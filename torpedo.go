@@ -18,8 +18,12 @@ func testDynamicVolume(
 	d scheduler.Driver,
 	volumeDriver string,
 ) error {
+	testName := "testDynamicVolume"
+
 	t := scheduler.Task{
-		Img: "gourao/fio",
+		Name: testName,
+		Img:  "gourao/fio",
+		Tag:  "latest",
 		Opt: []string{
 			"--blocksize=64k",
 			"--directory=/mnt/",
@@ -52,9 +56,10 @@ func testDynamicVolume(
 			return err
 		}
 
-		log.Print("Test: testDynamicVolume\n"+
+		log.Print("Test: %s\n"+
 			"\tStdout: %v\n"+
 			"\tStderr: %v\n",
+			testName,
 			ctx.Stdout,
 			ctx.Stderr,
 		)

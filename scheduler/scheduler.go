@@ -13,11 +13,13 @@ type Volume struct {
 }
 
 type Task struct {
-	Img string
-	Opt []string
-	Env []string
-	Cmd string
-	Vol Volume
+	Name string
+	Img  string
+	Tag  string
+	Opt  []string
+	Env  []string
+	Cmd  string
+	Vol  Volume
 }
 
 type Context struct {
