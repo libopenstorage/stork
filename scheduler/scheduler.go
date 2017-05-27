@@ -4,10 +4,27 @@ import (
 	"errors"
 )
 
+type Volume struct {
+	Driver string
+	Name   string
+	Path   string
+	Size   uint64 // in MB
+	Opt    []string
+}
+
 type Task struct {
+	Img string
+	Opt []string
+	Env []string
+	Cmd string
+	Vol Volume
 }
 
 type Context struct {
+	Id     string
+	NodeIp string
+	Stdout string
+	Stderr string
 }
 
 type Driver interface {
@@ -19,6 +36,12 @@ type Driver interface {
 
 	// Create creates a task context.  Does not start the task.
 	Create(Task) (*Context, error)
+
+	// Run runs a task to completion.
+	Run(*Context) error
+
+	// InspectVolume inspects a storage volume.
+	InspectVolume(name string) (*Volume, error)
 }
 
 var (

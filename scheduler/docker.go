@@ -21,6 +21,15 @@ func (d *driver) Create(t Task) (*Context, error) {
 	return &Context{}, nil
 }
 
+func (d *driver) Run(ctx *Context) error {
+	return nil
+}
+
+func (d *driver) InspectVolume(name string) (*Volume, error) {
+	v := Volume{}
+	return &v, nil
+}
+
 func init() {
 	register("docker", &driver{})
 }

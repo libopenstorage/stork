@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"os"
 
@@ -12,12 +13,61 @@ import (
 // arguments.
 type testDriverFunc func(scheduler.Driver, string) error
 
-// Create dynamic volumes.
+// Create dynamic volumes.  Make sure that a task can use the dynamic volume.
 func testDynamicVolume(
 	d scheduler.Driver,
 	volumeDriver string,
 ) error {
-	// d.Create()
+	t := scheduler.Task{
+		Img: "gourao/fio",
+		Opt: []string{
+			"--blocksize=64k",
+			"--directory=/mnt/",
+			"--ioengine=libaio",
+			"--readwrite=write",
+			"--size=5G",
+			"--name=test",
+			"--verify=meta",
+			"--do_verify=1",
+			"--verify_pattern=0xDeadBeef",
+			"--direct=1",
+			"--gtod_reduce=1",
+			"--iodepth=1",
+			"--randrepeat=1",
+		},
+		Cmd: "fio",
+		Vol: scheduler.Volume{
+			Driver: volumeDriver,
+			Name:   "fiovol",
+			Path:   "/mnt/",
+			Size:   10240,
+		},
+	}
+
+	if ctx, err := d.Create(t); err != nil {
+		return err
+	} else {
+		// Run the task and wait for completion.
+		if err = d.Run(ctx); err != nil {
+			return err
+		}
+
+		log.Print("Test: testDynamicVolume\n"+
+			"\tStdout: %v\n"+
+			"\tStderr: %v\n",
+			ctx.Stdout,
+			ctx.Stderr,
+		)
+	}
+
+	// Verify that the volume properties are honored.
+	if v, err := d.InspectVolume("fiovol"); err != nil {
+		return err
+	} else {
+		if v.Size != 10240 || v.Driver != volumeDriver {
+			return errors.New("Dynamic volume creation failed")
+		}
+	}
 	return nil
 }
 
