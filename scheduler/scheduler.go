@@ -24,6 +24,7 @@ type Task struct {
 
 type Context struct {
 	Id     string
+	Name   string
 	NodeIp string
 	Status int
 	Stdout string
@@ -42,6 +43,9 @@ type Driver interface {
 
 	// Run runs a task to completion.
 	Run(*Context) error
+
+	// Destroy removes a task.
+	Destroy(*Context) error
 
 	// InspectVolume inspects a storage volume.
 	InspectVolume(name string) (*Volume, error)

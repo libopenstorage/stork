@@ -57,7 +57,7 @@ func (d *driver) Create(t Task) (*Context, error) {
 
 	hostConfig := dockerclient.HostConfig{
 		RestartPolicy: dockerclient.RestartPolicy{
-			Name:              "unless-stopped",
+			Name:              "no",
 			MaximumRetryCount: 0,
 		},
 	}
@@ -76,6 +76,7 @@ func (d *driver) Create(t Task) (*Context, error) {
 	if con, err := d.docker.CreateContainer(co); err != nil {
 		return nil, err
 	} else {
+		context.Name = t.Name
 		context.Id = con.ID
 	}
 
@@ -129,6 +130,15 @@ func (d *driver) Run(ctx *Context) error {
 		ctx.Status = status
 	}
 
+	return nil
+}
+
+func (d *driver) Destroy(ctx *Context) error {
+	opts := dockerclient.RemoveContainerOptions{ID: ctx.Id}
+	if err := d.docker.RemoveContainer(opts); err != nil {
+		log.Panicf("Unable to delete task %v: %v\n", ctx.Name, err)
+		return err
+	}
 	return nil
 }
 

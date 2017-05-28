@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -51,24 +50,32 @@ func testDynamicVolume(
 	if ctx, err := d.Create(t); err != nil {
 		return err
 	} else {
+		defer d.Destroy(ctx)
+
 		// Run the task and wait for completion.
 		if err = d.Run(ctx); err != nil {
 			return err
 		}
 
-		log.Print(
-			"\tStdout: %v\n\tStderr: %v\n",
-			ctx.Stdout,
-			ctx.Stderr,
-		)
+		log.Printf("\tStdout: %v\n", ctx.Stdout)
+		log.Printf("\tStderr: %v\n", ctx.Stderr)
 	}
 
 	// Verify that the volume properties are honored.
 	if v, err := d.InspectVolume("fiovol"); err != nil {
 		return err
 	} else {
-		if v.Size != 10240 || v.Driver != volumeDriver {
-			return errors.New("Dynamic volume creation failed")
+		if v.Size != 10240 {
+			return fmt.Errorf(
+				"Dynamic volume creation failed, size was not honored (size = %v).",
+				v.Size,
+			)
+		}
+		if v.Driver != volumeDriver {
+			return fmt.Errorf(
+				"Dynamic volume creation failed, incorrect volume driver (driver = %v).",
+				v.Driver,
+			)
 		}
 	}
 	return nil
@@ -197,8 +204,6 @@ func main() {
 		log.Fatalf("Cannot find driver %v\n", os.Args[1])
 		os.Exit(-1)
 	} else {
-		d.Init()
-
 		if run(d, os.Args[2]) != nil {
 			os.Exit(-1)
 		}
