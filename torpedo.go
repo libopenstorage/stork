@@ -6,12 +6,12 @@ import (
 	"os"
 
 	"github.com/portworx/torpedo/scheduler"
+	"github.com/portworx/torpedo/volume"
 )
 
 // testDriverFunc runs a specific external storage test case.  It takes
-// in a scheduler driver and an external volume provider (string) as
-// arguments.
-type testDriverFunc func(scheduler.Driver, string) error
+// in a scheduler driver and an external volume provider as arguments.
+type testDriverFunc func(scheduler.Driver, volume.Driver) error
 
 const (
 	// Use the inline volume specification so that we can test
@@ -24,7 +24,7 @@ const (
 // This test will fail if the storage driver is not able to parse the size correctly.
 func testDynamicVolume(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	// If it exists, remove it.
 	d.RemoveVolume(volName)
@@ -50,7 +50,7 @@ func testDynamicVolume(
 			"--randrepeat=1",
 		},
 		Vol: scheduler.Volume{
-			Driver: volumeDriver,
+			Driver: v.String(),
 			Name:   volName,
 			Path:   "/mnt/",
 			Size:   10240,
@@ -81,13 +81,13 @@ func testDynamicVolume(
 	}
 
 	// Verify that the volume properties are honored.
-	if v, err := d.InspectVolume(volName); err != nil {
+	if vol, err := d.InspectVolume(volName); err != nil {
 		return err
 	} else {
-		if v.Driver != volumeDriver {
+		if vol.Driver != v.String() {
 			return fmt.Errorf(
 				"Dynamic volume creation failed, incorrect volume driver (driver = %v).",
-				v.Driver,
+				vol.Driver,
 			)
 		}
 	}
@@ -98,7 +98,7 @@ func testDynamicVolume(
 // and unmounts and allow the volume to get mounted on another node.
 func testRemoteForceMount(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
@@ -107,7 +107,7 @@ func testRemoteForceMount(
 // not be impacted.
 func testDriverDown(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
@@ -117,7 +117,7 @@ func testDriverDown(
 // be able to come up on another system and use the volume.
 func testDriverDownContainerDown(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
@@ -125,7 +125,7 @@ func testDriverDownContainerDown(
 // A container is using a volume on node X.  Node X is now powered off.
 func testNodePowerOff(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
@@ -134,7 +134,7 @@ func testNodePowerOff(
 // provider’s volume.
 func testPluginDown(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
@@ -144,7 +144,7 @@ func testPluginDown(
 // another container.
 func testNetworkDown(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
@@ -155,7 +155,7 @@ func testNetworkDown(
 // can use the volume for another container.
 func testNetworkPartition(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
@@ -163,7 +163,7 @@ func testNetworkPartition(
 // Docker daemon crashes and live restore is disabled.
 func testDockerDown(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
@@ -171,12 +171,12 @@ func testDockerDown(
 // Docker daemon crashes and live restore is enabled.
 func testDockerDownLiveRestore(
 	d scheduler.Driver,
-	volumeDriver string,
+	v volume.Driver,
 ) error {
 	return nil
 }
 
-func run(d scheduler.Driver, vd string) error {
+func run(d scheduler.Driver, v volume.Driver) error {
 	if err := d.Init(); err != nil {
 		return err
 	}
@@ -197,7 +197,7 @@ func run(d scheduler.Driver, vd string) error {
 
 	for n, f := range testFuncs {
 		log.Printf("Executing test %v\n", n)
-		if err := f(d, vd); err != nil {
+		if err := f(d, v); err != nil {
 			log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
 			return err
 		}
@@ -214,10 +214,13 @@ func main() {
 	}
 
 	if d, err := scheduler.Get(os.Args[1]); err != nil {
-		log.Fatalf("Cannot find driver %v\n", os.Args[1])
+		log.Fatalf("Cannot find scheduler driver %v\n", os.Args[1])
+		os.Exit(-1)
+	} else if v, err := volume.Get(os.Args[2]); err != nil {
+		log.Fatalf("Cannot find scheduler driver %v\n", os.Args[1])
 		os.Exit(-1)
 	} else {
-		if run(d, os.Args[2]) != nil {
+		if run(d, v) != nil {
 			os.Exit(-1)
 		}
 	}

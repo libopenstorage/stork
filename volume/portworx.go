@@ -7,7 +7,7 @@ func (d *driver) String() string {
 	return "pxd"
 }
 
-func (d *driver) Exit(string Ip) error {
+func (d *driver) Exit(Ip string) error {
 	return nil
 }
 

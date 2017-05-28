@@ -9,7 +9,7 @@ type Driver interface {
 	String() string
 
 	// Exit must cause the volume driver to exit on a given node.
-	Exit(string Ip) error
+	Exit(Ip string) error
 }
 
 var (
