@@ -1,11 +1,16 @@
 package scheduler
 
 import (
+	"log"
+	"os"
+	"strings"
+
 	dockerclient "github.com/fsouza/go-dockerclient"
 )
 
 var (
-	endpoint = "unix:///var/run/docker.sock"
+	endpoint string
+	nodes    []string
 )
 
 type driver struct {
@@ -13,6 +18,10 @@ type driver struct {
 }
 
 func (d *driver) Init() error {
+	log.Printf("Using the Docker scheduler driver.\n")
+	log.Printf("Docker daemon is available at: %v.\n", endpoint)
+	log.Printf("The following hosts are in the cluster: [%v].\n", nodes)
+
 	if docker, err := dockerclient.NewClient(endpoint); err != nil {
 		return err
 	} else {
@@ -93,5 +102,11 @@ func (d *driver) InspectVolume(name string) (*Volume, error) {
 }
 
 func init() {
+	if endpoint = os.Getenv("DOCKER_HOST"); endpoint == "" {
+		endpoint = "unix:///var/run/docker.sock"
+	}
+
+	nodes = strings.Split(os.Getenv("CLUSTER_NODES"), ",")
+
 	register("docker", &driver{})
 }

@@ -31,6 +31,21 @@ This document covers the various scheduler-storage integration points that are b
 |----------------------------------|--------------------------|
 | Portworx                         | http://docs.portworx.com |
 
+## Usage
+
+Torpedo runs as a Docker container:
+
+```
+# docker run 														\
+	-e DOCKER_HOST=127.0.0.1										\
+	-e CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"	\
+	torpedo <scheduler> <storage driver>
+```
+
+Where:
+* DOCKER_HOST is optional.  When specified, the Docker driver will use this variable to talk to the Docker daemon.  By default, it will use `unix:///var/run/docker.sock`.
+* CLUSTER_NODES is a list of all the members in this cluster.  Some tests require a minimum cluster size and may not pass if there are not enough hosts in the cluster.
+
 ## Contributing
 
 The specification and code is licensed under the Apache 2.0 license found in 

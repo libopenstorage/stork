@@ -13,15 +13,14 @@ import (
 // arguments.
 type testDriverFunc func(scheduler.Driver, string) error
 
-// Create dynamic volumes.  Make sure that a task can use the dynamic volume.
+// Create dynamic volumes.  Make sure that a task can use the dynamic volume
+// in th einline format as size=x,repl=x,compress=x,name=foo.
 func testDynamicVolume(
 	d scheduler.Driver,
 	volumeDriver string,
 ) error {
-	testName := "testDynamicVolume"
-
 	t := scheduler.Task{
-		Name: testName,
+		Name: "testDynamicVolume",
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Opt: []string{
@@ -56,10 +55,8 @@ func testDynamicVolume(
 			return err
 		}
 
-		log.Print("Test: %s\n"+
-			"\tStdout: %v\n"+
-			"\tStderr: %v\n",
-			testName,
+		log.Print(
+			"\tStdout: %v\n\tStderr: %v\n",
 			ctx.Stdout,
 			ctx.Stderr,
 		)
@@ -164,23 +161,26 @@ func run(d scheduler.Driver, vd string) error {
 	}
 
 	// Add new test functions here.
-	testFuncs := []testDriverFunc{
-		testDynamicVolume,
-		testRemoteForceMount,
-		testDriverDown,
-		testDriverDownContainerDown,
-		testNodePowerOff,
-		testPluginDown,
-		testNetworkDown,
-		testNetworkPartition,
-		testDockerDown,
-		testDockerDownLiveRestore,
+	testFuncs := map[string]testDriverFunc{
+		"testDynamicVolume":           testDynamicVolume,
+		"testRemoteForceMount":        testRemoteForceMount,
+		"testDriverDown":              testDriverDown,
+		"testDriverDownContainerDown": testDriverDownContainerDown,
+		"testNodePowerOff":            testNodePowerOff,
+		"testPluginDown":              testPluginDown,
+		"testNetworkDown":             testNetworkDown,
+		"testNetworkPartition":        testNetworkPartition,
+		"testDockerDown":              testDockerDown,
+		"testDockerDownLiveRestore":   testDockerDownLiveRestore,
 	}
 
-	for _, f := range testFuncs {
+	for n, f := range testFuncs {
+		log.Printf("Executing test %v\n", n)
 		if err := f(d, vd); err != nil {
+			log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
 			return err
 		}
+		log.Printf("\tTest %v Passed.\n", n)
 	}
 
 	return nil
@@ -198,7 +198,7 @@ func main() {
 		}
 	}
 
-	log.Print("All tests have passed with this driver: %v and this scheduler: %v\n",
+	log.Printf("All tests have passed with this driver: %v and this scheduler: %v\n",
 		os.Args[2],
 		os.Args[1],
 	)
