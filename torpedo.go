@@ -101,6 +101,15 @@ func testRemoteForceMount(
 	d scheduler.Driver,
 	v volume.Driver,
 ) error {
+	return nil
+}
+
+// Volume Driver Plugin is down, unavailable - and the client container should
+// not be impacted.
+func testDriverDown(
+	d scheduler.Driver,
+	v volume.Driver,
+) error {
 	// If it exists, remove it.
 	d.RemoveVolume(volName)
 
@@ -148,6 +157,7 @@ func testRemoteForceMount(
 		time.Sleep(20 * time.Second)
 
 		// Stop the volume driver.
+		log.Printf("Stopping the %v volume driver\n", v.String())
 		if err = v.Stop(ctx.Ip); err != nil {
 			return err
 		}
@@ -156,7 +166,12 @@ func testRemoteForceMount(
 		time.Sleep(20 * time.Second)
 
 		// Restart the volume driver.
+		log.Printf("Starting the %v volume driver\n", v.String())
 		if err = v.Start(ctx.Ip); err != nil {
+			return err
+		}
+
+		if err = d.WaitDone(ctx); err != nil {
 			return err
 		}
 
@@ -168,15 +183,6 @@ func testRemoteForceMount(
 			)
 		}
 	}
-	return nil
-}
-
-// Volume Driver Plugin is down, unavailable - and the client container should
-// not be impacted.
-func testDriverDown(
-	d scheduler.Driver,
-	v volume.Driver,
-) error {
 	return nil
 }
 
