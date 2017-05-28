@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"bytes"
 	"log"
 	"os"
 	"strings"
@@ -62,8 +63,10 @@ func (d *driver) Create(t Task) (*Context, error) {
 	}
 
 	config := dockerclient.Config{
-		Image: t.Img + ":" + t.Tag,
-		Cmd:   []string{t.Cmd},
+		Image:        t.Img + ":" + t.Tag,
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          []string{t.Cmd},
 	}
 
 	co := dockerclient.CreateContainerOptions{
@@ -92,6 +95,39 @@ func (d *driver) Run(ctx *Context) error {
 	}
 
 	// Wait for the container to exit and collect it's stdout and stderr.
+	if status, err := d.docker.WaitContainer(ctx.Id); err != nil {
+		return err
+	} else {
+		buf := bytes.NewBuffer([]byte(""))
+		lo := dockerclient.LogsOptions{
+			Container:    ctx.Id,
+			Stdout:       true,
+			Stderr:       false,
+			RawTerminal:  false,
+			Timestamps:   false,
+			OutputStream: buf,
+		}
+		if err := d.docker.Logs(lo); err != nil {
+			return err
+		}
+		ctx.Stdout = buf.String()
+
+		buf = bytes.NewBuffer([]byte(""))
+		lo = dockerclient.LogsOptions{
+			Container:    ctx.Id,
+			Stdout:       false,
+			Stderr:       true,
+			RawTerminal:  false,
+			Timestamps:   false,
+			OutputStream: buf,
+		}
+		if err := d.docker.Logs(lo); err != nil {
+			return err
+		}
+		ctx.Stderr = buf.String()
+
+		ctx.Status = status
+	}
 
 	return nil
 }

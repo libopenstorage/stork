@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 
@@ -187,8 +188,13 @@ func run(d scheduler.Driver, vd string) error {
 }
 
 func main() {
+	if len(os.Args) != 3 {
+		fmt.Printf("Usage: %v <scheduler> <volume driver>\n", os.Args[0])
+		os.Exit(-1)
+	}
+
 	if d, err := scheduler.Get(os.Args[1]); err != nil {
-		log.Fatal("Cannot find driver %v\n", os.Args[1])
+		log.Fatalf("Cannot find driver %v\n", os.Args[1])
 		os.Exit(-1)
 	} else {
 		d.Init()

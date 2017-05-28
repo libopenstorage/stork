@@ -25,6 +25,7 @@ type Task struct {
 type Context struct {
 	Id     string
 	NodeIp string
+	Status int
 	Stdout string
 	Stderr string
 }
@@ -47,10 +48,11 @@ type Driver interface {
 }
 
 var (
-	drivers map[string]Driver
+	drivers = make(map[string]Driver)
 )
 
 func register(name string, d Driver) error {
+	drivers[name] = d
 	return nil
 }
 
@@ -60,8 +62,4 @@ func Get(name string) (Driver, error) {
 	} else {
 		return nil, errors.New("No such scheduler driver installed")
 	}
-}
-
-func init() {
-	drivers = make(map[string]Driver)
 }
