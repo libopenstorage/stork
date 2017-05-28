@@ -147,8 +147,8 @@ func testRemoteForceMount(
 		// Sleep for fio to get going...
 		time.Sleep(20 * time.Second)
 
-		// Exit the volume driver.
-		if err = v.Exit(ctx.Ip); err != nil {
+		// Stop the volume driver.
+		if err = v.Stop(ctx.Ip); err != nil {
 			return err
 		}
 
