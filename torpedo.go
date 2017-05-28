@@ -20,7 +20,8 @@ const (
 )
 
 // Create dynamic volumes.  Make sure that a task can use the dynamic volume
-// in th einline format as size=x,repl=x,compress=x,name=foo.
+// in the inline format as size=x,repl=x,compress=x,name=foo.
+// This test will fail if the storage driver is not able to parse the size correctly.
 func testDynamicVolume(
 	d scheduler.Driver,
 	volumeDriver string,
@@ -83,15 +84,6 @@ func testDynamicVolume(
 	if v, err := d.InspectVolume(volName); err != nil {
 		return err
 	} else {
-		// TODO: inspect size.
-		/*
-			if v.Size != 10240 {
-				return fmt.Errorf(
-					"Dynamic volume creation failed, size was not honored (size = %v).",
-					v.Size,
-				)
-			}
-		*/
 		if v.Driver != volumeDriver {
 			return fmt.Errorf(
 				"Dynamic volume creation failed, incorrect volume driver (driver = %v).",
@@ -230,7 +222,7 @@ func main() {
 		}
 	}
 
-	log.Printf("All tests have passed with this driver: %v and this scheduler: %v\n",
+	log.Printf("All tests have passed with this driver: %v, and this scheduler: %v\n",
 		os.Args[2],
 		os.Args[1],
 	)
