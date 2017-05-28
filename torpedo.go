@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/portworx/torpedo/scheduler"
 	"github.com/portworx/torpedo/volume"
@@ -100,6 +101,73 @@ func testRemoteForceMount(
 	d scheduler.Driver,
 	v volume.Driver,
 ) error {
+	// If it exists, remove it.
+	d.RemoveVolume(volName)
+
+	t := scheduler.Task{
+		Name: "testDynamicVolume",
+		Img:  "gourao/fio",
+		Tag:  "latest",
+		Cmd: []string{
+			"fio",
+			"--blocksize=64k",
+			"--directory=/mnt/",
+			"--ioengine=libaio",
+			"--readwrite=write",
+			"--size=5G",
+			"--name=test",
+			"--verify=meta",
+			"--do_verify=1",
+			"--verify_pattern=0xDeadBeef",
+			"--direct=1",
+			"--gtod_reduce=1",
+			"--iodepth=1",
+			"--randrepeat=1",
+		},
+		Vol: scheduler.Volume{
+			Driver: v.String(),
+			Name:   volName,
+			Path:   "/mnt/",
+			Size:   10240,
+		},
+	}
+
+	if ctx, err := d.Create(t); err != nil {
+		return err
+	} else {
+		defer func() {
+			d.Destroy(ctx)
+			d.RemoveVolume(volName)
+		}()
+
+		if err = d.Start(ctx); err != nil {
+			return err
+		}
+
+		// Sleep for fio to get going...
+		time.Sleep(20 * time.Second)
+
+		// Exit the volume driver.
+		if err = v.Exit(ctx.Ip); err != nil {
+			return err
+		}
+
+		// Sleep for fio to keep going...
+		time.Sleep(20 * time.Second)
+
+		// Restart the volume driver.
+		if err = v.Start(ctx.Ip); err != nil {
+			return err
+		}
+
+		if ctx.Status != 0 {
+			return fmt.Errorf("Exit status %v\nStdout: %v\nStderr: %v\n",
+				ctx.Status,
+				ctx.Stdout,
+				ctx.Stderr,
+			)
+		}
+	}
 	return nil
 }
 

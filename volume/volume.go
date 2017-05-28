@@ -10,6 +10,9 @@ type Driver interface {
 
 	// Exit must cause the volume driver to exit on a given node.
 	Exit(Ip string) error
+
+	// Start must cause the volume driver to start on a given node.
+	Start(Ip string) error
 }
 
 var (

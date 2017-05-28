@@ -24,7 +24,7 @@ type Task struct {
 type Context struct {
 	Id     string
 	Task   Task
-	NodeIp string
+	Ip     string
 	Status int
 	Stdout string
 	Stderr string
@@ -39,6 +39,12 @@ type Driver interface {
 
 	// Create creates a task context.  Does not start the task.
 	Create(Task) (*Context, error)
+
+	// Start task
+	Start(*Context) error
+
+	// WaitDone waits for task to complete.
+	WaitDone(*Context) error
 
 	// Run runs a task to completion.
 	Run(*Context) error

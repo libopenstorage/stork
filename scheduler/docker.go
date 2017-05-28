@@ -93,6 +93,7 @@ func (d *driver) Create(t Task) (*Context, error) {
 	return &context, nil
 }
 
+// Run to completion.
 func (d *driver) Run(ctx *Context) error {
 	hostConfig := dockerclient.HostConfig{
 		RestartPolicy: dockerclient.RestartPolicy{
@@ -109,6 +110,64 @@ func (d *driver) Run(ctx *Context) error {
 		return err
 	}
 
+	// Wait for the container to exit and collect it's stdout and stderr.
+	if status, err := d.docker.WaitContainer(ctx.Id); err != nil {
+		return err
+	} else {
+		buf := bytes.NewBuffer([]byte(""))
+		lo := dockerclient.LogsOptions{
+			Container:    ctx.Id,
+			Stdout:       true,
+			Stderr:       false,
+			RawTerminal:  false,
+			Timestamps:   false,
+			OutputStream: buf,
+		}
+		if err := d.docker.Logs(lo); err != nil {
+			return err
+		}
+		ctx.Stdout = buf.String()
+
+		buf = bytes.NewBuffer([]byte(""))
+		lo = dockerclient.LogsOptions{
+			Container:    ctx.Id,
+			Stdout:       false,
+			Stderr:       true,
+			RawTerminal:  false,
+			Timestamps:   false,
+			OutputStream: buf,
+		}
+		if err := d.docker.Logs(lo); err != nil {
+			return err
+		}
+		ctx.Stderr = buf.String()
+
+		ctx.Status = status
+	}
+
+	return nil
+}
+
+func (d *driver) Start(ctx *Context) error {
+	hostConfig := dockerclient.HostConfig{
+		RestartPolicy: dockerclient.RestartPolicy{
+			Name:              "no",
+			MaximumRetryCount: 0,
+		},
+		Binds: []string{
+			ctx.Task.Vol.Name + ":" + ctx.Task.Vol.Path,
+		},
+		VolumeDriver: ctx.Task.Vol.Driver,
+	}
+
+	if err := d.docker.StartContainer(ctx.Id, &hostConfig); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *driver) WaitDone(ctx *Context) error {
 	// Wait for the container to exit and collect it's stdout and stderr.
 	if status, err := d.docker.WaitContainer(ctx.Id); err != nil {
 		return err
