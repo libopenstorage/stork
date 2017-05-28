@@ -1,6 +1,7 @@
 package volume
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -13,10 +14,12 @@ import (
 )
 
 var (
-	nodes []string
+	nodes  []string
+	docker *dockerclient.Client
 )
 
 type driver struct {
+	hostConfig     *dockerclient.HostConfig
 	clusterManager cluster.Cluster
 }
 
@@ -68,15 +71,82 @@ func (d *driver) Stop(Ip string) error {
 		}
 	}
 
-	// Find the Portworx container
+	// Find and stop the Portworx container
+	lo := dockerclient.ListContainersOptions{
+		All:  true,
+		Size: false,
+	}
+	if allContainers, err := docker.ListContainers(lo); err != nil {
+		return err
+	} else {
+		for _, c := range allContainers {
+			if info, err := docker.InspectContainer(c.ID); err != nil {
+				return err
+			} else {
+				if strings.Contains(info.Config.Image, "portworx/px") {
+					if !info.State.Running {
+						return fmt.Errorf(
+							"Portworx container with ID %v is not running.",
+							c.ID,
+						)
+					}
 
-	// Stop the Portworx container
+					d.hostConfig = info.HostConfig
+					log.Printf("Stopping Portworx container with ID: %v\n", c.ID)
+					if err = docker.StopContainer(c.ID, 0); err != nil {
+						return err
+					}
+					return nil
+				}
+			}
+		}
+	}
 
-	return nil
+	return fmt.Errorf("Could not find the Portworx container on %v", Ip)
 }
 
 func (d *driver) Start(Ip string) error {
-	return nil
+	endpoint := "tcp://" + Ip + ":2375"
+	docker, err := dockerclient.NewClient(endpoint)
+	if err != nil {
+		return err
+	} else {
+		if err = docker.Ping(); err != nil {
+			return err
+		}
+	}
+
+	// Find and stop the Portworx container
+	lo := dockerclient.ListContainersOptions{
+		All:  true,
+		Size: false,
+	}
+	if allContainers, err := docker.ListContainers(lo); err != nil {
+		return err
+	} else {
+		for _, c := range allContainers {
+			if info, err := docker.InspectContainer(c.ID); err != nil {
+				return err
+			} else {
+				if strings.Contains(info.Config.Image, "portworx/px") {
+					if !info.State.Running {
+						return fmt.Errorf(
+							"Portworx container with ID %v is not stopped.",
+							c.ID,
+						)
+					}
+
+					log.Printf("Starting Portworx container with ID: %v\n", c.ID)
+					if err = docker.StartContainer(c.ID, d.hostConfig); err != nil {
+						return err
+					}
+					return nil
+				}
+			}
+		}
+	}
+
+	return fmt.Errorf("Could not find the Portworx container on %v", Ip)
 }
 
 func init() {
