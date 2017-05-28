@@ -14,7 +14,9 @@ import (
 type testDriverFunc func(scheduler.Driver, string) error
 
 const (
-	volName = "torpedo_fiovol"
+	// Use the inline volume specification so that we can test
+	// volume options being dynamically parsed and used inline.
+	volName = "size=10G,name=torpedo_fiovol"
 )
 
 // Create dynamic volumes.  Make sure that a task can use the dynamic volume
