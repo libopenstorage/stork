@@ -204,8 +204,6 @@ func run(d scheduler.Driver, vd string) error {
 	}
 
 	for n, f := range testFuncs {
-		// TODO: Delete test volumes before test, in case there was
-		// previous state from a failed run.
 		log.Printf("Executing test %v\n", n)
 		if err := f(d, vd); err != nil {
 			log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
