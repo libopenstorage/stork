@@ -52,6 +52,9 @@ type Driver interface {
 	// Destroy removes a task.  Must also delete the external volume.
 	Destroy(*Context) error
 
+	// DestroyByName removes a task by name.  Must also delete the external volume.
+	DestroyByName(string) error
+
 	// InspectVolume inspects a storage volume.
 	InspectVolume(name string) (*Volume, error)
 }

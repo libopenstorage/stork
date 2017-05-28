@@ -30,13 +30,14 @@ func testDynamicVolume(
 	d scheduler.Driver,
 	v volume.Driver,
 ) error {
-	// If it exists, remove it.
+	taskName := "testDynamicVolume"
+
+	// Remove any container and volume for this test - previous run may have failed.
+	d.DestroyByName(taskName)
 	v.RemoveVolume(volName)
 
-	// TODO: Delete any task with the same name - previous run could have failed.
-
 	t := scheduler.Task{
-		Name: "testDynamicVolume",
+		Name: taskName,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -115,13 +116,14 @@ func testDriverDown(
 	d scheduler.Driver,
 	v volume.Driver,
 ) error {
-	// If it exists, remove it.
+	taskName := "testDynamicVolume"
+
+	// Remove any container and volume for this test - previous run may have failed.
+	d.DestroyByName(taskName)
 	v.RemoveVolume(volName)
 
-	// TODO: Delete any task with the same name - previous run could have failed.
-
 	t := scheduler.Task{
-		Name: "testDynamicVolume",
+		Name: taskName,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
