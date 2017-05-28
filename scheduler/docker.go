@@ -217,9 +217,37 @@ func (d *driver) Destroy(ctx *Context) error {
 	return nil
 }
 
-func (d *driver) RemoveVolume(name string) error {
-	if err := d.docker.RemoveVolume(name); err != nil {
+func (d *driver) DestroyByName(name string) error {
+	lo := dockerclient.ListContainersOptions{
+		All:  true,
+		Size: false,
+	}
+
+	if allContainers, err := d.docker.ListContainers(lo); err != nil {
 		return err
+	} else {
+		for _, c := range allContainers {
+			if info, err := d.docker.InspectContainer(c.ID); err != nil {
+				return err
+			} else {
+				if info.Name == "/"+name {
+					if err = d.docker.StopContainer(c.ID, 0); err != nil {
+						return err
+					}
+					ro := dockerclient.RemoveContainerOptions{
+						ID:            c.ID,
+						Force:         true,
+						RemoveVolumes: true,
+					}
+
+					if err = d.docker.RemoveContainer(ro); err != nil {
+						return err
+					}
+					log.Printf("Deleted task: %v\n", name)
+					return nil
+				}
+			}
+		}
 	}
 
 	return nil

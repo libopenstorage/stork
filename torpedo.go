@@ -16,9 +16,11 @@ import (
 type testDriverFunc func(scheduler.Driver, volume.Driver) error
 
 const (
+	volName = "torpedo_fiovol"
+
 	// Use the inline volume specification so that we can test
 	// volume options being dynamically parsed and used inline.
-	volName = "size=10G,name=torpedo_fiovol"
+	dynName = "size=10G,name=" + volName
 )
 
 // Create dynamic volumes.  Make sure that a task can use the dynamic volume
@@ -29,7 +31,9 @@ func testDynamicVolume(
 	v volume.Driver,
 ) error {
 	// If it exists, remove it.
-	d.RemoveVolume(volName)
+	v.RemoveVolume(volName)
+
+	// TODO: Delete any task with the same name - previous run could have failed.
 
 	t := scheduler.Task{
 		Name: "testDynamicVolume",
@@ -53,7 +57,7 @@ func testDynamicVolume(
 		},
 		Vol: scheduler.Volume{
 			Driver: v.String(),
-			Name:   volName,
+			Name:   dynName,
 			Path:   "/mnt/",
 			Size:   10240,
 		},
@@ -64,7 +68,7 @@ func testDynamicVolume(
 	} else {
 		defer func() {
 			d.Destroy(ctx)
-			d.RemoveVolume(volName)
+			v.RemoveVolume(volName)
 		}()
 
 		// Run the task and wait for completion.  This task will exit and
@@ -83,7 +87,7 @@ func testDynamicVolume(
 	}
 
 	// Verify that the volume properties are honored.
-	if vol, err := d.InspectVolume(volName); err != nil {
+	if vol, err := d.InspectVolume(dynName); err != nil {
 		return err
 	} else {
 		if vol.Driver != v.String() {
@@ -112,7 +116,9 @@ func testDriverDown(
 	v volume.Driver,
 ) error {
 	// If it exists, remove it.
-	d.RemoveVolume(volName)
+	v.RemoveVolume(volName)
+
+	// TODO: Delete any task with the same name - previous run could have failed.
 
 	t := scheduler.Task{
 		Name: "testDynamicVolume",
@@ -136,7 +142,7 @@ func testDriverDown(
 		},
 		Vol: scheduler.Volume{
 			Driver: v.String(),
-			Name:   volName,
+			Name:   dynName,
 			Path:   "/mnt/",
 			Size:   10240,
 		},
@@ -147,7 +153,7 @@ func testDriverDown(
 	} else {
 		defer func() {
 			d.Destroy(ctx)
-			d.RemoveVolume(volName)
+			v.RemoveVolume(volName)
 		}()
 
 		if err = d.Start(ctx); err != nil {

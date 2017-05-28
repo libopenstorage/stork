@@ -11,6 +11,9 @@ type Driver interface {
 	// Init initializes the volume driver.
 	Init() error
 
+	// RemoveVolume forcefully unmounts/detaches and deletes a storage volume.
+	RemoveVolume(name string) error
+
 	// Stop must cause the volume driver to exit on a given node.
 	Stop(Ip string) error
 
