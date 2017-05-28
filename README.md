@@ -36,15 +36,22 @@ This document covers the various scheduler-storage integration points that are b
 Torpedo runs as a Docker container:
 
 ```
-# docker run 														\
-	-e DOCKER_HOST=127.0.0.1										\
-	-e CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"	\
+# docker run                                                        \
+    --privileged=true                                               \
+    --net=host                                                      \
+	-e DOCKER_HOST=127.0.0.1                                        \
+	-e CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"    \
 	torpedo <scheduler> <storage driver>
 ```
 
 Where:
-* DOCKER_HOST is optional.  When specified, the Docker driver will use this variable to talk to the Docker daemon.  By default, it will use `unix:///var/run/docker.sock`.
-* CLUSTER_NODES is a list of all the members in this cluster.  Some tests require a minimum cluster size and may not pass if there are not enough hosts in the cluster.
+
+|  Argument | Description
+|:---------:|------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| --privileged=true | This must be provided as Torpedo will connect to the docker daemon and also kill the daemon during the negative testing.
+| --net=host | This must be provided as Torpedo will attempt to communicate with the scheduler agents outside the container network.
+| DOCKER_HOST | This is optional.  When specified, the Docker driver will use this variable to talk to the Docker daemon.  By default, it will use `unix:///var/run/docker.sock`.
+| CLUSTER_NODES | This is a list of all the members in this cluster.  Some tests require a minimum cluster size and may not pass if there are not enough hosts in the cluster.
 
 ## Contributing
 

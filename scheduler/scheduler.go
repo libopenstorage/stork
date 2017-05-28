@@ -8,7 +8,7 @@ type Volume struct {
 	Driver string
 	Name   string
 	Path   string
-	Size   uint64 // in MB
+	Size   int // in MB
 	Opt    []string
 }
 
@@ -16,15 +16,14 @@ type Task struct {
 	Name string
 	Img  string
 	Tag  string
-	Opt  []string
 	Env  []string
-	Cmd  string
+	Cmd  []string
 	Vol  Volume
 }
 
 type Context struct {
 	Id     string
-	Name   string
+	Task   Task
 	NodeIp string
 	Status int
 	Stdout string
@@ -44,7 +43,7 @@ type Driver interface {
 	// Run runs a task to completion.
 	Run(*Context) error
 
-	// Destroy removes a task.
+	// Destroy removes a task.  Must also delete the external volume.
 	Destroy(*Context) error
 
 	// InspectVolume inspects a storage volume.
