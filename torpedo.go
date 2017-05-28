@@ -23,6 +23,9 @@ func testDynamicVolume(
 	d scheduler.Driver,
 	volumeDriver string,
 ) error {
+	// If it exists, remove it.
+	d.RemoveVolume(volName)
+
 	t := scheduler.Task{
 		Name: "testDynamicVolume",
 		Img:  "gourao/fio",
@@ -54,7 +57,10 @@ func testDynamicVolume(
 	if ctx, err := d.Create(t); err != nil {
 		return err
 	} else {
-		defer d.Destroy(ctx)
+		defer func() {
+			d.Destroy(ctx)
+			d.RemoveVolume(volName)
+		}()
 
 		// Run the task and wait for completion.  This task will exit and
 		// must not be re-started by the scheduler.
@@ -62,8 +68,13 @@ func testDynamicVolume(
 			return err
 		}
 
-		log.Printf("\tStdout: %v\n", ctx.Stdout)
-		log.Printf("\tStderr: %v\n", ctx.Stderr)
+		if ctx.Status != 0 {
+			return fmt.Errorf("Exit status %v\nStdout: %v\nStderr: %v\n",
+				ctx.Status,
+				ctx.Stdout,
+				ctx.Stderr,
+			)
+		}
 	}
 
 	// Verify that the volume properties are honored.

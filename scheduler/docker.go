@@ -158,6 +158,14 @@ func (d *driver) Destroy(ctx *Context) error {
 	return nil
 }
 
+func (d *driver) RemoveVolume(name string) error {
+	if err := d.docker.RemoveVolume(name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (d *driver) InspectVolume(name string) (*Volume, error) {
 	if vol, err := d.docker.InspectVolume(name); err != nil {
 		return nil, err

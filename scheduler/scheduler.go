@@ -48,6 +48,9 @@ type Driver interface {
 
 	// InspectVolume inspects a storage volume.
 	InspectVolume(name string) (*Volume, error)
+
+	// RemoveVolume deletes a storage volume.
+	RemoveVolume(name string) error
 }
 
 var (
