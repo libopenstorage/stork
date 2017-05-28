@@ -39,9 +39,9 @@ Torpedo runs as a Docker container:
 # docker run                                                        \
     --privileged=true                                               \
     --net=host                                                      \
-	-e DOCKER_HOST=127.0.0.1                                        \
-	-e CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"    \
-	torpedo <scheduler> <storage driver>
+    -e DOCKER_HOST=127.0.0.1                                        \
+    -e CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"    \
+    torpedo <scheduler> <storage driver>
 ```
 
 Where:
