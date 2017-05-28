@@ -20,10 +20,6 @@ type driver struct {
 }
 
 func (d *driver) Init() error {
-	if len(nodes) < 3 {
-		log.Printf("There are not enough nodes in this cluster.  Most tests will fail.\n")
-	}
-
 	log.Printf("Using the Docker scheduler driver.\n")
 	log.Printf("Docker daemon is available at: %v.\n", endpoint)
 	log.Printf("The following hosts are in the cluster: %v.\n", nodes)

@@ -53,6 +53,14 @@ Where:
 | DOCKER_HOST | This is optional.  When specified, the Docker driver will use this variable to talk to the Docker daemon.  By default, it will use `unix:///var/run/docker.sock`.
 | CLUSTER_NODES | This is a list of all the members in this cluster.  Some tests require a minimum cluster size and may not pass if there are not enough hosts in the cluster.
 
+### Important
+Some Torpedo volume drivers such as the Portworx driver need to be able to talk to the Docker daemon during the tests.  This requires the Docker daemon to be configured to allow the a Docker client to connect on the TCP port.
+
+Start Docker with
+```
+ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2375
+```
+
 ## Contributing
 
 The specification and code is licensed under the Apache 2.0 license found in 

@@ -8,6 +8,9 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
+	// Init initializes the volume driver.
+	Init() error
+
 	// Stop must cause the volume driver to exit on a given node.
 	Stop(Ip string) error
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/portworx/torpedo/scheduler"
@@ -255,6 +256,10 @@ func run(d scheduler.Driver, v volume.Driver) error {
 		return err
 	}
 
+	if err := v.Init(); err != nil {
+		return err
+	}
+
 	// Add new test functions here.
 	testFuncs := map[string]testDriverFunc{
 		"testDynamicVolume":           testDynamicVolume,
@@ -285,6 +290,11 @@ func main() {
 	if len(os.Args) != 3 {
 		fmt.Printf("Usage: %v <scheduler> <volume driver>\n", os.Args[0])
 		os.Exit(-1)
+	}
+
+	nodes := strings.Split(os.Getenv("CLUSTER_NODES"), ",")
+	if len(nodes) < 3 {
+		log.Printf("There are not enough nodes in this cluster.  Most tests will fail.\n")
 	}
 
 	if d, err := scheduler.Get(os.Args[1]); err != nil {

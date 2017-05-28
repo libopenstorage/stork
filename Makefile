@@ -1,9 +1,10 @@
 TORPEDO_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_TORPEDO_IMAGE):$(DOCKER_HUB_TAG)
 
-all: clean
+all:
 	@echo "Building the torpedo binary"
 	go build -o torpedo torpedo.go
 
+container:
 	@echo "Building container: docker build --tag $(TORPEDO_IMG) -f Dockerfile ."
 	sudo docker build --tag $(TORPEDO_IMG) -f Dockerfile .
 
