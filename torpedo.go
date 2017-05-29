@@ -266,11 +266,15 @@ func testDriverDownContainerDown(
 			return err
 		}
 
+		// Sleep for the volume driver to startup.
+		time.Sleep(60 * time.Second)
+
 		// Check to see if you can delete the volume.
 		log.Printf("Deleting the volume: %v\n", volName)
 		if err = v.RemoveVolume(volName); err != nil {
 			return err
 		}
+
 	}
 	return nil
 }

@@ -209,7 +209,6 @@ func (d *driver) Destroy(ctx *Context) error {
 		RemoveVolumes: true,
 	}
 	if err := d.docker.RemoveContainer(opts); err != nil {
-		log.Panicf("Unable to delete task %v: %v\n", ctx.Task.Name, err)
 		return err
 	}
 
