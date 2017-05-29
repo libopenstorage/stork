@@ -116,7 +116,7 @@ func testDriverDown(
 	d scheduler.Driver,
 	v volume.Driver,
 ) error {
-	taskName := "testDynamicVolume"
+	taskName := "testDriverDown"
 
 	// Remove any container and volume for this test - previous run may have failed.
 	d.DestroyByName(taskName)
@@ -196,12 +196,82 @@ func testDriverDown(
 }
 
 // Volume driver plugin is down and the client container gets terminated.
-// There is a lost unmount call in this case, but the container should i
-// be able to come up on another system and use the volume.
+// There is a lost unmount call in this case. When the volume driver is
+// back up, we should be able to detach and delete the volume.
 func testDriverDownContainerDown(
 	d scheduler.Driver,
 	v volume.Driver,
 ) error {
+	taskName := "testDriverDownContainerDown"
+
+	// Remove any container and volume for this test - previous run may have failed.
+	d.DestroyByName(taskName)
+	v.RemoveVolume(volName)
+
+	t := scheduler.Task{
+		Name: taskName,
+		Img:  "gourao/fio",
+		Tag:  "latest",
+		Cmd: []string{
+			"fio",
+			"--blocksize=64k",
+			"--directory=/mnt/",
+			"--ioengine=libaio",
+			"--readwrite=write",
+			"--size=5G",
+			"--name=test",
+			"--verify=meta",
+			"--do_verify=1",
+			"--verify_pattern=0xDeadBeef",
+			"--direct=1",
+			"--gtod_reduce=1",
+			"--iodepth=1",
+			"--randrepeat=1",
+		},
+		Vol: scheduler.Volume{
+			Driver: v.String(),
+			Name:   dynName,
+			Path:   "/mnt/",
+			Size:   10240,
+		},
+	}
+
+	if ctx, err := d.Create(t); err != nil {
+		return err
+	} else {
+		defer func() {
+			d.Destroy(ctx)
+			v.RemoveVolume(volName)
+		}()
+
+		if err = d.Start(ctx); err != nil {
+			return err
+		}
+
+		// Sleep for fio to get going...
+		time.Sleep(20 * time.Second)
+
+		// Stop the volume driver.
+		log.Printf("Stopping the %v volume driver\n", v.String())
+		if err = v.Stop(ctx.Ip); err != nil {
+			return err
+		}
+
+		// Now kill the task... this will lead to a lost Unmount/Detach call.
+		d.Destroy(ctx)
+
+		// Restart the volume driver.
+		log.Printf("Starting the %v volume driver\n", v.String())
+		if err = v.Start(ctx.Ip); err != nil {
+			return err
+		}
+
+		// Check to see if you can delete the volume.
+		log.Printf("Deleting the volume: %v\n", volName)
+		if err = v.RemoveVolume(volName); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
