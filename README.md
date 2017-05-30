@@ -32,14 +32,36 @@ This document covers the various scheduler-storage integration points that are b
 | Portworx                         | http://docs.portworx.com |
 
 ## Usage
+Torpedo is written in Golang.  To build Torpedo:
 
-Torpedo runs as a Docker container:
+```
+# git clone git@github.com:portworx/torpedo.git
+# make
+```
+
+### Important
+Some Torpedo volume drivers such as the Portworx driver need to be able to talk to the Docker daemon during the tests.  This requires the Docker daemon to be configured to allow the a Docker client to connect on the TCP port.
+
+Start Docker with
+```
+ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2375
+```
+
+Torpedo can be run as follows:
+
+```
+# export CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"
+# torpedo docker pxd
+```
+
+The above command starts Torpedo directly using the Docker daemon for the tests.  It also specified Portworx (`pxd`) as the volume driver.
+
+Torpedo can also run as a Docker container (although some tests may not work, since they involve restarting or killing the Docker Daemon itself):
 
 ```
 # docker run                                                        \
     --privileged=true                                               \
     --net=host                                                      \
-    -e DOCKER_HOST=127.0.0.1                                        \
     -e CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"    \
     torpedo <scheduler> <storage driver>
 ```
@@ -52,14 +74,6 @@ Where:
 | --net=host | This must be provided as Torpedo will attempt to communicate with the scheduler agents outside the container network.
 | DOCKER_HOST | This is optional.  When specified, the Docker driver will use this variable to talk to the Docker daemon.  By default, it will use `unix:///var/run/docker.sock`.
 | CLUSTER_NODES | This is a list of all the members in this cluster.  Some tests require a minimum cluster size and may not pass if there are not enough hosts in the cluster.
-
-### Important
-Some Torpedo volume drivers such as the Portworx driver need to be able to talk to the Docker daemon during the tests.  This requires the Docker daemon to be configured to allow the a Docker client to connect on the TCP port.
-
-Start Docker with
-```
-ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2375
-```
 
 ## Contributing
 

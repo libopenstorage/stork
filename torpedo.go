@@ -510,6 +510,7 @@ func main() {
 	nodes := strings.Split(os.Getenv("CLUSTER_NODES"), ",")
 	if len(nodes) < 3 {
 		log.Printf("There are not enough nodes in this cluster.  Most tests will fail.\n")
+		log.Printf("Use 'export CLUSTER_NODES=\"192.168.1.100,192.168.1.101,192.168.1.102\"'")
 	}
 
 	testName := ""
