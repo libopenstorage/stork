@@ -19,12 +19,12 @@ type Task struct {
 	Env  []string
 	Cmd  []string
 	Vol  Volume
+	Ip   string
 }
 
 type Context struct {
 	Id     string
 	Task   Task
-	Ip     string
 	Status int
 	Stdout string
 	Stderr string
@@ -53,13 +53,13 @@ type Driver interface {
 	Destroy(*Context) error
 
 	// DestroyByName removes a task by name.  Must also delete the external volume.
-	DestroyByName(string) error
+	DestroyByName(ip, name string) error
 
 	// InspectVolume inspects a storage volume.
-	InspectVolume(name string) (*Volume, error)
+	InspectVolume(ip, name string) (*Volume, error)
 
 	// DeleteVolume will delete a storage volume.
-	DeleteVolume(name string) error
+	DeleteVolume(ip, name string) error
 }
 
 var (

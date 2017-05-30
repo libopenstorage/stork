@@ -33,11 +33,12 @@ func testDynamicVolume(
 	taskName := "testDynamicVolume"
 
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName(taskName)
+	d.DestroyByName("localhost", taskName)
 	v.RemoveVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
+		Ip:   "localhost",
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -88,7 +89,7 @@ func testDynamicVolume(
 	}
 
 	// Verify that the volume properties are honored.
-	if vol, err := d.InspectVolume(dynName); err != nil {
+	if vol, err := d.InspectVolume("", dynName); err != nil {
 		return err
 	} else {
 		if vol.Driver != v.String() {
@@ -101,15 +102,6 @@ func testDynamicVolume(
 	return nil
 }
 
-// Verify that the volume driver can deal with an uneven number of mounts
-// and unmounts and allow the volume to get mounted on another node.
-func testRemoteForceMount(
-	d scheduler.Driver,
-	v volume.Driver,
-) error {
-	return nil
-}
-
 // Volume Driver Plugin is down, unavailable - and the client container should
 // not be impacted.
 func testDriverDown(
@@ -119,11 +111,12 @@ func testDriverDown(
 	taskName := "testDriverDown"
 
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName(taskName)
+	d.DestroyByName("localhost", taskName)
 	v.RemoveVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
+		Ip:   "localhost",
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -167,7 +160,7 @@ func testDriverDown(
 
 		// Stop the volume driver.
 		log.Printf("Stopping the %v volume driver\n", v.String())
-		if err = v.Stop(ctx.Ip); err != nil {
+		if err = v.Stop(ctx.Task.Ip); err != nil {
 			return err
 		}
 
@@ -176,7 +169,7 @@ func testDriverDown(
 
 		// Restart the volume driver.
 		log.Printf("Starting the %v volume driver\n", v.String())
-		if err = v.Start(ctx.Ip); err != nil {
+		if err = v.Start(ctx.Task.Ip); err != nil {
 			return err
 		}
 
@@ -206,11 +199,12 @@ func testDriverDownContainerDown(
 	taskName := "testDriverDownContainerDown"
 
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName(taskName)
+	d.DestroyByName("localhost", taskName)
 	v.RemoveVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
+		Ip:   "localhost",
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -254,11 +248,11 @@ func testDriverDownContainerDown(
 
 		// Stop the volume driver.
 		log.Printf("Stopping the %v volume driver\n", v.String())
-		if err = v.Stop(ctx.Ip); err != nil {
+		if err = v.Stop(ctx.Task.Ip); err != nil {
 			return err
 		}
 
-		// Now kill the task... this will lead to a lost Unmount/Detach call.
+		// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
 		log.Printf("Waiting for the test task to exit\n")
 		if err = d.WaitDone(ctx); err != nil {
 			return err
@@ -274,13 +268,104 @@ func testDriverDownContainerDown(
 
 		// Restart the volume driver.
 		log.Printf("Starting the %v volume driver\n", v.String())
-		if err = v.Start(ctx.Ip); err != nil {
+		if err = v.Start(ctx.Task.Ip); err != nil {
 			return err
 		}
 
 		// Check to see if you can delete the volume.
 		log.Printf("Deleting the attached volume: %v from this host\n", volName)
-		if err = d.DeleteVolume(volName); err != nil {
+		if err = d.DeleteVolume("localhost", volName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Verify that the volume driver can deal with an uneven number of mounts
+// and unmounts and allow the volume to get mounted on another node.
+func testRemoteForceMount(
+	d scheduler.Driver,
+	v volume.Driver,
+) error {
+	taskName := "testRemoteForceMount"
+
+	// Remove any container and volume for this test - previous run may have failed.
+	d.DestroyByName("localhost", taskName)
+	v.RemoveVolume(volName)
+
+	t := scheduler.Task{
+		Name: taskName,
+		Img:  "gourao/fio",
+		Ip:   "localhost",
+		Tag:  "latest",
+		Cmd: []string{
+			"fio",
+			"--blocksize=64k",
+			"--directory=/mnt/",
+			"--ioengine=libaio",
+			"--readwrite=write",
+			"--size=5G",
+			"--name=test",
+			"--verify=meta",
+			"--do_verify=1",
+			"--verify_pattern=0xDeadBeef",
+			"--direct=1",
+			"--gtod_reduce=1",
+			"--iodepth=1",
+			"--randrepeat=1",
+		},
+		Vol: scheduler.Volume{
+			Driver: v.String(),
+			Name:   dynName,
+			Path:   "/mnt/",
+			Size:   10240,
+		},
+	}
+
+	if ctx, err := d.Create(t); err != nil {
+		return err
+	} else {
+		defer func() {
+			d.Destroy(ctx)
+			v.RemoveVolume(volName)
+		}()
+
+		if err = d.Start(ctx); err != nil {
+			return err
+		}
+
+		// Sleep for fio to get going...
+		time.Sleep(20 * time.Second)
+
+		// Stop the volume driver.
+		log.Printf("Stopping the %v volume driver\n", v.String())
+		if err = v.Stop(ctx.Task.Ip); err != nil {
+			return err
+		}
+
+		// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
+		log.Printf("Waiting for the test task to exit\n")
+		if err = d.WaitDone(ctx); err != nil {
+			return err
+		}
+
+		if ctx.Status == 0 {
+			return fmt.Errorf("Unexpected success exit status %v\nStdout: %v\nStderr: %v\n",
+				ctx.Status,
+				ctx.Stdout,
+				ctx.Stderr,
+			)
+		}
+
+		// Restart the volume driver.
+		log.Printf("Starting the %v volume driver\n", v.String())
+		if err = v.Start(ctx.Task.Ip); err != nil {
+			return err
+		}
+
+		// Check to see if you can delete the volume.
+		log.Printf("Deleting the attached volume: %v from this host\n", volName)
+		if err = d.DeleteVolume("localhost", volName); err != nil {
 			return err
 		}
 	}
