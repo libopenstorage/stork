@@ -235,9 +235,12 @@ func (d *driver) Start(Ip string) error {
 
 					// Wait for Portworx to become usable.
 					status, _ := d.clusterManager.NodeStatus()
-					for i := 0; status != api.Status_STATUS_ERROR; i++ {
+					for i := 0; status != api.Status_STATUS_OK; i++ {
 						if i > 60 {
-							return fmt.Errorf("Portworx did not start up in time.")
+							return fmt.Errorf(
+								"Portworx did not start up in time: Status is %v",
+								status,
+							)
 						}
 
 						time.Sleep(1 * time.Second)
