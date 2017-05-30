@@ -13,15 +13,13 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS := -gcflags "-N -l"
 endif
 
-ifndef PROTOC
-PROTOC = protoc
-endif
+BASE_DIR := $(shell git rev-parse --show-toplevel)
 
-ifndef PROTOS_PATH
-PROTOS_PATH = /root/git/go/src
-endif
+BIN :=$(BASE_DIR)/bin
 
-export GO15VENDOREXPERIMENT=1
+.DEFAULT_GOAL=all
+
+all: $(TARGETS) tags
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -79,9 +77,11 @@ test:
 docker-build-osd-dev:
 	docker build -t openstorage/osd-dev -f Dockerfile.osd-dev .
 
-all:
+all: torpedo
+
+torpedo:
 	@echo "Building the torpedo binary"
-	go build -o torpedo torpedo.go
+	@cd cmd/torpedo && go build $(BUILD_OPTIONS) -o $(BIN)/torpedo
 
 container:
 	@echo "Building container: docker build --tag $(TORPEDO_IMG) -f Dockerfile ."
