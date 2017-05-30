@@ -371,7 +371,7 @@ func testRemoteForceMount(
 		log.Printf("Creating the test task on a new host.\n")
 		t.Ip = scheduler.ExternalHost
 		if ctx, err = d.Create(t); err != nil {
-			log.Errorf("Error while creating remote task: %v\n", err)
+			log.Warnf("Error while creating remote task: %v\n", err)
 			return err
 		}
 

@@ -4,7 +4,6 @@ ifndef TAGS
 TAGS := daemon
 endif
 
-
 ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/vendor')
 endif
@@ -19,7 +18,7 @@ BIN :=$(BASE_DIR)/bin
 
 .DEFAULT_GOAL=all
 
-all: $(TARGETS) tags
+all: torpedo vet lint
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -76,8 +75,6 @@ test:
 
 docker-build-osd-dev:
 	docker build -t openstorage/osd-dev -f Dockerfile.osd-dev .
-
-all: torpedo
 
 torpedo:
 	@echo "Building the torpedo binary"

@@ -1,1 +1,3 @@
 bin/torpedo
+*.swp
+*.swo
