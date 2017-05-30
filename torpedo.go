@@ -358,6 +358,7 @@ func testRemoteForceMount(
 		time.Sleep(20 * time.Second)
 
 		// Kill Docker.
+		fmt.Printf("Stopping Docker.\n")
 		if err = sc.Stop(dockerServiceName); err != nil {
 			return err
 		}
@@ -366,6 +367,7 @@ func testRemoteForceMount(
 		time.Sleep(20 * time.Second)
 
 		// Start a task on a new system with this same volume.
+		fmt.Printf("Creating the test task on a new host.\n")
 		t.Ip = scheduler.ExternalHost
 		if ctx, err = d.Create(t); err != nil {
 			fmt.Errorf("Error while creating remote task: %v\n", err)
