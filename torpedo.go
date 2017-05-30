@@ -396,8 +396,17 @@ func testRemoteForceMount(
 		}
 
 		// Restart Docker.
-		if err = sc.Start(dockerServiceName); err != nil {
-			return err
+		fmt.Printf("Restarting Docker.\n")
+		for i, err := 0, sc.Start(dockerServiceName); err != nil; i, err = i+1, sc.Start(dockerServiceName) {
+			if _, ok := err.(*systemd.JobExecutionTookTooLongError); ok {
+				if i < 20 {
+					fmt.Printf("Docker taking too long to start... retry attempt %v\n", i)
+				} else {
+					return fmt.Errorf("Could not restart Docker.")
+				}
+			} else {
+				return err
+			}
 		}
 
 		// Wait for the volume driver to start.
