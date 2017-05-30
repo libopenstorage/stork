@@ -11,6 +11,11 @@ type Driver interface {
 	// Init initializes the volume driver.
 	Init() error
 
+	// DetachVolume must only detach a volume and not unmount it prior.
+	// This is specifically used by Torpedo to test for a lost
+	// unmount request.
+	DetachVolume(name string) error
+
 	// RemoveVolume forcefully unmounts/detaches and deletes a storage volume.
 	RemoveVolume(name string) error
 

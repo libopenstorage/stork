@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	dockerclient "github.com/fsouza/go-dockerclient"
 
@@ -120,6 +121,35 @@ func (d *driver) RemoveVolume(name string) error {
 	return nil
 }
 
+func (d *driver) DetachVolume(name string) error {
+	locator := &api.VolumeLocator{}
+
+	volumes, err := d.volDriver.Enumerate(locator, nil)
+	if err != nil {
+		return err
+	}
+
+	for _, v := range volumes {
+		if v.Locator.Name == name {
+			if err = d.volDriver.Detach(v.Id); err != nil {
+				err = fmt.Errorf(
+					"Error while detaching %v because of: %v",
+					v.Id,
+					err,
+				)
+				log.Printf("%v", err)
+				return err
+			}
+
+			log.Printf("Succesfully detached Portworx volume %v\n", name)
+
+			return nil
+		}
+	}
+
+	return nil
+}
+
 // Portworx runs as a container - so all we need to do is ask docker to
 // stop the running portworx container.
 func (d *driver) Stop(Ip string) error {
@@ -202,6 +232,18 @@ func (d *driver) Start(Ip string) error {
 					if err = docker.StartContainer(c.ID, d.hostConfig); err != nil {
 						return err
 					}
+
+					// Wait for Portworx to become usable.
+					status, _ := d.clusterManager.NodeStatus()
+					for i := 0; status != api.Status_STATUS_ERROR; i++ {
+						if i > 60 {
+							return fmt.Errorf("Portworx did not start up in time.")
+						}
+
+						time.Sleep(1 * time.Second)
+						status, _ = d.clusterManager.NodeStatus()
+					}
+
 					return nil
 				}
 			}

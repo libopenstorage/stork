@@ -258,7 +258,9 @@ func testDriverDownContainerDown(
 		}
 
 		// Now kill the task... this will lead to a lost Unmount/Detach call.
+		log.Printf("Destroying the test task...")
 		d.Destroy(ctx)
+		log.Printf("Done\n")
 
 		// Restart the volume driver.
 		log.Printf("Starting the %v volume driver\n", v.String())
@@ -266,15 +268,11 @@ func testDriverDownContainerDown(
 			return err
 		}
 
-		// Sleep for the volume driver to startup.
-		time.Sleep(60 * time.Second)
-
 		// Check to see if you can delete the volume.
-		log.Printf("Deleting the volume: %v\n", volName)
-		if err = v.RemoveVolume(volName); err != nil {
+		log.Printf("Detaching the volume: %v from this host\n", volName)
+		if err = v.DetachVolume(volName); err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
