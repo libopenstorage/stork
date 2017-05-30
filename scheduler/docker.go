@@ -2,9 +2,9 @@ package scheduler
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"os"
-	_ "strconv"
 	"strings"
 
 	dockerclient "github.com/fsouza/go-dockerclient"
@@ -279,6 +279,12 @@ func (d *driver) InspectVolume(name string) (*Volume, error) {
 func (d *driver) DeleteVolume(name string) error {
 	if err := d.docker.RemoveVolume(name); err != nil {
 		return err
+	}
+
+	// There is a bug with the dockerclient.  Even if the volume could not
+	// be removed, it returns nil.  So make sure the volume was infact deleted.
+	if _, err := d.docker.InspectVolume(name); err == nil {
+		return fmt.Errorf("Volume %v could not be deleted.", name)
 	}
 
 	return nil

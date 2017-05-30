@@ -180,6 +180,7 @@ func testDriverDown(
 			return err
 		}
 
+		log.Printf("Waiting for the test task to exit\n")
 		if err = d.WaitDone(ctx); err != nil {
 			return err
 		}
@@ -258,9 +259,18 @@ func testDriverDownContainerDown(
 		}
 
 		// Now kill the task... this will lead to a lost Unmount/Detach call.
-		log.Printf("Destroying the test task...")
-		d.Destroy(ctx)
-		log.Printf("Done\n")
+		log.Printf("Waiting for the test task to exit\n")
+		if err = d.WaitDone(ctx); err != nil {
+			return err
+		}
+
+		if ctx.Status == 0 {
+			return fmt.Errorf("Unexpected success exit status %v\nStdout: %v\nStderr: %v\n",
+				ctx.Status,
+				ctx.Stdout,
+				ctx.Stderr,
+			)
+		}
 
 		// Restart the volume driver.
 		log.Printf("Starting the %v volume driver\n", v.String())
