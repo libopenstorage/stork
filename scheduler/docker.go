@@ -47,38 +47,45 @@ func ifaceToIp(iface *net.Interface) (string, error) {
 	return "", fmt.Errorf("Node not connected to the network.")
 }
 
-func connect(ip string) (*dockerclient.Client, error) {
+func connect(ip string) (*dockerclient.Client, string, error) {
 	if ip == ExternalHost {
 		// Find any other host except this one.
 		ifaces, err := net.Interfaces()
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
-		for _, iface := range ifaces {
-			if iface.Flags&net.FlagUp == 0 {
-				continue // interface down
-			}
-			if iface.Flags&net.FlagLoopback != 0 {
-				continue // loopback interface
-			}
-
-			ifaceIp, err := ifaceToIp(&iface)
-			if err != nil {
-				continue
-			}
-
-			for _, n := range nodes {
-				if ifaceIp != n {
-					fmt.Printf("Selecting Docker host %v\n", ip)
-					ip = n
+		for _, n := range nodes {
+			localIp := false
+			for _, iface := range ifaces {
+				if iface.Flags&net.FlagUp == 0 {
+					continue // interface down
 				}
+				if iface.Flags&net.FlagLoopback != 0 {
+					continue // loopback interface
+				}
+
+				ifaceIp, err := ifaceToIp(&iface)
+				if err != nil {
+					continue
+				}
+
+				if ifaceIp == n {
+					localIp = true
+					break
+				}
+			}
+
+			if !localIp {
+				fmt.Printf("Selecting Docker host %v\n", n)
+				ip = n
+				break
 			}
 		}
 	}
 
 	if ip == ExternalHost {
-		return nil, fmt.Errorf("Cannot find any other Docker host in the cluster.")
+		return nil, "", fmt.Errorf("Cannot find any other Docker host in the cluster.")
 	}
 
 	endpoint := ""
@@ -91,12 +98,12 @@ func connect(ip string) (*dockerclient.Client, error) {
 	}
 
 	if docker, err := dockerclient.NewClient(endpoint); err != nil {
-		return nil, err
+		return nil, "", err
 	} else {
 		if err = docker.Ping(); err != nil {
-			return nil, err
+			return nil, "", err
 		}
-		return docker, nil
+		return docker, ip, nil
 	}
 }
 
@@ -114,10 +121,12 @@ func (d *driver) GetNodes() ([]string, error) {
 func (d *driver) Create(t Task) (*Context, error) {
 	context := Context{}
 
-	docker, err := connect(t.Ip)
+	docker, ip, err := connect(t.Ip)
 	if err != nil {
 		return nil, err
 	}
+
+	t.Ip = ip
 
 	po := dockerclient.PullImageOptions{
 		Repository: t.Img,
@@ -166,7 +175,7 @@ func (d *driver) Create(t Task) (*Context, error) {
 
 // Run to completion.
 func (d *driver) Run(ctx *Context) error {
-	docker, err := connect(ctx.Task.Ip)
+	docker, _, err := connect(ctx.Task.Ip)
 	if err != nil {
 		return err
 	}
@@ -225,7 +234,7 @@ func (d *driver) Run(ctx *Context) error {
 }
 
 func (d *driver) Start(ctx *Context) error {
-	docker, err := connect(ctx.Task.Ip)
+	docker, _, err := connect(ctx.Task.Ip)
 	if err != nil {
 		return err
 	}
@@ -249,7 +258,7 @@ func (d *driver) Start(ctx *Context) error {
 }
 
 func (d *driver) WaitDone(ctx *Context) error {
-	docker, err := connect(ctx.Task.Ip)
+	docker, _, err := connect(ctx.Task.Ip)
 	if err != nil {
 		return err
 	}
@@ -293,7 +302,7 @@ func (d *driver) WaitDone(ctx *Context) error {
 }
 
 func (d *driver) Destroy(ctx *Context) error {
-	docker, err := connect(ctx.Task.Ip)
+	docker, _, err := connect(ctx.Task.Ip)
 	if err != nil {
 		return err
 	}
@@ -312,7 +321,7 @@ func (d *driver) Destroy(ctx *Context) error {
 }
 
 func (d *driver) DestroyByName(ip, name string) error {
-	docker, err := connect(ip)
+	docker, _, err := connect(ip)
 	if err != nil {
 		return err
 	}
@@ -364,7 +373,7 @@ func (d *driver) DestroyByName(ip, name string) error {
 }
 
 func (d *driver) InspectVolume(ip, name string) (*Volume, error) {
-	docker, err := connect(ip)
+	docker, _, err := connect(ip)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +391,7 @@ func (d *driver) InspectVolume(ip, name string) (*Volume, error) {
 }
 
 func (d *driver) DeleteVolume(ip, name string) error {
-	docker, err := connect(ip)
+	docker, _, err := connect(ip)
 	if err != nil {
 		return err
 	}

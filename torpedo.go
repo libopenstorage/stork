@@ -24,7 +24,7 @@ const (
 
 	// Use the inline volume specification so that we can test
 	// volume options being dynamically parsed and used inline.
-	dynName = "size=10G,name=" + volName
+	dynName = "size=10G,repl=2,name=" + volName
 )
 
 // Create dynamic volumes.  Make sure that a task can use the dynamic volume
@@ -73,7 +73,9 @@ func testDynamicVolume(
 		return err
 	} else {
 		defer func() {
-			d.Destroy(ctx)
+			if ctx != nil {
+				d.Destroy(ctx)
+			}
 			v.RemoveVolume(volName)
 		}()
 
@@ -151,7 +153,9 @@ func testDriverDown(
 		return err
 	} else {
 		defer func() {
-			d.Destroy(ctx)
+			if ctx != nil {
+				d.Destroy(ctx)
+			}
 			v.RemoveVolume(volName)
 		}()
 
@@ -239,7 +243,9 @@ func testDriverDownContainerDown(
 		return err
 	} else {
 		defer func() {
-			d.Destroy(ctx)
+			if ctx != nil {
+				d.Destroy(ctx)
+			}
 			v.RemoveVolume(volName)
 		}()
 
@@ -338,7 +344,9 @@ func testRemoteForceMount(
 			if err = sc.Start(dockerServiceName); err != nil {
 				fmt.Printf("Error while restarting Docker: %v\n", err)
 			}
-			d.Destroy(ctx)
+			if ctx != nil {
+				d.Destroy(ctx)
+			}
 			v.RemoveVolume(volName)
 		}()
 
@@ -360,6 +368,7 @@ func testRemoteForceMount(
 		// Start a task on a new system with this same volume.
 		t.Ip = scheduler.ExternalHost
 		if ctx, err = d.Create(t); err != nil {
+			fmt.Errorf("Error while creating remote task: %v\n", err)
 			return err
 		}
 
