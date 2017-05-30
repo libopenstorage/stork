@@ -265,6 +265,14 @@ func (d *driver) InspectVolume(name string) (*Volume, error) {
 	}
 }
 
+func (d *driver) DeleteVolume(name string) error {
+	if err := d.docker.RemoveVolume(name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func init() {
 	if endpoint = os.Getenv("DOCKER_HOST"); endpoint == "" {
 		endpoint = "unix:///var/run/docker.sock"

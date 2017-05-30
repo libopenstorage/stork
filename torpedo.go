@@ -269,8 +269,8 @@ func testDriverDownContainerDown(
 		}
 
 		// Check to see if you can delete the volume.
-		log.Printf("Detaching the volume: %v from this host\n", volName)
-		if err = v.DetachVolume(volName); err != nil {
+		log.Printf("Deleting the attached volume: %v from this host\n", volName)
+		if err = d.DeleteVolume(volName); err != nil {
 			return err
 		}
 	}
