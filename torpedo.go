@@ -9,6 +9,8 @@ import (
 
 	"github.com/portworx/torpedo/scheduler"
 	"github.com/portworx/torpedo/volume"
+
+	"github.com/giantswarm/yochu/systemd"
 )
 
 // testDriverFunc runs a specific external storage test case.  It takes
@@ -16,6 +18,8 @@ import (
 type testDriverFunc func(scheduler.Driver, volume.Driver) error
 
 const (
+	dockerServiceName = "docker.service"
+
 	volName = "torpedo_fiovol"
 
 	// Use the inline volume specification so that we can test
@@ -38,7 +42,7 @@ func testDynamicVolume(
 
 	t := scheduler.Task{
 		Name: taskName,
-		Ip:   "localhost",
+		Ip:   scheduler.LocalHost,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -116,7 +120,7 @@ func testDriverDown(
 
 	t := scheduler.Task{
 		Name: taskName,
-		Ip:   "localhost",
+		Ip:   scheduler.LocalHost,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -204,7 +208,7 @@ func testDriverDownContainerDown(
 
 	t := scheduler.Task{
 		Name: taskName,
-		Ip:   "localhost",
+		Ip:   scheduler.LocalHost,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -281,8 +285,9 @@ func testDriverDownContainerDown(
 	return nil
 }
 
-// Verify that the volume driver can deal with an uneven number of mounts
-// and unmounts and allow the volume to get mounted on another node.
+// Verify that the volume driver can deal with an event where Docker and the
+// client container crash on this system.  The volume should be able
+// to get moounted on another node.
 func testRemoteForceMount(
 	d scheduler.Driver,
 	v volume.Driver,
@@ -296,7 +301,7 @@ func testRemoteForceMount(
 	t := scheduler.Task{
 		Name: taskName,
 		Img:  "gourao/fio",
-		Ip:   "localhost",
+		Ip:   scheduler.LocalHost,
 		Tag:  "latest",
 		Cmd: []string{
 			"fio",
@@ -325,7 +330,14 @@ func testRemoteForceMount(
 	if ctx, err := d.Create(t); err != nil {
 		return err
 	} else {
+		sc, err := systemd.NewSystemdClient()
+		if err != nil {
+			return err
+		}
 		defer func() {
+			if err = sc.Start(dockerServiceName); err != nil {
+				fmt.Printf("Error while restarting Docker: %v\n", err)
+			}
 			d.Destroy(ctx)
 			v.RemoveVolume(volName)
 		}()
@@ -337,11 +349,26 @@ func testRemoteForceMount(
 		// Sleep for fio to get going...
 		time.Sleep(20 * time.Second)
 
-		// Stop the volume driver.
-		log.Printf("Stopping the %v volume driver\n", v.String())
-		if err = v.Stop(ctx.Task.Ip); err != nil {
+		// Kill Docker.
+		if err = sc.Stop(dockerServiceName); err != nil {
 			return err
 		}
+
+		// 20 second grace period before we try to use the volume elsewhere.
+		time.Sleep(20 * time.Second)
+
+		// Start a task on a new system with this same volume.
+		t.Ip = scheduler.ExternalHost
+		if ctx, err = d.Create(t); err != nil {
+			return err
+		}
+
+		if err = d.Start(ctx); err != nil {
+			return err
+		}
+
+		// Sleep for fio to get going...
+		time.Sleep(20 * time.Second)
 
 		// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
 		log.Printf("Waiting for the test task to exit\n")
@@ -349,15 +376,20 @@ func testRemoteForceMount(
 			return err
 		}
 
-		if ctx.Status == 0 {
-			return fmt.Errorf("Unexpected success exit status %v\nStdout: %v\nStderr: %v\n",
+		if ctx.Status != 0 {
+			return fmt.Errorf("Exit status %v\nStdout: %v\nStderr: %v\n",
 				ctx.Status,
 				ctx.Stdout,
 				ctx.Stderr,
 			)
 		}
 
-		// Restart the volume driver.
+		// Restart Docker.
+		if err = sc.Start(dockerServiceName); err != nil {
+			return err
+		}
+
+		// Wait for the volume driver to start.
 		log.Printf("Starting the %v volume driver\n", v.String())
 		if err = v.Start(ctx.Task.Ip); err != nil {
 			return err
@@ -410,14 +442,6 @@ func testNetworkPartition(
 	return nil
 }
 
-// Docker daemon crashes and live restore is disabled.
-func testDockerDown(
-	d scheduler.Driver,
-	v volume.Driver,
-) error {
-	return nil
-}
-
 // Docker daemon crashes and live restore is enabled.
 func testDockerDownLiveRestore(
 	d scheduler.Driver,
@@ -449,7 +473,6 @@ func run(
 		"testPluginDown":              testPluginDown,
 		"testNetworkDown":             testNetworkDown,
 		"testNetworkPartition":        testNetworkPartition,
-		"testDockerDown":              testDockerDown,
 		"testDockerDownLiveRestore":   testDockerDownLiveRestore,
 	}
 

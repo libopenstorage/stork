@@ -121,35 +121,6 @@ func (d *driver) RemoveVolume(name string) error {
 	return nil
 }
 
-func (d *driver) DetachVolume(name string) error {
-	locator := &api.VolumeLocator{}
-
-	volumes, err := d.volDriver.Enumerate(locator, nil)
-	if err != nil {
-		return err
-	}
-
-	for _, v := range volumes {
-		if v.Locator.Name == name {
-			if err = d.volDriver.Detach(v.Id); err != nil {
-				err = fmt.Errorf(
-					"Error while detaching %v because of: %v",
-					v.Id,
-					err,
-				)
-				log.Printf("%v", err)
-				return err
-			}
-
-			log.Printf("Succesfully detached Portworx volume %v\n", name)
-
-			return nil
-		}
-	}
-
-	return nil
-}
-
 // Portworx runs as a container - so all we need to do is ask docker to
 // stop the running portworx container.
 func (d *driver) Stop(Ip string) error {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 
@@ -17,7 +18,69 @@ var (
 type driver struct {
 }
 
+func ifaceToIp(iface *net.Interface) (string, error) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return "", err
+	}
+	for _, addr := range addrs {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+		if ip == nil || ip.IsLoopback() {
+			continue
+		}
+		ip = ip.To4()
+		if ip == nil {
+			continue // not an ipv4 address
+		}
+		if ip.String() == "" {
+			continue // address is empty string
+		}
+		return ip.String(), nil
+	}
+
+	return "", fmt.Errorf("Node not connected to the network.")
+}
+
 func connect(ip string) (*dockerclient.Client, error) {
+	if ip == ExternalHost {
+		// Find any other host except this one.
+		ifaces, err := net.Interfaces()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, iface := range ifaces {
+			if iface.Flags&net.FlagUp == 0 {
+				continue // interface down
+			}
+			if iface.Flags&net.FlagLoopback != 0 {
+				continue // loopback interface
+			}
+
+			ifaceIp, err := ifaceToIp(&iface)
+			if err != nil {
+				continue
+			}
+
+			for _, n := range nodes {
+				if ifaceIp != n {
+					fmt.Printf("Selecting Docker host %v\n", ip)
+					ip = n
+				}
+			}
+		}
+	}
+
+	if ip == ExternalHost {
+		return nil, fmt.Errorf("Cannot find any other Docker host in the cluster.")
+	}
+
 	endpoint := ""
 	if ip == "" {
 		if endpoint = os.Getenv("DOCKER_HOST"); endpoint == "" {

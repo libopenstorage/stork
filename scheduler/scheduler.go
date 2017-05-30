@@ -4,6 +4,11 @@ import (
 	"errors"
 )
 
+const (
+	LocalHost    = "localhost"
+	ExternalHost = "externalhost"
+)
+
 type Volume struct {
 	Driver string
 	Name   string
