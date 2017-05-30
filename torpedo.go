@@ -331,7 +331,11 @@ func testDockerDownLiveRestore(
 	return nil
 }
 
-func run(d scheduler.Driver, v volume.Driver) error {
+func run(
+	d scheduler.Driver,
+	v volume.Driver,
+	testName string,
+) error {
 	if err := d.Init(); err != nil {
 		return err
 	}
@@ -354,27 +358,45 @@ func run(d scheduler.Driver, v volume.Driver) error {
 		"testDockerDownLiveRestore":   testDockerDownLiveRestore,
 	}
 
-	for n, f := range testFuncs {
-		log.Printf("Executing test %v\n", n)
-		if err := f(d, v); err != nil {
-			log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
-			return err
+	if testName != "" {
+		if f, ok := testFuncs[testName]; !ok {
+			return fmt.Errorf("Unknown test function %v", testName)
+		} else {
+			if err := f(d, v); err != nil {
+				log.Printf("\tTest %v Failed with Error: %v.\n", testName, err)
+				return err
+			}
+			log.Printf("\tTest %v Passed.\n", testName)
+			return nil
 		}
-		log.Printf("\tTest %v Passed.\n", n)
+	} else {
+		for n, f := range testFuncs {
+			log.Printf("Executing test %v\n", n)
+			if err := f(d, v); err != nil {
+				log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
+				return err
+			}
+			log.Printf("\tTest %v Passed.\n", n)
+		}
 	}
 
 	return nil
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Printf("Usage: %v <scheduler> <volume driver>\n", os.Args[0])
+	if len(os.Args) < 2 {
+		fmt.Printf("Usage: %v <scheduler> <volume driver> [testName]\n", os.Args[0])
 		os.Exit(-1)
 	}
 
 	nodes := strings.Split(os.Getenv("CLUSTER_NODES"), ",")
 	if len(nodes) < 3 {
 		log.Printf("There are not enough nodes in this cluster.  Most tests will fail.\n")
+	}
+
+	testName := ""
+	if len(os.Args) >= 3 {
+		testName = os.Args[3]
 	}
 
 	if d, err := scheduler.Get(os.Args[1]); err != nil {
@@ -384,7 +406,7 @@ func main() {
 		log.Fatalf("Cannot find scheduler driver %v\n", os.Args[1])
 		os.Exit(-1)
 	} else {
-		if run(d, v) != nil {
+		if run(d, v, testName) != nil {
 			os.Exit(-1)
 		}
 	}

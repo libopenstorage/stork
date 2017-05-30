@@ -231,7 +231,13 @@ func (d *driver) DestroyByName(name string) error {
 			} else {
 				if info.Name == "/"+name {
 					if err = d.docker.StopContainer(c.ID, 0); err != nil {
-						return err
+						if _, ok := err.(*dockerclient.ContainerNotRunning); !ok {
+							log.Printf("Error while stopping task %v: %v",
+								info.Name,
+								err,
+							)
+							return err
+						}
 					}
 					ro := dockerclient.RemoveContainerOptions{
 						ID:            c.ID,
@@ -240,6 +246,11 @@ func (d *driver) DestroyByName(name string) error {
 					}
 
 					if err = d.docker.RemoveContainer(ro); err != nil {
+						log.Printf(
+							"Error while removing task %v: %v",
+							info.Name,
+							err,
+						)
 						return err
 					}
 					log.Printf("Deleted task: %v\n", name)
