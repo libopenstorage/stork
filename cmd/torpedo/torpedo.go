@@ -363,8 +363,8 @@ func testRemoteForceMount(
 			return err
 		}
 
-		// 20 second grace period before we try to use the volume elsewhere.
-		time.Sleep(20 * time.Second)
+		// 40 second grace period before we try to use the volume elsewhere.
+		time.Sleep(40 * time.Second)
 
 		// Start a task on a new system with this same volume.
 		fmt.Printf("Creating the test task on a new host.\n")
