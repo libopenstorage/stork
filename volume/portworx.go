@@ -172,6 +172,24 @@ func (d *driver) Stop(ip string) error {
 	return fmt.Errorf("Could not find the Portworx container on %v", ip)
 }
 
+func (d *driver) WaitStart(ip string) error {
+	// Wait for Portworx to become usable.
+	status, _ := d.clusterManager.NodeStatus()
+	for i := 0; status != api.Status_STATUS_OK; i++ {
+		if i > 60 {
+			return fmt.Errorf(
+				"Portworx did not start up in time: Status is %v",
+				status,
+			)
+		}
+
+		time.Sleep(1 * time.Second)
+		status, _ = d.clusterManager.NodeStatus()
+	}
+
+	return nil
+}
+
 func (d *driver) Start(ip string) error {
 	endpoint := "tcp://" + ip + ":2375"
 	docker, err := dockerclient.NewClient(endpoint)
@@ -213,21 +231,7 @@ func (d *driver) Start(ip string) error {
 				return err
 			}
 
-			// Wait for Portworx to become usable.
-			status, _ := d.clusterManager.NodeStatus()
-			for i := 0; status != api.Status_STATUS_OK; i++ {
-				if i > 60 {
-					return fmt.Errorf(
-						"Portworx did not start up in time: Status is %v",
-						status,
-					)
-				}
-
-				time.Sleep(1 * time.Second)
-				status, _ = d.clusterManager.NodeStatus()
-			}
-
-			return nil
+			return d.WaitStart(ip)
 		}
 	}
 

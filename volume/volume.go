@@ -22,6 +22,9 @@ type Driver interface {
 
 	// Start must cause the volume driver to start on a given node.
 	Start(ip string) error
+
+	// WaitStart must wait till the volume driver becomes usable on a given node.
+	WaitStart(ip string) error
 }
 
 var (
