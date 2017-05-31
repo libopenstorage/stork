@@ -544,7 +544,7 @@ func main() {
 	}
 
 	testName := ""
-	if len(os.Args) >= 3 {
+	if len(os.Args) > 3 {
 		testName = os.Args[3]
 	}
 
