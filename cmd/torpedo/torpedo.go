@@ -504,6 +504,7 @@ func run(
 	}
 
 	if testName != "" {
+		log.Printf("Executing single test %v\n", testName)
 		f, ok := testFuncs[testName]
 
 		if !ok {
