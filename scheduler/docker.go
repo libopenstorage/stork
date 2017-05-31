@@ -119,7 +119,7 @@ func (d *driver) Init() error {
 }
 
 func (d *driver) GetNodes() ([]string, error) {
-	nodes := make([]string, 0)
+	nodes := []string{}
 	return nodes, nil
 }
 
