@@ -2,6 +2,6 @@ FROM fedora:25
 
 WORKDIR /
 
-COPY ./torpedo /
+COPY ./bin/torpedo /
 ENTRYPOINT ["/torpedo"]
 CMD []
