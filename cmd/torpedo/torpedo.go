@@ -559,7 +559,7 @@ func main() {
 		}
 	}
 
-	log.Printf("All tests have passed with this driver: %v, and this scheduler: %v\n",
+	log.Printf("Test suite complete with this driver: %v, and this scheduler: %v\n",
 		os.Args[2],
 		os.Args[1],
 	)
