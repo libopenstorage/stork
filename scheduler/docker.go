@@ -77,7 +77,7 @@ func connect(ip string) (*dockerclient.Client, string, error) {
 			}
 
 			if !localIp {
-				fmt.Printf("Selecting Docker host %v\n", n)
+				log.Printf("Selecting Docker host %v\n", n)
 				ip = n
 				break
 			}

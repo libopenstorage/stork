@@ -342,7 +342,7 @@ func testRemoteForceMount(
 		}
 		defer func() {
 			if err = sc.Start(dockerServiceName); err != nil {
-				fmt.Printf("Error while restarting Docker: %v\n", err)
+				log.Printf("Error while restarting Docker: %v\n", err)
 			}
 			if ctx != nil {
 				d.Destroy(ctx)
@@ -350,6 +350,7 @@ func testRemoteForceMount(
 			v.RemoveVolume(volName)
 		}()
 
+		log.Printf("Starting test task on local node.\n")
 		if err = d.Start(ctx); err != nil {
 			return err
 		}
@@ -358,7 +359,7 @@ func testRemoteForceMount(
 		time.Sleep(20 * time.Second)
 
 		// Kill Docker.
-		fmt.Printf("Stopping Docker.\n")
+		log.Printf("Stopping Docker.\n")
 		if err = sc.Stop(dockerServiceName); err != nil {
 			return err
 		}
@@ -367,10 +368,10 @@ func testRemoteForceMount(
 		time.Sleep(40 * time.Second)
 
 		// Start a task on a new system with this same volume.
-		fmt.Printf("Creating the test task on a new host.\n")
+		log.Printf("Creating the test task on a new host.\n")
 		t.Ip = scheduler.ExternalHost
 		if ctx, err = d.Create(t); err != nil {
-			fmt.Errorf("Error while creating remote task: %v\n", err)
+			log.Errorf("Error while creating remote task: %v\n", err)
 			return err
 		}
 
@@ -396,11 +397,11 @@ func testRemoteForceMount(
 		}
 
 		// Restart Docker.
-		fmt.Printf("Restarting Docker.\n")
+		log.Printf("Restarting Docker.\n")
 		for i, err := 0, sc.Start(dockerServiceName); err != nil; i, err = i+1, sc.Start(dockerServiceName) {
 			if _, ok := err.(*systemd.JobExecutionTookTooLongError); ok {
 				if i < 20 {
-					fmt.Printf("Docker taking too long to start... retry attempt %v\n", i)
+					log.Printf("Docker taking too long to start... retry attempt %v\n", i)
 				} else {
 					return fmt.Errorf("Could not restart Docker.")
 				}
