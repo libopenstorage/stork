@@ -10,8 +10,7 @@ before_install:
   - sudo apt-get -o Dpkg::Options::="--force-confnew" install -yq docker-engine
 script:
   - make torpedo
-  - make test
-  - make container
+  - DOCKER_HUB_REPO=adityadani DOCKER_HUB_TORPEDO_IMAGE=torpedo DOCKER_HUB_TAG=latest make container
 notifications:
   email:
     recipients:
