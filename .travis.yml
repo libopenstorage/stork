@@ -1,0 +1,22 @@
+sudo: required
+dist: trusty
+services:
+  - docker
+language: go
+go:
+  - 1.6
+before_install:  
+  - sudo apt-get update -yq
+  - sudo apt-get -o Dpkg::Options::="--force-confnew" install -yq docker-engine
+script:
+  - make torpedo
+  - make test
+  - make container
+notifications:
+  email:
+    recipients:
+      - aditya@portworx.com
+      - gou@portworx.com
+      - jv@portworx.com
+    on_success: always
+    on_failure: always
