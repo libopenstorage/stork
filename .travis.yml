@@ -4,7 +4,7 @@ services:
   - docker
 language: go
 go:
-  - 1.6
+  - 1.8
 before_install:  
   - sudo apt-get update -yq
   - sudo apt-get -o Dpkg::Options::="--force-confnew" install -yq docker-engine
