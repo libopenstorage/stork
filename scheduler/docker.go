@@ -18,7 +18,7 @@ var (
 type driver struct {
 }
 
-func ifaceToIp(iface *net.Interface) (string, error) {
+func ifaceToIP(iface *net.Interface) (string, error) {
 	addrs, err := iface.Addrs()
 	if err != nil {
 		return "", err
@@ -44,7 +44,7 @@ func ifaceToIp(iface *net.Interface) (string, error) {
 		return ip.String(), nil
 	}
 
-	return "", fmt.Errorf("Node not connected to the network.")
+	return "", fmt.Errorf("node not connected to the network")
 }
 
 func connect(ip string) (*dockerclient.Client, string, error) {
@@ -56,7 +56,7 @@ func connect(ip string) (*dockerclient.Client, string, error) {
 		}
 
 		for _, n := range nodes {
-			localIp := false
+			localIP := false
 			for _, iface := range ifaces {
 				if iface.Flags&net.FlagUp == 0 {
 					continue // interface down
@@ -65,18 +65,18 @@ func connect(ip string) (*dockerclient.Client, string, error) {
 					continue // loopback interface
 				}
 
-				ifaceIp, err := ifaceToIp(&iface)
+				ifaceIP, err := ifaceToIP(&iface)
 				if err != nil {
 					continue
 				}
 
-				if ifaceIp == n {
-					localIp = true
+				if ifaceIP == n {
+					localIP = true
 					break
 				}
 			}
 
-			if !localIp {
+			if !localIP {
 				log.Printf("Selecting Docker host %v\n", n)
 				ip = n
 				break
@@ -85,7 +85,7 @@ func connect(ip string) (*dockerclient.Client, string, error) {
 	}
 
 	if ip == ExternalHost {
-		return nil, "", fmt.Errorf("Cannot find any other Docker host in the cluster.")
+		return nil, "", fmt.Errorf("cannot find any other Docker host in the cluster")
 	}
 
 	endpoint := ""
@@ -97,14 +97,16 @@ func connect(ip string) (*dockerclient.Client, string, error) {
 		endpoint = "http://" + ip + ":2375"
 	}
 
-	if docker, err := dockerclient.NewClient(endpoint); err != nil {
+	docker, err := dockerclient.NewClient(endpoint)
+	if err != nil {
 		return nil, "", err
-	} else {
-		if err = docker.Ping(); err != nil {
-			return nil, "", err
-		}
-		return docker, ip, nil
 	}
+
+	if err = docker.Ping(); err != nil {
+		return nil, "", err
+	}
+
+	return docker, ip, nil
 }
 
 func (d *driver) Init() error {
@@ -121,12 +123,12 @@ func (d *driver) GetNodes() ([]string, error) {
 func (d *driver) Create(t Task) (*Context, error) {
 	context := Context{}
 
-	docker, ip, err := connect(t.Ip)
+	docker, ip, err := connect(t.IP)
 	if err != nil {
 		return nil, err
 	}
 
-	t.Ip = ip
+	t.IP = ip
 
 	po := dockerclient.PullImageOptions{
 		Repository: t.Img,
@@ -163,19 +165,21 @@ func (d *driver) Create(t Task) (*Context, error) {
 		Config:     &config,
 		HostConfig: &hostConfig,
 	}
-	if con, err := docker.CreateContainer(co); err != nil {
+
+	con, err := docker.CreateContainer(co)
+	if err != nil {
 		return nil, err
-	} else {
-		context.Task = t
-		context.Id = con.ID
 	}
+
+	context.Task = t
+	context.ID = con.ID
 
 	return &context, nil
 }
 
 // Run to completion.
 func (d *driver) Run(ctx *Context) error {
-	docker, _, err := connect(ctx.Task.Ip)
+	docker, _, err := connect(ctx.Task.IP)
 	if err != nil {
 		return err
 	}
@@ -191,50 +195,50 @@ func (d *driver) Run(ctx *Context) error {
 		VolumeDriver: ctx.Task.Vol.Driver,
 	}
 
-	if err := docker.StartContainer(ctx.Id, &hostConfig); err != nil {
+	if err := docker.StartContainer(ctx.ID, &hostConfig); err != nil {
 		return err
 	}
 
 	// Wait for the container to exit and collect it's stdout and stderr.
-	if status, err := docker.WaitContainer(ctx.Id); err != nil {
+	status, err := docker.WaitContainer(ctx.ID)
+	if err != nil {
 		return err
-	} else {
-		buf := bytes.NewBuffer([]byte(""))
-		lo := dockerclient.LogsOptions{
-			Container:    ctx.Id,
-			Stdout:       true,
-			Stderr:       false,
-			RawTerminal:  false,
-			Timestamps:   false,
-			OutputStream: buf,
-		}
-		if err := docker.Logs(lo); err != nil {
-			return err
-		}
-		ctx.Stdout = buf.String()
-
-		buf = bytes.NewBuffer([]byte(""))
-		lo = dockerclient.LogsOptions{
-			Container:    ctx.Id,
-			Stdout:       false,
-			Stderr:       true,
-			RawTerminal:  false,
-			Timestamps:   false,
-			OutputStream: buf,
-		}
-		if err := docker.Logs(lo); err != nil {
-			return err
-		}
-		ctx.Stderr = buf.String()
-
-		ctx.Status = status
 	}
+
+	buf := bytes.NewBuffer([]byte(""))
+	lo := dockerclient.LogsOptions{
+		Container:    ctx.ID,
+		Stdout:       true,
+		Stderr:       false,
+		RawTerminal:  false,
+		Timestamps:   false,
+		OutputStream: buf,
+	}
+	if err := docker.Logs(lo); err != nil {
+		return err
+	}
+	ctx.Stdout = buf.String()
+
+	buf = bytes.NewBuffer([]byte(""))
+	lo = dockerclient.LogsOptions{
+		Container:    ctx.ID,
+		Stdout:       false,
+		Stderr:       true,
+		RawTerminal:  false,
+		Timestamps:   false,
+		OutputStream: buf,
+	}
+	if err := docker.Logs(lo); err != nil {
+		return err
+	}
+	ctx.Stderr = buf.String()
+	ctx.Status = status
 
 	return nil
 }
 
 func (d *driver) Start(ctx *Context) error {
-	docker, _, err := connect(ctx.Task.Ip)
+	docker, _, err := connect(ctx.Task.IP)
 	if err != nil {
 		return err
 	}
@@ -250,7 +254,7 @@ func (d *driver) Start(ctx *Context) error {
 		VolumeDriver: ctx.Task.Vol.Driver,
 	}
 
-	if err := docker.StartContainer(ctx.Id, &hostConfig); err != nil {
+	if err := docker.StartContainer(ctx.ID, &hostConfig); err != nil {
 		return err
 	}
 
@@ -258,57 +262,57 @@ func (d *driver) Start(ctx *Context) error {
 }
 
 func (d *driver) WaitDone(ctx *Context) error {
-	docker, _, err := connect(ctx.Task.Ip)
+	docker, _, err := connect(ctx.Task.IP)
 	if err != nil {
 		return err
 	}
 
 	// Wait for the container to exit and collect it's stdout and stderr.
-	if status, err := docker.WaitContainer(ctx.Id); err != nil {
+	status, err := docker.WaitContainer(ctx.ID)
+	if err != nil {
 		return err
-	} else {
-		buf := bytes.NewBuffer([]byte(""))
-		lo := dockerclient.LogsOptions{
-			Container:    ctx.Id,
-			Stdout:       true,
-			Stderr:       false,
-			RawTerminal:  false,
-			Timestamps:   false,
-			OutputStream: buf,
-		}
-		if err := docker.Logs(lo); err != nil {
-			return err
-		}
-		ctx.Stdout = buf.String()
-
-		buf = bytes.NewBuffer([]byte(""))
-		lo = dockerclient.LogsOptions{
-			Container:    ctx.Id,
-			Stdout:       false,
-			Stderr:       true,
-			RawTerminal:  false,
-			Timestamps:   false,
-			OutputStream: buf,
-		}
-		if err := docker.Logs(lo); err != nil {
-			return err
-		}
-		ctx.Stderr = buf.String()
-
-		ctx.Status = status
 	}
+	buf := bytes.NewBuffer([]byte(""))
+	lo := dockerclient.LogsOptions{
+		Container:    ctx.ID,
+		Stdout:       true,
+		Stderr:       false,
+		RawTerminal:  false,
+		Timestamps:   false,
+		OutputStream: buf,
+	}
+	if err := docker.Logs(lo); err != nil {
+		return err
+	}
+	ctx.Stdout = buf.String()
+
+	buf = bytes.NewBuffer([]byte(""))
+	lo = dockerclient.LogsOptions{
+		Container:    ctx.ID,
+		Stdout:       false,
+		Stderr:       true,
+		RawTerminal:  false,
+		Timestamps:   false,
+		OutputStream: buf,
+	}
+	if err := docker.Logs(lo); err != nil {
+		return err
+	}
+
+	ctx.Stderr = buf.String()
+	ctx.Status = status
 
 	return nil
 }
 
 func (d *driver) Destroy(ctx *Context) error {
-	docker, _, err := connect(ctx.Task.Ip)
+	docker, _, err := connect(ctx.Task.IP)
 	if err != nil {
 		return err
 	}
 
 	opts := dockerclient.RemoveContainerOptions{
-		ID:            ctx.Id,
+		ID:            ctx.ID,
 		Force:         true,
 		RemoveVolumes: true,
 	}
@@ -331,41 +335,42 @@ func (d *driver) DestroyByName(ip, name string) error {
 		Size: false,
 	}
 
-	if allContainers, err := docker.ListContainers(lo); err != nil {
+	allContainers, err := docker.ListContainers(lo)
+	if err != nil {
 		return err
-	} else {
-		for _, c := range allContainers {
-			if info, err := docker.InspectContainer(c.ID); err != nil {
-				return err
-			} else {
-				if info.Name == "/"+name {
-					if err = docker.StopContainer(c.ID, 0); err != nil {
-						if _, ok := err.(*dockerclient.ContainerNotRunning); !ok {
-							log.Printf("Error while stopping task %v: %v",
-								info.Name,
-								err,
-							)
-							return err
-						}
-					}
-					ro := dockerclient.RemoveContainerOptions{
-						ID:            c.ID,
-						Force:         true,
-						RemoveVolumes: true,
-					}
+	}
+	for _, c := range allContainers {
+		info, err := docker.InspectContainer(c.ID)
+		if err != nil {
+			return err
+		}
 
-					if err = docker.RemoveContainer(ro); err != nil {
-						log.Printf(
-							"Error while removing task %v: %v",
-							info.Name,
-							err,
-						)
-						return err
-					}
-					log.Printf("Deleted task: %v\n", name)
-					return nil
+		if info.Name == "/"+name {
+			if err = docker.StopContainer(c.ID, 0); err != nil {
+				if _, ok := err.(*dockerclient.ContainerNotRunning); !ok {
+					log.Printf("Error while stopping task %v: %v",
+						info.Name,
+						err,
+					)
+					return err
 				}
 			}
+			ro := dockerclient.RemoveContainerOptions{
+				ID:            c.ID,
+				Force:         true,
+				RemoveVolumes: true,
+			}
+
+			if err = docker.RemoveContainer(ro); err != nil {
+				log.Printf(
+					"Error while removing task %v: %v",
+					info.Name,
+					err,
+				)
+				return err
+			}
+			log.Printf("Deleted task: %v\n", name)
+			return nil
 		}
 	}
 
@@ -378,16 +383,16 @@ func (d *driver) InspectVolume(ip, name string) (*Volume, error) {
 		return nil, err
 	}
 
-	if vol, err := docker.InspectVolume(name); err != nil {
+	vol, err := docker.InspectVolume(name)
+	if err != nil {
 		return nil, err
-	} else {
-		// TODO: Get volume size in a generic way.
-		v := Volume{
-			// Size:   sz,
-			Driver: vol.Driver,
-		}
-		return &v, nil
 	}
+	// TODO: Get volume size in a generic way.
+	v := Volume{
+		// Size:   sz,
+		Driver: vol.Driver,
+	}
+	return &v, nil
 }
 
 func (d *driver) DeleteVolume(ip, name string) error {
@@ -403,7 +408,7 @@ func (d *driver) DeleteVolume(ip, name string) error {
 	// There is a bug with the dockerclient.  Even if the volume could not
 	// be removed, it returns nil.  So make sure the volume was infact deleted.
 	if _, err := docker.InspectVolume(name); err == nil {
-		return fmt.Errorf("Volume %v could not be deleted.", name)
+		return fmt.Errorf("volume %v could not be deleted", name)
 	}
 
 	return nil

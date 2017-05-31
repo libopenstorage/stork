@@ -42,7 +42,7 @@ func testDynamicVolume(
 
 	t := scheduler.Task{
 		Name: taskName,
-		Ip:   scheduler.LocalHost,
+		IP:   scheduler.LocalHost,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -69,41 +69,43 @@ func testDynamicVolume(
 		},
 	}
 
-	if ctx, err := d.Create(t); err != nil {
+	ctx, err := d.Create(t)
+	if err != nil {
 		return err
-	} else {
-		defer func() {
-			if ctx != nil {
-				d.Destroy(ctx)
-			}
-			v.RemoveVolume(volName)
-		}()
+	}
 
-		// Run the task and wait for completion.  This task will exit and
-		// must not be re-started by the scheduler.
-		if err = d.Run(ctx); err != nil {
-			return err
+	defer func() {
+		if ctx != nil {
+			d.Destroy(ctx)
 		}
+		v.RemoveVolume(volName)
+	}()
 
-		if ctx.Status != 0 {
-			return fmt.Errorf("Exit status %v\nStdout: %v\nStderr: %v\n",
-				ctx.Status,
-				ctx.Stdout,
-				ctx.Stderr,
-			)
-		}
+	// Run the task and wait for completion.  This task will exit and
+	// must not be re-started by the scheduler.
+	if err = d.Run(ctx); err != nil {
+		return err
+	}
+
+	if ctx.Status != 0 {
+		return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
+			ctx.Status,
+			ctx.Stdout,
+			ctx.Stderr,
+		)
 	}
 
 	// Verify that the volume properties are honored.
-	if vol, err := d.InspectVolume("", dynName); err != nil {
+	vol, err := d.InspectVolume("", dynName)
+	if err != nil {
 		return err
-	} else {
-		if vol.Driver != v.String() {
-			return fmt.Errorf(
-				"Dynamic volume creation failed, incorrect volume driver (driver = %v).",
-				vol.Driver,
-			)
-		}
+	}
+
+	if vol.Driver != v.String() {
+		return fmt.Errorf(
+			"dynamic volume creation failed, incorrect volume driver (driver = %v)",
+			vol.Driver,
+		)
 	}
 	return nil
 }
@@ -122,7 +124,7 @@ func testDriverDown(
 
 	t := scheduler.Task{
 		Name: taskName,
-		Ip:   scheduler.LocalHost,
+		IP:   scheduler.LocalHost,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -149,50 +151,52 @@ func testDriverDown(
 		},
 	}
 
-	if ctx, err := d.Create(t); err != nil {
+	ctx, err := d.Create(t)
+
+	if err != nil {
 		return err
-	} else {
-		defer func() {
-			if ctx != nil {
-				d.Destroy(ctx)
-			}
-			v.RemoveVolume(volName)
-		}()
+	}
 
-		if err = d.Start(ctx); err != nil {
-			return err
+	defer func() {
+		if ctx != nil {
+			d.Destroy(ctx)
 		}
+		v.RemoveVolume(volName)
+	}()
 
-		// Sleep for fio to get going...
-		time.Sleep(20 * time.Second)
+	if err = d.Start(ctx); err != nil {
+		return err
+	}
 
-		// Stop the volume driver.
-		log.Printf("Stopping the %v volume driver\n", v.String())
-		if err = v.Stop(ctx.Task.Ip); err != nil {
-			return err
-		}
+	// Sleep for fio to get going...
+	time.Sleep(20 * time.Second)
 
-		// Sleep for fio to keep going...
-		time.Sleep(20 * time.Second)
+	// Stop the volume driver.
+	log.Printf("Stopping the %v volume driver\n", v.String())
+	if err = v.Stop(ctx.Task.IP); err != nil {
+		return err
+	}
 
-		// Restart the volume driver.
-		log.Printf("Starting the %v volume driver\n", v.String())
-		if err = v.Start(ctx.Task.Ip); err != nil {
-			return err
-		}
+	// Sleep for fio to keep going...
+	time.Sleep(20 * time.Second)
 
-		log.Printf("Waiting for the test task to exit\n")
-		if err = d.WaitDone(ctx); err != nil {
-			return err
-		}
+	// Restart the volume driver.
+	log.Printf("Starting the %v volume driver\n", v.String())
+	if err = v.Start(ctx.Task.IP); err != nil {
+		return err
+	}
 
-		if ctx.Status != 0 {
-			return fmt.Errorf("Exit status %v\nStdout: %v\nStderr: %v\n",
-				ctx.Status,
-				ctx.Stdout,
-				ctx.Stderr,
-			)
-		}
+	log.Printf("Waiting for the test task to exit\n")
+	if err = d.WaitDone(ctx); err != nil {
+		return err
+	}
+
+	if ctx.Status != 0 {
+		return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
+			ctx.Status,
+			ctx.Stdout,
+			ctx.Stderr,
+		)
 	}
 	return nil
 }
@@ -212,7 +216,7 @@ func testDriverDownContainerDown(
 
 	t := scheduler.Task{
 		Name: taskName,
-		Ip:   scheduler.LocalHost,
+		IP:   scheduler.LocalHost,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -239,54 +243,55 @@ func testDriverDownContainerDown(
 		},
 	}
 
-	if ctx, err := d.Create(t); err != nil {
+	ctx, err := d.Create(t)
+	if err != nil {
 		return err
-	} else {
-		defer func() {
-			if ctx != nil {
-				d.Destroy(ctx)
-			}
-			v.RemoveVolume(volName)
-		}()
+	}
 
-		if err = d.Start(ctx); err != nil {
-			return err
+	defer func() {
+		if ctx != nil {
+			d.Destroy(ctx)
 		}
+		v.RemoveVolume(volName)
+	}()
 
-		// Sleep for fio to get going...
-		time.Sleep(20 * time.Second)
+	if err = d.Start(ctx); err != nil {
+		return err
+	}
 
-		// Stop the volume driver.
-		log.Printf("Stopping the %v volume driver\n", v.String())
-		if err = v.Stop(ctx.Task.Ip); err != nil {
-			return err
-		}
+	// Sleep for fio to get going...
+	time.Sleep(20 * time.Second)
 
-		// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
-		log.Printf("Waiting for the test task to exit\n")
-		if err = d.WaitDone(ctx); err != nil {
-			return err
-		}
+	// Stop the volume driver.
+	log.Printf("Stopping the %v volume driver\n", v.String())
+	if err = v.Stop(ctx.Task.IP); err != nil {
+		return err
+	}
 
-		if ctx.Status == 0 {
-			return fmt.Errorf("Unexpected success exit status %v\nStdout: %v\nStderr: %v\n",
-				ctx.Status,
-				ctx.Stdout,
-				ctx.Stderr,
-			)
-		}
+	// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
+	log.Printf("Waiting for the test task to exit\n")
+	if err = d.WaitDone(ctx); err != nil {
+		return err
+	}
 
-		// Restart the volume driver.
-		log.Printf("Starting the %v volume driver\n", v.String())
-		if err = v.Start(ctx.Task.Ip); err != nil {
-			return err
-		}
+	if ctx.Status == 0 {
+		return fmt.Errorf("unexpected success exit status %v\nStdout: %v\nStderr: %v",
+			ctx.Status,
+			ctx.Stdout,
+			ctx.Stderr,
+		)
+	}
 
-		// Check to see if you can delete the volume.
-		log.Printf("Deleting the attached volume: %v from this host\n", volName)
-		if err = d.DeleteVolume("localhost", volName); err != nil {
-			return err
-		}
+	// Restart the volume driver.
+	log.Printf("Starting the %v volume driver\n", v.String())
+	if err = v.Start(ctx.Task.IP); err != nil {
+		return err
+	}
+
+	// Check to see if you can delete the volume.
+	log.Printf("Deleting the attached volume: %v from this host\n", volName)
+	if err = d.DeleteVolume("localhost", volName); err != nil {
+		return err
 	}
 	return nil
 }
@@ -307,7 +312,7 @@ func testRemoteForceMount(
 	t := scheduler.Task{
 		Name: taskName,
 		Img:  "gourao/fio",
-		Ip:   scheduler.LocalHost,
+		IP:   scheduler.LocalHost,
 		Tag:  "latest",
 		Cmd: []string{
 			"fio",
@@ -333,94 +338,95 @@ func testRemoteForceMount(
 		},
 	}
 
-	if ctx, err := d.Create(t); err != nil {
+	ctx, err := d.Create(t)
+	if err != nil {
 		return err
-	} else {
-		sc, err := systemd.NewSystemdClient()
-		if err != nil {
-			return err
+	}
+
+	sc, err := systemd.NewSystemdClient()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err = sc.Start(dockerServiceName); err != nil {
+			log.Printf("Error while restarting Docker: %v\n", err)
 		}
-		defer func() {
-			if err = sc.Start(dockerServiceName); err != nil {
-				log.Printf("Error while restarting Docker: %v\n", err)
-			}
-			if ctx != nil {
-				d.Destroy(ctx)
-			}
-			v.RemoveVolume(volName)
-		}()
-
-		log.Printf("Starting test task on local node.\n")
-		if err = d.Start(ctx); err != nil {
-			return err
+		if ctx != nil {
+			d.Destroy(ctx)
 		}
+		v.RemoveVolume(volName)
+	}()
 
-		// Sleep for fio to get going...
-		time.Sleep(20 * time.Second)
+	log.Printf("Starting test task on local node.\n")
+	if err = d.Start(ctx); err != nil {
+		return err
+	}
 
-		// Kill Docker.
-		log.Printf("Stopping Docker.\n")
-		if err = sc.Stop(dockerServiceName); err != nil {
-			return err
-		}
+	// Sleep for fio to get going...
+	time.Sleep(20 * time.Second)
 
-		// 40 second grace period before we try to use the volume elsewhere.
-		time.Sleep(40 * time.Second)
+	// Kill Docker.
+	log.Printf("Stopping Docker.\n")
+	if err = sc.Stop(dockerServiceName); err != nil {
+		return err
+	}
 
-		// Start a task on a new system with this same volume.
-		log.Printf("Creating the test task on a new host.\n")
-		t.Ip = scheduler.ExternalHost
-		if ctx, err = d.Create(t); err != nil {
-			log.Warnf("Error while creating remote task: %v\n", err)
-			return err
-		}
+	// 40 second grace period before we try to use the volume elsewhere.
+	time.Sleep(40 * time.Second)
 
-		if err = d.Start(ctx); err != nil {
-			return err
-		}
+	// Start a task on a new system with this same volume.
+	log.Printf("Creating the test task on a new host.\n")
+	t.IP = scheduler.ExternalHost
+	if ctx, err = d.Create(t); err != nil {
+		log.Printf("Error while creating remote task: %v\n", err)
+		return err
+	}
 
-		// Sleep for fio to get going...
-		time.Sleep(20 * time.Second)
+	if err = d.Start(ctx); err != nil {
+		return err
+	}
 
-		// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
-		log.Printf("Waiting for the test task to exit\n")
-		if err = d.WaitDone(ctx); err != nil {
-			return err
-		}
+	// Sleep for fio to get going...
+	time.Sleep(20 * time.Second)
 
-		if ctx.Status != 0 {
-			return fmt.Errorf("Exit status %v\nStdout: %v\nStderr: %v\n",
-				ctx.Status,
-				ctx.Stdout,
-				ctx.Stderr,
-			)
-		}
+	// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
+	log.Printf("Waiting for the test task to exit\n")
+	if err = d.WaitDone(ctx); err != nil {
+		return err
+	}
 
-		// Restart Docker.
-		log.Printf("Restarting Docker.\n")
-		for i, err := 0, sc.Start(dockerServiceName); err != nil; i, err = i+1, sc.Start(dockerServiceName) {
-			if _, ok := err.(*systemd.JobExecutionTookTooLongError); ok {
-				if i < 20 {
-					log.Printf("Docker taking too long to start... retry attempt %v\n", i)
-				} else {
-					return fmt.Errorf("Could not restart Docker.")
-				}
+	if ctx.Status != 0 {
+		return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
+			ctx.Status,
+			ctx.Stdout,
+			ctx.Stderr,
+		)
+	}
+
+	// Restart Docker.
+	log.Printf("Restarting Docker.\n")
+	for i, err := 0, sc.Start(dockerServiceName); err != nil; i, err = i+1, sc.Start(dockerServiceName) {
+		if _, ok := err.(*systemd.JobExecutionTookTooLongError); ok {
+			if i < 20 {
+				log.Printf("Docker taking too long to start... retry attempt %v\n", i)
 			} else {
-				return err
+				return fmt.Errorf("could not restart Docker")
 			}
-		}
-
-		// Wait for the volume driver to start.
-		log.Printf("Starting the %v volume driver\n", v.String())
-		if err = v.Start(ctx.Task.Ip); err != nil {
+		} else {
 			return err
 		}
+	}
 
-		// Check to see if you can delete the volume.
-		log.Printf("Deleting the attached volume: %v from this host\n", volName)
-		if err = d.DeleteVolume("localhost", volName); err != nil {
-			return err
-		}
+	// Wait for the volume driver to start.
+	log.Printf("Starting the %v volume driver\n", v.String())
+	if err = v.Start(ctx.Task.IP); err != nil {
+		return err
+	}
+
+	// Check to see if you can delete the volume.
+	log.Printf("Deleting the attached volume: %v from this host\n", volName)
+	if err = d.DeleteVolume("localhost", volName); err != nil {
+		return err
 	}
 	return nil
 }
@@ -498,25 +504,27 @@ func run(
 	}
 
 	if testName != "" {
-		if f, ok := testFuncs[testName]; !ok {
-			return fmt.Errorf("Unknown test function %v", testName)
-		} else {
-			if err := f(d, v); err != nil {
-				log.Printf("\tTest %v Failed with Error: %v.\n", testName, err)
-				return err
-			}
-			log.Printf("\tTest %v Passed.\n", testName)
-			return nil
+		f, ok := testFuncs[testName]
+
+		if !ok {
+			return fmt.Errorf("unknown test function %v", testName)
 		}
-	} else {
-		for n, f := range testFuncs {
-			log.Printf("Executing test %v\n", n)
-			if err := f(d, v); err != nil {
-				log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
-				return err
-			}
-			log.Printf("\tTest %v Passed.\n", n)
+
+		if err := f(d, v); err != nil {
+			log.Printf("\tTest %v Failed with Error: %v.\n", testName, err)
+			return err
 		}
+		log.Printf("\tTest %v Passed.\n", testName)
+		return nil
+	}
+
+	for n, f := range testFuncs {
+		log.Printf("Executing test %v\n", n)
+		if err := f(d, v); err != nil {
+			log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
+			return err
+		}
+		log.Printf("\tTest %v Passed.\n", n)
 	}
 
 	return nil

@@ -5,10 +5,14 @@ import (
 )
 
 const (
-	LocalHost    = "localhost"
+	// LocalHost will pin a task to the node the task is created on.
+	LocalHost = "localhost"
+	// ExternalHost will pick any other host in the cluster other than the
+	// one the task is created on.
 	ExternalHost = "externalhost"
 )
 
+// Volume specifies the parameters for creating an external volume.
 type Volume struct {
 	Driver string
 	Name   string
@@ -17,6 +21,7 @@ type Volume struct {
 	Opt    []string
 }
 
+// Task specifies the Docker properties of a test task.
 type Task struct {
 	Name string
 	Img  string
@@ -24,17 +29,19 @@ type Task struct {
 	Env  []string
 	Cmd  []string
 	Vol  Volume
-	Ip   string
+	IP   string
 }
 
+// Context holds the execution context and output values of a test task.
 type Context struct {
-	Id     string
+	ID     string
 	Task   Task
 	Status int
 	Stdout string
 	Stderr string
 }
 
+// Driver must be implemented to provide test support to various schedulers.
 type Driver interface {
 	// Init initializes this driver.  Parameters are provided as env variables.
 	Init() error
@@ -76,10 +83,10 @@ func register(name string, d Driver) error {
 	return nil
 }
 
+// Get returns a registered scheduler test provider.
 func Get(name string) (Driver, error) {
 	if d, ok := drivers[name]; ok {
 		return d, nil
-	} else {
-		return nil, errors.New("No such scheduler driver installed")
 	}
+	return nil, errors.New("No such scheduler driver installed")
 }

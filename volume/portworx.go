@@ -39,30 +39,31 @@ func (d *driver) Init() error {
 		n = nodes[0]
 	}
 
-	if clnt, err := clusterclient.NewClusterClient("http://"+n+":9001", "v1"); err != nil {
+	clnt, err := clusterclient.NewClusterClient("http://"+n+":9001", "v1")
+	if err != nil {
 		return err
-	} else {
-		d.clusterManager = clusterclient.ClusterManager(clnt)
+	}
+	d.clusterManager = clusterclient.ClusterManager(clnt)
+
+	clnt, err = volumeclient.NewDriverClient("http://"+n+":9001", "pxd", "")
+	if err != nil {
+		return err
+	}
+	d.volDriver = volumeclient.VolumeDriver(clnt)
+
+	cluster, err := d.clusterManager.Enumerate()
+	if err != nil {
+		return err
 	}
 
-	if clnt, err := volumeclient.NewDriverClient("http://"+n+":9001", "pxd", ""); err != nil {
-		return err
-	} else {
-		d.volDriver = volumeclient.VolumeDriver(clnt)
-	}
-
-	if cluster, err := d.clusterManager.Enumerate(); err != nil {
-		return err
-	} else {
-		log.Printf("The following Portworx nodes are in the cluster:\n")
-		for _, n := range cluster.Nodes {
-			log.Printf(
-				"\tNode ID: %v\tNode IP: %v\tNode Status: %v\n",
-				n.Id,
-				n.DataIp,
-				n.Status,
-			)
-		}
+	log.Printf("The following Portworx nodes are in the cluster:\n")
+	for _, n := range cluster.Nodes {
+		log.Printf(
+			"\tNode ID: %v\tNode IP: %v\tNode Status: %v\n",
+			n.Id,
+			n.DataIp,
+			n.Status,
+		)
 	}
 
 	return nil
@@ -123,15 +124,15 @@ func (d *driver) RemoveVolume(name string) error {
 
 // Portworx runs as a container - so all we need to do is ask docker to
 // stop the running portworx container.
-func (d *driver) Stop(Ip string) error {
-	endpoint := "tcp://" + Ip + ":2375"
+func (d *driver) Stop(ip string) error {
+	endpoint := "tcp://" + ip + ":2375"
 	docker, err := dockerclient.NewClient(endpoint)
 	if err != nil {
 		return err
-	} else {
-		if err = docker.Ping(); err != nil {
-			return err
-		}
+	}
+
+	if err = docker.Ping(); err != nil {
+		return err
 	}
 
 	// Find and stop the Portworx container
@@ -139,44 +140,47 @@ func (d *driver) Stop(Ip string) error {
 		All:  true,
 		Size: false,
 	}
-	if allContainers, err := docker.ListContainers(lo); err != nil {
-		return err
-	} else {
-		for _, c := range allContainers {
-			if info, err := docker.InspectContainer(c.ID); err != nil {
-				return err
-			} else {
-				if strings.Contains(info.Config.Image, "portworx/px") {
-					if !info.State.Running {
-						return fmt.Errorf(
-							"Portworx container with ID %v is not running.",
-							c.ID,
-						)
-					}
 
-					d.hostConfig = info.HostConfig
-					log.Printf("Stopping Portworx container with ID: %v\n", c.ID)
-					if err = docker.StopContainer(c.ID, 0); err != nil {
-						return err
-					}
-					return nil
-				}
+	allContainers, err := docker.ListContainers(lo)
+	if err != nil {
+		return err
+	}
+
+	for _, c := range allContainers {
+		info, err := docker.InspectContainer(c.ID)
+		if err != nil {
+			return err
+		}
+
+		if strings.Contains(info.Config.Image, "portworx/px") {
+			if !info.State.Running {
+				return fmt.Errorf(
+					"portworx container with ID %v is not running",
+					c.ID,
+				)
 			}
+
+			d.hostConfig = info.HostConfig
+			log.Printf("Stopping Portworx container with ID: %v\n", c.ID)
+			if err = docker.StopContainer(c.ID, 0); err != nil {
+				return err
+			}
+			return nil
 		}
 	}
 
-	return fmt.Errorf("Could not find the Portworx container on %v", Ip)
+	return fmt.Errorf("Could not find the Portworx container on %v", ip)
 }
 
-func (d *driver) Start(Ip string) error {
-	endpoint := "tcp://" + Ip + ":2375"
+func (d *driver) Start(ip string) error {
+	endpoint := "tcp://" + ip + ":2375"
 	docker, err := dockerclient.NewClient(endpoint)
 	if err != nil {
 		return err
-	} else {
-		if err = docker.Ping(); err != nil {
-			return err
-		}
+	}
+
+	if err = docker.Ping(); err != nil {
+		return err
 	}
 
 	// Find and stop the Portworx container
@@ -184,48 +188,51 @@ func (d *driver) Start(Ip string) error {
 		All:  true,
 		Size: false,
 	}
-	if allContainers, err := docker.ListContainers(lo); err != nil {
+
+	allContainers, err := docker.ListContainers(lo)
+	if err != nil {
 		return err
-	} else {
-		for _, c := range allContainers {
-			if info, err := docker.InspectContainer(c.ID); err != nil {
-				return err
-			} else {
-				if strings.Contains(info.Config.Image, "portworx/px") {
-					if info.State.Running {
-						return fmt.Errorf(
-							"Portworx container with ID %v is not stopped.",
-							c.ID,
-						)
-					}
+	}
 
-					log.Printf("Starting Portworx container with ID: %v\n", c.ID)
-					if err = docker.StartContainer(c.ID, d.hostConfig); err != nil {
-						return err
-					}
+	for _, c := range allContainers {
+		info, err := docker.InspectContainer(c.ID)
+		if err != nil {
+			return err
+		}
 
-					// Wait for Portworx to become usable.
-					status, _ := d.clusterManager.NodeStatus()
-					for i := 0; status != api.Status_STATUS_OK; i++ {
-						if i > 60 {
-							return fmt.Errorf(
-								"Portworx did not start up in time: Status is %v",
-								status,
-							)
-						}
-
-						time.Sleep(1 * time.Second)
-						status, _ = d.clusterManager.NodeStatus()
-					}
-
-					return nil
-				}
+		if strings.Contains(info.Config.Image, "portworx/px") {
+			if info.State.Running {
+				return fmt.Errorf(
+					"portworx container with ID %v is not stopped",
+					c.ID,
+				)
 			}
+
+			log.Printf("Starting Portworx container with ID: %v\n", c.ID)
+			if err = docker.StartContainer(c.ID, d.hostConfig); err != nil {
+				return err
+			}
+
+			// Wait for Portworx to become usable.
+			status, _ := d.clusterManager.NodeStatus()
+			for i := 0; status != api.Status_STATUS_OK; i++ {
+				if i > 60 {
+					return fmt.Errorf(
+						"Portworx did not start up in time: Status is %v",
+						status,
+					)
+				}
+
+				time.Sleep(1 * time.Second)
+				status, _ = d.clusterManager.NodeStatus()
+			}
+
+			return nil
 		}
 	}
 
 	log.Printf("Could not fine the Portworx container.\n")
-	return fmt.Errorf("Could not find the Portworx container on %v", Ip)
+	return fmt.Errorf("Could not find the Portworx container on %v", ip)
 }
 
 func init() {

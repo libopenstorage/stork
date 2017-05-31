@@ -4,6 +4,9 @@ import (
 	"errors"
 )
 
+// Driver defines an external volume driver interface that must be implemented
+// by any external storage provider that wants to qualify their product with
+// CSI.
 type Driver interface {
 	// String returns the string name of this driver.
 	String() string
@@ -15,10 +18,10 @@ type Driver interface {
 	RemoveVolume(name string) error
 
 	// Stop must cause the volume driver to exit on a given node.
-	Stop(Ip string) error
+	Stop(ip string) error
 
 	// Start must cause the volume driver to start on a given node.
-	Start(Ip string) error
+	Start(ip string) error
 }
 
 var (
@@ -30,10 +33,12 @@ func register(name string, d Driver) error {
 	return nil
 }
 
+// Get an external storage provider to be used with Torpedo.
 func Get(name string) (Driver, error) {
-	if d, ok := drivers[name]; ok {
+	d, ok := drivers[name]
+	if ok {
 		return d, nil
-	} else {
-		return nil, errors.New("No such volume driver installed")
 	}
+
+	return nil, errors.New("No such volume driver installed")
 }
