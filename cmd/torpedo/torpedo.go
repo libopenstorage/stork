@@ -406,7 +406,7 @@ func testRemoteForceMount(
 	// Restart Docker.
 	log.Printf("Restarting Docker.\n")
 	for i, err := 0, sc.Start(dockerServiceName); err != nil; i, err = i+1, sc.Start(dockerServiceName) {
-		if _, ok := err.(*systemd.JobExecutionTookTooLongError); ok {
+		if err == systemd.JobExecutionTookTooLongError {
 			if i < 20 {
 				log.Printf("Docker taking too long to start... retry attempt %v\n", i)
 			} else {
