@@ -77,6 +77,9 @@ func connect(ip string) (*dockerclient.Client, string, error) {
 			}
 
 			if !localIP {
+				if n == "" {
+					return nil, "", fmt.Errorf("not enough Docker hosts in this cluster")
+				}
 				log.Printf("Selecting Docker host %v\n", n)
 				ip = n
 				break
