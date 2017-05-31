@@ -523,7 +523,6 @@ func run(
 		log.Printf("Executing test %v\n", n)
 		if err := f(d, v); err != nil {
 			log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
-			return err
 		}
 		log.Printf("\tTest %v Passed.\n", n)
 	}
