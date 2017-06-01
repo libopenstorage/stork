@@ -48,9 +48,7 @@ Deploying ephemeral applications require less consideration when compared to sta
 | Docker daemon crashes and live restore is enabled. This scenario should be a noop. Container does not crash.                                                                                                                                                       | Acceptance                 | Expected to pass                                                                                                                                                                                  |
 
 ## Qualified External Storage Providers
-| Provider                         | Information              |
-|----------------------------------|--------------------------|
-| Portworx                         | http://docs.portworx.com |
+To submit an external storage provider, please submit a PR with the output of the Torpedo test program and the specifics of the environment used.
 
 ## Usage
 Torpedo is written in Golang.  To build Torpedo:
