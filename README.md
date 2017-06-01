@@ -50,6 +50,10 @@ Deploying ephemeral applications require less consideration when compared to sta
 ## Qualified External Storage Providers
 To submit an external storage provider, please submit a PR with the output of the Torpedo test program and the specifics of the environment used.
 
+| Provider                         | Information              | Test Coverage Status |
+|----------------------------------|--------------------------|----------------------|
+|                                  |                          |                      |
+
 ## Usage
 Torpedo is written in Golang.  To build Torpedo:
 
