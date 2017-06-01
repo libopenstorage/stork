@@ -18,7 +18,7 @@ The core interaction between the Docker runtime and the Portworx endpoint are do
 This document covers the various scheduler-storage integration points that are being addressed by the CSI specification (https://docs.google.com/document/d/1JMNVNP-ZHz8cGlnqckOnpJmHF-DNY7IYP-Di7iuVhQI/edit#) and how external volume providers like Portworx are able to support CSI with DVDI today.
 
 ## Scenarios to Consider when Deploying Stateful Applications
-Administrators should take into account for various production runtime scenarious that may occur when running stateful applications in production, and chose an external storage provider that is capable of dealing with these situations.  Examples of these scenarious are:
+Deploying ephemeral applications require less consideration when compared to stateful applications.  Administrators should take into account for various production runtime scenarious that may occur when running stateful applications in production, and chose an external storage provider that is capable of dealing with these situations.  Examples of these scenarious are:
 
 ### Runtime software hangs and crashes
 * Container runtime engine (or scheduler) software failure, hang or crash:  When a daemon, like Docker crashes, it can induce errors with an application's connectivity to the external storage.  This problem is compounded when the storage provider itself, runs as a container.  In general, you need to assume that user space code will either hang or crash, and the storage system needs to gracefully deal with this, without data loss, unavailability or corruption.
