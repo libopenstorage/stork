@@ -2,6 +2,8 @@ package volume
 
 import (
 	"errors"
+	"os"
+	"strings"
 )
 
 // Driver defines an external volume driver interface that must be implemented
@@ -15,9 +17,11 @@ type Driver interface {
 	Init() error
 
 	// RemoveVolume forcefully unmounts/detaches and deletes a storage volume.
+	// This is only called by Torpedo during cleanup operations, it is not
+	// used during orchestration simulations.
 	RemoveVolume(name string) error
 
-	// Stop must cause the volume driver to exit on a given node.
+	// Stop must cause the volume driver to exit or get killed on a given node.
 	Stop(ip string) error
 
 	// Start must cause the volume driver to start on a given node.
@@ -28,6 +32,7 @@ type Driver interface {
 }
 
 var (
+	nodes   []string
 	drivers = make(map[string]Driver)
 )
 
@@ -44,4 +49,8 @@ func Get(name string) (Driver, error) {
 	}
 
 	return nil, errors.New("No such volume driver installed")
+}
+
+func init() {
+	nodes = strings.Split(os.Getenv("CLUSTER_NODES"), ",")
 }

@@ -2,6 +2,12 @@ package scheduler
 
 import (
 	"errors"
+	"os"
+	"strings"
+)
+
+var (
+	nodes []string
 )
 
 const (
@@ -85,6 +91,8 @@ func register(name string, d Driver) error {
 
 // Get returns a registered scheduler test provider.
 func Get(name string) (Driver, error) {
+	nodes = strings.Split(os.Getenv("CLUSTER_NODES"), ",")
+
 	if d, ok := drivers[name]; ok {
 		return d, nil
 	}

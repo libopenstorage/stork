@@ -17,22 +17,21 @@ import (
 )
 
 var (
-	nodes  []string
 	docker *dockerclient.Client
 )
 
-type driver struct {
+type portworx struct {
 	hostConfig     *dockerclient.HostConfig
 	clusterManager cluster.Cluster
 	volDriver      volume.VolumeDriver
 }
 
-func (d *driver) String() string {
+func (d *portworx) String() string {
 	return "pxd"
 }
 
-func (d *driver) Init() error {
-	log.Printf("Using the Portworx volume driver.\n")
+func (d *portworx) Init() error {
+	log.Printf("Using the Portworx volume portworx.\n")
 
 	n := "127.0.0.1"
 	if len(nodes) > 0 {
@@ -69,7 +68,7 @@ func (d *driver) Init() error {
 	return nil
 }
 
-func (d *driver) RemoveVolume(name string) error {
+func (d *portworx) RemoveVolume(name string) error {
 	locator := &api.VolumeLocator{}
 
 	volumes, err := d.volDriver.Enumerate(locator, nil)
@@ -124,7 +123,7 @@ func (d *driver) RemoveVolume(name string) error {
 
 // Portworx runs as a container - so all we need to do is ask docker to
 // stop the running portworx container.
-func (d *driver) Stop(ip string) error {
+func (d *portworx) Stop(ip string) error {
 	endpoint := "tcp://" + ip + ":2375"
 	docker, err := dockerclient.NewClient(endpoint)
 	if err != nil {
@@ -172,7 +171,7 @@ func (d *driver) Stop(ip string) error {
 	return fmt.Errorf("Could not find the Portworx container on %v", ip)
 }
 
-func (d *driver) WaitStart(ip string) error {
+func (d *portworx) WaitStart(ip string) error {
 	// Wait for Portworx to become usable.
 	status, _ := d.clusterManager.NodeStatus()
 	for i := 0; status != api.Status_STATUS_OK; i++ {
@@ -190,7 +189,7 @@ func (d *driver) WaitStart(ip string) error {
 	return nil
 }
 
-func (d *driver) Start(ip string) error {
+func (d *portworx) Start(ip string) error {
 	endpoint := "tcp://" + ip + ":2375"
 	docker, err := dockerclient.NewClient(endpoint)
 	if err != nil {
@@ -242,5 +241,5 @@ func (d *driver) Start(ip string) error {
 func init() {
 	nodes = strings.Split(os.Getenv("CLUSTER_NODES"), ",")
 
-	register("pxd", &driver{})
+	register("pxd", &portworx{})
 }

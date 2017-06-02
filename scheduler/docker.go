@@ -6,13 +6,8 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 
 	dockerclient "github.com/fsouza/go-dockerclient"
-)
-
-var (
-	nodes []string
 )
 
 type driver struct {
@@ -418,7 +413,5 @@ func (d *driver) DeleteVolume(ip, name string) error {
 }
 
 func init() {
-	nodes = strings.Split(os.Getenv("CLUSTER_NODES"), ",")
-
 	register("docker", &driver{})
 }
