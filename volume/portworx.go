@@ -151,7 +151,7 @@ func (d *portworx) Stop(ip string) error {
 			return err
 		}
 
-		if strings.Contains(info.Config.Image, "portworx/px") {
+		if strings.Contains(info.Config.Image, "px") {
 			if !info.State.Running {
 				return fmt.Errorf(
 					"portworx container with ID %v is not running",
@@ -217,7 +217,7 @@ func (d *portworx) Start(ip string) error {
 			return err
 		}
 
-		if strings.Contains(info.Config.Image, "portworx/px") {
+		if strings.Contains(info.Config.Image, "px") {
 			if info.State.Running {
 				return fmt.Errorf(
 					"portworx container with ID %v is not stopped",

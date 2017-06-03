@@ -114,7 +114,6 @@ func (d *driver) Init() error {
 }
 
 func (d *driver) GetNodes() ([]string, error) {
-	nodes := []string{}
 	return nodes, nil
 }
 

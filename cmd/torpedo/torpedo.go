@@ -36,13 +36,21 @@ func testDynamicVolume(
 ) error {
 	taskName := "testDynamicVolume"
 
+	// Pick the first node to start the task
+	nodes, err := d.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	host := nodes[0]
+
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName("localhost", taskName)
+	d.DestroyByName(host, taskName)
 	v.RemoveVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
-		IP:   scheduler.LocalHost,
+		IP:   host,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -51,7 +59,7 @@ func testDynamicVolume(
 			"--directory=/mnt/",
 			"--ioengine=libaio",
 			"--readwrite=write",
-			"--size=5G",
+			"--size=1G",
 			"--name=test",
 			"--verify=meta",
 			"--do_verify=1",
@@ -96,7 +104,7 @@ func testDynamicVolume(
 	}
 
 	// Verify that the volume properties are honored.
-	vol, err := d.InspectVolume("", dynName)
+	vol, err := d.InspectVolume(host, dynName)
 	if err != nil {
 		return err
 	}
@@ -118,13 +126,21 @@ func testDriverDown(
 ) error {
 	taskName := "testDriverDown"
 
+	// Pick the first node to start the task
+	nodes, err := d.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	host := nodes[0]
+
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName("localhost", taskName)
+	d.DestroyByName(host, taskName)
 	v.RemoveVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
-		IP:   scheduler.LocalHost,
+		IP:   host,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -133,7 +149,7 @@ func testDriverDown(
 			"--directory=/mnt/",
 			"--ioengine=libaio",
 			"--readwrite=write",
-			"--size=5G",
+			"--size=1G",
 			"--name=test",
 			"--verify=meta",
 			"--do_verify=1",
@@ -210,13 +226,21 @@ func testDriverDownContainerDown(
 ) error {
 	taskName := "testDriverDownContainerDown"
 
+	// Pick the first node to start the task
+	nodes, err := d.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	host := nodes[0]
+
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName("localhost", taskName)
+	d.DestroyByName(host, taskName)
 	v.RemoveVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
-		IP:   scheduler.LocalHost,
+		IP:   host,
 		Img:  "gourao/fio",
 		Tag:  "latest",
 		Cmd: []string{
@@ -225,7 +249,7 @@ func testDriverDownContainerDown(
 			"--directory=/mnt/",
 			"--ioengine=libaio",
 			"--readwrite=write",
-			"--size=5G",
+			"--size=1G",
 			"--name=test",
 			"--verify=meta",
 			"--do_verify=1",
@@ -288,11 +312,12 @@ func testDriverDownContainerDown(
 		return err
 	}
 
-	// Check to see if you can delete the volume.
-	log.Printf("Deleting the attached volume: %v from this host\n", volName)
-	if err = d.DeleteVolume("localhost", volName); err != nil {
+	// Check to see if you can delete the volume from another node
+	log.Printf("Deleting the attached volume: %v from %v\n", volName, nodes[1])
+	if err = d.DeleteVolume(nodes[1], volName); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -305,14 +330,22 @@ func testRemoteForceMount(
 ) error {
 	taskName := "testRemoteForceMount"
 
+	// Pick the first node to start the task
+	nodes, err := d.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	host := nodes[0]
+
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName("localhost", taskName)
+	d.DestroyByName(host, taskName)
 	v.RemoveVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
 		Img:  "gourao/fio",
-		IP:   scheduler.LocalHost,
+		IP:   host,
 		Tag:  "latest",
 		Cmd: []string{
 			"fio",
@@ -320,7 +353,7 @@ func testRemoteForceMount(
 			"--directory=/mnt/",
 			"--ioengine=libaio",
 			"--readwrite=write",
-			"--size=5G",
+			"--size=1G",
 			"--name=test",
 			"--verify=meta",
 			"--do_verify=1",
@@ -483,10 +516,12 @@ func run(
 	testName string,
 ) error {
 	if err := d.Init(); err != nil {
+		log.Fatalf("Error initializing schedule driver")
 		return err
 	}
 
 	if err := v.Init(); err != nil {
+		log.Fatalf("Error initializing volume driver")
 		return err
 	}
 
