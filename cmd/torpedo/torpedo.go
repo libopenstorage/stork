@@ -20,11 +20,35 @@ type testDriverFunc func(scheduler.Driver, volume.Driver) error
 const (
 	dockerServiceName = "docker.service"
 
-	volName = "torpedo_fiovol"
+	// Name of the external volume for the Torpedo tests.
+	volName = "torpedo_vol"
 
 	// Use the inline volume specification so that we can test
 	// volume options being dynamically parsed and used inline.
 	dynName = "size=10G,repl=2,name=" + volName
+)
+
+var (
+	// Docker image to use as the test workload.
+	testImage = "torpedo/fio"
+
+	// Test image command line arguments.  This is passed into the testImage.
+	testArgs = []string{
+		"fio",
+		"--blocksize=64k",
+		"--directory=/mnt/",
+		"--ioengine=libaio",
+		"--readwrite=write",
+		"--size=1G",
+		"--name=test",
+		"--verify=meta",
+		"--do_verify=1",
+		"--verify_pattern=0xDeadBeef",
+		"--direct=1",
+		"--gtod_reduce=1",
+		"--iodepth=1",
+		"--randrepeat=1",
+	}
 )
 
 // Create dynamic volumes.  Make sure that a task can use the dynamic volume
@@ -51,24 +75,9 @@ func testDynamicVolume(
 	t := scheduler.Task{
 		Name: taskName,
 		IP:   host,
-		Img:  "gourao/fio",
+		Img:  testImage,
 		Tag:  "latest",
-		Cmd: []string{
-			"fio",
-			"--blocksize=64k",
-			"--directory=/mnt/",
-			"--ioengine=libaio",
-			"--readwrite=write",
-			"--size=1G",
-			"--name=test",
-			"--verify=meta",
-			"--do_verify=1",
-			"--verify_pattern=0xDeadBeef",
-			"--direct=1",
-			"--gtod_reduce=1",
-			"--iodepth=1",
-			"--randrepeat=1",
-		},
+		Cmd:  testArgs,
 		Vol: scheduler.Volume{
 			Driver: v.String(),
 			Name:   dynName,
@@ -141,24 +150,9 @@ func testDriverDown(
 	t := scheduler.Task{
 		Name: taskName,
 		IP:   host,
-		Img:  "gourao/fio",
+		Img:  testImage,
 		Tag:  "latest",
-		Cmd: []string{
-			"fio",
-			"--blocksize=64k",
-			"--directory=/mnt/",
-			"--ioengine=libaio",
-			"--readwrite=write",
-			"--size=1G",
-			"--name=test",
-			"--verify=meta",
-			"--do_verify=1",
-			"--verify_pattern=0xDeadBeef",
-			"--direct=1",
-			"--gtod_reduce=1",
-			"--iodepth=1",
-			"--randrepeat=1",
-		},
+		Cmd:  testArgs,
 		Vol: scheduler.Volume{
 			Driver: v.String(),
 			Name:   dynName,
@@ -241,24 +235,9 @@ func testDriverDownContainerDown(
 	t := scheduler.Task{
 		Name: taskName,
 		IP:   host,
-		Img:  "gourao/fio",
+		Img:  testImage,
 		Tag:  "latest",
-		Cmd: []string{
-			"fio",
-			"--blocksize=64k",
-			"--directory=/mnt/",
-			"--ioengine=libaio",
-			"--readwrite=write",
-			"--size=1G",
-			"--name=test",
-			"--verify=meta",
-			"--do_verify=1",
-			"--verify_pattern=0xDeadBeef",
-			"--direct=1",
-			"--gtod_reduce=1",
-			"--iodepth=1",
-			"--randrepeat=1",
-		},
+		Cmd:  testArgs,
 		Vol: scheduler.Volume{
 			Driver: v.String(),
 			Name:   dynName,
@@ -344,25 +323,10 @@ func testRemoteForceMount(
 
 	t := scheduler.Task{
 		Name: taskName,
-		Img:  "gourao/fio",
+		Img:  testImage,
 		IP:   host,
 		Tag:  "latest",
-		Cmd: []string{
-			"fio",
-			"--blocksize=64k",
-			"--directory=/mnt/",
-			"--ioengine=libaio",
-			"--readwrite=write",
-			"--size=1G",
-			"--name=test",
-			"--verify=meta",
-			"--do_verify=1",
-			"--verify_pattern=0xDeadBeef",
-			"--direct=1",
-			"--gtod_reduce=1",
-			"--iodepth=1",
-			"--randrepeat=1",
-		},
+		Cmd:  testArgs,
 		Vol: scheduler.Volume{
 			Driver: v.String(),
 			Name:   dynName,
