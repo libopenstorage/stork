@@ -6,16 +6,21 @@
 
 Torpedo is a test suite to qualify storage providers for stateful containers running in a cluster.  It tests various scenarios that applications encounter when running in Linux containers and deployed via schedulers such as Marathon, Kubernetes or Swarm.
 
-## Background
-This test suite will natively support the CSI specification for external volume support into Mesosphere and Kubernetes.
+## CSI
+CSI is a specification for Linux Container Storage Interfaces.  It defines the control plane interraction between a cloud native scheduler such as Kubernetes, and a cloud native storage provider.  The specification is available [here](https://github.com/container-storage-interface/spec/blob/master/spec.md).
 
-However, at the time of this writing, CSI is currently still work in progress, so most schedulers provide external volume support to Mesosphere or Kubernetes via DVDI or Kubernetes native driver interface.
+The Torpedo test suite natively supports the CSI specification for external volume support into Mesosphere and Kubernetes.  It operates as a CSI enabled orchestrator (scheduler) to communicate with external storage providers that support CSI.
+
+This document covers the various scheduler-storage integration points that are being addressed by the CSI specification (https://docs.google.com/document/d/1JMNVNP-ZHz8cGlnqckOnpJmHF-DNY7IYP-Di7iuVhQI/edit#) and how external volume providers like Portworx are able to support CSI with DVDI today.
+
+### Legacy support
+Since CSI is currently still work in progress, so most schedulers provide external volume support to Mesosphere or Kubernetes via DVDI or Kubernetes native driver interface.
 
 Docker volume driver interface (DVDI) provides the control path operations to create, mount, unmount and eventually delete an external volume.
 
 The core interaction between the Docker runtime and the Portworx endpoint are documented here: https://github.com/portworx/px-docs/blob/gh-pages/scheduler/docker/volume_plugin.md
 
-This document covers the various scheduler-storage integration points that are being addressed by the CSI specification (https://docs.google.com/document/d/1JMNVNP-ZHz8cGlnqckOnpJmHF-DNY7IYP-Di7iuVhQI/edit#) and how external volume providers like Portworx are able to support CSI with DVDI today.
+Torpedo can also work with schedulers that still use the Docker volume driver interface.
 
 ## Scenarios to Consider when Deploying Stateful Applications
 Deploying ephemeral applications require less consideration when compared to stateful applications.  When running stateful applications in production, administrators should take into account various runtime scenarios that may occur and chose an external storage provider that is capable of dealing with these situations.  Examples of these scenarios are:
