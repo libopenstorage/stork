@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/scheduler"
-	"github.com/portworx/torpedo/volume"
+	"github.com/portworx/torpedo/services/scheduler"
+	"github.com/portworx/torpedo/services/volume"
 
 	"github.com/giantswarm/yochu/systemd"
 )
@@ -174,7 +174,7 @@ func testDriverDown(
 		v.CleanupVolume(volName)
 	}()
 
-	if err = s.Start(ctx); err != nil {
+	if err = s.Schedule(ctx); err != nil {
 		return err
 	}
 
@@ -183,7 +183,7 @@ func testDriverDown(
 
 	// Stop the volume driver.
 	log.Printf("Stopping the %v volume driver\n", v.String())
-	if err = v.Stop(ctx.Task.IP); err != nil {
+	if err = v.StopDriver(ctx.Task.IP); err != nil {
 		return err
 	}
 
@@ -192,7 +192,7 @@ func testDriverDown(
 
 	// Restart the volume driver.
 	log.Printf("Starting the %v volume driver\n", v.String())
-	if err = v.Start(ctx.Task.IP); err != nil {
+	if err = v.StartDriver(ctx.Task.IP); err != nil {
 		return err
 	}
 
@@ -258,7 +258,7 @@ func testDriverDownContainerDown(
 		v.CleanupVolume(volName)
 	}()
 
-	if err = s.Start(ctx); err != nil {
+	if err = s.Schedule(ctx); err != nil {
 		return err
 	}
 
@@ -267,7 +267,7 @@ func testDriverDownContainerDown(
 
 	// Stop the volume driver.
 	log.Printf("Stopping the %v volume driver\n", v.String())
-	if err = v.Stop(ctx.Task.IP); err != nil {
+	if err = v.StopDriver(ctx.Task.IP); err != nil {
 		return err
 	}
 
@@ -287,7 +287,7 @@ func testDriverDownContainerDown(
 
 	// Restart the volume driver.
 	log.Printf("Starting the %v volume driver\n", v.String())
-	if err = v.Start(ctx.Task.IP); err != nil {
+	if err = v.StartDriver(ctx.Task.IP); err != nil {
 		return err
 	}
 
@@ -355,7 +355,7 @@ func testRemoteForceMount(
 	}()
 
 	log.Printf("Starting test task on local node.\n")
-	if err = s.Start(ctx); err != nil {
+	if err = s.Schedule(ctx); err != nil {
 		return err
 	}
 
@@ -379,7 +379,7 @@ func testRemoteForceMount(
 		return err
 	}
 
-	if err = s.Start(ctx); err != nil {
+	if err = s.Schedule(ctx); err != nil {
 		return err
 	}
 

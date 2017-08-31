@@ -8,7 +8,8 @@ import (
 
 // Driver defines an external volume driver interface that must be implemented
 // by any external storage provider that wants to qualify their product with
-// CSI.
+// Torpedo.  The functions defined here are meant to be destructive and illustrative
+// of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// String returns the string name of this driver.
 	String() string
@@ -22,10 +23,10 @@ type Driver interface {
 	CleanupVolume(name string) error
 
 	// Stop must cause the volume driver to exit or get killed on a given node.
-	Stop(ip string) error
+	StopDriver(ip string) error
 
 	// Start must cause the volume driver to start on a given node.
-	Start(ip string) error
+	StartDriver(ip string) error
 
 	// WaitStart must wait till the volume driver becomes usable on a given node.
 	WaitStart(ip string) error

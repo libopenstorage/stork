@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"strings"
+
+	"github.com/portworx/torpedo/services"
 )
 
 var (
@@ -49,6 +51,9 @@ type Context struct {
 
 // Driver must be implemented to provide test support to various schedulers.
 type Driver interface {
+	// Services provides the basic service manipulation routines.
+	services.Service
+
 	// Init initializes this driver.  Parameters are provided as env variables.
 	Init() error
 
@@ -58,8 +63,8 @@ type Driver interface {
 	// Create creates a task context.  Does not start the task.
 	Create(Task) (*Context, error)
 
-	// Start task
-	Start(*Context) error
+	// Schedule starts a task
+	Schedule(*Context) error
 
 	// WaitDone waits for task to complete.
 	WaitDone(*Context) error
@@ -81,11 +86,11 @@ type Driver interface {
 }
 
 var (
-	drivers = make(map[string]Driver)
+	schedulers = make(map[string]Driver)
 )
 
 func register(name string, d Driver) error {
-	drivers[name] = d
+	schedulers[name] = d
 	return nil
 }
 
@@ -93,7 +98,7 @@ func register(name string, d Driver) error {
 func Get(name string) (Driver, error) {
 	nodes = strings.Split(os.Getenv("CLUSTER_NODES"), ",")
 
-	if d, ok := drivers[name]; ok {
+	if d, ok := schedulers[name]; ok {
 		return d, nil
 	}
 	return nil, errors.New("No such scheduler driver installed")

@@ -1,4 +1,4 @@
-package scheduler
+package swarm
 
 import (
 	"bytes"
@@ -8,9 +8,11 @@ import (
 	"os"
 
 	dockerclient "github.com/fsouza/go-dockerclient"
+
+	"github.com/portworx/torpedo/services/scheduler"
 )
 
-type driver struct {
+type swarm struct {
 }
 
 func ifaceToIP(iface *net.Interface) (string, error) {
@@ -107,17 +109,17 @@ func connect(ip string) (*dockerclient.Client, string, error) {
 	return docker, ip, nil
 }
 
-func (d *driver) Init() error {
-	log.Printf("Using the Docker scheduler driver.\n")
+func (s *swarm) Init() error {
+	log.Printf("Using the Docker scheduler swarm.\n")
 	log.Printf("The following hosts are in the cluster: %v.\n", nodes)
 	return nil
 }
 
-func (d *driver) GetNodes() ([]string, error) {
+func (s *swarm) GetNodes() ([]string, error) {
 	return nodes, nil
 }
 
-func (d *driver) Create(t Task) (*Context, error) {
+func (s *swarm) Create(t Task) (*Context, error) {
 	context := Context{}
 
 	docker, ip, err := connect(t.IP)
@@ -175,7 +177,7 @@ func (d *driver) Create(t Task) (*Context, error) {
 }
 
 // Run to completion.
-func (d *driver) Run(ctx *Context) error {
+func (s *swarm) Run(ctx *Context) error {
 	docker, _, err := connect(ctx.Task.IP)
 	if err != nil {
 		return err
@@ -234,7 +236,7 @@ func (d *driver) Run(ctx *Context) error {
 	return nil
 }
 
-func (d *driver) Start(ctx *Context) error {
+func (s *swarm) Schedule(ctx *Context) error {
 	docker, _, err := connect(ctx.Task.IP)
 	if err != nil {
 		return err
@@ -258,7 +260,7 @@ func (d *driver) Start(ctx *Context) error {
 	return nil
 }
 
-func (d *driver) WaitDone(ctx *Context) error {
+func (s *swarm) WaitDone(ctx *Context) error {
 	docker, _, err := connect(ctx.Task.IP)
 	if err != nil {
 		return err
@@ -302,7 +304,7 @@ func (d *driver) WaitDone(ctx *Context) error {
 	return nil
 }
 
-func (d *driver) Destroy(ctx *Context) error {
+func (s *swarm) Destroy(ctx *Context) error {
 	docker, _, err := connect(ctx.Task.IP)
 	if err != nil {
 		return err
@@ -321,7 +323,7 @@ func (d *driver) Destroy(ctx *Context) error {
 	return nil
 }
 
-func (d *driver) DestroyByName(ip, name string) error {
+func (s *swarm) DestroyByName(ip, name string) error {
 	docker, _, err := connect(ip)
 	if err != nil {
 		return err
@@ -374,7 +376,7 @@ func (d *driver) DestroyByName(ip, name string) error {
 	return nil
 }
 
-func (d *driver) InspectVolume(ip, name string) (*Volume, error) {
+func (s *swarm) InspectVolume(ip, name string) (*Volume, error) {
 	docker, _, err := connect(ip)
 	if err != nil {
 		return nil, err
@@ -392,7 +394,7 @@ func (d *driver) InspectVolume(ip, name string) (*Volume, error) {
 	return &v, nil
 }
 
-func (d *driver) DeleteVolume(ip, name string) error {
+func (s *swarm) DeleteVolume(ip, name string) error {
 	docker, _, err := connect(ip)
 	if err != nil {
 		return err
@@ -412,5 +414,5 @@ func (d *driver) DeleteVolume(ip, name string) error {
 }
 
 func init() {
-	register("docker", &driver{})
+	scheduler.register("swarm", &swarm{})
 }
