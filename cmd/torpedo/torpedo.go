@@ -55,13 +55,13 @@ var (
 // in the inline format as size=x,repl=x,compress=x,name=foo.
 // This test will fail if the storage driver is not able to parse the size correctly.
 func testDynamicVolume(
-	d scheduler.Driver,
+	s scheduler.Driver,
 	v volume.Driver,
 ) error {
 	taskName := "testDynamicVolume"
 
 	// Pick the first node to start the task
-	nodes, err := d.GetNodes()
+	nodes, err := s.GetNodes()
 	if err != nil {
 		return err
 	}
@@ -69,8 +69,8 @@ func testDynamicVolume(
 	host := nodes[0]
 
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName(host, taskName)
-	v.RemoveVolume(volName)
+	s.DestroyByName(host, taskName)
+	v.CleanupVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
@@ -86,21 +86,21 @@ func testDynamicVolume(
 		},
 	}
 
-	ctx, err := d.Create(t)
+	ctx, err := s.Create(t)
 	if err != nil {
 		return err
 	}
 
 	defer func() {
 		if ctx != nil {
-			d.Destroy(ctx)
+			s.Destroy(ctx)
 		}
-		v.RemoveVolume(volName)
+		v.CleanupVolume(volName)
 	}()
 
 	// Run the task and wait for completion.  This task will exit and
 	// must not be re-started by the scheduler.
-	if err = d.Run(ctx); err != nil {
+	if err = s.Run(ctx); err != nil {
 		return err
 	}
 
@@ -113,7 +113,7 @@ func testDynamicVolume(
 	}
 
 	// Verify that the volume properties are honored.
-	vol, err := d.InspectVolume(host, dynName)
+	vol, err := s.InspectVolume(host, dynName)
 	if err != nil {
 		return err
 	}
@@ -130,13 +130,13 @@ func testDynamicVolume(
 // Volume Driver Plugin is down, unavailable - and the client container should
 // not be impacted.
 func testDriverDown(
-	d scheduler.Driver,
+	s scheduler.Driver,
 	v volume.Driver,
 ) error {
 	taskName := "testDriverDown"
 
 	// Pick the first node to start the task
-	nodes, err := d.GetNodes()
+	nodes, err := s.GetNodes()
 	if err != nil {
 		return err
 	}
@@ -144,8 +144,8 @@ func testDriverDown(
 	host := nodes[0]
 
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName(host, taskName)
-	v.RemoveVolume(volName)
+	s.DestroyByName(host, taskName)
+	v.CleanupVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
@@ -161,7 +161,7 @@ func testDriverDown(
 		},
 	}
 
-	ctx, err := d.Create(t)
+	ctx, err := s.Create(t)
 
 	if err != nil {
 		return err
@@ -169,12 +169,12 @@ func testDriverDown(
 
 	defer func() {
 		if ctx != nil {
-			d.Destroy(ctx)
+			s.Destroy(ctx)
 		}
-		v.RemoveVolume(volName)
+		v.CleanupVolume(volName)
 	}()
 
-	if err = d.Start(ctx); err != nil {
+	if err = s.Start(ctx); err != nil {
 		return err
 	}
 
@@ -197,7 +197,7 @@ func testDriverDown(
 	}
 
 	log.Printf("Waiting for the test task to exit\n")
-	if err = d.WaitDone(ctx); err != nil {
+	if err = s.WaitDone(ctx); err != nil {
 		return err
 	}
 
@@ -215,13 +215,13 @@ func testDriverDown(
 // There is a lost unmount call in this case. When the volume driver is
 // back up, we should be able to detach and delete the volume.
 func testDriverDownContainerDown(
-	d scheduler.Driver,
+	s scheduler.Driver,
 	v volume.Driver,
 ) error {
 	taskName := "testDriverDownContainerDown"
 
 	// Pick the first node to start the task
-	nodes, err := d.GetNodes()
+	nodes, err := s.GetNodes()
 	if err != nil {
 		return err
 	}
@@ -229,8 +229,8 @@ func testDriverDownContainerDown(
 	host := nodes[0]
 
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName(host, taskName)
-	v.RemoveVolume(volName)
+	s.DestroyByName(host, taskName)
+	v.CleanupVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
@@ -246,19 +246,19 @@ func testDriverDownContainerDown(
 		},
 	}
 
-	ctx, err := d.Create(t)
+	ctx, err := s.Create(t)
 	if err != nil {
 		return err
 	}
 
 	defer func() {
 		if ctx != nil {
-			d.Destroy(ctx)
+			s.Destroy(ctx)
 		}
-		v.RemoveVolume(volName)
+		v.CleanupVolume(volName)
 	}()
 
-	if err = d.Start(ctx); err != nil {
+	if err = s.Start(ctx); err != nil {
 		return err
 	}
 
@@ -273,7 +273,7 @@ func testDriverDownContainerDown(
 
 	// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
 	log.Printf("Waiting for the test task to exit\n")
-	if err = d.WaitDone(ctx); err != nil {
+	if err = s.WaitDone(ctx); err != nil {
 		return err
 	}
 
@@ -293,7 +293,7 @@ func testDriverDownContainerDown(
 
 	// Check to see if you can delete the volume from another node
 	log.Printf("Deleting the attached volume: %v from %v\n", volName, nodes[1])
-	if err = d.DeleteVolume(nodes[1], volName); err != nil {
+	if err = s.DeleteVolume(nodes[1], volName); err != nil {
 		return err
 	}
 
@@ -304,13 +304,13 @@ func testDriverDownContainerDown(
 // client container crash on this system.  The volume should be able
 // to get moounted on another node.
 func testRemoteForceMount(
-	d scheduler.Driver,
+	s scheduler.Driver,
 	v volume.Driver,
 ) error {
 	taskName := "testRemoteForceMount"
 
 	// Pick the first node to start the task
-	nodes, err := d.GetNodes()
+	nodes, err := s.GetNodes()
 	if err != nil {
 		return err
 	}
@@ -318,8 +318,8 @@ func testRemoteForceMount(
 	host := nodes[0]
 
 	// Remove any container and volume for this test - previous run may have failed.
-	d.DestroyByName(host, taskName)
-	v.RemoveVolume(volName)
+	s.DestroyByName(host, taskName)
+	v.CleanupVolume(volName)
 
 	t := scheduler.Task{
 		Name: taskName,
@@ -335,7 +335,7 @@ func testRemoteForceMount(
 		},
 	}
 
-	ctx, err := d.Create(t)
+	ctx, err := s.Create(t)
 	if err != nil {
 		return err
 	}
@@ -349,13 +349,13 @@ func testRemoteForceMount(
 			log.Printf("Error while restarting Docker: %v\n", err)
 		}
 		if ctx != nil {
-			d.Destroy(ctx)
+			s.Destroy(ctx)
 		}
-		v.RemoveVolume(volName)
+		v.CleanupVolume(volName)
 	}()
 
 	log.Printf("Starting test task on local node.\n")
-	if err = d.Start(ctx); err != nil {
+	if err = s.Start(ctx); err != nil {
 		return err
 	}
 
@@ -374,12 +374,12 @@ func testRemoteForceMount(
 	// Start a task on a new system with this same volume.
 	log.Printf("Creating the test task on a new host.\n")
 	t.IP = scheduler.ExternalHost
-	if ctx, err = d.Create(t); err != nil {
+	if ctx, err = s.Create(t); err != nil {
 		log.Printf("Error while creating remote task: %v\n", err)
 		return err
 	}
 
-	if err = d.Start(ctx); err != nil {
+	if err = s.Start(ctx); err != nil {
 		return err
 	}
 
@@ -388,7 +388,7 @@ func testRemoteForceMount(
 
 	// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
 	log.Printf("Waiting for the test task to exit\n")
-	if err = d.WaitDone(ctx); err != nil {
+	if err = s.WaitDone(ctx); err != nil {
 		return err
 	}
 
@@ -422,7 +422,7 @@ func testRemoteForceMount(
 
 	// Check to see if you can delete the volume.
 	log.Printf("Deleting the attached volume: %v from this host\n", volName)
-	if err = d.DeleteVolume("localhost", volName); err != nil {
+	if err = s.DeleteVolume("localhost", volName); err != nil {
 		return err
 	}
 	return nil
@@ -430,7 +430,7 @@ func testRemoteForceMount(
 
 // A container is using a volume on node X.  Node X is now powered off.
 func testNodePowerOff(
-	d scheduler.Driver,
+	s scheduler.Driver,
 	v volume.Driver,
 ) error {
 	return nil
@@ -460,7 +460,7 @@ func testNetworkDown(
 // storage cluster gets a network partition. Node Y that is in the cluster
 // can use the volume for another container.
 func testNetworkPartition(
-	d scheduler.Driver,
+	s scheduler.Driver,
 	v volume.Driver,
 ) error {
 	return nil
@@ -468,18 +468,18 @@ func testNetworkPartition(
 
 // Docker daemon crashes and live restore is enabled.
 func testDockerDownLiveRestore(
-	d scheduler.Driver,
+	s scheduler.Driver,
 	v volume.Driver,
 ) error {
 	return nil
 }
 
 func run(
-	d scheduler.Driver,
+	s scheduler.Driver,
 	v volume.Driver,
 	testName string,
 ) error {
-	if err := d.Init(); err != nil {
+	if err := s.Init(); err != nil {
 		log.Fatalf("Error initializing schedule driver")
 		return err
 	}
@@ -510,7 +510,7 @@ func run(
 			return fmt.Errorf("unknown test function %v", testName)
 		}
 
-		if err := f(d, v); err != nil {
+		if err := f(s, v); err != nil {
 			log.Printf("\tTest %v Failed with Error: %v.\n", testName, err)
 			return err
 		}
@@ -520,7 +520,7 @@ func run(
 
 	for n, f := range testFuncs {
 		log.Printf("Executing test %v\n", n)
-		if err := f(d, v); err != nil {
+		if err := f(s, v); err != nil {
 			log.Printf("\tTest %v Failed with Error: %v.\n", n, err)
 		} else {
 			log.Printf("\tTest %v Passed.\n", n)
@@ -547,14 +547,14 @@ func main() {
 		testName = os.Args[3]
 	}
 
-	if d, err := scheduler.Get(os.Args[1]); err != nil {
+	if s, err := scheduler.Get(os.Args[1]); err != nil {
 		log.Fatalf("Cannot find scheduler driver %v\n", os.Args[1])
 		os.Exit(-1)
 	} else if v, err := volume.Get(os.Args[2]); err != nil {
 		log.Fatalf("Cannot find scheduler driver %v\n", os.Args[1])
 		os.Exit(-1)
 	} else {
-		if run(d, v, testName) != nil {
+		if run(s, v, testName) != nil {
 			os.Exit(-1)
 		}
 	}

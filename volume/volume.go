@@ -16,10 +16,10 @@ type Driver interface {
 	// Init initializes the volume driver.
 	Init() error
 
-	// RemoveVolume forcefully unmounts/detaches and deletes a storage volume.
+	// CleanupVolume forcefully unmounts/detaches and deletes a storage volume.
 	// This is only called by Torpedo during cleanup operations, it is not
 	// used during orchestration simulations.
-	RemoveVolume(name string) error
+	CleanupVolume(name string) error
 
 	// Stop must cause the volume driver to exit or get killed on a given node.
 	Stop(ip string) error

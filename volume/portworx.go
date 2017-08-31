@@ -68,7 +68,7 @@ func (d *portworx) Init() error {
 	return nil
 }
 
-func (d *portworx) RemoveVolume(name string) error {
+func (d *portworx) CleanupVolume(name string) error {
 	locator := &api.VolumeLocator{}
 
 	volumes, err := d.volDriver.Enumerate(locator, nil)
