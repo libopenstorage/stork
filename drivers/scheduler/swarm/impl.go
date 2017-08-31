@@ -9,7 +9,7 @@ import (
 
 	dockerclient "github.com/fsouza/go-dockerclient"
 
-	"github.com/portworx/torpedo/services/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler"
 )
 
 type swarm struct {

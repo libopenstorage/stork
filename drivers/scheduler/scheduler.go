@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/portworx/torpedo/services"
+	"github.com/portworx/torpedo/drivers"
 )
 
 var (
@@ -51,11 +51,8 @@ type Context struct {
 
 // Driver must be implemented to provide test support to various schedulers.
 type Driver interface {
-	// Services provides the basic service manipulation routines.
-	services.Service
-
-	// Init initializes this driver.  Parameters are provided as env variables.
-	Init() error
+	// Driver provides the basic service manipulation routines.
+	drivers.Driver
 
 	// GetNodes returns an array of all nodes in the cluster.
 	GetNodes() ([]string, error)

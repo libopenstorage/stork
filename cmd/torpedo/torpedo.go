@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/services/scheduler"
-	"github.com/portworx/torpedo/services/volume"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 
 	"github.com/giantswarm/yochu/systemd"
 )
