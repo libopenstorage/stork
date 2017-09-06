@@ -18,7 +18,7 @@ BIN :=$(BASE_DIR)/bin
 
 .DEFAULT_GOAL=all
 
-all: stork vet lint
+all: stork vet lint container
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -72,9 +72,6 @@ pretest: lint vet errcheck
 
 test:
 	go test -tags "$(TAGS)" $(TESTFLAGS) $(PKGS)
-
-docker-build-osd-dev:
-	docker build -t openstorage/osd-dev -f Dockerfile.osd-dev .
 
 stork:
 	@echo "Building the stork binary"

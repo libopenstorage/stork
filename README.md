@@ -55,7 +55,7 @@ spec:
     spec:
       containers:
       - command:
-        - /usr/local/bin/stork
+        - /stork
         - --address=0.0.0.0
         - --leader-elect=false
         - --scheduler-name=stork
