@@ -33,7 +33,7 @@ This will create the Docker image `$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):
 Now that you have the stork scheduler in a container image, you can just create a pod config for it and run it in your Kubernetes cluster.  We do this via a deployment.
 
 ## Create a Deployment
-A Deployment manages a Replica Set which in turn manages the pods, thereby making the scheduler resilient to failures.  Here is the deployment config.  Change the docker hub image Save it as stork.yaml:
+A Deployment manages a Replica Set which in turn manages the pods, thereby making the scheduler resilient to failures.  Here is the deployment config.  Save it as stork.yaml:
 
 ```yaml
 apiVersion: apps/v1beta1
@@ -80,6 +80,8 @@ spec:
       hostPID: false
       volumes: []
 ```
+
+** Note: Change the docker hub repo and image variables.  **
 
 ## Run the Stork Scheduler in the Cluster
 In order to run the stork scheduler in your Kubernetes cluster, just create the deployment specified in the config above in a Kubernetes cluster:
