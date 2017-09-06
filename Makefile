@@ -1,4 +1,4 @@
-STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_TORPEDO_IMAGE):$(DOCKER_HUB_TAG)
+STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_TAG)
 
 ifndef TAGS
 TAGS := daemon
@@ -81,15 +81,15 @@ stork:
 	@cd cmd/stork && go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
 container:
-	@echo "Building container: docker build --tag $(TORPEDO_IMG) -f Dockerfile ."
-	sudo docker build --tag $(TORPEDO_IMG) -f Dockerfile .
+	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."
+	sudo docker build --tag $(STORK_IMG) -f Dockerfile .
 
 deploy: all
-	docker push $(TORPEDO_IMG)
+	docker push $(STORK_IMG)
 
 clean:
 	-rm -rf stork
-	@echo "Deleting image "$(TORPEDO_IMG)
-	-docker rmi -f $(TORPEDO_IMG)
+	@echo "Deleting image "$(STORK_IMG)
+	-docker rmi -f $(STORK_IMG)
 	go clean -i $(PKGS)`
 

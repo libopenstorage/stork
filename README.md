@@ -21,11 +21,99 @@ Stork is written in Golang. To build Torpedo:
 
 ```
 # git clone git@github.com:libopenstorage/stork.git
+# export DOCKER_HUB_REPO=myrepo
+# export DOCKER_HUB_STORK_IMAGE=stork
+# export DOCKER_HUB_TAG=latest
 # make
 ```
 
-# Running Stork
+This will create the Docker image `$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_TAG)`.
 
+# Running Stork
+Now that you have the stork scheduler in a container image, you can just create a pod config for it and run it in your Kubernetes cluster.  We do this via a deployment.
+
+## Create a Deployment
+A Deployment manages a Replica Set which in turn manages the pods, thereby making the scheduler resilient to failures.  Here is the deployment config.  Change the docker hub image Save it as stork.yaml:
+
+```yaml
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    component: scheduler
+    tier: control-plane
+  name: stork
+  namespace: kube-system
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        component: scheduler
+        tier: control-plane
+        version: second
+    spec:
+      containers:
+      - command:
+        - /usr/local/bin/stork
+        - --address=0.0.0.0
+        - --leader-elect=false
+        - --scheduler-name=stork
+        image: $(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_TAG)
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 10251
+          initialDelaySeconds: 15
+        name: kube-stork-scheduler
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 10251
+        resources:
+          requests:
+            cpu: '0.1'
+        securityContext:
+          privileged: false
+        volumeMounts: []
+      hostNetwork: false
+      hostPID: false
+      volumes: []
+```
+
+## Run the Stork Scheduler in the Cluster
+In order to run the stork scheduler in your Kubernetes cluster, just create the deployment specified in the config above in a Kubernetes cluster:
+
+```
+# kubectl create -f stork.yaml
+```
+
+Verify that the scheduler pod is running:
+
+```
+# kubectl get pods --namespace=kube-system
+NAME                                           READY     STATUS    RESTARTS   AGE
+....
+stork-lnf4s-4744f                              1/1       Running   0          2m
+...
+```
+
+## Specify the Stork Schedulers for Pods
+In order to schedule a given pod using the Stork scheduler, specify the name of the scheduler in that pod spec:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: annotation-stork-scheduler
+  labels:
+    name: stork-scheduler-example
+spec:
+  schedulerName: stork
+  containers:
+  - name: pod-with-annotation-container
+    image: gcr.io/google_containers/pause:2.0
+```
 
 # Contributing
 The specification and code is licensed under the Apache 2.0 license found in 
