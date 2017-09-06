@@ -1,52 +1,45 @@
 package scheduler
 
 import (
-	"errors"
-	"os"
-	"strings"
+	"log"
 
 	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
 )
 
-var (
-	nodes []string
-)
+// NodeType identifies the type of the cluster node
+type NodeType string
 
 const (
-	// LocalHost will pin a task to the node the task is created on.
-	LocalHost = "localhost"
-	// ExternalHost will pick any other host in the cluster other than the
-	// one the task is created on.
-	ExternalHost = "externalhost"
+	// NodeTypeMaster identifies a cluster node that is a master/manager
+	NodeTypeMaster NodeType = "Master"
+	// NodeTypeWorker identifies a cluster node that is a worker
+	NodeTypeWorker NodeType = "Worker"
 )
 
-// Volume specifies the parameters for creating an external volume.
-type Volume struct {
-	Driver string
-	Name   string
-	Path   string
-	Size   int // in MB
-	Opt    []string
-}
-
-// Task specifies the Docker properties of a test task.
-type Task struct {
-	Name string
-	Img  string
-	Tag  string
-	Env  []string
-	Cmd  []string
-	Vol  Volume
-	IP   string
+// Node encapsulates a node in the cluster
+type Node struct {
+	Name      string
+	Addresses []string
+	Type      NodeType
 }
 
 // Context holds the execution context and output values of a test task.
 type Context struct {
-	ID     string
-	Task   Task
+	UID    string
+	App    spec.AppSpec
 	Status int
 	Stdout string
 	Stderr string
+}
+
+// ScheduleOptions are options that callers to pass to influence the apps that get schduled
+type ScheduleOptions struct {
+	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
+	AppKeys []string
+	// Nodes restricts the applications to get scheduled only on these nodes (Optional)
+	Nodes []Node
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -54,49 +47,52 @@ type Driver interface {
 	// Driver provides the basic service manipulation routines.
 	drivers.Driver
 
+	// String returns the string name of this driver.
+	String() string
+
 	// GetNodes returns an array of all nodes in the cluster.
-	GetNodes() ([]string, error)
+	GetNodes() []Node
 
-	// Create creates a task context.  Does not start the task.
-	Create(Task) (*Context, error)
+	// Schedule starts tasks and returns a context for each one of them
+	Schedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
 
-	// Schedule starts a task
-	Schedule(*Context) error
+	// WaitForRunning waits for task to complete.
+	WaitForRunning(*Context) error
 
-	// WaitDone waits for task to complete.
-	WaitDone(*Context) error
-
-	// Run runs a task to completion.
-	Run(*Context) error
-
-	// Destroy removes a task.  Must also delete the external volume.
+	// Destroy removes a task. It does not delete the volumes of the task.
 	Destroy(*Context) error
 
-	// DestroyByName removes a task by name.  Must also delete the external volume.
-	DestroyByName(ip, name string) error
+	// GetVolumes Returns list of volume IDs using by given context
+	GetVolumes(*Context) ([]string, error)
 
-	// InspectVolume inspects a storage volume.
-	InspectVolume(ip, name string) (*Volume, error)
+	// GetVolumeParameters Returns a maps, each item being a volume and it's options
+	GetVolumeParameters(*Context) (map[string]map[string]string, error)
 
-	// DeleteVolume will delete a storage volume.
-	DeleteVolume(ip, name string) error
+	// InspectVolumes inspects a storage volume.
+	InspectVolumes(*Context) error
+
+	// DeleteVolumes will delete a storage volume.
+	DeleteVolumes(*Context) error
 }
 
 var (
 	schedulers = make(map[string]Driver)
 )
 
-func register(name string, d Driver) error {
+// Register registers the given scheduler driver
+func Register(name string, d Driver) error {
+	log.Printf("Registering sched driver: %v\n", name)
 	schedulers[name] = d
 	return nil
 }
 
 // Get returns a registered scheduler test provider.
 func Get(name string) (Driver, error) {
-	nodes = strings.Split(os.Getenv("CLUSTER_NODES"), ",")
-
 	if d, ok := schedulers[name]; ok {
 		return d, nil
 	}
-	return nil, errors.New("No such scheduler driver installed")
+	return nil, &errors.ErrNotFound{
+		ID:   name,
+		Type: "Scheduler",
+	}
 }

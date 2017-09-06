@@ -9,13 +9,14 @@ before_install:
   - sudo apt-get update -yq
   - sudo apt-get -o Dpkg::Options::="--force-confnew" install -yq docker-ce
 script:
-  - make torpedo
-  - DOCKER_HUB_REPO=adityadani DOCKER_HUB_TORPEDO_IMAGE=torpedo DOCKER_HUB_TAG=latest make container
+  - make all
+  - DOCKER_HUB_REPO=harshpx DOCKER_HUB_TORPEDO_IMAGE=torpedo DOCKER_HUB_TAG=latest make container
 notifications:
   email:
     recipients:
       - aditya@portworx.com
       - gou@portworx.com
       - jv@portworx.com
+      - harsh@portworx.com
     on_success: always
     on_failure: always

@@ -27,6 +27,7 @@ const (
 	SpecHaLevel              = "repl"
 	SpecPriority             = "io_priority"
 	SpecSnapshotInterval     = "snap_interval"
+	SpecSnapshotSchedule     = "snap_schedule"
 	SpecAggregationLevel     = "aggregation_level"
 	SpecDedupe               = "dedupe"
 	SpecPassphrase           = "secret_key"
@@ -36,6 +37,9 @@ const (
 	SpecZones                = "zones"
 	SpecRacks                = "racks"
 	SpecRegions              = "regions"
+	SpecLabels               = "labels"
+	SpecPriorityAlias        = "priority_io"
+	SpecIoProfile            = "io_profile"
 )
 
 // OptionKey specifies a set of recognized query params.
@@ -44,6 +48,8 @@ const (
 	OptName = "Name"
 	// OptVolumeID query parameter used to lookup volume by ID.
 	OptVolumeID = "VolumeID"
+	// OptSnapID query parameter used to lookup snapshot by ID.
+	OptSnapID = "SnapID"
 	// OptLabel query parameter used to lookup volume by set of labels.
 	OptLabel = "Label"
 	// OptConfigLabel query parameter used to lookup volume by set of labels.
@@ -88,6 +94,17 @@ type Node struct {
 	NodeLabels map[string]string
 }
 
+type FluentDConfig struct {
+	IP   string `json:"ip"`
+	Port string `json:"port"`
+}
+
+type TunnelConfig struct {
+	Key      string `json:"key"`
+	Cert     string `json:"cert"`
+	Endpoint string `json:"tunnel_endpoint"`
+}
+
 // Cluster represents the state of the cluster.
 type Cluster struct {
 	Status Status
@@ -104,6 +121,15 @@ type Cluster struct {
 
 	// Logging url for the cluster.
 	LoggingURL string
+
+	// Management url for the cluster
+	ManagementURL string
+
+	// FluentD Host for the cluster
+	FluentDConfig FluentDConfig
+
+	// TunnelConfig for the cluster [key, cert, endpoint]
+	TunnelConfig TunnelConfig
 }
 
 // StatPoint represents the basic structure of a single Stat reported
@@ -253,7 +279,23 @@ func (v *Stats) Latency() uint64 {
 	if ops == 0 {
 		return 0
 	}
-	return (uint64)((v.IoMs * 1000) / (v.Writes + v.Reads))
+	return (uint64)((v.IoMs * 1000) / ops)
+}
+
+// Read latency returns avg. time required for read operation to complete
+func (v *Stats) ReadLatency() uint64 {
+	if v.Reads == 0 {
+		return 0
+	}
+	return (uint64)((v.ReadMs * 1000) / v.Reads)
+}
+
+// Write latency returns avg. time required for write operation to complete
+func (v *Stats) WriteLatency() uint64 {
+	if v.Writes == 0 {
+		return 0
+	}
+	return (uint64)((v.WriteMs * 1000) / v.Writes)
 }
 
 // Iops returns iops
@@ -303,4 +345,21 @@ func (s *Node) Copy() *Node {
 	localCopy := deepcopy.Copy(*s)
 	nodeCopy := localCopy.(Node)
 	return &nodeCopy
+}
+
+func (v Volume) IsClone() bool {
+	return v.Source != nil && len(v.Source.Parent) != 0 && !v.Readonly
+}
+
+func (v Volume) IsSnapshot() bool {
+	return v.Source != nil && len(v.Source.Parent) != 0 && v.Readonly
+}
+
+func (v Volume) DisplayId() string {
+	if v.Locator != nil {
+		return fmt.Sprintf("%s (%s)", v.Locator.Name, v.Id)
+	} else {
+		return v.Id
+	}
+	return ""
 }

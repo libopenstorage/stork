@@ -42,11 +42,14 @@ type NodeEntry struct {
 
 // ClusterInfo is the basic info about the cluster and its nodes
 type ClusterInfo struct {
-	Size        int
-	Status      api.Status
-	Id          string
-	NodeEntries map[string]NodeEntry
-	LoggingURL  string
+	Size          int
+	Status        api.Status
+	Id            string
+	NodeEntries   map[string]NodeEntry
+	LoggingURL    string
+	ManagementURL string
+	FluentDConfig  api.FluentDConfig
+	TunnelConfig  api.TunnelConfig
 }
 
 // ClusterInitState is the snapshot state which should be used to initialize
@@ -64,8 +67,13 @@ type FinalizeInitCb func() error
 
 // ClusterListener is an interface to be implemented by a storage driver
 // if it is participating in a multi host environment.  It exposes events
-// in the cluster state machine.  Your driver can do the needful when
-// these events are provided.
+// in the cluster state machine.
+// The basic set of APIs determine the lifecycle of a node and comprises of two operations
+// 1. Setup
+// ClusterInit -> (Node)Init -> Join -> JoinComplete
+// 2. Teardown
+// Halt -> CleanupInit
+// The other APIs are helpers for cluster manager.
 type ClusterListener interface {
 	// String returns a string representation of this listener.
 	String() string
@@ -76,15 +84,62 @@ type ClusterListener interface {
 	// Init is called when this node is joining an existing cluster for the first time.
 	Init(self *api.Node, state *ClusterInfo) (FinalizeInitCb, error)
 
+	// Join is called when this node is joining an existing cluster.
+	Join(self *api.Node, state *ClusterInitState, clusterNotify ClusterNotify) error
+
+	// JoinComplete is called when this node has successfully joined a cluster
+	JoinComplete(self *api.Node) error
+
 	// CleanupInit is called when Init failed.
 	CleanupInit(self *api.Node, clusterInfo *ClusterInfo) error
 
 	// Halt is called when a node is gracefully shutting down.
 	Halt(self *api.Node, clusterInfo *ClusterInfo) error
 
-	// Join is called when this node is joining an existing cluster.
-	Join(self *api.Node, state *ClusterInitState, clusterNotify ClusterNotify) error
+	ClusterListenerNodeOps
+	ClusterListenerStatusOps
+	ClusterListenerGenericOps
+	ClusterListenerAlertOps
+}
 
+// ClusterListenerAlertOps is a wrapper over ClusterAlerts interface
+// which the listeners need to implement if they want to handle alerts
+type ClusterListenerAlertOps interface {
+	ClusterAlerts
+}
+
+// ClusterListenerGenericOps defines a set of generic helper APIs for
+// listeners to implement
+type ClusterListenerGenericOps interface {
+	// ListenerData returns the data that the listener wants to share
+	// with ClusterManager and would be stored in NodeData field.
+	ListenerData() map[string]interface{}
+
+	// QuorumMember returns true if the listener wants this node to
+	// participate in quorum decisions.
+	QuorumMember(node *api.Node) bool
+
+	// UpdateClusterInfo is called when there is an update to the cluster.
+	// XXX: Remove ClusterInfo from this API
+	UpdateCluster(self *api.Node, clusterInfo *ClusterInfo) error
+
+	// Enumerate updates listener specific data in Enumerate.
+	Enumerate(cluster api.Cluster) error
+}
+
+// ClusterListenerStatusOps defines APIs that a listener needs to implement
+// to indicate its own/peer statuses
+type ClusterListenerStatusOps interface {
+	// ListenerStatus returns the listener's Status
+	ListenerStatus() api.Status
+
+	// ListenerPeerStatus returns the peer Statuses for a listener
+	ListenerPeerStatus() map[string]api.Status
+}
+
+// ClusterListenerNodeOps defines APIs that a listener needs to implement
+// to handle various node operations/updates
+type ClusterListenerNodeOps interface {
 	// Add is called when a new node joins the cluster.
 	Add(node *api.Node) error
 
@@ -92,7 +147,7 @@ type ClusterListener interface {
 	Remove(node *api.Node, forceRemove bool) error
 
 	// CanNodeRemove test to see if we can remove this node
-	CanNodeRemove(node *api.Node) (error, string)
+	CanNodeRemove(node *api.Node) (string, error)
 
 	// MarkNodeDown marks the given node's status as down
 	MarkNodeDown(node *api.Node) error
@@ -103,25 +158,6 @@ type ClusterListener interface {
 
 	// Leave is called when this node leaves the cluster.
 	Leave(node *api.Node) error
-
-	// ListenerStatus returns the listener's Status
-	ListenerStatus() api.Status
-
-	// ListenerPeerStatus returns the peer Statuses for a listener
-	ListenerPeerStatus() map[string]api.Status
-
-	// ListenerData returns the data that the listener wants to share
-	// with ClusterManaher and would be stored in NodeData field.
-	ListenerData() map[string]interface{}
-
-	// QuorumMember returns true if the listener wants this node to
-	// participate in quorum decisions.
-	QuorumMember(node *api.Node) bool
-
-	// UpdateClusterInfo is called when there is an update to the cluster.
-	UpdateCluster(self *api.Node, clusterInfo *ClusterInfo) error
-
-	ClusterAlerts
 }
 
 // ClusterState is the gossip state of all nodes in the cluster
@@ -150,6 +186,14 @@ type ClusterData interface {
 	GetGossipState() *ClusterState
 
 	SetLoggingURL(loggingURL string) error
+
+	SetManagementURL(managementURL string) error
+
+	SetFluentDConfig(fluentdConfig api.FluentDConfig) error
+
+	SetTunnelConfig(tunnelConfig api.TunnelConfig) error
+
+	GetTunnelConfig() api.TunnelConfig
 }
 
 // ClusterStatus interface provides apis for cluster and node status
@@ -246,4 +290,117 @@ func Inst() (Cluster, error) {
 		return nil, errClusterNotInitialized
 	}
 	return inst, nil
+}
+
+// NullClusterListener is a NULL implementation of ClusterListener functions
+// ClusterListeners should use this as the base override functions they
+// are interested in.
+type NullClusterListener struct {
+}
+
+func (nc *NullClusterListener) String() string {
+	return "NullClusterListener"
+}
+func (nc *NullClusterListener) ClusterInit(self *api.Node) error {
+	return nil
+}
+
+func (nc *NullClusterListener) Init(self *api.Node, state *ClusterInfo) (FinalizeInitCb, error) {
+	return nil, nil
+}
+
+func (nc *NullClusterListener) CleanupInit(
+self *api.Node,
+clusterInfo *ClusterInfo,
+) error {
+	return nil
+}
+
+func (nc *NullClusterListener) Enumerate(cluster api.Cluster) error {
+	return nil
+}
+
+func (nc *NullClusterListener) Halt(
+self *api.Node,
+clusterInfo *ClusterInfo) error {
+	return nil
+}
+
+func (nc *NullClusterListener) Join(
+self *api.Node,
+state *ClusterInitState,
+clusterNotify ClusterNotify,
+) error {
+	return nil
+}
+
+func (nc *NullClusterListener) JoinComplete(
+self *api.Node,
+) error {
+	return nil
+}
+
+func (nc *NullClusterListener) Add(node *api.Node) error {
+	return nil
+}
+
+func (nc *NullClusterListener) Remove(node *api.Node, forceRemove bool) error {
+	return nil
+}
+
+func (nc *NullClusterListener) CanNodeRemove(node *api.Node) (string, error) {
+	return "", nil
+}
+
+func (nc *NullClusterListener) MarkNodeDown(node *api.Node) error {
+	return nil
+}
+
+func (nc *NullClusterListener) Update(node *api.Node) error {
+	return nil
+}
+
+func (nc *NullClusterListener) Leave(node *api.Node) error {
+	return nil
+}
+
+func (nc *NullClusterListener) ListenerStatus() api.Status {
+	return api.Status_STATUS_OK
+}
+
+func (nc *NullClusterListener) ListenerPeerStatus() map[string]api.Status {
+	return nil
+}
+
+func (nc *NullClusterListener) ListenerData() map[string]interface{} {
+	return nil
+}
+
+func (nc *NullClusterListener) QuorumMember(node *api.Node) bool {
+	return false
+}
+
+func (nc *NullClusterListener) UpdateCluster(self *api.Node,
+clusterInfo *ClusterInfo,
+) error {
+	return nil
+}
+
+func (nc *NullClusterListener) EnumerateAlerts(
+timeStart, timeEnd time.Time,
+resource api.ResourceType,
+) (*api.Alerts, error) {
+	return nil, nil
+}
+func (nc *NullClusterListener) ClearAlert(
+resource api.ResourceType,
+alertID int64,
+) error {
+	return nil
+}
+func (nc *NullClusterListener) EraseAlert(
+resource api.ResourceType,
+alertID int64,
+) error {
+	return nil
 }

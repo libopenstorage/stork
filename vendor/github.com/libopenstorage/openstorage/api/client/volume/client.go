@@ -195,6 +195,21 @@ func (v *volumeClient) Snapshot(volumeID string, readonly bool,
 	return "", nil
 }
 
+// Restore specified volume to given snapshot state
+func (v *volumeClient) Restore(volumeID string, snapID string) error {
+	response := &api.VolumeResponse{}
+	req := v.c.Post().Resource(snapPath + "/restore").Instance(volumeID)
+	req.QueryOption(api.OptSnapID, snapID)
+
+	if err := req.Do().Unmarshal(response); err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
+	}
+	return nil
+}
+
 // Stats for specified volume.
 // Errors ErrEnoEnt may be returned
 func (v *volumeClient) Stats(
@@ -313,12 +328,13 @@ func (v *volumeClient) Attach(volumeID string, attachOptions map[string]string) 
 
 // Detach device from the host.
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Detach(volumeID string) error {
+func (v *volumeClient) Detach(volumeID string, unmountBeforeDetach bool) error {
 	return v.doVolumeSet(
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
-				Attach: api.VolumeActionParam_VOLUME_ACTION_PARAM_OFF,
+				Attach:              api.VolumeActionParam_VOLUME_ACTION_PARAM_OFF,
+				UnmountBeforeDetach: unmountBeforeDetach,
 			},
 		},
 	)

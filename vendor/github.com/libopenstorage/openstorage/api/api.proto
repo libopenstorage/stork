@@ -94,6 +94,7 @@ enum IoProfile {
   IO_PROFILE_SEQUENTIAL = 0;
   IO_PROFILE_RANDOM= 1;
   IO_PROFILE_DB = 2;
+  IO_PROFILE_DB_REMOTE = 3;
 }
 
 // VolumeState represents the state of a volume.
@@ -114,6 +115,10 @@ enum VolumeState {
   // Volume is deleted, it will remain in this state
   // while resources are asynchronously reclaimed
   VOLUME_STATE_DELETED = 7;
+  // Volume is trying to be detached
+  VOLUME_STATE_TRY_DETACHING = 8;
+  // Volume is undergoing restore
+  VOLUME_STATE_RESTORE = 9;
 }
 
 // VolumeStatus represents a health status for a volume.
@@ -142,6 +147,15 @@ enum StorageMedium {
 enum ClusterNotify {
  // Node is down
  CLUSTER_NOTIFY_DOWN = 0;
+}
+
+enum AttachState {
+    // Attached and available externally
+    ATTACH_STATE_EXTERNAL = 0;
+    // Attached but only available internally
+    ATTACH_STATE_INTERNAL = 1;
+    // Switching from External to Internal
+    ATTACH_STATE_INTERNAL_SWITCH = 2;
 }
 
 // StorageResource groups properties of a storage device.
@@ -186,6 +200,8 @@ message StoragePool {
   uint64 TotalSize = 7;
   // Used size of the pool
   uint64 Used = 8;
+  // Labels is a list of user defined name-value pairs
+  map<string, string> labels = 9;
 }
 
 // VolumeLocator is a structure that is attached to a volume
@@ -297,8 +313,8 @@ message Volume {
   VolumeState state = 12;
   // AttachedOn is the node instance identifier for clustered systems.
   string attached_on = 13;
-  // BackgroundProcessing is true if volume is attached but not by the user.
-  bool background_processing = 14;
+  // AttachedState shows whether the device is attached for internal or external use.
+  AttachState attached_state = 14;
   // DevicePath is the device exported by block device implementations.
   string device_path = 15;
   // SecureDevicePath is the device path for an encrypted volume.
@@ -389,9 +405,13 @@ message VolumeStateAction {
   VolumeActionParam attach = 1;
   // Mount or unmount volume
   VolumeActionParam mount = 2;
+  // MountPath Path where the device is mounted
   string mount_path = 3;
-  // Device path returned in attach
+  // DevicePath Path returned in attach
   string device_path = 4;
+  // UnmountBeforeDetach is used to check whether unmount should be done before
+  // a detach
+  bool unmount_before_detach = 5;
 }
 
 message VolumeSetRequest {

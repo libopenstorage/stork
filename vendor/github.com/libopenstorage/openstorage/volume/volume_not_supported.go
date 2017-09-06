@@ -25,7 +25,7 @@ func (b *blockNotSupported) Attach(volumeID string, attachOptions map[string]str
 	return "", ErrNotSupported
 }
 
-func (b *blockNotSupported) Detach(volumeID string) error {
+func (b *blockNotSupported) Detach(volumeID string, unmountBeforeDetach bool) error {
 	return ErrNotSupported
 }
 
@@ -33,6 +33,10 @@ type snapshotNotSupported struct{}
 
 func (s *snapshotNotSupported) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator) (string, error) {
 	return "", ErrNotSupported
+}
+
+func (s *snapshotNotSupported) Restore(volumeID, snapshotID string) error {
+	return ErrNotSupported
 }
 
 type ioNotSupported struct{}
