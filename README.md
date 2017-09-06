@@ -8,19 +8,19 @@ Stork is intended to allow storage operators such as Portworx, EMC-RexRay, and K
 ## Stork as a Kubernetes Scheduler Extension
 Stork is implemented as a Kubernetes native scheduler extension.  It interfaces with the Kubernetes state machine to provide the storage provider with the [predicates defined here](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-phase).  Stork will then translate those predicates to the following storage orchestration actions:
 
-| Cointainer State                                                                                                                                                                                                                                                   | Storage Runtime Input      | Storage Runtime Output |
-|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------|------------------------| 
-| A POD is in state `pending`                                                                                                                                                                                                                                        | Runtime                    |                        |
-| A POD is in state `running`                                                                                                                                                                                                                                        | Runtime                    |                        |
-| A POD is in state `succeeded`                                                                                                                                                                                                                                      | Acceptance                 |                        |
-| A POD is in state `failed`                                                                                                                                                                                                                                         | Acceptance                 |                        |
-| A POD is in state `unknown`                                                                                                                                                                                                                                        | Acceptance                 |                        |
+| Cointainer State                                         | Storage Runtime Input      | Storage Runtime Output |
+|----------------------------------------------------------|----------------------------|------------------------| 
+| A POD is in state `pending`                              | POD STATE, POD SPEC        | NEXT STATE, NODE       |
+| A POD is in state `running`                              | POD STATE, POD SPEC        | NOOP                   |
+| A POD is in state `succeeded`                            | POD STATE, POD SPEC        | NOOP                   |
+| A POD is in state `failed`                               | POD STATE, POD SPEC        | NEXT STATE, NODE       |
+| A POD is in state `unknown`                              | POD STATE, POD SPEC        | NEXT STATE, NODE       |
 
 # Building Stork
 Stork is written in Golang. To build Torpedo:
 
 ```
-# git clone git@github.com:portworx/torpedo.git
+# git clone git@github.com:libopenstorage/stork.git
 # make
 ```
 
