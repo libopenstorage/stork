@@ -1,11 +1,10 @@
 package scheduler
 
 import (
-	"log"
-
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
+	"github.com/portworx/torpedo/pkg/errors"
 )
 
 // NodeType identifies the type of the cluster node
@@ -62,6 +61,9 @@ type Driver interface {
 	// Destroy removes a task. It does not delete the volumes of the task.
 	Destroy(*Context) error
 
+	// WaitForDestroy waits for task to destroy.
+	WaitForDestroy(*Context) error
+
 	// GetVolumes Returns list of volume IDs using by given context
 	GetVolumes(*Context) ([]string, error)
 
@@ -81,7 +83,7 @@ var (
 
 // Register registers the given scheduler driver
 func Register(name string, d Driver) error {
-	log.Printf("Registering sched driver: %v\n", name)
+	logrus.Infof("Registering sched driver: %v", name)
 	schedulers[name] = d
 	return nil
 }

@@ -1,8 +1,7 @@
 package volume
 
 import (
-	"log"
-
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -41,7 +40,7 @@ var (
 
 // Register registers the given volume driver
 func Register(name string, d Driver) error {
-	log.Printf("Registering volume driver: %v\n", name)
+	logrus.Infof("Registering volume driver: %v", name)
 	volDrivers[name] = d
 	return nil
 }

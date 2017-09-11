@@ -1,16 +1,16 @@
 package factory
 
 import (
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
 	"github.com/portworx/torpedo/pkg/errors"
-	"log"
 )
 
 var appSpecFactory = make(map[string]spec.AppSpec)
 
 // Register registers a new spec with the factory
 func Register(id string, app spec.AppSpec) {
-	log.Printf("Registering app: %v\n", id)
+	logrus.Infof("Registering app: %v", id)
 	appSpecFactory[id] = app
 }
 

@@ -2,16 +2,17 @@ package k8sutils
 
 import (
 	"fmt"
-	"log"
+	"regexp"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/apps/v1beta1"
+	ext_v1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	storage_v1beta1 "k8s.io/client-go/pkg/apis/storage/v1beta1"
 	"k8s.io/client-go/rest"
-	ext_v1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 const k8sMasterLabelKey = "node-role.kubernetes.io/master"
@@ -98,7 +99,7 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 		}
 
 		pods, err := GetDeploymentPods(deployment)
-		if err != nil {
+		if err != nil || pods == nil {
 			return &ErrAppNotReady{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
@@ -111,6 +112,47 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 					ID:    dep.Name,
 					Cause: fmt.Sprintf("pod: %v is not yet ready", pod.Name),
 				}
+			}
+		}
+
+		return nil
+	}
+
+	if err := doRetryWithTimeout(task, 10*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateTerminatedDeployment validates if given deployment is terminated
+func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
+	task := func() error {
+		client, err := GetK8sClient()
+		if err != nil {
+			return err
+		}
+
+		dep, err := client.AppsV1beta1().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
+		if err != nil {
+			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
+				return nil
+			}
+			return err
+		}
+
+		pods, err := GetDeploymentPods(deployment)
+		if err != nil {
+			return &ErrAppNotTerminated{
+				ID:    dep.Name,
+				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
+			}
+		}
+
+		if pods != nil && len(pods) > 0 {
+			return &ErrAppNotTerminated{
+				ID:    dep.Name,
+				Cause: fmt.Sprintf("pods: %#v is still present", pods),
 			}
 		}
 
@@ -144,7 +186,7 @@ func GetDeploymentPods(deployment *v1beta1.Deployment) ([]v1.Pod, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("failed to get pods for deployement: %v", deployment.Name)
+	return nil, nil
 }
 
 // GetReplicaSetPods returns pods for the given replica set
@@ -340,7 +382,7 @@ func doRetryWithTimeout(task func() error, timeout, timeBeforeRetry time.Duratio
 			select {
 			case q := <-quit:
 				if q {
-					log.Printf("Quiting task due to timeout...\n")
+					logrus.Printf("Quiting task due to timeout...\n")
 					return
 				}
 
@@ -348,6 +390,7 @@ func doRetryWithTimeout(task func() error, timeout, timeBeforeRetry time.Duratio
 				if err := task(); err == nil {
 					done <- true
 				}
+
 				time.Sleep(timeBeforeRetry)
 			}
 		}

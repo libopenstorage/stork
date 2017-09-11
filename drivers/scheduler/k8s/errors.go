@@ -66,6 +66,18 @@ func (e *ErrFailedToValidateApp) Error() string {
 	return fmt.Sprintf("Failed to validate app: %v due to err: %v", e.App.Key(), e.Cause)
 }
 
+// ErrFailedToValidateAppDestroy error type for failing to validate destory of an app
+type ErrFailedToValidateAppDestroy struct {
+	// App is the app that failed to destroy
+	App spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToValidateAppDestroy) Error() string {
+	return fmt.Sprintf("Failed to validate destroy of app: %v due to err: %v", e.App.Key(), e.Cause)
+}
+
 // ErrFailedToGetVolumesForApp error type for failing to get an app's volumes
 type ErrFailedToGetVolumesForApp struct {
 	// App is the app that failed to destroy

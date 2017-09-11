@@ -2,9 +2,10 @@ package k8s
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec/factory"
 	"github.com/portworx/torpedo/pkg/k8sutils"
 	"k8s.io/client-go/pkg/api/v1"
@@ -12,7 +13,6 @@ import (
 	// blank importing all applications specs to allow them to init()
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s/spec/postgres"
 	"k8s.io/client-go/pkg/apis/apps/v1beta1"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
 )
 
 // SchedName is the name of the kubernetes scheduler driver implementation
@@ -63,8 +63,8 @@ func (k *k8s) Init() error {
 }
 
 func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
-	var specs[]spec.AppSpec
-	if options.AppKeys != nil && len(options.AppKeys) > 0  {
+	var specs []spec.AppSpec
+	if options.AppKeys != nil && len(options.AppKeys) > 0 {
 		for _, key := range options.AppKeys {
 			spec, err := factory.Get(key)
 			if err != nil {
@@ -87,7 +87,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 						Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", obj.Name, err),
 					}
 				}
-				log.Printf("Created storage class: %v", sc)
+				logrus.Printf("Created storage class: %v", sc)
 			} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
 				pvc, err := k8sutils.CreatePersistentVolumeClaim(obj)
 				if err != nil {
@@ -96,7 +96,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 						Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", obj.Name, err),
 					}
 				}
-				log.Printf("Created PVC: %v", pvc)
+				logrus.Printf("Created PVC: %v", pvc)
 			} else {
 				return nil, &ErrFailedToScheduleApp{
 					App:   spec,
@@ -114,7 +114,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 						Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", obj.Name, err),
 					}
 				}
-				log.Printf("Created deployment: %v", dep)
+				logrus.Printf("Created deployment: %v", dep)
 			} else {
 				return nil, &ErrFailedToScheduleApp{
 					App:   spec,
@@ -140,14 +140,13 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 	for _, core := range ctx.App.Core(ctx.UID) {
 		if obj, ok := core.(*v1beta1.Deployment); ok {
-			err := k8sutils.ValidateDeployement(obj)
-			if err != nil {
+			if err := k8sutils.ValidateDeployement(obj); err != nil {
 				return &ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Deployment: %v. Err: %v", obj.Name, err),
 				}
 			}
-			log.Printf("Validated deployment: %v", obj.Name)
+			logrus.Printf("Validated deployment: %v", obj.Name)
 		} else {
 			return &ErrFailedToValidateApp{
 				App:   ctx.App,
@@ -162,14 +161,13 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 func (k *k8s) Destroy(ctx *scheduler.Context) error {
 	for _, core := range ctx.App.Core(ctx.UID) {
 		if obj, ok := core.(*v1beta1.Deployment); ok {
-			err := k8sutils.DeleteDeployment(obj)
-			if err != nil {
+			if err := k8sutils.DeleteDeployment(obj); err != nil {
 				return &ErrFailedToDestroyApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Deployment: %v. Err: %v", obj.Name, err),
 				}
 			}
-			log.Printf("Destroyed deployment: %v", obj.Name)
+			logrus.Printf("Destroyed deployment: %v", obj.Name)
 		} else {
 			return &ErrFailedToDestroyApp{
 				App:   ctx.App,
@@ -178,6 +176,26 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
+	for _, core := range ctx.App.Core(ctx.UID) {
+		if obj, ok := core.(*v1beta1.Deployment); ok {
+			if err := k8sutils.ValidateTerminatedDeployment(obj); err != nil {
+				return &ErrFailedToValidateAppDestroy{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate destroy of deployment: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Printf("Validated destroy of deployment: %v", obj.Name)
+		} else {
+			return &ErrFailedToValidateAppDestroy{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("Failed to validate destory of unsupported core component: %#v.", core),
+			}
+		}
+	}
 	return nil
 }
 
@@ -236,7 +254,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 					Cause: fmt.Sprintf("Failed to validate StorageClass: %v. Err: %v", obj.Name, err),
 				}
 			}
-			log.Printf("Validated storage class: %v", obj.Name)
+			logrus.Printf("Validated storage class: %v", obj.Name)
 		} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
 			if err := k8sutils.ValidatePersistentVolumeClaim(obj); err != nil {
 				return &ErrFailedToValidateStorage{
@@ -244,7 +262,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 					Cause: fmt.Sprintf("Failed to validate PVC: %v. Err: %v", obj.Name, err),
 				}
 			}
-			log.Printf("Validated PVC: %v", obj.Name)
+			logrus.Printf("Validated PVC: %v", obj.Name)
 		} else {
 			return &ErrFailedToValidateStorage{
 				App:   ctx.App,
@@ -265,7 +283,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 					Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
 				}
 			}
-			log.Printf("Destroyed storage class: %v", obj.Name)
+			logrus.Printf("Destroyed storage class: %v", obj.Name)
 		} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
 			if err := k8sutils.DeletePersistentVolumeClaim(obj); err != nil {
 				return &ErrFailedToDestroyStorage{
@@ -273,7 +291,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 					Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
 				}
 			}
-			log.Printf("Destroyed PVC: %v", obj.Name)
+			logrus.Printf("Destroyed PVC: %v", obj.Name)
 		} else {
 			return &ErrFailedToDestroyStorage{
 				App:   ctx.App,

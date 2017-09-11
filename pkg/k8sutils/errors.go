@@ -47,6 +47,18 @@ func (e *ErrAppNotReady) Error() string {
 	return fmt.Sprintf("app %v is not ready yet. Cause: %v", e.ID, e.Cause)
 }
 
+// ErrAppNotTerminated error type for when an app is not yet terminated
+type ErrAppNotTerminated struct {
+	// ID is the identifier of the app
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrAppNotTerminated) Error() string {
+	return fmt.Sprintf("app %v is not terminated yet. Cause: %v", e.ID, e.Cause)
+}
+
 // ErrPVCNotReady error type for when a PVC is not yet ready/bound
 type ErrPVCNotReady struct {
 	// ID is the identifier of the app
