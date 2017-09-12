@@ -54,6 +54,6 @@ spec:
       containers:
       - name: torpedo
         image: harshpx/torpedo:latest
-        command: ["./torpedo", "k8s", "pxd"]
+        command: ["./torpedo", "k8s", "pxd", "ssh"]
       restartPolicy: Never
       serviceAccountName: torpedo-account

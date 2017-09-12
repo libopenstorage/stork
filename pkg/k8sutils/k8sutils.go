@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/portworx/torpedo/pkg/task"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
@@ -13,10 +13,14 @@ import (
 	ext_v1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	storage_v1beta1 "k8s.io/client-go/pkg/apis/storage/v1beta1"
 	"k8s.io/client-go/rest"
+	"github.com/Sirupsen/logrus"
 )
 
-const k8sMasterLabelKey = "node-role.kubernetes.io/master"
-const k8sPVCStorageClassKey = "volume.beta.kubernetes.io/storage-class"
+const (
+	k8sMasterLabelKey        = "node-role.kubernetes.io/master"
+	k8sPVCStorageClassKey    = "volume.beta.kubernetes.io/storage-class"
+	k8sLabelUpdateMaxRetries = 5
+)
 
 // GetK8sClient instantiates a k8s client
 func GetK8sClient() (*kubernetes.Clientset, error) {
@@ -48,6 +52,51 @@ func GetNodes() (*v1.NodeList, error) {
 	return nodes, nil
 }
 
+// GetNodeByName returns the k8s node given it's name
+func GetNodeByName(name string) (*v1.Node, error) {
+	var err error
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	node, err := client.CoreV1().Nodes().Get(name, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
+// IsNodeReady checks if node with given name is ready. Returns nil is ready.
+func IsNodeReady(name string) error {
+	node, err := GetNodeByName(name)
+	if err != nil {
+		return err
+	}
+
+	for _, condition := range node.Status.Conditions {
+		switch condition.Type {
+		case v1.NodeConditionType(v1.NodeReady):
+			if condition.Status != v1.ConditionStatus(v1.ConditionTrue) {
+				return fmt.Errorf("node: %v is not ready as condition: %v (%v) is %v. Reason: %v",
+					name, condition.Type, condition.Message, condition.Status, condition.Reason)
+			}
+		case v1.NodeConditionType(v1.NodeOutOfDisk),
+			 v1.NodeConditionType(v1.NodeMemoryPressure),
+			 v1.NodeConditionType(v1.NodeDiskPressure),
+			 v1.NodeConditionType(v1.NodeNetworkUnavailable),
+			 v1.NodeConditionType(v1.NodeInodePressure):
+			if condition.Status != v1.ConditionStatus(v1.ConditionFalse) {
+				return fmt.Errorf("node: %v is not ready as condition: %v (%v) is %v. Reason: %v",
+					name, condition.Type, condition.Message, condition.Status, condition.Reason)
+			}
+		}
+	}
+
+	return nil
+}
+
 // CreateDeployment creates the given deployment
 func CreateDeployment(deployment *v1beta1.Deployment) (*v1beta1.Deployment, error) {
 	client, err := GetK8sClient()
@@ -73,7 +122,7 @@ func DeleteDeployment(deployment *v1beta1.Deployment) error {
 
 // ValidateDeployement validates the given deployment if it's running and healthy
 func ValidateDeployement(deployment *v1beta1.Deployment) error {
-	task := func() error {
+	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
 			return err
@@ -118,7 +167,7 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 		return nil
 	}
 
-	if err := doRetryWithTimeout(task, 10*time.Minute, 10*time.Second); err != nil {
+	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 
@@ -127,7 +176,7 @@ func ValidateDeployement(deployment *v1beta1.Deployment) error {
 
 // ValidateTerminatedDeployment validates if given deployment is terminated
 func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
-	task := func() error {
+	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
 			return err
@@ -159,7 +208,7 @@ func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
 		return nil
 	}
 
-	if err := doRetryWithTimeout(task, 10*time.Minute, 10*time.Second); err != nil {
+	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 
@@ -187,6 +236,28 @@ func GetDeploymentPods(deployment *v1beta1.Deployment) ([]v1.Pod, error) {
 	}
 
 	return nil, nil
+}
+
+// DeletePods deletes the given pods
+func DeletePods(pods []v1.Pod) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	var gracePeriod int64
+	gracePeriod = 0
+
+	for _, pod := range pods {
+		logrus.Infof("[debug] Deleting pod : %v", pod.Name)
+		if err = client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, &meta_v1.DeleteOptions{
+			GracePeriodSeconds: &gracePeriod,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // GetReplicaSetPods returns pods for the given replica set
@@ -270,7 +341,7 @@ func DeletePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 
 // ValidatePersistentVolumeClaim validates the given pvc
 func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
-	task := func() error {
+	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
 			return err
@@ -291,7 +362,7 @@ func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 		}
 	}
 
-	if err := doRetryWithTimeout(task, 5*time.Minute, 10*time.Second); err != nil {
+	if err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 
@@ -359,6 +430,64 @@ func IsNodeMaster(node v1.Node) bool {
 	return ok
 }
 
+// AddLabelOnNode adds a label key=value on the given node
+func AddLabelOnNode(name, key, value string) error {
+	var err error
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	retryCnt := 0
+	for retryCnt < k8sLabelUpdateMaxRetries {
+		retryCnt++
+
+		node, err := client.CoreV1().Nodes().Get(name, meta_v1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		if val, present := node.Labels[key]; present && val == value {
+			return nil
+		}
+
+		node.Labels[key] = value
+		if _, err = client.CoreV1().Nodes().Update(node); err == nil {
+			return nil
+		}
+	}
+
+	return err
+}
+
+// RemoveLabelOnNode removes the label with key on given node
+func RemoveLabelOnNode(name, key string) error {
+	var err error
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	retryCnt := 0
+	for retryCnt < k8sLabelUpdateMaxRetries {
+		retryCnt++
+
+		node, err := client.CoreV1().Nodes().Get(name, meta_v1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		if _, present := node.Labels[key]; present {
+			delete(node.Labels, key)
+			if _, err = client.CoreV1().Nodes().Update(node); err == nil {
+				return nil
+			}
+		}
+	}
+
+	return err
+}
+
 // loadClientFromServiceAccount loads a k8s client from a ServiceAccount specified in the pod running px
 func loadClientFromServiceAccount() (*kubernetes.Clientset, error) {
 	config, err := rest.InClusterConfig()
@@ -371,38 +500,6 @@ func loadClientFromServiceAccount() (*kubernetes.Clientset, error) {
 		return nil, err
 	}
 	return k8sClient, nil
-}
-
-func doRetryWithTimeout(task func() error, timeout, timeBeforeRetry time.Duration) error {
-	done := make(chan bool, 1)
-	quit := make(chan bool, 1)
-
-	go func(done, quit chan bool) {
-		for {
-			select {
-			case q := <-quit:
-				if q {
-					logrus.Printf("Quiting task due to timeout...\n")
-					return
-				}
-
-			default:
-				if err := task(); err == nil {
-					done <- true
-				}
-
-				time.Sleep(timeBeforeRetry)
-			}
-		}
-	}(done, quit)
-
-	select {
-	case <-done:
-		return nil
-	case <-time.After(timeout):
-		quit <- true
-		return ErrTimedOut
-	}
 }
 
 func roundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {

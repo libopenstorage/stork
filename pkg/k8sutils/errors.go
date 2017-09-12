@@ -8,9 +8,6 @@ import (
 // ErrK8SApiAccountNotSet is returned when the account used to talk to k8s api is not setup
 var ErrK8SApiAccountNotSet = errors.New("k8s api account is not setup")
 
-// ErrTimedOut is returned when an operation times out
-var ErrTimedOut = errors.New("timed out performing task")
-
 // ErrFailedToParseYAML error type for objects not found
 type ErrFailedToParseYAML struct {
 	// Path is the path of the yaml file that was to be parsed

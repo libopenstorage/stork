@@ -2,8 +2,10 @@ package k8s
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec/factory"
@@ -12,18 +14,45 @@ import (
 	storage_v1beta1 "k8s.io/client-go/pkg/apis/storage/v1beta1"
 	// blank importing all applications specs to allow them to init()
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s/spec/postgres"
+	"github.com/portworx/torpedo/pkg/task"
 	"k8s.io/client-go/pkg/apis/apps/v1beta1"
 )
+
+// TODO: add support for StatefulSet, Service (all places in this file where a Deployment is referenced)
 
 // SchedName is the name of the kubernetes scheduler driver implementation
 const SchedName = "k8s"
 
 type k8s struct {
-	nodes []scheduler.Node
+	nodes map[string]node.Node
 }
 
-func (k *k8s) GetNodes() []scheduler.Node {
-	return k.nodes
+func (k *k8s) GetNodes() []node.Node {
+	var ret []node.Node
+	for _, val := range k.nodes {
+		ret = append(ret, val)
+	}
+	return ret
+}
+
+func (k *k8s) IsNodeReady(n node.Node) error {
+	t := func() error {
+		if err := k8sutils.IsNodeReady(n.Name); err != nil {
+			return &ErrNodeNotReady{
+				Node:  n,
+				Cause: err.Error(),
+			}
+		}
+
+		return nil
+	}
+
+	if err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+		logrus.Infof("[debug] node timed out. %#v", n)
+		return err
+	}
+
+	return nil
 }
 
 // String returns the string name of this driver.
@@ -38,28 +67,35 @@ func (k *k8s) Init() error {
 	}
 
 	for _, n := range nodes.Items {
-		var addrs []string
-		for _, addr := range n.Status.Addresses {
-			if addr.Type == v1.NodeExternalIP || addr.Type == v1.NodeInternalIP {
-				addrs = append(addrs, addr.Address)
-			}
-		}
-
-		var nodeType scheduler.NodeType
-		if k8sutils.IsNodeMaster(n) {
-			nodeType = scheduler.NodeTypeMaster
-		} else {
-			nodeType = scheduler.NodeTypeWorker
-		}
-
-		k.nodes = append(k.nodes, scheduler.Node{
-			Name:      n.Name,
-			Addresses: addrs,
-			Type:      nodeType,
-		})
+		k.nodes[n.Name] = k.parseK8SNode(n)
 	}
 
 	return nil
+}
+
+func (k *k8s) getAddressesForNode(n v1.Node) []string {
+	var addrs []string
+	for _, addr := range n.Status.Addresses {
+		if addr.Type == v1.NodeExternalIP || addr.Type == v1.NodeInternalIP {
+			addrs = append(addrs, addr.Address)
+		}
+	}
+	return addrs
+}
+
+func (k *k8s) parseK8SNode(n v1.Node) node.Node {
+	var nodeType node.Type
+	if k8sutils.IsNodeMaster(n) {
+		nodeType = node.TypeMaster
+	} else {
+		nodeType = node.TypeWorker
+	}
+
+	return node.Node{
+		Name:      n.Name,
+		Addresses: k.getAddressesForNode(n),
+		Type:      nodeType,
+	}
 }
 
 func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
@@ -87,7 +123,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 						Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", obj.Name, err),
 					}
 				}
-				logrus.Printf("Created storage class: %v", sc)
+				logrus.Printf("Created storage class: %v", sc.Name)
 			} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
 				pvc, err := k8sutils.CreatePersistentVolumeClaim(obj)
 				if err != nil {
@@ -96,7 +132,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 						Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", obj.Name, err),
 					}
 				}
-				logrus.Printf("Created PVC: %v", pvc)
+				logrus.Printf("Created PVC: %v", pvc.Name)
 			} else {
 				return nil, &ErrFailedToScheduleApp{
 					App:   spec,
@@ -114,7 +150,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 						Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", obj.Name, err),
 					}
 				}
-				logrus.Printf("Created deployment: %v", dep)
+				logrus.Printf("Created deployment: %v", dep.Name)
 			} else {
 				return nil, &ErrFailedToScheduleApp{
 					App:   spec,
@@ -193,6 +229,28 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 			return &ErrFailedToValidateAppDestroy{
 				App:   ctx.App,
 				Cause: fmt.Sprintf("Failed to validate destory of unsupported core component: %#v.", core),
+			}
+		}
+	}
+	return nil
+}
+
+func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
+	for _, core := range ctx.App.Core(ctx.UID) {
+		if obj, ok := core.(*v1beta1.Deployment); ok {
+			pods, err := k8sutils.GetDeploymentPods(obj)
+			if err != nil {
+				return &ErrFailedToDeleteTasks {
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
+				}
+			}
+
+			if err := k8sutils.DeletePods(pods); err != nil {
+				return &ErrFailedToDeleteTasks {
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
+				}
 			}
 		}
 	}
@@ -303,7 +361,39 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 	return nil
 }
 
+func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
+	var result []node.Node
+	for _, core := range ctx.App.Core(ctx.UID) {
+		if obj, ok := core.(*v1beta1.Deployment); ok {
+			pods, err := k8sutils.GetDeploymentPods(obj)
+			if err != nil {
+				return nil, &ErrFailedToGetNodesForApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
+				}
+			}
+
+			for _, p := range pods {
+				if len(p.Spec.NodeName) > 0 {
+					n, ok := k.nodes[p.Spec.NodeName]
+					if !ok {
+						return nil, &ErrFailedToGetNodesForApp{
+							App:   ctx.App,
+							Cause: fmt.Sprintf("node: %v not present in k8s map", p.Spec.NodeName),
+						}
+					}
+					result = append(result, n)
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
 func init() {
-	k := &k8s{}
+	k := &k8s{
+		nodes: make(map[string]node.Node),
+	}
 	scheduler.Register(SchedName, k)
 }

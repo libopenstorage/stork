@@ -106,6 +106,7 @@ func (p *postgres) Core(instanceID string) []interface{} {
 	return coreComponents
 }
 
+// TODO Storage should respect the volume driver of the test (e.g pxd vs rook). Add support.
 func (p *postgres) Storage(instanceID string) []interface{} {
 	var storageComponents []interface{}
 

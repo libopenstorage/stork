@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -17,16 +19,16 @@ type torpedo struct {
 	instanceID string
 	s          scheduler.Driver
 	v          volume.Driver
+	n          node.Driver
 }
 
 // testDriverFunc runs a specific external storage test case.  It takes
 // in a scheduler driver and an external volume provider as arguments.
 type testDriverFunc func() error
 
-// Create dynamic volumes.  Make sure that a task can use the dynamic volume
-// in the inline format as size=x,repl=x,compress=x,name=foo.
-// This test will fail if the storage driver is not able to parse the size correctly.
-func (t *torpedo) testDynamicVolume() error {
+
+// testSetupTearDown performs basic test of starting an application and destroying it (along with storage)
+func (t *torpedo) testSetupTearDown() error {
 	taskName := fmt.Sprintf("testdynamicvolume-%v", t.instanceID)
 
 	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
@@ -35,19 +37,7 @@ func (t *torpedo) testDynamicVolume() error {
 	}
 
 	for _, ctx := range contexts {
-		if ctx.Status != 0 {
-			return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
-				ctx.Status,
-				ctx.Stdout,
-				ctx.Stderr,
-			)
-		}
-
-		if err := t.validateVolumes(ctx); err != nil {
-			return err
-		}
-
-		if err := t.s.WaitForRunning(ctx); err != nil {
+		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
 
@@ -58,6 +48,265 @@ func (t *torpedo) testDynamicVolume() error {
 
 	return err
 }
+
+// Volume Driver Plugin is down, unavailable - and the client container should
+// not be impacted.
+func (t *torpedo) testDriverDown() error {
+    taskName := fmt.Sprintf("testdriverdown-%v", t.instanceID)
+	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, ctx := range contexts {
+		// Validate app and volumes
+		if err := t.validateContext(ctx); err != nil {
+			return err
+		}
+
+		appNodes, err := t.s.GetNodesForApp(ctx)
+		if err != nil {
+			return err
+		}
+
+		if len(appNodes) == 0 {
+			return fmt.Errorf("error: found 0 nodes for app: %v (uid: %v)", ctx.App.Key(), ctx.UID)
+		}
+
+		logrus.Infof("[%v] Stopping volume driver on app nodes", taskName)
+		for _, n := range appNodes {
+			if err := t.v.StopDriver(n); err != nil {
+				return err
+			}
+		}
+
+		// TODO add a PerformIO interface to applications
+
+		// Sleep for apps to get going...
+		time.Sleep(20 * time.Second)
+
+		logrus.Infof("[%v] Re-starting volume driver on app nodes", taskName)
+		for _, n := range appNodes {
+			if err := t.v.StartDriver(n); err != nil {
+				return err
+			}
+		}
+
+		// Wait for volume driver to start
+		for _, n := range appNodes {
+			if err := t.v.WaitStart(n); err != nil {
+				return err
+			}
+		}
+
+		// Re-validate app and volumes
+		if err := t.validateContext(ctx); err != nil {
+			return err
+		}
+
+		if err := t.tearDownContext(ctx); err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+// Volume driver plugin is down and the client container gets terminated.
+// There is a lost unmount call in this case. When the volume driver is
+// back up, we should be able to detach and delete the volume.
+func (t *torpedo) testDriverDownAppDown() error {
+	taskName := fmt.Sprintf("testdriverappdown-%v", t.instanceID)
+	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, ctx := range contexts {
+		// Validate app and volumes
+		if err := t.validateContext(ctx); err != nil {
+			return err
+		}
+
+		appNodes, err := t.s.GetNodesForApp(ctx)
+		if err != nil {
+			return err
+		}
+
+		if len(appNodes) == 0 {
+			return fmt.Errorf("error: found 0 nodes for app: %v (uid: %v)", ctx.App.Key(), ctx.UID)
+		}
+
+		logrus.Infof("[%v] Stopping volume driver on app nodes", taskName)
+		for _, n := range appNodes {
+			if err := t.v.StopDriver(n); err != nil {
+				return err
+			}
+		}
+
+		// Sleep for apps to get going...
+		time.Sleep(20 * time.Second)
+
+		logrus.Infof("[%v] Destroying application: %v", taskName, ctx.App.Key())
+		if err := t.s.Destroy(ctx); err != nil {
+			return err
+		}
+
+		logrus.Infof("[%v] Re-starting volume driver on app nodes", taskName)
+		for _, n := range appNodes {
+			if err := t.v.StartDriver(n); err != nil {
+				return err
+			}
+		}
+
+		// Wait for volume driver to start
+		for _, n := range appNodes {
+			if err := t.v.WaitStart(n); err != nil {
+				return err
+			}
+		}
+
+		// Wait for applications to be destroyed
+		if err := t.s.WaitForDestroy(ctx); err != nil {
+			return err
+		}
+
+		// Delete storage
+		if err := t.s.DeleteVolumes(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// testAppTasksDown deletes all tasks of an application and checks if app converges back to desired state
+func (t *torpedo) testAppTasksDown() error {
+	taskName := fmt.Sprintf("testapptasksdown-%v", t.instanceID)
+	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, ctx := range contexts {
+		// Validate app and volumes
+		if err := t.validateContext(ctx); err != nil {
+			return err
+		}
+
+		logrus.Infof("[%v] Destroying tasks for application: %v", taskName, ctx.App.Key())
+		if err := t.s.DeleteTasks(ctx); err != nil {
+			return err
+		}
+
+		// Re-validate app and volumes
+		if err := t.validateContext(ctx); err != nil {
+			return err
+		}
+
+		if err := t.tearDownContext(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// testNodeReboot reboots one of the nodes on which an app is running
+func (t *torpedo) testNodeReboot(allNodes bool) error {
+	taskName := fmt.Sprintf("testnodereboot-%v", t.instanceID)
+
+	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, ctx := range contexts {
+		// Validate app and volumes
+		if err := t.validateContext(ctx); err != nil {
+			return err
+		}
+
+		appNodes, err := t.s.GetNodesForApp(ctx)
+		if err != nil {
+			return err
+		}
+
+		if len(appNodes) == 0 {
+			return fmt.Errorf("error: found 0 nodes for app: %v (uid: %v)", ctx.App.Key(), ctx.UID)
+		}
+
+		var nodesToReboot []node.Node
+		if allNodes {
+			nodesToReboot = appNodes
+		} else {
+			nodesToReboot = append(nodesToReboot, appNodes[0])
+		}
+
+		for _, n := range nodesToReboot {
+			logrus.Infof("[%v] Rebooting: %v", taskName, n.Name)
+			if err := t.n.RebootNode(n, node.RebootNodeOpts{
+				Force: false,
+			}); err != nil {
+				return err
+			}
+		}
+
+		time.Sleep(20 * time.Second)
+
+		// Wait for node to be back
+		for _, n := range nodesToReboot {
+			logrus.Infof("[%v] Testing connectivity with: %v", taskName, n.Name)
+			if err := t.n.TestConnection(n, node.TestConectionOpts{
+				Timeout:  15*time.Minute,
+				TimeBeforeRetry: 10*time.Second,
+			}); err != nil {
+				return err
+			}
+
+			if err := t.s.IsNodeReady(n); err != nil {
+				return err
+			}
+
+			if err := t.v.WaitStart(n); err != nil {
+				return err
+			}
+		}
+
+		// Re-validate app and volumes
+		if err := t.validateContext(ctx); err != nil {
+			return err
+		}
+
+		if err := t.tearDownContext(ctx); err != nil {
+			return err
+		}
+	}
+
+	return err
+}
+
+func (t * torpedo) validateContext(ctx *scheduler.Context) error {
+	if ctx.Status != 0 {
+		return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
+			ctx.Status,
+			ctx.Stdout,
+			ctx.Stderr,
+		)
+	}
+
+	if err := t.validateVolumes(ctx); err != nil {
+		return err
+	}
+
+	if err := t.s.WaitForRunning(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 
 // validateVolumes validates the volume with the scheduler and volume driver
 func (t *torpedo) validateVolumes(ctx *scheduler.Context) error {
@@ -104,178 +353,46 @@ func (t *torpedo) tearDownContext(ctx *scheduler.Context) error {
 	return nil
 }
 
-// Volume Driver Plugin is down, unavailable - and the client container should
-// not be impacted.
-func (t *torpedo) testDriverDown() error {
-	/*	taskName := "testDriverDown"
-
-		// Pick the first node to start the task
-		nodes, err := s.GetNodes()
-		if err != nil {
-			return err
-		}
-
-		host := nodes[0]
-
-		// Remove any container and volume for this test - previous run may have failed.
-		// TODO: cleanup task and volume
-
-		t := scheduler.Task{
-			Name: taskName,
-			IP:   host,
-			Img:  testImage,
-			Tag:  "latest",
-			Cmd:  testArgs,
-			Vol: scheduler.Volume{
-				Driver: v.String(),
-				Name:   dynName,
-				Path:   "/mnt/",
-				Size:   10240,
-			},
-		}
-
-		ctx, err := s.Create(t)
-
-		if err != nil {
-			return err
-		}
-
-		defer func() {
-			if ctx != nil {
-				s.Destroy(ctx)
-			}
-			v.CleanupVolume(volName)
-		}()
-
-		if err = s.Schedule(ctx); err != nil {
-			return err
-		}
-
-		// Sleep for postgres to get going...
-		time.Sleep(20 * time.Second)
-
-		// Stop the volume driver.
-		logrus.Printf("Stopping the %v volume driver\n", v.String())
-		if err = v.StopDriver(ctx.Task.IP); err != nil {
-			return err
-		}
-
-		// Sleep for postgres to keep going...
-		time.Sleep(20 * time.Second)
-
-		// Restart the volume driver.
-		logrus.Printf("Starting the %v volume driver\n", v.String())
-		if err = v.StartDriver(ctx.Task.IP); err != nil {
-			return err
-		}
-
-		logrus.Printf("Waiting for the test task to exit\n")
-		if err = s.WaitDone(ctx); err != nil {
-			return err
-		}
-
-		if ctx.Status != 0 {
-			return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
-				ctx.Status,
-				ctx.Stdout,
-				ctx.Stderr,
-			)
-		}*/
-	return nil
+/*
+// Storage plugin is down.  Scheduler tries to create a container using the
+// provider’s volume.
+func (t *torpedo) testPluginDown() error {
+	return &errors.ErrNotSupported{
+		Operation: "testPluginDown",
+	}
 }
 
-// Volume driver plugin is down and the client container gets terminated.
-// There is a lost unmount call in this case. When the volume driver is
-// back up, we should be able to detach and delete the volume.
-func (t *torpedo) testDriverDownContainerDown() error {
-	/*
-		taskName := "testDriverDownContainerDown"
+// A container is running on node X.  Node X loses network access and is
+// partitioned away.  Node Y that is in the cluster can use the volume for
+// another container.
+func (t *torpedo) testNetworkDown() error {
+	return &errors.ErrNotSupported{
+		Operation: "testNetworkDown",
+	}
+}
 
-		// Pick the first node to start the task
-		nodes, err := s.GetNodes()
-		if err != nil {
-			return err
-		}
+// A container is running on node X.  Node X can only see a subset of the
+// storage cluster.  That is, it can see the entire DC/OS cluster, but just the
+// storage cluster gets a network partition. Node Y that is in the cluster
+// can use the volume for another container.
+func (t *torpedo) testNetworkPartition() error {
+	return &errors.ErrNotSupported{
+		Operation: "testNetworkPartition",
+	}
+}
 
-		host := nodes[0]
-
-		// Remove any container and volume for this test - previous run may have failed.
-		// TODO: cleanup task and volume
-
-		t := scheduler.Task{
-			Name: taskName,
-			IP:   host,
-			Img:  testImage,
-			Tag:  "latest",
-			Cmd:  testArgs,
-			Vol: scheduler.Volume{
-				Driver: v.String(),
-				Name:   dynName,
-				Path:   "/mnt/",
-				Size:   10240,
-			},
-		}
-
-		ctx, err := s.Create(t)
-		if err != nil {
-			return err
-		}
-
-		defer func() {
-			if ctx != nil {
-				s.Destroy(ctx)
-			}
-			v.CleanupVolume(volName)
-		}()
-
-		if err = s.Schedule(ctx); err != nil {
-			return err
-		}
-
-		// Sleep for postgres to get going...
-		time.Sleep(20 * time.Second)
-
-		// Stop the volume driver.
-		logrus.Printf("Stopping the %v volume driver\n", v.String())
-		if err = v.StopDriver(ctx.Task.IP); err != nil {
-			return err
-		}
-
-		// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
-		logrus.Printf("Waiting for the test task to exit\n")
-		if err = s.WaitDone(ctx); err != nil {
-			return err
-		}
-
-		if ctx.Status == 0 {
-			return fmt.Errorf("unexpected success exit status %v\nStdout: %v\nStderr: %v",
-				ctx.Status,
-				ctx.Stdout,
-				ctx.Stderr,
-			)
-		}
-
-		// Restart the volume driver.
-		logrus.Printf("Starting the %v volume driver\n", v.String())
-		if err = v.StartDriver(ctx.Task.IP); err != nil {
-			return err
-		}
-
-		// Check to see if you can delete the volume from another node
-		logrus.Printf("Deleting the attached volume: %v from %v\n", volName, nodes[1])
-		if err = s.DeleteVolumes(volName); err != nil {
-			return err
-		}
-	*/
-
-	return nil
+// Docker daemon crashes and live restore is enabled.
+func (t *torpedo) testDockerDownLiveRestore() error {
+	return &errors.ErrNotSupported{
+		Operation: "testDockerDownLiveRestore",
+	}
 }
 
 // Verify that the volume driver can deal with an event where Docker and the
 // client container crash on this system.  The volume should be able
 // to get moounted on another node.
 func (t *torpedo) testRemoteForceMount() error {
-	/*	taskName := "testRemoteForceMount"
+	*//*	taskName := "testRemoteForceMount"
 
 		// Pick the first node to start the task
 		nodes, err := s.GetNodes()
@@ -391,40 +508,13 @@ func (t *torpedo) testRemoteForceMount() error {
 		logrus.Printf("Deleting the attached volume: %v from this host\n", volName)
 		if err = s.DeleteVolumes(volName); err != nil {
 			return err
-		}*/
-	return nil
-}
+		}*//*
+	return &errors.ErrNotSupported{
+		Operation: "testRemoteForceMount",
+	}
 
-// A container is using a volume on node X.  Node X is now powered off.
-func (t *torpedo) testNodePowerOff() error {
-	return nil
-}
+}*/
 
-// Storage plugin is down.  Scheduler tries to create a container using the
-// provider’s volume.
-func (t *torpedo) testPluginDown() error {
-	return nil
-}
-
-// A container is running on node X.  Node X loses network access and is
-// partitioned away.  Node Y that is in the cluster can use the volume for
-// another container.
-func (t *torpedo) testNetworkDown() error {
-	return nil
-}
-
-// A container is running on node X.  Node X can only see a subset of the
-// storage cluster.  That is, it can see the entire DC/OS cluster, but just the
-// storage cluster gets a network partition. Node Y that is in the cluster
-// can use the volume for another container.
-func (t *torpedo) testNetworkPartition() error {
-	return nil
-}
-
-// Docker daemon crashes and live restore is enabled.
-func (t *torpedo) testDockerDownLiveRestore() error {
-	return nil
-}
 
 func (t *torpedo) run(testName string) error {
 	logrus.Printf("Running torpedo test: %v", t.instanceID)
@@ -439,17 +529,19 @@ func (t *torpedo) run(testName string) error {
 		return err
 	}
 
+	if err := t.n.Init(t.s.String()); err != nil {
+		logrus.Fatalf("Error initializing node driver. Err: %v", err)
+		return err
+	}
+
 	// Add new test functions here.
 	testFuncs := map[string]testDriverFunc{
-		"testDynamicVolume": t.testDynamicVolume,
-		/*		"testRemoteForceMount":        t.testRemoteForceMount,
-				"testDriverDown":              t.testDriverDown,
-				"testDriverDownContainerDown": t.testDriverDownContainerDown,
-				"testNodePowerOff":            t.testNodePowerOff,
-				"testPluginDown":              t.testPluginDown,
-				"testNetworkDown":             t.testNetworkDown,
-				"testNetworkPartition":        t.testNetworkPartition,
-				"testDockerDownLiveRestore":   t.testDockerDownLiveRestore,*/
+		"testSetupTearDown": func () error { return t.testSetupTearDown() },
+		"testOneNodeReboot": func () error { return t.testNodeReboot(false) },
+		"testAllNodeReboot": func () error { return t.testNodeReboot(true) },
+		"testDriverDown" : func() error { return t.testDriverDown() },
+		"testDriverDownAppDown" : func() error { return t.testDriverDownAppDown() },
+		"testAppTasksDown": func() error { return t.testAppTasksDown() },
 	}
 
 	if testName != "" {
@@ -463,19 +555,19 @@ func (t *torpedo) run(testName string) error {
 		}
 
 		if err := f(); err != nil {
-			logrus.Infof("Test %v Failed with Error: %v.", testName, err)
+			logrus.Infof("Test %v Failed with Error: %v", testName, err)
 			return err
 		}
-		logrus.Infof("Test %v Passed.", testName)
+		logrus.Infof("Test %v Passed", testName)
 		return nil
 	}
 
 	for n, f := range testFuncs {
 		logrus.Infof("Executing test %v", n)
 		if err := f(); err != nil {
-			logrus.Infof("Test %v Failed with Error: %v.", n, err)
+			logrus.Infof("Test %v Failed with Error: %v", n, err)
 		} else {
-			logrus.Infof("Test %v Passed.", n)
+			logrus.Infof("Test %v Passed", n)
 		}
 	}
 
@@ -484,17 +576,15 @@ func (t *torpedo) run(testName string) error {
 
 func main() {
 	// TODO: switch to a proper argument parser
-	if len(os.Args) < 2 {
-		logrus.Infof("Usage: %v <scheduler> <volume driver> [testName]", os.Args[0])
+	if len(os.Args) < 3 {
+		logrus.Infof("Usage: %v <scheduler> <volume driver> <node driver> [testName]", os.Args[0])
 		os.Exit(-1)
 	}
 
 	testName := ""
-	if len(os.Args) > 3 {
-		testName = os.Args[3]
+	if len(os.Args) > 4 {
+		testName = os.Args[4]
 	}
-
-	// TODO: implement Node driver
 
 	if s, err := scheduler.Get(os.Args[1]); err != nil {
 		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", os.Args[1], err)
@@ -502,20 +592,25 @@ func main() {
 	} else if v, err := volume.Get(os.Args[2]); err != nil {
 		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", os.Args[2], err)
 		os.Exit(-1)
+	} else if n, err := node.Get(os.Args[3]); err != nil {
+		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", os.Args[3], err)
+		os.Exit(-1)
 	} else {
 		t := torpedo{
 			instanceID: time.Now().Format("01-02-15h04m05s"),
 			s:          s,
 			v:          v,
+			n:          n,
 		}
 
 		if t.run(testName) != nil {
 			os.Exit(-1)
 		}
 
-		logrus.Printf("Test suite complete with volume driver: %v, and scheduler: %v\n",
+		logrus.Printf("Test suite complete with volume driver: %v, and scheduler: %v, node: %v\n",
 			t.v.String(),
 			t.s.String(),
+			t.n.String(),
 		)
 	}
 }

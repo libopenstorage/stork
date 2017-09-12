@@ -3,7 +3,6 @@ package portworx
 import (
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -14,12 +13,11 @@ import (
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-)
-
-var (
-	docker *dockerclient.Client
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/portworx/torpedo/pkg/task"
 )
 
 // DriverName is the name of the portworx driver implementation
@@ -30,6 +28,7 @@ type portworx struct {
 	clusterManager cluster.Cluster
 	volDriver      volume.VolumeDriver
 	schedDriver    scheduler.Driver
+	schedOps       schedops.Driver
 }
 
 func (d *portworx) String() string {
@@ -43,12 +42,11 @@ func (d *portworx) Init(sched string) error {
 	if err != nil {
 		return err
 	}
-
 	nodes := d.schedDriver.GetNodes()
 
 	var endpoint string
 	for _, n := range nodes {
-		if n.Type == scheduler.NodeTypeWorker {
+		if n.Type == node.TypeWorker {
 			endpoint = n.Addresses[0]
 			break
 		}
@@ -76,10 +74,16 @@ func (d *portworx) Init(sched string) error {
 		return err
 	}
 
-	logrus.Printf("The following Portworx nodes are in the cluster:\n")
+
+	d.schedOps, err = schedops.Get(sched)
+	if err != nil {
+		return fmt.Errorf("Failed to get scheduler operator for portworx. Err: %v", err)
+	}
+
+	logrus.Printf("The following Portworx nodes are in the cluster:")
 	for _, n := range cluster.Nodes {
 		logrus.Printf(
-			"\tNode UID: %v\tNode IP: %v\tNode Status: %v\n",
+			"Node UID: %vNode IP: %vNode Status: %v",
 			n.Id,
 			n.DataIp,
 			n.Status,
@@ -103,7 +107,7 @@ func (d *portworx) CleanupVolume(name string) error {
 			for _, path := range v.AttachPath {
 				if err = d.volDriver.Unmount(v.Id, path); err != nil {
 					err = fmt.Errorf(
-						"Error while unmounting %v at %v because of: %v",
+						"error while unmounting %v at %v because of: %v",
 						v.Id,
 						path,
 						err,
@@ -115,7 +119,7 @@ func (d *portworx) CleanupVolume(name string) error {
 
 			if err = d.volDriver.Detach(v.Id, false); err != nil {
 				err = fmt.Errorf(
-					"Error while detaching %v because of: %v",
+					"error while detaching %v because of: %v",
 					v.Id,
 					err,
 				)
@@ -125,7 +129,7 @@ func (d *portworx) CleanupVolume(name string) error {
 
 			if err = d.volDriver.Delete(v.Id); err != nil {
 				err = fmt.Errorf(
-					"Error while deleting %v because of: %v",
+					"error while deleting %v because of: %v",
 					v.Id,
 					err,
 				)
@@ -133,7 +137,7 @@ func (d *portworx) CleanupVolume(name string) error {
 				return err
 			}
 
-			logrus.Printf("Succesfully removed Portworx volume %v\n", name)
+			logrus.Printf("successfully removed Portworx volume %v", name)
 
 			return nil
 		}
@@ -265,130 +269,59 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 			if requestedSpec.IoProfile != vol.Spec.IoProfile {
 				return errFailedToInspectVolme(name, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
 			}
+		case api.SpecSize:
+			// pass, we don't validate size here
 		default:
-			logrus.Printf("Warning: Encountered unhandled custom param: %v -> %v\n", k, v)
+			logrus.Printf("Warning: Encountered unhandled custom param: %v -> %v", k, v)
 		}
 	}
 
-	logrus.Printf("Successfully inspected volume: %v (%v)", vol.Locator.Name, name)
+	logrus.Printf("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
 }
 
-// Portworx runs as a container - so all we need to do is ask docker to
-// stop the running portworx container.
-func (d *portworx) StopDriver(ip string) error {
-	endpoint := "tcp://" + ip + ":2375"
-	docker, err := dockerclient.NewClient(endpoint)
-	if err != nil {
-		return err
-	}
-
-	if err = docker.Ping(); err != nil {
-		return err
-	}
-
-	// Find and stop the Portworx container
-	lo := dockerclient.ListContainersOptions{
-		All:  true,
-		Size: false,
-	}
-
-	allContainers, err := docker.ListContainers(lo)
-	if err != nil {
-		return err
-	}
-
-	for _, c := range allContainers {
-		info, err := docker.InspectContainer(c.ID)
-		if err != nil {
-			return err
-		}
-
-		if strings.Contains(info.Config.Image, "px") {
-			if !info.State.Running {
-				return fmt.Errorf(
-					"portworx container with UID %v is not running",
-					c.ID,
-				)
-			}
-
-			d.hostConfig = info.HostConfig
-			logrus.Printf("Stopping Portworx container with UID: %v\n", c.ID)
-			if err = docker.StopContainer(c.ID, 0); err != nil {
-				return err
-			}
-			return nil
-		}
-	}
-
-	return fmt.Errorf("Could not find the Portworx container on %v", ip)
+func (d *portworx) StopDriver(n node.Node) error {
+	return d.schedOps.DisableOnNode(n)
 }
 
-func (d *portworx) WaitStart(ip string) error {
+func (d *portworx) WaitStart(n node.Node) error {
 	// Wait for Portworx to become usable.
-	status, _ := d.clusterManager.NodeStatus()
-	for i := 0; status != api.Status_STATUS_OK; i++ {
-		if i > 60 {
-			return fmt.Errorf(
-				"Portworx did not start up in time: Status is %v",
-				status,
-			)
+	t := func() error {
+		if status, _ := d.clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
+			return &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", status),
+			}
 		}
 
-		time.Sleep(1 * time.Second)
-		status, _ = d.clusterManager.NodeStatus()
+		pxNode, err := d.clusterManager.Inspect(n.Name)
+		if err != nil {
+			return &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: err.Error(),
+			}
+		}
+
+		if pxNode.Status != api.Status_STATUS_OK {
+			return &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("px cluster is usable but not status is not ok. Expected: %v Actual: %v",
+					api.Status_STATUS_OK, pxNode.Status),
+			}
+		}
+
+		return nil
+	}
+
+	if err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (d *portworx) StartDriver(ip string) error {
-	endpoint := "tcp://" + ip + ":2375"
-	docker, err := dockerclient.NewClient(endpoint)
-	if err != nil {
-		return err
-	}
-
-	if err = docker.Ping(); err != nil {
-		return err
-	}
-
-	// Find and stop the Portworx container
-	lo := dockerclient.ListContainersOptions{
-		All:  true,
-		Size: false,
-	}
-
-	allContainers, err := docker.ListContainers(lo)
-	if err != nil {
-		return err
-	}
-
-	for _, c := range allContainers {
-		info, err := docker.InspectContainer(c.ID)
-		if err != nil {
-			return err
-		}
-
-		if strings.Contains(info.Config.Image, "px") {
-			if info.State.Running {
-				return fmt.Errorf(
-					"portworx container with UID %v is not stopped",
-					c.ID,
-				)
-			}
-
-			logrus.Printf("Starting Portworx container with UID: %v\n", c.ID)
-			if err = docker.StartContainer(c.ID, d.hostConfig); err != nil {
-				return err
-			}
-
-			return d.WaitStart(ip)
-		}
-	}
-
-	logrus.Printf("Could not fine the Portworx container.\n")
-	return fmt.Errorf("could not find the Portworx container on %v", ip)
+func (d *portworx) StartDriver(n node.Node) error {
+	return d.schedOps.EnableOnNode(n)
 }
 
 func init() {

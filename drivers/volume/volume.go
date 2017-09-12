@@ -3,6 +3,7 @@ package volume
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/drivers/node"
 )
 
 // Driver defines an external volume driver interface that must be implemented
@@ -25,13 +26,13 @@ type Driver interface {
 	InspectVolume(name string, params map[string]string) error
 
 	// Stop must cause the volume driver to exit or get killed on a given node.
-	StopDriver(ip string) error
+	StopDriver(n node.Node) error
 
 	// Start must cause the volume driver to start on a given node.
-	StartDriver(ip string) error
+	StartDriver(n node.Node) error
 
 	// WaitStart must wait till the volume driver becomes usable on a given node.
-	WaitStart(ip string) error
+	WaitStart(n node.Node) error
 }
 
 var (

@@ -58,48 +58,50 @@ To submit an external storage provider, please submit a PR with the output of th
 |                                  |                          |                      |
 
 ## Usage
-Torpedo is written in Golang.  To build Torpedo:
 
+>**Note:**<br/> Torpedo is in pre-alpha stage at this moment and under active development. Currently it only supports Kubernetes as the scheduler.
+
+### Build
+Torpedo is written in Golang.
+
+To build Torpedo:
 ```
 # git clone git@github.com:portworx/torpedo.git
 # make
 ```
 
-### Important
-Some Torpedo volume drivers such as the Portworx driver need to be able to talk to the Docker daemon during the tests.  This requires the Docker daemon to be configured to allow the a Docker client to connect on the TCP port.
-
-Start Docker with
+To deploy Torpedo image in your docker repository:
 ```
-ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:2375
-```
-
-Torpedo can be run as follows:
-
-```
-# export CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"
-# torpedo docker pxd
+# export DOCKER_HUB_REPO=harshpx
+# export DOCKER_HUB_TORPEDO_IMAGE=torpedo
+# export DOCKER_HUB_TAG=latest
+# make deploy
 ```
 
-The above command starts Torpedo directly using the Docker daemon for the tests.  It also specified Portworx (`pxd`) as the volume driver.
+Make sure you change the environment variables above to match your docker repository.
 
-Torpedo can also run as a Docker container (although some tests may not work, since they involve restarting or killing the Docker Daemon itself):
+### Run
 
+#### Pre-requisites:
+* Minimum 3-node Kubernetes cluster
+* Portworx installed on the Kubernetes cluster
+* A root user on each node created as follows. The password should be `t0rped0` .
+```bash
+# useradd torpedo
+# usermod -aG sudo torpedo
+# sudo sh -c "echo 'torpedo ALL=NOPASSWD: ALL' >> /etc/sudoers"
 ```
-# docker run                                                        \
-    --privileged=true                                               \
-    --net=host                                                      \
-    -e CLUSTER_NODES="192.168.1.100,192.168.1.101,192.168.1.102"    \
-    torpedo <scheduler> <storage driver>
+
+To run on kubernetes:
+```
+# kubectl apply -f deployments/torpedo-k8s.yaml
 ```
 
-Where:
+Make sure you change `image: harshpx/torpedo:latest` to your torpedo docker image.
 
-|  Argument | Description
-|:---------:|------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-| --privileged=true | This must be provided as Torpedo will connect to the docker daemon and also kill the daemon during the negative testing.
-| --net=host | This must be provided as Torpedo will attempt to communicate with the scheduler agents outside the container network.
-| DOCKER_HOST | This is optional.  When specified, the Docker driver will use this variable to talk to the Docker daemon.  By default, it will use `unix:///var/run/docker.sock`.
-| CLUSTER_NODES | This is a list of all the members in this cluster.  Some tests require a minimum cluster size and may not pass if there are not enough hosts in the cluster.
+The above command starts Torpedo by deploying a k8s `Job` in your kubernetes cluster.  It also specified Portworx (`pxd`) as the volume driver and `ssh` as the node driver to.
+
+You can look at status of torpedo by viewing logs of the torpedo pod.
 
 ## Contributing
 

@@ -25,3 +25,12 @@ type ErrValidateVol struct {
 func (e *ErrValidateVol) Error() string {
 	return fmt.Sprintf("Failed to validate volumes for spec: %v Err: %v", e.ID, e.Cause)
 }
+
+// ErrNotSupported is error type when an operation is not supposed
+type ErrNotSupported struct {
+	Operation string
+}
+
+func (e *ErrNotSupported) Error() string {
+	return fmt.Sprintf("Operation %v is not supported", e.Operation)
+}

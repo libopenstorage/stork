@@ -16,9 +16,10 @@ func Register(id string, app spec.AppSpec) {
 
 // Get returns a registered application
 func Get(id string) (spec.AppSpec, error) {
-	if d, ok := appSpecFactory[id]; ok {
+	if d, ok := appSpecFactory[id]; ok && d.IsEnabled() {
 		return d, nil
 	}
+
 	return nil, &errors.ErrNotFound{
 		ID:   id,
 		Type: "AppSpec",

@@ -3,26 +3,10 @@ package scheduler
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
 	"github.com/portworx/torpedo/pkg/errors"
 )
-
-// NodeType identifies the type of the cluster node
-type NodeType string
-
-const (
-	// NodeTypeMaster identifies a cluster node that is a master/manager
-	NodeTypeMaster NodeType = "Master"
-	// NodeTypeWorker identifies a cluster node that is a worker
-	NodeTypeWorker NodeType = "Worker"
-)
-
-// Node encapsulates a node in the cluster
-type Node struct {
-	Name      string
-	Addresses []string
-	Type      NodeType
-}
 
 // Context holds the execution context and output values of a test task.
 type Context struct {
@@ -38,7 +22,7 @@ type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
 	AppKeys []string
 	// Nodes restricts the applications to get scheduled only on these nodes (Optional)
-	Nodes []Node
+	Nodes []node.Node
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -50,19 +34,28 @@ type Driver interface {
 	String() string
 
 	// GetNodes returns an array of all nodes in the cluster.
-	GetNodes() []Node
+	GetNodes() []node.Node
 
-	// Schedule starts tasks and returns a context for each one of them
+	// IsNodeReady checks if node is in ready state. Returns nil if ready.
+	IsNodeReady(n node.Node) error
+
+	// GetNodesForApp returns nodes on which given app context is running
+	GetNodesForApp(*Context) ([]node.Node, error)
+
+	// Schedule starts applications and returns a context for each one of them
 	Schedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
 
-	// WaitForRunning waits for task to complete.
+	// WaitForRunning waits for application to start running.
 	WaitForRunning(*Context) error
 
-	// Destroy removes a task. It does not delete the volumes of the task.
+	// Destroy removes a application. It does not delete the volumes of the task.
 	Destroy(*Context) error
 
-	// WaitForDestroy waits for task to destroy.
+	// WaitForDestroy waits for application to destroy.
 	WaitForDestroy(*Context) error
+
+	// DeleteTasks deletes all tasks of the application (not the applicaton)
+	DeleteTasks(*Context) error
 
 	// GetVolumes Returns list of volume IDs using by given context
 	GetVolumes(*Context) ([]string, error)
