@@ -42,11 +42,10 @@
 			"revisionTime": "2017-08-10T14:37:23Z"
 		},
 		{
-			"checksumSHA1": "QvibMZwbRw2ltwyNCza/0fXUbF0=",
-			"origin": "github.com/docker/docker/vendor/github.com/Sirupsen/logrus",
+			"checksumSHA1": "Liv7AJyNinmP3pvwohcXp4R6xY4=",
 			"path": "github.com/Sirupsen/logrus",
-			"revision": "e57f8a78ae3291670c903784864d04139c821ea1",
-			"revisionTime": "2017-06-08T20:41:49Z"
+			"revision": "85b1699d505667d13f8ac4478c1debbf85d6c5de",
+			"revisionTime": "2017-06-08T22:14:41Z"
 		},
 		{
 			"checksumSHA1": "d6798KSc0jDg2MHNxKdgyNfMK7A=",
@@ -627,6 +626,30 @@
 			"revisionTime": "2017-09-06T21:42:54Z"
 		},
 		{
+			"checksumSHA1": "MlEHIE/60sB86Lmf0MPTIXHzKzE=",
+			"path": "golang.org/x/crypto/curve25519",
+			"revision": "faadfbdc035307d901e69eea569f5dda451a3ee3",
+			"revisionTime": "2017-09-12T19:17:24Z"
+		},
+		{
+			"checksumSHA1": "X6Q8nYb+KXh+64AKHwWOOcyijHQ=",
+			"path": "golang.org/x/crypto/ed25519",
+			"revision": "faadfbdc035307d901e69eea569f5dda451a3ee3",
+			"revisionTime": "2017-09-12T19:17:24Z"
+		},
+		{
+			"checksumSHA1": "LXFcVx8I587SnWmKycSDEq9yvK8=",
+			"path": "golang.org/x/crypto/ed25519/internal/edwards25519",
+			"revision": "faadfbdc035307d901e69eea569f5dda451a3ee3",
+			"revisionTime": "2017-09-12T19:17:24Z"
+		},
+		{
+			"checksumSHA1": "U8Hfwou4jfW3wHPoIuz8Oi4KxTc=",
+			"path": "golang.org/x/crypto/ssh",
+			"revision": "faadfbdc035307d901e69eea569f5dda451a3ee3",
+			"revisionTime": "2017-09-12T19:17:24Z"
+		},
+		{
 			"checksumSHA1": "dr5+PfIRzXeN+l1VG+s0lea9qz8=",
 			"path": "golang.org/x/net/context",
 			"revision": "66aacef3dd8a676686c7ae3716979581e8b03c47",
@@ -663,11 +686,10 @@
 			"revisionTime": "2016-09-14T00:11:54Z"
 		},
 		{
-			"checksumSHA1": "dUfdXzRJupI9VpqNR2LlppeZvLc=",
-			"origin": "github.com/docker/docker/vendor/golang.org/x/sys/unix",
+			"checksumSHA1": "noiZtKqeCoHgwUw9PQz4O3w3CnU=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "e57f8a78ae3291670c903784864d04139c821ea1",
-			"revisionTime": "2017-06-08T20:41:49Z"
+			"revision": "8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9",
+			"revisionTime": "2016-09-14T20:33:16Z"
 		},
 		{
 			"checksumSHA1": "fpW2dhGFC6SrVzipJx7fjg2DIH8=",
