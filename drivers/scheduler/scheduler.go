@@ -2,16 +2,15 @@ package scheduler
 
 import (
 	"github.com/Sirupsen/logrus"
-	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
 // Context holds the execution context and output values of a test task.
 type Context struct {
 	UID    string
-	App    spec.AppSpec
+	App    *spec.AppSpec
 	Status int
 	Stdout string
 	Stderr string
@@ -27,8 +26,10 @@ type ScheduleOptions struct {
 
 // Driver must be implemented to provide test support to various schedulers.
 type Driver interface {
-	// Driver provides the basic service manipulation routines.
-	drivers.Driver
+	spec.Parser
+
+	// Init initializes the scheduler driver
+	Init(specDir string) error
 
 	// String returns the string name of this driver.
 	String() string

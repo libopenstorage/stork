@@ -43,7 +43,7 @@ func (d *portworx) String() string {
 }
 
 func (d *portworx) Init(sched string) error {
-	logrus.Printf("Using the Portworx volume driver under scheduler: %v\n", sched)
+	logrus.Infof("Using the Portworx volume driver under scheduler: %v", sched)
 	var err error
 	d.schedDriver, err = scheduler.Get(sched)
 	if err != nil {
@@ -68,7 +68,7 @@ func (d *portworx) Init(sched string) error {
 		return fmt.Errorf("failed to get endpoint for portworx volume driver")
 	}
 
-	logrus.Printf("Using %v as endpoint for portworx volume driver\n", endpoint)
+	logrus.Infof("Using %v as endpoint for portworx volume driver", endpoint)
 	clnt, err := clusterclient.NewClusterClient("http://"+endpoint+":9001", "v1")
 	if err != nil {
 		return err
@@ -88,13 +88,13 @@ func (d *portworx) Init(sched string) error {
 
 	d.schedOps, err = schedops.Get(sched)
 	if err != nil {
-		return fmt.Errorf("Failed to get scheduler operator for portworx. Err: %v", err)
+		return fmt.Errorf("failed to get scheduler operator for portworx. Err: %v", err)
 	}
 
-	logrus.Printf("The following Portworx nodes are in the cluster:")
+	logrus.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range cluster.Nodes {
-		logrus.Printf(
-			"Node UID: %vNode IP: %vNode Status: %v",
+		logrus.Infof(
+			"Node UID: %v Node IP: %v Node Status: %v",
 			n.Id,
 			n.DataIp,
 			n.Status,
@@ -148,7 +148,7 @@ func (d *portworx) CleanupVolume(name string) error {
 				return err
 			}
 
-			logrus.Printf("successfully removed Portworx volume %v", name)
+			logrus.Infof("successfully removed Portworx volume %v", name)
 
 			return nil
 		}
@@ -287,7 +287,7 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 		}
 	}
 
-	logrus.Printf("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
 }
 

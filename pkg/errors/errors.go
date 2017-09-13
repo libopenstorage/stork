@@ -28,9 +28,10 @@ func (e *ErrValidateVol) Error() string {
 
 // ErrNotSupported is error type when an operation is not supposed
 type ErrNotSupported struct {
-	Operation string
+	Type      string
+	Operation interface{}
 }
 
 func (e *ErrNotSupported) Error() string {
-	return fmt.Sprintf("Operation %v is not supported", e.Operation)
+	return fmt.Sprintf("%v %v is not supported", e.Type, e.Operation)
 }

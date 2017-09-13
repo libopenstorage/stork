@@ -102,9 +102,9 @@ To run on kubernetes:
 
 Make sure you change `image: harshpx/torpedo:latest` to your torpedo docker image.
 
-The above command starts Torpedo by deploying a k8s `Job` in your kubernetes cluster.  It also specified Portworx (`pxd`) as the volume driver and `ssh` as the node driver to.
+The above command starts Torpedo by deploying a k8s `Pod` in your kubernetes cluster.  It also specified Portworx (`pxd`) as the volume driver and `ssh` as the node driver to.
 
-You can look at status of torpedo by viewing logs of the torpedo pod.
+You can look at status of torpedo by viewing logs using: `kubectl logs -f torpedo`
 
 ## Contributing
 

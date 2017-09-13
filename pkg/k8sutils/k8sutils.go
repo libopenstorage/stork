@@ -5,14 +5,13 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/task"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/apps/v1beta1"
 	ext_v1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	storage_v1beta1 "k8s.io/client-go/pkg/apis/storage/v1beta1"
+	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -106,7 +105,12 @@ func CreateService(service *v1.Service) (*v1.Service, error) {
 		return nil, err
 	}
 
-	return client.CoreV1().Services(service.Namespace).Create(service)
+	ns := service.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return client.CoreV1().Services(ns).Create(service)
 }
 
 // DeleteService deletes the given service
@@ -140,18 +144,46 @@ func GetService(svcName string, svcNS string) (*v1.Service, error) {
 
 }
 
+// ValidateDeletedService validates if given service is deleted
+func ValidateDeletedService(svcName string, svcNS string) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	if svcName == "" {
+		return fmt.Errorf("cannot validate service without service name")
+	}
+
+	_, err = client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
+	if err != nil {
+		if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
+			return nil
+		}
+		return err
+	}
+
+	return nil
+}
+
 // Service APIs - END
 
 // Deployment APIs - BEGIN
 
 // CreateDeployment creates the given deployment
+// TODO change references to v1** to aliases in the import above
 func CreateDeployment(deployment *v1beta1.Deployment) (*v1beta1.Deployment, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return client.AppsV1beta1().Deployments(deployment.Namespace).Create(deployment)
+	ns := deployment.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return client.AppsV1beta1().Deployments(ns).Create(deployment)
 }
 
 // DeleteDeployment deletes the given deployment
@@ -176,6 +208,7 @@ func ValidateDeployment(deployment *v1beta1.Deployment) error {
 			return err
 		}
 
+		// TODO: alias below apps v1beta1
 		dep, err := client.AppsV1beta1().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
 		if err != nil {
 			return err
@@ -200,6 +233,13 @@ func ValidateDeployment(deployment *v1beta1.Deployment) error {
 			return &ErrAppNotReady{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
+			}
+		}
+
+		if len(pods) == 0 {
+			return &ErrAppNotReady{
+				ID:    dep.Name,
+				Cause: "Application has 0 pods",
 			}
 		}
 
@@ -295,7 +335,12 @@ func CreateStatefulSet(statefulset *v1beta1.StatefulSet) (*v1beta1.StatefulSet, 
 		return nil, err
 	}
 
-	return client.AppsV1beta1().StatefulSets(statefulset.Namespace).Create(statefulset)
+	ns := statefulset.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return client.AppsV1beta1().StatefulSets(ns).Create(statefulset)
 }
 
 // DeleteStatefulSet deletes the given statefulset
@@ -442,7 +487,6 @@ func DeletePods(pods []v1.Pod) error {
 	gracePeriod = 0
 
 	for _, pod := range pods {
-		logrus.Infof("[debug] Deleting pod : %v", pod.Name)
 		if err = client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, &meta_v1.DeleteOptions{
 			GracePeriodSeconds: &gracePeriod,
 		}); err != nil {
@@ -480,17 +524,17 @@ func GetReplicaSetPods(rSet ext_v1beta1.ReplicaSet) ([]v1.Pod, error) {
 // StorageClass APIs - BEGIN
 
 // CreateStorageClass creates the given storage class
-func CreateStorageClass(sc *storage_v1beta1.StorageClass) (*storage_v1beta1.StorageClass, error) {
+func CreateStorageClass(sc *storage_api.StorageClass) (*storage_api.StorageClass, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
 	}
 
-	return client.StorageV1beta1().StorageClasses().Create(sc)
+	return client.StorageV1().StorageClasses().Create(sc)
 }
 
 // DeleteStorageClass deletes the given storage class
-func DeleteStorageClass(sc *storage_v1beta1.StorageClass) error {
+func DeleteStorageClass(sc *storage_api.StorageClass) error {
 	client, err := GetK8sClient()
 	if err != nil {
 		return err
@@ -500,7 +544,7 @@ func DeleteStorageClass(sc *storage_v1beta1.StorageClass) error {
 }
 
 // ValidateStorageClass validates the given storage class
-func ValidateStorageClass(sc *storage_v1beta1.StorageClass) error {
+func ValidateStorageClass(sc *storage_api.StorageClass) error {
 	client, err := GetK8sClient()
 	if err != nil {
 		return err
@@ -525,7 +569,12 @@ func CreatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1.PersistentV
 		return nil, err
 	}
 
-	return client.PersistentVolumeClaims(pvc.Namespace).Create(pvc)
+	ns := pvc.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return client.PersistentVolumeClaims(ns).Create(pvc)
 }
 
 // DeletePersistentVolumeClaim deletes the given persistent volume claim
