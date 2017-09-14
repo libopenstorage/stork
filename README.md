@@ -85,9 +85,10 @@ Make sure you change the environment variables above to match your docker reposi
 #### Pre-requisites:
 * Minimum 3-node Kubernetes cluster
 * Portworx installed on the Kubernetes cluster
-* A root user on each node created as follows. The password should be `t0rped0` .
-```bash
+* A root user on each node created as follows. The password should be `t0rped0`. If not already available a group called sudo should be created too.
+```
 # useradd torpedo
+# groupadd sudo
 # usermod -aG sudo torpedo
 # sudo sh -c "echo 'torpedo ALL=NOPASSWD: ALL' >> /etc/sudoers"
 ```
