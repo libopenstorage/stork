@@ -151,6 +151,15 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 					}
 				}
 				logrus.Printf("Created deployment: %v", dep.Name)
+			} else if obj, ok := core.(*v1beta1.StatefulSet); ok {
+				statefulset, err := k8sutils.CreateStatefulSet(obj)
+				if err != nil {
+					return nil, &ErrFailedToScheduleApp{
+						App:   spec,
+						Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", obj.Name, err),
+					}
+				}
+				logrus.Printf("Created StatefulSet: %v", statefulset.Name)
 			} else {
 				return nil, &ErrFailedToScheduleApp{
 					App:   spec,
@@ -176,13 +185,21 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 	for _, core := range ctx.App.Core(ctx.UID) {
 		if obj, ok := core.(*v1beta1.Deployment); ok {
-			if err := k8sutils.ValidateDeployement(obj); err != nil {
+			if err := k8sutils.ValidateDeployment(obj); err != nil {
 				return &ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Deployment: %v. Err: %v", obj.Name, err),
 				}
 			}
 			logrus.Printf("Validated deployment: %v", obj.Name)
+		} else if obj, ok := core.(*v1beta1.StatefulSet); ok {
+			if err := k8sutils.ValidateStatefulSet(obj); err != nil {
+				return &ErrFailedToValidateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Printf("Validated statefulset: %v", obj.Name)
 		} else {
 			return &ErrFailedToValidateApp{
 				App:   ctx.App,
@@ -204,6 +221,15 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 				}
 			}
 			logrus.Printf("Destroyed deployment: %v", obj.Name)
+		} else if obj, ok := core.(*v1beta1.StatefulSet); ok {
+			if err := k8sutils.DeleteStatefulSet(obj); err != nil {
+				return &ErrFailedToDestroyApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to destroy StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Printf("Destroyed StatefulSet: %v", obj.Name)
+
 		} else {
 			return &ErrFailedToDestroyApp{
 				App:   ctx.App,
@@ -225,6 +251,15 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 			logrus.Printf("Validated destroy of deployment: %v", obj.Name)
+		} else if obj, ok := core.(*v1beta1.StatefulSet); ok {
+			if err := k8sutils.ValidateTerminatedStatefulSet(obj); err != nil {
+				return &ErrFailedToValidateAppDestroy{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate destroy of statefulset: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Printf("Validated destroy of statefulset: %v", obj.Name)
+
 		} else {
 			return &ErrFailedToValidateAppDestroy{
 				App:   ctx.App,
@@ -236,22 +271,37 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
+	var pods []v1.Pod
+	var err error
 	for _, core := range ctx.App.Core(ctx.UID) {
 		if obj, ok := core.(*v1beta1.Deployment); ok {
-			pods, err := k8sutils.GetDeploymentPods(obj)
+			pods, err = k8sutils.GetDeploymentPods(obj)
 			if err != nil {
-				return &ErrFailedToDeleteTasks {
+				return &ErrFailedToDeleteTasks{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 				}
 			}
-
-			if err := k8sutils.DeletePods(pods); err != nil {
-				return &ErrFailedToDeleteTasks {
+		} else if obj, ok := core.(*v1beta1.StatefulSet); ok {
+			pods, err = k8sutils.GetStatefulSetPods(obj)
+			if err != nil {
+				return &ErrFailedToDeleteTasks{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
+					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 				}
 			}
+		} else {
+			return &ErrFailedToDeleteTasks{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("failed to get pods of an unsupported application: %#v", obj),
+			}
+		}
+	}
+
+	if err := k8sutils.DeletePods(pods); err != nil {
+		return &ErrFailedToDeleteTasks{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
 		}
 	}
 	return nil
@@ -363,28 +413,43 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	var result []node.Node
+	var pods []v1.Pod
+	var err error
 	for _, core := range ctx.App.Core(ctx.UID) {
 		if obj, ok := core.(*v1beta1.Deployment); ok {
-			pods, err := k8sutils.GetDeploymentPods(obj)
+			pods, err = k8sutils.GetDeploymentPods(obj)
 			if err != nil {
 				return nil, &ErrFailedToGetNodesForApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 				}
 			}
-
-			for _, p := range pods {
-				if len(p.Spec.NodeName) > 0 {
-					n, ok := k.nodes[p.Spec.NodeName]
-					if !ok {
-						return nil, &ErrFailedToGetNodesForApp{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("node: %v not present in k8s map", p.Spec.NodeName),
-						}
-					}
-					result = append(result, n)
+		} else if obj, ok := core.(*v1beta1.StatefulSet); ok {
+			pods, err = k8sutils.GetStatefulSetPods(obj)
+			if err != nil {
+				return nil, &ErrFailedToGetNodesForApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get pods due to: %v", err),
 				}
 			}
+		} else {
+			return nil, &ErrFailedToGetNodesForApp{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("Failed to get pods for an unsupported app type: #%v", core),
+			}
+		}
+	}
+	//We should have pods from a supported application at this point
+	for _, p := range pods {
+		if len(p.Spec.NodeName) > 0 {
+			n, ok := k.nodes[p.Spec.NodeName]
+			if !ok {
+				return nil, &ErrFailedToGetNodesForApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("node: %v not present in k8s map", p.Spec.NodeName),
+				}
+			}
+			result = append(result, n)
 		}
 	}
 

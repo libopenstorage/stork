@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/task"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -13,7 +14,6 @@ import (
 	ext_v1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	storage_v1beta1 "k8s.io/client-go/pkg/apis/storage/v1beta1"
 	"k8s.io/client-go/rest"
-	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -83,10 +83,10 @@ func IsNodeReady(name string) error {
 					name, condition.Type, condition.Message, condition.Status, condition.Reason)
 			}
 		case v1.NodeConditionType(v1.NodeOutOfDisk),
-			 v1.NodeConditionType(v1.NodeMemoryPressure),
-			 v1.NodeConditionType(v1.NodeDiskPressure),
-			 v1.NodeConditionType(v1.NodeNetworkUnavailable),
-			 v1.NodeConditionType(v1.NodeInodePressure):
+			v1.NodeConditionType(v1.NodeMemoryPressure),
+			v1.NodeConditionType(v1.NodeDiskPressure),
+			v1.NodeConditionType(v1.NodeNetworkUnavailable),
+			v1.NodeConditionType(v1.NodeInodePressure):
 			if condition.Status != v1.ConditionStatus(v1.ConditionFalse) {
 				return fmt.Errorf("node: %v is not ready as condition: %v (%v) is %v. Reason: %v",
 					name, condition.Type, condition.Message, condition.Status, condition.Reason)
@@ -96,6 +96,8 @@ func IsNodeReady(name string) error {
 
 	return nil
 }
+
+// Deployment APIs - BEGIN
 
 // CreateDeployment creates the given deployment
 func CreateDeployment(deployment *v1beta1.Deployment) (*v1beta1.Deployment, error) {
@@ -120,8 +122,8 @@ func DeleteDeployment(deployment *v1beta1.Deployment) error {
 	})
 }
 
-// ValidateDeployement validates the given deployment if it's running and healthy
-func ValidateDeployement(deployment *v1beta1.Deployment) error {
+// ValidateDeployment validates the given deployment if it's running and healthy
+func ValidateDeployment(deployment *v1beta1.Deployment) error {
 	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
@@ -238,6 +240,154 @@ func GetDeploymentPods(deployment *v1beta1.Deployment) ([]v1.Pod, error) {
 	return nil, nil
 }
 
+// Deployment APIs - END
+
+// StatefulSet APIs - BEGIN
+
+// CreateStatefulSet creates the given statefulset
+func CreateStatefulSet(statefulset *v1beta1.StatefulSet) (*v1beta1.StatefulSet, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return client.AppsV1beta1().StatefulSets(statefulset.Namespace).Create(statefulset)
+}
+
+// DeleteStatefulSet deletes the given statefulset
+func DeleteStatefulSet(statefulset *v1beta1.StatefulSet) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	policy := meta_v1.DeletePropagationForeground
+	return client.AppsV1beta1().StatefulSets(statefulset.Namespace).Delete(statefulset.Name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &policy,
+	})
+}
+
+// ValidateStatefulSet validates the given statefulset if it's running and healthy
+func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
+	t := func() error {
+		client, err := GetK8sClient()
+		if err != nil {
+			return err
+		}
+
+		sset, err := client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		if *sset.Spec.Replicas != sset.Status.Replicas { // Not sure if this is even needed but for now let's have one check before
+			//readiness check
+			return &ErrAppNotReady{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Observed replicas: %v", *sset.Spec.Replicas, sset.Status.Replicas),
+			}
+		}
+
+		if *sset.Spec.Replicas != sset.Status.ReadyReplicas {
+			return &ErrAppNotReady{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v", *sset.Spec.Replicas, sset.Status.ReadyReplicas),
+			}
+		}
+
+		pods, err := GetStatefulSetPods(statefulset)
+		if err != nil || pods == nil {
+			return &ErrAppNotReady{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
+			}
+		}
+
+		for _, pod := range pods {
+			if !IsPodRunning(pod) {
+				return &ErrAppNotReady{
+					ID:    sset.Name,
+					Cause: fmt.Sprintf("pod: %v is not yet ready", pod.Name),
+				}
+			}
+		}
+
+		return nil
+	}
+
+	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetStatefulSetPods returns pods for the given statefulset
+func GetStatefulSetPods(statefulset *v1beta1.StatefulSet) ([]v1.Pod, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	rSets, err := client.ReplicaSets(statefulset.Namespace).List(meta_v1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rSet := range rSets.Items {
+		for _, owner := range rSet.OwnerReferences {
+			if owner.Name == statefulset.Name {
+				return GetReplicaSetPods(rSet)
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// ValidateTerminatedStatefulSet validates if given deployment is terminated
+func ValidateTerminatedStatefulSet(statefulset *v1beta1.StatefulSet) error {
+	t := func() error {
+		client, err := GetK8sClient()
+		if err != nil {
+			return err
+		}
+
+		sset, err := client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
+		if err != nil {
+			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
+				return nil
+			}
+			return err
+		}
+
+		pods, err := GetStatefulSetPods(statefulset)
+		if err != nil {
+			return &ErrAppNotTerminated{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
+			}
+		}
+
+		if pods != nil && len(pods) > 0 {
+			return &ErrAppNotTerminated{
+				ID:    sset.Name,
+				Cause: fmt.Sprintf("pods: %#v is still present", pods),
+			}
+		}
+
+		return nil
+	}
+
+	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// StatefulSet APIs - END
+
 // DeletePods deletes the given pods
 func DeletePods(pods []v1.Pod) error {
 	client, err := GetK8sClient()
@@ -284,6 +434,8 @@ func GetReplicaSetPods(rSet ext_v1beta1.ReplicaSet) ([]v1.Pod, error) {
 	return result, nil
 }
 
+// StorageClass APIs - BEGIN
+
 // CreateStorageClass creates the given storage class
 func CreateStorageClass(sc *storage_v1beta1.StorageClass) (*storage_v1beta1.StorageClass, error) {
 	client, err := GetK8sClient()
@@ -318,6 +470,10 @@ func ValidateStorageClass(sc *storage_v1beta1.StorageClass) error {
 
 	return nil
 }
+
+// StorageClass APIs - END
+
+// PVC APIs - BEGIN
 
 // CreatePersistentVolumeClaim creates the given persistent volume claim
 func CreatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error) {
@@ -423,6 +579,8 @@ func GetPersistentVolumeClaimParams(pvc *v1.PersistentVolumeClaim) (map[string]s
 
 	return params, nil
 }
+
+// PVCs APIs - END
 
 // IsNodeMaster returns true if given node is a kubernetes master node
 func IsNodeMaster(node v1.Node) bool {
