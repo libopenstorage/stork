@@ -97,6 +97,51 @@ func IsNodeReady(name string) error {
 	return nil
 }
 
+// Service APIs - BEGIN
+
+// CreateService creates the given service
+func CreateService(service *v1.Service) (*v1.Service, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return client.CoreV1().Services(service.Namespace).Create(service)
+}
+
+// DeleteService deletes the given service
+func DeleteService(service *v1.Service) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	policy := meta_v1.DeletePropagationForeground
+	return client.CoreV1().Services(service.Namespace).Delete(service.Name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &policy,
+	})
+}
+
+// GetService gets the service by the name
+func GetService(svcName string, svcNS string) (*v1.Service, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	if svcName == "" {
+		return nil, fmt.Errorf("Cannot return service obj without service name")
+	}
+	svc, err := client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return svc, nil
+
+}
+
+// Service APIs - END
+
 // Deployment APIs - BEGIN
 
 // CreateDeployment creates the given deployment
@@ -274,7 +319,6 @@ func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
 		if err != nil {
 			return err
 		}
-
 		sset, err := client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
 		if err != nil {
 			return err
