@@ -160,6 +160,15 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 					}
 				}
 				logrus.Printf("Created StatefulSet: %v", statefulset.Name)
+			} else if obj, ok := core.(*v1.Service); ok {
+				svc, err := k8sutils.CreateService(obj)
+				if err != nil {
+					return nil, &ErrFailedToScheduleApp{
+						App:   spec,
+						Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", obj.Name, err),
+					}
+				}
+				logrus.Printf("Created Service: %v", svc.Name)
 			} else {
 				return nil, &ErrFailedToScheduleApp{
 					App:   spec,
@@ -229,7 +238,14 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 				}
 			}
 			logrus.Printf("Destroyed StatefulSet: %v", obj.Name)
-
+		} else if obj, ok := core.(*v1.Service); ok {
+			if err := k8sutils.DeleteService(obj); err != nil {
+				return &ErrFailedToDestroyApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to destroy Service: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Printf("Destroyed Service: %v", obj.Name)
 		} else {
 			return &ErrFailedToDestroyApp{
 				App:   ctx.App,
