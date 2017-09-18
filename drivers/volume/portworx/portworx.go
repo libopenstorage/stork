@@ -23,8 +23,10 @@ import (
 
 // DriverName is the name of the portworx driver implementation
 const DriverName = "pxd"
+
 // PXServiceName is the name of the portworx service
 const PXServiceName = "portworx-service"
+
 // PXNamespace is the kubernetes namespace in which portworx daemon set runs.
 const PXNamespace = "kube-system"
 

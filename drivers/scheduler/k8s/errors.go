@@ -3,10 +3,9 @@ package k8s
 import (
 	"fmt"
 
-	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s/spec"
 )
-
 
 // ErrNodeNotReady error type when a k8s node is not ready
 type ErrNodeNotReady struct {

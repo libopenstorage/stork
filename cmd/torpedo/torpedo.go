@@ -7,11 +7,11 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers/node"
+	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
-	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -25,7 +25,6 @@ type torpedo struct {
 // testDriverFunc runs a specific external storage test case.  It takes
 // in a scheduler driver and an external volume provider as arguments.
 type testDriverFunc func() error
-
 
 // testSetupTearDown performs basic test of starting an application and destroying it (along with storage)
 func (t *torpedo) testSetupTearDown() error {
@@ -52,7 +51,7 @@ func (t *torpedo) testSetupTearDown() error {
 // Volume Driver Plugin is down, unavailable - and the client container should
 // not be impacted.
 func (t *torpedo) testDriverDown() error {
-    taskName := fmt.Sprintf("testdriverdown-%v", t.instanceID)
+	taskName := fmt.Sprintf("testdriverdown-%v", t.instanceID)
 	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
 	if err != nil {
 		return err
@@ -259,8 +258,8 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 		for _, n := range nodesToReboot {
 			logrus.Infof("[%v] Testing connectivity with: %v", taskName, n.Name)
 			if err := t.n.TestConnection(n, node.TestConectionOpts{
-				Timeout:  15*time.Minute,
-				TimeBeforeRetry: 10*time.Second,
+				Timeout:         15 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
 			}); err != nil {
 				return err
 			}
@@ -287,7 +286,7 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 	return err
 }
 
-func (t * torpedo) validateContext(ctx *scheduler.Context) error {
+func (t *torpedo) validateContext(ctx *scheduler.Context) error {
 	if ctx.Status != 0 {
 		return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
 			ctx.Status,
@@ -306,7 +305,6 @@ func (t * torpedo) validateContext(ctx *scheduler.Context) error {
 
 	return nil
 }
-
 
 // validateVolumes validates the volume with the scheduler and volume driver
 func (t *torpedo) validateVolumes(ctx *scheduler.Context) error {
@@ -392,129 +390,128 @@ func (t *torpedo) testDockerDownLiveRestore() error {
 // client container crash on this system.  The volume should be able
 // to get moounted on another node.
 func (t *torpedo) testRemoteForceMount() error {
-	*//*	taskName := "testRemoteForceMount"
+*/ /*	taskName := "testRemoteForceMount"
 
-		// Pick the first node to start the task
-		nodes, err := s.GetNodes()
-		if err != nil {
-			return err
+	// Pick the first node to start the task
+	nodes, err := s.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	host := nodes[0]
+
+	// Remove any container and volume for this test - previous run may have failed.
+	// TODO: cleanup task and volume
+
+	t := scheduler.Task{
+		Name: taskName,
+		Img:  testImage,
+		IP:   host,
+		Tag:  "latest",
+		Cmd:  testArgs,
+		Vol: scheduler.Volume{
+			Driver: v.String(),
+			Name:   dynName,
+			Path:   "/mnt/",
+			Size:   10240,
+		},
+	}
+
+	ctx, err := s.Create(t)
+	if err != nil {
+		return err
+	}
+
+	sc, err := systemd.NewSystemdClient()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err = sc.Start(dockerServiceName); err != nil {
+			logrus.Printf("Error while restarting Docker: %v\n", err)
 		}
-
-		host := nodes[0]
-
-		// Remove any container and volume for this test - previous run may have failed.
-		// TODO: cleanup task and volume
-
-		t := scheduler.Task{
-			Name: taskName,
-			Img:  testImage,
-			IP:   host,
-			Tag:  "latest",
-			Cmd:  testArgs,
-			Vol: scheduler.Volume{
-				Driver: v.String(),
-				Name:   dynName,
-				Path:   "/mnt/",
-				Size:   10240,
-			},
+		if ctx != nil {
+			s.Destroy(ctx)
 		}
+		v.CleanupVolume(volName)
+	}()
 
-		ctx, err := s.Create(t)
-		if err != nil {
-			return err
-		}
+	logrus.Printf("Starting test task on local node.\n")
+	if err = s.Schedule(ctx); err != nil {
+		return err
+	}
 
-		sc, err := systemd.NewSystemdClient()
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if err = sc.Start(dockerServiceName); err != nil {
-				logrus.Printf("Error while restarting Docker: %v\n", err)
-			}
-			if ctx != nil {
-				s.Destroy(ctx)
-			}
-			v.CleanupVolume(volName)
-		}()
+	// Sleep for postgres to get going...
+	time.Sleep(20 * time.Second)
 
-		logrus.Printf("Starting test task on local node.\n")
-		if err = s.Schedule(ctx); err != nil {
-			return err
-		}
+	// Kill Docker.
+	logrus.Printf("Stopping Docker.\n")
+	if err = sc.Stop(dockerServiceName); err != nil {
+		return err
+	}
 
-		// Sleep for postgres to get going...
-		time.Sleep(20 * time.Second)
+	// 40 second grace period before we try to use the volume elsewhere.
+	time.Sleep(40 * time.Second)
 
-		// Kill Docker.
-		logrus.Printf("Stopping Docker.\n")
-		if err = sc.Stop(dockerServiceName); err != nil {
-			return err
-		}
+	// Start a task on a new system with this same volume.
+	logrus.Printf("Creating the test task on a new host.\n")
+	t.IP = scheduler.ExternalHost
+	if ctx, err = s.Create(t); err != nil {
+		logrus.Printf("Error while creating remote task: %v\n", err)
+		return err
+	}
 
-		// 40 second grace period before we try to use the volume elsewhere.
-		time.Sleep(40 * time.Second)
+	if err = s.Schedule(ctx); err != nil {
+		return err
+	}
 
-		// Start a task on a new system with this same volume.
-		logrus.Printf("Creating the test task on a new host.\n")
-		t.IP = scheduler.ExternalHost
-		if ctx, err = s.Create(t); err != nil {
-			logrus.Printf("Error while creating remote task: %v\n", err)
-			return err
-		}
+	// Sleep for postgres to get going...
+	time.Sleep(20 * time.Second)
 
-		if err = s.Schedule(ctx); err != nil {
-			return err
-		}
+	// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
+	logrus.Printf("Waiting for the test task to exit\n")
+	if err = s.WaitDone(ctx); err != nil {
+		return err
+	}
 
-		// Sleep for postgres to get going...
-		time.Sleep(20 * time.Second)
+	if ctx.Status != 0 {
+		return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
+			ctx.Status,
+			ctx.Stdout,
+			ctx.Stderr,
+		)
+	}
 
-		// Wait for the task to exit. This will lead to a lost Unmount/Detach call.
-		logrus.Printf("Waiting for the test task to exit\n")
-		if err = s.WaitDone(ctx); err != nil {
-			return err
-		}
-
-		if ctx.Status != 0 {
-			return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
-				ctx.Status,
-				ctx.Stdout,
-				ctx.Stderr,
-			)
-		}
-
-		// Restart Docker.
-		logrus.Printf("Restarting Docker.\n")
-		for i, err := 0, sc.Start(dockerServiceName); err != nil; i, err = i+1, sc.Start(dockerServiceName) {
-			if err.Error() == systemd.JobExecutionTookTooLongError.Error() {
-				if i < 20 {
-					logrus.Printf("Docker taking too long to start... retry attempt %v\n", i)
-				} else {
-					return fmt.Errorf("could not restart Docker")
-				}
+	// Restart Docker.
+	logrus.Printf("Restarting Docker.\n")
+	for i, err := 0, sc.Start(dockerServiceName); err != nil; i, err = i+1, sc.Start(dockerServiceName) {
+		if err.Error() == systemd.JobExecutionTookTooLongError.Error() {
+			if i < 20 {
+				logrus.Printf("Docker taking too long to start... retry attempt %v\n", i)
 			} else {
-				return err
+				return fmt.Errorf("could not restart Docker")
 			}
-		}
-
-		// Wait for the volume driver to start.
-		logrus.Printf("Waiting for the %v volume driver to start back up\n", v.String())
-		if err = v.WaitStart(ctx.Task.IP); err != nil {
+		} else {
 			return err
 		}
+	}
 
-		// Check to see if you can delete the volume.
-		logrus.Printf("Deleting the attached volume: %v from this host\n", volName)
-		if err = s.DeleteVolumes(volName); err != nil {
-			return err
-		}*//*
+	// Wait for the volume driver to start.
+	logrus.Printf("Waiting for the %v volume driver to start back up\n", v.String())
+	if err = v.WaitStart(ctx.Task.IP); err != nil {
+		return err
+	}
+
+	// Check to see if you can delete the volume.
+	logrus.Printf("Deleting the attached volume: %v from this host\n", volName)
+	if err = s.DeleteVolumes(volName); err != nil {
+		return err
+	}*/ /*
 	return &errors.ErrNotSupported{
 		Operation: "testRemoteForceMount",
 	}
 
 }*/
-
 
 func (t *torpedo) run(testName string) error {
 	logrus.Printf("Running torpedo test: %v", t.instanceID)
@@ -536,12 +533,12 @@ func (t *torpedo) run(testName string) error {
 
 	// Add new test functions here.
 	testFuncs := map[string]testDriverFunc{
-		"testSetupTearDown": func () error { return t.testSetupTearDown() },
-		"testOneNodeReboot": func () error { return t.testNodeReboot(false) },
-		"testAllNodeReboot": func () error { return t.testNodeReboot(true) },
-		"testDriverDown" : func() error { return t.testDriverDown() },
-		"testDriverDownAppDown" : func() error { return t.testDriverDownAppDown() },
-		"testAppTasksDown": func() error { return t.testAppTasksDown() },
+		"testSetupTearDown":     func() error { return t.testSetupTearDown() },
+		"testOneNodeReboot":     func() error { return t.testNodeReboot(false) },
+		"testAllNodeReboot":     func() error { return t.testNodeReboot(true) },
+		"testDriverDown":        func() error { return t.testDriverDown() },
+		"testDriverDownAppDown": func() error { return t.testDriverDownAppDown() },
+		"testAppTasksDown":      func() error { return t.testAppTasksDown() },
 	}
 
 	if testName != "" {

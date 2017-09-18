@@ -1,8 +1,8 @@
 package task
 
 import (
-	"time"
 	"errors"
+	"time"
 )
 
 // ErrTimedOut is returned when an operation times out

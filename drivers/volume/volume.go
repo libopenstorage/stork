@@ -2,8 +2,8 @@ package volume
 
 import (
 	"github.com/Sirupsen/logrus"
-	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/pkg/errors"
 )
 
 // Driver defines an external volume driver interface that must be implemented

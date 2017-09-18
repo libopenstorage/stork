@@ -25,7 +25,6 @@ func errFailedToInspectVolme(ID, key string, expected, actual interface{}) error
 	}
 }
 
-
 // ErrFailedToWaitForPx error type for failing to wait for px to be up on a node
 type ErrFailedToWaitForPx struct {
 	// Node is the node on which px was waited upon

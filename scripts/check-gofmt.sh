@@ -14,4 +14,4 @@ if [[ -n "${diff}" ]]; then
   echo "${diff}"
   exit 1
 fi
-echo "All files are gofmt'ed"
+echo "All files are gofmt'ed."

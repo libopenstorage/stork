@@ -6,17 +6,14 @@ import (
 	"github.com/portworx/torpedo/pkg/k8sutils"
 )
 
-
 const (
 	// k8sPxRunningLabelKey is the label key used for px state
 	k8sPxRunningLabelKey = "px/running"
 	// k8sPxNotRunningLabelValue is label value for a not running px state
 	k8sPxNotRunningLabelValue = "false"
-
 )
 
-
-type k8sSchedOps struct {}
+type k8sSchedOps struct{}
 
 func (k *k8sSchedOps) DisableOnNode(n node.Node) error {
 	return k8sutils.AddLabelOnNode(n.Name, k8sPxRunningLabelKey, k8sPxNotRunningLabelValue)

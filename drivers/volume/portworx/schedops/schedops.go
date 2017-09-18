@@ -1,8 +1,8 @@
 package schedops
 
 import (
-	"github.com/portworx/torpedo/drivers/node"
 	"github.com/Sirupsen/logrus"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -19,7 +19,6 @@ type Driver interface {
 var (
 	schedOpsRegistry = make(map[string]Driver)
 )
-
 
 // Register registers the given portworx scheduler operator
 func Register(name string, d Driver) error {
