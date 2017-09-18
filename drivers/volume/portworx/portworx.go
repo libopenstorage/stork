@@ -17,11 +17,16 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"github.com/portworx/torpedo/pkg/k8sutils"
 	"github.com/portworx/torpedo/pkg/task"
 )
 
 // DriverName is the name of the portworx driver implementation
 const DriverName = "pxd"
+// PXServiceName is the name of the portworx service
+const PXServiceName = "portworx-service"
+// PXNamespace is the kubernetes namespace in which portworx daemon set runs.
+const PXNamespace = "kube-system"
 
 type portworx struct {
 	hostConfig     *dockerclient.HostConfig
@@ -45,11 +50,16 @@ func (d *portworx) Init(sched string) error {
 	nodes := d.schedDriver.GetNodes()
 
 	var endpoint string
-	for _, n := range nodes {
-		if n.Type == node.TypeWorker {
-			endpoint = n.Addresses[0]
-			break
+	svc, err := k8sutils.GetService(PXServiceName, PXNamespace)
+	if err != nil {
+		for _, n := range nodes {
+			if n.Type == node.TypeWorker {
+				endpoint = n.Addresses[0]
+				break
+			}
 		}
+	} else {
+		endpoint = svc.Spec.ClusterIP
 	}
 
 	if len(endpoint) == 0 {
@@ -73,7 +83,6 @@ func (d *portworx) Init(sched string) error {
 	if err != nil {
 		return err
 	}
-
 
 	d.schedOps, err = schedops.Get(sched)
 	if err != nil {
@@ -289,7 +298,7 @@ func (d *portworx) WaitStart(n node.Node) error {
 	t := func() error {
 		if status, _ := d.clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
 			return &ErrFailedToWaitForPx{
-				Node: n,
+				Node:  n,
 				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", status),
 			}
 		}
