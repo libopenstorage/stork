@@ -15,10 +15,11 @@ endif
 BASE_DIR := $(shell git rev-parse --show-toplevel)
 
 BIN :=$(BASE_DIR)/bin
+GOFMT := gofmt
 
 .DEFAULT_GOAL=all
 
-all: vet lint build torpedo
+all: vet lint build torpedo fmt
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -43,6 +44,10 @@ vendor-without-update:
 	GOOS=linux GOARCH=amd64 govendor update +vendor
 	GOOS=linux GOARCH=amd64 govendor add +external
 	GOOS=linux GOARCH=amd64 govendor update +vendor
+
+fmt:
+	@echo -e "Checking gofmt on following: $(PKGS)"
+	@./scripts/check-gofmt.sh $(PKGS)
 
 vendor: vendor-update vendor-without-update
 
