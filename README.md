@@ -6,6 +6,8 @@
 
 Torpedo is a test suite to qualify storage providers for stateful containers running in a distributed environment.  It tests various scenarios that applications encounter when running in Linux containers and deployed via schedulers such as Kubernetes, Marathon or Swarm.
 
+<div style="text-align:center"><img src="images/torpedo.png" alt="Drawing" style="width: 50px;"/></div>
+
 ## CSI
 CSI is a specification for Linux Container Storage Interfaces.  It defines the control plane interraction between a cloud native scheduler such as Kubernetes, and a cloud native storage provider.  The specification is available [here](https://github.com/container-storage-interface/spec/blob/master/spec.md).
 
