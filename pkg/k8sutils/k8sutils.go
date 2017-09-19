@@ -169,6 +169,7 @@ func DeleteDeployment(deployment *v1beta1.Deployment) error {
 
 // ValidateDeployment validates the given deployment if it's running and healthy
 func ValidateDeployment(deployment *v1beta1.Deployment) error {
+	var err error
 	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
@@ -213,16 +214,15 @@ func ValidateDeployment(deployment *v1beta1.Deployment) error {
 
 		return nil
 	}
-
-	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // ValidateTerminatedDeployment validates if given deployment is terminated
 func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
+	var err error
 	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
@@ -255,11 +255,10 @@ func ValidateTerminatedDeployment(deployment *v1beta1.Deployment) error {
 		return nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // GetDeploymentPods returns pods for the given deployment
@@ -314,6 +313,7 @@ func DeleteStatefulSet(statefulset *v1beta1.StatefulSet) error {
 
 // ValidateStatefulSet validates the given statefulset if it's running and healthy
 func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
+	var err error
 	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
@@ -359,11 +359,10 @@ func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
 		return nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // GetStatefulSetPods returns pods for the given statefulset
@@ -391,6 +390,7 @@ func GetStatefulSetPods(statefulset *v1beta1.StatefulSet) ([]v1.Pod, error) {
 
 // ValidateTerminatedStatefulSet validates if given deployment is terminated
 func ValidateTerminatedStatefulSet(statefulset *v1beta1.StatefulSet) error {
+	var err error
 	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
@@ -423,11 +423,10 @@ func ValidateTerminatedStatefulSet(statefulset *v1beta1.StatefulSet) error {
 		return nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if err = task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // StatefulSet APIs - END
@@ -541,6 +540,7 @@ func DeletePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 
 // ValidatePersistentVolumeClaim validates the given pvc
 func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
+	var err error
 	t := func() error {
 		client, err := GetK8sClient()
 		if err != nil {
@@ -565,8 +565,7 @@ func ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 	if err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // GetVolumeForPersistentVolumeClaim returns the back volume for the given PVC

@@ -287,6 +287,7 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 }
 
 func (t *torpedo) validateContext(ctx *scheduler.Context) error {
+	var err error
 	if ctx.Status != 0 {
 		return fmt.Errorf("exit status %v\nStdout: %v\nStderr: %v",
 			ctx.Status,
@@ -298,12 +299,10 @@ func (t *torpedo) validateContext(ctx *scheduler.Context) error {
 	if err := t.validateVolumes(ctx); err != nil {
 		return err
 	}
-
-	if err := t.s.WaitForRunning(ctx); err != nil {
+	if err = t.s.WaitForRunning(ctx); err != nil {
 		return err
 	}
-
-	return nil
+	return err
 }
 
 // validateVolumes validates the volume with the scheduler and volume driver
@@ -337,18 +336,18 @@ func (t *torpedo) validateVolumes(ctx *scheduler.Context) error {
 }
 
 func (t *torpedo) tearDownContext(ctx *scheduler.Context) error {
-	if err := t.s.Destroy(ctx); err != nil {
+	var err error
+	if err = t.s.Destroy(ctx); err != nil {
+		return err
+	}
+	if err = t.s.WaitForDestroy(ctx); err != nil {
+		return err
+	}
+	if err = t.s.DeleteVolumes(ctx); err != nil {
 		return err
 	}
 
-	if err := t.s.WaitForDestroy(ctx); err != nil {
-		return err
-	}
-
-	if err := t.s.DeleteVolumes(ctx); err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 /*

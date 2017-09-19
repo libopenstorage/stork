@@ -296,6 +296,7 @@ func (d *portworx) StopDriver(n node.Node) error {
 }
 
 func (d *portworx) WaitStart(n node.Node) error {
+	var err error
 	// Wait for Portworx to become usable.
 	t := func() error {
 		if status, _ := d.clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
@@ -324,11 +325,11 @@ func (d *portworx) WaitStart(n node.Node) error {
 		return nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+	if err = task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 
-	return nil
+	return err
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
