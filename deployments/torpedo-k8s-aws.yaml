@@ -31,29 +31,25 @@ roleRef:
   name: torpedo-role
   apiGroup: rbac.authorization.k8s.io
 ---
-apiVersion: batch/v1
-kind: Job
+apiVersion: v1
+kind: Pod
 metadata:
   name: torpedo
 spec:
-  template:
-    metadata:
-      name: torpedo
-    spec:
-      tolerations:
-      - key: node-role.kubernetes.io/master
-        operator: Equal
-        effect: NoSchedule
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: node-role.kubernetes.io/master
-                operator: Exists
-      containers:
-      - name: torpedo
-        image: harshpx/torpedo:latest
-        command: ["./torpedo", "k8s", "pxd", "aws"]
-      restartPolicy: Never
-      serviceAccountName: torpedo-account
+  tolerations:
+  - key: node-role.kubernetes.io/master
+    operator: Equal
+    effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: node-role.kubernetes.io/master
+            operator: Exists
+  containers:
+  - name: torpedo
+    image: harshpx/torpedo:latest
+    command: ["./torpedo", "k8s", "pxd", "aws"]
+  restartPolicy: Never
+  serviceAccountName: torpedo-account
