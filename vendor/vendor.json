@@ -544,6 +544,12 @@
 			"revisionTime": "2017-05-23T03:00:23Z"
 		},
 		{
+			"checksumSHA1": "SshnwGo3w3gUaXIswP3/vOQp57k=",
+			"path": "github.com/mohae/deepcopy",
+			"revision": "491d3605edfb866af34a48075bd4355ac1bf46ca",
+			"revisionTime": "2017-06-03T00:54:31Z"
+		},
+		{
 			"checksumSHA1": "OUupkCHnh8e3RHRNcMFqQJqhaQI=",
 			"origin": "github.com/docker/distribution/vendor/github.com/opencontainers/go-digest",
 			"path": "github.com/opencontainers/go-digest",
