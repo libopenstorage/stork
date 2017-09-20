@@ -52,5 +52,6 @@ spec:
     image: harshpx/torpedo:latest
     # TODO: add comments describing below
     command: ["./torpedo", "k8s", "pxd", "ssh" ]
+    tty: true
   restartPolicy: Never
   serviceAccountName: torpedo-account

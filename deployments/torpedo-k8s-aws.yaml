@@ -51,5 +51,6 @@ spec:
   - name: torpedo
     image: harshpx/torpedo:latest
     command: ["./torpedo", "k8s", "pxd", "aws"]
+    tty: true
   restartPolicy: Never
   serviceAccountName: torpedo-account

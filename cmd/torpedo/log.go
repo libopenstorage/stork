@@ -50,7 +50,8 @@ func (hook *Hook) SetFormatter(formatter logrus.Formatter) {
 func successMessage(msg string) bool {
 	successStrings := []string{
 		"pass",
-		"valid",
+		"validated",
+		"successfully",
 	}
 
 	for _, s := range successStrings {
