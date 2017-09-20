@@ -7,10 +7,12 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/task"
 	ssh_pkg "golang.org/x/crypto/ssh"
+	"os"
 )
 
 const (
@@ -22,7 +24,7 @@ const (
 	DefaultPassword = "t0rped0"
 	// DefaultSSHPort is the default port used for ssh operations
 	DefaultSSHPort = 22
-	// DefaultSSHKey is the default public key path used for ssh operations
+	// DefaultSSHKey is the default public keyPath path used for ssh operations
 	DefaultSSHKey = "/home/torpedo/key4torpedo.pem"
 )
 
@@ -30,17 +32,17 @@ type ssh struct {
 	node.Driver
 	username    string
 	password    string
-	key         string
+	keyPath     string
 	schedDriver scheduler.Driver
 	sshConfig   *ssh_pkg.ClientConfig
-	// TODO key-based ssh
+	// TODO keyPath-based ssh
 }
 
 func (s *ssh) String() string {
 	return DriverName
 }
 
-// returns ssh.Signer from user you running app home path + cutted key path.
+// returns ssh.Signer from user you running app home path + cutted keyPath path.
 // (ex. pubkey,err := getKeyFile("/.ssh/id_rsa") )
 func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	file := keypath
@@ -59,6 +61,24 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 
 func (s *ssh) Init(sched string) error {
 	var err error
+
+	keyPath := os.Getenv("TORPEDO_SSH_KEY")
+	if len(keyPath) == 0 {
+		s.keyPath = DefaultSSHKey
+	} else {
+		s.keyPath = keyPath
+	}
+
+	logrus.Infof("[debug] Using ssh keypath: %v", s.keyPath)
+
+	username := os.Getenv("TORPEDO_SSH_USER")
+	if len(username) == 0 {
+		s.username = DefaultUsername
+	} else {
+		s.username = username
+	}
+	logrus.Infof("[debug] Using ssh user: %v", s.username)
+
 	if s.password != "" {
 		s.sshConfig = &ssh_pkg.ClientConfig{
 			User: s.username,
@@ -67,16 +87,17 @@ func (s *ssh) Init(sched string) error {
 			},
 			HostKeyCallback: ssh_pkg.InsecureIgnoreHostKey(),
 		}
-	} else if s.key != "" {
-		pubkey, err := getKeyFile(s.key)
+	} else if s.keyPath != "" {
+		pubkey, err := getKeyFile(s.keyPath)
 		if err != nil {
-			return fmt.Errorf("Error getting public key from keyfile")
+			return fmt.Errorf("Error getting public keyPath from keyfile")
 		}
 		s.sshConfig = &ssh_pkg.ClientConfig{
 			User: s.username,
 			Auth: []ssh_pkg.AuthMethod{
 				ssh_pkg.PublicKeys(pubkey),
 			},
+			HostKeyCallback: ssh_pkg.InsecureIgnoreHostKey(),
 		}
 
 	} else {
@@ -271,7 +292,7 @@ func init() {
 		Driver:   node.NotSupportedDriver,
 		username: DefaultUsername,
 		password: DefaultPassword,
-		key:      DefaultSSHKey,
+		keyPath:  DefaultSSHKey,
 	}
 
 	node.Register(DriverName, s)

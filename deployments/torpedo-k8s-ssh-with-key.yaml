@@ -50,8 +50,20 @@ spec:
   containers:
   - name: torpedo
     image: harshpx/torpedo:latest
-    # TODO: add comments describing below
-    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh" ]
+    #command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh" ]
+    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown" ]
     tty: true
+    env:
+    - name: TORPEDO_SSH_USER
+      value: "centos"
+    - name: TORPEDO_SSH_KEY
+      value: "/home/torpedo/key4torpedo.pem"
+    volumeMounts:
+    - mountPath: /home/torpedo/key4torpedo.pem
+      name: ssh-key
   restartPolicy: Never
   serviceAccountName: torpedo-account
+  volumes:
+    - name: ssh-key
+      hostPath:
+        path: /home/torpedo/key4torpedo.pem

@@ -245,9 +245,7 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 				return errFailedToInspectVolme(name, k, requestedSpec.HaLevel, vol.Spec.HaLevel)
 			}
 		case api.SpecPriorityAlias:
-			if requestedSpec.Cos != vol.Spec.Cos {
-				return errFailedToInspectVolme(name, k, requestedSpec.Cos, vol.Spec.Cos)
-			}
+			// Since IO priority isn't guaranteed, we aren't validating it here.
 		case api.SpecSnapshotInterval:
 			if requestedSpec.SnapshotInterval != vol.Spec.SnapshotInterval {
 				return errFailedToInspectVolme(name, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)

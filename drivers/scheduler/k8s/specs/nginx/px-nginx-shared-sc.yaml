@@ -5,4 +5,5 @@ metadata:
     name: px-nginx-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   repl: "2"
+   repl: "3"
+   shared: "true"

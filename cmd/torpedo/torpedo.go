@@ -43,19 +43,21 @@ type testDriverFunc func() error
 func (t *torpedo) testSetupTearDown() error {
 	taskName := fmt.Sprintf("setupteardown-%v", t.instanceID)
 
-	logrus.Infof("[%v] Scheduling new applications", taskName)
+	logrus.Infof("[Test: %v] Scheduling new applications", taskName)
 	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
 	if err != nil {
 		return err
 	}
 
 	for _, ctx := range contexts {
-		logrus.Infof("[%v] Validating %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
+	}
 
-		logrus.Infof("[%v] Tearing down %v", taskName, ctx.App.Key)
+	for _, ctx := range contexts {
+		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
 		if err := t.tearDownContext(ctx); err != nil {
 			return err
 		}
@@ -68,18 +70,21 @@ func (t *torpedo) testSetupTearDown() error {
 // not be impacted.
 func (t *torpedo) testDriverDown() error {
 	taskName := fmt.Sprintf("driverdown-%v", t.instanceID)
-	logrus.Infof("[%v] Scheduling new applications", taskName)
+	logrus.Infof("[Test: %v] Scheduling new applications", taskName)
+
 	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
 	if err != nil {
 		return err
 	}
 
 	for _, ctx := range contexts {
-		logrus.Infof("[%v] Validating %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
+	}
 
+	for _, ctx := range contexts {
 		appNodes, err := t.s.GetNodesForApp(ctx)
 		if err != nil {
 			return err
@@ -89,38 +94,37 @@ func (t *torpedo) testDriverDown() error {
 			return fmt.Errorf("error: found 0 nodes for app: %v (uid: %v)", ctx.App.Key, ctx.UID)
 		}
 
-		logrus.Infof("[%v] Stopping volume driver: %v on app nodes", taskName, t.v.String())
+		logrus.Infof("[Test: %v] Stopping volume driver: %v on app: %v nodes",
+			taskName, t.v.String(), ctx.App.Key)
 		for _, n := range appNodes {
 			if err := t.v.StopDriver(n); err != nil {
 				return err
 			}
 		}
 
-		// TODO add a PerformIO interface to applications
-
 		// Sleep for apps to get going...
-		time.Sleep(20 * time.Second)
+		time.Sleep(40 * time.Second)
 
-		logrus.Infof("[%v] Re-starting volume driver on app nodes", taskName)
+		logrus.Infof("[Test: %v] Re-starting volume driver on app nodes", taskName)
 		for _, n := range appNodes {
 			if err := t.v.StartDriver(n); err != nil {
 				return err
 			}
 		}
 
-		logrus.Infof("[%v] Waiting for volume driver:%v to start", taskName, t.v.String())
+		logrus.Infof("[Test: %v] Waiting for volume driver:%v to start", taskName, t.v.String())
 		for _, n := range appNodes {
 			if err := t.v.WaitStart(n); err != nil {
 				return err
 			}
 		}
 
-		logrus.Infof("[%v] Re-validating %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Re-validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
 
-		logrus.Infof("[%v] Tearing down %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
 		if err := t.tearDownContext(ctx); err != nil {
 			return err
 		}
@@ -135,18 +139,20 @@ func (t *torpedo) testDriverDown() error {
 // back up, we should be able to detach and delete the volume.
 func (t *torpedo) testDriverDownAppDown() error {
 	taskName := fmt.Sprintf("driverappdown-%v", t.instanceID)
-	logrus.Infof("[%v] Scheduling new applications", taskName)
+	logrus.Infof("[Test: %v] Scheduling new applications", taskName)
 	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
 	if err != nil {
 		return err
 	}
 
 	for _, ctx := range contexts {
-		logrus.Infof("[%v] Validating %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
+	}
 
+	for _, ctx := range contexts {
 		appNodes, err := t.s.GetNodesForApp(ctx)
 		if err != nil {
 			return err
@@ -156,7 +162,8 @@ func (t *torpedo) testDriverDownAppDown() error {
 			return fmt.Errorf("error: found 0 nodes for app: %v (uid: %v)", ctx.App.Key, ctx.UID)
 		}
 
-		logrus.Infof("[%v] Stopping volume driver on app nodes", taskName)
+		logrus.Infof("[Test: %v] Stopping volume driver: %v on app: %v nodes",
+			taskName, t.v.String(), ctx.App.Key)
 		for _, n := range appNodes {
 			if err := t.v.StopDriver(n); err != nil {
 				return err
@@ -164,21 +171,21 @@ func (t *torpedo) testDriverDownAppDown() error {
 		}
 
 		// Sleep for apps to get going...
-		time.Sleep(20 * time.Second)
+		time.Sleep(40 * time.Second)
 
-		logrus.Infof("[%v] Destroying application: %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Destroying application: %v", taskName, ctx.App.Key)
 		if err := t.s.Destroy(ctx); err != nil {
 			return err
 		}
 
-		logrus.Infof("[%v] Re-starting volume driver on app nodes", taskName)
+		logrus.Infof("[Test: %v] Re-starting volume driver on app: %v nodes", taskName, ctx.App.Key)
 		for _, n := range appNodes {
 			if err := t.v.StartDriver(n); err != nil {
 				return err
 			}
 		}
 
-		logrus.Infof("[%v] Waiting for volume driver: %v to start", taskName, t.v.String())
+		logrus.Infof("[Test: %v] Waiting for volume driver: %v to start", taskName, t.v.String())
 		for _, n := range appNodes {
 			if err := t.v.WaitStart(n); err != nil {
 				return err
@@ -190,7 +197,7 @@ func (t *torpedo) testDriverDownAppDown() error {
 			return err
 		}
 
-		logrus.Infof("[%v] Tearing down storage for: %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Tearing down storage for: %v", taskName, ctx.App.Key)
 		if err := t.s.DeleteVolumes(ctx); err != nil {
 			return err
 		}
@@ -204,29 +211,31 @@ func (t *torpedo) testDriverDownAppDown() error {
 // testAppTasksDown deletes all tasks of an application and checks if app converges back to desired state
 func (t *torpedo) testAppTasksDown() error {
 	taskName := fmt.Sprintf("apptasksdown-%v", t.instanceID)
-	logrus.Infof("[%v] Scheduling new applications", taskName)
+	logrus.Infof("[Test: %v] Scheduling new applications", taskName)
 	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
 	if err != nil {
 		return err
 	}
 
 	for _, ctx := range contexts {
-		logrus.Infof("[%v] Validating %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
+	}
 
-		logrus.Infof("[%v] Destroying tasks for application: %v", taskName, ctx.App.Key)
+	for _, ctx := range contexts {
+		logrus.Infof("[Test: %v] Destroying tasks for application: %v", taskName, ctx.App.Key)
 		if err := t.s.DeleteTasks(ctx); err != nil {
 			return err
 		}
 
-		logrus.Infof("[%v] Re-validating %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Re-validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
 
-		logrus.Infof("[%v] Tearing down %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
 		if err := t.tearDownContext(ctx); err != nil {
 			return err
 		}
@@ -242,18 +251,20 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 		taskName = fmt.Sprintf("all%v", taskName)
 	}
 
-	logrus.Infof("[%v] Scheduling new applications", taskName)
+	logrus.Infof("[Test: %v] Scheduling new applications", taskName)
 	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
 	if err != nil {
 		return err
 	}
 
 	for _, ctx := range contexts {
-		logrus.Infof("[%v] Validating %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
+	}
 
+	for _, ctx := range contexts {
 		appNodes, err := t.s.GetNodesForApp(ctx)
 		if err != nil {
 			return err
@@ -271,7 +282,7 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 		}
 
 		for _, n := range nodesToReboot {
-			logrus.Infof("[%v] Rebooting: %v", taskName, n.Name)
+			logrus.Infof("[Test: %v] Rebooting: %v as app: %v is running on it", taskName, n.Name, ctx.App.Key)
 			if err := t.n.RebootNode(n, node.RebootNodeOpts{
 				Force: false,
 			}); err != nil {
@@ -283,7 +294,7 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 
 		// Wait for node to be back
 		for _, n := range nodesToReboot {
-			logrus.Infof("[%v] Testing connectivity with: %v", taskName, n.Name)
+			logrus.Infof("[Test: %v] Testing connectivity with: %v", taskName, n.Name)
 			if err := t.n.TestConnection(n, node.ConnectionOpts{
 				Timeout:         15 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
@@ -300,12 +311,12 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 			}
 		}
 
-		logrus.Infof("[%v] Re-validating %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Re-validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
 			return err
 		}
 
-		logrus.Infof("[%v] Tearing down %v", taskName, ctx.App.Key)
+		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
 		if err := t.tearDownContext(ctx); err != nil {
 			return err
 		}
@@ -572,7 +583,7 @@ func (t *torpedo) run(tests string) error {
 	if tests != "" {
 		testList := strings.Split(tests, ",")
 		for _, testName := range testList {
-			logrus.Infof("***** Test %v starting *****", testName)
+			logrus.Printf("***** Test %v starting *****\n", testName)
 			f, ok := testFuncs[testName]
 			if !ok {
 				return &errors.ErrNotFound{
@@ -582,21 +593,22 @@ func (t *torpedo) run(tests string) error {
 			}
 
 			if err := f(); err != nil {
-				logrus.Infof("***** Test %v Failed with Error: %v *****", testName, err)
+				logrus.Printf("***** Test %v Failed with Error: %v *****\n", testName, err)
 			} else {
-				logrus.Infof("***** Test %v Passed *****", testName)
+				logrus.Printf("***** Test %v Passed *****\n", testName)
 			}
 		}
 	} else {
 		for n, f := range testFuncs {
-			logrus.Infof("***** Test %v starting *****", n)
+			logrus.Infof("***** Test %v starting *****\n", n)
 			if err := f(); err != nil {
-				logrus.Infof("***** Test %v Failed with Error: %v *****", n, err)
+				logrus.Printf("***** Test %v Failed with Error: %v *****\n", n, err)
 			} else {
-				logrus.Infof("***** Test %v Passed *****", n)
+				logrus.Printf("***** Test %v Passed *****\n", n)
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -630,7 +642,7 @@ func main() {
 				},
 				cli.StringFlag{
 					Name:  testsCliFlag,
-					Usage: "Comman-separated list of tests. [Default:  runs all the tests]",
+					Usage: "Comma-separated list of tests. [Default:  runs all the tests]",
 					Value: "",
 				},
 			},

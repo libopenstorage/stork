@@ -10,7 +10,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/apps/v1beta1"
-	ext_v1beta1 "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 	"k8s.io/client-go/rest"
 )
@@ -33,6 +32,31 @@ func GetK8sClient() (*kubernetes.Clientset, error) {
 	}
 
 	return k8sClient, nil
+}
+
+// CreateNamespace creates a namespace with given name and metadata
+func CreateNamespace(name string, metadata map[string]string) (*v1.Namespace, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return client.CoreV1().Namespaces().Create(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:   name,
+			Labels: metadata,
+		},
+	})
+}
+
+// DeleteNamespace deletes a namespace with given name
+func DeleteNamespace(name string) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	return client.CoreV1().Namespaces().Delete(name, &meta_v1.DeleteOptions{})
 }
 
 // GetNodes talks to the k8s api server and gets the nodes in the cluster
@@ -317,7 +341,7 @@ func GetDeploymentPods(deployment *v1beta1.Deployment) ([]v1.Pod, error) {
 	for _, rSet := range rSets.Items {
 		for _, owner := range rSet.OwnerReferences {
 			if owner.Name == deployment.Name {
-				return GetReplicaSetPods(rSet)
+				return GetPodsByOwner(rSet.Name, rSet.Namespace)
 			}
 		}
 	}
@@ -413,25 +437,7 @@ func ValidateStatefulSet(statefulset *v1beta1.StatefulSet) error {
 
 // GetStatefulSetPods returns pods for the given statefulset
 func GetStatefulSetPods(statefulset *v1beta1.StatefulSet) ([]v1.Pod, error) {
-	client, err := GetK8sClient()
-	if err != nil {
-		return nil, err
-	}
-
-	rSets, err := client.ReplicaSets(statefulset.Namespace).List(meta_v1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, rSet := range rSets.Items {
-		for _, owner := range rSet.OwnerReferences {
-			if owner.Name == statefulset.Name {
-				return GetReplicaSetPods(rSet)
-			}
-		}
-	}
-
-	return nil, nil
+	return GetPodsByOwner(statefulset.Name, statefulset.Namespace)
 }
 
 // ValidateTerminatedStatefulSet validates if given deployment is terminated
@@ -498,14 +504,14 @@ func DeletePods(pods []v1.Pod) error {
 	return nil
 }
 
-// GetReplicaSetPods returns pods for the given replica set
-func GetReplicaSetPods(rSet ext_v1beta1.ReplicaSet) ([]v1.Pod, error) {
+// GetPodsByOwner returns pods for the given owner and namespace
+func GetPodsByOwner(ownerName string, namespace string) ([]v1.Pod, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
 	}
 
-	pods, err := client.Pods(rSet.Namespace).List(meta_v1.ListOptions{})
+	pods, err := client.Pods(namespace).List(meta_v1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -513,7 +519,7 @@ func GetReplicaSetPods(rSet ext_v1beta1.ReplicaSet) ([]v1.Pod, error) {
 	var result []v1.Pod
 	for _, pod := range pods.Items {
 		for _, owner := range pod.OwnerReferences {
-			if owner.Name == rSet.Name {
+			if owner.Name == ownerName {
 				result = append(result, pod)
 			}
 		}
@@ -535,28 +541,28 @@ func CreateStorageClass(sc *storage_api.StorageClass) (*storage_api.StorageClass
 }
 
 // DeleteStorageClass deletes the given storage class
-func DeleteStorageClass(sc *storage_api.StorageClass) error {
+func DeleteStorageClass(name string) error {
 	client, err := GetK8sClient()
 	if err != nil {
 		return err
 	}
 
-	return client.StorageV1beta1().StorageClasses().Delete(sc.Name, &meta_v1.DeleteOptions{})
+	return client.StorageV1().StorageClasses().Delete(name, &meta_v1.DeleteOptions{})
 }
 
 // ValidateStorageClass validates the given storage class
-func ValidateStorageClass(sc *storage_api.StorageClass) error {
+func ValidateStorageClass(name string) (*storage_api.StorageClass, error) {
 	client, err := GetK8sClient()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = client.StorageV1beta1().StorageClasses().Get(sc.Name, meta_v1.GetOptions{})
+	sc, err := client.StorageV1().StorageClasses().Get(name, meta_v1.GetOptions{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return sc, nil
 }
 
 // StorageClass APIs - END

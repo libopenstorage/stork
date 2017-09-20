@@ -8,7 +8,7 @@ import (
 
 const (
 	// k8sPxRunningLabelKey is the label key used for px state
-	k8sPxRunningLabelKey = "px/running"
+	k8sPxRunningLabelKey = "px/enabled"
 	// k8sPxNotRunningLabelValue is label value for a not running px state
 	k8sPxNotRunningLabelValue = "false"
 )

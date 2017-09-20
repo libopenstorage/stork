@@ -63,6 +63,21 @@ func successMessage(msg string) bool {
 	return false
 }
 
+func errorMessage(msg string) bool {
+	errorStrings := []string{
+		"failed",
+		"error",
+	}
+
+	for _, s := range errorStrings {
+		if strings.Contains(strings.ToLower(msg), s) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Fire color codes the output.
 func (hook *Hook) Fire(entry *logrus.Entry) error {
 	if entry.Level <= logrus.WarnLevel {
@@ -70,6 +85,8 @@ func (hook *Hook) Fire(entry *logrus.Entry) error {
 	} else {
 		if successMessage(entry.Message) {
 			entry.Message = green(entry.Message)
+		} else if errorMessage(entry.Message) {
+			entry.Message = red(entry.Message)
 		} else {
 			entry.Message = yellow(entry.Message)
 		}

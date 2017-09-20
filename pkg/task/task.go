@@ -3,8 +3,6 @@ package task
 import (
 	"errors"
 	"time"
-
-	"github.com/Sirupsen/logrus"
 )
 
 //TODO: export the type: type Task func() (string, error)
@@ -24,7 +22,6 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 			select {
 			case q := <-quit:
 				if q {
-					logrus.Infof("Timed out, quitting")
 					return
 				}
 
@@ -34,6 +31,7 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 					done <- true
 					return
 				}
+
 				time.Sleep(timeBeforeRetry)
 			}
 		}

@@ -113,7 +113,7 @@ Enter the new value, or press ENTER for the default
 
 To run on kubernetes:
 ```
-# kubectl apply -f deployments/torpedo-k8s.yaml
+# kubectl create -f deployments/torpedo-k8s-ssh.yaml
 ```
 
 Make sure you change `image: harshpx/torpedo:latest` to your torpedo docker image.

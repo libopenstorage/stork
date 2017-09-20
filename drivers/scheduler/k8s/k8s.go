@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -180,6 +181,10 @@ func (k *k8s) parseK8SNode(n v1.Node) node.Node {
 	}
 }
 
+func getAppNamespaceName(app *spec.AppSpec, instanceID string) string {
+	return fmt.Sprintf("%s-%s", app.Key, instanceID)
+}
+
 func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
 	if options.AppKeys != nil && len(options.AppKeys) > 0 {
@@ -196,31 +201,46 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 	var contexts []*scheduler.Context
 	for _, app := range apps {
+		appNamespace := getAppNamespaceName(app, instanceID)
+		ns, err := k8sutils.CreateNamespace(appNamespace, map[string]string{
+			"creater": "torpedo",
+			"app":     app.Key,
+		})
+		if err != nil {
+			return nil, &ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", appNamespace, err),
+			}
+		}
+
 		var coreObjects []interface{}
 		var storageObjects []interface{}
 
 		for _, storage := range app.Storage {
 			if obj, ok := storage.(*storage_api.StorageClass); ok {
-				obj.Name = fmt.Sprintf("%s-%s", obj.Name, instanceID)
+				obj.Namespace = ns.Name
 				sc, err := k8sutils.CreateStorageClass(obj)
 				if err != nil {
-					return nil, &ErrFailedToScheduleApp{
-						App:   app,
-						Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
+					if matched, _ := regexp.MatchString(".+ already exists", err.Error()); !matched {
+						return nil, &ErrFailedToScheduleApp{
+							App:   app,
+							Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
+						}
+					}
+
+					sc, err = k8sutils.ValidateStorageClass(obj.Name)
+					if err != nil {
+						return nil, &ErrFailedToScheduleApp{
+							App:   app,
+							Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
+						}
 					}
 				}
 				storageObjects = append(storageObjects, sc)
 
-				logrus.Infof("Created storage class: %v", sc.Name)
+				logrus.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
 			} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
-				obj.Name = fmt.Sprintf("%s-%s", obj.Name, instanceID)
-
-				// Update storage class name to use the dynamically generated one
-				if scName, ok := obj.ObjectMeta.Annotations["volume.beta.kubernetes.io/storage-class"]; ok {
-					obj.ObjectMeta.Annotations["volume.beta.kubernetes.io/storage-class"] =
-						fmt.Sprintf("%s-%s", scName, instanceID)
-				}
-
+				obj.Namespace = ns.Name
 				pvc, err := k8sutils.CreatePersistentVolumeClaim(obj)
 				if err != nil {
 					return nil, &ErrFailedToScheduleApp{
@@ -230,7 +250,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				}
 				storageObjects = append(storageObjects, pvc)
 
-				logrus.Infof("Created PVC: %v", pvc.Name)
+				logrus.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 			} else {
 				return nil, &ErrFailedToScheduleApp{
 					App:   app,
@@ -241,19 +261,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 		for _, core := range app.Core {
 			if obj, ok := core.(*apps_api.Deployment); ok {
-				obj.Name = fmt.Sprintf("%s-%s", obj.Name, instanceID)
-
-				// Update PVC name to use dynamically genereated name
-				for index, vol := range obj.Spec.Template.Spec.Volumes {
-					if vol.PersistentVolumeClaim != nil {
-						vol.PersistentVolumeClaim.ClaimName =
-							fmt.Sprintf("%s-%s", vol.PersistentVolumeClaim.ClaimName, instanceID)
-						obj.Spec.Template.Spec.Volumes[index] = vol
-					}
-				}
-
-				// TODO update metadata labels
-
+				obj.Namespace = ns.Name
 				dep, err := k8sutils.CreateDeployment(obj)
 				if err != nil {
 					return nil, &ErrFailedToScheduleApp{
@@ -263,12 +271,9 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				}
 				coreObjects = append(coreObjects, dep)
 
-				logrus.Infof("Created deployment: %v", dep.Name)
+				logrus.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
 			} else if obj, ok := core.(*apps_api.StatefulSet); ok {
-				obj.Name = fmt.Sprintf("%s-%s", obj.Name, instanceID)
-
-				// TODO update metadata labels
-
+				obj.Namespace = ns.Name
 				ss, err := k8sutils.CreateStatefulSet(obj)
 				if err != nil {
 					return nil, &ErrFailedToScheduleApp{
@@ -278,12 +283,9 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				}
 				coreObjects = append(coreObjects, ss)
 
-				logrus.Infof("Created StatefulSet: %v", ss.Name)
+				logrus.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
 			} else if obj, ok := core.(*v1.Service); ok {
-				obj.Name = fmt.Sprintf("%s-%s", obj.Name, instanceID)
-
-				// TODO update service selector
-
+				obj.Namespace = ns.Name
 				svc, err := k8sutils.CreateService(obj)
 				if err != nil {
 					return nil, &ErrFailedToScheduleApp{
@@ -293,7 +295,7 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				}
 				coreObjects = append(coreObjects, svc)
 
-				logrus.Infof("Created Service: %v", svc.Name)
+				logrus.Infof("[%v] Created Service: %v", app.Key, svc.Name)
 			} else {
 				return nil, &ErrFailedToScheduleApp{
 					App:   app,
@@ -331,7 +333,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Validated deployment: %v", obj.Name)
+			logrus.Infof("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := core.(*apps_api.StatefulSet); ok {
 			if err := k8sutils.ValidateStatefulSet(obj); err != nil {
 				return &ErrFailedToValidateApp{
@@ -340,7 +342,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Validated statefulset: %v", obj.Name)
+			logrus.Infof("[%v] Validated statefulset: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := core.(*v1.Service); ok {
 			svc, err := k8sutils.GetService(obj.Name, obj.Namespace)
 			if err != nil {
@@ -350,7 +352,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Validated Service: %v", svc.Name)
+			logrus.Infof("[%v] Validated Service: %v", ctx.App.Key, svc.Name)
 		} else {
 			return &ErrFailedToValidateApp{
 				App:   ctx.App,
@@ -372,7 +374,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Destroyed deployment: %v", obj.Name)
+			logrus.Infof("[%v] Destroyed deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := core.(*apps_api.StatefulSet); ok {
 			if err := k8sutils.DeleteStatefulSet(obj); err != nil {
 				return &ErrFailedToDestroyApp{
@@ -381,7 +383,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Destroyed StatefulSet: %v", obj.Name)
+			logrus.Infof("[%v]Destroyed StatefulSet: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := core.(*v1.Service); ok {
 			if err := k8sutils.DeleteService(obj); err != nil {
 				return &ErrFailedToDestroyApp{
@@ -390,7 +392,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Destroyed Service: %v", obj.Name)
+			logrus.Infof("[%v] Destroyed Service: %v", ctx.App.Key, obj.Name)
 		} else {
 			return &ErrFailedToDestroyApp{
 				App:   ctx.App,
@@ -398,6 +400,16 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 			}
 		}
 	}
+
+	appNamespace := getAppNamespaceName(ctx.App, ctx.UID)
+	if err := k8sutils.DeleteNamespace(appNamespace); err != nil {
+		return &ErrFailedToDestroyApp{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("Failed to destroy namespace: %#v. Err: %v", appNamespace, err),
+		}
+	}
+
+	logrus.Infof("[%v] Destroyed Namespace: %v", ctx.App.Key, appNamespace)
 
 	return nil
 }
@@ -412,7 +424,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Validated destroy of Deployment: %v", obj.Name)
+			logrus.Infof("[%v] Validated destroy of Deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := core.(*apps_api.StatefulSet); ok {
 			if err := k8sutils.ValidateTerminatedStatefulSet(obj); err != nil {
 				return &ErrFailedToValidateAppDestroy{
@@ -421,7 +433,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Validated destroy of StatefulSet: %v", obj.Name)
+			logrus.Infof("[%v] Validated destroy of StatefulSet: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := core.(*v1.Service); ok {
 			if err := k8sutils.ValidateDeletedService(obj.Name, obj.Namespace); err != nil {
 				return &ErrFailedToValidateAppDestroy{
@@ -430,7 +442,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Validated destroy of Service: %v", obj.Name)
+			logrus.Infof("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
 		} else {
 			return &ErrFailedToValidateAppDestroy{
 				App:   ctx.App,
@@ -522,14 +534,14 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 	for _, storage := range ctx.App.Storage {
 		if obj, ok := storage.(*storage_api.StorageClass); ok {
-			if err := k8sutils.ValidateStorageClass(obj); err != nil {
+			if _, err := k8sutils.ValidateStorageClass(obj.Name); err != nil {
 				return &ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate StorageClass: %v. Err: %v", obj.Name, err),
 				}
 			}
 
-			logrus.Infof("Validated storage class: %v", obj.Name)
+			logrus.Infof("[%v] Validated storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
 			if err := k8sutils.ValidatePersistentVolumeClaim(obj); err != nil {
 				return &ErrFailedToValidateStorage{
@@ -538,7 +550,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 				}
 			}
 
-			logrus.Infof("Validated PVC: %v", obj.Name)
+			logrus.Infof("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
 		} else {
 			return &ErrFailedToValidateStorage{
 				App:   ctx.App,
@@ -553,21 +565,23 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 	for _, storage := range ctx.App.Storage {
 		if obj, ok := storage.(*storage_api.StorageClass); ok {
-			if err := k8sutils.DeleteStorageClass(obj); err != nil {
+			if err := k8sutils.DeleteStorageClass(obj.Name); err != nil {
 				return &ErrFailedToDestroyStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
 				}
 			}
-			logrus.Infof("Destroyed storage class: %v", obj.Name)
+			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := storage.(*v1.PersistentVolumeClaim); ok {
 			if err := k8sutils.DeletePersistentVolumeClaim(obj); err != nil {
-				return &ErrFailedToDestroyStorage{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
+				if matched, _ := regexp.MatchString(".+ not found", err.Error()); !matched {
+					return &ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
+					}
 				}
 			}
-			logrus.Infof("Destroyed PVC: %v", obj.Name)
+			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else {
 			return &ErrFailedToDestroyStorage{
 				App:   ctx.App,
@@ -613,11 +627,25 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 					Cause: fmt.Sprintf("node: %v not present in k8s map", p.Spec.NodeName),
 				}
 			}
+
+			if contains(result, n) {
+				continue
+			}
+
 			result = append(result, n)
 		}
 	}
 
 	return result, nil
+}
+
+func contains(nodes []node.Node, n node.Node) bool {
+	for _, value := range nodes {
+		if value.Name == n.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func init() {
