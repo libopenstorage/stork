@@ -88,6 +88,7 @@ var NotSupportedDriver = &notSupportedDriver{}
 
 func (d *notSupportedDriver) Init(sched string) error {
 	return &errors.ErrNotSupported{
+		Type:      "Function",
 		Operation: "Init()",
 	}
 }
@@ -98,18 +99,21 @@ func (d *notSupportedDriver) String() string {
 
 func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error {
 	return &errors.ErrNotSupported{
+		Type:      "Function",
 		Operation: "RebootNode()",
 	}
 }
 
 func (d *notSupportedDriver) ShutdownNode(node Node, options ShutdownNodeOpts) error {
 	return &errors.ErrNotSupported{
+		Type:      "Function",
 		Operation: "ShutdownNode()",
 	}
 }
 
 func (d *notSupportedDriver) TestConnection(node Node, options TestConectionOpts) error {
 	return &errors.ErrNotSupported{
+		Type:      "Function",
 		Operation: "TestConnection()",
 	}
 }

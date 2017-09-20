@@ -6,8 +6,10 @@
 // License: MIT, for more details check the included LICENSE file.
 package deepcopy
 
-import "reflect"
-import "time"
+import (
+	"reflect"
+	"time"
+)
 
 // Iface is an alias to Copy; this exists for backwards compatibility reasons.
 func Iface(iface interface{}) interface{} {
@@ -31,7 +33,7 @@ func Copy(src interface{}) interface{} {
 	// Recursively copy the original.
 	copyRecursive(original, cpy)
 
-	// Return theb copy as an interface.
+	// Return the copy as an interface.
 	return cpy.Interface()
 }
 
@@ -67,16 +69,7 @@ func copyRecursive(original, cpy reflect.Value) {
 	case reflect.Struct:
 		t, ok := original.Interface().(time.Time)
 		if ok {
-			b, err := t.MarshalBinary()
-			if err != nil {
-				panic(err)
-			}
-			tcpy := time.Time{}
-			tcpy.UnmarshalBinary(b)
-			if err != nil {
-				panic(err)
-			}
-			cpy.Set(reflect.ValueOf(tcpy))
+			cpy.Set(reflect.ValueOf(t))
 			return
 		}
 		// Go through each field of the struct and copy it.
@@ -109,7 +102,8 @@ func copyRecursive(original, cpy reflect.Value) {
 			originalValue := original.MapIndex(key)
 			copyValue := reflect.New(originalValue.Type()).Elem()
 			copyRecursive(originalValue, copyValue)
-			cpy.SetMapIndex(key, copyValue)
+			copyKey := Copy(key.Interface())
+			cpy.SetMapIndex(reflect.ValueOf(copyKey), copyValue)
 		}
 
 	default:

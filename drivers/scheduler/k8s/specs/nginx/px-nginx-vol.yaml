@@ -1,0 +1,13 @@
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: px-nginx-pvc
+   annotations:
+     volume.beta.kubernetes.io/storage-class: px-nginx-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi

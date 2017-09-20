@@ -21,6 +21,7 @@ func (k *k8sSchedOps) DisableOnNode(n node.Node) error {
 
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 	return &errors.ErrNotSupported{
+		Type:      "Function",
 		Operation: "ValidateOnNode",
 	}
 }

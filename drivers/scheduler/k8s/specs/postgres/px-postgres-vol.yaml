@@ -1,0 +1,13 @@
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: postgres-data
+   annotations:
+     volume.beta.kubernetes.io/storage-class: px-postgres-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
