@@ -89,7 +89,23 @@ Make sure you change the environment variables above to match your docker reposi
 * Portworx installed on the Kubernetes cluster
 * A root user on each node created as follows. The password should be `t0rped0`. If not already available a group called sudo should be created too.
 ```
-# useradd torpedo
+# adduser torpedo
+Adding user `torpedo' ...
+Adding new group `torpedo' (1001) ...
+Adding new user `torpedo' (1001) with group `torpedo' ...
+Creating home directory `/home/torpedo' ...
+Copying files from `/etc/skel' ...
+Enter new UNIX password:
+Retype new UNIX password:
+passwd: password updated successfully
+Changing the user information for torpedo
+Enter the new value, or press ENTER for the default
+	Full Name []: torpedo
+	Room Number []:
+	Work Phone []:
+	Home Phone []:
+	Other []:
+
 # groupadd sudo
 # usermod -aG sudo torpedo
 # sudo sh -c "echo 'torpedo ALL=NOPASSWD: ALL' >> /etc/sudoers"
