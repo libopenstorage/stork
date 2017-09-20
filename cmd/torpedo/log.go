@@ -97,4 +97,9 @@ func init() {
 	white = color.New(color.FgWhite).SprintFunc()
 	heading = color.New(color.Underline, color.Bold).SprintFunc()
 	plain = color.New(color.Reset).SprintFunc()
+
+	customFormatter := new(logrus.TextFormatter)
+	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+	logrus.SetFormatter(customFormatter)
+	customFormatter.FullTimestamp = true
 }
