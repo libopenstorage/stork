@@ -64,7 +64,7 @@ func successMessage(msg string) bool {
 
 // Fire color codes the output.
 func (hook *Hook) Fire(entry *logrus.Entry) error {
-	if entry.Level >= logrus.WarnLevel {
+	if entry.Level <= logrus.WarnLevel {
 		entry.Message = red(entry.Message)
 	} else {
 		if successMessage(entry.Message) {

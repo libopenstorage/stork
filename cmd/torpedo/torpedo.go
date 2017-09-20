@@ -592,6 +592,10 @@ func (t *torpedo) run(testName string) error {
 }
 
 func main() {
+	logrus.Infof("Info level")
+	logrus.Debugf("Debug level")
+	logrus.Warnf("Warn level")
+	logrus.Errorf("Error level")
 	// TODO: switch to a proper argument parser
 	if len(os.Args) < 3 {
 		logrus.Infof("Usage: %v <scheduler> <volume driver> <node driver> [testName]", os.Args[0])
