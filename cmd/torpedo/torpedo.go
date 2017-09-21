@@ -10,6 +10,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/portworx/torpedo/drivers/node"
+	_ "github.com/portworx/torpedo/drivers/node/aws"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -68,7 +69,6 @@ func (t *torpedo) testSetupTearDown() error {
 func (t *torpedo) testDriverDown() error {
 	taskName := fmt.Sprintf("driverdown-%v", t.instanceID)
 	logrus.Infof("[%v] Scheduling new applications", taskName)
-
 	contexts, err := t.s.Schedule(taskName, scheduler.ScheduleOptions{})
 	if err != nil {
 		return err
