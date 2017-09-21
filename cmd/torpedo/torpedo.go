@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/codegangsta/cli"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -592,39 +593,74 @@ func (t *torpedo) run(testName string) error {
 }
 
 func main() {
-	// TODO: switch to a proper argument parser
-	if len(os.Args) < 3 {
-		logrus.Infof("Usage: %v <scheduler> <volume driver> <node driver> [testName]", os.Args[0])
-		os.Exit(-1)
-	}
 
-	testName := "" // TODO csv or yaml based args
-	if len(os.Args) > 4 {
-		testName = os.Args[4]
-	}
+	app := cli.NewApp()
+	app.Name = "torpedo"
+	app.Usage = "Run the torpedo scheduler test suite."
 
-	if s, err := scheduler.Get(os.Args[1]); err != nil {
-		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", os.Args[1], err)
+	app.Commands = []cli.Command{
+		{
+			Name:    "fire",
+			Aliases: []string{"f"},
+			Usage:   "Starts the basic test suite",
+			Action:  fireTorpedo,
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "scheduler,s",
+					Usage: "Name of the scheduler to use",
+					Value: "k8s",
+				},
+				cli.StringFlag{
+					Name:  "storage,v",
+					Usage: "Name of the storage driver to use",
+					Value: "pxd",
+				},
+				cli.StringFlag{
+					Name:  "node-driver,n",
+					Usage: "Name of the node driver to use",
+					Value: "ssh",
+				},
+				cli.StringFlag{
+					Name:  "test,t",
+					Usage: "Name of the test to run",
+					Value: "all",
+				},
+			},
+		},
+	}
+	app.Run(os.Args)
+
+}
+
+func fireTorpedo(c *cli.Context) {
+	s := c.String("scheduler")
+	v := c.String("storage")
+	n := c.String("node-driver")
+	testName := c.String("test")
+
+	if schedulerDriver, err := scheduler.Get(s); err != nil {
+		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
 		os.Exit(-1)
-	} else if v, err := volume.Get(os.Args[2]); err != nil {
-		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", os.Args[2], err)
+	} else if volumeDriver, err := volume.Get(v); err != nil {
+		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 		os.Exit(-1)
-	} else if n, err := node.Get(os.Args[3]); err != nil {
-		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", os.Args[3], err)
+	} else if nodeDriver, err := node.Get(n); err != nil {
+		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
 		os.Exit(-1)
 	} else {
 		t := torpedo{
 			instanceID: time.Now().Format("01-02-15h04m05s"),
-			s:          s,
-			v:          v,
-			n:          n,
+			s:          schedulerDriver,
+			v:          volumeDriver,
+			n:          nodeDriver,
 		}
 
-		if t.run(testName) != nil {
+		if err := t.run(testName); err != nil {
+			logrus.Infof("Torpedo failed with the following error : %v", err)
 			os.Exit(-1)
 		}
 
-		logrus.Printf("Test suite complete with volume driver: %v, and scheduler: %v, node: %v\n",
+		logrus.Printf("Torpedo completed with volume driver: %v, and scheduler: %v, node: %v\n",
 			t.v.String(),
 			t.s.String(),
 			t.n.String(),
