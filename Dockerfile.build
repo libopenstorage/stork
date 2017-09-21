@@ -1,0 +1,6 @@
+FROM golang:1.8.3
+MAINTAINER harsh@portworx.com
+
+RUN mkdir -p /go/src/github.com/portworx/torpedo
+ADD . /go/src/github.com/portworx/torpedo
+WORKDIR /go/src/github.com/portworx/torpedo

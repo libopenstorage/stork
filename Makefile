@@ -92,6 +92,13 @@ container:
 deploy: all container
 	docker push $(TORPEDO_IMG)
 
+docker-build:
+	docker build -t torpedo/docker-build -f Dockerfile.build .
+	@echo "Building torpedo using docker"
+	docker run \
+		--privileged \
+		torpedo/docker-build make all
+
 clean:
 	-rm -rf bin
 	@echo "Deleting image "$(TORPEDO_IMG)
