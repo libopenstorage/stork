@@ -1,5 +1,5 @@
-hash: 9e0605bc8c273f40dd60b896c0881e44dc1684ce7bfe4f7f75bc734e0794be0f
-updated: 2017-09-21T00:50:03.743830102-07:00
+hash: d26c138664c4cbb1341fc9200ad8bf5e3d2960ea23f65074798d2d2d7465f3b4
+updated: 2017-09-22T00:02:54.394807829+01:00
 imports:
 - name: github.com/armon/go-metrics
   version: 0a12dc6f6b9da6da644031a1b9b5a85478c5ee27
@@ -9,6 +9,8 @@ imports:
   - winterm
 - name: github.com/cloudfoundry/gosigar
   version: f4030c18ce1a78252deadef2f5e460b35cce7ae5
+- name: github.com/codegangsta/cli
+  version: cfb38830724cc34fedffe9a2a29fb54fa9169cd1
 - name: github.com/containerd/continuity
   version: 35d55c5e8dd23b32037d56cf97174aff3efdfa83
   subpackages:
@@ -154,7 +156,7 @@ imports:
 - name: github.com/Microsoft/go-winio
   version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
 - name: github.com/miekg/dns
-  version: e4205768578dc90c2669e75a2f8a8bf77e3083a4
+  version: 689d334b0197696eac0afdaa67224aca9ce93eff
 - name: github.com/mohae/deepcopy
   version: 491d3605edfb866af34a48075bd4355ac1bf46ca
 - name: github.com/Nvveen/Gotty
