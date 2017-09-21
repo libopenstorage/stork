@@ -33,23 +33,9 @@ test-deps:
 update-test-deps:
 	GO15VENDOREXPERIMENT=0 go get -tags "$(TAGS)" -d -v -t -u -f $(PKGS)
 
-vendor-update:
-	GO15VENDOREXPERIMENT=0 GOOS=linux GOARCH=amd64 go get -tags "daemon" -d -v -t -u -f $(shell go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/vendor')
-
-vendor-without-update:
-	go get -v github.com/kardianos/govendor
-	rm -rf vendor
-	govendor init
-	GOOS=linux GOARCH=amd64 govendor add +external
-	GOOS=linux GOARCH=amd64 govendor update +vendor
-	GOOS=linux GOARCH=amd64 govendor add +external
-	GOOS=linux GOARCH=amd64 govendor update +vendor
-
 fmt:
 	@echo -e "Checking gofmt on following: $(PKGS)"
 	@./scripts/check-gofmt.sh $(PKGS)
-
-vendor: vendor-update vendor-without-update
 
 build:
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
