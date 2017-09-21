@@ -51,7 +51,7 @@ spec:
   - name: torpedo
     image: harshpx/torpedo:latest
     # TODO: add comments describing below
-    command: ["./torpedo", "k8s", "pxd", "ssh" ]
+    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh" ]
     tty: true
   restartPolicy: Never
   serviceAccountName: torpedo-account

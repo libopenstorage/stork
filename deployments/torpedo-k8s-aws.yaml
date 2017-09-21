@@ -50,7 +50,7 @@ spec:
   containers:
   - name: torpedo
     image: harshpx/torpedo:latest
-    command: ["./torpedo", "k8s", "pxd", "aws"]
+    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "aws" ]
     tty: true
   restartPolicy: Never
   serviceAccountName: torpedo-account
