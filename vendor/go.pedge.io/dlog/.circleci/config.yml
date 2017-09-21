@@ -1,0 +1,9 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: golang:1.8.1
+    working_directory: /go/src/go.pedge.io/dlog
+    steps:
+      - checkout
+      - run: make updatetestdeps test

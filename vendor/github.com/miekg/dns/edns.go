@@ -1,27 +1,30 @@
 package dns
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net"
 	"strconv"
 )
 
 // EDNS0 Option codes.
 const (
-	EDNS0LLQ         = 0x1     // long lived queries: http://tools.ietf.org/html/draft-sekar-dns-llq-01
-	EDNS0UL          = 0x2     // update lease draft: http://files.dns-sd.org/draft-sekar-dns-ul.txt
-	EDNS0NSID        = 0x3     // nsid (RFC5001)
-	EDNS0DAU         = 0x5     // DNSSEC Algorithm Understood
-	EDNS0DHU         = 0x6     // DS Hash Understood
-	EDNS0N3U         = 0x7     // NSEC3 Hash Understood
-	EDNS0SUBNET      = 0x8     // client-subnet (RFC6891)
-	EDNS0EXPIRE      = 0x9     // EDNS0 expire
-	EDNS0COOKIE      = 0xa     // EDNS0 Cookie
-	EDNS0SUBNETDRAFT = 0x50fa  // Don't use! Use EDNS0SUBNET
-	EDNS0LOCALSTART  = 0xFDE9  // Beginning of range reserved for local/experimental use (RFC6891)
-	EDNS0LOCALEND    = 0xFFFE  // End of range reserved for local/experimental use (RFC6891)
-	_DO              = 1 << 15 // dnssec ok
+	EDNS0LLQ          = 0x1     // long lived queries: http://tools.ietf.org/html/draft-sekar-dns-llq-01
+	EDNS0UL           = 0x2     // update lease draft: http://files.dns-sd.org/draft-sekar-dns-ul.txt
+	EDNS0NSID         = 0x3     // nsid (RFC5001)
+	EDNS0DAU          = 0x5     // DNSSEC Algorithm Understood
+	EDNS0DHU          = 0x6     // DS Hash Understood
+	EDNS0N3U          = 0x7     // NSEC3 Hash Understood
+	EDNS0SUBNET       = 0x8     // client-subnet (RFC6891)
+	EDNS0EXPIRE       = 0x9     // EDNS0 expire
+	EDNS0COOKIE       = 0xa     // EDNS0 Cookie
+	EDNS0TCPKEEPALIVE = 0xb     // EDNS0 tcp keep alive (RFC7828)
+	EDNS0SUBNETDRAFT  = 0x50fa  // Don't use! Use EDNS0SUBNET
+	EDNS0LOCALSTART   = 0xFDE9  // Beginning of range reserved for local/experimental use (RFC6891)
+	EDNS0LOCALEND     = 0xFFFE  // End of range reserved for local/experimental use (RFC6891)
+	_DO               = 1 << 15 // dnssec ok
 )
 
 // OPT is the EDNS0 RR appended to messages to convey extra (meta) information.
@@ -127,12 +130,21 @@ func (rr *OPT) Do() bool {
 }
 
 // SetDo sets the DO (DNSSEC OK) bit.
-func (rr *OPT) SetDo() {
-	rr.Hdr.Ttl |= _DO
+// If we pass an argument, set the DO bit to that value.
+// It is possible to pass 2 or more arguments. Any arguments after the 1st is silently ignored.
+func (rr *OPT) SetDo(do ...bool) {
+	if len(do) == 1 {
+		if do[0] {
+			rr.Hdr.Ttl |= _DO
+		} else {
+			rr.Hdr.Ttl &^= _DO
+		}
+	} else {
+		rr.Hdr.Ttl |= _DO
+	}
 }
 
-// EDNS0 defines an EDNS0 Option. An OPT RR can have multiple options appended to
-// it.
+// EDNS0 defines an EDNS0 Option. An OPT RR can have multiple options appended to it.
 type EDNS0 interface {
 	// Option returns the option code for the option.
 	Option() uint16
@@ -145,7 +157,7 @@ type EDNS0 interface {
 	String() string
 }
 
-// The nsid EDNS0 option is used to retrieve a nameserver
+// EDNS0_NSID option is used to retrieve a nameserver
 // identifier. When sending a request Nsid must be set to the empty string
 // The identifier is an opaque string encoded as hex.
 // Basic use pattern for creating an nsid option:
@@ -185,7 +197,7 @@ func (e *EDNS0_NSID) String() string        { return string(e.Nsid) }
 //	e := new(dns.EDNS0_SUBNET)
 //	e.Code = dns.EDNS0SUBNET
 //	e.Family = 1	// 1 for IPv4 source address, 2 for IPv6
-//	e.NetMask = 32	// 32 for IPV4, 128 for IPv6
+//	e.SourceNetmask = 32	// 32 for IPV4, 128 for IPv6
 //	e.SourceScope = 0
 //	e.Address = net.ParseIP("127.0.0.1").To4()	// for IPv4
 //	// e.Address = net.ParseIP("2001:7b8:32a::2")	// for IPV6
@@ -213,7 +225,7 @@ func (e *EDNS0_SUBNET) Option() uint16 {
 
 func (e *EDNS0_SUBNET) pack() ([]byte, error) {
 	b := make([]byte, 4)
-	b[0], b[1] = packUint16(e.Family)
+	binary.BigEndian.PutUint16(b[0:], e.Family)
 	b[2] = e.SourceNetmask
 	b[3] = e.SourceScope
 	switch e.Family {
@@ -247,7 +259,7 @@ func (e *EDNS0_SUBNET) unpack(b []byte) error {
 	if len(b) < 4 {
 		return ErrBuf
 	}
-	e.Family, _ = unpackUint16(b, 0)
+	e.Family = binary.BigEndian.Uint16(b)
 	e.SourceNetmask = b[2]
 	e.SourceScope = b[3]
 	switch e.Family {
@@ -289,7 +301,7 @@ func (e *EDNS0_SUBNET) String() (s string) {
 	return
 }
 
-// The Cookie EDNS0 option
+// The EDNS0_COOKIE option is used to add a DNS Cookie to a message.
 //
 //	o := new(dns.OPT)
 //	o.Hdr.Name = "."
@@ -299,6 +311,14 @@ func (e *EDNS0_SUBNET) String() (s string) {
 //	e.Cookie = "24a5ac.."
 //	o.Option = append(o.Option, e)
 //
+// The Cookie field consists out of a client cookie (RFC 7873 Section 4), that is
+// always 8 bytes. It may then optionally be followed by the server cookie. The server
+// cookie is of variable length, 8 to a maximum of 32 bytes. In other words:
+//
+//	cCookie := o.Cookie[:16]
+//	sCookie := o.Cookie[16:]
+//
+// There is no guarantee that the Cookie string has a specific length.
 type EDNS0_COOKIE struct {
 	Code   uint16 // Always EDNS0COOKIE
 	Cookie string // Hex-encoded cookie data
@@ -339,10 +359,7 @@ func (e *EDNS0_UL) String() string { return strconv.FormatUint(uint64(e.Lease), 
 // Copied: http://golang.org/src/pkg/net/dnsmsg.go
 func (e *EDNS0_UL) pack() ([]byte, error) {
 	b := make([]byte, 4)
-	b[0] = byte(e.Lease >> 24)
-	b[1] = byte(e.Lease >> 16)
-	b[2] = byte(e.Lease >> 8)
-	b[3] = byte(e.Lease)
+	binary.BigEndian.PutUint32(b, e.Lease)
 	return b, nil
 }
 
@@ -350,7 +367,7 @@ func (e *EDNS0_UL) unpack(b []byte) error {
 	if len(b) < 4 {
 		return ErrBuf
 	}
-	e.Lease = uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+	e.Lease = binary.BigEndian.Uint32(b)
 	return nil
 }
 
@@ -369,21 +386,11 @@ func (e *EDNS0_LLQ) Option() uint16 { return EDNS0LLQ }
 
 func (e *EDNS0_LLQ) pack() ([]byte, error) {
 	b := make([]byte, 18)
-	b[0], b[1] = packUint16(e.Version)
-	b[2], b[3] = packUint16(e.Opcode)
-	b[4], b[5] = packUint16(e.Error)
-	b[6] = byte(e.Id >> 56)
-	b[7] = byte(e.Id >> 48)
-	b[8] = byte(e.Id >> 40)
-	b[9] = byte(e.Id >> 32)
-	b[10] = byte(e.Id >> 24)
-	b[11] = byte(e.Id >> 16)
-	b[12] = byte(e.Id >> 8)
-	b[13] = byte(e.Id)
-	b[14] = byte(e.LeaseLife >> 24)
-	b[15] = byte(e.LeaseLife >> 16)
-	b[16] = byte(e.LeaseLife >> 8)
-	b[17] = byte(e.LeaseLife)
+	binary.BigEndian.PutUint16(b[0:], e.Version)
+	binary.BigEndian.PutUint16(b[2:], e.Opcode)
+	binary.BigEndian.PutUint16(b[4:], e.Error)
+	binary.BigEndian.PutUint64(b[6:], e.Id)
+	binary.BigEndian.PutUint32(b[14:], e.LeaseLife)
 	return b, nil
 }
 
@@ -391,12 +398,11 @@ func (e *EDNS0_LLQ) unpack(b []byte) error {
 	if len(b) < 18 {
 		return ErrBuf
 	}
-	e.Version, _ = unpackUint16(b, 0)
-	e.Opcode, _ = unpackUint16(b, 2)
-	e.Error, _ = unpackUint16(b, 4)
-	e.Id = uint64(b[6])<<56 | uint64(b[6+1])<<48 | uint64(b[6+2])<<40 |
-		uint64(b[6+3])<<32 | uint64(b[6+4])<<24 | uint64(b[6+5])<<16 | uint64(b[6+6])<<8 | uint64(b[6+7])
-	e.LeaseLife = uint32(b[14])<<24 | uint32(b[14+1])<<16 | uint32(b[14+2])<<8 | uint32(b[14+3])
+	e.Version = binary.BigEndian.Uint16(b[0:])
+	e.Opcode = binary.BigEndian.Uint16(b[2:])
+	e.Error = binary.BigEndian.Uint16(b[4:])
+	e.Id = binary.BigEndian.Uint64(b[6:])
+	e.LeaseLife = binary.BigEndian.Uint32(b[14:])
 	return nil
 }
 
@@ -492,7 +498,7 @@ func (e *EDNS0_EXPIRE) unpack(b []byte) error {
 	if len(b) < 4 {
 		return ErrBuf
 	}
-	e.Expire = uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+	e.Expire = binary.BigEndian.Uint32(b)
 	return nil
 }
 
@@ -535,4 +541,57 @@ func (e *EDNS0_LOCAL) unpack(b []byte) error {
 		return ErrBuf
 	}
 	return nil
+}
+
+// EDNS0_TCP_KEEPALIVE is an EDNS0 option that instructs the server to keep
+// the TCP connection alive. See RFC 7828.
+type EDNS0_TCP_KEEPALIVE struct {
+	Code    uint16 // Always EDNSTCPKEEPALIVE
+	Length  uint16 // the value 0 if the TIMEOUT is omitted, the value 2 if it is present;
+	Timeout uint16 // an idle timeout value for the TCP connection, specified in units of 100 milliseconds, encoded in network byte order.
+}
+
+func (e *EDNS0_TCP_KEEPALIVE) Option() uint16 { return EDNS0TCPKEEPALIVE }
+
+func (e *EDNS0_TCP_KEEPALIVE) pack() ([]byte, error) {
+	if e.Timeout != 0 && e.Length != 2 {
+		return nil, errors.New("dns: timeout specified but length is not 2")
+	}
+	if e.Timeout == 0 && e.Length != 0 {
+		return nil, errors.New("dns: timeout not specified but length is not 0")
+	}
+	b := make([]byte, 4+e.Length)
+	binary.BigEndian.PutUint16(b[0:], e.Code)
+	binary.BigEndian.PutUint16(b[2:], e.Length)
+	if e.Length == 2 {
+		binary.BigEndian.PutUint16(b[4:], e.Timeout)
+	}
+	return b, nil
+}
+
+func (e *EDNS0_TCP_KEEPALIVE) unpack(b []byte) error {
+	if len(b) < 4 {
+		return ErrBuf
+	}
+	e.Length = binary.BigEndian.Uint16(b[2:4])
+	if e.Length != 0 && e.Length != 2 {
+		return errors.New("dns: length mismatch, want 0/2 but got " + strconv.FormatUint(uint64(e.Length), 10))
+	}
+	if e.Length == 2 {
+		if len(b) < 6 {
+			return ErrBuf
+		}
+		e.Timeout = binary.BigEndian.Uint16(b[4:6])
+	}
+	return nil
+}
+
+func (e *EDNS0_TCP_KEEPALIVE) String() (s string) {
+	s = "use tcp keep-alive"
+	if e.Length == 0 {
+		s += ", timeout omitted"
+	} else {
+		s += fmt.Sprintf(", timeout %dms", e.Timeout*100)
+	}
+	return
 }

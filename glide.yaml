@@ -1,0 +1,32 @@
+package: github.com/portworx/torpedo
+import:
+- package: github.com/Sirupsen/logrus
+  version: ^1.0.3
+- package: github.com/fatih/color
+  version: ^1.5.0
+- package: github.com/fsouza/go-dockerclient
+- package: github.com/libopenstorage/openstorage
+  version: 093a0c3888753c2056e7373183693d670c6bba01
+  subpackages:
+  - api
+  - api/client/cluster
+  - api/client/volume
+  - api/spec
+  - cluster
+  - volume
+- package: golang.org/x/crypto
+  subpackages:
+  - ssh
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/apis/meta/v1
+- package: k8s.io/client-go
+  version: ^4.0.0
+  subpackages:
+  - kubernetes
+  - kubernetes/scheme
+  - pkg/api/v1
+  - pkg/apis/apps/v1beta1
+  - pkg/apis/extensions/v1beta1
+  - pkg/apis/storage/v1
+  - rest

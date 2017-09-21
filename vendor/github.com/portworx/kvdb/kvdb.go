@@ -2,6 +2,8 @@ package kvdb
 
 import (
 	"errors"
+	"time"
+
 	"github.com/Sirupsen/logrus"
 )
 
@@ -109,6 +111,9 @@ var (
 	ErrNoCertificate = errors.New("Certificate File Path not provided")
 	// ErrUnknownPermission raised if unknown permission type
 	ErrUnknownPermission = errors.New("Unknown Permission Type")
+	// ErrMemberDoesNotExist returned when an operation fails for a member
+	// which does not exist
+	ErrMemberDoesNotExist = errors.New("Kvdb member does not exist")
 )
 
 // KVAction specifies the action on a KV pair. This is useful to make decisions
@@ -180,6 +185,7 @@ type Tx interface {
 
 // Kvdb interface implemented by backing datastores.
 type Kvdb interface {
+	Controller
 	// String representation of backend datastore.
 	String() string
 	// Capbilities - see KVCapabilityXXX
@@ -206,8 +212,9 @@ type Kvdb interface {
 	// DeleteTree same as Delete execpt that all keys sharing the prefix are
 	// deleted.
 	DeleteTree(prefix string) error
-	// Keys returns an array of keys that share specified prefix.
-	Keys(prefix, key string) ([]string, error)
+	// Keys returns an array of keys that share specified prefix (ie. "1st level directory").
+	// sep parameter defines a key-separator, and if not provided the "/" is assumed.
+	Keys(prefix, sep string) ([]string, error)
 	// CompareAndSet updates value at kvp.Key if the previous resident
 	// satisfies conditions set in flags and optional prevValue.
 	CompareAndSet(kvp *KVPair, flags KVFlags, prevValue []byte) (*KVPair, error)
@@ -241,6 +248,10 @@ type Kvdb interface {
 	GrantUserAccess(username string, permType PermissionType, subtree string) error
 	// RevokeUsersAccess revokes user's access to a subtree/prefix based on the permission
 	RevokeUsersAccess(username string, permType PermissionType, subtree string) error
+	// SetFatalCb sets the function to be called in case of fatal errors
+	SetFatalCb(f FatalErrorCB)
+	// SetLockTimeout sets maximum time a lock may be held
+	SetLockTimeout(timeout time.Duration)
 }
 
 // ReplayCb provides info required for replay
@@ -279,4 +290,44 @@ func NewUpdatesCollector(
 		return nil, err
 	}
 	return collector, nil
+}
+
+// List of kvdb controller ports
+const (
+	// PeerPort is the port on which peers identify themselves
+	PeerPort = "2380"
+	// ClientPort is the port on which clients send requests to kvdb.
+	ClientPort = "2379"
+)
+
+// MemberInfo represents a member of the kvdb cluster
+type MemberInfo struct {
+	PeerUrls   []string
+	ClientUrls []string
+	Leader     bool
+	DbSize     int64
+	IsHealthy  bool
+}
+
+// Controller interface provides APIs to manage Kvdb Cluster and Kvdb Clients.
+type Controller interface {
+	// AddMember adds a new member to an existing kvdb cluster. Add should be
+	// called on a kvdb node where kvdb is already running. It should be
+	// followed by a Setup call on the actual node
+	// Returns: map of nodeID to peerUrls of all members in the initial cluster or error
+	AddMember(nodeIP, nodePeerPort, nodeName string) (map[string][]string, error)
+
+	// RemoveMember removes a member from an existing kvdb cluster
+	// Returns: error if it fails to remove a member
+	RemoveMember(nodeID string) error
+
+	// ListMembers enumerates the members of the kvdb cluster
+	// Returns: the nodeID  to memberInfo mappings of all the members
+	ListMembers() (map[string]*MemberInfo, error)
+
+	// SetEndpoints set the kvdb endpoints for the client
+	SetEndpoints(endpoints []string) error
+
+	// GetEndpoints returns the kvdb endpoints for the client
+	GetEndpoints() []string
 }
