@@ -587,17 +587,16 @@ func (t *torpedo) run(tests string) error {
 				logrus.Infof("***** Test %v Passed *****", testName)
 			}
 		}
-	}
-
-	for n, f := range testFuncs {
-		logrus.Infof("***** Test %v starting *****", n)
-		if err := f(); err != nil {
-			logrus.Infof("***** Test %v Failed with Error: %v *****", n, err)
-		} else {
-			logrus.Infof("***** Test %v Passed *****", n)
+	} else {
+		for n, f := range testFuncs {
+			logrus.Infof("***** Test %v starting *****", n)
+			if err := f(); err != nil {
+				logrus.Infof("***** Test %v Failed with Error: %v *****", n, err)
+			} else {
+				logrus.Infof("***** Test %v Passed *****", n)
+			}
 		}
 	}
-
 	return nil
 }
 
@@ -645,7 +644,7 @@ func fireTorpedo(c *cli.Context) {
 	s := c.String("scheduler")
 	v := c.String("storage")
 	n := c.String("node-driver")
-	testName := c.String("tests")
+	tests := c.String("tests")
 
 	if schedulerDriver, err := scheduler.Get(s); err != nil {
 		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
@@ -664,7 +663,7 @@ func fireTorpedo(c *cli.Context) {
 			n:          nodeDriver,
 		}
 
-		if err := t.run(testName); err != nil {
+		if err := t.run(tests); err != nil {
 			logrus.Infof("Torpedo failed with the following error : %v", err)
 			os.Exit(-1)
 		}
