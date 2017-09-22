@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -17,8 +18,14 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
-// DefaultSpecsRoot specifies the default location of the base specs directory in the torpedo container
-const DefaultSpecsRoot = "/specs"
+const (
+	// DefaultSpecsRoot specifies the default location of the base specs directory in the torpedo container
+	DefaultSpecsRoot     = "/specs"
+	schedulerCliFlag     = "scheduler,s"
+	nodeDriverCliFlag    = "node-driver,n"
+	storageDriverCliFlag = "storage,v"
+	testsCliFlag         = "tests,t"
+)
 
 type torpedo struct {
 	instanceID string
@@ -534,7 +541,7 @@ func (t *torpedo) testRemoteForceMount() error {
 }*/
 
 // TODO replace run() with go tests
-func (t *torpedo) run(testName string) error {
+func (t *torpedo) run(tests string) error {
 	logrus.Printf("Running torpedo instance: %v", t.instanceID)
 
 	if err := t.s.Init(path.Join(DefaultSpecsRoot, t.s.String())); err != nil {
@@ -562,22 +569,24 @@ func (t *torpedo) run(testName string) error {
 		"testAppTasksDown":      func() error { return t.testAppTasksDown() },
 	}
 
-	if testName != "" {
-		logrus.Infof("***** Test %v starting *****", testName)
-		f, ok := testFuncs[testName]
-		if !ok {
-			return &errors.ErrNotFound{
-				ID:   testName,
-				Type: "Test",
+	if tests != "" {
+		testList := strings.Split(tests, ",")
+		for _, testName := range testList {
+			logrus.Infof("***** Test %v starting *****", testName)
+			f, ok := testFuncs[testName]
+			if !ok {
+				return &errors.ErrNotFound{
+					ID:   testName,
+					Type: "Test",
+				}
+			}
+
+			if err := f(); err != nil {
+				logrus.Infof("***** Test %v Failed with Error: %v *****", testName, err)
+			} else {
+				logrus.Infof("***** Test %v Passed *****", testName)
 			}
 		}
-
-		if err := f(); err != nil {
-			logrus.Infof("***** Test %v Failed with Error: %v *****", testName, err)
-			return err
-		}
-		logrus.Infof("***** Test %v Passed *****", testName)
-		return nil
 	}
 
 	for n, f := range testFuncs {
@@ -606,24 +615,24 @@ func main() {
 			Action:  fireTorpedo,
 			Flags: []cli.Flag{
 				cli.StringFlag{
-					Name:  "scheduler,s",
+					Name:  schedulerCliFlag,
 					Usage: "Name of the scheduler to use",
 					Value: "k8s",
 				},
 				cli.StringFlag{
-					Name:  "storage,v",
+					Name:  storageDriverCliFlag,
 					Usage: "Name of the storage driver to use",
 					Value: "pxd",
 				},
 				cli.StringFlag{
-					Name:  "node-driver,n",
+					Name:  nodeDriverCliFlag,
 					Usage: "Name of the node driver to use",
 					Value: "ssh",
 				},
 				cli.StringFlag{
-					Name:  "test,t",
-					Usage: "Name of the test to run",
-					Value: "all",
+					Name:  testsCliFlag,
+					Usage: "Comman-separated list of tests. [Default:  runs all the tests]",
+					Value: "",
 				},
 			},
 		},
@@ -636,7 +645,7 @@ func fireTorpedo(c *cli.Context) {
 	s := c.String("scheduler")
 	v := c.String("storage")
 	n := c.String("node-driver")
-	testName := c.String("test")
+	testName := c.String("tests")
 
 	if schedulerDriver, err := scheduler.Get(s); err != nil {
 		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
