@@ -62,7 +62,7 @@ func (s *ssh) Init(sched string) error {
 				Timeout:         1 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
 			}); err != nil {
-				return &ErrFailedToTestConnection{
+				return &node.ErrFailedToTestConnection{
 					Node:  n,
 					Cause: err.Error(),
 				}
@@ -76,7 +76,7 @@ func (s *ssh) Init(sched string) error {
 func (s *ssh) TestConnection(n node.Node, options node.TestConectionOpts) error {
 	addr, err := s.getAddrToConnect(n)
 	if err != nil {
-		return &ErrFailedToTestConnection{
+		return &node.ErrFailedToTestConnection{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
 		}
@@ -87,7 +87,7 @@ func (s *ssh) TestConnection(n node.Node, options node.TestConectionOpts) error 
 	}
 
 	if err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
-		return &ErrFailedToTestConnection{
+		return &node.ErrFailedToTestConnection{
 			Node:  n,
 			Cause: err.Error(),
 		}
@@ -99,7 +99,7 @@ func (s *ssh) TestConnection(n node.Node, options node.TestConectionOpts) error 
 func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	addr, err := s.getAddrToConnect(n)
 	if err != nil {
-		return &ErrFailedToRebootNode{
+		return &node.ErrFailedToRebootNode{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
 		}
@@ -115,7 +115,7 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	}
 
 	if err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
-		return &ErrFailedToRebootNode{
+		return &node.ErrFailedToRebootNode{
 			Node:  n,
 			Cause: err.Error(),
 		}
@@ -127,7 +127,7 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	addr, err := s.getAddrToConnect(n)
 	if err != nil {
-		return &ErrFailedToShutdownNode{
+		return &node.ErrFailedToShutdownNode{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
 		}
@@ -143,7 +143,7 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	}
 
 	if err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
-		return &ErrFailedToShutdownNode{
+		return &node.ErrFailedToShutdownNode{
 			Node:  n,
 			Cause: err.Error(),
 		}
@@ -155,7 +155,7 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%v:%d", addr, DefaultSSHPort), s.sshConfig)
 	if err != nil {
-		return &ErrFailedToRunCommand{
+		return &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to dial: %v", err),
 		}
@@ -163,7 +163,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 
 	session, err := connection.NewSession()
 	if err != nil {
-		return &ErrFailedToRunCommand{
+		return &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to create session: %s", err),
 		}
@@ -178,7 +178,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 	}
 
 	if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
-		return &ErrFailedToRunCommand{
+		return &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("request for pseudo terminal failed: %s", err),
 		}
@@ -186,7 +186,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return &ErrFailedToRunCommand{
+		return &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("Unable to setup stdout for session: %v", err),
 		}
@@ -201,7 +201,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		return &ErrFailedToRunCommand{
+		return &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("Unable to setup stderr for session: %v", err),
 		}
@@ -215,7 +215,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 	}()
 
 	if err = session.Run(cmd); !ignoreErr && err != nil {
-		return &ErrFailedToRunCommand{
+		return &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to run command due to: %v", err),
 		}
