@@ -36,18 +36,18 @@ func (k *k8s) GetNodes() []node.Node {
 }
 
 func (k *k8s) IsNodeReady(n node.Node) error {
-	t := func() error {
+	t := func() (interface{}, error) {
 		if err := k8sutils.IsNodeReady(n.Name); err != nil {
-			return &ErrNodeNotReady{
+			return "", &ErrNodeNotReady{
 				Node:  n,
 				Cause: err.Error(),
 			}
 		}
 
-		return nil
+		return "", nil
 	}
 
-	if err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		logrus.Infof("[debug] node timed out. %#v", n)
 		return err
 	}

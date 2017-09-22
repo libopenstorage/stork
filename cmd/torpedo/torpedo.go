@@ -284,7 +284,7 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 		// Wait for node to be back
 		for _, n := range nodesToReboot {
 			logrus.Infof("[%v] Testing connectivity with: %v", taskName, n.Name)
-			if err := t.n.TestConnection(n, node.TestConectionOpts{
+			if err := t.n.TestConnection(n, node.ConnectionOpts{
 				Timeout:         15 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
 			}); err != nil {

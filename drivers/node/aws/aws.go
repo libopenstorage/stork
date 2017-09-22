@@ -53,7 +53,7 @@ func (a *aws) Init(sched string) error {
 	return nil
 }
 
-func (a *aws) TestConnection(n node.Node, options node.TestConectionOpts) error {
+func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	return nil
 }
 

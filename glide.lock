@@ -1,5 +1,5 @@
-hash: ac58cd77b739d672fe42c7dafd748b555ba8b04792d62e282c6600f809a580e0
-updated: 2017-09-21T19:22:51.209461364-07:00
+hash: b942298f0cbad576874087148a276b6bfcda102543bb4e41271b56e485cac448
+updated: 2017-09-22T14:16:24.75687073-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 0a12dc6f6b9da6da644031a1b9b5a85478c5ee27
@@ -201,7 +201,7 @@ imports:
   - specs-go
   - specs-go/v1
 - name: github.com/opencontainers/runc
-  version: 593914b8bd5448a93f7c3e4902a03408b6d5c0ce
+  version: e385f67a0e45fa1d8ef8154e2aea5128ea1d331b
   subpackages:
   - libcontainer/system
   - libcontainer/user
@@ -230,7 +230,7 @@ imports:
   subpackages:
   - logrus
 - name: golang.org/x/crypto
-  version: d172538b2cfce0c13cee31e647d0367aa8cd2486
+  version: faadfbdc035307d901e69eea569f5dda451a3ee3
   subpackages:
   - curve25519
   - ed25519

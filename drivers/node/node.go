@@ -20,25 +20,33 @@ const (
 
 // Node encapsulates a node in the cluster
 type Node struct {
-	Name      string
-	Addresses []string
-	Type      Type
+	Name       string
+	Addresses  []string
+	UsableAddr string
+	Type       Type
+}
+
+// ConnectionOpts provide basic options for all operations and can be embedded by other options
+type ConnectionOpts struct {
+	Timeout         time.Duration
+	TimeBeforeRetry time.Duration
 }
 
 // RebootNodeOpts provide additional options for reboot operation
 type RebootNodeOpts struct {
 	Force bool
+	ConnectionOpts
 }
 
 // ShutdownNodeOpts provide additional options for shutdown operation
 type ShutdownNodeOpts struct {
 	Force bool
+	ConnectionOpts
 }
 
-// TestConectionOpts provide additional options for test connection operation
-type TestConectionOpts struct {
-	Timeout         time.Duration
-	TimeBeforeRetry time.Duration
+// TestConnectionOpts provide additional options for test connection operation
+type TestConnectionOpts struct {
+	ConnectionOpts
 }
 
 var (
@@ -60,7 +68,7 @@ type Driver interface {
 	ShutdownNode(node Node, options ShutdownNodeOpts) error
 
 	// TestConnection tests connection to given node. returns nil if driver can connect to given node
-	TestConnection(node Node, options TestConectionOpts) error
+	TestConnection(node Node, options ConnectionOpts) error
 }
 
 // Register registers the given node driver
@@ -111,7 +119,7 @@ func (d *notSupportedDriver) ShutdownNode(node Node, options ShutdownNodeOpts) e
 	}
 }
 
-func (d *notSupportedDriver) TestConnection(node Node, options TestConectionOpts) error {
+func (d *notSupportedDriver) TestConnection(node Node, options ConnectionOpts) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "TestConnection()",

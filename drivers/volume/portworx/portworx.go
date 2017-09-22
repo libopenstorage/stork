@@ -298,9 +298,9 @@ func (d *portworx) StopDriver(n node.Node) error {
 func (d *portworx) WaitStart(n node.Node) error {
 	var err error
 	// Wait for Portworx to become usable.
-	t := func() error {
+	t := func() (interface{}, error) {
 		if status, _ := d.clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
-			return &ErrFailedToWaitForPx{
+			return "", &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", status),
 			}
@@ -308,24 +308,24 @@ func (d *portworx) WaitStart(n node.Node) error {
 
 		pxNode, err := d.clusterManager.Inspect(n.Name)
 		if err != nil {
-			return &ErrFailedToWaitForPx{
+			return "", &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: err.Error(),
 			}
 		}
 
 		if pxNode.Status != api.Status_STATUS_OK {
-			return &ErrFailedToWaitForPx{
+			return "", &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but not status is not ok. Expected: %v Actual: %v",
 					api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
 
-		return nil
+		return "", nil
 	}
 
-	if err = task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
 

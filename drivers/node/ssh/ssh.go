@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net"
+	"io/ioutil"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
@@ -22,12 +22,15 @@ const (
 	DefaultPassword = "t0rped0"
 	// DefaultSSHPort is the default port used for ssh operations
 	DefaultSSHPort = 22
+	// DefaultSSHKey is the default public key path used for ssh operations
+	DefaultSSHKey = "/home/torpedo/key4torpedo.pem"
 )
 
 type ssh struct {
 	node.Driver
 	username    string
 	password    string
+	key         string
 	schedDriver scheduler.Driver
 	sshConfig   *ssh_pkg.ClientConfig
 	// TODO key-based ssh
@@ -37,17 +40,47 @@ func (s *ssh) String() string {
 	return DriverName
 }
 
+// returns ssh.Signer from user you running app home path + cutted key path.
+// (ex. pubkey,err := getKeyFile("/.ssh/id_rsa") )
+func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
+	file := keypath
+	buf, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	pubkey, err := ssh_pkg.ParsePrivateKey(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return pubkey, nil
+}
+
 func (s *ssh) Init(sched string) error {
 	var err error
+	if s.password != "" {
+		s.sshConfig = &ssh_pkg.ClientConfig{
+			User: s.username,
+			Auth: []ssh_pkg.AuthMethod{
+				ssh_pkg.Password(s.password),
+			},
+			HostKeyCallback: ssh_pkg.InsecureIgnoreHostKey(),
+		}
+	} else if s.key != "" {
+		pubkey, err := getKeyFile(s.key)
+		if err != nil {
+			return fmt.Errorf("Error getting public key from keyfile")
+		}
+		s.sshConfig = &ssh_pkg.ClientConfig{
+			User: s.username,
+			Auth: []ssh_pkg.AuthMethod{
+				ssh_pkg.PublicKeys(pubkey),
+			},
+		}
 
-	s.sshConfig = &ssh_pkg.ClientConfig{
-		User: s.username,
-		Auth: []ssh_pkg.AuthMethod{
-			ssh_pkg.Password(s.password),
-		},
-		HostKeyCallback: func(addr string, remote net.Addr, key ssh_pkg.PublicKey) error {
-			return nil
-		},
+	} else {
+		return fmt.Errorf("Unknown auth type")
 	}
 
 	s.schedDriver, err = scheduler.Get(sched)
@@ -58,7 +91,7 @@ func (s *ssh) Init(sched string) error {
 	nodes := s.schedDriver.GetNodes()
 	for _, n := range nodes {
 		if n.Type == node.TypeWorker {
-			if err := s.TestConnection(n, node.TestConectionOpts{
+			if err := s.TestConnection(n, node.ConnectionOpts{
 				Timeout:         1 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
 			}); err != nil {
@@ -73,8 +106,8 @@ func (s *ssh) Init(sched string) error {
 	return nil
 }
 
-func (s *ssh) TestConnection(n node.Node, options node.TestConectionOpts) error {
-	addr, err := s.getAddrToConnect(n)
+func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
+	_, err := s.getAddrToConnect(n, options)
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
@@ -82,22 +115,11 @@ func (s *ssh) TestConnection(n node.Node, options node.TestConectionOpts) error 
 		}
 	}
 
-	t := func() error {
-		return s.doCmd(addr, "hostname", false)
-	}
-
-	if err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
-		return &node.ErrFailedToTestConnection{
-			Node:  n,
-			Cause: err.Error(),
-		}
-	}
-
 	return nil
 }
 
 func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
-	addr, err := s.getAddrToConnect(n)
+	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
 	if err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
@@ -110,11 +132,11 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		rebootCmd = rebootCmd + " -f"
 	}
 
-	t := func() error {
+	t := func() (interface{}, error) {
 		return s.doCmd(addr, rebootCmd, true)
 	}
 
-	if err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
 			Cause: err.Error(),
@@ -125,7 +147,7 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 }
 
 func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
-	addr, err := s.getAddrToConnect(n)
+	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
 	if err != nil {
 		return &node.ErrFailedToShutdownNode{
 			Node:  n,
@@ -138,11 +160,11 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 		shutdownCmd = "halt"
 	}
 
-	t := func() error {
+	t := func() (interface{}, error) {
 		return s.doCmd(addr, shutdownCmd, true)
 	}
 
-	if err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
 		return &node.ErrFailedToShutdownNode{
 			Node:  n,
 			Cause: err.Error(),
@@ -152,10 +174,11 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
-func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
-	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%v:%d", addr, DefaultSSHPort), s.sshConfig)
+func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
+	var out string
+	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)
 	if err != nil {
-		return &node.ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to dial: %v", err),
 		}
@@ -163,12 +186,11 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 
 	session, err := connection.NewSession()
 	if err != nil {
-		return &node.ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to create session: %s", err),
 		}
 	}
-
 	defer session.Close()
 
 	modes := ssh_pkg.TerminalModes{
@@ -178,7 +200,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 	}
 
 	if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
-		return &node.ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("request for pseudo terminal failed: %s", err),
 		}
@@ -186,7 +208,7 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		return &node.ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("Unable to setup stdout for session: %v", err),
 		}
@@ -198,39 +220,50 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) error {
 		io.Copy(&bufout, stdout)
 		chOut <- bufout.String()
 	}()
-
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		return &node.ErrFailedToRunCommand{
+		return "", &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("Unable to setup stderr for session: %v", err),
 		}
 	}
-
 	chErr := make(chan string)
 	go func() {
 		var buferr bytes.Buffer
 		io.Copy(&buferr, stderr)
 		chErr <- buferr.String()
 	}()
-
-	if err = session.Run(cmd); !ignoreErr && err != nil {
-		return &node.ErrFailedToRunCommand{
+	byteout, err := session.CombinedOutput(cmd)
+	out = fmt.Sprintf("%v", byteout)
+	if ignoreErr == false && err != nil {
+		return out, &node.ErrFailedToRunCommand{
 			Addr:  addr,
 			Cause: fmt.Sprintf("failed to run command due to: %v", err),
 		}
 	}
-
-	return nil
+	return out, nil
 }
 
-func (s *ssh) getAddrToConnect(n node.Node) (string, error) {
+func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string, error) {
 	if n.Addresses == nil || len(n.Addresses) == 0 {
 		return "", fmt.Errorf("no address available to connect")
 	}
 
-	addr := n.Addresses[0] // TODO don't stick to first address
-	return addr, nil
+	addr, err := s.getOneUsableAddr(n, options)
+	return addr, err
+}
+
+func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
+	for _, addr := range n.Addresses {
+		t := func() (interface{}, error) {
+			return s.doCmd(addr, "hostname", false)
+		}
+		if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
+			n.UsableAddr = addr
+			return addr, nil
+		}
+	}
+	return "", fmt.Errorf("No usable address found")
 }
 
 func init() {
@@ -238,6 +271,7 @@ func init() {
 		Driver:   node.NotSupportedDriver,
 		username: DefaultUsername,
 		password: DefaultPassword,
+		key:      DefaultSSHKey,
 	}
 
 	node.Register(DriverName, s)
