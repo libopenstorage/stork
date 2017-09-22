@@ -61,7 +61,7 @@ To submit an external storage provider, please submit a PR with the output of th
 
 ## Usage
 
->**Note:**<br/> Torpedo is in pre-alpha stage at this moment and under active development. Currently it only supports Kubernetes as the scheduler.
+>**Note:**<br/> Torpedo is in alpha stage at this moment and under active development. Currently it only supports Kubernetes as the container orchestrator.
 
 ### Build
 Torpedo is written in Golang.
