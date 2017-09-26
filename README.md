@@ -1,5 +1,5 @@
 # Stork - Storage Orchestration Runtime for Kubernetes
-Stork is a Cloud Native storage orchestration runtime scheduler plugin.  It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon.
+Stork is a Cloud Native storage orchestration runtime scheduler plugin.  It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon.  By doing so, it extends Kubernetes with more stateful awareness of the underlying storage providor, it's capabilities and state.
 
 <div style="text-align:center"><img src="images/stork.png" alt="Drawing" style="width: 50px;"/></div>
 
