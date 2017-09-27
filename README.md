@@ -17,7 +17,7 @@ Stork is implemented as a Kubernetes native scheduler extension.  It interfaces 
 | A POD is in state `unknown`                              | POD STATE, POD SPEC        | NEXT STATE, NODE       |
 
 # Building Stork
-Stork is written in Golang. To build Torpedo:
+Stork is written in Golang. To build Stork:
 
 ```
 # git clone git@github.com:libopenstorage/stork.git
@@ -122,34 +122,6 @@ The specification and code is licensed under the Apache 2.0 license found in
 the `LICENSE` file of this repository.  
 
 See the [Style Guide](STYLEGUIDE.md).
-
-### Protoeasy quick start
-
-https://go.pedge.io/protoeasy
-
-```
-docker pull quay.io/pedge/protoeasy
-```
-
-Add to your ~/.bashrc (or equivalent):
-
-```
-# to use protoeasy for now, you must have docker installed locally or in a vm
-# if running docker using docker-machine etc, replace 192.168.10.10 with the ip of the vm
-# if running docker locally, replace 192.168.10.10 with 0.0.0.0
-export PROTOEASY_ADDRESS=127.0.0.1:6789
-
-launch-protoeasy() {
-  docker rm -f protoeasy || true
-  docker run -d -p 6789:6789 --name=protoeasy quay.io/pedge/protoeasy
-}
-```
-
-Then just run `launch-protoeasy` before compiling the protocol buffers files, and then to compile:
-
-```
-make proto
-```
 
 ### Sign your work
 

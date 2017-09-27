@@ -1,22 +1,8 @@
 # Style Guide
 
-This is the official openstorage style guide for golang code. This is in addition to the offical style guide at https://github.com/golang/go/wiki/CodeReviewComments.
+This is the official stork style guide for golang code. This is in addition to the offical style guide at https://github.com/golang/go/wiki/CodeReviewComments.
 
 This is just a rough outline for now, we will formalize this as we go.
-
-IF YOU CODE ON OPENSTORAGE, YOU ARE EXPECTED TO KNOW THIS. Just take the 20 minutes and read through the issues, we will buy you a coffee, maybe.
-
-### Relevant Issues
-
-* https://github.com/libopenstorage/openstorage/issues/100
-* https://github.com/libopenstorage/openstorage/issues/88
-* https://github.com/libopenstorage/openstorage/issues/97
-* https://github.com/libopenstorage/openstorage/issues/87
-* https://github.com/libopenstorage/openstorage/issues/92
-* https://github.com/libopenstorage/openstorage/issues/89
-* https://github.com/libopenstorage/openstorage/issues/76
-* https://github.com/libopenstorage/openstorage/issues/71
-* https://github.com/libopenstorage/openstorage/issues/96
 
 ### Items
 
