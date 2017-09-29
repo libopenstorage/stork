@@ -77,27 +77,21 @@ func NewFactory(specDir string, parser Parser) (*Factory, error) {
 			specID := file.Name()
 
 			logrus.Infof("Parsing: %v...", path.Join(f.specDir, specID))
-			coreComponents, err := f.specParser.ParseCoreSpecs(path.Join(f.specDir, file.Name()))
+
+			specs, err := f.specParser.ParseSpecs(path.Join(f.specDir, file.Name()))
 			if err != nil {
 				return nil, err
 			}
 
-			storageComponents, err := f.specParser.ParseStorageSpecs(path.Join(f.specDir, file.Name()))
-			if err != nil {
-				return nil, err
-			}
-
-			if (coreComponents == nil || len(coreComponents) == 0) &&
-				(storageComponents == nil || len(storageComponents) == 0) {
+			if specs == nil || len(specs) == 0 {
 				continue
 			}
 
 			// Register the spec
 			f.register(specID, &AppSpec{
-				Key:     specID,
-				Core:    coreComponents,
-				Storage: storageComponents,
-				Enabled: true,
+				Key:      specID,
+				SpecList: specs,
+				Enabled:  true,
 			})
 		}
 	}

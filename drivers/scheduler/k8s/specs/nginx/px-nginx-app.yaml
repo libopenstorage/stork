@@ -1,3 +1,16 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx
+  type: NodePort
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+---
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
