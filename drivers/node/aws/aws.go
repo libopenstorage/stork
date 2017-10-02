@@ -3,12 +3,17 @@ package aws
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	aws_pkg "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/task"
 )
 
 const (
@@ -22,7 +27,9 @@ type aws struct {
 	credentials *credentials.Credentials
 	config      *aws_pkg.Config
 	region      string
+	schedDriver scheduler.Driver
 	svc         *ec2.EC2
+	svcSsm      *ssm.SSM
 	instances   []*ec2.Instance
 }
 
@@ -32,8 +39,9 @@ func (a *aws) String() string {
 
 func (a *aws) Init(sched string) error {
 	var err error
-	sess := session.Must(session.NewSession())
-	a.session = sess
+	sess := session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}))
 	creds := credentials.NewEnvCredentials()
 	a.credentials = creds
 	a.region = os.Getenv("AWS_REGION")
@@ -45,16 +53,94 @@ func (a *aws) Init(sched string) error {
 	a.config = config
 	svc := ec2.New(sess, config)
 	a.svc = svc
+	a.schedDriver, err = scheduler.Get(sched)
+	if err != nil {
+		return err
+	}
+	a.svcSsm = ssm.New(sess, aws_pkg.NewConfig().WithRegion(a.region))
+	a.session = sess
 	instances, err := a.getAllInstances()
 	if err != nil {
 		return err
 	}
 	a.instances = instances
+	nodes := a.schedDriver.GetNodes()
+	for _, n := range nodes {
+		if n.Type == node.TypeWorker {
+			if err := a.TestConnection(n, node.ConnectionOpts{
+				Timeout:         1 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			}); err != nil {
+				return &node.ErrFailedToTestConnection{
+					Node:  n,
+					Cause: err.Error(),
+				}
+			}
+		}
+	}
 	return nil
 }
 
 func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
-	return nil
+	var err error
+	instanceID, err := a.getNodeIDByPrivAddr(n)
+	if err != nil {
+		return &node.ErrFailedToTestConnection{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get instance ID for connection due to: %v", err),
+		}
+	}
+	command := "uptime"
+	param := make(map[string][]*string)
+	param["commands"] = []*string{
+		aws_pkg.String(command),
+	}
+	sendCommandInput := &ssm.SendCommandInput{
+		Comment:      aws_pkg.String(command),
+		DocumentName: aws_pkg.String("AWS-RunShellScript"),
+		Parameters:   param,
+		InstanceIds: []*string{
+			aws_pkg.String(instanceID),
+		},
+	}
+	sendCommandOutput, err := a.svcSsm.SendCommand(sendCommandInput)
+	if err != nil {
+		return &node.ErrFailedToTestConnection{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to send command to instance %s: %v", instanceID, err),
+		}
+	}
+	if sendCommandOutput.Command == nil || sendCommandOutput.Command.CommandId == nil {
+		return fmt.Errorf("No command returned after sending command to %s", instanceID)
+	}
+	listCmdsInput := &ssm.ListCommandInvocationsInput{
+		CommandId: sendCommandOutput.Command.CommandId,
+	}
+	t := func() (interface{}, error) {
+		return "", a.connect(listCmdsInput)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
+		return &node.ErrFailedToTestConnection{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+	return err
+}
+
+func (a *aws) connect(listCmdsInput *ssm.ListCommandInvocationsInput) error {
+	var status string
+	listCmdInvsOutput, _ := a.svcSsm.ListCommandInvocations(listCmdsInput)
+	for _, cmd := range listCmdInvsOutput.CommandInvocations {
+		status = strings.TrimSpace(*cmd.StatusDetails)
+		if status == "Success" {
+			return nil
+		}
+	}
+	return &node.ErrFailedToTestConnection{
+		Cause: fmt.Sprintf("Failed to connect. Command status is %s", status),
+	}
 }
 
 func (a *aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
@@ -77,6 +163,14 @@ func (a *aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to reboot instance due to: %v", err),
+		}
+	}
+	//TestConnection after node reboot
+	err = a.TestConnection(n, node.ConnectionOpts{Timeout: 1 * time.Minute, TimeBeforeRetry: 10 * time.Second})
+	if err != nil {
+		return &node.ErrFailedToRebootNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to connect instance after reboot due to: %v", err),
 		}
 	}
 	return nil
