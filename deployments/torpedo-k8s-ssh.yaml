@@ -50,8 +50,14 @@ spec:
   containers:
   - name: torpedo
     image: harshpx/torpedo:latest
-    #command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh" ]
-    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown" ]
+    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown", "--log-location", "/mnt/torpedo_support_bundle" ]
     tty: true
+    volumeMounts:
+    - mountPath: /mnt/torpedo_support_bundle
+      name: support-bundle-path
   restartPolicy: Never
   serviceAccountName: torpedo-account
+  volumes:
+    - name: support-bundle-path
+      hostPath:
+        path: /mnt/torpedo_support_bundle

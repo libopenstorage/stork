@@ -69,6 +69,9 @@ type Driver interface {
 
 	// DeleteVolumes will delete a storage volume.
 	DeleteVolumes(*Context) error
+
+	// Describe generates a bundle that can be used by support - logs, cores, states, etc
+	Describe(*Context) (string, error)
 }
 
 var (

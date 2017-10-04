@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -26,6 +27,7 @@ const (
 	nodeDriverCliFlag    = "node-driver,n"
 	storageDriverCliFlag = "storage,v"
 	testsCliFlag         = "tests,t"
+	logLocationCliFlag   = "log-location"
 )
 
 type torpedo struct {
@@ -33,6 +35,7 @@ type torpedo struct {
 	s          scheduler.Driver
 	v          volume.Driver
 	n          node.Driver
+	logLoc     string
 }
 
 // testDriverFunc runs a specific external storage test case.  It takes
@@ -335,13 +338,37 @@ func (t *torpedo) validateContext(ctx *scheduler.Context) error {
 		)
 	}
 
-	if err := t.validateVolumes(ctx); err != nil {
+	if err = t.validateVolumes(ctx); err != nil {
+		gsbErr := t.generateSupportBundle(ctx)
+		if gsbErr != nil {
+			logrus.Warnf("In attempting to generate support bundle, Err: %v", gsbErr)
+		}
 		return err
 	}
 	if err = t.s.WaitForRunning(ctx); err != nil {
+		gsbErr := t.generateSupportBundle(ctx)
+		if gsbErr != nil {
+			logrus.Warnf("In attempting to generate support bundle, Err: %v", gsbErr)
+		}
 		return err
 	}
 	return err
+}
+
+// generateSupportBundle gathers logs and any artifacts pertinent to the scheduler and dumps them in the defined location
+func (t *torpedo) generateSupportBundle(ctx *scheduler.Context) error {
+	if ctx == nil || t.s == nil {
+		return fmt.Errorf("Invalid context or scheduler. Cannot generate support bundle")
+	}
+	out, err := t.s.Describe(ctx)
+	if err != nil {
+		return fmt.Errorf("Couldn't generate support bundle for torpedo instance: %s. Err: %v", t.instanceID, err)
+	}
+	err = ioutil.WriteFile(fmt.Sprintf("%s/supportbundle_%s_%v.log", t.logLoc, t.instanceID, time.Now().Format(time.RFC3339)), []byte(out), 0644)
+	if err != nil {
+		return fmt.Errorf("Couldn't write the support bundle file because of err: %v", err)
+	}
+	return nil
 }
 
 // validateVolumes validates the volume with the scheduler and volume driver
@@ -645,6 +672,11 @@ func main() {
 					Usage: "Comma-separated list of tests. [Default:  runs all the tests]",
 					Value: "",
 				},
+				cli.StringFlag{
+					Name:  logLocationCliFlag,
+					Usage: "Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir",
+					Value: "/mnt/torpedo_support_dir",
+				},
 			},
 		},
 	}
@@ -657,6 +689,7 @@ func fireTorpedo(c *cli.Context) {
 	v := c.String("storage")
 	n := c.String("node-driver")
 	tests := c.String("tests")
+	logLoc := c.String("log-location")
 
 	if schedulerDriver, err := scheduler.Get(s); err != nil {
 		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
@@ -667,12 +700,15 @@ func fireTorpedo(c *cli.Context) {
 	} else if nodeDriver, err := node.Get(n); err != nil {
 		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
 		os.Exit(-1)
+	} else if err := os.MkdirAll(logLoc, os.ModeDir); err != nil {
+		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
 		t := torpedo{
 			instanceID: time.Now().Format("01-02-15h04m05s"),
 			s:          schedulerDriver,
 			v:          volumeDriver,
 			n:          nodeDriver,
+			logLoc:     logLoc,
 		}
 
 		if err := t.run(tests); err != nil {

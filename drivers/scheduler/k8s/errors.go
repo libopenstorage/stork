@@ -79,6 +79,18 @@ func (e *ErrFailedToValidateApp) Error() string {
 	return fmt.Sprintf("Failed to validate app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
+// ErrFailedToGetAppStatus error type for failing to get app's status
+type ErrFailedToGetAppStatus struct {
+	// App is the app for which we want to get the status
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetAppStatus) Error() string {
+	return fmt.Sprintf("Failed to get status of app: %v due to err: %v", e.App.Key, e.Cause)
+}
+
 // ErrFailedToValidateAppDestroy error type for failing to validate destory of an app
 type ErrFailedToValidateAppDestroy struct {
 	// App is the app that failed to destroy
@@ -117,7 +129,7 @@ func (e *ErrFailedToDeleteTasks) Error() string {
 
 // ErrFailedToGetVolumesForApp error type for failing to get an app's volumes
 type ErrFailedToGetVolumesForApp struct {
-	// App is the app that failed to destroy
+	// App is the app that has volumes we want to get
 	App *spec.AppSpec
 	// Cause is the underlying cause of the error
 	Cause string
@@ -137,4 +149,28 @@ type ErrFailedToGetVolumesParameters struct {
 
 func (e *ErrFailedToGetVolumesParameters) Error() string {
 	return fmt.Sprintf("Failed to get volume parameters for app: %v due to err: %v", e.App.Key, e.Cause)
+}
+
+// ErrFailedToGetPvcStatus error type for failing to get the status of a pvc
+type ErrFailedToGetPvcStatus struct {
+	// App whose persistent volume claim status couldn't be obtained
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetPvcStatus) Error() string {
+	return fmt.Sprintf("Failed to get status of pvc: %v due to err: %v", e.App.Key, e.Cause)
+}
+
+// ErrFailedToGetScParams error type for failing to get the parameters of a storage class
+type ErrFailedToGetScParams struct {
+	// App whose storage class params couldn't be obtained
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetScParams) Error() string {
+	return fmt.Sprintf("Failed to get params of storage class: %v due to err: %v", e.App.Key, e.Cause)
 }

@@ -616,6 +616,102 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	return result, nil
 }
 
+func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
+	var buf bytes.Buffer
+	var err error
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			buf.WriteString(insertLineBreak(obj.Name))
+			var depStatus *apps_api.DeploymentStatus
+			if depStatus, err = k8sutils.DescribeDeployment(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get status of deployment: %v. Err: %v", obj.Name, err),
+				}))
+			}
+			//Dump depStatus
+			buf.WriteString(fmt.Sprintf("%v\n", *depStatus))
+			pods, _ := k8sutils.GetDeploymentPods(obj)
+			for _, pod := range pods {
+				buf.WriteString(dumpPodStatusRecursively(pod))
+			}
+			buf.WriteString(insertLineBreak("END Deployment"))
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			buf.WriteString(insertLineBreak(obj.Name))
+			var ssetStatus *apps_api.StatefulSetStatus
+			if ssetStatus, err = k8sutils.DescribeStatefulSet(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get status of statefulset: %v. Err: %v", obj.Name, err),
+				}))
+			}
+			//Dump ssetStatus
+			buf.WriteString(fmt.Sprintf("%v\n", *ssetStatus))
+			pods, _ := k8sutils.GetStatefulSetPods(obj)
+			for _, pod := range pods {
+				buf.WriteString(dumpPodStatusRecursively(pod))
+			}
+			buf.WriteString(insertLineBreak("END StatefulSet"))
+		} else if obj, ok := spec.(*v1.Service); ok {
+			buf.WriteString(insertLineBreak(obj.Name))
+			var svcStatus *v1.ServiceStatus
+			if svcStatus, err = k8sutils.DescribeService(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &ErrFailedToGetAppStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get status of service: %v. Err: %v", obj.Name, err),
+				}))
+			}
+			//Dump service status
+			buf.WriteString(fmt.Sprintf("%v\n", *svcStatus))
+			buf.WriteString(insertLineBreak("END Service"))
+		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			buf.WriteString(insertLineBreak(obj.Name))
+			var pvcStatus *v1.PersistentVolumeClaimStatus
+			if pvcStatus, err = k8sutils.GetPersistentVolumeClaimStatus(obj); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &ErrFailedToGetPvcStatus{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get status of persistent volume claim: %v. Err: %v", obj.Name, err),
+				}))
+			}
+			//Dump persistent volume claim status
+			buf.WriteString(fmt.Sprintf("%v\n", *pvcStatus))
+			buf.WriteString(insertLineBreak("END PersistentVolumeClaim"))
+		} else if obj, ok := spec.(*storage_api.StorageClass); ok {
+			buf.WriteString(insertLineBreak(obj.Name))
+			var scParams map[string]string
+			if scParams, err = k8sutils.GetStorageClassParams(obj); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &ErrFailedToGetScParams{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get parameters of storage class: %v. Err: %v", obj.Name, err),
+				}))
+			}
+			//Dump storage class parameters
+			buf.WriteString(fmt.Sprintf("%v\n", scParams))
+			buf.WriteString(insertLineBreak("END Storage Class"))
+		} else {
+			logrus.Warnf("Object type unknown/not supported: %v", obj)
+		}
+	}
+	return buf.String(), nil
+}
+
+func insertLineBreak(note string) string {
+	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
+}
+
+func dumpPodStatusRecursively(pod v1.Pod) string {
+	var buf bytes.Buffer
+	buf.WriteString(insertLineBreak(pod.Name))
+	buf.WriteString(fmt.Sprintf("%v\n", pod.Status))
+	for _, conStat := range pod.Status.ContainerStatuses {
+		buf.WriteString(insertLineBreak(conStat.Name))
+		buf.WriteString(fmt.Sprintf("%v\n", conStat))
+		buf.WriteString(insertLineBreak("END Container"))
+	}
+	buf.WriteString(insertLineBreak("END Pod"))
+	return buf.String()
+}
+
 func contains(nodes []node.Node, n node.Node) bool {
 	for _, value := range nodes {
 		if value.Name == n.Name {

@@ -168,6 +168,15 @@ func GetService(svcName string, svcNS string) (*v1.Service, error) {
 
 }
 
+// DescribeService updates the service status and returns the status part
+func DescribeService(svcName string, svcNamespace string) (*v1.ServiceStatus, error) {
+	svc, err := GetService(svcName, svcNamespace)
+	if err != nil {
+		return nil, err
+	}
+	return &svc.Status, err
+}
+
 // ValidateDeletedService validates if given service is deleted
 func ValidateDeletedService(svcName string, svcNS string) error {
 	client, err := GetK8sClient()
@@ -349,6 +358,19 @@ func GetDeploymentPods(deployment *v1beta1.Deployment) ([]v1.Pod, error) {
 	return nil, nil
 }
 
+// DescribeDeployment updates the deployment status and returns the status part
+func DescribeDeployment(depName string, depNamespace string) (*v1beta1.DeploymentStatus, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+	dep, err := client.AppsV1beta1().Deployments(depNamespace).Get(depName, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return &dep.Status, err
+}
+
 // Deployment APIs - END
 
 // StatefulSet APIs - BEGIN
@@ -481,6 +503,19 @@ func ValidateTerminatedStatefulSet(statefulset *v1beta1.StatefulSet) error {
 	return err
 }
 
+// DescribeStatefulSet updates the status of the statefulset and returns the status part
+func DescribeStatefulSet(ssetName string, ssetNamespace string) (*v1beta1.StatefulSetStatus, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+	sset, err := client.AppsV1beta1().StatefulSets(ssetNamespace).Get(ssetName, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return &sset.Status, err
+}
+
 // StatefulSet APIs - END
 
 // DeletePods deletes the given pods
@@ -504,14 +539,19 @@ func DeletePods(pods []v1.Pod) error {
 	return nil
 }
 
-// GetPodsByOwner returns pods for the given owner and namespace
-func GetPodsByOwner(ownerName string, namespace string) ([]v1.Pod, error) {
+//GetPods returns pods for the given namespace
+func GetPods(namespace string) (*v1.PodList, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
 	}
 
-	pods, err := client.Pods(namespace).List(meta_v1.ListOptions{})
+	return client.Pods(namespace).List(meta_v1.ListOptions{})
+}
+
+// GetPodsByOwner returns pods for the given owner and namespace
+func GetPodsByOwner(ownerName string, namespace string) ([]v1.Pod, error) {
+	pods, err := GetPods(namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -548,6 +588,21 @@ func DeleteStorageClass(name string) error {
 	}
 
 	return client.StorageV1().StorageClasses().Delete(name, &meta_v1.DeleteOptions{})
+}
+
+// GetStorageClassParams returns the parameters of the given sc in the native map format
+func GetStorageClassParams(sc *storage_api.StorageClass) (map[string]string, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	sc, err = client.StorageV1().StorageClasses().Get(sc.Name, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return sc.Parameters, nil
 }
 
 // ValidateStorageClass validates the given storage class
@@ -592,6 +647,21 @@ func DeletePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
 	}
 
 	return client.PersistentVolumeClaims(pvc.Namespace).Delete(pvc.Name, &meta_v1.DeleteOptions{})
+}
+
+// GetPersistentVolumeClaimStatus returns the status of the given pvc
+func GetPersistentVolumeClaimStatus(pvc *v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaimStatus, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.PersistentVolumeClaims(pvc.Namespace).Get(pvc.Name, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &result.Status, nil
 }
 
 // ValidatePersistentVolumeClaim validates the given pvc
