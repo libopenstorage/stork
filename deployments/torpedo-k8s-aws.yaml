@@ -50,6 +50,22 @@ spec:
   containers:
   - name: torpedo
     image: harshpx/torpedo:latest
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: aws-access
+            key: AWS_ACCESS_KEY_ID
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: aws-access
+            key: AWS_SECRET_ACCESS_KEY
+      - name: AWS_REGION
+        valueFrom:
+          secretKeyRef:
+            name: aws-access
+            key: AWS_REGION
     command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "aws" ]
     tty: true
   restartPolicy: Never
