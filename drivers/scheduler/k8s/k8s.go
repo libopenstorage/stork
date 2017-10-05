@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	k8s_ops "github.com/portworx/torpedo/pkg/k8sops"
 	"github.com/portworx/torpedo/pkg/task"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/pkg/api/v1"
@@ -24,11 +25,15 @@ import (
 )
 
 // SchedName is the name of the kubernetes scheduler driver implementation
-const SchedName = "k8s"
+const (
+	SchedName      = "k8s"
+	k8sPodsRootDir = "/var/lib/kubelet/pods"
+)
 
 type k8s struct {
-	nodes       map[string]node.Node
-	specFactory *spec.Factory
+	nodes          map[string]node.Node
+	specFactory    *spec.Factory
+	nodeDriverName string
 }
 
 func (k *k8s) GetNodes() []node.Node {
@@ -64,7 +69,7 @@ func (k *k8s) String() string {
 	return SchedName
 }
 
-func (k *k8s) Init(specDir string) error {
+func (k *k8s) Init(specDir string, nodeDriverName string) error {
 	nodes, err := k8s_ops.Instance().GetNodes()
 	if err != nil {
 		return err
@@ -79,6 +84,7 @@ func (k *k8s) Init(specDir string) error {
 		return err
 	}
 
+	k.nodeDriverName = nodeDriverName
 	return nil
 }
 
@@ -364,10 +370,18 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 	return nil
 }
 
-func (k *k8s) Destroy(ctx *scheduler.Context) error {
+func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	k8sOps := k8s_ops.Instance()
+	var podList []v1.Pod
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
+			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+				if pods, err := k8sOps.GetDeploymentPods(obj); err != nil {
+					logrus.Warnf("[%v] Error getting deployment pods. Err: %v", ctx.App.Key, err)
+				} else {
+					podList = append(podList, pods...)
+				}
+			}
 			if err := k8sOps.DeleteDeployment(obj); err != nil {
 				return &ErrFailedToDestroyApp{
 					App:   ctx.App,
@@ -377,6 +391,13 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Destroyed deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+				if pods, err := k8sOps.GetStatefulSetPods(obj); err != nil {
+					logrus.Warnf("[%v] Error getting statefulset pods. Err: %v", ctx.App.Key, err)
+				} else {
+					podList = append(podList, pods...)
+				}
+			}
 			if err := k8sOps.DeleteStatefulSet(obj); err != nil {
 				return &ErrFailedToDestroyApp{
 					App:   ctx.App,
@@ -407,7 +428,61 @@ func (k *k8s) Destroy(ctx *scheduler.Context) error {
 
 	logrus.Infof("[%v] Destroyed Namespace: %v", ctx.App.Key, appNamespace)
 
+	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+		if err := k.WaitForDestroy(ctx); err != nil {
+			return err
+		}
+		if err := k.waitForCleanup(ctx, podList); err != nil {
+			return err
+		}
+	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
+		if err := k.WaitForDestroy(ctx); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func (k *k8s) waitForCleanup(ctx *scheduler.Context, podList []v1.Pod) error {
+	for _, pod := range podList {
+		t := func() (interface{}, error) {
+			return nil, k.validateVolumeDirCleanup(pod.UID, ctx.App)
+		}
+		if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+			return err
+		}
+		logrus.Infof("Validated resource cleanup for pod: %v", pod.UID)
+	}
+	return nil
+}
+
+func (k *k8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) error {
+	podVolDir := k.getVolumeDirPath(podUID)
+	options := node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	}
+	driver, _ := node.Get(k.nodeDriverName)
+
+	for _, n := range k.GetNodes() {
+		if n.Type == node.TypeWorker {
+			if exists, err := driver.CheckIfPathExists(podVolDir, n, options); err != nil {
+				return err
+			} else if exists {
+				return &ErrFailedToDeleteVolumeDirForPod{
+					App:   app,
+					Cause: fmt.Sprintf("Volume directory for pod %v still exists in node: %v", podUID, n.Name),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (k *k8s) getVolumeDirPath(podUID types.UID) string {
+	return filepath.Join(k8sPodsRootDir, string(podUID), "volumes")
 }
 
 func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
@@ -604,7 +679,7 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 		}
 	}
 
-	//We should have pods from a supported application at this point
+	// We should have pods from a supported application at this point
 	for _, p := range pods {
 		if len(p.Spec.NodeName) > 0 {
 			n, ok := k.nodes[p.Spec.NodeName]

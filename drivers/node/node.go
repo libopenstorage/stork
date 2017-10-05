@@ -67,6 +67,9 @@ type Driver interface {
 	// ShutdownNode shuts down the given node
 	ShutdownNode(node Node, options ShutdownNodeOpts) error
 
+	// CheckIfPathExists checks whether the given path is present in the node
+	CheckIfPathExists(path string, node Node, options ConnectionOpts) (bool, error)
+
 	// TestConnection tests connection to given node. returns nil if driver can connect to given node
 	TestConnection(node Node, options ConnectionOpts) error
 }
@@ -116,6 +119,13 @@ func (d *notSupportedDriver) ShutdownNode(node Node, options ShutdownNodeOpts) e
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ShutdownNode()",
+	}
+}
+
+func (d *notSupportedDriver) CheckIfPathExists(path string, node Node, options ConnectionOpts) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ReadDir()",
 	}
 }
 

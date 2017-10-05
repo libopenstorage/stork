@@ -174,3 +174,15 @@ type ErrFailedToGetScParams struct {
 func (e *ErrFailedToGetScParams) Error() string {
 	return fmt.Sprintf("Failed to get params of storage class: %v due to err: %v", e.App.Key, e.Cause)
 }
+
+// ErrFailedToDeleteVolumeDirForPod error type for failing to delete volume dir path for pods
+type ErrFailedToDeleteVolumeDirForPod struct {
+	// App is the app whose volume directories are not deleted
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDeleteVolumeDirForPod) Error() string {
+	return fmt.Sprintf("Failed to delete volume directory for app: %v due to err: %v", e.App.Key, e.Cause)
+}

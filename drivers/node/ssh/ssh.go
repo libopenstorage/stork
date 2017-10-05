@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -12,7 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/task"
 	ssh_pkg "golang.org/x/crypto/ssh"
-	"os"
 )
 
 const (
@@ -193,6 +193,24 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	}
 
 	return nil
+}
+
+func (s *ssh) CheckIfPathExists(path string, n node.Node, options node.ConnectionOpts) (bool, error) {
+	addr, err := s.getAddrToConnect(n, options)
+	if err != nil {
+		return false, &node.ErrFailedToCheckPathOnNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
+		}
+	}
+
+	readDirCmd := "sudo ls " + path
+
+	// An error is returned if path is not present on the remote node
+	if _, err := s.doCmd(addr, readDirCmd, false); err != nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {

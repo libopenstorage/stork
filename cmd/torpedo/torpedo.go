@@ -59,9 +59,11 @@ func (t *torpedo) testSetupTearDown() error {
 		}
 	}
 
+	opts := make(map[string]bool)
+	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 	for _, ctx := range contexts {
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		if err := t.tearDownContext(ctx); err != nil {
+		if err := t.tearDownContext(ctx, opts); err != nil {
 			return err
 		}
 	}
@@ -80,6 +82,8 @@ func (t *torpedo) testDriverDown() error {
 		return err
 	}
 
+	opts := make(map[string]bool)
+	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 	for _, ctx := range contexts {
 		logrus.Infof("[Test: %v] Validating %v", taskName, ctx.App.Key)
 		if err := t.validateContext(ctx); err != nil {
@@ -128,7 +132,7 @@ func (t *torpedo) testDriverDown() error {
 		}
 
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		if err := t.tearDownContext(ctx); err != nil {
+		if err := t.tearDownContext(ctx, opts); err != nil {
 			return err
 		}
 
@@ -177,7 +181,7 @@ func (t *torpedo) testDriverDownAppDown() error {
 		time.Sleep(40 * time.Second)
 
 		logrus.Infof("[Test: %v] Destroying application: %v", taskName, ctx.App.Key)
-		if err := t.s.Destroy(ctx); err != nil {
+		if err := t.s.Destroy(ctx, nil); err != nil {
 			return err
 		}
 
@@ -239,7 +243,7 @@ func (t *torpedo) testAppTasksDown() error {
 		}
 
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		if err := t.tearDownContext(ctx); err != nil {
+		if err := t.tearDownContext(ctx, nil); err != nil {
 			return err
 		}
 	}
@@ -320,7 +324,7 @@ func (t *torpedo) testNodeReboot(allNodes bool) error {
 		}
 
 		logrus.Infof("[Test: %v] Tearing down %v", taskName, ctx.App.Key)
-		if err := t.tearDownContext(ctx); err != nil {
+		if err := t.tearDownContext(ctx, nil); err != nil {
 			return err
 		}
 	}
@@ -401,12 +405,9 @@ func (t *torpedo) validateVolumes(ctx *scheduler.Context) error {
 	return nil
 }
 
-func (t *torpedo) tearDownContext(ctx *scheduler.Context) error {
+func (t *torpedo) tearDownContext(ctx *scheduler.Context, opts map[string]bool) error {
 	var err error
-	if err = t.s.Destroy(ctx); err != nil {
-		return err
-	}
-	if err = t.s.WaitForDestroy(ctx); err != nil {
+	if err = t.s.Destroy(ctx, opts); err != nil {
 		return err
 	}
 	if err = t.s.DeleteVolumes(ctx); err != nil {
@@ -582,7 +583,7 @@ func (t *torpedo) testRemoteForceMount() error {
 func (t *torpedo) run(tests string) error {
 	logrus.Printf("Running torpedo instance: %v", t.instanceID)
 
-	if err := t.s.Init(path.Join(DefaultSpecsRoot, t.s.String())); err != nil {
+	if err := t.s.Init(path.Join(DefaultSpecsRoot, t.s.String()), t.n.String()); err != nil {
 		logrus.Fatalf("Error initializing schedule driver. Err: %v", err)
 		return err
 	}

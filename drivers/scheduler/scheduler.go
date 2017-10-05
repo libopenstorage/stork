@@ -7,6 +7,14 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
+// Options specifies keys for a key-value pair that can be passed to scheduler methods
+const (
+	// OptionsWaitForDestroy Wait for the destroy to finish before returning
+	OptionsWaitForDestroy = "WAIT_FOR_DESTROY"
+	// OptionsWaitForResourceLeak Wait for all the resources to be cleaned up after destroying
+	OptionsWaitForResourceLeakCleanup = "WAIT_FOR_RESOURCE_LEAK_CLEANUP"
+)
+
 // Context holds the execution context and output values of a test task.
 type Context struct {
 	UID    string
@@ -29,7 +37,7 @@ type Driver interface {
 	spec.Parser
 
 	// Init initializes the scheduler driver
-	Init(specDir string) error
+	Init(string, string) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -50,7 +58,7 @@ type Driver interface {
 	WaitForRunning(*Context) error
 
 	// Destroy removes a application. It does not delete the volumes of the task.
-	Destroy(*Context) error
+	Destroy(*Context, map[string]bool) error
 
 	// WaitForDestroy waits for application to destroy.
 	WaitForDestroy(*Context) error
