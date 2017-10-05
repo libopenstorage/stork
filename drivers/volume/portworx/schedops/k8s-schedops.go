@@ -3,7 +3,7 @@ package schedops
 import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/k8sutils"
+	"github.com/portworx/torpedo/pkg/k8sops"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 type k8sSchedOps struct{}
 
 func (k *k8sSchedOps) DisableOnNode(n node.Node) error {
-	return k8sutils.AddLabelOnNode(n.Name, k8sPxRunningLabelKey, k8sPxNotRunningLabelValue)
+	return k8sops.Instance().AddLabelOnNode(n.Name, k8sPxRunningLabelKey, k8sPxNotRunningLabelValue)
 }
 
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
@@ -27,7 +27,7 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 }
 
 func (k *k8sSchedOps) EnableOnNode(n node.Node) error {
-	return k8sutils.RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
+	return k8sops.Instance().RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
 }
 
 func init() {

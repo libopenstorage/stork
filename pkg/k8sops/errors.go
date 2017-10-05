@@ -1,4 +1,4 @@
-package k8sutils
+package k8sops
 
 import (
 	"errors"

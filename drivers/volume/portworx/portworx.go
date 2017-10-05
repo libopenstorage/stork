@@ -17,7 +17,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/portworx/torpedo/pkg/k8sutils"
+	"github.com/portworx/torpedo/pkg/k8sops"
 	"github.com/portworx/torpedo/pkg/task"
 )
 
@@ -52,7 +52,7 @@ func (d *portworx) Init(sched string) error {
 	nodes := d.schedDriver.GetNodes()
 
 	var endpoint string
-	svc, err := k8sutils.GetService(PXServiceName, PXNamespace)
+	svc, err := k8sops.Instance().GetService(PXServiceName, PXNamespace)
 	if err != nil {
 		for _, n := range nodes {
 			if n.Type == node.TypeWorker {
