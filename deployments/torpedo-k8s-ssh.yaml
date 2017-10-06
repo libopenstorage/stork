@@ -48,7 +48,7 @@ spec:
             operator: Exists
   containers:
   - name: torpedo
-    image: harshpx/torpedo:dev
+    image: portworx/torpedo:latest
     command: [ "ginkgo",
                "--slowSpecThreshold", "180",
                "-v",
