@@ -1,7 +1,8 @@
 package volume
 
 import (
-	"github.com/Sirupsen/logrus"
+	"fmt"
+
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
@@ -41,8 +42,12 @@ var (
 
 // Register registers the given volume driver
 func Register(name string, d Driver) error {
-	logrus.Infof("Registering volume driver: %v", name)
-	volDrivers[name] = d
+	if _, ok := volDrivers[name]; !ok {
+		volDrivers[name] = d
+	} else {
+		return fmt.Errorf("volume driver: %s is already registered", name)
+	}
+
 	return nil
 }
 

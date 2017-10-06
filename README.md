@@ -64,63 +64,12 @@ To submit an external storage provider, please submit a PR with the output of th
 >**Note:**<br/> Torpedo is in alpha stage at this moment and under active development. Currently it only supports Kubernetes as the container orchestrator.
 
 ### Build
-Torpedo is written in Golang.
 
-To build Torpedo:
-```
-# git clone git@github.com:portworx/torpedo.git
-# make
-```
-
-To deploy Torpedo image in your docker repository:
-```
-# export DOCKER_HUB_REPO=harshpx
-# export DOCKER_HUB_TORPEDO_IMAGE=torpedo
-# export DOCKER_HUB_TAG=latest
-# make deploy
-```
-
-Make sure you change the environment variables above to match your docker repository.
+See [How to build](HOW_TO_BUILD.md).
 
 ### Run
 
-#### Pre-requisites:
-* Minimum 3-node Kubernetes cluster
-* Portworx installed on the Kubernetes cluster
-* A root user on each node created as follows. The password should be `t0rped0`. If not already available a group called sudo should be created too.
-```
-# adduser torpedo
-Adding user `torpedo' ...
-Adding new group `torpedo' (1001) ...
-Adding new user `torpedo' (1001) with group `torpedo' ...
-Creating home directory `/home/torpedo' ...
-Copying files from `/etc/skel' ...
-Enter new UNIX password:
-Retype new UNIX password:
-passwd: password updated successfully
-Changing the user information for torpedo
-Enter the new value, or press ENTER for the default
-	Full Name []: torpedo
-	Room Number []:
-	Work Phone []:
-	Home Phone []:
-	Other []:
-
-# groupadd sudo
-# usermod -aG sudo torpedo
-# sudo sh -c "echo 'torpedo ALL=NOPASSWD: ALL' >> /etc/sudoers"
-```
-
-To run on kubernetes:
-```
-# kubectl create -f deployments/torpedo-k8s-ssh.yaml
-```
-
-Make sure you change `image: harshpx/torpedo:latest` to your torpedo docker image.
-
-The above command starts Torpedo by deploying a k8s `Pod` in your kubernetes cluster.  It also specified Portworx (`pxd`) as the volume driver and `ssh` as the node driver to.
-
-You can look at status of torpedo by viewing logs using: `kubectl logs -f torpedo`
+See [How to run](HOW_TO_RUN.md).
 
 ## Contributing
 

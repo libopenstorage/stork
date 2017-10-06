@@ -5,7 +5,7 @@ TAGS := daemon
 endif
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/vendor')
+PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/vendor' | grep -v 'github.com/portworx/torpedo/tests')
 endif
 
 ifeq ($(BUILD_TYPE),debug)
@@ -19,7 +19,7 @@ GOFMT := gofmt
 
 .DEFAULT_GOAL=all
 
-all: torpedo vet lint build fmt
+all: vet lint build fmt
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -38,7 +38,15 @@ fmt:
 	@./scripts/check-gofmt.sh $(PKGS)
 
 build:
+	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
+
+	go get github.com/onsi/ginkgo/ginkgo
+	go get github.com/onsi/gomega
+	ginkgo build -r
+
+	find . -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
+	chmod -R 755 bin/*
 
 install:
 	go install -tags "$(TAGS)" $(PKGS)
@@ -64,29 +72,26 @@ pretest: lint vet errcheck
 test:
 	go test -tags "$(TAGS)" $(TESTFLAGS) $(PKGS)
 
-docker-build-osd-dev:
-	docker build -t openstorage/osd-dev -f Dockerfile.osd-dev .
-
-torpedo:
-	@echo "Building the torpedo binary"
-	@cd cmd/torpedo && go build $(BUILD_OPTIONS) -o $(BIN)/torpedo
-
 container:
 	@echo "Building container: docker build --tag $(TORPEDO_IMG) -f Dockerfile ."
 	sudo docker build --tag $(TORPEDO_IMG) -f Dockerfile .
 
-deploy: all container
-	docker push $(TORPEDO_IMG)
+deploy: container
+	sudo docker push $(TORPEDO_IMG)
 
 docker-build:
 	docker build -t torpedo/docker-build -f Dockerfile.build .
 	@echo "Building torpedo using docker"
 	docker run \
 		--privileged \
+		-v $(shell pwd):/go/src/github.com/portworx/torpedo \
+		-e DOCKER_HUB_REPO=$(DOCKER_HUB_REPO) \
+		-e DOCKER_HUB_TORPEDO_IMAGE=$(DOCKER_HUB_TORPEDO_IMAGE) \
+		-e DOCKER_HUB_TAG=$(DOCKER_HUB_TAG) \
 		torpedo/docker-build make all
 
 clean:
-	-rm -rf bin
+	-sudo rm -rf bin
 	@echo "Deleting image "$(TORPEDO_IMG)
 	-docker rmi -f $(TORPEDO_IMG)
 	go clean -i $(PKGS)

@@ -1,7 +1,8 @@
 package scheduler
 
 import (
-	"github.com/Sirupsen/logrus"
+	"fmt"
+
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -88,8 +89,12 @@ var (
 
 // Register registers the given scheduler driver
 func Register(name string, d Driver) error {
-	logrus.Infof("Registering sched driver: %v", name)
-	schedulers[name] = d
+	if _, ok := schedulers[name]; !ok {
+		schedulers[name] = d
+	} else {
+		return fmt.Errorf("scheduler driver: %s is already registered", name)
+	}
+
 	return nil
 }
 

@@ -8,8 +8,7 @@ apiVersion: rbac.authorization.k8s.io/v1alpha1
 metadata:
    name: torpedo-role
 rules:
-  -
-    apiGroups:
+  - apiGroups:
       # have access to everything except Secrets
       - "*"
     resources: ["*"]
@@ -49,8 +48,15 @@ spec:
             operator: Exists
   containers:
   - name: torpedo
-    image: harshpx/torpedo:latest
-    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown", "--log-location", "/mnt/torpedo_support_bundle" ]
+    image: harshpx/torpedo:dev
+    command: [ "ginkgo",
+               "--slowSpecThreshold", "180",
+               "-v",
+               "bin/basic.test",
+               "--",
+               "--spec-dir", "../drivers/scheduler/k8s/specs"]
+               # "../drivers/scheduler/k8s/specs" is the default k8s specs checked-in with torpedo. If you have custom
+               # specs, mount them into the pod using a hostPath volume and specify the target mount path here
     tty: true
     volumeMounts:
     - mountPath: /mnt/torpedo_support_bundle

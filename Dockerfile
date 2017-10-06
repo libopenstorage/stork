@@ -1,9 +1,15 @@
-FROM fedora:25
+FROM golang:1.8.3
+MAINTAINER harsh@portworx.com
 
-WORKDIR /
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 
-COPY ./bin/torpedo /
-COPY ./drivers/scheduler/k8s/specs /specs/k8s
+RUN go get github.com/onsi/ginkgo/ginkgo
+RUN go install github.com/onsi/ginkgo/ginkgo
+RUN go get github.com/onsi/gomega
 
-ENTRYPOINT ["/torpedo"]
+ADD . /go/src/github.com/portworx/torpedo
+WORKDIR /go/src/github.com/portworx/torpedo
+
+ENTRYPOINT ["ginkgo", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
+#CMD ["ginkgo", "-dryRun", "--slowSpecThreshold", "180", "bin/*.test", "--", "--spec-dir","pxd"]

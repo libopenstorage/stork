@@ -2,6 +2,7 @@ package k8sops
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	apps_api "k8s.io/client-go/pkg/apis/apps/v1beta1"
 	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -897,7 +899,16 @@ func (k *k8sOps) appsClient() v1beta1.AppsV1beta1Interface {
 
 // getK8sClient instantiates a k8s client
 func getK8sClient() (*kubernetes.Clientset, error) {
-	k8sClient, err := loadClientFromServiceAccount()
+	var k8sClient *kubernetes.Clientset
+	var err error
+
+	kubeconfig := os.Getenv("KUBECONFIG")
+	if len(kubeconfig) > 0 {
+		k8sClient, err = loadClientFromKubeconfig(kubeconfig)
+	} else {
+		k8sClient, err = loadClientFromServiceAccount()
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -921,6 +932,15 @@ func loadClientFromServiceAccount() (*kubernetes.Clientset, error) {
 		return nil, err
 	}
 	return k8sClient, nil
+}
+
+func loadClientFromKubeconfig(kubeconfig string) (*kubernetes.Clientset, error) {
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return kubernetes.NewForConfig(config)
 }
 
 func roundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {

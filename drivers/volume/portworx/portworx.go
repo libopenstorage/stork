@@ -21,14 +21,16 @@ import (
 	"github.com/portworx/torpedo/pkg/task"
 )
 
-// DriverName is the name of the portworx driver implementation
-const DriverName = "pxd"
-
-// PXServiceName is the name of the portworx service
-const PXServiceName = "portworx-service"
-
-// PXNamespace is the kubernetes namespace in which portworx daemon set runs.
-const PXNamespace = "kube-system"
+const (
+	// DriverName is the name of the portworx driver implementation
+	DriverName = "pxd"
+	// PXServiceName is the name of the portworx service
+	PXServiceName = "portworx-service"
+	// PXNamespace is the kubernetes namespace in which portworx daemon set runs.
+	PXNamespace             = "kube-system"
+	pxdClientSchedUserAgent = "pxd-sched"
+	pxdRestPort             = 9001
+)
 
 type portworx struct {
 	hostConfig     *dockerclient.HostConfig
@@ -49,46 +51,19 @@ func (d *portworx) Init(sched string) error {
 	if err != nil {
 		return err
 	}
-	nodes := d.schedDriver.GetNodes()
-
-	var endpoint string
-	svc, err := k8sops.Instance().GetService(PXServiceName, PXNamespace)
-	if err != nil {
-		for _, n := range nodes {
-			if n.Type == node.TypeWorker {
-				endpoint = n.Addresses[0]
-				break
-			}
-		}
-	} else {
-		endpoint = svc.Spec.ClusterIP
-	}
-
-	if len(endpoint) == 0 {
-		return fmt.Errorf("failed to get endpoint for portworx volume driver")
-	}
-
-	logrus.Infof("Using %v as endpoint for portworx volume driver", endpoint)
-	clnt, err := clusterclient.NewClusterClient("http://"+endpoint+":9001", "v1")
-	if err != nil {
-		return err
-	}
-	d.clusterManager = clusterclient.ClusterManager(clnt)
-
-	clnt, err = volumeclient.NewDriverClient("http://"+endpoint+":9001", "pxd", "", "pxd-sched")
-	if err != nil {
-		return err
-	}
-	d.volDriver = volumeclient.VolumeDriver(clnt)
-
-	cluster, err := d.clusterManager.Enumerate()
-	if err != nil {
-		return err
-	}
 
 	d.schedOps, err = schedops.Get(sched)
 	if err != nil {
 		return fmt.Errorf("failed to get scheduler operator for portworx. Err: %v", err)
+	}
+
+	if err = d.setDriver(); err != nil {
+		return err
+	}
+
+	cluster, err := d.clusterManager.Enumerate()
+	if err != nil {
+		return err
 	}
 
 	logrus.Infof("The following Portworx nodes are in the cluster:")
@@ -148,7 +123,7 @@ func (d *portworx) CleanupVolume(name string) error {
 				return err
 			}
 
-			logrus.Infof("successfully removed Portworx volume %v", name)
+			logrus.Debugf("successfully removed Portworx volume %v", name)
 
 			return nil
 		}
@@ -158,26 +133,35 @@ func (d *portworx) CleanupVolume(name string) error {
 }
 
 func (d *portworx) InspectVolume(name string, params map[string]string) error {
-	vols, err := d.volDriver.Inspect([]string{name})
+	t := func() (interface{}, error) {
+		vols, err := d.volDriver.Inspect([]string{name})
+		if err != nil {
+			return nil, err
+		}
+
+		if len(vols) != 1 {
+			return nil, &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: fmt.Sprintf("Volume inspect result has invalid length. Expected:1 Actual:%v", len(vols)),
+			}
+		}
+
+		return vols[0], nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, 10*time.Second, 2*time.Second)
 	if err != nil {
-		return &ErrFailedToInspectVolme{
+		return &ErrFailedToInspectVolume{
 			ID:    name,
 			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
 		}
 	}
 
-	if len(vols) != 1 {
-		return &ErrFailedToInspectVolme{
-			ID:    name,
-			Cause: fmt.Sprintf("Volume inspect result has invalid length. Expected:1 Actual:%v", len(vols)),
-		}
-	}
-
-	vol := vols[0]
+	vol := out.(*api.Volume)
 
 	// Status
 	if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
-		return &ErrFailedToInspectVolme{
+		return &ErrFailedToInspectVolume{
 			ID: name,
 			Cause: fmt.Sprintf("Volume has invalid status. Expected:%v Actual:%v",
 				api.VolumeStatus_VOLUME_STATUS_UP, vol.Status),
@@ -186,7 +170,7 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 
 	// State
 	if vol.State == api.VolumeState_VOLUME_STATE_ERROR || vol.State == api.VolumeState_VOLUME_STATE_DELETED {
-		return &ErrFailedToInspectVolme{
+		return &ErrFailedToInspectVolume{
 			ID:    name,
 			Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
 		}
@@ -200,7 +184,7 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 	// Size
 	actualSizeStr := fmt.Sprintf("%d", vol.Spec.Size)
 	if params["size"] != actualSizeStr { // TODO this will fail for docker. Current focus on k8s.
-		return &ErrFailedToInspectVolme{
+		return &ErrFailedToInspectVolume{
 			ID:    name,
 			Cause: fmt.Sprintf("Volume has invalid size. Expected:%v Actual:%v", params["size"], actualSizeStr),
 		}
@@ -209,7 +193,7 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 	// Spec
 	requestedSpec, requestedLocator, _, err := spec.NewSpecHandler().SpecFromOpts(params)
 	if err != nil {
-		return &ErrFailedToInspectVolme{
+		return &ErrFailedToInspectVolume{
 			ID:    name,
 			Cause: fmt.Sprintf("failed to parse requested spec of volume. Err: %v", err),
 		}
@@ -285,7 +269,7 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 		}
 	}
 
-	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+	logrus.Debugf("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
 }
 
@@ -328,6 +312,59 @@ func (d *portworx) WaitStart(n node.Node) error {
 	}
 
 	return err
+}
+
+func (d *portworx) setDriver() error {
+	var err error
+	nodes := d.schedDriver.GetNodes()
+
+	var endpoint string
+	// Try portworx-service first
+	svc, err := k8sops.Instance().GetService(PXServiceName, PXNamespace)
+	if err == nil {
+		endpoint = svc.Spec.ClusterIP
+		if err = d.testAndSetEndpoint(endpoint); err == nil {
+			return nil
+		}
+	}
+
+	// Try direct address of cluster nodes
+	for _, n := range nodes {
+		if n.Type == node.TypeWorker {
+			for _, addr := range n.Addresses {
+				if err = d.testAndSetEndpoint(addr); err == nil {
+					return nil
+				}
+			}
+		}
+	}
+
+	return fmt.Errorf("failed to get endpoint for portworx volume driver")
+}
+
+func (d *portworx) testAndSetEndpoint(endpoint string) error {
+	pxEndpoint := fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+	cClient, err := clusterclient.NewClusterClient(pxEndpoint, "v1")
+	if err != nil {
+		return err
+	}
+
+	clusterManager := clusterclient.ClusterManager(cClient)
+	_, err = clusterManager.Enumerate()
+	if err != nil {
+		return err
+	}
+
+	dClient, err := volumeclient.NewDriverClient(pxEndpoint, DriverName, "", pxdClientSchedUserAgent)
+	if err != nil {
+		return err
+	}
+
+	d.volDriver = volumeclient.VolumeDriver(dClient)
+	d.clusterManager = clusterclient.ClusterManager(cClient)
+	logrus.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
+
+	return nil
 }
 
 func (d *portworx) StartDriver(n node.Node) error {

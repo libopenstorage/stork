@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/task"
@@ -69,15 +68,12 @@ func (s *ssh) Init(sched string) error {
 		s.keyPath = keyPath
 	}
 
-	logrus.Infof("[debug] Using ssh keypath: %v", s.keyPath)
-
 	username := os.Getenv("TORPEDO_SSH_USER")
 	if len(username) == 0 {
 		s.username = DefaultUsername
 	} else {
 		s.username = username
 	}
-	logrus.Infof("[debug] Using ssh user: %v", s.username)
 
 	if s.password != "" {
 		s.sshConfig = &ssh_pkg.ClientConfig{
@@ -302,7 +298,8 @@ func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string
 			return addr, nil
 		}
 	}
-	return "", fmt.Errorf("No usable address found")
+	return "", fmt.Errorf("no usable address found. Tried: %v. "+
+		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses)
 }
 
 func init() {

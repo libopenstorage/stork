@@ -50,8 +50,14 @@ spec:
   containers:
   - name: torpedo
     image: harshpx/torpedo:latest
-    #command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh" ]
-    command: ["./torpedo", "fire", "--scheduler", "k8s", "--storage", "pxd", "--node-driver", "ssh", "--tests", "testSetupTearDown" ]
+    command: [ "ginkgo",
+               "--slowSpecThreshold", "180",
+               "-v",
+               "bin/basic.test",
+               "--",
+               "--spec-dir", "../drivers/scheduler/k8s/specs"]
+               # "../drivers/scheduler/k8s/specs" is the default k8s specs checked-in with torpedo. If you have custom
+               # specs, mount them into the pod using a hostPath volume and specify the target mount path here
     tty: true
     env:
     - name: TORPEDO_SSH_USER
@@ -61,9 +67,14 @@ spec:
     volumeMounts:
     - mountPath: /home/torpedo/key4torpedo.pem
       name: ssh-key
+    - mountPath: /mnt/torpedo_support_bundle
+      name: support-bundle-path
   restartPolicy: Never
   serviceAccountName: torpedo-account
   volumes:
     - name: ssh-key
       hostPath:
         path: /home/torpedo/key4torpedo.pem
+    - name: support-bundle-path
+      hostPath:
+        path: /mnt/torpedo_support_bundle
