@@ -181,8 +181,8 @@ func (a *aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 }
 
 // TODO add AWS implementation for this
-func (a *aws) CheckIfPathExists(path string, n node.Node, options node.ConnectionOpts) (bool, error) {
-	return false, nil
+func (a *aws) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
+	return "", nil
 }
 
 func (a *aws) getAllInstances() ([]*ec2.Instance, error) {

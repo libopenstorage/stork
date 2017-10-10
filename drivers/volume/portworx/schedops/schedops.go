@@ -4,17 +4,20 @@ import (
 	"fmt"
 
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
 // Driver is the interface for portworx operations under various schedulers
 type Driver interface {
-	// DisableOnNode disabled portworx on given node
+	// DisableOnNode disable portworx on given node
 	DisableOnNode(n node.Node) error
 	// ValidateOnNode validates portworx on given node (from scheduler perspective)
 	ValidateOnNode(n node.Node) error
-	// EnableOnNode enabled portworx on given node
+	// EnableOnNode enable portworx on given node
 	EnableOnNode(n node.Node) error
+	// ValidateVolumeCleanup validates that volume dir does not exist and no data present inside it
+	ValidateVolumeCleanup(sched scheduler.Driver, d node.Driver) error
 }
 
 var (

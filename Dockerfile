@@ -12,4 +12,4 @@ WORKDIR /go/src/github.com/portworx/torpedo
 
 ENTRYPOINT ["ginkgo", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
-#CMD ["ginkgo", "-dryRun", "--slowSpecThreshold", "180", "bin/*.test", "--", "--spec-dir","pxd"]
+#CMD ["ginkgo", "-dryRun", "--slowSpecThreshold", "180", "bin/*.test", "--", "--spec-dir", "pxd"]

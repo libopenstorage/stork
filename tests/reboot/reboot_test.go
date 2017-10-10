@@ -98,6 +98,10 @@ var _ = Describe("Reboot all nodes test", func() {
 	rebootNodesTest("rebootallnodes", false)
 })
 
+var _ = AfterSuite(func() {
+	ValidateCleanup()
+})
+
 func init() {
 	ParseFlags()
 }

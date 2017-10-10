@@ -928,11 +928,7 @@ func loadClientFromServiceAccount() (*kubernetes.Clientset, error) {
 		return nil, err
 	}
 
-	k8sClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	return k8sClient, nil
+	return kubernetes.NewForConfig(config)
 }
 
 func loadClientFromKubeconfig(kubeconfig string) (*kubernetes.Clientset, error) {

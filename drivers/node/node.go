@@ -43,6 +43,14 @@ type ShutdownNodeOpts struct {
 	ConnectionOpts
 }
 
+// FindOpts provide additional options for find operation
+type FindOpts struct {
+	Name     string
+	MinDepth int
+	MaxDepth int
+	ConnectionOpts
+}
+
 // TestConnectionOpts provide additional options for test connection operation
 type TestConnectionOpts struct {
 	ConnectionOpts
@@ -66,8 +74,8 @@ type Driver interface {
 	// ShutdownNode shuts down the given node
 	ShutdownNode(node Node, options ShutdownNodeOpts) error
 
-	// CheckIfPathExists checks whether the given path is present in the node
-	CheckIfPathExists(path string, node Node, options ConnectionOpts) (bool, error)
+	// FindFiles finds and returns the files for the given path regex and the node
+	FindFiles(path string, node Node, options FindOpts) (string, error)
 
 	// TestConnection tests connection to given node. returns nil if driver can connect to given node
 	TestConnection(node Node, options ConnectionOpts) error
@@ -125,10 +133,10 @@ func (d *notSupportedDriver) ShutdownNode(node Node, options ShutdownNodeOpts) e
 	}
 }
 
-func (d *notSupportedDriver) CheckIfPathExists(path string, node Node, options ConnectionOpts) (bool, error) {
-	return false, &errors.ErrNotSupported{
+func (d *notSupportedDriver) FindFiles(path string, node Node, options FindOpts) (string, error) {
+	return "", &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "CheckIfPathExists()",
+		Operation: "FindFiles()",
 	}
 }
 

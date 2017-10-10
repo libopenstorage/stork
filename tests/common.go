@@ -56,10 +56,16 @@ func InitInstance() {
 	err = Inst().S.Init(Inst().SpecDir, Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String())
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init(Inst().S.String())
+	expect(err).NotTo(haveOccurred())
+}
+
+// ValidateCleanup checks that there are no resource leaks after the test run
+func ValidateCleanup() {
+	err := Inst().V.ValidateVolumeCleanup()
 	expect(err).NotTo(haveOccurred())
 }
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
@@ -458,17 +459,21 @@ func (k *k8s) waitForCleanup(ctx *scheduler.Context, podList []v1.Pod) error {
 
 func (k *k8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) error {
 	podVolDir := k.getVolumeDirPath(podUID)
-	options := node.ConnectionOpts{
-		Timeout:         1 * time.Minute,
-		TimeBeforeRetry: 10 * time.Second,
-	}
 	driver, _ := node.Get(k.nodeDriverName)
+	options := node.FindOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		},
+		MinDepth: 1,
+		MaxDepth: 1,
+	}
 
 	for _, n := range k.GetNodes() {
 		if n.Type == node.TypeWorker {
-			if exists, err := driver.CheckIfPathExists(podVolDir, n, options); err != nil {
+			if volDir, err := driver.FindFiles(podVolDir, n, options); err != nil {
 				return err
-			} else if exists {
+			} else if strings.TrimSpace(volDir) != "" {
 				return &ErrFailedToDeleteVolumeDirForPod{
 					App:   app,
 					Cause: fmt.Sprintf("Volume directory for pod %v still exists in node: %v", podUID, n.Name),

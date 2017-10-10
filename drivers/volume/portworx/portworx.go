@@ -38,22 +38,25 @@ type portworx struct {
 	volDriver      volume.VolumeDriver
 	schedDriver    scheduler.Driver
 	schedOps       schedops.Driver
+	nodeDriver     node.Driver
 }
 
 func (d *portworx) String() string {
 	return DriverName
 }
 
-func (d *portworx) Init(sched string) error {
+func (d *portworx) Init(sched string, nodeDriver string) error {
 	util.Infof("Using the Portworx volume driver under scheduler: %v", sched)
 	var err error
-	d.schedDriver, err = scheduler.Get(sched)
-	if err != nil {
+	if d.schedDriver, err = scheduler.Get(sched); err != nil {
 		return err
 	}
 
-	d.schedOps, err = schedops.Get(sched)
-	if err != nil {
+	if d.nodeDriver, err = node.Get(nodeDriver); err != nil {
+		return err
+	}
+
+	if d.schedOps, err = schedops.Get(sched); err != nil {
 		return fmt.Errorf("failed to get scheduler operator for portworx. Err: %v", err)
 	}
 
@@ -271,6 +274,10 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 
 	util.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
+}
+
+func (d *portworx) ValidateVolumeCleanup() error {
+	return d.schedOps.ValidateVolumeCleanup(d.schedDriver, d.nodeDriver)
 }
 
 func (d *portworx) StopDriver(n node.Node) error {

@@ -13,7 +13,7 @@ import (
 // of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string) error
+	Init(sched string, nodeDriver string) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -25,6 +25,9 @@ type Driver interface {
 
 	// InspectVolume inspects a storage volume. params are the custom volume options passed when creating the volume.
 	InspectVolume(name string, params map[string]string) error
+
+	// ValidateVolumeCleanup checks if the necessary cleanup has happened for the volumes by this driver
+	ValidateVolumeCleanup() error
 
 	// Stop must cause the volume driver to exit or get killed on a given node.
 	StopDriver(n node.Node) error

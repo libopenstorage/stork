@@ -34,14 +34,14 @@ func (e *ErrFailedToShutdownNode) Error() string {
 	return fmt.Sprintf("Failed to shutdown node: %v. Cause: %v", e.Node.Name, e.Cause)
 }
 
-// ErrFailedToCheckPathOnNode error type when failing to check if a path exists on node
-type ErrFailedToCheckPathOnNode struct {
+// ErrFailedToFindFileOnNode error type when failing to run find on the node
+type ErrFailedToFindFileOnNode struct {
 	Node  Node
 	Cause string
 }
 
-func (e *ErrFailedToCheckPathOnNode) Error() string {
-	return fmt.Sprintf("Failed to check path exists on: %v. Cause: %v", e.Node.Name, e.Cause)
+func (e *ErrFailedToFindFileOnNode) Error() string {
+	return fmt.Sprintf("Failed to find file on: %v. Cause: %v", e.Node.Name, e.Cause)
 }
 
 // ErrFailedToRunCommand error type when failing to run command

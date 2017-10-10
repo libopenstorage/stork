@@ -1,11 +1,10 @@
 package ssh
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
@@ -191,22 +190,41 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
-func (s *ssh) CheckIfPathExists(path string, n node.Node, options node.ConnectionOpts) (bool, error) {
-	addr, err := s.getAddrToConnect(n, options)
+func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
+	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
 	if err != nil {
-		return false, &node.ErrFailedToCheckPathOnNode{
+		return "", &node.ErrFailedToFindFileOnNode{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
 		}
 	}
 
-	readDirCmd := "sudo ls " + path
-
-	// An error is returned if path is not present on the remote node
-	if _, err := s.doCmd(addr, readDirCmd, false); err != nil {
-		return false, nil
+	findCmd := "sudo find " + path
+	if options.Name != "" {
+		findCmd += " -name " + options.Name
 	}
-	return true, nil
+	if options.MinDepth > 0 {
+		findCmd += " -mindepth " + strconv.Itoa(options.MinDepth)
+	}
+	if options.MaxDepth > 0 {
+		findCmd += " -maxdepth " + strconv.Itoa(options.MaxDepth)
+	}
+
+	t := func() (interface{}, error) {
+		return s.doCmd(addr, findCmd, true)
+	}
+
+	out, err := task.DoRetryWithTimeout(t,
+		options.ConnectionOpts.Timeout,
+		options.ConnectionOpts.TimeBeforeRetry)
+
+	if err != nil {
+		return "", &node.ErrFailedToFindFileOnNode{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+	return out.(string), nil
 }
 
 func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
@@ -228,48 +246,8 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	}
 	defer session.Close()
 
-	modes := ssh_pkg.TerminalModes{
-		ssh_pkg.ECHO:          0,     // disable echoing
-		ssh_pkg.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
-		ssh_pkg.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
-	}
-
-	if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  addr,
-			Cause: fmt.Sprintf("request for pseudo terminal failed: %s", err),
-		}
-	}
-
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  addr,
-			Cause: fmt.Sprintf("Unable to setup stdout for session: %v", err),
-		}
-	}
-
-	chOut := make(chan string)
-	go func() {
-		var bufout bytes.Buffer
-		io.Copy(&bufout, stdout)
-		chOut <- bufout.String()
-	}()
-	stderr, err := session.StderrPipe()
-	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  addr,
-			Cause: fmt.Sprintf("Unable to setup stderr for session: %v", err),
-		}
-	}
-	chErr := make(chan string)
-	go func() {
-		var buferr bytes.Buffer
-		io.Copy(&buferr, stderr)
-		chErr <- buferr.String()
-	}()
-	byteout, err := session.CombinedOutput(cmd)
-	out = fmt.Sprintf("%v", byteout)
+	byteout, err := session.Output(cmd)
+	out = string(byteout)
 	if ignoreErr == false && err != nil {
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  addr,
