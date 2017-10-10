@@ -640,6 +640,7 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
 				return "", nil
 			}
+
 			return "", err
 		}
 

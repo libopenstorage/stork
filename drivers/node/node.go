@@ -128,7 +128,7 @@ func (d *notSupportedDriver) ShutdownNode(node Node, options ShutdownNodeOpts) e
 func (d *notSupportedDriver) CheckIfPathExists(path string, node Node, options ConnectionOpts) (bool, error) {
 	return false, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "ReadDir()",
+		Operation: "CheckIfPathExists()",
 	}
 }
 

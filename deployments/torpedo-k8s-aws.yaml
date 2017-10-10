@@ -51,8 +51,9 @@ spec:
   - name: torpedo
     image: portworx/torpedo:latest
     command: [ "ginkgo",
-               "--slowSpecThreshold", "180",
+               "--slowSpecThreshold", "360",
                "-v",
+               "-failFast",
                "bin/basic.test",
                "--",
                "--spec-dir", "../drivers/scheduler/k8s/specs",

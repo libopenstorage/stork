@@ -34,8 +34,8 @@ update-test-deps:
 	GO15VENDOREXPERIMENT=0 go get -tags "$(TAGS)" -d -v -t -u -f $(PKGS)
 
 fmt:
-	@echo -e "Checking gofmt on following: $(PKGS)"
-	@./scripts/check-gofmt.sh $(PKGS)
+	@echo -e "Performing gofmt on following: $(PKGS)"
+	@./scripts/do-gofmt.sh $(PKGS)
 
 build:
 	mkdir -p $(BIN)

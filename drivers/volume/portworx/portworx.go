@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	dockerclient "github.com/fsouza/go-dockerclient"
 	"github.com/libopenstorage/openstorage/api"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
@@ -19,6 +18,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/k8sops"
 	"github.com/portworx/torpedo/pkg/task"
+	"github.com/portworx/torpedo/util"
 )
 
 const (
@@ -45,7 +45,7 @@ func (d *portworx) String() string {
 }
 
 func (d *portworx) Init(sched string) error {
-	logrus.Infof("Using the Portworx volume driver under scheduler: %v", sched)
+	util.Infof("Using the Portworx volume driver under scheduler: %v", sched)
 	var err error
 	d.schedDriver, err = scheduler.Get(sched)
 	if err != nil {
@@ -66,9 +66,9 @@ func (d *portworx) Init(sched string) error {
 		return err
 	}
 
-	logrus.Infof("The following Portworx nodes are in the cluster:")
+	util.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range cluster.Nodes {
-		logrus.Infof(
+		util.Infof(
 			"Node UID: %v Node IP: %v Node Status: %v",
 			n.Id,
 			n.DataIp,
@@ -98,7 +98,7 @@ func (d *portworx) CleanupVolume(name string) error {
 						path,
 						err,
 					)
-					logrus.Printf("%v", err)
+					util.Infof("%v", err)
 					return err
 				}
 			}
@@ -109,7 +109,7 @@ func (d *portworx) CleanupVolume(name string) error {
 					v.Id,
 					err,
 				)
-				logrus.Printf("%v", err)
+				util.Infof("%v", err)
 				return err
 			}
 
@@ -119,11 +119,11 @@ func (d *portworx) CleanupVolume(name string) error {
 					v.Id,
 					err,
 				)
-				logrus.Printf("%v", err)
+				util.Infof("%v", err)
 				return err
 			}
 
-			logrus.Debugf("successfully removed Portworx volume %v", name)
+			util.Infof("successfully removed Portworx volume %v", name)
 
 			return nil
 		}
@@ -177,7 +177,7 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 	}
 
 	if vol.IsSnapshot() {
-		logrus.Printf("Warning: Param/Option testing of snapshots is currently not supported. Skipping")
+		util.Infof("Warning: Param/Option testing of snapshots is currently not supported. Skipping")
 		return nil
 	}
 
@@ -265,11 +265,11 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 		case api.SpecSize:
 			// pass, we don't validate size here
 		default:
-			logrus.Printf("Warning: Encountered unhandled custom param: %v -> %v", k, v)
+			util.Infof("Warning: Encountered unhandled custom param: %v -> %v", k, v)
 		}
 	}
 
-	logrus.Debugf("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+	util.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
 }
 
@@ -362,7 +362,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 
 	d.volDriver = volumeclient.VolumeDriver(dClient)
 	d.clusterManager = clusterclient.ClusterManager(cClient)
-	logrus.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
+	util.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
 
 	return nil
 }

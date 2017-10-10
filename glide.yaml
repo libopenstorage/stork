@@ -1,7 +1,5 @@
 package: github.com/portworx/torpedo
 import:
-- package: github.com/Sirupsen/logrus
-  version: ^1.0.3
 - package: github.com/fatih/color
   version: ^1.5.0
 - package: github.com/libopenstorage/openstorage

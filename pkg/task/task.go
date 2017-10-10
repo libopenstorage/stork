@@ -3,6 +3,8 @@ package task
 import (
 	"errors"
 	"time"
+
+	"github.com/portworx/torpedo/util"
 )
 
 //TODO: export the type: type Task func() (string, error)
@@ -18,6 +20,7 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 	var err error
 
 	go func() {
+		count := 0
 		for {
 			select {
 			case q := <-quit:
@@ -32,8 +35,11 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 					return
 				}
 
+				util.Infof("%v. Retry count: %v Next retry in: %v", err, count, timeBeforeRetry)
 				time.Sleep(timeBeforeRetry)
 			}
+
+			count++
 		}
 	}()
 

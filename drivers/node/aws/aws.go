@@ -180,6 +180,11 @@ func (a *aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
+// TODO add AWS implementation for this
+func (a *aws) CheckIfPathExists(path string, n node.Node, options node.ConnectionOpts) (bool, error) {
+	return false, nil
+}
+
 func (a *aws) getAllInstances() ([]*ec2.Instance, error) {
 	instances := []*ec2.Instance{}
 	params := &ec2.DescribeInstancesInput{}
