@@ -117,7 +117,7 @@ func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 		CommandId: sendCommandOutput.Command.CommandId,
 	}
 	t := func() (interface{}, error) {
-		return "", a.connect(listCmdsInput)
+		return "", a.connect(n, listCmdsInput)
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {
@@ -129,7 +129,7 @@ func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	return err
 }
 
-func (a *aws) connect(listCmdsInput *ssm.ListCommandInvocationsInput) error {
+func (a *aws) connect(n node.Node, listCmdsInput *ssm.ListCommandInvocationsInput) error {
 	var status string
 	listCmdInvsOutput, _ := a.svcSsm.ListCommandInvocations(listCmdsInput)
 	for _, cmd := range listCmdInvsOutput.CommandInvocations {
@@ -139,6 +139,7 @@ func (a *aws) connect(listCmdsInput *ssm.ListCommandInvocationsInput) error {
 		}
 	}
 	return &node.ErrFailedToTestConnection{
+		Node:  n,
 		Cause: fmt.Sprintf("Failed to connect. Command status is %s", status),
 	}
 }
