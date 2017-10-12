@@ -5,6 +5,7 @@ import (
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -73,8 +74,8 @@ type Driver interface {
 	// InspectVolumes inspects a storage volume.
 	InspectVolumes(*Context) error
 
-	// DeleteVolumes will delete a storage volume.
-	DeleteVolumes(*Context) error
+	// DeleteVolumes will delete all storage volumes for the given context
+	DeleteVolumes(*Context) ([]*volume.Volume, error)
 
 	// Describe generates a bundle that can be used by support - logs, cores, states, etc
 	Describe(*Context) (string, error)

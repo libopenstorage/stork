@@ -54,6 +54,8 @@ type K8sNodeOps interface {
 	IsNodeReady(string) error
 	// IsNodeMaster returns true if given node is a kubernetes master node
 	IsNodeMaster(v1.Node) bool
+	// GetLabelsOnNode gets all the labels on the given node
+	GetLabelsOnNode(string) (map[string]string, error)
 	// AddLabelOnNode adds a label key=value on the given node
 	AddLabelOnNode(string, string, string) error
 	// RemoveLabelOnNode removes the label with key on given node
@@ -253,6 +255,19 @@ func (k *k8sOps) IsNodeReady(name string) error {
 func (k *k8sOps) IsNodeMaster(node v1.Node) bool {
 	_, ok := node.Labels[k8sMasterLabelKey]
 	return ok
+}
+
+func (k *k8sOps) GetLabelsOnNode(name string) (map[string]string, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	node, err := k.client.CoreV1().Nodes().Get(name, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return node.Labels, nil
 }
 
 func (k *k8sOps) AddLabelOnNode(name, key, value string) error {

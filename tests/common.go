@@ -102,7 +102,7 @@ func ValidateVolumes(ctx *scheduler.Context) {
 
 		for vol, params := range vols {
 			Step(fmt.Sprintf("get %s app's volume inspected by the volume driver", ctx.App.Key), func() {
-				err = Inst().V.InspectVolume(vol, params)
+				err = Inst().V.ValidateCreateVolume(vol, params)
 				expect(err).NotTo(haveOccurred())
 			})
 		}
@@ -112,20 +112,26 @@ func ValidateVolumes(ctx *scheduler.Context) {
 // TearDownContext is the ginkgo spec for tearing down a scheduled context
 func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
+		var err error
+
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
-			err := Inst().S.Destroy(ctx, opts)
+			err = Inst().S.Destroy(ctx, opts)
 			expect(err).NotTo(haveOccurred())
 		})
 
-		Step(fmt.Sprintf("wait for %s app to terminate", ctx.App.Key), func() {
-			err := Inst().S.WaitForDestroy(ctx)
-			expect(err).NotTo(haveOccurred())
-		})
-
+		var vols []*volume.Volume
 		Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
-			err := Inst().S.DeleteVolumes(ctx)
+			vols, err = Inst().S.DeleteVolumes(ctx)
 			expect(err).NotTo(haveOccurred())
 		})
+
+		for _, vol := range vols {
+			Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
+				ctx.App.Key, vol.Name), func() {
+				err = Inst().V.ValidateDeleteVolume(vol)
+				expect(err).NotTo(haveOccurred())
+			})
+		}
 	})
 }
 

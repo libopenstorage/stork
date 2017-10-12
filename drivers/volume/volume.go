@@ -7,6 +7,12 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
+// Volume is a generic struct encapsulating volumes in the cluster
+type Volume struct {
+	ID   string
+	Name string
+}
+
 // Driver defines an external volume driver interface that must be implemented
 // by any external storage provider that wants to qualify their product with
 // Torpedo.  The functions defined here are meant to be destructive and illustrative
@@ -23,8 +29,12 @@ type Driver interface {
 	// used during orchestration simulations.
 	CleanupVolume(name string) error
 
-	// InspectVolume inspects a storage volume. params are the custom volume options passed when creating the volume.
-	InspectVolume(name string, params map[string]string) error
+	// ValidateCreateVolume validates whether a volume has been created properly.
+	// params are the custom volume options passed when creating the volume.
+	ValidateCreateVolume(name string, params map[string]string) error
+
+	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
+	ValidateDeleteVolume(vol *Volume) error
 
 	// ValidateVolumeCleanup checks if the necessary cleanup has happened for the volumes by this driver
 	ValidateVolumeCleanup() error

@@ -135,7 +135,7 @@ func (d *portworx) CleanupVolume(name string) error {
 	return nil
 }
 
-func (d *portworx) InspectVolume(name string, params map[string]string) error {
+func (d *portworx) ValidateCreateVolume(name string, params map[string]string) error {
 	t := func() (interface{}, error) {
 		vols, err := d.volDriver.Inspect([]string{name})
 		if err != nil {
@@ -190,6 +190,14 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 		return &ErrFailedToInspectVolume{
 			ID:    name,
 			Cause: fmt.Sprintf("Volume has invalid size. Expected:%v Actual:%v", params["size"], actualSizeStr),
+		}
+	}
+
+	// Labels
+	if err := d.schedOps.ValidateAddLabels(vol); err != nil {
+		return &ErrFailedToInspectVolume{
+			ID:    name,
+			Cause: err.Error(),
 		}
 	}
 
@@ -274,6 +282,32 @@ func (d *portworx) InspectVolume(name string, params map[string]string) error {
 
 	util.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
 	return nil
+}
+
+func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, error) {
+		vols, err := d.volDriver.Inspect([]string{name})
+		if err != nil && err == volume.ErrEnoEnt {
+			return nil, nil
+		} else if err != nil {
+			return nil, err
+		}
+		if len(vols) > 0 {
+			return nil, fmt.Errorf("Volume %v is not yet removed from the system", name)
+		}
+		return nil, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	if err != nil {
+		return &ErrFailedToDeleteVolume{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+
+	return d.schedOps.ValidateRemoveLabels(vol, d.schedDriver)
 }
 
 func (d *portworx) ValidateVolumeCleanup() error {

@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume"
 	k8s_ops "github.com/portworx/torpedo/pkg/k8sops"
 	"github.com/portworx/torpedo/pkg/task"
 	"github.com/portworx/torpedo/util"
@@ -628,21 +629,27 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 	return nil
 }
 
-func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
+func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
+	var vols []*volume.Volume
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
 			if err := k8sOps.DeleteStorageClass(obj.Name); err != nil {
-				return &ErrFailedToDestroyStorage{
+				return nil, &ErrFailedToDestroyStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
 				}
 			}
 			util.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			volToBeDeleted := &volume.Volume{
+				ID:   string(obj.UID),
+				Name: obj.Name,
+			}
+			vols = append(vols, volToBeDeleted)
 			if err := k8sOps.DeletePersistentVolumeClaim(obj); err != nil {
 				if matched, _ := regexp.MatchString(".+ not found", err.Error()); !matched {
-					return &ErrFailedToDestroyStorage{
+					return nil, &ErrFailedToDestroyStorage{
 						App:   ctx.App,
 						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
 					}
@@ -652,7 +659,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) error {
 		}
 	}
 
-	return nil
+	return vols, nil
 }
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {

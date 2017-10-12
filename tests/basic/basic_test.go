@@ -125,8 +125,10 @@ var _ = PDescribe("Volume driver and app down", func() {
 		})
 
 		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForDestroy] = true
 			for _, ctx := range contexts {
-				TearDownContext(ctx, nil)
+				TearDownContext(ctx, opts)
 			}
 		})
 
