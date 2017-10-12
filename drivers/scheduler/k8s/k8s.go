@@ -239,9 +239,6 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				SpecList: specObjects,
 				Enabled:  app.Enabled,
 			},
-			// Status: TODO
-			// Stdout: TODO
-			// Stderr: TODO
 		}
 
 		contexts = append(contexts, ctx)

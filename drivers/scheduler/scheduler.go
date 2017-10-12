@@ -16,13 +16,10 @@ const (
 	OptionsWaitForResourceLeakCleanup = "WAIT_FOR_RESOURCE_LEAK_CLEANUP"
 )
 
-// Context holds the execution context and output values of a test task.
+// Context holds the execution context of a test task.
 type Context struct {
-	UID    string
-	App    *spec.AppSpec
-	Status int
-	Stdout string
-	Stderr string
+	UID string
+	App *spec.AppSpec
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

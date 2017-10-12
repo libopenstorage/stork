@@ -341,7 +341,7 @@ func (k *k8sOps) GetService(svcName string, svcNS string) (*v1.Service, error) {
 	}
 
 	if svcName == "" {
-		return nil, fmt.Errorf("Cannot return service obj without service name")
+		return nil, fmt.Errorf("cannot return service obj without service name")
 	}
 	svc, err := k.client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
 	if err != nil {
@@ -429,17 +429,46 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 			return "", err
 		}
 
-		if *dep.Spec.Replicas != dep.Status.AvailableReplicas {
-			return "", &ErrAppNotReady{
-				ID:    dep.Name,
-				Cause: fmt.Sprintf("Expected replicas: %v Available replicas: %v", *dep.Spec.Replicas, dep.Status.AvailableReplicas),
+		requiredReplicas := *dep.Spec.Replicas
+
+		if requiredReplicas != 1 {
+			shared := false
+			foundPVC := false
+			for _, vol := range dep.Spec.Template.Spec.Volumes {
+				if vol.PersistentVolumeClaim != nil {
+					foundPVC = true
+
+					claim, err := k.client.PersistentVolumeClaims(dep.Namespace).Get(vol.PersistentVolumeClaim.ClaimName,
+						meta_v1.GetOptions{})
+					if err != nil {
+						return "", err
+					}
+
+					if k.isPVCShared(claim) {
+						shared = true
+						break
+					}
+				}
+			}
+
+			if foundPVC && !shared {
+				requiredReplicas = 1
 			}
 		}
 
-		if *dep.Spec.Replicas != dep.Status.ReadyReplicas {
+		if requiredReplicas > dep.Status.AvailableReplicas {
 			return "", &ErrAppNotReady{
-				ID:    dep.Name,
-				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v", *dep.Spec.Replicas, dep.Status.ReadyReplicas),
+				ID: dep.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Available replicas: %v",
+					requiredReplicas, dep.Status.AvailableReplicas),
+			}
+		}
+
+		if requiredReplicas > dep.Status.ReadyReplicas {
+			return "", &ErrAppNotReady{
+				ID: dep.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v",
+					requiredReplicas, dep.Status.ReadyReplicas),
 			}
 		}
 
@@ -458,16 +487,25 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 			}
 		}
 
+		// look for "requiredReplicas" number of pods in running state
+		var notRunningPods []string
+		var runningCount int32
 		for _, pod := range pods {
 			if !k.IsPodRunning(pod) {
-				return "", &ErrAppNotReady{
-					ID:    dep.Name,
-					Cause: fmt.Sprintf("pod: %v is not yet ready", pod.Name),
-				}
+				notRunningPods = append(notRunningPods, pod.Name)
+			} else {
+				runningCount++
 			}
 		}
 
-		return "", nil
+		if runningCount >= requiredReplicas {
+			return "", nil
+		}
+
+		return "", &ErrAppNotReady{
+			ID:    dep.Name,
+			Cause: fmt.Sprintf("pod(s): %#v not yet ready", notRunningPods),
+		}
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
@@ -890,6 +928,18 @@ func (k *k8sOps) GetPersistentVolumeClaimParams(pvc *v1.PersistentVolumeClaim) (
 	}
 
 	return params, nil
+}
+
+// isPVCShared returns true if the PersistentVolumeClaim has been configured for use by multiple clients
+func (k *k8sOps) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
+	for _, mode := range pvc.Spec.AccessModes {
+		if mode == v1.PersistentVolumeAccessMode(v1.ReadOnlyMany) ||
+			mode == v1.PersistentVolumeAccessMode(v1.ReadWriteMany) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // PVCs APIs - END
