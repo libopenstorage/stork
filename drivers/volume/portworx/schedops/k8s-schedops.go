@@ -41,33 +41,36 @@ func (k *k8sSchedOps) EnableOnNode(n node.Node) error {
 	return k8sops.Instance().RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
 }
 
-func (k *k8sSchedOps) ValidateAddLabels(vol *api.Volume) error {
+func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
 	pvc, ok := vol.Locator.VolumeLabels["pvc"]
 	if !ok {
 		return nil
 	}
 
-	nodes := make(map[string]bool)
-	for _, rs := range vol.ReplicaSets {
-		for _, n := range rs.Nodes {
-			if !nodes[n] {
-				nodes[n] = true
-			}
-		}
-	}
-
 	var missingLabelNodes []string
-	for n := range nodes {
+	for _, rs := range replicaNodes {
 		t := func() (interface{}, error) {
-			return k8sops.Instance().GetLabelsOnNode(n)
+			n, err := k8sops.Instance().GetNodeByName(rs.Id)
+			if err == nil && n != nil {
+				return n.Labels, nil
+			}
+
+			addrs := []string{rs.DataIp, rs.MgmtIp}
+			n, err = k8sops.Instance().SearchNodeByAddresses(addrs)
+			if err == nil && n != nil {
+				return n.Labels, nil
+			}
+
+			return nil, fmt.Errorf("failed to locate node using id: %s and addresses: %v", rs.Id, addrs)
 		}
+
 		ret, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
 		if err != nil {
 			return err
 		}
 		nodeLabels := ret.(map[string]string)
 		if _, ok := nodeLabels[pvc]; !ok {
-			missingLabelNodes = append(missingLabelNodes, n)
+			missingLabelNodes = append(missingLabelNodes, rs.Id)
 		}
 	}
 

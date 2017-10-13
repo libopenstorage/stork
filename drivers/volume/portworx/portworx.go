@@ -194,7 +194,22 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 	}
 
 	// Labels
-	if err := d.schedOps.ValidateAddLabels(vol); err != nil {
+	var pxNodes []api.Node
+	for _, rs := range vol.ReplicaSets {
+		for _, n := range rs.Nodes {
+			pxNode, err := d.clusterManager.Inspect(n)
+			if err != nil {
+				return &ErrFailedToInspectVolume{
+					ID:    name,
+					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
+				}
+			}
+
+			pxNodes = append(pxNodes, pxNode)
+		}
+	}
+
+	if err := d.schedOps.ValidateAddLabels(pxNodes, vol); err != nil {
 		return &ErrFailedToInspectVolume{
 			ID:    name,
 			Cause: err.Error(),

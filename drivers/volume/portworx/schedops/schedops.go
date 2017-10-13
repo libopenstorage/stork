@@ -18,8 +18,8 @@ type Driver interface {
 	ValidateOnNode(n node.Node) error
 	// EnableOnNode enable portworx on given node
 	EnableOnNode(n node.Node) error
-	// ValidateAddLabels validates whether the labels for the volume are applied appropriately
-	ValidateAddLabels(v *api.Volume) error
+	// ValidateAddLabels validates whether the labels for the volume are applied appropriately on the vol replica nodes
+	ValidateAddLabels(replicaNodes []api.Node, v *api.Volume) error
 	// ValidateRemoveLabels validates whether the volume labels have been removed
 	ValidateRemoveLabels(v *volume.Volume, sched scheduler.Driver) error
 	// ValidateVolumeCleanup validates that volume dir does not exist and no data present inside it

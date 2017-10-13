@@ -50,6 +50,8 @@ type K8sNodeOps interface {
 	GetNodes() (*v1.NodeList, error)
 	// GetNodeByName returns the k8s node given it's name
 	GetNodeByName(string) (*v1.Node, error)
+	// SearchNodeByAddresses searches corresponding k8s node match any of the given address
+	SearchNodeByAddresses(addresses []string) (*v1.Node, error)
 	// IsNodeReady checks if node with given name is ready. Returns nil is ready.
 	IsNodeReady(string) error
 	// IsNodeMaster returns true if given node is a kubernetes master node
@@ -258,17 +260,41 @@ func (k *k8sOps) IsNodeMaster(node v1.Node) bool {
 }
 
 func (k *k8sOps) GetLabelsOnNode(name string) (map[string]string, error) {
-	if err := k.initK8sClient(); err != nil {
-		return nil, err
-	}
-
-	node, err := k.client.CoreV1().Nodes().Get(name, meta_v1.GetOptions{})
+	node, err := k.GetNodeByName(name)
 	if err != nil {
 		return nil, err
 	}
 
 	return node.Labels, nil
 }
+
+func (k *k8sOps) SearchNodeByAddresses(addresses []string) (*v1.Node, error) {
+	nodes, err := k.GetNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, node := range nodes.Items {
+		for _, addr := range addresses {
+			if matchAddress(addr, node.Status.Addresses) {
+				return &node, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("failed to find k8s node for given addresses: %v", addresses)
+}
+
+// matchAddress returns true if given address is present in nodeAddresses
+func matchAddress(address string, nodeAddresses []v1.NodeAddress) bool {
+	for _, n := range nodeAddresses {
+		if n.Address == address {
+			return true
+		}
+	}
+	return false
+}
+
 
 func (k *k8sOps) AddLabelOnNode(name, key, value string) error {
 	var err error
