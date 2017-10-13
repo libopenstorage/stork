@@ -51,7 +51,7 @@ spec:
     image: portworx/torpedo:latest
     command: [ "ginkgo",
                "--slowSpecThreshold", "360",
-               "-failFast",
+               "--failFast",
                "-v",
                "bin/basic.test",
                "--",

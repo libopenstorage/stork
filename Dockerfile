@@ -10,6 +10,5 @@ RUN go get github.com/onsi/gomega
 ADD . /go/src/github.com/portworx/torpedo
 WORKDIR /go/src/github.com/portworx/torpedo
 
-ENTRYPOINT ["ginkgo", "--slowSpecThreshold", "180", "-v", "-trace"]
+ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
-#CMD ["ginkgo", "-dryRun", "--slowSpecThreshold", "180", "bin/*.test", "--", "--spec-dir", "pxd"]
