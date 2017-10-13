@@ -33,12 +33,13 @@ const (
 )
 
 type portworx struct {
-	hostConfig     *dockerclient.HostConfig
-	clusterManager cluster.Cluster
-	volDriver      volume.VolumeDriver
-	schedDriver    scheduler.Driver
-	schedOps       schedops.Driver
-	nodeDriver     node.Driver
+	hostConfig      *dockerclient.HostConfig
+	clusterManager  cluster.Cluster
+	volDriver       volume.VolumeDriver
+	schedDriver     scheduler.Driver
+	schedOps        schedops.Driver
+	nodeDriver      node.Driver
+	refreshEndpoint bool
 }
 
 func (d *portworx) String() string {
@@ -64,7 +65,7 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		return err
 	}
 
-	cluster, err := d.clusterManager.Enumerate()
+	cluster, err := d.getClusterManager().Enumerate()
 	if err != nil {
 		return err
 	}
@@ -85,7 +86,7 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 func (d *portworx) CleanupVolume(name string) error {
 	locator := &api.VolumeLocator{}
 
-	volumes, err := d.volDriver.Enumerate(locator, nil)
+	volumes, err := d.getVolDriver().Enumerate(locator, nil)
 	if err != nil {
 		return err
 	}
@@ -94,7 +95,7 @@ func (d *portworx) CleanupVolume(name string) error {
 		if v.Locator.Name == name {
 			// First unmount this volume at all mount paths...
 			for _, path := range v.AttachPath {
-				if err = d.volDriver.Unmount(v.Id, path); err != nil {
+				if err = d.getVolDriver().Unmount(v.Id, path); err != nil {
 					err = fmt.Errorf(
 						"error while unmounting %v at %v because of: %v",
 						v.Id,
@@ -106,7 +107,7 @@ func (d *portworx) CleanupVolume(name string) error {
 				}
 			}
 
-			if err = d.volDriver.Detach(v.Id, false); err != nil {
+			if err = d.getVolDriver().Detach(v.Id, false); err != nil {
 				err = fmt.Errorf(
 					"error while detaching %v because of: %v",
 					v.Id,
@@ -116,7 +117,7 @@ func (d *portworx) CleanupVolume(name string) error {
 				return err
 			}
 
-			if err = d.volDriver.Delete(v.Id); err != nil {
+			if err = d.getVolDriver().Delete(v.Id); err != nil {
 				err = fmt.Errorf(
 					"error while deleting %v because of: %v",
 					v.Id,
@@ -137,7 +138,7 @@ func (d *portworx) CleanupVolume(name string) error {
 
 func (d *portworx) ValidateCreateVolume(name string, params map[string]string) error {
 	t := func() (interface{}, error) {
-		vols, err := d.volDriver.Inspect([]string{name})
+		vols, err := d.getVolDriver().Inspect([]string{name})
 		if err != nil {
 			return nil, err
 		}
@@ -337,14 +338,14 @@ func (d *portworx) WaitStart(n node.Node) error {
 	var err error
 	// Wait for Portworx to become usable.
 	t := func() (interface{}, error) {
-		if status, _ := d.clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
+		if status, _ := d.getClusterManager().NodeStatus(); status != api.Status_STATUS_OK {
 			return "", &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", status),
 			}
 		}
 
-		pxNode, err := d.clusterManager.Inspect(n.Name)
+		pxNode, err := d.getClusterManager().Inspect(n.Name)
 		if err != nil {
 			return "", &ErrFailedToWaitForPx{
 				Node:  n,
@@ -380,17 +381,24 @@ func (d *portworx) setDriver() error {
 	if err == nil {
 		endpoint = svc.Spec.ClusterIP
 		if err = d.testAndSetEndpoint(endpoint); err == nil {
+			d.refreshEndpoint = false
 			return nil
 		}
+		util.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
 	}
 
 	// Try direct address of cluster nodes
+	// Set refresh endpoint to true so that we try and get the new
+	// and working driver if the endpoint we are hooked onto goes
+	// down
+	d.refreshEndpoint = true
 	for _, n := range nodes {
 		if n.Type == node.TypeWorker {
 			for _, addr := range n.Addresses {
 				if err = d.testAndSetEndpoint(addr); err == nil {
 					return nil
 				}
+				util.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
 			}
 		}
 	}
@@ -417,7 +425,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 	}
 
 	d.volDriver = volumeclient.VolumeDriver(dClient)
-	d.clusterManager = clusterclient.ClusterManager(cClient)
+	d.clusterManager = clusterManager
 	util.Infof("Using %v as endpoint for portworx volume driver", pxEndpoint)
 
 	return nil
@@ -425,6 +433,20 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 
 func (d *portworx) StartDriver(n node.Node) error {
 	return d.schedOps.EnableOnNode(n)
+}
+
+func (d *portworx) getVolDriver() volume.VolumeDriver {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.volDriver
+}
+
+func (d *portworx) getClusterManager() cluster.Cluster {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.clusterManager
 }
 
 func init() {
