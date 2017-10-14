@@ -81,7 +81,7 @@ container:
 	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."
 	sudo docker build --tag $(STORK_IMG) -f Dockerfile .
 
-deploy: all
+deploy:
 	docker push $(STORK_IMG)
 
 clean:
