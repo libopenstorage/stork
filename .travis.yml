@@ -4,7 +4,10 @@ language: go
 go:
   - 1.8.3
 script:
-  make stork
+  - export DOCKER_HUB_REPO=openstorage
+  - export DOCKER_HUB_STORK_IMAGE=stork
+  - export DOCKER_HUB_TAG=latest
+  - make
 notifications:
   email:
     on_success: always
