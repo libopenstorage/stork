@@ -30,7 +30,9 @@ func main() {
 		},
 	}
 
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatalf("Error starting stork: %v", err)
+	}
 }
 func run(c *cli.Context) {
 	driverName := c.String("driver")

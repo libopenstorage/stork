@@ -29,7 +29,11 @@ type Extender struct {
 // Init Initializes the extender
 func (e *Extender) Init() error {
 	// TODO: Make the listen port configurable
-	go http.ListenAndServe(":8099", http.HandlerFunc(e.serveHTTP))
+	go func() {
+		if err := http.ListenAndServe(":8099", http.HandlerFunc(e.serveHTTP)); err != nil {
+			log.Panicf("Error starting extender server: %v", err)
+		}
+	}()
 	return nil
 }
 
@@ -45,7 +49,11 @@ func (e *Extender) serveHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
-	defer req.Body.Close()
+	defer func() {
+		if err := req.Body.Close(); err != nil {
+			log.Warnf("Error closing decoder")
+		}
+	}()
 	encoder := json.NewEncoder(w)
 
 	var args schedulerapi.ExtenderArgs
@@ -114,7 +122,11 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 }
 func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
-	defer req.Body.Close()
+	defer func() {
+		if err := req.Body.Close(); err != nil {
+			log.Warnf("Error closing decoder")
+		}
+	}()
 	encoder := json.NewEncoder(w)
 
 	var args schedulerapi.ExtenderArgs

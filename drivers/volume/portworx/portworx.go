@@ -187,5 +187,7 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 }
 
 func init() {
-	storkvolume.Register(driverName, &portworx{})
+	if err := storkvolume.Register(driverName, &portworx{}); err != nil {
+		logrus.Panicf("Error registering portworx volume driver: %v", err)
+	}
 }
