@@ -1,0 +1,11 @@
+sudo: required
+dist: trusty
+language: go
+go:
+  - 1.8.3
+script:
+  make stork
+notifications:
+  email:
+    on_success: always
+    on_failure: always
