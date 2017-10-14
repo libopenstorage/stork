@@ -7,6 +7,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/libopenstorage/stork/drivers/volume"
+	storklog "github.com/libopenstorage/stork/pkg/log"
 	"k8s.io/api/core/v1"
 	schedulerapi "k8s.io/kubernetes/plugin/pkg/scheduler/api"
 )
@@ -50,16 +51,17 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	log.Debugf("Nodes in filter request:")
+	pod := &args.Pod
+	storklog.PodLog(pod).Debugf("Nodes in filter request:")
 	for _, node := range args.Nodes.Items {
-		log.Debugf("%+v", node.Status.Addresses)
+		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)
 	}
 
 	filteredNodes := []v1.Node{}
-	driverVolumes, err := e.Driver.GetPodVolumes(&args.Pod)
+	driverVolumes, err := e.Driver.GetPodVolumes(pod)
 
 	if err != nil {
-		log.Warnf("Error getting volumes for Pod for driver: %v", err)
+		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
 			http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
 			return
@@ -67,7 +69,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	} else if len(driverVolumes) > 0 {
 		driverNodes, err := e.Driver.GetNodes()
 		if err != nil {
-			log.Errorf("Error getting list of driver nodes, returning all nodes:")
+			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes")
 		} else {
 			for _, node := range args.Nodes.Items {
 				for _, address := range node.Status.Addresses {
@@ -92,7 +94,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		filteredNodes = args.Nodes.Items
 	}
 
-	log.Debugf("Nodes in filter response:")
+	storklog.PodLog(pod).Debugf("Nodes in filter response:")
 	for _, node := range filteredNodes {
 		log.Debugf("%+v", node.Status.Addresses)
 	}
@@ -102,7 +104,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		},
 	}
 	if err := encoder.Encode(response); err != nil {
-		log.Fatalf("Error encoding filter response: %+v : %v", response, err)
+		storklog.PodLog(pod).Fatalf("Error encoding filter response: %+v : %v", response, err)
 	}
 
 }
@@ -111,22 +113,23 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	defer req.Body.Close()
 	encoder := json.NewEncoder(w)
 
-	log.Debugf("Got prioritize request")
 	var args schedulerapi.ExtenderArgs
 	if err := decoder.Decode(&args); err != nil {
 		log.Errorf("Error decoding prioritize request: %v", err)
 		http.Error(w, "Decode error", http.StatusBadRequest)
 		return
 	}
-	log.Debugf("Nodes in prioritize request:")
+
+	pod := &args.Pod
+	storklog.PodLog(pod).Debugf("Nodes in prioritize request:")
 	for _, node := range args.Nodes.Items {
-		log.Debugf("%+v", node.Status.Addresses)
+		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)
 	}
 	respList := schedulerapi.HostPriorityList{}
-	driverVolumes, err := e.Driver.GetPodVolumes(&args.Pod)
+	driverVolumes, err := e.Driver.GetPodVolumes(pod)
 
 	if err != nil {
-		log.Warnf("Error getting volumes for Pod for driver: %v", err)
+		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
 			http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
 			return
@@ -134,7 +137,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	} else if len(driverVolumes) > 0 {
 		priorityMap := make(map[string]int)
 		for _, volume := range driverVolumes {
-			log.Debugf("PX volume allocated on nodes:")
+			storklog.PodLog(pod).Debugf("Volume allocated on nodes:")
 			for _, node := range volume.DataNodes {
 				log.Debugf("%+v", node)
 			}
@@ -167,13 +170,13 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		}
 	}
 
-	log.Debugf("Nodes in response:")
+	storklog.PodLog(pod).Debugf("Nodes in response:")
 	for _, node := range respList {
-		log.Debugf("%+v", node)
+		storklog.PodLog(pod).Debugf("%+v", node)
 	}
 
 	if err := encoder.Encode(respList); err != nil {
-		log.Fatalf("Failed to encode response: %v", err)
+		storklog.PodLog(pod).Fatalf("Failed to encode response: %v", err)
 	}
 
 	return
