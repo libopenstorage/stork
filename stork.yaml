@@ -69,7 +69,7 @@ spec:
         imagePullPolicy: Always
         args:
           ["--driver", "pxd", "--verbose"]
-        image: disrani/stork
+        image: <stork_image_name>
         resources:
           requests:
             cpu: '0.1'
