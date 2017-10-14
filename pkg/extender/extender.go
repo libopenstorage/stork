@@ -15,6 +15,10 @@ import (
 const (
 	filter     = "filter"
 	prioritize = "prioritize"
+	// priorityScore Score by which each node is bumped if it has data for a volume
+	priorityScore = 100
+	// defaultScore Score assigned to a node which doesn't have data for any volume
+	defaultScore = 10
 )
 
 // Extender Scheduler extender
@@ -150,9 +154,9 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 							// the pod and is present on the node
 							_, ok := priorityMap[node.Name]
 							if !ok {
-								priorityMap[node.Name] = 100
+								priorityMap[node.Name] = priorityScore
 							} else {
-								priorityMap[node.Name] += 100
+								priorityMap[node.Name] += priorityScore
 							}
 						}
 					}
@@ -160,10 +164,13 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			}
 		}
 
+		// For any nodes that didn't have any volumes, assign it a
+		// default score so that it doesn't get completelt ignored
+		// by the scheduler
 		for _, node := range args.Nodes.Items {
 			score, ok := priorityMap[node.Name]
 			if !ok {
-				score = 10
+				score = defaultScore
 			}
 			hostPriority := schedulerapi.HostPriority{Host: node.Name, Score: score}
 			respList = append(respList, hostPriority)
