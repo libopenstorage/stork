@@ -13,7 +13,6 @@ spec:
       labels:
         component: scheduler
         tier: control-plane
-        version: second
     spec:
       containers:
       - command:
@@ -28,7 +27,7 @@ spec:
             path: /healthz
             port: 10251
           initialDelaySeconds: 15
-        name: kube-second-scheduler
+        name: stork-scheduler
         readinessProbe:
           httpGet:
             path: /healthz
