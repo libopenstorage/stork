@@ -1,4 +1,27 @@
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stork-config
+  namespace: kube-system
+data:
+  policy.cfg: |-
+    {
+      "kind" : "Policy",
+      "apiVersion" : "v1",
+      "extenders" : [
+        {
+          "urlPrefix": "http://stork-servive.kube-system.svc.cluster.local:8099",
+          "apiVersion": "v1beta1",
+          "filterVerb": "filter",
+          "prioritizeVerb": "prioritize",
+          "weight": 5,
+          "enableHttps": false,
+          "nodeCacheCapable": false
+        }
+      ]
+    }
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: stork-account
@@ -50,7 +73,6 @@ metadata:
   annotations:
     scheduler.alpha.kubernetes.io/critical-pod: ""
   labels:
-    component: scheduler
     tier: control-plane
   name: stork
   namespace: kube-system
@@ -69,19 +91,16 @@ spec:
         imagePullPolicy: Always
         args:
           ["--driver", "pxd", "--verbose"]
-        image: <stork_image_name>
+        image: openstorage/stork:0.1
         resources:
           requests:
             cpu: '0.1'
         securityContext:
           privileged: false
         volumeMounts: []
-        #ports:
-        #- protocol: TCP
-        #  containerPort: 8099
-        #  port: 8099
         name: stork
       hostNetwork: true
       hostPID: false
       volumes: []
       serviceAccountName: stork-account
+
