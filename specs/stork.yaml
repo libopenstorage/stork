@@ -10,7 +10,7 @@ data:
       "apiVersion" : "v1",
       "extenders" : [
         {
-          "urlPrefix": "http://stork-servive.kube-system.svc.cluster.local:8099",
+          "urlPrefix": "http://stork-service.kube-system.svc.cluster.local:8099",
           "apiVersion": "v1beta1",
           "filterVerb": "filter",
           "prioritizeVerb": "prioritize",
@@ -99,7 +99,7 @@ spec:
           privileged: false
         volumeMounts: []
         name: stork
-      hostNetwork: true
+      hostNetwork: false
       hostPID: false
       volumes: []
       serviceAccountName: stork-account
