@@ -71,7 +71,7 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// Get an external storage provider to be used with Torpedo.
+// Get an external storage provider to be used with Stork.
 func Get(name string) (Driver, error) {
 	d, ok := volDrivers[name]
 	if ok {
