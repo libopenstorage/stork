@@ -7,7 +7,7 @@ metadata:
   name: stork-scheduler
   namespace: kube-system
 spec:
-  replicas: 1
+  replicas: 3
   template:
     metadata:
       labels:
@@ -18,10 +18,10 @@ spec:
       - command:
         - /usr/local/bin/kube-scheduler
         - --address=0.0.0.0
-        - --leader-elect=false
+        - --leader-elect=true
         - --scheduler-name=stork
         - --policy-configmap=stork-config
-        image: gcr.io/google_containers/kube-scheduler-amd64:v1.7.6
+        image: gcr.io/google_containers/kube-scheduler-amd64:<kube_version>
         livenessProbe:
           httpGet:
             path: /healthz

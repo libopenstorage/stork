@@ -6,9 +6,31 @@ metadata:
 data:
   policy.cfg: |-
     {
-      "kind" : "Policy",
-      "apiVersion" : "v1",
-      "extenders" : [
+      "kind": "Policy",
+      "apiVersion": "v1",
+      "predicates": [
+        {"name": "MaxAzureDiskVolumeCount"},
+        {"name": "NoVolumeNodeConflict"},
+        {"name": "PodToleratesNodeTaints"},
+        {"name": "CheckNodeMemoryPressure"},
+        {"name": "NoVolumeZoneConflict"},
+        {"name": "MaxEBSVolumeCount"},
+        {"name": "MaxGCEPDVolumeCount"},
+        {"name": "MatchInterPodAffinity"},
+        {"name": "NoDiskConflict"},
+        {"name": "GeneralPredicates"},
+        {"name": "CheckNodeDiskPressure"}
+      ],
+      "priorities": [
+        {"name": "NodeAffinityPriority", "weight": 1},
+        {"name": "TaintTolerationPriority", "weight": 1},
+        {"name": "SelectorSpreadPriority", "weight": 1},
+        {"name": "InterPodAffinityPriority", "weight": 1},
+        {"name": "LeastRequestedPriority", "weight": 1},
+        {"name": "BalancedResourceAllocation", "weight": 1},
+        {"name": "NodePreferAvoidPodsPriority", "weight": 1}
+      ],
+      "extenders": [
         {
           "urlPrefix": "http://stork-service.kube-system.svc.cluster.local:8099",
           "apiVersion": "v1beta1",
@@ -28,7 +50,7 @@ metadata:
   namespace: kube-system
 ---
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1alpha1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
    name: stork-role
 rules:
@@ -37,16 +59,11 @@ rules:
   verbs: ["*"]
 ---
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1alpha1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: stork-role-binding
 subjects:
-- apiVersion: v1
-  kind: ServiceAccount
-  name: stork-account
-  namespace: kube-system
-- apiVersion: v1beta1
-  kind: ServiceAccount
+- kind: ServiceAccount
   name: stork-account
   namespace: kube-system
 roleRef:
