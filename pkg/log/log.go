@@ -79,22 +79,10 @@ func errorMessage(msg string) bool {
 
 // Fire color codes the output.
 func (hook *Hook) Fire(entry *logrus.Entry) error {
-<<<<<<< HEAD
-<<<<<<< HEAD
 	if entry.Level < logrus.WarnLevel {
 		entry.Message = red(entry.Message)
 	} else if entry.Level == logrus.WarnLevel {
 		entry.Message = hiyellow(entry.Message)
-=======
-	if entry.Level <= logrus.WarnLevel {
-		entry.Message = red(entry.Message)
->>>>>>> 5ce0426... remove util package for logging
-=======
-	if entry.Level < logrus.WarnLevel {
-		entry.Message = red(entry.Message)
-	} else if entry.Level == logrus.WarnLevel {
-		entry.Message = hiyellow(entry.Message)
->>>>>>> 0a49261... fix warn color
 	} else {
 		if successMessage(entry.Message) {
 			entry.Message = green(entry.Message)
