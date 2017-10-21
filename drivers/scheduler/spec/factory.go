@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"path"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/util"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -21,7 +21,7 @@ var appSpecFactory = make(map[string]*AppSpec)
 // register registers a new spec with the factory
 func (f *Factory) register(id string, app *AppSpec) {
 	if _, ok := appSpecFactory[id]; !ok {
-		util.Infof("Registering app: %v", id)
+		logrus.Infof("Registering app: %v", id)
 		appSpecFactory[id] = app
 	}
 }
@@ -31,7 +31,7 @@ func (f *Factory) Get(id string) (*AppSpec, error) {
 	if d, ok := appSpecFactory[id]; ok && d.Enabled {
 		dCopy, err := scheme.Scheme.DeepCopy(d)
 		if err != nil {
-			util.Errorf("Failed to create a copy of spec object: %#v Err: %v", d, err)
+			logrus.Errorf("Failed to create a copy of spec object: %#v Err: %v", d, err)
 			return nil, err
 		}
 
@@ -51,7 +51,7 @@ func (f *Factory) GetAll() []*AppSpec {
 		if val.Enabled {
 			valCopy, err := scheme.Scheme.DeepCopy(val)
 			if err != nil {
-				util.Errorf("Failed to create a copy of spec object: %#v Err: %v", val, err)
+				logrus.Errorf("Failed to create a copy of spec object: %#v Err: %v", val, err)
 				return nil
 			}
 
@@ -78,7 +78,7 @@ func NewFactory(specDir string, parser Parser) (*Factory, error) {
 		if file.IsDir() {
 			specID := file.Name()
 
-			util.Infof("Parsing: %v...", path.Join(f.specDir, specID))
+			logrus.Infof("Parsing: %v...", path.Join(f.specDir, specID))
 
 			specs, err := f.specParser.ParseSpecs(path.Join(f.specDir, file.Name()))
 			if err != nil {

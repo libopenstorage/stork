@@ -14,6 +14,7 @@ import (
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
 	// import ssh driver to invoke it's init
+	"github.com/Sirupsen/logrus"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	// import k8s driver to invoke it's init
@@ -21,7 +22,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
-	"github.com/portworx/torpedo/util"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 const (
@@ -236,16 +237,16 @@ func ParseFlags() {
 	flag.Parse()
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
-		util.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
+		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
 		os.Exit(-1)
 	} else if volumeDriver, err = volume.Get(v); err != nil {
-		util.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
+		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 		os.Exit(-1)
 	} else if nodeDriver, err = node.Get(n); err != nil {
-		util.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
+		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
 		os.Exit(-1)
 	} else if err := os.MkdirAll(logLoc, os.ModeDir); err != nil {
-		util.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
+		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 		os.Exit(-1)
 	} else {
 		once.Do(func() {
@@ -259,4 +260,10 @@ func ParseFlags() {
 			}
 		})
 	}
+}
+
+func init() {
+	logrus.SetLevel(logrus.InfoLevel)
+	logrus.StandardLogger().Hooks.Add(log.NewHook())
+	logrus.SetOutput(ginkgo.GinkgoWriter)
 }

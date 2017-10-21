@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/portworx/torpedo/util"
+	"github.com/Sirupsen/logrus"
 )
 
 //TODO: export the type: type Task func() (string, error)
@@ -35,7 +35,7 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 					return
 				}
 
-				util.Infof("%v. Retry count: %v Next retry in: %v", err, count, timeBeforeRetry)
+				logrus.Infof("%v. Retry count: %v Next retry in: %v", err, count, timeBeforeRetry)
 				time.Sleep(timeBeforeRetry)
 			}
 

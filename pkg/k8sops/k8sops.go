@@ -295,7 +295,6 @@ func matchAddress(address string, nodeAddresses []v1.NodeAddress) bool {
 	return false
 }
 
-
 func (k *k8sOps) AddLabelOnNode(name, key, value string) error {
 	var err error
 	if err := k.initK8sClient(); err != nil {
