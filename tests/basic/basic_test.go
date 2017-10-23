@@ -83,7 +83,7 @@ var _ = Describe("Volume driver down", func() {
 // Volume driver plugin is down and the client container gets terminated.
 // There is a lost unmount call in this case. When the volume driver is
 // back up, we should be able to detach and delete the volume.
-var _ = PDescribe("Volume driver and app down", func() {
+var _ = Describe("Volume driver and app down", func() {
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
 		var err error
 		contexts := ScheduleAndValidate("voldriverappdown")
