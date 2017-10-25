@@ -33,13 +33,15 @@ const (
 	storageDriverCliFlag = "storage-driver"
 	specDirCliFlag       = "spec-dir"
 	logLocationCliFlag   = "log-location"
+	scaleFactorCliFlag   = "scale-factor"
 )
 
 const (
-	defaultScheduler     = "k8s"
-	defaultNodeDriver    = "ssh"
-	defaultStorageDriver = "pxd"
-	defaultLogLocation   = "/mnt/torpedo_support_dir"
+	defaultScheduler      = "k8s"
+	defaultNodeDriver     = "ssh"
+	defaultStorageDriver  = "pxd"
+	defaultLogLocation    = "/mnt/torpedo_support_dir"
+	defaultAppScaleFactor = 10
 )
 
 var (
@@ -120,20 +122,26 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 			expect(err).NotTo(haveOccurred())
 		})
 
-		var vols []*volume.Volume
-		Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
-			vols, err = Inst().S.DeleteVolumes(ctx)
+		DeleteVolumesAndWait(ctx)
+	})
+}
+
+// DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
+func DeleteVolumesAndWait(ctx *scheduler.Context) {
+	var err error
+	var vols []*volume.Volume
+	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
+		vols, err = Inst().S.DeleteVolumes(ctx)
+		expect(err).NotTo(haveOccurred())
+	})
+
+	for _, vol := range vols {
+		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
+			ctx.App.Key, vol.Name), func() {
+			err = Inst().V.ValidateDeleteVolume(vol)
 			expect(err).NotTo(haveOccurred())
 		})
-
-		for _, vol := range vols {
-			Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
-				ctx.App.Key, vol.Name), func() {
-				err = Inst().V.ValidateDeleteVolume(vol)
-				expect(err).NotTo(haveOccurred())
-			})
-		}
-	})
+	}
 }
 
 // ScheduleAndValidate schedules and validates applications
@@ -210,12 +218,13 @@ var once sync.Once
 
 // Torpedo is the torpedo testsuite
 type Torpedo struct {
-	InstanceID string
-	S          scheduler.Driver
-	V          volume.Driver
-	N          node.Driver
-	SpecDir    string
-	LogLoc     string
+	InstanceID  string
+	S           scheduler.Driver
+	V           volume.Driver
+	N           node.Driver
+	SpecDir     string
+	LogLoc      string
+	ScaleFactor int
 }
 
 // ParseFlags parses command line flags
@@ -225,6 +234,7 @@ func ParseFlags() {
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
+	var appScaleFactor int
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -233,6 +243,7 @@ func ParseFlags() {
 		"Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
+	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 
 	flag.Parse()
 
@@ -251,12 +262,13 @@ func ParseFlags() {
 	} else {
 		once.Do(func() {
 			instance = &Torpedo{
-				InstanceID: time.Now().Format("01-02-15h04m05s"),
-				S:          schedulerDriver,
-				V:          volumeDriver,
-				N:          nodeDriver,
-				SpecDir:    specDir,
-				LogLoc:     logLoc,
+				InstanceID:  time.Now().Format("01-02-15h04m05s"),
+				S:           schedulerDriver,
+				V:           volumeDriver,
+				N:           nodeDriver,
+				SpecDir:     specDir,
+				LogLoc:      logLoc,
+				ScaleFactor: appScaleFactor,
 			}
 		})
 	}

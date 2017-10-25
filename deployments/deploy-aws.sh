@@ -6,11 +6,13 @@ if [ -n "${VERBOSE}" ]; then
     VERBOSE="--v"
 fi
 
-
 if [ -n "${SKIP_TESTS}" ]; then
     EXTRA_ARGS="--skip=$SKIP_TESTS $EXTRA_ARGS"
 fi
 
+if [ -z "${SCALE_FACTOR}" ]; then
+    SCALE_FACTOR="10"
+fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
     TORPEDO_IMG="portworx/torpedo:latest"
@@ -102,12 +104,14 @@ spec:
             "--trace",
             "--failFast",
             "$EXTRA_ARGS",
-             "--slowSpecThreshold", "360",
+             "--slowSpecThreshold", "600",
             "bin/basic.test",
             "bin/reboot.test",
+            "bin/scale.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
-            "--node-driver", "aws" ]
+            "--node-driver", "aws",
+            "--scale-factor", "$SCALE_FACTOR" ]
     tty: true
     env:
       - name: AWS_ACCESS_KEY_ID
