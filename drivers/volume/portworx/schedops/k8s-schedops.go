@@ -91,7 +91,7 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume, sched scheduler.D
 			t := func() (interface{}, error) {
 				return k8sops.Instance().GetLabelsOnNode(n.Name)
 			}
-			ret, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+			ret, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
 			if err != nil {
 				return err
 			}
