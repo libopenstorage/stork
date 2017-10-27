@@ -24,6 +24,18 @@ const (
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
 )
 
+// errLabelPresent error type for a label being present on a node
+type errLabelPresent struct {
+	// label is the label key
+	label string
+	// node is the k8s node where the label is present
+	node string
+}
+
+func (e *errLabelPresent) Error() string {
+	return fmt.Sprintf("label %s is present on node %s", e.label, e.node)
+}
+
 type k8sSchedOps struct{}
 
 func (k *k8sSchedOps) DisableOnNode(n node.Node) error {
@@ -89,15 +101,28 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume, sched scheduler.D
 	for _, n := range sched.GetNodes() {
 		if n.Type == node.TypeWorker {
 			t := func() (interface{}, error) {
-				return k8sops.Instance().GetLabelsOnNode(n.Name)
+				nodeLabels, err := k8sops.Instance().GetLabelsOnNode(n.Name)
+				if err != nil {
+					return nil, err
+				}
+
+				if _, ok := nodeLabels[pvcLabel]; ok {
+					return nil, &errLabelPresent{
+						node:  n.Name,
+						label: pvcLabel,
+					}
+				}
+
+				return nil, nil
 			}
-			ret, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
+
+			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
 			if err != nil {
-				return err
-			}
-			nodeLabels := ret.(map[string]string)
-			if _, ok := nodeLabels[pvcLabel]; ok {
-				staleLabelNodes = append(staleLabelNodes, n.Name)
+				if _, ok := err.(*errLabelPresent); ok {
+					staleLabelNodes = append(staleLabelNodes, n.Name)
+				} else {
+					return err
+				}
 			}
 		}
 	}
