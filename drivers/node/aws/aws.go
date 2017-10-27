@@ -167,7 +167,7 @@ func (a *aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		}
 	}
 	//TestConnection after node reboot
-	err = a.TestConnection(n, node.ConnectionOpts{Timeout: 1 * time.Minute, TimeBeforeRetry: 10 * time.Second})
+	err = a.TestConnection(n, node.ConnectionOpts{Timeout: 5 * time.Minute, TimeBeforeRetry: 10 * time.Second})
 	if err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
