@@ -1,5 +1,11 @@
 package: github.com/portworx/torpedo
 import:
+- package: github.com/sirupsen/logrus
+  version: 33a34430d1c3dc71777fdd677864928e5b5812bc
+- package: github.com/Sirupsen/logrus
+  repo: git@github.com:/sirupsen/logrus
+  vcs: git
+  version: master
 - package: github.com/fatih/color
   version: ^1.5.0
 - package: github.com/libopenstorage/openstorage
@@ -28,38 +34,6 @@ import:
   - pkg/apis/extensions/v1beta1
   - pkg/apis/storage/v1
   - rest
-- package: github.com/docker/docker
-  version: 48cce229330561c104f777dac4f3f39ef2e2de6e
-  subpackages:
-  - api/types
-  - api/types/blkiodev
-  - api/types/container
-  - api/types/filters
-  - api/types/mount
-  - api/types/network
-  - api/types/registry
-  - api/types/strslice
-  - api/types/swarm
-  - api/types/swarm/runtime
-  - api/types/versions
-  - opts
-  - pkg/archive
-  - pkg/fileutils
-  - pkg/homedir
-  - pkg/idtools
-  - pkg/ioutils
-  - pkg/jsonlog
-  - pkg/jsonmessage
-  - pkg/longpath
-  - pkg/mount
-  - pkg/pools
-  - pkg/promise
-  - pkg/stdcopy
-  - pkg/system
-  - pkg/term
-  - pkg/term/windows
-- package: github.com/fsouza/go-dockerclient
-  version: 98edf3edfae6a6500fecc69d2bcccf1302544004
 - package: github.com/aws/aws-sdk-go
   version: a881d8ac1079e5f917d926c04c32ace8a9f68d22
   subpackages:

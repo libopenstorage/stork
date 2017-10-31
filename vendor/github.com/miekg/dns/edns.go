@@ -106,15 +106,12 @@ func (rr *OPT) SetVersion(v uint8) {
 
 // ExtendedRcode returns the EDNS extended RCODE field (the upper 8 bits of the TTL).
 func (rr *OPT) ExtendedRcode() int {
-	return int((rr.Hdr.Ttl&0xFF000000)>>24) + 15
+	return int((rr.Hdr.Ttl&0xFF000000)>>24)
 }
 
 // SetExtendedRcode sets the EDNS extended RCODE field.
 func (rr *OPT) SetExtendedRcode(v uint8) {
-	if v < RcodeBadVers { // Smaller than 16.. Use the 4 bits you have!
-		return
-	}
-	rr.Hdr.Ttl = rr.Hdr.Ttl&0x00FFFFFF | (uint32(v-15) << 24)
+	rr.Hdr.Ttl = rr.Hdr.Ttl&0x00FFFFFF | (uint32(v) << 24)
 }
 
 // UDPSize returns the UDP buffer size.
@@ -232,6 +229,12 @@ func (e *EDNS0_SUBNET) pack() ([]byte, error) {
 	b[2] = e.SourceNetmask
 	b[3] = e.SourceScope
 	switch e.Family {
+	case 0:
+		// "dig" sets AddressFamily to 0 if SourceNetmask is also 0
+		// We might don't need to complain either
+		if e.SourceNetmask != 0 {
+			return nil, errors.New("dns: bad address family")
+		}
 	case 1:
 		if e.SourceNetmask > net.IPv4len*8 {
 			return nil, errors.New("dns: bad netmask")
@@ -266,6 +269,13 @@ func (e *EDNS0_SUBNET) unpack(b []byte) error {
 	e.SourceNetmask = b[2]
 	e.SourceScope = b[3]
 	switch e.Family {
+	case 0:
+		// "dig" sets AddressFamily to 0 if SourceNetmask is also 0
+		// It's okay to accept such a packet
+		if e.SourceNetmask != 0 {
+			return errors.New("dns: bad address family")
+		}
+		e.Address = net.IPv4(0, 0, 0, 0)
 	case 1:
 		if e.SourceNetmask > net.IPv4len*8 || e.SourceScope > net.IPv4len*8 {
 			return errors.New("dns: bad netmask")

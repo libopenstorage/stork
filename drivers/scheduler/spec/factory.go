@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"path"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 

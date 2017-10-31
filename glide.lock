@@ -1,5 +1,5 @@
-hash: f84c6ea3803dac2e9f35d4469ba2ea4ebd06d9b46711dc486eb82661f4a3ae01
-updated: 2017-10-09T23:13:40.804465016-04:00
+hash: 0b86f4b815746ede3bbb9aec160f67b2f4bd911b9872d6f1dc81a583360981d2
+updated: 2017-10-30T18:09:49.017003-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 9a4b6e10bed6220a1665955aa2b75afc91eb10b3
@@ -54,7 +54,7 @@ imports:
   - digest
   - reference
 - name: github.com/docker/docker
-  version: 48cce229330561c104f777dac4f3f39ef2e2de6e
+  version: 226eb8004e0e9b1cd55b37ce4c235c0f19ca9a14
   subpackages:
   - api/types
   - api/types/blkiodev
@@ -73,12 +73,10 @@ imports:
   - pkg/homedir
   - pkg/idtools
   - pkg/ioutils
-  - pkg/jsonlog
   - pkg/jsonmessage
   - pkg/longpath
   - pkg/mount
   - pkg/pools
-  - pkg/promise
   - pkg/stdcopy
   - pkg/system
   - pkg/term
@@ -98,11 +96,11 @@ imports:
 - name: github.com/fatih/color
   version: 570b54cabe6b8eb0bc2dfce68d964677d63b5260
 - name: github.com/fsouza/go-dockerclient
-  version: 98edf3edfae6a6500fecc69d2bcccf1302544004
+  version: de3ca5806469df077d946342784e525cc7d078ed
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: c787282c39ac1fc618827141a1f762240def08a3
+  version: f280b3ba517bf5fc98922624f21fb0e7a92adaec
 - name: github.com/go-openapi/analysis
   version: b44dc874b601d9e4e2f6e19140e794ba24bead3b
 - name: github.com/go-openapi/jsonpointer
@@ -140,7 +138,7 @@ imports:
 - name: github.com/hashicorp/go-multierror
   version: 83588e72410abfbe4df460eeb6f30841ae47d4c4
 - name: github.com/hashicorp/go-sockaddr
-  version: 41949a141473f6340abc6ba0fcd0f89da6f6f837
+  version: 9b4c5fa5b10a683339a270d664474b9f4aee62fc
 - name: github.com/hashicorp/golang-lru
   version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
@@ -184,10 +182,16 @@ imports:
   - buffer
   - jlexer
   - jwriter
+- name: github.com/mattn/go-colorable
+  version: 5411d3eea5978e6cdc258b30de592b60df6aba96
+  repo: https://github.com/mattn/go-colorable
+- name: github.com/mattn/go-isatty
+  version: 57fdcb988a5c543893cc61bce354a6e24ab70022
+  repo: https://github.com/mattn/go-isatty
 - name: github.com/Microsoft/go-winio
   version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
 - name: github.com/miekg/dns
-  version: 946bd9fbed05568b0f3cd188353d8aa28f38b688
+  version: a5852667e3c36e2e0b0a69ab43869e00e95aacdf
   subpackages:
   - internal/socket
 - name: github.com/mohae/deepcopy
@@ -195,7 +199,7 @@ imports:
 - name: github.com/Nvveen/Gotty
   version: cd527374f1e5bff4938207604a14f2e38a9cf512
 - name: github.com/onsi/ginkgo
-  version: 11459a886d9cd66b319dac7ef1e917ee221372c9
+  version: 4b883f0bbff7d7fa65307e0e13dcf7b328131e08
   subpackages:
   - config
   - internal/codelocation
@@ -215,7 +219,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: dcabb60a477c2b6f456df65037cb6708210fbb02
+  version: 283ed655c6b8238afecd5bea6434bc9b03129f2f
   subpackages:
   - format
   - internal/assertion
@@ -236,14 +240,19 @@ imports:
   - specs-go
   - specs-go/v1
 - name: github.com/opencontainers/runc
-  version: f53ad9cec928821a25c2a74eb8bd95558f8cf152
+  version: 6464a1c27ed92367e6d15785ff55d89ab81456fd
   subpackages:
   - libcontainer/system
   - libcontainer/user
 - name: github.com/pkg/errors
-  version: 2b3a18b5f0fb6b4f9190549597d3f962c02bc5eb
+  version: f15c970de5b76fac0b59abb32d62c17cc7bed265
 - name: github.com/portworx/kvdb
-  version: 3888faed74e772959607fe3f49e5f4c2eb12b54c
+  version: 9917afab1ab69c60e6acd4b2977caf0c3ec4b78d
+- name: github.com/portworx/sched-ops
+  version: 96b4f508ee903108266a85e0e089022a91bf395f
+  subpackages:
+  - k8s
+  - task
 - name: github.com/PuerkitoBio/purell
   version: 8a290539e2e8629dbc4e6bad948158f790ec31f4
 - name: github.com/PuerkitoBio/urlesc
@@ -251,9 +260,11 @@ imports:
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/Sirupsen/logrus
-  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
-- name: github.com/sirupsen/logrus
   version: 89742aefa4b206dcf400792f3bd35b542998eb3b
+  repo: git@github.com:/sirupsen/logrus
+  vcs: git
+- name: github.com/sirupsen/logrus
+  version: 33a34430d1c3dc71777fdd677864928e5b5812bc
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go

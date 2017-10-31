@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/portworx/torpedo/pkg/k8sops"
-	"github.com/portworx/torpedo/pkg/task"
 )
 
 const (
@@ -39,7 +39,7 @@ func (e *errLabelPresent) Error() string {
 type k8sSchedOps struct{}
 
 func (k *k8sSchedOps) DisableOnNode(n node.Node) error {
-	return k8sops.Instance().AddLabelOnNode(n.Name, k8sPxRunningLabelKey, k8sPxNotRunningLabelValue)
+	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxRunningLabelKey, k8sPxNotRunningLabelValue)
 }
 
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
@@ -50,7 +50,7 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 }
 
 func (k *k8sSchedOps) EnableOnNode(n node.Node) error {
-	return k8sops.Instance().RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
+	return k8s.Instance().RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
 }
 
 func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
@@ -62,13 +62,13 @@ func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume
 	var missingLabelNodes []string
 	for _, rs := range replicaNodes {
 		t := func() (interface{}, error) {
-			n, err := k8sops.Instance().GetNodeByName(rs.Id)
+			n, err := k8s.Instance().GetNodeByName(rs.Id)
 			if err == nil && n != nil {
 				return n.Labels, nil
 			}
 
 			addrs := []string{rs.DataIp, rs.MgmtIp}
-			n, err = k8sops.Instance().SearchNodeByAddresses(addrs)
+			n, err = k8s.Instance().SearchNodeByAddresses(addrs)
 			if err == nil && n != nil {
 				return n.Labels, nil
 			}
@@ -101,7 +101,7 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume, sched scheduler.D
 	for _, n := range sched.GetNodes() {
 		if n.Type == node.TypeWorker {
 			t := func() (interface{}, error) {
-				nodeLabels, err := k8sops.Instance().GetLabelsOnNode(n.Name)
+				nodeLabels, err := k8s.Instance().GetLabelsOnNode(n.Name)
 				if err != nil {
 					return nil, err
 				}
@@ -165,7 +165,7 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(sched scheduler.Driver, d node.Drive
 		}
 	}
 
-	existingPods, _ := k8sops.Instance().GetPods("")
+	existingPods, _ := k8s.Instance().GetPods("")
 
 	orphanPodsMap := make(map[string][]string)
 	dirtyVolPodsMap := make(map[string][]string)

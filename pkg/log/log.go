@@ -3,8 +3,8 @@ package log
 import (
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
 )
 
 type colorizer func(...interface{}) string

@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	dockerclient "github.com/fsouza/go-dockerclient"
 	"github.com/libopenstorage/openstorage/api"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
@@ -13,12 +12,13 @@ import (
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
+	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
-	"github.com/portworx/torpedo/pkg/k8sops"
-	"github.com/portworx/torpedo/pkg/task"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -377,7 +377,7 @@ func (d *portworx) setDriver() error {
 
 	var endpoint string
 	// Try portworx-service first
-	svc, err := k8sops.Instance().GetService(PXServiceName, PXNamespace)
+	svc, err := k8s.Instance().GetService(PXServiceName, PXNamespace)
 	if err == nil {
 		endpoint = svc.Spec.ClusterIP
 		if err = d.testAndSetEndpoint(endpoint); err == nil {

@@ -73,7 +73,7 @@ func (w *watchQ) start() {
 		err = w.cb(key, w.opaque, kvp, err)
 		if err != nil {
 			w.done = true
-			logrus.Infof("Watch cb returned err: %v", err)
+			logrus.Infof("Watch cb for key %v returned err: %v", key, err)
 			// Indicate the caller that watch has been canceled
 			_ = w.cb(key, w.opaque, nil, kvdb.ErrWatchStopped)
 			// Indicate that watch is returning.
@@ -498,7 +498,7 @@ func (et *etcdKV) CompareAndSet(
 		}
 		if txnResponse.Succeeded == false {
 			if len(txnResponse.Responses) == 0 {
-				logrus.Infof("Etcd did not return any transaction responses")
+				logrus.Infof("Etcd did not return any transaction responses for key (%v)", kvp.Key)
 			} else {
 				for i, responseOp := range txnResponse.Responses {
 					logrus.Infof("Etcd transaction Response: %v %v", i, responseOp.String())
@@ -518,7 +518,7 @@ func (et *etcdKV) CompareAndSet(
 		}
 		if txnResponse.Succeeded == false {
 			if len(txnResponse.Responses) == 0 {
-				logrus.Infof("Etcd did not return any transaction responses")
+				logrus.Infof("Etcd did not return any transaction responses for key (%v)", kvp.Key)
 			} else {
 				for i, responseOp := range txnResponse.Responses {
 					logrus.Infof("Etcd transaction Response: %v %v", i, responseOp.String())
@@ -551,7 +551,7 @@ func (et *etcdKV) CompareAndDelete(
 		}
 		if txnResponse.Succeeded == false {
 			if len(txnResponse.Responses) == 0 {
-				logrus.Infof("Etcd did not return any transaction responses")
+				logrus.Infof("Etcd did not return any transaction responses for key (%v)", kvp.Key)
 			} else {
 				for i, responseOp := range txnResponse.Responses {
 					logrus.Infof("Etcd transaction Response: %v %v", i, responseOp.String())
@@ -570,7 +570,7 @@ func (et *etcdKV) CompareAndDelete(
 		}
 		if txnResponse.Succeeded == false {
 			if len(txnResponse.Responses) == 0 {
-				logrus.Infof("Etcd did not return any transaction responses")
+				logrus.Infof("Etcd did not return any transaction responses for key (%v)", kvp.Key)
 			} else {
 				for i, responseOp := range txnResponse.Responses {
 					logrus.Infof("Etcd transaction Response: %v %v", i, responseOp.String())
@@ -924,8 +924,9 @@ func (et *etcdKV) watchStart(
 	select {
 	case <-session.Done(): // closed by etcd
 		// Indicate the caller that watch has been canceled
-		logrus.Errorf("Watch closing session")
+		logrus.Errorf("Watch closing session for key: %v", key)
 		watchQ.enqueue(key, nil, kvdb.ErrWatchStopped)
+		watchCancel()
 	case <-watchRet: // error in watcher
 		// Close the context
 		watchCancel()

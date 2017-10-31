@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/sirupsen/logrus"
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
 	// import ssh driver to invoke it's init

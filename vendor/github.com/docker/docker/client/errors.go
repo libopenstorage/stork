@@ -64,41 +64,11 @@ func wrapResponseError(err error, resp serverResponse, object, id string) error 
 		return nil
 	case resp.statusCode == http.StatusNotFound:
 		return objectNotFoundError{object: object, id: id}
+	case resp.statusCode == http.StatusNotImplemented:
+		return notImplementedError{message: err.Error()}
 	default:
 		return err
 	}
-}
-
-// IsErrImageNotFound returns true if the error is caused
-// when an image is not found in the docker host.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrImageNotFound(err error) bool {
-	return IsErrNotFound(err)
-}
-
-// IsErrContainerNotFound returns true if the error is caused
-// when a container is not found in the docker host.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrContainerNotFound(err error) bool {
-	return IsErrNotFound(err)
-}
-
-// IsErrNetworkNotFound returns true if the error is caused
-// when a network is not found in the docker host.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrNetworkNotFound(err error) bool {
-	return IsErrNotFound(err)
-}
-
-// IsErrVolumeNotFound returns true if the error is caused
-// when a volume is not found in the docker host.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrVolumeNotFound(err error) bool {
-	return IsErrNotFound(err)
 }
 
 // unauthorizedError represents an authorization error in a remote registry.
@@ -118,30 +88,6 @@ func IsErrUnauthorized(err error) bool {
 	return ok
 }
 
-// IsErrNodeNotFound returns true if the error is caused
-// when a node is not found.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrNodeNotFound(err error) bool {
-	return IsErrNotFound(err)
-}
-
-// IsErrServiceNotFound returns true if the error is caused
-// when a service is not found.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrServiceNotFound(err error) bool {
-	return IsErrNotFound(err)
-}
-
-// IsErrTaskNotFound returns true if the error is caused
-// when a task is not found.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrTaskNotFound(err error) bool {
-	return IsErrNotFound(err)
-}
-
 type pluginPermissionDenied struct {
 	name string
 }
@@ -157,6 +103,26 @@ func IsErrPluginPermissionDenied(err error) bool {
 	return ok
 }
 
+type notImplementedError struct {
+	message string
+}
+
+func (e notImplementedError) Error() string {
+	return e.message
+}
+
+func (e notImplementedError) NotImplemented() bool {
+	return true
+}
+
+// IsErrNotImplemented returns true if the error is a NotImplemented error.
+// This is returned by the API when a requested feature has not been
+// implemented.
+func IsErrNotImplemented(err error) bool {
+	te, ok := err.(notImplementedError)
+	return ok && te.NotImplemented()
+}
+
 // NewVersionError returns an error if the APIVersion required
 // if less than the current supported version
 func (cli *Client) NewVersionError(APIrequired, feature string) error {
@@ -164,28 +130,4 @@ func (cli *Client) NewVersionError(APIrequired, feature string) error {
 		return fmt.Errorf("%q requires API version %s, but the Docker daemon API version is %s", feature, APIrequired, cli.version)
 	}
 	return nil
-}
-
-// IsErrSecretNotFound returns true if the error is caused
-// when a secret is not found.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrSecretNotFound(err error) bool {
-	return IsErrNotFound(err)
-}
-
-// IsErrConfigNotFound returns true if the error is caused
-// when a config is not found.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrConfigNotFound(err error) bool {
-	return IsErrNotFound(err)
-}
-
-// IsErrPluginNotFound returns true if the error is caused
-// when a plugin is not found in the docker host.
-//
-// Deprecated: Use IsErrNotFound
-func IsErrPluginNotFound(err error) bool {
-	return IsErrNotFound(err)
 }
