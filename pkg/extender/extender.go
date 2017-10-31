@@ -144,6 +144,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	respList := schedulerapi.HostPriorityList{}
 	driverVolumes, err := e.Driver.GetPodVolumes(pod)
 
+	priorityMap := make(map[string]int)
 	if err != nil {
 		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
@@ -151,7 +152,6 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			return
 		}
 	} else if len(driverVolumes) > 0 {
-		priorityMap := make(map[string]int)
 		for _, volume := range driverVolumes {
 			storklog.PodLog(pod).Debugf("Volume allocated on nodes:")
 			for _, node := range volume.DataNodes {
@@ -175,18 +175,18 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 				}
 			}
 		}
+	}
 
-		// For any nodes that didn't have any volumes, assign it a
-		// default score so that it doesn't get completelt ignored
-		// by the scheduler
-		for _, node := range args.Nodes.Items {
-			score, ok := priorityMap[node.Name]
-			if !ok {
-				score = defaultScore
-			}
-			hostPriority := schedulerapi.HostPriority{Host: node.Name, Score: score}
-			respList = append(respList, hostPriority)
+	// For any nodes that didn't have any volumes, assign it a
+	// default score so that it doesn't get completelt ignored
+	// by the scheduler
+	for _, node := range args.Nodes.Items {
+		score, ok := priorityMap[node.Name]
+		if !ok {
+			score = defaultScore
 		}
+		hostPriority := schedulerapi.HostPriority{Host: node.Name, Score: score}
+		respList = append(respList, hostPriority)
 	}
 
 	storklog.PodLog(pod).Debugf("Nodes in response:")
