@@ -76,15 +76,7 @@ func GetPod(podName string, podNS string) (*v1.Pod, error) {
 	return pod, nil
 }
 
-// HasPVC Checks whether a Pod has a PVC
-func HasPVC(pod *v1.Pod) bool {
-	if len(pod.Spec.Volumes) != 0 && pod.Spec.Volumes[0].PersistentVolumeClaim != nil {
-		return true
-	}
-	return false
-}
-
-// GetPVC gets the pod by the name
+// GetPVC gets the PVC by the name
 func GetPVC(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error) {
 	if pvcName == "" {
 		return nil, fmt.Errorf("Empty PVC name")
