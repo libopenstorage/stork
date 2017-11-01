@@ -78,6 +78,9 @@ func (k *k8s) Init(specDir string, nodeDriverName string) error {
 
 	for _, n := range nodes.Items {
 		k.nodes[n.Name] = k.parseK8SNode(n)
+		if err := k.IsNodeReady(k.nodes[n.Name]); err != nil {
+			return err
+		}
 	}
 
 	k.specFactory, err = spec.NewFactory(specDir, k)
