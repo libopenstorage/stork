@@ -7,10 +7,8 @@ script:
   - export DOCKER_HUB_REPO=openstorage
   - export DOCKER_HUB_STORK_IMAGE=stork
   - export DOCKER_HUB_TAG=`git rev-parse --short HEAD`
-  - make
-  - make pretest
-  - make test
-  - if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
+  - make && make pretest && make test && \
+    if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
       docker login -u "${DOCKER_USER}" -p "${DOCKER_PASSWORD}";
       make deploy;
     fi
