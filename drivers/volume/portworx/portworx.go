@@ -61,6 +61,10 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		return fmt.Errorf("failed to get scheduler operator for portworx. Err: %v", err)
 	}
 
+	if err = d.setDriver(); err != nil {
+		return err
+	}
+
 	nodes := d.schedDriver.GetNodes()
 	for _, n := range nodes {
 		if err := d.WaitStart(n); err != nil {
@@ -68,9 +72,6 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		}
 	}
 
-	if err = d.setDriver(); err != nil {
-		return err
-	}
 
 	cluster, err := d.getClusterManager().Enumerate()
 	if err != nil {
