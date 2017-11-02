@@ -10,14 +10,14 @@ before_install:
   - sudo apt-get -o Dpkg::Options::="--force-confnew" install -yq docker-ce
 script:
   - make all
-  - DOCKER_HUB_REPO=harshpx DOCKER_HUB_TORPEDO_IMAGE=torpedo DOCKER_HUB_TAG=latest make container
+  - docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
+  - make deploy
 notifications:
   email:
     recipients:
       - aditya@portworx.com
-      - gou@portworx.com
+      - piyush@portworx.com
       - jv@portworx.com
       - harsh@portworx.com
-      - varun@portworx.com
     on_success: always
     on_failure: always
