@@ -67,11 +67,12 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 
 	nodes := d.schedDriver.GetNodes()
 	for _, n := range nodes {
-		if err := d.WaitStart(n); err != nil {
-			return err
+		if n.Type == node.TypeWorker {
+			if err := d.WaitStart(n); err != nil {
+				return err
+			}
 		}
 	}
-
 
 	cluster, err := d.getClusterManager().Enumerate()
 	if err != nil {
