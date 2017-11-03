@@ -166,14 +166,7 @@ func (a *aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 			Cause: fmt.Sprintf("failed to reboot instance due to: %v", err),
 		}
 	}
-	//TestConnection after node reboot
-	err = a.TestConnection(n, node.ConnectionOpts{Timeout: 5 * time.Minute, TimeBeforeRetry: 10 * time.Second})
-	if err != nil {
-		return &node.ErrFailedToRebootNode{
-			Node:  n,
-			Cause: fmt.Sprintf("failed to connect instance after reboot due to: %v", err),
-		}
-	}
+
 	return nil
 }
 

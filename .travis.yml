@@ -10,8 +10,8 @@ before_install:
   - sudo apt-get -o Dpkg::Options::="--force-confnew" install -yq docker-ce
 script:
   - make all
-  - docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
-  - make deploy
+  - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"; fi'
+  - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then make deploy; fi'
 notifications:
   email:
     recipients:
