@@ -90,6 +90,11 @@ spec:
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR" ]
     tty: true
+    env:
+    - name: TORPEDO_SSH_USER
+      value: "root"
+    - name: TORPEDO_SSH_PASSWORD
+      value: "${TORPEDO_SSH_PASSWORD}"
   restartPolicy: Never
   serviceAccountName: torpedo-account
 EOF

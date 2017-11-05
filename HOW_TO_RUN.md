@@ -1,34 +1,25 @@
 ## Pre-requisites:
 * Minimum 3-node Kubernetes cluster
 * Portworx installed on the Kubernetes cluster
-* A root user on each node created as follows. The password should be `t0rped0`. If not already available a group called sudo should be created too.
-```
-# adduser torpedo
-Adding user `torpedo' ...
-Adding new group `torpedo' (1001) ...
-Adding new user `torpedo' (1001) with group `torpedo' ...
-Creating home directory `/home/torpedo' ...
-Copying files from `/etc/skel' ...
-Enter new UNIX password:
-Retype new UNIX password:
-passwd: password updated successfully
-Changing the user information for torpedo
-Enter the new value, or press ENTER for the default
-	Full Name []: torpedo
-	Room Number []:
-	Work Phone []:
-	Home Phone []:
-	Other []:
-
-# groupadd sudo
-# usermod -aG sudo torpedo
-# sudo sh -c "echo 'torpedo ALL=NOPASSWD: ALL' >> /etc/sudoers"
-```
+* Torpedo currently requires root username/password to access the physical nodes.
 
 ## Running using a Kubernetes pod
-To run on kubernetes with ssh node driver: `kubectl create -f deployments/torpedo-k8s-ssh.yaml`
 
-To run on kubernetes with aws node driver: `kubectl create -f deployments/torpedo-k8s-aws.yaml`
+### Kubernetes with ssh node driver
+
+To run torpedo with ssh node driver run the following script:
+
+```
+$ TORPEDO_SSH_PASSWORD=[your_root_password] deployments/deploy-ssh.sh
+```
+
+### Kubernetes with aws node driver
+
+To run torpedo under AWS environment with aws node driver run the following script:
+
+```
+$ deployments/deploy-aws.sh
+```
 
 Make sure you change `image: harshpx/torpedo:latest` to your torpedo docker image.
 
