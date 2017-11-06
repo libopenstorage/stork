@@ -26,24 +26,15 @@ import (
 	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 )
 
-// SchedName is the name of the kubernetes scheduler driver implementation
 const (
+	// SchedName is the name of the kubernetes scheduler driver implementation
 	SchedName      = "k8s"
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
 )
 
 type k8s struct {
-	nodes          map[string]node.Node
 	specFactory    *spec.Factory
 	nodeDriverName string
-}
-
-func (k *k8s) GetNodes() []node.Node {
-	var ret []node.Node
-	for _, val := range k.nodes {
-		ret = append(ret, val)
-	}
-	return ret
 }
 
 func (k *k8s) IsNodeReady(n node.Node) error {
@@ -77,8 +68,11 @@ func (k *k8s) Init(specDir string, nodeDriverName string) error {
 	}
 
 	for _, n := range nodes.Items {
-		k.nodes[n.Name] = k.parseK8SNode(n)
-		if err := k.IsNodeReady(k.nodes[n.Name]); err != nil {
+		newNode := k.parseK8SNode(n)
+		if err := k.IsNodeReady(newNode); err != nil {
+			return err
+		}
+		if err := node.AddNode(newNode); err != nil {
 			return err
 		}
 	}
@@ -470,15 +464,13 @@ func (k *k8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) erro
 		MaxDepth: 1,
 	}
 
-	for _, n := range k.GetNodes() {
-		if n.Type == node.TypeWorker {
-			if volDir, err := driver.FindFiles(podVolDir, n, options); err != nil {
-				return err
-			} else if strings.TrimSpace(volDir) != "" {
-				return &ErrFailedToDeleteVolumeDirForPod{
-					App:   app,
-					Cause: fmt.Sprintf("Volume directory for pod %v still exists in node: %v", podUID, n.Name),
-				}
+	for _, n := range node.GetWorkerNodes() {
+		if volDir, err := driver.FindFiles(podVolDir, n, options); err != nil {
+			return err
+		} else if strings.TrimSpace(volDir) != "" {
+			return &ErrFailedToDeleteVolumeDirForPod{
+				App:   app,
+				Cause: fmt.Sprintf("Volume directory for pod %v still exists in node: %v", podUID, n.Name),
 			}
 		}
 	}
@@ -691,9 +683,14 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	}
 
 	// We should have pods from a supported application at this point
+	nodeMap := make(map[string]node.Node)
+	for _, n := range node.GetNodes() {
+		nodeMap[n.Name] = n
+	}
+
 	for _, p := range pods {
 		if len(p.Spec.NodeName) > 0 {
-			n, ok := k.nodes[p.Spec.NodeName]
+			n, ok := nodeMap[p.Spec.NodeName]
 			if !ok {
 				return nil, &ErrFailedToGetNodesForApp{
 					App:   ctx.App,
@@ -819,8 +816,6 @@ func contains(nodes []node.Node, n node.Node) bool {
 }
 
 func init() {
-	k := &k8s{
-		nodes: make(map[string]node.Node),
-	}
+	k := &k8s{}
 	scheduler.Register(SchedName, k)
 }

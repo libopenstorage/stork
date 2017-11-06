@@ -62,7 +62,7 @@ func InitInstance() {
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().N.Init(Inst().S.String())
+	err = Inst().N.Init()
 	expect(err).NotTo(haveOccurred())
 }
 

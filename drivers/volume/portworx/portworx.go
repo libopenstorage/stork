@@ -12,10 +12,8 @@ import (
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
-	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/sirupsen/logrus"
@@ -23,11 +21,7 @@ import (
 
 const (
 	// DriverName is the name of the portworx driver implementation
-	DriverName = "pxd"
-	// PXServiceName is the name of the portworx service
-	PXServiceName = "portworx-service"
-	// PXNamespace is the kubernetes namespace in which portworx daemon set runs.
-	PXNamespace             = "kube-system"
+	DriverName              = "pxd"
 	pxdClientSchedUserAgent = "pxd-sched"
 	pxdRestPort             = 9001
 )
@@ -36,7 +30,6 @@ type portworx struct {
 	hostConfig      *dockerclient.HostConfig
 	clusterManager  cluster.Cluster
 	volDriver       volume.VolumeDriver
-	schedDriver     scheduler.Driver
 	schedOps        schedops.Driver
 	nodeDriver      node.Driver
 	refreshEndpoint bool
@@ -49,10 +42,6 @@ func (d *portworx) String() string {
 func (d *portworx) Init(sched string, nodeDriver string) error {
 	logrus.Infof("Using the Portworx volume driver under scheduler: %v", sched)
 	var err error
-	if d.schedDriver, err = scheduler.Get(sched); err != nil {
-		return err
-	}
-
 	if d.nodeDriver, err = node.Get(nodeDriver); err != nil {
 		return err
 	}
@@ -65,12 +54,10 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		return err
 	}
 
-	nodes := d.schedDriver.GetNodes()
+	nodes := node.GetWorkerNodes()
 	for _, n := range nodes {
-		if n.Type == node.TypeWorker {
-			if err := d.WaitStart(n); err != nil {
-				return err
-			}
+		if err := d.WaitStart(n); err != nil {
+			return err
 		}
 	}
 
@@ -332,11 +319,11 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		}
 	}
 
-	return d.schedOps.ValidateRemoveLabels(vol, d.schedDriver)
+	return d.schedOps.ValidateRemoveLabels(vol)
 }
 
 func (d *portworx) ValidateVolumeCleanup() error {
-	return d.schedOps.ValidateVolumeCleanup(d.schedDriver, d.nodeDriver)
+	return d.schedOps.ValidateVolumeCleanup(d.nodeDriver)
 }
 
 func (d *portworx) StopDriver(n node.Node) error {
@@ -347,14 +334,15 @@ func (d *portworx) WaitStart(n node.Node) error {
 	var err error
 	// Wait for Portworx to become usable.
 	t := func() (interface{}, error) {
-		if status, _ := d.getClusterManager().NodeStatus(); status != api.Status_STATUS_OK {
+		clusterManager := d.getClusterManager()
+		if status, _ := clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
 			return "", &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", status),
 			}
 		}
 
-		pxNode, err := d.getClusterManager().Inspect(n.Name)
+		pxNode, err := clusterManager.Inspect(n.Name)
 		if err != nil {
 			return "", &ErrFailedToWaitForPx{
 				Node:  n,
@@ -382,13 +370,11 @@ func (d *portworx) WaitStart(n node.Node) error {
 
 func (d *portworx) setDriver() error {
 	var err error
-	nodes := d.schedDriver.GetNodes()
-
 	var endpoint string
+
 	// Try portworx-service first
-	svc, err := k8s.Instance().GetService(PXServiceName, PXNamespace)
-	if err == nil {
-		endpoint = svc.Spec.ClusterIP
+	endpoint = d.schedOps.GetServiceEndpoint()
+	if endpoint != "" {
 		if err = d.testAndSetEndpoint(endpoint); err == nil {
 			d.refreshEndpoint = false
 			return nil
@@ -401,14 +387,12 @@ func (d *portworx) setDriver() error {
 	// and working driver if the endpoint we are hooked onto goes
 	// down
 	d.refreshEndpoint = true
-	for _, n := range nodes {
-		if n.Type == node.TypeWorker {
-			for _, addr := range n.Addresses {
-				if err = d.testAndSetEndpoint(addr); err == nil {
-					return nil
-				}
-				logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
+	for _, n := range node.GetWorkerNodes() {
+		for _, addr := range n.Addresses {
+			if err = d.testAndSetEndpoint(addr); err == nil {
+				return nil
 			}
+			logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
 		}
 	}
 

@@ -9,7 +9,6 @@ import (
 
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
 	ssh_pkg "golang.org/x/crypto/ssh"
 )
 
@@ -26,11 +25,10 @@ const (
 
 type ssh struct {
 	node.Driver
-	username    string
-	password    string
-	keyPath     string
-	schedDriver scheduler.Driver
-	sshConfig   *ssh_pkg.ClientConfig
+	username  string
+	password  string
+	keyPath   string
+	sshConfig *ssh_pkg.ClientConfig
 	// TODO keyPath-based ssh
 }
 
@@ -55,9 +53,7 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	return pubkey, nil
 }
 
-func (s *ssh) Init(sched string) error {
-	var err error
-
+func (s *ssh) Init() error {
 	keyPath := os.Getenv("TORPEDO_SSH_KEY")
 	if len(keyPath) == 0 {
 		s.keyPath = DefaultSSHKey
@@ -101,22 +97,15 @@ func (s *ssh) Init(sched string) error {
 		return fmt.Errorf("Unknown auth type")
 	}
 
-	s.schedDriver, err = scheduler.Get(sched)
-	if err != nil {
-		return err
-	}
-
-	nodes := s.schedDriver.GetNodes()
+	nodes := node.GetWorkerNodes()
 	for _, n := range nodes {
-		if n.Type == node.TypeWorker {
-			if err := s.TestConnection(n, node.ConnectionOpts{
-				Timeout:         1 * time.Minute,
-				TimeBeforeRetry: 10 * time.Second,
-			}); err != nil {
-				return &node.ErrFailedToTestConnection{
-					Node:  n,
-					Cause: err.Error(),
-				}
+		if err := s.TestConnection(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}); err != nil {
+			return &node.ErrFailedToTestConnection{
+				Node:  n,
+				Cause: err.Error(),
 			}
 		}
 	}

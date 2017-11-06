@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
 )
 
 const (
@@ -27,7 +26,6 @@ type aws struct {
 	credentials *credentials.Credentials
 	config      *aws_pkg.Config
 	region      string
-	schedDriver scheduler.Driver
 	svc         *ec2.EC2
 	svcSsm      *ssm.SSM
 	instances   []*ec2.Instance
@@ -37,7 +35,7 @@ func (a *aws) String() string {
 	return DriverName
 }
 
-func (a *aws) Init(sched string) error {
+func (a *aws) Init() error {
 	var err error
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -53,10 +51,6 @@ func (a *aws) Init(sched string) error {
 	a.config = config
 	svc := ec2.New(sess, config)
 	a.svc = svc
-	a.schedDriver, err = scheduler.Get(sched)
-	if err != nil {
-		return err
-	}
 	a.svcSsm = ssm.New(sess, aws_pkg.NewConfig().WithRegion(a.region))
 	a.session = sess
 	instances, err := a.getAllInstances()
@@ -64,17 +58,15 @@ func (a *aws) Init(sched string) error {
 		return err
 	}
 	a.instances = instances
-	nodes := a.schedDriver.GetNodes()
+	nodes := node.GetWorkerNodes()
 	for _, n := range nodes {
-		if n.Type == node.TypeWorker {
-			if err := a.TestConnection(n, node.ConnectionOpts{
-				Timeout:         1 * time.Minute,
-				TimeBeforeRetry: 10 * time.Second,
-			}); err != nil {
-				return &node.ErrFailedToTestConnection{
-					Node:  n,
-					Cause: err.Error(),
-				}
+		if err := a.TestConnection(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}); err != nil {
+			return &node.ErrFailedToTestConnection{
+				Node:  n,
+				Cause: err.Error(),
 			}
 		}
 	}

@@ -41,9 +41,6 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
-	// GetNodes returns an array of all nodes in the cluster.
-	GetNodes() []node.Node
-
 	// IsNodeReady checks if node is in ready state. Returns nil if ready.
 	IsNodeReady(n node.Node) error
 

@@ -1,5 +1,5 @@
 hash: 0b86f4b815746ede3bbb9aec160f67b2f4bd911b9872d6f1dc81a583360981d2
-updated: 2017-10-30T18:09:49.017003-07:00
+updated: 2017-11-06T10:57:27.510820364-08:00
 imports:
 - name: github.com/armon/go-metrics
   version: 9a4b6e10bed6220a1665955aa2b75afc91eb10b3
@@ -244,6 +244,8 @@ imports:
   subpackages:
   - libcontainer/system
   - libcontainer/user
+- name: github.com/pborman/uuid
+  version: e790cca94e6cc75c7064b1332e63811d4aae1a53
 - name: github.com/pkg/errors
   version: f15c970de5b76fac0b59abb32d62c17cc7bed265
 - name: github.com/portworx/kvdb

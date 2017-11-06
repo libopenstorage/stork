@@ -10,12 +10,15 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
 const (
+	// PXServiceName is the name of the portworx service
+	PXServiceName = "portworx-service"
+	// PXNamespace is the kubernetes namespace in which portworx daemon set runs.
+	PXNamespace = "kube-system"
 	// k8sPxRunningLabelKey is the label key used for px state
 	k8sPxRunningLabelKey = "px/enabled"
 	// k8sPxNotRunningLabelValue is label value for a not running px state
@@ -95,34 +98,32 @@ func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume
 	return nil
 }
 
-func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume, sched scheduler.Driver) error {
+func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 	pvcLabel := vol.Name
 	var staleLabelNodes []string
-	for _, n := range sched.GetNodes() {
-		if n.Type == node.TypeWorker {
-			t := func() (interface{}, error) {
-				nodeLabels, err := k8s.Instance().GetLabelsOnNode(n.Name)
-				if err != nil {
-					return nil, err
-				}
-
-				if _, ok := nodeLabels[pvcLabel]; ok {
-					return nil, &errLabelPresent{
-						node:  n.Name,
-						label: pvcLabel,
-					}
-				}
-
-				return nil, nil
+	for _, n := range node.GetWorkerNodes() {
+		t := func() (interface{}, error) {
+			nodeLabels, err := k8s.Instance().GetLabelsOnNode(n.Name)
+			if err != nil {
+				return nil, err
 			}
 
-			_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
-			if err != nil {
-				if _, ok := err.(*errLabelPresent); ok {
-					staleLabelNodes = append(staleLabelNodes, n.Name)
-				} else {
-					return err
+			if _, ok := nodeLabels[pvcLabel]; ok {
+				return nil, &errLabelPresent{
+					node:  n.Name,
+					label: pvcLabel,
 				}
+			}
+
+			return nil, nil
+		}
+
+		_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
+		if err != nil {
+			if _, ok := err.(*errLabelPresent); ok {
+				staleLabelNodes = append(staleLabelNodes, n.Name)
+			} else {
+				return err
 			}
 		}
 	}
@@ -144,7 +145,7 @@ func (k *k8sSchedOps) GetVolumeName(vol *volume.Volume) string {
 	return ""
 }
 
-func (k *k8sSchedOps) ValidateVolumeCleanup(sched scheduler.Driver, d node.Driver) error {
+func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 	nodeToPodsMap := make(map[string][]string)
 	nodeMap := make(map[string]node.Node)
 
@@ -157,12 +158,10 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(sched scheduler.Driver, d node.Drive
 		Name:           "*portworx-volume",
 	}
 
-	for _, n := range sched.GetNodes() {
-		if n.Type == node.TypeWorker {
-			volDirList, _ := d.FindFiles(k8sPodsRootDir, n, listVolOpts)
-			nodeToPodsMap[n.Name] = separateFilePaths(volDirList)
-			nodeMap[n.Name] = n
-		}
+	for _, n := range node.GetWorkerNodes() {
+		volDirList, _ := d.FindFiles(k8sPodsRootDir, n, listVolOpts)
+		nodeToPodsMap[n.Name] = separateFilePaths(volDirList)
+		nodeMap[n.Name] = n
 	}
 
 	existingPods, _ := k8s.Instance().GetPods("")
@@ -219,6 +218,14 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(sched scheduler.Driver, d node.Drive
 		OrphanPods:   orphanPodsMap,
 		DirtyVolPods: dirtyVolPodsMap,
 	}
+}
+
+func (k *k8sSchedOps) GetServiceEndpoint() string {
+	svc, err := k8s.Instance().GetService(PXServiceName, PXNamespace)
+	if err == nil {
+		return svc.Spec.ClusterIP
+	}
+	return ""
 }
 
 func separateFilePaths(volDirList string) []string {
