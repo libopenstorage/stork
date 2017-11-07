@@ -2,10 +2,6 @@ package: github.com/portworx/torpedo
 import:
 - package: github.com/sirupsen/logrus
   version: 33a34430d1c3dc71777fdd677864928e5b5812bc
-- package: github.com/Sirupsen/logrus
-  repo: git@github.com:/sirupsen/logrus
-  vcs: git
-  version: master
 - package: github.com/fatih/color
   version: ^1.5.0
 - package: github.com/libopenstorage/openstorage
@@ -62,3 +58,5 @@ import:
   - private/protocol/xml/xmlutil
   - service/ec2
   - service/sts
+- package: github.com/gambol99/go-marathon
+  version: ^0.7.1

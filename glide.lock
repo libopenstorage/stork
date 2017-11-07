@@ -1,5 +1,5 @@
-hash: 0b86f4b815746ede3bbb9aec160f67b2f4bd911b9872d6f1dc81a583360981d2
-updated: 2017-11-06T10:57:27.510820364-08:00
+hash: 0037abb5cc30fb9c37abbb4689f6d1a45ac0d89e17def23ac7e5076839b91e32
+updated: 2017-11-06T16:33:14.584449325-08:00
 imports:
 - name: github.com/armon/go-metrics
   version: 9a4b6e10bed6220a1665955aa2b75afc91eb10b3
@@ -87,6 +87,8 @@ imports:
   - nat
 - name: github.com/docker/go-units
   version: 0dadbb0345b35ec7ef35e228dabb8de89a65bf52
+- name: github.com/donovanhide/eventsource
+  version: 3ed64d21fb0b6bd8b49bcfec08f3004daee8723d
 - name: github.com/emicklei/go-restful
   version: ff4f55a206334ef123e4f79bbf348980da81ca46
   subpackages:
@@ -97,6 +99,8 @@ imports:
   version: 570b54cabe6b8eb0bc2dfce68d964677d63b5260
 - name: github.com/fsouza/go-dockerclient
   version: de3ca5806469df077d946342784e525cc7d078ed
+- name: github.com/gambol99/go-marathon
+  version: 6b00a5b651b1beb2c6821863f7c60df490bd46c8
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
@@ -125,6 +129,10 @@ imports:
   subpackages:
   - proto
   - ptypes/timestamp
+- name: github.com/google/go-querystring
+  version: 53e6ce116135b80d037921a7fdd5138cf32d7a8a
+  subpackages:
+  - query
 - name: github.com/google/gofuzz
   version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
 - name: github.com/hashicorp/errwrap
@@ -261,12 +269,10 @@ imports:
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
-- name: github.com/Sirupsen/logrus
-  version: 89742aefa4b206dcf400792f3bd35b542998eb3b
-  repo: git@github.com:/sirupsen/logrus
-  vcs: git
 - name: github.com/sirupsen/logrus
   version: 33a34430d1c3dc71777fdd677864928e5b5812bc
+- name: github.com/Sirupsen/logrus
+  version: 89742aefa4b206dcf400792f3bd35b542998eb3b
 - name: github.com/spf13/pflag
   version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go
