@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/libopenstorage/stork.svg?branch=master)](https://travis-ci.org/libopenstorage/stork)
+[![Go Report Card](https://goreportcard.com/badge/github.com/libopenstorage/stork)](https://goreportcard.com/report/libopenstorage/stork)
+
 # Stork - Storage Orchestration Runtime for Kubernetes
 Stork is a Cloud Native storage orchestration runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage providor, it's capabilities and state.
 
