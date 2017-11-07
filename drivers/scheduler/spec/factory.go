@@ -69,12 +69,12 @@ func NewFactory(specDir string, parser Parser) (*Factory, error) {
 		specParser: parser,
 	}
 
-	files, err := ioutil.ReadDir(f.specDir)
+	appDirList, err := ioutil.ReadDir(f.specDir)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, file := range files {
+	for _, file := range appDirList {
 		if file.IsDir() {
 			specID := file.Name()
 
@@ -85,7 +85,7 @@ func NewFactory(specDir string, parser Parser) (*Factory, error) {
 				return nil, err
 			}
 
-			if specs == nil || len(specs) == 0 {
+			if len(specs) == 0 {
 				continue
 			}
 
@@ -98,7 +98,7 @@ func NewFactory(specDir string, parser Parser) (*Factory, error) {
 		}
 	}
 
-	if apps := f.GetAll(); apps == nil || len(apps) == 0 {
+	if apps := f.GetAll(); len(apps) == 0 {
 		return nil, fmt.Errorf("found 0 supported applications in given specDir: %v", specDir)
 	}
 

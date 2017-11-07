@@ -73,7 +73,7 @@ func rebootNodesTest(testName string, allNodes bool) {
 							err = Inst().S.IsNodeReady(n)
 							Expect(err).NotTo(HaveOccurred())
 
-							err = Inst().V.WaitStart(n)
+							err = Inst().V.WaitForNode(n)
 							Expect(err).NotTo(HaveOccurred())
 						})
 					}

@@ -69,7 +69,7 @@ func (e *ErrFailedToValidateStorage) Error() string {
 
 // ErrFailedToValidateApp error type for failing to validate an app
 type ErrFailedToValidateApp struct {
-	// App is the app that failed to destroy
+	// App is the app whose validation failed
 	App *spec.AppSpec
 	// Cause is the underlying cause of the error
 	Cause string

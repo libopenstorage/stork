@@ -1,0 +1,15 @@
+{
+    "id": "torpedo",
+    "description": "Run torpedo on DC/OS",
+    "run": {
+        "cpus": 0.5,
+        "mem": 256,
+        "docker": {
+            "image": "portworx/torpedo:latest"
+        },
+        "cmd": "ginkgo --slowSpecThreshold 180 -v bin/basic.test -- --spec-dir ../drivers/scheduler/dcos/specs --scheduler dcos",
+        "env": {
+            "TORPEDO_SSH_PASSWORD": "root"
+        }
+    }
+}

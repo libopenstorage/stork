@@ -17,7 +17,8 @@ import (
 	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	// import k8s driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	// import portworx driver to invoke it's init
@@ -177,7 +178,7 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.WaitStart(n)
+				err := Inst().V.WaitForNode(n)
 				expect(err).NotTo(haveOccurred())
 			}
 		})

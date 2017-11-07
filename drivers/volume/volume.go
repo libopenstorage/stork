@@ -45,8 +45,8 @@ type Driver interface {
 	// Start must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
 
-	// WaitStart must wait till the volume driver becomes usable on a given node.
-	WaitStart(n node.Node) error
+	// WaitForNode must wait till the volume driver becomes usable on a given node
+	WaitForNode(n node.Node) error
 }
 
 var (

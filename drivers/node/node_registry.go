@@ -19,7 +19,8 @@ func AddNode(n Node) error {
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	nodeRegistry[uuid.New()] = n
+	n.uuid = uuid.New()
+	nodeRegistry[n.uuid] = n
 	return nil
 }
 

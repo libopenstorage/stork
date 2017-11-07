@@ -182,7 +182,7 @@ func getAppNamespaceName(app *spec.AppSpec, instanceID string) string {
 
 func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
-	if options.AppKeys != nil && len(options.AppKeys) > 0 {
+	if len(options.AppKeys) > 0 {
 		for _, key := range options.AppKeys {
 			spec, err := k.specFactory.Get(key)
 			if err != nil {

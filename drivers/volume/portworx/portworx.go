@@ -54,16 +54,16 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		return err
 	}
 
-	nodes := node.GetWorkerNodes()
-	for _, n := range nodes {
-		if err := d.WaitStart(n); err != nil {
-			return err
-		}
-	}
-
-	cluster, err := d.getClusterManager().Enumerate()
+	cluster, err := d.getClusterOnStart()
 	if err != nil {
 		return err
+	}
+	d.updateNodes(cluster.Nodes)
+
+	for _, n := range node.GetWorkerNodes() {
+		if err := d.WaitForNode(n); err != nil {
+			return err
+		}
 	}
 
 	logrus.Infof("The following Portworx nodes are in the cluster:")
@@ -76,7 +76,25 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		)
 	}
 
-	return err
+	return nil
+}
+
+func (d *portworx) updateNodes(pxNodes []api.Node) {
+	for _, n := range node.GetNodes() {
+		d.updateNode(n, pxNodes)
+	}
+}
+
+func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) {
+	for _, address := range n.Addresses {
+		for _, pxNode := range pxNodes {
+			if address == pxNode.DataIp || address == pxNode.MgmtIp {
+				n.VolDriverNodeID = pxNode.Id
+				node.UpdateNode(n)
+				return
+			}
+		}
+	}
 }
 
 func (d *portworx) CleanupVolume(name string) error {
@@ -330,19 +348,33 @@ func (d *portworx) StopDriver(n node.Node) error {
 	return d.schedOps.DisableOnNode(n)
 }
 
-func (d *portworx) WaitStart(n node.Node) error {
-	var err error
-	// Wait for Portworx to become usable.
+func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 	t := func() (interface{}, error) {
-		clusterManager := d.getClusterManager()
-		if status, _ := clusterManager.NodeStatus(); status != api.Status_STATUS_OK {
-			return "", &ErrFailedToWaitForPx{
-				Node:  n,
-				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", status),
+		cluster, err := d.getClusterManager().Enumerate()
+		if err != nil {
+			return nil, err
+		}
+		if cluster.Status != api.Status_STATUS_OK {
+			return nil, &ErrFailedToWaitForPx{
+				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", cluster.Status),
 			}
 		}
 
-		pxNode, err := clusterManager.Inspect(n.Name)
+		return &cluster, nil
+	}
+
+	cluster, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	return cluster.(*api.Cluster), nil
+}
+
+// Wait for Portworx to be up on given node
+func (d *portworx) WaitForNode(n node.Node) error {
+	t := func() (interface{}, error) {
+		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
 			return "", &ErrFailedToWaitForPx{
 				Node:  n,
@@ -353,7 +385,7 @@ func (d *portworx) WaitStart(n node.Node) error {
 		if pxNode.Status != api.Status_STATUS_OK {
 			return "", &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("px cluster is usable but not status is not ok. Expected: %v Actual: %v",
+				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
 					api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
@@ -365,7 +397,7 @@ func (d *portworx) WaitStart(n node.Node) error {
 		return err
 	}
 
-	return err
+	return nil
 }
 
 func (d *portworx) setDriver() error {
