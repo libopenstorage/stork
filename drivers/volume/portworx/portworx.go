@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
 	"github.com/libopenstorage/openstorage/api/spec"
@@ -27,6 +28,9 @@ const (
 	pxdClientSchedUserAgent = "pxd-sched"
 	pxdRestPort             = 9001
 	pxVersionLabel          = "PX Version"
+	maintenanceOpRetries    = 3
+	enterMaintenancePath    = "/entermaintenance"
+	exitMaintenancePath     = "/exitmaintenance"
 )
 
 type portworx struct {
@@ -147,6 +151,78 @@ func (d *portworx) CleanupVolume(name string) error {
 
 			return nil
 		}
+	}
+
+	return nil
+}
+
+func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
+	const (
+		storageInfoKey = "STORAGE-INFO"
+		resourcesKey   = "Resources"
+		pathKey        = "path"
+	)
+	pxNode, err := d.getClusterManager().Inspect(n.Name)
+	if err != nil {
+		return []string{}, err
+	}
+	devPaths := []string{}
+
+	storageInfo, ok := pxNode.NodeData[storageInfoKey]
+	if !ok {
+		return []string{}, fmt.Errorf("Unable to find storage info for node: %v", n.Name)
+	}
+	storageInfoMap := storageInfo.(map[string]interface{})
+
+	resourcesMapIntf, ok := storageInfoMap[resourcesKey]
+	if !ok || resourcesMapIntf == nil {
+		return []string{}, fmt.Errorf("Unable to find resource info for node: %v", n.Name)
+	}
+	resourcesMap := resourcesMapIntf.(map[string]interface{})
+
+	for _, v := range resourcesMap {
+		resource := v.(map[string]interface{})
+		path, _ := resource[pathKey]
+		if path == "" {
+			continue
+		}
+		devPaths = append(devPaths, path.(string))
+	}
+	return devPaths, nil
+}
+
+func (d *portworx) RecoverDriver(n node.Node) error {
+
+	t := func() (interface{}, error) {
+		return nil, d.maintenanceOp(n, enterMaintenancePath)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+	t = func() (interface{}, error) {
+		apiNode, err := d.getClusterManager().Inspect(n.Name)
+		if err != nil {
+			return nil, err
+		}
+		if apiNode.Status == api.Status_STATUS_MAINTENANCE {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("Node %v is not in Maintenance mode", n.Name)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+		return &ErrFailedToRecoverDriver{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+	t = func() (interface{}, error) {
+		return nil, d.maintenanceOp(n, exitMaintenancePath)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+		return err
 	}
 
 	return nil
@@ -476,7 +552,7 @@ func (d *portworx) setDriver() error {
 }
 
 func (d *portworx) testAndSetEndpoint(endpoint string) error {
-	pxEndpoint := fmt.Sprintf("http://%s:%d", endpoint, pxdRestPort)
+	pxEndpoint := d.constructURL(endpoint)
 	cClient, err := clusterclient.NewClusterClient(pxEndpoint, "v1")
 	if err != nil {
 		return err
@@ -533,6 +609,22 @@ func (d *portworx) getClusterManager() cluster.Cluster {
 		d.setDriver()
 	}
 	return d.clusterManager
+
+}
+
+func (d *portworx) maintenanceOp(n node.Node, op string) error {
+	url := d.constructURL(n.Addresses[0])
+	c, err := client.NewClient(url, "", "")
+	if err != nil {
+		return err
+	}
+	req := c.Get().Resource(op)
+	resp := req.Do()
+	return resp.Error()
+}
+
+func (d *portworx) constructURL(ip string) string {
+	return fmt.Sprintf("http://%s:%d", ip, pxdRestPort)
 }
 
 func init() {

@@ -38,9 +38,9 @@ func (e *ErrFailedToDeleteVolume) Error() string {
 	return fmt.Sprintf("Failed to delete volume: %v due to err: %v", e.ID, e.Cause)
 }
 
-// ErrFailedToWaitForPx error type for failing to wait for px to be up on a node
+// ErrFailedToWaitForPx error type for failing to wait for PX to be up on a node
 type ErrFailedToWaitForPx struct {
-	// Node is the node on which px was waited upon
+	// Node is the node on which PX was waited upon
 	Node node.Node
 	// Cause is the underlying cause of the error
 	Cause string
@@ -60,4 +60,16 @@ type ErrFailedToUpgradeVolumeDriver struct {
 
 func (e *ErrFailedToUpgradeVolumeDriver) Error() string {
 	return fmt.Sprintf("Failed to upgrade volume driver to version: %v due to err: %v", e.Version, e.Cause)
+}
+
+// ErrFailedToRecoverDriver error type for failing to recover PX on a node
+type ErrFailedToRecoverDriver struct {
+	// Node is the node on which PX failed to recover on
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToRecoverDriver) Error() string {
+	return fmt.Sprintf("Failed to wait for px to be up on: %v due to err: %v", e.Node.Name, e.Cause)
 }

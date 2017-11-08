@@ -63,3 +63,23 @@ type ErrFailedToRunCommand struct {
 func (e *ErrFailedToRunCommand) Error() string {
 	return fmt.Sprintf("Failed to run command on: %v. Cause: %v", e.Addr, e.Cause)
 }
+
+// ErrFailedToYankDrive error type when we fail to simulate drive failure
+type ErrFailedToYankDrive struct {
+	Node  Node
+	Cause string
+}
+
+func (e *ErrFailedToYankDrive) Error() string {
+	return fmt.Sprintf("Failed to yank a drive on: %v. Cause: %v", e.Node.Name, e.Cause)
+}
+
+// ErrFailedToRecoverDrive error type when we fail to simulate drive failure
+type ErrFailedToRecoverDrive struct {
+	Node  Node
+	Cause string
+}
+
+func (e *ErrFailedToRecoverDrive) Error() string {
+	return fmt.Sprintf("Failed to recover a drive on: %v. Cause: %v", e.Node.Name, e.Cause)
+}
