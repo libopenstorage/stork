@@ -206,7 +206,7 @@ func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.Connec
 	}
 
 	driveID = strings.TrimRight(driveID, "\n")
-	driveNameToFail = strings.TrimRight(strings.TrimLeft(driveNameToFail, "/"), "/")
+	driveNameToFail = strings.Trim(driveNameToFail, "/")
 	devices := strings.Split(driveNameToFail, "/")
 
 	// Disable the block device, so that it returns IO errors

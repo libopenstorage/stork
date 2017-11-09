@@ -20,7 +20,8 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-func driveFailureTest(testName string) {
+var _ = Describe("Induce drive failure on of the nodes", func() {
+	testName := "drivefailure"
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error
 		contexts := ScheduleAndValidate(testName)
@@ -90,10 +91,6 @@ func driveFailureTest(testName string) {
 		})
 
 	})
-}
-
-var _ = Describe("Induce drive failure on of the nodes", func() {
-	driveFailureTest("drivefailure")
 })
 
 var _ = AfterSuite(func() {

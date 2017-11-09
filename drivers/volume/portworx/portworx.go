@@ -162,24 +162,24 @@ func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
 		resourcesKey   = "Resources"
 		pathKey        = "path"
 	)
-	pxNode, err := d.getClusterManager().Inspect(n.Name)
+	pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 	if err != nil {
-		return []string{}, err
+		return nil, err
 	}
-	devPaths := []string{}
 
 	storageInfo, ok := pxNode.NodeData[storageInfoKey]
 	if !ok {
-		return []string{}, fmt.Errorf("Unable to find storage info for node: %v", n.Name)
+		return nil, fmt.Errorf("Unable to find storage info for node: %v", n.Name)
 	}
 	storageInfoMap := storageInfo.(map[string]interface{})
 
 	resourcesMapIntf, ok := storageInfoMap[resourcesKey]
 	if !ok || resourcesMapIntf == nil {
-		return []string{}, fmt.Errorf("Unable to find resource info for node: %v", n.Name)
+		return nil, fmt.Errorf("Unable to find resource info for node: %v", n.Name)
 	}
 	resourcesMap := resourcesMapIntf.(map[string]interface{})
 
+	devPaths := []string{}
 	for _, v := range resourcesMap {
 		resource := v.(map[string]interface{})
 		path, _ := resource[pathKey]
