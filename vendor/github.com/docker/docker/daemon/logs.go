@@ -22,7 +22,7 @@ import (
 //
 // if it returns nil, the config channel will be active and return log
 // messages until it runs out or the context is canceled.
-func (daemon *Daemon) ContainerLogs(ctx context.Context, containerName string, config *types.ContainerLogsOptions) (<-chan *backend.LogMessage, bool, error) {
+func (daemon *Daemon) ContainerLogs(ctx context.Context, containerName string, config *types.ContainerLogsOptions) (<-chan *backend.LogMessage, error) {
 	lg := logrus.WithFields(logrus.Fields{
 		"module":    "daemon",
 		"method":    "(*Daemon).ContainerLogs",
@@ -30,24 +30,24 @@ func (daemon *Daemon) ContainerLogs(ctx context.Context, containerName string, c
 	})
 
 	if !(config.ShowStdout || config.ShowStderr) {
-		return nil, false, validationError{errors.New("You must choose at least one stream")}
+		return nil, errors.New("You must choose at least one stream")
 	}
 	container, err := daemon.GetContainer(containerName)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	if container.RemovalInProgress || container.Dead {
-		return nil, false, stateConflictError{errors.New("can not get logs from container which is dead or marked for removal")}
+		return nil, errors.New("can not get logs from container which is dead or marked for removal")
 	}
 
 	if container.HostConfig.LogConfig.Type == "none" {
-		return nil, false, logger.ErrReadLogsNotSupported{}
+		return nil, logger.ErrReadLogsNotSupported
 	}
 
 	cLog, cLogCreated, err := daemon.getLogger(container)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if cLogCreated {
 		defer func() {
@@ -59,7 +59,7 @@ func (daemon *Daemon) ContainerLogs(ctx context.Context, containerName string, c
 
 	logReader, ok := cLog.(logger.LogReader)
 	if !ok {
-		return nil, false, logger.ErrReadLogsNotSupported{}
+		return nil, logger.ErrReadLogsNotSupported
 	}
 
 	follow := config.Follow && !cLogCreated
@@ -72,7 +72,7 @@ func (daemon *Daemon) ContainerLogs(ctx context.Context, containerName string, c
 	if config.Since != "" {
 		s, n, err := timetypes.ParseTimestamps(config.Since, 0)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		since = time.Unix(s, n)
 	}
@@ -137,7 +137,7 @@ func (daemon *Daemon) ContainerLogs(ctx context.Context, containerName string, c
 			}
 		}
 	}()
-	return messageChan, container.Config.Tty, nil
+	return messageChan, nil
 }
 
 func (daemon *Daemon) getLogger(container *container.Container) (l logger.Logger, created bool, err error) {

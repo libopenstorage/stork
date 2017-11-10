@@ -45,7 +45,8 @@ const (
 const (
 	// Exit status codes that can be returned by the probe command.
 
-	exitStatusHealthy = 0 // Container is healthy
+	exitStatusHealthy   = 0 // Container is healthy
+	exitStatusUnhealthy = 1 // Container is unhealthy
 )
 
 // probe implementations know how to run a particular type of probe.
@@ -100,7 +101,7 @@ func (p *cmdProbe) run(ctx context.Context, d *Daemon, cntr *container.Container
 		return nil, err
 	}
 	if info.ExitCode == nil {
-		return nil, fmt.Errorf("healthcheck for container %s has no exit code", cntr.ID)
+		return nil, fmt.Errorf("Healthcheck for container %s has no exit code!", cntr.ID)
 	}
 	// Note: Go's json package will handle invalid UTF-8 for us
 	out := output.String()

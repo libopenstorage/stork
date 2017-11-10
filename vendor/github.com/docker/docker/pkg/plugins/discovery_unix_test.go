@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestLocalSocket(t *testing.T) {
@@ -91,7 +89,6 @@ func TestScan(t *testing.T) {
 
 	r := newLocalRegistry()
 	p, err := r.Plugin(name)
-	require.NoError(t, err)
 
 	pluginNamesNotEmpty, err := Scan()
 	if err != nil {

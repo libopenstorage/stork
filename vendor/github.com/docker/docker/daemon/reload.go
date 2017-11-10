@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/daemon/config"
 	"github.com/docker/docker/daemon/discovery"
+	"github.com/docker/docker/libcontainerd"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,9 +37,7 @@ func (daemon *Daemon) Reload(conf *config.Config) (err error) {
 		}
 	}()
 
-	if err := daemon.reloadPlatform(conf, attributes); err != nil {
-		return err
-	}
+	daemon.reloadPlatform(conf, attributes)
 	daemon.reloadDebug(conf, attributes)
 	daemon.reloadMaxConcurrentDownloadsAndUploads(conf, attributes)
 	daemon.reloadShutdownTimeout(conf, attributes)
@@ -302,6 +301,9 @@ func (daemon *Daemon) reloadLiveRestore(conf *config.Config, attributes map[stri
 	// update corresponding configuration
 	if conf.IsValueSet("live-restore") {
 		daemon.configStore.LiveRestoreEnabled = conf.LiveRestoreEnabled
+		if err := daemon.containerdRemote.UpdateOptions(libcontainerd.WithLiveRestore(conf.LiveRestoreEnabled)); err != nil {
+			return err
+		}
 	}
 
 	// prepare reload event attributes with updatable configurations

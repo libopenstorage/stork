@@ -308,6 +308,8 @@ func (n *Node) run(ctx context.Context) (err error) {
 			case <-agentDone:
 				return
 			case nodeChanges := <-n.notifyNodeChange:
+				currentRole := n.currentRole()
+
 				if nodeChanges.Node != nil {
 					// This is a bit complex to be backward compatible with older CAs that
 					// don't support the Node.Role field. They only use what's presently
@@ -333,7 +335,10 @@ func (n *Node) run(ctx context.Context) (err error) {
 				}
 
 				if nodeChanges.RootCert != nil {
-					if bytes.Equal(nodeChanges.RootCert, securityConfig.RootCA().Certs) {
+					// We only want to update the root CA if this is a worker node.  Manager nodes directly watch the raft
+					// store and update the root CA, with the necessary signer, from the raft store (since the managers
+					// need the CA key as well to potentially issue new TLS certificates).
+					if currentRole == api.NodeRoleManager || bytes.Equal(nodeChanges.RootCert, securityConfig.RootCA().Certs) {
 						continue
 					}
 					newRootCA, err := ca.NewRootCA(nodeChanges.RootCert, nil, nil, ca.DefaultNodeCertExpiration, nil)
@@ -341,7 +346,7 @@ func (n *Node) run(ctx context.Context) (err error) {
 						log.G(ctx).WithError(err).Error("invalid new root certificate from the dispatcher")
 						continue
 					}
-					if err := securityConfig.UpdateRootCA(&newRootCA); err != nil {
+					if err := securityConfig.UpdateRootCA(&newRootCA, newRootCA.Pool); err != nil {
 						log.G(ctx).WithError(err).Error("could not use new root CA from dispatcher")
 						continue
 					}
@@ -823,22 +828,14 @@ func (n *Node) runManager(ctx context.Context, securityConfig *ca.SecurityConfig
 		}
 	}
 
-	joinAddr := n.config.JoinAddr
-	if joinAddr == "" {
-		remoteAddr, err := n.remotes.Select(n.NodeID())
-		if err == nil {
-			joinAddr = remoteAddr.Addr
-		}
-	}
-
+	remoteAddr, _ := n.remotes.Select(n.NodeID())
 	m, err := manager.New(&manager.Config{
 		ForceNewCluster:  n.config.ForceNewCluster,
 		RemoteAPI:        remoteAPI,
 		ControlAPI:       n.config.ListenControlAPI,
 		SecurityConfig:   securityConfig,
 		ExternalCAs:      n.config.ExternalCAs,
-		JoinRaft:         joinAddr,
-		ForceJoin:        n.config.JoinAddr != "",
+		JoinRaft:         remoteAddr.Addr,
 		StateDir:         n.config.StateDir,
 		HeartbeatTick:    n.config.HeartbeatTick,
 		ElectionTick:     n.config.ElectionTick,

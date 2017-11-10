@@ -2,6 +2,7 @@
 package awslogs
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"regexp"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials/endpointcreds"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -22,22 +22,22 @@ import (
 	"github.com/docker/docker/daemon/logger"
 	"github.com/docker/docker/daemon/logger/loggerutils"
 	"github.com/docker/docker/dockerversion"
+	"github.com/docker/docker/pkg/templates"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	name                   = "awslogs"
-	regionKey              = "awslogs-region"
-	regionEnvKey           = "AWS_REGION"
-	logGroupKey            = "awslogs-group"
-	logStreamKey           = "awslogs-stream"
-	logCreateGroupKey      = "awslogs-create-group"
-	tagKey                 = "tag"
-	datetimeFormatKey      = "awslogs-datetime-format"
-	multilinePatternKey    = "awslogs-multiline-pattern"
-	credentialsEndpointKey = "awslogs-credentials-endpoint"
-	batchPublishFrequency  = 5 * time.Second
+	name                  = "awslogs"
+	regionKey             = "awslogs-region"
+	regionEnvKey          = "AWS_REGION"
+	logGroupKey           = "awslogs-group"
+	logStreamKey          = "awslogs-stream"
+	logCreateGroupKey     = "awslogs-create-group"
+	tagKey                = "tag"
+	datetimeFormatKey     = "awslogs-datetime-format"
+	multilinePatternKey   = "awslogs-multiline-pattern"
+	batchPublishFrequency = 5 * time.Second
 
 	// See: http://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_PutLogEvents.html
 	perEventBytes          = 26
@@ -51,8 +51,6 @@ const (
 	dataAlreadyAcceptedCode   = "DataAlreadyAcceptedException"
 	invalidSequenceTokenCode  = "InvalidSequenceTokenException"
 	resourceNotFoundCode      = "ResourceNotFoundException"
-
-	credentialsEndpoint = "http://169.254.170.2"
 
 	userAgentHeader = "User-Agent"
 )
@@ -196,15 +194,24 @@ var strftimeToRegex = map[string]string{
 	/*milliseconds          */ `%L`: `\.\d{3}`,
 }
 
+func parseLogGroup(info logger.Info, groupTemplate string) (string, error) {
+	tmpl, err := templates.NewParse("log-group", groupTemplate)
+	if err != nil {
+		return "", err
+	}
+	buf := new(bytes.Buffer)
+	if err := tmpl.Execute(buf, &info); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
 // newRegionFinder is a variable such that the implementation
 // can be swapped out for unit tests.
 var newRegionFinder = func() regionFinder {
 	return ec2metadata.New(session.New())
 }
-
-// newSDKEndpoint is a variable such that the implementation
-// can be swapped out for unit tests.
-var newSDKEndpoint = credentialsEndpoint
 
 // newAWSLogsClient creates the service client for Amazon CloudWatch Logs.
 // Customizations to the default client from the SDK include a Docker-specific
@@ -230,33 +237,11 @@ func newAWSLogsClient(info logger.Info) (api, error) {
 		}
 		region = &r
 	}
-
-	sess, err := session.NewSession()
-	if err != nil {
-		return nil, errors.New("Failed to create a service client session for for awslogs driver")
-	}
-
-	// attach region to cloudwatchlogs config
-	sess.Config.Region = region
-
-	if uri, ok := info.Config[credentialsEndpointKey]; ok {
-		logrus.Debugf("Trying to get credentials from awslogs-credentials-endpoint")
-
-		endpoint := fmt.Sprintf("%s%s", newSDKEndpoint, uri)
-		creds := endpointcreds.NewCredentialsClient(*sess.Config, sess.Handlers, endpoint,
-			func(p *endpointcreds.Provider) {
-				p.ExpiryWindow = 5 * time.Minute
-			})
-
-		// attach credentials to cloudwatchlogs config
-		sess.Config.Credentials = creds
-	}
-
 	logrus.WithFields(logrus.Fields{
 		"region": *region,
 	}).Debug("Created awslogs client")
 
-	client := cloudwatchlogs.New(sess)
+	client := cloudwatchlogs.New(session.New(), aws.NewConfig().WithRegion(*region))
 
 	client.Handlers.Build.PushBackNamed(request.NamedHandler{
 		Name: "DockerUserAgentHandler",
@@ -273,10 +258,6 @@ func newAWSLogsClient(info logger.Info) (api, error) {
 // Name returns the name of the awslogs logging driver
 func (l *logStream) Name() string {
 	return name
-}
-
-func (l *logStream) BufSize() int {
-	return maximumBytesPerEvent
 }
 
 // Log submits messages for logging by an instance of the awslogs logging driver
@@ -559,7 +540,6 @@ func ValidateLogOpt(cfg map[string]string) error {
 		case tagKey:
 		case datetimeFormatKey:
 		case multilinePatternKey:
-		case credentialsEndpointKey:
 		default:
 			return fmt.Errorf("unknown log opt '%s' for %s log driver", key, name)
 		}

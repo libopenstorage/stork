@@ -2,12 +2,12 @@
 
 package layer
 
-// SetOS writes the "os" file to the layer filestore
-func (fm *fileMetadataTransaction) SetOS(os OS) error {
+// SetPlatform writes the "platform" file to the layer filestore
+func (fm *fileMetadataTransaction) SetPlatform(platform Platform) error {
 	return nil
 }
 
-// GetOS reads the "os" file from the layer filestore
-func (fms *fileMetadataStore) GetOS(layer ChainID) (OS, error) {
+// GetPlatform reads the "platform" file from the layer filestore
+func (fms *fileMetadataStore) GetPlatform(layer ChainID) (Platform, error) {
 	return "", nil
 }

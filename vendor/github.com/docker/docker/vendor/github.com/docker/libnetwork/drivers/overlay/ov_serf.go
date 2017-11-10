@@ -120,9 +120,15 @@ func (d *driver) processEvent(u serf.UserEvent) {
 
 	switch action {
 	case "join":
-		d.peerAdd(nid, eid, net.ParseIP(ipStr), net.IPMask(net.ParseIP(maskStr).To4()), mac, net.ParseIP(vtepStr), false, false, false)
+		if err := d.peerAdd(nid, eid, net.ParseIP(ipStr), net.IPMask(net.ParseIP(maskStr).To4()), mac,
+			net.ParseIP(vtepStr), true, false, false); err != nil {
+			logrus.Errorf("Peer add failed in the driver: %v\n", err)
+		}
 	case "leave":
-		d.peerDelete(nid, eid, net.ParseIP(ipStr), net.IPMask(net.ParseIP(maskStr).To4()), mac, net.ParseIP(vtepStr), false)
+		if err := d.peerDelete(nid, eid, net.ParseIP(ipStr), net.IPMask(net.ParseIP(maskStr).To4()), mac,
+			net.ParseIP(vtepStr), true); err != nil {
+			logrus.Errorf("Peer delete failed in the driver: %v\n", err)
+		}
 	}
 }
 
@@ -135,13 +141,13 @@ func (d *driver) processQuery(q *serf.Query) {
 		fmt.Printf("Failed to scan query payload string: %v\n", err)
 	}
 
-	pKey, pEntry, err := d.peerDbSearch(nid, net.ParseIP(ipStr))
+	peerMac, peerIPMask, vtep, err := d.peerDbSearch(nid, net.ParseIP(ipStr))
 	if err != nil {
 		return
 	}
 
-	logrus.Debugf("Sending peer query resp mac %v, mask %s, vtep %s", pKey.peerMac, net.IP(pEntry.peerIPMask).String(), pEntry.vtep)
-	q.Respond([]byte(fmt.Sprintf("%s %s %s", pKey.peerMac.String(), net.IP(pEntry.peerIPMask).String(), pEntry.vtep.String())))
+	logrus.Debugf("Sending peer query resp mac %s, mask %s, vtep %s", peerMac, net.IP(peerIPMask), vtep)
+	q.Respond([]byte(fmt.Sprintf("%s %s %s", peerMac.String(), net.IP(peerIPMask).String(), vtep.String())))
 }
 
 func (d *driver) resolvePeer(nid string, peerIP net.IP) (net.HardwareAddr, net.IPMask, net.IP, error) {

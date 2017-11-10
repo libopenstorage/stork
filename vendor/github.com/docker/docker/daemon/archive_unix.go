@@ -4,7 +4,6 @@ package daemon
 
 import (
 	"github.com/docker/docker/container"
-	"github.com/docker/docker/volume"
 )
 
 // checkIfPathIsInAVolume checks if the path is in a volume. If it is, it
@@ -12,9 +11,8 @@ import (
 // cannot be configured with a read-only rootfs.
 func checkIfPathIsInAVolume(container *container.Container, absPath string) (bool, error) {
 	var toVolume bool
-	parser := volume.NewParser(container.OS)
 	for _, mnt := range container.MountPoints {
-		if toVolume = parser.HasResource(mnt, absPath); toVolume {
+		if toVolume = mnt.HasResource(absPath); toVolume {
 			if mnt.RW {
 				break
 			}

@@ -7,12 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/integration-cli/request"
 	"github.com/go-check/check"
-	"golang.org/x/net/context"
 )
 
 func (s *DockerSuite) TestLogsAPIWithStdout(c *check.C) {
@@ -54,13 +51,13 @@ func (s *DockerSuite) TestLogsAPIWithStdout(c *check.C) {
 func (s *DockerSuite) TestLogsAPINoStdoutNorStderr(c *check.C) {
 	name := "logs_test"
 	dockerCmd(c, "run", "-d", "-t", "--name", name, "busybox", "/bin/sh")
-	cli, err := client.NewEnvClient()
-	c.Assert(err, checker.IsNil)
-	defer cli.Close()
 
-	_, err = cli.ContainerLogs(context.Background(), name, types.ContainerLogsOptions{})
+	status, body, err := request.SockRequest("GET", fmt.Sprintf("/containers/%s/logs", name), nil, daemonHost())
+	c.Assert(status, checker.Equals, http.StatusBadRequest)
+	c.Assert(err, checker.IsNil)
+
 	expected := "Bad parameters: you must choose at least one stream"
-	c.Assert(err.Error(), checker.Contains, expected)
+	c.Assert(getErrorMessage(c, body), checker.Contains, expected)
 }
 
 // Regression test for #12704

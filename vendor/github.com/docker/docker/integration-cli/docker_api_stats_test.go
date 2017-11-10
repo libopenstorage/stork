@@ -13,11 +13,9 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/versions"
-	"github.com/docker/docker/client"
 	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/integration-cli/request"
 	"github.com/go-check/check"
-	"golang.org/x/net/context"
 )
 
 var expectedNetworkInterfaceStats = strings.Split("rx_bytes rx_dropped rx_errors rx_packets tx_bytes tx_dropped tx_errors tx_packets", " ")
@@ -262,16 +260,14 @@ func jsonBlobHasGTE121NetworkStats(blob map[string]interface{}) bool {
 
 func (s *DockerSuite) TestAPIStatsContainerNotFound(c *check.C) {
 	testRequires(c, DaemonIsLinux)
-	cli, err := client.NewEnvClient()
+
+	status, _, err := request.SockRequest("GET", "/containers/nonexistent/stats", nil, daemonHost())
 	c.Assert(err, checker.IsNil)
-	defer cli.Close()
+	c.Assert(status, checker.Equals, http.StatusNotFound)
 
-	expected := "No such container: nonexistent"
-
-	_, err = cli.ContainerStats(context.Background(), "nonexistent", true)
-	c.Assert(err.Error(), checker.Contains, expected)
-	_, err = cli.ContainerStats(context.Background(), "nonexistent", false)
-	c.Assert(err.Error(), checker.Contains, expected)
+	status, _, err = request.SockRequest("GET", "/containers/nonexistent/stats?stream=0", nil, daemonHost())
+	c.Assert(err, checker.IsNil)
+	c.Assert(status, checker.Equals, http.StatusNotFound)
 }
 
 func (s *DockerSuite) TestAPIStatsNoStreamConnectedContainers(c *check.C) {
@@ -285,7 +281,7 @@ func (s *DockerSuite) TestAPIStatsNoStreamConnectedContainers(c *check.C) {
 	id2 := strings.TrimSpace(out2)
 	c.Assert(waitRun(id2), checker.IsNil)
 
-	ch := make(chan error, 1)
+	ch := make(chan error)
 	go func() {
 		resp, body, err := request.Get(fmt.Sprintf("/containers/%s/stats?stream=false", id2))
 		defer body.Close()

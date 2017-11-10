@@ -12,9 +12,9 @@ import (
 	"sync"
 
 	"github.com/docker/docker/daemon/logger"
-	"github.com/docker/docker/daemon/logger/jsonfilelog/jsonlog"
 	"github.com/docker/docker/daemon/logger/loggerutils"
-	units "github.com/docker/go-units"
+	"github.com/docker/docker/pkg/jsonlog"
+	"github.com/docker/go-units"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -106,19 +106,25 @@ func writeMessageBuf(w io.Writer, m *logger.Message, extra json.RawMessage, buf 
 		return err
 	}
 	logger.PutMessage(m)
-	_, err := w.Write(buf.Bytes())
-	return errors.Wrap(err, "error writing log entry")
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		return errors.Wrap(err, "error writing log entry")
+	}
+	return nil
 }
 
 func marshalMessage(msg *logger.Message, extra json.RawMessage, buf *bytes.Buffer) error {
+	timestamp, err := jsonlog.FastTimeMarshalJSON(msg.Timestamp)
+	if err != nil {
+		return err
+	}
 	logLine := msg.Line
 	if !msg.Partial {
 		logLine = append(msg.Line, '\n')
 	}
-	err := (&jsonlog.JSONLogs{
+	err = (&jsonlog.JSONLogs{
 		Log:      logLine,
 		Stream:   msg.Source,
-		Created:  msg.Timestamp,
+		Created:  timestamp,
 		RawAttrs: extra,
 	}).MarshalJSONBuf(buf)
 	if err != nil {

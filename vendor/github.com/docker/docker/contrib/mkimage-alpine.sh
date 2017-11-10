@@ -47,7 +47,7 @@ pack() {
 }
 
 save() {
-	[ $SAVE -eq 1 ] || return 0
+	[ $SAVE -eq 1 ] || return
 
 	tar --numeric-owner -C $ROOTFS -c . | xz > rootfs.tar.xz
 }

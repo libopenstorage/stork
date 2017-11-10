@@ -1,25 +1,18 @@
 package daemon
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/pkg/errors"
 )
 
 // ContainerUpdate updates configuration of the container
 func (daemon *Daemon) ContainerUpdate(name string, hostConfig *container.HostConfig) (container.ContainerUpdateOKBody, error) {
 	var warnings []string
 
-	c, err := daemon.GetContainer(name)
+	warnings, err := daemon.verifyContainerSettings(hostConfig, nil, true)
 	if err != nil {
 		return container.ContainerUpdateOKBody{Warnings: warnings}, err
-	}
-
-	warnings, err = daemon.verifyContainerSettings(c.OS, hostConfig, nil, true)
-	if err != nil {
-		return container.ContainerUpdateOKBody{Warnings: warnings}, validationError{err}
 	}
 
 	if err := daemon.update(name, hostConfig); err != nil {
@@ -51,7 +44,7 @@ func (daemon *Daemon) update(name string, hostConfig *container.HostConfig) erro
 	}()
 
 	if container.RemovalInProgress || container.Dead {
-		return errCannotUpdate(container.ID, fmt.Errorf("container is marked for removal and cannot be \"update\""))
+		return errCannotUpdate(container.ID, fmt.Errorf("Container is marked for removal and cannot be \"update\"."))
 	}
 
 	container.Lock()
@@ -77,10 +70,9 @@ func (daemon *Daemon) update(name string, hostConfig *container.HostConfig) erro
 	// If container is running (including paused), we need to update configs
 	// to the real world.
 	if container.IsRunning() && !container.IsRestarting() {
-		if err := daemon.containerd.UpdateResources(context.Background(), container.ID, toContainerdResources(hostConfig.Resources)); err != nil {
+		if err := daemon.containerd.UpdateResources(container.ID, toContainerdResources(hostConfig.Resources)); err != nil {
 			restoreConfig = true
-			// TODO: it would be nice if containerd responded with better errors here so we can classify this better.
-			return errCannotUpdate(container.ID, systemError{err})
+			return errCannotUpdate(container.ID, err)
 		}
 	}
 
@@ -90,5 +82,5 @@ func (daemon *Daemon) update(name string, hostConfig *container.HostConfig) erro
 }
 
 func errCannotUpdate(containerID string, err error) error {
-	return errors.Wrap(err, "Cannot update container "+containerID)
+	return fmt.Errorf("Cannot update container %s: %v", containerID, err)
 }

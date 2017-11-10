@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution/reference"
+	apierrors "github.com/docker/docker/api/errors"
 	apitypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/backend"
 	types "github.com/docker/docker/api/types/swarm"
@@ -74,7 +75,7 @@ func (c *Cluster) GetServices(options apitypes.ServiceListOptions) ([]types.Serv
 	services := make([]types.Service, 0, len(r.Services))
 
 	for _, service := range r.Services {
-		if options.Filters.Contains("mode") {
+		if options.Filters.Include("mode") {
 			var mode string
 			switch service.Spec.GetMode().(type) {
 			case *swarmapi.ServiceSpec_Global:
@@ -128,7 +129,7 @@ func (c *Cluster) CreateService(s types.ServiceSpec, encodedAuth string, queryRe
 
 		serviceSpec, err := convert.ServiceSpecToGRPC(s)
 		if err != nil {
-			return convertError{err}
+			return apierrors.NewBadRequestError(err)
 		}
 
 		resp = &apitypes.ServiceCreateResponse{}
@@ -138,16 +139,9 @@ func (c *Cluster) CreateService(s types.ServiceSpec, encodedAuth string, queryRe
 		case *swarmapi.TaskSpec_Generic:
 			switch serviceSpec.Task.GetGeneric().Kind {
 			case string(types.RuntimePlugin):
-				info, _ := c.config.Backend.SystemInfo()
-				if !info.ExperimentalBuild {
-					return fmt.Errorf("runtime type %q only supported in experimental", types.RuntimePlugin)
-				}
 				if s.TaskTemplate.PluginSpec == nil {
 					return errors.New("plugin spec must be set")
 				}
-
-			default:
-				return fmt.Errorf("unsupported runtime type: %q", serviceSpec.Task.GetGeneric().Kind)
 			}
 
 			r, err := state.controlClient.CreateService(ctx, &swarmapi.CreateServiceRequest{Spec: &serviceSpec})
@@ -232,7 +226,7 @@ func (c *Cluster) UpdateService(serviceIDOrName string, version uint64, spec typ
 
 		serviceSpec, err := convert.ServiceSpecToGRPC(spec)
 		if err != nil {
-			return convertError{err}
+			return apierrors.NewBadRequestError(err)
 		}
 
 		currentService, err := getService(ctx, state.controlClient, serviceIDOrName, false)

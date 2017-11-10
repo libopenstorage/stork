@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/containerd/console"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/utils"
@@ -290,7 +289,7 @@ func TestExecInTTY(t *testing.T) {
 	defer child.Close()
 	ps.ConsoleSocket = child
 	type cdata struct {
-		c   console.Console
+		c   libcontainer.Console
 		err error
 	}
 	dc := make(chan *cdata, 1)
@@ -300,18 +299,10 @@ func TestExecInTTY(t *testing.T) {
 			dc <- &cdata{
 				err: err,
 			}
-			return
 		}
-		c, err := console.ConsoleFromFile(f)
-		if err != nil {
-			dc <- &cdata{
-				err: err,
-			}
-			return
-		}
-		console.ClearONLCR(c.Fd())
+		libcontainer.SaneTerminal(f)
 		dc <- &cdata{
-			c: c,
+			c: libcontainer.ConsoleFromFile(f),
 		}
 	}()
 	err = container.Run(ps)

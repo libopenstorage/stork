@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/docker/pkg/jsonlog"
 	"github.com/docker/docker/pkg/term"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestError(t *testing.T) {
@@ -114,8 +114,8 @@ func TestJSONMessageDisplay(t *testing.T) {
 			From:   "From",
 			Status: "status",
 		}: {
-			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(now.Unix(), 0).Format(RFC3339NanoFixed)),
-			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(now.Unix(), 0).Format(RFC3339NanoFixed)),
+			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(now.Unix(), 0).Format(jsonlog.RFC3339NanoFixed)),
+			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(now.Unix(), 0).Format(jsonlog.RFC3339NanoFixed)),
 		},
 		// General, with nano precision time
 		{
@@ -124,8 +124,8 @@ func TestJSONMessageDisplay(t *testing.T) {
 			From:     "From",
 			Status:   "status",
 		}: {
-			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(0, now.UnixNano()).Format(RFC3339NanoFixed)),
-			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(0, now.UnixNano()).Format(RFC3339NanoFixed)),
+			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(0, now.UnixNano()).Format(jsonlog.RFC3339NanoFixed)),
+			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(0, now.UnixNano()).Format(jsonlog.RFC3339NanoFixed)),
 		},
 		// General, with both times Nano is preferred
 		{
@@ -135,8 +135,8 @@ func TestJSONMessageDisplay(t *testing.T) {
 			From:     "From",
 			Status:   "status",
 		}: {
-			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(0, now.UnixNano()).Format(RFC3339NanoFixed)),
-			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(0, now.UnixNano()).Format(RFC3339NanoFixed)),
+			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(0, now.UnixNano()).Format(jsonlog.RFC3339NanoFixed)),
+			fmt.Sprintf("%v ID: (from From) status\n", time.Unix(0, now.UnixNano()).Format(jsonlog.RFC3339NanoFixed)),
 		},
 		// Stream over status
 		{
@@ -198,7 +198,9 @@ func TestJSONMessageDisplayWithJSONError(t *testing.T) {
 
 	jsonMessage = JSONMessage{Error: &JSONError{401, "Anything"}}
 	err = jsonMessage.Display(data, &noTermInfo{})
-	assert.EqualError(t, err, "authentication is required")
+	if err == nil || err.Error() != "Authentication is required." {
+		t.Fatalf("Expected an error \"Authentication is required.\", got %q", err)
+	}
 }
 
 func TestDisplayJSONMessagesStreamInvalidJSON(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	apierrors "github.com/docker/docker/api/errors"
 	"github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
 	networktypes "github.com/docker/docker/api/types/network"
@@ -36,31 +37,17 @@ func (daemon *Daemon) ContainerCreate(params types.ContainerCreateConfig) (conta
 func (daemon *Daemon) containerCreate(params types.ContainerCreateConfig, managed bool) (containertypes.ContainerCreateCreatedBody, error) {
 	start := time.Now()
 	if params.Config == nil {
-		return containertypes.ContainerCreateCreatedBody{}, validationError{errors.New("Config cannot be empty in order to create a container")}
+		return containertypes.ContainerCreateCreatedBody{}, fmt.Errorf("Config cannot be empty in order to create a container")
 	}
 
-	os := runtime.GOOS
-	if params.Config.Image != "" {
-		img, err := daemon.GetImage(params.Config.Image)
-		if err == nil {
-			os = img.OS
-		}
-	} else {
-		// This mean scratch. On Windows, we can safely assume that this is a linux
-		// container. On other platforms, it's the host OS (which it already is)
-		if runtime.GOOS == "windows" && system.LCOWSupported() {
-			os = "linux"
-		}
-	}
-
-	warnings, err := daemon.verifyContainerSettings(os, params.HostConfig, params.Config, false)
+	warnings, err := daemon.verifyContainerSettings(params.HostConfig, params.Config, false)
 	if err != nil {
-		return containertypes.ContainerCreateCreatedBody{Warnings: warnings}, validationError{err}
+		return containertypes.ContainerCreateCreatedBody{Warnings: warnings}, err
 	}
 
-	err = verifyNetworkingConfig(params.NetworkingConfig)
+	err = daemon.verifyNetworkingConfig(params.NetworkingConfig)
 	if err != nil {
-		return containertypes.ContainerCreateCreatedBody{Warnings: warnings}, validationError{err}
+		return containertypes.ContainerCreateCreatedBody{Warnings: warnings}, err
 	}
 
 	if params.HostConfig == nil {
@@ -68,12 +55,12 @@ func (daemon *Daemon) containerCreate(params types.ContainerCreateConfig, manage
 	}
 	err = daemon.adaptContainerSettings(params.HostConfig, params.AdjustCPUShares)
 	if err != nil {
-		return containertypes.ContainerCreateCreatedBody{Warnings: warnings}, validationError{err}
+		return containertypes.ContainerCreateCreatedBody{Warnings: warnings}, err
 	}
 
 	container, err := daemon.create(params, managed)
 	if err != nil {
-		return containertypes.ContainerCreateCreatedBody{Warnings: warnings}, err
+		return containertypes.ContainerCreateCreatedBody{Warnings: warnings}, daemon.imageNotExistToErrcode(err)
 	}
 	containerActions.WithValues("create").UpdateSince(start)
 
@@ -89,33 +76,51 @@ func (daemon *Daemon) create(params types.ContainerCreateConfig, managed bool) (
 		err       error
 	)
 
-	os := runtime.GOOS
+	// TODO: @jhowardmsft LCOW support - at a later point, can remove the hard-coding
+	// to force the platform to be linux.
+	// Default the platform if not supplied
+	if params.Platform == "" {
+		params.Platform = runtime.GOOS
+	}
+	if system.LCOWSupported() {
+		params.Platform = "linux"
+	}
+
 	if params.Config.Image != "" {
 		img, err = daemon.GetImage(params.Config.Image)
 		if err != nil {
 			return nil, err
 		}
-		os = img.OS
+
+		if runtime.GOOS == "solaris" && img.OS != "solaris " {
+			return nil, errors.New("platform on which parent image was created is not Solaris")
+		}
 		imgID = img.ID()
 
 		if runtime.GOOS == "windows" && img.OS == "linux" && !system.LCOWSupported() {
-			return nil, errors.New("operating system on which parent image was created is not Windows")
+			return nil, errors.New("platform on which parent image was created is not Windows")
 		}
-	} else {
-		if runtime.GOOS == "windows" {
-			os = "linux" // 'scratch' case.
+	}
+
+	// Make sure the platform requested matches the image
+	if img != nil {
+		if params.Platform != img.Platform() {
+			// Ignore this in LCOW mode. @jhowardmsft TODO - This will need revisiting later.
+			if !system.LCOWSupported() {
+				return nil, fmt.Errorf("cannot create a %s container from a %s image", params.Platform, img.Platform())
+			}
 		}
 	}
 
 	if err := daemon.mergeAndVerifyConfig(params.Config, img); err != nil {
-		return nil, validationError{err}
+		return nil, err
 	}
 
 	if err := daemon.mergeAndVerifyLogConfig(&params.HostConfig.LogConfig); err != nil {
-		return nil, validationError{err}
+		return nil, err
 	}
 
-	if container, err = daemon.newContainer(params.Name, os, params.Config, params.HostConfig, imgID, managed); err != nil {
+	if container, err = daemon.newContainer(params.Name, params.Platform, params.Config, params.HostConfig, imgID, managed); err != nil {
 		return nil, err
 	}
 	defer func() {
@@ -132,26 +137,9 @@ func (daemon *Daemon) create(params types.ContainerCreateConfig, managed bool) (
 
 	container.HostConfig.StorageOpt = params.HostConfig.StorageOpt
 
-	// Fixes: https://github.com/moby/moby/issues/34074 and
-	// https://github.com/docker/for-win/issues/999.
-	// Merge the daemon's storage options if they aren't already present. We only
-	// do this on Windows as there's no effective sandbox size limit other than
-	// physical on Linux.
-	if runtime.GOOS == "windows" {
-		if container.HostConfig.StorageOpt == nil {
-			container.HostConfig.StorageOpt = make(map[string]string)
-		}
-		for _, v := range daemon.configStore.GraphOptions {
-			opt := strings.SplitN(v, "=", 2)
-			if _, ok := container.HostConfig.StorageOpt[opt[0]]; !ok {
-				container.HostConfig.StorageOpt[opt[0]] = opt[1]
-			}
-		}
-	}
-
 	// Set RWLayer for container after mount labels have been set
 	if err := daemon.setRWLayer(container); err != nil {
-		return nil, systemError{err}
+		return nil, err
 	}
 
 	rootIDs := daemon.idMappings.RootPair()
@@ -166,7 +154,7 @@ func (daemon *Daemon) create(params types.ContainerCreateConfig, managed bool) (
 		return nil, err
 	}
 
-	if err := daemon.createContainerOSSpecificSettings(container, params.Config, params.HostConfig); err != nil {
+	if err := daemon.createContainerPlatformSpecificSettings(container, params.Config, params.HostConfig); err != nil {
 		return nil, err
 	}
 
@@ -249,7 +237,7 @@ func (daemon *Daemon) generateSecurityOpt(hostConfig *containertypes.HostConfig)
 func (daemon *Daemon) setRWLayer(container *container.Container) error {
 	var layerID layer.ChainID
 	if container.ImageID != "" {
-		img, err := daemon.stores[container.OS].imageStore.Get(container.ImageID)
+		img, err := daemon.stores[container.Platform].imageStore.Get(container.ImageID)
 		if err != nil {
 			return err
 		}
@@ -262,7 +250,7 @@ func (daemon *Daemon) setRWLayer(container *container.Container) error {
 		StorageOpt: container.HostConfig.StorageOpt,
 	}
 
-	rwLayer, err := daemon.stores[container.OS].layerStore.CreateRWLayer(container.ID, layerID, rwLayerOpts)
+	rwLayer, err := daemon.stores[container.Platform].layerStore.CreateRWLayer(container.ID, layerID, rwLayerOpts)
 	if err != nil {
 		return err
 	}
@@ -307,7 +295,7 @@ func (daemon *Daemon) mergeAndVerifyConfig(config *containertypes.Config, img *i
 
 // Checks if the client set configurations for more than one network while creating a container
 // Also checks if the IPAMConfig is valid
-func verifyNetworkingConfig(nwConfig *networktypes.NetworkingConfig) error {
+func (daemon *Daemon) verifyNetworkingConfig(nwConfig *networktypes.NetworkingConfig) error {
 	if nwConfig == nil || len(nwConfig.EndpointsConfig) == 0 {
 		return nil
 	}
@@ -315,14 +303,14 @@ func verifyNetworkingConfig(nwConfig *networktypes.NetworkingConfig) error {
 		for _, v := range nwConfig.EndpointsConfig {
 			if v != nil && v.IPAMConfig != nil {
 				if v.IPAMConfig.IPv4Address != "" && net.ParseIP(v.IPAMConfig.IPv4Address).To4() == nil {
-					return errors.Errorf("invalid IPv4 address: %s", v.IPAMConfig.IPv4Address)
+					return apierrors.NewBadRequestError(fmt.Errorf("invalid IPv4 address: %s", v.IPAMConfig.IPv4Address))
 				}
 				if v.IPAMConfig.IPv6Address != "" {
 					n := net.ParseIP(v.IPAMConfig.IPv6Address)
 					// if the address is an invalid network address (ParseIP == nil) or if it is
 					// an IPv4 address (To4() != nil), then it is an invalid IPv6 address
 					if n == nil || n.To4() != nil {
-						return errors.Errorf("invalid IPv6 address: %s", v.IPAMConfig.IPv6Address)
+						return apierrors.NewBadRequestError(fmt.Errorf("invalid IPv6 address: %s", v.IPAMConfig.IPv6Address))
 					}
 				}
 			}
@@ -333,5 +321,6 @@ func verifyNetworkingConfig(nwConfig *networktypes.NetworkingConfig) error {
 	for k := range nwConfig.EndpointsConfig {
 		l = append(l, k)
 	}
-	return errors.Errorf("Container cannot be connected to network endpoints: %s", strings.Join(l, ", "))
+	err := fmt.Errorf("Container cannot be connected to network endpoints: %s", strings.Join(l, ", "))
+	return apierrors.NewBadRequestError(err)
 }

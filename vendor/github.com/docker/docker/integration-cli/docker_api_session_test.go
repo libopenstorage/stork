@@ -5,6 +5,7 @@ import (
 
 	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/integration-cli/request"
+	"github.com/docker/docker/pkg/testutil"
 	"github.com/go-check/check"
 )
 
@@ -28,7 +29,7 @@ func (s *DockerSuite) TestSessionCreateWithBadUpgrade(c *check.C) {
 	res, body, err := request.Post("/session")
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusBadRequest)
-	buf, err := request.ReadBody(body)
+	buf, err := testutil.ReadBody(body)
 	c.Assert(err, checker.IsNil)
 
 	out := string(buf)
@@ -40,7 +41,7 @@ func (s *DockerSuite) TestSessionCreateWithBadUpgrade(c *check.C) {
 	})
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusBadRequest)
-	buf, err = request.ReadBody(body)
+	buf, err = testutil.ReadBody(body)
 	c.Assert(err, checker.IsNil)
 
 	out = string(buf)

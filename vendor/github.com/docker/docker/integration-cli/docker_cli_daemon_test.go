@@ -28,18 +28,18 @@ import (
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
-	moby_daemon "github.com/docker/docker/daemon"
 	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/integration-cli/cli"
 	"github.com/docker/docker/integration-cli/daemon"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/stringid"
+	"github.com/docker/docker/pkg/testutil"
+	icmd "github.com/docker/docker/pkg/testutil/cmd"
 	units "github.com/docker/go-units"
 	"github.com/docker/libnetwork/iptables"
 	"github.com/docker/libtrust"
 	"github.com/go-check/check"
-	"github.com/gotestyourself/gotestyourself/icmd"
 	"github.com/kr/pty"
 	"golang.org/x/sys/unix"
 )
@@ -49,7 +49,6 @@ import (
 func (s *DockerDaemonSuite) TestLegacyDaemonCommand(c *check.C) {
 	cmd := exec.Command(dockerBinary, "daemon", "--storage-driver=vfs", "--debug")
 	err := cmd.Start()
-	go cmd.Wait()
 	c.Assert(err, checker.IsNil, check.Commentf("could not start daemon using 'docker daemon'"))
 
 	c.Assert(cmd.Process.Kill(), checker.IsNil)
@@ -203,7 +202,7 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithInvalidBasesize(c *check.C) {
 	testRequires(c, Devicemapper)
 	s.d.Start(c)
 
-	oldBasesizeBytes := getBaseDeviceSize(c, s.d)
+	oldBasesizeBytes := s.d.GetBaseDeviceSize(c)
 	var newBasesizeBytes int64 = 1073741824 //1GB in bytes
 
 	if newBasesizeBytes < oldBasesizeBytes {
@@ -223,7 +222,7 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithIncreasedBasesize(c *check.C) {
 	testRequires(c, Devicemapper)
 	s.d.Start(c)
 
-	oldBasesizeBytes := getBaseDeviceSize(c, s.d)
+	oldBasesizeBytes := s.d.GetBaseDeviceSize(c)
 
 	var newBasesizeBytes int64 = 53687091200 //50GB in bytes
 
@@ -234,29 +233,11 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithIncreasedBasesize(c *check.C) {
 	err := s.d.RestartWithError("--storage-opt", fmt.Sprintf("dm.basesize=%d", newBasesizeBytes))
 	c.Assert(err, check.IsNil, check.Commentf("we should have been able to start the daemon with increased base device size: %v", err))
 
-	basesizeAfterRestart := getBaseDeviceSize(c, s.d)
+	basesizeAfterRestart := s.d.GetBaseDeviceSize(c)
 	newBasesize, err := convertBasesize(newBasesizeBytes)
 	c.Assert(err, check.IsNil, check.Commentf("Error in converting base device size: %v", err))
 	c.Assert(newBasesize, check.Equals, basesizeAfterRestart, check.Commentf("Basesize passed is not equal to Basesize set"))
 	s.d.Stop(c)
-}
-
-func getBaseDeviceSize(c *check.C, d *daemon.Daemon) int64 {
-	info := d.Info(c)
-	for _, statusLine := range info.DriverStatus {
-		key, value := statusLine[0], statusLine[1]
-		if key == "Base Device Size" {
-			return parseDeviceSize(c, value)
-		}
-	}
-	c.Fatal("failed to parse Base Device Size from info")
-	return int64(0)
-}
-
-func parseDeviceSize(c *check.C, raw string) int64 {
-	size, err := units.RAMInBytes(strings.TrimSpace(raw))
-	c.Assert(err, check.IsNil)
-	return size
 }
 
 func convertBasesize(basesizeBytes int64) (int64, error) {
@@ -836,7 +817,7 @@ func (s *DockerDaemonSuite) TestDaemonDefaultNetworkInvalidClusterConfig(c *chec
 
 	// Start daemon with docker0 bridge
 	result := icmd.RunCommand("ifconfig", defaultNetworkBridge)
-	result.Assert(c, icmd.Success)
+	c.Assert(result, icmd.Matches, icmd.Success)
 
 	s.d.Restart(c, fmt.Sprintf("--cluster-store=%s", discoveryBackend))
 }
@@ -1450,8 +1431,7 @@ func (s *DockerDaemonSuite) TestCleanupMountsAfterDaemonAndContainerKill(c *chec
 	c.Assert(strings.Contains(string(mountOut), id), check.Equals, true, comment)
 
 	// kill the container
-	icmd.RunCommand(ctrBinary, "--address", "/var/run/docker/containerd/docker-containerd.sock",
-		"--namespace", moby_daemon.MainNamespace, "tasks", "kill", id).Assert(c, icmd.Success)
+	icmd.RunCommand(ctrBinary, "--address", "unix:///var/run/docker/libcontainerd/docker-containerd.sock", "containers", "kill", id).Assert(c, icmd.Success)
 
 	// restart daemon.
 	d.Restart(c)
@@ -1828,7 +1808,7 @@ func (s *DockerDaemonSuite) TestDaemonNoSpaceLeftOnDeviceError(c *check.C) {
 	defer s.d.Stop(c)
 
 	// pull a repository large enough to fill the mount point
-	pullOut, err := s.d.Cmd("pull", "debian:stretch")
+	pullOut, err := s.d.Cmd("pull", "registry:2")
 	c.Assert(err, checker.NotNil, check.Commentf(pullOut))
 	c.Assert(pullOut, checker.Contains, "no space left on device")
 }
@@ -1903,7 +1883,7 @@ func (s *DockerDaemonSuite) TestDaemonCgroupParent(c *check.C) {
 
 	out, err := s.d.Cmd("run", "--name", name, "busybox", "cat", "/proc/self/cgroup")
 	c.Assert(err, checker.IsNil)
-	cgroupPaths := ParseCgroupPaths(string(out))
+	cgroupPaths := testutil.ParseCgroupPaths(string(out))
 	c.Assert(len(cgroupPaths), checker.Not(checker.Equals), 0, check.Commentf("unexpected output - %q", string(out)))
 	out, err = s.d.Cmd("inspect", "-f", "{{.Id}}", name)
 	c.Assert(err, checker.IsNil)
@@ -1990,6 +1970,7 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithNames(c *check.C) {
 
 // TestDaemonRestartWithKilledRunningContainer requires live restore of running containers
 func (s *DockerDaemonSuite) TestDaemonRestartWithKilledRunningContainer(t *check.C) {
+	// TODO(mlaventure): Not sure what would the exit code be on windows
 	testRequires(t, DaemonIsLinux)
 	s.d.StartWithBusybox(t)
 
@@ -2010,8 +1991,7 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithKilledRunningContainer(t *check
 	}
 
 	// kill the container
-	icmd.RunCommand(ctrBinary, "--address", "/var/run/docker/containerd/docker-containerd.sock",
-		"--namespace", moby_daemon.MainNamespace, "tasks", "kill", cid).Assert(t, icmd.Success)
+	icmd.RunCommand(ctrBinary, "--address", "unix:///var/run/docker/libcontainerd/docker-containerd.sock", "containers", "kill", cid).Assert(t, icmd.Success)
 
 	// Give time to containerd to process the command if we don't
 	// the exit event might be received after we do the inspect
@@ -2079,6 +2059,7 @@ func (s *DockerDaemonSuite) TestCleanupMountsAfterDaemonCrash(c *check.C) {
 
 // TestDaemonRestartWithUnpausedRunningContainer requires live restore of running containers.
 func (s *DockerDaemonSuite) TestDaemonRestartWithUnpausedRunningContainer(t *check.C) {
+	// TODO(mlaventure): Not sure what would the exit code be on windows
 	testRequires(t, DaemonIsLinux)
 	s.d.StartWithBusybox(t, "--live-restore")
 
@@ -2105,10 +2086,9 @@ func (s *DockerDaemonSuite) TestDaemonRestartWithUnpausedRunningContainer(t *che
 	// resume the container
 	result := icmd.RunCommand(
 		ctrBinary,
-		"--address", "/var/run/docker/containerd/docker-containerd.sock",
-		"--namespace", moby_daemon.MainNamespace,
-		"tasks", "resume", cid)
-	result.Assert(t, icmd.Success)
+		"--address", "unix:///var/run/docker/libcontainerd/docker-containerd.sock",
+		"containers", "resume", cid)
+	t.Assert(result, icmd.Matches, icmd.Success)
 
 	// Give time to containerd to process the command if we don't
 	// the resume event might be received after we do the inspect
@@ -2162,9 +2142,9 @@ func (s *DockerDaemonSuite) TestRunLinksChanged(c *check.C) {
 }
 
 func (s *DockerDaemonSuite) TestDaemonStartWithoutColors(c *check.C) {
-	testRequires(c, DaemonIsLinux)
+	testRequires(c, DaemonIsLinux, NotPpc64le)
 
-	infoLog := "\x1b[36mINFO\x1b"
+	infoLog := "\x1b[34mINFO\x1b"
 
 	b := bytes.NewBuffer(nil)
 	done := make(chan bool)
@@ -2212,7 +2192,7 @@ func (s *DockerDaemonSuite) TestDaemonStartWithoutColors(c *check.C) {
 }
 
 func (s *DockerDaemonSuite) TestDaemonDebugLog(c *check.C) {
-	testRequires(c, DaemonIsLinux)
+	testRequires(c, DaemonIsLinux, NotPpc64le)
 
 	debugLog := "\x1b[37mDEBU\x1b"
 
@@ -2789,7 +2769,7 @@ func (s *DockerDaemonSuite) TestDaemonShutdownTimeout(c *check.C) {
 	case <-time.After(5 * time.Second):
 	}
 
-	expectedMessage := `level=debug msg="daemon configured with a 3 seconds minimum shutdown timeout"`
+	expectedMessage := `level=debug msg="start clean shutdown of all containers with a 3 seconds timeout..."`
 	content, err := s.d.ReadLogFile()
 	c.Assert(err, checker.IsNil)
 	c.Assert(string(content), checker.Contains, expectedMessage)
@@ -3003,167 +2983,6 @@ func (s *DockerDaemonSuite) TestShmSizeReload(c *check.C) {
 	out, err = s.d.Cmd("inspect", "--format", "{{.HostConfig.ShmSize}}", name)
 	c.Assert(err, check.IsNil, check.Commentf("Output: %s", out))
 	c.Assert(strings.TrimSpace(out), check.Equals, fmt.Sprintf("%v", size))
-}
-
-// this is used to test both "private" and "shareable" daemon default ipc modes
-func testDaemonIpcPrivateShareable(d *daemon.Daemon, c *check.C, mustExist bool) {
-	name := "test-ipcmode"
-	_, err := d.Cmd("run", "-d", "--name", name, "busybox", "top")
-	c.Assert(err, checker.IsNil)
-
-	// get major:minor pair for /dev/shm from container's /proc/self/mountinfo
-	cmd := "awk '($5 == \"/dev/shm\") {printf $3}' /proc/self/mountinfo"
-	mm, err := d.Cmd("exec", "-i", name, "sh", "-c", cmd)
-	c.Assert(err, checker.IsNil)
-	c.Assert(mm, checker.Matches, "^[0-9]+:[0-9]+$")
-
-	exists, err := testIpcCheckDevExists(mm)
-	c.Assert(err, checker.IsNil)
-	c.Logf("[testDaemonIpcPrivateShareable] ipcdev: %v, exists: %v, mustExist: %v\n", mm, exists, mustExist)
-	c.Assert(exists, checker.Equals, mustExist)
-}
-
-// TestDaemonIpcModeShareable checks that --default-ipc-mode shareable works as intended.
-func (s *DockerDaemonSuite) TestDaemonIpcModeShareable(c *check.C) {
-	testRequires(c, DaemonIsLinux, SameHostDaemon)
-
-	s.d.StartWithBusybox(c, "--default-ipc-mode", "shareable")
-	testDaemonIpcPrivateShareable(s.d, c, true)
-}
-
-// TestDaemonIpcModePrivate checks that --default-ipc-mode private works as intended.
-func (s *DockerDaemonSuite) TestDaemonIpcModePrivate(c *check.C) {
-	testRequires(c, DaemonIsLinux, SameHostDaemon)
-
-	s.d.StartWithBusybox(c, "--default-ipc-mode", "private")
-	testDaemonIpcPrivateShareable(s.d, c, false)
-}
-
-// used to check if an IpcMode given in config works as intended
-func testDaemonIpcFromConfig(s *DockerDaemonSuite, c *check.C, mode string, mustExist bool) {
-	f, err := ioutil.TempFile("", "test-daemon-ipc-config")
-	c.Assert(err, checker.IsNil)
-	defer os.Remove(f.Name())
-
-	config := `{"default-ipc-mode": "` + mode + `"}`
-	_, err = f.WriteString(config)
-	c.Assert(f.Close(), checker.IsNil)
-	c.Assert(err, checker.IsNil)
-
-	s.d.StartWithBusybox(c, "--config-file", f.Name())
-	testDaemonIpcPrivateShareable(s.d, c, mustExist)
-}
-
-// TestDaemonIpcModePrivateFromConfig checks that "default-ipc-mode: private" config works as intended.
-func (s *DockerDaemonSuite) TestDaemonIpcModePrivateFromConfig(c *check.C) {
-	testRequires(c, DaemonIsLinux, SameHostDaemon)
-	testDaemonIpcFromConfig(s, c, "private", false)
-}
-
-// TestDaemonIpcModeShareableFromConfig checks that "default-ipc-mode: shareable" config works as intended.
-func (s *DockerDaemonSuite) TestDaemonIpcModeShareableFromConfig(c *check.C) {
-	testRequires(c, DaemonIsLinux, SameHostDaemon)
-	testDaemonIpcFromConfig(s, c, "shareable", true)
-}
-
-func testDaemonStartIpcMode(c *check.C, from, mode string, valid bool) {
-	d := daemon.New(c, dockerBinary, dockerdBinary, daemon.Config{
-		Experimental: testEnv.ExperimentalDaemon(),
-	})
-	c.Logf("Checking IpcMode %s set from %s\n", mode, from)
-	var serr error
-	switch from {
-	case "config":
-		f, err := ioutil.TempFile("", "test-daemon-ipc-config")
-		c.Assert(err, checker.IsNil)
-		defer os.Remove(f.Name())
-		config := `{"default-ipc-mode": "` + mode + `"}`
-		_, err = f.WriteString(config)
-		c.Assert(f.Close(), checker.IsNil)
-		c.Assert(err, checker.IsNil)
-
-		serr = d.StartWithError("--config-file", f.Name())
-	case "cli":
-		serr = d.StartWithError("--default-ipc-mode", mode)
-	default:
-		c.Fatalf("testDaemonStartIpcMode: invalid 'from' argument")
-	}
-	if serr == nil {
-		d.Stop(c)
-	}
-
-	if valid {
-		c.Assert(serr, check.IsNil)
-	} else {
-		c.Assert(serr, check.NotNil)
-		icmd.RunCommand("grep", "-E", "IPC .* is (invalid|not supported)", d.LogFileName()).Assert(c, icmd.Success)
-	}
-}
-
-// TestDaemonStartWithIpcModes checks that daemon starts fine given correct
-// arguments for default IPC mode, and bails out with incorrect ones.
-// Both CLI option (--default-ipc-mode) and config parameter are tested.
-func (s *DockerDaemonSuite) TestDaemonStartWithIpcModes(c *check.C) {
-	testRequires(c, DaemonIsLinux, SameHostDaemon)
-
-	ipcModes := []struct {
-		mode  string
-		valid bool
-	}{
-		{"private", true},
-		{"shareable", true},
-
-		{"host", false},
-		{"container:123", false},
-		{"nosuchmode", false},
-	}
-
-	for _, from := range []string{"config", "cli"} {
-		for _, m := range ipcModes {
-			testDaemonStartIpcMode(c, from, m.mode, m.valid)
-		}
-	}
-}
-
-// TestDaemonRestartIpcMode makes sure a container keeps its ipc mode
-// (derived from daemon default) even after the daemon is restarted
-// with a different default ipc mode.
-func (s *DockerDaemonSuite) TestDaemonRestartIpcMode(c *check.C) {
-	f, err := ioutil.TempFile("", "test-daemon-ipc-config-restart")
-	c.Assert(err, checker.IsNil)
-	file := f.Name()
-	defer os.Remove(file)
-	c.Assert(f.Close(), checker.IsNil)
-
-	config := []byte(`{"default-ipc-mode": "private"}`)
-	c.Assert(ioutil.WriteFile(file, config, 0644), checker.IsNil)
-	s.d.StartWithBusybox(c, "--config-file", file)
-
-	// check the container is created with private ipc mode as per daemon default
-	name := "ipc1"
-	_, err = s.d.Cmd("run", "-d", "--name", name, "--restart=always", "busybox", "top")
-	c.Assert(err, checker.IsNil)
-	m, err := s.d.InspectField(name, ".HostConfig.IpcMode")
-	c.Assert(err, check.IsNil)
-	c.Assert(m, checker.Equals, "private")
-
-	// restart the daemon with shareable default ipc mode
-	config = []byte(`{"default-ipc-mode": "shareable"}`)
-	c.Assert(ioutil.WriteFile(file, config, 0644), checker.IsNil)
-	s.d.Restart(c, "--config-file", file)
-
-	// check the container is still having private ipc mode
-	m, err = s.d.InspectField(name, ".HostConfig.IpcMode")
-	c.Assert(err, check.IsNil)
-	c.Assert(m, checker.Equals, "private")
-
-	// check a new container is created with shareable ipc mode as per new daemon default
-	name = "ipc2"
-	_, err = s.d.Cmd("run", "-d", "--name", name, "busybox", "top")
-	c.Assert(err, checker.IsNil)
-	m, err = s.d.InspectField(name, ".HostConfig.IpcMode")
-	c.Assert(err, check.IsNil)
-	c.Assert(m, checker.Equals, "shareable")
 }
 
 // TestFailedPluginRemove makes sure that a failed plugin remove does not block

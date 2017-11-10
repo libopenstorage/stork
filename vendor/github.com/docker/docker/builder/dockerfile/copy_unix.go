@@ -6,21 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/docker/docker/pkg/containerfs"
 	"github.com/docker/docker/pkg/idtools"
 )
 
-func fixPermissions(source, destination string, rootIDs idtools.IDPair, overrideSkip bool) error {
-	var (
-		skipChownRoot bool
-		err           error
-	)
-	if !overrideSkip {
-		destEndpoint := &copyEndpoint{driver: containerfs.NewLocalDriver(), path: destination}
-		skipChownRoot, err = isExistingDirectory(destEndpoint)
-		if err != nil {
-			return err
-		}
+func fixPermissions(source, destination string, rootIDs idtools.IDPair) error {
+	skipChownRoot, err := isExistingDirectory(destination)
+	if err != nil {
+		return err
 	}
 
 	// We Walk on the source rather than on the destination because we don't
@@ -41,8 +33,4 @@ func fixPermissions(source, destination string, rootIDs idtools.IDPair, override
 		fullpath = filepath.Join(destination, cleaned)
 		return os.Lchown(fullpath, rootIDs.UID, rootIDs.GID)
 	})
-}
-
-func validateCopySourcePath(imageSource *imageMount, origPath, platform string) error {
-	return nil
 }

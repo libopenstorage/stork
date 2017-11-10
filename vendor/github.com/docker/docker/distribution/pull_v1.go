@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/docker/distribution/reference"
-	"github.com/docker/distribution/registry/client/auth"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/docker/docker/distribution/metadata"
 	"github.com/docker/docker/distribution/xfer"
@@ -36,7 +35,7 @@ type v1Puller struct {
 	session     *registry.Session
 }
 
-func (p *v1Puller) Pull(ctx context.Context, ref reference.Named, platform string) error {
+func (p *v1Puller) Pull(ctx context.Context, ref reference.Named) error {
 	if _, isCanonical := ref.(reference.Canonical); isCanonical {
 		// Allowing fallback, because HTTPS v1 is before HTTP v2
 		return fallbackError{err: ErrNoSupport{Err: errors.New("Cannot pull by digest with v1 registry")}}
@@ -50,10 +49,14 @@ func (p *v1Puller) Pull(ctx context.Context, ref reference.Named, platform strin
 	tr := transport.NewTransport(
 		// TODO(tiborvass): was ReceiveTimeout
 		registry.NewTransport(tlsConfig),
-		registry.Headers(dockerversion.DockerUserAgent(ctx), p.config.MetaHeaders)...,
+		registry.DockerHeaders(dockerversion.DockerUserAgent(ctx), p.config.MetaHeaders)...,
 	)
 	client := registry.HTTPClient(tr)
-	v1Endpoint := p.endpoint.ToV1Endpoint(dockerversion.DockerUserAgent(ctx), p.config.MetaHeaders)
+	v1Endpoint, err := p.endpoint.ToV1Endpoint(dockerversion.DockerUserAgent(ctx), p.config.MetaHeaders)
+	if err != nil {
+		logrus.Debugf("Could not get v1 endpoint: %v", err)
+		return fallbackError{err: err}
+	}
 	p.session, err = registry.NewSession(client, p.config.AuthConfig, v1Endpoint)
 	if err != nil {
 		// TODO(dmcgowan): Check if should fallback
@@ -69,9 +72,7 @@ func (p *v1Puller) Pull(ctx context.Context, ref reference.Named, platform strin
 	return nil
 }
 
-// Note use auth.Scope rather than reference.Named due to this warning causing Jenkins CI to fail:
-// warning: ref can be github.com/docker/docker/vendor/github.com/docker/distribution/registry/client/auth.Scope (interfacer)
-func (p *v1Puller) pullRepository(ctx context.Context, ref auth.Scope) error {
+func (p *v1Puller) pullRepository(ctx context.Context, ref reference.Named) error {
 	progress.Message(p.config.ProgressOutput, "", "Pulling repository "+p.repoInfo.Name.Name())
 
 	tagged, isTagged := ref.(reference.NamedTagged)

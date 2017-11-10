@@ -3,9 +3,10 @@
 package daemon
 
 import (
+	"fmt"
+
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/container"
-	"github.com/pkg/errors"
 )
 
 // Resolve Network SandboxID in case the container reuse another container's network stack
@@ -15,7 +16,7 @@ func (daemon *Daemon) getNetworkSandboxID(c *container.Container) (string, error
 		containerID := curr.HostConfig.NetworkMode.ConnectedContainer()
 		connected, err := daemon.GetContainer(containerID)
 		if err != nil {
-			return "", errors.Wrapf(err, "Could not get container for %s", containerID)
+			return "", fmt.Errorf("Could not get container for %s", containerID)
 		}
 		curr = connected
 	}

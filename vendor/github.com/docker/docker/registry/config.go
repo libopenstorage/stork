@@ -10,8 +10,10 @@ import (
 
 	"github.com/docker/distribution/reference"
 	registrytypes "github.com/docker/docker/api/types/registry"
+	"github.com/docker/docker/opts"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 )
 
 // ServiceOptions holds command line options.
@@ -60,7 +62,7 @@ var (
 	// not have the correct form
 	ErrInvalidRepositoryName = errors.New("Invalid repository name (ex: \"registry.domain.tld/myrepos\")")
 
-	emptyServiceConfig, _ = newServiceConfig(ServiceOptions{})
+	emptyServiceConfig = newServiceConfig(ServiceOptions{})
 )
 
 var (
@@ -70,28 +72,37 @@ var (
 // for mocking in unit tests
 var lookupIP = net.LookupIP
 
+// InstallCliFlags adds command-line options to the top-level flag parser for
+// the current process.
+func (options *ServiceOptions) InstallCliFlags(flags *pflag.FlagSet) {
+	ana := opts.NewNamedListOptsRef("allow-nondistributable-artifacts", &options.AllowNondistributableArtifacts, ValidateIndexName)
+	mirrors := opts.NewNamedListOptsRef("registry-mirrors", &options.Mirrors, ValidateMirror)
+	insecureRegistries := opts.NewNamedListOptsRef("insecure-registries", &options.InsecureRegistries, ValidateIndexName)
+
+	flags.Var(ana, "allow-nondistributable-artifacts", "Allow push of nondistributable artifacts to registry")
+	flags.Var(mirrors, "registry-mirror", "Preferred Docker registry mirror")
+	flags.Var(insecureRegistries, "insecure-registry", "Enable insecure registry communication")
+
+	options.installCliPlatformFlags(flags)
+}
+
 // newServiceConfig returns a new instance of ServiceConfig
-func newServiceConfig(options ServiceOptions) (*serviceConfig, error) {
+func newServiceConfig(options ServiceOptions) *serviceConfig {
 	config := &serviceConfig{
 		ServiceConfig: registrytypes.ServiceConfig{
 			InsecureRegistryCIDRs: make([]*registrytypes.NetIPNet, 0),
-			IndexConfigs:          make(map[string]*registrytypes.IndexInfo),
+			IndexConfigs:          make(map[string]*registrytypes.IndexInfo, 0),
 			// Hack: Bypass setting the mirrors to IndexConfigs since they are going away
 			// and Mirrors are only for the official registry anyways.
 		},
 		V2Only: options.V2Only,
 	}
-	if err := config.LoadAllowNondistributableArtifacts(options.AllowNondistributableArtifacts); err != nil {
-		return nil, err
-	}
-	if err := config.LoadMirrors(options.Mirrors); err != nil {
-		return nil, err
-	}
-	if err := config.LoadInsecureRegistries(options.InsecureRegistries); err != nil {
-		return nil, err
-	}
 
-	return config, nil
+	config.LoadAllowNondistributableArtifacts(options.AllowNondistributableArtifacts)
+	config.LoadMirrors(options.Mirrors)
+	config.LoadInsecureRegistries(options.InsecureRegistries)
+
+	return config
 }
 
 // LoadAllowNondistributableArtifacts loads allow-nondistributable-artifacts registries into config.
@@ -176,7 +187,7 @@ func (config *serviceConfig) LoadInsecureRegistries(registries []string) error {
 	originalIndexInfos := config.ServiceConfig.IndexConfigs
 
 	config.ServiceConfig.InsecureRegistryCIDRs = make([]*registrytypes.NetIPNet, 0)
-	config.ServiceConfig.IndexConfigs = make(map[string]*registrytypes.IndexInfo)
+	config.ServiceConfig.IndexConfigs = make(map[string]*registrytypes.IndexInfo, 0)
 
 skip:
 	for _, r := range registries {
@@ -343,7 +354,7 @@ func ValidateIndexName(val string) (string, error) {
 		val = "docker.io"
 	}
 	if strings.HasPrefix(val, "-") || strings.HasSuffix(val, "-") {
-		return "", fmt.Errorf("invalid index name (%s). Cannot begin or end with a hyphen", val)
+		return "", fmt.Errorf("Invalid index name (%s). Cannot begin or end with a hyphen.", val)
 	}
 	return val, nil
 }

@@ -9,17 +9,17 @@ import (
 	"testing"
 
 	"github.com/docker/docker/daemon/config"
-	"github.com/gotestyourself/gotestyourself/fs"
+	"github.com/docker/docker/pkg/testutil/tempfile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLoadDaemonCliConfigWithDaemonFlags(t *testing.T) {
 	content := `{"log-opts": {"max-size": "1k"}}`
-	tempFile := fs.NewFile(t, "config", fs.WithContent(content))
+	tempFile := tempfile.NewTempFile(t, "config", content)
 	defer tempFile.Remove()
 
-	opts := defaultOptions(tempFile.Path())
+	opts := defaultOptions(tempFile.Name())
 	opts.Debug = true
 	opts.LogLevel = "info"
 	assert.NoError(t, opts.flags.Set("selinux-enabled", "true"))
@@ -37,10 +37,10 @@ func TestLoadDaemonCliConfigWithDaemonFlags(t *testing.T) {
 
 func TestLoadDaemonConfigWithNetwork(t *testing.T) {
 	content := `{"bip": "127.0.0.2", "ip": "127.0.0.1"}`
-	tempFile := fs.NewFile(t, "config", fs.WithContent(content))
+	tempFile := tempfile.NewTempFile(t, "config", content)
 	defer tempFile.Remove()
 
-	opts := defaultOptions(tempFile.Path())
+	opts := defaultOptions(tempFile.Name())
 	loadedConfig, err := loadDaemonCliConfig(opts)
 	require.NoError(t, err)
 	require.NotNil(t, loadedConfig)
@@ -54,10 +54,10 @@ func TestLoadDaemonConfigWithMapOptions(t *testing.T) {
 		"cluster-store-opts": {"kv.cacertfile": "/var/lib/docker/discovery_certs/ca.pem"},
 		"log-opts": {"tag": "test"}
 }`
-	tempFile := fs.NewFile(t, "config", fs.WithContent(content))
+	tempFile := tempfile.NewTempFile(t, "config", content)
 	defer tempFile.Remove()
 
-	opts := defaultOptions(tempFile.Path())
+	opts := defaultOptions(tempFile.Name())
 	loadedConfig, err := loadDaemonCliConfig(opts)
 	require.NoError(t, err)
 	require.NotNil(t, loadedConfig)
@@ -71,10 +71,10 @@ func TestLoadDaemonConfigWithMapOptions(t *testing.T) {
 
 func TestLoadDaemonConfigWithTrueDefaultValues(t *testing.T) {
 	content := `{ "userland-proxy": false }`
-	tempFile := fs.NewFile(t, "config", fs.WithContent(content))
+	tempFile := tempfile.NewTempFile(t, "config", content)
 	defer tempFile.Remove()
 
-	opts := defaultOptions(tempFile.Path())
+	opts := defaultOptions(tempFile.Name())
 	loadedConfig, err := loadDaemonCliConfig(opts)
 	require.NoError(t, err)
 	require.NotNil(t, loadedConfig)
@@ -90,10 +90,10 @@ func TestLoadDaemonConfigWithTrueDefaultValues(t *testing.T) {
 }
 
 func TestLoadDaemonConfigWithTrueDefaultValuesLeaveDefaults(t *testing.T) {
-	tempFile := fs.NewFile(t, "config", fs.WithContent(`{}`))
+	tempFile := tempfile.NewTempFile(t, "config", `{}`)
 	defer tempFile.Remove()
 
-	opts := defaultOptions(tempFile.Path())
+	opts := defaultOptions(tempFile.Name())
 	loadedConfig, err := loadDaemonCliConfig(opts)
 	require.NoError(t, err)
 	require.NotNil(t, loadedConfig)
@@ -103,10 +103,10 @@ func TestLoadDaemonConfigWithTrueDefaultValuesLeaveDefaults(t *testing.T) {
 
 func TestLoadDaemonConfigWithLegacyRegistryOptions(t *testing.T) {
 	content := `{"disable-legacy-registry": false}`
-	tempFile := fs.NewFile(t, "config", fs.WithContent(content))
+	tempFile := tempfile.NewTempFile(t, "config", content)
 	defer tempFile.Remove()
 
-	opts := defaultOptions(tempFile.Path())
+	opts := defaultOptions(tempFile.Name())
 	loadedConfig, err := loadDaemonCliConfig(opts)
 	require.NoError(t, err)
 	require.NotNil(t, loadedConfig)

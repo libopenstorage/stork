@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/docker/docker/libcontainerd"
@@ -16,10 +15,10 @@ func (daemon *Daemon) ContainerResize(name string, height, width int) error {
 	}
 
 	if !container.IsRunning() {
-		return errNotRunning(container.ID)
+		return errNotRunning{container.ID}
 	}
 
-	if err = daemon.containerd.ResizeTerminal(context.Background(), container.ID, libcontainerd.InitProcessName, width, height); err == nil {
+	if err = daemon.containerd.Resize(container.ID, libcontainerd.InitFriendlyName, width, height); err == nil {
 		attributes := map[string]string{
 			"height": fmt.Sprintf("%d", height),
 			"width":  fmt.Sprintf("%d", width),
@@ -37,5 +36,5 @@ func (daemon *Daemon) ContainerExecResize(name string, height, width int) error 
 	if err != nil {
 		return err
 	}
-	return daemon.containerd.ResizeTerminal(context.Background(), ec.ContainerID, ec.ID, width, height)
+	return daemon.containerd.Resize(ec.ContainerID, ec.ID, width, height)
 }

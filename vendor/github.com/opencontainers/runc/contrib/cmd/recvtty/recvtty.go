@@ -24,7 +24,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/containerd/console"
+	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/urfave/cli"
 )
@@ -101,26 +101,24 @@ func handleSingle(path string) error {
 	if err != nil {
 		return err
 	}
-	c, err := console.ConsoleFromFile(master)
-	if err != nil {
+	if err = libcontainer.SaneTerminal(master); err != nil {
 		return err
 	}
-	console.ClearONLCR(c.Fd())
 
 	// Copy from our stdio to the master fd.
 	quitChan := make(chan struct{})
 	go func() {
-		io.Copy(os.Stdout, c)
+		io.Copy(os.Stdout, master)
 		quitChan <- struct{}{}
 	}()
 	go func() {
-		io.Copy(c, os.Stdin)
+		io.Copy(master, os.Stdin)
 		quitChan <- struct{}{}
 	}()
 
 	// Only close the master fd once we've stopped copying.
 	<-quitChan
-	c.Close()
+	master.Close()
 	return nil
 }
 

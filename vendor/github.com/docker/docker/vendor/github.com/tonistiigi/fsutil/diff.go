@@ -1,7 +1,6 @@
 package fsutil
 
 import (
-	"hash"
 	"os"
 
 	"golang.org/x/net/context"
@@ -14,8 +13,6 @@ func Changes(ctx context.Context, a, b walkerFn, changeFn ChangeFunc) error {
 }
 
 type HandleChangeFn func(ChangeKind, string, os.FileInfo, error) error
-
-type ContentHasher func(*Stat) (hash.Hash, error)
 
 func GetWalkerFn(root string) walkerFn {
 	return func(ctx context.Context, pathC chan<- *currentPath) error {
@@ -37,8 +34,4 @@ func GetWalkerFn(root string) walkerFn {
 			}
 		})
 	}
-}
-
-func emptyWalker(ctx context.Context, pathC chan<- *currentPath) error {
-	return nil
 }

@@ -8,23 +8,20 @@
 package logger
 
 import (
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/backend"
+	"github.com/docker/docker/pkg/jsonlog"
 )
 
-// ErrReadLogsNotSupported is returned when the underlying log driver does not support reading
-type ErrReadLogsNotSupported struct{}
-
-func (ErrReadLogsNotSupported) Error() string {
-	return "configured logging driver does not support reading"
-}
-
-// NotImplemented makes this error implement the `NotImplemented` interface from api/errdefs
-func (ErrReadLogsNotSupported) NotImplemented() {}
+// ErrReadLogsNotSupported is returned when the logger does not support reading logs.
+var ErrReadLogsNotSupported = errors.New("configured logging driver does not support reading")
 
 const (
+	// TimeFormat is the time format used for timestamps sent to log readers.
+	TimeFormat           = jsonlog.RFC3339NanoFixed
 	logWatcherBufferSize = 4096
 )
 
@@ -76,13 +73,6 @@ type Logger interface {
 	Log(*Message) error
 	Name() string
 	Close() error
-}
-
-// SizedLogger is the interface for logging drivers that can control
-// the size of buffer used for their messages.
-type SizedLogger interface {
-	Logger
-	BufSize() int
 }
 
 // ReadConfig is the configuration passed into ReadLogs.

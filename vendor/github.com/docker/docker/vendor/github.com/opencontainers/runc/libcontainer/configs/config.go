@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
-
 	"github.com/sirupsen/logrus"
 )
 
@@ -187,10 +186,6 @@ type Config struct {
 
 	// Rootless specifies whether the container is a rootless container.
 	Rootless bool `json:"rootless"`
-
-	// IntelRdt specifies settings for Intel RDT/CAT group that the container is placed into
-	// to limit the resources (e.g., L3 cache) the container has available
-	IntelRdt *IntelRdt `json:"intel_rdt,omitempty"`
 }
 
 type Hooks struct {

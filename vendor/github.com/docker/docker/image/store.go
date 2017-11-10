@@ -47,17 +47,17 @@ type store struct {
 	images    map[ID]*imageMeta
 	fs        StoreBackend
 	digestSet *digestset.Set
-	os        string
+	platform  string
 }
 
 // NewImageStore returns new store object for given layer store
-func NewImageStore(fs StoreBackend, os string, ls LayerGetReleaser) (Store, error) {
+func NewImageStore(fs StoreBackend, platform string, ls LayerGetReleaser) (Store, error) {
 	is := &store{
 		ls:        ls,
 		images:    make(map[ID]*imageMeta),
 		fs:        fs,
 		digestSet: digestset.NewSet(),
-		os:        os,
+		platform:  platform,
 	}
 
 	// load all current images and retain layers
@@ -118,11 +118,11 @@ func (is *store) Create(config []byte) (ID, error) {
 		return "", err
 	}
 
-	// TODO @jhowardmsft - LCOW Support. This will need revisiting when coalescing the image stores.
+	// TODO @jhowardmsft - LCOW Support. This will need revisiting.
 	// Integrity check - ensure we are creating something for the correct platform
 	if system.LCOWSupported() {
-		if strings.ToLower(img.OperatingSystem()) != strings.ToLower(is.os) {
-			return "", fmt.Errorf("cannot create entry for operating system %q in image store for operating system %q", img.OperatingSystem(), is.os)
+		if strings.ToLower(img.Platform()) != strings.ToLower(is.platform) {
+			return "", fmt.Errorf("cannot create entry for platform %q in image store for platform %q", img.Platform(), is.platform)
 		}
 	}
 
@@ -180,21 +180,13 @@ func (is *store) Create(config []byte) (ID, error) {
 	return imageID, nil
 }
 
-type imageNotFoundError string
-
-func (e imageNotFoundError) Error() string {
-	return "No such image: " + string(e)
-}
-
-func (imageNotFoundError) NotFound() {}
-
 func (is *store) Search(term string) (ID, error) {
 	dgst, err := is.digestSet.Lookup(term)
 	if err != nil {
 		if err == digestset.ErrDigestNotFound {
-			err = imageNotFoundError(term)
+			err = fmt.Errorf("No such image: %s", term)
 		}
-		return "", errors.WithStack(err)
+		return "", err
 	}
 	return IDFromDigest(dgst), nil
 }

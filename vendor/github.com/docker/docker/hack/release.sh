@@ -57,7 +57,7 @@ if [ "$1" != '--release-regardless-of-test-failure' ]; then
 	RELEASE_BUNDLES=(
 		test-unit
 		"${RELEASE_BUNDLES[@]}"
-		test-integration
+		test-integration-cli
 	)
 fi
 
@@ -206,6 +206,10 @@ release_build() {
 			;;
 		linux)
 			s3Os=Linux
+			;;
+		solaris)
+			echo skipping solaris release
+			return 0
 			;;
 		windows)
 			# this is windows use the .zip and .exe extensions for the files.

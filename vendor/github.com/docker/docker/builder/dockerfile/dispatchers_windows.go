@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -14,37 +13,11 @@ import (
 
 var pattern = regexp.MustCompile(`^[a-zA-Z]:\.$`)
 
-// normalizeWorkdir normalizes a user requested working directory in a
+// normaliseWorkdir normalises a user requested working directory in a
 // platform semantically consistent way.
-func normalizeWorkdir(platform string, current string, requested string) (string, error) {
-	if platform == "" {
-		platform = "windows"
-	}
-	if platform == "windows" {
-		return normalizeWorkdirWindows(current, requested)
-	}
-	return normalizeWorkdirUnix(current, requested)
-}
-
-// normalizeWorkdirUnix normalizes a user requested working directory in a
-// platform semantically consistent way.
-func normalizeWorkdirUnix(current string, requested string) (string, error) {
+func normaliseWorkdir(current string, requested string) (string, error) {
 	if requested == "" {
-		return "", errors.New("cannot normalize nothing")
-	}
-	current = strings.Replace(current, string(os.PathSeparator), "/", -1)
-	requested = strings.Replace(requested, string(os.PathSeparator), "/", -1)
-	if !path.IsAbs(requested) {
-		return path.Join(`/`, current, requested), nil
-	}
-	return requested, nil
-}
-
-// normalizeWorkdirWindows normalizes a user requested working directory in a
-// platform semantically consistent way.
-func normalizeWorkdirWindows(current string, requested string) (string, error) {
-	if requested == "" {
-		return "", errors.New("cannot normalize nothing")
+		return "", errors.New("cannot normalise nothing")
 	}
 
 	// `filepath.Clean` will replace "" with "." so skip in that case
@@ -92,6 +65,25 @@ func normalizeWorkdirWindows(current string, requested string) (string, error) {
 	}
 	// Upper-case drive letter
 	return (strings.ToUpper(string(requested[0])) + requested[1:]), nil
+}
+
+func errNotJSON(command, original string) error {
+	// For Windows users, give a hint if it looks like it might contain
+	// a path which hasn't been escaped such as ["c:\windows\system32\prog.exe", "-param"],
+	// as JSON must be escaped. Unfortunate...
+	//
+	// Specifically looking for quote-driveletter-colon-backslash, there's no
+	// double backslash and a [] pair. No, this is not perfect, but it doesn't
+	// have to be. It's simply a hint to make life a little easier.
+	extra := ""
+	original = filepath.FromSlash(strings.ToLower(strings.Replace(strings.ToLower(original), strings.ToLower(command)+" ", "", -1)))
+	if len(regexp.MustCompile(`"[a-z]:\\.*`).FindStringSubmatch(original)) > 0 &&
+		!strings.Contains(original, `\\`) &&
+		strings.Contains(original, "[") &&
+		strings.Contains(original, "]") {
+		extra = fmt.Sprintf(`. It looks like '%s' includes a file path without an escaped back-slash. JSON requires back-slashes to be escaped such as ["c:\\path\\to\\file.exe", "/parameter"]`, original)
+	}
+	return fmt.Errorf("%s requires the arguments to be in JSON form%s", command, extra)
 }
 
 // equalEnvKeys compare two strings and returns true if they are equal. On

@@ -1,9 +1,15 @@
 package foo
 
 import (
+	"fmt"
+
 	aliasedio "io"
 
 	"github.com/docker/docker/pkg/plugins/pluginrpc-gen/fixtures/otherfixture"
+)
+
+var (
+	errFakeImport = fmt.Errorf("just to import fmt for imports tests")
 )
 
 type wobble struct {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api"
+	"github.com/docker/docker/api/errors"
 	"github.com/docker/docker/api/server/httputils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
@@ -84,16 +85,6 @@ func (s *systemRouter) getDiskUsage(ctx context.Context, w http.ResponseWriter, 
 	return httputils.WriteJSON(w, http.StatusOK, du)
 }
 
-type invalidRequestError struct {
-	Err error
-}
-
-func (e invalidRequestError) Error() string {
-	return e.Err.Error()
-}
-
-func (e invalidRequestError) InvalidParameter() {}
-
 func (s *systemRouter) getEvents(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := httputils.ParseForm(r); err != nil {
 		return err
@@ -114,7 +105,7 @@ func (s *systemRouter) getEvents(ctx context.Context, w http.ResponseWriter, r *
 	)
 	if !until.IsZero() {
 		if until.Before(since) {
-			return invalidRequestError{fmt.Errorf("`since` time (%s) cannot be after `until` time (%s)", r.Form.Get("since"), r.Form.Get("until"))}
+			return errors.NewBadRequestError(fmt.Errorf("`since` time (%s) cannot be after `until` time (%s)", r.Form.Get("since"), r.Form.Get("until")))
 		}
 
 		now := time.Now()
@@ -123,11 +114,11 @@ func (s *systemRouter) getEvents(ctx context.Context, w http.ResponseWriter, r *
 
 		if !onlyPastEvents {
 			dur := until.Sub(now)
-			timeout = time.After(dur)
+			timeout = time.NewTimer(dur).C
 		}
 	}
 
-	ef, err := filters.FromJSON(r.Form.Get("filters"))
+	ef, err := filters.FromParam(r.Form.Get("filters"))
 	if err != nil {
 		return err
 	}

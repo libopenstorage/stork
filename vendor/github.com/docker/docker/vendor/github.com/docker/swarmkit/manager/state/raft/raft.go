@@ -166,8 +166,6 @@ type NodeOptions struct {
 	// JoinAddr is the cluster to join. May be an empty string to create
 	// a standalone cluster.
 	JoinAddr string
-	// ForceJoin tells us to join even if already part of a cluster.
-	ForceJoin bool
 	// Config is the raft config.
 	Config *raft.Config
 	// StateDir is the directory to store durable state.
@@ -395,10 +393,8 @@ func (n *Node) JoinAndStart(ctx context.Context) (err error) {
 
 	// restore from snapshot
 	if loadAndStartErr == nil {
-		if n.opts.JoinAddr != "" && n.opts.ForceJoin {
-			if err := n.joinCluster(ctx); err != nil {
-				return errors.Wrap(err, "failed to rejoin cluster")
-			}
+		if n.opts.JoinAddr != "" {
+			log.G(ctx).Warning("ignoring request to join cluster, because raft state already exists")
 		}
 		n.campaignWhenAble = true
 		n.initTransport()
@@ -406,6 +402,7 @@ func (n *Node) JoinAndStart(ctx context.Context) (err error) {
 		return nil
 	}
 
+	// first member of cluster
 	if n.opts.JoinAddr == "" {
 		// First member in the cluster, self-assign ID
 		n.Config.ID = uint64(rand.Int63()) + 1
@@ -420,22 +417,6 @@ func (n *Node) JoinAndStart(ctx context.Context) (err error) {
 	}
 
 	// join to existing cluster
-
-	if err := n.joinCluster(ctx); err != nil {
-		return err
-	}
-
-	if _, err := n.newRaftLogs(n.opts.ID); err != nil {
-		return err
-	}
-
-	n.initTransport()
-	n.raftNode = raft.StartNode(n.Config, nil)
-
-	return nil
-}
-
-func (n *Node) joinCluster(ctx context.Context) error {
 	if n.opts.Addr == "" {
 		return errors.New("attempted to join raft cluster without knowing own address")
 	}
@@ -457,7 +438,15 @@ func (n *Node) joinCluster(ctx context.Context) error {
 	}
 
 	n.Config.ID = resp.RaftID
+
+	if _, err := n.newRaftLogs(n.opts.ID); err != nil {
+		return err
+	}
 	n.bootstrapMembers = resp.Members
+
+	n.initTransport()
+	n.raftNode = raft.StartNode(n.Config, nil)
+
 	return nil
 }
 
@@ -542,7 +531,6 @@ func (n *Node) Run(ctx context.Context) error {
 		n.done()
 	}()
 
-	// Flag that indicates if this manager node is *currently* the raft leader.
 	wasLeader := false
 	transferLeadershipLimit := rate.NewLimiter(rate.Every(time.Minute), 1)
 
@@ -564,13 +552,10 @@ func (n *Node) Run(ctx context.Context) error {
 				return errors.Wrap(err, "failed to save entries to storage")
 			}
 
-			// If the memory store lock has been held for too long,
-			// transferring leadership is an easy way to break out of it.
 			if wasLeader &&
 				(rd.SoftState == nil || rd.SoftState.RaftState == raft.StateLeader) &&
 				n.memoryStore.Wedged() &&
 				transferLeadershipLimit.Allow() {
-				log.G(ctx).Error("Attempting to transfer leadership")
 				if !n.opts.DisableStackDump {
 					signal.DumpStacks("")
 				}
@@ -616,8 +601,6 @@ func (n *Node) Run(ctx context.Context) error {
 			if rd.SoftState != nil {
 				if wasLeader && rd.SoftState.RaftState != raft.StateLeader {
 					wasLeader = false
-					log.G(ctx).Error("soft state changed, node no longer a leader, resetting and cancelling all waits")
-
 					if atomic.LoadUint32(&n.signalledLeadership) == 1 {
 						atomic.StoreUint32(&n.signalledLeadership, 0)
 						n.leadershipBroadcast.Publish(IsFollower)
@@ -636,7 +619,6 @@ func (n *Node) Run(ctx context.Context) error {
 					// cancelAll, or by its own check of signalledLeadership.
 					n.wait.cancelAll()
 				} else if !wasLeader && rd.SoftState.RaftState == raft.StateLeader {
-					// Node just became a leader.
 					wasLeader = true
 				}
 			}
@@ -927,6 +909,24 @@ func (n *Node) Join(ctx context.Context, req *api.JoinRequest) (*api.JoinRespons
 		return nil, grpc.Errorf(codes.FailedPrecondition, "%s", ErrLostLeadership.Error())
 	}
 
+	// A single manager must not be able to join the raft cluster twice. If
+	// it did, that would cause the quorum to be computed incorrectly. This
+	// could happen if the WAL was deleted from an active manager.
+	for _, m := range n.cluster.Members() {
+		if m.NodeID == nodeInfo.NodeID {
+			return nil, grpc.Errorf(codes.AlreadyExists, "%s", "a raft member with this node ID already exists")
+		}
+	}
+
+	// Find a unique ID for the joining member.
+	var raftID uint64
+	for {
+		raftID = uint64(rand.Int63()) + 1
+		if n.cluster.GetMember(raftID) == nil && !n.cluster.IsIDRemoved(raftID) {
+			break
+		}
+	}
+
 	remoteAddr := req.Addr
 
 	// If the joining node sent an address like 0.0.0.0:4242, automatically
@@ -953,54 +953,12 @@ func (n *Node) Join(ctx context.Context, req *api.JoinRequest) (*api.JoinRespons
 		return nil, err
 	}
 
-	// If the peer is already a member of the cluster, we will only update
-	// its information, not add it as a new member. Adding it again would
-	// cause the quorum to be computed incorrectly.
-	for _, m := range n.cluster.Members() {
-		if m.NodeID == nodeInfo.NodeID {
-			if remoteAddr == m.Addr {
-				return n.joinResponse(m.RaftID), nil
-			}
-			updatedRaftMember := &api.RaftMember{
-				RaftID: m.RaftID,
-				NodeID: m.NodeID,
-				Addr:   remoteAddr,
-			}
-			if err := n.cluster.UpdateMember(m.RaftID, updatedRaftMember); err != nil {
-				return nil, err
-			}
-
-			if err := n.updateNodeBlocking(ctx, m.RaftID, remoteAddr); err != nil {
-				log.WithError(err).Error("failed to update node address")
-				return nil, err
-			}
-
-			log.Info("updated node address")
-			return n.joinResponse(m.RaftID), nil
-		}
-	}
-
-	// Find a unique ID for the joining member.
-	var raftID uint64
-	for {
-		raftID = uint64(rand.Int63()) + 1
-		if n.cluster.GetMember(raftID) == nil && !n.cluster.IsIDRemoved(raftID) {
-			break
-		}
-	}
-
 	err = n.addMember(ctx, remoteAddr, raftID, nodeInfo.NodeID)
 	if err != nil {
 		log.WithError(err).Errorf("failed to add member %x", raftID)
 		return nil, err
 	}
 
-	log.Debug("node joined")
-
-	return n.joinResponse(raftID), nil
-}
-
-func (n *Node) joinResponse(raftID uint64) *api.JoinResponse {
 	var nodes []*api.RaftMember
 	for _, node := range n.cluster.Members() {
 		nodes = append(nodes, &api.RaftMember{
@@ -1009,8 +967,9 @@ func (n *Node) joinResponse(raftID uint64) *api.JoinResponse {
 			Addr:   node.Addr,
 		})
 	}
+	log.Debugf("node joined")
 
-	return &api.JoinResponse{Members: nodes, RaftID: raftID}
+	return &api.JoinResponse{Members: nodes, RaftID: raftID}, nil
 }
 
 // checkHealth tries to contact an aspiring member through its advertised address
@@ -1290,7 +1249,10 @@ func (n *Node) reportNewAddress(ctx context.Context, id uint64) error {
 		return err
 	}
 	newAddr := net.JoinHostPort(newHost, officialPort)
-	return n.transport.UpdatePeerAddr(id, newAddr)
+	if err := n.transport.UpdatePeerAddr(id, newAddr); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ProcessRaftMessage calls 'Step' which advances the
@@ -1485,7 +1447,7 @@ func (n *Node) registerNode(node *api.RaftMember) error {
 	return nil
 }
 
-// ProposeValue calls Propose on the underlying raft library(etcd/raft) and waits
+// ProposeValue calls Propose on the raft and waits
 // on the commit log action before returning a result
 func (n *Node) ProposeValue(ctx context.Context, storeAction []api.StoreAction, cb func()) error {
 	ctx, cancel := n.WithContext(ctx)
@@ -1661,14 +1623,11 @@ func (n *Node) saveToStorage(
 	return nil
 }
 
-// processInternalRaftRequest proposes a value to be appended to the raft log.
-// It calls Propose() on etcd/raft, which calls back into the raft FSM,
-// which then sends a message to each of the participating nodes
-// in the raft group to apply a log entry and then waits for it to be applied
-// on this node. It will block until the this node:
-// 1. Gets the necessary replies back from the participating nodes and also performs the commit itself, or
-// 2. There is an error, or
-// 3. Until the raft node finalizes all the proposals on node shutdown.
+// processInternalRaftRequest sends a message to nodes participating
+// in the raft to apply a log entry and then waits for it to be applied
+// on the server. It will block until the update is performed, there is
+// an error or until the raft node finalizes all the proposals on node
+// shutdown.
 func (n *Node) processInternalRaftRequest(ctx context.Context, r *api.InternalRaftRequest, cb func()) (proto.Message, error) {
 	n.stopMu.RLock()
 	if !n.IsMember() {
@@ -1689,7 +1648,6 @@ func (n *Node) processInternalRaftRequest(ctx context.Context, r *api.InternalRa
 
 	// Do this check after calling register to avoid a race.
 	if atomic.LoadUint32(&n.signalledLeadership) != 1 {
-		log.G(ctx).Error("node is no longer leader, aborting propose")
 		n.wait.cancel(r.ID)
 		return nil, ErrLostLeadership
 	}
@@ -1714,23 +1672,14 @@ func (n *Node) processInternalRaftRequest(ctx context.Context, r *api.InternalRa
 	select {
 	case x, ok := <-ch:
 		if !ok {
-			// Wait notification channel was closed. This should only happen if the wait was cancelled.
-			log.G(ctx).Error("wait cancelled")
-			if atomic.LoadUint32(&n.signalledLeadership) == 1 {
-				log.G(ctx).Error("wait cancelled but node is still a leader")
-			}
 			return nil, ErrLostLeadership
 		}
 		return x.(proto.Message), nil
 	case <-waitCtx.Done():
 		n.wait.cancel(r.ID)
-		// If we can read from the channel, wait item was triggered. Otherwise it was cancelled.
+		// if channel is closed, wait item was canceled, otherwise it was triggered
 		x, ok := <-ch
 		if !ok {
-			log.G(ctx).WithError(waitCtx.Err()).Error("wait context cancelled")
-			if atomic.LoadUint32(&n.signalledLeadership) == 1 {
-				log.G(ctx).Error("wait context cancelled but node is still a leader")
-			}
 			return nil, ErrLostLeadership
 		}
 		return x.(proto.Message), nil
@@ -1799,26 +1748,21 @@ func (n *Node) processEntry(ctx context.Context, entry raftpb.Entry) error {
 	}
 
 	if !n.wait.trigger(r.ID, r) {
-		log.G(ctx).Errorf("wait not found for raft request id %x", r.ID)
-
 		// There was no wait on this ID, meaning we don't have a
 		// transaction in progress that would be committed to the
 		// memory store by the "trigger" call. Either a different node
 		// wrote this to raft, or we wrote it before losing the leader
-		// position and cancelling the transaction. This entry still needs
-		// to be committed since other nodes have already committed it.
-		// Create a new transaction to commit this entry.
+		// position and cancelling the transaction. Create a new
+		// transaction to commit the data.
 
 		// It should not be possible for processInternalRaftRequest
 		// to be running in this situation, but out of caution we
 		// cancel any current invocations to avoid a deadlock.
-		// TODO(anshul) This call is likely redundant, remove after consideration.
 		n.wait.cancelAll()
 
 		err := n.memoryStore.ApplyStoreActions(r.Action)
 		if err != nil {
 			log.G(ctx).WithError(err).Error("failed to apply actions from raft")
-			// TODO(anshul) return err here ?
 		}
 	}
 	return nil
@@ -1870,7 +1814,10 @@ func (n *Node) applyAddNode(cc raftpb.ConfChange) error {
 		return nil
 	}
 
-	return n.registerNode(member)
+	if err = n.registerNode(member); err != nil {
+		return err
+	}
+	return nil
 }
 
 // applyUpdateNode is called when we receive a ConfChange from a member in the

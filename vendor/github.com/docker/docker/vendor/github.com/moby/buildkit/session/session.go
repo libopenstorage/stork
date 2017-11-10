@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	headerSessionID        = "X-Docker-Expose-Session-Uuid"
+	headerSessionUUID      = "X-Docker-Expose-Session-Uuid"
 	headerSessionName      = "X-Docker-Expose-Session-Name"
 	headerSessionSharedKey = "X-Docker-Expose-Session-Sharedkey"
 	headerSessionMethod    = "X-Docker-Expose-Session-Grpc-Method"
@@ -28,7 +28,7 @@ type Attachable interface {
 
 // Session is a long running connection between client and a daemon
 type Session struct {
-	id         string
+	uuid       string
 	name       string
 	sharedKey  string
 	ctx        context.Context
@@ -39,9 +39,9 @@ type Session struct {
 
 // NewSession returns a new long running session
 func NewSession(name, sharedKey string) (*Session, error) {
-	id := stringid.GenerateRandomID()
+	uuid := stringid.GenerateRandomID()
 	s := &Session{
-		id:         id,
+		uuid:       uuid,
 		name:       name,
 		sharedKey:  sharedKey,
 		grpcServer: grpc.NewServer(),
@@ -57,9 +57,9 @@ func (s *Session) Allow(a Attachable) {
 	a.Register(s.grpcServer)
 }
 
-// ID returns unique identifier for the session
-func (s *Session) ID() string {
-	return s.id
+// UUID returns unique identifier for the session
+func (s *Session) UUID() string {
+	return s.uuid
 }
 
 // Run activates the session
@@ -72,7 +72,7 @@ func (s *Session) Run(ctx context.Context, dialer Dialer) error {
 	defer close(s.done)
 
 	meta := make(map[string][]string)
-	meta[headerSessionID] = []string{s.id}
+	meta[headerSessionUUID] = []string{s.uuid}
 	meta[headerSessionName] = []string{s.name}
 	meta[headerSessionSharedKey] = []string{s.sharedKey}
 
@@ -92,7 +92,6 @@ func (s *Session) Run(ctx context.Context, dialer Dialer) error {
 // Close closes the session
 func (s *Session) Close() error {
 	if s.cancelCtx != nil && s.done != nil {
-		s.grpcServer.Stop()
 		s.cancelCtx()
 		<-s.done
 	}

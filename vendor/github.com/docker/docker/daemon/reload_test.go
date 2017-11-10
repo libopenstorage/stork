@@ -12,7 +12,6 @@ import (
 	"github.com/docker/docker/pkg/discovery"
 	_ "github.com/docker/docker/pkg/discovery/memory"
 	"github.com/docker/docker/registry"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDaemonReloadLabels(t *testing.T) {
@@ -47,9 +46,8 @@ func TestDaemonReloadAllowNondistributableArtifacts(t *testing.T) {
 		configStore: &config.Config{},
 	}
 
-	var err error
 	// Initialize daemon with some registries.
-	daemon.RegistryService, err = registry.NewService(registry.ServiceOptions{
+	daemon.RegistryService = registry.NewService(registry.ServiceOptions{
 		AllowNondistributableArtifacts: []string{
 			"127.0.0.0/8",
 			"10.10.1.11:5000",
@@ -58,9 +56,6 @@ func TestDaemonReloadAllowNondistributableArtifacts(t *testing.T) {
 			"docker2.com", // This will be removed during reload.
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	registries := []string{
 		"127.0.0.0/8",
@@ -90,17 +85,20 @@ func TestDaemonReloadAllowNondistributableArtifacts(t *testing.T) {
 	for _, value := range serviceConfig.AllowNondistributableArtifactsCIDRs {
 		actual = append(actual, value.String())
 	}
-	actual = append(actual, serviceConfig.AllowNondistributableArtifactsHostnames...)
+	for _, value := range serviceConfig.AllowNondistributableArtifactsHostnames {
+		actual = append(actual, value)
+	}
 
 	sort.Strings(registries)
 	sort.Strings(actual)
-	assert.Equal(t, registries, actual)
+	if !reflect.DeepEqual(registries, actual) {
+		t.Fatalf("expected %v, got %v\n", registries, actual)
+	}
 }
 
 func TestDaemonReloadMirrors(t *testing.T) {
 	daemon := &Daemon{}
-	var err error
-	daemon.RegistryService, err = registry.NewService(registry.ServiceOptions{
+	daemon.RegistryService = registry.NewService(registry.ServiceOptions{
 		InsecureRegistries: []string{},
 		Mirrors: []string{
 			"https://mirror.test1.com",
@@ -108,9 +106,6 @@ func TestDaemonReloadMirrors(t *testing.T) {
 			"https://mirror.test3.com", // this will be removed when reloading
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	daemon.configStore = &config.Config{}
 
@@ -196,9 +191,8 @@ func TestDaemonReloadMirrors(t *testing.T) {
 
 func TestDaemonReloadInsecureRegistries(t *testing.T) {
 	daemon := &Daemon{}
-	var err error
 	// initialize daemon with existing insecure registries: "127.0.0.0/8", "10.10.1.11:5000", "10.10.1.22:5000"
-	daemon.RegistryService, err = registry.NewService(registry.ServiceOptions{
+	daemon.RegistryService = registry.NewService(registry.ServiceOptions{
 		InsecureRegistries: []string{
 			"127.0.0.0/8",
 			"10.10.1.11:5000",
@@ -207,9 +201,6 @@ func TestDaemonReloadInsecureRegistries(t *testing.T) {
 			"docker2.com", // this will be removed when reloading
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	daemon.configStore = &config.Config{}
 

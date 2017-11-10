@@ -7,7 +7,6 @@ import (
 
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/chrootarchive"
-	"github.com/docker/docker/pkg/containerfs"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/system"
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -95,7 +94,7 @@ func (d *Driver) Create(id, parent string, opts *graphdriver.CreateOpts) error {
 	if err != nil {
 		return fmt.Errorf("%s: %s", parent, err)
 	}
-	return CopyWithTar(parentDir.Path(), dir)
+	return CopyWithTar(parentDir, dir)
 }
 
 func (d *Driver) dir(id string) string {
@@ -104,18 +103,21 @@ func (d *Driver) dir(id string) string {
 
 // Remove deletes the content from the directory for a given id.
 func (d *Driver) Remove(id string) error {
-	return system.EnsureRemoveAll(d.dir(id))
+	if err := system.EnsureRemoveAll(d.dir(id)); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Get returns the directory for the given id.
-func (d *Driver) Get(id, mountLabel string) (containerfs.ContainerFS, error) {
+func (d *Driver) Get(id, mountLabel string) (string, error) {
 	dir := d.dir(id)
 	if st, err := os.Stat(dir); err != nil {
-		return nil, err
+		return "", err
 	} else if !st.IsDir() {
-		return nil, fmt.Errorf("%s: not a directory", dir)
+		return "", fmt.Errorf("%s: not a directory", dir)
 	}
-	return containerfs.NewLocalContainerFS(dir), nil
+	return dir, nil
 }
 
 // Put is a noop for vfs that return nil for the error, since this driver has no runtime resources to clean up.

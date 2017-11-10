@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -32,7 +33,7 @@ import (
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/plugin/v2"
 	refstore "github.com/docker/docker/reference"
-	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -54,7 +55,7 @@ func (pm *Manager) Disable(refOrID string, config *types.PluginDisableConfig) er
 	pm.mu.RUnlock()
 
 	if !config.ForceDisable && p.GetRefCount() > 0 {
-		return errors.WithStack(inUseError(p.Name()))
+		return fmt.Errorf("plugin %s is in use", p.Name())
 	}
 
 	for _, typ := range p.GetTypes() {
@@ -141,16 +142,16 @@ func (s *tempConfigStore) Put(c []byte) (digest.Digest, error) {
 
 func (s *tempConfigStore) Get(d digest.Digest) ([]byte, error) {
 	if d != s.configDigest {
-		return nil, errNotFound("digest not found")
+		return nil, fmt.Errorf("digest not found")
 	}
 	return s.config, nil
 }
 
-func (s *tempConfigStore) RootFSAndOSFromConfig(c []byte) (*image.RootFS, layer.OS, error) {
+func (s *tempConfigStore) RootFSAndPlatformFromConfig(c []byte) (*image.RootFS, layer.Platform, error) {
 	return configToRootFS(c)
 }
 
-func computePrivileges(c types.PluginConfig) types.PluginPrivileges {
+func computePrivileges(c types.PluginConfig) (types.PluginPrivileges, error) {
 	var privileges types.PluginPrivileges
 	if c.Network.Type != "null" && c.Network.Type != "bridge" && c.Network.Type != "" {
 		privileges = append(privileges, types.PluginPrivilege{
@@ -206,7 +207,7 @@ func computePrivileges(c types.PluginConfig) types.PluginPrivileges {
 		})
 	}
 
-	return privileges
+	return privileges, nil
 }
 
 // Privileges pulls a plugin config and computes the privileges required to install it.
@@ -235,21 +236,21 @@ func (pm *Manager) Privileges(ctx context.Context, ref reference.Named, metaHead
 	}
 	var config types.PluginConfig
 	if err := json.Unmarshal(cs.config, &config); err != nil {
-		return nil, systemError{err}
+		return nil, err
 	}
 
-	return computePrivileges(config), nil
+	return computePrivileges(config)
 }
 
 // Upgrade upgrades a plugin
 func (pm *Manager) Upgrade(ctx context.Context, ref reference.Named, name string, metaHeader http.Header, authConfig *types.AuthConfig, privileges types.PluginPrivileges, outStream io.Writer) (err error) {
 	p, err := pm.config.Store.GetV2Plugin(name)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "plugin must be installed before upgrading")
 	}
 
 	if p.IsEnabled() {
-		return errors.Wrap(enabledError(p.Name()), "plugin must be disabled before upgrading")
+		return fmt.Errorf("plugin must be disabled before upgrading")
 	}
 
 	pm.muGC.RLock()
@@ -257,12 +258,12 @@ func (pm *Manager) Upgrade(ctx context.Context, ref reference.Named, name string
 
 	// revalidate because Pull is public
 	if _, err := reference.ParseNormalizedNamed(name); err != nil {
-		return errors.Wrapf(validationError{err}, "failed to parse %q", name)
+		return errors.Wrapf(err, "failed to parse %q", name)
 	}
 
 	tmpRootFSDir, err := ioutil.TempDir(pm.tmpDir(), ".rootfs")
 	if err != nil {
-		return errors.Wrap(systemError{err}, "error preparing upgrade")
+		return err
 	}
 	defer os.RemoveAll(tmpRootFSDir)
 
@@ -304,17 +305,17 @@ func (pm *Manager) Pull(ctx context.Context, ref reference.Named, name string, m
 	// revalidate because Pull is public
 	nameref, err := reference.ParseNormalizedNamed(name)
 	if err != nil {
-		return errors.Wrapf(validationError{err}, "failed to parse %q", name)
+		return errors.Wrapf(err, "failed to parse %q", name)
 	}
 	name = reference.FamiliarString(reference.TagNameOnly(nameref))
 
 	if err := pm.config.Store.validateName(name); err != nil {
-		return validationError{err}
+		return err
 	}
 
 	tmpRootFSDir, err := ioutil.TempDir(pm.tmpDir(), ".rootfs")
 	if err != nil {
-		return errors.Wrap(systemError{err}, "error preparing pull")
+		return err
 	}
 	defer os.RemoveAll(tmpRootFSDir)
 
@@ -365,13 +366,13 @@ func (pm *Manager) List(pluginFilters filters.Args) ([]types.Plugin, error) {
 
 	enabledOnly := false
 	disabledOnly := false
-	if pluginFilters.Contains("enabled") {
+	if pluginFilters.Include("enabled") {
 		if pluginFilters.ExactMatch("enabled", "true") {
 			enabledOnly = true
 		} else if pluginFilters.ExactMatch("enabled", "false") {
 			disabledOnly = true
 		} else {
-			return nil, invalidFilter{"enabled", pluginFilters.Get("enabled")}
+			return nil, fmt.Errorf("Invalid filter 'enabled=%s'", pluginFilters.Get("enabled"))
 		}
 	}
 
@@ -386,7 +387,7 @@ next:
 		if disabledOnly && p.PluginObj.Enabled {
 			continue
 		}
-		if pluginFilters.Contains("capability") {
+		if pluginFilters.Include("capability") {
 			for _, f := range p.GetTypes() {
 				if !pluginFilters.Match("capability", f.Capability) {
 					continue next
@@ -533,7 +534,7 @@ func (s *pluginConfigStore) Get(d digest.Digest) ([]byte, error) {
 	return ioutil.ReadAll(rwc)
 }
 
-func (s *pluginConfigStore) RootFSAndOSFromConfig(c []byte) (*image.RootFS, layer.OS, error) {
+func (s *pluginConfigStore) RootFSAndPlatformFromConfig(c []byte) (*image.RootFS, layer.Platform, error) {
 	return configToRootFS(c)
 }
 
@@ -614,10 +615,10 @@ func (pm *Manager) Remove(name string, config *types.PluginRmConfig) error {
 
 	if !config.ForceRemove {
 		if p.GetRefCount() > 0 {
-			return inUseError(p.Name())
+			return fmt.Errorf("plugin %s is in use", p.Name())
 		}
 		if p.IsEnabled() {
-			return enabledError(p.Name())
+			return fmt.Errorf("plugin %s is enabled", p.Name())
 		}
 	}
 
@@ -650,6 +651,22 @@ func (pm *Manager) Remove(name string, config *types.PluginRmConfig) error {
 	pm.config.LogPluginEvent(id, name, "remove")
 	pm.publisher.Publish(EventRemove{Plugin: p.PluginObj})
 	return nil
+}
+
+func getMounts(root string) ([]string, error) {
+	infos, err := mount.GetMounts()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read mount table")
+	}
+
+	var mounts []string
+	for _, m := range infos {
+		if strings.HasPrefix(m.Mountpoint, root) {
+			mounts = append(mounts, m.Mountpoint)
+		}
+	}
+
+	return mounts, nil
 }
 
 // Set sets plugin args

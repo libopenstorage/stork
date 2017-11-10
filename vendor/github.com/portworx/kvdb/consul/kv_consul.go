@@ -794,7 +794,7 @@ func (kv *consulKV) getLock(key string, tag interface{}, ttl time.Duration) (
 	entry := &api.SessionEntry{
 		Behavior:  api.SessionBehaviorRelease, // Release the lock when the session expires
 		TTL:       (ttl / 2).String(),         // Consul multiplies the TTL by 2x
-		LockDelay: 1 * time.Millisecond,       // Virtually disable lock delay
+		LockDelay: 0,                          // Virtually disable lock delay
 	}
 
 	// Create the key session
@@ -1041,7 +1041,7 @@ func (kv *consulKV) renewSession(
 	entry := &api.SessionEntry{
 		Behavior:  api.SessionBehaviorDelete, // Delete the key when the session expires
 		TTL:       durationTTL.String(),
-		LockDelay: 1 * time.Millisecond, // Virtually disable lock delay
+		LockDelay: 0, // Virtually disable lock delay
 	}
 
 	// Create the key session

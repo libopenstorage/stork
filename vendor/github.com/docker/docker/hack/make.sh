@@ -59,17 +59,19 @@ DEFAULT_BUNDLES=(
 	binary-daemon
 	dynbinary
 
-	test-integration
+	test-unit
+	test-integration-cli
 	test-docker-py
 
 	cross
+	tgz
 )
 
-VERSION=${VERSION:-$(< ./VERSION)}
+VERSION=$(< ./VERSION)
 ! BUILDTIME=$(date -u -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}" --rfc-3339 ns 2> /dev/null | sed -e 's/ /T/')
 if [ "$DOCKER_GITCOMMIT" ]; then
 	GITCOMMIT="$DOCKER_GITCOMMIT"
-elif command -v git &> /dev/null && [ -e .git ] && git rev-parse &> /dev/null; then
+elif command -v git &> /dev/null && [ -d .git ] && git rev-parse &> /dev/null; then
 	GITCOMMIT=$(git rev-parse --short HEAD)
 	if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 		GITCOMMIT="$GITCOMMIT-unsupported"
@@ -95,6 +97,13 @@ if [ "$AUTO_GOPATH" ]; then
 	mkdir -p .gopath/src/"$(dirname "${DOCKER_PKG}")"
 	ln -sf ../../../.. .gopath/src/"${DOCKER_PKG}"
 	export GOPATH="${PWD}/.gopath"
+
+	if [ "$(go env GOOS)" = 'solaris' ]; then
+		# sys/unix is installed outside the standard library on solaris
+		# TODO need to allow for version change, need to get version from go
+		export GO_VERSION=${GO_VERSION:-"1.8.1"}
+		export GOPATH="${GOPATH}:/usr/lib/gocode/${GO_VERSION}"
+	fi
 fi
 
 if [ ! "$GOPATH" ]; then
@@ -121,7 +130,7 @@ fi
 # functionality.
 if \
 	command -v gcc &> /dev/null \
-	&& ! ( echo -e  '#include <libdevmapper.h>\nint main() { dm_task_deferred_remove(NULL); }'| gcc -xc - -o /dev/null $(pkg-config --libs devmapper) &> /dev/null ) \
+	&& ! ( echo -e  '#include <libdevmapper.h>\nint main() { dm_task_deferred_remove(NULL); }'| gcc -xc - -o /dev/null -ldevmapper &> /dev/null ) \
 ; then
 	DOCKER_BUILDTAGS+=' libdm_no_deferred_remove'
 fi
@@ -181,18 +190,20 @@ bundle() {
 }
 
 main() {
-	if [ -z "${KEEPBUNDLE-}" ]; then
-		echo "Removing bundles/"
-		rm -rf "bundles/*"
+	# We want this to fail if the bundles already exist and cannot be removed.
+	# This is to avoid mixing bundles from different versions of the code.
+	mkdir -p bundles
+	if [ -e "bundles/$VERSION" ] && [ -z "$KEEPBUNDLE" ]; then
+		echo "bundles/$VERSION already exists. Removing."
+		rm -fr "bundles/$VERSION" && mkdir "bundles/$VERSION" || exit 1
 		echo
 	fi
-	mkdir -p bundles
 
-	# Windows and symlinks don't get along well
 	if [ "$(go env GOHOSTOS)" != 'windows' ]; then
+		# Windows and symlinks don't get along well
+
 		rm -f bundles/latest
-		# preserve latest symlink for backward compatibility
-		ln -sf . bundles/latest
+		ln -s "$VERSION" bundles/latest
 	fi
 
 	if [ $# -lt 1 ]; then
@@ -201,7 +212,7 @@ main() {
 		bundles=($@)
 	fi
 	for bundle in ${bundles[@]}; do
-		export DEST="bundles/$(basename "$bundle")"
+		export DEST="bundles/$VERSION/$(basename "$bundle")"
 		# Cygdrive paths don't play well with go build -o.
 		if [[ "$(uname -s)" == CYGWIN* ]]; then
 			export DEST="$(cygpath -mw "$DEST")"

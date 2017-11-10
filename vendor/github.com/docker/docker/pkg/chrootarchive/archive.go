@@ -16,10 +16,7 @@ func NewArchiver(idMappings *idtools.IDMappings) *archive.Archiver {
 	if idMappings == nil {
 		idMappings = &idtools.IDMappings{}
 	}
-	return &archive.Archiver{
-		Untar:         Untar,
-		IDMappingsVar: idMappings,
-	}
+	return &archive.Archiver{Untar: Untar, IDMappings: idMappings}
 }
 
 // Untar reads a stream of bytes from `archive`, parses it as a tar archive,

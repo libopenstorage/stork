@@ -10,11 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/containerd/continuity/driver"
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/daemon/graphdriver/vfs"
 	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/containerfs"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/stringid"
 	"github.com/opencontainers/go-digest"
@@ -84,7 +82,7 @@ func newTestStore(t *testing.T) (Store, string, func()) {
 	}
 }
 
-type layerInit func(root containerfs.ContainerFS) error
+type layerInit func(root string) error
 
 func createLayer(ls Store, parent ChainID, layerFunc layerInit) (Layer, error) {
 	containerID := stringid.GenerateRandomID()
@@ -93,12 +91,12 @@ func createLayer(ls Store, parent ChainID, layerFunc layerInit) (Layer, error) {
 		return nil, err
 	}
 
-	pathFS, err := mount.Mount("")
+	path, err := mount.Mount("")
 	if err != nil {
 		return nil, err
 	}
 
-	if err := layerFunc(pathFS); err != nil {
+	if err := layerFunc(path); err != nil {
 		return nil, err
 	}
 
@@ -108,7 +106,7 @@ func createLayer(ls Store, parent ChainID, layerFunc layerInit) (Layer, error) {
 	}
 	defer ts.Close()
 
-	layer, err := ls.Register(ts, parent, OS(runtime.GOOS))
+	layer, err := ls.Register(ts, parent, Platform(runtime.GOOS))
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +123,7 @@ func createLayer(ls Store, parent ChainID, layerFunc layerInit) (Layer, error) {
 }
 
 type FileApplier interface {
-	ApplyFile(root containerfs.ContainerFS) error
+	ApplyFile(root string) error
 }
 
 type testFile struct {
@@ -142,25 +140,25 @@ func newTestFile(name string, content []byte, perm os.FileMode) FileApplier {
 	}
 }
 
-func (tf *testFile) ApplyFile(root containerfs.ContainerFS) error {
-	fullPath := root.Join(root.Path(), tf.name)
-	if err := root.MkdirAll(root.Dir(fullPath), 0755); err != nil {
+func (tf *testFile) ApplyFile(root string) error {
+	fullPath := filepath.Join(root, tf.name)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return err
 	}
 	// Check if already exists
-	if stat, err := root.Stat(fullPath); err == nil && stat.Mode().Perm() != tf.permission {
-		if err := root.Lchmod(fullPath, tf.permission); err != nil {
+	if stat, err := os.Stat(fullPath); err == nil && stat.Mode().Perm() != tf.permission {
+		if err := os.Chmod(fullPath, tf.permission); err != nil {
 			return err
 		}
 	}
-	if err := driver.WriteFile(root, fullPath, tf.content, tf.permission); err != nil {
+	if err := ioutil.WriteFile(fullPath, tf.content, tf.permission); err != nil {
 		return err
 	}
 	return nil
 }
 
 func initWithFiles(files ...FileApplier) layerInit {
-	return func(root containerfs.ContainerFS) error {
+	return func(root string) error {
 		for _, f := range files {
 			if err := f.ApplyFile(root); err != nil {
 				return err
@@ -290,7 +288,7 @@ func TestMountAndRegister(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b, err := driver.ReadFile(path2, path2.Join(path2.Path(), "testfile.txt"))
+	b, err := ioutil.ReadFile(filepath.Join(path2, "testfile.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,12 +391,12 @@ func TestStoreRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pathFS, err := m.Mount("")
+	path, err := m.Mount("")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := driver.WriteFile(pathFS, pathFS.Join(pathFS.Path(), "testfile.txt"), []byte("nothing here"), 0644); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(path, "testfile.txt"), []byte("nothing here"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -432,20 +430,20 @@ func TestStoreRestore(t *testing.T) {
 
 	if mountPath, err := m2.Mount(""); err != nil {
 		t.Fatal(err)
-	} else if pathFS.Path() != mountPath.Path() {
-		t.Fatalf("Unexpected path %s, expected %s", mountPath.Path(), pathFS.Path())
+	} else if path != mountPath {
+		t.Fatalf("Unexpected path %s, expected %s", mountPath, path)
 	}
 
 	if mountPath, err := m2.Mount(""); err != nil {
 		t.Fatal(err)
-	} else if pathFS.Path() != mountPath.Path() {
-		t.Fatalf("Unexpected path %s, expected %s", mountPath.Path(), pathFS.Path())
+	} else if path != mountPath {
+		t.Fatalf("Unexpected path %s, expected %s", mountPath, path)
 	}
 	if err := m2.Unmount(); err != nil {
 		t.Fatal(err)
 	}
 
-	b, err := driver.ReadFile(pathFS, pathFS.Join(pathFS.Path(), "testfile.txt"))
+	b, err := ioutil.ReadFile(filepath.Join(path, "testfile.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +499,7 @@ func TestTarStreamStability(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layer1, err := ls.Register(bytes.NewReader(tar1), "", OS(runtime.GOOS))
+	layer1, err := ls.Register(bytes.NewReader(tar1), "", Platform(runtime.GOOS))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,7 +518,7 @@ func TestTarStreamStability(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layer2, err := ls.Register(bytes.NewReader(tar2), layer1.ChainID(), OS(runtime.GOOS))
+	layer2, err := ls.Register(bytes.NewReader(tar2), layer1.ChainID(), Platform(runtime.GOOS))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -620,7 +618,7 @@ func tarFromFiles(files ...FileApplier) ([]byte, error) {
 	defer os.RemoveAll(td)
 
 	for _, f := range files {
-		if err := f.ApplyFile(containerfs.NewLocalContainerFS(td)); err != nil {
+		if err := f.ApplyFile(td); err != nil {
 			return nil, err
 		}
 	}
@@ -688,12 +686,12 @@ func TestRegisterExistingLayer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layer2a, err := ls.Register(bytes.NewReader(tar1), layer1.ChainID(), OS(runtime.GOOS))
+	layer2a, err := ls.Register(bytes.NewReader(tar1), layer1.ChainID(), Platform(runtime.GOOS))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	layer2b, err := ls.Register(bytes.NewReader(tar1), layer1.ChainID(), OS(runtime.GOOS))
+	layer2b, err := ls.Register(bytes.NewReader(tar1), layer1.ChainID(), Platform(runtime.GOOS))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -728,12 +726,12 @@ func TestTarStreamVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	layer1, err := ls.Register(bytes.NewReader(tar1), "", OS(runtime.GOOS))
+	layer1, err := ls.Register(bytes.NewReader(tar1), "", Platform(runtime.GOOS))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	layer2, err := ls.Register(bytes.NewReader(tar2), "", OS(runtime.GOOS))
+	layer2, err := ls.Register(bytes.NewReader(tar2), "", Platform(runtime.GOOS))
 	if err != nil {
 		t.Fatal(err)
 	}

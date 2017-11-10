@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
 	"strings"
 
-	"github.com/docker/docker/client"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/integration-cli/checker"
+	"github.com/docker/docker/integration-cli/request"
 	"github.com/go-check/check"
-	"golang.org/x/net/context"
 )
 
 func (s *DockerSuite) TestPluginLogDriver(c *check.C) {
@@ -34,14 +36,13 @@ func (s *DockerSuite) TestPluginLogDriverInfoList(c *check.C) {
 	pluginName := "cpuguy83/docker-logdriver-test"
 
 	dockerCmd(c, "plugin", "install", pluginName)
-
-	cli, err := client.NewEnvClient()
-	c.Assert(err, checker.IsNil)
-	defer cli.Close()
-
-	info, err := cli.Info(context.Background())
+	status, body, err := request.SockRequest("GET", "/info", nil, daemonHost())
+	c.Assert(status, checker.Equals, http.StatusOK)
 	c.Assert(err, checker.IsNil)
 
+	var info types.Info
+	err = json.Unmarshal(body, &info)
+	c.Assert(err, checker.IsNil)
 	drivers := strings.Join(info.Plugins.Log, " ")
 	c.Assert(drivers, checker.Contains, "json-file")
 	c.Assert(drivers, checker.Not(checker.Contains), pluginName)

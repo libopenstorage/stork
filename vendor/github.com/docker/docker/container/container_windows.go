@@ -16,15 +16,17 @@ const (
 	containerSecretMountPath         = `C:\ProgramData\Docker\secrets`
 	containerInternalSecretMountPath = `C:\ProgramData\Docker\internal\secrets`
 	containerInternalConfigsDirPath  = `C:\ProgramData\Docker\internal\configs`
-
-	// DefaultStopTimeout is the timeout (in seconds) for the shutdown call on a container
-	DefaultStopTimeout = 30
 )
 
-// UnmountIpcMount unmounts Ipc related mounts.
+// ExitStatus provides exit reasons for a container.
+type ExitStatus struct {
+	// The exit code with which the container exited.
+	ExitCode int
+}
+
+// UnmountIpcMounts unmounts Ipc related mounts.
 // This is a NOOP on windows.
-func (container *Container) UnmountIpcMount(unmount func(pth string) error) error {
-	return nil
+func (container *Container) UnmountIpcMounts(unmount func(pth string) error) {
 }
 
 // IpcMounts returns the list of Ipc related mounts.
@@ -167,6 +169,18 @@ func (container *Container) UpdateContainer(hostConfig *containertypes.HostConfi
 		container.HostConfig.RestartPolicy = hostConfig.RestartPolicy
 	}
 	return nil
+}
+
+// cleanResourcePath cleans a resource path by removing C:\ syntax, and prepares
+// to combine with a volume path
+func cleanResourcePath(path string) string {
+	if len(path) >= 2 {
+		c := path[0]
+		if path[1] == ':' && ('a' <= c && c <= 'z' || 'A' <= c && c <= 'Z') {
+			path = path[2:]
+		}
+	}
+	return filepath.Join(string(os.PathSeparator), path)
 }
 
 // BuildHostnameFile writes the container's hostname file.

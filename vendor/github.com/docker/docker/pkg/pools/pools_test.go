@@ -6,9 +6,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBufioReaderPoolGetWithNoReaderShouldCreateOne(t *testing.T) {
@@ -95,16 +92,22 @@ func TestBufioWriterPoolPutAndGet(t *testing.T) {
 	buf := new(bytes.Buffer)
 	bw := bufio.NewWriter(buf)
 	writer := BufioWriter32KPool.Get(bw)
-	require.NotNil(t, writer)
-
+	if writer == nil {
+		t.Fatalf("BufioReaderPool should not return a nil writer.")
+	}
 	written, err := writer.Write([]byte("foobar"))
-	require.NoError(t, err)
-	assert.Equal(t, 6, written)
-
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written != 6 {
+		t.Fatalf("Should have written 6 bytes, but wrote %v bytes", written)
+	}
 	// Make sure we Flush all the way ?
 	writer.Flush()
 	bw.Flush()
-	assert.Len(t, buf.Bytes(), 6)
+	if len(buf.Bytes()) != 6 {
+		t.Fatalf("The buffer should contain 6 bytes ('foobar') but contains %v ('%v')", buf.Bytes(), string(buf.Bytes()))
+	}
 	// Reset the buffer
 	buf.Reset()
 	BufioWriter32KPool.Put(writer)

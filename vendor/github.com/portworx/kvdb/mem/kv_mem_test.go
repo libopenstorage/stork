@@ -7,5 +7,13 @@ import (
 )
 
 func TestAll(t *testing.T) {
-	test.RunBasic(New, t)
+	test.RunBasic(New, t, Start, Stop)
+}
+
+func Start() error {
+	return nil
+}
+
+func Stop() error {
+	return nil
 }

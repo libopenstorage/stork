@@ -3,13 +3,12 @@
 package dockerfile
 
 import (
-	"runtime"
 	"testing"
 )
 
-func TestNormalizeWorkdir(t *testing.T) {
+func TestNormaliseWorkdir(t *testing.T) {
 	testCases := []struct{ current, requested, expected, expectedError string }{
-		{``, ``, ``, `cannot normalize nothing`},
+		{``, ``, ``, `cannot normalise nothing`},
 		{``, `foo`, `/foo`, ``},
 		{``, `/foo`, `/foo`, ``},
 		{`/foo`, `bar`, `/foo/bar`, ``},
@@ -17,18 +16,18 @@ func TestNormalizeWorkdir(t *testing.T) {
 	}
 
 	for _, test := range testCases {
-		normalized, err := normalizeWorkdir(runtime.GOOS, test.current, test.requested)
+		normalised, err := normaliseWorkdir(test.current, test.requested)
 
 		if test.expectedError != "" && err == nil {
-			t.Fatalf("NormalizeWorkdir should return an error %s, got nil", test.expectedError)
+			t.Fatalf("NormaliseWorkdir should return an error %s, got nil", test.expectedError)
 		}
 
 		if test.expectedError != "" && err.Error() != test.expectedError {
-			t.Fatalf("NormalizeWorkdir returned wrong error. Expected %s, got %s", test.expectedError, err.Error())
+			t.Fatalf("NormaliseWorkdir returned wrong error. Expected %s, got %s", test.expectedError, err.Error())
 		}
 
-		if normalized != test.expected {
-			t.Fatalf("NormalizeWorkdir error. Expected %s for current %s and requested %s, got %s", test.expected, test.current, test.requested, normalized)
+		if normalised != test.expected {
+			t.Fatalf("NormaliseWorkdir error. Expected %s for current %s and requested %s, got %s", test.expected, test.current, test.requested, normalised)
 		}
 	}
 }

@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"runtime"
 	"testing"
 
 	"github.com/docker/docker/volume"
@@ -21,10 +20,8 @@ func TestParseVolumesFrom(t *testing.T) {
 		{"foobar:baz", "", "", true},
 	}
 
-	parser := volume.NewParser(runtime.GOOS)
-
 	for _, c := range cases {
-		id, mode, err := parser.ParseVolumesFrom(c.spec)
+		id, mode, err := volume.ParseVolumesFrom(c.spec)
 		if c.fail {
 			if err == nil {
 				t.Fatalf("Expected error, was nil, for spec %s\n", c.spec)

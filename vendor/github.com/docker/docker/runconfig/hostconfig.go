@@ -2,6 +2,7 @@ package runconfig
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 
@@ -10,7 +11,7 @@ import (
 
 // DecodeHostConfig creates a HostConfig based on the specified Reader.
 // It assumes the content of the reader will be JSON, and decodes it.
-func decodeHostConfig(src io.Reader) (*container.HostConfig, error) {
+func DecodeHostConfig(src io.Reader) (*container.HostConfig, error) {
 	decoder := json.NewDecoder(src)
 
 	var w ContainerConfigWrapper
@@ -44,7 +45,7 @@ func validateNetContainerMode(c *container.Config, hc *container.HostConfig) err
 	parts := strings.Split(string(hc.NetworkMode), ":")
 	if parts[0] == "container" {
 		if len(parts) < 2 || parts[1] == "" {
-			return validationError("Invalid network mode: invalid container format container:<name|id>")
+			return fmt.Errorf("Invalid network mode: invalid container format container:<name|id>")
 		}
 	}
 
@@ -68,7 +69,7 @@ func validateNetContainerMode(c *container.Config, hc *container.HostConfig) err
 		return ErrConflictContainerNetworkAndMac
 	}
 
-	if hc.NetworkMode.IsContainer() && (len(hc.PortBindings) > 0 || hc.PublishAllPorts) {
+	if hc.NetworkMode.IsContainer() && (len(hc.PortBindings) > 0 || hc.PublishAllPorts == true) {
 		return ErrConflictNetworkPublishPorts
 	}
 

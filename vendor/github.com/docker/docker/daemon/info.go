@@ -97,10 +97,10 @@ func (daemon *Daemon) SystemInfo() (*types.Info, error) {
 	drivers = strings.TrimSpace(drivers)
 	v := &types.Info{
 		ID:                 daemon.ID,
-		Containers:         cRunning + cPaused + cStopped,
-		ContainersRunning:  cRunning,
-		ContainersPaused:   cPaused,
-		ContainersStopped:  cStopped,
+		Containers:         int(cRunning + cPaused + cStopped),
+		ContainersRunning:  int(cRunning),
+		ContainersPaused:   int(cPaused),
+		ContainersStopped:  int(cStopped),
 		Images:             imageCount,
 		Driver:             drivers,
 		DriverStatus:       daemon.stores[p].layerStore.DriverStatus(),

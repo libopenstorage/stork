@@ -35,7 +35,7 @@ func TestCloseRootDirectory(t *testing.T) {
 		t.Fatalf("Error while executing Close: %s", err)
 	}
 
-	_, err = os.Stat(src.Root().Path())
+	_, err = os.Stat(src.Root())
 
 	if !os.IsNotExist(err) {
 		t.Fatal("Directory should not exist at this point")

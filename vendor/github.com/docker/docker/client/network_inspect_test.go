@@ -21,17 +21,20 @@ func TestNetworkInspectError(t *testing.T) {
 	}
 
 	_, err := client.NetworkInspect(context.Background(), "nothing", types.NetworkInspectOptions{})
-	assert.EqualError(t, err, "Error response from daemon: Server error")
+	if err == nil || err.Error() != "Error response from daemon: Server error" {
+		t.Fatalf("expected a Server Error, got %v", err)
+	}
 }
 
-func TestNetworkInspectNotFoundError(t *testing.T) {
+func TestNetworkInspectContainerNotFound(t *testing.T) {
 	client := &Client{
-		client: newMockClient(errorMock(http.StatusNotFound, "missing")),
+		client: newMockClient(errorMock(http.StatusNotFound, "Server error")),
 	}
 
 	_, err := client.NetworkInspect(context.Background(), "unknown", types.NetworkInspectOptions{})
-	assert.EqualError(t, err, "Error: No such network: unknown")
-	assert.True(t, IsErrNotFound(err))
+	if err == nil || !IsErrNetworkNotFound(err) {
+		t.Fatalf("expected a networkNotFound error, got %v", err)
+	}
 }
 
 func TestNetworkInspect(t *testing.T) {

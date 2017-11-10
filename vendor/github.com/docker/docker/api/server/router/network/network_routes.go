@@ -2,21 +2,21 @@ package network
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"golang.org/x/net/context"
 
+	"github.com/docker/docker/api/errors"
 	"github.com/docker/docker/api/server/httputils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/versions"
 	"github.com/docker/libnetwork"
-	netconst "github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/networkdb"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -37,7 +37,7 @@ func (n *networkRouter) getNetworksList(ctx context.Context, w http.ResponseWrit
 	}
 
 	filter := r.Form.Get("filters")
-	netFilters, err := filters.FromJSON(filter)
+	netFilters, err := filters.FromParam(filter)
 	if err != nil {
 		return err
 	}
@@ -82,42 +82,6 @@ SKIP:
 	return httputils.WriteJSON(w, http.StatusOK, list)
 }
 
-type invalidRequestError struct {
-	cause error
-}
-
-func (e invalidRequestError) Error() string {
-	return e.cause.Error()
-}
-
-func (e invalidRequestError) InvalidParameter() {}
-
-type ambigousResultsError string
-
-func (e ambigousResultsError) Error() string {
-	return "network " + string(e) + " is ambiguous"
-}
-
-func (ambigousResultsError) InvalidParameter() {}
-
-type conflictError struct {
-	cause error
-}
-
-func (e conflictError) Error() string {
-	return e.cause.Error()
-}
-
-func (e conflictError) Cause() error {
-	return e.cause
-}
-
-func (e conflictError) Conflict() {}
-
-func nameConflict(name string) error {
-	return conflictError{libnetwork.NetworkNameError(name)}
-}
-
 func (n *networkRouter) getNetwork(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := httputils.ParseForm(r); err != nil {
 		return err
@@ -130,7 +94,8 @@ func (n *networkRouter) getNetwork(ctx context.Context, w http.ResponseWriter, r
 	)
 	if v := r.URL.Query().Get("verbose"); v != "" {
 		if verbose, err = strconv.ParseBool(v); err != nil {
-			return errors.Wrapf(invalidRequestError{err}, "invalid value for verbose: %s", v)
+			err = fmt.Errorf("invalid value for verbose: %s", v)
+			return errors.NewBadRequestError(err)
 		}
 	}
 	scope := r.URL.Query().Get("scope")
@@ -170,17 +135,6 @@ func (n *networkRouter) getNetwork(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 
-	nwk, err := n.cluster.GetNetwork(term)
-	if err == nil {
-		// If the get network is passed with a specific network ID / partial network ID
-		// or if the get network was passed with a network name and scope as swarm
-		// return the network. Skipped using isMatchingScope because it is true if the scope
-		// is not set which would be case if the client API v1.30
-		if strings.HasPrefix(nwk.ID, term) || (netconst.SwarmScope == scope) {
-			return httputils.WriteJSON(w, http.StatusOK, nwk)
-		}
-	}
-
 	nr, _ := n.cluster.GetNetworks()
 	for _, network := range nr {
 		if network.ID == term && isMatchingScope(network.Scope, scope) {
@@ -211,7 +165,7 @@ func (n *networkRouter) getNetwork(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 	if len(listByFullName) > 1 {
-		return errors.Wrapf(ambigousResultsError(term), "%d matches found based on name", len(listByFullName))
+		return fmt.Errorf("network %s is ambiguous (%d matches found based on name)", term, len(listByFullName))
 	}
 
 	// Find based on partial ID, returns true only if no duplicates
@@ -221,7 +175,7 @@ func (n *networkRouter) getNetwork(ctx context.Context, w http.ResponseWriter, r
 		}
 	}
 	if len(listByPartialID) > 1 {
-		return errors.Wrapf(ambigousResultsError(term), "%d matches found based on ID prefix", len(listByPartialID))
+		return fmt.Errorf("network %s is ambiguous (%d matches found based on ID prefix)", term, len(listByPartialID))
 	}
 
 	return libnetwork.ErrNoSuchNetwork(term)
@@ -243,7 +197,7 @@ func (n *networkRouter) postNetworkCreate(ctx context.Context, w http.ResponseWr
 	}
 
 	if nws, err := n.cluster.GetNetworksByName(create.Name); err == nil && len(nws) > 0 {
-		return nameConflict(create.Name)
+		return libnetwork.NetworkNameError(create.Name)
 	}
 
 	nw, err := n.backend.CreateNetwork(create)
@@ -253,7 +207,7 @@ func (n *networkRouter) postNetworkCreate(ctx context.Context, w http.ResponseWr
 			// check if user defined CheckDuplicate, if set true, return err
 			// otherwise prepare a warning message
 			if create.CheckDuplicate {
-				return nameConflict(create.Name)
+				return libnetwork.NetworkNameError(create.Name)
 			}
 			warning = libnetwork.NetworkNameError(create.Name).Error()
 		}
@@ -443,9 +397,7 @@ func buildIpamResources(r *types.NetworkResource, nwInfo libnetwork.NetworkInfo)
 		for _, ip4Info := range ipv4Info {
 			iData := network.IPAMConfig{}
 			iData.Subnet = ip4Info.IPAMData.Pool.String()
-			if ip4Info.IPAMData.Gateway != nil {
-				iData.Gateway = ip4Info.IPAMData.Gateway.IP.String()
-			}
+			iData.Gateway = ip4Info.IPAMData.Gateway.IP.String()
 			r.IPAM.Config = append(r.IPAM.Config, iData)
 		}
 	}
@@ -507,7 +459,7 @@ func (n *networkRouter) postNetworksPrune(ctx context.Context, w http.ResponseWr
 		return err
 	}
 
-	pruneFilters, err := filters.FromJSON(r.Form.Get("filters"))
+	pruneFilters, err := filters.FromParam(r.Form.Get("filters"))
 	if err != nil {
 		return err
 	}

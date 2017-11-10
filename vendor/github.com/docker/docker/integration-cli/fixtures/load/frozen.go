@@ -9,27 +9,21 @@ import (
 	"strings"
 	"sync"
 
-	"context"
-
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/docker/docker/pkg/term"
 	"github.com/pkg/errors"
 )
 
-const frozenImgDir = "/docker-frozen-images"
+var frozenImgDir = "/docker-frozen-images"
 
 // FrozenImagesLinux loads the frozen image set for the integration suite
 // If the images are not available locally it will download them
 // TODO: This loads whatever is in the frozen image dir, regardless of what
 // images were passed in. If the images need to be downloaded, then it will respect
 // the passed in images
-func FrozenImagesLinux(client client.APIClient, images ...string) error {
+func FrozenImagesLinux(dockerBinary string, images ...string) error {
 	imgNS := os.Getenv("TEST_IMAGE_NAMESPACE")
 	var loadImages []struct{ srcName, destName string }
 	for _, img := range images {
-		if !imageExists(client, img) {
+		if err := exec.Command(dockerBinary, "inspect", "--type=image", img).Run(); err != nil {
 			srcName := img
 			// hello-world:latest gets re-tagged as hello-world:frozen
 			// there are some tests that use hello-world:latest specifically so it pulls
@@ -52,41 +46,35 @@ func FrozenImagesLinux(client client.APIClient, images ...string) error {
 		return nil
 	}
 
-	ctx := context.Background()
 	fi, err := os.Stat(frozenImgDir)
 	if err != nil || !fi.IsDir() {
 		srcImages := make([]string, 0, len(loadImages))
 		for _, img := range loadImages {
 			srcImages = append(srcImages, img.srcName)
 		}
-		if err := pullImages(ctx, client, srcImages); err != nil {
+		if err := pullImages(dockerBinary, srcImages); err != nil {
 			return errors.Wrap(err, "error pulling image list")
 		}
 	} else {
-		if err := loadFrozenImages(ctx, client); err != nil {
+		if err := loadFrozenImages(dockerBinary); err != nil {
 			return err
 		}
 	}
 
 	for _, img := range loadImages {
 		if img.srcName != img.destName {
-			if err := client.ImageTag(ctx, img.srcName, img.destName); err != nil {
-				return errors.Wrapf(err, "failed to tag %s as %s", img.srcName, img.destName)
+			if out, err := exec.Command(dockerBinary, "tag", img.srcName, img.destName).CombinedOutput(); err != nil {
+				return errors.Errorf("%v: %s", err, string(out))
 			}
-			if _, err := client.ImageRemove(ctx, img.srcName, types.ImageRemoveOptions{}); err != nil {
-				return errors.Wrapf(err, "failed to remove %s", img.srcName)
+			if out, err := exec.Command(dockerBinary, "rmi", img.srcName).CombinedOutput(); err != nil {
+				return errors.Errorf("%v: %s", err, string(out))
 			}
 		}
 	}
 	return nil
 }
 
-func imageExists(client client.APIClient, name string) bool {
-	_, _, err := client.ImageInspectWithRaw(context.Background(), name)
-	return err == nil
-}
-
-func loadFrozenImages(ctx context.Context, client client.APIClient) error {
+func loadFrozenImages(dockerBinary string) error {
 	tar, err := exec.LookPath("tar")
 	if err != nil {
 		return errors.Wrap(err, "could not find tar binary")
@@ -102,16 +90,15 @@ func loadFrozenImages(ctx context.Context, client client.APIClient) error {
 	tarCmd.Start()
 	defer tarCmd.Wait()
 
-	resp, err := client.ImageLoad(ctx, out, true)
-	if err != nil {
-		return errors.Wrap(err, "failed to load frozen images")
+	cmd := exec.Command(dockerBinary, "load")
+	cmd.Stdin = out
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return errors.Errorf("%v: %s", err, string(out))
 	}
-	defer resp.Body.Close()
-	fd, isTerminal := term.GetFdInfo(os.Stdout)
-	return jsonmessage.DisplayJSONMessagesStream(resp.Body, os.Stdout, fd, isTerminal, nil)
+	return nil
 }
 
-func pullImages(ctx context.Context, client client.APIClient, images []string) error {
+func pullImages(dockerBinary string, images []string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return errors.Wrap(err, "error getting path to dockerfile")
@@ -132,8 +119,16 @@ func pullImages(ctx context.Context, client client.APIClient, images []string) e
 		wg.Add(1)
 		go func(tag, ref string) {
 			defer wg.Done()
-			if err := pullTagAndRemove(ctx, client, ref, tag); err != nil {
-				chErr <- err
+			if out, err := exec.Command(dockerBinary, "pull", ref).CombinedOutput(); err != nil {
+				chErr <- errors.Errorf("%v: %s", string(out), err)
+				return
+			}
+			if out, err := exec.Command(dockerBinary, "tag", ref, tag).CombinedOutput(); err != nil {
+				chErr <- errors.Errorf("%v: %s", string(out), err)
+				return
+			}
+			if out, err := exec.Command(dockerBinary, "rmi", ref).CombinedOutput(); err != nil {
+				chErr <- errors.Errorf("%v: %s", string(out), err)
 				return
 			}
 		}(tag, ref)
@@ -141,25 +136,6 @@ func pullImages(ctx context.Context, client client.APIClient, images []string) e
 	wg.Wait()
 	close(chErr)
 	return <-chErr
-}
-
-func pullTagAndRemove(ctx context.Context, client client.APIClient, ref string, tag string) error {
-	resp, err := client.ImagePull(ctx, ref, types.ImagePullOptions{})
-	if err != nil {
-		return errors.Wrapf(err, "failed to pull %s", ref)
-	}
-	defer resp.Close()
-	fd, isTerminal := term.GetFdInfo(os.Stdout)
-	if err := jsonmessage.DisplayJSONMessagesStream(resp, os.Stdout, fd, isTerminal, nil); err != nil {
-		return err
-	}
-
-	if err := client.ImageTag(ctx, ref, tag); err != nil {
-		return errors.Wrapf(err, "failed to tag %s as %s", ref, tag)
-	}
-	_, err = client.ImageRemove(ctx, ref, types.ImageRemoveOptions{})
-	return errors.Wrapf(err, "failed to remove %s", ref)
-
 }
 
 func readFrozenImageList(dockerfilePath string, images []string) (map[string]string, error) {
@@ -178,6 +154,11 @@ func readFrozenImageList(dockerfilePath string, images []string) (map[string]str
 		}
 		if !(line[0] == "RUN" && line[1] == "./contrib/download-frozen-image-v2.sh") {
 			continue
+		}
+
+		frozenImgDir = line[2]
+		if line[2] == frozenImgDir {
+			frozenImgDir = filepath.Join(os.Getenv("DEST"), "frozen-images")
 		}
 
 		for scanner.Scan() {

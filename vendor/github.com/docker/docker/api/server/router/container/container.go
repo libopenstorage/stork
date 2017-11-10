@@ -6,18 +6,12 @@ import (
 )
 
 type validationError struct {
-	cause error
+	error
 }
 
-func (e validationError) Error() string {
-	return e.cause.Error()
+func (validationError) IsValidationError() bool {
+	return true
 }
-
-func (e validationError) Cause() error {
-	return e.cause
-}
-
-func (e validationError) InvalidParameter() {}
 
 // containerRouter is a router to talk with the container controller
 type containerRouter struct {

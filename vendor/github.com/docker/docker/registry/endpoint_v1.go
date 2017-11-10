@@ -67,7 +67,7 @@ func validateEndpoint(endpoint *V1Endpoint) error {
 	return nil
 }
 
-func newV1Endpoint(address url.URL, tlsConfig *tls.Config, userAgent string, metaHeaders http.Header) *V1Endpoint {
+func newV1Endpoint(address url.URL, tlsConfig *tls.Config, userAgent string, metaHeaders http.Header) (*V1Endpoint, error) {
 	endpoint := &V1Endpoint{
 		IsSecure: (tlsConfig == nil || !tlsConfig.InsecureSkipVerify),
 		URL:      new(url.URL),
@@ -77,8 +77,8 @@ func newV1Endpoint(address url.URL, tlsConfig *tls.Config, userAgent string, met
 
 	// TODO(tiborvass): make sure a ConnectTimeout transport is used
 	tr := NewTransport(tlsConfig)
-	endpoint.client = HTTPClient(transport.NewTransport(tr, Headers(userAgent, metaHeaders)...))
-	return endpoint
+	endpoint.client = HTTPClient(transport.NewTransport(tr, DockerHeaders(userAgent, metaHeaders)...))
+	return endpoint, nil
 }
 
 // trimV1Address trims the version off the address and returns the
@@ -123,7 +123,7 @@ func newV1EndpointFromStr(address string, tlsConfig *tls.Config, userAgent strin
 		return nil, err
 	}
 
-	endpoint := newV1Endpoint(*uri, tlsConfig, userAgent, metaHeaders)
+	endpoint, err := newV1Endpoint(*uri, tlsConfig, userAgent, metaHeaders)
 	if err != nil {
 		return nil, err
 	}

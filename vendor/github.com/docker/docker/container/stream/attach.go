@@ -7,6 +7,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/docker/docker/pkg/pools"
+	"github.com/docker/docker/pkg/promise"
 	"github.com/docker/docker/pkg/term"
 	"github.com/sirupsen/logrus"
 )
@@ -57,7 +58,7 @@ func (c *Config) AttachStreams(cfg *AttachConfig) {
 }
 
 // CopyStreams starts goroutines to copy data in and out to/from the container
-func (c *Config) CopyStreams(ctx context.Context, cfg *AttachConfig) <-chan error {
+func (c *Config) CopyStreams(ctx context.Context, cfg *AttachConfig) chan error {
 	var (
 		wg     sync.WaitGroup
 		errors = make(chan error, 3)
@@ -136,42 +137,35 @@ func (c *Config) CopyStreams(ctx context.Context, cfg *AttachConfig) <-chan erro
 	go attachStream("stdout", cfg.Stdout, cfg.CStdout)
 	go attachStream("stderr", cfg.Stderr, cfg.CStderr)
 
-	errs := make(chan error, 1)
-
-	go func() {
-		defer close(errs)
-		errs <- func() error {
-			done := make(chan struct{})
-			go func() {
-				wg.Wait()
-				close(done)
-			}()
-			select {
-			case <-done:
-			case <-ctx.Done():
-				// close all pipes
-				if cfg.CStdin != nil {
-					cfg.CStdin.Close()
-				}
-				if cfg.CStdout != nil {
-					cfg.CStdout.Close()
-				}
-				if cfg.CStderr != nil {
-					cfg.CStderr.Close()
-				}
-				<-done
-			}
-			close(errors)
-			for err := range errors {
-				if err != nil {
-					return err
-				}
-			}
-			return nil
+	return promise.Go(func() error {
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
 		}()
-	}()
-
-	return errs
+		select {
+		case <-done:
+		case <-ctx.Done():
+			// close all pipes
+			if cfg.CStdin != nil {
+				cfg.CStdin.Close()
+			}
+			if cfg.CStdout != nil {
+				cfg.CStdout.Close()
+			}
+			if cfg.CStderr != nil {
+				cfg.CStderr.Close()
+			}
+			<-done
+		}
+		close(errors)
+		for err := range errors {
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func copyEscapable(dst io.Writer, src io.ReadCloser, keys []byte) (written int64, err error) {

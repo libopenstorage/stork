@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/docker/docker/internal/testutil"
+	"github.com/docker/docker/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNormalizeDest(t *testing.T) {
+func TestNormaliseDest(t *testing.T) {
 	tests := []struct{ current, requested, expected, etext string }{
 		{``, `D:\`, ``, `Windows does not support destinations not on the system drive (C:)`},
 		{``, `e:/`, ``, `Windows does not support destinations not on the system drive (C:)`},
@@ -40,7 +40,7 @@ func TestNormalizeDest(t *testing.T) {
 	}
 	for _, testcase := range tests {
 		msg := fmt.Sprintf("Input: %s, %s", testcase.current, testcase.requested)
-		actual, err := normalizeDest(testcase.current, testcase.requested, "windows")
+		actual, err := normaliseDest(testcase.current, testcase.requested)
 		if testcase.etext == "" {
 			if !assert.NoError(t, err, msg) {
 				continue

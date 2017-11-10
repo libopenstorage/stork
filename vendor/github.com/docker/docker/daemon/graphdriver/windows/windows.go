@@ -26,7 +26,6 @@ import (
 	"github.com/Microsoft/hcsshim"
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/containerfs"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/longpath"
@@ -154,8 +153,19 @@ func (d *Driver) Status() [][2]string {
 	}
 }
 
+// panicIfUsedByLcow does exactly what it says.
+// TODO @jhowardmsft - this is a temporary measure for the bring-up of
+// Linux containers on Windows. It is a failsafe to ensure that the right
+// graphdriver is used.
+func panicIfUsedByLcow() {
+	if system.LCOWSupported() {
+		panic("inconsistency - windowsfilter graphdriver should not be used when in LCOW mode")
+	}
+}
+
 // Exists returns true if the given id is registered with this driver.
 func (d *Driver) Exists(id string) bool {
+	panicIfUsedByLcow()
 	rID, err := d.resolveID(id)
 	if err != nil {
 		return false
@@ -170,6 +180,7 @@ func (d *Driver) Exists(id string) bool {
 // CreateReadWrite creates a layer that is writable for use as a container
 // file system.
 func (d *Driver) CreateReadWrite(id, parent string, opts *graphdriver.CreateOpts) error {
+	panicIfUsedByLcow()
 	if opts != nil {
 		return d.create(id, parent, opts.MountLabel, false, opts.StorageOpt)
 	}
@@ -178,6 +189,7 @@ func (d *Driver) CreateReadWrite(id, parent string, opts *graphdriver.CreateOpts
 
 // Create creates a new read-only layer with the given id.
 func (d *Driver) Create(id, parent string, opts *graphdriver.CreateOpts) error {
+	panicIfUsedByLcow()
 	if opts != nil {
 		return d.create(id, parent, opts.MountLabel, true, opts.StorageOpt)
 	}
@@ -261,6 +273,7 @@ func (d *Driver) dir(id string) string {
 
 // Remove unmounts and removes the dir information.
 func (d *Driver) Remove(id string) error {
+	panicIfUsedByLcow()
 	rID, err := d.resolveID(id)
 	if err != nil {
 		return err
@@ -341,35 +354,36 @@ func (d *Driver) Remove(id string) error {
 }
 
 // Get returns the rootfs path for the id. This will mount the dir at its given path.
-func (d *Driver) Get(id, mountLabel string) (containerfs.ContainerFS, error) {
+func (d *Driver) Get(id, mountLabel string) (string, error) {
+	panicIfUsedByLcow()
 	logrus.Debugf("WindowsGraphDriver Get() id %s mountLabel %s", id, mountLabel)
 	var dir string
 
 	rID, err := d.resolveID(id)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if count := d.ctr.Increment(rID); count > 1 {
-		return containerfs.NewLocalContainerFS(d.cache[rID]), nil
+		return d.cache[rID], nil
 	}
 
 	// Getting the layer paths must be done outside of the lock.
 	layerChain, err := d.getLayerChain(rID)
 	if err != nil {
 		d.ctr.Decrement(rID)
-		return nil, err
+		return "", err
 	}
 
 	if err := hcsshim.ActivateLayer(d.info, rID); err != nil {
 		d.ctr.Decrement(rID)
-		return nil, err
+		return "", err
 	}
 	if err := hcsshim.PrepareLayer(d.info, rID, layerChain); err != nil {
 		d.ctr.Decrement(rID)
 		if err2 := hcsshim.DeactivateLayer(d.info, rID); err2 != nil {
 			logrus.Warnf("Failed to Deactivate %s: %s", id, err)
 		}
-		return nil, err
+		return "", err
 	}
 
 	mountPath, err := hcsshim.GetLayerMountPath(d.info, rID)
@@ -381,7 +395,7 @@ func (d *Driver) Get(id, mountLabel string) (containerfs.ContainerFS, error) {
 		if err2 := hcsshim.DeactivateLayer(d.info, rID); err2 != nil {
 			logrus.Warnf("Failed to Deactivate %s: %s", id, err)
 		}
-		return nil, err
+		return "", err
 	}
 	d.cacheMu.Lock()
 	d.cache[rID] = mountPath
@@ -395,11 +409,12 @@ func (d *Driver) Get(id, mountLabel string) (containerfs.ContainerFS, error) {
 		dir = d.dir(id)
 	}
 
-	return containerfs.NewLocalContainerFS(dir), nil
+	return dir, nil
 }
 
 // Put adds a new layer to the driver.
 func (d *Driver) Put(id string) error {
+	panicIfUsedByLcow()
 	logrus.Debugf("WindowsGraphDriver Put() id %s", id)
 
 	rID, err := d.resolveID(id)
@@ -458,6 +473,7 @@ func (d *Driver) Cleanup() error {
 // layer and its parent layer which may be "".
 // The layer should be mounted when calling this function
 func (d *Driver) Diff(id, parent string) (_ io.ReadCloser, err error) {
+	panicIfUsedByLcow()
 	rID, err := d.resolveID(id)
 	if err != nil {
 		return
@@ -494,6 +510,7 @@ func (d *Driver) Diff(id, parent string) (_ io.ReadCloser, err error) {
 // and its parent layer. If parent is "", then all changes will be ADD changes.
 // The layer should not be mounted when calling this function.
 func (d *Driver) Changes(id, parent string) ([]archive.Change, error) {
+	panicIfUsedByLcow()
 	rID, err := d.resolveID(id)
 	if err != nil {
 		return nil, err
@@ -549,6 +566,7 @@ func (d *Driver) Changes(id, parent string) ([]archive.Change, error) {
 // new layer in bytes.
 // The layer should not be mounted when calling this function
 func (d *Driver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
+	panicIfUsedByLcow()
 	var layerChain []string
 	if parent != "" {
 		rPId, err := d.resolveID(parent)
@@ -583,6 +601,7 @@ func (d *Driver) ApplyDiff(id, parent string, diff io.Reader) (int64, error) {
 // and its parent and returns the size in bytes of the changes
 // relative to its base filesystem directory.
 func (d *Driver) DiffSize(id, parent string) (size int64, err error) {
+	panicIfUsedByLcow()
 	rPId, err := d.resolveID(parent)
 	if err != nil {
 		return
@@ -599,11 +618,12 @@ func (d *Driver) DiffSize(id, parent string) (size int64, err error) {
 	}
 	defer d.Put(id)
 
-	return archive.ChangesSize(layerFs.Path(), changes), nil
+	return archive.ChangesSize(layerFs, changes), nil
 }
 
 // GetMetadata returns custom driver information.
 func (d *Driver) GetMetadata(id string) (map[string]string, error) {
+	panicIfUsedByLcow()
 	m := make(map[string]string)
 	m["dir"] = d.dir(id)
 	return m, nil
@@ -906,6 +926,7 @@ func (fg *fileGetCloserWithBackupPrivileges) Close() error {
 // DiffGetter returns a FileGetCloser that can read files from the directory that
 // contains files for the layer differences. Used for direct access for tar-split.
 func (d *Driver) DiffGetter(id string) (graphdriver.FileGetCloser, error) {
+	panicIfUsedByLcow()
 	id, err := d.resolveID(id)
 	if err != nil {
 		return nil, err

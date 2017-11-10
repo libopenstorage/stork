@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -35,15 +34,7 @@ func (daemon *Daemon) ContainerTop(name string, psArgs string) (*containertypes.
 		return nil, err
 	}
 
-	if !container.IsRunning() {
-		return nil, errNotRunning(container.ID)
-	}
-
-	if container.IsRestarting() {
-		return nil, errContainerIsRestarting(container.ID)
-	}
-
-	s, err := daemon.containerd.Summary(context.Background(), container.ID)
+	s, err := daemon.containerd.Summary(container.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +49,5 @@ func (daemon *Daemon) ContainerTop(name string, psArgs string) (*containertypes.
 			fmt.Sprintf("%02d:%02d:%02d.%03d", int(d.Hours()), int(d.Minutes())%60, int(d.Seconds())%60, int(d.Nanoseconds()/1000000)%1000),
 			units.HumanSize(float64(j.MemoryWorkingSetPrivateBytes))})
 	}
-
 	return procList, nil
 }

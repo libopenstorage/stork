@@ -1,10 +1,6 @@
 package graphdriver
 
-import (
-	"syscall"
-
-	"golang.org/x/sys/unix"
-)
+import "golang.org/x/sys/unix"
 
 var (
 	// Slice of drivers that should be used in an order

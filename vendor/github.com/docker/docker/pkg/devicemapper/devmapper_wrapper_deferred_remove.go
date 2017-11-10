@@ -2,10 +2,13 @@
 
 package devicemapper
 
-// #include <libdevmapper.h>
+/*
+#cgo LDFLAGS: -L. -ldevmapper
+#include <libdevmapper.h>
+*/
 import "C"
 
-// LibraryDeferredRemovalSupport tells if the feature is enabled in the build
+// LibraryDeferredRemovalSupport is supported when statically linked.
 const LibraryDeferredRemovalSupport = true
 
 func dmTaskDeferredRemoveFct(task *cdmTask) int {

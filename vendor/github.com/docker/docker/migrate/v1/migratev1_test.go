@@ -433,7 +433,7 @@ func (l *mockLayer) DiffSize() (int64, error) {
 	return 0, nil
 }
 
-func (l *mockLayer) OS() layer.OS {
+func (l *mockLayer) Platform() layer.Platform {
 	return ""
 }
 

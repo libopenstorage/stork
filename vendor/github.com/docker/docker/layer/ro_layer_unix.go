@@ -2,6 +2,6 @@
 
 package layer
 
-func (rl *roLayer) OS() OS {
+func (rl *roLayer) Platform() Platform {
 	return ""
 }

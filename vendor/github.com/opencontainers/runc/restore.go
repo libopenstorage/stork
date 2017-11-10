@@ -86,10 +86,6 @@ using the runc checkpoint command.`,
 			Name:  "auto-dedup",
 			Usage: "enable auto deduplication of memory images",
 		},
-		cli.BoolFlag{
-			Name:  "lazy-pages",
-			Usage: "use userfaultfd to lazily restore memory pages",
-		},
 	},
 	Action: func(context *cli.Context) error {
 		if err := checkArgs(context, 1, exactArgs); err != nil {
@@ -132,7 +128,5 @@ func criuOptions(context *cli.Context) *libcontainer.CriuOpts {
 		FileLocks:               context.Bool("file-locks"),
 		PreDump:                 context.Bool("pre-dump"),
 		AutoDedup:               context.Bool("auto-dedup"),
-		LazyPages:               context.Bool("lazy-pages"),
-		StatusFd:                context.String("status-fd"),
 	}
 }

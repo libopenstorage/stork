@@ -5,7 +5,6 @@ import (
 
 	"github.com/docker/docker/daemon/config"
 	"github.com/docker/docker/opts"
-	"github.com/docker/docker/registry"
 	"github.com/spf13/pflag"
 )
 
@@ -20,15 +19,13 @@ const (
 func installCommonConfigFlags(conf *config.Config, flags *pflag.FlagSet) {
 	var maxConcurrentDownloads, maxConcurrentUploads int
 
-	installRegistryServiceFlags(&conf.ServiceOptions, flags)
+	conf.ServiceOptions.InstallCliFlags(flags)
 
 	flags.Var(opts.NewNamedListOptsRef("storage-opts", &conf.GraphOptions, nil), "storage-opt", "Storage driver options")
 	flags.Var(opts.NewNamedListOptsRef("authorization-plugins", &conf.AuthorizationPlugins, nil), "authorization-plugin", "Authorization plugins to load")
 	flags.Var(opts.NewNamedListOptsRef("exec-opts", &conf.ExecOptions, nil), "exec-opt", "Runtime execution options")
 	flags.StringVarP(&conf.Pidfile, "pidfile", "p", defaultPidFile, "Path to use for daemon PID file")
 	flags.StringVarP(&conf.Root, "graph", "g", defaultDataRoot, "Root of the Docker runtime")
-	flags.StringVar(&conf.ExecRoot, "exec-root", defaultExecRoot, "Root directory for execution state files")
-	flags.StringVar(&conf.ContainerdAddr, "containerd", "", "containerd grpc address")
 
 	// "--graph" is "soft-deprecated" in favor of "data-root". This flag was added
 	// before Docker 1.0, so won't be removed, only hidden, to discourage its usage.
@@ -77,18 +74,4 @@ func installCommonConfigFlags(conf *config.Config, flags *pflag.FlagSet) {
 
 	conf.MaxConcurrentDownloads = &maxConcurrentDownloads
 	conf.MaxConcurrentUploads = &maxConcurrentUploads
-}
-
-func installRegistryServiceFlags(options *registry.ServiceOptions, flags *pflag.FlagSet) {
-	ana := opts.NewNamedListOptsRef("allow-nondistributable-artifacts", &options.AllowNondistributableArtifacts, registry.ValidateIndexName)
-	mirrors := opts.NewNamedListOptsRef("registry-mirrors", &options.Mirrors, registry.ValidateMirror)
-	insecureRegistries := opts.NewNamedListOptsRef("insecure-registries", &options.InsecureRegistries, registry.ValidateIndexName)
-
-	flags.Var(ana, "allow-nondistributable-artifacts", "Allow push of nondistributable artifacts to registry")
-	flags.Var(mirrors, "registry-mirror", "Preferred Docker registry mirror")
-	flags.Var(insecureRegistries, "insecure-registry", "Enable insecure registry communication")
-
-	if runtime.GOOS != "windows" {
-		flags.BoolVar(&options.V2Only, "disable-legacy-registry", true, "Disable contacting legacy registries")
-	}
 }

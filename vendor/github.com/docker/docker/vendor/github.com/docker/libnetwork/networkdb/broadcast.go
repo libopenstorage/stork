@@ -32,7 +32,7 @@ func (nDB *NetworkDB) sendNetworkEvent(nid string, event NetworkEvent_Type, ltim
 	nEvent := NetworkEvent{
 		Type:      event,
 		LTime:     ltime,
-		NodeName:  nDB.config.NodeID,
+		NodeName:  nDB.config.NodeName,
 		NetworkID: nid,
 	}
 
@@ -44,7 +44,7 @@ func (nDB *NetworkDB) sendNetworkEvent(nid string, event NetworkEvent_Type, ltim
 	nDB.networkBroadcasts.QueueBroadcast(&networkEventMessage{
 		msg:  raw,
 		id:   nid,
-		node: nDB.config.NodeID,
+		node: nDB.config.NodeName,
 	})
 	return nil
 }
@@ -72,7 +72,7 @@ func (nDB *NetworkDB) sendNodeEvent(event NodeEvent_Type) error {
 	nEvent := NodeEvent{
 		Type:     event,
 		LTime:    nDB.networkClock.Increment(),
-		NodeName: nDB.config.NodeID,
+		NodeName: nDB.config.NodeName,
 	}
 
 	raw, err := encodeMessage(MessageTypeNodeEvent, &nEvent)
@@ -114,8 +114,7 @@ type tableEventMessage struct {
 }
 
 func (m *tableEventMessage) Invalidates(other memberlist.Broadcast) bool {
-	otherm := other.(*tableEventMessage)
-	return m.tname == otherm.tname && m.id == otherm.id && m.key == otherm.key
+	return false
 }
 
 func (m *tableEventMessage) Message() []byte {
@@ -129,13 +128,11 @@ func (nDB *NetworkDB) sendTableEvent(event TableEvent_Type, nid string, tname st
 	tEvent := TableEvent{
 		Type:      event,
 		LTime:     entry.ltime,
-		NodeName:  nDB.config.NodeID,
+		NodeName:  nDB.config.NodeName,
 		NetworkID: nid,
 		TableName: tname,
 		Key:       key,
 		Value:     entry.value,
-		// The duration in second is a float that below would be truncated
-		ResidualReapTime: int32(entry.reapTime.Seconds()),
 	}
 
 	raw, err := encodeMessage(MessageTypeTableEvent, &tEvent)
@@ -145,7 +142,7 @@ func (nDB *NetworkDB) sendTableEvent(event TableEvent_Type, nid string, tname st
 
 	var broadcastQ *memberlist.TransmitLimitedQueue
 	nDB.RLock()
-	thisNodeNetworks, ok := nDB.networks[nDB.config.NodeID]
+	thisNodeNetworks, ok := nDB.networks[nDB.config.NodeName]
 	if ok {
 		// The network may have been removed
 		network, networkOk := thisNodeNetworks[nid]
@@ -168,7 +165,7 @@ func (nDB *NetworkDB) sendTableEvent(event TableEvent_Type, nid string, tname st
 		id:    nid,
 		tname: tname,
 		key:   key,
-		node:  nDB.config.NodeID,
+		node:  nDB.config.NodeName,
 	})
 	return nil
 }

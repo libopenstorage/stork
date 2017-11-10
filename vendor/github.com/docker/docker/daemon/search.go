@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"strconv"
 
 	"golang.org/x/net/context"
@@ -23,7 +24,7 @@ func (daemon *Daemon) SearchRegistryForImages(ctx context.Context, filtersArgs s
 	authConfig *types.AuthConfig,
 	headers map[string][]string) (*registrytypes.SearchResults, error) {
 
-	searchFilters, err := filters.FromJSON(filtersArgs)
+	searchFilters, err := filters.FromParam(filtersArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -33,26 +34,26 @@ func (daemon *Daemon) SearchRegistryForImages(ctx context.Context, filtersArgs s
 
 	var isAutomated, isOfficial bool
 	var hasStarFilter = 0
-	if searchFilters.Contains("is-automated") {
+	if searchFilters.Include("is-automated") {
 		if searchFilters.UniqueExactMatch("is-automated", "true") {
 			isAutomated = true
 		} else if !searchFilters.UniqueExactMatch("is-automated", "false") {
-			return nil, invalidFilter{"is-automated", searchFilters.Get("is-automated")}
+			return nil, fmt.Errorf("Invalid filter 'is-automated=%s'", searchFilters.Get("is-automated"))
 		}
 	}
-	if searchFilters.Contains("is-official") {
+	if searchFilters.Include("is-official") {
 		if searchFilters.UniqueExactMatch("is-official", "true") {
 			isOfficial = true
 		} else if !searchFilters.UniqueExactMatch("is-official", "false") {
-			return nil, invalidFilter{"is-official", searchFilters.Get("is-official")}
+			return nil, fmt.Errorf("Invalid filter 'is-official=%s'", searchFilters.Get("is-official"))
 		}
 	}
-	if searchFilters.Contains("stars") {
+	if searchFilters.Include("stars") {
 		hasStars := searchFilters.Get("stars")
 		for _, hasStar := range hasStars {
 			iHasStar, err := strconv.Atoi(hasStar)
 			if err != nil {
-				return nil, invalidFilter{"stars", hasStar}
+				return nil, fmt.Errorf("Invalid filter 'stars=%s'", hasStar)
 			}
 			if iHasStar > hasStarFilter {
 				hasStarFilter = iHasStar
@@ -67,17 +68,17 @@ func (daemon *Daemon) SearchRegistryForImages(ctx context.Context, filtersArgs s
 
 	filteredResults := []registrytypes.SearchResult{}
 	for _, result := range unfilteredResult.Results {
-		if searchFilters.Contains("is-automated") {
+		if searchFilters.Include("is-automated") {
 			if isAutomated != result.IsAutomated {
 				continue
 			}
 		}
-		if searchFilters.Contains("is-official") {
+		if searchFilters.Include("is-official") {
 			if isOfficial != result.IsOfficial {
 				continue
 			}
 		}
-		if searchFilters.Contains("stars") {
+		if searchFilters.Include("stars") {
 			if result.StarCount < hasStarFilter {
 				continue
 			}

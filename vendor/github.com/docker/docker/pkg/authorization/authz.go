@@ -158,7 +158,7 @@ func sendBody(url string, header http.Header) bool {
 
 // headers returns flatten version of the http headers excluding authorization
 func headers(header http.Header) map[string]string {
-	v := make(map[string]string)
+	v := make(map[string]string, 0)
 	for k, values := range header {
 		// Skip authorization headers
 		if strings.EqualFold(k, "Authorization") || strings.EqualFold(k, "X-Registry-Config") || strings.EqualFold(k, "X-Registry-Auth") {
@@ -176,7 +176,10 @@ type authorizationError struct {
 	error
 }
 
-func (authorizationError) Forbidden() {}
+// HTTPErrorStatusCode returns the authorization error status code (forbidden)
+func (e authorizationError) HTTPErrorStatusCode() int {
+	return http.StatusForbidden
+}
 
 func newAuthorizationError(plugin, msg string) authorizationError {
 	return authorizationError{error: fmt.Errorf("authorization denied by plugin %s: %s", plugin, msg)}

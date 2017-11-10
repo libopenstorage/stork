@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
@@ -27,8 +26,6 @@ type executor struct {
 	backend       executorpkg.Backend
 	pluginBackend plugin.Backend
 	dependencies  exec.DependencyManager
-	mutex         sync.Mutex // This mutex protects the following node field
-	node          *api.NodeDescription
 }
 
 // NewExecutor returns an executor from the docker client.
@@ -127,41 +124,27 @@ func (e *executor) Describe(ctx context.Context) (*api.NodeDescription, error) {
 		},
 	}
 
-	// Save the node information in the executor field
-	e.mutex.Lock()
-	e.node = description
-	e.mutex.Unlock()
-
 	return description, nil
 }
 
 func (e *executor) Configure(ctx context.Context, node *api.Node) error {
-	var ingressNA *api.NetworkAttachment
-	attachments := make(map[string]string)
-
-	for _, na := range node.Attachments {
-		if na.Network.Spec.Ingress {
-			ingressNA = na
-		}
-		attachments[na.Network.ID] = na.Addresses[0]
-	}
-
-	if ingressNA == nil {
+	na := node.Attachment
+	if na == nil {
 		e.backend.ReleaseIngress()
-		return e.backend.GetAttachmentStore().ResetAttachments(attachments)
+		return nil
 	}
 
 	options := types.NetworkCreate{
-		Driver: ingressNA.Network.DriverState.Name,
+		Driver: na.Network.DriverState.Name,
 		IPAM: &network.IPAM{
-			Driver: ingressNA.Network.IPAM.Driver.Name,
+			Driver: na.Network.IPAM.Driver.Name,
 		},
-		Options:        ingressNA.Network.DriverState.Options,
+		Options:        na.Network.DriverState.Options,
 		Ingress:        true,
 		CheckDuplicate: true,
 	}
 
-	for _, ic := range ingressNA.Network.IPAM.Configs {
+	for _, ic := range na.Network.IPAM.Configs {
 		c := network.IPAMConfig{
 			Subnet:  ic.Subnet,
 			IPRange: ic.Range,
@@ -171,30 +154,22 @@ func (e *executor) Configure(ctx context.Context, node *api.Node) error {
 	}
 
 	_, err := e.backend.SetupIngress(clustertypes.NetworkCreateRequest{
-		ID: ingressNA.Network.ID,
+		ID: na.Network.ID,
 		NetworkCreateRequest: types.NetworkCreateRequest{
-			Name:          ingressNA.Network.Spec.Annotations.Name,
+			Name:          na.Network.Spec.Annotations.Name,
 			NetworkCreate: options,
 		},
-	}, ingressNA.Addresses[0])
-	if err != nil {
-		return err
-	}
+	}, na.Addresses[0])
 
-	return e.backend.GetAttachmentStore().ResetAttachments(attachments)
+	return err
 }
 
 // Controller returns a docker container runner.
 func (e *executor) Controller(t *api.Task) (exec.Controller, error) {
 	dependencyGetter := agent.Restrict(e.dependencies, t)
 
-	// Get the node description from the executor field
-	e.mutex.Lock()
-	nodeDescription := e.node
-	e.mutex.Unlock()
-
 	if t.Spec.GetAttachment() != nil {
-		return newNetworkAttacherController(e.backend, t, nodeDescription, dependencyGetter)
+		return newNetworkAttacherController(e.backend, t, dependencyGetter)
 	}
 
 	var ctlr exec.Controller
@@ -210,20 +185,16 @@ func (e *executor) Controller(t *api.Task) (exec.Controller, error) {
 		}
 		switch runtimeKind {
 		case string(swarmtypes.RuntimePlugin):
-			info, _ := e.backend.SystemInfo()
-			if !info.ExperimentalBuild {
-				return ctlr, fmt.Errorf("runtime type %q only supported in experimental", swarmtypes.RuntimePlugin)
-			}
 			c, err := plugin.NewController(e.pluginBackend, t)
 			if err != nil {
 				return ctlr, err
 			}
 			ctlr = c
 		default:
-			return ctlr, fmt.Errorf("unsupported runtime type: %q", runtimeKind)
+			return ctlr, fmt.Errorf("unsupported runtime type: %q", r.Generic.Kind)
 		}
 	case *api.TaskSpec_Container:
-		c, err := newController(e.backend, t, nodeDescription, dependencyGetter)
+		c, err := newController(e.backend, t, dependencyGetter)
 		if err != nil {
 			return ctlr, err
 		}

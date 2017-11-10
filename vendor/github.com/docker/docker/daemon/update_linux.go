@@ -7,43 +7,26 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/libcontainerd"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func toContainerdResources(resources container.Resources) *libcontainerd.Resources {
+func toContainerdResources(resources container.Resources) libcontainerd.Resources {
 	var r libcontainerd.Resources
-
-	r.BlockIO = &specs.LinuxBlockIO{
-		Weight: &resources.BlkioWeight,
-	}
-
-	shares := uint64(resources.CPUShares)
-	r.CPU = &specs.LinuxCPU{
-		Shares: &shares,
-		Cpus:   resources.CpusetCpus,
-		Mems:   resources.CpusetMems,
-	}
-
-	var (
-		period uint64
-		quota  int64
-	)
+	r.BlkioWeight = uint64(resources.BlkioWeight)
+	r.CpuShares = uint64(resources.CPUShares)
 	if resources.NanoCPUs != 0 {
-		period = uint64(100 * time.Millisecond / time.Microsecond)
-		quota = resources.NanoCPUs * int64(period) / 1e9
+		r.CpuPeriod = uint64(100 * time.Millisecond / time.Microsecond)
+		r.CpuQuota = uint64(resources.NanoCPUs) * r.CpuPeriod / 1e9
+	} else {
+		r.CpuPeriod = uint64(resources.CPUPeriod)
+		r.CpuQuota = uint64(resources.CPUQuota)
 	}
-	r.CPU.Period = &period
-	r.CPU.Quota = &quota
-
-	r.Memory = &specs.LinuxMemory{
-		Limit:       &resources.Memory,
-		Reservation: &resources.MemoryReservation,
-		Kernel:      &resources.KernelMemory,
-	}
-
+	r.CpusetCpus = resources.CpusetCpus
+	r.CpusetMems = resources.CpusetMems
+	r.MemoryLimit = uint64(resources.Memory)
 	if resources.MemorySwap > 0 {
-		r.Memory.Swap = &resources.MemorySwap
+		r.MemorySwap = uint64(resources.MemorySwap)
 	}
-
-	return &r
+	r.MemoryReservation = uint64(resources.MemoryReservation)
+	r.KernelMemoryLimit = uint64(resources.KernelMemory)
+	return r
 }

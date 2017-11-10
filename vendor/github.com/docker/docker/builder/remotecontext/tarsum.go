@@ -1,24 +1,25 @@
 package remotecontext
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
-	"github.com/docker/docker/pkg/containerfs"
+	"github.com/docker/docker/pkg/symlink"
 	iradix "github.com/hashicorp/go-immutable-radix"
-	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
 )
 
 type hashed interface {
-	Digest() digest.Digest
+	Hash() string
 }
 
 // CachableSource is a source that contains cache records for its contents
 type CachableSource struct {
 	mu   sync.Mutex
-	root containerfs.ContainerFS
+	root string
 	tree *iradix.Tree
 	txn  *iradix.Txn
 }
@@ -27,7 +28,7 @@ type CachableSource struct {
 func NewCachableSource(root string) *CachableSource {
 	ts := &CachableSource{
 		tree: iradix.New(),
-		root: containerfs.NewLocalContainerFS(root),
+		root: root,
 	}
 	return ts
 }
@@ -66,7 +67,7 @@ func (cs *CachableSource) Scan() error {
 		return err
 	}
 	txn := iradix.New().Txn()
-	err = cs.root.Walk(cs.root.Path(), func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(cs.root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return errors.Wrapf(err, "failed to walk %s", path)
 		}
@@ -109,7 +110,7 @@ func (cs *CachableSource) HandleChange(kind fsutil.ChangeKind, p string, fi os.F
 	}
 
 	hfi := &fileInfo{
-		sum: h.Digest().Hex(),
+		sum: h.Hash(),
 	}
 	cs.txn.Insert([]byte(p), hfi)
 	cs.mu.Unlock()
@@ -132,19 +133,35 @@ func (cs *CachableSource) Close() error {
 	return nil
 }
 
+func (cs *CachableSource) normalize(path string) (cleanpath, fullpath string, err error) {
+	cleanpath = filepath.Clean(string(os.PathSeparator) + path)[1:]
+	fullpath, err = symlink.FollowSymlinkInScope(filepath.Join(cs.root, path), cs.root)
+	if err != nil {
+		return "", "", fmt.Errorf("Forbidden path outside the context: %s (%s)", path, fullpath)
+	}
+	_, err = os.Lstat(fullpath)
+	if err != nil {
+		return "", "", convertPathError(err, path)
+	}
+	return
+}
+
 // Hash returns a hash for a single file in the source
 func (cs *CachableSource) Hash(path string) (string, error) {
 	n := cs.getRoot()
+	sum := ""
 	// TODO: check this for symlinks
 	v, ok := n.Get([]byte(path))
 	if !ok {
-		return path, nil
+		sum = path
+	} else {
+		sum = v.(*fileInfo).sum
 	}
-	return v.(*fileInfo).sum, nil
+	return sum, nil
 }
 
 // Root returns a root directory for the source
-func (cs *CachableSource) Root() containerfs.ContainerFS {
+func (cs *CachableSource) Root() string {
 	return cs.root
 }
 

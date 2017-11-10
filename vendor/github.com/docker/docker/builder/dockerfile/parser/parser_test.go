@@ -141,13 +141,6 @@ RUN something \
 RUN another \
 
     thing
-RUN non-indented \
-# this is a comment
-   after-comment
-
-RUN indented \
-    # this is an indented comment
-    comment
 	`)
 
 	result, err := Parse(dockerfile)

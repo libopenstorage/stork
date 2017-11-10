@@ -5,13 +5,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/docker/distribution/reference"
-	digest "github.com/opencontainers/go-digest"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/opencontainers/go-digest"
 )
 
 var (
@@ -42,7 +41,7 @@ func TestLoad(t *testing.T) {
 	}
 	jsonFile.Close()
 
-	store, err := NewReferenceStore(jsonFile.Name())
+	store, err := NewReferenceStore(jsonFile.Name(), runtime.GOOS)
 	if err != nil {
 		t.Fatalf("error creating tag store: %v", err)
 	}
@@ -64,14 +63,14 @@ func TestLoad(t *testing.T) {
 
 func TestSave(t *testing.T) {
 	jsonFile, err := ioutil.TempFile("", "tag-store-test")
-	require.NoError(t, err)
-
+	if err != nil {
+		t.Fatalf("error creating temp file: %v", err)
+	}
 	_, err = jsonFile.Write([]byte(`{}`))
-	require.NoError(t, err)
 	jsonFile.Close()
 	defer os.RemoveAll(jsonFile.Name())
 
-	store, err := NewReferenceStore(jsonFile.Name())
+	store, err := NewReferenceStore(jsonFile.Name(), runtime.GOOS)
 	if err != nil {
 		t.Fatalf("error creating tag store: %v", err)
 	}
@@ -113,7 +112,7 @@ func TestAddDeleteGet(t *testing.T) {
 	jsonFile.Close()
 	defer os.RemoveAll(jsonFile.Name())
 
-	store, err := NewReferenceStore(jsonFile.Name())
+	store, err := NewReferenceStore(jsonFile.Name(), runtime.GOOS)
 	if err != nil {
 		t.Fatalf("error creating tag store: %v", err)
 	}
@@ -306,19 +305,19 @@ func TestAddDeleteGet(t *testing.T) {
 	}
 
 	// Delete a few references
-	if deleted, err := store.Delete(ref1); err != nil || !deleted {
+	if deleted, err := store.Delete(ref1); err != nil || deleted != true {
 		t.Fatal("Delete failed")
 	}
 	if _, err := store.Get(ref1); err != ErrDoesNotExist {
 		t.Fatal("Expected ErrDoesNotExist from Get")
 	}
-	if deleted, err := store.Delete(ref5); err != nil || !deleted {
+	if deleted, err := store.Delete(ref5); err != nil || deleted != true {
 		t.Fatal("Delete failed")
 	}
 	if _, err := store.Get(ref5); err != ErrDoesNotExist {
 		t.Fatal("Expected ErrDoesNotExist from Get")
 	}
-	if deleted, err := store.Delete(nameOnly); err != nil || !deleted {
+	if deleted, err := store.Delete(nameOnly); err != nil || deleted != true {
 		t.Fatal("Delete failed")
 	}
 	if _, err := store.Get(nameOnly); err != ErrDoesNotExist {
@@ -328,23 +327,32 @@ func TestAddDeleteGet(t *testing.T) {
 
 func TestInvalidTags(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "tag-store-test")
-	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	store, err := NewReferenceStore(filepath.Join(tmpDir, "repositories.json"))
-	require.NoError(t, err)
+	store, err := NewReferenceStore(filepath.Join(tmpDir, "repositories.json"), runtime.GOOS)
+	if err != nil {
+		t.Fatalf("error creating tag store: %v", err)
+	}
 	id := digest.Digest("sha256:470022b8af682154f57a2163d030eb369549549cba00edc69e1b99b46bb924d6")
 
 	// sha256 as repo name
 	ref, err := reference.ParseNormalizedNamed("sha256:abc")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = store.AddTag(ref, id, true)
-	assert.Error(t, err)
+	if err == nil {
+		t.Fatalf("expected setting tag %q to fail", ref)
+	}
 
 	// setting digest as a tag
 	ref, err = reference.ParseNormalizedNamed("registry@sha256:367eb40fd0330a7e464777121e39d2f5b3e8e23a1e159342e53ab05c9e4d94e6")
-	require.NoError(t, err)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = store.AddTag(ref, id, true)
-	assert.Error(t, err)
+	if err == nil {
+		t.Fatalf("expected setting tag %q to fail", ref)
+	}
+
 }

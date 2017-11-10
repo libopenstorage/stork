@@ -3,7 +3,6 @@
 package daemon
 
 import (
-	"context"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -17,7 +16,6 @@ func validatePSArgs(psArgs string) error {
 	// NOTE: \\s does not detect unicode whitespaces.
 	// So we use fieldsASCII instead of strings.Fields in parsePSOutput.
 	// See https://github.com/docker/docker/pull/24358
-	// nolint: gosimple
 	re := regexp.MustCompile("\\s+([^\\s]*)=\\s*(PID[^\\s]*)")
 	for _, group := range re.FindAllStringSubmatch(psArgs, -1) {
 		if len(group) >= 3 {
@@ -51,16 +49,16 @@ func appendProcess2ProcList(procList *container.ContainerTopOKBody, fields []str
 	procList.Processes = append(procList.Processes, process)
 }
 
-func hasPid(procs []uint32, pid int) bool {
-	for _, p := range procs {
-		if int(p) == pid {
+func hasPid(pids []int, pid int) bool {
+	for _, i := range pids {
+		if i == pid {
 			return true
 		}
 	}
 	return false
 }
 
-func parsePSOutput(output []byte, procs []uint32) (*container.ContainerTopOKBody, error) {
+func parsePSOutput(output []byte, pids []int) (*container.ContainerTopOKBody, error) {
 	procList := &container.ContainerTopOKBody{}
 
 	lines := strings.Split(string(output), "\n")
@@ -102,7 +100,7 @@ func parsePSOutput(output []byte, procs []uint32) (*container.ContainerTopOKBody
 			return nil, fmt.Errorf("Unexpected pid '%s': %s", fields[pidIndex], err)
 		}
 
-		if hasPid(procs, p) {
+		if hasPid(pids, p) {
 			preContainedPidFlag = true
 			appendProcess2ProcList(procList, fields)
 			continue
@@ -132,14 +130,14 @@ func (daemon *Daemon) ContainerTop(name string, psArgs string) (*container.Conta
 	}
 
 	if !container.IsRunning() {
-		return nil, errNotRunning(container.ID)
+		return nil, errNotRunning{container.ID}
 	}
 
 	if container.IsRestarting() {
 		return nil, errContainerIsRestarting(container.ID)
 	}
 
-	procs, err := daemon.containerd.ListPids(context.Background(), container.ID)
+	pids, err := daemon.containerd.GetPidsForContainer(container.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +146,7 @@ func (daemon *Daemon) ContainerTop(name string, psArgs string) (*container.Conta
 	if err != nil {
 		return nil, fmt.Errorf("Error running ps: %v", err)
 	}
-	procList, err := parsePSOutput(output, procs)
+	procList, err := parsePSOutput(output, pids)
 	if err != nil {
 		return nil, err
 	}

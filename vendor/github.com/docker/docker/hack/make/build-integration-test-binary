@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# required by `make build-integration-cli-on-swarm`
 set -e
 
-source "${MAKEDIR}/.go-autogen"
-source hack/make/.integration-test-helpers
+rm -rf "$DEST"
+DEST="$ABS_DEST/../test-integration-cli"
 
-build_test_suite_binaries
+source "$SCRIPTDIR/make/.go-autogen"
+
+if [ -z $DOCKER_INTEGRATION_TESTS_VERIFIED ]; then
+	source ${MAKEDIR}/.integration-test-helpers
+	ensure_test_dir integration-cli "$DEST/test.main"
+	export DOCKER_INTEGRATION_TESTS_VERIFIED=1
+fi

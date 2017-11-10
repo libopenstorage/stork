@@ -3,7 +3,6 @@ package overlay
 //go:generate protoc -I.:../../Godeps/_workspace/src/github.com/gogo/protobuf  --gogo_out=import_path=github.com/docker/libnetwork/drivers/overlay,Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto:. overlay.proto
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -51,8 +50,6 @@ type driver struct {
 	joinOnce         sync.Once
 	localJoinOnce    sync.Once
 	keys             []*key
-	peerOpCh         chan *peerOperation
-	peerOpCancel     context.CancelFunc
 	sync.Mutex
 }
 
@@ -67,15 +64,9 @@ func Init(dc driverapi.DriverCallback, config map[string]interface{}) error {
 		peerDb: peerNetworkMap{
 			mp: map[string]*peerMap{},
 		},
-		secMap:   &encrMap{nodes: map[string][]*spi{}},
-		config:   config,
-		peerOpCh: make(chan *peerOperation),
+		secMap: &encrMap{nodes: map[string][]*spi{}},
+		config: config,
 	}
-
-	// Launch the go routine for processing peer operations
-	ctx, cancel := context.WithCancel(context.Background())
-	d.peerOpCancel = cancel
-	go d.peerOpRoutine(ctx, d.peerOpCh)
 
 	if data, ok := config[netlabel.GlobalKVClient]; ok {
 		var err error
@@ -162,7 +153,7 @@ func (d *driver) restoreEndpoints() error {
 		Ifaces := make(map[string][]osl.IfaceOption)
 		vethIfaceOption := make([]osl.IfaceOption, 1)
 		vethIfaceOption = append(vethIfaceOption, n.sbox.InterfaceOptions().Master(s.brName))
-		Ifaces["veth+veth"] = vethIfaceOption
+		Ifaces[fmt.Sprintf("%s+%s", "veth", "veth")] = vethIfaceOption
 
 		err := n.sbox.Restore(Ifaces, nil, nil, nil)
 		if err != nil {
@@ -170,7 +161,7 @@ func (d *driver) restoreEndpoints() error {
 		}
 
 		n.incEndpointCount()
-		d.peerAdd(ep.nid, ep.id, ep.addr.IP, ep.addr.Mask, ep.mac, net.ParseIP(d.advertiseAddress), false, false, true)
+		d.peerDbAdd(ep.nid, ep.id, ep.addr.IP, ep.addr.Mask, ep.mac, net.ParseIP(d.advertiseAddress), true)
 	}
 	return nil
 }
@@ -178,11 +169,6 @@ func (d *driver) restoreEndpoints() error {
 // Fini cleans up the driver resources
 func Fini(drv driverapi.Driver) {
 	d := drv.(*driver)
-
-	// Notify the peer go routine to return
-	if d.peerOpCancel != nil {
-		d.peerOpCancel()
-	}
 
 	if d.exitCh != nil {
 		waitCh := make(chan struct{})
@@ -262,7 +248,7 @@ func (d *driver) nodeJoin(advertiseAddress, bindAddress string, self bool) {
 		d.Unlock()
 
 		// If containers are already running on this network update the
-		// advertise address in the peerDB
+		// advertiseaddress in the peerDB
 		d.localJoinOnce.Do(func() {
 			d.peerDBUpdateSelf()
 		})
@@ -270,7 +256,7 @@ func (d *driver) nodeJoin(advertiseAddress, bindAddress string, self bool) {
 		// If there is no cluster store there is no need to start serf.
 		if d.store != nil {
 			if err := validateSelf(advertiseAddress); err != nil {
-				logrus.Warn(err.Error())
+				logrus.Warnf("%s", err.Error())
 			}
 			err := d.serfInit()
 			if err != nil {

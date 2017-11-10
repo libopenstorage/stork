@@ -1,6 +1,11 @@
+// +build linux windows
+
 package fsutil
 
 import (
+	"archive/tar"
+	"crypto/sha256"
+	"encoding/hex"
 	"hash"
 	"io"
 	"os"
@@ -9,7 +14,8 @@ import (
 	"sync"
 	"time"
 
-	digest "github.com/opencontainers/go-digest"
+	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/tarsum"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"golang.org/x/sync/errgroup"
@@ -18,14 +24,10 @@ import (
 type WriteToFunc func(context.Context, string, io.WriteCloser) error
 
 type DiskWriterOpt struct {
-	AsyncDataCb   WriteToFunc
-	SyncDataCb    WriteToFunc
-	NotifyCb      func(ChangeKind, string, os.FileInfo, error) error
-	ContentHasher ContentHasher
-	Filter        FilterFunc
+	AsyncDataCb WriteToFunc
+	SyncDataCb  WriteToFunc
+	NotifyCb    func(ChangeKind, string, os.FileInfo, error) error
 }
-
-type FilterFunc func(*Stat) bool
 
 type DiskWriter struct {
 	opt  DiskWriterOpt
@@ -35,7 +37,6 @@ type DiskWriter struct {
 	ctx    context.Context
 	cancel func()
 	eg     *errgroup.Group
-	filter FilterFunc
 }
 
 func NewDiskWriter(ctx context.Context, dest string, opt DiskWriterOpt) (*DiskWriter, error) {
@@ -99,12 +100,6 @@ func (dw *DiskWriter) HandleChange(kind ChangeKind, p string, fi os.FileInfo, er
 	stat, ok := fi.Sys().(*Stat)
 	if !ok {
 		return errors.Errorf("%s invalid change without stat information", p)
-	}
-
-	if dw.filter != nil {
-		if ok := dw.filter(stat); !ok {
-			return nil
-		}
 	}
 
 	rename := true
@@ -207,7 +202,7 @@ func (dw *DiskWriter) processChange(kind ChangeKind, p string, fi os.FileInfo, w
 	var hw *hashedWriter
 	if dw.opt.NotifyCb != nil {
 		var err error
-		if hw, err = newHashWriter(dw.opt.ContentHasher, fi, w); err != nil {
+		if hw, err = newHashWriter(p, fi, w); err != nil {
 			return err
 		}
 		w = hw
@@ -234,18 +229,13 @@ func (dw *DiskWriter) processChange(kind ChangeKind, p string, fi os.FileInfo, w
 type hashedWriter struct {
 	os.FileInfo
 	io.Writer
-	h    hash.Hash
-	w    io.WriteCloser
-	dgst digest.Digest
+	h   hash.Hash
+	w   io.WriteCloser
+	sum string
 }
 
-func newHashWriter(ch ContentHasher, fi os.FileInfo, w io.WriteCloser) (*hashedWriter, error) {
-	stat, ok := fi.Sys().(*Stat)
-	if !ok {
-		return nil, errors.Errorf("invalid change without stat information")
-	}
-
-	h, err := ch(stat)
+func newHashWriter(p string, fi os.FileInfo, w io.WriteCloser) (*hashedWriter, error) {
+	h, err := NewTarsumHash(p, fi)
 	if err != nil {
 		return nil, err
 	}
@@ -259,15 +249,15 @@ func newHashWriter(ch ContentHasher, fi os.FileInfo, w io.WriteCloser) (*hashedW
 }
 
 func (hw *hashedWriter) Close() error {
-	hw.dgst = digest.NewDigest(digest.SHA256, hw.h)
+	hw.sum = string(hex.EncodeToString(hw.h.Sum(nil)))
 	if hw.w != nil {
 		return hw.w.Close()
 	}
 	return nil
 }
 
-func (hw *hashedWriter) Digest() digest.Digest {
-	return hw.dgst
+func (hw *hashedWriter) Hash() string {
+	return hw.sum
 }
 
 type lazyFileWriter struct {
@@ -319,4 +309,45 @@ func nextSuffix() string {
 	rand = r
 	randmu.Unlock()
 	return strconv.Itoa(int(1e9 + r%1e9))[1:]
+}
+
+func NewTarsumHash(p string, fi os.FileInfo) (hash.Hash, error) {
+	stat, ok := fi.Sys().(*Stat)
+	link := ""
+	if ok {
+		link = stat.Linkname
+	}
+	if fi.IsDir() {
+		p += string(os.PathSeparator)
+	}
+	h, err := archive.FileInfoHeader(p, fi, link)
+	if err != nil {
+		return nil, err
+	}
+	h.Name = p
+	if ok {
+		h.Uid = int(stat.Uid)
+		h.Gid = int(stat.Gid)
+		h.Linkname = stat.Linkname
+		if stat.Xattrs != nil {
+			h.Xattrs = make(map[string]string)
+			for k, v := range stat.Xattrs {
+				h.Xattrs[k] = string(v)
+			}
+		}
+	}
+	tsh := &tarsumHash{h: h, Hash: sha256.New()}
+	tsh.Reset()
+	return tsh, nil
+}
+
+// Reset resets the Hash to its initial state.
+func (tsh *tarsumHash) Reset() {
+	tsh.Hash.Reset()
+	tarsum.WriteV1Header(tsh.h, tsh.Hash)
+}
+
+type tarsumHash struct {
+	hash.Hash
+	h *tar.Header
 }

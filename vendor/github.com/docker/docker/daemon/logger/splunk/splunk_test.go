@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/daemon/logger"
-	"github.com/stretchr/testify/require"
 )
 
 // Validate options
@@ -126,7 +125,7 @@ func TestDefault(t *testing.T) {
 		splunkLoggerDriver.nullMessage.Source != "" ||
 		splunkLoggerDriver.nullMessage.SourceType != "" ||
 		splunkLoggerDriver.nullMessage.Index != "" ||
-		splunkLoggerDriver.gzipCompression ||
+		splunkLoggerDriver.gzipCompression != false ||
 		splunkLoggerDriver.postMessagesFrequency != defaultPostMessagesFrequency ||
 		splunkLoggerDriver.postMessagesBatchSize != defaultPostMessagesBatchSize ||
 		splunkLoggerDriver.bufferMaximum != defaultBufferMaximum ||
@@ -256,7 +255,7 @@ func TestInlineFormatWithNonDefaultOptions(t *testing.T) {
 		splunkLoggerDriver.nullMessage.Source != "mysource" ||
 		splunkLoggerDriver.nullMessage.SourceType != "mysourcetype" ||
 		splunkLoggerDriver.nullMessage.Index != "myindex" ||
-		!splunkLoggerDriver.gzipCompression ||
+		splunkLoggerDriver.gzipCompression != true ||
 		splunkLoggerDriver.gzipCompressionLevel != gzip.DefaultCompression ||
 		splunkLoggerDriver.postMessagesFrequency != defaultPostMessagesFrequency ||
 		splunkLoggerDriver.postMessagesBatchSize != defaultPostMessagesBatchSize ||
@@ -356,7 +355,7 @@ func TestJsonFormat(t *testing.T) {
 		splunkLoggerDriver.nullMessage.Source != "" ||
 		splunkLoggerDriver.nullMessage.SourceType != "" ||
 		splunkLoggerDriver.nullMessage.Index != "" ||
-		!splunkLoggerDriver.gzipCompression ||
+		splunkLoggerDriver.gzipCompression != true ||
 		splunkLoggerDriver.gzipCompressionLevel != gzip.BestSpeed ||
 		splunkLoggerDriver.postMessagesFrequency != defaultPostMessagesFrequency ||
 		splunkLoggerDriver.postMessagesBatchSize != defaultPostMessagesBatchSize ||
@@ -449,10 +448,14 @@ func TestRawFormat(t *testing.T) {
 	}
 
 	hostname, err := info.Hostname()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	loggerDriver, err := New(info)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if !hec.connectionVerified {
 		t.Fatal("By default connection should be verified")
@@ -469,7 +472,7 @@ func TestRawFormat(t *testing.T) {
 		splunkLoggerDriver.nullMessage.Source != "" ||
 		splunkLoggerDriver.nullMessage.SourceType != "" ||
 		splunkLoggerDriver.nullMessage.Index != "" ||
-		splunkLoggerDriver.gzipCompression ||
+		splunkLoggerDriver.gzipCompression != false ||
 		splunkLoggerDriver.postMessagesFrequency != defaultPostMessagesFrequency ||
 		splunkLoggerDriver.postMessagesBatchSize != defaultPostMessagesBatchSize ||
 		splunkLoggerDriver.bufferMaximum != defaultBufferMaximum ||
@@ -583,7 +586,7 @@ func TestRawFormatWithLabels(t *testing.T) {
 		splunkLoggerDriver.nullMessage.Source != "" ||
 		splunkLoggerDriver.nullMessage.SourceType != "" ||
 		splunkLoggerDriver.nullMessage.Index != "" ||
-		splunkLoggerDriver.gzipCompression ||
+		splunkLoggerDriver.gzipCompression != false ||
 		splunkLoggerDriver.postMessagesFrequency != defaultPostMessagesFrequency ||
 		splunkLoggerDriver.postMessagesBatchSize != defaultPostMessagesBatchSize ||
 		splunkLoggerDriver.bufferMaximum != defaultBufferMaximum ||
@@ -695,7 +698,7 @@ func TestRawFormatWithoutTag(t *testing.T) {
 		splunkLoggerDriver.nullMessage.Source != "" ||
 		splunkLoggerDriver.nullMessage.SourceType != "" ||
 		splunkLoggerDriver.nullMessage.Index != "" ||
-		splunkLoggerDriver.gzipCompression ||
+		splunkLoggerDriver.gzipCompression != false ||
 		splunkLoggerDriver.postMessagesFrequency != defaultPostMessagesFrequency ||
 		splunkLoggerDriver.postMessagesBatchSize != defaultPostMessagesBatchSize ||
 		splunkLoggerDriver.bufferMaximum != defaultBufferMaximum ||
@@ -713,19 +716,12 @@ func TestRawFormatWithoutTag(t *testing.T) {
 	if err := loggerDriver.Log(&logger.Message{Line: []byte("notjson"), Source: "stdout", Timestamp: message2Time}); err != nil {
 		t.Fatal(err)
 	}
-	message3Time := time.Now()
-	if err := loggerDriver.Log(&logger.Message{Line: []byte(" "), Source: "stdout", Timestamp: message3Time}); err != nil {
-		t.Fatal(err)
-	}
 
 	err = loggerDriver.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// message3 would have an empty or whitespace only string in the "event" field
-	// both of which are not acceptable to HEC
-	// thus here we must expect 2 messages, not 3
 	if len(hec.messages) != 2 {
 		t.Fatal("Expected two messages")
 	}

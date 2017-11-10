@@ -17,19 +17,20 @@ import:
   version: faadfbdc035307d901e69eea569f5dda451a3ee3
   subpackages:
   - ssh
+- package: k8s.io/kubernetes
+  version: v1.8.2
+  subpackages:
+  - pkg/api/v1/helper
 - package: k8s.io/apimachinery
-  subpackages:
-  - pkg/apis/meta/v1
+  version: kubernetes-1.8.2
+- package: k8s.io/api
+  version: kubernetes-1.8.2
 - package: k8s.io/client-go
-  version: 4.0.0
-  subpackages:
-  - kubernetes
-  - kubernetes/scheme
-  - pkg/api/v1
-  - pkg/apis/apps/v1beta1
-  - pkg/apis/extensions/v1beta1
-  - pkg/apis/storage/v1
-  - rest
+  version: kubernetes-1.8.2
+- package: github.com/portworx/sched-ops
+  version: master
+  vcs: git
+  repo: git@github.com:piyush-nimbalkar/sched-ops.git
 - package: github.com/aws/aws-sdk-go
   version: a881d8ac1079e5f917d926c04c32ace8a9f68d22
   subpackages:
@@ -60,3 +61,7 @@ import:
   - service/sts
 - package: github.com/gambol99/go-marathon
   version: ^0.7.1
+- package: go.pedge.io/dlog
+  version: 292aa66beb49590f5c6da27331b90506b1c3cbbc
+  vcs: git
+  repo: git@github.com:peter-edge/dlog-go.git

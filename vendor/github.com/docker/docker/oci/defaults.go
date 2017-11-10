@@ -39,33 +39,46 @@ func DefaultSpec() specs.Spec {
 func DefaultOSSpec(osName string) specs.Spec {
 	if osName == "windows" {
 		return DefaultWindowsSpec()
+	} else if osName == "solaris" {
+		return DefaultSolarisSpec()
+	} else {
+		return DefaultLinuxSpec()
 	}
-	return DefaultLinuxSpec()
 }
 
 // DefaultWindowsSpec create a default spec for running Windows containers
 func DefaultWindowsSpec() specs.Spec {
 	return specs.Spec{
 		Version: specs.Version,
+		Platform: specs.Platform{
+			OS:   runtime.GOOS,
+			Arch: runtime.GOARCH,
+		},
 		Windows: &specs.Windows{},
-		Process: &specs.Process{},
-		Root:    &specs.Root{},
 	}
+}
+
+// DefaultSolarisSpec create a default spec for running Solaris containers
+func DefaultSolarisSpec() specs.Spec {
+	s := specs.Spec{
+		Version: "0.6.0",
+		Platform: specs.Platform{
+			OS:   "SunOS",
+			Arch: runtime.GOARCH,
+		},
+	}
+	s.Solaris = &specs.Solaris{}
+	return s
 }
 
 // DefaultLinuxSpec create a default spec for running Linux containers
 func DefaultLinuxSpec() specs.Spec {
 	s := specs.Spec{
 		Version: specs.Version,
-		Process: &specs.Process{
-			Capabilities: &specs.LinuxCapabilities{
-				Bounding:    defaultCapabilities(),
-				Permitted:   defaultCapabilities(),
-				Inheritable: defaultCapabilities(),
-				Effective:   defaultCapabilities(),
-			},
+		Platform: specs.Platform{
+			OS:   "linux",
+			Arch: runtime.GOARCH,
 		},
-		Root: &specs.Root{},
 	}
 	s.Mounts = []specs.Mount{
 		{
@@ -104,12 +117,12 @@ func DefaultLinuxSpec() specs.Spec {
 			Source:      "mqueue",
 			Options:     []string{"nosuid", "noexec", "nodev"},
 		},
-		{
-			Destination: "/dev/shm",
-			Type:        "tmpfs",
-			Source:      "shm",
-			Options:     []string{"nosuid", "noexec", "nodev", "mode=1777"},
-		},
+	}
+	s.Process.Capabilities = &specs.LinuxCapabilities{
+		Bounding:    defaultCapabilities(),
+		Permitted:   defaultCapabilities(),
+		Inheritable: defaultCapabilities(),
+		Effective:   defaultCapabilities(),
 	}
 
 	s.Linux = &specs.Linux{
@@ -137,7 +150,7 @@ func DefaultLinuxSpec() specs.Spec {
 		},
 		// Devices implicitly contains the following devices:
 		// null, zero, full, random, urandom, tty, console, and ptmx.
-		// ptmx is a bind mount or symlink of the container's ptmx.
+		// ptmx is a bind-mount or symlink of the container's ptmx.
 		// See also: https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#default-devices
 		Devices: []specs.LinuxDevice{},
 		Resources: &specs.LinuxResources{
@@ -197,11 +210,6 @@ func DefaultLinuxSpec() specs.Spec {
 				},
 			},
 		},
-	}
-
-	// For LCOW support, populate a blank Windows spec
-	if runtime.GOOS == "windows" {
-		s.Windows = &specs.Windows{}
 	}
 
 	// For LCOW support, don't mask /sys/firmware

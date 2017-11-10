@@ -3,6 +3,7 @@ package cluster
 import (
 	"fmt"
 
+	apierrors "github.com/docker/docker/api/errors"
 	apitypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	types "github.com/docker/docker/api/types/swarm"
@@ -249,8 +250,8 @@ func (c *Cluster) DetachNetwork(target string, containerID string) error {
 // CreateNetwork creates a new cluster managed network.
 func (c *Cluster) CreateNetwork(s apitypes.NetworkCreateRequest) (string, error) {
 	if runconfig.IsPreDefinedNetwork(s.Name) {
-		err := notAllowedError(fmt.Sprintf("%s is a pre-defined network and cannot be created", s.Name))
-		return "", errors.WithStack(err)
+		err := fmt.Errorf("%s is a pre-defined network and cannot be created", s.Name)
+		return "", apierrors.NewRequestForbiddenError(err)
 	}
 
 	var resp *swarmapi.CreateNetworkResponse
@@ -298,13 +299,14 @@ func (c *Cluster) populateNetworkID(ctx context.Context, client swarmapi.Control
 				// and use its id for the request.
 				apiNetwork, err = getNetwork(ctx, client, ln.Name())
 				if err != nil {
-					return errors.Wrap(notFoundError{err}, "could not find the corresponding predefined swarm network")
+					err = fmt.Errorf("could not find the corresponding predefined swarm network: %v", err)
+					return apierrors.NewRequestNotFoundError(err)
 				}
 				goto setid
 			}
 			if ln != nil && !ln.Info().Dynamic() {
-				errMsg := fmt.Sprintf("The network %s cannot be used with services. Only networks scoped to the swarm can be used, such as those created with the overlay driver.", ln.Name())
-				return errors.WithStack(notAllowedError(errMsg))
+				err = fmt.Errorf("The network %s cannot be used with services. Only networks scoped to the swarm can be used, such as those created with the overlay driver.", ln.Name())
+				return apierrors.NewRequestForbiddenError(err)
 			}
 			return err
 		}

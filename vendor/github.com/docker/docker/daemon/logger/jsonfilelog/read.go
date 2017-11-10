@@ -13,9 +13,9 @@ import (
 
 	"github.com/docker/docker/api/types/backend"
 	"github.com/docker/docker/daemon/logger"
-	"github.com/docker/docker/daemon/logger/jsonfilelog/jsonlog"
 	"github.com/docker/docker/daemon/logger/jsonfilelog/multireader"
 	"github.com/docker/docker/pkg/filenotify"
+	"github.com/docker/docker/pkg/jsonlog"
 	"github.com/docker/docker/pkg/tailfile"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -137,7 +137,8 @@ func newSectionReader(f *os.File) (*io.SectionReader, error) {
 }
 
 func tailFile(f io.ReadSeeker, logWatcher *logger.LogWatcher, tail int, since time.Time) {
-	rdr := io.Reader(f)
+	var rdr io.Reader
+	rdr = f
 	if tail > 0 {
 		ls, err := tailfile.TailFile(f, tail)
 		if err != nil {
@@ -147,8 +148,9 @@ func tailFile(f io.ReadSeeker, logWatcher *logger.LogWatcher, tail int, since ti
 		rdr = bytes.NewBuffer(bytes.Join(ls, []byte("\n")))
 	}
 	dec := json.NewDecoder(rdr)
+	l := &jsonlog.JSONLog{}
 	for {
-		msg, err := decodeLogLine(dec, &jsonlog.JSONLog{})
+		msg, err := decodeLogLine(dec, l)
 		if err != nil {
 			if err != io.EOF {
 				logWatcher.Err <- err

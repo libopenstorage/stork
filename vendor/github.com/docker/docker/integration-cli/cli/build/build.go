@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/integration-cli/cli/build/fakecontext"
-	"github.com/gotestyourself/gotestyourself/icmd"
+	icmd "github.com/docker/docker/pkg/testutil/cmd"
 )
 
 type testingT interface {

@@ -8,8 +8,7 @@ import (
 	"strings"
 )
 
-// SkipT is the interface required to skip tests
-type SkipT interface {
+type skipT interface {
 	Skip(reason string)
 }
 
@@ -18,7 +17,7 @@ type Test func() bool
 
 // Is checks if the environment satisfies the requirements
 // for the test to run or skips the tests.
-func Is(s SkipT, requirements ...Test) {
+func Is(s skipT, requirements ...Test) {
 	for _, r := range requirements {
 		isValid := r()
 		if !isValid {

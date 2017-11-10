@@ -28,12 +28,6 @@ func TestEmptyLayer(t *testing.T) {
 		t.Fatal("expected zero diffsize for empty layer")
 	}
 
-	meta, err := EmptyLayer.Metadata()
-
-	if len(meta) != 0 || err != nil {
-		t.Fatal("expected zero length metadata for empty layer")
-	}
-
 	tarStream, err := EmptyLayer.TarStream()
 	if err != nil {
 		t.Fatalf("error streaming tar for empty layer: %v", err)

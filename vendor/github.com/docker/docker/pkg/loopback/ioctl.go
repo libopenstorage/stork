@@ -17,7 +17,10 @@ func ioctlLoopCtlGetFree(fd uintptr) (int, error) {
 }
 
 func ioctlLoopSetFd(loopFd, sparseFd uintptr) error {
-	return unix.IoctlSetInt(int(loopFd), LoopSetFd, int(sparseFd))
+	if err := unix.IoctlSetInt(int(loopFd), LoopSetFd, int(sparseFd)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func ioctlLoopSetStatus64(loopFd uintptr, loopInfo *loopInfo64) error {
@@ -44,5 +47,8 @@ func ioctlLoopGetStatus64(loopFd uintptr) (*loopInfo64, error) {
 }
 
 func ioctlLoopSetCapacity(loopFd uintptr, value int) error {
-	return unix.IoctlSetInt(int(loopFd), LoopSetCapacity, value)
+	if err := unix.IoctlSetInt(int(loopFd), LoopSetCapacity, value); err != nil {
+		return err
+	}
+	return nil
 }

@@ -4,11 +4,9 @@ package logentries
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/bsphere/le_go"
 	"github.com/docker/docker/daemon/logger"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,13 +16,11 @@ type logentries struct {
 	containerName string
 	writer        *le_go.Logger
 	extra         map[string]string
-	lineOnly      bool
 }
 
 const (
-	name     = "logentries"
-	token    = "logentries-token"
-	lineonly = "line-only"
+	name  = "logentries"
+	token = "logentries-token"
 )
 
 func init() {
@@ -42,44 +38,32 @@ func init() {
 func New(info logger.Info) (logger.Logger, error) {
 	logrus.WithField("container", info.ContainerID).
 		WithField("token", info.Config[token]).
-		WithField("line-only", info.Config[lineonly]).
 		Debug("logging driver logentries configured")
 
 	log, err := le_go.Connect(info.Config[token])
 	if err != nil {
-		return nil, errors.Wrap(err, "error connecting to logentries")
-	}
-	var lineOnly bool
-	if lineOnly, err = strconv.ParseBool(info.Config[lineonly]); err != nil {
-		return nil, errors.Wrap(err, "error parsing lineonly option")
+		return nil, err
 	}
 	return &logentries{
 		containerID:   info.ContainerID,
 		containerName: info.ContainerName,
 		writer:        log,
-		lineOnly:      lineOnly,
 	}, nil
 }
 
 func (f *logentries) Log(msg *logger.Message) error {
-	if !f.lineOnly {
-		data := map[string]string{
-			"container_id":   f.containerID,
-			"container_name": f.containerName,
-			"source":         msg.Source,
-			"log":            string(msg.Line),
-		}
-		for k, v := range f.extra {
-			data[k] = v
-		}
-		ts := msg.Timestamp
-		logger.PutMessage(msg)
-		f.writer.Println(f.tag, ts, data)
-	} else {
-		line := msg.Line
-		logger.PutMessage(msg)
-		f.writer.Println(line)
+	data := map[string]string{
+		"container_id":   f.containerID,
+		"container_name": f.containerName,
+		"source":         msg.Source,
+		"log":            string(msg.Line),
 	}
+	for k, v := range f.extra {
+		data[k] = v
+	}
+	ts := msg.Timestamp
+	logger.PutMessage(msg)
+	f.writer.Println(f.tag, ts, data)
 	return nil
 }
 

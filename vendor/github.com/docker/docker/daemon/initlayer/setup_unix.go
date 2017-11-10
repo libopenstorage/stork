@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/pkg/containerfs"
 	"github.com/docker/docker/pkg/idtools"
 	"golang.org/x/sys/unix"
 )
@@ -17,10 +16,7 @@ import (
 //
 // This extra layer is used by all containers as the top-most ro layer. It protects
 // the container from unwanted side-effects on the rw layer.
-func Setup(initLayerFs containerfs.ContainerFS, rootIDs idtools.IDPair) error {
-	// Since all paths are local to the container, we can just extract initLayerFs.Path()
-	initLayer := initLayerFs.Path()
-
+func Setup(initLayer string, rootIDs idtools.IDPair) error {
 	for pth, typ := range map[string]string{
 		"/dev/pts":         "dir",
 		"/dev/shm":         "dir",

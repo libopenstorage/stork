@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strings"
 
 	"github.com/docker/docker/integration-cli/checker"
 	"github.com/go-check/check"
@@ -31,11 +30,11 @@ func (s *DockerSuite) TestCpToErrSrcNotExists(c *check.C) {
 
 	srcPath := cpPath(tmpDir, "file1")
 	dstPath := containerCpPath(containerID, "file1")
-	_, srcStatErr := os.Stat(srcPath)
-	c.Assert(os.IsNotExist(srcStatErr), checker.True)
 
 	err := runDockerCp(c, srcPath, dstPath, nil)
-	c.Assert(strings.ToLower(err.Error()), checker.Contains, strings.ToLower(srcStatErr.Error()))
+	c.Assert(err, checker.NotNil)
+
+	c.Assert(isCpNotExist(err), checker.True, check.Commentf("expected IsNotExist error, but got %T: %s", err, err))
 }
 
 // Test for error when SRC ends in a trailing

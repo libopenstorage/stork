@@ -57,41 +57,27 @@ func (daemon *Daemon) setupLinkedContainers(container *container.Container) ([]s
 	return env, nil
 }
 
-func (daemon *Daemon) getIpcContainer(id string) (*container.Container, error) {
-	errMsg := "can't join IPC of container " + id
-	// Check the container exists
-	container, err := daemon.GetContainer(id)
+func (daemon *Daemon) getIpcContainer(container *container.Container) (*container.Container, error) {
+	containerID := container.HostConfig.IpcMode.Container()
+	container, err := daemon.GetContainer(containerID)
 	if err != nil {
-		return nil, errors.Wrap(err, errMsg)
+		return nil, errors.Wrapf(err, "cannot join IPC of a non running container: %s", container.ID)
 	}
-	// Check the container is running and not restarting
-	if err := daemon.checkContainer(container, containerIsRunning, containerIsNotRestarting); err != nil {
-		return nil, errors.Wrap(err, errMsg)
-	}
-	// Check the container ipc is shareable
-	if st, err := os.Stat(container.ShmPath); err != nil || !st.IsDir() {
-		if err == nil || os.IsNotExist(err) {
-			return nil, errors.New(errMsg + ": non-shareable IPC")
-		}
-		// stat() failed?
-		return nil, errors.Wrap(err, errMsg+": unexpected error from stat "+container.ShmPath)
-	}
-
-	return container, nil
+	return container, daemon.checkContainer(container, containerIsRunning, containerIsNotRestarting)
 }
 
 func (daemon *Daemon) getPidContainer(container *container.Container) (*container.Container, error) {
 	containerID := container.HostConfig.PidMode.Container()
 	container, err := daemon.GetContainer(containerID)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot join PID of a non running container: %s", containerID)
+		return nil, errors.Wrapf(err, "cannot join PID of a non running container: %s", container.ID)
 	}
 	return container, daemon.checkContainer(container, containerIsRunning, containerIsNotRestarting)
 }
 
 func containerIsRunning(c *container.Container) error {
 	if !c.IsRunning() {
-		return stateConflictError{errors.Errorf("container %s is not running", c.ID)}
+		return errors.Errorf("container %s is not running", c.ID)
 	}
 	return nil
 }
@@ -104,33 +90,25 @@ func containerIsNotRestarting(c *container.Container) error {
 }
 
 func (daemon *Daemon) setupIpcDirs(c *container.Container) error {
-	ipcMode := c.HostConfig.IpcMode
+	var err error
 
-	switch {
-	case ipcMode.IsContainer():
-		ic, err := daemon.getIpcContainer(ipcMode.Container())
+	c.ShmPath, err = c.ShmResourcePath()
+	if err != nil {
+		return err
+	}
+
+	if c.HostConfig.IpcMode.IsContainer() {
+		ic, err := daemon.getIpcContainer(c)
 		if err != nil {
 			return err
 		}
 		c.ShmPath = ic.ShmPath
-
-	case ipcMode.IsHost():
+	} else if c.HostConfig.IpcMode.IsHost() {
 		if _, err := os.Stat("/dev/shm"); err != nil {
 			return fmt.Errorf("/dev/shm is not mounted, but must be for --ipc=host")
 		}
 		c.ShmPath = "/dev/shm"
-
-	case ipcMode.IsPrivate(), ipcMode.IsNone():
-		// c.ShmPath will/should not be used, so make it empty.
-		// Container's /dev/shm mount comes from OCI spec.
-		c.ShmPath = ""
-
-	case ipcMode.IsEmpty():
-		// A container was created by an older version of the daemon.
-		// The default behavior used to be what is now called "shareable".
-		fallthrough
-
-	case ipcMode.IsShareable():
+	} else {
 		rootIDs := daemon.idMappings.RootPair()
 		if !c.HasMountFor("/dev/shm") {
 			shmPath, err := c.ShmResourcePath()
@@ -142,18 +120,19 @@ func (daemon *Daemon) setupIpcDirs(c *container.Container) error {
 				return err
 			}
 
-			shmproperty := "mode=1777,size=" + strconv.FormatInt(c.HostConfig.ShmSize, 10)
+			shmSize := int64(daemon.configStore.ShmSize)
+			if c.HostConfig.ShmSize != 0 {
+				shmSize = c.HostConfig.ShmSize
+			}
+			shmproperty := "mode=1777,size=" + strconv.FormatInt(shmSize, 10)
 			if err := unix.Mount("shm", shmPath, "tmpfs", uintptr(unix.MS_NOEXEC|unix.MS_NOSUID|unix.MS_NODEV), label.FormatMountLabel(shmproperty, c.GetMountLabel())); err != nil {
 				return fmt.Errorf("mounting shm tmpfs: %s", err)
 			}
 			if err := os.Chown(shmPath, rootIDs.UID, rootIDs.GID); err != nil {
 				return err
 			}
-			c.ShmPath = shmPath
 		}
 
-	default:
-		return fmt.Errorf("invalid IPC mode: %v", ipcMode)
 	}
 
 	return nil
@@ -307,8 +286,6 @@ func (daemon *Daemon) setupConfigDir(c *container.Container) (setupErr error) {
 		if err := os.Chown(fPath, rootIDs.UID+uid, rootIDs.GID+gid); err != nil {
 			return errors.Wrap(err, "error setting ownership for config")
 		}
-
-		label.Relabel(fPath, c.MountLabel, false)
 	}
 
 	return nil

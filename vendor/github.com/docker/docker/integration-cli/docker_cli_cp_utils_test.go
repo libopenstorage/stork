@@ -193,7 +193,9 @@ func runDockerCp(c *check.C, src, dst string, params []string) (err error) {
 
 	args := []string{"cp"}
 
-	args = append(args, params...)
+	for _, param := range params {
+		args = append(args, param)
+	}
 
 	args = append(args, src, dst)
 
@@ -229,7 +231,7 @@ func getTestDir(c *check.C, label string) (tmpDir string) {
 }
 
 func isCpNotExist(err error) bool {
-	return strings.Contains(strings.ToLower(err.Error()), "could not find the file")
+	return strings.Contains(err.Error(), "no such file or directory") || strings.Contains(err.Error(), "cannot find the file specified")
 }
 
 func isCpDirNotExist(err error) bool {

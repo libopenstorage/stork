@@ -12,7 +12,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	containerpkg "github.com/docker/docker/container"
 	"github.com/docker/docker/layer"
-	"github.com/docker/docker/pkg/containerfs"
 	"golang.org/x/net/context"
 )
 
@@ -25,7 +24,7 @@ const (
 // instructions in the builder.
 type Source interface {
 	// Root returns root path for accessing source
-	Root() containerfs.ContainerFS
+	Root() string
 	// Close allows to signal that the filesystem tree won't be used anymore.
 	// For Context implementations using a temporary directory, it is recommended to
 	// delete the temporary directory in Close().
@@ -95,13 +94,12 @@ type Image interface {
 	ImageID() string
 	RunConfig() *container.Config
 	MarshalJSON() ([]byte, error)
-	OperatingSystem() string
 }
 
 // ReleaseableLayer is an image layer that can be mounted and released
 type ReleaseableLayer interface {
 	Release() error
-	Mount() (containerfs.ContainerFS, error)
+	Mount() (string, error)
 	Commit(platform string) (ReleaseableLayer, error)
 	DiffID() layer.DiffID
 }

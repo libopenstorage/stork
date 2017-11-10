@@ -17,7 +17,7 @@ From the root of the Docker/Docker repo one can use make to execute the followin
 - make default
 - make shell
 - make test-unit
-- make test-integration
+- make test-integration-cli
 - make
 
 The Makefile does include logic to determine on which OS and architecture the Docker Development Image is built.

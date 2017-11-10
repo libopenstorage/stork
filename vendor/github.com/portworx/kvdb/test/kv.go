@@ -45,8 +45,15 @@ func fatalErrorCb() kvdb.FatalErrorCB {
 	}
 }
 
+type StartKvdb func() error
+type StopKvdb func() error
+
 // Run runs the test suite.
-func Run(datastoreInit kvdb.DatastoreInit, t *testing.T) kvdb.Kvdb {
+func Run(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb) {
+	err := start()
+	assert.NoError(t, err, "Unable to start kvdb")
+	// Wait for kvdb to start
+	time.Sleep(5 * time.Second)
 	kv, err := datastoreInit("pwx/test", nil, nil, fatalErrorCb())
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -68,11 +75,16 @@ func Run(datastoreInit kvdb.DatastoreInit, t *testing.T) kvdb.Kvdb {
 	watchWithIndex(kv, t)
 	collect(kv, t)
 	lock(kv, t)
-	return kv
+	lockBetweenRestarts(kv, t, start, stop)
+	err = stop()
+	assert.NoError(t, err, "Unable to stop kvdb")
 }
 
 // RunBasic runs the basic test suite.
-func RunBasic(datastoreInit kvdb.DatastoreInit, t *testing.T) {
+func RunBasic(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb) {
+	err := start()
+	time.Sleep(3 * time.Second)
+	assert.NoError(t, err, "Unable to start kvdb")
 	kv, err := datastoreInit("pwx/test", nil, nil, fatalErrorCb())
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -88,11 +100,13 @@ func RunBasic(datastoreInit kvdb.DatastoreInit, t *testing.T) {
 	keys(kv, t)
 	concurrentEnum(kv, t)
 	lock(kv, t)
+	lockBetweenRestarts(kv, t, start, stop)
 	snapshot(kv, t)
 	watchTree(kv, t)
 	watchKey(kv, t)
 	watchWithIndex(kv, t)
 	cas(kv, t)
+	assert.NoError(t, err, "Unable to stop kvdb")
 }
 
 // RunAuth runs the authentication test suite for kvdb
@@ -672,7 +686,43 @@ func lock(kv kvdb.Kvdb, t *testing.T) {
 		time.Sleep(15 * time.Second)
 		assert.True(t, lockTimedout, "lock timeout not called")
 		err = kv.Unlock(kvPair2)
-		kv.SetLockTimeout(0)
+		kv.SetLockTimeout(5 * time.Second)
+
+	}
+}
+
+func lockBetweenRestarts(kv kvdb.Kvdb, t *testing.T, start StartKvdb, stop StopKvdb) {
+	lockMethods := getLockMethods(kv)
+	for _, lockMethod := range lockMethods {
+		// Try to take the lock again
+		// We need this test for consul to check if LockDelay is not set
+		fmt.Println("lock before restarting kvdb")
+		kvPair3, err := lockMethod("key3")
+		assert.NoError(t, err, "Unable to take a lock")
+		fmt.Println("stopping kvdb")
+		err = stop()
+		assert.NoError(t, err, "Unable to stop kvdb")
+		// Unlock the key
+		kv.Unlock(kvPair3)
+		time.Sleep(30 * time.Second)
+
+		fmt.Println("starting kvdb")
+		err = start()
+		assert.NoError(t, err, "Unable to start kvdb")
+		time.Sleep(30 * time.Second)
+
+		lockChan := make(chan int)
+		go func() {
+			kvPair3, err = lockMethod("key3")
+			lockChan <- 1
+		}()
+		select {
+		case <-time.After(5 * time.Second):
+			assert.Fail(t, "Unable to take a lock whose session is expired")
+		case <-lockChan:
+		}
+		err = kv.Unlock(kvPair3)
+		assert.NoError(t, err, "unable to unlock")
 	}
 }
 
@@ -912,6 +962,16 @@ func watchWithIndexCb(
 	if !ok {
 		data.t.Fatalf("Unable to parse waitIndex in watch callback")
 	}
+	if err != nil {
+		assert.Equal(data.t, err, kvdb.ErrWatchStopped)
+		data.watchStopped = true
+		return err
+
+	}
+	if kvp != nil && len(kvp.Value) != 0 && string(kvp.Value) == "stop" {
+		// Stop the watch
+		return fmt.Errorf("stop the watch")
+	}
 	assert.True(data.t, kvp.ModifiedIndex >= data.localIndex,
 		"For key: %v. ModifiedIndex (%v) should be > than waitIndex (%v)",
 		kvp.Key, kvp.ModifiedIndex, data.localIndex,
@@ -963,6 +1023,7 @@ func watchWithIndex(kv kvdb.Kvdb, t *testing.T) {
 	kv.Put(key, []byte("bar2"), 0)
 	kv.Create(key1, []byte("bar"), 0)
 	kv.Delete(key)
+	kv.Put(key, []byte("stop"), 0)
 }
 
 func cas(kv kvdb.Kvdb, t *testing.T) {

@@ -1,6 +1,8 @@
 package network
 
 import (
+	"fmt"
+
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/runconfig"
@@ -22,18 +24,10 @@ func filterNetworkByType(nws []types.NetworkResource, netType string) ([]types.N
 			}
 		}
 	default:
-		return nil, invalidFilter(netType)
+		return nil, fmt.Errorf("Invalid filter: 'type'='%s'", netType)
 	}
 	return retNws, nil
 }
-
-type invalidFilter string
-
-func (e invalidFilter) Error() string {
-	return "Invalid filter: 'type'='" + string(e) + "'"
-}
-
-func (e invalidFilter) InvalidParameter() {}
 
 // filterNetworks filters network list according to user specified filter
 // and returns user chosen networks
@@ -45,27 +39,27 @@ func filterNetworks(nws []types.NetworkResource, filter filters.Args) ([]types.N
 
 	displayNet := []types.NetworkResource{}
 	for _, nw := range nws {
-		if filter.Contains("driver") {
+		if filter.Include("driver") {
 			if !filter.ExactMatch("driver", nw.Driver) {
 				continue
 			}
 		}
-		if filter.Contains("name") {
+		if filter.Include("name") {
 			if !filter.Match("name", nw.Name) {
 				continue
 			}
 		}
-		if filter.Contains("id") {
+		if filter.Include("id") {
 			if !filter.Match("id", nw.ID) {
 				continue
 			}
 		}
-		if filter.Contains("label") {
+		if filter.Include("label") {
 			if !filter.MatchKVList("label", nw.Labels) {
 				continue
 			}
 		}
-		if filter.Contains("scope") {
+		if filter.Include("scope") {
 			if !filter.ExactMatch("scope", nw.Scope) {
 				continue
 			}
@@ -73,7 +67,7 @@ func filterNetworks(nws []types.NetworkResource, filter filters.Args) ([]types.N
 		displayNet = append(displayNet, nw)
 	}
 
-	if filter.Contains("type") {
+	if filter.Include("type") {
 		typeNet := []types.NetworkResource{}
 		errFilter := filter.WalkValues("type", func(fval string) error {
 			passList, err := filterNetworkByType(displayNet, fval)

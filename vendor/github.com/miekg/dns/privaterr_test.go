@@ -7,7 +7,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-const TypeISBN uint16 = 0xFF00
+const TypeISBN uint16 = 0x0F01
 
 // A crazy new RR type :)
 type ISBN struct {
@@ -101,7 +101,7 @@ func TestPrivateByteSlice(t *testing.T) {
 	}
 }
 
-const TypeVERSION uint16 = 0xFF01
+const TypeVERSION uint16 = 0x0F02
 
 type VERSION struct {
 	x string
@@ -143,7 +143,7 @@ func (rd *VERSION) Len() int {
 }
 
 var smallzone = `$ORIGIN example.org.
-@ 3600 IN SOA	sns.dns.icann.org. noc.dns.icann.org. (
+@ SOA	sns.dns.icann.org. noc.dns.icann.org. (
 		2014091518 7200 3600 1209600 3600
 )
     A   1.2.3.4

@@ -4,53 +4,29 @@ package daemon
 
 import (
 	"fmt"
-	"os/exec"
-	"path/filepath"
 
-	"github.com/containerd/containerd/linux/runcopts"
 	"github.com/docker/docker/container"
-	"github.com/pkg/errors"
+	"github.com/docker/docker/libcontainerd"
 )
 
-func (daemon *Daemon) getRuntimeScript(container *container.Container) (string, error) {
-	name := container.HostConfig.Runtime
-	rt := daemon.configStore.GetRuntime(name)
-	if rt == nil {
-		return "", validationError{errors.Errorf("no such runtime '%s'", name)}
-	}
-
-	if len(rt.Args) > 0 {
-		// First check that the target exist, as using it in a script won't
-		// give us the right error
-		if _, err := exec.LookPath(rt.Path); err != nil {
-			return "", translateContainerdStartErr(container.Path, container.SetExitCode, err)
-		}
-		return filepath.Join(daemon.configStore.Root, "runtimes", name), nil
-	}
-	return rt.Path, nil
-}
-
 // getLibcontainerdCreateOptions callers must hold a lock on the container
-func (daemon *Daemon) getLibcontainerdCreateOptions(container *container.Container) (interface{}, error) {
+func (daemon *Daemon) getLibcontainerdCreateOptions(container *container.Container) ([]libcontainerd.CreateOption, error) {
+	createOptions := []libcontainerd.CreateOption{}
+
 	// Ensure a runtime has been assigned to this container
 	if container.HostConfig.Runtime == "" {
 		container.HostConfig.Runtime = daemon.configStore.GetDefaultRuntimeName()
 		container.CheckpointTo(daemon.containersReplica)
 	}
 
-	path, err := daemon.getRuntimeScript(container)
-	if err != nil {
-		return nil, err
+	rt := daemon.configStore.GetRuntime(container.HostConfig.Runtime)
+	if rt == nil {
+		return nil, fmt.Errorf("no such runtime '%s'", container.HostConfig.Runtime)
 	}
-	opts := &runcopts.RuncOptions{
-		Runtime: path,
-		RuntimeRoot: filepath.Join(daemon.configStore.ExecRoot,
-			fmt.Sprintf("runtime-%s", container.HostConfig.Runtime)),
-	}
-
 	if UsingSystemd(daemon.configStore) {
-		opts.SystemdCgroup = true
+		rt.Args = append(rt.Args, "--systemd-cgroup=true")
 	}
+	createOptions = append(createOptions, libcontainerd.WithRuntime(rt.Path, rt.Args))
 
-	return opts, nil
+	return createOptions, nil
 }

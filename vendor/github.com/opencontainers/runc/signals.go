@@ -74,15 +74,16 @@ func (h *signalHandler) forward(process *libcontainer.Process, tty *tty, detach 
 		}
 	}
 
-	// Perform the initial tty resize. Always ignore errors resizing because
-	// stdout might have disappeared (due to races with when SIGHUP is sent).
-	_ = tty.resize()
-	// Handle and forward signals.
+	// perform the initial tty resize.
+	if err := tty.resize(); err != nil {
+		logrus.Error(err)
+	}
 	for s := range h.signals {
 		switch s {
 		case unix.SIGWINCH:
-			// Ignore errors resizing, as above.
-			_ = tty.resize()
+			if err := tty.resize(); err != nil {
+				logrus.Error(err)
+			}
 		case unix.SIGCHLD:
 			exits, err := h.reap()
 			if err != nil {

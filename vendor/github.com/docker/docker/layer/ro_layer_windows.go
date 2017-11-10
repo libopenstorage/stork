@@ -8,9 +8,9 @@ func (rl *roLayer) Descriptor() distribution.Descriptor {
 	return rl.descriptor
 }
 
-func (rl *roLayer) OS() OS {
-	if rl.os == "" {
+func (rl *roLayer) Platform() Platform {
+	if rl.platform == "" {
 		return "windows"
 	}
-	return rl.os
+	return rl.platform
 }

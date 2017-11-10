@@ -1,8 +1,6 @@
 package main
 
 import (
-	"strings"
-
 	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/runconfig"
 	"github.com/go-check/check"
@@ -49,7 +47,7 @@ func (s *DockerSuite) TestNetHostname(c *check.C) {
 	c.Assert(out, checker.Contains, "Invalid network mode: invalid container format container:<name|id>")
 
 	out, _ = dockerCmdWithFail(c, "run", "--net=weird", "busybox", "ps")
-	c.Assert(strings.ToLower(out), checker.Contains, "no such network")
+	c.Assert(out, checker.Contains, "network weird not found")
 }
 
 func (s *DockerSuite) TestConflictContainerNetworkAndLinks(c *check.C) {

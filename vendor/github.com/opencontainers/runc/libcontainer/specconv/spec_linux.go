@@ -37,7 +37,7 @@ var mountPropagationMapping = map[string]int{
 	"slave":    unix.MS_SLAVE,
 	"rshared":  unix.MS_SHARED | unix.MS_REC,
 	"shared":   unix.MS_SHARED,
-	"":         0,
+	"":         unix.MS_PRIVATE | unix.MS_REC,
 }
 
 var allowedDevices = []*configs.Device{
@@ -184,6 +184,13 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 	}
 
 	exists := false
+	if config.Namespaces.Contains(configs.NEWNET) {
+		config.Networks = []*configs.Network{
+			{
+				Type: "loopback",
+			},
+		}
+	}
 	for _, m := range spec.Mounts {
 		config.Mounts = append(config.Mounts, createLibcontainerMount(cwd, m))
 	}
@@ -203,9 +210,6 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		if config.RootPropagation, exists = mountPropagationMapping[spec.Linux.RootfsPropagation]; !exists {
 			return nil, fmt.Errorf("rootfsPropagation=%v is not supported", spec.Linux.RootfsPropagation)
 		}
-		if config.NoPivotRoot && (config.RootPropagation&unix.MS_PRIVATE != 0) {
-			return nil, fmt.Errorf("rootfsPropagation of [r]private is not safe without pivot_root")
-		}
 
 		for _, ns := range spec.Linux.Namespaces {
 			t, exists := namespaceMapping[ns.Type]
@@ -216,13 +220,6 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 				return nil, fmt.Errorf("malformed spec file: duplicated ns %q", ns)
 			}
 			config.Namespaces.Add(t, ns.Path)
-		}
-		if config.Namespaces.Contains(configs.NEWNET) {
-			config.Networks = []*configs.Network{
-				{
-					Type: "loopback",
-				},
-			}
 		}
 		config.MaskPaths = spec.Linux.MaskedPaths
 		config.ReadonlyPaths = spec.Linux.ReadonlyPaths
@@ -253,12 +250,6 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 	}
 	createHooks(spec, config)
 	config.Version = specs.Version
-	if spec.Linux.IntelRdt != nil {
-		config.IntelRdt = &configs.IntelRdt{}
-		if spec.Linux.IntelRdt.L3CacheSchema != "" {
-			config.IntelRdt.L3CacheSchema = spec.Linux.IntelRdt.L3CacheSchema
-		}
-	}
 	return config, nil
 }
 

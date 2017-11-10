@@ -15,7 +15,6 @@ import (
 	swarmtypes "github.com/docker/docker/api/types/swarm"
 	containerpkg "github.com/docker/docker/container"
 	clustertypes "github.com/docker/docker/daemon/cluster/provider"
-	networkSettings "github.com/docker/docker/daemon/network"
 	"github.com/docker/docker/plugin"
 	"github.com/docker/libnetwork"
 	"github.com/docker/libnetwork/cluster"
@@ -35,7 +34,7 @@ type Backend interface {
 	CreateManagedContainer(config types.ContainerCreateConfig) (container.ContainerCreateCreatedBody, error)
 	ContainerStart(name string, hostConfig *container.HostConfig, checkpoint string, checkpointDir string) error
 	ContainerStop(name string, seconds *int) error
-	ContainerLogs(context.Context, string, *types.ContainerLogsOptions) (msgs <-chan *backend.LogMessage, tty bool, err error)
+	ContainerLogs(context.Context, string, *types.ContainerLogsOptions) (<-chan *backend.LogMessage, error)
 	ConnectContainerToNetwork(containerName, networkName string, endpointConfig *network.EndpointSettings) error
 	ActivateContainerServiceBinding(containerName string) error
 	DeactivateContainerServiceBinding(containerName string) error
@@ -62,5 +61,4 @@ type Backend interface {
 	LookupImage(name string) (*types.ImageInspect, error)
 	PluginManager() *plugin.Manager
 	PluginGetter() *plugin.Store
-	GetAttachmentStore() *networkSettings.AttachmentStore
 }

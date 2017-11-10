@@ -15,7 +15,6 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/containerfs"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 )
@@ -53,8 +52,8 @@ var (
 	ErrMaxDepthExceeded = errors.New("max depth exceeded")
 
 	// ErrNotSupported is used when the action is not supported
-	// on the current host operating system.
-	ErrNotSupported = errors.New("not support on this host operating system")
+	// on the current platform
+	ErrNotSupported = errors.New("not support on this platform")
 )
 
 // ChainID is the content-addressable ID of a layer.
@@ -65,11 +64,11 @@ func (id ChainID) String() string {
 	return string(id)
 }
 
-// OS is the operating system of a layer
-type OS string
+// Platform is the platform of a layer
+type Platform string
 
-// String returns a string rendition of layers target operating system
-func (id OS) String() string {
+// String returns a string rendition of layers target platform
+func (id Platform) String() string {
 	return string(id)
 }
 
@@ -108,8 +107,8 @@ type Layer interface {
 	// Parent returns the next layer in the layer chain.
 	Parent() Layer
 
-	// OS returns the operating system of the layer
-	OS() OS
+	// Platform returns the platform of the layer
+	Platform() Platform
 
 	// Size returns the size of the entire layer chain. The size
 	// is calculated from the total size of all files in the layers.
@@ -138,7 +137,7 @@ type RWLayer interface {
 
 	// Mount mounts the RWLayer and returns the filesystem path
 	// the to the writable layer.
-	Mount(mountLabel string) (containerfs.ContainerFS, error)
+	Mount(mountLabel string) (string, error)
 
 	// Unmount unmounts the RWLayer. This should be called
 	// for every mount. If there are multiple mount calls
@@ -179,7 +178,7 @@ type Metadata struct {
 // writable mount. Changes made here will
 // not be included in the Tar stream of the
 // RWLayer.
-type MountInit func(root containerfs.ContainerFS) error
+type MountInit func(root string) error
 
 // CreateRWLayerOpts contains optional arguments to be passed to CreateRWLayer
 type CreateRWLayerOpts struct {
@@ -191,7 +190,7 @@ type CreateRWLayerOpts struct {
 // Store represents a backend for managing both
 // read-only and read-write layers.
 type Store interface {
-	Register(io.Reader, ChainID, OS) (Layer, error)
+	Register(io.Reader, ChainID, Platform) (Layer, error)
 	Get(ChainID) (Layer, error)
 	Map() map[ChainID]Layer
 	Release(Layer) ([]Metadata, error)
@@ -209,7 +208,7 @@ type Store interface {
 // DescribableStore represents a layer store capable of storing
 // descriptors for layers.
 type DescribableStore interface {
-	RegisterWithDescriptor(io.Reader, ChainID, OS, distribution.Descriptor) (Layer, error)
+	RegisterWithDescriptor(io.Reader, ChainID, Platform, distribution.Descriptor) (Layer, error)
 }
 
 // MetadataTransaction represents functions for setting layer metadata
@@ -220,7 +219,7 @@ type MetadataTransaction interface {
 	SetDiffID(DiffID) error
 	SetCacheID(string) error
 	SetDescriptor(distribution.Descriptor) error
-	SetOS(OS) error
+	SetPlatform(Platform) error
 	TarSplitWriter(compressInput bool) (io.WriteCloser, error)
 
 	Commit(ChainID) error
@@ -241,7 +240,7 @@ type MetadataStore interface {
 	GetDiffID(ChainID) (DiffID, error)
 	GetCacheID(ChainID) (string, error)
 	GetDescriptor(ChainID) (distribution.Descriptor, error)
-	GetOS(ChainID) (OS, error)
+	GetPlatform(ChainID) (Platform, error)
 	TarSplitReader(ChainID) (io.ReadCloser, error)
 
 	SetMountID(string, string) error

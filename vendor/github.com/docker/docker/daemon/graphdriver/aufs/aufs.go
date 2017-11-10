@@ -38,7 +38,6 @@ import (
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
-	"github.com/docker/docker/pkg/containerfs"
 	"github.com/docker/docker/pkg/directory"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/locker"
@@ -140,30 +139,6 @@ func Init(root string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 	for _, p := range paths {
 		if err := idtools.MkdirAllAs(path.Join(root, p), 0700, rootUID, rootGID); err != nil {
 			return nil, err
-		}
-	}
-	logger := logrus.WithFields(logrus.Fields{
-		"module": "graphdriver",
-		"driver": "aufs",
-	})
-
-	for _, path := range []string{"mnt", "diff"} {
-		p := filepath.Join(root, path)
-		entries, err := ioutil.ReadDir(p)
-		if err != nil {
-			logger.WithError(err).WithField("dir", p).Error("error reading dir entries")
-			continue
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			if strings.HasSuffix(entry.Name(), "-removing") {
-				logger.WithField("dir", entry.Name()).Debug("Cleaning up stale layer dir")
-				if err := system.EnsureRemoveAll(filepath.Join(p, entry.Name())); err != nil {
-					logger.WithField("dir", entry.Name()).WithError(err).Error("Error removing stale layer dir")
-				}
-			}
 		}
 	}
 
@@ -342,25 +317,31 @@ func (a *Driver) Remove(id string) error {
 		retries++
 		logger.Warnf("unmount failed due to EBUSY: retry count: %d", retries)
 		time.Sleep(100 * time.Millisecond)
-	}
-
-	// Remove the layers file for the id
-	if err := os.Remove(path.Join(a.rootPath(), "layers", id)); err != nil && !os.IsNotExist(err) {
-		return errors.Wrapf(err, "error removing layers dir for %s", id)
-	}
-
-	if err := atomicRemove(a.getDiffPath(id)); err != nil {
-		return errors.Wrapf(err, "could not remove diff path for id %s", id)
+		continue
 	}
 
 	// Atomically remove each directory in turn by first moving it out of the
 	// way (so that docker doesn't find it anymore) before doing removal of
 	// the whole tree.
-	if err := atomicRemove(mountpoint); err != nil {
-		if errors.Cause(err) == unix.EBUSY {
-			logger.WithField("dir", mountpoint).WithError(err).Warn("error performing atomic remove due to EBUSY")
+	tmpMntPath := path.Join(a.mntPath(), fmt.Sprintf("%s-removing", id))
+	if err := os.Rename(mountpoint, tmpMntPath); err != nil && !os.IsNotExist(err) {
+		if err == unix.EBUSY {
+			logger.WithField("dir", mountpoint).WithError(err).Warn("os.Rename err due to EBUSY")
 		}
-		return errors.Wrapf(err, "could not remove mountpoint for id %s", id)
+		return errors.Wrapf(err, "error preparing atomic delete of aufs mountpoint for id: %s", id)
+	}
+	if err := system.EnsureRemoveAll(tmpMntPath); err != nil {
+		return errors.Wrapf(err, "error removing aufs layer %s", id)
+	}
+
+	tmpDiffpath := path.Join(a.diffPath(), fmt.Sprintf("%s-removing", id))
+	if err := os.Rename(a.getDiffPath(id), tmpDiffpath); err != nil && !os.IsNotExist(err) {
+		return errors.Wrapf(err, "error preparing atomic delete of aufs diff dir for id: %s", id)
+	}
+
+	// Remove the layers file for the id
+	if err := os.Remove(path.Join(a.rootPath(), "layers", id)); err != nil && !os.IsNotExist(err) {
+		return errors.Wrapf(err, "error removing layers dir for %s", id)
 	}
 
 	a.pathCacheLock.Lock()
@@ -369,32 +350,14 @@ func (a *Driver) Remove(id string) error {
 	return nil
 }
 
-func atomicRemove(source string) error {
-	target := source + "-removing"
-
-	err := os.Rename(source, target)
-	switch {
-	case err == nil, os.IsNotExist(err):
-	case os.IsExist(err):
-		// Got error saying the target dir already exists, maybe the source doesn't exist due to a previous (failed) remove
-		if _, e := os.Stat(source); !os.IsNotExist(e) {
-			return errors.Wrapf(err, "target rename dir '%s' exists but should not, this needs to be manually cleaned up")
-		}
-	default:
-		return errors.Wrapf(err, "error preparing atomic delete")
-	}
-
-	return system.EnsureRemoveAll(target)
-}
-
 // Get returns the rootfs path for the id.
 // This will mount the dir at its given path
-func (a *Driver) Get(id, mountLabel string) (containerfs.ContainerFS, error) {
+func (a *Driver) Get(id, mountLabel string) (string, error) {
 	a.locker.Lock(id)
 	defer a.locker.Unlock(id)
 	parents, err := a.getParentLayerPaths(id)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, err
+		return "", err
 	}
 
 	a.pathCacheLock.Lock()
@@ -408,21 +371,21 @@ func (a *Driver) Get(id, mountLabel string) (containerfs.ContainerFS, error) {
 		}
 	}
 	if count := a.ctr.Increment(m); count > 1 {
-		return containerfs.NewLocalContainerFS(m), nil
+		return m, nil
 	}
 
 	// If a dir does not have a parent ( no layers )do not try to mount
 	// just return the diff path to the data
 	if len(parents) > 0 {
 		if err := a.mount(id, m, mountLabel, parents); err != nil {
-			return nil, err
+			return "", err
 		}
 	}
 
 	a.pathCacheLock.Lock()
 	a.pathCache[id] = m
 	a.pathCacheLock.Unlock()
-	return containerfs.NewLocalContainerFS(m), nil
+	return m, nil
 }
 
 // Put unmounts and updates list of active mounts.

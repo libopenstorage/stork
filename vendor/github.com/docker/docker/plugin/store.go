@@ -24,6 +24,25 @@ const allowV1PluginsFallback bool = true
 */
 const defaultAPIVersion string = "1.0"
 
+// ErrNotFound indicates that a plugin was not found locally.
+type ErrNotFound string
+
+func (name ErrNotFound) Error() string { return fmt.Sprintf("plugin %q not found", string(name)) }
+
+// ErrAmbiguous indicates that more than one plugin was found
+type ErrAmbiguous string
+
+func (name ErrAmbiguous) Error() string {
+	return fmt.Sprintf("multiple plugins found for %q", string(name))
+}
+
+// ErrDisabled indicates that a plugin was found but it is disabled
+type ErrDisabled string
+
+func (name ErrDisabled) Error() string {
+	return fmt.Sprintf("plugin %s found but disabled", string(name))
+}
+
 // GetV2Plugin retrieves a plugin by name, id or partial ID.
 func (ps *Store) GetV2Plugin(refOrID string) (*v2.Plugin, error) {
 	ps.RLock()
@@ -36,7 +55,7 @@ func (ps *Store) GetV2Plugin(refOrID string) (*v2.Plugin, error) {
 
 	p, idOk := ps.plugins[id]
 	if !idOk {
-		return nil, errors.WithStack(errNotFound(id))
+		return nil, errors.WithStack(ErrNotFound(id))
 	}
 
 	return p, nil
@@ -46,7 +65,7 @@ func (ps *Store) GetV2Plugin(refOrID string) (*v2.Plugin, error) {
 func (ps *Store) validateName(name string) error {
 	for _, p := range ps.plugins {
 		if p.Name() == name {
-			return alreadyExistsError(name)
+			return errors.Errorf("plugin %q already exists", name)
 		}
 	}
 	return nil
@@ -111,9 +130,14 @@ func (ps *Store) Remove(p *v2.Plugin) {
 
 // Get returns an enabled plugin matching the given name and capability.
 func (ps *Store) Get(name, capability string, mode int) (plugingetter.CompatPlugin, error) {
+	var (
+		p   *v2.Plugin
+		err error
+	)
+
 	// Lookup using new model.
 	if ps != nil {
-		p, err := ps.GetV2Plugin(name)
+		p, err = ps.GetV2Plugin(name)
 		if err == nil {
 			p.AddRefCount(mode)
 			if p.IsEnabled() {
@@ -121,25 +145,23 @@ func (ps *Store) Get(name, capability string, mode int) (plugingetter.CompatPlug
 			}
 			// Plugin was found but it is disabled, so we should not fall back to legacy plugins
 			// but we should error out right away
-			return nil, errDisabled(name)
+			return nil, ErrDisabled(name)
 		}
-		if _, ok := errors.Cause(err).(errNotFound); !ok {
+		if _, ok := errors.Cause(err).(ErrNotFound); !ok {
 			return nil, err
 		}
 	}
 
-	if !allowV1PluginsFallback {
-		return nil, errNotFound(name)
-	}
-
-	p, err := plugins.Get(name, capability)
-	if err == nil {
+	// Lookup using legacy model.
+	if allowV1PluginsFallback {
+		p, err := plugins.Get(name, capability)
+		if err != nil {
+			return nil, fmt.Errorf("legacy plugin: %v", err)
+		}
 		return p, nil
 	}
-	if errors.Cause(err) == plugins.ErrNotFound {
-		return nil, errNotFound(name)
-	}
-	return nil, errors.Wrap(systemError{err}, "legacy plugin")
+
+	return nil, err
 }
 
 // GetAllManagedPluginsByCap returns a list of managed plugins matching the given capability.
@@ -167,7 +189,7 @@ func (ps *Store) GetAllByCap(capability string) ([]plugingetter.CompatPlugin, er
 	if allowV1PluginsFallback {
 		pl, err := plugins.GetAll(capability)
 		if err != nil {
-			return nil, errors.Wrap(systemError{err}, "legacy plugin")
+			return nil, fmt.Errorf("legacy plugin: %v", err)
 		}
 		for _, p := range pl {
 			result = append(result, p)
@@ -217,11 +239,11 @@ func (ps *Store) resolvePluginID(idOrName string) (string, error) {
 
 	ref, err := reference.ParseNormalizedNamed(idOrName)
 	if err != nil {
-		return "", errors.WithStack(errNotFound(idOrName))
+		return "", errors.WithStack(ErrNotFound(idOrName))
 	}
 	if _, ok := ref.(reference.Canonical); ok {
 		logrus.Warnf("canonical references cannot be resolved: %v", reference.FamiliarString(ref))
-		return "", errors.WithStack(errNotFound(idOrName))
+		return "", errors.WithStack(ErrNotFound(idOrName))
 	}
 
 	ref = reference.TagNameOnly(ref)
@@ -236,13 +258,13 @@ func (ps *Store) resolvePluginID(idOrName string) (string, error) {
 	for id, p := range ps.plugins { // this can be optimized
 		if strings.HasPrefix(id, idOrName) {
 			if found != nil {
-				return "", errors.WithStack(errAmbiguous(idOrName))
+				return "", errors.WithStack(ErrAmbiguous(idOrName))
 			}
 			found = p
 		}
 	}
 	if found == nil {
-		return "", errors.WithStack(errNotFound(idOrName))
+		return "", errors.WithStack(ErrNotFound(idOrName))
 	}
 	return found.PluginObj.ID, nil
 }

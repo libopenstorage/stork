@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/api/types/swarm/runtime"
 	"github.com/docker/docker/integration-cli/checker"
@@ -65,22 +64,14 @@ func (s *DockerSwarmSuite) TestAPISwarmServicesCreate(c *check.C) {
 	id := d.CreateService(c, simpleTestService, setInstances(instances))
 	waitAndAssert(c, defaultReconciliationTimeout, d.CheckActiveContainerCount, checker.Equals, instances)
 
-	cli, err := d.NewClient()
-	c.Assert(err, checker.IsNil)
-	defer cli.Close()
-
-	options := types.ServiceInspectOptions{InsertDefaults: true}
+	// insertDefaults inserts UpdateConfig when service is fetched by ID
+	_, out, err := d.SockRequest("GET", "/services/"+id+"?insertDefaults=true", nil)
+	c.Assert(err, checker.IsNil, check.Commentf("%s", out))
+	c.Assert(string(out), checker.Contains, "UpdateConfig")
 
 	// insertDefaults inserts UpdateConfig when service is fetched by ID
-	resp, _, err := cli.ServiceInspectWithRaw(context.Background(), id, options)
-	out := fmt.Sprintf("%+v", resp)
-	c.Assert(err, checker.IsNil)
-	c.Assert(out, checker.Contains, "UpdateConfig")
-
-	// insertDefaults inserts UpdateConfig when service is fetched by ID
-	resp, _, err = cli.ServiceInspectWithRaw(context.Background(), "top", options)
-	out = fmt.Sprintf("%+v", resp)
-	c.Assert(err, checker.IsNil)
+	_, out, err = d.SockRequest("GET", "/services/top?insertDefaults=true", nil)
+	c.Assert(err, checker.IsNil, check.Commentf("%s", out))
 	c.Assert(string(out), checker.Contains, "UpdateConfig")
 
 	service := d.GetService(c, id)
@@ -186,7 +177,7 @@ func (s *DockerSwarmSuite) TestAPISwarmServicesUpdate(c *check.C) {
 
 	// Roll back to the previous version. This uses the CLI because
 	// rollback used to be a client-side operation.
-	out, err := daemons[0].Cmd("service", "update", "--detach", "--rollback", id)
+	out, err := daemons[0].Cmd("service", "update", "--rollback", id)
 	c.Assert(err, checker.IsNil, check.Commentf(out))
 
 	// first batch
@@ -204,7 +195,7 @@ func (s *DockerSwarmSuite) TestAPISwarmServicesUpdateStartFirst(c *check.C) {
 	// service image at start
 	image1 := "busybox:latest"
 	// target image in update
-	image2 := "testhealth:latest"
+	image2 := "testhealth"
 
 	// service started from this image won't pass health check
 	_, _, err := d.BuildImageWithOut(image2,
@@ -295,7 +286,7 @@ func (s *DockerSwarmSuite) TestAPISwarmServicesUpdateStartFirst(c *check.C) {
 
 	// Roll back to the previous version. This uses the CLI because
 	// rollback is a client-side operation.
-	out, err := d.Cmd("service", "update", "--detach", "--rollback", id)
+	out, err := d.Cmd("service", "update", "--rollback", id)
 	c.Assert(err, checker.IsNil, check.Commentf(out))
 
 	// first batch
@@ -340,7 +331,7 @@ func (s *DockerSwarmSuite) TestAPISwarmServicesFailedUpdate(c *check.C) {
 
 	// Roll back to the previous version. This uses the CLI because
 	// rollback used to be a client-side operation.
-	out, err := daemons[0].Cmd("service", "update", "--detach", "--rollback", id)
+	out, err := daemons[0].Cmd("service", "update", "--rollback", id)
 	c.Assert(err, checker.IsNil, check.Commentf(out))
 
 	waitAndAssert(c, defaultReconciliationTimeout, daemons[0].CheckRunningTaskImages, checker.DeepEquals,
@@ -612,8 +603,7 @@ func (s *DockerSwarmSuite) TestAPISwarmServicesStateReporting(c *check.C) {
 
 // Test plugins deployed via swarm services
 func (s *DockerSwarmSuite) TestAPISwarmServicesPlugin(c *check.C) {
-	testRequires(c, ExperimentalDaemon, DaemonIsLinux, IsAmd64)
-
+	testRequires(c, DaemonIsLinux, IsAmd64)
 	reg := setupRegistry(c, false, "", "")
 	defer reg.Close()
 

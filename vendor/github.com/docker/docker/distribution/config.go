@@ -86,7 +86,7 @@ type ImagePushConfig struct {
 type ImageConfigStore interface {
 	Put([]byte) (digest.Digest, error)
 	Get(digest.Digest) ([]byte, error)
-	RootFSAndOSFromConfig([]byte) (*image.RootFS, layer.OS, error)
+	RootFSAndPlatformFromConfig([]byte) (*image.RootFS, layer.Platform, error)
 }
 
 // PushLayerProvider provides layers to be pushed by ChainID.
@@ -112,7 +112,7 @@ type RootFSDownloadManager interface {
 	// returns the final rootfs.
 	// Given progress output to track download progress
 	// Returns function to release download resources
-	Download(ctx context.Context, initialRootFS image.RootFS, os layer.OS, layers []xfer.DownloadDescriptor, progressOutput progress.Output) (image.RootFS, func(), error)
+	Download(ctx context.Context, initialRootFS image.RootFS, platform layer.Platform, layers []xfer.DownloadDescriptor, progressOutput progress.Output) (image.RootFS, func(), error)
 }
 
 type imageConfigStore struct {
@@ -140,7 +140,7 @@ func (s *imageConfigStore) Get(d digest.Digest) ([]byte, error) {
 	return img.RawJSON(), nil
 }
 
-func (s *imageConfigStore) RootFSAndOSFromConfig(c []byte) (*image.RootFS, layer.OS, error) {
+func (s *imageConfigStore) RootFSAndPlatformFromConfig(c []byte) (*image.RootFS, layer.Platform, error) {
 	var unmarshalledConfig image.Image
 	if err := json.Unmarshal(c, &unmarshalledConfig); err != nil {
 		return nil, "", err
@@ -154,11 +154,11 @@ func (s *imageConfigStore) RootFSAndOSFromConfig(c []byte) (*image.RootFS, layer
 		return nil, "", fmt.Errorf("image operating system %q cannot be used on this platform", unmarshalledConfig.OS)
 	}
 
-	os := ""
+	platform := ""
 	if runtime.GOOS == "windows" {
-		os = unmarshalledConfig.OS
+		platform = unmarshalledConfig.OS
 	}
-	return unmarshalledConfig.RootFS, layer.OS(os), nil
+	return unmarshalledConfig.RootFS, layer.Platform(platform), nil
 }
 
 type storeLayerProvider struct {

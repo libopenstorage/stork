@@ -1,4 +1,4 @@
-// +build !exclude_graphdriver_devicemapper,!static_build,linux
+// +build !exclude_graphdriver_devicemapper,linux
 
 package register
 

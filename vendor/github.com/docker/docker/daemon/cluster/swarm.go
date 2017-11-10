@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	apierrors "github.com/docker/docker/api/errors"
 	apitypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	types "github.com/docker/docker/api/types/swarm"
@@ -26,13 +27,9 @@ func (c *Cluster) Init(req types.InitRequest) (string, error) {
 	defer c.controlMutex.Unlock()
 	if c.nr != nil {
 		if req.ForceNewCluster {
-
 			// Take c.mu temporarily to wait for presently running
 			// API handlers to finish before shutting down the node.
 			c.mu.Lock()
-			if !c.nr.nodeState.IsManager() {
-				return "", errSwarmNotManager
-			}
 			c.mu.Unlock()
 
 			if err := c.nr.Stop(); err != nil {
@@ -44,7 +41,7 @@ func (c *Cluster) Init(req types.InitRequest) (string, error) {
 	}
 
 	if err := validateAndSanitizeInitRequest(&req); err != nil {
-		return "", validationError{err}
+		return "", apierrors.NewBadRequestError(err)
 	}
 
 	listenHost, listenPort, err := resolveListenAddr(req.ListenAddr)
@@ -135,12 +132,12 @@ func (c *Cluster) Join(req types.JoinRequest) error {
 	c.mu.Lock()
 	if c.nr != nil {
 		c.mu.Unlock()
-		return errors.WithStack(errSwarmExists)
+		return errSwarmExists
 	}
 	c.mu.Unlock()
 
 	if err := validateAndSanitizeJoinRequest(&req); err != nil {
-		return validationError{err}
+		return apierrors.NewBadRequestError(err)
 	}
 
 	listenHost, listenPort, err := resolveListenAddr(req.ListenAddr)
@@ -225,7 +222,7 @@ func (c *Cluster) Update(version uint64, spec types.Spec, flags types.UpdateFlag
 		// will be used to swarmkit.
 		clusterSpec, err := convert.SwarmSpecToGRPC(spec)
 		if err != nil {
-			return convertError{err}
+			return apierrors.NewBadRequestError(err)
 		}
 
 		_, err = state.controlClient.UpdateCluster(
@@ -287,7 +284,7 @@ func (c *Cluster) UnlockSwarm(req types.UnlockRequest) error {
 	} else {
 		// when manager is active, return an error of "not locked"
 		c.mu.RUnlock()
-		return notLockedError{}
+		return errors.New("swarm is not locked")
 	}
 
 	// only when swarm is locked, code running reaches here
@@ -296,7 +293,7 @@ func (c *Cluster) UnlockSwarm(req types.UnlockRequest) error {
 
 	key, err := encryption.ParseHumanReadableKey(req.UnlockKey)
 	if err != nil {
-		return validationError{err}
+		return err
 	}
 
 	config := nr.config
@@ -315,9 +312,9 @@ func (c *Cluster) UnlockSwarm(req types.UnlockRequest) error {
 
 	if err := <-nr.Ready(); err != nil {
 		if errors.Cause(err) == errSwarmLocked {
-			return invalidUnlockKey{}
+			return errors.New("swarm could not be unlocked: invalid key provided")
 		}
-		return errors.Errorf("swarm component could not be started: %v", err)
+		return fmt.Errorf("swarm component could not be started: %v", err)
 	}
 	return nil
 }
@@ -331,7 +328,7 @@ func (c *Cluster) Leave(force bool) error {
 	nr := c.nr
 	if nr == nil {
 		c.mu.Unlock()
-		return errors.WithStack(errNoSwarm)
+		return errNoSwarm
 	}
 
 	state := c.currentNodeState()
@@ -340,7 +337,7 @@ func (c *Cluster) Leave(force bool) error {
 
 	if errors.Cause(state.err) == errSwarmLocked && !force {
 		// leave a locked swarm without --force is not allowed
-		return errors.WithStack(notAvailableError("Swarm is encrypted and locked. Please unlock it first or use `--force` to ignore this message."))
+		return errors.New("Swarm is encrypted and locked. Please unlock it first or use `--force` to ignore this message.")
 	}
 
 	if state.IsManager() && !force {
@@ -351,7 +348,7 @@ func (c *Cluster) Leave(force bool) error {
 				if active && removingManagerCausesLossOfQuorum(reachable, unreachable) {
 					if isLastManager(reachable, unreachable) {
 						msg += "Removing the last manager erases all current state of the swarm. Use `--force` to ignore this message. "
-						return errors.WithStack(notAvailableError(msg))
+						return errors.New(msg)
 					}
 					msg += fmt.Sprintf("Removing this node leaves %v managers out of %v. Without a Raft quorum your swarm will be inaccessible. ", reachable-1, reachable+unreachable)
 				}
@@ -361,7 +358,7 @@ func (c *Cluster) Leave(force bool) error {
 		}
 
 		msg += "The only way to restore a swarm that has lost consensus is to reinitialize it with `--force-new-cluster`. Use `--force` to suppress this message."
-		return errors.WithStack(notAvailableError(msg))
+		return errors.New(msg)
 	}
 	// release readers in here
 	if err := nr.Stop(); err != nil {

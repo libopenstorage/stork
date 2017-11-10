@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 set -e
 set -x
 
@@ -20,7 +20,7 @@ RUNC_BUILDTAGS="${RUNC_BUILDTAGS:-"seccomp apparmor selinux"}"
 
 install_runc() {
 	echo "Install runc version $RUNC_COMMIT"
-	git clone https://github.com/opencontainers/runc.git "$GOPATH/src/github.com/opencontainers/runc"
+	git clone https://github.com/docker/runc.git "$GOPATH/src/github.com/opencontainers/runc"
 	cd "$GOPATH/src/github.com/opencontainers/runc"
 	git checkout -q "$RUNC_COMMIT"
 	make BUILDTAGS="$RUNC_BUILDTAGS" $1
@@ -32,10 +32,7 @@ install_containerd() {
 	git clone https://github.com/containerd/containerd.git "$GOPATH/src/github.com/containerd/containerd"
 	cd "$GOPATH/src/github.com/containerd/containerd"
 	git checkout -q "$CONTAINERD_COMMIT"
-	(
-		export GOPATH
-		make $1
-	)
+	make $1
 	cp bin/containerd /usr/local/bin/docker-containerd
 	cp bin/containerd-shim /usr/local/bin/docker-containerd-shim
 	cp bin/ctr /usr/local/bin/docker-containerd-ctr
@@ -50,41 +47,11 @@ install_proxy() {
 }
 
 install_dockercli() {
-	DOCKERCLI_CHANNEL=${DOCKERCLI_CHANNEL:-edge}
-	DOCKERCLI_VERSION=${DOCKERCLI_VERSION:-17.06.0-ce}
-	echo "Install docker/cli version $DOCKERCLI_VERSION from $DOCKERCLI_CHANNEL"
-
-	arch=$(uname -m)
-	# No official release of these platforms
-	if [[ "$arch" != "x86_64" ]] && [[ "$arch" != "s390x" ]]; then
-		build_dockercli
-		return
-	fi
-
-	url=https://download.docker.com/linux/static
-	curl -Ls $url/$DOCKERCLI_CHANNEL/$arch/docker-$DOCKERCLI_VERSION.tgz | \
-	tar -xz docker/docker
-	mv docker/docker /usr/local/bin/
-	rmdir docker
-}
-
-build_dockercli() {
-	DOCKERCLI_VERSION=${DOCKERCLI_VERSION:-17.06.0-ce}
-	git clone https://github.com/docker/docker-ce "$GOPATH/tmp/docker-ce"
-	cd "$GOPATH/tmp/docker-ce"
-	git checkout -q "v$DOCKERCLI_VERSION"
-	mkdir -p "$GOPATH/src/github.com/docker"
-	mv components/cli "$GOPATH/src/github.com/docker/cli"
+	echo "Install docker/cli version $DOCKERCLI_COMMIT"
+	git clone "$DOCKERCLI_REPO" "$GOPATH/src/github.com/docker/cli"
+	cd "$GOPATH/src/github.com/docker/cli"
+	git checkout -q "$DOCKERCLI_COMMIT"
 	go build -o /usr/local/bin/docker github.com/docker/cli/cmd/docker
-}
-
-install_gometalinter() {
-	echo "Installing gometalinter version $GOMETALINTER_COMMIT"
-	go get -d github.com/alecthomas/gometalinter
-	cd "$GOPATH/src/github.com/alecthomas/gometalinter"
-	git checkout -q "$GOMETALINTER_COMMIT"
-	go build -o /usr/local/bin/gometalinter github.com/alecthomas/gometalinter
-	GOBIN=/usr/local/bin gometalinter --install
 }
 
 for prog in "$@"
@@ -106,15 +73,11 @@ do
 			;;
 
 		containerd)
-			install_containerd
+			install_containerd static
 			;;
 
 		containerd-dynamic)
 			install_containerd
-			;;
-
-		gometalinter)
-			install_gometalinter
 			;;
 
 		tini)
@@ -151,7 +114,7 @@ do
 			;;
 
 		*)
-			echo echo "Usage: $0 [tomlv|runc|runc-dynamic|containerd|containerd-dynamic|tini|proxy|proxy-dynamic|vndr|dockercli|gometalinter]"
+			echo echo "Usage: $0 [tomlv|runc|runc-dynamic|containerd|containerd-dynamic|tini|proxy|proxy-dynamic|vndr|dockercli]"
 			exit 1
 
 	esac

@@ -2,10 +2,12 @@ package daemon
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"time"
 
+	"github.com/docker/docker/api/errors"
 	containerpkg "github.com/docker/docker/container"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,14 +23,15 @@ func (daemon *Daemon) ContainerStop(name string, seconds *int) error {
 		return err
 	}
 	if !container.IsRunning() {
-		return containerNotModifiedError{running: false}
+		err := fmt.Errorf("Container %s is already stopped", name)
+		return errors.NewErrorWithStatusCode(err, http.StatusNotModified)
 	}
 	if seconds == nil {
 		stopTimeout := container.StopTimeout()
 		seconds = &stopTimeout
 	}
 	if err := daemon.containerStop(container, *seconds); err != nil {
-		return errors.Wrapf(systemError{err}, "cannot stop container: %s", name)
+		return fmt.Errorf("Cannot stop container %s: %v", name, err)
 	}
 	return nil
 }
@@ -78,7 +81,7 @@ func (daemon *Daemon) containerStop(container *containerpkg.Container, seconds i
 		// 3. If it doesn't, then send SIGKILL
 		if err := daemon.Kill(container); err != nil {
 			// Wait without a timeout, ignore result.
-			<-container.Wait(context.Background(), containerpkg.WaitConditionNotRunning)
+			_ = <-container.Wait(context.Background(), containerpkg.WaitConditionNotRunning)
 			logrus.Warn(err) // Don't return error because we only care that container is stopped, not what function stopped it
 		}
 	}

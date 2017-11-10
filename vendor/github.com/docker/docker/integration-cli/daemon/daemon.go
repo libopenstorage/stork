@@ -14,26 +14,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/client"
 	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/integration-cli/request"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/stringid"
+	"github.com/docker/docker/pkg/testutil"
+	icmd "github.com/docker/docker/pkg/testutil/cmd"
 	"github.com/docker/go-connections/sockets"
 	"github.com/docker/go-connections/tlsconfig"
 	"github.com/go-check/check"
-	"github.com/gotestyourself/gotestyourself/icmd"
 	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 )
 
 type testingT interface {
-	require.TestingT
 	logT
 	Fatalf(string, ...interface{})
 }
@@ -222,7 +217,7 @@ func (d *Daemon) StartWithLogFile(out *os.File, providedArgs ...string) error {
 		return errors.Wrapf(err, "[%s] could not find docker binary in $PATH", d.id)
 	}
 	args := append(d.GlobalFlags,
-		"--containerd", "/var/run/docker/containerd/docker-containerd.sock",
+		"--containerd", "/var/run/docker/libcontainerd/docker-containerd.sock",
 		"--data-root", d.Root,
 		"--exec-root", d.execRoot,
 		"--pidfile", fmt.Sprintf("%s/docker.pid", d.Folder),
@@ -330,7 +325,9 @@ func (d *Daemon) StartWithLogFile(out *os.File, providedArgs ...string) error {
 // then save the busybox image from the main daemon and load it into this Daemon instance.
 func (d *Daemon) StartWithBusybox(t testingT, arg ...string) {
 	d.Start(t, arg...)
-	d.LoadBusybox(t)
+	if err := d.LoadBusybox(); err != nil {
+		t.Fatalf("Error loading busybox image to current daemon: %s\n%v", d.id, err)
+	}
 }
 
 // Kill will send a SIGKILL to the daemon
@@ -457,8 +454,6 @@ out2:
 		return err
 	}
 
-	d.cmd.Wait()
-
 	if err := os.Remove(fmt.Sprintf("%s/docker.pid", d.Folder)); err != nil {
 		return err
 	}
@@ -494,24 +489,27 @@ func (d *Daemon) handleUserns() {
 	}
 }
 
-// LoadBusybox image into the daemon
-func (d *Daemon) LoadBusybox(t testingT) {
-	clientHost, err := client.NewEnvClient()
-	require.NoError(t, err, "failed to create client")
-	defer clientHost.Close()
-
-	ctx := context.Background()
-	reader, err := clientHost.ImageSave(ctx, []string{"busybox:latest"})
-	require.NoError(t, err, "failed to download busybox")
-	defer reader.Close()
-
-	client, err := d.NewClient()
-	require.NoError(t, err, "failed to create client")
-	defer client.Close()
-
-	resp, err := client.ImageLoad(ctx, reader, true)
-	require.NoError(t, err, "failed to load busybox")
-	defer resp.Body.Close()
+// LoadBusybox will load the stored busybox into a newly started daemon
+func (d *Daemon) LoadBusybox() error {
+	bb := filepath.Join(d.Folder, "busybox.tar")
+	if _, err := os.Stat(bb); err != nil {
+		if !os.IsNotExist(err) {
+			return errors.Errorf("unexpected error on busybox.tar stat: %v", err)
+		}
+		// saving busybox image from main daemon
+		if out, err := exec.Command(d.dockerBinary, "save", "--output", bb, "busybox:latest").CombinedOutput(); err != nil {
+			imagesOut, _ := exec.Command(d.dockerBinary, "images", "--format", "{{ .Repository }}:{{ .Tag }}").CombinedOutput()
+			return errors.Errorf("could not save busybox image: %s\n%s", string(out), strings.TrimSpace(string(imagesOut)))
+		}
+	}
+	// loading busybox image to this daemon
+	if out, err := d.Cmd("load", "--input", bb); err != nil {
+		return errors.Errorf("could not load busybox image: %s", out)
+	}
+	if err := os.Remove(bb); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *Daemon) queryRootDir() (string, error) {
@@ -547,7 +545,7 @@ func (d *Daemon) queryRootDir() (string, error) {
 	}
 	var b []byte
 	var i Info
-	b, err = request.ReadBody(body)
+	b, err = testutil.ReadBody(body)
 	if err == nil && resp.StatusCode == http.StatusOK {
 		// read the docker root dir
 		if err = json.Unmarshal(b, &i); err == nil {
@@ -572,13 +570,20 @@ func (d *Daemon) WaitRun(contID string) error {
 	return WaitInspectWithArgs(d.dockerBinary, contID, "{{.State.Running}}", "true", 10*time.Second, args...)
 }
 
-// Info returns the info struct for this daemon
-func (d *Daemon) Info(t require.TestingT) types.Info {
-	apiclient, err := request.NewClientForHost(d.Sock())
-	require.NoError(t, err)
-	info, err := apiclient.Info(context.Background())
-	require.NoError(t, err)
-	return info
+// GetBaseDeviceSize returns the base device size of the daemon
+func (d *Daemon) GetBaseDeviceSize(c *check.C) int64 {
+	infoCmdOutput, _, err := testutil.RunCommandPipelineWithOutput(
+		exec.Command(d.dockerBinary, "-H", d.Sock(), "info"),
+		exec.Command("grep", "Base Device Size"),
+	)
+	c.Assert(err, checker.IsNil)
+	basesizeSlice := strings.Split(infoCmdOutput, ":")
+	basesize := strings.Trim(basesizeSlice[1], " ")
+	basesize = strings.Trim(basesize, "\n")[:len(basesize)-3]
+	basesizeFloat, err := strconv.ParseFloat(strings.Trim(basesize, " "), 64)
+	c.Assert(err, checker.IsNil)
+	basesizeBytes := int64(basesizeFloat) * (1024 * 1024 * 1024)
+	return basesizeBytes
 }
 
 // Cmd executes a docker CLI command against this daemon.
@@ -615,7 +620,7 @@ func (d *Daemon) SockRequest(method, endpoint string, data interface{}) (int, []
 	if err != nil {
 		return -1, nil, err
 	}
-	b, err := request.ReadBody(body)
+	b, err := testutil.ReadBody(body)
 	return res.StatusCode, b, err
 }
 
@@ -750,16 +755,6 @@ func (d *Daemon) ReloadConfig() error {
 		return errors.New("timeout waiting for daemon reload event")
 	}
 	return nil
-}
-
-// NewClient creates new client based on daemon's socket path
-func (d *Daemon) NewClient() (*client.Client, error) {
-	httpClient, err := request.NewHTTPClient(d.Sock())
-	if err != nil {
-		return nil, err
-	}
-
-	return client.NewClient(d.Sock(), api.DefaultVersion, httpClient, nil)
 }
 
 // WaitInspectWithArgs waits for the specified expression to be equals to the specified expected string in the given time.

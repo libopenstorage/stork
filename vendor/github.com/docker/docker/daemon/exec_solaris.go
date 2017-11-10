@@ -3,9 +3,9 @@ package daemon
 import (
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/exec"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/docker/docker/libcontainerd"
 )
 
-func (daemon *Daemon) execSetPlatformOpt(_ *container.Container, _ *exec.Config, _ *specs.Process) error {
+func execSetPlatformOpt(c *container.Container, ec *exec.Config, p *libcontainerd.Process) error {
 	return nil
 }
