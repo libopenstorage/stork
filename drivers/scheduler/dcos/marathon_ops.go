@@ -1,6 +1,8 @@
 package dcos
 
 import (
+	"net/url"
+	"os"
 	"regexp"
 	"sync"
 	"time"
@@ -9,8 +11,13 @@ import (
 	"github.com/portworx/sched-ops/task"
 )
 
-// Ops is an interface to perform Marathon related operations
-type Ops interface {
+const (
+	defaultMarathonHostname = "marathon.mesos"
+	defaultMarathonPort     = "8080"
+)
+
+// MarathonOps is an interface to perform Marathon related operations
+type MarathonOps interface {
 	ApplicationOps
 }
 
@@ -27,30 +34,38 @@ type ApplicationOps interface {
 }
 
 var (
-	instance Ops
-	once     sync.Once
+	marathonInstance MarathonOps
+	marathonOnce     sync.Once
 )
 
 type marathonOps struct {
 	client marathon.Marathon
 }
 
-// MarathonClient returns a singleton instance of Marathon Ops type
-func MarathonClient() Ops {
-	once.Do(func() {
-		instance = &marathonOps{}
+// MarathonClient returns a singleton instance of MarathonOps type
+func MarathonClient() MarathonOps {
+	marathonOnce.Do(func() {
+		marathonInstance = &marathonOps{}
 	})
-	return instance
+	return marathonInstance
 }
 
 // Initialize Marathon client if not initialized
 func (m *marathonOps) initMarathonClient() error {
 	if m.client == nil {
-		// TODO: Use environment variable to get the master node ip/marathon ip
-		// Instead of talking to marathon directly use http://dcos/marathon/..
-		marathonURL := "http://192.168.65.90:8080"
+		hostname := os.Getenv("MARATHON_HOSTNAME")
+		if len(hostname) == 0 {
+			hostname = defaultMarathonHostname
+		}
+
+		port := os.Getenv("MARATHON_PORT")
+		if len(port) == 0 {
+			port = defaultMarathonPort
+		}
+
 		config := marathon.NewDefaultConfig()
-		config.URL = marathonURL
+		marathonURL := &url.URL{Scheme: "http", Host: hostname + ":" + port}
+		config.URL = marathonURL.String()
 
 		client, err := marathon.NewClient(config)
 		if err != nil {

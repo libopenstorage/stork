@@ -25,18 +25,21 @@ type dcos struct {
 }
 
 func (d *dcos) Init(specDir string, nodeDriver string) error {
-	nodes, _ := getNodes()
+	privateAgents, err := MesosClient().GetPrivateAgentNodes()
+	if err != nil {
+		return err
+	}
 
-	for _, n := range nodes {
-		if err := d.IsNodeReady(n); err != nil {
+	for _, n := range privateAgents {
+		newNode := d.parseMesosNode(n)
+		if err := d.IsNodeReady(newNode); err != nil {
 			return err
 		}
-		if err := node.AddNode(n); err != nil {
+		if err := node.AddNode(newNode); err != nil {
 			return err
 		}
 	}
 
-	var err error
 	d.specFactory, err = spec.NewFactory(specDir, d)
 	if err != nil {
 		return err
@@ -45,25 +48,12 @@ func (d *dcos) Init(specDir string, nodeDriver string) error {
 	return nil
 }
 
-// TODO: Remove hardcoded nodes and query mesos to get the nodes from the cluster
-func getNodes() ([]node.Node, error) {
-	var nodes []node.Node
-	nodes = append(nodes, node.Node{
-		Name:      "a1.dcos",
-		Addresses: []string{"192.168.65.111"},
+func (d *dcos) parseMesosNode(n AgentNode) node.Node {
+	return node.Node{
+		Name:      n.ID,
+		Addresses: []string{n.Hostname},
 		Type:      node.TypeWorker,
-	})
-	nodes = append(nodes, node.Node{
-		Name:      "a2.dcos",
-		Addresses: []string{"192.168.65.121"},
-		Type:      node.TypeWorker,
-	})
-	nodes = append(nodes, node.Node{
-		Name:      "a3.dcos",
-		Addresses: []string{"192.168.65.131"},
-		Type:      node.TypeWorker,
-	})
-	return nodes, nil
+	}
 }
 
 func (d *dcos) String() string {
