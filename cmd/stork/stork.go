@@ -61,8 +61,8 @@ func run(c *cli.Context) {
 		Driver: d,
 	}
 
-	if err = extender.Init(); err != nil {
-		log.Fatalf("Error initializing scheduler extender: %v", err)
+	if err = extender.Start(); err != nil {
+		log.Fatalf("Error starting scheduler extender: %v", err)
 		os.Exit(-1)
 	}
 
@@ -72,6 +72,9 @@ func run(c *cli.Context) {
 		select {
 		case <-signalChan:
 			log.Printf("Shutdown signal received, exiting...")
+			if err := extender.Stop(); err != nil {
+				log.Warnf("Error stopping extender: %v", err)
+			}
 			os.Exit(0)
 		}
 	}
