@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"time"
 
-	dockerclient "github.com/fsouza/go-dockerclient"
 	"github.com/libopenstorage/openstorage/api"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
@@ -27,7 +26,6 @@ const (
 )
 
 type portworx struct {
-	hostConfig      *dockerclient.HostConfig
 	clusterManager  cluster.Cluster
 	volDriver       volume.VolumeDriver
 	schedOps        schedops.Driver
@@ -109,7 +107,7 @@ func (d *portworx) CleanupVolume(name string) error {
 		if v.Locator.Name == name {
 			// First unmount this volume at all mount paths...
 			for _, path := range v.AttachPath {
-				if err = d.getVolDriver().Unmount(v.Id, path); err != nil {
+				if err = d.getVolDriver().Unmount(v.Id, path, nil); err != nil {
 					err = fmt.Errorf(
 						"error while unmounting %v at %v because of: %v",
 						v.Id,
@@ -121,7 +119,7 @@ func (d *portworx) CleanupVolume(name string) error {
 				}
 			}
 
-			if err = d.getVolDriver().Detach(v.Id, false); err != nil {
+			if err = d.getVolDriver().Detach(v.Id, nil); err != nil {
 				err = fmt.Errorf(
 					"error while detaching %v because of: %v",
 					v.Id,
@@ -199,15 +197,6 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		return nil
 	}
 
-	// Size
-	actualSizeStr := fmt.Sprintf("%d", vol.Spec.Size)
-	if params["size"] != actualSizeStr { // TODO this will fail for docker. Current focus on k8s.
-		return &ErrFailedToInspectVolume{
-			ID:    name,
-			Cause: fmt.Sprintf("Volume has invalid size. Expected:%v Actual:%v", params["size"], actualSizeStr),
-		}
-	}
-
 	// Labels
 	var pxNodes []api.Node
 	for _, rs := range vol.ReplicaSets {
@@ -247,64 +236,66 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		switch k {
 		case api.SpecNodes:
 			if !reflect.DeepEqual(v, vol.Spec.ReplicaSet.Nodes) {
-				return errFailedToInspectVolme(name, k, v, vol.Spec.ReplicaSet.Nodes)
+				return errFailedToInspectVolume(name, k, v, vol.Spec.ReplicaSet.Nodes)
 			}
 		case api.SpecParent:
 			if v != vol.Source.Parent {
-				return errFailedToInspectVolme(name, k, v, vol.Source.Parent)
+				return errFailedToInspectVolume(name, k, v, vol.Source.Parent)
 			}
 		case api.SpecEphemeral:
 			if requestedSpec.Ephemeral != vol.Spec.Ephemeral {
-				return errFailedToInspectVolme(name, k, requestedSpec.Ephemeral, vol.Spec.Ephemeral)
+				return errFailedToInspectVolume(name, k, requestedSpec.Ephemeral, vol.Spec.Ephemeral)
 			}
 		case api.SpecFilesystem:
 			if requestedSpec.Format != vol.Spec.Format {
-				return errFailedToInspectVolme(name, k, requestedSpec.Format, vol.Spec.Format)
+				return errFailedToInspectVolume(name, k, requestedSpec.Format, vol.Spec.Format)
 			}
 		case api.SpecBlockSize:
 			if requestedSpec.BlockSize != vol.Spec.BlockSize {
-				return errFailedToInspectVolme(name, k, requestedSpec.BlockSize, vol.Spec.BlockSize)
+				return errFailedToInspectVolume(name, k, requestedSpec.BlockSize, vol.Spec.BlockSize)
 			}
 		case api.SpecHaLevel:
 			if requestedSpec.HaLevel != vol.Spec.HaLevel {
-				return errFailedToInspectVolme(name, k, requestedSpec.HaLevel, vol.Spec.HaLevel)
+				return errFailedToInspectVolume(name, k, requestedSpec.HaLevel, vol.Spec.HaLevel)
 			}
 		case api.SpecPriorityAlias:
 			// Since IO priority isn't guaranteed, we aren't validating it here.
 		case api.SpecSnapshotInterval:
 			if requestedSpec.SnapshotInterval != vol.Spec.SnapshotInterval {
-				return errFailedToInspectVolme(name, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)
+				return errFailedToInspectVolume(name, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)
 			}
 		case api.SpecAggregationLevel:
 			if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
-				return errFailedToInspectVolme(name, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
+				return errFailedToInspectVolume(name, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
 			}
 		case api.SpecShared:
 			if requestedSpec.Shared != vol.Spec.Shared {
-				return errFailedToInspectVolme(name, k, requestedSpec.Shared, vol.Spec.Shared)
+				return errFailedToInspectVolume(name, k, requestedSpec.Shared, vol.Spec.Shared)
 			}
 		case api.SpecSticky:
 			if requestedSpec.Sticky != vol.Spec.Sticky {
-				return errFailedToInspectVolme(name, k, requestedSpec.Sticky, vol.Spec.Sticky)
+				return errFailedToInspectVolume(name, k, requestedSpec.Sticky, vol.Spec.Sticky)
 			}
 		case api.SpecGroup:
 			if requestedSpec.Group != vol.Spec.Group {
-				return errFailedToInspectVolme(name, k, requestedSpec.Group, vol.Spec.Group)
+				return errFailedToInspectVolume(name, k, requestedSpec.Group, vol.Spec.Group)
 			}
 		case api.SpecGroupEnforce:
 			if requestedSpec.GroupEnforced != vol.Spec.GroupEnforced {
-				return errFailedToInspectVolme(name, k, requestedSpec.GroupEnforced, vol.Spec.GroupEnforced)
+				return errFailedToInspectVolume(name, k, requestedSpec.GroupEnforced, vol.Spec.GroupEnforced)
 			}
 		case api.SpecLabels:
 			if !reflect.DeepEqual(requestedLocator.VolumeLabels, vol.Locator.VolumeLabels) {
-				return errFailedToInspectVolme(name, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+				return errFailedToInspectVolume(name, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
 			}
 		case api.SpecIoProfile:
 			if requestedSpec.IoProfile != vol.Spec.IoProfile {
-				return errFailedToInspectVolme(name, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
+				return errFailedToInspectVolume(name, k, requestedSpec.IoProfile, vol.Spec.IoProfile)
 			}
 		case api.SpecSize:
-			// pass, we don't validate size here
+			if requestedSpec.Size != vol.Spec.Size {
+				return errFailedToInspectVolume(name, k, requestedSpec.Size, vol.Spec.Size)
+			}
 		default:
 			logrus.Infof("Warning: Encountered unhandled custom param: %v -> %v", k, v)
 		}
@@ -346,6 +337,14 @@ func (d *portworx) ValidateVolumeCleanup() error {
 
 func (d *portworx) StopDriver(n node.Node) error {
 	return d.schedOps.DisableOnNode(n)
+}
+
+func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
+	ok, volParams, volName := spec.NewSpecHandler().SpecOptsFromString(params)
+	if !ok {
+		return params, nil, fmt.Errorf("Unable to parse the volume options")
+	}
+	return volName, volParams, nil
 }
 
 func (d *portworx) getClusterOnStart() (*api.Cluster, error) {

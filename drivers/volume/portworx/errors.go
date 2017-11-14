@@ -18,7 +18,7 @@ func (e *ErrFailedToInspectVolume) Error() string {
 	return fmt.Sprintf("Failed to inspect volume: %v due to err: %v", e.ID, e.Cause)
 }
 
-func errFailedToInspectVolme(ID, key string, expected, actual interface{}) error {
+func errFailedToInspectVolume(ID, key string, expected, actual interface{}) error {
 	return &ErrFailedToInspectVolume{
 		ID: ID,
 		Cause: fmt.Sprintf("volume has invalid %v value. Expected:%#v Actual:%#v",

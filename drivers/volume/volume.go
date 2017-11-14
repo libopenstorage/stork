@@ -47,6 +47,9 @@ type Driver interface {
 
 	// WaitForNode must wait till the volume driver becomes usable on a given node
 	WaitForNode(n node.Node) error
+
+	// ExtractVolumeInfo extracts the volume params from the given string
+	ExtractVolumeInfo(params string) (string, map[string]string, error)
 }
 
 var (

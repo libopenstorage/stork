@@ -37,7 +37,7 @@ func (d *dcosSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 }
 
 func (d *dcosSchedOps) GetVolumeName(vol *volume.Volume) string {
-	return vol.ID
+	return vol.Name
 }
 
 func (d *dcosSchedOps) ValidateVolumeCleanup(n node.Driver) error {

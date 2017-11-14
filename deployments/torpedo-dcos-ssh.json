@@ -10,6 +10,13 @@
         "cmd": "ginkgo --slowSpecThreshold 180 -v bin/basic.test -- --spec-dir ../drivers/scheduler/dcos/specs --scheduler dcos",
         "env": {
             "TORPEDO_SSH_PASSWORD": "root"
-        }
+        },
+        "volumes": [
+            {
+                "containerPath": "/var/run/docker.sock",
+                "hostPath": "/var/run/docker.sock",
+                "mode": "RW"
+            }
+        ]
     }
 }

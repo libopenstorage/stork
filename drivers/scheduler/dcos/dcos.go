@@ -6,13 +6,17 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
+	docker "github.com/docker/docker/client"
 	marathon "github.com/gambol99/go-marathon"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -21,10 +25,12 @@ const (
 )
 
 type dcos struct {
-	specFactory *spec.Factory
+	dockerClient  *docker.Client
+	specFactory   *spec.Factory
+	volDriverName string
 }
 
-func (d *dcos) Init(specDir string, nodeDriver string) error {
+func (d *dcos) Init(specDir, volDriver, nodeDriver string) error {
 	privateAgents, err := MesosClient().GetPrivateAgentNodes()
 	if err != nil {
 		return err
@@ -45,6 +51,12 @@ func (d *dcos) Init(specDir string, nodeDriver string) error {
 		return err
 	}
 
+	d.dockerClient, err = docker.NewEnvClient()
+	if err != nil {
+		return err
+	}
+
+	d.volDriverName = volDriver
 	return nil
 }
 
@@ -120,7 +132,7 @@ func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([
 			if application, ok := spec.(*marathon.Application); ok {
 				obj, err := MarathonClient().CreateApplication(application)
 				if err != nil {
-					return nil, &ErrFailedToScheduleApp{
+					return nil, &scheduler.ErrFailedToScheduleApp{
 						App:   app,
 						Cause: err.Error(),
 					}
@@ -149,7 +161,7 @@ func (d *dcos) WaitForRunning(ctx *scheduler.Context) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().WaitForApplicationStart(obj.ID); err != nil {
-				return &ErrFailedToValidateApp{
+				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Application: %v. Err: %v", obj.ID, err),
 				}
@@ -164,7 +176,7 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().DeleteApplication(obj.ID); err != nil {
-				return &ErrFailedToDestroyApp{
+				return &scheduler.ErrFailedToDestroyApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Application: %v. Err: %v", obj.ID, err),
 				}
@@ -191,7 +203,7 @@ func (d *dcos) WaitForDestroy(ctx *scheduler.Context) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().WaitForApplicationTermination(obj.ID); err != nil {
-				return &ErrFailedToValidateAppDestroy{
+				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Application: %v. Err: %v", obj.ID, err),
 				}
@@ -208,24 +220,91 @@ func (d *dcos) DeleteTasks(ctx *scheduler.Context) error {
 	return nil
 }
 
-func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]string, error) {
-	// TODO: Implement this method
-	return nil, nil
-}
-
 func (d *dcos) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string]string, error) {
-	// TODO: Implement this method
-	return nil, nil
+	result := make(map[string]map[string]string)
+	populateParamsFunc := func(volName string, volParams map[string]string) error {
+		result[volName] = volParams
+		return nil
+	}
+
+	if err := d.volumeOperation(ctx, populateParamsFunc); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (d *dcos) InspectVolumes(ctx *scheduler.Context) error {
-	// TODO: Implement this method
-	return nil
+	inspectDockerVolumeFunc := func(volName string, _ map[string]string) error {
+		t := func() (interface{}, error) {
+			return d.dockerClient.VolumeInspect(context.Background(), volName)
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+			return &scheduler.ErrFailedToValidateStorage{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("Failed to inspect docker volume: %v. Err: %v", volName, err),
+			}
+		}
+		return nil
+	}
+
+	return d.volumeOperation(ctx, inspectDockerVolumeFunc)
 }
 
 func (d *dcos) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
-	// TODO: Implement this method
-	return nil, nil
+	var vols []*volume.Volume
+
+	deleteDockerVolumeFunc := func(volName string, _ map[string]string) error {
+		vols = append(vols, &volume.Volume{Name: volName})
+		t := func() (interface{}, error) {
+			return nil, d.dockerClient.VolumeRemove(context.Background(), volName, false)
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+			return &scheduler.ErrFailedToDestroyStorage{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("Failed to remove docker volume: %v. Err: %v", volName, err),
+			}
+		}
+		return nil
+	}
+
+	if err := d.volumeOperation(ctx, deleteDockerVolumeFunc); err != nil {
+		return nil, err
+	}
+	return vols, nil
+}
+
+func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string]string) error) error {
+	// DC/OS does not have volume objects like Kubernetes. We get the volume information from
+	// the app spec and get the options parsed from the respective volume driver
+	volDriver, err := volume.Get(d.volDriverName)
+	if err != nil {
+		return err
+	}
+
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*marathon.Application); ok {
+			// TODO: This handles only docker volumes. Implement for UCR/mesos containers
+			params := *obj.Container.Docker.Parameters
+			for _, p := range params {
+				if p.Key == "volume" {
+					volName, volParams, err := volDriver.ExtractVolumeInfo(p.Value)
+					if err != nil {
+						return &scheduler.ErrFailedToGetVolumeParameters{
+							App:   ctx.App,
+							Cause: fmt.Sprintf("Failed to extract volume info: %v. Err: %v", p.Value, err),
+						}
+					}
+					if err := f(volName, volParams); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {

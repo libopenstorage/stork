@@ -57,7 +57,7 @@ var (
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
-	err = Inst().S.Init(Inst().SpecDir, Inst().N.String())
+	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String())

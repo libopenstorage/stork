@@ -36,7 +36,7 @@ type Driver interface {
 	spec.Parser
 
 	// Init initializes the scheduler driver
-	Init(string, string) error
+	Init(string, string, string) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -61,9 +61,6 @@ type Driver interface {
 
 	// DeleteTasks deletes all tasks of the application (not the applicaton)
 	DeleteTasks(*Context) error
-
-	// GetVolumes Returns list of volume IDs using by given context
-	GetVolumes(*Context) ([]string, error)
 
 	// GetVolumeParameters Returns a maps, each item being a volume and it's options
 	GetVolumeParameters(*Context) (map[string]map[string]string, error)

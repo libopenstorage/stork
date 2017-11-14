@@ -1,4 +1,4 @@
-package k8s
+package scheduler
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 )
 
-// ErrNodeNotReady error type when a k8s node is not ready
+// ErrNodeNotReady error type when a node is not ready
 type ErrNodeNotReady struct {
 	// Node is not which is not ready
 	Node node.Node
@@ -57,7 +57,7 @@ func (e *ErrFailedToDestroyStorage) Error() string {
 
 // ErrFailedToValidateStorage error type for failing to validate an app's storage
 type ErrFailedToValidateStorage struct {
-	// App is the app that failed to destroy
+	// App is the app whose storage validation failed
 	App *spec.AppSpec
 	// Cause is the underlying cause of the error
 	Cause string
@@ -127,52 +127,28 @@ func (e *ErrFailedToDeleteTasks) Error() string {
 	return fmt.Sprintf("Failed to delete tasks of app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
-// ErrFailedToGetVolumesForApp error type for failing to get an app's volumes
-type ErrFailedToGetVolumesForApp struct {
-	// App is the app that has volumes we want to get
-	App *spec.AppSpec
-	// Cause is the underlying cause of the error
-	Cause string
-}
-
-func (e *ErrFailedToGetVolumesForApp) Error() string {
-	return fmt.Sprintf("Failed to get volumes for app: %v due to err: %v", e.App.Key, e.Cause)
-}
-
-// ErrFailedToGetVolumesParameters error type for failing to get an app's volume paramters
-type ErrFailedToGetVolumesParameters struct {
+// ErrFailedToGetVolumeParameters error type for failing to get an app's volume paramters
+type ErrFailedToGetVolumeParameters struct {
 	// App is the app for which we failed to get volume parameters
 	App *spec.AppSpec
 	// Cause is the underlying cause of the error
 	Cause string
 }
 
-func (e *ErrFailedToGetVolumesParameters) Error() string {
+func (e *ErrFailedToGetVolumeParameters) Error() string {
 	return fmt.Sprintf("Failed to get volume parameters for app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
-// ErrFailedToGetPvcStatus error type for failing to get the status of a pvc
-type ErrFailedToGetPvcStatus struct {
-	// App whose persistent volume claim status couldn't be obtained
+// ErrFailedToGetStorageStatus error type for failing to get the status of the app's storage
+type ErrFailedToGetStorageStatus struct {
+	// App whose storage status couldn't be obtained
 	App *spec.AppSpec
 	// Cause is the underlying cause of the error
 	Cause string
 }
 
-func (e *ErrFailedToGetPvcStatus) Error() string {
-	return fmt.Sprintf("Failed to get status of pvc: %v due to err: %v", e.App.Key, e.Cause)
-}
-
-// ErrFailedToGetScParams error type for failing to get the parameters of a storage class
-type ErrFailedToGetScParams struct {
-	// App whose storage class params couldn't be obtained
-	App *spec.AppSpec
-	// Cause is the underlying cause of the error
-	Cause string
-}
-
-func (e *ErrFailedToGetScParams) Error() string {
-	return fmt.Sprintf("Failed to get params of storage class: %v due to err: %v", e.App.Key, e.Cause)
+func (e *ErrFailedToGetStorageStatus) Error() string {
+	return fmt.Sprintf("Failed to get storage status for: %v due to err: %v", e.App.Key, e.Cause)
 }
 
 // ErrFailedToDeleteVolumeDirForPod error type for failing to delete volume dir path for pods
