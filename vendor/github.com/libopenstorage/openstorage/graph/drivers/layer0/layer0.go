@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/graph"
+	"github.com/libopenstorage/openstorage/pkg/options"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers"
 )
@@ -195,7 +196,7 @@ func (l *Layer0) create(id, parent string) (string, *Layer0Vol, error) {
 			return id, nil, nil
 		}
 	}
-	err = l.volDriver.Mount(vols[index].Id, mountPath)
+	err = l.volDriver.Mount(vols[index].Id, mountPath, nil)
 	if err != nil {
 		dlog.Errorf("Failed to mount volume %v at path %v",
 			vols[index].Id, mountPath)
@@ -251,9 +252,13 @@ func (l *Layer0) Remove(id string) error {
 				dlog.Warnf("Failed in rename(%v): %v", id, err)
 			}
 			l.Driver.Remove(l.realID(id))
-			err = l.volDriver.Unmount(v.volumeID, v.path)
+
+			opts := make(map[string]string)
+			opts[options.OptionsDeleteAfterUnmount] = "true"
+
+			err = l.volDriver.Unmount(v.volumeID, v.path, opts)
 			if l.volDriver.Type() == api.DriverType_DRIVER_TYPE_BLOCK {
-				_ = l.volDriver.Detach(v.volumeID, false)
+				_ = l.volDriver.Detach(v.volumeID, nil)
 			}
 			err = os.RemoveAll(v.path)
 			delete(l.volumes, v.id)

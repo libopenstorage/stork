@@ -22,6 +22,7 @@ type volumeDriver struct {
 	volume.SnapshotDriver
 	volume.StoreEnumerator
 	volume.StatsDriver
+	volume.QuiesceDriver
 	name        string
 	baseDirPath string
 	provider    Provider
@@ -41,6 +42,7 @@ func newVolumeDriver(
 			kvdb.Instance(),
 		),
 		volume.StatsNotSupported,
+		volume.QuiesceNotSupported,
 		name,
 		baseDirPath,
 		provider,
@@ -96,7 +98,7 @@ func (v *volumeDriver) MountedAt(mountpath string) string {
 	return ""
 }
 
-func (v *volumeDriver) Mount(volumeID string, mountpath string) error {
+func (v *volumeDriver) Mount(volumeID string, mountpath string, options map[string]string) error {
 	volume, err := v.GetVol(volumeID)
 	if err != nil {
 		return err
@@ -131,7 +133,7 @@ func (v *volumeDriver) Mount(volumeID string, mountpath string) error {
 	return conn.MountError
 }
 
-func (v *volumeDriver) Unmount(volumeID string, mountpath string) error {
+func (v *volumeDriver) Unmount(volumeID string, mountpath string, options map[string]string) error {
 	volume, err := v.GetVol(volumeID)
 	if err != nil {
 		return err

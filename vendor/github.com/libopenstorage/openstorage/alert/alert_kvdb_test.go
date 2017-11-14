@@ -1,17 +1,17 @@
 package alert
 
 import (
-	"fmt"
-	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/kvdb"
-	"github.com/portworx/kvdb/mem"
-	"github.com/stretchr/testify/require"
-	"go.pedge.io/dlog"
-	"github.com/libopenstorage/openstorage/pkg/proto/time"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/openstorage/pkg/proto/time"
+	"github.com/portworx/kvdb"
+	"github.com/portworx/kvdb/mem"
+	"github.com/stretchr/testify/require"
+	"go.pedge.io/dlog"
 )
 
 var (
@@ -249,7 +249,7 @@ func retrieve(t *testing.T) {
 		Severity: api.SeverityType_SEVERITY_TYPE_ALARM,
 	}
 	err := kva.Raise(&raiseAlert)
-	fmt.Printf("Raise err : %s, Raise Id : %d \n", err, raiseAlert.Id)
+	//fmt.Printf("Raise err : %s, Raise Id : %d \n", err, raiseAlert.Id)
 
 	alert, err = kva.Retrieve(api.ResourceType_RESOURCE_TYPE_NODE, raiseAlert.Id)
 	require.NoError(t, err, "Failed to retrieve alert")
@@ -366,6 +366,12 @@ func enumerate(t *testing.T) {
 	err = kva.Erase(api.ResourceType_RESOURCE_TYPE_VOLUME, raiseAlert3.Id)
 	err = kva.Erase(api.ResourceType_RESOURCE_TYPE_NODE, raiseAlert4.Id)
 	err = kva.Erase(api.ResourceType_RESOURCE_TYPE_VOLUME, fakeAlertId)
+
+	// let's sleep a bit, and validate alerts erasures have been flushed
+	time.Sleep(time.Second)
+	err = kva.Erase(api.ResourceType_RESOURCE_TYPE_VOLUME, fakeAlertId)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found", "Expecting cleanup completed successfully")
 }
 
 func testAlertWatcher(alert *api.Alert, action api.AlertActionType, prefix string, key string) error {
@@ -397,7 +403,7 @@ func watch(t *testing.T) {
 	err = kva.Raise(&raiseAlert1)
 
 	// Sleep for sometime so that we pass on some previous watch callbacks
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Second * 1)
 
 	require.Equal(t, 1, isWatcherCalled, "Callback function not called")
 	require.Equal(t, api.AlertActionType_ALERT_ACTION_TYPE_CREATE, watcherAction, "action mismatch for create")

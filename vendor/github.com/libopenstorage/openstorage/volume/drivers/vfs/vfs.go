@@ -3,9 +3,11 @@ package vfs
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"go.pedge.io/dlog"
 
@@ -21,6 +23,8 @@ const (
 	Name = "vfs"
 	// Type of the driver
 	Type = api.DriverType_DRIVER_TYPE_FILE
+	// freezebin free binary
+	freezebin = "/usr/sbin/fsfreeze"
 )
 
 type driver struct {
@@ -88,7 +92,7 @@ func (d *driver) MountedAt(mountpath string) string {
 
 // Mount volume at specified path
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (d *driver) Mount(volumeID string, mountpath string) error {
+func (d *driver) Mount(volumeID string, mountpath string, options map[string]string) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
 		dlog.Println(err)
@@ -120,7 +124,7 @@ func (d *driver) Mount(volumeID string, mountpath string) error {
 
 // Unmount volume at specified path
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (d *driver) Unmount(volumeID string, mountpath string) error {
+func (d *driver) Unmount(volumeID string, mountpath string, options map[string]string) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
 		return err
@@ -154,3 +158,45 @@ func (d *driver) Status() [][2]string {
 }
 
 func (d *driver) Shutdown() {}
+
+func (d *driver) fsFreeze(volumeID string, freeze bool) error {
+	v, err := d.GetVol(volumeID)
+	if err != nil {
+		dlog.Println(err)
+		return err
+	}
+	if len(v.AttachPath) == 0 {
+		if !freeze {
+			return nil
+		}
+		return fmt.Errorf("Volume not mounted")
+	}
+	freezeOpt := "-f"
+	if !freeze {
+		freezeOpt = "-u"
+	}
+	_, err = exec.Command(freezebin, freezeOpt,
+		v.AttachPath[0]).Output()
+	return err
+}
+
+func (d *driver) Quiesce(
+	volumeID string,
+	timeoutSec uint64,
+	quiesceID string,
+) error {
+	if err := d.fsFreeze(volumeID, true); err != nil {
+		return err
+	}
+	if timeoutSec > 0 {
+		go func() {
+			time.Sleep(time.Duration(timeoutSec) * time.Second)
+			d.Unquiesce(volumeID)
+		}()
+	}
+	return nil
+}
+
+func (d *driver) Unquiesce(volumeID string) error {
+	return d.fsFreeze(volumeID, false)
+}

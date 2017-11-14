@@ -11,6 +11,7 @@ import (
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
 	"github.com/libopenstorage/openstorage/cluster"
+	"github.com/libopenstorage/openstorage/pkg/options"
 	"github.com/libopenstorage/openstorage/volume"
 )
 
@@ -130,7 +131,7 @@ func (v *volDriver) volumeMount(context *cli.Context) {
 		return
 	}
 
-	err := v.volDriver.Mount(string(volumeID), path)
+	err := v.volDriver.Mount(string(volumeID), path, nil)
 	if err != nil {
 		cmdError(context, fn, err)
 		return
@@ -151,7 +152,10 @@ func (v *volDriver) volumeUnmount(context *cli.Context) {
 
 	path := context.String("path")
 
-	err := v.volDriver.Unmount(string(volumeID), path)
+	opts := make(map[string]string)
+	opts[options.OptionsDeleteAfterUnmount] = "true"
+
+	err := v.volDriver.Unmount(string(volumeID), path, opts)
 	if err != nil {
 		cmdError(context, fn, err)
 		return
@@ -186,7 +190,7 @@ func (v *volDriver) volumeDetach(context *cli.Context) {
 	}
 	volumeID := context.Args()[0]
 	v.volumeOptions(context)
-	err := v.volDriver.Detach(string(volumeID), false)
+	err := v.volDriver.Detach(string(volumeID), nil)
 	if err != nil {
 		cmdError(context, fn, err)
 		return

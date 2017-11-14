@@ -328,14 +328,14 @@ func (v *volumeClient) Attach(volumeID string, attachOptions map[string]string) 
 
 // Detach device from the host.
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Detach(volumeID string, unmountBeforeDetach bool) error {
+func (v *volumeClient) Detach(volumeID string, options map[string]string) error {
 	return v.doVolumeSet(
 		volumeID,
 		&api.VolumeSetRequest{
 			Action: &api.VolumeStateAction{
-				Attach:              api.VolumeActionParam_VOLUME_ACTION_PARAM_OFF,
-				UnmountBeforeDetach: unmountBeforeDetach,
+				Attach: api.VolumeActionParam_VOLUME_ACTION_PARAM_OFF,
 			},
+			Options: options,
 		},
 	)
 }
@@ -346,7 +346,7 @@ func (v *volumeClient) MountedAt(mountPath string) string {
 
 // Mount volume at specified path
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Mount(volumeID string, mountPath string) error {
+func (v *volumeClient) Mount(volumeID string, mountPath string, options map[string]string) error {
 	return v.doVolumeSet(
 		volumeID,
 		&api.VolumeSetRequest{
@@ -354,13 +354,14 @@ func (v *volumeClient) Mount(volumeID string, mountPath string) error {
 				Mount:     api.VolumeActionParam_VOLUME_ACTION_PARAM_ON,
 				MountPath: mountPath,
 			},
+			Options: options,
 		},
 	)
 }
 
 // Unmount volume at specified path
 // Errors ErrEnoEnt, ErrVolDetached may be returned.
-func (v *volumeClient) Unmount(volumeID string, mountPath string) error {
+func (v *volumeClient) Unmount(volumeID string, mountPath string, options map[string]string) error {
 	return v.doVolumeSet(
 		volumeID,
 		&api.VolumeSetRequest{
@@ -368,6 +369,7 @@ func (v *volumeClient) Unmount(volumeID string, mountPath string) error {
 				Mount:     api.VolumeActionParam_VOLUME_ACTION_PARAM_OFF,
 				MountPath: mountPath,
 			},
+			Options: options,
 		},
 	)
 }
@@ -400,4 +402,36 @@ func (v *volumeClient) doVolumeSetGetResponse(volumeID string,
 		return nil, errors.New(response.VolumeResponse.Error)
 	}
 	return response, nil
+}
+
+// Quiesce quiesces volume i/o
+func (v *volumeClient) Quiesce(
+	volumeID string,
+	timeoutSec uint64,
+	quiesceID string,
+) error {
+	response := &api.VolumeResponse{}
+	req := v.c.Post().Resource(volumePath + "/quiesce").Instance(volumeID)
+	req.QueryOption(api.OptTimeoutSec, strconv.FormatUint(timeoutSec, 10))
+	req.QueryOption(api.OptQuiesceID, quiesceID)
+	if err := req.Do().Unmarshal(response); err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
+	}
+	return nil
+}
+
+// Unquiesce un-quiesces volume i/o
+func (v *volumeClient) Unquiesce(volumeID string) error {
+	response := &api.VolumeResponse{}
+	req := v.c.Post().Resource(volumePath + "/unquiesce").Instance(volumeID)
+	if err := req.Do().Unmarshal(response); err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
+	}
+	return nil
 }

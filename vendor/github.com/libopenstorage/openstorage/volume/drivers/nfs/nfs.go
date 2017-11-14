@@ -32,6 +32,7 @@ type driver struct {
 	volume.IODriver
 	volume.StoreEnumerator
 	volume.StatsDriver
+	volume.QuiesceDriver
 	nfsServer string
 	nfsPath   string
 	mounter   mount.Manager
@@ -49,7 +50,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 		dlog.Printf("NFS driver initializing with %s:%s ", server, path)
 	}
 	// Create a mount manager for this NFS server. Blank sever is OK.
-	mounter, err := mount.New(mount.NFSMount, nil, []string{server}, nil, []string{})
+	mounter, err := mount.New(mount.NFSMount, nil, []string{server}, nil, []string{}, "")
 	if err != nil {
 		dlog.Warnf("Failed to create mount manager for server: %v (%v)", server, err)
 		return nil, err
@@ -58,6 +59,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 		IODriver:        volume.IONotSupported,
 		StoreEnumerator: common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
 		StatsDriver:     volume.StatsNotSupported,
+		QuiesceDriver:   volume.QuiesceNotSupported,
 		nfsServer:       server,
 		nfsPath:         path,
 		mounter:         mounter,
@@ -209,7 +211,7 @@ func (d *driver) MountedAt(mountpath string) string {
 	return ""
 }
 
-func (d *driver) Mount(volumeID string, mountpath string) error {
+func (d *driver) Mount(volumeID string, mountpath string, options map[string]string) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
 		dlog.Println(err)
@@ -219,7 +221,8 @@ func (d *driver) Mount(volumeID string, mountpath string) error {
 	srcPath := path.Join(":", d.nfsPath, volumeID)
 	mountExists, err := d.mounter.Exists(srcPath, mountpath)
 	if !mountExists {
-		d.mounter.Unmount(path.Join(nfsMountPath, volumeID), mountpath, syscall.MNT_DETACH, 0)
+		d.mounter.Unmount(path.Join(nfsMountPath, volumeID), mountpath,
+			syscall.MNT_DETACH, 0, nil)
 		if err := d.mounter.Mount(
 			0, path.Join(nfsMountPath, volumeID),
 			mountpath,
@@ -227,6 +230,7 @@ func (d *driver) Mount(volumeID string, mountpath string) error {
 			syscall.MS_BIND,
 			"",
 			0,
+			nil,
 		); err != nil {
 			dlog.Printf("Cannot mount %s at %s because %+v",
 				path.Join(nfsMountPath, volumeID), mountpath, err)
@@ -240,7 +244,7 @@ func (d *driver) Mount(volumeID string, mountpath string) error {
 	return d.UpdateVol(v)
 }
 
-func (d *driver) Unmount(volumeID string, mountpath string) error {
+func (d *driver) Unmount(volumeID string, mountpath string, options map[string]string) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
 		return err
@@ -248,7 +252,8 @@ func (d *driver) Unmount(volumeID string, mountpath string) error {
 	if len(v.AttachPath) == 0 {
 		return fmt.Errorf("Device %v not mounted", volumeID)
 	}
-	err = d.mounter.Unmount(path.Join(nfsMountPath, volumeID), mountpath, syscall.MNT_DETACH, 0)
+	err = d.mounter.Unmount(path.Join(nfsMountPath, volumeID), mountpath,
+		syscall.MNT_DETACH, 0, nil)
 	if err != nil {
 		return err
 	}
@@ -292,7 +297,7 @@ func (d *driver) Attach(volumeID string, attachOptions map[string]string) (strin
 	return path.Join(nfsMountPath, volumeID+nfsBlockFile), nil
 }
 
-func (d *driver) Detach(volumeID string, unmountBeforeDetach bool) error {
+func (d *driver) Detach(volumeID string, options map[string]string) error {
 	return nil
 }
 

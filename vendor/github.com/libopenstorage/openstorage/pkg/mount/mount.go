@@ -3,12 +3,23 @@
 package mount
 
 import (
+	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/keylock"
+	"github.com/libopenstorage/openstorage/pkg/options"
+	"github.com/libopenstorage/openstorage/pkg/sched"
 	"go.pedge.io/dlog"
 )
 
@@ -37,15 +48,23 @@ type Manager interface {
 	// GetSourcePaths returns all source paths from the mount table
 	GetSourcePaths() []string
 	// Mount device at mountpoint
-	Mount(minor int, device, path, fs string, flags uintptr, data string, timeout int) error
+	Mount(
+		minor int,
+		device string,
+		path string,
+		fs string,
+		flags uintptr,
+		data string,
+		timeout int,
+		opts map[string]string) error
 	// Unmount device at mountpoint and remove from the matrix.
 	// ErrEnoent is returned if the device or mountpoint for the device
 	// is not found.
-	Unmount(source, path string, flags int, timeout int) error
-	// MakeMountUnbindable marks a mount path as unbindable
-	MakeMountUnbindable(device string, path string) error
-	// MakeMountShared marks a mount path as shared
-	MakeMountShared(device string, path string) error
+	Unmount(source, path string, flags int, timeout int, opts map[string]string) error
+	// RemoveMountPath removes the given path
+	RemoveMountPath(path string, opts map[string]string) error
+	// EmptyTrashDir removes all directories from the mounter trash directory
+	EmptyTrashDir() error
 }
 
 // MountImpl backend implementation for Mount/Unmount calls
@@ -66,6 +85,10 @@ const (
 	// own defined way of handling mount table
 	CustomMount
 )
+
+const mountPathRemoveDelay = 30 * time.Second
+const chattrBin = "/usr/bin/chattr"
+const lsattrBin = "/usr/bin/lsattr"
 
 var (
 	// ErrExist is returned if path is already mounted to a different device.
@@ -105,10 +128,12 @@ type Info struct {
 // Mounter implements Ops and keeps track of active mounts for volume drivers.
 type Mounter struct {
 	sync.Mutex
-	mountImpl   MountImpl
-	mounts      DeviceMap
-	paths       PathMap
-	allowedDirs []string
+	mountImpl     MountImpl
+	mounts        DeviceMap
+	paths         PathMap
+	allowedDirs   []string
+	kl            keylock.KeyLock
+	trashLocation string
 }
 
 // DefaultMounter defaults to syscall implementation.
@@ -134,7 +159,19 @@ func (m *DefaultMounter) Unmount(target string, flags int, timeout int) error {
 
 // String representation of Mounter
 func (m *Mounter) String() string {
-	return fmt.Sprintf("%#v", *m)
+	s := struct {
+		mounts        DeviceMap
+		paths         PathMap
+		allowedDirs   []string
+		trashLocation string
+	}{
+		mounts:        m.mounts,
+		paths:         m.paths,
+		allowedDirs:   m.allowedDirs,
+		trashLocation: m.trashLocation,
+	}
+
+	return fmt.Sprintf("%#v", s)
 }
 
 // Inspect mount table for device
@@ -290,6 +327,7 @@ func (m *Mounter) Mount(
 	flags uintptr,
 	data string,
 	timeout int,
+	opts map[string]string,
 ) error {
 	path = normalizeMountPath(path)
 	if len(m.allowedDirs) > 0 {
@@ -331,31 +369,50 @@ func (m *Mounter) Mount(
 		return ErrEinval
 	}
 
-	// Try to find the mountpoint. If it already exists, mark it shared
+	// Try to find the mountpoint. If it already exists, do nothing
 	for _, p := range info.Mountpoint {
 		if p.Path == path {
-			m.makeMountShared(device, path)
 			return nil
 		}
 	}
-	// The device is not mounted at path, mount it and add to its mountpoints.
-	err := m.mountImpl.Mount(device, path, fs, flags, data, timeout)
-	if err != nil {
-		return err
+
+	h := m.kl.Acquire(path)
+	defer m.kl.Release(&h)
+
+	// Record previous state of the path
+	pathWasReadOnly := m.isPathSetImmutable(path)
+	if err := m.makeMountpathReadOnly(path); err != nil {
+		return fmt.Errorf("failed to make %s readonly Err: %v", path, err)
 	}
-	err = m.makeMountShared(device, path)
-	if err != nil {
+
+	// The device is not mounted at path, mount it and add to its mountpoints.
+	if err := m.mountImpl.Mount(device, path, fs, flags, data, timeout); err != nil {
+		// Rollback only if was writeable
+		if !pathWasReadOnly {
+			if e := m.makeMountpathWriteable(path); e != nil {
+				return fmt.Errorf("failed to make %v writeable during rollback. Err: %v Mount err: %v",
+					path, e, err)
+			}
+		}
+
 		return err
 	}
 
 	info.Mountpoint = append(info.Mountpoint, &PathInfo{Path: path})
 	m.addPath(path, device)
+
 	return nil
 }
 
 // Unmount device at mountpoint and from the matrix.
 // ErrEnoent is returned if the device or mountpoint for the device is not found.
-func (m *Mounter) Unmount(device, path string, flags int, timeout int) error {
+func (m *Mounter) Unmount(
+	device string,
+	path string,
+	flags int,
+	timeout int,
+	opts map[string]string,
+) error {
 	m.Lock()
 
 	path = normalizeMountPath(path)
@@ -371,12 +428,7 @@ func (m *Mounter) Unmount(device, path string, flags int, timeout int) error {
 		if p.Path != path {
 			continue
 		}
-		err := m.makeMountUnbindable(device, path)
-		if err != nil {
-			return err
-		}
-
-		err = m.mountImpl.Unmount(path, flags, timeout)
+		err := m.mountImpl.Unmount(path, flags, timeout)
 		if err != nil {
 			return err
 		}
@@ -388,75 +440,184 @@ func (m *Mounter) Unmount(device, path string, flags int, timeout int) error {
 		info.Mountpoint[i] = info.Mountpoint[len(info.Mountpoint)-1]
 		info.Mountpoint = info.Mountpoint[0 : len(info.Mountpoint)-1]
 		m.maybeRemoveDevice(device)
+		if options.IsBoolOptionSet(opts, options.OptionsDeleteAfterUnmount) {
+			m.RemoveMountPath(path, opts)
+		}
+
 		return nil
 	}
 	dlog.Warnf("Device %q is not mounted at path %q", path, device)
 	return nil
 }
 
-func (m *Mounter) makeMountUnbindable(
-	device string,
-	path string,
-) error {
-	return m.mountImpl.Mount(device, path, "", syscall.MS_UNBINDABLE, "", 0)
-}
+func (m *Mounter) removeMountPath(path string) error {
+	h := m.kl.Acquire(path)
+	defer m.kl.Release(&h)
 
-func (m *Mounter) MakeMountUnbindable(
-	device string,
-	path string,
-) error {
-	m.Lock()
-
-	path = normalizeMountPath(path)
-	info, ok := m.mounts[device]
-	if !ok {
-		m.Unlock()
-		return ErrEnoent
-	}
-	m.Unlock()
-	info.Lock()
-	defer info.Unlock()
-	for _, p := range info.Mountpoint {
-		if p.Path != path {
-			continue
+	if devicePath, mounted := m.HasTarget(path); !mounted {
+		if err := m.makeMountpathWriteable(path); err != nil {
+			dlog.Warnf("Failed to make path: %v writeable. Err: %v", path, err)
+			return err
 		}
-		return m.makeMountUnbindable(device, path)
+	} else {
+		dlog.Infof("Not making %v writeable as %v is mounted on it", path, devicePath)
+		return nil
 	}
 
-	dlog.Warnf("Device %q is not mounted at path %q", path, device)
+	if _, err := os.Stat(path); err == nil {
+		dlog.Infof("Removing mount path directory: %v", path)
+		if err = os.Remove(path); err != nil {
+			dlog.Warnf("Failed to remove path: %v Err: %v", path, err)
+			return err
+		}
+	}
 	return nil
 }
 
-func (m *Mounter) makeMountShared(
-	device string,
-	path string,
-) error {
-	return m.mountImpl.Mount(device, path, "", syscall.MS_SHARED, "", 0)
+// RemoveMountPath makes the path writeable and removes it after a fixed delay
+func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) error {
+	if _, err := os.Stat(mountPath); err == nil {
+		if options.IsBoolOptionSet(opts, options.OptionsWaitBeforeDelete) {
+			hasher := md5.New()
+			hasher.Write([]byte(mountPath))
+			symlinkName := hex.EncodeToString(hasher.Sum(nil))
+			symlinkPath := path.Join(m.trashLocation, symlinkName)
+
+			if err = os.Symlink(mountPath, symlinkPath); err != nil {
+				if !os.IsExist(err) {
+					dlog.Errorf("Error creating sym link %s => %s. Err: %v", symlinkPath, mountPath, err)
+				}
+			}
+
+			if _, err = sched.Instance().Schedule(
+				func(sched.Interval) {
+					if err = m.removeMountPath(mountPath); err != nil {
+						return
+					}
+
+					if err = os.Remove(symlinkPath); err != nil {
+						return
+					}
+				},
+				sched.Periodic(time.Second),
+				time.Now().Add(mountPathRemoveDelay),
+				true /* run only once */); err != nil {
+				dlog.Errorf("Failed to schedule task to remove path:%v. Err: %v", mountPath, err)
+				return err
+			}
+		} else {
+			return m.removeMountPath(mountPath)
+		}
+	}
+
+	return nil
 }
 
-func (m *Mounter) MakeMountShared(
-	device string,
-	path string,
-) error {
-	m.Lock()
-
-	path = normalizeMountPath(path)
-	info, ok := m.mounts[device]
-	if !ok {
-		m.Unlock()
-		return ErrEnoent
+func (m *Mounter) EmptyTrashDir() error {
+	files, err := ioutil.ReadDir(m.trashLocation)
+	if err != nil {
+		dlog.Errorf("failed to read trash dir: %s. Err: %v", m.trashLocation, err)
+		return err
 	}
-	m.Unlock()
-	info.Lock()
-	defer info.Unlock()
-	for _, p := range info.Mountpoint {
-		if p.Path != path {
-			continue
+
+	for _, file := range files {
+		if _, err := sched.Instance().Schedule(
+			func(sched.Interval) {
+				e := m.removeSoftlinkAndTarget(path.Join(m.trashLocation, file.Name()))
+				if e != nil {
+					dlog.Errorf("failed to remove link: %s. Err: %v", path.Join(m.trashLocation, file.Name()), e)
+					err = e
+					// continue with other directories
+				}
+			},
+			sched.Periodic(time.Second),
+			time.Now().Add(mountPathRemoveDelay),
+			true /* run only once */); err != nil {
+			dlog.Errorf("Failed to cleanup of trash dir. Err: %v", err)
+			return err
 		}
-		return m.makeMountShared(device, path)
 	}
 
-	dlog.Warnf("Device %q is not mounted at path %q", path, device)
+	return nil
+}
+
+func (m *Mounter) removeSoftlinkAndTarget(link string) error {
+	if _, err := os.Stat(link); err == nil {
+		target, err := os.Readlink(link)
+		if err != nil {
+			return err
+		}
+
+		if err = m.removeMountPath(target); err != nil {
+			return err
+		}
+	}
+
+	if err := os.Remove(link); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// isPathSetImmutable returns true on error in getting path info or if path
+// is immutable .
+func (m *Mounter) isPathSetImmutable(mountpath string) bool {
+	if _, err := os.Stat(mountpath); err != nil {
+		dlog.Errorf("Failed to stat mount path:%v", err)
+		return true
+	}
+	op, err := exec.Command(lsattrBin, "-d", mountpath).CombinedOutput()
+	if err != nil {
+		// Cannot get path status, return true so that immutable bit is not reverted
+		dlog.Errorf("Error listing attrs for %v err:%v", mountpath, string(op))
+		return true
+	}
+	// 'lsattr -d' output is a single line with 2 fields separated by space; 1st one
+	// is list of applicable attrs and 2nd field is the path itself.Sample output below.
+	// lsattr -d /mnt/vol2
+	// ----i--------e-- /mnt/vol2
+	attrs := strings.Split(string(op), " ")
+	if len(attrs) != 2 {
+		// Cannot get path status, return true so that immutable bit is not reverted
+		dlog.Errorf("Invalid lsattr output %v", string(op))
+		return true
+	}
+	if strings.Contains(attrs[0], "i") {
+		dlog.Errorf("Mount Path already set to Immutable")
+		return true
+	}
+
+	return false
+}
+
+// makeMountpathReadOnly makes given mountpath read-only
+func (m *Mounter) makeMountpathReadOnly(mountpath string) error {
+	if _, err := os.Stat(mountpath); err == nil {
+		cmd := exec.Command(chattrBin, "+i", mountpath)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+
+		if err = cmd.Run(); err != nil {
+			return fmt.Errorf("%s +i failed: %s. Err: %v", chattrBin, stderr.String(), err)
+		}
+	}
+
+	return nil
+}
+
+// makeMountpathWriteable makes given mountpath writeable
+func (m *Mounter) makeMountpathWriteable(mountpath string) error {
+	if _, err := os.Stat(mountpath); err == nil {
+		cmd := exec.Command(chattrBin, "-i", mountpath)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+
+		if err = cmd.Run(); err != nil {
+			return fmt.Errorf("%s -i failed: %s. Err: %v", chattrBin, stderr.String(), err)
+		}
+	}
+
 	return nil
 }
 
@@ -467,6 +628,7 @@ func New(
 	identifiers []string,
 	customMounter CustomMounter,
 	allowedDirs []string,
+	trashLocation string,
 ) (Manager, error) {
 
 	if mountImpl == nil {
@@ -475,7 +637,7 @@ func New(
 
 	switch mounterType {
 	case DeviceMount:
-		return NewDeviceMounter(identifiers, mountImpl, allowedDirs)
+		return NewDeviceMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case NFSMount:
 		if len(identifiers) > 1 {
 			return nil, fmt.Errorf("Multiple server addresses provided.")

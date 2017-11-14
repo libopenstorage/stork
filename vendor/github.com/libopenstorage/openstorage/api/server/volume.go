@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/errors"
 	"github.com/libopenstorage/openstorage/volume"
@@ -101,8 +100,6 @@ func processErrorForVolSetResponse(action *api.VolumeStateAction, err error, res
 		action.Attach == api.VolumeActionParam_VOLUME_ACTION_PARAM_OFF) {
 		switch err.(type) {
 		case *errors.ErrNotFound:
-			logrus.Warnf("Ignoring volumeSet on non-existent volume. Err: %v. Actions are Mount=%v Attach=%v",
-				err, action.Mount, action.Attach)
 			resp.VolumeResponse = &api.VolumeResponse{}
 			resp.Volume = &api.Volume{}
 		default:
@@ -159,7 +156,7 @@ func (vd *volAPI) volumeSet(w http.ResponseWriter, r *http.Request) {
 			if req.Action.Attach == api.VolumeActionParam_VOLUME_ACTION_PARAM_ON {
 				_, err = d.Attach(volumeID, req.Options)
 			} else {
-				err = d.Detach(volumeID, req.Action.UnmountBeforeDetach)
+				err = d.Detach(volumeID, req.Options)
 			}
 			if err != nil {
 				break
@@ -172,9 +169,9 @@ func (vd *volAPI) volumeSet(w http.ResponseWriter, r *http.Request) {
 					err = fmt.Errorf("Invalid mount path")
 					break
 				}
-				err = d.Mount(volumeID, req.Action.MountPath)
+				err = d.Mount(volumeID, req.Action.MountPath, req.Options)
 			} else {
-				err = d.Unmount(volumeID, req.Action.MountPath)
+				err = d.Unmount(volumeID, req.Action.MountPath, req.Options)
 			}
 			if err != nil {
 				break
@@ -218,8 +215,6 @@ func (vd *volAPI) inspect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vd.logRequest(method, string(volumeID)).Infoln("")
-
 	dk, err := d.Inspect([]string{volumeID})
 	if err != nil {
 		vd.sendError(vd.name, method, w, err.Error(), http.StatusNotFound)
@@ -248,22 +243,7 @@ func (vd *volAPI) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	volumes, err := d.Inspect([]string{volumeID})
-
-	if len(volumes) < 1 {
-		e := fmt.Errorf("Volume %s does not exist", volumeID)
-		vd.sendError(vd.name, method, w, e.Error(), http.StatusBadRequest)
-		return
-	}
-	vol := volumes[0]
-
 	volumeResponse := &api.VolumeResponse{}
-
-	if vol.Spec.Sticky {
-		volumeResponse.Error = "Cannot delete a sticky volume"
-		json.NewEncoder(w).Encode(volumeResponse)
-		return
-	}
 
 	if err := d.Delete(volumeID); err != nil {
 		volumeResponse.Error = err.Error()
@@ -508,6 +488,73 @@ func (vd *volAPI) requests(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(requests)
 }
 
+func (vd *volAPI) quiesce(w http.ResponseWriter, r *http.Request) {
+	var volumeID string
+	var err error
+	method := "quiesce"
+
+	if volumeID, err = vd.parseID(r); err != nil {
+		e := fmt.Errorf("Failed to parse parse volumeID: %s", err.Error())
+		vd.sendError(vd.name, method, w, e.Error(), http.StatusBadRequest)
+		return
+	}
+
+	d, err := vd.getVolDriver(r)
+	if err != nil {
+		notFound(w, r)
+		return
+	}
+
+	params := r.URL.Query()
+	timeoutStr := params[api.OptTimeoutSec]
+	var timeoutSec uint64
+	if timeoutStr != nil {
+		var err error
+		timeoutSec, err = strconv.ParseUint(timeoutStr[0], 10, 64)
+		if err != nil {
+			vd.sendError(vd.name, method, w, api.OptTimeoutSec+" must be int",
+				http.StatusBadRequest)
+			return
+		}
+	}
+
+	quiesceIdParam := params[api.OptQuiesceID]
+	var quiesceId string
+	if len(quiesceIdParam) > 0 {
+		quiesceId = quiesceIdParam[0]
+	}
+
+	volumeResponse := &api.VolumeResponse{}
+	if err := d.Quiesce(volumeID, timeoutSec, quiesceId); err != nil {
+		volumeResponse.Error = responseStatus(err)
+	}
+	json.NewEncoder(w).Encode(volumeResponse)
+}
+
+func (vd *volAPI) unquiesce(w http.ResponseWriter, r *http.Request) {
+	var volumeID string
+	var err error
+	method := "unquiesce"
+
+	if volumeID, err = vd.parseID(r); err != nil {
+		e := fmt.Errorf("Failed to parse parse volumeID: %s", err.Error())
+		vd.sendError(vd.name, method, w, e.Error(), http.StatusBadRequest)
+		return
+	}
+
+	d, err := vd.getVolDriver(r)
+	if err != nil {
+		notFound(w, r)
+		return
+	}
+
+	volumeResponse := &api.VolumeResponse{}
+	if err := d.Unquiesce(volumeID); err != nil {
+		volumeResponse.Error = responseStatus(err)
+	}
+	json.NewEncoder(w).Encode(volumeResponse)
+}
+
 func (vd *volAPI) versions(w http.ResponseWriter, r *http.Request) {
 	versions := []string{
 		volume.APIVersion,
@@ -546,6 +593,8 @@ func (vd *volAPI) Routes() []*Route {
 		{verb: "GET", path: volPath("/usedsize/{id}", volume.APIVersion), fn: vd.usedsize},
 		{verb: "GET", path: volPath("/requests", volume.APIVersion), fn: vd.requests},
 		{verb: "GET", path: volPath("/requests/{id}", volume.APIVersion), fn: vd.requests},
+		{verb: "POST", path: volPath("/quiesce/{id}", volume.APIVersion), fn: vd.quiesce},
+		{verb: "POST", path: volPath("/unquiesce/{id}", volume.APIVersion), fn: vd.unquiesce},
 		{verb: "POST", path: snapPath("", volume.APIVersion), fn: vd.snap},
 		{verb: "GET", path: snapPath("", volume.APIVersion), fn: vd.snapEnumerate},
 		{verb: "POST", path: snapPath("/restore/{id}", volume.APIVersion), fn: vd.restore},

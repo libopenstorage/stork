@@ -61,6 +61,7 @@ type driver struct {
 	volume.IODriver
 	volume.StoreEnumerator
 	volume.StatsDriver
+	volume.QuiesceDriver
 	consistencyGroup string
 	project          string
 	varray           string
@@ -111,6 +112,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 		IODriver:         volume.IONotSupported,
 		StoreEnumerator:  common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
 		StatsDriver:      volume.StatsNotSupported,
+		QuiesceDriver:    volume.QuiesceNotSupported,
 		consistencyGroup: consistencyGroup,
 		project:          project,
 		varray:           varray,
@@ -159,7 +161,7 @@ func (d *driver) Create(
 		1,                         // Count
 		locator.Name,              // Name
 		d.project,                 // Project
-		fmt.Sprintf("%.6fGB", sz), // Volume Size
+		fmt.Sprintf("%.6dGB", sz), // Volume Size
 		d.varray,                  // Virtual Block Array
 		d.vpool,                   // Virtual Block Pool
 	}
@@ -170,7 +172,7 @@ func (d *driver) Create(
 
 	if resp.Status() != http.StatusAccepted {
 
-		return "", fmt.Errorf("Failed to create volume: %s", resp.Status())
+		return "", fmt.Errorf("Failed to create volume: %d", resp.Status())
 	}
 
 	return res.Task[0].Resource.Id, err
@@ -188,15 +190,15 @@ func (d *driver) MountedAt(mountpath string) string {
 	return ""
 }
 
-func (d *driver) Detach(volumeID string, unmountBeforeDetach bool) error {
+func (d *driver) Detach(volumeID string, options map[string]string) error {
 	return nil
 }
 
-func (d *driver) Mount(volumeID string, mountpath string) error {
+func (d *driver) Mount(volumeID string, mountpath string, options map[string]string) error {
 	return nil
 }
 
-func (d *driver) Unmount(volumeID string, mountpath string) error {
+func (d *driver) Unmount(volumeID string, mountpath string, options map[string]string) error {
 
 	return nil
 }

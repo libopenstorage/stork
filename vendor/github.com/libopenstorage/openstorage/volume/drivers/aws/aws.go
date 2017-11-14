@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"go.pedge.io/dlog"
 	"github.com/libopenstorage/openstorage/pkg/proto/time"
-	
+	"go.pedge.io/dlog"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -53,6 +53,7 @@ type Driver struct {
 	volume.StatsDriver
 	volume.StoreEnumerator
 	volume.IODriver
+	volume.QuiesceDriver
 	ops StorageOps
 	md  *Metadata
 }
@@ -91,6 +92,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 			instance: instance,
 		},
 		IODriver:        volume.IONotSupported,
+		QuiesceDriver:   volume.QuiesceNotSupported,
 		StoreEnumerator: common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
 	}
 	return d, nil
@@ -223,7 +225,7 @@ func (d *Driver) Create(
 	if err := d.Format(volume.Id); err != nil {
 		return "", err
 	}
-	if err := d.Detach(volume.Id, false); err != nil {
+	if err := d.Detach(volume.Id, nil); err != nil {
 		return "", err
 	}
 
@@ -402,7 +404,7 @@ func (d *Driver) Format(volumeID string) error {
 	return d.UpdateVol(volume)
 }
 
-func (d *Driver) Detach(volumeID string, unmountBeforeDetach bool) error {
+func (d *Driver) Detach(volumeID string, options map[string]string) error {
 	if err := d.ops.Detach(volumeID); err != nil {
 		return err
 	}
@@ -422,7 +424,7 @@ func (d *Driver) MountedAt(mountpath string) string {
 	return ""
 }
 
-func (d *Driver) Mount(volumeID string, mountpath string) error {
+func (d *Driver) Mount(volumeID string, mountpath string, options map[string]string) error {
 	volume, err := d.GetVol(volumeID)
 	if err != nil {
 		return fmt.Errorf("Failed to locate volume %q", volumeID)
@@ -445,7 +447,7 @@ func (d *Driver) Mount(volumeID string, mountpath string) error {
 	return nil
 }
 
-func (d *Driver) Unmount(volumeID string, mountpath string) error {
+func (d *Driver) Unmount(volumeID string, mountpath string, options map[string]string) error {
 	// XXX:  determine if valid mount path
 	err := syscall.Unmount(mountpath, 0)
 	return err

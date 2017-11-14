@@ -6,6 +6,11 @@ ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/openstorage/vendor')
 endif
 
+ifndef LINT_PKGS
+LINT_DIRS := "./csi"
+LINT_PKGS := $(shell go list $(LINT_DIRS) | grep -v vendor)
+endif
+
 ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS := -gcflags "-N -l"
 endif
@@ -78,15 +83,10 @@ proto:
 
 lint:
 	go get -v github.com/golang/lint/golint
-	for file in $$(find . -name '*.go' | grep -v vendor | grep -v '\.pb\.go' | grep -v '\.pb\.gw\.go'); do \
-		golint $${file}; \
-		if [ -n "$$(golint $${file})" ]; then \
-			exit 1; \
-		fi; \
-	done
+	golint -set_exit_status $(LINT_PKGS)
 
 vet:
-	go vet $(PKGS)
+	go vet $(shell go list ./... | grep -v vendor)
 
 errcheck:
 	go get -v github.com/kisielk/errcheck
@@ -95,7 +95,7 @@ errcheck:
 pretest: lint vet errcheck
 
 test:
-	go test -tags "$(TAGS)" $(TESTFLAGS) $(PKGS)
+	go test -tags "$(TAGS)" $(TESTFLAGS) $(shell go list ./... | grep -v vendor)
 
 docker-build-osd-dev:
 	docker build -t openstorage/osd-dev -f Dockerfile.osd-dev .
@@ -116,6 +116,7 @@ docker-test: docker-build-osd-dev
 	docker run \
 		--privileged \
 		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v /mnt:/mnt \
 		-e AWS_ACCESS_KEY_ID \
 		-e AWS_SECRET_ACCESS_KEY \
 		-e "TAGS=$(TAGS)" \
@@ -193,3 +194,33 @@ clean:
 	launch-local-btrfs \
 	install-flexvolume-plugin \
 	clean
+
+$(GOPATH)/bin/cover:
+	go get golang.org/x/tools/cmd/cover
+
+$(GOPATH)/bin/gotestcover:
+	go get github.com/pierrre/gotestcover
+
+# Generate test-coverage HTML report
+# - note: the 'go test -coverprofile...' does append results, so we're merging individual pkgs in for-loop
+coverage: $(GOPATH)/bin/cover $(GOPATH)/bin/gotestcover
+	gotestcover -coverprofile=coverage.out $(shell go list ./... | grep -v vendor)
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "INFO: Summary of coverage"
+	go tool cover -func=coverage.out
+	@cp coverage.out coverage.html /mnt/ && \
+	echo "INFO: libopenstorage coverage saved at /mnt/coverage.{html,out}"
+
+docker-coverage: docker-build-osd-dev
+	docker run \
+		--privileged \
+		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v /mnt:/mnt \
+		-e AWS_ACCESS_KEY_ID \
+		-e AWS_SECRET_ACCESS_KEY \
+		-e "TAGS=$(TAGS)" \
+		-e "PKGS=$(PKGS)" \
+		-e "BUILDFLAGS=$(BUILDFLAGS)" \
+		-e "TESTFLAGS=$(TESTFLAGS)" \
+		openstorage/osd-dev \
+			make coverage

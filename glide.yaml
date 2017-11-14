@@ -5,7 +5,7 @@ import:
 - package: github.com/fatih/color
   version: ^1.5.0
 - package: github.com/libopenstorage/openstorage
-  version: 093a0c3888753c2056e7373183693d670c6bba01
+  version: 02fe99c7963fcdc7ba7122da34027a2e1148cf56
   subpackages:
   - api
   - api/client/cluster

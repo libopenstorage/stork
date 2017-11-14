@@ -17,6 +17,7 @@ const (
 	SpecParent               = "parent"
 	SpecEphemeral            = "ephemeral"
 	SpecShared               = "shared"
+	SpecCascaded             = "cascaded"
 	SpecSticky               = "sticky"
 	SpecSecure               = "secure"
 	SpecCompressed           = "compressed"
@@ -36,6 +37,7 @@ const (
 	SpecGroupEnforce         = "fg"
 	SpecZones                = "zones"
 	SpecRacks                = "racks"
+	SpecRack                 = "rack"
 	SpecRegions              = "regions"
 	SpecLabels               = "labels"
 	SpecPriorityAlias        = "priority_io"
@@ -56,6 +58,10 @@ const (
 	OptConfigLabel = "ConfigLabel"
 	// OptCumulative query parameter used to request cumulative stats.
 	OptCumulative = "Cumulative"
+	// OptTimeout query parameter used to indicate timeout seconds
+	OptTimeoutSec = "TimeoutSec"
+	// OptQuiesceID query parameter use for quiesce
+	OptQuiesceID = "QuiesceID"
 )
 
 // Api client-server Constants
@@ -361,5 +367,4 @@ func (v Volume) DisplayId() string {
 	} else {
 		return v.Id
 	}
-	return ""
 }
