@@ -9,13 +9,14 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/extender"
+	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/urfave/cli"
 )
 
 func main() {
 	app := cli.NewApp()
 	app.Name = "stork"
-	app.Usage = "STorage ORchestartor for Kubernetes"
+	app.Usage = "STorage Orchestartor Runtime for Kubernetes (STORK)"
 	app.Version = "0.1"
 	app.Action = run
 
@@ -66,6 +67,15 @@ func run(c *cli.Context) {
 		os.Exit(-1)
 	}
 
+	monitor := &monitor.Monitor{
+		Driver: d,
+	}
+
+	if err = monitor.Start(); err != nil {
+		log.Fatalf("Error starting storage monitor: %v", err)
+		os.Exit(-1)
+	}
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	for {
@@ -74,6 +84,9 @@ func run(c *cli.Context) {
 			log.Printf("Shutdown signal received, exiting...")
 			if err := extender.Stop(); err != nil {
 				log.Warnf("Error stopping extender: %v", err)
+			}
+			if err := monitor.Stop(); err != nil {
+				log.Warnf("Error stopping monitor: %v", err)
 			}
 			os.Exit(0)
 		}
