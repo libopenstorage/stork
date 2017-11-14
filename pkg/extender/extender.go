@@ -2,8 +2,10 @@ package extender
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -23,17 +25,47 @@ const (
 
 // Extender Scheduler extender
 type Extender struct {
-	Driver volume.Driver
+	Driver  volume.Driver
+	server  *http.Server
+	lock    sync.Mutex
+	started bool
 }
 
-// Init Initializes the extender
-func (e *Extender) Init() error {
+// Start Starts the extender
+func (e *Extender) Start() error {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	if e.started {
+		return fmt.Errorf("Extender has already been started")
+	}
+
 	// TODO: Make the listen port configurable
+	e.server = &http.Server{Addr: ":8099"}
+
+	http.HandleFunc("/", e.serveHTTP)
 	go func() {
-		if err := http.ListenAndServe(":8099", http.HandlerFunc(e.serveHTTP)); err != nil {
+		if err := e.server.ListenAndServe(); err != nil {
 			log.Panicf("Error starting extender server: %v", err)
 		}
 	}()
+	e.started = true
+	return nil
+}
+
+// Stop Stops the extender
+func (e *Extender) Stop() error {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	if !e.started {
+		return fmt.Errorf("Extender has not been started")
+	}
+
+	if err := e.server.Shutdown(nil); err != nil {
+		return err
+	}
+	e.started = false
 	return nil
 }
 
@@ -118,8 +150,8 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	if err := encoder.Encode(response); err != nil {
 		storklog.PodLog(pod).Fatalf("Error encoding filter response: %+v : %v", response, err)
 	}
-
 }
+
 func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	defer func() {
@@ -197,7 +229,5 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	if err := encoder.Encode(respList); err != nil {
 		storklog.PodLog(pod).Fatalf("Failed to encode response: %v", err)
 	}
-
 	return
-
 }

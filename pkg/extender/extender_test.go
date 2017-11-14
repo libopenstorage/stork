@@ -21,6 +21,7 @@ const (
 )
 
 var driver *mock.Driver
+var extender *Extender
 
 func setup(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
@@ -39,12 +40,18 @@ func setup(t *testing.T) {
 		t.Fatalf("Error initializing mock volume driver: %v", err)
 	}
 
-	extender := &Extender{
+	extender = &Extender{
 		Driver: storkdriver,
 	}
 
-	if err = extender.Init(); err != nil {
-		t.Fatalf("Error initializing scheduler extender: %v", err)
+	if err = extender.Start(); err != nil {
+		t.Fatalf("Error starting scheduler extender: %v", err)
+	}
+}
+
+func teardown(t *testing.T) {
+	if err := extender.Stop(); err != nil {
+		t.Fatalf("Error stopping scheduler extender: %v", err)
 	}
 }
 
@@ -230,6 +237,7 @@ func TestExtender(t *testing.T) {
 	t.Run("multipleVolumeTest", multipleVolumeTest)
 	t.Run("driverErrorTest", driverErrorTest)
 	t.Run("driverNodeErrorStateTest", driverNodeErrorStateTest)
+	t.Run("teardown", teardown)
 }
 
 // Send requests for a pod that doesn't have any PVCs.
