@@ -18,12 +18,12 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
+	apps_api "k8s.io/api/apps/v1beta1"
+	"k8s.io/api/core/v1"
+	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/pkg/api/v1"
-	apps_api "k8s.io/client-go/pkg/apis/apps/v1beta1"
-	storage_api "k8s.io/client-go/pkg/apis/storage/v1"
 )
 
 const (
