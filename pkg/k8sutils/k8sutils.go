@@ -40,7 +40,7 @@ func loadClientFromServiceAccount() (*kubernetes.Clientset, error) {
 	return k8sClient, nil
 }
 
-// GetService gets the service by the name
+// GetService Gets the service by the name
 func GetService(svcName string, svcNS string) (*v1.Service, error) {
 	client, err := GetK8sClient()
 	if err != nil {
@@ -58,8 +58,8 @@ func GetService(svcName string, svcNS string) (*v1.Service, error) {
 
 }
 
-// GetPod gets the pod by the name
-func GetPod(podName string, podNS string) (*v1.Pod, error) {
+// GetPod Gets the pod by the name
+func GetPod(podName string, namespace string) (*v1.Pod, error) {
 	client, err := GetK8sClient()
 	if err != nil {
 		return nil, err
@@ -69,14 +69,28 @@ func GetPod(podName string, podNS string) (*v1.Pod, error) {
 		return nil, fmt.Errorf("Cannot return pod obj without pod name")
 	}
 
-	pod, err := client.CoreV1().Pods(podNS).Get(podName, metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 	return pod, nil
 }
 
-// GetPVC gets the PVC by the name
+// GetAllPods Get all Pods in the cluster
+func GetAllPods() (*v1.PodList, error) {
+	client, err := GetK8sClient()
+	if err != nil {
+		return nil, err
+	}
+
+	podList, err := client.CoreV1().Pods("").List(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return podList, nil
+}
+
+// GetPVC Gets the PVC by the name
 func GetPVC(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error) {
 	if pvcName == "" {
 		return nil, fmt.Errorf("Empty PVC name")
@@ -90,12 +104,33 @@ func GetPVC(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error)
 	return client.CoreV1().PersistentVolumeClaims(namespace).Get(pvcName, metav1.GetOptions{})
 }
 
-// GetStorageClassName gets the storage class name for a PVC
+// DeletePod Deletes the pod by the name
+func DeletePod(podName string, namespace string, force bool) error {
+	client, err := GetK8sClient()
+	if err != nil {
+		return err
+	}
+
+	if podName == "" {
+		return fmt.Errorf("Cannot delete pod without pod name")
+	}
+
+	deleteOptions := metav1.DeleteOptions{}
+	if force {
+		gracePeriodSec := int64(0)
+		deleteOptions.GracePeriodSeconds = &gracePeriodSec
+
+	}
+
+	return client.CoreV1().Pods(namespace).Delete(podName, &deleteOptions)
+}
+
+// GetStorageClassName Gets the storage class name for a PVC
 func GetStorageClassName(pvc *v1.PersistentVolumeClaim) string {
 	return k8shelper.GetPersistentVolumeClaimClass(pvc)
 }
 
-// GetStorageClass gets the storage class by name
+// GetStorageClass Gets the storage class by name
 func GetStorageClass(storageClassName string, namespace string) (*storagev1.StorageClass, error) {
 	if storageClassName == "" {
 		return nil, fmt.Errorf("Empty storage class name")
