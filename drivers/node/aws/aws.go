@@ -171,6 +171,11 @@ func (a *aws) FindFiles(path string, n node.Node, options node.FindOpts) (string
 	return "", nil
 }
 
+// TODO implement for AWS
+func (a *aws) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
+	return nil
+}
+
 func (a *aws) getAllInstances() ([]*ec2.Instance, error) {
 	instances := []*ec2.Instance{}
 	params := &ec2.DescribeInstancesInput{}

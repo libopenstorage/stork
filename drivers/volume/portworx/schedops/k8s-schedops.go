@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// PXServiceName is the name of the portworx service
+	// PXServiceName is the name of the portworx service in kubernetes
 	PXServiceName = "portworx-service"
 	// PXNamespace is the kubernetes namespace in which portworx daemon set runs
 	PXNamespace = "kube-system"
@@ -60,7 +60,7 @@ func (e *errLabelAbsent) Error() string {
 
 type k8sSchedOps struct{}
 
-func (k *k8sSchedOps) DisableOnNode(n node.Node) error {
+func (k *k8sSchedOps) DisableOnNode(n node.Node, _ node.Driver) error {
 	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxRunningLabelKey, k8sPxNotRunningLabelValue)
 }
 
@@ -71,7 +71,7 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 	}
 }
 
-func (k *k8sSchedOps) EnableOnNode(n node.Node) error {
+func (k *k8sSchedOps) EnableOnNode(n node.Node, _ node.Driver) error {
 	return k8s.Instance().RemoveLabelOnNode(n.Name, k8sPxRunningLabelKey)
 }
 

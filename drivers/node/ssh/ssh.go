@@ -218,6 +218,31 @@ func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string
 	return out.(string), nil
 }
 
+func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
+	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
+	if err != nil {
+		return &node.ErrFailedToRunSystemctlOnNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
+		}
+	}
+
+	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
+	t := func() (interface{}, error) {
+		return s.doCmd(addr, systemctlCmd, false)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t,
+		options.ConnectionOpts.Timeout,
+		options.ConnectionOpts.TimeBeforeRetry); err != nil {
+		return &node.ErrFailedToRunSystemctlOnNode{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+	return nil
+}
+
 func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	var out string
 	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)

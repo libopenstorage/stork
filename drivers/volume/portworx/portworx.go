@@ -338,7 +338,7 @@ func (d *portworx) ValidateVolumeCleanup() error {
 }
 
 func (d *portworx) StopDriver(n node.Node) error {
-	return d.schedOps.DisableOnNode(n)
+	return d.schedOps.DisableOnNode(n, d.nodeDriver)
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
@@ -494,7 +494,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
-	return d.schedOps.EnableOnNode(n)
+	return d.schedOps.EnableOnNode(n, d.nodeDriver)
 }
 
 func (d *portworx) UpgradeDriver(version string) error {

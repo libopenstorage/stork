@@ -44,6 +44,16 @@ func (e *ErrFailedToFindFileOnNode) Error() string {
 	return fmt.Sprintf("Failed to find file on: %v. Cause: %v", e.Node.Name, e.Cause)
 }
 
+// ErrFailedToRunSystemctlOnNode error type when failing to run systemctl on the node
+type ErrFailedToRunSystemctlOnNode struct {
+	Node  Node
+	Cause string
+}
+
+func (e *ErrFailedToRunSystemctlOnNode) Error() string {
+	return fmt.Sprintf("Failed to run systemctl command on: %v. Cause: %v", e.Node.Name, e.Cause)
+}
+
 // ErrFailedToRunCommand error type when failing to run command
 type ErrFailedToRunCommand struct {
 	Addr  string
