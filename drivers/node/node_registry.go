@@ -54,3 +54,22 @@ func GetWorkerNodes() []Node {
 	}
 	return nodeList
 }
+
+// GetNodesByName returns map of nodes where the node name is the key
+func GetNodesByName() map[string]Node {
+	nodeMap := make(map[string]Node)
+	for _, n := range nodeRegistry {
+		nodeMap[n.Name] = n
+	}
+	return nodeMap
+}
+
+// Contains checks if the node is present in the given list of nodes
+func Contains(nodes []Node, n Node) bool {
+	for _, value := range nodes {
+		if value.Name == n.Name {
+			return true
+		}
+	}
+	return false
+}

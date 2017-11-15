@@ -641,51 +641,47 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	k8sOps := k8s_ops.Instance()
-	var result []node.Node
 	var pods []v1.Pod
-	var err error
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
-			pods, err = k8sOps.GetDeploymentPods(obj)
+			depPods, err := k8sOps.GetDeploymentPods(obj)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetNodesForApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 				}
 			}
+			pods = append(pods, depPods...)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			pods, err = k8sOps.GetStatefulSetPods(obj)
+			ssPods, err := k8sOps.GetStatefulSetPods(obj)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetNodesForApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get pods due to: %v", err),
 				}
 			}
+			pods = append(pods, ssPods...)
 		}
 	}
 
 	// We should have pods from a supported application at this point
-	nodeMap := make(map[string]node.Node)
-	for _, n := range node.GetNodes() {
-		nodeMap[n.Name] = n
-	}
+	var result []node.Node
+	nodeMap := node.GetNodesByName()
 
 	for _, p := range pods {
-		if len(p.Spec.NodeName) > 0 {
-			n, ok := nodeMap[p.Spec.NodeName]
-			if !ok {
-				return nil, &scheduler.ErrFailedToGetNodesForApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("node: %v not present in k8s map", p.Spec.NodeName),
-				}
+		n, ok := nodeMap[p.Spec.NodeName]
+		if !ok {
+			return nil, &scheduler.ErrFailedToGetNodesForApp{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("node: %v not present in node map", p.Spec.NodeName),
 			}
-
-			if contains(result, n) {
-				continue
-			}
-
-			result = append(result, n)
 		}
+
+		if node.Contains(result, n) {
+			continue
+		}
+
+		result = append(result, n)
 	}
 
 	return result, nil
@@ -786,15 +782,6 @@ func dumpPodStatusRecursively(pod v1.Pod) string {
 	}
 	buf.WriteString(insertLineBreak("END Pod"))
 	return buf.String()
-}
-
-func contains(nodes []node.Node, n node.Node) bool {
-	for _, value := range nodes {
-		if value.Name == n.Name {
-			return true
-		}
-	}
-	return false
 }
 
 func init() {

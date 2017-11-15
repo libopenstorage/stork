@@ -27,6 +27,8 @@ type ApplicationOps interface {
 	CreateApplication(*marathon.Application) (*marathon.Application, error)
 	// ValidateAppliation checks if the aplication is running and healthy
 	WaitForApplicationStart(string) error
+	// GetApplicationTasks gets all the tasks/instances for the application
+	GetApplicationTasks(string) ([]marathon.Task, error)
 	// DeleteApplication deletes the given application
 	DeleteApplication(string) error
 	// WaitForApplicationTermination validates if the application is terminated
@@ -93,13 +95,31 @@ func (m *marathonOps) WaitForApplicationStart(name string) error {
 	return m.client.WaitOnApplication(name, 5*time.Minute)
 }
 
+func (m *marathonOps) GetApplicationTasks(name string) ([]marathon.Task, error) {
+	if err := m.initMarathonClient(); err != nil {
+		return nil, err
+	}
+
+	tasks, err := m.client.Tasks(name)
+	if err != nil {
+		return nil, err
+	}
+	return tasks.Tasks, nil
+}
+
 func (m *marathonOps) DeleteApplication(name string) error {
 	if err := m.initMarathonClient(); err != nil {
 		return err
 	}
 
-	if _, err := m.client.DeleteApplication(name, false); err != nil {
+	dep, err := m.client.DeleteApplication(name, false)
+	if err != nil {
 		return err
+	}
+
+	// Wait for the deployment to terminate, so we can start the same app again without issues
+	if err := m.client.WaitOnDeployment(dep.DeploymentID, 2*time.Minute); err != nil {
+		return nil
 	}
 	return nil
 }

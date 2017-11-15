@@ -106,9 +106,40 @@ func (d *dcos) IsNodeReady(n node.Node) error {
 	return nil
 }
 
-func (d *dcos) GetNodesForApp(*scheduler.Context) ([]node.Node, error) {
-	// TODO: Implement this method
-	return nil, nil
+func (d *dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
+	var tasks []marathon.Task
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*marathon.Application); ok {
+			appTasks, err := MarathonClient().GetApplicationTasks(obj.ID)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetNodesForApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get tasks for application %v. %v", obj.ID, err),
+				}
+			}
+			tasks = append(tasks, appTasks...)
+		}
+	}
+
+	var result []node.Node
+	nodeMap := node.GetNodesByName()
+
+	for _, task := range tasks {
+		n, ok := nodeMap[task.SlaveID]
+		if !ok {
+			return nil, &scheduler.ErrFailedToGetNodesForApp{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("node [%v] not present in node map", task.SlaveID),
+			}
+		}
+
+		if node.Contains(result, n) {
+			continue
+		}
+		result = append(result, n)
+	}
+
+	return result, nil
 }
 
 func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
