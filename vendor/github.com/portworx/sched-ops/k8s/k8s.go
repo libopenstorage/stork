@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/portworx/sched-ops/task"
-	apps_api "k8s.io/api/apps/v1beta1"
+	apps_api "k8s.io/api/apps/v1beta2"
 	"k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/typed/apps/v1beta1"
+	"k8s.io/client-go/kubernetes/typed/apps/v1beta2"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -671,7 +671,7 @@ func (k *k8sOps) GetDeploymentPods(deployment *apps_api.Deployment) ([]v1.Pod, e
 		return nil, err
 	}
 
-	rSets, err := k.client.AppsV1beta2().ReplicaSets(deployment.Namespace).List(meta_v1.ListOptions{})
+	rSets, err := k.appsClient().ReplicaSets(deployment.Namespace).List(meta_v1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -787,7 +787,7 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet
 			return "", err
 		}
 
-		sset, err := k.client.AppsV1beta1().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
+		sset, err := k.appsClient().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
 		if err != nil {
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
 				return "", nil
@@ -1062,8 +1062,8 @@ func (k *k8sOps) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
 
 // PVCs APIs - END
 
-func (k *k8sOps) appsClient() v1beta1.AppsV1beta1Interface {
-	return k.client.AppsV1beta1()
+func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
+	return k.client.AppsV1beta2()
 }
 
 // getK8sClient instantiates a k8s client
