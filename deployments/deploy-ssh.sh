@@ -30,7 +30,7 @@ metadata:
   name: torpedo-account
 ---
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1alpha1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
    name: torpedo-role
 rules:
@@ -44,7 +44,7 @@ rules:
     verbs: ["*"]
 ---
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1alpha1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: torpedo-role-binding
 subjects:
