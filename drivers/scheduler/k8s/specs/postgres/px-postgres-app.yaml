@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta1
+apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   name: postgres
@@ -9,6 +9,9 @@ spec:
       maxUnavailable: 1
     type: RollingUpdate
   replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
   template:
     metadata:
       labels:

@@ -15,7 +15,7 @@ spec:
     port: 9300
     protocol: TCP
 ---
-apiVersion: apps/v1beta1
+apiVersion: apps/v1beta2
 kind: StatefulSet
 metadata:
   name: elasticsearch-data
@@ -25,6 +25,10 @@ metadata:
 spec:
   serviceName: elasticsearch-data
   replicas: 3
+  selector:
+    matchLabels:
+      component: elasticsearch
+      role: data
   template:
     metadata:
       labels:
