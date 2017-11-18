@@ -22,8 +22,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: torpedo-role-binding
 subjects:
-- apiVersion: v1
-  kind: ServiceAccount
+- kind: ServiceAccount
   name: torpedo-account
   namespace: default
 roleRef:
