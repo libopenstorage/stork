@@ -300,8 +300,8 @@ func (c *ClusterManager) getNonDecommisionedPeers(
 			continue
 		}
 		peers[types.NodeId(nodeEntry.Id)] = types.NodeUpdate{
-			nodeEntry.DataIp + ":9002",
-			!nodeEntry.NonQuorumMember,
+			Addr:         nodeEntry.DataIp + ":9002",
+			QuorumMember: !nodeEntry.NonQuorumMember,
 		}
 	}
 	return peers
@@ -517,6 +517,7 @@ func (c *ClusterManager) joinCluster(
 	defer func() {
 		if initState.Collector != nil {
 			initState.Collector.Stop()
+			initState.Collector = nil
 		}
 	}()
 
