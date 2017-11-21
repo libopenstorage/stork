@@ -1,3 +1,5 @@
+// +build unittest
+
 package extender
 
 import (
@@ -35,7 +37,6 @@ func setup(t *testing.T) {
 	if !ok {
 		t.Fatalf("Error casting mockdriver")
 	}
-	logrus.Printf("storkdriver: %v, driver: %v", &storkdriver, &driver)
 	if err = storkdriver.Init(); err != nil {
 		t.Fatalf("Error initializing mock volume driver: %v", err)
 	}
@@ -277,6 +278,12 @@ func noDriverVolumeTest(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1"))
 	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2"))
 	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3"))
+
+	podVolume := v1.Volume{}
+	podVolume.PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: "noDriverPVC",
+	}
+	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
