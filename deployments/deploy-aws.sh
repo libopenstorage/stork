@@ -107,6 +107,7 @@ spec:
             "bin/basic.test",
             "bin/reboot.test",
             "bin/scale.test",
+            "bin/upgrade.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--node-driver", "aws",
