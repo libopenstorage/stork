@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -124,7 +125,7 @@ func (k *k8s) ParseSpecs(specDir string) ([]interface{}, error) {
 
 				specObj, err := validateSpec(obj)
 				if err != nil {
-					logrus.Warnf("%s. Parser skipping the spec", err)
+					logrus.Warnf("Error parsing spec from %v: %v", fileName, err)
 					return nil, nil
 				}
 
@@ -148,7 +149,7 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*storage_api.StorageClass); ok {
 		return specObj, nil
 	}
-	return nil, fmt.Errorf("Unsupported object")
+	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
 }
 
 func (k *k8s) getAddressesForNode(n v1.Node) []string {
