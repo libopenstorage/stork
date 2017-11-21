@@ -10,6 +10,7 @@ import (
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
+	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"k8s.io/api/core/v1"
 )
@@ -69,9 +70,16 @@ func (p *portworx) Init() error {
 func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
 	vols, err := p.volDriver.Inspect([]string{volumeID})
 	if err != nil {
-		return nil, &ErrFailedToInspectVolme{
+		return nil, &ErrFailedToInspectVolume{
 			ID:    volumeID,
 			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+		}
+	}
+
+	if len(vols) == 0 {
+		return nil, &errors.ErrNotFound{
+			ID:   volumeID,
+			Type: "Volume",
 		}
 	}
 
@@ -123,7 +131,7 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	cluster, err := p.clusterManager.Enumerate()
 	if err != nil {
-		return nil, &ErrFailedToInspectVolme{
+		return nil, &ErrFailedToGetNodes{
 			Cause: err.Error(),
 		}
 	}
