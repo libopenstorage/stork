@@ -17,6 +17,7 @@ BASE_DIR := $(shell git rev-parse --show-toplevel)
 BIN :=$(BASE_DIR)/bin
 
 .DEFAULT_GOAL=all
+.PHONY: test clean
 
 all: stork vet lint container
 
@@ -71,7 +72,7 @@ errcheck:
 pretest: lint vet errcheck
 
 test:
-	go test -tags "$(TAGS)" $(TESTFLAGS) $(PKGS)
+	go test -tags unittest $(TESTFLAGS) $(PKGS)
 
 stork:
 	@echo "Building the stork binary"
@@ -82,11 +83,11 @@ container:
 	sudo docker build --tag $(STORK_IMG) -f Dockerfile .
 
 deploy:
-	docker push $(STORK_IMG)
+	sudo docker push $(STORK_IMG)
 
 clean:
 	-rm -rf stork
 	@echo "Deleting image "$(STORK_IMG)
-	-docker rmi -f $(STORK_IMG)
+	-sudo docker rmi -f $(STORK_IMG)
 	go clean -i $(PKGS)`
 
