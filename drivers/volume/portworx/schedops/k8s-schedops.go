@@ -39,6 +39,18 @@ func (e *errLabelPresent) Error() string {
 	return fmt.Sprintf("label %s is present on node %s", e.label, e.node)
 }
 
+// errLabelAbsent error type for a label absent on a node
+type errLabelAbsent struct {
+	// label is the label key
+	label string
+	// node is the k8s node where the label is absent
+	node string
+}
+
+func (e *errLabelAbsent) Error() string {
+	return fmt.Sprintf("label %s is absent on node %s", e.label, e.node)
+}
+
 type k8sSchedOps struct{}
 
 func (k *k8sSchedOps) DisableOnNode(n node.Node) error {
@@ -66,26 +78,30 @@ func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume
 	for _, rs := range replicaNodes {
 		t := func() (interface{}, error) {
 			n, err := k8s.Instance().GetNodeByName(rs.Id)
-			if err == nil && n != nil {
-				return n.Labels, nil
+			if err != nil || n == nil {
+				addrs := []string{rs.DataIp, rs.MgmtIp}
+				n, err = k8s.Instance().SearchNodeByAddresses(addrs)
+				if err != nil || n == nil {
+					return nil, fmt.Errorf("failed to locate node using id: %s and addresses: %v",
+						rs.Id, addrs)
+				}
 			}
 
-			addrs := []string{rs.DataIp, rs.MgmtIp}
-			n, err = k8s.Instance().SearchNodeByAddresses(addrs)
-			if err == nil && n != nil {
-				return n.Labels, nil
+			if _, ok := n.Labels[pvc]; !ok {
+				return nil, &errLabelAbsent{
+					node:  n.Name,
+					label: pvc,
+				}
 			}
-
-			return nil, fmt.Errorf("failed to locate node using id: %s and addresses: %v", rs.Id, addrs)
+			return nil, nil
 		}
 
-		ret, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
-		if err != nil {
-			return err
-		}
-		nodeLabels := ret.(map[string]string)
-		if _, ok := nodeLabels[pvc]; !ok {
-			missingLabelNodes = append(missingLabelNodes, rs.Id)
+		if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+			if _, ok := err.(*errLabelAbsent); ok {
+				missingLabelNodes = append(missingLabelNodes, rs.Id)
+			} else {
+				return err
+			}
 		}
 	}
 
@@ -114,12 +130,10 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 					label: pvcLabel,
 				}
 			}
-
 			return nil, nil
 		}
 
-		_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
-		if err != nil {
+		if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 			if _, ok := err.(*errLabelPresent); ok {
 				staleLabelNodes = append(staleLabelNodes, n.Name)
 			} else {
