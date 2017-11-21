@@ -32,6 +32,7 @@ type Ops interface {
 	ServiceOps
 	StatefulSetOps
 	DeploymentOps
+	DaemonSetOps
 	PodOps
 	StorageClassOps
 	PersistentVolumeClaimOps
@@ -111,6 +112,14 @@ type DeploymentOps interface {
 	GetDeploymentPods(*apps_api.Deployment) ([]v1.Pod, error)
 	// DescribeDeployment gets the deployment status
 	DescribeDeployment(string, string) (*apps_api.DeploymentStatus, error)
+}
+
+// DaemonSetOps is an interface to perform k8s daemon set operations
+type DaemonSetOps interface {
+	// GetDaemonSet gets the the daemon set with given name
+	GetDaemonSet(string, string) (*apps_api.DaemonSet, error)
+	// UpdateDaemonSet updates the given daemon set
+	UpdateDaemonSet(*apps_api.DaemonSet) error
 }
 
 // PodOps is an interface to perform k8s pod operations
@@ -688,6 +697,37 @@ func (k *k8sOps) GetDeploymentPods(deployment *apps_api.Deployment) ([]v1.Pod, e
 }
 
 // Deployment APIs - END
+
+// DaemonSet APIs - BEGIN
+
+func (k *k8sOps) GetDaemonSet(name, namespace string) (*apps_api.DaemonSet, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	if len(namespace) == 0 {
+		namespace = v1.NamespaceDefault
+	}
+
+	ds, err := k.appsClient().DaemonSets(namespace).Get(name, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return ds, nil
+}
+
+func (k *k8sOps) UpdateDaemonSet(ds *apps_api.DaemonSet) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	if _, err := k.appsClient().DaemonSets(ds.Namespace).Update(ds); err != nil {
+		return err
+	}
+	return nil
+}
+
+// DaemonSet APIs - END
 
 // StatefulSet APIs - BEGIN
 
