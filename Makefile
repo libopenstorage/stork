@@ -1,4 +1,5 @@
-STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_TAG)
+STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
+STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
 ifndef TAGS
 TAGS := daemon
@@ -19,7 +20,7 @@ BIN :=$(BASE_DIR)/bin
 .DEFAULT_GOAL=all
 .PHONY: test clean
 
-all: stork vet lint container
+all: stork vet lint container integration-test
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -73,6 +74,17 @@ pretest: lint vet errcheck
 
 test:
 	go test -tags unittest $(TESTFLAGS) $(PKGS)
+
+integration-test:
+	@echo "Building stork tests"
+	@cd test/integration_test && go test -tags integrationtest -v -c -o stork.test
+
+integration-test-container:
+	@echo "Building container: docker build --tag $(STORK_TEST_IMG) -f Dockerfile ."
+	@cd test/integration_test && sudo docker build --tag $(STORK_TEST_IMG) -f Dockerfile .
+
+integration-test-deploy:
+	sudo docker push $(STORK_TEST_IMG)
 
 stork:
 	@echo "Building the stork binary"
