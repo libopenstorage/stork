@@ -2,7 +2,7 @@ package kvdb
 
 import (
 	"fmt"
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"strings"
 	"sync"
 )
@@ -51,9 +51,7 @@ func (c *updatesCollectorImpl) Stop() {
 	c.stopped = true
 }
 
-func (c *updatesCollectorImpl) ReplayUpdates(
-	cbList []ReplayCb,
-) (uint64, error) {
+func (c *updatesCollectorImpl) ReplayUpdates(cbList []ReplayCb) (uint64, error) {
 	c.updatesMutex.Lock()
 	updates := make([]*kvdbUpdate, len(c.updates))
 	copy(updates, c.updates)
@@ -67,8 +65,7 @@ func (c *updatesCollectorImpl) ReplayUpdates(
 		}
 		index = update.kvp.ModifiedIndex
 		for _, cbInfo := range cbList {
-			if strings.HasPrefix(update.kvp.Key, cbInfo.Prefix) &&
-				cbInfo.WaitIndex < update.kvp.ModifiedIndex {
+			if strings.HasPrefix(update.kvp.Key, cbInfo.Prefix) {
 				err := cbInfo.WatchCB(update.prefix, cbInfo.Opaque, update.kvp,
 					update.err)
 				if err != nil {
