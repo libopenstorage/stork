@@ -3,7 +3,6 @@ package portworx
 import (
 	"fmt"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/libopenstorage/openstorage/api"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
@@ -12,6 +11,7 @@ import (
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 )
 

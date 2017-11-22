@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	storklog "github.com/libopenstorage/stork/pkg/log"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 )
 

@@ -1,8 +1,8 @@
 package volume
 
 import (
-	"github.com/Sirupsen/logrus"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 )
 
