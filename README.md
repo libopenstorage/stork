@@ -42,15 +42,13 @@ In order to run stork in your Kubernetes cluster, just create the deployment spe
 # kubectl create -f stork-deployment.yaml
 ```
 
-Verify that the stork pods are running:
+Verify that the stork pod is running:
 
 ```
 # kubectl get pods --namespace=kube-system
 NAME                              READY     STATUS    RESTARTS   AGE
 ....
 stork-98b64f47f-5wh2b             1/1       Running   0          27m
-stork-98b64f47f-fjknb             1/1       Running   0          27m
-stork-98b64f47f-wdzmj             1/1       Running   0          27m
 ....
 ```
 
