@@ -54,7 +54,7 @@ type NodeInfo struct {
 	ID string
 	// Hostname of the node
 	Hostname string
-	// IPs List of IPs assocaited with the node
+	// IPs List of IPs associated with the node
 	IPs []string
 	// Status of the node
 	Status NodeStatus
