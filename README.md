@@ -30,10 +30,10 @@ Now that you have stork in a container image, you can just create a pod config f
 ## Create a Deployment
 A Deployment manages a Replica Set which in turn manages the pods, thereby making stork resilient to failures. The deployment spec is defined in [specs/stork-deployment.yaml](specs/stork-deployment.yaml).
 By default the deployment does the following
-* Uses the latest stable image of stork to start 3 replicas. You can update the tag to use a specific version or use your own stork image.
-* Creates a service to load balance between the replicas. 
+* Uses the latest stable image of stork to start a pod. You can update the tag to use a specific version or use your own stork image.
+* Creates a service to provide an endpoint that can be used to reach the extender. 
 * Creates a ConfigMap which can be used by a scheduler to communicate with stork.
-* Uses the Portworx (pxd) driver for stork
+* Uses the Portworx (pxd) driver for stork.
 
 ## Run Stork in the Kubernetes
 In order to run stork in your Kubernetes cluster, just create the deployment specified in the config above in a Kubernetes cluster:
