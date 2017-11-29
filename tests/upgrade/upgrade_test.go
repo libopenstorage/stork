@@ -23,7 +23,7 @@ var _ = Describe("Upgrade volume driver", func() {
 		contexts := ScheduleAndValidate("upgradevolumedriver")
 
 		Step("start the upgrade of volume driver", func() {
-			err := Inst().V.UpgradeDriver("1.2.11.4")
+			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeVersion)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -34,7 +34,7 @@ var _ = Describe("Upgrade volume driver", func() {
 		})
 
 		Step("start the downgrade of volume driver", func() {
-			err := Inst().V.UpgradeDriver("1.2.11.3")
+			err := Inst().V.UpgradeDriver(Inst().StorageDriverBaseVersion)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

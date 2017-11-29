@@ -88,7 +88,9 @@ spec:
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--node-driver", "ssh",
-            "--scale-factor", "$SCALE_FACTOR" ]
+            "--scale-factor", "$SCALE_FACTOR",
+            "--storage-driver-upgrade-version", "$STORAGE_UPGRADE_VERSION",
+            "--storage-driver-base-version", "$STORAGE_BASE_VERSION" ]
     tty: true
     env:
     - name: TORPEDO_SSH_USER

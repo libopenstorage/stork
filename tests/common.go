@@ -28,13 +28,15 @@ import (
 
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
-	defaultSpecsRoot     = "/specs"
-	schedulerCliFlag     = "scheduler"
-	nodeDriverCliFlag    = "node-driver"
-	storageDriverCliFlag = "storage-driver"
-	specDirCliFlag       = "spec-dir"
-	logLocationCliFlag   = "log-location"
-	scaleFactorCliFlag   = "scale-factor"
+	defaultSpecsRoot                   = "/specs"
+	schedulerCliFlag                   = "scheduler"
+	nodeDriverCliFlag                  = "node-driver"
+	storageDriverCliFlag               = "storage-driver"
+	specDirCliFlag                     = "spec-dir"
+	logLocationCliFlag                 = "log-location"
+	scaleFactorCliFlag                 = "scale-factor"
+	storageDriverUpgradeVersionCliFlag = "storage-driver-upgrade-version"
+	storageDriverBaseVersionCliFlag    = "storage-driver-base-version"
 )
 
 const (
@@ -43,6 +45,10 @@ const (
 	defaultStorageDriver  = "pxd"
 	defaultLogLocation    = "/mnt/torpedo_support_dir"
 	defaultAppScaleFactor = 10
+	// TODO: These are Portworx specific versions and will not work with other storage drivers.
+	// Eventually we should remove the defaults and make it mandatory with documentation.
+	defaultStorageDriverUpgradeVersion = "1.2.11.6"
+	defaultStorageDriverBaseVersion    = "1.2.11.5"
 )
 
 var (
@@ -219,13 +225,15 @@ var once sync.Once
 
 // Torpedo is the torpedo testsuite
 type Torpedo struct {
-	InstanceID  string
-	S           scheduler.Driver
-	V           volume.Driver
-	N           node.Driver
-	SpecDir     string
-	LogLoc      string
-	ScaleFactor int
+	InstanceID                  string
+	S                           scheduler.Driver
+	V                           volume.Driver
+	N                           node.Driver
+	SpecDir                     string
+	LogLoc                      string
+	ScaleFactor                 int
+	StorageDriverUpgradeVersion string
+	StorageDriverBaseVersion    string
 }
 
 // ParseFlags parses command line flags
@@ -236,6 +244,7 @@ func ParseFlags() {
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
 	var appScaleFactor int
+	var volUpgradeVersion, volBaseVersion string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -245,6 +254,10 @@ func ParseFlags() {
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
+	flag.StringVar(&volUpgradeVersion, storageDriverUpgradeVersionCliFlag, defaultStorageDriverUpgradeVersion,
+		"Version of storage driver to be upgraded to")
+	flag.StringVar(&volBaseVersion, storageDriverBaseVersionCliFlag, defaultStorageDriverBaseVersion,
+		"Version of storage driver to be downgraded to")
 
 	flag.Parse()
 
@@ -263,13 +276,15 @@ func ParseFlags() {
 	} else {
 		once.Do(func() {
 			instance = &Torpedo{
-				InstanceID:  time.Now().Format("01-02-15h04m05s"),
-				S:           schedulerDriver,
-				V:           volumeDriver,
-				N:           nodeDriver,
-				SpecDir:     specDir,
-				LogLoc:      logLoc,
-				ScaleFactor: appScaleFactor,
+				InstanceID:                  time.Now().Format("01-02-15h04m05s"),
+				S:                           schedulerDriver,
+				V:                           volumeDriver,
+				N:                           nodeDriver,
+				SpecDir:                     specDir,
+				LogLoc:                      logLoc,
+				ScaleFactor:                 appScaleFactor,
+				StorageDriverUpgradeVersion: volUpgradeVersion,
+				StorageDriverBaseVersion:    volBaseVersion,
 			}
 		})
 	}

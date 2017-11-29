@@ -24,6 +24,7 @@ const (
 	DriverName              = "pxd"
 	pxdClientSchedUserAgent = "pxd-sched"
 	pxdRestPort             = 9001
+	pxVersionLabel          = "PX Version"
 )
 
 type portworx struct {
@@ -418,7 +419,7 @@ func (d *portworx) WaitForUpgrade(n node.Node, newVersion string) error {
 			}
 		}
 
-		pxVersion := pxNode.NodeLabels["PX Version"]
+		pxVersion := pxNode.NodeLabels[pxVersionLabel]
 		if !strings.HasPrefix(pxVersion, newVersion) {
 			return nil, &ErrFailedToUpgradeVolumeDriver{
 				Version: newVersion,
