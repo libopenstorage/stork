@@ -118,6 +118,8 @@ func (d *dcos) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 				}
 			}
 			tasks = append(tasks, appTasks...)
+		} else {
+			logrus.Warnf("Invalid spec received for app %v in GetNodesForApp", ctx.App.Key)
 		}
 	}
 
@@ -161,6 +163,12 @@ func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([
 		var specObjects []interface{}
 		for _, spec := range app.SpecList {
 			if application, ok := spec.(*marathon.Application); ok {
+				if err := d.randomizeVolumeNames(application); err != nil {
+					return nil, &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: err.Error(),
+					}
+				}
 				obj, err := MarathonClient().CreateApplication(application)
 				if err != nil {
 					return nil, &scheduler.ErrFailedToScheduleApp{
@@ -170,6 +178,8 @@ func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([
 				}
 
 				specObjects = append(specObjects, obj)
+			} else {
+				return nil, fmt.Errorf("Unsupported object received in app %v while scheduling", app.Key)
 			}
 		}
 
@@ -188,6 +198,22 @@ func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([
 	return contexts, nil
 }
 
+func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
+	volDriver, err := volume.Get(d.volDriverName)
+	if err != nil {
+		return err
+	}
+
+	params := *application.Container.Docker.Parameters
+	for i := range params {
+		p := &params[i]
+		if p.Key == "volume" {
+			p.Value = volDriver.RandomizeVolumeName(p.Value)
+		}
+	}
+	return nil
+}
+
 func (d *dcos) WaitForRunning(ctx *scheduler.Context) error {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
@@ -198,6 +224,8 @@ func (d *dcos) WaitForRunning(ctx *scheduler.Context) error {
 				}
 			}
 			logrus.Infof("[%v] Validated application: %v", ctx.App.Key, obj.ID)
+		} else {
+			logrus.Warnf("Invalid spec received for app %v in WaitForRunning", ctx.App.Key)
 		}
 	}
 	return nil
@@ -212,7 +240,9 @@ func (d *dcos) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 					Cause: fmt.Sprintf("Failed to destroy Application: %v. Err: %v", obj.ID, err),
 				}
 			}
-			logrus.Infof("[%v] Destoyed application: %v", ctx.App.Key, obj.ID)
+			logrus.Infof("[%v] Destroyed application: %v", ctx.App.Key, obj.ID)
+		} else {
+			logrus.Warnf("Invalid spec received for app %v in Destroy", ctx.App.Key)
 		}
 	}
 
@@ -240,6 +270,8 @@ func (d *dcos) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 			logrus.Infof("[%v] Validated destroy of Application: %v", ctx.App.Key, obj.ID)
+		} else {
+			logrus.Warnf("Invalid spec received for app %v in WaitForDestroy", ctx.App.Key)
 		}
 	}
 
@@ -247,7 +279,18 @@ func (d *dcos) WaitForDestroy(ctx *scheduler.Context) error {
 }
 
 func (d *dcos) DeleteTasks(ctx *scheduler.Context) error {
-	// TODO: Implement this method
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*marathon.Application); ok {
+			if err := MarathonClient().KillApplicationTasks(obj.ID); err != nil {
+				return &scheduler.ErrFailedToDeleteTasks{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to delete tasks for application: %v. %v", obj.ID, err),
+				}
+			}
+		} else {
+			logrus.Warnf("Invalid spec received for app %v in DeleteTasks", ctx.App.Key)
+		}
+	}
 	return nil
 }
 
@@ -332,6 +375,8 @@ func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string
 					}
 				}
 			}
+		} else {
+			logrus.Warnf("Invalid spec received for app %v", ctx.App.Key)
 		}
 	}
 

@@ -519,30 +519,15 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
-	k8sOps := k8s_ops.Instance()
-	var pods []v1.Pod
-	var err error
-	for _, spec := range ctx.App.SpecList {
-		if obj, ok := spec.(*apps_api.Deployment); ok {
-			pods, err = k8sOps.GetDeploymentPods(obj)
-			if err != nil {
-				return &scheduler.ErrFailedToDeleteTasks{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-				}
-			}
-		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			pods, err = k8sOps.GetStatefulSetPods(obj)
-			if err != nil {
-				return &scheduler.ErrFailedToDeleteTasks{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-				}
-			}
+	pods, err := k.getPodsForApp(ctx)
+	if err != nil {
+		return &scheduler.ErrFailedToDeleteTasks{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 		}
 	}
 
-	if err := k8sOps.DeletePods(pods); err != nil {
+	if err := k8s_ops.Instance().DeletePods(pods); err != nil {
 		return &scheduler.ErrFailedToDeleteTasks{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
@@ -640,27 +625,11 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 }
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
-	k8sOps := k8s_ops.Instance()
-	var pods []v1.Pod
-	for _, spec := range ctx.App.SpecList {
-		if obj, ok := spec.(*apps_api.Deployment); ok {
-			depPods, err := k8sOps.GetDeploymentPods(obj)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToGetNodesForApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-				}
-			}
-			pods = append(pods, depPods...)
-		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			ssPods, err := k8sOps.GetStatefulSetPods(obj)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToGetNodesForApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to get pods due to: %v", err),
-				}
-			}
-			pods = append(pods, ssPods...)
+	pods, err := k.getPodsForApp(ctx)
+	if err != nil {
+		return nil, &scheduler.ErrFailedToGetNodesForApp{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 		}
 	}
 
@@ -685,6 +654,29 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	}
 
 	return result, nil
+}
+
+func (k *k8s) getPodsForApp(ctx *scheduler.Context) ([]v1.Pod, error) {
+	k8sOps := k8s_ops.Instance()
+	var pods []v1.Pod
+
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			depPods, err := k8sOps.GetDeploymentPods(obj)
+			if err != nil {
+				return nil, err
+			}
+			pods = append(pods, depPods...)
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ssPods, err := k8sOps.GetStatefulSetPods(obj)
+			if err != nil {
+				return nil, err
+			}
+			pods = append(pods, ssPods...)
+		}
+	}
+
+	return pods, nil
 }
 
 func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {

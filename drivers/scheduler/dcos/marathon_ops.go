@@ -1,9 +1,10 @@
 package dcos
 
 import (
+	"fmt"
 	"net/url"
 	"os"
-	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,8 @@ type ApplicationOps interface {
 	WaitForApplicationStart(string) error
 	// GetApplicationTasks gets all the tasks/instances for the application
 	GetApplicationTasks(string) ([]marathon.Task, error)
+	// KillApplicationTasks kills all tasks of an application
+	KillApplicationTasks(string) error
 	// DeleteApplication deletes the given application
 	DeleteApplication(string) error
 	// WaitForApplicationTermination validates if the application is terminated
@@ -107,32 +110,62 @@ func (m *marathonOps) GetApplicationTasks(name string) ([]marathon.Task, error) 
 	return tasks.Tasks, nil
 }
 
+func (m *marathonOps) KillApplicationTasks(name string) error {
+	tasks, err := m.GetApplicationTasks(name)
+	if err != nil {
+		return err
+	}
+
+	var taskIds []string
+	for _, task := range tasks {
+		taskIds = append(taskIds, task.ID)
+	}
+
+	return m.client.KillTasks(taskIds, &marathon.KillTaskOpts{})
+}
+
 func (m *marathonOps) DeleteApplication(name string) error {
 	if err := m.initMarathonClient(); err != nil {
 		return err
 	}
 
-	dep, err := m.client.DeleteApplication(name, false)
-	if err != nil {
+	if _, err := m.client.DeleteApplication(name, false); err != nil {
 		return err
-	}
-
-	// Wait for the deployment to terminate, so we can start the same app again without issues
-	if err := m.client.WaitOnDeployment(dep.DeploymentID, 2*time.Minute); err != nil {
-		return nil
 	}
 	return nil
 }
 
 func (m *marathonOps) WaitForApplicationTermination(name string) error {
+	if err := m.initMarathonClient(); err != nil {
+		return err
+	}
+
 	t := func() (interface{}, error) {
-		if err := m.initMarathonClient(); err != nil {
+		_, err := m.client.Application(name)
+		if err == nil {
+			return nil, fmt.Errorf("Application %v is not yet deleted", name)
+		}
+
+		if !strings.Contains(err.Error(), "does not exist") {
 			return nil, err
 		}
 
-		if _, err := m.client.Application(name); err != nil {
-			if matched, _ := regexp.MatchString(".+ does not exist", err.Error()); !matched {
-				return nil, err
+		// Delete stuck deployments that are no more relevant, as the app is deleted
+		deps, err := m.client.Deployments()
+		if err != nil {
+			return nil, err
+		}
+		for _, dep := range deps {
+			for _, affectedApp := range dep.AffectedApps {
+				if name == affectedApp {
+					// Wait for the deployment to exit properly if it is not stuck
+					// If we delete a successful deployment without waiting, it may
+					// rollback and bring the app back.
+					m.client.WaitOnDeployment(dep.ID, 2*time.Minute)
+					// Delete the deployment assuming it is stuck
+					m.client.DeleteDeployment(dep.ID, true)
+					break
+				}
 			}
 		}
 

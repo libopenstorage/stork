@@ -3,6 +3,7 @@ package portworx
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
+	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
@@ -347,6 +349,11 @@ func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, 
 		return params, nil, fmt.Errorf("Unable to parse the volume options")
 	}
 	return volName, volParams, nil
+}
+
+func (d *portworx) RandomizeVolumeName(params string) string {
+	re := regexp.MustCompile("(" + api.Name + "=)([0-9A-Za-z_-]+),?")
+	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New())
 }
 
 func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
