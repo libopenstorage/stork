@@ -26,7 +26,7 @@ type Driver interface {
 	// GetVolumeName returns the volume name based on the volume object recevied
 	GetVolumeName(v *volume.Volume) string
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
-	GetServiceEndpoint() string
+	GetServiceEndpoint() (string, error)
 	// UpgradePortworx upgrades portworx to the given version
 	UpgradePortworx(version string) error
 }

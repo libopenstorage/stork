@@ -440,13 +440,15 @@ func (d *portworx) setDriver() error {
 	var endpoint string
 
 	// Try portworx-service first
-	endpoint = d.schedOps.GetServiceEndpoint()
-	if endpoint != "" {
+	endpoint, err = d.schedOps.GetServiceEndpoint()
+	if err == nil && endpoint != "" {
 		if err = d.testAndSetEndpoint(endpoint); err == nil {
 			d.refreshEndpoint = false
 			return nil
 		}
 		logrus.Infof("testAndSetEndpoint failed for %v: %v", endpoint, err)
+	} else if err != nil && len(node.GetWorkerNodes()) == 0 {
+		return err
 	}
 
 	// Try direct address of cluster nodes

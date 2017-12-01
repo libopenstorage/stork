@@ -241,12 +241,12 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 	}
 }
 
-func (k *k8sSchedOps) GetServiceEndpoint() string {
+func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
 	svc, err := k8s.Instance().GetService(PXServiceName, PXNamespace)
 	if err == nil {
-		return svc.Spec.ClusterIP
+		return svc.Spec.ClusterIP, nil
 	}
-	return ""
+	return "", err
 }
 
 func (k *k8sSchedOps) UpgradePortworx(version string) error {
