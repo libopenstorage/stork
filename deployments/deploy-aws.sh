@@ -1,17 +1,30 @@
 #!/bin/bash -x
 
 EXTRA_ARGS=""
+UPGRADE_ARGS=""
 
 if [ -n "${VERBOSE}" ]; then
     VERBOSE="--v"
+fi
+
+if [ -z "${SCALE_FACTOR}" ]; then
+    SCALE_FACTOR="10"
 fi
 
 if [ -n "${SKIP_TESTS}" ]; then
     EXTRA_ARGS="--skip=$SKIP_TESTS $EXTRA_ARGS"
 fi
 
-if [ -z "${SCALE_FACTOR}" ]; then
-    SCALE_FACTOR="10"
+if [ -n "${FOCUS_TESTS}" ]; then
+    EXTRA_ARGS="--focus=$FOCUS_TESTS $EXTRA_ARGS"
+fi
+
+if [ -n "${STORAGE_UPGRADE_VERSION}" ]; then
+    UPGRADE_ARGS="--storage-driver-upgrade-version=$STORAGE_UPGRADE_VERSION"
+fi
+
+if [ -n "${STORAGE_BASE_VERSION}" ]; then
+    UPGRADE_ARGS="--storage-driver-base-version=$STORAGE_BASE_VERSION $UPGRADE_ARGS"
 fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
@@ -112,8 +125,7 @@ spec:
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--node-driver", "aws",
             "--scale-factor", "$SCALE_FACTOR",
-            "--storage-driver-upgrade-version", "$STORAGE_UPGRADE_VERSION",
-            "--storage-driver-base-version", "$STORAGE_BASE_VERSION" ]
+            "$UPGRADE_ARGS" ]
     tty: true
     env:
       - name: AWS_ACCESS_KEY_ID
