@@ -1,8 +1,5 @@
 #!/bin/bash -x
 
-EXTRA_ARGS=""
-UPGRADE_ARGS=""
-
 if [ -n "${VERBOSE}" ]; then
     VERBOSE="--v"
 fi
@@ -11,20 +8,24 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+SKIP_ARG=""
 if [ -n "${SKIP_TESTS}" ]; then
-    EXTRA_ARGS="--skip=$SKIP_TESTS $EXTRA_ARGS"
+    SKIP_ARG="--skip=$SKIP_TESTS"
 fi
 
+FOCUS_ARG=""
 if [ -n "${FOCUS_TESTS}" ]; then
-    EXTRA_ARGS="--focus=$FOCUS_TESTS $EXTRA_ARGS"
+    FOCUS_ARG="--focus=$FOCUS_TESTS"
 fi
 
+UPGRADE_VERSION_ARG=""
 if [ -n "${STORAGE_UPGRADE_VERSION}" ]; then
-    UPGRADE_ARGS="--storage-driver-upgrade-version=$STORAGE_UPGRADE_VERSION"
+    UPGRADE_VERSION_ARG="--storage-driver-upgrade-version=$STORAGE_UPGRADE_VERSION"
 fi
 
+UPGRADE_BASE_VERSION_ARG=""
 if [ -n "${STORAGE_BASE_VERSION}" ]; then
-    UPGRADE_ARGS="--storage-driver-base-version=$STORAGE_BASE_VERSION $UPGRADE_ARGS"
+    UPGRADE_BASE_VERSION_ARG="--storage-driver-base-version=$STORAGE_BASE_VERSION"
 fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
@@ -92,7 +93,8 @@ spec:
     args: [ "$VERBOSE",
             "--trace",
             "--failFast",
-            "$EXTRA_ARGS",
+            "$FOCUS_ARG",
+            "$SKIP_ARG",
              "--slowSpecThreshold", "600",
             "bin/basic.test",
             "bin/reboot.test",
@@ -102,7 +104,8 @@ spec:
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
-            "$UPGRADE_ARGS" ]
+            "$UPGRADE_VERSION_ARG",
+            "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true
     env:
     - name: TORPEDO_SSH_USER
