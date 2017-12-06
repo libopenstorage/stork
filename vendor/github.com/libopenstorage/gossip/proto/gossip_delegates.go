@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/memberlist"
+	"github.com/sirupsen/logrus"
 
 	"github.com/libopenstorage/gossip/proto/state"
 	"github.com/libopenstorage/gossip/types"

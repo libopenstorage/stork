@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/hashicorp/logutils"
 	ml "github.com/hashicorp/memberlist"
 	"github.com/libopenstorage/gossip/types"
+	log "github.com/sirupsen/logrus"
 )
 
 type GossipNode struct {

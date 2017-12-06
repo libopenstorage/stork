@@ -8,7 +8,7 @@ package dlog_logrus // import "go.pedge.io/dlog/logrus"
 import (
 	"go.pedge.io/dlog"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 var (
