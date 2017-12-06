@@ -47,7 +47,7 @@ func (e *Extender) Start() error {
 
 	http.HandleFunc("/", e.serveHTTP)
 	go func() {
-		if err := e.server.ListenAndServe(); err != nil {
+		if err := e.server.ListenAndServe(); err != http.ErrServerClosed {
 			log.Panicf("Error starting extender server: %v", err)
 		}
 	}()
