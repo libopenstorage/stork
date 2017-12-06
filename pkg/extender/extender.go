@@ -1,11 +1,13 @@
 package extender
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
@@ -62,7 +64,10 @@ func (e *Extender) Stop() error {
 		return fmt.Errorf("Extender has not been started")
 	}
 
-	if err := e.server.Shutdown(nil); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := e.server.Shutdown(ctx); err != nil {
 		return err
 	}
 	e.started = false
