@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"os/signal"
 	"syscall"
@@ -9,11 +10,23 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/monitor"
+	"github.com/libopenstorage/stork/pkg/snapshot"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
 func main() {
+	// Parse empty flags to suppress warnings from the snapshotter which uses
+	// glog
+	err := flag.CommandLine.Parse([]string{})
+	if err != nil {
+		log.Warnf("Error parsing flag: %v", err)
+	}
+	err = flag.Set("logtostderr", "true")
+	if err != nil {
+		log.Fatalf("Error setting glog flag: %v", err)
+	}
+
 	app := cli.NewApp()
 	app.Name = "stork"
 	app.Usage = "STorage Orchestartor Runtime for Kubernetes (STORK)"
@@ -76,6 +89,15 @@ func run(c *cli.Context) {
 		os.Exit(-1)
 	}
 
+	snapshotController := &snapshotcontroller.SnapshotController{
+		Driver: d,
+	}
+
+	if err = snapshotController.Start(); err != nil {
+		log.Fatalf("Error starting snapshot controller: %v", err)
+		os.Exit(-1)
+	}
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	for {
@@ -87,6 +109,9 @@ func run(c *cli.Context) {
 			}
 			if err := monitor.Stop(); err != nil {
 				log.Warnf("Error stopping monitor: %v", err)
+			}
+			if err := snapshotController.Stop(); err != nil {
+				log.Warnf("Error stopping snapshot controller: %v", err)
 			}
 			os.Exit(0)
 		}
