@@ -2,7 +2,7 @@ package kvdb
 
 import (
 	"errors"
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -74,8 +74,6 @@ const (
 	EtcdBaseVersion = "etcd"
 	// EtcdVersion3 key
 	EtcdVersion3 = "etcdv3"
-	// Zookeeper key
-	ZookeeperVersion3 = "zkv3"
 	// MemVersion1 key
 	MemVersion1 = "memv1"
 )
@@ -247,10 +245,14 @@ type Kvdb interface {
 
 // ReplayCb provides info required for replay
 type ReplayCb struct {
-	Prefix    string
+	// Prefix is the watch key/tree prefix
+	Prefix string
+	// WaitIndex is the index after which updates must be returned
 	WaitIndex uint64
-	Opaque    interface{}
-	WatchCB   WatchCB
+	// Opaque is a hint returned by the caller
+	Opaque interface{}
+	// WatchCB is the watch callback
+	WatchCB WatchCB
 }
 
 // UpdatesCollector collects updates from kvdb.

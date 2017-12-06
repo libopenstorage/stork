@@ -12,19 +12,26 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
+	"k8s.io/api/core/v1"
 )
 
 const (
 	// PXServiceName is the name of the portworx service
 	PXServiceName = "portworx-service"
-	// PXNamespace is the kubernetes namespace in which portworx daemon set runs.
+	// PXNamespace is the kubernetes namespace in which portworx daemon set runs
 	PXNamespace = "kube-system"
+	// PXDaemonSet is the name of portworx daemon set in k8s deployment
+	PXDaemonSet = "portworx"
+	// PXImage is the image for portworx driver
+	PXImage = "portworx/px-enterprise"
 	// k8sPxRunningLabelKey is the label key used for px state
 	k8sPxRunningLabelKey = "px/enabled"
 	// k8sPxNotRunningLabelValue is label value for a not running px state
 	k8sPxNotRunningLabelValue = "false"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
+	// pxImageEnvVar is the env variable in portworx daemon set specifying portworx image to be used
+	pxImageEnvVar = "PX_IMAGE"
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -37,6 +44,18 @@ type errLabelPresent struct {
 
 func (e *errLabelPresent) Error() string {
 	return fmt.Sprintf("label %s is present on node %s", e.label, e.node)
+}
+
+// errLabelAbsent error type for a label absent on a node
+type errLabelAbsent struct {
+	// label is the label key
+	label string
+	// node is the k8s node where the label is absent
+	node string
+}
+
+func (e *errLabelAbsent) Error() string {
+	return fmt.Sprintf("label %s is absent on node %s", e.label, e.node)
 }
 
 type k8sSchedOps struct{}
@@ -66,26 +85,30 @@ func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume
 	for _, rs := range replicaNodes {
 		t := func() (interface{}, error) {
 			n, err := k8s.Instance().GetNodeByName(rs.Id)
-			if err == nil && n != nil {
-				return n.Labels, nil
+			if err != nil || n == nil {
+				addrs := []string{rs.DataIp, rs.MgmtIp}
+				n, err = k8s.Instance().SearchNodeByAddresses(addrs)
+				if err != nil || n == nil {
+					return nil, fmt.Errorf("failed to locate node using id: %s and addresses: %v",
+						rs.Id, addrs)
+				}
 			}
 
-			addrs := []string{rs.DataIp, rs.MgmtIp}
-			n, err = k8s.Instance().SearchNodeByAddresses(addrs)
-			if err == nil && n != nil {
-				return n.Labels, nil
+			if _, ok := n.Labels[pvc]; !ok {
+				return nil, &errLabelAbsent{
+					node:  n.Name,
+					label: pvc,
+				}
 			}
-
-			return nil, fmt.Errorf("failed to locate node using id: %s and addresses: %v", rs.Id, addrs)
+			return nil, nil
 		}
 
-		ret, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
-		if err != nil {
-			return err
-		}
-		nodeLabels := ret.(map[string]string)
-		if _, ok := nodeLabels[pvc]; !ok {
-			missingLabelNodes = append(missingLabelNodes, rs.Id)
+		if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+			if _, ok := err.(*errLabelAbsent); ok {
+				missingLabelNodes = append(missingLabelNodes, rs.Id)
+			} else {
+				return err
+			}
 		}
 	}
 
@@ -114,12 +137,10 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 					label: pvcLabel,
 				}
 			}
-
 			return nil, nil
 		}
 
-		_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
-		if err != nil {
+		if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 			if _, ok := err.(*errLabelPresent); ok {
 				staleLabelNodes = append(staleLabelNodes, n.Name)
 			} else {
@@ -226,6 +247,56 @@ func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
 		return svc.Spec.ClusterIP, nil
 	}
 	return "", err
+}
+
+func (k *k8sSchedOps) UpgradePortworx(version string) error {
+	k8sOps := k8s.Instance()
+	ds, err := k8sOps.GetDaemonSet(PXDaemonSet, PXNamespace)
+	if err != nil {
+		return err
+	}
+
+	image := fmt.Sprintf("%s:%s", PXImage, version)
+
+	found := false
+	envList := ds.Spec.Template.Spec.Containers[0].Env
+	for i := range envList {
+		envVar := &envList[i]
+		if envVar.Name == pxImageEnvVar {
+			envVar.Value = image
+			found = true
+			break
+		}
+	}
+	if !found {
+		imageEnv := v1.EnvVar{Name: pxImageEnvVar, Value: image}
+		ds.Spec.Template.Spec.Containers[0].Env = append(ds.Spec.Template.Spec.Containers[0].Env, imageEnv)
+	}
+
+	if err := k8sOps.UpdateDaemonSet(ds); err != nil {
+		return err
+	}
+
+	// Sleep for a short duration so that the daemon set updates its status
+	time.Sleep(10 * time.Second)
+
+	t := func() (interface{}, error) {
+		ds, err := k8sOps.GetDaemonSet(PXDaemonSet, PXNamespace)
+		if err != nil {
+			return nil, err
+		}
+
+		if ds.Status.DesiredNumberScheduled == ds.Status.UpdatedNumberScheduled {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("Only %v nodes have been updated out of %v nodes",
+			ds.Status.UpdatedNumberScheduled, ds.Status.DesiredNumberScheduled)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 20*time.Minute, 30*time.Second); err != nil {
+		return err
+	}
+	return nil
 }
 
 func separateFilePaths(volDirList string) []string {

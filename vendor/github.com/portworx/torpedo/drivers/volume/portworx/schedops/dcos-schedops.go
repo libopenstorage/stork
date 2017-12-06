@@ -51,6 +51,11 @@ func (d *dcosSchedOps) GetServiceEndpoint() (string, error) {
 	return "", nil
 }
 
+func (d *dcosSchedOps) UpgradePortworx(version string) error {
+	// TOOD: Implement this method
+	return nil
+}
+
 func init() {
 	d := &dcosSchedOps{}
 	Register("dcos", d)

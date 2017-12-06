@@ -50,6 +50,9 @@ type Driver interface {
 
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
+
+	// UpgradeDriver upgrades the volume driver to the given version
+	UpgradeDriver(version string) error
 }
 
 var (
