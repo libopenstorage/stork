@@ -49,3 +49,15 @@ type ErrFailedToWaitForPx struct {
 func (e *ErrFailedToWaitForPx) Error() string {
 	return fmt.Sprintf("Failed to wait for px to be up on: %v due to err: %v", e.Node.Name, e.Cause)
 }
+
+// ErrFailedToUpgradeVolumeDriver error type for failed volume driver upgrade
+type ErrFailedToUpgradeVolumeDriver struct {
+	// Version is the new image used to upgrade the volume driver
+	Version string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToUpgradeVolumeDriver) Error() string {
+	return fmt.Sprintf("Failed to upgrade volume driver to version: %v due to err: %v", e.Version, e.Cause)
+}

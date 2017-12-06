@@ -3,6 +3,7 @@ package portworx
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
@@ -23,6 +24,7 @@ const (
 	DriverName              = "pxd"
 	pxdClientSchedUserAgent = "pxd-sched"
 	pxdRestPort             = 9001
+	pxVersionLabel          = "PX Version"
 )
 
 type portworx struct {
@@ -399,13 +401,47 @@ func (d *portworx) WaitForNode(n node.Node) error {
 	return nil
 }
 
+func (d *portworx) WaitForUpgrade(n node.Node, newVersion string) error {
+	t := func() (interface{}, error) {
+		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
+		if err != nil {
+			return nil, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: err.Error(),
+			}
+		}
+
+		if pxNode.Status != api.Status_STATUS_OK {
+			return nil, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
+					api.Status_STATUS_OK, pxNode.Status),
+			}
+		}
+
+		pxVersion := pxNode.NodeLabels[pxVersionLabel]
+		if !strings.HasPrefix(pxVersion, newVersion) {
+			return nil, &ErrFailedToUpgradeVolumeDriver{
+				Version: newVersion,
+				Cause:   fmt.Sprintf("Version on node %v is still %v", n.VolDriverNodeID, pxVersion),
+			}
+		}
+		return nil, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (d *portworx) setDriver() error {
 	var err error
 	var endpoint string
 
 	// Try portworx-service first
 	endpoint, err = d.schedOps.GetServiceEndpoint()
-	if err == nil {
+	if err == nil && endpoint != "" {
 		if err = d.testAndSetEndpoint(endpoint); err == nil {
 			d.refreshEndpoint = false
 			return nil
@@ -459,6 +495,23 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 
 func (d *portworx) StartDriver(n node.Node) error {
 	return d.schedOps.EnableOnNode(n)
+}
+
+func (d *portworx) UpgradeDriver(version string) error {
+	if err := d.schedOps.UpgradePortworx(version); err != nil {
+		return &ErrFailedToUpgradeVolumeDriver{
+			Version: version,
+			Cause:   err.Error(),
+		}
+	}
+
+	for _, n := range node.GetWorkerNodes() {
+		if err := d.WaitForUpgrade(n, version); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (d *portworx) getVolDriver() volume.VolumeDriver {
