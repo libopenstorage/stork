@@ -3,6 +3,9 @@ package portworx
 import (
 	"fmt"
 
+	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter"
+	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/openstorage/api"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
@@ -11,8 +14,10 @@ import (
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TODO: Make some of these configurable
@@ -145,13 +150,10 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 		}
 		nodes = append(nodes, nodeInfo)
 	}
-
 	return nodes, nil
-
 }
 
 func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
-
 	var volumes []*storkvolume.Info
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
@@ -172,8 +174,8 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 				return nil, err
 			}
 
-			if storageClass.Provisioner != provisionerName {
-				logrus.Debugf("Provisioner in Storageclass not Portworx, ignoring")
+			if storageClass.Provisioner != provisionerName && storageClass.Provisioner != snapshotcontroller.GetProvisionerName() {
+				logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner, ignoring")
 				continue
 			}
 
@@ -192,6 +194,125 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 		}
 	}
 	return volumes, nil
+}
+
+func (p *portworx) GetSnapshotPlugin() snapshotVolume.Plugin {
+	return p
+}
+
+func (p *portworx) SnapshotCreate(pv *v1.PersistentVolume, tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
+	if pv == nil || pv.Spec.PortworxVolume == nil {
+		return nil, nil, fmt.Errorf("Invalid PV: %v", pv)
+	}
+	spec := &pv.Spec
+	volumeID := spec.PortworxVolume.VolumeID
+
+	logrus.Debugf("SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
+	locator := &api.VolumeLocator{
+		Name: (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNameTag],
+	}
+	snapshotID, err := p.volDriver.Snapshot(volumeID, true, locator)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &crdv1.VolumeSnapshotDataSource{
+		PortworxSnapshot: &crdv1.PortworxVolumeSnapshotSource{
+			SnapshotID: snapshotID,
+		},
+	}, nil, nil
+}
+
+func (p *portworx) SnapshotDelete(snapshot *crdv1.VolumeSnapshotDataSource, _ *v1.PersistentVolume) error {
+	if snapshot == nil || snapshot.PortworxSnapshot == nil {
+		return fmt.Errorf("Invalid Snaphsot source %v", snapshot)
+	}
+	return p.volDriver.Delete(snapshot.PortworxSnapshot.SnapshotID)
+}
+
+func (p *portworx) SnapshotRestore(
+	snapshotData *crdv1.VolumeSnapshotData,
+	pvc *v1.PersistentVolumeClaim,
+	pvName string,
+	parameters map[string]string,
+) (*v1.PersistentVolumeSource, map[string]string, error) {
+	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
+		return nil, nil, fmt.Errorf("Invalid Snapshot spec")
+	}
+	if pvc == nil {
+		return nil, nil, fmt.Errorf("Invalid PVC spec")
+	}
+
+	snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
+
+	logrus.Debugf("SnapshotRestore for pvc: %+v", pvc)
+	locator := &api.VolumeLocator{
+		Name: "pvc-" + string(pvc.UID),
+	}
+	volumeID, err := p.volDriver.Snapshot(snapID, false, locator)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	vols, err := p.volDriver.Inspect([]string{volumeID})
+	if err != nil {
+		return nil, nil, &ErrFailedToInspectVolume{
+			ID:    volumeID,
+			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+		}
+	}
+
+	if len(vols) == 0 {
+		return nil, nil, &errors.ErrNotFound{
+			ID:   volumeID,
+			Type: "Volume",
+		}
+	}
+
+	pv := &v1.PersistentVolumeSource{
+		PortworxVolume: &v1.PortworxVolumeSource{
+			VolumeID: volumeID,
+			FSType:   vols[0].Format.String(),
+			ReadOnly: vols[0].Readonly,
+		},
+	}
+
+	labels := make(map[string]string)
+
+	return pv, labels, nil
+}
+
+func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]crdv1.VolumeSnapshotCondition, bool, error) {
+	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
+		return nil, false, fmt.Errorf("Invalid VolumeSnapshotDataSource: %v", snapshotData)
+	}
+	snapshotID := snapshotData.Spec.PortworxSnapshot.SnapshotID
+	_, err := p.InspectVolume(snapshotID)
+	if err != nil {
+		return nil, false, err
+	}
+	var snapConditions []crdv1.VolumeSnapshotCondition
+	snapConditions = []crdv1.VolumeSnapshotCondition{
+		{
+			Type:               crdv1.VolumeSnapshotConditionReady,
+			Status:             v1.ConditionTrue,
+			Message:            "Snapshot created successfully and it is ready",
+			LastTransitionTime: metav1.Now(),
+		},
+	}
+	return &snapConditions, true, err
+}
+
+// TODO: Implement FindSnapshot
+func (p *portworx) FindSnapshot(tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
+	return nil, nil, nil
+}
+
+func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
+	if pv == nil || pv.Spec.PortworxVolume == nil {
+		return fmt.Errorf("Invalid PV: %v", pv)
+	}
+	return p.volDriver.Delete(pv.Spec.PortworxVolume.VolumeID)
 }
 
 func init() {
