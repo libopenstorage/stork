@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
@@ -181,6 +182,11 @@ func (m Driver) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 	}
 
 	return volumes, nil
+}
+
+//GetSnapshotPlugin Returns nil since snapshot is not supported in the mock driver
+func (m *Driver) GetSnapshotPlugin() snapshotVolume.Plugin {
+	return nil
 }
 
 func init() {

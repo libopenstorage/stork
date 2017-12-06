@@ -1,6 +1,7 @@
 package volume
 
 import (
+	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -16,14 +17,17 @@ type Driver interface {
 	// String returns the string name of this driver.
 	String() string
 
-	// Inspect returns information about a volume.
+	// InspectVolume returns information about a volume.
 	InspectVolume(volumeID string) (*Info, error)
 
 	// GetNodes Get the list of nodes where the driver is available
 	GetNodes() ([]*NodeInfo, error)
 
-	// GetPodVolumes
+	// GetPodVolumes Get all the volumes used by a pod
 	GetPodVolumes(*v1.Pod) ([]*Info, error)
+
+	// GetSnapshotPlugin Get the snapshot plugin to be used for the driver
+	GetSnapshotPlugin() snapshotVolume.Plugin
 }
 
 // Info Information about a volume
