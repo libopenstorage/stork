@@ -108,8 +108,8 @@ func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	listCmdsInput := &ssm.ListCommandInvocationsInput{
 		CommandId: sendCommandOutput.Command.CommandId,
 	}
-	t := func() (interface{}, error) {
-		return "", a.connect(n, listCmdsInput)
+	t := func() (interface{}, bool, error) {
+		return "", true, a.connect(n, listCmdsInput)
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err != nil {

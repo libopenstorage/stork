@@ -309,8 +309,9 @@ func (d *dcos) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[strin
 
 func (d *dcos) InspectVolumes(ctx *scheduler.Context) error {
 	inspectDockerVolumeFunc := func(volName string, _ map[string]string) error {
-		t := func() (interface{}, error) {
-			return d.dockerClient.VolumeInspect(context.Background(), volName)
+		t := func() (interface{}, bool, error) {
+			out, err := d.dockerClient.VolumeInspect(context.Background(), volName)
+			return out, true, err
 		}
 
 		if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
@@ -330,8 +331,8 @@ func (d *dcos) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 	deleteDockerVolumeFunc := func(volName string, _ map[string]string) error {
 		vols = append(vols, &volume.Volume{Name: volName})
-		t := func() (interface{}, error) {
-			return nil, d.dockerClient.VolumeRemove(context.Background(), volName, false)
+		t := func() (interface{}, bool, error) {
+			return nil, true, d.dockerClient.VolumeRemove(context.Background(), volName, false)
 		}
 
 		if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {

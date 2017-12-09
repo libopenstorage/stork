@@ -83,24 +83,24 @@ func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume
 
 	var missingLabelNodes []string
 	for _, rs := range replicaNodes {
-		t := func() (interface{}, error) {
+		t := func() (interface{}, bool, error) {
 			n, err := k8s.Instance().GetNodeByName(rs.Id)
 			if err != nil || n == nil {
 				addrs := []string{rs.DataIp, rs.MgmtIp}
 				n, err = k8s.Instance().SearchNodeByAddresses(addrs)
 				if err != nil || n == nil {
-					return nil, fmt.Errorf("failed to locate node using id: %s and addresses: %v",
+					return nil, true, fmt.Errorf("failed to locate node using id: %s and addresses: %v",
 						rs.Id, addrs)
 				}
 			}
 
 			if _, ok := n.Labels[pvc]; !ok {
-				return nil, &errLabelAbsent{
+				return nil, true, &errLabelAbsent{
 					node:  n.Name,
 					label: pvc,
 				}
 			}
-			return nil, nil
+			return nil, false, nil
 		}
 
 		if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
@@ -125,19 +125,19 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 	pvcLabel := vol.Name
 	var staleLabelNodes []string
 	for _, n := range node.GetWorkerNodes() {
-		t := func() (interface{}, error) {
+		t := func() (interface{}, bool, error) {
 			nodeLabels, err := k8s.Instance().GetLabelsOnNode(n.Name)
 			if err != nil {
-				return nil, err
+				return nil, true, err
 			}
 
 			if _, ok := nodeLabels[pvcLabel]; ok {
-				return nil, &errLabelPresent{
+				return nil, true, &errLabelPresent{
 					node:  n.Name,
 					label: pvcLabel,
 				}
 			}
-			return nil, nil
+			return nil, false, nil
 		}
 
 		if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
@@ -280,16 +280,16 @@ func (k *k8sSchedOps) UpgradePortworx(version string) error {
 	// Sleep for a short duration so that the daemon set updates its status
 	time.Sleep(10 * time.Second)
 
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		ds, err := k8sOps.GetDaemonSet(PXDaemonSet, PXNamespace)
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 
 		if ds.Status.DesiredNumberScheduled == ds.Status.UpdatedNumberScheduled {
-			return nil, nil
+			return nil, false, nil
 		}
-		return nil, fmt.Errorf("Only %v nodes have been updated out of %v nodes",
+		return nil, true, fmt.Errorf("Only %v nodes have been updated out of %v nodes",
 			ds.Status.UpdatedNumberScheduled, ds.Status.DesiredNumberScheduled)
 	}
 

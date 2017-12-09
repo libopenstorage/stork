@@ -140,20 +140,20 @@ func (m *marathonOps) WaitForApplicationTermination(name string) error {
 		return err
 	}
 
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		_, err := m.client.Application(name)
 		if err == nil {
-			return nil, fmt.Errorf("Application %v is not yet deleted", name)
+			return nil, true, fmt.Errorf("Application %v is not yet deleted", name)
 		}
 
 		if !strings.Contains(err.Error(), "does not exist") {
-			return nil, err
+			return nil, true, err
 		}
 
 		// Delete stuck deployments that are no more relevant, as the app is deleted
 		deps, err := m.client.Deployments()
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 		for _, dep := range deps {
 			for _, affectedApp := range dep.AffectedApps {
@@ -169,7 +169,7 @@ func (m *marathonOps) WaitForApplicationTermination(name string) error {
 			}
 		}
 
-		return nil, nil
+		return nil, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
