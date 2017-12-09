@@ -1,7 +1,12 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
 # This script exists as backwards compatibility for CI
+(
+    DEST="${DEST}-client"
+    ABS_DEST="${ABS_DEST}-client"
+    . hack/make/dynbinary-client
+)
 (
 
     DEST="${DEST}-daemon"

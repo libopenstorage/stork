@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # This file is just wrapper around vndr (github.com/LK4D4/vndr) tool.
 # For updating dependencies you should change `vendor.conf` file in root of the

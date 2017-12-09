@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -76,16 +77,17 @@ func Run(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop S
 	collect(kv, t)
 	lock(kv, t)
 	lockBetweenRestarts(kv, t, start, stop)
+	serialization(kv, t)
 	err = stop()
 	assert.NoError(t, err, "Unable to stop kvdb")
 }
 
 // RunBasic runs the basic test suite.
-func RunBasic(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb) {
+func RunBasic(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb, kvdbOptions map[string]string) {
 	err := start()
 	time.Sleep(3 * time.Second)
 	assert.NoError(t, err, "Unable to start kvdb")
-	kv, err := datastoreInit("pwx/test", nil, nil, fatalErrorCb())
+	kv, err := datastoreInit("pwx/test", nil, kvdbOptions, fatalErrorCb())
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -106,6 +108,7 @@ func RunBasic(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, s
 	watchKey(kv, t)
 	watchWithIndex(kv, t)
 	cas(kv, t)
+	serialization(kv, t)
 	assert.NoError(t, err, "Unable to stop kvdb")
 }
 
@@ -227,7 +230,7 @@ func createWithTTL(kv kvdb.Kvdb, t *testing.T) {
 		_, err := kv.Create(key, []byte("bar"), 20)
 		assert.NoError(t, err, "Error on create")
 		// Consul doubles the ttl value
-		time.Sleep(time.Second * 20)
+		time.Sleep(time.Second * 21)
 		_, err = kv.Get(key)
 		assert.Error(t, err, "Expecting error value for expired value")
 
@@ -861,7 +864,6 @@ func watchUpdate(kv kvdb.Kvdb, data *watchData) error {
 	atomic.SwapInt32(&data.whichKey, 1)
 	data.action = kvdb.KVCreate
 	_, err = kv.Create(data.key, []byte(data.stop), 0)
-
 	return err
 }
 
@@ -894,6 +896,9 @@ func watchKey(kv kvdb.Kvdb, t *testing.T) {
 		fmt.Printf("Cannot test watchKey: %v\n", err)
 		return
 	}
+
+	// Sleep for sometime before calling the watchUpdate go routine.
+	time.Sleep(time.Second * 2)
 
 	go watchUpdate(kv, &watchData)
 
@@ -1246,5 +1251,51 @@ func collect(kv kvdb.Kvdb, t *testing.T) {
 		replayCb[0].WatchCB = cb
 		replayCb[0].WaitIndex = kvp.ModifiedIndex
 		collector.ReplayUpdates(replayCb)
+	}
+}
+
+func serialization(kv kvdb.Kvdb, t *testing.T) {
+	fmt.Println("serialization")
+	kv.DeleteTree("")
+	prefix := "/folder"
+	type A struct {
+		A1 int
+		A2 string
+	}
+	type B struct {
+		B1 string
+	}
+	a1 := A{1, "a"}
+	b1 := B{"2"}
+	c1 := A{2, "b"}
+	_, err := kv.Put(prefix+"/a/a1", a1, 0)
+	assert.NoError(t, err, "Unexpected error on put")
+	_, err = kv.Put(prefix+"/b/b1", b1, 0)
+	assert.NoError(t, err, "Unexpected error on put")
+	_, err = kv.Put(prefix+"/c/c1", c1, 0)
+	assert.NoError(t, err, "Unexpected error on put")
+	kv.Delete(prefix + "/c/c1")
+	b, err := kv.Serialize()
+	assert.NoError(t, err, "Unexpected error on serialize")
+	kvps, err := kv.Deserialize(b)
+	assert.NoError(t, err, "Unexpected error on de-serialize")
+	for _, kvp := range kvps {
+		if strings.Contains(kvp.Key, "/a/a1") {
+			aa := A{}
+			err = json.Unmarshal(kvp.Value, &aa)
+			assert.NoError(t, err, "Unexpected error on unmarshal")
+			assert.Equal(t, aa.A1, a1.A1, "Unequal A values")
+			assert.Equal(t, aa.A2, a1.A2, "Unequal A values")
+		} else if strings.Contains(kvp.Key, "/b/b1") {
+			bb := B{}
+			err = json.Unmarshal(kvp.Value, &bb)
+			assert.NoError(t, err, "Unexpected error on unmarshal")
+			assert.Equal(t, bb.B1, b1.B1, "Unequal B values")
+		} else if strings.Contains(kvp.Key, "/c") {
+			// ETCD v2 will return an empty folder, but v3 and consul will not
+			assert.Equal(t, len(kvp.Value), 0, "Unexpected C values")
+		} else {
+			t.Fatalf("Unexpected values returned by deserialize: %v", kvp.Key)
+		}
 	}
 }

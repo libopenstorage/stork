@@ -1,7 +1,7 @@
 package ca
 
 import (
-	cryptorand "crypto/rand"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
@@ -321,7 +321,7 @@ func (k *KeyReadWriter) readKey() (*pem.Block, error) {
 	}
 
 	// If it's encrypted, we can't read without a passphrase (we're assuming
-	// empty passphrases are invalid)
+	// empty passphrases iare invalid)
 	if k.kekData.KEK == nil {
 		return nil, ErrInvalidKEK{Wrapped: x509.IncorrectPasswordError}
 	}
@@ -345,7 +345,7 @@ func (k *KeyReadWriter) readKey() (*pem.Block, error) {
 // writing it to disk.  If the kek is nil, writes it to disk unencrypted.
 func (k *KeyReadWriter) writeKey(keyBlock *pem.Block, kekData KEKData, pkh PEMKeyHeaders) error {
 	if kekData.KEK != nil {
-		encryptedPEMBlock, err := x509.EncryptPEMBlock(cryptorand.Reader,
+		encryptedPEMBlock, err := x509.EncryptPEMBlock(rand.Reader,
 			keyBlock.Type,
 			keyBlock.Bytes,
 			kekData.KEK,

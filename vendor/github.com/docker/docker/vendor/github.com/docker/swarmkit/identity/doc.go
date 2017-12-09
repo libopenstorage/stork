@@ -1,6 +1,6 @@
-// Package identity provides functionality for generating and managing
-// identifiers within a swarm. This includes entity identification, such as for
-// Services, Tasks and Networks but also cryptographically-secure Node identities.
+// Package identity provides functionality for generating and manager
+// identifiers within swarm. This includes entity identification, such as that
+// of Service, Task and Network but also cryptographically-secure Node identity.
 //
 // Random Identifiers
 //
@@ -8,9 +8,10 @@
 // 128 bit numbers encoded in Base36. This method is preferred over UUID4 since
 // it requires less storage and leverages the full 128 bits of entropy.
 //
-// Generating an identifier is simple. Simply call the `NewID` function:
+// Generating an identifier is simple. Simply call the `NewID` function, check
+// the error and proceed:
 //
-// 	id := NewID()
+// 	id, err := NewID()
+// 	if err != nil { /* ... handle it, please ... */ }
 //
-// If an error occurs while generating the ID, it will panic.
 package identity

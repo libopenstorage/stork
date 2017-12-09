@@ -1,6 +1,6 @@
 package hcsshim
 
-import "github.com/sirupsen/logrus"
+import "github.com/Sirupsen/logrus"
 
 // DeactivateLayer will dismount a layer that was mounted via ActivateLayer.
 func DeactivateLayer(info DriverInfo, id string) error {

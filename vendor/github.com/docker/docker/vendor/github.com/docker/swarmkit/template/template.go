@@ -13,10 +13,6 @@ var funcMap = template.FuncMap{
 	},
 }
 
-func newTemplate(s string, extraFuncs template.FuncMap) (*template.Template, error) {
-	tmpl := template.New("expansion").Option("missingkey=error").Funcs(funcMap)
-	if len(extraFuncs) != 0 {
-		tmpl = tmpl.Funcs(extraFuncs)
-	}
-	return tmpl.Parse(s)
+func newTemplate(s string) (*template.Template, error) {
+	return template.New("expansion").Option("missingkey=error").Funcs(funcMap).Parse(s)
 }

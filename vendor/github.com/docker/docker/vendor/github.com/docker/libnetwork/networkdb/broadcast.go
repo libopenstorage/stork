@@ -1,7 +1,7 @@
 package networkdb
 
 import (
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/hashicorp/memberlist"
@@ -86,20 +86,11 @@ func (nDB *NetworkDB) sendNodeEvent(event NodeEvent_Type) error {
 		notify: notifyCh,
 	})
 
-	nDB.RLock()
-	noPeers := len(nDB.nodes) <= 1
-	nDB.RUnlock()
-
-	// Message enqueued, do not wait for a send if no peer is present
-	if noPeers {
-		return nil
-	}
-
 	// Wait for the broadcast
 	select {
 	case <-notifyCh:
 	case <-time.After(broadcastTimeout):
-		return errors.New("timed out broadcasting node event")
+		return fmt.Errorf("timed out broadcasting node event")
 	}
 
 	return nil
@@ -114,7 +105,8 @@ type tableEventMessage struct {
 }
 
 func (m *tableEventMessage) Invalidates(other memberlist.Broadcast) bool {
-	return false
+	otherm := other.(*tableEventMessage)
+	return m.id == otherm.id && m.tname == otherm.tname && m.key == otherm.key
 }
 
 func (m *tableEventMessage) Message() []byte {

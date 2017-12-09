@@ -1,21 +1,19 @@
 package networkdb
 
-//go:generate protoc -I.:../vendor/github.com/gogo/protobuf --gogo_out=import_path=github.com/docker/libnetwork/networkdb,Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto:. networkdb.proto
+//go:generate protoc -I.:../Godeps/_workspace/src/github.com/gogo/protobuf  --gogo_out=import_path=github.com/docker/libnetwork/networkdb,Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto:. networkdb.proto
 
 import (
 	"fmt"
-	"net"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/armon/go-radix"
 	"github.com/docker/go-events"
 	"github.com/docker/libnetwork/types"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -90,16 +88,6 @@ type NetworkDB struct {
 
 	// Reference to the memberlist's keyring to add & remove keys
 	keyring *memberlist.Keyring
-
-	// bootStrapIP is the list of IPs that can be used to bootstrap
-	// the gossip.
-	bootStrapIP []net.IP
-
-	// lastStatsTimestamp is the last timestamp when the stats got printed
-	lastStatsTimestamp time.Time
-
-	// lastHealthTimestamp is the last timestamp when the health score got printed
-	lastHealthTimestamp time.Time
 }
 
 // PeerInfo represents the peer (gossip cluster) nodes of a network
@@ -133,9 +121,6 @@ type network struct {
 	// The broadcast queue for table event gossip. This is only
 	// initialized for this node's network attachment entries.
 	tableBroadcasts *memberlist.TransmitLimitedQueue
-
-	// Number of gossip messages sent related to this network during the last stats collection period
-	qMessagesSent int
 }
 
 // Config represents the configuration of the networdb instance and
@@ -159,21 +144,6 @@ type Config struct {
 	// Keys to be added to the Keyring of the memberlist. Key at index
 	// 0 is the primary key
 	Keys [][]byte
-
-	// PacketBufferSize is the maximum number of bytes that memberlist will
-	// put in a packet (this will be for UDP packets by default with a NetTransport).
-	// A safe value for this is typically 1400 bytes (which is the default). However,
-	// depending on your network's MTU (Maximum Transmission Unit) you may
-	// be able to increase this to get more content into each gossip packet.
-	PacketBufferSize int
-
-	// StatsPrintPeriod the period to use to print queue stats
-	// Default is 5min
-	StatsPrintPeriod time.Duration
-
-	// HealthPrintPeriod the period to use to print the health score
-	// Default is 1min
-	HealthPrintPeriod time.Duration
 }
 
 // entry defines a table entry
@@ -194,18 +164,6 @@ type entry struct {
 	// Number of seconds still left before a deleted table entry gets
 	// removed from networkDB
 	reapTime time.Duration
-}
-
-// DefaultConfig returns a NetworkDB config with default values
-func DefaultConfig() *Config {
-	hostname, _ := os.Hostname()
-	return &Config{
-		NodeName:          hostname,
-		BindAddr:          "0.0.0.0",
-		PacketBufferSize:  1400,
-		StatsPrintPeriod:  5 * time.Minute,
-		HealthPrintPeriod: 1 * time.Minute,
-	}
 }
 
 // New creates a new instance of NetworkDB using the Config passed by
@@ -236,12 +194,6 @@ func New(c *Config) (*NetworkDB, error) {
 // Join joins this NetworkDB instance with a list of peer NetworkDB
 // instances passed by the caller in the form of addr:port
 func (nDB *NetworkDB) Join(members []string) error {
-	nDB.Lock()
-	nDB.bootStrapIP = make([]net.IP, 0, len(members))
-	for _, m := range members {
-		nDB.bootStrapIP = append(nDB.bootStrapIP, net.ParseIP(m))
-	}
-	nDB.Unlock()
 	return nDB.clusterJoin(members)
 }
 
@@ -323,6 +275,7 @@ func (nDB *NetworkDB) CreateEntry(tname, nid, key string, value []byte) error {
 	nDB.indexes[byNetwork].Insert(fmt.Sprintf("/%s/%s/%s", nid, tname, key), entry)
 	nDB.Unlock()
 
+	nDB.broadcaster.Write(makeEvent(opCreate, tname, nid, key, value))
 	return nil
 }
 
@@ -350,23 +303,8 @@ func (nDB *NetworkDB) UpdateEntry(tname, nid, key string, value []byte) error {
 	nDB.indexes[byNetwork].Insert(fmt.Sprintf("/%s/%s/%s", nid, tname, key), entry)
 	nDB.Unlock()
 
+	nDB.broadcaster.Write(makeEvent(opUpdate, tname, nid, key, value))
 	return nil
-}
-
-// GetTableByNetwork walks the networkdb by the give table and network id and
-// returns a map of keys and values
-func (nDB *NetworkDB) GetTableByNetwork(tname, nid string) map[string]interface{} {
-	entries := make(map[string]interface{})
-	nDB.indexes[byTable].WalkPrefix(fmt.Sprintf("/%s/%s", tname, nid), func(k string, v interface{}) bool {
-		entry := v.(*entry)
-		if entry.deleting {
-			return false
-		}
-		key := k[strings.LastIndex(k, "/")+1:]
-		entries[key] = entry.value
-		return false
-	})
-	return entries
 }
 
 // DeleteEntry deletes a table entry in NetworkDB for given (network,
@@ -395,6 +333,7 @@ func (nDB *NetworkDB) DeleteEntry(tname, nid, key string) error {
 	nDB.indexes[byNetwork].Insert(fmt.Sprintf("/%s/%s/%s", nid, tname, key), entry)
 	nDB.Unlock()
 
+	nDB.broadcaster.Write(makeEvent(opDelete, tname, nid, key, value))
 	return nil
 }
 
@@ -414,37 +353,6 @@ func (nDB *NetworkDB) deleteNetworkEntriesForNode(deletedNode string) {
 	}
 
 	delete(nDB.networks, deletedNode)
-	nDB.Unlock()
-}
-
-func (nDB *NetworkDB) deleteNodeNetworkEntries(nid, node string) {
-	nDB.Lock()
-	nDB.indexes[byNetwork].WalkPrefix(fmt.Sprintf("/%s", nid),
-		func(path string, v interface{}) bool {
-			oldEntry := v.(*entry)
-			params := strings.Split(path[1:], "/")
-			nid := params[0]
-			tname := params[1]
-			key := params[2]
-
-			if oldEntry.node != node {
-				return false
-			}
-
-			entry := &entry{
-				ltime:    oldEntry.ltime,
-				node:     node,
-				value:    oldEntry.value,
-				deleting: true,
-				reapTime: reapInterval,
-			}
-
-			nDB.indexes[byTable].Insert(fmt.Sprintf("/%s/%s/%s", tname, nid, key), entry)
-			nDB.indexes[byNetwork].Insert(fmt.Sprintf("/%s/%s/%s", nid, tname, key), entry)
-
-			nDB.broadcaster.Write(makeEvent(opDelete, tname, nid, key, entry.value))
-			return false
-		})
 	nDB.Unlock()
 }
 
@@ -519,12 +427,13 @@ func (nDB *NetworkDB) JoinNetwork(nid string) error {
 	nodeNetworks[nid].tableBroadcasts = &memberlist.TransmitLimitedQueue{
 		NumNodes: func() int {
 			nDB.RLock()
-			defer nDB.RUnlock()
-			return len(nDB.networkNodes[nid])
+			num := len(nDB.networkNodes[nid])
+			nDB.RUnlock()
+			return num
 		},
 		RetransmitMult: 4,
 	}
-	nDB.addNetworkNode(nid, nDB.config.NodeName)
+	nDB.networkNodes[nid] = append(nDB.networkNodes[nid], nDB.config.NodeName)
 	networkNodes := nDB.networkNodes[nid]
 	nDB.Unlock()
 
@@ -558,8 +467,6 @@ func (nDB *NetworkDB) LeaveNetwork(nid string) error {
 		paths   []string
 		entries []*entry
 	)
-
-	nDB.deleteNetworkNode(nid, nDB.config.NodeName)
 
 	nwWalker := func(path string, v interface{}) bool {
 		entry, ok := v.(*entry)
@@ -619,10 +526,7 @@ func (nDB *NetworkDB) addNetworkNode(nid string, nodeName string) {
 // passed network. Caller should hold the NetworkDB lock while calling
 // this
 func (nDB *NetworkDB) deleteNetworkNode(nid string, nodeName string) {
-	nodes, ok := nDB.networkNodes[nid]
-	if !ok || len(nodes) == 0 {
-		return
-	}
+	nodes := nDB.networkNodes[nid]
 	newNodes := make([]string, 0, len(nodes)-1)
 	for _, name := range nodes {
 		if name == nodeName {

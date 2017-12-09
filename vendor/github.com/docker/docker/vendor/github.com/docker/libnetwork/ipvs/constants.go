@@ -85,23 +85,6 @@ const (
 	ipvsDestAttrInactiveConnections
 	ipvsDestAttrPersistentConnections
 	ipvsDestAttrStats
-	ipvsDestAttrAddressFamily
-)
-
-// IPVS Svc Statistics constancs
-
-const (
-	ipvsSvcStatsUnspec int = iota
-	ipvsSvcStatsConns
-	ipvsSvcStatsPktsIn
-	ipvsSvcStatsPktsOut
-	ipvsSvcStatsBytesIn
-	ipvsSvcStatsBytesOut
-	ipvsSvcStatsCPS
-	ipvsSvcStatsPPSIn
-	ipvsSvcStatsPPSOut
-	ipvsSvcStatsBPSIn
-	ipvsSvcStatsBPSOut
 )
 
 // Destination forwarding methods

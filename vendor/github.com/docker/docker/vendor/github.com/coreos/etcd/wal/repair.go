@@ -17,7 +17,7 @@ package wal
 import (
 	"io"
 	"os"
-	"path/filepath"
+	"path"
 
 	"github.com/coreos/etcd/pkg/fileutil"
 	"github.com/coreos/etcd/wal/walpb"
@@ -62,7 +62,7 @@ func Repair(dirpath string) bool {
 			}
 			defer bf.Close()
 
-			if _, err = f.Seek(0, io.SeekStart); err != nil {
+			if _, err = f.Seek(0, os.SEEK_SET); err != nil {
 				plog.Errorf("could not repair %v, failed to read file", f.Name())
 				return false
 			}
@@ -94,6 +94,6 @@ func openLast(dirpath string) (*fileutil.LockedFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	last := filepath.Join(dirpath, names[len(names)-1])
+	last := path.Join(dirpath, names[len(names)-1])
 	return fileutil.LockFile(last, os.O_RDWR, fileutil.PrivateFileMode)
 }

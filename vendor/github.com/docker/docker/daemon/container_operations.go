@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	derr "github.com/docker/docker/api/errors"
 	containertypes "github.com/docker/docker/api/types/container"
 	networktypes "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/network"
-	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/go-connections/nat"
@@ -23,7 +23,6 @@ import (
 	"github.com/docker/libnetwork/netlabel"
 	"github.com/docker/libnetwork/options"
 	"github.com/docker/libnetwork/types"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -33,23 +32,12 @@ var (
 	getPortMapInfo    = container.GetSandboxPortMapInfo
 )
 
-func (daemon *Daemon) getDNSSearchSettings(container *container.Container) []string {
-	if len(container.HostConfig.DNSSearch) > 0 {
-		return container.HostConfig.DNSSearch
-	}
-
-	if len(daemon.configStore.DNSSearch) > 0 {
-		return daemon.configStore.DNSSearch
-	}
-
-	return nil
-}
-
 func (daemon *Daemon) buildSandboxOptions(container *container.Container) ([]libnetwork.SandboxOption, error) {
 	var (
 		sboxOptions []libnetwork.SandboxOption
 		err         error
 		dns         []string
+		dnsSearch   []string
 		dnsOptions  []string
 		bindings    = make(nat.PortMap)
 		pbList      []types.PortBinding
@@ -90,7 +78,11 @@ func (daemon *Daemon) buildSandboxOptions(container *container.Container) ([]lib
 		sboxOptions = append(sboxOptions, libnetwork.OptionDNS(d))
 	}
 
-	dnsSearch := daemon.getDNSSearchSettings(container)
+	if len(container.HostConfig.DNSSearch) > 0 {
+		dnsSearch = container.HostConfig.DNSSearch
+	} else if len(daemon.configStore.DNSSearch) > 0 {
+		dnsSearch = daemon.configStore.DNSSearch
+	}
 
 	for _, ds := range dnsSearch {
 		sboxOptions = append(sboxOptions, libnetwork.OptionDNSSearch(ds))
@@ -119,9 +111,6 @@ func (daemon *Daemon) buildSandboxOptions(container *container.Container) ([]lib
 
 	for _, extraHost := range container.HostConfig.ExtraHosts {
 		// allow IPv6 addresses in extra hosts; only split on first ":"
-		if _, err := opts.ValidateExtraHost(extraHost); err != nil {
-			return nil, err
-		}
 		parts := strings.SplitN(extraHost, ":", 2)
 		sboxOptions = append(sboxOptions, libnetwork.OptionExtraHost(parts[0], parts[1]))
 	}
@@ -287,7 +276,7 @@ func (daemon *Daemon) updateEndpointNetworkSettings(container *container.Contain
 	}
 
 	if container.HostConfig.NetworkMode == runconfig.DefaultDaemonNetworkMode() {
-		container.NetworkSettings.Bridge = daemon.configStore.BridgeConfig.Iface
+		container.NetworkSettings.Bridge = daemon.configStore.bridgeConfig.Iface
 	}
 
 	return nil
@@ -393,7 +382,7 @@ func (daemon *Daemon) findAndAttachNetwork(container *container.Container, idOrN
 			}
 
 			// Retry network attach again if we failed to
-			// find the network after successful
+			// find the network after successfull
 			// attachment because the only reason that
 			// would happen is if some other container
 			// attached to the swarm scope network went down
@@ -421,7 +410,7 @@ func (daemon *Daemon) findAndAttachNetwork(container *container.Container, idOrN
 	return n, config, nil
 }
 
-// updateContainerNetworkSettings updates the network settings
+// updateContainerNetworkSettings update the network settings
 func (daemon *Daemon) updateContainerNetworkSettings(container *container.Container, endpointsConfig map[string]*networktypes.EndpointSettings) {
 	var n libnetwork.Network
 
@@ -506,13 +495,12 @@ func (daemon *Daemon) allocateNetwork(container *container.Container) error {
 		logrus.Errorf("failed to cleanup up stale network sandbox for container %s", container.ID)
 	}
 
-	if container.Config.NetworkDisabled || container.HostConfig.NetworkMode.IsContainer() {
-		return nil
-	}
-
 	updateSettings := false
-
 	if len(container.NetworkSettings.Networks) == 0 {
+		if container.Config.NetworkDisabled || container.HostConfig.NetworkMode.IsContainer() {
+			return nil
+		}
+
 		daemon.updateContainerNetworkSettings(container, nil)
 		updateSettings = true
 	}
@@ -547,29 +535,7 @@ func (daemon *Daemon) allocateNetwork(container *container.Container) error {
 		}
 	}
 
-	// If the container is not to be connected to any network,
-	// create its network sandbox now if not present
-	if len(networks) == 0 {
-		if nil == daemon.getNetworkSandbox(container) {
-			options, err := daemon.buildSandboxOptions(container)
-			if err != nil {
-				return err
-			}
-			sb, err := daemon.netController.NewSandbox(container.ID, options...)
-			if err != nil {
-				return err
-			}
-			container.UpdateSandboxNetworkSettings(sb)
-			defer func() {
-				if err != nil {
-					sb.Delete()
-				}
-			}()
-		}
-
-	}
-
-	if _, err := container.WriteHostConfig(); err != nil {
+	if err := container.WriteHostConfig(); err != nil {
 		return err
 	}
 	networkActions.WithValues("allocate").UpdateSince(start)
@@ -842,7 +808,7 @@ func (daemon *Daemon) disconnectFromNetwork(container *container.Container, n li
 	}
 
 	if ep == nil {
-		return fmt.Errorf("container %s is not connected to network %s", container.ID, n.Name())
+		return fmt.Errorf("container %s is not connected to the network", container.ID)
 	}
 
 	if err := ep.Leave(sbox); err != nil {
@@ -857,24 +823,16 @@ func (daemon *Daemon) disconnectFromNetwork(container *container.Container, n li
 
 	delete(container.NetworkSettings.Networks, n.Name())
 
-	daemon.tryDetachContainerFromClusterNetwork(n, container)
-
-	return nil
-}
-
-func (daemon *Daemon) tryDetachContainerFromClusterNetwork(network libnetwork.Network, container *container.Container) {
-	if daemon.clusterProvider != nil && network.Info().Dynamic() && !container.Managed {
-		if err := daemon.clusterProvider.DetachNetwork(network.Name(), container.ID); err != nil {
-			logrus.Warnf("error detaching from network %s: %v", network.Name(), err)
-			if err := daemon.clusterProvider.DetachNetwork(network.ID(), container.ID); err != nil {
-				logrus.Warnf("error detaching from network %s: %v", network.ID(), err)
+	if daemon.clusterProvider != nil && n.Info().Dynamic() && !container.Managed {
+		if err := daemon.clusterProvider.DetachNetwork(n.Name(), container.ID); err != nil {
+			logrus.Warnf("error detaching from network %s: %v", n.Name(), err)
+			if err := daemon.clusterProvider.DetachNetwork(n.ID(), container.ID); err != nil {
+				logrus.Warnf("error detaching from network %s: %v", n.ID(), err)
 			}
 		}
 	}
-	attributes := map[string]string{
-		"container": container.ID,
-	}
-	daemon.LogNetworkEventWithAttributes(network, "disconnect", attributes)
+
+	return nil
 }
 
 func (daemon *Daemon) initializeNetworking(container *container.Container) error {
@@ -886,12 +844,7 @@ func (daemon *Daemon) initializeNetworking(container *container.Container) error
 		if err != nil {
 			return err
 		}
-
-		err = daemon.initializeNetworkingPaths(container, nc)
-		if err != nil {
-			return err
-		}
-
+		initializeNetworkingPaths(container, nc)
 		container.Config.Hostname = nc.Config.Hostname
 		container.Config.Domainname = nc.Config.Domainname
 		return nil
@@ -944,7 +897,7 @@ func (daemon *Daemon) releaseNetwork(container *container.Container) {
 	settings := container.NetworkSettings.Networks
 	container.NetworkSettings.Ports = nil
 
-	if sid == "" {
+	if sid == "" || len(settings) == 0 {
 		return
 	}
 
@@ -972,7 +925,19 @@ func (daemon *Daemon) releaseNetwork(container *container.Container) {
 	}
 
 	for _, nw := range networks {
-		daemon.tryDetachContainerFromClusterNetwork(nw, container)
+		if daemon.clusterProvider != nil && nw.Info().Dynamic() && !container.Managed {
+			if err := daemon.clusterProvider.DetachNetwork(nw.Name(), container.ID); err != nil {
+				logrus.Warnf("error detaching from network %s: %v", nw.Name(), err)
+				if err := daemon.clusterProvider.DetachNetwork(nw.ID(), container.ID); err != nil {
+					logrus.Warnf("error detaching from network %s: %v", nw.ID(), err)
+				}
+			}
+		}
+
+		attributes := map[string]string{
+			"container": container.ID,
+		}
+		daemon.LogNetworkEventWithAttributes(nw, "disconnect", attributes)
 	}
 	networkActions.WithValues("release").UpdateSince(start)
 }
@@ -986,9 +951,6 @@ func (daemon *Daemon) ConnectToNetwork(container *container.Container, idOrName 
 	if endpointConfig == nil {
 		endpointConfig = &networktypes.EndpointSettings{}
 	}
-	container.Lock()
-	defer container.Unlock()
-
 	if !container.Running {
 		if container.RemovalInProgress || container.Dead {
 			return errRemovalContainer(container.ID)
@@ -1011,16 +973,15 @@ func (daemon *Daemon) ConnectToNetwork(container *container.Container, idOrName 
 			return err
 		}
 	}
-
-	return container.CheckpointTo(daemon.containersReplica)
+	if err := container.ToDiskLocking(); err != nil {
+		return fmt.Errorf("Error saving container to disk: %v", err)
+	}
+	return nil
 }
 
 // DisconnectFromNetwork disconnects container from network n.
 func (daemon *Daemon) DisconnectFromNetwork(container *container.Container, networkName string, force bool) error {
 	n, err := daemon.FindNetwork(networkName)
-	container.Lock()
-	defer container.Unlock()
-
 	if !container.Running || (err != nil && force) {
 		if container.RemovalInProgress || container.Dead {
 			return errRemovalContainer(container.ID)
@@ -1048,16 +1009,16 @@ func (daemon *Daemon) DisconnectFromNetwork(container *container.Container, netw
 		return err
 	}
 
-	if err := container.CheckpointTo(daemon.containersReplica); err != nil {
-		return err
+	if err := container.ToDiskLocking(); err != nil {
+		return fmt.Errorf("Error saving container to disk: %v", err)
 	}
 
 	if n != nil {
-		daemon.LogNetworkEventWithAttributes(n, "disconnect", map[string]string{
+		attributes := map[string]string{
 			"container": container.ID,
-		})
+		}
+		daemon.LogNetworkEventWithAttributes(n, "disconnect", attributes)
 	}
-
 	return nil
 }
 
@@ -1074,7 +1035,7 @@ func (daemon *Daemon) ActivateContainerServiceBinding(containerName string) erro
 	return sb.EnableService()
 }
 
-// DeactivateContainerServiceBinding removes this container from load balancer active rotation, and DNS response
+// DeactivateContainerServiceBinding remove this container fromload balancer active rotation, and DNS response
 func (daemon *Daemon) DeactivateContainerServiceBinding(containerName string) error {
 	container, err := daemon.GetContainer(containerName)
 	if err != nil {
@@ -1082,9 +1043,7 @@ func (daemon *Daemon) DeactivateContainerServiceBinding(containerName string) er
 	}
 	sb := daemon.getNetworkSandbox(container)
 	if sb == nil {
-		// If the network sandbox is not found, then there is nothing to deactivate
-		logrus.Debugf("Could not find network sandbox for container %s on service binding deactivation request", containerName)
-		return nil
+		return fmt.Errorf("network sandbox does not exist for container %s", containerName)
 	}
 	return sb.DisableService()
 }

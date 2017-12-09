@@ -72,12 +72,7 @@ func (v *volumeRouter) postVolumesPrune(ctx context.Context, w http.ResponseWrit
 		return err
 	}
 
-	pruneFilters, err := filters.FromParam(r.Form.Get("filters"))
-	if err != nil {
-		return err
-	}
-
-	pruneReport, err := v.backend.VolumesPrune(ctx, pruneFilters)
+	pruneReport, err := v.backend.VolumesPrune(filters.Args{})
 	if err != nil {
 		return err
 	}

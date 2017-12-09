@@ -1,7 +1,7 @@
 package identity
 
 import (
-	cryptorand "crypto/rand"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"math/big"
@@ -10,7 +10,7 @@ import (
 var (
 	// idReader is used for random id generation. This declaration allows us to
 	// replace it for testing.
-	idReader = cryptorand.Reader
+	idReader = rand.Reader
 )
 
 // parameters for random identifier generation. We can tweak this when there is

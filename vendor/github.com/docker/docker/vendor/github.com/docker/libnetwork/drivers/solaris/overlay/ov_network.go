@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/driverapi"
 	"github.com/docker/libnetwork/netlabel"
@@ -17,7 +18,6 @@ import (
 	"github.com/docker/libnetwork/osl"
 	"github.com/docker/libnetwork/resolvconf"
 	"github.com/docker/libnetwork/types"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -153,7 +153,7 @@ func (d *driver) CreateNetwork(id string, option map[string]interface{}, nInfo d
 	}
 
 	if nInfo != nil {
-		if err := nInfo.TableEventRegister(ovPeerTable, driverapi.EndpointObject); err != nil {
+		if err := nInfo.TableEventRegister(ovPeerTable); err != nil {
 			return err
 		}
 	}
@@ -457,7 +457,7 @@ func (n *network) initSandbox(restore bool) error {
 	// In the restore case network sandbox already exist; but we don't know
 	// what epoch number it was created with. It has to be retrieved by
 	// searching the net namespaces.
-	var key string
+	key := ""
 	if restore {
 		key = osl.GenerateKey("-" + n.id)
 	} else {
@@ -570,10 +570,15 @@ func (n *network) Value() []byte {
 		netJSON = append(netJSON, sj)
 	}
 
+	b, err := json.Marshal(netJSON)
+	if err != nil {
+		return []byte{}
+	}
+
 	m["secure"] = n.secure
 	m["subnets"] = netJSON
 	m["mtu"] = n.mtu
-	b, err := json.Marshal(m)
+	b, err = json.Marshal(m)
 	if err != nil {
 		return []byte{}
 	}

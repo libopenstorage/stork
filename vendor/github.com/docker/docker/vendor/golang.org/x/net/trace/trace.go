@@ -77,6 +77,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/net/context"
 	"golang.org/x/net/internal/timeseries"
 )
 
@@ -90,10 +91,9 @@ var DebugUseAfterFinish = false
 // It returns two bools; the first indicates whether the page may be viewed at all,
 // and the second indicates whether sensitive events will be shown.
 //
-// AuthRequest may be replaced by a program to customize its authorization requirements.
+// AuthRequest may be replaced by a program to customise its authorisation requirements.
 //
-// The default AuthRequest function returns (true, true) if and only if the request
-// comes from localhost/127.0.0.1/[::1].
+// The default AuthRequest function returns (true, true) iff the request comes from localhost/127.0.0.1/[::1].
 var AuthRequest = func(req *http.Request) (any, sensitive bool) {
 	// RemoteAddr is commonly in the form "IP" or "IP:port".
 	// If it is in the form "IP:port", split off the port.
@@ -270,6 +270,18 @@ type contextKeyT string
 
 var contextKey = contextKeyT("golang.org/x/net/trace.Trace")
 
+// NewContext returns a copy of the parent context
+// and associates it with a Trace.
+func NewContext(ctx context.Context, tr Trace) context.Context {
+	return context.WithValue(ctx, contextKey, tr)
+}
+
+// FromContext returns the Trace bound to the context, if any.
+func FromContext(ctx context.Context) (tr Trace, ok bool) {
+	tr, ok = ctx.Value(contextKey).(Trace)
+	return
+}
+
 // Trace represents an active request.
 type Trace interface {
 	// LazyLog adds x to the event log. It will be evaluated each time the
@@ -320,8 +332,7 @@ func New(family, title string) Trace {
 	tr.ref()
 	tr.Family, tr.Title = family, title
 	tr.Start = time.Now()
-	tr.maxEvents = maxEventsPerTrace
-	tr.events = tr.eventsBuf[:0]
+	tr.events = make([]event, 0, maxEventsPerTrace)
 
 	activeMu.RLock()
 	s := activeTraces[tr.Family]
@@ -638,8 +649,8 @@ type event struct {
 	Elapsed    time.Duration // since previous event in trace
 	NewDay     bool          // whether this event is on a different day to the previous event
 	Recyclable bool          // whether this event was passed via LazyLog
-	Sensitive  bool          // whether this event contains sensitive information
 	What       interface{}   // string or fmt.Stringer
+	Sensitive  bool          // whether this event contains sensitive information
 }
 
 // WhenString returns a string representation of the elapsed time of the event.
@@ -680,17 +691,14 @@ type trace struct {
 	IsError bool
 
 	// Append-only sequence of events (modulo discards).
-	mu        sync.RWMutex
-	events    []event
-	maxEvents int
+	mu     sync.RWMutex
+	events []event
 
 	refs     int32 // how many buckets this is in
 	recycler func(interface{})
 	disc     discarded // scratch space to avoid allocation
 
 	finishStack []byte // where finish was called, if DebugUseAfterFinish is set
-
-	eventsBuf [4]event // preallocated buffer in case we only log a few events
 }
 
 func (tr *trace) reset() {
@@ -702,15 +710,11 @@ func (tr *trace) reset() {
 	tr.traceID = 0
 	tr.spanID = 0
 	tr.IsError = false
-	tr.maxEvents = 0
 	tr.events = nil
 	tr.refs = 0
 	tr.recycler = nil
 	tr.disc = 0
 	tr.finishStack = nil
-	for i := range tr.eventsBuf {
-		tr.eventsBuf[i] = event{}
-	}
 }
 
 // delta returns the elapsed time since the last event or the trace start,
@@ -739,7 +743,7 @@ func (tr *trace) addEvent(x interface{}, recyclable, sensitive bool) {
 		and very unlikely to be the fault of this code.
 
 		The most likely scenario is that some code elsewhere is using
-		a trace.Trace after its Finish method is called.
+		a requestz.Trace after its Finish method is called.
 		You can temporarily set the DebugUseAfterFinish var
 		to help discover where that is; do not leave that var set,
 		since it makes this package much less efficient.
@@ -748,11 +752,11 @@ func (tr *trace) addEvent(x interface{}, recyclable, sensitive bool) {
 	e := event{When: time.Now(), What: x, Recyclable: recyclable, Sensitive: sensitive}
 	tr.mu.Lock()
 	e.Elapsed, e.NewDay = tr.delta(e.When)
-	if len(tr.events) < tr.maxEvents {
+	if len(tr.events) < cap(tr.events) {
 		tr.events = append(tr.events, e)
 	} else {
 		// Discard the middle events.
-		di := int((tr.maxEvents - 1) / 2)
+		di := int((cap(tr.events) - 1) / 2)
 		if d, ok := tr.events[di].What.(*discarded); ok {
 			(*d)++
 		} else {
@@ -772,7 +776,7 @@ func (tr *trace) addEvent(x interface{}, recyclable, sensitive bool) {
 			go tr.recycler(tr.events[di+1].What)
 		}
 		copy(tr.events[di+1:], tr.events[di+2:])
-		tr.events[tr.maxEvents-1] = e
+		tr.events[cap(tr.events)-1] = e
 	}
 	tr.mu.Unlock()
 }
@@ -798,7 +802,7 @@ func (tr *trace) SetTraceInfo(traceID, spanID uint64) {
 func (tr *trace) SetMaxEvents(m int) {
 	// Always keep at least three events: first, discarded count, last.
 	if len(tr.events) == 0 && m > 3 {
-		tr.maxEvents = m
+		tr.events = make([]event, 0, m)
 	}
 }
 

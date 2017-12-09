@@ -3,7 +3,7 @@ package hcsshim
 import (
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 func processAsyncHcsResult(err error, resultp *uint16, callbackNumber uintptr, expectedNotification hcsNotification, timeout *time.Duration) error {
@@ -59,5 +59,4 @@ func waitForNotification(callbackNumber uintptr, expectedNotification hcsNotific
 	case <-c:
 		return ErrTimeout
 	}
-	return nil
 }

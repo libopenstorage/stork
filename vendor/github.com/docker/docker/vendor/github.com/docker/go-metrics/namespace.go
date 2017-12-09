@@ -40,25 +40,21 @@ type Namespace struct {
 //  Only metrics created with the returned namespace will get the new constant
 //  labels.  The returned namespace must be registered separately.
 func (n *Namespace) WithConstLabels(labels Labels) *Namespace {
-	n.mu.Lock()
-	ns := &Namespace{
-		name:      n.name,
-		subsystem: n.subsystem,
-		labels:    mergeLabels(n.labels, labels),
-	}
-	n.mu.Unlock()
-	return ns
+	ns := *n
+	ns.metrics = nil // blank this out
+	ns.labels = mergeLabels(ns.labels, labels)
+	return &ns
 }
 
 func (n *Namespace) NewCounter(name, help string) Counter {
 	c := &counter{pc: prometheus.NewCounter(n.newCounterOpts(name, help))}
-	n.Add(c)
+	n.addMetric(c)
 	return c
 }
 
 func (n *Namespace) NewLabeledCounter(name, help string, labels ...string) LabeledCounter {
 	c := &labeledCounter{pc: prometheus.NewCounterVec(n.newCounterOpts(name, help), labels)}
-	n.Add(c)
+	n.addMetric(c)
 	return c
 }
 
@@ -66,7 +62,7 @@ func (n *Namespace) newCounterOpts(name, help string) prometheus.CounterOpts {
 	return prometheus.CounterOpts{
 		Namespace:   n.name,
 		Subsystem:   n.subsystem,
-		Name:        makeName(name, Total),
+		Name:        fmt.Sprintf("%s_%s", name, Total),
 		Help:        help,
 		ConstLabels: prometheus.Labels(n.labels),
 	}
@@ -76,7 +72,7 @@ func (n *Namespace) NewTimer(name, help string) Timer {
 	t := &timer{
 		m: prometheus.NewHistogram(n.newTimerOpts(name, help)),
 	}
-	n.Add(t)
+	n.addMetric(t)
 	return t
 }
 
@@ -84,7 +80,7 @@ func (n *Namespace) NewLabeledTimer(name, help string, labels ...string) Labeled
 	t := &labeledTimer{
 		m: prometheus.NewHistogramVec(n.newTimerOpts(name, help), labels),
 	}
-	n.Add(t)
+	n.addMetric(t)
 	return t
 }
 
@@ -92,7 +88,7 @@ func (n *Namespace) newTimerOpts(name, help string) prometheus.HistogramOpts {
 	return prometheus.HistogramOpts{
 		Namespace:   n.name,
 		Subsystem:   n.subsystem,
-		Name:        makeName(name, Seconds),
+		Name:        fmt.Sprintf("%s_%s", name, Seconds),
 		Help:        help,
 		ConstLabels: prometheus.Labels(n.labels),
 	}
@@ -102,7 +98,7 @@ func (n *Namespace) NewGauge(name, help string, unit Unit) Gauge {
 	g := &gauge{
 		pg: prometheus.NewGauge(n.newGaugeOpts(name, help, unit)),
 	}
-	n.Add(g)
+	n.addMetric(g)
 	return g
 }
 
@@ -110,7 +106,7 @@ func (n *Namespace) NewLabeledGauge(name, help string, unit Unit, labels ...stri
 	g := &labeledGauge{
 		pg: prometheus.NewGaugeVec(n.newGaugeOpts(name, help, unit), labels),
 	}
-	n.Add(g)
+	n.addMetric(g)
 	return g
 }
 
@@ -118,7 +114,7 @@ func (n *Namespace) newGaugeOpts(name, help string, unit Unit) prometheus.GaugeO
 	return prometheus.GaugeOpts{
 		Namespace:   n.name,
 		Subsystem:   n.subsystem,
-		Name:        makeName(name, unit),
+		Name:        fmt.Sprintf("%s_%s", name, unit),
 		Help:        help,
 		ConstLabels: prometheus.Labels(n.labels),
 	}
@@ -142,20 +138,10 @@ func (n *Namespace) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func (n *Namespace) Add(collector prometheus.Collector) {
+func (n *Namespace) addMetric(collector prometheus.Collector) {
 	n.mu.Lock()
 	n.metrics = append(n.metrics, collector)
 	n.mu.Unlock()
-}
-
-func (n *Namespace) NewDesc(name, help string, unit Unit, labels ...string) *prometheus.Desc {
-	name = makeName(name, unit)
-	namespace := n.name
-	if n.subsystem != "" {
-		namespace = fmt.Sprintf("%s_%s", namespace, n.subsystem)
-	}
-	name = fmt.Sprintf("%s_%s", namespace, name)
-	return prometheus.NewDesc(name, help, labels, prometheus.Labels(n.labels))
 }
 
 // mergeLabels merges two or more labels objects into a single map, favoring
@@ -170,12 +156,4 @@ func mergeLabels(lbs ...Labels) Labels {
 	}
 
 	return merged
-}
-
-func makeName(name string, unit Unit) string {
-	if unit == "" {
-		return name
-	}
-
-	return fmt.Sprintf("%s_%s", name, unit)
 }

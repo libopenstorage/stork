@@ -91,9 +91,9 @@ func (mwr *remotesWeightedRandom) Select(excludes ...string) (api.Peer, error) {
 
 	// https://github.com/LK4D4/sample
 	//
-	// The first link applies exponential distribution weight choice reservoir
+	// The first link applies exponential distribution weight choice reservior
 	// sampling. This may be relevant if we view the master selection as a
-	// distributed reservoir sampling problem.
+	// distributed reservior sampling problem.
 
 	// bias to zero-weighted remotes have same probability. otherwise, we
 	// always select first entry when all are zero.

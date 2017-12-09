@@ -3,23 +3,22 @@ package main
 import (
 	"strings"
 
-	"github.com/docker/docker/integration-cli/checker"
-	"github.com/docker/docker/integration-cli/cli"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
 func (s *DockerSuite) TestCommitAfterContainerIsDone(c *check.C) {
-	out := cli.DockerCmd(c, "run", "-i", "-a", "stdin", "busybox", "echo", "foo").Combined()
+	out, _ := dockerCmd(c, "run", "-i", "-a", "stdin", "busybox", "echo", "foo")
 
 	cleanedContainerID := strings.TrimSpace(out)
 
-	cli.DockerCmd(c, "wait", cleanedContainerID)
+	dockerCmd(c, "wait", cleanedContainerID)
 
-	out = cli.DockerCmd(c, "commit", cleanedContainerID).Combined()
+	out, _ = dockerCmd(c, "commit", cleanedContainerID)
 
 	cleanedImageID := strings.TrimSpace(out)
 
-	cli.DockerCmd(c, "inspect", cleanedImageID)
+	dockerCmd(c, "inspect", cleanedImageID)
 }
 
 func (s *DockerSuite) TestCommitWithoutPause(c *check.C) {
@@ -40,6 +39,7 @@ func (s *DockerSuite) TestCommitWithoutPause(c *check.C) {
 //test commit a paused container should not unpause it after commit
 func (s *DockerSuite) TestCommitPausedContainer(c *check.C) {
 	testRequires(c, DaemonIsLinux)
+	defer unpauseAllContainers()
 	out, _ := dockerCmd(c, "run", "-i", "-d", "busybox")
 
 	cleanedContainerID := strings.TrimSpace(out)
@@ -54,9 +54,9 @@ func (s *DockerSuite) TestCommitPausedContainer(c *check.C) {
 }
 
 func (s *DockerSuite) TestCommitNewFile(c *check.C) {
-	dockerCmd(c, "run", "--name", "committer", "busybox", "/bin/sh", "-c", "echo koye > /foo")
+	dockerCmd(c, "run", "--name", "commiter", "busybox", "/bin/sh", "-c", "echo koye > /foo")
 
-	imageID, _ := dockerCmd(c, "commit", "committer")
+	imageID, _ := dockerCmd(c, "commit", "commiter")
 	imageID = strings.TrimSpace(imageID)
 
 	out, _ := dockerCmd(c, "run", imageID, "cat", "/foo")
@@ -76,7 +76,7 @@ func (s *DockerSuite) TestCommitHardlink(c *check.C) {
 	imageID, _ := dockerCmd(c, "commit", "hardlinks", "hardlinks")
 	imageID = strings.TrimSpace(imageID)
 
-	secondOutput, _ := dockerCmd(c, "run", "-t", imageID, "ls", "-di", "file1", "file2")
+	secondOutput, _ := dockerCmd(c, "run", "-t", "hardlinks", "ls", "-di", "file1", "file2")
 
 	chunks = strings.Split(strings.TrimSpace(secondOutput), " ")
 	inode = chunks[0]
@@ -90,7 +90,7 @@ func (s *DockerSuite) TestCommitTTY(c *check.C) {
 	imageID, _ := dockerCmd(c, "commit", "tty", "ttytest")
 	imageID = strings.TrimSpace(imageID)
 
-	dockerCmd(c, "run", imageID, "/bin/ls")
+	dockerCmd(c, "run", "ttytest", "/bin/ls")
 }
 
 func (s *DockerSuite) TestCommitWithHostBindMount(c *check.C) {
@@ -100,7 +100,7 @@ func (s *DockerSuite) TestCommitWithHostBindMount(c *check.C) {
 	imageID, _ := dockerCmd(c, "commit", "bind-commit", "bindtest")
 	imageID = strings.TrimSpace(imageID)
 
-	dockerCmd(c, "run", imageID, "true")
+	dockerCmd(c, "run", "bindtest", "true")
 }
 
 func (s *DockerSuite) TestCommitChange(c *check.C) {

@@ -3,7 +3,7 @@ package hcsshim
 import (
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 var prepareLayerLock sync.Mutex

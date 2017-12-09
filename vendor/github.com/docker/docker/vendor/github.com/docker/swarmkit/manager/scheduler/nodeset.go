@@ -3,10 +3,9 @@ package scheduler
 import (
 	"container/heap"
 	"errors"
-	"strings"
+	"time"
 
 	"github.com/docker/swarmkit/api"
-	"github.com/docker/swarmkit/manager/constraint"
 )
 
 var errNodeNotFound = errors.New("node not found in scheduler dataset")
@@ -31,6 +30,16 @@ func (ns *nodeSet) nodeInfo(nodeID string) (NodeInfo, error) {
 // addOrUpdateNode sets the number of tasks for a given node. It adds the node
 // to the set if it wasn't already tracked.
 func (ns *nodeSet) addOrUpdateNode(n NodeInfo) {
+	if n.Tasks == nil {
+		n.Tasks = make(map[string]*api.Task)
+	}
+	if n.DesiredRunningTasksCountByService == nil {
+		n.DesiredRunningTasksCountByService = make(map[string]int)
+	}
+	if n.recentFailures == nil {
+		n.recentFailures = make(map[string][]time.Time)
+	}
+
 	ns.nodes[n.ID] = n
 }
 
@@ -47,78 +56,73 @@ func (ns *nodeSet) remove(nodeID string) {
 	delete(ns.nodes, nodeID)
 }
 
-func (ns *nodeSet) tree(serviceID string, preferences []*api.PlacementPreference, maxAssignments int, meetsConstraints func(*NodeInfo) bool, nodeLess func(*NodeInfo, *NodeInfo) bool) decisionTree {
-	var root decisionTree
+type nodeMaxHeap struct {
+	nodes    []NodeInfo
+	lessFunc func(*NodeInfo, *NodeInfo) bool
+	length   int
+}
 
-	if maxAssignments == 0 {
-		return root
+func (h nodeMaxHeap) Len() int {
+	return h.length
+}
+
+func (h nodeMaxHeap) Swap(i, j int) {
+	h.nodes[i], h.nodes[j] = h.nodes[j], h.nodes[i]
+}
+
+func (h nodeMaxHeap) Less(i, j int) bool {
+	// reversed to make a max-heap
+	return h.lessFunc(&h.nodes[j], &h.nodes[i])
+}
+
+func (h *nodeMaxHeap) Push(x interface{}) {
+	h.nodes = append(h.nodes, x.(NodeInfo))
+	h.length++
+}
+
+func (h *nodeMaxHeap) Pop() interface{} {
+	h.length--
+	// return value is never used
+	return nil
+}
+
+// findBestNodes returns n nodes (or < n if fewer nodes are available) that
+// rank best (lowest) according to the sorting function.
+func (ns *nodeSet) findBestNodes(n int, meetsConstraints func(*NodeInfo) bool, nodeLess func(*NodeInfo, *NodeInfo) bool) []NodeInfo {
+	if n == 0 {
+		return []NodeInfo{}
 	}
 
+	nodeHeap := nodeMaxHeap{lessFunc: nodeLess}
+
+	// TODO(aaronl): Is is possible to avoid checking constraints on every
+	// node? Perhaps we should try to schedule with n*2 nodes that weren't
+	// prescreened, and repeat the selection if there weren't enough nodes
+	// meeting the constraints.
 	for _, node := range ns.nodes {
-		tree := &root
-		for _, pref := range preferences {
-			// Only spread is supported so far
-			spread := pref.GetSpread()
-			if spread == nil {
-				continue
-			}
-
-			descriptor := spread.SpreadDescriptor
-			var value string
-			switch {
-			case len(descriptor) > len(constraint.NodeLabelPrefix) && strings.EqualFold(descriptor[:len(constraint.NodeLabelPrefix)], constraint.NodeLabelPrefix):
-				if node.Spec.Annotations.Labels != nil {
-					value = node.Spec.Annotations.Labels[descriptor[len(constraint.NodeLabelPrefix):]]
-				}
-			case len(descriptor) > len(constraint.EngineLabelPrefix) && strings.EqualFold(descriptor[:len(constraint.EngineLabelPrefix)], constraint.EngineLabelPrefix):
-				if node.Description != nil && node.Description.Engine != nil && node.Description.Engine.Labels != nil {
-					value = node.Description.Engine.Labels[descriptor[len(constraint.EngineLabelPrefix):]]
-				}
-			// TODO(aaronl): Support other items from constraint
-			// syntax like node ID, hostname, os/arch, etc?
-			default:
-				continue
-			}
-
-			// If value is still uninitialized, the value used for
-			// the node at this level of the tree is "". This makes
-			// sure that the tree structure is not affected by
-			// which properties nodes have and don't have.
-
-			if node.ActiveTasksCountByService != nil {
-				tree.tasks += node.ActiveTasksCountByService[serviceID]
-			}
-
-			if tree.next == nil {
-				tree.next = make(map[string]*decisionTree)
-			}
-			next := tree.next[value]
-			if next == nil {
-				next = &decisionTree{}
-				tree.next[value] = next
-			}
-			tree = next
-		}
-
-		if node.ActiveTasksCountByService != nil {
-			tree.tasks += node.ActiveTasksCountByService[serviceID]
-		}
-
-		if tree.nodeHeap.lessFunc == nil {
-			tree.nodeHeap.lessFunc = nodeLess
-		}
-
-		if tree.nodeHeap.Len() < maxAssignments {
+		// If there are fewer then n nodes in the heap, we add this
+		// node if it meets the constraints. Otherwise, the heap has
+		// n nodes, and if this node is better than the worst node in
+		// the heap, we replace the worst node and then fix the heap.
+		if nodeHeap.Len() < n {
 			if meetsConstraints(&node) {
-				heap.Push(&tree.nodeHeap, node)
+				heap.Push(&nodeHeap, node)
 			}
-		} else if nodeLess(&node, &tree.nodeHeap.nodes[0]) {
+		} else if nodeLess(&node, &nodeHeap.nodes[0]) {
 			if meetsConstraints(&node) {
-				tree.nodeHeap.nodes[0] = node
-				heap.Fix(&tree.nodeHeap, 0)
+				nodeHeap.nodes[0] = node
+				heap.Fix(&nodeHeap, 0)
 			}
 		}
 	}
 
-	return root
+	// Popping every element orders the nodes from best to worst. The
+	// first pop gets the worst node (since this a max-heap), and puts it
+	// at position n-1. Then the next pop puts the next-worst at n-2, and
+	// so on.
+	for nodeHeap.Len() > 0 {
+		heap.Pop(&nodeHeap)
+	}
+
+	return nodeHeap.nodes
 }

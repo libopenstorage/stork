@@ -92,7 +92,7 @@ service Control {
 		option (docker.protobuf.plugin.tls_authorization) = { roles: "swarm-manager" };
 	};
 
-	// ListSecrets returns a `ListSecretResponse` with a list of all non-internal `Secret`s being
+	// ListSecrets returns a `ListSecretResponse` with a list all non-internal `Secret`s being
 	// managed, or all secrets matching any name in `ListSecretsRequest.Names`, any
 	// name prefix in `ListSecretsRequest.NamePrefixes`, any id in
 	// `ListSecretsRequest.SecretIDs`, or any id prefix in `ListSecretsRequest.IDPrefixes`.
@@ -116,55 +116,10 @@ service Control {
 	rpc RemoveSecret(RemoveSecretRequest) returns (RemoveSecretResponse) {
 		option (docker.protobuf.plugin.tls_authorization) = { roles: "swarm-manager" };
 	}
-
-	// --- config APIs ---
-
-	// GetConfig returns a `GetConfigResponse` with a `Config` with the same
-	// id as `GetConfigRequest.ConfigID`
-	// - Returns `NotFound` if the Config with the given id is not found.
-	// - Returns `InvalidArgument` if the `GetConfigRequest.ConfigID` is empty.
-	// - Returns an error if getting fails.
-	rpc GetConfig(GetConfigRequest) returns (GetConfigResponse) {
-		option (docker.protobuf.plugin.tls_authorization) = { roles: "swarm-manager" };
-	}
-
-	// UpdateConfig returns a `UpdateConfigResponse` with a `Config` with the same
-	// id as `GetConfigRequest.ConfigID`
-	// - Returns `NotFound` if the Config with the given id is not found.
-	// - Returns `InvalidArgument` if the `GetConfigRequest.ConfigID` is empty.
-	// - Returns an error if updating fails.
-	rpc UpdateConfig(UpdateConfigRequest) returns (UpdateConfigResponse) {
-		option (docker.protobuf.plugin.tls_authorization) = { roles: "swarm-manager" };
-	};
-
-	// ListConfigs returns a `ListConfigResponse` with a list of `Config`s being
-	// managed, or all configs matching any name in `ListConfigsRequest.Names`, any
-	// name prefix in `ListConfigsRequest.NamePrefixes`, any id in
-	// `ListConfigsRequest.ConfigIDs`, or any id prefix in `ListConfigsRequest.IDPrefixes`.
-	// - Returns an error if listing fails.
-	rpc ListConfigs(ListConfigsRequest) returns (ListConfigsResponse) {
-		option (docker.protobuf.plugin.tls_authorization) = { roles: "swarm-manager" };
-	}
-	// CreateConfig creates and return a `CreateConfigResponse` with a `Config` based
-	// on the provided `CreateConfigRequest.ConfigSpec`.
-	// - Returns `InvalidArgument` if the `CreateConfigRequest.ConfigSpec` is malformed,
-	//   or if the config data is too long or contains invalid characters.
-	// - Returns an error if the creation fails.
-	rpc CreateConfig(CreateConfigRequest) returns (CreateConfigResponse) {
-		option (docker.protobuf.plugin.tls_authorization) = { roles: "swarm-manager" };
-	}
-
-	// RemoveConfig removes the config referenced by `RemoveConfigRequest.ID`.
-	// - Returns `InvalidArgument` if `RemoveConfigRequest.ID` is empty.
-	// - Returns `NotFound` if the a config named `RemoveConfigRequest.ID` is not found.
-	// - Returns an error if the deletion fails.
-	rpc RemoveConfig(RemoveConfigRequest) returns (RemoveConfigResponse) {
-		option (docker.protobuf.plugin.tls_authorization) = { roles: "swarm-manager" };
-	}
 }
 
 message GetNodeRequest {
-	string node_id = 1;
+	string node_id = 1 [(gogoproto.customname) = "NodeID"];
 }
 
 message GetNodeResponse {
@@ -174,10 +129,10 @@ message GetNodeResponse {
 message ListNodesRequest {
 	message Filters {
 		repeated string names = 1;
-		repeated string id_prefixes = 2;
+		repeated string id_prefixes = 2 [(gogoproto.customname) = "IDPrefixes"];
 		map<string, string> labels = 3;
-		repeated NodeSpec.Membership memberships = 4 [packed=false];
-		repeated NodeRole roles = 5 [packed=false];
+		repeated NodeSpec.Membership memberships = 4;
+		repeated NodeRole roles = 5;
 		// NamePrefixes matches all objects with the given prefixes
 		repeated string name_prefixes = 6;
 	}
@@ -193,7 +148,7 @@ message ListNodesResponse {
 // to request a new availability for a node, such as PAUSE. Invalid updates
 // will be denied and cause an error.
 message UpdateNodeRequest {
-	string node_id = 1;
+	string node_id = 1 [(gogoproto.customname) = "NodeID"];
 	Version node_version = 2;
 	NodeSpec spec = 3;
 }
@@ -204,7 +159,7 @@ message UpdateNodeResponse {
 
 // RemoveNodeRequest requests to delete the specified node from store.
 message RemoveNodeRequest {
-	string node_id = 1;
+	string node_id = 1 [(gogoproto.customname) = "NodeID"];
 	bool force = 2;
 }
 
@@ -212,7 +167,7 @@ message RemoveNodeResponse {
 }
 
 message GetTaskRequest {
-	string task_id = 1;
+	string task_id = 1 [(gogoproto.customname) = "TaskID"];
 }
 
 message GetTaskResponse {
@@ -220,7 +175,7 @@ message GetTaskResponse {
 }
 
 message RemoveTaskRequest {
-	string task_id = 1;
+	string task_id = 1 [(gogoproto.customname) = "TaskID"];
 }
 
 message RemoveTaskResponse {
@@ -229,20 +184,13 @@ message RemoveTaskResponse {
 message ListTasksRequest {
 	message Filters {
 		repeated string names = 1;
-		repeated string id_prefixes = 2;
+		repeated string id_prefixes = 2 [(gogoproto.customname) = "IDPrefixes"];
 		map<string, string> labels = 3;
-		repeated string service_ids = 4;
-		repeated string node_ids = 5;
-		repeated docker.swarmkit.v1.TaskState desired_states = 6 [packed=false];
+		repeated string service_ids = 4 [(gogoproto.customname) = "ServiceIDs"];
+		repeated string node_ids = 5 [(gogoproto.customname) = "NodeIDs"];
+		repeated docker.swarmkit.v1.TaskState desired_states = 6;
 		// NamePrefixes matches all objects with the given prefixes
 		repeated string name_prefixes = 7;
-		repeated string runtimes = 9;
-
-		// UpToDate matches tasks that are consistent with the current
-		// service definition.
-		// Note: this is intended for internal status reporting rather
-		// than being exposed to users. It may be removed in the future.
-		bool up_to_date = 8;
 	}
 
 	Filters filters = 1;
@@ -261,8 +209,7 @@ message CreateServiceResponse {
 }
 
 message GetServiceRequest {
-	string service_id = 1;
-	bool insert_defaults = 2;
+	string service_id = 1 [(gogoproto.customname) = "ServiceID"];
 }
 
 message GetServiceResponse {
@@ -270,24 +217,9 @@ message GetServiceResponse {
 }
 
 message UpdateServiceRequest {
-	string service_id = 1;
+	string service_id = 1 [(gogoproto.customname) = "ServiceID"];
 	Version service_version = 2;
 	ServiceSpec spec = 3;
-
-	enum Rollback {
-		// This is not a rollback. The spec field of the request will
-		// be honored.
-		NONE = 0;
-
-		// Roll back the service - get spec from the service's
-		// previous_spec.
-		PREVIOUS = 1;
-	}
-
-	// Rollback may be set to PREVIOUS to request a rollback (the service's
-	// spec will be set to the value of its previous_spec field). In this
-	// case, the spec field of this request is ignored.
-	Rollback rollback = 4;
 }
 
 message UpdateServiceResponse {
@@ -295,7 +227,7 @@ message UpdateServiceResponse {
 }
 
 message RemoveServiceRequest {
-	string service_id = 1;
+	string service_id = 1 [(gogoproto.customname) = "ServiceID"];
 }
 
 message RemoveServiceResponse {
@@ -304,11 +236,10 @@ message RemoveServiceResponse {
 message ListServicesRequest {
 	message Filters {
 		repeated string names = 1;
-		repeated string id_prefixes = 2;
+		repeated string id_prefixes = 2 [(gogoproto.customname) = "IDPrefixes"];
 		map<string, string> labels = 3;
 		// NamePrefixes matches all objects with the given prefixes
 		repeated string name_prefixes = 4;
-		repeated string runtimes = 5;
 	}
 
 	Filters filters = 1;
@@ -328,7 +259,7 @@ message CreateNetworkResponse {
 
 message GetNetworkRequest {
 	string name = 1;
-	string network_id = 2;
+	string network_id = 2 [(gogoproto.customname) = "NetworkID"];
 }
 
 message GetNetworkResponse {
@@ -337,7 +268,7 @@ message GetNetworkResponse {
 
 message RemoveNetworkRequest {
 	string name = 1;
-	string network_id = 2;
+	string network_id = 2 [(gogoproto.customname) = "NetworkID"];
 }
 
 message RemoveNetworkResponse {}
@@ -345,7 +276,7 @@ message RemoveNetworkResponse {}
 message ListNetworksRequest {
 	message Filters {
 		repeated string names = 1;
-		repeated string id_prefixes = 2;
+		repeated string id_prefixes = 2 [(gogoproto.customname) = "IDPrefixes"];
 		map<string, string> labels = 3;
 		// NamePrefixes matches all objects with the given prefixes
 		repeated string name_prefixes = 4;
@@ -359,7 +290,7 @@ message ListNetworksResponse {
 }
 
 message GetClusterRequest {
-	string cluster_id = 1;
+	string cluster_id = 1 [(gogoproto.customname) = "ClusterID"];
 }
 
 message GetClusterResponse {
@@ -369,7 +300,7 @@ message GetClusterResponse {
 message ListClustersRequest {
 	message Filters {
 		repeated string names = 1;
-		repeated string id_prefixes = 2;
+		repeated string id_prefixes = 2 [(gogoproto.customname) = "IDPrefixes"];
 		map<string, string> labels = 3;
 		// NamePrefixes matches all objects with the given prefixes
 		repeated string name_prefixes = 4;
@@ -397,7 +328,7 @@ message KeyRotation {
 
 message UpdateClusterRequest {
 	// ClusterID is the cluster ID to update.
-	string cluster_id = 1;
+	string cluster_id = 1 [(gogoproto.customname) = "ClusterID"];
 
 	// ClusterVersion is the version of the cluster being updated.
 	Version cluster_version = 2;
@@ -415,7 +346,7 @@ message UpdateClusterResponse {
 
 // GetSecretRequest is the request to get a `Secret` object given a secret id.
 message GetSecretRequest {
-	string secret_id = 1;
+	string secret_id = 1 [(gogoproto.customname) = "SecretID"];
 }
 
 // GetSecretResponse contains the Secret corresponding to the id in
@@ -427,7 +358,7 @@ message GetSecretResponse {
 
 message UpdateSecretRequest {
 	// SecretID is the secret ID to update.
-	string secret_id = 1;
+	string secret_id = 1 [(gogoproto.customname) = "SecretID"];
 
 	// SecretVersion is the version of the secret being updated.
 	Version secret_version = 2;
@@ -441,12 +372,13 @@ message UpdateSecretResponse {
 	Secret secret = 1;
 }
 
+
 // ListSecretRequest is the request to list all non-internal secrets in the secret store,
 // or all secrets filtered by (name or name prefix or id prefix) and labels.
 message ListSecretsRequest {
 	message Filters {
 		repeated string names = 1;
-		repeated string id_prefixes = 2;
+		repeated string id_prefixes = 2 [(gogoproto.customname) = "IDPrefixes"];
 		map<string, string> labels = 3;
 		repeated string name_prefixes = 4;
 	}
@@ -468,7 +400,7 @@ message CreateSecretRequest {
 	SecretSpec spec = 1;
 }
 
-// CreateSecretResponse contains the newly created `Secret` corresponding to the
+// CreateSecretResponse contains the newly created `Secret`` corresponding to the
 // name in `CreateSecretRequest`.  The `Secret.Spec.Data` field should be nil instead
 // of actually containing the secret bytes.
 message CreateSecretResponse {
@@ -478,77 +410,9 @@ message CreateSecretResponse {
 // RemoveSecretRequest contains the ID of the secret that should be removed.  This
 // removes all versions of the secret.
 message RemoveSecretRequest {
-	string secret_id = 1;
+	string secret_id = 1 [(gogoproto.customname) = "SecretID"];
 }
 
 // RemoveSecretResponse is an empty object indicating the successful removal of
 // a secret.
 message RemoveSecretResponse {}
-
-// GetConfigRequest is the request to get a `Config` object given a config id.
-message GetConfigRequest {
-	string config_id = 1;
-}
-
-// GetConfigResponse contains the Config corresponding to the id in
-// `GetConfigRequest`.
-message GetConfigResponse {
-	Config config = 1;
-}
-
-message UpdateConfigRequest {
-	// ConfigID is the config ID to update.
-	string config_id = 1;
-
-	// ConfigVersion is the version of the config being updated.
-	Version config_version = 2;
-
-	// Spec is the new spec to apply to the Config
-	// Only some fields are allowed to be updated.
-	ConfigSpec spec = 3;
-}
-
-message UpdateConfigResponse {
-	Config config = 1;
-}
-
-// ListConfigRequest is the request to list all configs in the config store,
-// or all configs filtered by (name or name prefix or id prefix) and labels.
-message ListConfigsRequest {
-	message Filters {
-		repeated string names = 1;
-		repeated string id_prefixes = 2;
-		map<string, string> labels = 3;
-		repeated string name_prefixes = 4;
-	}
-
-	Filters filters = 1;
-}
-
-// ListConfigResponse contains a list of all the configs that match the name or
-// name prefix filters provided in `ListConfigRequest`.
-message ListConfigsResponse {
-	repeated Config configs = 1;
-}
-
-// CreateConfigRequest specifies a new config (it will not update an existing
-// config) to create.
-message CreateConfigRequest {
-	ConfigSpec spec = 1;
-}
-
-// CreateConfigResponse contains the newly created `Config` corresponding to the
-// name in `CreateConfigRequest`.
-message CreateConfigResponse {
-	Config config = 1;
-}
-
-// RemoveConfigRequest contains the ID of the config that should be removed.  This
-// removes all versions of the config.
-message RemoveConfigRequest {
-	string config_id = 1;
-}
-
-// RemoveConfigResponse is an empty object indicating the successful removal of
-// a config.
-message RemoveConfigResponse {}

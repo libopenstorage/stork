@@ -1,10 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
 rm -rf "$DEST"
-DEST="$ABS_DEST/../test-integration-cli"
-
-source "$SCRIPTDIR/make/.go-autogen"
+DEST="$DEST/../test-integration-cli"
 
 if [ -z $DOCKER_INTEGRATION_TESTS_VERIFIED ]; then
 	source ${MAKEDIR}/.integration-test-helpers

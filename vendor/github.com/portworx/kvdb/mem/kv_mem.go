@@ -19,13 +19,23 @@ const (
 	// Name is the name of this kvdb implementation.
 	Name = "kv-mem"
 	// KvSnap is an option passed to designate this kvdb as a snap.
-	KvSnap       = "KvSnap"
-	bootstrapKey = "bootstrap"
+	KvSnap = "KvSnap"
+	// KvUseInterface is an option passed that configures the mem to store
+	// the values as interfaces instead of bytes. It will not create a
+	// copy of the interface that is passed in. USE WITH CAUTION
+	KvUseInterface = "KvUseInterface"
+	bootstrapKey   = "bootstrap"
 )
 
 var (
 	// ErrSnap is returned if an operation is not supported on a snap.
 	ErrSnap = errors.New("operation not supported on snap")
+	// ErrSnapWithInterfaceNotSupported is returned when a snap kv-mem is
+	// created with KvUseInterface flag on
+	ErrSnapWithInterfaceNotSupported = errors.New("snap kvdb not supported with interfaces")
+	// ErrIllegalSelect is returned when an incorrect select function
+	// implementation is detected.
+	ErrIllegalSelect = errors.New("Illegal Select implementation")
 )
 
 func init() {
@@ -37,7 +47,7 @@ func init() {
 type memKV struct {
 	common.BaseKvdb
 	// m is the key value database
-	m map[string]*kvdb.KVPair
+	m map[string]*memKVPair
 	// updates is the list of latest few updates
 	dist WatchDistributor
 	// mutex protects m, w, wt
@@ -47,7 +57,23 @@ type memKV struct {
 	domain string
 	// locks is the map of currently held locks
 	locks map[string]chan int
+	// noByte will store all the values as interface
+	noByte bool
 	kvdb.Controller
+}
+
+type memKVPair struct {
+	kvdb.KVPair
+	// ivalue is the value for this kv pair stored as an interface
+	ivalue interface{}
+}
+
+func (mkvp *memKVPair) copy() *kvdb.KVPair {
+	copyKvp := mkvp.KVPair
+	if mkvp.Value == nil && mkvp.ivalue != nil {
+		copyKvp.Value, _ = common.ToBytes(mkvp.ivalue)
+	}
+	return &copyKvp
 }
 
 type snapMem struct {
@@ -59,7 +85,7 @@ type watchUpdate struct {
 	// key is the key that was updated
 	key string
 	// kvp is the key-value that was updated
-	kvp kvdb.KVPair
+	kvp memKVPair
 	// err is any error on update
 	err error
 }
@@ -194,15 +220,21 @@ func New(
 
 	mem := &memKV{
 		BaseKvdb:   common.BaseKvdb{FatalCb: fatalErrorCb},
-		m:          make(map[string]*kvdb.KVPair),
+		m:          make(map[string]*memKVPair),
 		dist:       NewWatchDistributor(),
 		domain:     domain,
 		Controller: kvdb.ControllerNotSupported,
 		locks:      make(map[string]chan int),
 	}
 
-	if _, ok := options[KvSnap]; ok {
+	var noByte bool
+	if _, noByte = options[KvUseInterface]; noByte {
+		mem.noByte = true
+	}
+	if _, ok := options[KvSnap]; ok && !noByte {
 		return &snapMem{memKV: mem}, nil
+	} else if ok && noByte {
+		return nil, ErrSnapWithInterfaceNotSupported
 	}
 	return mem, nil
 }
@@ -220,7 +252,7 @@ func (kv *memKV) Capabilities() int {
 	return kvdb.KVCapabilityOrderedUpdates
 }
 
-func (kv *memKV) get(key string) (*kvdb.KVPair, error) {
+func (kv *memKV) get(key string) (*memKVPair, error) {
 	key = kv.domain + key
 	v, ok := kv.m[key]
 	if !ok {
@@ -229,10 +261,18 @@ func (kv *memKV) get(key string) (*kvdb.KVPair, error) {
 	return v, nil
 }
 
+func (kv *memKV) exists(key string) (*memKVPair, error) {
+	return kv.get(key)
+}
+
 func (kv *memKV) Get(key string) (*kvdb.KVPair, error) {
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
-	return kv.get(key)
+	v, err := kv.get(key)
+	if err != nil {
+		return nil, err
+	}
+	return v.copy(), nil
 }
 
 func (kv *memKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
@@ -242,15 +282,16 @@ func (kv *memKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 	if err != nil {
 		return nil, 0, fmt.Errorf("Failed to create snap bootstrap key: %v", err)
 	}
-	data := make(map[string]*kvdb.KVPair)
+	data := make(map[string]*memKVPair)
 	for key, value := range kv.m {
 		if !strings.HasPrefix(key, prefix) && strings.Contains(key, "/_") {
 			continue
 		}
-		snap := &kvdb.KVPair{}
-		*snap = *value
-		snap.Value = make([]byte, len(value.Value))
-		copy(snap.Value, value.Value)
+		snap := &memKVPair{}
+		snap.KVPair = value.KVPair
+		cpy := value.copy()
+		snap.Value = make([]byte, len(cpy.Value))
+		copy(snap.Value, cpy.Value)
 		data[key] = snap
 	}
 	highestKvPair, _ := kv.delete(bootstrapKey)
@@ -267,44 +308,62 @@ func (kv *memKV) put(
 	ttl uint64,
 ) (*kvdb.KVPair, error) {
 
-	var kvp *kvdb.KVPair
+	var (
+		kvp  *memKVPair
+		b    []byte
+		err  error
+		ival interface{}
+	)
 
 	suffix := key
 	key = kv.domain + suffix
 	index := atomic.AddUint64(&kv.index, 1)
-	if ttl != 0 {
-		time.AfterFunc(time.Second*time.Duration(ttl), func() {
-			// TODO: handle error
-			_, _ = kv.delete(suffix)
-		})
-	}
-	b, err := common.ToBytes(value)
-	if err != nil {
-		return nil, err
+
+	// Either set bytes or interface value
+	if !kv.noByte {
+		b, err = common.ToBytes(value)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ival = value
 	}
 	if old, ok := kv.m[key]; ok {
 		old.Value = b
+		old.ivalue = ival
 		old.Action = kvdb.KVSet
 		old.ModifiedIndex = index
 		old.KVDBIndex = index
 		kvp = old
-
 	} else {
-		kvp = &kvdb.KVPair{
-			Key:           key,
-			Value:         b,
-			TTL:           int64(ttl),
-			KVDBIndex:     index,
-			ModifiedIndex: index,
-			CreatedIndex:  index,
-			Action:        kvdb.KVCreate,
+		kvp = &memKVPair{
+			KVPair: kvdb.KVPair{
+				Key:           key,
+				Value:         b,
+				TTL:           int64(ttl),
+				KVDBIndex:     index,
+				ModifiedIndex: index,
+				CreatedIndex:  index,
+				Action:        kvdb.KVCreate,
+			},
+			ivalue: ival,
 		}
 		kv.m[key] = kvp
 	}
 
-	kv.normalize(kvp)
+	kv.normalize(&kvp.KVPair)
 	kv.dist.NewUpdate(&watchUpdate{key, *kvp, nil})
-	return kvp, nil
+
+	if ttl != 0 {
+		time.AfterFunc(time.Second*time.Duration(ttl), func() {
+			// TODO: handle error
+			kv.mutex.Lock()
+			defer kv.mutex.Unlock()
+			_, _ = kv.delete(suffix)
+		})
+	}
+
+	return kvp.copy(), nil
 }
 
 func (kv *memKV) Put(
@@ -319,13 +378,16 @@ func (kv *memKV) Put(
 }
 
 func (kv *memKV) GetVal(key string, v interface{}) (*kvdb.KVPair, error) {
-	kvp, err := kv.Get(key)
+	kv.mutex.Lock()
+	defer kv.mutex.Unlock()
+	kvp, err := kv.get(key)
 	if err != nil {
 		return nil, err
 	}
 
-	err = json.Unmarshal(kvp.Value, v)
-	return kvp, err
+	cpy := kvp.copy()
+	err = json.Unmarshal(cpy.Value, v)
+	return cpy, err
 }
 
 func (kv *memKV) Create(
@@ -336,11 +398,11 @@ func (kv *memKV) Create(
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
 
-	result, err := kv.get(key)
+	result, err := kv.exists(key)
 	if err != nil {
 		return kv.put(key, value, ttl)
 	}
-	return result, kvdb.ErrExist
+	return &result.KVPair, kvdb.ErrExist
 }
 
 func (kv *memKV) Update(
@@ -351,7 +413,7 @@ func (kv *memKV) Update(
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
 
-	if _, err := kv.get(key); err != nil {
+	if _, err := kv.exists(key); err != nil {
 		return nil, kvdb.ErrNotFound
 	}
 	return kv.put(key, value, ttl)
@@ -363,15 +425,16 @@ func (kv *memKV) Enumerate(prefix string) (kvdb.KVPairs, error) {
 	return kv.enumerate(prefix)
 }
 
+// enumerate returns a list of values and creates a copy if specified
 func (kv *memKV) enumerate(prefix string) (kvdb.KVPairs, error) {
 	var kvp = make(kvdb.KVPairs, 0, 100)
 	prefix = kv.domain + prefix
 
 	for k, v := range kv.m {
 		if strings.HasPrefix(k, prefix) && !strings.Contains(k, "/_") {
-			kvpLocal := *v
-			kv.normalize(&kvpLocal)
-			kvp = append(kvp, &kvpLocal)
+			kvpLocal := v.copy()
+			kv.normalize(kvpLocal)
+			kvp = append(kvp, kvpLocal)
 		}
 	}
 
@@ -388,7 +451,7 @@ func (kv *memKV) delete(key string) (*kvdb.KVPair, error) {
 	kvp.Action = kvdb.KVDelete
 	delete(kv.m, kv.domain+key)
 	kv.dist.NewUpdate(&watchUpdate{kv.domain + key, *kvp, nil})
-	return kvp, nil
+	return &kvp.KVPair, nil
 }
 
 func (kv *memKV) Delete(key string) (*kvdb.KVPair, error) {
@@ -458,12 +521,13 @@ func (kv *memKV) CompareAndSet(
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
 
-	result, err := kv.get(kvp.Key)
+	result, err := kv.exists(kvp.Key)
 	if err != nil {
 		return nil, err
 	}
 	if prevValue != nil {
-		if !bytes.Equal(result.Value, prevValue) {
+		cpy := result.copy()
+		if !bytes.Equal(cpy.Value, prevValue) {
 			return nil, kvdb.ErrValueMismatch
 		}
 	}
@@ -485,9 +549,12 @@ func (kv *memKV) CompareAndDelete(
 	if flags != kvdb.KVFlags(0) {
 		return nil, kvdb.ErrNotSupported
 	}
-	if result, err := kv.get(kvp.Key); err != nil {
+	result, err := kv.exists(kvp.Key)
+	if err != nil {
 		return nil, err
-	} else if !bytes.Equal(result.Value, kvp.Value) {
+	}
+	cpy := result.copy()
+	if !bytes.Equal(cpy.Value, kvp.Value) {
 		return nil, kvdb.ErrNotFound
 	}
 	return kv.delete(kvp.Key)
@@ -556,9 +623,9 @@ func (kv *memKV) LockWithID(
 	kv.mutex.Lock()
 	kv.locks[key] = lockChan
 	kv.mutex.Unlock()
-	if kv.LockTimeout > 0 {
+	if kv.GetLockTimeout() > 0 {
 		go func() {
-			timeout := time.After(kv.LockTimeout)
+			timeout := time.After(kv.GetLockTimeout())
 			for {
 				select {
 				case <-timeout:
@@ -585,6 +652,48 @@ func (kv *memKV) Unlock(kvp *kvdb.KVPair) error {
 	}
 	_, err := kv.CompareAndDelete(kvp, kvdb.KVFlags(0))
 	return err
+}
+
+func (kv *memKV) EnumerateWithSelect(
+	prefix string,
+	enumerateSelect kvdb.EnumerateSelect,
+	copySelect kvdb.CopySelect,
+) ([]interface{}, error) {
+	if enumerateSelect == nil || copySelect == nil {
+		return nil, ErrIllegalSelect
+	}
+	kv.mutex.Lock()
+	defer kv.mutex.Unlock()
+	var kvi []interface{}
+	prefix = kv.domain + prefix
+	for k, v := range kv.m {
+		if strings.HasPrefix(k, prefix) && !strings.Contains(k, "/_") {
+			if enumerateSelect(v.ivalue) {
+				cpy := copySelect(v.ivalue)
+				if cpy == nil {
+					return nil, ErrIllegalSelect
+				}
+				kvi = append(kvi, cpy)
+			}
+		}
+	}
+	return kvi, nil
+}
+
+func (kv *memKV) GetWithCopy(
+	key string,
+	copySelect kvdb.CopySelect,
+) (interface{}, error) {
+	if copySelect == nil {
+		return nil, ErrIllegalSelect
+	}
+	kv.mutex.Lock()
+	defer kv.mutex.Unlock()
+	kvp, err := kv.get(key)
+	if err != nil {
+		return nil, err
+	}
+	return copySelect(kvp.ivalue), nil
 }
 
 func (kv *memKV) TxNew() (kvdb.Tx, error) {
@@ -616,7 +725,8 @@ func (kv *memKV) watchCb(
 		if ((treeWatch && strings.HasPrefix(update.key, prefix)) ||
 			(!treeWatch && update.key == prefix)) &&
 			(v.waitIndex == 0 || v.waitIndex < update.kvp.ModifiedIndex) {
-			err := v.cb(update.key, v.opaque, &update.kvp, update.err)
+			kvpCopy := update.kvp.copy()
+			err := v.cb(update.key, v.opaque, kvpCopy, update.err)
 			if err != nil {
 				_ = v.cb("", v.opaque, nil, kvdb.ErrWatchStopped)
 				kv.dist.Remove(q)
@@ -631,7 +741,7 @@ func (kv *memKV) SnapPut(snapKvp *kvdb.KVPair) (*kvdb.KVPair, error) {
 }
 
 func (kv *snapMem) SnapPut(snapKvp *kvdb.KVPair) (*kvdb.KVPair, error) {
-	var kvp *kvdb.KVPair
+	var kvp *memKVPair
 
 	key := kv.domain + snapKvp.Key
 	kv.mutex.Lock()
@@ -645,20 +755,22 @@ func (kv *snapMem) SnapPut(snapKvp *kvdb.KVPair) (*kvdb.KVPair, error) {
 		kvp = old
 
 	} else {
-		kvp = &kvdb.KVPair{
-			Key:           key,
-			Value:         snapKvp.Value,
-			TTL:           0,
-			KVDBIndex:     snapKvp.KVDBIndex,
-			ModifiedIndex: snapKvp.ModifiedIndex,
-			CreatedIndex:  snapKvp.CreatedIndex,
-			Action:        kvdb.KVCreate,
+		kvp = &memKVPair{
+			KVPair: kvdb.KVPair{
+				Key:           key,
+				Value:         snapKvp.Value,
+				TTL:           0,
+				KVDBIndex:     snapKvp.KVDBIndex,
+				ModifiedIndex: snapKvp.ModifiedIndex,
+				CreatedIndex:  snapKvp.CreatedIndex,
+				Action:        kvdb.KVCreate,
+			},
 		}
 		kv.m[key] = kvp
 	}
 
-	kv.normalize(kvp)
-	return kvp, nil
+	kv.normalize(&kvp.KVPair)
+	return &kvp.KVPair, nil
 }
 
 func (kv *snapMem) Put(
@@ -691,7 +803,7 @@ func (kv *snapMem) Delete(snapKey string) (*kvdb.KVPair, error) {
 	defer kv.mutex.Unlock()
 	kvp := kv.m[key]
 	delete(kv.m, key)
-	return kvp, nil
+	return &kvp.KVPair, nil
 }
 
 func (kv *snapMem) DeleteTree(prefix string) error {
@@ -753,4 +865,17 @@ func (kv *memKV) RevokeUsersAccess(
 	subtree string,
 ) error {
 	return kvdb.ErrNotSupported
+}
+
+func (kv *memKV) Serialize() ([]byte, error) {
+
+	kvps, err := kv.Enumerate("")
+	if err != nil {
+		return nil, err
+	}
+	return kv.SerializeAll(kvps)
+}
+
+func (kv *memKV) Deserialize(b []byte) (kvdb.KVPairs, error) {
+	return kv.DeserializeAll(b)
 }

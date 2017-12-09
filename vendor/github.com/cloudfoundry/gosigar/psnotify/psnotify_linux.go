@@ -1,5 +1,3 @@
-// Copyright (c) 2012 VMware, Inc.
-
 // Go interface to the Linux netlink process connector.
 // See Documentation/connector/connector.txt in the linux kernel source tree.
 package psnotify
@@ -140,6 +138,9 @@ func (w *Watcher) readEvents() {
 
 // Internal helper to check if pid && event is being watched
 func (w *Watcher) isWatching(pid int, event uint32) bool {
+	w.watchesMutex.Lock()
+	defer w.watchesMutex.Unlock()
+
 	if watch, ok := w.watches[pid]; ok {
 		return (watch.flags & event) == event
 	}

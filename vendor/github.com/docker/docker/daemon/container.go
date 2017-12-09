@@ -12,13 +12,11 @@ import (
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/network"
 	"github.com/docker/docker/image"
-	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/truncindex"
-	"github.com/docker/docker/runconfig"
+	"github.com/docker/docker/runconfig/opts"
 	"github.com/docker/go-connections/nat"
-	"github.com/opencontainers/selinux/go-selinux/label"
 )
 
 // GetContainer looks for a container using the provided information, which could be
@@ -56,16 +54,6 @@ func (daemon *Daemon) GetContainer(prefixOrName string) (*container.Container, e
 	return daemon.containers.Get(containerID), nil
 }
 
-// checkContainer make sure the specified container validates the specified conditions
-func (daemon *Daemon) checkContainer(container *container.Container, conditions ...func(*container.Container) error) error {
-	for _, condition := range conditions {
-		if err := condition(container); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Exists returns a true if a container of the specified ID or name exists,
 // false otherwise.
 func (daemon *Daemon) Exists(id string) bool {
@@ -91,9 +79,6 @@ func (daemon *Daemon) load(id string) (*container.Container, error) {
 	if err := container.FromDisk(); err != nil {
 		return nil, err
 	}
-	if err := label.ReserveLabel(container.ProcessLabel); err != nil {
-		return nil, err
-	}
 
 	if container.ID != id {
 		return container, fmt.Errorf("Container %s is stored at %s", container.ID, id)
@@ -111,17 +96,13 @@ func (daemon *Daemon) Register(c *container.Container) error {
 		c.StreamConfig.NewNopInputPipe()
 	}
 
-	// once in the memory store it is visible to other goroutines
-	// grab a Lock until it has been checkpointed to avoid races
-	c.Lock()
-	defer c.Unlock()
-
 	daemon.containers.Add(c.ID, c)
 	daemon.idIndex.Add(c.ID)
-	return c.CheckpointTo(daemon.containersReplica)
+
+	return nil
 }
 
-func (daemon *Daemon) newContainer(name string, platform string, config *containertypes.Config, hostConfig *containertypes.HostConfig, imgID image.ID, managed bool) (*container.Container, error) {
+func (daemon *Daemon) newContainer(name string, config *containertypes.Config, hostConfig *containertypes.HostConfig, imgID image.ID, managed bool) (*container.Container, error) {
 	var (
 		id             string
 		err            error
@@ -154,8 +135,8 @@ func (daemon *Daemon) newContainer(name string, platform string, config *contain
 	base.ImageID = imgID
 	base.NetworkSettings = &network.Settings{IsAnonymousEndpoint: noExplicitName}
 	base.Name = name
-	base.Driver = daemon.GraphDriverName(platform)
-	base.Platform = platform
+	base.Driver = daemon.GraphDriverName()
+
 	return base, err
 }
 
@@ -168,7 +149,7 @@ func (daemon *Daemon) GetByName(name string) (*container.Container, error) {
 	if name[0] != '/' {
 		fullName = "/" + name
 	}
-	id, err := daemon.containersReplica.Snapshot().GetID(fullName)
+	id, err := daemon.nameIndex.Get(fullName)
 	if err != nil {
 		return nil, fmt.Errorf("Could not find entity for %s", name)
 	}
@@ -202,7 +183,7 @@ func (daemon *Daemon) generateHostname(id string, config *containertypes.Config)
 func (daemon *Daemon) setSecurityOptions(container *container.Container, hostConfig *containertypes.HostConfig) error {
 	container.Lock()
 	defer container.Unlock()
-	return daemon.parseSecurityOpt(container, hostConfig)
+	return parseSecurityOpt(container, hostConfig)
 }
 
 func (daemon *Daemon) setHostConfig(container *container.Container, hostConfig *containertypes.HostConfig) error {
@@ -220,9 +201,14 @@ func (daemon *Daemon) setHostConfig(container *container.Container, hostConfig *
 		return err
 	}
 
-	runconfig.SetDefaultNetModeIfBlank(hostConfig)
+	// make sure links is not nil
+	// this ensures that on the next daemon restart we don't try to migrate from legacy sqlite links
+	if hostConfig.Links == nil {
+		hostConfig.Links = []string{}
+	}
+
 	container.HostConfig = hostConfig
-	return container.CheckpointTo(daemon.containersReplica)
+	return container.ToDisk()
 }
 
 // verifyContainerSettings performs validation of the hostconfig and config
@@ -251,25 +237,6 @@ func (daemon *Daemon) verifyContainerSettings(hostConfig *containertypes.HostCon
 				return nil, err
 			}
 		}
-
-		// Validate the healthcheck params of Config
-		if config.Healthcheck != nil {
-			if config.Healthcheck.Interval != 0 && config.Healthcheck.Interval < containertypes.MinimumDuration {
-				return nil, fmt.Errorf("Interval in Healthcheck cannot be less than %s", containertypes.MinimumDuration)
-			}
-
-			if config.Healthcheck.Timeout != 0 && config.Healthcheck.Timeout < containertypes.MinimumDuration {
-				return nil, fmt.Errorf("Timeout in Healthcheck cannot be less than %s", containertypes.MinimumDuration)
-			}
-
-			if config.Healthcheck.Retries < 0 {
-				return nil, fmt.Errorf("Retries in Healthcheck cannot be negative")
-			}
-
-			if config.Healthcheck.StartPeriod != 0 && config.Healthcheck.StartPeriod < containertypes.MinimumDuration {
-				return nil, fmt.Errorf("StartPeriod in Healthcheck cannot be less than %s", containertypes.MinimumDuration)
-			}
-		}
 	}
 
 	if hostConfig == nil {
@@ -278,12 +245,6 @@ func (daemon *Daemon) verifyContainerSettings(hostConfig *containertypes.HostCon
 
 	if hostConfig.AutoRemove && !hostConfig.RestartPolicy.IsNone() {
 		return nil, fmt.Errorf("can't create 'AutoRemove' container with restart policy")
-	}
-
-	for _, extraHost := range hostConfig.ExtraHosts {
-		if _, err := opts.ValidateExtraHost(extraHost); err != nil {
-			return nil, err
-		}
 	}
 
 	for port := range hostConfig.PortBindings {
@@ -311,7 +272,7 @@ func (daemon *Daemon) verifyContainerSettings(hostConfig *containertypes.HostCon
 			return nil, fmt.Errorf("maximum retry count cannot be negative")
 		}
 	case "":
-		// do nothing
+	// do nothing
 	default:
 		return nil, fmt.Errorf("invalid restart policy '%s'", p.Name)
 	}

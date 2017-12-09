@@ -55,35 +55,24 @@ func DecodeContainerConfig(src io.Reader) (*container.Config, *container.HostCon
 
 	// Certain parameters need daemon-side validation that cannot be done
 	// on the client, as only the daemon knows what is valid for the platform.
-	if err := validateNetMode(w.Config, hc); err != nil {
+	if err := ValidateNetMode(w.Config, hc); err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Validate isolation
-	if err := validateIsolation(hc); err != nil {
+	if err := ValidateIsolation(hc); err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Validate QoS
-	if err := validateQoS(hc); err != nil {
+	if err := ValidateQoS(hc); err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Validate Resources
-	if err := validateResources(hc, sysinfo.New(true)); err != nil {
+	if err := ValidateResources(hc, sysinfo.New(true)); err != nil {
 		return nil, nil, nil, err
 	}
-
-	// Validate Privileged
-	if err := validatePrivileged(hc); err != nil {
-		return nil, nil, nil, err
-	}
-
-	// Validate ReadonlyRootfs
-	if err := validateReadonlyRootfs(hc); err != nil {
-		return nil, nil, nil, err
-	}
-
 	return w.Config, hc, w.NetworkingConfig, nil
 }
 

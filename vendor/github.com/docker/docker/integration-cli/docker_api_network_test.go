@@ -11,8 +11,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/integration-cli/checker"
-	"github.com/docker/docker/integration-cli/request"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
@@ -257,13 +256,12 @@ func createDeletePredefinedNetwork(c *check.C, name string) {
 }
 
 func isNetworkAvailable(c *check.C, name string) bool {
-	resp, body, err := request.Get("/networks")
+	status, body, err := sockRequest("GET", "/networks", nil)
+	c.Assert(status, checker.Equals, http.StatusOK)
 	c.Assert(err, checker.IsNil)
-	defer resp.Body.Close()
-	c.Assert(resp.StatusCode, checker.Equals, http.StatusOK)
 
 	nJSON := []types.NetworkResource{}
-	err = json.NewDecoder(body).Decode(&nJSON)
+	err = json.Unmarshal(body, &nJSON)
 	c.Assert(err, checker.IsNil)
 
 	for _, n := range nJSON {
@@ -284,12 +282,12 @@ func getNetworkIDByName(c *check.C, name string) string {
 	c.Assert(err, checker.IsNil)
 	v.Set("filters", filterJSON)
 
-	resp, body, err := request.Get("/networks?" + v.Encode())
-	c.Assert(resp.StatusCode, checker.Equals, http.StatusOK)
+	status, body, err := sockRequest("GET", "/networks?"+v.Encode(), nil)
+	c.Assert(status, checker.Equals, http.StatusOK)
 	c.Assert(err, checker.IsNil)
 
 	nJSON := []types.NetworkResource{}
-	err = json.NewDecoder(body).Decode(&nJSON)
+	err = json.Unmarshal(body, &nJSON)
 	c.Assert(err, checker.IsNil)
 	c.Assert(len(nJSON), checker.Equals, 1)
 
@@ -297,29 +295,28 @@ func getNetworkIDByName(c *check.C, name string) string {
 }
 
 func getNetworkResource(c *check.C, id string) *types.NetworkResource {
-	_, obj, err := request.Get("/networks/" + id)
+	_, obj, err := sockRequest("GET", "/networks/"+id, nil)
 	c.Assert(err, checker.IsNil)
 
 	nr := types.NetworkResource{}
-	err = json.NewDecoder(obj).Decode(&nr)
+	err = json.Unmarshal(obj, &nr)
 	c.Assert(err, checker.IsNil)
 
 	return &nr
 }
 
 func createNetwork(c *check.C, config types.NetworkCreateRequest, shouldSucceed bool) string {
-	resp, body, err := request.Post("/networks/create", request.JSONBody(config))
-	c.Assert(err, checker.IsNil)
-	defer resp.Body.Close()
+	status, resp, err := sockRequest("POST", "/networks/create", config)
 	if !shouldSucceed {
-		c.Assert(resp.StatusCode, checker.Not(checker.Equals), http.StatusCreated)
+		c.Assert(status, checker.Not(checker.Equals), http.StatusCreated)
 		return ""
 	}
 
-	c.Assert(resp.StatusCode, checker.Equals, http.StatusCreated)
+	c.Assert(err, checker.IsNil)
+	c.Assert(status, checker.Equals, http.StatusCreated)
 
 	var nr types.NetworkCreateResponse
-	err = json.NewDecoder(body).Decode(&nr)
+	err = json.Unmarshal(resp, &nr)
 	c.Assert(err, checker.IsNil)
 
 	return nr.ID
@@ -330,8 +327,8 @@ func connectNetwork(c *check.C, nid, cid string) {
 		Container: cid,
 	}
 
-	resp, _, err := request.Post("/networks/"+nid+"/connect", request.JSONBody(config))
-	c.Assert(resp.StatusCode, checker.Equals, http.StatusOK)
+	status, _, err := sockRequest("POST", "/networks/"+nid+"/connect", config)
+	c.Assert(status, checker.Equals, http.StatusOK)
 	c.Assert(err, checker.IsNil)
 }
 
@@ -340,18 +337,17 @@ func disconnectNetwork(c *check.C, nid, cid string) {
 		Container: cid,
 	}
 
-	resp, _, err := request.Post("/networks/"+nid+"/disconnect", request.JSONBody(config))
-	c.Assert(resp.StatusCode, checker.Equals, http.StatusOK)
+	status, _, err := sockRequest("POST", "/networks/"+nid+"/disconnect", config)
+	c.Assert(status, checker.Equals, http.StatusOK)
 	c.Assert(err, checker.IsNil)
 }
 
 func deleteNetwork(c *check.C, id string, shouldSucceed bool) {
-	resp, _, err := request.Delete("/networks/" + id)
-	c.Assert(err, checker.IsNil)
-	defer resp.Body.Close()
+	status, _, err := sockRequest("DELETE", "/networks/"+id, nil)
 	if !shouldSucceed {
-		c.Assert(resp.StatusCode, checker.Not(checker.Equals), http.StatusOK)
+		c.Assert(status, checker.Not(checker.Equals), http.StatusOK)
 		return
 	}
-	c.Assert(resp.StatusCode, checker.Equals, http.StatusNoContent)
+	c.Assert(status, checker.Equals, http.StatusNoContent)
+	c.Assert(err, checker.IsNil)
 }

@@ -1,6 +1,6 @@
 package hcsshim
 
-import "github.com/sirupsen/logrus"
+import "github.com/Sirupsen/logrus"
 
 // ExpandSandboxSize expands the size of a layer to at least size bytes.
 func ExpandSandboxSize(info DriverInfo, layerId string, size uint64) error {

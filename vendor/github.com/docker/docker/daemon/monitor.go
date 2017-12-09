@@ -7,23 +7,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/container"
 	"github.com/docker/docker/libcontainerd"
 	"github.com/docker/docker/restartmanager"
-	"github.com/sirupsen/logrus"
 )
-
-func (daemon *Daemon) setStateCounter(c *container.Container) {
-	switch c.StateString() {
-	case "paused":
-		stateCtr.set(c.ID, "paused")
-	case "running":
-		stateCtr.set(c.ID, "running")
-	default:
-		stateCtr.set(c.ID, "stopped")
-	}
-}
 
 // StateChanged updates daemon state changes from containerd
 func (daemon *Daemon) StateChanged(id string, e libcontainerd.StateInfo) error {
@@ -39,29 +27,31 @@ func (daemon *Daemon) StateChanged(id string, e libcontainerd.StateInfo) error {
 			return errors.New("Received StateOOM from libcontainerd on Windows. This should never happen.")
 		}
 		daemon.updateHealthMonitor(c)
-		if err := c.CheckpointTo(daemon.containersReplica); err != nil {
-			return err
-		}
 		daemon.LogContainerEvent(c, "oom")
 	case libcontainerd.StateExit:
+		// if container's AutoRemove flag is set, remove it after clean up
+		autoRemove := func() {
+			if c.HostConfig.AutoRemove {
+				if err := daemon.ContainerRm(c.ID, &types.ContainerRmConfig{ForceRemove: true, RemoveVolume: true}); err != nil {
+					logrus.Errorf("can't remove container %s: %v", c.ID, err)
+				}
+			}
+		}
 
 		c.Lock()
 		c.StreamConfig.Wait()
 		c.Reset(false)
 
-		// If daemon is being shutdown, don't let the container restart
-		restart, wait, err := c.RestartManager().ShouldRestart(e.ExitCode, daemon.IsShuttingDown() || c.HasBeenManuallyStopped, time.Since(c.StartedAt))
+		restart, wait, err := c.RestartManager().ShouldRestart(e.ExitCode, false, time.Since(c.StartedAt))
 		if err == nil && restart {
 			c.RestartCount++
 			c.SetRestarting(platformConstructExitStatus(e))
 		} else {
 			c.SetStopped(platformConstructExitStatus(e))
-			defer daemon.autoRemove(c)
+			defer autoRemove()
 		}
 
-		// cancel healthcheck here, they will be automatically
-		// restarted if/when the container is started again
-		daemon.stopHealthchecks(c)
+		daemon.updateHealthMonitor(c)
 		attributes := map[string]string{
 			"exitCode": strconv.Itoa(int(e.ExitCode)),
 		}
@@ -72,17 +62,13 @@ func (daemon *Daemon) StateChanged(id string, e libcontainerd.StateInfo) error {
 			go func() {
 				err := <-wait
 				if err == nil {
-					// daemon.netController is initialized when daemon is restoring containers.
-					// But containerStart will use daemon.netController segment.
-					// So to avoid panic at startup process, here must wait util daemon restore done.
-					daemon.waitForStartupDone()
 					if err = daemon.containerStart(c, "", "", false); err != nil {
 						logrus.Debugf("failed to restart container: %+v", err)
 					}
 				}
 				if err != nil {
 					c.SetStopped(platformConstructExitStatus(e))
-					defer daemon.autoRemove(c)
+					defer autoRemove()
 					if err != restartmanager.ErrRestartCanceled {
 						logrus.Errorf("restartmanger wait error: %+v", err)
 					}
@@ -90,10 +76,8 @@ func (daemon *Daemon) StateChanged(id string, e libcontainerd.StateInfo) error {
 			}()
 		}
 
-		daemon.setStateCounter(c)
-
 		defer c.Unlock()
-		if err := c.CheckpointTo(daemon.containersReplica); err != nil {
+		if err := c.ToDisk(); err != nil {
 			return err
 		}
 		return daemon.postRunProcessing(c, e)
@@ -106,7 +90,7 @@ func (daemon *Daemon) StateChanged(id string, e libcontainerd.StateInfo) error {
 			execConfig.Running = false
 			execConfig.StreamConfig.Wait()
 			if err := execConfig.CloseStreams(); err != nil {
-				logrus.Errorf("failed to cleanup exec %s streams: %s", c.ID, err)
+				logrus.Errorf("%s: %s", c.ID, err)
 			}
 
 			// remove the exec command from the container's store only and not the
@@ -120,54 +104,29 @@ func (daemon *Daemon) StateChanged(id string, e libcontainerd.StateInfo) error {
 		c.SetRunning(int(e.Pid), e.State == libcontainerd.StateStart)
 		c.HasBeenManuallyStopped = false
 		c.HasBeenStartedBefore = true
-		daemon.setStateCounter(c)
-
-		daemon.initHealthMonitor(c)
-		if err := c.CheckpointTo(daemon.containersReplica); err != nil {
+		if err := c.ToDisk(); err != nil {
 			c.Reset(false)
 			return err
 		}
-
+		daemon.initHealthMonitor(c)
 		daemon.LogContainerEvent(c, "start")
 	case libcontainerd.StatePause:
 		// Container is already locked in this case
 		c.Paused = true
-		daemon.setStateCounter(c)
-		daemon.updateHealthMonitor(c)
-		if err := c.CheckpointTo(daemon.containersReplica); err != nil {
+		if err := c.ToDisk(); err != nil {
 			return err
 		}
+		daemon.updateHealthMonitor(c)
 		daemon.LogContainerEvent(c, "pause")
 	case libcontainerd.StateResume:
 		// Container is already locked in this case
 		c.Paused = false
-		daemon.setStateCounter(c)
-		daemon.updateHealthMonitor(c)
-		if err := c.CheckpointTo(daemon.containersReplica); err != nil {
+		if err := c.ToDisk(); err != nil {
 			return err
 		}
+		daemon.updateHealthMonitor(c)
 		daemon.LogContainerEvent(c, "unpause")
 	}
+
 	return nil
-}
-
-func (daemon *Daemon) autoRemove(c *container.Container) {
-	c.Lock()
-	ar := c.HostConfig.AutoRemove
-	c.Unlock()
-	if !ar {
-		return
-	}
-
-	var err error
-	if err = daemon.ContainerRm(c.ID, &types.ContainerRmConfig{ForceRemove: true, RemoveVolume: true}); err == nil {
-		return
-	}
-	if c := daemon.containers.Get(c.ID); c == nil {
-		return
-	}
-
-	if err != nil {
-		logrus.WithError(err).WithField("container", c.ID).Error("error removing container")
-	}
 }

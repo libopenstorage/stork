@@ -155,19 +155,17 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/coreos/go-systemd/journal"
-	"github.com/docker/docker/api/types/backend"
 	"github.com/docker/docker/daemon/logger"
-	"github.com/sirupsen/logrus"
 )
 
 func (s *journald) Close() error {
-	s.mu.Lock()
-	s.closed = true
+	s.readers.mu.Lock()
 	for reader := range s.readers.readers {
 		reader.Close()
 	}
-	s.mu.Unlock()
+	s.readers.mu.Unlock()
 	return nil
 }
 
@@ -214,11 +212,14 @@ drain:
 				source = "stdout"
 			}
 			// Retrieve the values of any variables we're adding to the journal.
-			var attrs []backend.LogAttr
+			attrs := make(map[string]string)
 			C.sd_journal_restart_data(j)
 			for C.get_attribute_field(j, &data, &length) > C.int(0) {
 				kv := strings.SplitN(C.GoStringN(data, C.int(length)), "=", 2)
-				attrs = append(attrs, backend.LogAttr{Key: kv[0], Value: kv[1]})
+				attrs[kv[0]] = kv[1]
+			}
+			if len(attrs) == 0 {
+				attrs = nil
 			}
 			// Send the log message.
 			logWatcher.Msg <- &logger.Message{
@@ -236,64 +237,41 @@ drain:
 
 	// free(NULL) is safe
 	C.free(unsafe.Pointer(oldCursor))
-	if C.sd_journal_get_cursor(j, &cursor) != 0 {
-		// ensure that we won't be freeing an address that's invalid
-		cursor = nil
-	}
+	C.sd_journal_get_cursor(j, &cursor)
 	return cursor
 }
 
 func (s *journald) followJournal(logWatcher *logger.LogWatcher, config logger.ReadConfig, j *C.sd_journal, pfd [2]C.int, cursor *C.char) *C.char {
-	s.mu.Lock()
+	s.readers.mu.Lock()
 	s.readers.readers[logWatcher] = logWatcher
-	if s.closed {
-		// the journald Logger is closed, presumably because the container has been
-		// reset.  So we shouldn't follow, because we'll never be woken up.  But we
-		// should make one more drainJournal call to be sure we've got all the logs.
-		// Close pfd[1] so that one drainJournal happens, then cleanup, then return.
-		C.close(pfd[1])
-	}
-	s.mu.Unlock()
-
-	newCursor := make(chan *C.char)
-
+	s.readers.mu.Unlock()
 	go func() {
-		for {
-			// Keep copying journal data out until we're notified to stop
-			// or we hit an error.
-			status := C.wait_for_data_cancelable(j, pfd[0])
-			if status < 0 {
-				cerrstr := C.strerror(C.int(-status))
-				errstr := C.GoString(cerrstr)
-				fmtstr := "error %q while attempting to follow journal for container %q"
-				logrus.Errorf(fmtstr, errstr, s.vars["CONTAINER_ID_FULL"])
-				break
-			}
-
+		// Keep copying journal data out until we're notified to stop
+		// or we hit an error.
+		status := C.wait_for_data_cancelable(j, pfd[0])
+		for status == 1 {
 			cursor = s.drainJournal(logWatcher, config, j, cursor)
-
-			if status != 1 {
-				// We were notified to stop
-				break
-			}
+			status = C.wait_for_data_cancelable(j, pfd[0])
 		}
-
+		if status < 0 {
+			cerrstr := C.strerror(C.int(-status))
+			errstr := C.GoString(cerrstr)
+			fmtstr := "error %q while attempting to follow journal for container %q"
+			logrus.Errorf(fmtstr, errstr, s.vars["CONTAINER_ID_FULL"])
+		}
 		// Clean up.
 		C.close(pfd[0])
-		s.mu.Lock()
+		s.readers.mu.Lock()
 		delete(s.readers.readers, logWatcher)
-		s.mu.Unlock()
+		s.readers.mu.Unlock()
+		C.sd_journal_close(j)
 		close(logWatcher.Msg)
-		newCursor <- cursor
 	}()
-
 	// Wait until we're told to stop.
 	select {
-	case cursor = <-newCursor:
 	case <-logWatcher.WatchClose():
 		// Notify the other goroutine that its work is done.
 		C.close(pfd[1])
-		cursor = <-newCursor
 	}
 
 	return cursor
@@ -320,9 +298,9 @@ func (s *journald) readLogs(logWatcher *logger.LogWatcher, config logger.ReadCon
 	following := false
 	defer func(pfollowing *bool) {
 		if !*pfollowing {
+			C.sd_journal_close(j)
 			close(logWatcher.Msg)
 		}
-		C.sd_journal_close(j)
 	}(&following)
 	// Remove limits on the size of data items that we'll retrieve.
 	rc = C.sd_journal_set_data_threshold(j, C.size_t(0))

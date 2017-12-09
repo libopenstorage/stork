@@ -1,13 +1,11 @@
 package bridge
 
 import (
-	"errors"
 	"fmt"
 	"net"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/iptables"
-	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 )
 
 // DockerChain: DOCKER iptable chain name
@@ -19,7 +17,7 @@ const (
 func setupIPChains(config *configuration) (*iptables.ChainInfo, *iptables.ChainInfo, *iptables.ChainInfo, error) {
 	// Sanity check.
 	if config.EnableIPTables == false {
-		return nil, nil, nil, errors.New("cannot create new chains, EnableIPTable is disabled")
+		return nil, nil, nil, fmt.Errorf("cannot create new chains, EnableIPTable is disabled")
 	}
 
 	hairpinMode := !config.EnableUserlandProxy
@@ -53,7 +51,7 @@ func setupIPChains(config *configuration) (*iptables.ChainInfo, *iptables.ChainI
 		return nil, nil, nil, fmt.Errorf("failed to create FILTER isolation chain: %v", err)
 	}
 
-	if err := iptables.AddReturnRule(IsolationChain); err != nil {
+	if err := addReturnRule(IsolationChain); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -70,7 +68,7 @@ func (n *bridgeNetwork) setupIPTables(config *networkConfiguration, i *bridgeInt
 
 	// Sanity check.
 	if driverConfig.EnableIPTables == false {
-		return errors.New("Cannot program chains, EnableIPTable is disabled")
+		return fmt.Errorf("Cannot program chains, EnableIPTable is disabled")
 	}
 
 	// Pickup this configuration option from driver
@@ -116,10 +114,7 @@ func (n *bridgeNetwork) setupIPTables(config *networkConfiguration, i *bridgeInt
 		n.portMapper.SetIptablesChain(natChain, n.getNetworkBridgeName())
 	}
 
-	d.Lock()
-	err = iptables.EnsureJumpRule("FORWARD", IsolationChain)
-	d.Unlock()
-	if err != nil {
+	if err := ensureJumpRule("FORWARD", IsolationChain); err != nil {
 		return err
 	}
 
@@ -141,6 +136,7 @@ func setupIPTablesInternal(bridgeIface string, addr net.Addr, icc, ipmasq, hairp
 		hpNatRule = iptRule{table: iptables.Nat, chain: "POSTROUTING", preArgs: []string{"-t", "nat"}, args: []string{"-m", "addrtype", "--src-type", "LOCAL", "-o", bridgeIface, "-j", "MASQUERADE"}}
 		skipDNAT  = iptRule{table: iptables.Nat, chain: DockerChain, preArgs: []string{"-t", "nat"}, args: []string{"-i", bridgeIface, "-j", "RETURN"}}
 		outRule   = iptRule{table: iptables.Filter, chain: "FORWARD", args: []string{"-i", bridgeIface, "!", "-o", bridgeIface, "-j", "ACCEPT"}}
+		inRule    = iptRule{table: iptables.Filter, chain: "FORWARD", args: []string{"-o", bridgeIface, "-m", "conntrack", "--ctstate", "RELATED,ESTABLISHED", "-j", "ACCEPT"}}
 	)
 
 	// Set NAT.
@@ -170,6 +166,11 @@ func setupIPTablesInternal(bridgeIface string, addr net.Addr, icc, ipmasq, hairp
 
 	// Set Accept on all non-intercontainer outgoing packets.
 	if err := programChainRule(outRule, "ACCEPT NON_ICC OUTGOING", enable); err != nil {
+		return err
+	}
+
+	// Set Accept on incoming packets for existing connections.
+	if err := programChainRule(inRule, "ACCEPT INCOMING", enable); err != nil {
 		return err
 	}
 
@@ -280,6 +281,46 @@ func setINC(iface1, iface2 string, enable bool) error {
 	return nil
 }
 
+func addReturnRule(chain string) error {
+	var (
+		table = iptables.Filter
+		args  = []string{"-j", "RETURN"}
+	)
+
+	if iptables.Exists(table, chain, args...) {
+		return nil
+	}
+
+	err := iptables.RawCombinedOutput(append([]string{"-I", chain}, args...)...)
+	if err != nil {
+		return fmt.Errorf("unable to add return rule in %s chain: %s", chain, err.Error())
+	}
+
+	return nil
+}
+
+// Ensure the jump rule is on top
+func ensureJumpRule(fromChain, toChain string) error {
+	var (
+		table = iptables.Filter
+		args  = []string{"-j", toChain}
+	)
+
+	if iptables.Exists(table, fromChain, args...) {
+		err := iptables.RawCombinedOutput(append([]string{"-D", fromChain}, args...)...)
+		if err != nil {
+			return fmt.Errorf("unable to remove jump to %s rule in %s chain: %s", toChain, fromChain, err.Error())
+		}
+	}
+
+	err := iptables.RawCombinedOutput(append([]string{"-I", fromChain}, args...)...)
+	if err != nil {
+		return fmt.Errorf("unable to insert jump to %s rule in %s chain: %s", toChain, fromChain, err.Error())
+	}
+
+	return nil
+}
+
 func removeIPChains() {
 	for _, chainInfo := range []iptables.ChainInfo{
 		{Name: DockerChain, Table: iptables.Nat},
@@ -308,16 +349,4 @@ func setupInternalNetworkRules(bridgeIface string, addr net.Addr, icc, insert bo
 		return err
 	}
 	return nil
-}
-
-func clearEndpointConnections(nlh *netlink.Handle, ep *bridgeEndpoint) {
-	var ipv4List []net.IP
-	var ipv6List []net.IP
-	if ep.addr != nil {
-		ipv4List = append(ipv4List, ep.addr.IP)
-	}
-	if ep.addrv6 != nil {
-		ipv6List = append(ipv6List, ep.addrv6.IP)
-	}
-	iptables.DeleteConntrackEntries(nlh, ipv4List, ipv6List)
 }

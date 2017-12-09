@@ -1,7 +1,6 @@
 package container
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -30,7 +29,7 @@ func validateMounts(mounts []api.Mount) error {
 			}
 		case api.MountTypeTmpfs:
 			if mount.Source != "" {
-				return errors.New("invalid tmpfs source, source must be empty")
+				return fmt.Errorf("invalid tmpfs source, source must be empty")
 			}
 		default:
 			return fmt.Errorf("invalid mount type: %s", mount.Type)

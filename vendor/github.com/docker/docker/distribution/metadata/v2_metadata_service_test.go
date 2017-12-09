@@ -6,11 +6,10 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
-	"runtime"
 	"testing"
 
+	"github.com/docker/distribution/digest"
 	"github.com/docker/docker/layer"
-	"github.com/opencontainers/go-digest"
 )
 
 func TestV2MetadataService(t *testing.T) {
@@ -20,7 +19,7 @@ func TestV2MetadataService(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	metadataStore, err := NewFSMetadataStore(tmpDir, runtime.GOOS)
+	metadataStore, err := NewFSMetadataStore(tmpDir)
 	if err != nil {
 		t.Fatalf("could not create metadata store: %v", err)
 	}

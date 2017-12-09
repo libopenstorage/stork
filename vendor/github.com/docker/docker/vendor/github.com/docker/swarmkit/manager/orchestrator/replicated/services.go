@@ -7,6 +7,7 @@ import (
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/log"
 	"github.com/docker/swarmkit/manager/orchestrator"
+	"github.com/docker/swarmkit/manager/state"
 	"github.com/docker/swarmkit/manager/state/store"
 	"golang.org/x/net/context"
 )
@@ -46,19 +47,19 @@ func (r *Orchestrator) initServices(readTx store.ReadTx) error {
 
 func (r *Orchestrator) handleServiceEvent(ctx context.Context, event events.Event) {
 	switch v := event.(type) {
-	case api.EventDeleteService:
+	case state.EventDeleteService:
 		if !orchestrator.IsReplicatedService(v.Service) {
 			return
 		}
 		orchestrator.DeleteServiceTasks(ctx, r.store, v.Service)
 		r.restarts.ClearServiceHistory(v.Service.ID)
 		delete(r.reconcileServices, v.Service.ID)
-	case api.EventCreateService:
+	case state.EventCreateService:
 		if !orchestrator.IsReplicatedService(v.Service) {
 			return
 		}
 		r.reconcileServices[v.Service.ID] = v.Service
-	case api.EventUpdateService:
+	case state.EventUpdateService:
 		if !orchestrator.IsReplicatedService(v.Service) {
 			return
 		}
@@ -101,15 +102,15 @@ func (r *Orchestrator) reconcile(ctx context.Context, service *api.Service) {
 	}
 
 	deploy := service.Spec.GetMode().(*api.ServiceSpec_Replicated)
-	specifiedSlots := deploy.Replicated.Replicas
+	specifiedSlots := int(deploy.Replicated.Replicas)
 
 	switch {
-	case specifiedSlots > uint64(numSlots):
+	case specifiedSlots > numSlots:
 		log.G(ctx).Debugf("Service %s was scaled up from %d to %d instances", service.ID, numSlots, specifiedSlots)
 		// Update all current tasks then add missing tasks
 		r.updater.Update(ctx, r.cluster, service, slotsSlice)
-		err = r.store.Batch(func(batch *store.Batch) error {
-			r.addTasks(ctx, batch, service, runningSlots, deadSlots, specifiedSlots-uint64(numSlots))
+		_, err = r.store.Batch(func(batch *store.Batch) error {
+			r.addTasks(ctx, batch, service, runningSlots, deadSlots, specifiedSlots-numSlots)
 			r.deleteTasksMap(ctx, batch, deadSlots)
 			return nil
 		})
@@ -117,7 +118,7 @@ func (r *Orchestrator) reconcile(ctx context.Context, service *api.Service) {
 			log.G(ctx).WithError(err).Errorf("reconcile batch failed")
 		}
 
-	case specifiedSlots < uint64(numSlots):
+	case specifiedSlots < numSlots:
 		// Update up to N tasks then remove the extra
 		log.G(ctx).Debugf("Service %s was scaled down from %d to %d instances", service.ID, numSlots, specifiedSlots)
 
@@ -155,7 +156,7 @@ func (r *Orchestrator) reconcile(ctx context.Context, service *api.Service) {
 		}
 
 		r.updater.Update(ctx, r.cluster, service, sortedSlots[:specifiedSlots])
-		err = r.store.Batch(func(batch *store.Batch) error {
+		_, err = r.store.Batch(func(batch *store.Batch) error {
 			r.deleteTasksMap(ctx, batch, deadSlots)
 			r.deleteTasks(ctx, batch, sortedSlots[specifiedSlots:])
 			return nil
@@ -164,8 +165,8 @@ func (r *Orchestrator) reconcile(ctx context.Context, service *api.Service) {
 			log.G(ctx).WithError(err).Errorf("reconcile batch failed")
 		}
 
-	case specifiedSlots == uint64(numSlots):
-		err = r.store.Batch(func(batch *store.Batch) error {
+	case specifiedSlots == numSlots:
+		_, err = r.store.Batch(func(batch *store.Batch) error {
 			r.deleteTasksMap(ctx, batch, deadSlots)
 			return nil
 		})
@@ -177,10 +178,10 @@ func (r *Orchestrator) reconcile(ctx context.Context, service *api.Service) {
 	}
 }
 
-func (r *Orchestrator) addTasks(ctx context.Context, batch *store.Batch, service *api.Service, runningSlots map[uint64]orchestrator.Slot, deadSlots map[uint64]orchestrator.Slot, count uint64) {
+func (r *Orchestrator) addTasks(ctx context.Context, batch *store.Batch, service *api.Service, runningSlots map[uint64]orchestrator.Slot, deadSlots map[uint64]orchestrator.Slot, count int) {
 	slot := uint64(0)
-	for i := uint64(0); i < count; i++ {
-		// Find a slot number that is missing a running task
+	for i := 0; i < count; i++ {
+		// Find an slot number that is missing a running task
 		for {
 			slot++
 			if _, ok := runningSlots[slot]; !ok {
@@ -221,9 +222,4 @@ func (r *Orchestrator) deleteTask(ctx context.Context, batch *store.Batch, t *ap
 	if err != nil {
 		log.G(ctx).WithError(err).Errorf("deleting task %s failed", t.ID)
 	}
-}
-
-// IsRelatedService returns true if the service should be governed by this orchestrator
-func (r *Orchestrator) IsRelatedService(service *api.Service) bool {
-	return orchestrator.IsReplicatedService(service)
 }

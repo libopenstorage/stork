@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/logger"
 	"github.com/docker/docker/daemon/logger/loggerutils"
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/docker/go-units"
 	"github.com/fluent/fluent-logger-golang/fluent"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 type fluentd struct {
@@ -67,25 +67,22 @@ func init() {
 // New creates a fluentd logger using the configuration passed in on
 // the context. The supported context configuration variable is
 // fluentd-address.
-func New(info logger.Info) (logger.Logger, error) {
-	loc, err := parseAddress(info.Config[addressKey])
+func New(ctx logger.Context) (logger.Logger, error) {
+	loc, err := parseAddress(ctx.Config[addressKey])
 	if err != nil {
 		return nil, err
 	}
 
-	tag, err := loggerutils.ParseLogTag(info, loggerutils.DefaultTemplate)
+	tag, err := loggerutils.ParseLogTag(ctx, loggerutils.DefaultTemplate)
 	if err != nil {
 		return nil, err
 	}
 
-	extra, err := info.ExtraAttributes(nil)
-	if err != nil {
-		return nil, err
-	}
+	extra := ctx.ExtraAttributes(nil)
 
 	bufferLimit := defaultBufferLimit
-	if info.Config[bufferLimitKey] != "" {
-		bl64, err := units.RAMInBytes(info.Config[bufferLimitKey])
+	if ctx.Config[bufferLimitKey] != "" {
+		bl64, err := units.RAMInBytes(ctx.Config[bufferLimitKey])
 		if err != nil {
 			return nil, err
 		}
@@ -93,8 +90,8 @@ func New(info logger.Info) (logger.Logger, error) {
 	}
 
 	retryWait := defaultRetryWait
-	if info.Config[retryWaitKey] != "" {
-		rwd, err := time.ParseDuration(info.Config[retryWaitKey])
+	if ctx.Config[retryWaitKey] != "" {
+		rwd, err := time.ParseDuration(ctx.Config[retryWaitKey])
 		if err != nil {
 			return nil, err
 		}
@@ -102,8 +99,8 @@ func New(info logger.Info) (logger.Logger, error) {
 	}
 
 	maxRetries := defaultMaxRetries
-	if info.Config[maxRetriesKey] != "" {
-		mr64, err := strconv.ParseUint(info.Config[maxRetriesKey], 10, strconv.IntSize)
+	if ctx.Config[maxRetriesKey] != "" {
+		mr64, err := strconv.ParseUint(ctx.Config[maxRetriesKey], 10, strconv.IntSize)
 		if err != nil {
 			return nil, err
 		}
@@ -111,8 +108,8 @@ func New(info logger.Info) (logger.Logger, error) {
 	}
 
 	asyncConnect := false
-	if info.Config[asyncConnectKey] != "" {
-		if asyncConnect, err = strconv.ParseBool(info.Config[asyncConnectKey]); err != nil {
+	if ctx.Config[asyncConnectKey] != "" {
+		if asyncConnect, err = strconv.ParseBool(ctx.Config[asyncConnectKey]); err != nil {
 			return nil, err
 		}
 	}
@@ -128,7 +125,7 @@ func New(info logger.Info) (logger.Logger, error) {
 		AsyncConnect:     asyncConnect,
 	}
 
-	logrus.WithField("container", info.ContainerID).WithField("config", fluentConfig).
+	logrus.WithField("container", ctx.ContainerID).WithField("config", fluentConfig).
 		Debug("logging driver fluentd configured")
 
 	log, err := fluent.New(fluentConfig)
@@ -137,8 +134,8 @@ func New(info logger.Info) (logger.Logger, error) {
 	}
 	return &fluentd{
 		tag:           tag,
-		containerID:   info.ContainerID,
-		containerName: info.ContainerName,
+		containerID:   ctx.ContainerID,
+		containerName: ctx.ContainerName,
 		writer:        log,
 		extra:         extra,
 	}, nil
@@ -154,12 +151,9 @@ func (f *fluentd) Log(msg *logger.Message) error {
 	for k, v := range f.extra {
 		data[k] = v
 	}
-
-	ts := msg.Timestamp
-	logger.PutMessage(msg)
 	// fluent-logger-golang buffers logs from failures and disconnections,
 	// and these are transferred again automatically.
-	return f.writer.PostWithTime(f.tag, ts, data)
+	return f.writer.PostWithTime(f.tag, msg.Timestamp, data)
 }
 
 func (f *fluentd) Close() error {
@@ -175,7 +169,6 @@ func ValidateLogOpt(cfg map[string]string) error {
 	for key := range cfg {
 		switch key {
 		case "env":
-		case "env-regex":
 		case "labels":
 		case "tag":
 		case addressKey:
@@ -189,8 +182,11 @@ func ValidateLogOpt(cfg map[string]string) error {
 		}
 	}
 
-	_, err := parseAddress(cfg[addressKey])
-	return err
+	if _, err := parseAddress(cfg["fluentd-address"]); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func parseAddress(address string) (*location, error) {

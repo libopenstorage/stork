@@ -10,7 +10,11 @@ import math "math"
 import _ "github.com/gogo/protobuf/gogoproto"
 import _ "github.com/docker/swarmkit/protobuf/plugin"
 
-import github_com_docker_swarmkit_api_deepcopy "github.com/docker/swarmkit/api/deepcopy"
+import strings "strings"
+import github_com_gogo_protobuf_proto "github.com/gogo/protobuf/proto"
+import sort "sort"
+import strconv "strconv"
+import reflect "reflect"
 
 import (
 	context "golang.org/x/net/context"
@@ -21,10 +25,7 @@ import raftselector "github.com/docker/swarmkit/manager/raftselector"
 import codes "google.golang.org/grpc/codes"
 import metadata "google.golang.org/grpc/metadata"
 import transport "google.golang.org/grpc/transport"
-import rafttime "time"
-
-import strings "strings"
-import reflect "reflect"
+import time "time"
 
 import io "io"
 
@@ -104,61 +105,117 @@ func (m *AttachNetworkRequest) Copy() *AttachNetworkRequest {
 	if m == nil {
 		return nil
 	}
-	o := &AttachNetworkRequest{}
-	o.CopyFrom(m)
-	return o
-}
 
-func (m *AttachNetworkRequest) CopyFrom(src interface{}) {
-
-	o := src.(*AttachNetworkRequest)
-	*m = *o
-	if o.Config != nil {
-		m.Config = &NetworkAttachmentConfig{}
-		github_com_docker_swarmkit_api_deepcopy.Copy(m.Config, o.Config)
+	o := &AttachNetworkRequest{
+		Config:      m.Config.Copy(),
+		ContainerID: m.ContainerID,
 	}
+
+	return o
 }
 
 func (m *AttachNetworkResponse) Copy() *AttachNetworkResponse {
 	if m == nil {
 		return nil
 	}
-	o := &AttachNetworkResponse{}
-	o.CopyFrom(m)
+
+	o := &AttachNetworkResponse{
+		AttachmentID: m.AttachmentID,
+	}
+
 	return o
-}
-
-func (m *AttachNetworkResponse) CopyFrom(src interface{}) {
-
-	o := src.(*AttachNetworkResponse)
-	*m = *o
 }
 
 func (m *DetachNetworkRequest) Copy() *DetachNetworkRequest {
 	if m == nil {
 		return nil
 	}
-	o := &DetachNetworkRequest{}
-	o.CopyFrom(m)
+
+	o := &DetachNetworkRequest{
+		AttachmentID: m.AttachmentID,
+	}
+
 	return o
-}
-
-func (m *DetachNetworkRequest) CopyFrom(src interface{}) {
-
-	o := src.(*DetachNetworkRequest)
-	*m = *o
 }
 
 func (m *DetachNetworkResponse) Copy() *DetachNetworkResponse {
 	if m == nil {
 		return nil
 	}
+
 	o := &DetachNetworkResponse{}
-	o.CopyFrom(m)
+
 	return o
 }
 
-func (m *DetachNetworkResponse) CopyFrom(src interface{}) {}
+func (this *AttachNetworkRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&api.AttachNetworkRequest{")
+	if this.Config != nil {
+		s = append(s, "Config: "+fmt.Sprintf("%#v", this.Config)+",\n")
+	}
+	s = append(s, "ContainerID: "+fmt.Sprintf("%#v", this.ContainerID)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *AttachNetworkResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&api.AttachNetworkResponse{")
+	s = append(s, "AttachmentID: "+fmt.Sprintf("%#v", this.AttachmentID)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DetachNetworkRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&api.DetachNetworkRequest{")
+	s = append(s, "AttachmentID: "+fmt.Sprintf("%#v", this.AttachmentID)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DetachNetworkResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&api.DetachNetworkResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringResource(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
+func extensionToGoStringResource(m github_com_gogo_protobuf_proto.Message) string {
+	e := github_com_gogo_protobuf_proto.GetUnsafeExtensionsMap(m)
+	if e == nil {
+		return "nil"
+	}
+	s := "proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{"
+	keys := make([]int, 0, len(e))
+	for k := range e {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	ss := []string{}
+	for _, k := range keys {
+		ss = append(ss, strconv.Itoa(k)+": "+e[int32(k)].GoString())
+	}
+	s += strings.Join(ss, ",") + "})"
+	return s
+}
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
@@ -166,7 +223,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion3
 
 // Client API for ResourceAllocator service
 
@@ -262,102 +319,102 @@ var _ResourceAllocator_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "resource.proto",
+	Metadata: fileDescriptorResource,
 }
 
-func (m *AttachNetworkRequest) Marshal() (dAtA []byte, err error) {
+func (m *AttachNetworkRequest) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *AttachNetworkRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *AttachNetworkRequest) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.Config != nil {
-		dAtA[i] = 0xa
+		data[i] = 0xa
 		i++
-		i = encodeVarintResource(dAtA, i, uint64(m.Config.Size()))
-		n1, err := m.Config.MarshalTo(dAtA[i:])
+		i = encodeVarintResource(data, i, uint64(m.Config.Size()))
+		n1, err := m.Config.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
 		i += n1
 	}
 	if len(m.ContainerID) > 0 {
-		dAtA[i] = 0x12
+		data[i] = 0x12
 		i++
-		i = encodeVarintResource(dAtA, i, uint64(len(m.ContainerID)))
-		i += copy(dAtA[i:], m.ContainerID)
+		i = encodeVarintResource(data, i, uint64(len(m.ContainerID)))
+		i += copy(data[i:], m.ContainerID)
 	}
 	return i, nil
 }
 
-func (m *AttachNetworkResponse) Marshal() (dAtA []byte, err error) {
+func (m *AttachNetworkResponse) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *AttachNetworkResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *AttachNetworkResponse) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.AttachmentID) > 0 {
-		dAtA[i] = 0xa
+		data[i] = 0xa
 		i++
-		i = encodeVarintResource(dAtA, i, uint64(len(m.AttachmentID)))
-		i += copy(dAtA[i:], m.AttachmentID)
+		i = encodeVarintResource(data, i, uint64(len(m.AttachmentID)))
+		i += copy(data[i:], m.AttachmentID)
 	}
 	return i, nil
 }
 
-func (m *DetachNetworkRequest) Marshal() (dAtA []byte, err error) {
+func (m *DetachNetworkRequest) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *DetachNetworkRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *DetachNetworkRequest) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.AttachmentID) > 0 {
-		dAtA[i] = 0xa
+		data[i] = 0xa
 		i++
-		i = encodeVarintResource(dAtA, i, uint64(len(m.AttachmentID)))
-		i += copy(dAtA[i:], m.AttachmentID)
+		i = encodeVarintResource(data, i, uint64(len(m.AttachmentID)))
+		i += copy(data[i:], m.AttachmentID)
 	}
 	return i, nil
 }
 
-func (m *DetachNetworkResponse) Marshal() (dAtA []byte, err error) {
+func (m *DetachNetworkResponse) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *DetachNetworkResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *DetachNetworkResponse) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -365,41 +422,41 @@ func (m *DetachNetworkResponse) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func encodeFixed64Resource(dAtA []byte, offset int, v uint64) int {
-	dAtA[offset] = uint8(v)
-	dAtA[offset+1] = uint8(v >> 8)
-	dAtA[offset+2] = uint8(v >> 16)
-	dAtA[offset+3] = uint8(v >> 24)
-	dAtA[offset+4] = uint8(v >> 32)
-	dAtA[offset+5] = uint8(v >> 40)
-	dAtA[offset+6] = uint8(v >> 48)
-	dAtA[offset+7] = uint8(v >> 56)
+func encodeFixed64Resource(data []byte, offset int, v uint64) int {
+	data[offset] = uint8(v)
+	data[offset+1] = uint8(v >> 8)
+	data[offset+2] = uint8(v >> 16)
+	data[offset+3] = uint8(v >> 24)
+	data[offset+4] = uint8(v >> 32)
+	data[offset+5] = uint8(v >> 40)
+	data[offset+6] = uint8(v >> 48)
+	data[offset+7] = uint8(v >> 56)
 	return offset + 8
 }
-func encodeFixed32Resource(dAtA []byte, offset int, v uint32) int {
-	dAtA[offset] = uint8(v)
-	dAtA[offset+1] = uint8(v >> 8)
-	dAtA[offset+2] = uint8(v >> 16)
-	dAtA[offset+3] = uint8(v >> 24)
+func encodeFixed32Resource(data []byte, offset int, v uint32) int {
+	data[offset] = uint8(v)
+	data[offset+1] = uint8(v >> 8)
+	data[offset+2] = uint8(v >> 16)
+	data[offset+3] = uint8(v >> 24)
 	return offset + 4
 }
-func encodeVarintResource(dAtA []byte, offset int, v uint64) int {
+func encodeVarintResource(data []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
-		dAtA[offset] = uint8(v&0x7f | 0x80)
+		data[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
-	dAtA[offset] = uint8(v)
+	data[offset] = uint8(v)
 	return offset + 1
 }
 
 type raftProxyResourceAllocatorServer struct {
-	local                       ResourceAllocatorServer
-	connSelector                raftselector.ConnProvider
-	localCtxMods, remoteCtxMods []func(context.Context) (context.Context, error)
+	local        ResourceAllocatorServer
+	connSelector raftselector.ConnProvider
+	ctxMods      []func(context.Context) (context.Context, error)
 }
 
-func NewRaftProxyResourceAllocatorServer(local ResourceAllocatorServer, connSelector raftselector.ConnProvider, localCtxMod, remoteCtxMod func(context.Context) (context.Context, error)) ResourceAllocatorServer {
+func NewRaftProxyResourceAllocatorServer(local ResourceAllocatorServer, connSelector raftselector.ConnProvider, ctxMod func(context.Context) (context.Context, error)) ResourceAllocatorServer {
 	redirectChecker := func(ctx context.Context) (context.Context, error) {
 		s, ok := transport.StreamFromContext(ctx)
 		if !ok {
@@ -416,24 +473,18 @@ func NewRaftProxyResourceAllocatorServer(local ResourceAllocatorServer, connSele
 		md["redirect"] = append(md["redirect"], addr)
 		return metadata.NewContext(ctx, md), nil
 	}
-	remoteMods := []func(context.Context) (context.Context, error){redirectChecker}
-	remoteMods = append(remoteMods, remoteCtxMod)
-
-	var localMods []func(context.Context) (context.Context, error)
-	if localCtxMod != nil {
-		localMods = []func(context.Context) (context.Context, error){localCtxMod}
-	}
+	mods := []func(context.Context) (context.Context, error){redirectChecker}
+	mods = append(mods, ctxMod)
 
 	return &raftProxyResourceAllocatorServer{
-		local:         local,
-		connSelector:  connSelector,
-		localCtxMods:  localMods,
-		remoteCtxMods: remoteMods,
+		local:        local,
+		connSelector: connSelector,
+		ctxMods:      mods,
 	}
 }
-func (p *raftProxyResourceAllocatorServer) runCtxMods(ctx context.Context, ctxMods []func(context.Context) (context.Context, error)) (context.Context, error) {
+func (p *raftProxyResourceAllocatorServer) runCtxMods(ctx context.Context) (context.Context, error) {
 	var err error
-	for _, mod := range ctxMods {
+	for _, mod := range p.ctxMods {
 		ctx, err = mod(ctx)
 		if err != nil {
 			return ctx, err
@@ -442,7 +493,7 @@ func (p *raftProxyResourceAllocatorServer) runCtxMods(ctx context.Context, ctxMo
 	return ctx, nil
 }
 func (p *raftProxyResourceAllocatorServer) pollNewLeaderConn(ctx context.Context) (*grpc.ClientConn, error) {
-	ticker := rafttime.NewTicker(500 * rafttime.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
@@ -470,15 +521,11 @@ func (p *raftProxyResourceAllocatorServer) AttachNetwork(ctx context.Context, r 
 	conn, err := p.connSelector.LeaderConn(ctx)
 	if err != nil {
 		if err == raftselector.ErrIsLeader {
-			ctx, err = p.runCtxMods(ctx, p.localCtxMods)
-			if err != nil {
-				return nil, err
-			}
 			return p.local.AttachNetwork(ctx, r)
 		}
 		return nil, err
 	}
-	modCtx, err := p.runCtxMods(ctx, p.remoteCtxMods)
+	modCtx, err := p.runCtxMods(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -505,15 +552,11 @@ func (p *raftProxyResourceAllocatorServer) DetachNetwork(ctx context.Context, r 
 	conn, err := p.connSelector.LeaderConn(ctx)
 	if err != nil {
 		if err == raftselector.ErrIsLeader {
-			ctx, err = p.runCtxMods(ctx, p.localCtxMods)
-			if err != nil {
-				return nil, err
-			}
 			return p.local.DetachNetwork(ctx, r)
 		}
 		return nil, err
 	}
-	modCtx, err := p.runCtxMods(ctx, p.remoteCtxMods)
+	modCtx, err := p.runCtxMods(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -636,8 +679,8 @@ func valueToStringResource(v interface{}) string {
 	pv := reflect.Indirect(rv).Interface()
 	return fmt.Sprintf("*%v", pv)
 }
-func (m *AttachNetworkRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *AttachNetworkRequest) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -649,7 +692,7 @@ func (m *AttachNetworkRequest) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -677,7 +720,7 @@ func (m *AttachNetworkRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -694,7 +737,7 @@ func (m *AttachNetworkRequest) Unmarshal(dAtA []byte) error {
 			if m.Config == nil {
 				m.Config = &NetworkAttachmentConfig{}
 			}
-			if err := m.Config.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Config.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -710,7 +753,7 @@ func (m *AttachNetworkRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -725,11 +768,11 @@ func (m *AttachNetworkRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.ContainerID = string(dAtA[iNdEx:postIndex])
+			m.ContainerID = string(data[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipResource(dAtA[iNdEx:])
+			skippy, err := skipResource(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -748,8 +791,8 @@ func (m *AttachNetworkRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *AttachNetworkResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *AttachNetworkResponse) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -761,7 +804,7 @@ func (m *AttachNetworkResponse) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -789,7 +832,7 @@ func (m *AttachNetworkResponse) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -804,11 +847,11 @@ func (m *AttachNetworkResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.AttachmentID = string(dAtA[iNdEx:postIndex])
+			m.AttachmentID = string(data[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipResource(dAtA[iNdEx:])
+			skippy, err := skipResource(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -827,8 +870,8 @@ func (m *AttachNetworkResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *DetachNetworkRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *DetachNetworkRequest) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -840,7 +883,7 @@ func (m *DetachNetworkRequest) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -868,7 +911,7 @@ func (m *DetachNetworkRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -883,11 +926,11 @@ func (m *DetachNetworkRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.AttachmentID = string(dAtA[iNdEx:postIndex])
+			m.AttachmentID = string(data[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipResource(dAtA[iNdEx:])
+			skippy, err := skipResource(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -906,8 +949,8 @@ func (m *DetachNetworkRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *DetachNetworkResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *DetachNetworkResponse) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -919,7 +962,7 @@ func (m *DetachNetworkResponse) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -937,7 +980,7 @@ func (m *DetachNetworkResponse) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		default:
 			iNdEx = preIndex
-			skippy, err := skipResource(dAtA[iNdEx:])
+			skippy, err := skipResource(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -956,8 +999,8 @@ func (m *DetachNetworkResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func skipResource(dAtA []byte) (n int, err error) {
-	l := len(dAtA)
+func skipResource(data []byte) (n int, err error) {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		var wire uint64
@@ -968,7 +1011,7 @@ func skipResource(dAtA []byte) (n int, err error) {
 			if iNdEx >= l {
 				return 0, io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -986,7 +1029,7 @@ func skipResource(dAtA []byte) (n int, err error) {
 					return 0, io.ErrUnexpectedEOF
 				}
 				iNdEx++
-				if dAtA[iNdEx-1] < 0x80 {
+				if data[iNdEx-1] < 0x80 {
 					break
 				}
 			}
@@ -1003,7 +1046,7 @@ func skipResource(dAtA []byte) (n int, err error) {
 				if iNdEx >= l {
 					return 0, io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				length |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1026,7 +1069,7 @@ func skipResource(dAtA []byte) (n int, err error) {
 					if iNdEx >= l {
 						return 0, io.ErrUnexpectedEOF
 					}
-					b := dAtA[iNdEx]
+					b := data[iNdEx]
 					iNdEx++
 					innerWire |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
@@ -1037,7 +1080,7 @@ func skipResource(dAtA []byte) (n int, err error) {
 				if innerWireType == 4 {
 					break
 				}
-				next, err := skipResource(dAtA[start:])
+				next, err := skipResource(data[start:])
 				if err != nil {
 					return 0, err
 				}
@@ -1064,8 +1107,8 @@ var (
 func init() { proto.RegisterFile("resource.proto", fileDescriptorResource) }
 
 var fileDescriptorResource = []byte{
-	// 368 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2b, 0x4a, 0x2d, 0xce,
+	// 373 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2b, 0x4a, 0x2d, 0xce,
 	0x2f, 0x2d, 0x4a, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x12, 0x4a, 0xc9, 0x4f, 0xce,
 	0x4e, 0x2d, 0xd2, 0x2b, 0x2e, 0x4f, 0x2c, 0xca, 0xcd, 0xce, 0x2c, 0xd1, 0x2b, 0x33, 0x94, 0xe2,
 	0x2e, 0xa9, 0x2c, 0x48, 0x2d, 0x86, 0x28, 0x90, 0x12, 0x49, 0xcf, 0x4f, 0xcf, 0x07, 0x33, 0xf5,
@@ -1085,7 +1128,8 @@ var fileDescriptorResource = []byte{
 	0x93, 0x08, 0x95, 0x10, 0xcb, 0x95, 0x94, 0x4f, 0xad, 0x7b, 0x37, 0x83, 0x49, 0x96, 0x8b, 0x07,
 	0xac, 0x54, 0x17, 0x24, 0x97, 0x5a, 0xc4, 0xc5, 0x0b, 0xe1, 0xe5, 0x26, 0xe6, 0x25, 0xa6, 0xa7,
 	0x42, 0xdc, 0x82, 0xe2, 0x76, 0xec, 0x6e, 0xc1, 0x16, 0x5a, 0xd8, 0xdd, 0x82, 0x35, 0x20, 0x88,
-	0x72, 0x8b, 0x93, 0xc4, 0x89, 0x87, 0x72, 0x0c, 0x37, 0x1e, 0xca, 0x31, 0x34, 0x3c, 0x92, 0x63,
-	0x3c, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f, 0xe4, 0x18, 0x93, 0xd8, 0xc0,
-	0x09, 0xd3, 0x18, 0x10, 0x00, 0x00, 0xff, 0xff, 0x1c, 0x48, 0x12, 0x41, 0xf6, 0x02, 0x00, 0x00,
+	0x72, 0x8b, 0x93, 0xcc, 0x89, 0x87, 0x72, 0x0c, 0x37, 0x1e, 0xca, 0x31, 0x7c, 0x78, 0x28, 0xc7,
+	0xd8, 0xf0, 0x48, 0x8e, 0xf1, 0xc4, 0x23, 0x39, 0xc6, 0x0b, 0x8f, 0xe4, 0x18, 0x1f, 0x3c, 0x92,
+	0x63, 0x4c, 0x62, 0x03, 0x27, 0x4e, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0xef, 0x94, 0x58,
+	0xde, 0xfa, 0x02, 0x00, 0x00,
 }

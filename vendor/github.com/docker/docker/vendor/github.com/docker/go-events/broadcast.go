@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 // Broadcaster sends events to multiple, reliable Sinks. The goal of this
@@ -160,7 +160,7 @@ func (b *Broadcaster) run() {
 	}
 }
 
-func (b *Broadcaster) String() string {
+func (b Broadcaster) String() string {
 	// Serialize copy of this broadcaster without the sync.Once, to avoid
 	// a data race.
 

@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/memberlist"
-	"github.com/sirupsen/logrus"
 )
 
 const (
-	reapInterval     = 30 * time.Minute
+	reapInterval     = 60 * time.Second
 	reapPeriod       = 5 * time.Second
 	retryInterval    = 1 * time.Second
 	nodeReapInterval = 24 * time.Hour
@@ -98,20 +98,16 @@ func (nDB *NetworkDB) RemoveKey(key []byte) {
 }
 
 func (nDB *NetworkDB) clusterInit() error {
-	nDB.lastStatsTimestamp = time.Now()
-	nDB.lastHealthTimestamp = nDB.lastStatsTimestamp
-
 	config := memberlist.DefaultLANConfig()
 	config.Name = nDB.config.NodeName
 	config.BindAddr = nDB.config.BindAddr
 	config.AdvertiseAddr = nDB.config.AdvertiseAddr
-	config.UDPBufferSize = nDB.config.PacketBufferSize
 
 	if nDB.config.BindPort != 0 {
 		config.BindPort = nDB.config.BindPort
 	}
 
-	config.ProtocolVersion = memberlist.ProtocolVersion2Compatible
+	config.ProtocolVersion = memberlist.ProtocolVersionMax
 	config.Delegate = &delegate{nDB: nDB}
 	config.Events = &eventDelegate{nDB: nDB}
 	// custom logger that does not add time or date, so they are not
@@ -203,8 +199,9 @@ func (nDB *NetworkDB) clusterJoin(members []string) error {
 	mlist := nDB.memberlist
 
 	if _, err := mlist.Join(members); err != nil {
-		// In case of failure, keep retrying join until it succeeds or the cluster is shutdown.
+		// Incase of failure, keep retrying join until it succeeds or the cluster is shutdown.
 		go nDB.retryJoin(members, nDB.stopCh)
+
 		return fmt.Errorf("could not join node to memberlist: %v", err)
 	}
 
@@ -287,6 +284,7 @@ func (nDB *NetworkDB) reconnectNode() {
 	}
 
 	if err := nDB.sendNodeEvent(NodeEventTypeJoin); err != nil {
+		logrus.Errorf("failed to send node join during reconnect: %v", err)
 		return
 	}
 
@@ -313,11 +311,12 @@ func (nDB *NetworkDB) reapState() {
 
 func (nDB *NetworkDB) reapNetworks() {
 	nDB.Lock()
-	for _, nn := range nDB.networks {
+	for name, nn := range nDB.networks {
 		for id, n := range nn {
 			if n.leaving {
 				if n.reapTime <= 0 {
 					delete(nn, id)
+					nDB.deleteNetworkNode(id, name)
 					continue
 				}
 				n.reapTime -= reapPeriod
@@ -375,21 +374,11 @@ func (nDB *NetworkDB) gossip() {
 		networkNodes[nid] = nDB.networkNodes[nid]
 
 	}
-	printStats := time.Since(nDB.lastStatsTimestamp) >= nDB.config.StatsPrintPeriod
-	printHealth := time.Since(nDB.lastHealthTimestamp) >= nDB.config.HealthPrintPeriod
 	nDB.RUnlock()
-
-	if printHealth {
-		healthScore := nDB.memberlist.GetHealthScore()
-		if healthScore != 0 {
-			logrus.Warnf("NetworkDB stats - healthscore:%d (connectivity issues)", healthScore)
-		}
-		nDB.lastHealthTimestamp = time.Now()
-	}
 
 	for nid, nodes := range networkNodes {
 		mNodes := nDB.mRandomNodes(3, nodes)
-		bytesAvail := nDB.config.PacketBufferSize - compoundHeaderOverhead
+		bytesAvail := udpSendBuf - compoundHeaderOverhead
 
 		nDB.RLock()
 		network, ok := thisNodeNetworks[nid]
@@ -410,14 +399,6 @@ func (nDB *NetworkDB) gossip() {
 		}
 
 		msgs := broadcastQ.GetBroadcasts(compoundOverhead, bytesAvail)
-		// Collect stats and print the queue info, note this code is here also to have a view of the queues empty
-		network.qMessagesSent += len(msgs)
-		if printStats {
-			logrus.Infof("NetworkDB stats - Queue net:%s qLen:%d netPeers:%d netMsg/s:%d",
-				nid, broadcastQ.NumQueued(), broadcastQ.NumNodes(), network.qMessagesSent/int((nDB.config.StatsPrintPeriod/time.Second)))
-			network.qMessagesSent = 0
-		}
-
 		if len(msgs) == 0 {
 			continue
 		}
@@ -435,14 +416,10 @@ func (nDB *NetworkDB) gossip() {
 			}
 
 			// Send the compound message
-			if err := nDB.memberlist.SendBestEffort(&mnode.Node, compound); err != nil {
+			if err := nDB.memberlist.SendToUDP(&mnode.Node, compound); err != nil {
 				logrus.Errorf("Failed to send gossip to %s: %s", mnode.Addr, err)
 			}
 		}
-	}
-	// Reset the stats
-	if printStats {
-		nDB.lastStatsTimestamp = time.Now()
 	}
 }
 
@@ -503,31 +480,26 @@ func (nDB *NetworkDB) bulkSyncTables() {
 
 func (nDB *NetworkDB) bulkSync(nodes []string, all bool) ([]string, error) {
 	if !all {
-		// Get 2 random nodes. 2nd node will be tried if the bulk sync to
-		// 1st node fails.
-		nodes = nDB.mRandomNodes(2, nodes)
+		// If not all, then just pick one.
+		nodes = nDB.mRandomNodes(1, nodes)
 	}
 
 	if len(nodes) == 0 {
 		return nil, nil
 	}
 
+	logrus.Debugf("%s: Initiating bulk sync with nodes %v", nDB.config.NodeName, nodes)
 	var err error
 	var networks []string
 	for _, node := range nodes {
 		if node == nDB.config.NodeName {
 			continue
 		}
-		logrus.Debugf("%s: Initiating bulk sync with node %v", nDB.config.NodeName, node)
+
 		networks = nDB.findCommonNetworks(node)
 		err = nDB.bulkSyncNode(networks, node, true)
-		// if its periodic bulksync stop after the first successful sync
-		if !all && err == nil {
-			break
-		}
 		if err != nil {
-			err = fmt.Errorf("bulk sync to node %s failed: %v", node, err)
-			logrus.Warn(err.Error())
+			err = fmt.Errorf("bulk sync failed on node %s: %v", node, err)
 		}
 	}
 
@@ -614,7 +586,7 @@ func (nDB *NetworkDB) bulkSyncNode(networks []string, node string, unsolicited b
 	nDB.bulkSyncAckTbl[node] = ch
 	nDB.Unlock()
 
-	err = nDB.memberlist.SendReliable(&mnode.Node, buf)
+	err = nDB.memberlist.SendToTCP(&mnode.Node, buf)
 	if err != nil {
 		nDB.Lock()
 		delete(nDB.bulkSyncAckTbl, node)
@@ -631,7 +603,7 @@ func (nDB *NetworkDB) bulkSyncNode(networks []string, node string, unsolicited b
 		case <-t.C:
 			logrus.Errorf("Bulk sync to node %s timed out", node)
 		case <-ch:
-			logrus.Debugf("%s: Bulk sync to node %s took %s", nDB.config.NodeName, node, time.Since(startTime))
+			logrus.Debugf("%s: Bulk sync to node %s took %s", nDB.config.NodeName, node, time.Now().Sub(startTime))
 		}
 		t.Stop()
 	}

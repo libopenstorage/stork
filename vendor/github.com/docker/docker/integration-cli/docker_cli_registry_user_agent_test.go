@@ -2,12 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"os"
 	"regexp"
 
-	"github.com/docker/docker/integration-cli/registry"
 	"github.com/go-check/check"
 )
 
@@ -49,14 +46,9 @@ func regexpCheckUA(c *check.C, ua string) {
 	c.Assert(bMatchUpstreamUA, check.Equals, true, check.Commentf("(Upstream) Docker Client User-Agent malformed"))
 }
 
-// registerUserAgentHandler registers a handler for the `/v2/*` endpoint.
-// Note that a 404 is returned to prevent the client to proceed.
-// We are only checking if the client sent a valid User Agent string along
-// with the request.
-func registerUserAgentHandler(reg *registry.Mock, result *string) {
-	reg.RegisterHandler("/v2/", func(w http.ResponseWriter, r *http.Request) {
+func registerUserAgentHandler(reg *testRegistry, result *string) {
+	reg.registerHandler("/v2/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
-		w.Write([]byte(`{"errors":[{"code": "UNSUPPORTED","message": "this is a mock registry"}]}`))
 		var ua string
 		for k, v := range r.Header {
 			if k == "User-Agent" {
@@ -69,35 +61,60 @@ func registerUserAgentHandler(reg *registry.Mock, result *string) {
 
 // TestUserAgentPassThrough verifies that when an image is pulled from
 // a registry, the registry should see a User-Agent string of the form
-// [docker engine UA] UpstreamClientSTREAM-CLIENT([client UA])
+// [docker engine UA] UptreamClientSTREAM-CLIENT([client UA])
 func (s *DockerRegistrySuite) TestUserAgentPassThrough(c *check.C) {
-	var ua string
+	var (
+		buildUA string
+		pullUA  string
+		pushUA  string
+		loginUA string
+	)
 
-	reg, err := registry.NewMock(c)
-	defer reg.Close()
+	buildReg, err := newTestRegistry(c)
 	c.Assert(err, check.IsNil)
-	registerUserAgentHandler(reg, &ua)
-	repoName := fmt.Sprintf("%s/busybox", reg.URL())
+	registerUserAgentHandler(buildReg, &buildUA)
+	buildRepoName := fmt.Sprintf("%s/busybox", buildReg.hostport)
 
-	s.d.StartWithBusybox(c, "--insecure-registry", reg.URL())
-
-	tmp, err := ioutil.TempDir("", "integration-cli-")
+	pullReg, err := newTestRegistry(c)
 	c.Assert(err, check.IsNil)
-	defer os.RemoveAll(tmp)
+	registerUserAgentHandler(pullReg, &pullUA)
+	pullRepoName := fmt.Sprintf("%s/busybox", pullReg.hostport)
 
-	dockerfile, err := makefile(tmp, fmt.Sprintf("FROM %s", repoName))
+	pushReg, err := newTestRegistry(c)
+	c.Assert(err, check.IsNil)
+	registerUserAgentHandler(pushReg, &pushUA)
+	pushRepoName := fmt.Sprintf("%s/busybox", pushReg.hostport)
+
+	loginReg, err := newTestRegistry(c)
+	c.Assert(err, check.IsNil)
+	registerUserAgentHandler(loginReg, &loginUA)
+
+	err = s.d.Start(
+		"--insecure-registry", buildReg.hostport,
+		"--insecure-registry", pullReg.hostport,
+		"--insecure-registry", pushReg.hostport,
+		"--insecure-registry", loginReg.hostport,
+		"--disable-legacy-registry=true")
+	c.Assert(err, check.IsNil)
+
+	dockerfileName, cleanup1, err := makefile(fmt.Sprintf("FROM %s", buildRepoName))
 	c.Assert(err, check.IsNil, check.Commentf("Unable to create test dockerfile"))
+	defer cleanup1()
+	s.d.Cmd("build", "--file", dockerfileName, ".")
+	regexpCheckUA(c, buildUA)
 
-	s.d.Cmd("build", "--file", dockerfile, tmp)
-	regexpCheckUA(c, ua)
+	s.d.Cmd("login", "-u", "richard", "-p", "testtest", "-e", "testuser@testdomain.com", loginReg.hostport)
+	regexpCheckUA(c, loginUA)
 
-	s.d.Cmd("login", "-u", "richard", "-p", "testtest", reg.URL())
-	regexpCheckUA(c, ua)
+	s.d.Cmd("pull", pullRepoName)
+	regexpCheckUA(c, pullUA)
 
-	s.d.Cmd("pull", repoName)
-	regexpCheckUA(c, ua)
+	dockerfileName, cleanup2, err := makefile(`FROM scratch
+	ENV foo bar`)
+	c.Assert(err, check.IsNil, check.Commentf("Unable to create test dockerfile"))
+	defer cleanup2()
+	s.d.Cmd("build", "-t", pushRepoName, "--file", dockerfileName, ".")
 
-	s.d.Cmd("tag", "busybox", repoName)
-	s.d.Cmd("push", repoName)
-	regexpCheckUA(c, ua)
+	s.d.Cmd("push", pushRepoName)
+	regexpCheckUA(c, pushUA)
 }

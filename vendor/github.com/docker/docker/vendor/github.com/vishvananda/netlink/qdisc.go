@@ -187,11 +187,10 @@ func (qdisc *Netem) Type() string {
 // Tbf is a classless qdisc that rate limits based on tokens
 type Tbf struct {
 	QdiscAttrs
-	Rate     uint64
-	Limit    uint32
-	Buffer   uint32
-	Peakrate uint64
-	Minburst uint32
+	// TODO: handle 64bit rate properly
+	Rate   uint64
+	Limit  uint32
+	Buffer uint32
 	// TODO: handle other settings
 }
 

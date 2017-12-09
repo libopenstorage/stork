@@ -3,14 +3,13 @@ package distribution
 import (
 	"fmt"
 
-	"github.com/docker/distribution/reference"
+	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/digest"
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/distribution/metadata"
 	"github.com/docker/docker/pkg/progress"
-	refstore "github.com/docker/docker/reference"
+	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
-	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -56,12 +55,12 @@ func Pull(ctx context.Context, ref reference.Named, imagePullConfig *ImagePullCo
 		return err
 	}
 
-	// makes sure name is not `scratch`
-	if err := ValidateRepoName(repoInfo.Name); err != nil {
+	// makes sure name is not empty or `scratch`
+	if err := ValidateRepoName(repoInfo.Name()); err != nil {
 		return err
 	}
 
-	endpoints, err := imagePullConfig.RegistryService.LookupPullEndpoints(reference.Domain(repoInfo.Name))
+	endpoints, err := imagePullConfig.RegistryService.LookupPullEndpoints(repoInfo.Hostname())
 	if err != nil {
 		return err
 	}
@@ -105,7 +104,7 @@ func Pull(ctx context.Context, ref reference.Named, imagePullConfig *ImagePullCo
 			}
 		}
 
-		logrus.Debugf("Trying to pull %s from %s %s", reference.FamiliarName(repoInfo.Name), endpoint.URL, endpoint.Version)
+		logrus.Debugf("Trying to pull %s from %s %s", repoInfo.Name(), endpoint.URL, endpoint.Version)
 
 		puller, err := newPuller(endpoint, repoInfo, imagePullConfig)
 		if err != nil {
@@ -140,19 +139,19 @@ func Pull(ctx context.Context, ref reference.Named, imagePullConfig *ImagePullCo
 					// append subsequent errors
 					lastErr = err
 				}
-				logrus.Infof("Attempting next endpoint for pull after error: %v", err)
+				logrus.Errorf("Attempting next endpoint for pull after error: %v", err)
 				continue
 			}
 			logrus.Errorf("Not continuing with pull after error: %v", err)
 			return TranslatePullError(err, ref)
 		}
 
-		imagePullConfig.ImageEventLogger(reference.FamiliarString(ref), reference.FamiliarName(repoInfo.Name), "pull")
+		imagePullConfig.ImageEventLogger(ref.String(), repoInfo.Name(), "pull")
 		return nil
 	}
 
 	if lastErr == nil {
-		lastErr = fmt.Errorf("no endpoints found for %s", reference.FamiliarString(ref))
+		lastErr = fmt.Errorf("no endpoints found for %s", ref.String())
 	}
 
 	return TranslatePullError(lastErr, ref)
@@ -171,14 +170,17 @@ func writeStatus(requestedTag string, out progress.Output, layersDownloaded bool
 }
 
 // ValidateRepoName validates the name of a repository.
-func ValidateRepoName(name reference.Named) error {
-	if reference.FamiliarName(name) == api.NoBaseImageSpecifier {
+func ValidateRepoName(name string) error {
+	if name == "" {
+		return fmt.Errorf("Repository name can't be empty")
+	}
+	if name == api.NoBaseImageSpecifier {
 		return fmt.Errorf("'%s' is a reserved name", api.NoBaseImageSpecifier)
 	}
 	return nil
 }
 
-func addDigestReference(store refstore.Store, ref reference.Named, dgst digest.Digest, id digest.Digest) error {
+func addDigestReference(store reference.Store, ref reference.Named, dgst digest.Digest, id digest.Digest) error {
 	dgstRef, err := reference.WithDigest(reference.TrimNamed(ref), dgst)
 	if err != nil {
 		return err
@@ -190,7 +192,7 @@ func addDigestReference(store refstore.Store, ref reference.Named, dgst digest.D
 			logrus.Errorf("Image ID for digest %s changed from %s to %s, cannot update", dgst.String(), oldTagID, id)
 		}
 		return nil
-	} else if err != refstore.ErrDoesNotExist {
+	} else if err != reference.ErrDoesNotExist {
 		return err
 	}
 

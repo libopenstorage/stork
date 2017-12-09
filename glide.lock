@@ -1,8 +1,8 @@
-hash: da5f81d36ad1442db6c0986d92ecb503857a60895316d04be0adf74eb93a8f55
-updated: 2017-11-21T10:56:40.122891571-08:00
+hash: 7fbb7762ca24018d85593d5860afe1ffdd0e8970ad757943857d73310da17953
+updated: 2017-12-13T13:55:00.933378823-08:00
 imports:
 - name: github.com/armon/go-metrics
-  version: 9a4b6e10bed6220a1665955aa2b75afc91eb10b3
+  version: 7aa49fde808223f8dadfdbfd3a20ff6c19e5f9ec
 - name: github.com/aws/aws-sdk-go
   version: a881d8ac1079e5f917d926c04c32ace8a9f68d22
   subpackages:
@@ -35,42 +35,36 @@ imports:
   - service/ssm
   - service/sts
 - name: github.com/cloudfoundry/gosigar
-  version: 6ce1f0695dabb41475a8841fa1584afce1c34af7
+  version: dcb1afc219e4c99f21c37fb1ec22ed9ffe443317
   subpackages:
   - sys/windows
 - name: github.com/davecgh/go-spew
-  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
+  version: 04cdfd42973bb9c8589fd6a731800cf222fde1a9
   subpackages:
   - spew
 - name: github.com/docker/distribution
-  version: edc3ab29cdff8694dd6feb85cfeb4b5f1b38ed9c
+  version: f4118485915abb8b163442717326597908eee6aa
   subpackages:
   - digestset
   - reference
 - name: github.com/docker/docker
-  version: 4f3616fb1c112e206b88cb7a9922bf49067a7756
+  version: 092cba3727bb9b4a2f0e922cd6c0f93ea270e363
   subpackages:
-  - api
   - api/types
   - api/types/blkiodev
   - api/types/container
   - api/types/events
   - api/types/filters
-  - api/types/image
   - api/types/mount
   - api/types/network
+  - api/types/reference
   - api/types/registry
   - api/types/strslice
   - api/types/swarm
-  - api/types/swarm/runtime
   - api/types/time
   - api/types/versions
   - api/types/volume
   - client
-  - pkg/ioutils
-  - pkg/longpath
-  - pkg/mount
-  - pkg/system
   - pkg/tlsconfig
 - name: github.com/docker/go-connections
   version: 3ede32e2033de7505e6500d6c868c2b9ed9f169d
@@ -79,9 +73,7 @@ imports:
   - sockets
   - tlsconfig
 - name: github.com/docker/go-units
-  version: 9e638d38cf6977a37a8ea0078f3ee75a7cdb2dd1
-- name: github.com/docker/libtrust
-  version: 9cbd2a1374f46905c68a4eb3694a130610adc62a
+  version: 0dadbb0345b35ec7ef35e228dabb8de89a65bf52
 - name: github.com/donovanhide/eventsource
   version: 3ed64d21fb0b6bd8b49bcfec08f3004daee8723d
 - name: github.com/emicklei/go-restful
@@ -97,7 +89,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: f280b3ba517bf5fc98922624f21fb0e7a92adaec
+  version: 32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -148,7 +140,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/hashicorp/go-multierror
-  version: 83588e72410abfbe4df460eeb6f30841ae47d4c4
+  version: b7773ae218740a7be65057fc60b366a49b538a44
 - name: github.com/hashicorp/go-sockaddr
   version: 9b4c5fa5b10a683339a270d664474b9f4aee62fc
 - name: github.com/hashicorp/golang-lru
@@ -158,17 +150,22 @@ imports:
 - name: github.com/hashicorp/logutils
   version: 0dc08b1671f34c4250ce212759ebd880f743d883
 - name: github.com/hashicorp/memberlist
-  version: caa5d20d6a642b7543b3745e54031a96008bee57
+  version: 3d8438da9589e7b608a83ffac1ef8211486bcb7c
 - name: github.com/howeyc/gopass
   version: bf9dde6d0d2c004a008c27aaee91170c786f6db8
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/jmespath/go-jmespath
-  version: bd40a432e4c76585ef6b72d3fd96fb9b6dc7b68d
+  version: dd801d4f4ce7ac746e7e7b4489d2fa600b3b096b
 - name: github.com/json-iterator/go
   version: 36b14963da70d11297d313183d7e6388c8510e1e
 - name: github.com/juju/ratelimit
   version: 5b9ff866471762aa2ab2dced63c9fb6f53921342
+- name: github.com/kubernetes-incubator/external-storage
+  version: 18543a856d3cbeaa95498832f64a8cc166c04fdd
+  subpackages:
+  - snapshot/pkg/apis/crd/v1
+  - snapshot/pkg/client
 - name: github.com/libopenstorage/gossip
   version: aa5bca5fb84334d7d29c26b5ccd7c819f344beac
   subpackages:
@@ -205,11 +202,11 @@ imports:
 - name: github.com/Microsoft/go-winio
   version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
 - name: github.com/miekg/dns
-  version: 5d001d020961ae1c184f9f8152fdc73810481677
+  version: 3bbde607ac2132f47c307b292594a1af4f619fde
 - name: github.com/mohae/deepcopy
   version: c48cc78d482608239f6c4c92a4abd87eb8761c90
 - name: github.com/onsi/ginkgo
-  version: 67b9df7f55fe1165fd9ad49aca7754cce01a42b8
+  version: cb73bd0f14eb8d91a9801647edbebe6ddb5b4cb4
   subpackages:
   - config
   - internal/codelocation
@@ -229,7 +226,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  version: c1fb6682134d162f37c13f42e7157653a7de7d2b
   subpackages:
   - format
   - internal/assertion
@@ -243,24 +240,18 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opencontainers/go-digest
-  version: a6d0ee40d4207ea02364bd3b9e8e77b9159ba1eb
-- name: github.com/opencontainers/image-spec
-  version: 372ad780f63454fbbbbcc7cf80e5b90245c13e13
-  subpackages:
-  - specs-go
-  - specs-go/v1
+  version: 279bed98673dd5bef374d3b6e4b09e2af76183bf
 - name: github.com/pborman/uuid
-  version: e790cca94e6cc75c7064b1332e63811d4aae1a53
+  version: e533369306653d193b93dae055f6083cbf8ba54f
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/pkg/errors
-  version: a22138067af1c4942683050411a841ade67fe1eb
+  version: 8842a6e0cc595d1cc9d931f6c875883967280e32
 - name: github.com/portworx/kvdb
-  version: bc41ec8da0076a72a577dcd309a78dcfc29a12cd
+  version: 231bb043ca715e254d4a914aaf5b0a6314746361
 - name: github.com/portworx/sched-ops
-  version: 1764a4a5271c6efea6021a57ae0134ae63822771
+  version: 5d4d93b823cff5f9cf620dab8764fbf60c05878a
   repo: git@github.com:portworx/sched-ops.git
-  vcs: git
   subpackages:
   - k8s
   - task
@@ -271,11 +262,11 @@ imports:
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/Sirupsen/logrus
-  version: 33a34430d1c3dc71777fdd677864928e5b5812bc
+  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
 - name: github.com/sirupsen/logrus
   version: 33a34430d1c3dc71777fdd677864928e5b5812bc
 - name: github.com/spf13/pflag
-  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
+  version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: go.pedge.io/dlog
   version: 292aa66beb49590f5c6da27331b90506b1c3cbbc
   repo: git@github.com:peter-edge/dlog-go.git
@@ -293,15 +284,23 @@ imports:
 - name: golang.org/x/net
   version: 1c05540f6879653db88113bc4a2b70aec4bd491f
   subpackages:
+  - bpf
   - context
   - context/ctxhttp
+  - html
+  - html/atom
+  - html/charset
   - http2
   - http2/hpack
   - idna
+  - internal/iana
+  - internal/socket
+  - ipv4
+  - ipv6
   - lex/httplex
   - proxy
 - name: golang.org/x/sys
-  version: 7ddbeae9ae08c6a06a59597f0c9edbc5ff2444ce
+  version: a2e06a18b0d52d8cb2010e04b372a1965d8e3439
   subpackages:
   - unix
   - windows
@@ -309,8 +308,19 @@ imports:
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
   - cases
+  - encoding
+  - encoding/charmap
+  - encoding/htmlindex
+  - encoding/internal
+  - encoding/internal/identifier
+  - encoding/japanese
+  - encoding/korean
+  - encoding/simplifiedchinese
+  - encoding/traditionalchinese
+  - encoding/unicode
   - internal
   - internal/tag
+  - internal/utf8internal
   - language
   - runes
   - secure/bidirule
@@ -350,6 +360,14 @@ imports:
   - settings/v1alpha1
   - storage/v1
   - storage/v1beta1
+- name: k8s.io/apiextensions-apiserver
+  version: e509bb64fe1116e12a32273a2032426aa1a5fd26
+  subpackages:
+  - pkg/apis/apiextensions
+  - pkg/apis/apiextensions/v1beta1
+  - pkg/client/clientset/clientset
+  - pkg/client/clientset/clientset/scheme
+  - pkg/client/clientset/clientset/typed/apiextensions/v1beta1
 - name: k8s.io/apimachinery
   version: 019ae5ada31de202164b118aee88ee2d14075c31
   subpackages:

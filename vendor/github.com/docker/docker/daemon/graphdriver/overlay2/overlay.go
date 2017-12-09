@@ -15,8 +15,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/daemon/graphdriver/overlayutils"
@@ -26,15 +27,12 @@ import (
 	"github.com/docker/docker/pkg/directory"
 	"github.com/docker/docker/pkg/fsutils"
 	"github.com/docker/docker/pkg/idtools"
-	"github.com/docker/docker/pkg/locker"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/parsers/kernel"
-	"github.com/docker/docker/pkg/system"
-	units "github.com/docker/go-units"
+	"github.com/docker/go-units"
 
-	"github.com/opencontainers/selinux/go-selinux/label"
-	"golang.org/x/sys/unix"
+	"github.com/opencontainers/runc/libcontainer/label"
 )
 
 var (
@@ -100,7 +98,6 @@ type Driver struct {
 	options       overlayOptions
 	naiveDiff     graphdriver.DiffDriver
 	supportsDType bool
-	locker        *locker.Locker
 }
 
 var (
@@ -150,19 +147,9 @@ func Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 
 	// check if they are running over btrfs, aufs, zfs, overlay, or ecryptfs
 	switch fsMagic {
-	case graphdriver.FsMagicAufs, graphdriver.FsMagicZfs, graphdriver.FsMagicOverlay, graphdriver.FsMagicEcryptfs:
+	case graphdriver.FsMagicBtrfs, graphdriver.FsMagicAufs, graphdriver.FsMagicZfs, graphdriver.FsMagicOverlay, graphdriver.FsMagicEcryptfs:
 		logrus.Errorf("'overlay2' is not supported over %s", backingFs)
 		return nil, graphdriver.ErrIncompatibleFS
-	case graphdriver.FsMagicBtrfs:
-		// Support for OverlayFS on BTRFS was added in kernel 4.7
-		// See https://btrfs.wiki.kernel.org/index.php/Changelog
-		if kernel.CompareKernelVersion(*v, kernel.VersionInfo{Kernel: 4, Major: 7, Minor: 0}) < 0 {
-			if !opts.overrideKernelCheck {
-				logrus.Errorf("'overlay2' requires kernel 4.7 to use on %s", backingFs)
-				return nil, graphdriver.ErrIncompatibleFS
-			}
-			logrus.Warn("Using pre-4.7.0 kernel for overlay2 on btrfs, may require kernel update")
-		}
 	}
 
 	rootUID, rootGID, err := idtools.GetRootUIDGID(uidMaps, gidMaps)
@@ -183,7 +170,7 @@ func Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 		return nil, err
 	}
 	if !supportsDType {
-		// not a fatal error until v17.12 (#27443)
+		// not a fatal error until v1.16 (#27443)
 		logrus.Warn(overlayutils.ErrDTypeNotSupported("overlay2", backingFs))
 	}
 
@@ -193,8 +180,6 @@ func Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 		gidMaps:       gidMaps,
 		ctr:           graphdriver.NewRefCounter(graphdriver.NewFsChecker(graphdriver.FsMagicOverlay)),
 		supportsDType: supportsDType,
-		locker:        locker.New(),
-		options:       *opts,
 	}
 
 	d.naiveDiff = graphdriver.NewNaiveDiffDriver(d, uidMaps, gidMaps)
@@ -203,12 +188,7 @@ func Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 		// Try to enable project quota support over xfs.
 		if d.quotaCtl, err = quota.NewControl(home); err == nil {
 			projectQuotaSupported = true
-		} else if opts.quota.Size > 0 {
-			return nil, fmt.Errorf("Storage option overlay2.size not supported. Filesystem does not support Project Quota: %v", err)
 		}
-	} else if opts.quota.Size > 0 {
-		// if xfs is not the backing fs then error out if the storage-opt overlay2.size is used.
-		return nil, fmt.Errorf("Storage Option overlay2.size only supported for backingFS XFS. Found %v", backingFs)
 	}
 
 	logrus.Debugf("backingFs=%s,  projectQuotaSupported=%v", backingFs, projectQuotaSupported)
@@ -230,14 +210,9 @@ func parseOptions(options []string) (*overlayOptions, error) {
 			if err != nil {
 				return nil, err
 			}
-		case "overlay2.size":
-			size, err := units.RAMInBytes(val)
-			if err != nil {
-				return nil, err
-			}
-			o.quota.Size = uint64(size)
+
 		default:
-			return nil, fmt.Errorf("overlay2: unknown option %s", key)
+			return nil, fmt.Errorf("overlay2: Unknown option %s\n", key)
 		}
 	}
 	return o, nil
@@ -323,38 +298,17 @@ func (d *Driver) Cleanup() error {
 // CreateReadWrite creates a layer that is writable for use as a container
 // file system.
 func (d *Driver) CreateReadWrite(id, parent string, opts *graphdriver.CreateOpts) error {
-	if opts != nil && len(opts.StorageOpt) != 0 && !projectQuotaSupported {
-		return fmt.Errorf("--storage-opt is supported only for overlay over xfs with 'pquota' mount option")
-	}
-
-	if opts == nil {
-		opts = &graphdriver.CreateOpts{
-			StorageOpt: map[string]string{},
-		}
-	}
-
-	if _, ok := opts.StorageOpt["size"]; !ok {
-		if opts.StorageOpt == nil {
-			opts.StorageOpt = map[string]string{}
-		}
-		opts.StorageOpt["size"] = strconv.FormatUint(d.options.quota.Size, 10)
-	}
-
-	return d.create(id, parent, opts)
+	return d.Create(id, parent, opts)
 }
 
 // Create is used to create the upper, lower, and merge directories required for overlay fs for a given id.
 // The parent filesystem is used to configure these directories for the overlay.
 func (d *Driver) Create(id, parent string, opts *graphdriver.CreateOpts) (retErr error) {
-	if opts != nil && len(opts.StorageOpt) != 0 {
-		if _, ok := opts.StorageOpt["size"]; ok {
-			return fmt.Errorf("--storage-opt size is only supported for ReadWrite Layers")
-		}
-	}
-	return d.create(id, parent, opts)
-}
 
-func (d *Driver) create(id, parent string, opts *graphdriver.CreateOpts) (retErr error) {
+	if opts != nil && len(opts.StorageOpt) != 0 && !projectQuotaSupported {
+		return fmt.Errorf("--storage-opt is supported only for overlay over xfs with 'pquota' mount option")
+	}
+
 	dir := d.dir(id)
 
 	rootUID, rootGID, err := idtools.GetRootUIDGID(d.uidMaps, d.gidMaps)
@@ -497,8 +451,6 @@ func (d *Driver) getLowerDirs(id string) ([]string, error) {
 
 // Remove cleans the directories that are created for this id.
 func (d *Driver) Remove(id string) error {
-	d.locker.Lock(id)
-	defer d.locker.Unlock(id)
 	dir := d.dir(id)
 	lid, err := ioutil.ReadFile(path.Join(dir, "link"))
 	if err == nil {
@@ -507,7 +459,7 @@ func (d *Driver) Remove(id string) error {
 		}
 	}
 
-	if err := system.EnsureRemoveAll(dir); err != nil && !os.IsNotExist(err) {
+	if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
@@ -515,8 +467,6 @@ func (d *Driver) Remove(id string) error {
 
 // Get creates and mounts the required file system for the given id and returns the mount path.
 func (d *Driver) Get(id string, mountLabel string) (s string, err error) {
-	d.locker.Lock(id)
-	defer d.locker.Unlock(id)
 	dir := d.dir(id)
 	if _, err := os.Stat(dir); err != nil {
 		return "", err
@@ -539,7 +489,7 @@ func (d *Driver) Get(id string, mountLabel string) (s string, err error) {
 	defer func() {
 		if err != nil {
 			if c := d.ctr.Decrement(mergedDir); c <= 0 {
-				unix.Unmount(mergedDir, 0)
+				syscall.Unmount(mergedDir, 0)
 			}
 		}
 	}()
@@ -552,10 +502,10 @@ func (d *Driver) Get(id string, mountLabel string) (s string, err error) {
 	}
 	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", strings.Join(absLowers, ":"), path.Join(dir, "diff"), path.Join(dir, "work"))
 	mountData := label.FormatMountLabel(opts, mountLabel)
-	mount := unix.Mount
+	mount := syscall.Mount
 	mountTarget := mergedDir
 
-	pageSize := unix.Getpagesize()
+	pageSize := syscall.Getpagesize()
 
 	// Go can return a larger page size than supported by the system
 	// as of go 1.7. This will be fixed in 1.8 and this block can be
@@ -603,23 +553,11 @@ func (d *Driver) Get(id string, mountLabel string) (s string, err error) {
 
 // Put unmounts the mount path created for the give id.
 func (d *Driver) Put(id string) error {
-	d.locker.Lock(id)
-	defer d.locker.Unlock(id)
-	dir := d.dir(id)
-	_, err := ioutil.ReadFile(path.Join(dir, lowerFile))
-	if err != nil {
-		// If no lower, no mount happened and just return directly
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-
-	mountpoint := path.Join(dir, "merged")
+	mountpoint := path.Join(d.dir(id), "merged")
 	if count := d.ctr.Decrement(mountpoint); count > 0 {
 		return nil
 	}
-	if err := unix.Unmount(mountpoint, unix.MNT_DETACH); err != nil {
+	if err := syscall.Unmount(mountpoint, 0); err != nil {
 		logrus.Debugf("Failed to unmount %s overlay: %s - %v", id, mountpoint, err)
 	}
 	return nil

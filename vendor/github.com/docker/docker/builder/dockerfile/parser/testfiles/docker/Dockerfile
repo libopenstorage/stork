@@ -24,7 +24,7 @@
 #
 
 FROM	ubuntu:14.04
-LABEL	maintainer	Tianon Gravi <admwiggin@gmail.com> (@tianon)
+MAINTAINER	Tianon Gravi <admwiggin@gmail.com> (@tianon)
 
 # Packaged dependencies
 RUN	apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -yq \
@@ -39,6 +39,7 @@ RUN	apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -yq \
 	iptables \
 	libapparmor-dev \
 	libcap-dev \
+	libsqlite3-dev \
 	mercurial \
 	pandoc \
 	parallel \

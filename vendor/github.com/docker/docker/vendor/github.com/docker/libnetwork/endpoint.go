@@ -8,12 +8,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/ipamapi"
 	"github.com/docker/libnetwork/netlabel"
 	"github.com/docker/libnetwork/options"
 	"github.com/docker/libnetwork/types"
-	"github.com/sirupsen/logrus"
 )
 
 // Endpoint represents a logical connection between a network and a sandbox.
@@ -427,7 +427,7 @@ func (ep *endpoint) Join(sbox Sandbox, options ...EndpointOption) error {
 	return ep.sbJoin(sb, options...)
 }
 
-func (ep *endpoint) sbJoin(sb *sandbox, options ...EndpointOption) (err error) {
+func (ep *endpoint) sbJoin(sb *sandbox, options ...EndpointOption) error {
 	n, err := ep.getNetworkFromStore()
 	if err != nil {
 		return fmt.Errorf("failed to get network from store during join: %v", err)
@@ -462,7 +462,7 @@ func (ep *endpoint) sbJoin(sb *sandbox, options ...EndpointOption) (err error) {
 
 	d, err := n.driver(true)
 	if err != nil {
-		return fmt.Errorf("failed to get driver during join: %v", err)
+		return fmt.Errorf("failed to join endpoint: %v", err)
 	}
 
 	err = d.Join(nid, epid, sb.Key(), ep, sb.Labels())
@@ -471,8 +471,8 @@ func (ep *endpoint) sbJoin(sb *sandbox, options ...EndpointOption) (err error) {
 	}
 	defer func() {
 		if err != nil {
-			if e := d.Leave(nid, epid); e != nil {
-				logrus.Warnf("driver leave failed while rolling back join: %v", e)
+			if err := d.Leave(nid, epid); err != nil {
+				logrus.Warnf("driver leave failed while rolling back join: %v", err)
 			}
 		}
 	}()
@@ -519,14 +519,6 @@ func (ep *endpoint) sbJoin(sb *sandbox, options ...EndpointOption) (err error) {
 		return err
 	}
 
-	defer func() {
-		if err != nil {
-			if e := ep.deleteDriverInfoFromCluster(); e != nil {
-				logrus.Errorf("Could not delete endpoint state for endpoint %s from cluster on join failure: %v", ep.Name(), e)
-			}
-		}
-	}()
-
 	if sb.needDefaultGW() && sb.getEndpointInGWNetwork() == nil {
 		return sb.setupDefaultGW()
 	}
@@ -538,11 +530,11 @@ func (ep *endpoint) sbJoin(sb *sandbox, options ...EndpointOption) (err error) {
 			logrus.Debugf("Revoking external connectivity on endpoint %s (%s)", extEp.Name(), extEp.ID())
 			extN, err := extEp.getNetworkFromStore()
 			if err != nil {
-				return fmt.Errorf("failed to get network from store for revoking external connectivity during join: %v", err)
+				return fmt.Errorf("failed to get network from store during join: %v", err)
 			}
 			extD, err := extN.driver(true)
 			if err != nil {
-				return fmt.Errorf("failed to get driver for revoking external connectivity during join: %v", err)
+				return fmt.Errorf("failed to join endpoint: %v", err)
 			}
 			if err = extD.RevokeExternalConnectivity(extEp.network.ID(), extEp.ID()); err != nil {
 				return types.InternalErrorf(
@@ -570,9 +562,9 @@ func (ep *endpoint) sbJoin(sb *sandbox, options ...EndpointOption) (err error) {
 	}
 
 	if !sb.needDefaultGW() {
-		if e := sb.clearDefaultGW(); e != nil {
+		if err := sb.clearDefaultGW(); err != nil {
 			logrus.Warnf("Failure while disconnecting sandbox %s (%s) from gateway network: %v",
-				sb.ID(), sb.ContainerID(), e)
+				sb.ID(), sb.ContainerID(), err)
 		}
 	}
 
@@ -584,70 +576,39 @@ func doUpdateHostsFile(n *network, sb *sandbox) bool {
 }
 
 func (ep *endpoint) rename(name string) error {
-	var (
-		err      error
-		netWatch *netWatch
-		ok       bool
-	)
-
+	var err error
 	n := ep.getNetwork()
 	if n == nil {
 		return fmt.Errorf("network not connected for ep %q", ep.name)
 	}
 
-	c := n.getController()
+	n.getController().Lock()
+	netWatch, ok := n.getController().nmap[n.ID()]
+	n.getController().Unlock()
 
-	sb, ok := ep.getSandbox()
 	if !ok {
-		logrus.Warnf("rename for %s aborted, sandbox %s is not anymore present", ep.ID(), ep.sandboxID)
-		return nil
+		return fmt.Errorf("watch null for network %q", n.Name())
 	}
 
-	if c.isAgent() {
-		if err = ep.deleteServiceInfoFromCluster(sb, "rename"); err != nil {
-			return types.InternalErrorf("Could not delete service state for endpoint %s from cluster on rename: %v", ep.Name(), err)
-		}
-	} else {
-		c.Lock()
-		netWatch, ok = c.nmap[n.ID()]
-		c.Unlock()
-		if !ok {
-			return fmt.Errorf("watch null for network %q", n.Name())
-		}
-		n.updateSvcRecord(ep, c.getLocalEps(netWatch), false)
-	}
+	n.updateSvcRecord(ep, n.getController().getLocalEps(netWatch), false)
 
 	oldName := ep.name
 	oldAnonymous := ep.anonymous
 	ep.name = name
 	ep.anonymous = false
 
-	if c.isAgent() {
-		if err = ep.addServiceInfoToCluster(sb); err != nil {
-			return types.InternalErrorf("Could not add service state for endpoint %s to cluster on rename: %v", ep.Name(), err)
+	n.updateSvcRecord(ep, n.getController().getLocalEps(netWatch), true)
+	defer func() {
+		if err != nil {
+			n.updateSvcRecord(ep, n.getController().getLocalEps(netWatch), false)
+			ep.name = oldName
+			ep.anonymous = oldAnonymous
+			n.updateSvcRecord(ep, n.getController().getLocalEps(netWatch), true)
 		}
-		defer func() {
-			if err != nil {
-				ep.deleteServiceInfoFromCluster(sb, "rename")
-				ep.name = oldName
-				ep.anonymous = oldAnonymous
-				ep.addServiceInfoToCluster(sb)
-			}
-		}()
-	} else {
-		n.updateSvcRecord(ep, c.getLocalEps(netWatch), true)
-		defer func() {
-			if err != nil {
-				n.updateSvcRecord(ep, c.getLocalEps(netWatch), false)
-				ep.name = oldName
-				ep.anonymous = oldAnonymous
-				n.updateSvcRecord(ep, c.getLocalEps(netWatch), true)
-			}
-		}()
-	}
+	}()
 
 	// Update the store with the updated name
-	if err = c.updateToStore(ep); err != nil {
+	if err = n.getController().updateToStore(ep); err != nil {
 		return err
 	}
 	// After the name change do a dummy endpoint count update to
@@ -671,7 +632,7 @@ func (ep *endpoint) hasInterface(iName string) bool {
 
 func (ep *endpoint) Leave(sbox Sandbox, options ...EndpointOption) error {
 	if sbox == nil || sbox.ID() == "" || sbox.Key() == "" {
-		return types.BadRequestErrorf("invalid Sandbox passed to endpoint leave: %v", sbox)
+		return types.BadRequestErrorf("invalid Sandbox passed to enpoint leave: %v", sbox)
 	}
 
 	sb, ok := sbox.(*sandbox)
@@ -711,7 +672,7 @@ func (ep *endpoint) sbLeave(sb *sandbox, force bool, options ...EndpointOption) 
 
 	d, err := n.driver(!force)
 	if err != nil {
-		return fmt.Errorf("failed to get driver during endpoint leave: %v", err)
+		return fmt.Errorf("failed to leave endpoint: %v", err)
 	}
 
 	ep.Lock()
@@ -752,7 +713,7 @@ func (ep *endpoint) sbLeave(sb *sandbox, force bool, options ...EndpointOption) 
 		return err
 	}
 
-	if e := ep.deleteServiceInfoFromCluster(sb, "sbLeave"); e != nil {
+	if e := ep.deleteServiceInfoFromCluster(); e != nil {
 		logrus.Errorf("Could not delete service state for endpoint %s from cluster: %v", ep.Name(), e)
 	}
 
@@ -771,11 +732,11 @@ func (ep *endpoint) sbLeave(sb *sandbox, force bool, options ...EndpointOption) 
 		logrus.Debugf("Programming external connectivity on endpoint %s (%s)", extEp.Name(), extEp.ID())
 		extN, err := extEp.getNetworkFromStore()
 		if err != nil {
-			return fmt.Errorf("failed to get network from store for programming external connectivity during leave: %v", err)
+			return fmt.Errorf("failed to get network from store during leave: %v", err)
 		}
 		extD, err := extN.driver(true)
 		if err != nil {
-			return fmt.Errorf("failed to get driver for programming external connectivity during leave: %v", err)
+			return fmt.Errorf("failed to leave endpoint: %v", err)
 		}
 		if err := extD.ProgramExternalConnectivity(extEp.network.ID(), extEp.ID(), sb.Labels()); err != nil {
 			logrus.Warnf("driver failed programming external connectivity on endpoint %s: (%s) %v",
@@ -1158,9 +1119,6 @@ func (c *controller) cleanupLocalEndpoints() {
 	}
 
 	for _, n := range nl {
-		if n.ConfigOnly() {
-			continue
-		}
 		epl, err := n.getEndpointsFromStore()
 		if err != nil {
 			logrus.Warnf("Could not get list of endpoints in network %s during endpoint cleanup: %v", n.name, err)

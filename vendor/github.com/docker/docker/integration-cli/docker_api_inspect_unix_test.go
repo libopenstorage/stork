@@ -7,8 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/docker/docker/integration-cli/checker"
-	"github.com/docker/docker/integration-cli/request"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
@@ -20,7 +19,7 @@ func (s *DockerSuite) TestInspectAPICpusetInConfigPre120(c *check.C) {
 	name := "cpusetinconfig-pre120"
 	dockerCmd(c, "run", "--name", name, "--cpuset-cpus", "0", "busybox", "true")
 
-	status, body, err := request.SockRequest("GET", fmt.Sprintf("/v1.19/containers/%s/json", name), nil, daemonHost())
+	status, body, err := sockRequest("GET", fmt.Sprintf("/v1.19/containers/%s/json", name), nil)
 	c.Assert(status, check.Equals, http.StatusOK)
 	c.Assert(err, check.IsNil)
 

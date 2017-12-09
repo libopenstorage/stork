@@ -14,7 +14,7 @@ option (gogoproto.goproto_stringer_all) = false;
 // EndpointRecord specifies all the endpoint specific information that
 // needs to gossiped to nodes participating in the network.
 message EndpointRecord {
-	// Name of the container
+	// Name of the endpoint
 	string name = 1;
 
 	// Service name of the service to which this endpoint belongs.

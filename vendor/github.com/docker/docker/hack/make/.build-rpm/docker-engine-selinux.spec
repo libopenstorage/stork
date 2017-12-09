@@ -14,9 +14,6 @@ Vendor: Docker
 Packager: Docker <support@docker.com>
 
 %global selinux_policyver 3.13.1-102
-%if 0%{?oraclelinux} >= 7
-%global selinux_policyver 3.13.1-102.0.3.el7_3.15
-%endif # oraclelinux 7
 %global selinuxtype targeted
 %global moduletype  services
 %global modulenames docker

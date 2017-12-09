@@ -11,9 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/integration-cli/checker"
-	"github.com/docker/docker/integration-cli/cli/build"
-	icmd "github.com/docker/docker/pkg/testutil/cmd"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 	"github.com/kr/pty"
 )
@@ -31,10 +29,11 @@ func (s *DockerSuite) TestSaveAndLoadRepoStdout(c *check.C) {
 	c.Assert(err, check.IsNil)
 	defer os.Remove(tmpFile.Name())
 
-	icmd.RunCmd(icmd.Cmd{
-		Command: []string{dockerBinary, "save", repoName},
-		Stdout:  tmpFile,
-	}).Assert(c, icmd.Success)
+	saveCmd := exec.Command(dockerBinary, "save", repoName)
+	saveCmd.Stdout = tmpFile
+
+	_, err = runCommand(saveCmd)
+	c.Assert(err, check.IsNil)
 
 	tmpFile, err = os.Open(tmpFile.Name())
 	c.Assert(err, check.IsNil)
@@ -42,10 +41,11 @@ func (s *DockerSuite) TestSaveAndLoadRepoStdout(c *check.C) {
 
 	deleteImages(repoName)
 
-	icmd.RunCmd(icmd.Cmd{
-		Command: []string{dockerBinary, "load"},
-		Stdin:   tmpFile,
-	}).Assert(c, icmd.Success)
+	loadCmd := exec.Command(dockerBinary, "load")
+	loadCmd.Stdin = tmpFile
+
+	out, _, err := runCommandWithOutput(loadCmd)
+	c.Assert(err, check.IsNil, check.Commentf(out))
 
 	after := inspectField(c, repoName, "Id")
 	after = strings.TrimRight(after, "\n")
@@ -67,14 +67,16 @@ func (s *DockerSuite) TestSaveAndLoadRepoStdout(c *check.C) {
 
 	n, err := pty.Read(buf)
 	c.Assert(err, check.IsNil) //could not read tty output
-	c.Assert(string(buf[:n]), checker.Contains, "cowardly refusing", check.Commentf("help output is not being yielded"))
+	c.Assert(string(buf[:n]), checker.Contains, "Cowardly refusing", check.Commentf("help output is not being yielded", out))
 }
 
 func (s *DockerSuite) TestSaveAndLoadWithProgressBar(c *check.C) {
 	name := "test-load"
-	buildImageSuccessfully(c, name, build.WithDockerfile(`FROM busybox
+	_, err := buildImage(name, `
+	FROM busybox
 	RUN touch aa
-	`))
+	`, true)
+	c.Assert(err, check.IsNil)
 
 	tmptar := name + ".tar"
 	dockerCmd(c, "save", "-o", tmptar, name)

@@ -29,7 +29,7 @@ type applyLayerResponse struct {
 func applyLayer() {
 
 	var (
-		tmpDir  string
+		tmpDir  = ""
 		err     error
 		options *archive.TarOptions
 	)

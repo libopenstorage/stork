@@ -13,11 +13,11 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/docker/distribution/reference"
+	"github.com/docker/distribution/digest"
 	"github.com/docker/docker/distribution/metadata"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/layer"
-	"github.com/opencontainers/go-digest"
+	"github.com/docker/docker/reference"
 )
 
 func TestMigrateRefs(t *testing.T) {
@@ -40,9 +40,9 @@ func TestMigrateRefs(t *testing.T) {
 	}
 
 	expected := map[string]string{
-		"docker.io/library/busybox:latest":                                                                  "sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9",
-		"docker.io/library/busybox@sha256:16a2a52884c2a9481ed267c2d46483eac7693b813a63132368ab098a71303f8a": "sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9",
-		"docker.io/library/registry:2":                                                                      "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+		"busybox:latest": "sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9",
+		"busybox@sha256:16a2a52884c2a9481ed267c2d46483eac7693b813a63132368ab098a71303f8a": "sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9",
+		"registry:2": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
 	}
 
 	if !reflect.DeepEqual(expected, ta.refs) {
@@ -94,7 +94,7 @@ func TestMigrateContainers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	is, err := image.NewImageStore(ifs, runtime.GOOS, ls)
+	is, err := image.NewImageStore(ifs, ls)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,12 +172,12 @@ func TestMigrateImages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	is, err := image.NewImageStore(ifs, runtime.GOOS, ls)
+	is, err := image.NewImageStore(ifs, ls)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ms, err := metadata.NewFSMetadataStore(filepath.Join(tmpdir, "distribution"), runtime.GOOS)
+	ms, err := metadata.NewFSMetadataStore(filepath.Join(tmpdir, "distribution"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,10 +431,6 @@ func (l *mockLayer) Size() (int64, error) {
 
 func (l *mockLayer) DiffSize() (int64, error) {
 	return 0, nil
-}
-
-func (l *mockLayer) Platform() layer.Platform {
-	return ""
 }
 
 func (l *mockLayer) Metadata() (map[string]string, error) {

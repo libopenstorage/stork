@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/discovery"
 	"github.com/docker/docker/pkg/plugingetter"
 	"github.com/docker/go-connections/tlsconfig"
@@ -12,7 +13,6 @@ import (
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/netlabel"
 	"github.com/docker/libnetwork/osl"
-	"github.com/sirupsen/logrus"
 )
 
 // Config encapsulates configurations of various Libnetwork components
@@ -26,15 +26,15 @@ type Config struct {
 
 // DaemonCfg represents libnetwork core configuration
 type DaemonCfg struct {
-	Debug                  bool
-	Experimental           bool
-	DataDir                string
-	DefaultNetwork         string
-	DefaultDriver          string
-	Labels                 []string
-	DriverCfg              map[string]interface{}
-	ClusterProvider        cluster.Provider
-	NetworkControlPlaneMTU int
+	Debug           bool
+	Experimental    bool
+	DataDir         string
+	DefaultNetwork  string
+	DefaultDriver   string
+	Labels          []string
+	DriverCfg       map[string]interface{}
+	ClusterProvider cluster.Provider
+	DisableProvider chan struct{}
 }
 
 // ClusterCfg represents cluster configuration
@@ -74,7 +74,8 @@ func ParseConfig(tomlCfgFile string) (*Config, error) {
 func ParseConfigOptions(cfgOptions ...Option) *Config {
 	cfg := &Config{
 		Daemon: DaemonCfg{
-			DriverCfg: make(map[string]interface{}),
+			DriverCfg:       make(map[string]interface{}),
+			DisableProvider: make(chan struct{}, 10),
 		},
 		Scopes: make(map[string]*datastore.ScopeCfg),
 	}
@@ -222,18 +223,6 @@ func OptionExperimental(exp bool) Option {
 	}
 }
 
-// OptionNetworkControlPlaneMTU function returns an option setter for control plane MTU
-func OptionNetworkControlPlaneMTU(exp int) Option {
-	return func(c *Config) {
-		logrus.Debugf("Network Control Plane MTU: %d", exp)
-		if exp < 1500 {
-			// if exp == 0 the value won't be used
-			logrus.Warnf("Received a MTU of %d, this value is very low, the network control plane can misbehave", exp)
-		}
-		c.Daemon.NetworkControlPlaneMTU = exp
-	}
-}
-
 // ProcessOptions processes options and stores it in config
 func (c *Config) ProcessOptions(options ...Option) {
 	for _, opt := range options {
@@ -245,7 +234,10 @@ func (c *Config) ProcessOptions(options ...Option) {
 
 // IsValidName validates configuration objects supported by libnetwork
 func IsValidName(name string) bool {
-	return strings.TrimSpace(name) != ""
+	if strings.TrimSpace(name) == "" {
+		return false
+	}
+	return true
 }
 
 // OptionLocalKVProvider function returns an option setter for kvstore provider

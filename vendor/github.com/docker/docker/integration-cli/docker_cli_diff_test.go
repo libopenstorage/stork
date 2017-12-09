@@ -4,15 +4,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/integration-cli/checker"
-	"github.com/docker/docker/integration-cli/cli"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
 // ensure that an added file shows up in docker diff
 func (s *DockerSuite) TestDiffFilenameShownInOutput(c *check.C) {
 	containerCmd := `mkdir /foo; echo xyzzy > /foo/bar`
-	out := cli.DockerCmd(c, "run", "-d", "busybox", "sh", "-c", containerCmd).Combined()
+	out, _ := dockerCmd(c, "run", "-d", "busybox", "sh", "-c", containerCmd)
 
 	// Wait for it to exit as cannot diff a running container on Windows, and
 	// it will take a few seconds to exit. Also there's no way in Windows to
@@ -20,13 +19,14 @@ func (s *DockerSuite) TestDiffFilenameShownInOutput(c *check.C) {
 	// a "Files/" prefix.
 	containerID := strings.TrimSpace(out)
 	lookingFor := "A /foo/bar"
-	if testEnv.DaemonPlatform() == "windows" {
-		cli.WaitExited(c, containerID, 60*time.Second)
+	if daemonPlatform == "windows" {
+		err := waitExited(containerID, 60*time.Second)
+		c.Assert(err, check.IsNil)
 		lookingFor = "C Files/foo/bar"
 	}
 
 	cleanCID := strings.TrimSpace(out)
-	out = cli.DockerCmd(c, "diff", cleanCID).Combined()
+	out, _ = dockerCmd(c, "diff", cleanCID)
 
 	found := false
 	for _, line := range strings.Split(out, "\n") {

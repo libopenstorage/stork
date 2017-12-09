@@ -1,6 +1,6 @@
 package hcsshim
 
-import "github.com/sirupsen/logrus"
+import "github.com/Sirupsen/logrus"
 
 // ActivateLayer will find the layer with the given id and mount it's filesystem.
 // For a read/write layer, the mounted filesystem will appear as a volume on the

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/driverapi"
 	"github.com/docker/libnetwork/types"
 	"github.com/gogo/protobuf/proto"
-	"github.com/sirupsen/logrus"
 )
 
 // Join method is invoked when a Sandbox is attached to an endpoint.
@@ -26,6 +26,10 @@ func (d *driver) Join(nid, eid string, sboxKey string, jinfo driverapi.JoinInfo,
 		return fmt.Errorf("could not find endpoint with id %s", eid)
 	}
 
+	if err := d.writeEndpointToStore(ep); err != nil {
+		return fmt.Errorf("failed to update overlay endpoint %s to local data store: %v", ep.id[0:7], err)
+	}
+
 	buf, err := proto.Marshal(&PeerRecord{
 		EndpointIP:       ep.addr.String(),
 		EndpointMAC:      ep.mac.String(),
@@ -39,6 +43,9 @@ func (d *driver) Join(nid, eid string, sboxKey string, jinfo driverapi.JoinInfo,
 	if err := jinfo.AddTableEntry(ovPeerTable, eid, buf); err != nil {
 		logrus.Errorf("overlay: Failed adding table entry to joininfo: %v", err)
 	}
+
+	d.pushLocalEndpointEvent("join", nid, eid)
+
 	return nil
 }
 
@@ -93,15 +100,13 @@ func (d *driver) EventNotify(etype driverapi.EventType, nid, tableName, key stri
 	d.peerAdd(nid, eid, addr.IP, addr.Mask, mac, vtep, true)
 }
 
-func (d *driver) DecodeTableEntry(tablename string, key string, value []byte) (string, map[string]string) {
-	return "", nil
-}
-
 // Leave method is invoked when a Sandbox detaches from an endpoint.
 func (d *driver) Leave(nid, eid string) error {
 	if err := validateID(nid, eid); err != nil {
 		return err
 	}
+
+	d.pushLocalEndpointEvent("leave", nid, eid)
 
 	return nil
 }

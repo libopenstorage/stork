@@ -2,13 +2,29 @@ package daemon
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/docker/docker/api/errors"
+	"github.com/docker/docker/reference"
 )
 
 func (d *Daemon) imageNotExistToErrcode(err error) error {
 	if dne, isDNE := err.(ErrImageDoesNotExist); isDNE {
-		return errors.NewRequestNotFoundError(dne)
+		if strings.Contains(dne.RefOrID, "@") {
+			e := fmt.Errorf("No such image: %s", dne.RefOrID)
+			return errors.NewRequestNotFoundError(e)
+		}
+		tag := reference.DefaultTag
+		ref, err := reference.ParseNamed(dne.RefOrID)
+		if err != nil {
+			e := fmt.Errorf("No such image: %s:%s", dne.RefOrID, tag)
+			return errors.NewRequestNotFoundError(e)
+		}
+		if tagged, isTagged := ref.(reference.NamedTagged); isTagged {
+			tag = tagged.Tag()
+		}
+		e := fmt.Errorf("No such image: %s:%s", ref.Name(), tag)
+		return errors.NewRequestNotFoundError(e)
 	}
 	return err
 }
@@ -38,16 +54,4 @@ func errExecNotFound(id string) error {
 func errExecPaused(id string) error {
 	err := fmt.Errorf("Container %s is paused, unpause the container before exec", id)
 	return errors.NewRequestConflictError(err)
-}
-
-type errNotFound struct {
-	containerID string
-}
-
-func (e errNotFound) Error() string {
-	return fmt.Sprintf("Container %s is not found", e.containerID)
-}
-
-func (e errNotFound) ContainerNotFound() bool {
-	return true
 }

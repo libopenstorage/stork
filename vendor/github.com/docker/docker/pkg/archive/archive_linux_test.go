@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/docker/docker/pkg/system"
-	"golang.org/x/sys/unix"
 )
 
 // setupOverlayTestDir creates files in a directory with overlay whiteouts
@@ -52,7 +51,7 @@ func setupOverlayTestDir(t *testing.T, src string) {
 		t.Fatal(err)
 	}
 
-	if err := system.Mknod(filepath.Join(src, "d3", "f1"), unix.S_IFCHR, 0); err != nil {
+	if err := system.Mknod(filepath.Join(src, "d3", "f1"), syscall.S_IFCHR, 0); err != nil {
 		t.Fatal(err)
 	}
 }

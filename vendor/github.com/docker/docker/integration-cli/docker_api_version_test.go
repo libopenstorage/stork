@@ -6,13 +6,12 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/dockerversion"
-	"github.com/docker/docker/integration-cli/checker"
-	"github.com/docker/docker/integration-cli/request"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
 func (s *DockerSuite) TestGetVersion(c *check.C) {
-	status, body, err := request.SockRequest("GET", "/version", nil, daemonHost())
+	status, body, err := sockRequest("GET", "/version", nil)
 	c.Assert(status, checker.Equals, http.StatusOK)
 	c.Assert(err, checker.IsNil)
 

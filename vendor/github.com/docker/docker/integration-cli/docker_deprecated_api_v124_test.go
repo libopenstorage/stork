@@ -7,9 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/docker/docker/integration-cli/checker"
-	"github.com/docker/docker/integration-cli/request"
-	"github.com/docker/docker/pkg/testutil"
+	"github.com/docker/docker/pkg/integration/checker"
 	"github.com/go-check/check"
 )
 
@@ -23,7 +21,7 @@ func (s *DockerSuite) TestDeprecatedContainerAPIStartHostConfig(c *check.C) {
 	config := map[string]interface{}{
 		"Binds": []string{"/aa:/bb"},
 	}
-	status, body, err := request.SockRequest("POST", "/containers/"+name+"/start", config, daemonHost())
+	status, body, err := sockRequest("POST", "/containers/"+name+"/start", config)
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusBadRequest)
 	c.Assert(string(body), checker.Contains, "was deprecated since v1.10")
@@ -33,7 +31,7 @@ func (s *DockerSuite) TestDeprecatedContainerAPIStartVolumeBinds(c *check.C) {
 	// TODO Windows CI: Investigate further why this fails on Windows to Windows CI.
 	testRequires(c, DaemonIsLinux)
 	path := "/foo"
-	if testEnv.DaemonPlatform() == "windows" {
+	if daemonPlatform == "windows" {
 		path = `c:\foo`
 	}
 	name := "testing"
@@ -42,15 +40,15 @@ func (s *DockerSuite) TestDeprecatedContainerAPIStartVolumeBinds(c *check.C) {
 		"Volumes": map[string]struct{}{path: {}},
 	}
 
-	status, _, err := request.SockRequest("POST", formatV123StartAPIURL("/containers/create?name="+name), config, daemonHost())
+	status, _, err := sockRequest("POST", formatV123StartAPIURL("/containers/create?name="+name), config)
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusCreated)
 
-	bindPath := testutil.RandomTmpDirPath("test", testEnv.DaemonPlatform())
+	bindPath := randomTmpDirPath("test", daemonPlatform)
 	config = map[string]interface{}{
 		"Binds": []string{bindPath + ":" + path},
 	}
-	status, _, err = request.SockRequest("POST", formatV123StartAPIURL("/containers/"+name+"/start"), config, daemonHost())
+	status, _, err = sockRequest("POST", formatV123StartAPIURL("/containers/"+name+"/start"), config)
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusNoContent)
 
@@ -69,17 +67,17 @@ func (s *DockerSuite) TestDeprecatedContainerAPIStartDupVolumeBinds(c *check.C) 
 		"Volumes": map[string]struct{}{"/tmp": {}},
 	}
 
-	status, _, err := request.SockRequest("POST", formatV123StartAPIURL("/containers/create?name="+name), config, daemonHost())
+	status, _, err := sockRequest("POST", formatV123StartAPIURL("/containers/create?name="+name), config)
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusCreated)
 
-	bindPath1 := testutil.RandomTmpDirPath("test1", testEnv.DaemonPlatform())
-	bindPath2 := testutil.RandomTmpDirPath("test2", testEnv.DaemonPlatform())
+	bindPath1 := randomTmpDirPath("test1", daemonPlatform)
+	bindPath2 := randomTmpDirPath("test2", daemonPlatform)
 
 	config = map[string]interface{}{
 		"Binds": []string{bindPath1 + ":/tmp", bindPath2 + ":/tmp"},
 	}
-	status, body, err := request.SockRequest("POST", formatV123StartAPIURL("/containers/"+name+"/start"), config, daemonHost())
+	status, body, err := sockRequest("POST", formatV123StartAPIURL("/containers/"+name+"/start"), config)
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusInternalServerError)
 	c.Assert(string(body), checker.Contains, "Duplicate mount point", check.Commentf("Expected failure due to duplicate bind mounts to same path, instead got: %q with error: %v", string(body), err))
@@ -99,14 +97,14 @@ func (s *DockerSuite) TestDeprecatedContainerAPIStartVolumesFrom(c *check.C) {
 		"Volumes": map[string]struct{}{volPath: {}},
 	}
 
-	status, _, err := request.SockRequest("POST", formatV123StartAPIURL("/containers/create?name="+name), config, daemonHost())
+	status, _, err := sockRequest("POST", formatV123StartAPIURL("/containers/create?name="+name), config)
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusCreated)
 
 	config = map[string]interface{}{
 		"VolumesFrom": []string{volName},
 	}
-	status, _, err = request.SockRequest("POST", formatV123StartAPIURL("/containers/"+name+"/start"), config, daemonHost())
+	status, _, err = sockRequest("POST", formatV123StartAPIURL("/containers/"+name+"/start"), config)
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusNoContent)
 
@@ -129,7 +127,7 @@ func (s *DockerSuite) TestDeprecatedPostContainerBindNormalVolume(c *check.C) {
 	dockerCmd(c, "create", "-v", "/foo", "--name=two", "busybox")
 
 	bindSpec := map[string][]string{"Binds": {fooDir + ":/foo"}}
-	status, _, err := request.SockRequest("POST", formatV123StartAPIURL("/containers/two/start"), bindSpec, daemonHost())
+	status, _, err := sockRequest("POST", formatV123StartAPIURL("/containers/two/start"), bindSpec)
 	c.Assert(err, checker.IsNil)
 	c.Assert(status, checker.Equals, http.StatusNoContent)
 
@@ -150,9 +148,9 @@ func (s *DockerSuite) TestDeprecatedStartWithTooLowMemoryLimit(c *check.C) {
                 "Memory":    524287
         }`
 
-	res, body, err := request.Post(formatV123StartAPIURL("/containers/"+containerID+"/start"), request.RawString(config), request.JSON)
+	res, body, err := sockRequestRaw("POST", formatV123StartAPIURL("/containers/"+containerID+"/start"), strings.NewReader(config), "application/json")
 	c.Assert(err, checker.IsNil)
-	b, err2 := testutil.ReadBody(body)
+	b, err2 := readBody(body)
 	c.Assert(err2, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusInternalServerError)
 	c.Assert(string(b), checker.Contains, "Minimum memory limit allowed is 4MB")
@@ -169,7 +167,7 @@ func (s *DockerSuite) TestDeprecatedPostContainersStartWithoutLinksInHostConfig(
 	hc := inspectFieldJSON(c, name, "HostConfig")
 	config := `{"HostConfig":` + hc + `}`
 
-	res, b, err := request.Post(formatV123StartAPIURL("/containers/"+name+"/start"), request.RawString(config), request.JSON)
+	res, b, err := sockRequestRaw("POST", formatV123StartAPIURL("/containers/"+name+"/start"), strings.NewReader(config), "application/json")
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusNoContent)
 	b.Close()
@@ -187,7 +185,7 @@ func (s *DockerSuite) TestDeprecatedPostContainersStartWithLinksInHostConfig(c *
 	hc := inspectFieldJSON(c, name, "HostConfig")
 	config := `{"HostConfig":` + hc + `}`
 
-	res, b, err := request.Post(formatV123StartAPIURL("/containers/"+name+"/start"), request.RawString(config), request.JSON)
+	res, b, err := sockRequestRaw("POST", formatV123StartAPIURL("/containers/"+name+"/start"), strings.NewReader(config), "application/json")
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusNoContent)
 	b.Close()
@@ -205,7 +203,7 @@ func (s *DockerSuite) TestDeprecatedPostContainersStartWithLinksInHostConfigIdLi
 	hc := inspectFieldJSON(c, name, "HostConfig")
 	config := `{"HostConfig":` + hc + `}`
 
-	res, b, err := request.Post(formatV123StartAPIURL("/containers/"+name+"/start"), request.RawString(config), request.JSON)
+	res, b, err := sockRequestRaw("POST", formatV123StartAPIURL("/containers/"+name+"/start"), strings.NewReader(config), "application/json")
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusNoContent)
 	b.Close()
@@ -219,7 +217,7 @@ func (s *DockerSuite) TestDeprecatedStartWithNilDNS(c *check.C) {
 
 	config := `{"HostConfig": {"Dns": null}}`
 
-	res, b, err := request.Post(formatV123StartAPIURL("/containers/"+containerID+"/start"), request.RawString(config), request.JSON)
+	res, b, err := sockRequestRaw("POST", formatV123StartAPIURL("/containers/"+containerID+"/start"), strings.NewReader(config), "application/json")
 	c.Assert(err, checker.IsNil)
 	c.Assert(res.StatusCode, checker.Equals, http.StatusNoContent)
 	b.Close()

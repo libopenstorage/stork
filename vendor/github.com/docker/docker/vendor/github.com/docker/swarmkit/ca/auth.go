@@ -5,7 +5,7 @@ import (
 	"crypto/x509/pkix"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/log"
@@ -15,13 +15,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 )
-
-type localRequestKeyType struct{}
-
-// LocalRequestKey is a context key to mark a request that originating on the
-// local node. The associated value is a RemoteNodeInfo structure describing the
-// local node.
-var LocalRequestKey = localRequestKeyType{}
 
 // LogTLSState logs information about the TLS connection and remote peers
 func LogTLSState(ctx context.Context, tlsState *tls.ConnectionState) {
@@ -196,17 +189,6 @@ type RemoteNodeInfo struct {
 // well as the forwarder's ID. This function does not do authorization checks -
 // it only looks up the node ID.
 func RemoteNode(ctx context.Context) (RemoteNodeInfo, error) {
-	// If we have a value on the context that marks this as a local
-	// request, we return the node info from the context.
-	localNodeInfo := ctx.Value(LocalRequestKey)
-
-	if localNodeInfo != nil {
-		nodeInfo, ok := localNodeInfo.(RemoteNodeInfo)
-		if ok {
-			return nodeInfo, nil
-		}
-	}
-
 	certSubj, err := certSubjectFromContext(ctx)
 	if err != nil {
 		return RemoteNodeInfo{}, err

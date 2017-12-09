@@ -1,39 +1,30 @@
 package container
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
-	swarmtypes "github.com/docker/docker/api/types/swarm"
-	"github.com/docker/docker/daemon/cluster/controllers/plugin"
-	"github.com/docker/docker/daemon/cluster/convert"
 	executorpkg "github.com/docker/docker/daemon/cluster/executor"
 	clustertypes "github.com/docker/docker/daemon/cluster/provider"
 	networktypes "github.com/docker/libnetwork/types"
-	"github.com/docker/swarmkit/agent"
 	"github.com/docker/swarmkit/agent/exec"
+	"github.com/docker/swarmkit/agent/secrets"
 	"github.com/docker/swarmkit/api"
-	"github.com/docker/swarmkit/api/naming"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
 type executor struct {
-	backend       executorpkg.Backend
-	pluginBackend plugin.Backend
-	dependencies  exec.DependencyManager
+	backend executorpkg.Backend
+	secrets exec.SecretsManager
 }
 
 // NewExecutor returns an executor from the docker client.
-func NewExecutor(b executorpkg.Backend, p plugin.Backend) exec.Executor {
+func NewExecutor(b executorpkg.Backend) exec.Executor {
 	return &executor{
-		backend:       b,
-		pluginBackend: p,
-		dependencies:  agent.NewDependencyManager(),
+		backend: b,
+		secrets: secrets.NewManager(),
 	}
 }
 
@@ -60,10 +51,9 @@ func (e *executor) Describe(ctx context.Context) (*api.NodeDescription, error) {
 	// the plugin list by default.
 	addPlugins("Network", append([]string{"overlay"}, info.Plugins.Network...))
 	addPlugins("Authorization", info.Plugins.Authorization)
-	addPlugins("Log", info.Plugins.Log)
 
 	// add v2 plugins
-	v2Plugins, err := e.backend.PluginManager().List(filters.NewArgs())
+	v2Plugins, err := e.backend.PluginManager().List()
 	if err == nil {
 		for _, plgn := range v2Plugins {
 			for _, typ := range plgn.Config.Interface.Types {
@@ -71,15 +61,11 @@ func (e *executor) Describe(ctx context.Context) (*api.NodeDescription, error) {
 					continue
 				}
 				plgnTyp := typ.Capability
-				switch typ.Capability {
-				case "volumedriver":
+				if typ.Capability == "volumedriver" {
 					plgnTyp = "Volume"
-				case "networkdriver":
+				} else if typ.Capability == "networkdriver" {
 					plgnTyp = "Network"
-				case "logdriver":
-					plgnTyp = "Log"
 				}
-
 				plugins[api.PluginDescription{
 					Type: plgnTyp,
 					Name: plgn.Name,
@@ -120,7 +106,6 @@ func (e *executor) Describe(ctx context.Context) (*api.NodeDescription, error) {
 		Resources: &api.Resources{
 			NanoCPUs:    int64(info.NCPU) * 1e9,
 			MemoryBytes: info.MemTotal,
-			Generic:     convert.GenericResourcesToGRPC(info.GenericResources),
 		},
 	}
 
@@ -130,7 +115,6 @@ func (e *executor) Describe(ctx context.Context) (*api.NodeDescription, error) {
 func (e *executor) Configure(ctx context.Context, node *api.Node) error {
 	na := node.Attachment
 	if na == nil {
-		e.backend.ReleaseIngress()
 		return nil
 	}
 
@@ -140,7 +124,6 @@ func (e *executor) Configure(ctx context.Context, node *api.Node) error {
 			Driver: na.Network.IPAM.Driver.Name,
 		},
 		Options:        na.Network.DriverState.Options,
-		Ingress:        true,
 		CheckDuplicate: true,
 	}
 
@@ -153,54 +136,24 @@ func (e *executor) Configure(ctx context.Context, node *api.Node) error {
 		options.IPAM.Config = append(options.IPAM.Config, c)
 	}
 
-	_, err := e.backend.SetupIngress(clustertypes.NetworkCreateRequest{
-		ID: na.Network.ID,
-		NetworkCreateRequest: types.NetworkCreateRequest{
+	return e.backend.SetupIngress(clustertypes.NetworkCreateRequest{
+		na.Network.ID,
+		types.NetworkCreateRequest{
 			Name:          na.Network.Spec.Annotations.Name,
 			NetworkCreate: options,
 		},
 	}, na.Addresses[0])
-
-	return err
 }
 
 // Controller returns a docker container runner.
 func (e *executor) Controller(t *api.Task) (exec.Controller, error) {
-	dependencyGetter := agent.Restrict(e.dependencies, t)
-
 	if t.Spec.GetAttachment() != nil {
-		return newNetworkAttacherController(e.backend, t, dependencyGetter)
+		return newNetworkAttacherController(e.backend, t, e.secrets)
 	}
 
-	var ctlr exec.Controller
-	switch r := t.Spec.GetRuntime().(type) {
-	case *api.TaskSpec_Generic:
-		logrus.WithFields(logrus.Fields{
-			"kind":     r.Generic.Kind,
-			"type_url": r.Generic.Payload.TypeUrl,
-		}).Debug("custom runtime requested")
-		runtimeKind, err := naming.Runtime(t.Spec)
-		if err != nil {
-			return ctlr, err
-		}
-		switch runtimeKind {
-		case string(swarmtypes.RuntimePlugin):
-			c, err := plugin.NewController(e.pluginBackend, t)
-			if err != nil {
-				return ctlr, err
-			}
-			ctlr = c
-		default:
-			return ctlr, fmt.Errorf("unsupported runtime type: %q", r.Generic.Kind)
-		}
-	case *api.TaskSpec_Container:
-		c, err := newController(e.backend, t, dependencyGetter)
-		if err != nil {
-			return ctlr, err
-		}
-		ctlr = c
-	default:
-		return ctlr, fmt.Errorf("unsupported runtime: %q", r)
+	ctlr, err := newController(e.backend, t, e.secrets)
+	if err != nil {
+		return nil, err
 	}
 
 	return ctlr, nil
@@ -224,11 +177,7 @@ func (e *executor) SetNetworkBootstrapKeys(keys []*api.EncryptionKey) error {
 }
 
 func (e *executor) Secrets() exec.SecretsManager {
-	return e.dependencies.Secrets()
-}
-
-func (e *executor) Configs() exec.ConfigsManager {
-	return e.dependencies.Configs()
+	return e.secrets
 }
 
 type sortedPlugins []api.PluginDescription

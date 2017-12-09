@@ -12,7 +12,11 @@ import raftpb "github.com/coreos/etcd/raft/raftpb"
 // skipping weak import gogoproto "github.com/gogo/protobuf/gogoproto"
 // skipping weak import docker_protobuf_plugin "github.com/docker/swarmkit/protobuf/plugin"
 
-import github_com_docker_swarmkit_api_deepcopy "github.com/docker/swarmkit/api/deepcopy"
+import strings "strings"
+import github_com_gogo_protobuf_proto "github.com/gogo/protobuf/proto"
+import sort "sort"
+import strconv "strconv"
+import reflect "reflect"
 
 import (
 	context "golang.org/x/net/context"
@@ -23,10 +27,7 @@ import raftselector "github.com/docker/swarmkit/manager/raftselector"
 import codes "google.golang.org/grpc/codes"
 import metadata "google.golang.org/grpc/metadata"
 import transport "google.golang.org/grpc/transport"
-import rafttime "time"
-
-import strings "strings"
-import reflect "reflect"
+import time "time"
 
 import io "io"
 
@@ -155,8 +156,8 @@ func (*ResolveAddressResponse) Descriptor() ([]byte, []int) { return fileDescrip
 // over the raft backend with a request ID to track when the
 // action is effectively applied
 type InternalRaftRequest struct {
-	ID     uint64        `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Action []StoreAction `protobuf:"bytes,2,rep,name=action" json:"action"`
+	ID     uint64         `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Action []*StoreAction `protobuf:"bytes,2,rep,name=action" json:"action,omitempty"`
 }
 
 func (m *InternalRaftRequest) Reset()                    { *m = InternalRaftRequest{} }
@@ -173,9 +174,6 @@ type StoreAction struct {
 	//	*StoreAction_Network
 	//	*StoreAction_Cluster
 	//	*StoreAction_Secret
-	//	*StoreAction_Resource
-	//	*StoreAction_Extension
-	//	*StoreAction_Config
 	Target isStoreAction_Target `protobuf_oneof:"target"`
 }
 
@@ -207,25 +205,13 @@ type StoreAction_Cluster struct {
 type StoreAction_Secret struct {
 	Secret *Secret `protobuf:"bytes,7,opt,name=secret,oneof"`
 }
-type StoreAction_Resource struct {
-	Resource *Resource `protobuf:"bytes,8,opt,name=resource,oneof"`
-}
-type StoreAction_Extension struct {
-	Extension *Extension `protobuf:"bytes,9,opt,name=extension,oneof"`
-}
-type StoreAction_Config struct {
-	Config *Config `protobuf:"bytes,10,opt,name=config,oneof"`
-}
 
-func (*StoreAction_Node) isStoreAction_Target()      {}
-func (*StoreAction_Service) isStoreAction_Target()   {}
-func (*StoreAction_Task) isStoreAction_Target()      {}
-func (*StoreAction_Network) isStoreAction_Target()   {}
-func (*StoreAction_Cluster) isStoreAction_Target()   {}
-func (*StoreAction_Secret) isStoreAction_Target()    {}
-func (*StoreAction_Resource) isStoreAction_Target()  {}
-func (*StoreAction_Extension) isStoreAction_Target() {}
-func (*StoreAction_Config) isStoreAction_Target()    {}
+func (*StoreAction_Node) isStoreAction_Target()    {}
+func (*StoreAction_Service) isStoreAction_Target() {}
+func (*StoreAction_Task) isStoreAction_Target()    {}
+func (*StoreAction_Network) isStoreAction_Target() {}
+func (*StoreAction_Cluster) isStoreAction_Target() {}
+func (*StoreAction_Secret) isStoreAction_Target()  {}
 
 func (m *StoreAction) GetTarget() isStoreAction_Target {
 	if m != nil {
@@ -276,27 +262,6 @@ func (m *StoreAction) GetSecret() *Secret {
 	return nil
 }
 
-func (m *StoreAction) GetResource() *Resource {
-	if x, ok := m.GetTarget().(*StoreAction_Resource); ok {
-		return x.Resource
-	}
-	return nil
-}
-
-func (m *StoreAction) GetExtension() *Extension {
-	if x, ok := m.GetTarget().(*StoreAction_Extension); ok {
-		return x.Extension
-	}
-	return nil
-}
-
-func (m *StoreAction) GetConfig() *Config {
-	if x, ok := m.GetTarget().(*StoreAction_Config); ok {
-		return x.Config
-	}
-	return nil
-}
-
 // XXX_OneofFuncs is for the internal use of the proto package.
 func (*StoreAction) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
 	return _StoreAction_OneofMarshaler, _StoreAction_OneofUnmarshaler, _StoreAction_OneofSizer, []interface{}{
@@ -306,9 +271,6 @@ func (*StoreAction) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) e
 		(*StoreAction_Network)(nil),
 		(*StoreAction_Cluster)(nil),
 		(*StoreAction_Secret)(nil),
-		(*StoreAction_Resource)(nil),
-		(*StoreAction_Extension)(nil),
-		(*StoreAction_Config)(nil),
 	}
 }
 
@@ -344,21 +306,6 @@ func _StoreAction_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
 	case *StoreAction_Secret:
 		_ = b.EncodeVarint(7<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.Secret); err != nil {
-			return err
-		}
-	case *StoreAction_Resource:
-		_ = b.EncodeVarint(8<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Resource); err != nil {
-			return err
-		}
-	case *StoreAction_Extension:
-		_ = b.EncodeVarint(9<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Extension); err != nil {
-			return err
-		}
-	case *StoreAction_Config:
-		_ = b.EncodeVarint(10<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Config); err != nil {
 			return err
 		}
 	case nil:
@@ -419,30 +366,6 @@ func _StoreAction_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Bu
 		err := b.DecodeMessage(msg)
 		m.Target = &StoreAction_Secret{msg}
 		return true, err
-	case 8: // target.resource
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(Resource)
-		err := b.DecodeMessage(msg)
-		m.Target = &StoreAction_Resource{msg}
-		return true, err
-	case 9: // target.extension
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(Extension)
-		err := b.DecodeMessage(msg)
-		m.Target = &StoreAction_Extension{msg}
-		return true, err
-	case 10: // target.config
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(Config)
-		err := b.DecodeMessage(msg)
-		m.Target = &StoreAction_Config{msg}
-		return true, err
 	default:
 		return false, nil
 	}
@@ -480,21 +403,6 @@ func _StoreAction_OneofSizer(msg proto.Message) (n int) {
 	case *StoreAction_Secret:
 		s := proto.Size(x.Secret)
 		n += proto.SizeVarint(7<<3 | proto.WireBytes)
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *StoreAction_Resource:
-		s := proto.Size(x.Resource)
-		n += proto.SizeVarint(8<<3 | proto.WireBytes)
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *StoreAction_Extension:
-		s := proto.Size(x.Extension)
-		n += proto.SizeVarint(9<<3 | proto.WireBytes)
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *StoreAction_Config:
-		s := proto.Size(x.Config)
-		n += proto.SizeVarint(10<<3 | proto.WireBytes)
 		n += proto.SizeVarint(uint64(s))
 		n += s
 	case nil:
@@ -579,224 +487,377 @@ func (m *RaftMember) Copy() *RaftMember {
 	if m == nil {
 		return nil
 	}
-	o := &RaftMember{}
-	o.CopyFrom(m)
+
+	o := &RaftMember{
+		RaftID: m.RaftID,
+		NodeID: m.NodeID,
+		Addr:   m.Addr,
+		Status: *m.Status.Copy(),
+	}
+
 	return o
-}
-
-func (m *RaftMember) CopyFrom(src interface{}) {
-
-	o := src.(*RaftMember)
-	*m = *o
-	github_com_docker_swarmkit_api_deepcopy.Copy(&m.Status, &o.Status)
 }
 
 func (m *JoinRequest) Copy() *JoinRequest {
 	if m == nil {
 		return nil
 	}
-	o := &JoinRequest{}
-	o.CopyFrom(m)
+
+	o := &JoinRequest{
+		Addr: m.Addr,
+	}
+
 	return o
-}
-
-func (m *JoinRequest) CopyFrom(src interface{}) {
-
-	o := src.(*JoinRequest)
-	*m = *o
 }
 
 func (m *JoinResponse) Copy() *JoinResponse {
 	if m == nil {
 		return nil
 	}
-	o := &JoinResponse{}
-	o.CopyFrom(m)
-	return o
-}
 
-func (m *JoinResponse) CopyFrom(src interface{}) {
+	o := &JoinResponse{
+		RaftID: m.RaftID,
+	}
 
-	o := src.(*JoinResponse)
-	*m = *o
-	if o.Members != nil {
-		m.Members = make([]*RaftMember, len(o.Members))
-		for i := range m.Members {
-			m.Members[i] = &RaftMember{}
-			github_com_docker_swarmkit_api_deepcopy.Copy(m.Members[i], o.Members[i])
+	if m.Members != nil {
+		o.Members = make([]*RaftMember, 0, len(m.Members))
+		for _, v := range m.Members {
+			o.Members = append(o.Members, v.Copy())
 		}
 	}
 
-	if o.RemovedMembers != nil {
-		m.RemovedMembers = make([]uint64, len(o.RemovedMembers))
-		copy(m.RemovedMembers, o.RemovedMembers)
+	if m.RemovedMembers != nil {
+		o.RemovedMembers = make([]uint64, 0, len(m.RemovedMembers))
+		o.RemovedMembers = append(o.RemovedMembers, m.RemovedMembers...)
 	}
 
+	return o
 }
 
 func (m *LeaveRequest) Copy() *LeaveRequest {
 	if m == nil {
 		return nil
 	}
-	o := &LeaveRequest{}
-	o.CopyFrom(m)
-	return o
-}
 
-func (m *LeaveRequest) CopyFrom(src interface{}) {
-
-	o := src.(*LeaveRequest)
-	*m = *o
-	if o.Node != nil {
-		m.Node = &RaftMember{}
-		github_com_docker_swarmkit_api_deepcopy.Copy(m.Node, o.Node)
+	o := &LeaveRequest{
+		Node: m.Node.Copy(),
 	}
+
+	return o
 }
 
 func (m *LeaveResponse) Copy() *LeaveResponse {
 	if m == nil {
 		return nil
 	}
+
 	o := &LeaveResponse{}
-	o.CopyFrom(m)
+
 	return o
 }
 
-func (m *LeaveResponse) CopyFrom(src interface{}) {}
 func (m *ProcessRaftMessageResponse) Copy() *ProcessRaftMessageResponse {
 	if m == nil {
 		return nil
 	}
+
 	o := &ProcessRaftMessageResponse{}
-	o.CopyFrom(m)
+
 	return o
 }
 
-func (m *ProcessRaftMessageResponse) CopyFrom(src interface{}) {}
 func (m *ResolveAddressRequest) Copy() *ResolveAddressRequest {
 	if m == nil {
 		return nil
 	}
-	o := &ResolveAddressRequest{}
-	o.CopyFrom(m)
+
+	o := &ResolveAddressRequest{
+		RaftID: m.RaftID,
+	}
+
 	return o
-}
-
-func (m *ResolveAddressRequest) CopyFrom(src interface{}) {
-
-	o := src.(*ResolveAddressRequest)
-	*m = *o
 }
 
 func (m *ResolveAddressResponse) Copy() *ResolveAddressResponse {
 	if m == nil {
 		return nil
 	}
-	o := &ResolveAddressResponse{}
-	o.CopyFrom(m)
+
+	o := &ResolveAddressResponse{
+		Addr: m.Addr,
+	}
+
 	return o
-}
-
-func (m *ResolveAddressResponse) CopyFrom(src interface{}) {
-
-	o := src.(*ResolveAddressResponse)
-	*m = *o
 }
 
 func (m *InternalRaftRequest) Copy() *InternalRaftRequest {
 	if m == nil {
 		return nil
 	}
-	o := &InternalRaftRequest{}
-	o.CopyFrom(m)
-	return o
-}
 
-func (m *InternalRaftRequest) CopyFrom(src interface{}) {
+	o := &InternalRaftRequest{
+		ID: m.ID,
+	}
 
-	o := src.(*InternalRaftRequest)
-	*m = *o
-	if o.Action != nil {
-		m.Action = make([]StoreAction, len(o.Action))
-		for i := range m.Action {
-			github_com_docker_swarmkit_api_deepcopy.Copy(&m.Action[i], &o.Action[i])
+	if m.Action != nil {
+		o.Action = make([]*StoreAction, 0, len(m.Action))
+		for _, v := range m.Action {
+			o.Action = append(o.Action, v.Copy())
 		}
 	}
 
+	return o
 }
 
 func (m *StoreAction) Copy() *StoreAction {
 	if m == nil {
 		return nil
 	}
-	o := &StoreAction{}
-	o.CopyFrom(m)
+
+	o := &StoreAction{
+		Action: m.Action,
+	}
+
+	switch m.Target.(type) {
+	case *StoreAction_Node:
+		i := &StoreAction_Node{
+			Node: m.GetNode().Copy(),
+		}
+
+		o.Target = i
+	case *StoreAction_Service:
+		i := &StoreAction_Service{
+			Service: m.GetService().Copy(),
+		}
+
+		o.Target = i
+	case *StoreAction_Task:
+		i := &StoreAction_Task{
+			Task: m.GetTask().Copy(),
+		}
+
+		o.Target = i
+	case *StoreAction_Network:
+		i := &StoreAction_Network{
+			Network: m.GetNetwork().Copy(),
+		}
+
+		o.Target = i
+	case *StoreAction_Cluster:
+		i := &StoreAction_Cluster{
+			Cluster: m.GetCluster().Copy(),
+		}
+
+		o.Target = i
+	case *StoreAction_Secret:
+		i := &StoreAction_Secret{
+			Secret: m.GetSecret().Copy(),
+		}
+
+		o.Target = i
+	}
+
 	return o
 }
 
-func (m *StoreAction) CopyFrom(src interface{}) {
-
-	o := src.(*StoreAction)
-	*m = *o
-	if o.Target != nil {
-		switch o.Target.(type) {
-		case *StoreAction_Node:
-			v := StoreAction_Node{
-				Node: &Node{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Node, o.GetNode())
-			m.Target = &v
-		case *StoreAction_Service:
-			v := StoreAction_Service{
-				Service: &Service{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Service, o.GetService())
-			m.Target = &v
-		case *StoreAction_Task:
-			v := StoreAction_Task{
-				Task: &Task{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Task, o.GetTask())
-			m.Target = &v
-		case *StoreAction_Network:
-			v := StoreAction_Network{
-				Network: &Network{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Network, o.GetNetwork())
-			m.Target = &v
-		case *StoreAction_Cluster:
-			v := StoreAction_Cluster{
-				Cluster: &Cluster{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Cluster, o.GetCluster())
-			m.Target = &v
-		case *StoreAction_Secret:
-			v := StoreAction_Secret{
-				Secret: &Secret{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Secret, o.GetSecret())
-			m.Target = &v
-		case *StoreAction_Resource:
-			v := StoreAction_Resource{
-				Resource: &Resource{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Resource, o.GetResource())
-			m.Target = &v
-		case *StoreAction_Extension:
-			v := StoreAction_Extension{
-				Extension: &Extension{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Extension, o.GetExtension())
-			m.Target = &v
-		case *StoreAction_Config:
-			v := StoreAction_Config{
-				Config: &Config{},
-			}
-			github_com_docker_swarmkit_api_deepcopy.Copy(v.Config, o.GetConfig())
-			m.Target = &v
-		}
+func (this *RaftMember) GoString() string {
+	if this == nil {
+		return "nil"
 	}
-
+	s := make([]string, 0, 8)
+	s = append(s, "&api.RaftMember{")
+	s = append(s, "RaftID: "+fmt.Sprintf("%#v", this.RaftID)+",\n")
+	s = append(s, "NodeID: "+fmt.Sprintf("%#v", this.NodeID)+",\n")
+	s = append(s, "Addr: "+fmt.Sprintf("%#v", this.Addr)+",\n")
+	s = append(s, "Status: "+strings.Replace(this.Status.GoString(), `&`, ``, 1)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *JoinRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&api.JoinRequest{")
+	s = append(s, "Addr: "+fmt.Sprintf("%#v", this.Addr)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *JoinResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&api.JoinResponse{")
+	s = append(s, "RaftID: "+fmt.Sprintf("%#v", this.RaftID)+",\n")
+	if this.Members != nil {
+		s = append(s, "Members: "+fmt.Sprintf("%#v", this.Members)+",\n")
+	}
+	s = append(s, "RemovedMembers: "+fmt.Sprintf("%#v", this.RemovedMembers)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *LeaveRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&api.LeaveRequest{")
+	if this.Node != nil {
+		s = append(s, "Node: "+fmt.Sprintf("%#v", this.Node)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *LeaveResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&api.LeaveResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ProcessRaftMessageRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&api.ProcessRaftMessageRequest{")
+	if this.Message != nil {
+		s = append(s, "Message: "+fmt.Sprintf("%#v", this.Message)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ProcessRaftMessageResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&api.ProcessRaftMessageResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResolveAddressRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&api.ResolveAddressRequest{")
+	s = append(s, "RaftID: "+fmt.Sprintf("%#v", this.RaftID)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResolveAddressResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&api.ResolveAddressResponse{")
+	s = append(s, "Addr: "+fmt.Sprintf("%#v", this.Addr)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *InternalRaftRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&api.InternalRaftRequest{")
+	s = append(s, "ID: "+fmt.Sprintf("%#v", this.ID)+",\n")
+	if this.Action != nil {
+		s = append(s, "Action: "+fmt.Sprintf("%#v", this.Action)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StoreAction) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 11)
+	s = append(s, "&api.StoreAction{")
+	s = append(s, "Action: "+fmt.Sprintf("%#v", this.Action)+",\n")
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StoreAction_Node) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&api.StoreAction_Node{` +
+		`Node:` + fmt.Sprintf("%#v", this.Node) + `}`}, ", ")
+	return s
+}
+func (this *StoreAction_Service) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&api.StoreAction_Service{` +
+		`Service:` + fmt.Sprintf("%#v", this.Service) + `}`}, ", ")
+	return s
+}
+func (this *StoreAction_Task) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&api.StoreAction_Task{` +
+		`Task:` + fmt.Sprintf("%#v", this.Task) + `}`}, ", ")
+	return s
+}
+func (this *StoreAction_Network) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&api.StoreAction_Network{` +
+		`Network:` + fmt.Sprintf("%#v", this.Network) + `}`}, ", ")
+	return s
+}
+func (this *StoreAction_Cluster) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&api.StoreAction_Cluster{` +
+		`Cluster:` + fmt.Sprintf("%#v", this.Cluster) + `}`}, ", ")
+	return s
+}
+func (this *StoreAction_Secret) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&api.StoreAction_Secret{` +
+		`Secret:` + fmt.Sprintf("%#v", this.Secret) + `}`}, ", ")
+	return s
+}
+func valueToGoStringRaft(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
+func extensionToGoStringRaft(m github_com_gogo_protobuf_proto.Message) string {
+	e := github_com_gogo_protobuf_proto.GetUnsafeExtensionsMap(m)
+	if e == nil {
+		return "nil"
+	}
+	s := "proto.NewUnsafeXXX_InternalExtensions(map[int32]proto.Extension{"
+	keys := make([]int, 0, len(e))
+	for k := range e {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	ss := []string{}
+	for _, k := range keys {
+		ss = append(ss, strconv.Itoa(k)+": "+e[int32(k)].GoString())
+	}
+	s += strings.Join(ss, ",") + "})"
+	return s
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -805,7 +866,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion3
 
 // Client API for Raft service
 
@@ -907,7 +968,7 @@ var _Raft_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "raft.proto",
+	Metadata: fileDescriptorRaft,
 }
 
 // Client API for RaftMembership service
@@ -1008,45 +1069,45 @@ var _RaftMembership_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "raft.proto",
+	Metadata: fileDescriptorRaft,
 }
 
-func (m *RaftMember) Marshal() (dAtA []byte, err error) {
+func (m *RaftMember) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *RaftMember) MarshalTo(dAtA []byte) (int, error) {
+func (m *RaftMember) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.RaftID != 0 {
-		dAtA[i] = 0x8
+		data[i] = 0x8
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.RaftID))
+		i = encodeVarintRaft(data, i, uint64(m.RaftID))
 	}
 	if len(m.NodeID) > 0 {
-		dAtA[i] = 0x12
+		data[i] = 0x12
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(len(m.NodeID)))
-		i += copy(dAtA[i:], m.NodeID)
+		i = encodeVarintRaft(data, i, uint64(len(m.NodeID)))
+		i += copy(data[i:], m.NodeID)
 	}
 	if len(m.Addr) > 0 {
-		dAtA[i] = 0x1a
+		data[i] = 0x1a
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(len(m.Addr)))
-		i += copy(dAtA[i:], m.Addr)
+		i = encodeVarintRaft(data, i, uint64(len(m.Addr)))
+		i += copy(data[i:], m.Addr)
 	}
-	dAtA[i] = 0x22
+	data[i] = 0x22
 	i++
-	i = encodeVarintRaft(dAtA, i, uint64(m.Status.Size()))
-	n1, err := m.Status.MarshalTo(dAtA[i:])
+	i = encodeVarintRaft(data, i, uint64(m.Status.Size()))
+	n1, err := m.Status.MarshalTo(data[i:])
 	if err != nil {
 		return 0, err
 	}
@@ -1054,56 +1115,56 @@ func (m *RaftMember) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *JoinRequest) Marshal() (dAtA []byte, err error) {
+func (m *JoinRequest) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *JoinRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *JoinRequest) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Addr) > 0 {
-		dAtA[i] = 0xa
+		data[i] = 0xa
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(len(m.Addr)))
-		i += copy(dAtA[i:], m.Addr)
+		i = encodeVarintRaft(data, i, uint64(len(m.Addr)))
+		i += copy(data[i:], m.Addr)
 	}
 	return i, nil
 }
 
-func (m *JoinResponse) Marshal() (dAtA []byte, err error) {
+func (m *JoinResponse) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *JoinResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *JoinResponse) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.RaftID != 0 {
-		dAtA[i] = 0x8
+		data[i] = 0x8
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.RaftID))
+		i = encodeVarintRaft(data, i, uint64(m.RaftID))
 	}
 	if len(m.Members) > 0 {
 		for _, msg := range m.Members {
-			dAtA[i] = 0x12
+			data[i] = 0x12
 			i++
-			i = encodeVarintRaft(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
+			i = encodeVarintRaft(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
 			if err != nil {
 				return 0, err
 			}
@@ -1112,34 +1173,34 @@ func (m *JoinResponse) MarshalTo(dAtA []byte) (int, error) {
 	}
 	if len(m.RemovedMembers) > 0 {
 		for _, num := range m.RemovedMembers {
-			dAtA[i] = 0x18
+			data[i] = 0x18
 			i++
-			i = encodeVarintRaft(dAtA, i, uint64(num))
+			i = encodeVarintRaft(data, i, uint64(num))
 		}
 	}
 	return i, nil
 }
 
-func (m *LeaveRequest) Marshal() (dAtA []byte, err error) {
+func (m *LeaveRequest) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *LeaveRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *LeaveRequest) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.Node != nil {
-		dAtA[i] = 0xa
+		data[i] = 0xa
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Node.Size()))
-		n2, err := m.Node.MarshalTo(dAtA[i:])
+		i = encodeVarintRaft(data, i, uint64(m.Node.Size()))
+		n2, err := m.Node.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1148,17 +1209,17 @@ func (m *LeaveRequest) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *LeaveResponse) Marshal() (dAtA []byte, err error) {
+func (m *LeaveResponse) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *LeaveResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *LeaveResponse) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -1166,26 +1227,26 @@ func (m *LeaveResponse) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *ProcessRaftMessageRequest) Marshal() (dAtA []byte, err error) {
+func (m *ProcessRaftMessageRequest) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *ProcessRaftMessageRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *ProcessRaftMessageRequest) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.Message != nil {
-		dAtA[i] = 0xa
+		data[i] = 0xa
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Message.Size()))
-		n3, err := m.Message.MarshalTo(dAtA[i:])
+		i = encodeVarintRaft(data, i, uint64(m.Message.Size()))
+		n3, err := m.Message.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1194,17 +1255,17 @@ func (m *ProcessRaftMessageRequest) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *ProcessRaftMessageResponse) Marshal() (dAtA []byte, err error) {
+func (m *ProcessRaftMessageResponse) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *ProcessRaftMessageResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *ProcessRaftMessageResponse) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -1212,79 +1273,79 @@ func (m *ProcessRaftMessageResponse) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *ResolveAddressRequest) Marshal() (dAtA []byte, err error) {
+func (m *ResolveAddressRequest) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *ResolveAddressRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *ResolveAddressRequest) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.RaftID != 0 {
-		dAtA[i] = 0x8
+		data[i] = 0x8
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.RaftID))
+		i = encodeVarintRaft(data, i, uint64(m.RaftID))
 	}
 	return i, nil
 }
 
-func (m *ResolveAddressResponse) Marshal() (dAtA []byte, err error) {
+func (m *ResolveAddressResponse) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *ResolveAddressResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *ResolveAddressResponse) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Addr) > 0 {
-		dAtA[i] = 0xa
+		data[i] = 0xa
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(len(m.Addr)))
-		i += copy(dAtA[i:], m.Addr)
+		i = encodeVarintRaft(data, i, uint64(len(m.Addr)))
+		i += copy(data[i:], m.Addr)
 	}
 	return i, nil
 }
 
-func (m *InternalRaftRequest) Marshal() (dAtA []byte, err error) {
+func (m *InternalRaftRequest) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *InternalRaftRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *InternalRaftRequest) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.ID != 0 {
-		dAtA[i] = 0x8
+		data[i] = 0x8
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.ID))
+		i = encodeVarintRaft(data, i, uint64(m.ID))
 	}
 	if len(m.Action) > 0 {
 		for _, msg := range m.Action {
-			dAtA[i] = 0x12
+			data[i] = 0x12
 			i++
-			i = encodeVarintRaft(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
+			i = encodeVarintRaft(data, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(data[i:])
 			if err != nil {
 				return 0, err
 			}
@@ -1294,28 +1355,28 @@ func (m *InternalRaftRequest) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *StoreAction) Marshal() (dAtA []byte, err error) {
+func (m *StoreAction) Marshal() (data []byte, err error) {
 	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	data = make([]byte, size)
+	n, err := m.MarshalTo(data)
 	if err != nil {
 		return nil, err
 	}
-	return dAtA[:n], nil
+	return data[:n], nil
 }
 
-func (m *StoreAction) MarshalTo(dAtA []byte) (int, error) {
+func (m *StoreAction) MarshalTo(data []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.Action != 0 {
-		dAtA[i] = 0x8
+		data[i] = 0x8
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Action))
+		i = encodeVarintRaft(data, i, uint64(m.Action))
 	}
 	if m.Target != nil {
-		nn4, err := m.Target.MarshalTo(dAtA[i:])
+		nn4, err := m.Target.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1324,13 +1385,13 @@ func (m *StoreAction) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *StoreAction_Node) MarshalTo(dAtA []byte) (int, error) {
+func (m *StoreAction_Node) MarshalTo(data []byte) (int, error) {
 	i := 0
 	if m.Node != nil {
-		dAtA[i] = 0x12
+		data[i] = 0x12
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Node.Size()))
-		n5, err := m.Node.MarshalTo(dAtA[i:])
+		i = encodeVarintRaft(data, i, uint64(m.Node.Size()))
+		n5, err := m.Node.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1338,13 +1399,13 @@ func (m *StoreAction_Node) MarshalTo(dAtA []byte) (int, error) {
 	}
 	return i, nil
 }
-func (m *StoreAction_Service) MarshalTo(dAtA []byte) (int, error) {
+func (m *StoreAction_Service) MarshalTo(data []byte) (int, error) {
 	i := 0
 	if m.Service != nil {
-		dAtA[i] = 0x1a
+		data[i] = 0x1a
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Service.Size()))
-		n6, err := m.Service.MarshalTo(dAtA[i:])
+		i = encodeVarintRaft(data, i, uint64(m.Service.Size()))
+		n6, err := m.Service.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1352,13 +1413,13 @@ func (m *StoreAction_Service) MarshalTo(dAtA []byte) (int, error) {
 	}
 	return i, nil
 }
-func (m *StoreAction_Task) MarshalTo(dAtA []byte) (int, error) {
+func (m *StoreAction_Task) MarshalTo(data []byte) (int, error) {
 	i := 0
 	if m.Task != nil {
-		dAtA[i] = 0x22
+		data[i] = 0x22
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Task.Size()))
-		n7, err := m.Task.MarshalTo(dAtA[i:])
+		i = encodeVarintRaft(data, i, uint64(m.Task.Size()))
+		n7, err := m.Task.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1366,13 +1427,13 @@ func (m *StoreAction_Task) MarshalTo(dAtA []byte) (int, error) {
 	}
 	return i, nil
 }
-func (m *StoreAction_Network) MarshalTo(dAtA []byte) (int, error) {
+func (m *StoreAction_Network) MarshalTo(data []byte) (int, error) {
 	i := 0
 	if m.Network != nil {
-		dAtA[i] = 0x2a
+		data[i] = 0x2a
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Network.Size()))
-		n8, err := m.Network.MarshalTo(dAtA[i:])
+		i = encodeVarintRaft(data, i, uint64(m.Network.Size()))
+		n8, err := m.Network.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1380,13 +1441,13 @@ func (m *StoreAction_Network) MarshalTo(dAtA []byte) (int, error) {
 	}
 	return i, nil
 }
-func (m *StoreAction_Cluster) MarshalTo(dAtA []byte) (int, error) {
+func (m *StoreAction_Cluster) MarshalTo(data []byte) (int, error) {
 	i := 0
 	if m.Cluster != nil {
-		dAtA[i] = 0x32
+		data[i] = 0x32
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Cluster.Size()))
-		n9, err := m.Cluster.MarshalTo(dAtA[i:])
+		i = encodeVarintRaft(data, i, uint64(m.Cluster.Size()))
+		n9, err := m.Cluster.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1394,13 +1455,13 @@ func (m *StoreAction_Cluster) MarshalTo(dAtA []byte) (int, error) {
 	}
 	return i, nil
 }
-func (m *StoreAction_Secret) MarshalTo(dAtA []byte) (int, error) {
+func (m *StoreAction_Secret) MarshalTo(data []byte) (int, error) {
 	i := 0
 	if m.Secret != nil {
-		dAtA[i] = 0x3a
+		data[i] = 0x3a
 		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Secret.Size()))
-		n10, err := m.Secret.MarshalTo(dAtA[i:])
+		i = encodeVarintRaft(data, i, uint64(m.Secret.Size()))
+		n10, err := m.Secret.MarshalTo(data[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1408,83 +1469,41 @@ func (m *StoreAction_Secret) MarshalTo(dAtA []byte) (int, error) {
 	}
 	return i, nil
 }
-func (m *StoreAction_Resource) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
-	if m.Resource != nil {
-		dAtA[i] = 0x42
-		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Resource.Size()))
-		n11, err := m.Resource.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n11
-	}
-	return i, nil
-}
-func (m *StoreAction_Extension) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
-	if m.Extension != nil {
-		dAtA[i] = 0x4a
-		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Extension.Size()))
-		n12, err := m.Extension.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n12
-	}
-	return i, nil
-}
-func (m *StoreAction_Config) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
-	if m.Config != nil {
-		dAtA[i] = 0x52
-		i++
-		i = encodeVarintRaft(dAtA, i, uint64(m.Config.Size()))
-		n13, err := m.Config.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n13
-	}
-	return i, nil
-}
-func encodeFixed64Raft(dAtA []byte, offset int, v uint64) int {
-	dAtA[offset] = uint8(v)
-	dAtA[offset+1] = uint8(v >> 8)
-	dAtA[offset+2] = uint8(v >> 16)
-	dAtA[offset+3] = uint8(v >> 24)
-	dAtA[offset+4] = uint8(v >> 32)
-	dAtA[offset+5] = uint8(v >> 40)
-	dAtA[offset+6] = uint8(v >> 48)
-	dAtA[offset+7] = uint8(v >> 56)
+func encodeFixed64Raft(data []byte, offset int, v uint64) int {
+	data[offset] = uint8(v)
+	data[offset+1] = uint8(v >> 8)
+	data[offset+2] = uint8(v >> 16)
+	data[offset+3] = uint8(v >> 24)
+	data[offset+4] = uint8(v >> 32)
+	data[offset+5] = uint8(v >> 40)
+	data[offset+6] = uint8(v >> 48)
+	data[offset+7] = uint8(v >> 56)
 	return offset + 8
 }
-func encodeFixed32Raft(dAtA []byte, offset int, v uint32) int {
-	dAtA[offset] = uint8(v)
-	dAtA[offset+1] = uint8(v >> 8)
-	dAtA[offset+2] = uint8(v >> 16)
-	dAtA[offset+3] = uint8(v >> 24)
+func encodeFixed32Raft(data []byte, offset int, v uint32) int {
+	data[offset] = uint8(v)
+	data[offset+1] = uint8(v >> 8)
+	data[offset+2] = uint8(v >> 16)
+	data[offset+3] = uint8(v >> 24)
 	return offset + 4
 }
-func encodeVarintRaft(dAtA []byte, offset int, v uint64) int {
+func encodeVarintRaft(data []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
-		dAtA[offset] = uint8(v&0x7f | 0x80)
+		data[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
-	dAtA[offset] = uint8(v)
+	data[offset] = uint8(v)
 	return offset + 1
 }
 
 type raftProxyRaftServer struct {
-	local                       RaftServer
-	connSelector                raftselector.ConnProvider
-	localCtxMods, remoteCtxMods []func(context.Context) (context.Context, error)
+	local        RaftServer
+	connSelector raftselector.ConnProvider
+	ctxMods      []func(context.Context) (context.Context, error)
 }
 
-func NewRaftProxyRaftServer(local RaftServer, connSelector raftselector.ConnProvider, localCtxMod, remoteCtxMod func(context.Context) (context.Context, error)) RaftServer {
+func NewRaftProxyRaftServer(local RaftServer, connSelector raftselector.ConnProvider, ctxMod func(context.Context) (context.Context, error)) RaftServer {
 	redirectChecker := func(ctx context.Context) (context.Context, error) {
 		s, ok := transport.StreamFromContext(ctx)
 		if !ok {
@@ -1501,24 +1520,18 @@ func NewRaftProxyRaftServer(local RaftServer, connSelector raftselector.ConnProv
 		md["redirect"] = append(md["redirect"], addr)
 		return metadata.NewContext(ctx, md), nil
 	}
-	remoteMods := []func(context.Context) (context.Context, error){redirectChecker}
-	remoteMods = append(remoteMods, remoteCtxMod)
-
-	var localMods []func(context.Context) (context.Context, error)
-	if localCtxMod != nil {
-		localMods = []func(context.Context) (context.Context, error){localCtxMod}
-	}
+	mods := []func(context.Context) (context.Context, error){redirectChecker}
+	mods = append(mods, ctxMod)
 
 	return &raftProxyRaftServer{
-		local:         local,
-		connSelector:  connSelector,
-		localCtxMods:  localMods,
-		remoteCtxMods: remoteMods,
+		local:        local,
+		connSelector: connSelector,
+		ctxMods:      mods,
 	}
 }
-func (p *raftProxyRaftServer) runCtxMods(ctx context.Context, ctxMods []func(context.Context) (context.Context, error)) (context.Context, error) {
+func (p *raftProxyRaftServer) runCtxMods(ctx context.Context) (context.Context, error) {
 	var err error
-	for _, mod := range ctxMods {
+	for _, mod := range p.ctxMods {
 		ctx, err = mod(ctx)
 		if err != nil {
 			return ctx, err
@@ -1527,7 +1540,7 @@ func (p *raftProxyRaftServer) runCtxMods(ctx context.Context, ctxMods []func(con
 	return ctx, nil
 }
 func (p *raftProxyRaftServer) pollNewLeaderConn(ctx context.Context) (*grpc.ClientConn, error) {
-	ticker := rafttime.NewTicker(500 * rafttime.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
@@ -1555,15 +1568,11 @@ func (p *raftProxyRaftServer) ProcessRaftMessage(ctx context.Context, r *Process
 	conn, err := p.connSelector.LeaderConn(ctx)
 	if err != nil {
 		if err == raftselector.ErrIsLeader {
-			ctx, err = p.runCtxMods(ctx, p.localCtxMods)
-			if err != nil {
-				return nil, err
-			}
 			return p.local.ProcessRaftMessage(ctx, r)
 		}
 		return nil, err
 	}
-	modCtx, err := p.runCtxMods(ctx, p.remoteCtxMods)
+	modCtx, err := p.runCtxMods(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1590,15 +1599,11 @@ func (p *raftProxyRaftServer) ResolveAddress(ctx context.Context, r *ResolveAddr
 	conn, err := p.connSelector.LeaderConn(ctx)
 	if err != nil {
 		if err == raftselector.ErrIsLeader {
-			ctx, err = p.runCtxMods(ctx, p.localCtxMods)
-			if err != nil {
-				return nil, err
-			}
 			return p.local.ResolveAddress(ctx, r)
 		}
 		return nil, err
 	}
-	modCtx, err := p.runCtxMods(ctx, p.remoteCtxMods)
+	modCtx, err := p.runCtxMods(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1621,12 +1626,12 @@ func (p *raftProxyRaftServer) ResolveAddress(ctx context.Context, r *ResolveAddr
 }
 
 type raftProxyRaftMembershipServer struct {
-	local                       RaftMembershipServer
-	connSelector                raftselector.ConnProvider
-	localCtxMods, remoteCtxMods []func(context.Context) (context.Context, error)
+	local        RaftMembershipServer
+	connSelector raftselector.ConnProvider
+	ctxMods      []func(context.Context) (context.Context, error)
 }
 
-func NewRaftProxyRaftMembershipServer(local RaftMembershipServer, connSelector raftselector.ConnProvider, localCtxMod, remoteCtxMod func(context.Context) (context.Context, error)) RaftMembershipServer {
+func NewRaftProxyRaftMembershipServer(local RaftMembershipServer, connSelector raftselector.ConnProvider, ctxMod func(context.Context) (context.Context, error)) RaftMembershipServer {
 	redirectChecker := func(ctx context.Context) (context.Context, error) {
 		s, ok := transport.StreamFromContext(ctx)
 		if !ok {
@@ -1643,24 +1648,18 @@ func NewRaftProxyRaftMembershipServer(local RaftMembershipServer, connSelector r
 		md["redirect"] = append(md["redirect"], addr)
 		return metadata.NewContext(ctx, md), nil
 	}
-	remoteMods := []func(context.Context) (context.Context, error){redirectChecker}
-	remoteMods = append(remoteMods, remoteCtxMod)
-
-	var localMods []func(context.Context) (context.Context, error)
-	if localCtxMod != nil {
-		localMods = []func(context.Context) (context.Context, error){localCtxMod}
-	}
+	mods := []func(context.Context) (context.Context, error){redirectChecker}
+	mods = append(mods, ctxMod)
 
 	return &raftProxyRaftMembershipServer{
-		local:         local,
-		connSelector:  connSelector,
-		localCtxMods:  localMods,
-		remoteCtxMods: remoteMods,
+		local:        local,
+		connSelector: connSelector,
+		ctxMods:      mods,
 	}
 }
-func (p *raftProxyRaftMembershipServer) runCtxMods(ctx context.Context, ctxMods []func(context.Context) (context.Context, error)) (context.Context, error) {
+func (p *raftProxyRaftMembershipServer) runCtxMods(ctx context.Context) (context.Context, error) {
 	var err error
-	for _, mod := range ctxMods {
+	for _, mod := range p.ctxMods {
 		ctx, err = mod(ctx)
 		if err != nil {
 			return ctx, err
@@ -1669,7 +1668,7 @@ func (p *raftProxyRaftMembershipServer) runCtxMods(ctx context.Context, ctxMods 
 	return ctx, nil
 }
 func (p *raftProxyRaftMembershipServer) pollNewLeaderConn(ctx context.Context) (*grpc.ClientConn, error) {
-	ticker := rafttime.NewTicker(500 * rafttime.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
@@ -1697,15 +1696,11 @@ func (p *raftProxyRaftMembershipServer) Join(ctx context.Context, r *JoinRequest
 	conn, err := p.connSelector.LeaderConn(ctx)
 	if err != nil {
 		if err == raftselector.ErrIsLeader {
-			ctx, err = p.runCtxMods(ctx, p.localCtxMods)
-			if err != nil {
-				return nil, err
-			}
 			return p.local.Join(ctx, r)
 		}
 		return nil, err
 	}
-	modCtx, err := p.runCtxMods(ctx, p.remoteCtxMods)
+	modCtx, err := p.runCtxMods(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1732,15 +1727,11 @@ func (p *raftProxyRaftMembershipServer) Leave(ctx context.Context, r *LeaveReque
 	conn, err := p.connSelector.LeaderConn(ctx)
 	if err != nil {
 		if err == raftselector.ErrIsLeader {
-			ctx, err = p.runCtxMods(ctx, p.localCtxMods)
-			if err != nil {
-				return nil, err
-			}
 			return p.local.Leave(ctx, r)
 		}
 		return nil, err
 	}
-	modCtx, err := p.runCtxMods(ctx, p.remoteCtxMods)
+	modCtx, err := p.runCtxMods(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1943,33 +1934,6 @@ func (m *StoreAction_Secret) Size() (n int) {
 	}
 	return n
 }
-func (m *StoreAction_Resource) Size() (n int) {
-	var l int
-	_ = l
-	if m.Resource != nil {
-		l = m.Resource.Size()
-		n += 1 + l + sovRaft(uint64(l))
-	}
-	return n
-}
-func (m *StoreAction_Extension) Size() (n int) {
-	var l int
-	_ = l
-	if m.Extension != nil {
-		l = m.Extension.Size()
-		n += 1 + l + sovRaft(uint64(l))
-	}
-	return n
-}
-func (m *StoreAction_Config) Size() (n int) {
-	var l int
-	_ = l
-	if m.Config != nil {
-		l = m.Config.Size()
-		n += 1 + l + sovRaft(uint64(l))
-	}
-	return n
-}
 
 func sovRaft(x uint64) (n int) {
 	for {
@@ -2083,7 +2047,7 @@ func (this *InternalRaftRequest) String() string {
 	}
 	s := strings.Join([]string{`&InternalRaftRequest{`,
 		`ID:` + fmt.Sprintf("%v", this.ID) + `,`,
-		`Action:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.Action), "StoreAction", "StoreAction", 1), `&`, ``, 1) + `,`,
+		`Action:` + strings.Replace(fmt.Sprintf("%v", this.Action), "StoreAction", "StoreAction", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -2159,36 +2123,6 @@ func (this *StoreAction_Secret) String() string {
 	}, "")
 	return s
 }
-func (this *StoreAction_Resource) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&StoreAction_Resource{`,
-		`Resource:` + strings.Replace(fmt.Sprintf("%v", this.Resource), "Resource", "Resource", 1) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *StoreAction_Extension) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&StoreAction_Extension{`,
-		`Extension:` + strings.Replace(fmt.Sprintf("%v", this.Extension), "Extension", "Extension", 1) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *StoreAction_Config) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&StoreAction_Config{`,
-		`Config:` + strings.Replace(fmt.Sprintf("%v", this.Config), "Config", "Config", 1) + `,`,
-		`}`,
-	}, "")
-	return s
-}
 func valueToStringRaft(v interface{}) string {
 	rv := reflect.ValueOf(v)
 	if rv.IsNil() {
@@ -2197,8 +2131,8 @@ func valueToStringRaft(v interface{}) string {
 	pv := reflect.Indirect(rv).Interface()
 	return fmt.Sprintf("*%v", pv)
 }
-func (m *RaftMember) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *RaftMember) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2210,7 +2144,7 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2238,7 +2172,7 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				m.RaftID |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2257,7 +2191,7 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2272,7 +2206,7 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.NodeID = string(dAtA[iNdEx:postIndex])
+			m.NodeID = string(data[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -2286,7 +2220,7 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2301,7 +2235,7 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Addr = string(dAtA[iNdEx:postIndex])
+			m.Addr = string(data[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
@@ -2315,7 +2249,7 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2329,13 +2263,13 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if err := m.Status.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Status.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2354,8 +2288,8 @@ func (m *RaftMember) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *JoinRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *JoinRequest) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2367,7 +2301,7 @@ func (m *JoinRequest) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2395,7 +2329,7 @@ func (m *JoinRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2410,11 +2344,11 @@ func (m *JoinRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Addr = string(dAtA[iNdEx:postIndex])
+			m.Addr = string(data[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2433,8 +2367,8 @@ func (m *JoinRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *JoinResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *JoinResponse) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2446,7 +2380,7 @@ func (m *JoinResponse) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2474,7 +2408,7 @@ func (m *JoinResponse) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				m.RaftID |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2493,7 +2427,7 @@ func (m *JoinResponse) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2508,75 +2442,33 @@ func (m *JoinResponse) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Members = append(m.Members, &RaftMember{})
-			if err := m.Members[len(m.Members)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Members[len(m.Members)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		case 3:
-			if wireType == 0 {
-				var v uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowRaft
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.RemovedMembers = append(m.RemovedMembers, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowRaft
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLengthRaft
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				for iNdEx < postIndex {
-					var v uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowRaft
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= (uint64(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.RemovedMembers = append(m.RemovedMembers, v)
-				}
-			} else {
+			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field RemovedMembers", wireType)
 			}
+			var v uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRaft
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				v |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RemovedMembers = append(m.RemovedMembers, v)
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2595,8 +2487,8 @@ func (m *JoinResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *LeaveRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *LeaveRequest) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2608,7 +2500,7 @@ func (m *LeaveRequest) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2636,7 +2528,7 @@ func (m *LeaveRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2653,13 +2545,13 @@ func (m *LeaveRequest) Unmarshal(dAtA []byte) error {
 			if m.Node == nil {
 				m.Node = &RaftMember{}
 			}
-			if err := m.Node.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Node.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2678,8 +2570,8 @@ func (m *LeaveRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *LeaveResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *LeaveResponse) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2691,7 +2583,7 @@ func (m *LeaveResponse) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2709,7 +2601,7 @@ func (m *LeaveResponse) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2728,8 +2620,8 @@ func (m *LeaveResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ProcessRaftMessageRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *ProcessRaftMessageRequest) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2741,7 +2633,7 @@ func (m *ProcessRaftMessageRequest) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2769,7 +2661,7 @@ func (m *ProcessRaftMessageRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2786,13 +2678,13 @@ func (m *ProcessRaftMessageRequest) Unmarshal(dAtA []byte) error {
 			if m.Message == nil {
 				m.Message = &raftpb.Message{}
 			}
-			if err := m.Message.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Message.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2811,8 +2703,8 @@ func (m *ProcessRaftMessageRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ProcessRaftMessageResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *ProcessRaftMessageResponse) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2824,7 +2716,7 @@ func (m *ProcessRaftMessageResponse) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2842,7 +2734,7 @@ func (m *ProcessRaftMessageResponse) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2861,8 +2753,8 @@ func (m *ProcessRaftMessageResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ResolveAddressRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *ResolveAddressRequest) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2874,7 +2766,7 @@ func (m *ResolveAddressRequest) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2902,7 +2794,7 @@ func (m *ResolveAddressRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				m.RaftID |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2911,7 +2803,7 @@ func (m *ResolveAddressRequest) Unmarshal(dAtA []byte) error {
 			}
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2930,8 +2822,8 @@ func (m *ResolveAddressRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ResolveAddressResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *ResolveAddressResponse) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -2943,7 +2835,7 @@ func (m *ResolveAddressResponse) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2971,7 +2863,7 @@ func (m *ResolveAddressResponse) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2986,11 +2878,11 @@ func (m *ResolveAddressResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Addr = string(dAtA[iNdEx:postIndex])
+			m.Addr = string(data[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -3009,8 +2901,8 @@ func (m *ResolveAddressResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *InternalRaftRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *InternalRaftRequest) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -3022,7 +2914,7 @@ func (m *InternalRaftRequest) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -3050,7 +2942,7 @@ func (m *InternalRaftRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				m.ID |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3069,7 +2961,7 @@ func (m *InternalRaftRequest) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3083,14 +2975,14 @@ func (m *InternalRaftRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Action = append(m.Action, StoreAction{})
-			if err := m.Action[len(m.Action)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			m.Action = append(m.Action, &StoreAction{})
+			if err := m.Action[len(m.Action)-1].Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -3109,8 +3001,8 @@ func (m *InternalRaftRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *StoreAction) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
+func (m *StoreAction) Unmarshal(data []byte) error {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -3122,7 +3014,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -3150,7 +3042,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				m.Action |= (StoreActionKind(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3169,7 +3061,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3184,7 +3076,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			v := &Node{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := v.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			m.Target = &StoreAction_Node{v}
@@ -3201,7 +3093,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3216,7 +3108,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			v := &Service{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := v.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			m.Target = &StoreAction_Service{v}
@@ -3233,7 +3125,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3248,7 +3140,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			v := &Task{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := v.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			m.Target = &StoreAction_Task{v}
@@ -3265,7 +3157,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3280,7 +3172,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			v := &Network{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := v.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			m.Target = &StoreAction_Network{v}
@@ -3297,7 +3189,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3312,7 +3204,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			v := &Cluster{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := v.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			m.Target = &StoreAction_Cluster{v}
@@ -3329,7 +3221,7 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3344,110 +3236,14 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			v := &Secret{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+			if err := v.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			m.Target = &StoreAction_Secret{v}
 			iNdEx = postIndex
-		case 8:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Resource", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRaft
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthRaft
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			v := &Resource{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			m.Target = &StoreAction_Resource{v}
-			iNdEx = postIndex
-		case 9:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Extension", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRaft
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthRaft
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			v := &Extension{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			m.Target = &StoreAction_Extension{v}
-			iNdEx = postIndex
-		case 10:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Config", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRaft
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthRaft
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			v := &Config{}
-			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			m.Target = &StoreAction_Config{v}
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRaft(dAtA[iNdEx:])
+			skippy, err := skipRaft(data[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -3466,8 +3262,8 @@ func (m *StoreAction) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func skipRaft(dAtA []byte) (n int, err error) {
-	l := len(dAtA)
+func skipRaft(data []byte) (n int, err error) {
+	l := len(data)
 	iNdEx := 0
 	for iNdEx < l {
 		var wire uint64
@@ -3478,7 +3274,7 @@ func skipRaft(dAtA []byte) (n int, err error) {
 			if iNdEx >= l {
 				return 0, io.ErrUnexpectedEOF
 			}
-			b := dAtA[iNdEx]
+			b := data[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -3496,7 +3292,7 @@ func skipRaft(dAtA []byte) (n int, err error) {
 					return 0, io.ErrUnexpectedEOF
 				}
 				iNdEx++
-				if dAtA[iNdEx-1] < 0x80 {
+				if data[iNdEx-1] < 0x80 {
 					break
 				}
 			}
@@ -3513,7 +3309,7 @@ func skipRaft(dAtA []byte) (n int, err error) {
 				if iNdEx >= l {
 					return 0, io.ErrUnexpectedEOF
 				}
-				b := dAtA[iNdEx]
+				b := data[iNdEx]
 				iNdEx++
 				length |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -3536,7 +3332,7 @@ func skipRaft(dAtA []byte) (n int, err error) {
 					if iNdEx >= l {
 						return 0, io.ErrUnexpectedEOF
 					}
-					b := dAtA[iNdEx]
+					b := data[iNdEx]
 					iNdEx++
 					innerWire |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
@@ -3547,7 +3343,7 @@ func skipRaft(dAtA []byte) (n int, err error) {
 				if innerWireType == 4 {
 					break
 				}
-				next, err := skipRaft(dAtA[start:])
+				next, err := skipRaft(data[start:])
 				if err != nil {
 					return 0, err
 				}
@@ -3574,65 +3370,61 @@ var (
 func init() { proto.RegisterFile("raft.proto", fileDescriptorRaft) }
 
 var fileDescriptorRaft = []byte{
-	// 953 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x96, 0x4d, 0x6f, 0x1b, 0x45,
-	0x18, 0xc7, 0x77, 0xd7, 0x5b, 0x27, 0x79, 0xdc, 0xbc, 0x68, 0x42, 0xc2, 0x76, 0x29, 0x8e, 0xbb,
-	0x45, 0xc2, 0x2d, 0x64, 0x2d, 0x0c, 0x12, 0xa8, 0xd0, 0x43, 0xec, 0x58, 0xb2, 0x69, 0xeb, 0x54,
-	0x9b, 0x04, 0x7a, 0x0b, 0xeb, 0xdd, 0x89, 0xbb, 0xd8, 0xde, 0x31, 0x33, 0x63, 0x07, 0x2e, 0xa8,
-	0x47, 0x94, 0x2b, 0x07, 0x10, 0x52, 0x4f, 0x70, 0xee, 0x07, 0xe0, 0x03, 0xa0, 0x88, 0x13, 0x37,
-	0x38, 0x45, 0xd4, 0x1f, 0x00, 0xbe, 0x02, 0x9a, 0xd9, 0x5d, 0x3b, 0x38, 0x6b, 0x37, 0x17, 0x7b,
-	0x3c, 0xf3, 0xfb, 0x3f, 0xff, 0x79, 0xe6, 0xe5, 0x19, 0x03, 0x50, 0xf7, 0x98, 0xdb, 0x7d, 0x4a,
-	0x38, 0x41, 0xc8, 0x27, 0x5e, 0x07, 0x53, 0x9b, 0x9d, 0xb8, 0xb4, 0xd7, 0x09, 0xb8, 0x3d, 0x7c,
-	0xcf, 0x5c, 0x26, 0xad, 0x2f, 0xb1, 0xc7, 0x59, 0x84, 0x98, 0x39, 0xfe, 0x4d, 0x1f, 0x27, 0x3f,
-	0xb6, 0xdb, 0x01, 0x7f, 0x3a, 0x68, 0xd9, 0x1e, 0xe9, 0x95, 0x3c, 0x42, 0x31, 0x61, 0x25, 0xcc,
-	0x3d, 0xbf, 0x24, 0x42, 0xca, 0x8f, 0x7e, 0xab, 0x34, 0x09, 0x6f, 0xbe, 0xd6, 0x26, 0x6d, 0x22,
-	0x9b, 0x25, 0xd1, 0x8a, 0x7b, 0xd7, 0xfb, 0xdd, 0x41, 0x3b, 0x08, 0x4b, 0xd1, 0x57, 0xd4, 0x69,
-	0xbd, 0x50, 0x01, 0x1c, 0xf7, 0x98, 0x3f, 0xc2, 0xbd, 0x16, 0xa6, 0xe8, 0x36, 0x2c, 0x88, 0x38,
-	0x47, 0x81, 0x6f, 0xa8, 0x05, 0xb5, 0xa8, 0x57, 0x60, 0x74, 0xbe, 0x95, 0x15, 0x40, 0x63, 0xd7,
-	0xc9, 0x8a, 0xa1, 0x86, 0x2f, 0xa0, 0x90, 0xf8, 0x58, 0x40, 0x5a, 0x41, 0x2d, 0x2e, 0x45, 0x50,
-	0x93, 0xf8, 0x58, 0x40, 0x62, 0xa8, 0xe1, 0x23, 0x04, 0xba, 0xeb, 0xfb, 0xd4, 0xc8, 0x08, 0xc2,
-	0x91, 0x6d, 0x54, 0x81, 0x2c, 0xe3, 0x2e, 0x1f, 0x30, 0x43, 0x2f, 0xa8, 0xc5, 0x5c, 0xf9, 0x2d,
-	0xfb, 0xf2, 0x3a, 0xd8, 0x93, 0xd9, 0xec, 0x4b, 0xb6, 0xa2, 0x9f, 0x9d, 0x6f, 0x29, 0x4e, 0xac,
-	0xb4, 0x6e, 0x41, 0xee, 0x53, 0x12, 0x84, 0x0e, 0xfe, 0x6a, 0x80, 0x19, 0x1f, 0xdb, 0xa8, 0x13,
-	0x1b, 0xeb, 0x27, 0x15, 0xae, 0x47, 0x0c, 0xeb, 0x93, 0x90, 0xe1, 0xab, 0x65, 0xf5, 0x11, 0x2c,
-	0xf4, 0xa4, 0x2d, 0x33, 0xb4, 0x42, 0xa6, 0x98, 0x2b, 0xe7, 0xe7, 0xcf, 0xce, 0x49, 0x70, 0xf4,
-	0x0e, 0xac, 0x52, 0xdc, 0x23, 0x43, 0xec, 0x1f, 0x25, 0x11, 0x32, 0x85, 0x4c, 0x51, 0xaf, 0x68,
-	0x6b, 0x8a, 0xb3, 0x12, 0x0f, 0x45, 0x22, 0x66, 0x55, 0xe0, 0xfa, 0x43, 0xec, 0x0e, 0x71, 0x92,
-	0x40, 0x19, 0x74, 0xb1, 0x62, 0x72, 0x62, 0xaf, 0xf6, 0x94, 0xac, 0xb5, 0x0a, 0xcb, 0x71, 0x8c,
-	0x28, 0x41, 0xeb, 0x21, 0xdc, 0x78, 0x4c, 0x89, 0x87, 0x19, 0x8b, 0x58, 0xc6, 0xdc, 0xf6, 0xd8,
-	0xe1, 0x8e, 0x48, 0x4c, 0xf6, 0xc4, 0x26, 0xab, 0x76, 0x74, 0x64, 0xec, 0x04, 0x4c, 0xc6, 0xef,
-	0xe9, 0xcf, 0x7e, 0xb0, 0x14, 0xeb, 0x26, 0x98, 0x69, 0xd1, 0x62, 0xaf, 0x4f, 0x60, 0xc3, 0xc1,
-	0x8c, 0x74, 0x87, 0x78, 0xc7, 0xf7, 0xa9, 0x80, 0x62, 0x9f, 0xab, 0xac, 0xb2, 0xf5, 0x2e, 0x6c,
-	0x4e, 0xab, 0xe3, 0x4d, 0x4a, 0xdb, 0xc9, 0x2e, 0xac, 0x37, 0x42, 0x8e, 0x69, 0xe8, 0x76, 0x45,
-	0x9c, 0xc4, 0x69, 0x13, 0xb4, 0xb1, 0x49, 0x76, 0x74, 0xbe, 0xa5, 0x35, 0x76, 0x1d, 0x2d, 0xf0,
-	0xd1, 0x7d, 0xc8, 0xba, 0x1e, 0x0f, 0x48, 0x18, 0xef, 0xe0, 0x56, 0xda, 0x6a, 0xee, 0x73, 0x42,
-	0xf1, 0x8e, 0xc4, 0x92, 0xa3, 0x15, 0x89, 0xac, 0xdf, 0x74, 0xc8, 0x5d, 0x18, 0x45, 0x1f, 0x8f,
-	0xc3, 0x09, 0xab, 0x95, 0xf2, 0xed, 0x57, 0x84, 0x7b, 0x10, 0x84, 0x7e, 0x12, 0x0c, 0xd9, 0xf1,
-	0xbe, 0x6a, 0x72, 0xc9, 0x8d, 0x34, 0xa9, 0xb8, 0x31, 0x75, 0x25, 0xda, 0x53, 0xf4, 0x21, 0x2c,
-	0x30, 0x4c, 0x87, 0x81, 0x87, 0xe5, 0x95, 0xc9, 0x95, 0xdf, 0x48, 0x75, 0x8b, 0x90, 0xba, 0xe2,
-	0x24, 0xb4, 0x30, 0xe2, 0x2e, 0xeb, 0xc4, 0x57, 0x2a, 0xd5, 0xe8, 0xc0, 0x65, 0x1d, 0x61, 0x24,
-	0x38, 0x61, 0x14, 0x62, 0x7e, 0x42, 0x68, 0xc7, 0xb8, 0x36, 0xdb, 0xa8, 0x19, 0x21, 0xc2, 0x28,
-	0xa6, 0x85, 0xd0, 0xeb, 0x0e, 0x18, 0xc7, 0xd4, 0xc8, 0xce, 0x16, 0x56, 0x23, 0x44, 0x08, 0x63,
-	0x1a, 0x7d, 0x00, 0x59, 0x86, 0x3d, 0x8a, 0xb9, 0xb1, 0x20, 0x75, 0x66, 0x7a, 0x66, 0x82, 0xa8,
-	0x8b, 0x8b, 0x2e, 0x5b, 0xe8, 0x1e, 0x2c, 0x52, 0xcc, 0xc8, 0x80, 0x7a, 0xd8, 0x58, 0x94, 0xba,
-	0x9b, 0xa9, 0x97, 0x23, 0x66, 0xea, 0x8a, 0x33, 0xe6, 0xd1, 0x7d, 0x58, 0xc2, 0x5f, 0x73, 0x1c,
-	0x32, 0xb1, 0x79, 0x4b, 0x52, 0xfc, 0x66, 0x9a, 0xb8, 0x96, 0x40, 0x75, 0xc5, 0x99, 0x28, 0xc4,
-	0x84, 0x3d, 0x12, 0x1e, 0x07, 0x6d, 0x03, 0x66, 0x4f, 0xb8, 0x2a, 0x09, 0x31, 0xe1, 0x88, 0xad,
-	0x2c, 0x42, 0x96, 0xbb, 0xb4, 0x8d, 0xf9, 0xdd, 0x7f, 0x55, 0x58, 0x9d, 0x3a, 0x17, 0xe8, 0x6d,
-	0x58, 0x38, 0x6c, 0x3e, 0x68, 0xee, 0x7d, 0xde, 0x5c, 0x53, 0x4c, 0xf3, 0xf4, 0x79, 0x61, 0x73,
-	0x8a, 0x38, 0x0c, 0x3b, 0x21, 0x39, 0x09, 0x51, 0x19, 0xd6, 0xf7, 0x0f, 0xf6, 0x9c, 0xda, 0xd1,
-	0x4e, 0xf5, 0xa0, 0xb1, 0xd7, 0x3c, 0xaa, 0x3a, 0xb5, 0x9d, 0x83, 0xda, 0x9a, 0x6a, 0xde, 0x38,
-	0x7d, 0x5e, 0xd8, 0x98, 0x12, 0x55, 0x29, 0x76, 0x39, 0xbe, 0xa4, 0x39, 0x7c, 0xbc, 0x2b, 0x34,
-	0x5a, 0xaa, 0xe6, 0xb0, 0xef, 0xa7, 0x69, 0x9c, 0xda, 0xa3, 0xbd, 0xcf, 0x6a, 0x6b, 0x99, 0x54,
-	0x8d, 0x23, 0x8b, 0x98, 0xf9, 0xfa, 0x77, 0x3f, 0xe7, 0x95, 0x5f, 0x7f, 0xc9, 0x4f, 0x67, 0x57,
-	0xfe, 0x5e, 0x03, 0x5d, 0xdc, 0x50, 0x74, 0xaa, 0x02, 0xba, 0x5c, 0x3c, 0xd0, 0x76, 0xda, 0x0a,
-	0xce, 0x2c, 0x59, 0xa6, 0x7d, 0x55, 0x3c, 0xae, 0x49, 0x1b, 0xbf, 0xbf, 0xf8, 0xe7, 0x47, 0x6d,
-	0x15, 0x96, 0x25, 0xbf, 0xdd, 0x73, 0x43, 0xb7, 0x8d, 0x29, 0xfa, 0x16, 0x56, 0xfe, 0x5f, 0x6c,
-	0xd0, 0x9d, 0x59, 0x47, 0xe8, 0x52, 0x39, 0x33, 0xef, 0x5e, 0x05, 0x9d, 0xeb, 0x5f, 0xfe, 0x53,
-	0x85, 0x95, 0x49, 0xf1, 0x66, 0x4f, 0x83, 0x3e, 0xfa, 0x02, 0x74, 0xf1, 0x34, 0xa1, 0xd4, 0xd2,
-	0x74, 0xe1, 0x61, 0x33, 0x0b, 0xb3, 0x81, 0xf9, 0x49, 0x7b, 0x70, 0x4d, 0x3e, 0x0e, 0x28, 0x35,
-	0xc2, 0xc5, 0xb7, 0xc7, 0xbc, 0x35, 0x87, 0x98, 0x6b, 0x52, 0x31, 0xce, 0x5e, 0xe6, 0x95, 0xbf,
-	0x5e, 0xe6, 0x95, 0x67, 0xa3, 0xbc, 0x7a, 0x36, 0xca, 0xab, 0x7f, 0x8c, 0xf2, 0xea, 0xdf, 0xa3,
-	0xbc, 0xfa, 0x24, 0xf3, 0x44, 0x6f, 0x65, 0xe5, 0x7f, 0x8b, 0xf7, 0xff, 0x0b, 0x00, 0x00, 0xff,
-	0xff, 0x9a, 0xef, 0x6e, 0xdb, 0xf3, 0x08, 0x00, 0x00,
+	// 890 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x8c, 0x95, 0xcf, 0x73, 0xdb, 0x44,
+	0x14, 0xc7, 0xbd, 0xb2, 0x2a, 0xc3, 0x73, 0x13, 0x67, 0x36, 0x24, 0xb8, 0xa2, 0xa3, 0xb8, 0x2a,
+	0x33, 0x75, 0x3b, 0x44, 0x1e, 0x0c, 0x33, 0x65, 0x80, 0x4b, 0x9c, 0x78, 0x26, 0xa6, 0xad, 0xd3,
+	0x51, 0x12, 0xe8, 0x2d, 0xc8, 0xd2, 0xc6, 0x15, 0x8e, 0xb5, 0x66, 0x77, 0xed, 0x0c, 0x17, 0xa6,
+	0x47, 0x26, 0x57, 0x86, 0x1f, 0x97, 0x9e, 0xe0, 0xdc, 0x3f, 0x80, 0xbf, 0x20, 0xc3, 0x89, 0x1b,
+	0x9c, 0x32, 0xc4, 0x7f, 0x00, 0xf0, 0x27, 0x30, 0xbb, 0x92, 0x92, 0xd4, 0x51, 0x1c, 0x5f, 0x92,
+	0xf5, 0xea, 0xf3, 0x7d, 0xdf, 0x7d, 0x6f, 0xf5, 0x9e, 0x00, 0x98, 0xb7, 0x2f, 0x9c, 0x01, 0xa3,
+	0x82, 0x62, 0x1c, 0x50, 0xbf, 0x47, 0x98, 0xc3, 0x0f, 0x3d, 0xd6, 0xef, 0x85, 0xc2, 0x19, 0xbd,
+	0x6f, 0xce, 0xd1, 0xce, 0x57, 0xc4, 0x17, 0x3c, 0x46, 0xcc, 0xa2, 0xf8, 0x66, 0x40, 0xd2, 0x1f,
+	0xab, 0xdd, 0x50, 0x3c, 0x1f, 0x76, 0x1c, 0x9f, 0xf6, 0x6b, 0x3e, 0x65, 0x84, 0xf2, 0x1a, 0x11,
+	0x7e, 0x50, 0x93, 0x21, 0xd5, 0x9f, 0x41, 0xa7, 0x76, 0x1e, 0xde, 0x7c, 0xab, 0x4b, 0xbb, 0x54,
+	0x2d, 0x6b, 0x72, 0x95, 0xec, 0x2e, 0x0e, 0x0e, 0x86, 0xdd, 0x30, 0xaa, 0xc5, 0xff, 0xe2, 0x4d,
+	0xfb, 0x15, 0x02, 0x70, 0xbd, 0x7d, 0xf1, 0x84, 0xf4, 0x3b, 0x84, 0xe1, 0xbb, 0x50, 0x90, 0x71,
+	0xf6, 0xc2, 0xa0, 0x8c, 0x2a, 0xa8, 0xaa, 0x37, 0x60, 0x7c, 0xb2, 0x62, 0x48, 0xa0, 0xb5, 0xe1,
+	0x1a, 0xf2, 0x51, 0x2b, 0x90, 0x50, 0x44, 0x03, 0x22, 0x21, 0xad, 0x82, 0xaa, 0x6f, 0xc6, 0x50,
+	0x9b, 0x06, 0x44, 0x42, 0xf2, 0x51, 0x2b, 0xc0, 0x18, 0x74, 0x2f, 0x08, 0x58, 0x39, 0x2f, 0x09,
+	0x57, 0xad, 0x71, 0x03, 0x0c, 0x2e, 0x3c, 0x31, 0xe4, 0x65, 0xbd, 0x82, 0xaa, 0xc5, 0xfa, 0xbb,
+	0xce, 0xe5, 0x3a, 0x38, 0xe7, 0xa7, 0xd9, 0x56, 0x6c, 0x43, 0x3f, 0x3e, 0x59, 0xc9, 0xb9, 0x89,
+	0xd2, 0xbe, 0x03, 0xc5, 0xcf, 0x68, 0x18, 0xb9, 0xe4, 0xeb, 0x21, 0xe1, 0xe2, 0xcc, 0x06, 0x9d,
+	0xdb, 0xd8, 0x3f, 0x22, 0xb8, 0x19, 0x33, 0x7c, 0x40, 0x23, 0x4e, 0x66, 0xcb, 0xea, 0x23, 0x28,
+	0xf4, 0x95, 0x2d, 0x2f, 0x6b, 0x95, 0x7c, 0xb5, 0x58, 0xb7, 0xa6, 0x9f, 0xce, 0x4d, 0x71, 0x7c,
+	0x0f, 0x4a, 0x8c, 0xf4, 0xe9, 0x88, 0x04, 0x7b, 0x69, 0x84, 0x7c, 0x25, 0x5f, 0xd5, 0xdd, 0xf9,
+	0x64, 0x3b, 0x16, 0x70, 0xbb, 0x01, 0x37, 0x1f, 0x13, 0x6f, 0x44, 0xd2, 0xc3, 0xd7, 0x41, 0x97,
+	0xd5, 0x52, 0x87, 0xba, 0xde, 0x4f, 0xb1, 0x76, 0x09, 0xe6, 0x92, 0x18, 0x71, 0x72, 0xf6, 0x63,
+	0xb8, 0xf5, 0x94, 0x51, 0x9f, 0x70, 0x1e, 0xb3, 0x9c, 0x7b, 0xdd, 0x33, 0x87, 0xfb, 0x32, 0x29,
+	0xb5, 0x93, 0x98, 0x94, 0x9c, 0xf8, 0x75, 0x71, 0x52, 0x30, 0x7d, 0xfe, 0xb1, 0xfe, 0xe2, 0x27,
+	0x3b, 0x67, 0xdf, 0x06, 0x33, 0x2b, 0x5a, 0xe2, 0xf5, 0x29, 0x2c, 0xb9, 0x84, 0xd3, 0x83, 0x11,
+	0x59, 0x0b, 0x02, 0x26, 0xa1, 0xc4, 0x67, 0x96, 0x0a, 0xdb, 0xef, 0xc1, 0xf2, 0xa4, 0x3a, 0xb9,
+	0xa0, 0xac, 0x5b, 0xdc, 0x87, 0xc5, 0x56, 0x24, 0x08, 0x8b, 0xbc, 0x03, 0x19, 0x27, 0x75, 0x5a,
+	0x06, 0xed, 0xcc, 0xc4, 0x18, 0x9f, 0xac, 0x68, 0xad, 0x0d, 0x57, 0x0b, 0x03, 0xfc, 0x10, 0x0c,
+	0xcf, 0x17, 0x21, 0x8d, 0x92, 0xdb, 0x5b, 0xc9, 0xaa, 0xe6, 0xb6, 0xa0, 0x8c, 0xac, 0x29, 0xcc,
+	0x4d, 0x70, 0xfb, 0x87, 0x3c, 0x14, 0x2f, 0xec, 0xe3, 0x4f, 0xce, 0x02, 0x49, 0x93, 0xf9, 0xfa,
+	0xdd, 0x6b, 0x02, 0x3d, 0x0a, 0xa3, 0x20, 0x0d, 0x86, 0x9d, 0xe4, 0x46, 0x35, 0x55, 0xec, 0x72,
+	0x96, 0x54, 0xf6, 0xc9, 0x66, 0x2e, 0xbe, 0x4d, 0xfc, 0x10, 0x0a, 0x9c, 0xb0, 0x51, 0xe8, 0x13,
+	0xd5, 0x28, 0xc5, 0xfa, 0x3b, 0x99, 0x6e, 0x31, 0xb2, 0x99, 0x73, 0x53, 0x5a, 0x1a, 0x09, 0x8f,
+	0xf7, 0x92, 0x46, 0xca, 0x34, 0xda, 0xf1, 0x78, 0x4f, 0x1a, 0x49, 0x4e, 0x1a, 0x45, 0x44, 0x1c,
+	0x52, 0xd6, 0x2b, 0xdf, 0xb8, 0xda, 0xa8, 0x1d, 0x23, 0xd2, 0x28, 0xa1, 0xa5, 0xd0, 0x3f, 0x18,
+	0x72, 0x41, 0x58, 0xd9, 0xb8, 0x5a, 0xb8, 0x1e, 0x23, 0x52, 0x98, 0xd0, 0xf8, 0x43, 0x30, 0x38,
+	0xf1, 0x19, 0x11, 0xe5, 0x82, 0xd2, 0x99, 0xd9, 0x99, 0x49, 0x62, 0x53, 0xb6, 0xb7, 0x5a, 0x35,
+	0xde, 0x00, 0x43, 0x78, 0xac, 0x4b, 0xc4, 0x83, 0x7f, 0x11, 0x94, 0x26, 0xca, 0x8c, 0xef, 0x41,
+	0x61, 0xb7, 0xfd, 0xa8, 0xbd, 0xf5, 0x45, 0x7b, 0x21, 0x67, 0x9a, 0x47, 0x2f, 0x2b, 0xcb, 0x13,
+	0xc4, 0x6e, 0xd4, 0x8b, 0xe8, 0x61, 0x84, 0xeb, 0xb0, 0xb8, 0xbd, 0xb3, 0xe5, 0x36, 0xf7, 0xd6,
+	0xd6, 0x77, 0x5a, 0x5b, 0xed, 0xbd, 0x75, 0xb7, 0xb9, 0xb6, 0xd3, 0x5c, 0x40, 0xe6, 0xad, 0xa3,
+	0x97, 0x95, 0xa5, 0x09, 0xd1, 0x3a, 0x23, 0x9e, 0x20, 0x97, 0x34, 0xbb, 0x4f, 0x37, 0xa4, 0x46,
+	0xcb, 0xd4, 0xec, 0x0e, 0x82, 0x2c, 0x8d, 0xdb, 0x7c, 0xb2, 0xf5, 0x79, 0x73, 0x21, 0x9f, 0xa9,
+	0x71, 0xd5, 0x34, 0x30, 0xdf, 0xfe, 0xee, 0x17, 0x2b, 0xf7, 0xdb, 0xaf, 0xd6, 0x64, 0x76, 0xf5,
+	0xef, 0x35, 0xd0, 0xe5, 0xab, 0x8e, 0x8f, 0x10, 0xe0, 0xcb, 0x5d, 0x88, 0x57, 0xb3, 0x2a, 0x78,
+	0x65, 0xef, 0x9b, 0xce, 0xac, 0x78, 0xd2, 0xdc, 0x4b, 0xbf, 0xbf, 0xfa, 0xe7, 0x67, 0xad, 0x04,
+	0x73, 0x8a, 0x5f, 0xed, 0x7b, 0x91, 0xd7, 0x25, 0x0c, 0x7f, 0x0b, 0xf3, 0xaf, 0x77, 0x2d, 0xbe,
+	0x9f, 0x39, 0xa8, 0xb2, 0xe6, 0x82, 0xf9, 0x60, 0x16, 0x74, 0xaa, 0x7f, 0xfd, 0x4f, 0x04, 0xf3,
+	0xe7, 0x53, 0x90, 0x3f, 0x0f, 0x07, 0xf8, 0x4b, 0xd0, 0xe5, 0x7c, 0xc7, 0x99, 0x3d, 0x7e, 0xe1,
+	0xeb, 0x60, 0x56, 0xae, 0x06, 0xa6, 0x27, 0xed, 0xc3, 0x0d, 0x35, 0x65, 0x71, 0x66, 0x84, 0x8b,
+	0x43, 0xdc, 0xbc, 0x33, 0x85, 0x98, 0x6a, 0xd2, 0xb8, 0x7d, 0x7c, 0x6a, 0xe5, 0xfe, 0x3a, 0xb5,
+	0x72, 0xff, 0x9d, 0x5a, 0xe8, 0xc5, 0xd8, 0x42, 0xc7, 0x63, 0x0b, 0xfd, 0x31, 0xb6, 0xd0, 0xdf,
+	0x63, 0x0b, 0x3d, 0xcb, 0x3f, 0xd3, 0x3b, 0x86, 0xfa, 0x48, 0x7f, 0xf0, 0x7f, 0x00, 0x00, 0x00,
+	0xff, 0xff, 0x53, 0x4c, 0x9e, 0xad, 0x3c, 0x08, 0x00, 0x00,
 }

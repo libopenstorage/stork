@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docker/distribution/reference"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/plugingetter"
 	"github.com/docker/docker/pkg/plugins"
 	"github.com/docker/docker/plugin/v2"
+	"github.com/docker/docker/reference"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 /* allowV1PluginsFallback determines daemon's support for V1 plugins.
@@ -20,7 +20,7 @@ const allowV1PluginsFallback bool = true
 
 /* defaultAPIVersion is the version of the plugin API for volume, network,
    IPAM and authz. This is a very stable API. When we update this API, then
-   pluginType should include a version. e.g. "networkdriver/2.0".
+   pluginType should include a version. eg "networkdriver/2.0".
 */
 const defaultAPIVersion string = "1.0"
 
@@ -29,21 +29,14 @@ type ErrNotFound string
 
 func (name ErrNotFound) Error() string { return fmt.Sprintf("plugin %q not found", string(name)) }
 
-// ErrAmbiguous indicates that more than one plugin was found
+// ErrAmbiguous indicates that a plugin was not found locally.
 type ErrAmbiguous string
 
 func (name ErrAmbiguous) Error() string {
 	return fmt.Sprintf("multiple plugins found for %q", string(name))
 }
 
-// ErrDisabled indicates that a plugin was found but it is disabled
-type ErrDisabled string
-
-func (name ErrDisabled) Error() string {
-	return fmt.Sprintf("plugin %s found but disabled", string(name))
-}
-
-// GetV2Plugin retrieves a plugin by name, id or partial ID.
+// GetV2Plugin retreives a plugin by name, id or partial ID.
 func (ps *Store) GetV2Plugin(refOrID string) (*v2.Plugin, error) {
 	ps.RLock()
 	defer ps.RUnlock()
@@ -71,7 +64,7 @@ func (ps *Store) validateName(name string) error {
 	return nil
 }
 
-// GetAll retrieves all plugins.
+// GetAll retreives all plugins.
 func (ps *Store) GetAll() map[string]*v2.Plugin {
 	ps.RLock()
 	defer ps.RUnlock()
@@ -145,7 +138,7 @@ func (ps *Store) Get(name, capability string, mode int) (plugingetter.CompatPlug
 			}
 			// Plugin was found but it is disabled, so we should not fall back to legacy plugins
 			// but we should error out right away
-			return nil, ErrDisabled(name)
+			return nil, ErrNotFound(name)
 		}
 		if _, ok := errors.Cause(err).(ErrNotFound); !ok {
 			return nil, err
@@ -237,19 +230,19 @@ func (ps *Store) resolvePluginID(idOrName string) (string, error) {
 		return idOrName, nil
 	}
 
-	ref, err := reference.ParseNormalizedNamed(idOrName)
+	ref, err := reference.ParseNamed(idOrName)
 	if err != nil {
 		return "", errors.WithStack(ErrNotFound(idOrName))
 	}
 	if _, ok := ref.(reference.Canonical); ok {
-		logrus.Warnf("canonical references cannot be resolved: %v", reference.FamiliarString(ref))
+		logrus.Warnf("canonical references cannot be resolved: %v", ref.String())
 		return "", errors.WithStack(ErrNotFound(idOrName))
 	}
 
-	ref = reference.TagNameOnly(ref)
+	fullRef := reference.WithDefaultTag(ref)
 
 	for _, p := range ps.plugins {
-		if p.PluginObj.Name == reference.FamiliarString(ref) {
+		if p.PluginObj.Name == fullRef.String() {
 			return p.PluginObj.ID, nil
 		}
 	}

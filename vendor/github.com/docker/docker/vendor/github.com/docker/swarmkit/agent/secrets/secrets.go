@@ -1,15 +1,14 @@
 package secrets
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/docker/swarmkit/agent/exec"
 	"github.com/docker/swarmkit/api"
 )
 
-// secrets is a map that keeps all the currently available secrets to the agent
-// mapped by secret ID.
+// secrets is a map that keeps all the currenty available secrets to the agent
+// mapped by secret ID
 type secrets struct {
 	mu sync.RWMutex
 	m  map[string]*api.Secret
@@ -23,16 +22,16 @@ func NewManager() exec.SecretsManager {
 }
 
 // Get returns a secret by ID.  If the secret doesn't exist, returns nil.
-func (s *secrets) Get(secretID string) (*api.Secret, error) {
+func (s *secrets) Get(secretID string) *api.Secret {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s, ok := s.m[secretID]; ok {
-		return s, nil
+		return s
 	}
-	return nil, fmt.Errorf("secret %s not found", secretID)
+	return nil
 }
 
-// Add adds one or more secrets to the secret map.
+// add adds one or more secrets to the secret map
 func (s *secrets) Add(secrets ...api.Secret) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -41,7 +40,7 @@ func (s *secrets) Add(secrets ...api.Secret) {
 	}
 }
 
-// Remove removes one or more secrets by ID from the secret map.  Succeeds
+// remove removes one or more secrets by ID from the secret map.  Succeeds
 // whether or not the given IDs are in the map.
 func (s *secrets) Remove(secrets []string) {
 	s.mu.Lock()
@@ -51,7 +50,7 @@ func (s *secrets) Remove(secrets []string) {
 	}
 }
 
-// Reset removes all the secrets.
+// reset removes all the secrets
 func (s *secrets) Reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -64,9 +63,9 @@ type taskRestrictedSecretsProvider struct {
 	secretIDs map[string]struct{} // allow list of secret ids
 }
 
-func (sp *taskRestrictedSecretsProvider) Get(secretID string) (*api.Secret, error) {
+func (sp *taskRestrictedSecretsProvider) Get(secretID string) *api.Secret {
 	if _, ok := sp.secretIDs[secretID]; !ok {
-		return nil, fmt.Errorf("task not authorized to access secret %s", secretID)
+		return nil
 	}
 
 	return sp.secrets.Get(secretID)

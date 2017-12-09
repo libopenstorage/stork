@@ -16,31 +16,26 @@ func IsPreDefinedNetwork(network string) bool {
 	return false
 }
 
-// validateNetMode ensures that the various combinations of requested
+// ValidateNetMode ensures that the various combinations of requested
 // network settings are valid.
-func validateNetMode(c *container.Config, hc *container.HostConfig) error {
+func ValidateNetMode(c *container.Config, hc *container.HostConfig) error {
 	// We may not be passed a host config, such as in the case of docker commit
 	return nil
 }
 
-// validateIsolation performs platform specific validation of the
+// ValidateIsolation performs platform specific validation of the
 // isolation level in the hostconfig structure.
 // This setting is currently discarded for Solaris so this is a no-op.
-func validateIsolation(hc *container.HostConfig) error {
+func ValidateIsolation(hc *container.HostConfig) error {
 	return nil
 }
 
-// validateQoS performs platform specific validation of the QoS settings
-func validateQoS(hc *container.HostConfig) error {
+// ValidateQoS performs platform specific validation of the QoS settings
+func ValidateQoS(hc *container.HostConfig) error {
 	return nil
 }
 
-// validateResources performs platform specific validation of the resource settings
-func validateResources(hc *container.HostConfig, si *sysinfo.SysInfo) error {
-	return nil
-}
-
-// validatePrivileged performs platform specific validation of the Privileged setting
-func validatePrivileged(hc *container.HostConfig) error {
+// ValidateResources performs platform specific validation of the resource settings
+func ValidateResources(hc *container.HostConfig, si *sysinfo.SysInfo) error {
 	return nil
 }

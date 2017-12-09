@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/docker/docker/pkg/idtools"
-	"golang.org/x/sys/unix"
 )
 
 // Setup populates a directory with mountpoints suitable
@@ -16,7 +16,7 @@ import (
 //
 // This extra layer is used by all containers as the top-most ro layer. It protects
 // the container from unwanted side-effects on the rw layer.
-func Setup(initLayer string, rootIDs idtools.IDPair) error {
+func Setup(initLayer string, rootUID, rootGID int) error {
 	for pth, typ := range map[string]string{
 		"/dev/pts":         "dir",
 		"/dev/shm":         "dir",
@@ -33,17 +33,17 @@ func Setup(initLayer string, rootIDs idtools.IDPair) error {
 		prev := "/"
 		for _, p := range parts[1:] {
 			prev = filepath.Join(prev, p)
-			unix.Unlink(filepath.Join(initLayer, prev))
+			syscall.Unlink(filepath.Join(initLayer, prev))
 		}
 
 		if _, err := os.Stat(filepath.Join(initLayer, pth)); err != nil {
 			if os.IsNotExist(err) {
-				if err := idtools.MkdirAllAndChownNew(filepath.Join(initLayer, filepath.Dir(pth)), 0755, rootIDs); err != nil {
+				if err := idtools.MkdirAllNewAs(filepath.Join(initLayer, filepath.Dir(pth)), 0755, rootUID, rootGID); err != nil {
 					return err
 				}
 				switch typ {
 				case "dir":
-					if err := idtools.MkdirAllAndChownNew(filepath.Join(initLayer, pth), 0755, rootIDs); err != nil {
+					if err := idtools.MkdirAllNewAs(filepath.Join(initLayer, pth), 0755, rootUID, rootGID); err != nil {
 						return err
 					}
 				case "file":
@@ -51,7 +51,7 @@ func Setup(initLayer string, rootIDs idtools.IDPair) error {
 					if err != nil {
 						return err
 					}
-					f.Chown(rootIDs.UID, rootIDs.GID)
+					f.Chown(rootUID, rootGID)
 					f.Close()
 				default:
 					if err := os.Symlink(typ, filepath.Join(initLayer, pth)); err != nil {

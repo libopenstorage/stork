@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
 # usage: ./generate.sh [versions]
@@ -42,7 +42,7 @@ for version in "${versions[@]}"; do
 
 	echo >> "$version/Dockerfile"
 
-	extraBuildTags=
+	extraBuildTags='pkcs11'
 	runcBuildTags=
 
 	case "$from" in
@@ -60,7 +60,7 @@ for version in "${versions[@]}"; do
 	esac
 
 	case "$from" in
-		centos:*|amazonlinux:latest)
+		centos:*)
 			# get "Development Tools" packages dependencies
 			echo 'RUN yum groupinstall -y "Development Tools"' >> "$version/Dockerfile"
 
@@ -78,7 +78,7 @@ for version in "${versions[@]}"; do
 			echo 'RUN zypper --non-interactive install ca-certificates* curl gzip rpm-build' >> "$version/Dockerfile"
 			;;
 		photon:*)
-			echo "RUN ${installer} install -y wget curl ca-certificates gzip make rpm-build sed gcc linux-api-headers glibc-devel binutils libseccomp elfutils" >> "$version/Dockerfile"
+			echo "RUN ${installer} install -y wget curl ca-certificates gzip make rpm-build sed gcc linux-api-headers glibc-devel binutils libseccomp libltdl-devel elfutils" >> "$version/Dockerfile"
 			;;
 		*)
 			echo "RUN ${installer} install -y @development-tools fedora-packager" >> "$version/Dockerfile"
@@ -91,9 +91,11 @@ for version in "${versions[@]}"; do
 		glibc-static
 		libseccomp-devel # for "seccomp.h" & "libseccomp.so"
 		libselinux-devel # for "libselinux.so"
+		libtool-ltdl-devel # for pkcs11 "ltdl.h"
 		pkgconfig # for the pkg-config command
 		selinux-policy
 		selinux-policy-devel
+		sqlite-devel # for "sqlite3.h"
 		systemd-devel # for "sd-journal.h" and libraries
 		tar # older versions of dev-tools do not have tar
 		git # required for containerd and runc clone
@@ -109,7 +111,7 @@ for version in "${versions[@]}"; do
 	esac
 
 	case "$from" in
-		oraclelinux:6|amazonlinux:latest)
+		oraclelinux:6)
 			# doesn't use systemd, doesn't have a devel package for it
 			packages=( "${packages[@]/systemd-devel}" )
 			;;

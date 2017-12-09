@@ -5,8 +5,8 @@ import (
 	"net"
 	"strings"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/gogo/protobuf/proto"
-	"github.com/sirupsen/logrus"
 )
 
 type delegate struct {
@@ -15,25 +15,6 @@ type delegate struct {
 
 func (d *delegate) NodeMeta(limit int) []byte {
 	return []byte{}
-}
-
-func (nDB *NetworkDB) getNode(nEvent *NodeEvent) *node {
-	nDB.Lock()
-	defer nDB.Unlock()
-
-	for _, nodes := range []map[string]*node{
-		nDB.failedNodes,
-		nDB.leftNodes,
-		nDB.nodes,
-	} {
-		if n, ok := nodes[nEvent.NodeName]; ok {
-			if n.ltime >= nEvent.LTime {
-				return nil
-			}
-			return n
-		}
-	}
-	return nil
 }
 
 func (nDB *NetworkDB) checkAndGetNode(nEvent *NodeEvent) *node {
@@ -82,28 +63,10 @@ func (nDB *NetworkDB) purgeSameNode(n *node) {
 }
 
 func (nDB *NetworkDB) handleNodeEvent(nEvent *NodeEvent) bool {
-	// Update our local clock if the received messages has newer
-	// time.
-	nDB.networkClock.Witness(nEvent.LTime)
-
-	n := nDB.getNode(nEvent)
+	n := nDB.checkAndGetNode(nEvent)
 	if n == nil {
 		return false
 	}
-	// If its a node leave event for a manager and this is the only manager we
-	// know of we want the reconnect logic to kick in. In a single manager
-	// cluster manager's gossip can't be bootstrapped unless some other node
-	// connects to it.
-	if len(nDB.bootStrapIP) == 1 && nEvent.Type == NodeEventTypeLeave {
-		for _, ip := range nDB.bootStrapIP {
-			if ip.Equal(n.Addr) {
-				n.ltime = nEvent.LTime
-				return true
-			}
-		}
-	}
-
-	n = nDB.checkAndGetNode(nEvent)
 
 	nDB.purgeSameNode(n)
 	n.ltime = nEvent.LTime
@@ -111,18 +74,13 @@ func (nDB *NetworkDB) handleNodeEvent(nEvent *NodeEvent) bool {
 	switch nEvent.Type {
 	case NodeEventTypeJoin:
 		nDB.Lock()
-		_, found := nDB.nodes[n.Name]
 		nDB.nodes[n.Name] = n
 		nDB.Unlock()
-		if !found {
-			logrus.Infof("Node join event for %s/%s", n.Name, n.Addr)
-		}
 		return true
 	case NodeEventTypeLeave:
 		nDB.Lock()
 		nDB.leftNodes[n.Name] = n
 		nDB.Unlock()
-		logrus.Infof("Node leave event for %s/%s", n.Name, n.Addr)
 		return true
 	}
 
@@ -130,25 +88,12 @@ func (nDB *NetworkDB) handleNodeEvent(nEvent *NodeEvent) bool {
 }
 
 func (nDB *NetworkDB) handleNetworkEvent(nEvent *NetworkEvent) bool {
-	var flushEntries bool
 	// Update our local clock if the received messages has newer
 	// time.
 	nDB.networkClock.Witness(nEvent.LTime)
 
 	nDB.Lock()
-	defer func() {
-		nDB.Unlock()
-		// When a node leaves a network on the last task removal cleanup the
-		// local entries for this network & node combination. When the tasks
-		// on a network are removed we could have missed the gossip updates.
-		// Not doing this cleanup can leave stale entries because bulksyncs
-		// from the node will no longer include this network state.
-		//
-		// deleteNodeNetworkEntries takes nDB lock.
-		if flushEntries {
-			nDB.deleteNodeNetworkEntries(nEvent.NetworkID, nEvent.NodeName)
-		}
-	}()
+	defer nDB.Unlock()
 
 	if nEvent.NodeName == nDB.config.NodeName {
 		return false
@@ -176,15 +121,9 @@ func (nDB *NetworkDB) handleNetworkEvent(nEvent *NetworkEvent) bool {
 		n.leaving = nEvent.Type == NetworkEventTypeLeave
 		if n.leaving {
 			n.reapTime = reapInterval
-			flushEntries = true
 		}
 
-		if nEvent.Type == NetworkEventTypeLeave {
-			nDB.deleteNetworkNode(nEvent.NetworkID, nEvent.NodeName)
-		} else {
-			nDB.addNetworkNode(nEvent.NetworkID, nEvent.NodeName)
-		}
-
+		nDB.addNetworkNode(nEvent.NetworkID, nEvent.NodeName)
 		return true
 	}
 

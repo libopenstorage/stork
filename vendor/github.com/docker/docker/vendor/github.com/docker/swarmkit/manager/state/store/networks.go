@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/docker/swarmkit/api"
+	"github.com/docker/swarmkit/manager/state"
 	memdb "github.com/hashicorp/go-memdb"
 )
 
@@ -11,23 +12,19 @@ const tableNetwork = "network"
 
 func init() {
 	register(ObjectStoreConfig{
+		Name: tableNetwork,
 		Table: &memdb.TableSchema{
 			Name: tableNetwork,
 			Indexes: map[string]*memdb.IndexSchema{
 				indexID: {
 					Name:    indexID,
 					Unique:  true,
-					Indexer: api.NetworkIndexerByID{},
+					Indexer: networkIndexerByID{},
 				},
 				indexName: {
 					Name:    indexName,
 					Unique:  true,
-					Indexer: api.NetworkIndexerByName{},
-				},
-				indexCustom: {
-					Name:         indexCustom,
-					Indexer:      api.NetworkCustomIndexer{},
-					AllowMissing: true,
+					Indexer: networkIndexerByName{},
 				},
 			},
 		},
@@ -37,13 +34,23 @@ func init() {
 			return err
 		},
 		Restore: func(tx Tx, snapshot *api.StoreSnapshot) error {
-			toStoreObj := make([]api.StoreObject, len(snapshot.Networks))
-			for i, x := range snapshot.Networks {
-				toStoreObj[i] = x
+			networks, err := FindNetworks(tx, All)
+			if err != nil {
+				return err
 			}
-			return RestoreTable(tx, tableNetwork, toStoreObj)
+			for _, n := range networks {
+				if err := DeleteNetwork(tx, n.ID); err != nil {
+					return err
+				}
+			}
+			for _, n := range snapshot.Networks {
+				if err := CreateNetwork(tx, n); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
-		ApplyStoreAction: func(tx Tx, sa api.StoreAction) error {
+		ApplyStoreAction: func(tx Tx, sa *api.StoreAction) error {
 			switch v := sa.Target.(type) {
 			case *api.StoreAction_Network:
 				obj := v.Network
@@ -58,7 +65,62 @@ func init() {
 			}
 			return errUnknownStoreAction
 		},
+		NewStoreAction: func(c state.Event) (api.StoreAction, error) {
+			var sa api.StoreAction
+			switch v := c.(type) {
+			case state.EventCreateNetwork:
+				sa.Action = api.StoreActionKindCreate
+				sa.Target = &api.StoreAction_Network{
+					Network: v.Network,
+				}
+			case state.EventUpdateNetwork:
+				sa.Action = api.StoreActionKindUpdate
+				sa.Target = &api.StoreAction_Network{
+					Network: v.Network,
+				}
+			case state.EventDeleteNetwork:
+				sa.Action = api.StoreActionKindRemove
+				sa.Target = &api.StoreAction_Network{
+					Network: v.Network,
+				}
+			default:
+				return api.StoreAction{}, errUnknownStoreAction
+			}
+			return sa, nil
+		},
 	})
+}
+
+type networkEntry struct {
+	*api.Network
+}
+
+func (n networkEntry) ID() string {
+	return n.Network.ID
+}
+
+func (n networkEntry) Meta() api.Meta {
+	return n.Network.Meta
+}
+
+func (n networkEntry) SetMeta(meta api.Meta) {
+	n.Network.Meta = meta
+}
+
+func (n networkEntry) Copy() Object {
+	return networkEntry{n.Network.Copy()}
+}
+
+func (n networkEntry) EventCreate() state.Event {
+	return state.EventCreateNetwork{Network: n.Network}
+}
+
+func (n networkEntry) EventUpdate() state.Event {
+	return state.EventUpdateNetwork{Network: n.Network}
+}
+
+func (n networkEntry) EventDelete() state.Event {
+	return state.EventDeleteNetwork{Network: n.Network}
 }
 
 // CreateNetwork adds a new network to the store.
@@ -69,7 +131,7 @@ func CreateNetwork(tx Tx, n *api.Network) error {
 		return ErrNameConflict
 	}
 
-	return tx.create(tableNetwork, n)
+	return tx.create(tableNetwork, networkEntry{n})
 }
 
 // UpdateNetwork updates an existing network in the store.
@@ -77,12 +139,12 @@ func CreateNetwork(tx Tx, n *api.Network) error {
 func UpdateNetwork(tx Tx, n *api.Network) error {
 	// Ensure the name is either not in use or already used by this same Network.
 	if existing := tx.lookup(tableNetwork, indexName, strings.ToLower(n.Spec.Annotations.Name)); existing != nil {
-		if existing.GetID() != n.ID {
+		if existing.ID() != n.ID {
 			return ErrNameConflict
 		}
 	}
 
-	return tx.update(tableNetwork, n)
+	return tx.update(tableNetwork, networkEntry{n})
 }
 
 // DeleteNetwork removes a network from the store.
@@ -98,14 +160,14 @@ func GetNetwork(tx ReadTx, id string) *api.Network {
 	if n == nil {
 		return nil
 	}
-	return n.(*api.Network)
+	return n.(networkEntry).Network
 }
 
 // FindNetworks selects a set of networks and returns them.
 func FindNetworks(tx ReadTx, by By) ([]*api.Network, error) {
 	checkType := func(by By) error {
 		switch by.(type) {
-		case byName, byNamePrefix, byIDPrefix, byCustom, byCustomPrefix:
+		case byName, byNamePrefix, byIDPrefix:
 			return nil
 		default:
 			return ErrInvalidFindBy
@@ -113,10 +175,51 @@ func FindNetworks(tx ReadTx, by By) ([]*api.Network, error) {
 	}
 
 	networkList := []*api.Network{}
-	appendResult := func(o api.StoreObject) {
-		networkList = append(networkList, o.(*api.Network))
+	appendResult := func(o Object) {
+		networkList = append(networkList, o.(networkEntry).Network)
 	}
 
 	err := tx.find(tableNetwork, by, checkType, appendResult)
 	return networkList, err
+}
+
+type networkIndexerByID struct{}
+
+func (ni networkIndexerByID) FromArgs(args ...interface{}) ([]byte, error) {
+	return fromArgs(args...)
+}
+
+func (ni networkIndexerByID) FromObject(obj interface{}) (bool, []byte, error) {
+	n, ok := obj.(networkEntry)
+	if !ok {
+		panic("unexpected type passed to FromObject")
+	}
+
+	// Add the null character as a terminator
+	val := n.Network.ID + "\x00"
+	return true, []byte(val), nil
+}
+
+func (ni networkIndexerByID) PrefixFromArgs(args ...interface{}) ([]byte, error) {
+	return prefixFromArgs(args...)
+}
+
+type networkIndexerByName struct{}
+
+func (ni networkIndexerByName) FromArgs(args ...interface{}) ([]byte, error) {
+	return fromArgs(args...)
+}
+
+func (ni networkIndexerByName) FromObject(obj interface{}) (bool, []byte, error) {
+	n, ok := obj.(networkEntry)
+	if !ok {
+		panic("unexpected type passed to FromObject")
+	}
+
+	// Add the null character as a terminator
+	return true, []byte(strings.ToLower(n.Spec.Annotations.Name) + "\x00"), nil
+}
+
+func (ni networkIndexerByName) PrefixFromArgs(args ...interface{}) ([]byte, error) {
+	return prefixFromArgs(args...)
 }

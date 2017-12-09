@@ -4,6 +4,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/docker/go-events"
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/log"
 	"github.com/docker/swarmkit/manager/state"
@@ -32,28 +33,29 @@ type TaskReaper struct {
 	taskHistory int64
 	dirty       map[instanceTuple]struct{}
 	orphaned    []string
+	watcher     chan events.Event
+	cancelWatch func()
 	stopChan    chan struct{}
 	doneChan    chan struct{}
 }
 
 // New creates a new TaskReaper.
 func New(store *store.MemoryStore) *TaskReaper {
+	watcher, cancel := state.Watch(store.WatchQueue(), state.EventCreateTask{}, state.EventUpdateTask{}, state.EventUpdateCluster{})
+
 	return &TaskReaper{
-		store:    store,
-		dirty:    make(map[instanceTuple]struct{}),
-		stopChan: make(chan struct{}),
-		doneChan: make(chan struct{}),
+		store:       store,
+		watcher:     watcher,
+		cancelWatch: cancel,
+		dirty:       make(map[instanceTuple]struct{}),
+		stopChan:    make(chan struct{}),
+		doneChan:    make(chan struct{}),
 	}
 }
 
 // Run is the TaskReaper's main loop.
-func (tr *TaskReaper) Run(ctx context.Context) {
-	watcher, watchCancel := state.Watch(tr.store.WatchQueue(), api.EventCreateTask{}, api.EventUpdateTask{}, api.EventUpdateCluster{})
-
-	defer func() {
-		close(tr.doneChan)
-		watchCancel()
-	}()
+func (tr *TaskReaper) Run() {
+	defer close(tr.doneChan)
 
 	var tasks []*api.Task
 	tr.store.View(func(readTx store.ReadTx) {
@@ -66,7 +68,7 @@ func (tr *TaskReaper) Run(ctx context.Context) {
 
 		tasks, err = store.FindTasks(readTx, store.ByTaskState(api.TaskStateOrphaned))
 		if err != nil {
-			log.G(ctx).WithError(err).Error("failed to find Orphaned tasks in task reaper init")
+			log.G(context.TODO()).WithError(err).Error("failed to find Orphaned tasks in task reaper init")
 		}
 	})
 
@@ -89,21 +91,21 @@ func (tr *TaskReaper) Run(ctx context.Context) {
 
 	for {
 		select {
-		case event := <-watcher:
+		case event := <-tr.watcher:
 			switch v := event.(type) {
-			case api.EventCreateTask:
+			case state.EventCreateTask:
 				t := v.Task
 				tr.dirty[instanceTuple{
 					instance:  t.Slot,
 					serviceID: t.ServiceID,
 					nodeID:    t.NodeID,
 				}] = struct{}{}
-			case api.EventUpdateTask:
+			case state.EventUpdateTask:
 				t := v.Task
 				if t.Status.State >= api.TaskStateOrphaned && t.ServiceID == "" {
 					tr.orphaned = append(tr.orphaned, t.ID)
 				}
-			case api.EventUpdateCluster:
+			case state.EventUpdateCluster:
 				tr.taskHistory = v.Cluster.Spec.Orchestration.TaskHistoryRetentionLimit
 			}
 
@@ -129,13 +131,11 @@ func (tr *TaskReaper) tick() {
 	}
 
 	defer func() {
+		tr.dirty = make(map[instanceTuple]struct{})
 		tr.orphaned = nil
 	}()
 
-	deleteTasks := make(map[string]struct{})
-	for _, tID := range tr.orphaned {
-		deleteTasks[tID] = struct{}{}
-	}
+	deleteTasks := tr.orphaned
 	tr.store.View(func(tx store.ReadTx) {
 		for dirty := range tr.dirty {
 			service := store.GetService(tx, dirty.serviceID)
@@ -180,15 +180,13 @@ func (tr *TaskReaper) tick() {
 			// instead of sorting the whole slice.
 			sort.Sort(tasksByTimestamp(historicTasks))
 
-			runningTasks := 0
 			for _, t := range historicTasks {
-				if t.DesiredState <= api.TaskStateRunning || t.Status.State <= api.TaskStateRunning {
+				if t.DesiredState <= api.TaskStateRunning {
 					// Don't delete running tasks
-					runningTasks++
 					continue
 				}
 
-				deleteTasks[t.ID] = struct{}{}
+				deleteTasks = append(deleteTasks, t.ID)
 
 				taskHistory++
 				if int64(len(historicTasks)) <= taskHistory {
@@ -196,15 +194,12 @@ func (tr *TaskReaper) tick() {
 				}
 			}
 
-			if runningTasks <= 1 {
-				delete(tr.dirty, dirty)
-			}
 		}
 	})
 
 	if len(deleteTasks) > 0 {
 		tr.store.Batch(func(batch *store.Batch) error {
-			for taskID := range deleteTasks {
+			for _, taskID := range deleteTasks {
 				batch.Update(func(tx store.Tx) error {
 					return store.DeleteTask(tx, taskID)
 				})
@@ -216,6 +211,7 @@ func (tr *TaskReaper) tick() {
 
 // Stop stops the TaskReaper and waits for the main loop to exit.
 func (tr *TaskReaper) Stop() {
+	tr.cancelWatch()
 	close(tr.stopChan)
 	<-tr.doneChan
 }

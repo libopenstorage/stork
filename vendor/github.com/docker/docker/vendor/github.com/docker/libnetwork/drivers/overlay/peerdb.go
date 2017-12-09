@@ -6,7 +6,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 const ovPeerTable = "overlay_peer_table"
@@ -80,29 +80,25 @@ func (d *driver) peerDbWalk(f func(string, *peerKey, *peerEntry) bool) error {
 func (d *driver) peerDbNetworkWalk(nid string, f func(*peerKey, *peerEntry) bool) error {
 	d.peerDb.Lock()
 	pMap, ok := d.peerDb.mp[nid]
-	d.peerDb.Unlock()
-
 	if !ok {
+		d.peerDb.Unlock()
 		return nil
 	}
-
-	mp := map[string]peerEntry{}
+	d.peerDb.Unlock()
 
 	pMap.Lock()
 	for pKeyStr, pEntry := range pMap.mp {
-		mp[pKeyStr] = pEntry
-	}
-	pMap.Unlock()
-
-	for pKeyStr, pEntry := range mp {
 		var pKey peerKey
 		if _, err := fmt.Sscan(pKeyStr, &pKey); err != nil {
 			logrus.Warnf("Peer key scan on network %s failed: %v", nid, err)
 		}
+
 		if f(&pKey, &pEntry) {
+			pMap.Unlock()
 			return nil
 		}
 	}
+	pMap.Unlock()
 
 	return nil
 }
@@ -222,7 +218,7 @@ func (d *driver) peerDbUpdateSandbox(nid string) {
 	for pKeyStr, pEntry := range pMap.mp {
 		var pKey peerKey
 		if _, err := fmt.Sscan(pKeyStr, &pKey); err != nil {
-			logrus.Errorf("peer key scan failed: %v", err)
+			fmt.Printf("peer key scan failed: %v", err)
 		}
 
 		if pEntry.isLocal {
@@ -236,8 +232,8 @@ func (d *driver) peerDbUpdateSandbox(nid string) {
 		op := func() {
 			if err := d.peerAdd(nid, entry.eid, pKey.peerIP, entry.peerIPMask,
 				pKey.peerMac, entry.vtep,
-				false, false, false); err != nil {
-				logrus.Errorf("peerdbupdate in sandbox failed for ip %s and mac %s: %v",
+				false); err != nil {
+				fmt.Printf("peerdbupdate in sandbox failed for ip %s and mac %s: %v",
 					pKey.peerIP, pKey.peerMac, err)
 			}
 		}
@@ -254,7 +250,7 @@ func (d *driver) peerDbUpdateSandbox(nid string) {
 }
 
 func (d *driver) peerAdd(nid, eid string, peerIP net.IP, peerIPMask net.IPMask,
-	peerMac net.HardwareAddr, vtep net.IP, updateDb, l2Miss, l3Miss bool) error {
+	peerMac net.HardwareAddr, vtep net.IP, updateDb bool) error {
 
 	if err := validateID(nid, eid); err != nil {
 		return err
@@ -297,12 +293,12 @@ func (d *driver) peerAdd(nid, eid string, peerIP net.IP, peerIPMask net.IPMask,
 	}
 
 	// Add neighbor entry for the peer IP
-	if err := sbox.AddNeighbor(peerIP, peerMac, l3Miss, sbox.NeighborOptions().LinkName(s.vxlanName)); err != nil {
+	if err := sbox.AddNeighbor(peerIP, peerMac, sbox.NeighborOptions().LinkName(s.vxlanName)); err != nil {
 		return fmt.Errorf("could not add neighbor entry into the sandbox: %v", err)
 	}
 
 	// Add fdb entry to the bridge for the peer mac
-	if err := sbox.AddNeighbor(vtep, peerMac, l2Miss, sbox.NeighborOptions().LinkName(s.vxlanName),
+	if err := sbox.AddNeighbor(vtep, peerMac, sbox.NeighborOptions().LinkName(s.vxlanName),
 		sbox.NeighborOptions().Family(syscall.AF_BRIDGE)); err != nil {
 		return fmt.Errorf("could not add fdb entry into the sandbox: %v", err)
 	}
@@ -363,15 +359,6 @@ func (d *driver) pushLocalDb() {
 	d.peerDbWalk(func(nid string, pKey *peerKey, pEntry *peerEntry) bool {
 		if pEntry.isLocal {
 			d.pushLocalEndpointEvent("join", nid, pEntry.eid)
-		}
-		return false
-	})
-}
-
-func (d *driver) peerDBUpdateSelf() {
-	d.peerDbWalk(func(nid string, pkey *peerKey, pEntry *peerEntry) bool {
-		if pEntry.isLocal {
-			pEntry.vtep = net.ParseIP(d.advertiseAddress)
 		}
 		return false
 	})

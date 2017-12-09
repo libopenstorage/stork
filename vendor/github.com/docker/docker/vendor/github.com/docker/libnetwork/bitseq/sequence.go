@@ -6,13 +6,12 @@ package bitseq
 import (
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/types"
-	"github.com/sirupsen/logrus"
 )
 
 // block sequence constants
@@ -27,9 +26,9 @@ const (
 
 var (
 	// ErrNoBitAvailable is returned when no more bits are available to set
-	ErrNoBitAvailable = errors.New("no bit available")
+	ErrNoBitAvailable = fmt.Errorf("no bit available")
 	// ErrBitAllocated is returned when the specific bit requested is already set
-	ErrBitAllocated = errors.New("requested bit is already allocated")
+	ErrBitAllocated = fmt.Errorf("requested bit is already allocated")
 )
 
 // Handle contains the sequece representing the bitmask and its identifier
@@ -374,7 +373,7 @@ func (h *Handle) validateOrdinal(ordinal uint64) error {
 	h.Lock()
 	defer h.Unlock()
 	if ordinal >= h.bits {
-		return errors.New("bit does not belong to the sequence")
+		return fmt.Errorf("bit does not belong to the sequence")
 	}
 	return nil
 }
@@ -419,7 +418,7 @@ func (h *Handle) ToByteArray() ([]byte, error) {
 // FromByteArray reads his handle's data from a byte array
 func (h *Handle) FromByteArray(ba []byte) error {
 	if ba == nil {
-		return errors.New("nil byte array")
+		return fmt.Errorf("nil byte array")
 	}
 
 	nh := &sequence{}

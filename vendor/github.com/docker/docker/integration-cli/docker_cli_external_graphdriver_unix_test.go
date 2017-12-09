@@ -14,7 +14,6 @@ import (
 
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/daemon/graphdriver/vfs"
-	"github.com/docker/docker/integration-cli/daemon"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/plugins"
 	"github.com/go-check/check"
@@ -30,7 +29,7 @@ type DockerExternalGraphdriverSuite struct {
 	server  *httptest.Server
 	jserver *httptest.Server
 	ds      *DockerSuite
-	d       *daemon.Daemon
+	d       *Daemon
 	ec      map[string]*graphEventsCounter
 }
 
@@ -52,9 +51,7 @@ type graphEventsCounter struct {
 }
 
 func (s *DockerExternalGraphdriverSuite) SetUpTest(c *check.C) {
-	s.d = daemon.New(c, dockerBinary, dockerdBinary, daemon.Config{
-		Experimental: testEnv.ExperimentalDaemon(),
-	})
+	s.d = NewDaemon(c)
 }
 
 func (s *DockerExternalGraphdriverSuite) OnTimeout(c *check.C) {
@@ -62,10 +59,8 @@ func (s *DockerExternalGraphdriverSuite) OnTimeout(c *check.C) {
 }
 
 func (s *DockerExternalGraphdriverSuite) TearDownTest(c *check.C) {
-	if s.d != nil {
-		s.d.Stop(c)
-		s.ds.TearDownTest(c)
-	}
+	s.d.Stop()
+	s.ds.TearDownTest(c)
 }
 
 func (s *DockerExternalGraphdriverSuite) SetUpSuite(c *check.C) {
@@ -111,7 +106,7 @@ func (s *DockerExternalGraphdriverSuite) setUpPlugin(c *check.C, name string, ex
 	}
 
 	respond := func(w http.ResponseWriter, data interface{}) {
-		w.Header().Set("Content-Type", "application/vnd.docker.plugins.v1+json")
+		w.Header().Set("Content-Type", "appplication/vnd.docker.plugins.v1+json")
 		switch t := data.(type) {
 		case error:
 			fmt.Fprintln(w, fmt.Sprintf(`{"Err": %q}`, t.Error()))
@@ -353,12 +348,15 @@ func (s *DockerExternalGraphdriverSuite) TestExternalGraphDriver(c *check.C) {
 }
 
 func (s *DockerExternalGraphdriverSuite) testExternalGraphDriver(name string, ext string, c *check.C) {
-	s.d.StartWithBusybox(c, "-s", name)
+	if err := s.d.StartWithBusybox("-s", name); err != nil {
+		b, _ := ioutil.ReadFile(s.d.LogFileName())
+		c.Assert(err, check.IsNil, check.Commentf("\n%s", string(b)))
+	}
 
 	out, err := s.d.Cmd("run", "--name=graphtest", "busybox", "sh", "-c", "echo hello > /hello")
 	c.Assert(err, check.IsNil, check.Commentf(out))
 
-	s.d.Restart(c, "-s", name)
+	err = s.d.Restart("-s", name)
 
 	out, err = s.d.Cmd("inspect", "--format={{.GraphDriver.Name}}", "graphtest")
 	c.Assert(err, check.IsNil, check.Commentf(out))
@@ -374,7 +372,8 @@ func (s *DockerExternalGraphdriverSuite) testExternalGraphDriver(name string, ex
 	out, err = s.d.Cmd("info")
 	c.Assert(err, check.IsNil, check.Commentf(out))
 
-	s.d.Stop(c)
+	err = s.d.Stop()
+	c.Assert(err, check.IsNil)
 
 	// Don't check s.ec.exists, because the daemon no longer calls the
 	// Exists function.
@@ -396,7 +395,7 @@ func (s *DockerExternalGraphdriverSuite) testExternalGraphDriver(name string, ex
 func (s *DockerExternalGraphdriverSuite) TestExternalGraphDriverPull(c *check.C) {
 	testRequires(c, Network, ExperimentalDaemon)
 
-	s.d.Start(c)
+	c.Assert(s.d.Start(), check.IsNil)
 
 	out, err := s.d.Cmd("pull", "busybox:latest")
 	c.Assert(err, check.IsNil, check.Commentf(out))

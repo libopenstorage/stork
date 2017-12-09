@@ -3,12 +3,12 @@ package agent
 import (
 	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
 	"github.com/docker/swarmkit/agent/exec"
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/log"
 	"github.com/docker/swarmkit/watch"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -23,13 +23,12 @@ type Worker interface {
 	// It is not safe to call any worker function after that.
 	Close()
 
-	// Assign assigns a complete set of tasks and configs/secrets to a
-	// worker. Any items not included in this set will be removed.
+	// Assign assigns a complete set of tasks and secrets to a worker. Any task or secrets not included in
+	// this set will be removed.
 	Assign(ctx context.Context, assignments []*api.AssignmentChange) error
 
-	// Updates updates an incremental set of tasks or configs/secrets of
-	// the worker. Any items not included either in added or removed will
-	// remain untouched.
+	// Updates updates an incremental set of tasks or secrets of the worker. Any task/secret not included
+	// either in added or removed will remain untouched.
 	Update(ctx context.Context, assignments []*api.AssignmentChange) error
 
 	// Listen to updates about tasks controlled by the worker. When first
@@ -120,11 +119,11 @@ func (w *worker) Close() {
 	w.taskevents.Close()
 }
 
-// Assign assigns a full set of tasks, configs, and secrets to the worker.
+// Assign assigns a full set of tasks and secrets to the worker.
 // Any tasks not previously known will be started. Any tasks that are in the task set
 // and already running will be updated, if possible. Any tasks currently running on
 // the worker outside the task set will be terminated.
-// Anything not in the set of assignments will be removed.
+// Any secrets not in the set of assignments will be removed.
 func (w *worker) Assign(ctx context.Context, assignments []*api.AssignmentChange) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -137,14 +136,8 @@ func (w *worker) Assign(ctx context.Context, assignments []*api.AssignmentChange
 		"len(assignments)": len(assignments),
 	}).Debug("(*worker).Assign")
 
-	// Need to update dependencies before tasks
-
+	// Need to update secrets before tasks, because tasks might depend on new secrets
 	err := reconcileSecrets(ctx, w, assignments, true)
-	if err != nil {
-		return err
-	}
-
-	err = reconcileConfigs(ctx, w, assignments, true)
 	if err != nil {
 		return err
 	}
@@ -152,12 +145,10 @@ func (w *worker) Assign(ctx context.Context, assignments []*api.AssignmentChange
 	return reconcileTaskState(ctx, w, assignments, true)
 }
 
-// Update updates the set of tasks, configs, and secrets for the worker.
+// Update updates the set of tasks and secret for the worker.
 // Tasks in the added set will be added to the worker, and tasks in the removed set
 // will be removed from the worker
-// Secrets in the added set will be added to the worker, and secrets in the removed set
-// will be removed from the worker.
-// Configs in the added set will be added to the worker, and configs in the removed set
+// Serets in the added set will be added to the worker, and secrets in the removed set
 // will be removed from the worker.
 func (w *worker) Update(ctx context.Context, assignments []*api.AssignmentChange) error {
 	w.mu.Lock()
@@ -172,11 +163,6 @@ func (w *worker) Update(ctx context.Context, assignments []*api.AssignmentChange
 	}).Debug("(*worker).Update")
 
 	err := reconcileSecrets(ctx, w, assignments, false)
-	if err != nil {
-		return err
-	}
-
-	err = reconcileConfigs(ctx, w, assignments, false)
 	if err != nil {
 		return err
 	}
@@ -316,6 +302,15 @@ func reconcileTaskState(ctx context.Context, w *worker, assignments []*api.Assig
 }
 
 func reconcileSecrets(ctx context.Context, w *worker, assignments []*api.AssignmentChange, fullSnapshot bool) error {
+	var secrets exec.SecretsManager
+	provider, ok := w.executor.(exec.SecretsProvider)
+	if !ok {
+		log.G(ctx).Warn("secrets update ignored; executor does not support secrets")
+		return nil
+	}
+
+	secrets = provider.Secrets()
+
 	var (
 		updatedSecrets []api.Secret
 		removedSecrets []string
@@ -332,16 +327,6 @@ func reconcileSecrets(ctx context.Context, w *worker, assignments []*api.Assignm
 		}
 	}
 
-	secretsProvider, ok := w.executor.(exec.SecretsProvider)
-	if !ok {
-		if len(updatedSecrets) != 0 || len(removedSecrets) != 0 {
-			log.G(ctx).Warn("secrets update ignored; executor does not support secrets")
-		}
-		return nil
-	}
-
-	secrets := secretsProvider.Secrets()
-
 	log.G(ctx).WithFields(logrus.Fields{
 		"len(updatedSecrets)": len(updatedSecrets),
 		"len(removedSecrets)": len(removedSecrets),
@@ -354,49 +339,6 @@ func reconcileSecrets(ctx context.Context, w *worker, assignments []*api.Assignm
 		secrets.Remove(removedSecrets)
 	}
 	secrets.Add(updatedSecrets...)
-
-	return nil
-}
-
-func reconcileConfigs(ctx context.Context, w *worker, assignments []*api.AssignmentChange, fullSnapshot bool) error {
-	var (
-		updatedConfigs []api.Config
-		removedConfigs []string
-	)
-	for _, a := range assignments {
-		if r := a.Assignment.GetConfig(); r != nil {
-			switch a.Action {
-			case api.AssignmentChange_AssignmentActionUpdate:
-				updatedConfigs = append(updatedConfigs, *r)
-			case api.AssignmentChange_AssignmentActionRemove:
-				removedConfigs = append(removedConfigs, r.ID)
-			}
-
-		}
-	}
-
-	configsProvider, ok := w.executor.(exec.ConfigsProvider)
-	if !ok {
-		if len(updatedConfigs) != 0 || len(removedConfigs) != 0 {
-			log.G(ctx).Warn("configs update ignored; executor does not support configs")
-		}
-		return nil
-	}
-
-	configs := configsProvider.Configs()
-
-	log.G(ctx).WithFields(logrus.Fields{
-		"len(updatedConfigs)": len(updatedConfigs),
-		"len(removedConfigs)": len(removedConfigs),
-	}).Debug("(*worker).reconcileConfigs")
-
-	// If this was a complete set of configs, we're going to clear the configs map and add all of them
-	if fullSnapshot {
-		configs.Reset()
-	} else {
-		configs.Remove(removedConfigs)
-	}
-	configs.Add(updatedConfigs...)
 
 	return nil
 }
@@ -426,19 +368,14 @@ func (w *worker) Listen(ctx context.Context, reporter StatusReporter) {
 }
 
 func (w *worker) startTask(ctx context.Context, tx *bolt.Tx, task *api.Task) error {
+	w.taskevents.Publish(task.Copy())
 	_, err := w.taskManager(ctx, tx, task) // side-effect taskManager creation.
 
 	if err != nil {
 		log.G(ctx).WithError(err).Error("failed to start taskManager")
-		// we ignore this error: it gets reported in the taskStatus within
-		// `newTaskManager`. We log it here and move on. If their is an
-		// attempted restart, the lack of taskManager will have this retry
-		// again.
-		return nil
 	}
 
-	// only publish if controller resolution was successful.
-	w.taskevents.Publish(task.Copy())
+	// TODO(stevvooe): Add start method for taskmanager
 	return nil
 }
 
@@ -458,10 +395,7 @@ func (w *worker) taskManager(ctx context.Context, tx *bolt.Tx, task *api.Task) (
 }
 
 func (w *worker) newTaskManager(ctx context.Context, tx *bolt.Tx, task *api.Task) (*taskManager, error) {
-	ctx = log.WithLogger(ctx, log.G(ctx).WithFields(logrus.Fields{
-		"task.id":    task.ID,
-		"service.id": task.ServiceID,
-	}))
+	ctx = log.WithLogger(ctx, log.G(ctx).WithField("task.id", task.ID))
 
 	ctlr, status, err := exec.Resolve(ctx, task, w.executor)
 	if err := w.updateTaskStatus(ctx, tx, task.ID, status); err != nil {
@@ -469,7 +403,7 @@ func (w *worker) newTaskManager(ctx context.Context, tx *bolt.Tx, task *api.Task
 	}
 
 	if err != nil {
-		log.G(ctx).WithError(err).Error("controller resolution failed")
+		log.G(ctx).Error("controller resolution failed")
 		return nil, err
 	}
 
@@ -573,14 +507,9 @@ func (w *worker) Subscribe(ctx context.Context, subscription *api.SubscriptionMe
 		case v := <-ch:
 			task := v.(*api.Task)
 			if match(task) {
-				w.mu.RLock()
-				tm, ok := w.taskManagers[task.ID]
-				w.mu.RUnlock()
-				if !ok {
-					continue
-				}
-
-				go tm.Logs(ctx, *subscription.Options, publisher)
+				w.mu.Lock()
+				go w.taskManagers[task.ID].Logs(ctx, *subscription.Options, publisher)
+				w.mu.Unlock()
 			}
 		case <-ctx.Done():
 			return ctx.Err()

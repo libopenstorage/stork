@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/docker/go-events"
-	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/manager/state"
 )
 
@@ -13,32 +12,32 @@ import (
 func Apply(store *MemoryStore, item events.Event) (err error) {
 	return store.Update(func(tx Tx) error {
 		switch v := item.(type) {
-		case api.EventCreateTask:
+		case state.EventCreateTask:
 			return CreateTask(tx, v.Task)
-		case api.EventUpdateTask:
+		case state.EventUpdateTask:
 			return UpdateTask(tx, v.Task)
-		case api.EventDeleteTask:
+		case state.EventDeleteTask:
 			return DeleteTask(tx, v.Task.ID)
 
-		case api.EventCreateService:
+		case state.EventCreateService:
 			return CreateService(tx, v.Service)
-		case api.EventUpdateService:
+		case state.EventUpdateService:
 			return UpdateService(tx, v.Service)
-		case api.EventDeleteService:
+		case state.EventDeleteService:
 			return DeleteService(tx, v.Service.ID)
 
-		case api.EventCreateNetwork:
+		case state.EventCreateNetwork:
 			return CreateNetwork(tx, v.Network)
-		case api.EventUpdateNetwork:
+		case state.EventUpdateNetwork:
 			return UpdateNetwork(tx, v.Network)
-		case api.EventDeleteNetwork:
+		case state.EventDeleteNetwork:
 			return DeleteNetwork(tx, v.Network.ID)
 
-		case api.EventCreateNode:
+		case state.EventCreateNode:
 			return CreateNode(tx, v.Node)
-		case api.EventUpdateNode:
+		case state.EventUpdateNode:
 			return UpdateNode(tx, v.Node)
-		case api.EventDeleteNode:
+		case state.EventDeleteNode:
 			return DeleteNode(tx, v.Node.ID)
 
 		case state.EventCommit:

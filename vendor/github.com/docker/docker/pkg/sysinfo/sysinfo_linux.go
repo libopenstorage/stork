@@ -6,10 +6,15 @@ import (
 	"os"
 	"path"
 	"strings"
+	"syscall"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
+)
+
+const (
+	// SeccompModeFilter refers to the syscall argument SECCOMP_MODE_FILTER.
+	SeccompModeFilter = uintptr(2)
 )
 
 func findCgroupMountpoints() (map[string]string, error) {
@@ -55,9 +60,9 @@ func New(quiet bool) *SysInfo {
 	}
 
 	// Check if Seccomp is supported, via CONFIG_SECCOMP.
-	if err := unix.Prctl(unix.PR_GET_SECCOMP, 0, 0, 0, 0); err != unix.EINVAL {
+	if _, _, err := syscall.RawSyscall(syscall.SYS_PRCTL, syscall.PR_GET_SECCOMP, 0, 0); err != syscall.EINVAL {
 		// Make sure the kernel has CONFIG_SECCOMP_FILTER.
-		if err := unix.Prctl(unix.PR_SET_SECCOMP, unix.SECCOMP_MODE_FILTER, 0, 0, 0); err != unix.EINVAL {
+		if _, _, err := syscall.RawSyscall(syscall.SYS_PRCTL, syscall.PR_SET_SECCOMP, SeccompModeFilter, 0); err != syscall.EINVAL {
 			sysInfo.Seccomp = true
 		}
 	}

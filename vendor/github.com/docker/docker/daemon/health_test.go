@@ -19,31 +19,26 @@ func reset(c *container.Container) {
 
 func TestNoneHealthcheck(t *testing.T) {
 	c := &container.Container{
-		ID:   "container_id",
-		Name: "container_name",
-		Config: &containertypes.Config{
-			Image: "image_name",
-			Healthcheck: &containertypes.HealthConfig{
-				Test: []string{"NONE"},
+		CommonContainer: container.CommonContainer{
+			ID:   "container_id",
+			Name: "container_name",
+			Config: &containertypes.Config{
+				Image: "image_name",
+				Healthcheck: &containertypes.HealthConfig{
+					Test: []string{"NONE"},
+				},
 			},
+			State: &container.State{},
 		},
-		State: &container.State{},
 	}
-	store, err := container.NewViewDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	daemon := &Daemon{
-		containersReplica: store,
-	}
+	daemon := &Daemon{}
 
 	daemon.initHealthMonitor(c)
 	if c.State.Health != nil {
-		t.Error("Expecting Health to be nil, but was not")
+		t.Errorf("Expecting Health to be nil, but was not")
 	}
 }
 
-// FIXME(vdemeester) This takes around 3s… This is *way* too long
 func TestHealthStates(t *testing.T) {
 	e := events.New()
 	_, l, _ := e.Subscribe()
@@ -62,21 +57,16 @@ func TestHealthStates(t *testing.T) {
 	}
 
 	c := &container.Container{
-		ID:   "container_id",
-		Name: "container_name",
-		Config: &containertypes.Config{
-			Image: "image_name",
+		CommonContainer: container.CommonContainer{
+			ID:   "container_id",
+			Name: "container_name",
+			Config: &containertypes.Config{
+				Image: "image_name",
+			},
 		},
 	}
-
-	store, err := container.NewViewDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	daemon := &Daemon{
-		EventsService:     e,
-		containersReplica: store,
+		EventsService: e,
 	}
 
 	c.Config.Healthcheck = &containertypes.HealthConfig{
@@ -120,32 +110,6 @@ func TestHealthStates(t *testing.T) {
 	handleResult(c.State.StartedAt.Add(60*time.Second), 1)
 	expect("health_status: unhealthy")
 
-	handleResult(c.State.StartedAt.Add(80*time.Second), 0)
-	expect("health_status: healthy")
-	if c.State.Health.FailingStreak != 0 {
-		t.Errorf("Expecting FailingStreak=0, but got %d\n", c.State.Health.FailingStreak)
-	}
-
-	// Test start period
-
-	reset(c)
-	c.Config.Healthcheck.Retries = 2
-	c.Config.Healthcheck.StartPeriod = 30 * time.Second
-
-	handleResult(c.State.StartedAt.Add(20*time.Second), 1)
-	if c.State.Health.Status != types.Starting {
-		t.Errorf("Expecting starting, but got %#v\n", c.State.Health.Status)
-	}
-	if c.State.Health.FailingStreak != 0 {
-		t.Errorf("Expecting FailingStreak=0, but got %d\n", c.State.Health.FailingStreak)
-	}
-	handleResult(c.State.StartedAt.Add(50*time.Second), 1)
-	if c.State.Health.Status != types.Starting {
-		t.Errorf("Expecting starting, but got %#v\n", c.State.Health.Status)
-	}
-	if c.State.Health.FailingStreak != 1 {
-		t.Errorf("Expecting FailingStreak=1, but got %d\n", c.State.Health.FailingStreak)
-	}
 	handleResult(c.State.StartedAt.Add(80*time.Second), 0)
 	expect("health_status: healthy")
 	if c.State.Health.FailingStreak != 0 {

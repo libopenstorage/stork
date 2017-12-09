@@ -24,8 +24,7 @@ func (r *Response) GetError() string {
 // GetCapabilityResponse is the response of GetCapability request
 type GetCapabilityResponse struct {
 	Response
-	Scope             string
-	ConnectivityScope string
+	Scope string
 }
 
 // AllocateNetworkRequest requests allocation of new network by manager

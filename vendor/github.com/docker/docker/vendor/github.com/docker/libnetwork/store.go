@@ -2,14 +2,13 @@ package libnetwork
 
 import (
 	"fmt"
-	"strings"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libkv/store/boltdb"
 	"github.com/docker/libkv/store/consul"
 	"github.com/docker/libkv/store/etcd"
 	"github.com/docker/libkv/store/zookeeper"
 	"github.com/docker/libnetwork/datastore"
-	"github.com/sirupsen/logrus"
 )
 
 func registerKVStores() {
@@ -98,9 +97,7 @@ func (c *controller) getNetworkFromStore(nid string) (*network, error) {
 		}
 
 		n.epCnt = ec
-		if n.scope == "" {
-			n.scope = store.Scope()
-		}
+		n.scope = store.Scope()
 		return n, nil
 	}
 
@@ -134,9 +131,7 @@ func (c *controller) getNetworksForScope(scope string) ([]*network, error) {
 		}
 
 		n.epCnt = ec
-		if n.scope == "" {
-			n.scope = scope
-		}
+		n.scope = scope
 		nl = append(nl, n)
 	}
 
@@ -157,27 +152,22 @@ func (c *controller) getNetworksFromStore() ([]*network, error) {
 			continue
 		}
 
-		kvep, err := store.Map(datastore.Key(epCntKeyPrefix), &endpointCnt{})
-		if err != nil {
-			if err != datastore.ErrKeyNotFound {
-				logrus.Warnf("failed to get endpoint_count map for scope %s: %v", store.Scope(), err)
-			}
-		}
-
 		for _, kvo := range kvol {
 			n := kvo.(*network)
 			n.Lock()
 			n.ctrlr = c
+			n.Unlock()
+
 			ec := &endpointCnt{n: n}
-			// Trim the leading & trailing "/" to make it consistent across all stores
-			if val, ok := kvep[strings.Trim(datastore.Key(ec.Key()...), "/")]; ok {
-				ec = val.(*endpointCnt)
-				ec.n = n
-				n.epCnt = ec
+			err = store.GetObject(datastore.Key(ec.Key()...), ec)
+			if err != nil && !n.inDelete {
+				logrus.Warnf("could not find endpoint count key %s for network %s while listing: %v", datastore.Key(ec.Key()...), n.Name(), err)
+				continue
 			}
-			if n.scope == "" {
-				n.scope = store.Scope()
-			}
+
+			n.Lock()
+			n.epCnt = ec
+			n.scope = store.Scope()
 			n.Unlock()
 			nl = append(nl, n)
 		}
@@ -231,7 +221,7 @@ func (n *network) getEndpointsFromStore() ([]*endpoint, error) {
 func (c *controller) updateToStore(kvObject datastore.KVObject) error {
 	cs := c.getStore(kvObject.DataScope())
 	if cs == nil {
-		return ErrDataStoreNotInitialized(kvObject.DataScope())
+		return fmt.Errorf("datastore for scope %q is not initialized ", kvObject.DataScope())
 	}
 
 	if err := cs.PutObjectAtomic(kvObject); err != nil {
@@ -247,7 +237,7 @@ func (c *controller) updateToStore(kvObject datastore.KVObject) error {
 func (c *controller) deleteFromStore(kvObject datastore.KVObject) error {
 	cs := c.getStore(kvObject.DataScope())
 	if cs == nil {
-		return ErrDataStoreNotInitialized(kvObject.DataScope())
+		return fmt.Errorf("datastore for scope %q is not initialized ", kvObject.DataScope())
 	}
 
 retry:
@@ -356,18 +346,17 @@ func (c *controller) networkWatchLoop(nw *netWatch, ep *endpoint, ecCh <-chan da
 }
 
 func (c *controller) processEndpointCreate(nmap map[string]*netWatch, ep *endpoint) {
-	n := ep.getNetwork()
-	if !c.isDistributedControl() && n.Scope() == datastore.SwarmScope && n.driverIsMultihost() {
+	if !c.isDistributedControl() && ep.getNetwork().driverScope() == datastore.GlobalScope {
 		return
 	}
 
 	c.Lock()
-	nw, ok := nmap[n.ID()]
+	nw, ok := nmap[ep.getNetwork().ID()]
 	c.Unlock()
 
 	if ok {
 		// Update the svc db for the local endpoint join right away
-		n.updateSvcRecord(ep, c.getLocalEps(nw), true)
+		ep.getNetwork().updateSvcRecord(ep, c.getLocalEps(nw), true)
 
 		c.Lock()
 		nw.localEps[ep.ID()] = ep
@@ -388,15 +377,15 @@ func (c *controller) processEndpointCreate(nmap map[string]*netWatch, ep *endpoi
 	// Update the svc db for the local endpoint join right away
 	// Do this before adding this ep to localEps so that we don't
 	// try to update this ep's container's svc records
-	n.updateSvcRecord(ep, c.getLocalEps(nw), true)
+	ep.getNetwork().updateSvcRecord(ep, c.getLocalEps(nw), true)
 
 	c.Lock()
 	nw.localEps[ep.ID()] = ep
-	nmap[n.ID()] = nw
+	nmap[ep.getNetwork().ID()] = nw
 	nw.stopCh = make(chan struct{})
 	c.Unlock()
 
-	store := c.getStore(n.DataScope())
+	store := c.getStore(ep.getNetwork().DataScope())
 	if store == nil {
 		return
 	}
@@ -405,7 +394,7 @@ func (c *controller) processEndpointCreate(nmap map[string]*netWatch, ep *endpoi
 		return
 	}
 
-	ch, err := store.Watch(n.getEpCnt(), nw.stopCh)
+	ch, err := store.Watch(ep.getNetwork().getEpCnt(), nw.stopCh)
 	if err != nil {
 		logrus.Warnf("Error creating watch for network: %v", err)
 		return
@@ -415,13 +404,12 @@ func (c *controller) processEndpointCreate(nmap map[string]*netWatch, ep *endpoi
 }
 
 func (c *controller) processEndpointDelete(nmap map[string]*netWatch, ep *endpoint) {
-	n := ep.getNetwork()
-	if !c.isDistributedControl() && n.Scope() == datastore.SwarmScope && n.driverIsMultihost() {
+	if !c.isDistributedControl() && ep.getNetwork().driverScope() == datastore.GlobalScope {
 		return
 	}
 
 	c.Lock()
-	nw, ok := nmap[n.ID()]
+	nw, ok := nmap[ep.getNetwork().ID()]
 
 	if ok {
 		delete(nw.localEps, ep.ID())
@@ -430,7 +418,7 @@ func (c *controller) processEndpointDelete(nmap map[string]*netWatch, ep *endpoi
 		// Update the svc db about local endpoint leave right away
 		// Do this after we remove this ep from localEps so that we
 		// don't try to remove this svc record from this ep's container.
-		n.updateSvcRecord(ep, c.getLocalEps(nw), false)
+		ep.getNetwork().updateSvcRecord(ep, c.getLocalEps(nw), false)
 
 		c.Lock()
 		if len(nw.localEps) == 0 {
@@ -438,9 +426,9 @@ func (c *controller) processEndpointDelete(nmap map[string]*netWatch, ep *endpoi
 
 			// This is the last container going away for the network. Destroy
 			// this network's svc db entry
-			delete(c.svcRecords, n.ID())
+			delete(c.svcRecords, ep.getNetwork().ID())
 
-			delete(nmap, n.ID())
+			delete(nmap, ep.getNetwork().ID())
 		}
 	}
 	c.Unlock()
@@ -486,7 +474,7 @@ func (c *controller) networkCleanup() {
 }
 
 var populateSpecial NetworkWalker = func(nw Network) bool {
-	if n := nw.(*network); n.hasSpecialDriver() && !n.ConfigOnly() {
+	if n := nw.(*network); n.hasSpecialDriver() {
 		if err := n.getController().addNetwork(n); err != nil {
 			logrus.Warnf("Failed to populate network %q with driver %q", nw.Name(), nw.Type())
 		}

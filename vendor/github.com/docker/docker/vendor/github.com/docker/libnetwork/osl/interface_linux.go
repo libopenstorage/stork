@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/ns"
 	"github.com/docker/libnetwork/types"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 )
@@ -179,8 +179,6 @@ func (i *nwIface) Remove() error {
 	}
 	n.Unlock()
 
-	n.checkLoV6()
-
 	return nil
 }
 
@@ -241,8 +239,8 @@ func (n *networkNamespace) AddInterface(srcName, dstPrefix string, options ...If
 	if n.isDefault {
 		i.dstName = i.srcName
 	} else {
-		i.dstName = fmt.Sprintf("%s%d", dstPrefix, n.nextIfIndex[dstPrefix])
-		n.nextIfIndex[dstPrefix]++
+		i.dstName = fmt.Sprintf("%s%d", i.dstName, n.nextIfIndex)
+		n.nextIfIndex++
 	}
 
 	path := n.path
@@ -320,8 +318,6 @@ func (n *networkNamespace) AddInterface(srcName, dstPrefix string, options ...If
 	n.iFaces = append(n.iFaces, i)
 	n.Unlock()
 
-	n.checkLoV6()
-
 	return nil
 }
 
@@ -381,9 +377,6 @@ func setInterfaceIPv6(nlh *netlink.Handle, iface netlink.Link, i *nwIface) error
 	}
 	if err := checkRouteConflict(nlh, i.AddressIPv6(), netlink.FAMILY_V6); err != nil {
 		return err
-	}
-	if err := setIPv6(i.ns.path, i.DstName(), true); err != nil {
-		return fmt.Errorf("failed to enable ipv6: %v", err)
 	}
 	ipAddr := &netlink.Addr{IPNet: i.AddressIPv6(), Label: "", Flags: syscall.IFA_F_NODAD}
 	return nlh.AddrAdd(iface, ipAddr)

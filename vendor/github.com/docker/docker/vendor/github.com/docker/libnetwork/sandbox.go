@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/etchosts"
 	"github.com/docker/libnetwork/netlabel"
 	"github.com/docker/libnetwork/osl"
 	"github.com/docker/libnetwork/types"
-	"github.com/sirupsen/logrus"
 )
 
 // Sandbox provides the control over the network container entity. It is a one to one mapping with the container.
@@ -45,7 +45,7 @@ type Sandbox interface {
 	// EnableService  makes a managed container's service available by adding the
 	// endpoint to the service load balancer and service discovery
 	EnableService() error
-	// DisableService removes a managed container's endpoints from the load balancer
+	// DisableService removes a managed contianer's endpoints from the load balancer
 	// and service discovery
 	DisableService() error
 }
@@ -69,7 +69,7 @@ type sandbox struct {
 	id                 string
 	containerID        string
 	config             containerConfig
-	extDNS             []extDNSEntry
+	extDNS             []string
 	osSbox             osl.Sandbox
 	controller         *controller
 	resolver           Resolver
@@ -86,9 +86,6 @@ type sandbox struct {
 	ingress            bool
 	ndotsSet           bool
 	sync.Mutex
-	// This mutex is used to serialize service related operation for an endpoint
-	// The lock is here because the endpoint is saved into the store so is not unique
-	Service sync.Mutex
 }
 
 // These are the container configs used to customize container /etc/hosts file.
@@ -414,13 +411,6 @@ func (sb *sandbox) updateGateway(ep *endpoint) error {
 	return nil
 }
 
-func (sb *sandbox) HandleQueryResp(name string, ip net.IP) {
-	for _, ep := range sb.getConnectedEndpoints() {
-		n := ep.getNetwork()
-		n.HandleQueryResp(name, ip)
-	}
-}
-
 func (sb *sandbox) ResolveIP(ip string) string {
 	var svc string
 	logrus.Debugf("IP To resolve %v", ip)
@@ -621,7 +611,7 @@ func (sb *sandbox) resolveName(req string, networkName string, epList []*endpoin
 func (sb *sandbox) SetKey(basePath string) error {
 	start := time.Now()
 	defer func() {
-		logrus.Debugf("sandbox set key processing took %s for container %s", time.Since(start), sb.ContainerID())
+		logrus.Debugf("sandbox set key processing took %s for container %s", time.Now().Sub(start), sb.ContainerID())
 	}()
 
 	if basePath == "" {
@@ -629,10 +619,6 @@ func (sb *sandbox) SetKey(basePath string) error {
 	}
 
 	sb.Lock()
-	if sb.inDelete {
-		sb.Unlock()
-		return types.ForbiddenErrorf("failed to SetKey: sandbox %q delete in progress", sb.id)
-	}
 	oldosSbox := sb.osSbox
 	sb.Unlock()
 
@@ -651,6 +637,13 @@ func (sb *sandbox) SetKey(basePath string) error {
 	sb.Lock()
 	sb.osSbox = osSbox
 	sb.Unlock()
+	defer func() {
+		if err != nil {
+			sb.Lock()
+			sb.osSbox = nil
+			sb.Unlock()
+		}
+	}()
 
 	// If the resolver was setup before stop it and set it up in the
 	// new osl sandbox.
@@ -675,25 +668,26 @@ func (sb *sandbox) SetKey(basePath string) error {
 }
 
 func (sb *sandbox) EnableService() error {
-	logrus.Debugf("EnableService %s START", sb.containerID)
 	for _, ep := range sb.getConnectedEndpoints() {
 		if ep.enableService(true) {
-			if err := ep.addServiceInfoToCluster(sb); err != nil {
+			if err := ep.addServiceInfoToCluster(); err != nil {
 				ep.enableService(false)
 				return fmt.Errorf("could not update state for endpoint %s into cluster: %v", ep.Name(), err)
 			}
 		}
 	}
-	logrus.Debugf("EnableService %s DONE", sb.containerID)
 	return nil
 }
 
 func (sb *sandbox) DisableService() error {
-	logrus.Debugf("DisableService %s START", sb.containerID)
 	for _, ep := range sb.getConnectedEndpoints() {
-		ep.enableService(false)
+		if ep.enableService(false) {
+			if err := ep.deleteServiceInfoFromCluster(); err != nil {
+				ep.enableService(true)
+				return fmt.Errorf("could not delete state for endpoint %s from cluster: %v", ep.Name(), err)
+			}
+		}
 	}
-	logrus.Debugf("DisableService %s DONE", sb.containerID)
 	return nil
 }
 
@@ -773,7 +767,9 @@ func (sb *sandbox) restoreOslSandbox() error {
 		}
 		Ifaces[fmt.Sprintf("%s+%s", i.srcName, i.dstPrefix)] = ifaceOptions
 		if joinInfo != nil {
-			routes = append(routes, joinInfo.StaticRoutes...)
+			for _, r := range joinInfo.StaticRoutes {
+				routes = append(routes, r)
+			}
 		}
 		if ep.needResolver() {
 			sb.startResolver(true)
@@ -787,7 +783,11 @@ func (sb *sandbox) restoreOslSandbox() error {
 
 	// restore osl sandbox
 	err := sb.osSbox.Restore(Ifaces, routes, gwep.joinInfo.gw, gwep.joinInfo.gw6)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (sb *sandbox) populateNetworkResources(ep *endpoint) error {
@@ -952,7 +952,9 @@ func (sb *sandbox) joinLeaveStart() {
 		joinLeaveDone := sb.joinLeaveDone
 		sb.Unlock()
 
-		<-joinLeaveDone
+		select {
+		case <-joinLeaveDone:
+		}
 
 		sb.Lock()
 	}
@@ -1163,17 +1165,6 @@ func (eh epHeap) Less(i, j int) bool {
 
 	if epj.getNetwork().Internal() {
 		return true
-	}
-
-	if epi.joinInfo != nil && epj.joinInfo != nil {
-		if (epi.joinInfo.gw != nil && epi.joinInfo.gw6 != nil) &&
-			(epj.joinInfo.gw == nil || epj.joinInfo.gw6 == nil) {
-			return true
-		}
-		if (epj.joinInfo.gw != nil && epj.joinInfo.gw6 != nil) &&
-			(epi.joinInfo.gw == nil || epi.joinInfo.gw6 == nil) {
-			return false
-		}
 	}
 
 	if ci != nil {

@@ -5,7 +5,7 @@ import (
 	"io"
 
 	"github.com/docker/distribution"
-	"github.com/opencontainers/go-digest"
+	"github.com/docker/distribution/digest"
 )
 
 type roLayer struct {
@@ -16,28 +16,36 @@ type roLayer struct {
 	size       int64
 	layerStore *layerStore
 	descriptor distribution.Descriptor
-	platform   Platform
 
 	referenceCount int
 	references     map[Layer]struct{}
 }
 
-// TarStream for roLayer guarantees that the data that is produced is the exact
+// TarStream for roLayer guarentees that the data that is produced is the exact
 // data that the layer was registered with.
 func (rl *roLayer) TarStream() (io.ReadCloser, error) {
-	rc, err := rl.layerStore.getTarStream(rl)
+	r, err := rl.layerStore.store.TarSplitReader(rl.chainID)
 	if err != nil {
 		return nil, err
 	}
 
-	vrc, err := newVerifiedReadCloser(rc, digest.Digest(rl.diffID))
+	pr, pw := io.Pipe()
+	go func() {
+		err := rl.layerStore.assembleTarTo(rl.cacheID, r, nil, pw)
+		if err != nil {
+			pw.CloseWithError(err)
+		} else {
+			pw.Close()
+		}
+	}()
+	rc, err := newVerifiedReadCloser(pr, digest.Digest(rl.diffID))
 	if err != nil {
 		return nil, err
 	}
-	return vrc, nil
+	return rc, nil
 }
 
-// TarStreamFrom does not make any guarantees to the correctness of the produced
+// TarStreamFrom does not make any guarentees to the correctness of the produced
 // data. As such it should not be used when the layer content must be verified
 // to be an exact match to the registered layer.
 func (rl *roLayer) TarStreamFrom(parent ChainID) (io.ReadCloser, error) {
@@ -143,18 +151,19 @@ func storeLayer(tx MetadataTransaction, layer *roLayer) error {
 			return err
 		}
 	}
-	if err := tx.SetPlatform(layer.platform); err != nil {
-		return err
-	}
 
 	return nil
 }
 
 func newVerifiedReadCloser(rc io.ReadCloser, dgst digest.Digest) (io.ReadCloser, error) {
+	verifier, err := digest.NewDigestVerifier(dgst)
+	if err != nil {
+		return nil, err
+	}
 	return &verifiedReadCloser{
 		rc:       rc,
 		dgst:     dgst,
-		verifier: dgst.Verifier(),
+		verifier: verifier,
 	}, nil
 }
 

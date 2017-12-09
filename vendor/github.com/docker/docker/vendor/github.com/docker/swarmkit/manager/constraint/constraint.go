@@ -2,7 +2,6 @@ package constraint
 
 import (
 	"fmt"
-	"net"
 	"regexp"
 	"strings"
 
@@ -13,10 +12,8 @@ const (
 	eq = iota
 	noteq
 
-	// NodeLabelPrefix is the constraint key prefix for node labels.
-	NodeLabelPrefix = "node.labels."
-	// EngineLabelPrefix is the constraint key prefix for engine labels.
-	EngineLabelPrefix = "engine.labels."
+	nodeLabelPrefix   = "node.labels."
+	engineLabelPrefix = "engine.labels."
 )
 
 var (
@@ -124,28 +121,8 @@ func NodeMatches(constraints []Constraint, n *api.Node) bool {
 			if !constraint.Match(n.Description.Hostname) {
 				return false
 			}
-		case strings.EqualFold(constraint.key, "node.ip"):
-			nodeIP := net.ParseIP(n.Status.Addr)
-			// single IP address, node.ip == 2001:db8::2
-			if ip := net.ParseIP(constraint.exp); ip != nil {
-				ipEq := ip.Equal(nodeIP)
-				if (ipEq && constraint.operator != eq) || (!ipEq && constraint.operator == eq) {
-					return false
-				}
-				continue
-			}
-			// CIDR subnet, node.ip != 210.8.4.0/24
-			if _, subnet, err := net.ParseCIDR(constraint.exp); err == nil {
-				within := subnet.Contains(nodeIP)
-				if (within && constraint.operator != eq) || (!within && constraint.operator == eq) {
-					return false
-				}
-				continue
-			}
-			// reject constraint with malformed address/network
-			return false
 		case strings.EqualFold(constraint.key, "node.role"):
-			if !constraint.Match(n.Role.String()) {
+			if !constraint.Match(n.Spec.Role.String()) {
 				return false
 			}
 		case strings.EqualFold(constraint.key, "node.platform.os"):
@@ -170,14 +147,14 @@ func NodeMatches(constraints []Constraint, n *api.Node) bool {
 			}
 
 		// node labels constraint in form like 'node.labels.key==value'
-		case len(constraint.key) > len(NodeLabelPrefix) && strings.EqualFold(constraint.key[:len(NodeLabelPrefix)], NodeLabelPrefix):
+		case len(constraint.key) > len(nodeLabelPrefix) && strings.EqualFold(constraint.key[:len(nodeLabelPrefix)], nodeLabelPrefix):
 			if n.Spec.Annotations.Labels == nil {
 				if !constraint.Match("") {
 					return false
 				}
 				continue
 			}
-			label := constraint.key[len(NodeLabelPrefix):]
+			label := constraint.key[len(nodeLabelPrefix):]
 			// label itself is case sensitive
 			val := n.Spec.Annotations.Labels[label]
 			if !constraint.Match(val) {
@@ -185,14 +162,14 @@ func NodeMatches(constraints []Constraint, n *api.Node) bool {
 			}
 
 		// engine labels constraint in form like 'engine.labels.key!=value'
-		case len(constraint.key) > len(EngineLabelPrefix) && strings.EqualFold(constraint.key[:len(EngineLabelPrefix)], EngineLabelPrefix):
+		case len(constraint.key) > len(engineLabelPrefix) && strings.EqualFold(constraint.key[:len(engineLabelPrefix)], engineLabelPrefix):
 			if n.Description == nil || n.Description.Engine == nil || n.Description.Engine.Labels == nil {
 				if !constraint.Match("") {
 					return false
 				}
 				continue
 			}
-			label := constraint.key[len(EngineLabelPrefix):]
+			label := constraint.key[len(engineLabelPrefix):]
 			val := n.Description.Engine.Labels[label]
 			if !constraint.Match(val) {
 				return false

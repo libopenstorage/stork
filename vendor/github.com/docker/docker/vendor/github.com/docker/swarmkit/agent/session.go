@@ -5,17 +5,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/swarmkit/api"
-	"github.com/docker/swarmkit/connectionbroker"
 	"github.com/docker/swarmkit/log"
-	"github.com/sirupsen/logrus"
+	"github.com/docker/swarmkit/protobuf/ptypes"
+	"github.com/docker/swarmkit/remotes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
 
+const dispatcherRPCTimeout = 5 * time.Second
+
 var (
-	dispatcherRPCTimeout = 5 * time.Second
 	errSessionDisconnect = errors.New("agent: session disconnect") // instructed to disconnect
 	errSessionClosed     = errors.New("agent: session closed")
 )
@@ -28,7 +30,8 @@ var (
 // flow into the agent, such as task assignment, are called back into the
 // agent through errs, messages and tasks.
 type session struct {
-	conn *connectionbroker.Conn
+	conn *grpc.ClientConn
+	addr string
 
 	agent         *Agent
 	sessionID     string
@@ -38,14 +41,12 @@ type session struct {
 	assignments   chan *api.AssignmentsMessage
 	subscriptions chan *api.SubscriptionMessage
 
-	cancel     func()        // this is assumed to be never nil, and set whenever a session is created
 	registered chan struct{} // closed registration
 	closed     chan struct{}
 	closeOnce  sync.Once
 }
 
 func newSession(ctx context.Context, agent *Agent, delay time.Duration, sessionID string, description *api.NodeDescription) *session {
-	sessionCtx, sessionCancel := context.WithCancel(ctx)
 	s := &session{
 		agent:         agent,
 		sessionID:     sessionID,
@@ -55,13 +56,17 @@ func newSession(ctx context.Context, agent *Agent, delay time.Duration, sessionI
 		subscriptions: make(chan *api.SubscriptionMessage),
 		registered:    make(chan struct{}),
 		closed:        make(chan struct{}),
-		cancel:        sessionCancel,
 	}
 
 	// TODO(stevvooe): Need to move connection management up a level or create
 	// independent connection for log broker client.
 
-	cc, err := agent.config.ConnBroker.Select(
+	peer, err := agent.config.Managers.Select()
+	if err != nil {
+		s.errs <- err
+		return s
+	}
+	cc, err := grpc.Dial(peer.Addr,
 		grpc.WithTransportCredentials(agent.config.Credentials),
 		grpc.WithTimeout(dispatcherRPCTimeout),
 	)
@@ -69,9 +74,10 @@ func newSession(ctx context.Context, agent *Agent, delay time.Duration, sessionI
 		s.errs <- err
 		return s
 	}
+	s.addr = peer.Addr
 	s.conn = cc
 
-	go s.run(sessionCtx, delay, description)
+	go s.run(ctx, delay, description)
 	return s
 }
 
@@ -116,20 +122,12 @@ func (s *session) start(ctx context.Context, description *api.NodeDescription) e
 	// Note: we don't defer cancellation of this context, because the
 	// streaming RPC is used after this function returned. We only cancel
 	// it in the timeout case to make sure the goroutine completes.
-
-	// We also fork this context again from the `run` context, because on
-	// `dispatcherRPCTimeout`, we want to cancel establishing a session and
-	// return an error.  If we cancel the `run` context instead of forking,
-	// then in `run` it's possible that we just terminate the function because
-	// `ctx` is done and hence fail to propagate the timeout error to the agent.
-	// If the error is not propogated to the agent, the agent will not close
-	// the session or rebuild a new sesssion.
 	sessionCtx, cancelSession := context.WithCancel(ctx)
 
 	// Need to run Session in a goroutine since there's no way to set a
 	// timeout for an individual Recv call in a stream.
 	go func() {
-		client := api.NewDispatcherClient(s.conn.ClientConn)
+		client := api.NewDispatcherClient(s.conn)
 
 		stream, err = client.Session(sessionCtx, &api.SessionRequest{
 			Description: description,
@@ -162,7 +160,7 @@ func (s *session) start(ctx context.Context, description *api.NodeDescription) e
 
 func (s *session) heartbeat(ctx context.Context) error {
 	log.G(ctx).Debugf("(*session).heartbeat")
-	client := api.NewDispatcherClient(s.conn.ClientConn)
+	client := api.NewDispatcherClient(s.conn)
 	heartbeat := time.NewTimer(1) // send out a heartbeat right away
 	defer heartbeat.Stop()
 
@@ -182,7 +180,12 @@ func (s *session) heartbeat(ctx context.Context) error {
 				return err
 			}
 
-			heartbeat.Reset(resp.Period)
+			period, err := ptypes.Duration(&resp.Period)
+			if err != nil {
+				return err
+			}
+
+			heartbeat.Reset(period)
 		case <-s.closed:
 			return errSessionClosed
 		case <-ctx.Done():
@@ -221,7 +224,7 @@ func (s *session) logSubscriptions(ctx context.Context) error {
 	log := log.G(ctx).WithFields(logrus.Fields{"method": "(*session).logSubscriptions"})
 	log.Debugf("")
 
-	client := api.NewLogBrokerClient(s.conn.ClientConn)
+	client := api.NewLogBrokerClient(s.conn)
 	subscriptions, err := client.ListenSubscriptions(ctx, &api.ListenSubscriptionsRequest{})
 	if err != nil {
 		return err
@@ -266,7 +269,7 @@ func (s *session) watch(ctx context.Context) error {
 		err             error
 	)
 
-	client := api.NewDispatcherClient(s.conn.ClientConn)
+	client := api.NewDispatcherClient(s.conn)
 	for {
 		// If this is the first time we're running the loop, or there was a reference mismatch
 		// attempt to get the assignmentWatch
@@ -341,7 +344,7 @@ func (s *session) watch(ctx context.Context) error {
 
 // sendTaskStatus uses the current session to send the status of a single task.
 func (s *session) sendTaskStatus(ctx context.Context, taskID string, status *api.TaskStatus) error {
-	client := api.NewDispatcherClient(s.conn.ClientConn)
+	client := api.NewDispatcherClient(s.conn)
 	if _, err := client.UpdateTaskStatus(ctx, &api.UpdateTaskStatusRequest{
 		SessionID: s.sessionID,
 		Updates: []*api.UpdateTaskStatusRequest_TaskStatusUpdate{
@@ -382,7 +385,7 @@ func (s *session) sendTaskStatuses(ctx context.Context, updates ...*api.UpdateTa
 		return updates, ctx.Err()
 	}
 
-	client := api.NewDispatcherClient(s.conn.ClientConn)
+	client := api.NewDispatcherClient(s.conn)
 	n := batchSize
 
 	if len(updates) < n {
@@ -409,13 +412,14 @@ func (s *session) sendError(err error) {
 }
 
 // close closing session. It should be called only in <-session.errs branch
-// of event loop, or when cleaning up the agent.
+// of event loop.
 func (s *session) close() error {
 	s.closeOnce.Do(func() {
-		s.cancel()
 		if s.conn != nil {
-			s.conn.Close(false)
+			s.agent.config.Managers.ObserveIfExists(api.Peer{Addr: s.addr}, -remotes.DefaultObservationWeight)
+			s.conn.Close()
 		}
+
 		close(s.closed)
 	})
 

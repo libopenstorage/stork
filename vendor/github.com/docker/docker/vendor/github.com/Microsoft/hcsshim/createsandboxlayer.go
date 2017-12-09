@@ -1,6 +1,6 @@
 package hcsshim
 
-import "github.com/sirupsen/logrus"
+import "github.com/Sirupsen/logrus"
 
 // CreateSandboxLayer creates and populates new read-write layer for use by a container.
 // This requires both the id of the direct parent layer, as well as the full list

@@ -1108,6 +1108,21 @@ func (et *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 	return snapDb, highestKvdbIndex, nil
 }
 
+func (et *etcdKV) EnumerateWithSelect(
+	prefix string,
+	enumerateSelect kvdb.EnumerateSelect,
+	copySelect kvdb.CopySelect,
+) ([]interface{}, error) {
+	return nil, kvdb.ErrNotSupported
+}
+
+func (et *etcdKV) GetWithCopy(
+	key string,
+	copySelect kvdb.CopySelect,
+) (interface{}, error) {
+	return nil, kvdb.ErrNotSupported
+}
+
 func (et *etcdKV) SnapPut(snapKvp *kvdb.KVPair) (*kvdb.KVPair, error) {
 	return nil, kvdb.ErrNotSupported
 }
@@ -1281,6 +1296,19 @@ func (et *etcdKV) ListMembers() (map[string]*kvdb.MemberInfo, error) {
 		}
 	}
 	return resp, nil
+}
+
+func (et *etcdKV) Serialize() ([]byte, error) {
+
+	kvps, err := et.Enumerate("")
+	if err != nil {
+		return nil, err
+	}
+	return et.SerializeAll(kvps)
+}
+
+func (et *etcdKV) Deserialize(b []byte) (kvdb.KVPairs, error) {
+	return et.DeserializeAll(b)
 }
 
 func (et *etcdKV) SetEndpoints(endpoints []string) error {

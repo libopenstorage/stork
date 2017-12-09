@@ -774,6 +774,21 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 	return snapDb, highestKvdbIndex, nil
 }
 
+func (kv *etcdKV) EnumerateWithSelect(
+	prefix string,
+	enumerateSelect kvdb.EnumerateSelect,
+	copySelect kvdb.CopySelect,
+) ([]interface{}, error) {
+	return nil, kvdb.ErrNotSupported
+}
+
+func (kv *etcdKV) GetWithCopy(
+	key string,
+	copySelect kvdb.CopySelect,
+) (interface{}, error) {
+	return nil, kvdb.ErrNotSupported
+}
+
 func (kv *etcdKV) SnapPut(snapKvp *kvdb.KVPair) (*kvdb.KVPair, error) {
 	return nil, kvdb.ErrNotSupported
 }
@@ -847,6 +862,37 @@ func (kv *etcdKV) RevokeUsersAccess(username string, permType kvdb.PermissionTyp
 	// Revoke the specfied permission for that subtree
 	_, err = kv.authRole.RevokeRoleKV(context.Background(), roleName, []string{subtree}, etcdPermType)
 	return err
+}
+
+func (kv *etcdKV) Serialize() ([]byte, error) {
+	var allKvps kvdb.KVPairs
+	kvps, err := kv.Enumerate("")
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(kvps); i++ {
+		kvPair := kvps[i]
+		if len(kvPair.Value) > 0 {
+			allKvps = append(allKvps, kvPair)
+		} else {
+			newKvps, err := kv.Enumerate(kvPair.Key)
+			if err != nil {
+				return nil, err
+			}
+			if len(newKvps) == 0 {
+				allKvps = append(allKvps, kvPair)
+			} else if len(newKvps) == 1 {
+				allKvps = append(allKvps, newKvps[0])
+			} else {
+				kvps = append(kvps, newKvps...)
+			}
+		}
+	}
+	return kv.SerializeAll(allKvps)
+}
+
+func (kv *etcdKV) Deserialize(b []byte) (kvdb.KVPairs, error) {
+	return kv.DeserializeAll(b)
 }
 
 func getEtcdPermType(permType kvdb.PermissionType) (e.PermissionType, error) {

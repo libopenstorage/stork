@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/go-events"
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/ca"
@@ -16,7 +17,6 @@ import (
 	"github.com/docker/swarmkit/log"
 	"github.com/docker/swarmkit/manager/state/store"
 	"github.com/docker/swarmkit/watch"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -42,7 +42,7 @@ type LogBroker struct {
 	subscriptionQueue *watch.Queue
 
 	registeredSubscriptions map[string]*subscription
-	subscriptionsByNode     map[string]map[*subscription]struct{}
+	connectedNodes          map[string]struct{}
 
 	pctx      context.Context
 	cancelAll context.CancelFunc
@@ -70,7 +70,7 @@ func (lb *LogBroker) Run(ctx context.Context) error {
 	lb.logQueue = watch.NewQueue()
 	lb.subscriptionQueue = watch.NewQueue()
 	lb.registeredSubscriptions = make(map[string]*subscription)
-	lb.subscriptionsByNode = make(map[string]map[*subscription]struct{})
+	lb.connectedNodes = make(map[string]struct{})
 	lb.mu.Unlock()
 
 	select {
@@ -139,13 +139,10 @@ func (lb *LogBroker) registerSubscription(subscription *subscription) {
 	lb.registeredSubscriptions[subscription.message.ID] = subscription
 	lb.subscriptionQueue.Publish(subscription)
 
+	// Mark nodes that won't receive the message as done.
 	for _, node := range subscription.Nodes() {
-		if _, ok := lb.subscriptionsByNode[node]; !ok {
-			// Mark nodes that won't receive the message as done.
+		if _, ok := lb.connectedNodes[node]; !ok {
 			subscription.Done(node, fmt.Errorf("node %s is not available", node))
-		} else {
-			// otherwise, add the subscription to the node's subscriptions list
-			lb.subscriptionsByNode[node][subscription] = struct{}{}
 		}
 	}
 }
@@ -155,14 +152,6 @@ func (lb *LogBroker) unregisterSubscription(subscription *subscription) {
 	defer lb.mu.Unlock()
 
 	delete(lb.registeredSubscriptions, subscription.message.ID)
-
-	// remove the subscription from all of the nodes
-	for _, node := range subscription.Nodes() {
-		// but only if a node exists
-		if _, ok := lb.subscriptionsByNode[node]; ok {
-			delete(lb.subscriptionsByNode[node], subscription)
-		}
-	}
 
 	subscription.Close()
 	lb.subscriptionQueue.Publish(subscription)
@@ -184,7 +173,7 @@ func (lb *LogBroker) watchSubscriptions(nodeID string) ([]*subscription, chan ev
 	}))
 
 	// Grab current subscriptions.
-	var subscriptions []*subscription
+	subscriptions := make([]*subscription, 0, len(lb.registeredSubscriptions))
 	for _, s := range lb.registeredSubscriptions {
 		if s.Contains(nodeID) {
 			subscriptions = append(subscriptions, s)
@@ -209,21 +198,6 @@ func (lb *LogBroker) publish(log *api.PublishLogsMessage) {
 	defer lb.mu.RUnlock()
 
 	lb.logQueue.Publish(&logMessage{PublishLogsMessage: log})
-}
-
-// markDone wraps (*Subscription).Done() so that the removal of the sub from
-// the node's subscription list is possible
-func (lb *LogBroker) markDone(sub *subscription, nodeID string, err error) {
-	lb.mu.Lock()
-	defer lb.mu.Unlock()
-
-	// remove the subscription from the node's subscription list, if it exists
-	if _, ok := lb.subscriptionsByNode[nodeID]; ok {
-		delete(lb.subscriptionsByNode[nodeID], sub)
-	}
-
-	// mark the sub as done
-	sub.Done(nodeID, err)
 }
 
 // SubscribeLogs creates a log subscription and streams back logs
@@ -286,19 +260,14 @@ func (lb *LogBroker) nodeConnected(nodeID string) {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
-	if _, ok := lb.subscriptionsByNode[nodeID]; !ok {
-		lb.subscriptionsByNode[nodeID] = make(map[*subscription]struct{})
-	}
+	lb.connectedNodes[nodeID] = struct{}{}
 }
 
 func (lb *LogBroker) nodeDisconnected(nodeID string) {
 	lb.mu.Lock()
 	defer lb.mu.Unlock()
 
-	for sub := range lb.subscriptionsByNode[nodeID] {
-		sub.Done(nodeID, fmt.Errorf("node %s disconnected unexpectedly", nodeID))
-	}
-	delete(lb.subscriptionsByNode, nodeID)
+	delete(lb.connectedNodes, nodeID)
 }
 
 // ListenSubscriptions returns a stream of matching subscriptions for the current node
@@ -323,6 +292,12 @@ func (lb *LogBroker) ListenSubscriptions(request *api.ListenSubscriptionsRequest
 	log.Debug("node registered")
 
 	activeSubscriptions := make(map[string]*subscription)
+	defer func() {
+		// If the worker quits, mark all active subscriptions as finished.
+		for _, subscription := range activeSubscriptions {
+			subscription.Done(remote.NodeID, fmt.Errorf("node %s disconnected unexpectedly", remote.NodeID))
+		}
+	}()
 
 	// Start by sending down all active subscriptions.
 	for _, subscription := range subscriptions {
@@ -348,6 +323,7 @@ func (lb *LogBroker) ListenSubscriptions(request *api.ListenSubscriptionsRequest
 			subscription := v.(*subscription)
 
 			if subscription.Closed() {
+				log.WithField("subscription.id", subscription.message.ID).Debug("subscription closed")
 				delete(activeSubscriptions, subscription.message.ID)
 			} else {
 				// Avoid sending down the same subscription multiple times
@@ -355,6 +331,7 @@ func (lb *LogBroker) ListenSubscriptions(request *api.ListenSubscriptionsRequest
 					continue
 				}
 				activeSubscriptions[subscription.message.ID] = subscription
+				log.WithField("subscription.id", subscription.message.ID).Debug("subscription added")
 			}
 			if err := stream.Send(subscription.message); err != nil {
 				log.Error(err)
@@ -378,12 +355,12 @@ func (lb *LogBroker) PublishLogs(stream api.LogBroker_PublishLogsServer) (err er
 	var currentSubscription *subscription
 	defer func() {
 		if currentSubscription != nil {
-			lb.markDone(currentSubscription, remote.NodeID, err)
+			currentSubscription.Done(remote.NodeID, err)
 		}
 	}()
 
 	for {
-		logMsg, err := stream.Recv()
+		log, err := stream.Recv()
 		if err == io.EOF {
 			return stream.SendAndClose(&api.PublishLogsResponse{})
 		}
@@ -391,37 +368,28 @@ func (lb *LogBroker) PublishLogs(stream api.LogBroker_PublishLogsServer) (err er
 			return err
 		}
 
-		if logMsg.SubscriptionID == "" {
+		if log.SubscriptionID == "" {
 			return grpc.Errorf(codes.InvalidArgument, "missing subscription ID")
 		}
 
 		if currentSubscription == nil {
-			currentSubscription = lb.getSubscription(logMsg.SubscriptionID)
+			currentSubscription = lb.getSubscription(log.SubscriptionID)
 			if currentSubscription == nil {
 				return grpc.Errorf(codes.NotFound, "unknown subscription ID")
 			}
 		} else {
-			if logMsg.SubscriptionID != currentSubscription.message.ID {
+			if log.SubscriptionID != currentSubscription.message.ID {
 				return grpc.Errorf(codes.InvalidArgument, "different subscription IDs in the same session")
 			}
 		}
 
-		// if we have a close message, close out the subscription
-		if logMsg.Close {
-			// Mark done and then set to nil so if we error after this point,
-			// we don't try to close again in the defer
-			lb.markDone(currentSubscription, remote.NodeID, err)
-			currentSubscription = nil
-			return nil
-		}
-
 		// Make sure logs are emitted using the right Node ID to avoid impersonation.
-		for _, msg := range logMsg.Messages {
+		for _, msg := range log.Messages {
 			if msg.Context.NodeID != remote.NodeID {
 				return grpc.Errorf(codes.PermissionDenied, "invalid NodeID: expected=%s;received=%s", remote.NodeID, msg.Context.NodeID)
 			}
 		}
 
-		lb.publish(logMsg)
+		lb.publish(log)
 	}
 }

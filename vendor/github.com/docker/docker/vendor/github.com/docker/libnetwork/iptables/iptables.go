@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 // Action signifies the iptable action.
@@ -50,7 +50,8 @@ var (
 	bestEffortLock sync.Mutex
 	// ErrIptablesNotFound is returned when the rule is not found.
 	ErrIptablesNotFound = errors.New("Iptables not found")
-	initOnce            sync.Once
+	probeOnce           sync.Once
+	firewalldOnce       sync.Once
 )
 
 // ChainInfo defines the iptables chain.
@@ -85,32 +86,22 @@ func initFirewalld() {
 	}
 }
 
-func detectIptables() {
-	path, err := exec.LookPath("iptables")
-	if err != nil {
-		return
-	}
-	iptablesPath = path
-	supportsXlock = exec.Command(iptablesPath, "--wait", "-L", "-n").Run() == nil
-	mj, mn, mc, err := GetVersion()
-	if err != nil {
-		logrus.Warnf("Failed to read iptables version: %v", err)
-		return
-	}
-	supportsCOpt = supportsCOption(mj, mn, mc)
-}
-
-func initDependencies() {
-	probe()
-	initFirewalld()
-	detectIptables()
-}
-
 func initCheck() error {
-	initOnce.Do(initDependencies)
-
 	if iptablesPath == "" {
-		return ErrIptablesNotFound
+		probeOnce.Do(probe)
+		firewalldOnce.Do(initFirewalld)
+		path, err := exec.LookPath("iptables")
+		if err != nil {
+			return ErrIptablesNotFound
+		}
+		iptablesPath = path
+		supportsXlock = exec.Command(iptablesPath, "--wait", "-L", "-n").Run() == nil
+		mj, mn, mc, err := GetVersion()
+		if err != nil {
+			logrus.Warnf("Failed to read iptables version: %v", err)
+			return nil
+		}
+		supportsCOpt = supportsCOption(mj, mn, mc)
 	}
 	return nil
 }
@@ -140,7 +131,7 @@ func NewChain(name string, table Table, hairpinMode bool) (*ChainInfo, error) {
 // ProgramChain is used to add rules to a chain
 func ProgramChain(c *ChainInfo, bridgeName string, hairpinMode, enable bool) error {
 	if c.Name == "" {
-		return errors.New("Could not program chain, missing chain name")
+		return fmt.Errorf("Could not program chain, missing chain name")
 	}
 
 	switch c.Table {
@@ -151,11 +142,11 @@ func ProgramChain(c *ChainInfo, bridgeName string, hairpinMode, enable bool) err
 			"-j", c.Name}
 		if !Exists(Nat, "PREROUTING", preroute...) && enable {
 			if err := c.Prerouting(Append, preroute...); err != nil {
-				return fmt.Errorf("Failed to inject %s in PREROUTING chain: %s", c.Name, err)
+				return fmt.Errorf("Failed to inject docker in PREROUTING chain: %s", err)
 			}
 		} else if Exists(Nat, "PREROUTING", preroute...) && !enable {
 			if err := c.Prerouting(Delete, preroute...); err != nil {
-				return fmt.Errorf("Failed to remove %s in PREROUTING chain: %s", c.Name, err)
+				return fmt.Errorf("Failed to remove docker in PREROUTING chain: %s", err)
 			}
 		}
 		output := []string{
@@ -167,11 +158,11 @@ func ProgramChain(c *ChainInfo, bridgeName string, hairpinMode, enable bool) err
 		}
 		if !Exists(Nat, "OUTPUT", output...) && enable {
 			if err := c.Output(Append, output...); err != nil {
-				return fmt.Errorf("Failed to inject %s in OUTPUT chain: %s", c.Name, err)
+				return fmt.Errorf("Failed to inject docker in OUTPUT chain: %s", err)
 			}
 		} else if Exists(Nat, "OUTPUT", output...) && !enable {
 			if err := c.Output(Delete, output...); err != nil {
-				return fmt.Errorf("Failed to inject %s in OUTPUT chain: %s", c.Name, err)
+				return fmt.Errorf("Failed to inject docker in OUTPUT chain: %s", err)
 			}
 		}
 	case Filter:
@@ -197,26 +188,6 @@ func ProgramChain(c *ChainInfo, bridgeName string, hairpinMode, enable bool) err
 				return fmt.Errorf("Could not delete linking rule from %s/%s: %s", c.Table, c.Name, output)
 			}
 
-		}
-		establish := []string{
-			"-o", bridgeName,
-			"-m", "conntrack",
-			"--ctstate", "RELATED,ESTABLISHED",
-			"-j", "ACCEPT"}
-		if !Exists(Filter, "FORWARD", establish...) && enable {
-			insert := append([]string{string(Insert), "FORWARD"}, establish...)
-			if output, err := Raw(insert...); err != nil {
-				return err
-			} else if len(output) != 0 {
-				return fmt.Errorf("Could not create establish rule to %s: %s", c.Table, output)
-			}
-		} else if Exists(Filter, "FORWARD", establish...) && !enable {
-			del := append([]string{string(Delete), "FORWARD"}, establish...)
-			if output, err := Raw(del...); err != nil {
-				return err
-			} else if len(output) != 0 {
-				return fmt.Errorf("Could not delete establish rule from %s: %s", c.Table, output)
-			}
 		}
 	}
 	return nil
@@ -382,11 +353,7 @@ func exists(native bool, table Table, chain string, rule ...string) bool {
 		table = Filter
 	}
 
-	if err := initCheck(); err != nil {
-		// The exists() signature does not allow us to return an error, but at least
-		// we can skip the (likely invalid) exec invocation.
-		return false
-	}
+	initCheck()
 
 	if supportsCOpt {
 		// if exit status is 0 then return true, the rule exists
@@ -469,9 +436,9 @@ func ExistChain(chain string, table Table) bool {
 	return false
 }
 
-// GetVersion reads the iptables version numbers during initialization
+// GetVersion reads the iptables version numbers
 func GetVersion() (major, minor, micro int, err error) {
-	out, err := exec.Command(iptablesPath, "--version").CombinedOutput()
+	out, err := Raw("--version")
 	if err == nil {
 		major, minor, micro = parseVersionNumbers(string(out))
 	}
@@ -497,45 +464,4 @@ func parseVersionNumbers(input string) (major, minor, micro int) {
 // http://ftp.netfilter.org/pub/iptables/changes-iptables-1.4.11.txt
 func supportsCOption(mj, mn, mc int) bool {
 	return mj > 1 || (mj == 1 && (mn > 4 || (mn == 4 && mc >= 11)))
-}
-
-// AddReturnRule adds a return rule for the chain in the filter table
-func AddReturnRule(chain string) error {
-	var (
-		table = Filter
-		args  = []string{"-j", "RETURN"}
-	)
-
-	if Exists(table, chain, args...) {
-		return nil
-	}
-
-	err := RawCombinedOutput(append([]string{"-A", chain}, args...)...)
-	if err != nil {
-		return fmt.Errorf("unable to add return rule in %s chain: %s", chain, err.Error())
-	}
-
-	return nil
-}
-
-// EnsureJumpRule ensures the jump rule is on top
-func EnsureJumpRule(fromChain, toChain string) error {
-	var (
-		table = Filter
-		args  = []string{"-j", toChain}
-	)
-
-	if Exists(table, fromChain, args...) {
-		err := RawCombinedOutput(append([]string{"-D", fromChain}, args...)...)
-		if err != nil {
-			return fmt.Errorf("unable to remove jump to %s rule in %s chain: %s", toChain, fromChain, err.Error())
-		}
-	}
-
-	err := RawCombinedOutput(append([]string{"-I", fromChain}, args...)...)
-	if err != nil {
-		return fmt.Errorf("unable to insert jump to %s rule in %s chain: %s", toChain, fromChain, err.Error())
-	}
-
-	return nil
 }

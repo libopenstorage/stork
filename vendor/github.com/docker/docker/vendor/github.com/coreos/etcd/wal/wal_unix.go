@@ -16,11 +16,7 @@
 
 package wal
 
-import (
-	"os"
-
-	"github.com/coreos/etcd/pkg/fileutil"
-)
+import "os"
 
 func (w *WAL) renameWal(tmpdirpath string) (*WAL, error) {
 	// On non-Windows platforms, hold the lock while renaming. Releasing
@@ -38,7 +34,5 @@ func (w *WAL) renameWal(tmpdirpath string) (*WAL, error) {
 	}
 
 	w.fp = newFilePipeline(w.dir, SegmentSizeBytes)
-	df, err := fileutil.OpenDir(w.dir)
-	w.dirFile = df
-	return w, err
+	return w, nil
 }

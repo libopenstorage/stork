@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/discoverapi"
 	"github.com/docker/libnetwork/driverapi"
@@ -15,7 +16,6 @@ import (
 	"github.com/docker/libnetwork/osl"
 	"github.com/docker/libnetwork/types"
 	"github.com/hashicorp/serf/serf"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -46,9 +46,8 @@ type driver struct {
 	store            datastore.DataStore
 	localStore       datastore.DataStore
 	vxlanIdm         *idm.Idm
-	initOS           sync.Once
+	once             sync.Once
 	joinOnce         sync.Once
-	localJoinOnce    sync.Once
 	keys             []*key
 	sync.Mutex
 }
@@ -56,8 +55,7 @@ type driver struct {
 // Init registers a new instance of overlay driver
 func Init(dc driverapi.DriverCallback, config map[string]interface{}) error {
 	c := driverapi.Capability{
-		DataScope:         datastore.GlobalScope,
-		ConnectivityScope: datastore.GlobalScope,
+		DataScope: datastore.GlobalScope,
 	}
 	d := &driver{
 		networks: networkTable{},
@@ -180,10 +178,6 @@ func Fini(drv driverapi.Driver) {
 }
 
 func (d *driver) configure() error {
-
-	// Apply OS specific kernel configs if needed
-	d.initOS.Do(applyOStweaks)
-
 	if d.store == nil {
 		return nil
 	}
@@ -246,12 +240,6 @@ func (d *driver) nodeJoin(advertiseAddress, bindAddress string, self bool) {
 		d.advertiseAddress = advertiseAddress
 		d.bindAddress = bindAddress
 		d.Unlock()
-
-		// If containers are already running on this network update the
-		// advertiseaddress in the peerDB
-		d.localJoinOnce.Do(func() {
-			d.peerDBUpdateSelf()
-		})
 
 		// If there is no cluster store there is no need to start serf.
 		if d.store != nil {

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/docker/swarmkit/api"
+	"github.com/docker/swarmkit/manager/state"
 	memdb "github.com/hashicorp/go-memdb"
 )
 
@@ -12,13 +13,14 @@ const tableNode = "node"
 
 func init() {
 	register(ObjectStoreConfig{
+		Name: tableNode,
 		Table: &memdb.TableSchema{
 			Name: tableNode,
 			Indexes: map[string]*memdb.IndexSchema{
 				indexID: {
 					Name:    indexID,
 					Unique:  true,
-					Indexer: api.NodeIndexerByID{},
+					Indexer: nodeIndexerByID{},
 				},
 				// TODO(aluzzardi): Use `indexHostname` instead.
 				indexName: {
@@ -34,11 +36,6 @@ func init() {
 					Name:    indexMembership,
 					Indexer: nodeIndexerByMembership{},
 				},
-				indexCustom: {
-					Name:         indexCustom,
-					Indexer:      api.NodeCustomIndexer{},
-					AllowMissing: true,
-				},
 			},
 		},
 		Save: func(tx ReadTx, snapshot *api.StoreSnapshot) error {
@@ -47,13 +44,23 @@ func init() {
 			return err
 		},
 		Restore: func(tx Tx, snapshot *api.StoreSnapshot) error {
-			toStoreObj := make([]api.StoreObject, len(snapshot.Nodes))
-			for i, x := range snapshot.Nodes {
-				toStoreObj[i] = x
+			nodes, err := FindNodes(tx, All)
+			if err != nil {
+				return err
 			}
-			return RestoreTable(tx, tableNode, toStoreObj)
+			for _, n := range nodes {
+				if err := DeleteNode(tx, n.ID); err != nil {
+					return err
+				}
+			}
+			for _, n := range snapshot.Nodes {
+				if err := CreateNode(tx, n); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
-		ApplyStoreAction: func(tx Tx, sa api.StoreAction) error {
+		ApplyStoreAction: func(tx Tx, sa *api.StoreAction) error {
 			switch v := sa.Target.(type) {
 			case *api.StoreAction_Node:
 				obj := v.Node
@@ -68,19 +75,74 @@ func init() {
 			}
 			return errUnknownStoreAction
 		},
+		NewStoreAction: func(c state.Event) (api.StoreAction, error) {
+			var sa api.StoreAction
+			switch v := c.(type) {
+			case state.EventCreateNode:
+				sa.Action = api.StoreActionKindCreate
+				sa.Target = &api.StoreAction_Node{
+					Node: v.Node,
+				}
+			case state.EventUpdateNode:
+				sa.Action = api.StoreActionKindUpdate
+				sa.Target = &api.StoreAction_Node{
+					Node: v.Node,
+				}
+			case state.EventDeleteNode:
+				sa.Action = api.StoreActionKindRemove
+				sa.Target = &api.StoreAction_Node{
+					Node: v.Node,
+				}
+			default:
+				return api.StoreAction{}, errUnknownStoreAction
+			}
+			return sa, nil
+		},
 	})
+}
+
+type nodeEntry struct {
+	*api.Node
+}
+
+func (n nodeEntry) ID() string {
+	return n.Node.ID
+}
+
+func (n nodeEntry) Meta() api.Meta {
+	return n.Node.Meta
+}
+
+func (n nodeEntry) SetMeta(meta api.Meta) {
+	n.Node.Meta = meta
+}
+
+func (n nodeEntry) Copy() Object {
+	return nodeEntry{n.Node.Copy()}
+}
+
+func (n nodeEntry) EventCreate() state.Event {
+	return state.EventCreateNode{Node: n.Node}
+}
+
+func (n nodeEntry) EventUpdate() state.Event {
+	return state.EventUpdateNode{Node: n.Node}
+}
+
+func (n nodeEntry) EventDelete() state.Event {
+	return state.EventDeleteNode{Node: n.Node}
 }
 
 // CreateNode adds a new node to the store.
 // Returns ErrExist if the ID is already taken.
 func CreateNode(tx Tx, n *api.Node) error {
-	return tx.create(tableNode, n)
+	return tx.create(tableNode, nodeEntry{n})
 }
 
 // UpdateNode updates an existing node in the store.
 // Returns ErrNotExist if the node doesn't exist.
 func UpdateNode(tx Tx, n *api.Node) error {
-	return tx.update(tableNode, n)
+	return tx.update(tableNode, nodeEntry{n})
 }
 
 // DeleteNode removes a node from the store.
@@ -96,14 +158,14 @@ func GetNode(tx ReadTx, id string) *api.Node {
 	if n == nil {
 		return nil
 	}
-	return n.(*api.Node)
+	return n.(nodeEntry).Node
 }
 
 // FindNodes selects a set of nodes and returns them.
 func FindNodes(tx ReadTx, by By) ([]*api.Node, error) {
 	checkType := func(by By) error {
 		switch by.(type) {
-		case byName, byNamePrefix, byIDPrefix, byRole, byMembership, byCustom, byCustomPrefix:
+		case byName, byNamePrefix, byIDPrefix, byRole, byMembership:
 			return nil
 		default:
 			return ErrInvalidFindBy
@@ -111,12 +173,33 @@ func FindNodes(tx ReadTx, by By) ([]*api.Node, error) {
 	}
 
 	nodeList := []*api.Node{}
-	appendResult := func(o api.StoreObject) {
-		nodeList = append(nodeList, o.(*api.Node))
+	appendResult := func(o Object) {
+		nodeList = append(nodeList, o.(nodeEntry).Node)
 	}
 
 	err := tx.find(tableNode, by, checkType, appendResult)
 	return nodeList, err
+}
+
+type nodeIndexerByID struct{}
+
+func (ni nodeIndexerByID) FromArgs(args ...interface{}) ([]byte, error) {
+	return fromArgs(args...)
+}
+
+func (ni nodeIndexerByID) FromObject(obj interface{}) (bool, []byte, error) {
+	n, ok := obj.(nodeEntry)
+	if !ok {
+		panic("unexpected type passed to FromObject")
+	}
+
+	// Add the null character as a terminator
+	val := n.Node.ID + "\x00"
+	return true, []byte(val), nil
+}
+
+func (ni nodeIndexerByID) PrefixFromArgs(args ...interface{}) ([]byte, error) {
+	return prefixFromArgs(args...)
 }
 
 type nodeIndexerByHostname struct{}
@@ -126,7 +209,10 @@ func (ni nodeIndexerByHostname) FromArgs(args ...interface{}) ([]byte, error) {
 }
 
 func (ni nodeIndexerByHostname) FromObject(obj interface{}) (bool, []byte, error) {
-	n := obj.(*api.Node)
+	n, ok := obj.(nodeEntry)
+	if !ok {
+		panic("unexpected type passed to FromObject")
+	}
 
 	if n.Description == nil {
 		return false, nil, nil
@@ -146,10 +232,13 @@ func (ni nodeIndexerByRole) FromArgs(args ...interface{}) ([]byte, error) {
 }
 
 func (ni nodeIndexerByRole) FromObject(obj interface{}) (bool, []byte, error) {
-	n := obj.(*api.Node)
+	n, ok := obj.(nodeEntry)
+	if !ok {
+		panic("unexpected type passed to FromObject")
+	}
 
 	// Add the null character as a terminator
-	return true, []byte(strconv.FormatInt(int64(n.Role), 10) + "\x00"), nil
+	return true, []byte(strconv.FormatInt(int64(n.Spec.Role), 10) + "\x00"), nil
 }
 
 type nodeIndexerByMembership struct{}
@@ -159,7 +248,10 @@ func (ni nodeIndexerByMembership) FromArgs(args ...interface{}) ([]byte, error) 
 }
 
 func (ni nodeIndexerByMembership) FromObject(obj interface{}) (bool, []byte, error) {
-	n := obj.(*api.Node)
+	n, ok := obj.(nodeEntry)
+	if !ok {
+		panic("unexpected type passed to FromObject")
+	}
 
 	// Add the null character as a terminator
 	return true, []byte(strconv.FormatInt(int64(n.Spec.Membership), 10) + "\x00"), nil

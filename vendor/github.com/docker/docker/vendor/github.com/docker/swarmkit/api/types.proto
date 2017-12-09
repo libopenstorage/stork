@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package docker.swarmkit.v1;
 
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/duration.proto";
+import "timestamp/timestamp.proto"; // TODO(stevvooe): use our own until we fix gogoproto/deepcopy
+import "duration/duration.proto"; // TODO(stevvooe): use our own until we fix gogoproto/deepcopy
 import "gogoproto/gogo.proto";
 
 // This file contains types that are common to objects and spec or that are not
@@ -14,47 +14,11 @@ message Version {
 	uint64 index = 1;
 }
 
-message IndexEntry {
-	string key = 1;
-	string val = 2;
-}
-
 // Annotations provide useful information to identify API objects. They are
 // common to all API specs.
 message Annotations {
 	string name = 1;
 	map<string, string> labels = 2;
-
-	// Indices provides keys and values for indexing this object.
-	// A single key may have multiple values.
-	repeated IndexEntry indices = 4 [(gogoproto.nullable) = false];
-}
-
-// NamedGenericResource represents a "user defined" resource which is defined
-// as a string.
-// "Kind" is used to describe the Kind of a resource (e.g: "GPU", "FPGA", "SSD", ...)
-// Value is used to identify the resource (GPU="UUID-1", FPGA="/dev/sdb5", ...)
-message NamedGenericResource {
-	string kind = 1;
-	string value = 2;
-}
-
-// DiscreteGenericResource represents a "user defined" resource which is defined
-// as an integer
-// "Kind" is used to describe the Kind of a resource (e.g: "GPU", "FPGA", "SSD", ...)
-// Value is used to count the resource (SSD=5, HDD=3, ...)
-message DiscreteGenericResource {
-	string kind = 1;
-	int64 value = 2;
-}
-
-// GenericResource represents a "user defined" resource which can
-// be either an integer (e.g: SSD=3) or a string (e.g: SSD=sda1)
-message GenericResource {
-	oneof resource {
-		NamedGenericResource named_resource_spec = 1;
-		DiscreteGenericResource discrete_resource_spec = 2;
-	}
 }
 
 message Resources {
@@ -63,9 +27,6 @@ message Resources {
 
 	// Amount of memory in bytes.
 	int64 memory_bytes = 2;
-
-	// User specified resource (e.g: bananas=2;apple={red,yellow,green})
-	repeated GenericResource generic = 3;
 }
 
 message ResourceRequirements {
@@ -116,18 +77,6 @@ message NodeDescription {
 
 	// Information about the Docker Engine on the node.
 	EngineDescription engine = 4;
-
-	// Information on the node's TLS setup
-	NodeTLSInfo tls_info = 5 [(gogoproto.customname) = "TLSInfo"];
-}
-
-message NodeTLSInfo {
-	// Information about which root certs the node trusts
-	bytes trust_root = 1;
-
-	// Information about the node's current TLS certificate
-	bytes cert_issuer_subject = 2;
-	bytes cert_issuer_public_key = 3;
 }
 
 message RaftMemberStatus {
@@ -310,8 +259,7 @@ message RestartPolicy {
 	RestartCondition condition = 1;
 
 	// Delay between restart attempts
-	// Note: can't use stdduration because this field needs to be nullable.
-	google.protobuf.Duration delay = 2;
+	Duration delay = 2;
 
 	// MaxAttempts is the maximum number of restarts to attempt on an
 	// instance before giving up. Ignored if 0.
@@ -319,8 +267,7 @@ message RestartPolicy {
 
 	// Window is the time window used to evaluate the restart policy.
 	// The time window is unbounded if this is 0.
-	// Note: can't use stdduration because this field needs to be nullable.
-	google.protobuf.Duration window = 4;
+	Duration window = 4;
 }
 
 // UpdateConfig specifies the rate and policy of updates.
@@ -331,11 +278,17 @@ message UpdateConfig {
 	uint64 parallelism = 1;
 
 	// Amount of time between updates.
-	google.protobuf.Duration delay = 2 [(gogoproto.stdduration) = true, (gogoproto.nullable) = false];
+	Duration delay = 2 [(gogoproto.nullable) = false];
 
 	enum FailureAction {
 		PAUSE = 0;
 		CONTINUE = 1;
+		// NOTE: Automated rollback triggered as a failure action is an
+		// experimental feature that is not yet exposed to the end
+		// user. Currently, rollbacks must be initiated manually
+		// through the API by setting Spec to PreviousSpec. We may
+		// decide to expose automatic rollback in the future based on
+		// user feedback, or remove this feature otherwise.
 		ROLLBACK = 2;
 	}
 
@@ -348,8 +301,7 @@ message UpdateConfig {
 	// this counts as a failure. If it fails after Monitor, it does not
 	// count as a failure. If Monitor is unspecified, a default value will
 	// be used.
-	// Note: can't use stdduration because this field needs to be nullable.
-	google.protobuf.Duration monitor = 4;
+	Duration monitor = 4;
 
 	// MaxFailureRatio is the fraction of tasks that may fail during
 	// an update before the failure action is invoked. Any task created by
@@ -365,18 +317,12 @@ message UpdateConfig {
 	// If the failure action is ROLLBACK, the orchestrator will attempt to
 	// roll back to the previous service spec. If the MaxFailureRatio
 	// threshold is hit during the rollback, the rollback will pause.
+	//
+	// TODO(aaronl): Should there be a separate failure threshold for
+	// rollbacks? Should there be a failure action for rollbacks (to allow
+	// them to do something other than pause when the rollback encounters
+	// errors)?
 	float max_failure_ratio = 5;
-
-	// UpdateOrder controls the order of operations when rolling out an
-	// updated task. Either the old task is shut down before the new task
-	// is started, or the new task is started before the old task is shut
-	// down.
-	enum UpdateOrder {
-		STOP_FIRST = 0;
-		START_FIRST = 1;
-	}
-
-	UpdateOrder order = 6;
 }
 
 // UpdateStatus is the status of an update in progress.
@@ -397,13 +343,11 @@ message UpdateStatus {
 	UpdateState state = 1;
 
 	// StartedAt is the time at which the update was started.
-	// Note: can't use stdtime because this field is nullable.
-	google.protobuf.Timestamp started_at = 2;
+	Timestamp started_at = 2;
 
 	// CompletedAt is the time at which the update completed successfully,
 	// paused, or finished rolling back.
-	// Note: can't use stdtime because this field is nullable.
-	google.protobuf.Timestamp completed_at = 3;
+	Timestamp completed_at = 3;
 
 	// TODO(aaronl): Consider adding a timestamp showing when the most
 	// recent task update took place. Currently, this is nontrivial
@@ -461,7 +405,7 @@ enum TaskState {
 
 // Container specific status.
 message ContainerStatus {
-	string container_id = 1;
+	string container_id = 1 [(gogoproto.customname) = "ContainerID"];
 
 	int32 pid = 2 [(gogoproto.customname) = "PID"];
 	int32 exit_code = 3;
@@ -474,8 +418,7 @@ message PortStatus {
 }
 
 message TaskStatus {
-	// Note: can't use stdtime because this field is nullable.
-	google.protobuf.Timestamp timestamp = 1;
+	Timestamp timestamp = 1;
 
 	// State expresses the current state of the task.
 	TaskState state = 2;
@@ -525,8 +468,6 @@ message NetworkAttachmentConfig {
 	// preferred. If these addresses are not available then the
 	// attachment might fail.
 	repeated string addresses = 3;
-	// DriverAttachmentOpts is a map of driver attachment options for the network target
-	map<string, string> driver_attachment_opts = 4;
 }
 
 // IPAMConfig specifies parameters for IP Address Management.
@@ -627,7 +568,7 @@ message IPAMOptions {
 
 // Peer should be used anywhere where we are describing a remote peer.
 message Peer {
-	string node_id = 1;
+	string node_id = 1 [(gogoproto.customname) = "NodeID"];
 	string addr = 2;
 }
 
@@ -699,34 +640,15 @@ message ExternalCA {
 	// Options is a set of additional key/value pairs whose interpretation
 	// depends on the specified CA type.
 	map<string, string> options = 3;
-
-	// CACert specifies which root CA is used by this external CA
-	bytes ca_cert = 4 [(gogoproto.customname) = "CACert"];
 }
 
 message CAConfig {
 	// NodeCertExpiry is the duration certificates should be issued for
-	// Note: can't use stdduration because this field needs to be nullable.
-	google.protobuf.Duration node_cert_expiry = 1;
+	Duration node_cert_expiry = 1;
 
 	// ExternalCAs is a list of CAs to which a manager node will make
 	// certificate signing requests for node certificates.
 	repeated ExternalCA external_cas = 2 [(gogoproto.customname) = "ExternalCAs"];
-
-	// SigningCACert is the desired CA certificate to be used as the root and
-	// signing CA for the swarm.  If not provided, indicates that we are either happy
-	// with the current configuration, or (together with a bump in the ForceRotate value)
-	// that we want a certificate and key generated for us.
-	bytes signing_ca_cert = 3 [(gogoproto.customname) = "SigningCACert"];
-
-	// SigningCAKey is the desired private key, matching the signing CA cert, to be used
-	// to sign certificates for the swarm
-	bytes signing_ca_key = 4 [(gogoproto.customname) = "SigningCAKey"];
-
-	// ForceRotate is a counter that triggers a root CA rotation even if no relevant
-	// parameters have been in the spec. This will force the manager to generate a new
-	// certificate and key, if none have been provided.
-	uint64 force_rotate = 5;
 }
 
 // OrchestrationConfig defines cluster-level orchestration settings.
@@ -751,8 +673,7 @@ message TaskDefaults {
 message DispatcherConfig {
 	// HeartbeatPeriod defines how often agent should send heartbeats to
 	// dispatcher.
-	// Note: can't use stdduration because this field needs to be nullable.
-	google.protobuf.Duration heartbeat_period = 1;
+	Duration heartbeat_period = 1;
 }
 
 // RaftConfig defines raft settings for the cluster.
@@ -780,34 +701,10 @@ message EncryptionConfig {
 	bool auto_lock_managers = 1;
 }
 
-message SpreadOver {
-	string spread_descriptor = 1; // label descriptor, such as engine.labels.az
-	// TODO: support node information beyond engine and node labels
-
-	// TODO: in the future, add a map that provides weights for weighted
-	// spreading.
-}
-
-message PlacementPreference {
-	oneof Preference {
-		SpreadOver spread = 1;
-	}
-}
-
 // Placement specifies task distribution constraints.
 message Placement {
-	// Constraints specifies a set of requirements a node should meet for a task.
+	// constraints specifies a set of requirements a node should meet for a task.
 	repeated string constraints = 1;
-
-	// Preferences provide a way to make the scheduler aware of factors
-	// such as topology. They are provided in order from highest to lowest
-	// precedence.
-	repeated PlacementPreference preferences = 2;
-
-	// Platforms stores all the platforms that the image can run on.
-	// This field is used in the platform filter for scheduling. If empty,
-	// then the platform filter is off, meaning there are no scheduling restrictions.
-	repeated Platform platforms = 3;
 }
 
 // JoinToken contains the join tokens for workers and managers.
@@ -831,14 +728,6 @@ message RootCA {
 
 	// JoinTokens contains the join tokens for workers and managers.
 	JoinTokens join_tokens = 4 [(gogoproto.nullable) = false];
-
-	// RootRotation contains the new root cert and key we want to rotate to - if this is nil, we are not in the
-	// middle of a root rotation
-	RootRotation root_rotation = 5;
-
-	// LastForcedRotation matches the Cluster Spec's CAConfig's ForceRotation counter.
-	// It indicates when the current CA cert and key were generated (or updated).
-	uint64 last_forced_rotation = 6;
 }
 
 
@@ -890,7 +779,7 @@ message EncryptionKey {
 message ManagerStatus {
 	// RaftID specifies the internal ID used by the manager in a raft context, it can never be modified
 	// and is used only for information purposes
-	uint64 raft_id = 1;
+	uint64 raft_id = 1 [(gogoproto.customname) = "RaftID"];
 
 	// Addr is the address advertised to raft.
 	string addr = 2;
@@ -902,47 +791,32 @@ message ManagerStatus {
 	RaftMemberStatus.Reachability reachability = 4;
 }
 
-// FileTarget represents a specific target that is backed by a file
-message FileTarget {
-	// Name represents the final filename in the filesystem
-	string name = 1;
-
-	// UID represents the file UID
-	string uid = 2 [(gogoproto.customname) = "UID"];
-
-	// GID represents the file GID
-	string gid = 3 [(gogoproto.customname) = "GID"];
-
-	// Mode represents the FileMode of the file
-	uint32 mode = 4 [(gogoproto.customtype) = "os.FileMode", (gogoproto.nullable) = false];
-}
 
 // SecretReference is the linkage between a service and a secret that it uses.
 message SecretReference {
 	// SecretID represents the ID of the specific Secret that we're
 	// referencing. This identifier exists so that SecretReferences don't leak
 	// any information about the secret contents.
-	string secret_id = 1;
+	string secret_id = 1 [(gogoproto.customname) = "SecretID"];
 
 	// SecretName is the name of the secret that this references, but this is just provided for
 	// lookup/display purposes.  The secret in the reference will be identified by its ID.
 	string secret_name = 2;
 
-	// Target specifies how this secret should be exposed to the task.
-	oneof target {
-		FileTarget file = 3;
+	// FileTarget represents a specific target that is backed by a file
+	message FileTarget {
+		// Name represents the final filename in the filesystem
+		string name = 1;
+
+		// UID represents the file UID
+		string uid = 2 [(gogoproto.customname) = "UID"];
+
+		// GID represents the file GID
+		string gid = 3 [(gogoproto.customname) = "GID"];
+
+		// Mode represents the FileMode of the file
+		uint32 mode = 4 [(gogoproto.customtype) = "os.FileMode", (gogoproto.nullable) = false];
 	}
-}
-
-// ConfigReference is the linkage between a service and a config that it uses.
-message ConfigReference {
-	// ConfigID represents the ID of the specific Config that we're
-	// referencing.
-	string config_id = 1;
-
-	// ConfigName is the name of the config that this references, but this is just provided for
-	// lookup/display purposes. The config in the reference will be identified by its ID.
-	string config_name = 2;
 
 	// Target specifies how this secret should be exposed to the task.
 	oneof target {
@@ -955,8 +829,7 @@ message ConfigReference {
 message BlacklistedCertificate {
 	// Expiry is the latest known expiration time of a certificate that
 	// was issued for the given CN.
-	// Note: can't use stdtime because this field is nullable.
-	google.protobuf.Timestamp expiry = 1;
+	Timestamp expiry = 1;
 }
 
 // HealthConfig holds configuration settings for the HEALTHCHECK feature.
@@ -971,22 +844,15 @@ message HealthConfig {
 	repeated string test = 1;
 
 	// Interval is the time to wait between checks. Zero means inherit.
-	// Note: can't use stdduration because this field needs to be nullable.
-	google.protobuf.Duration interval = 2;
+	Duration interval = 2;
 
 	// Timeout is the time to wait before considering the check to have hung.
 	// Zero means inherit.
-	// Note: can't use stdduration because this field needs to be nullable.
-	google.protobuf.Duration timeout = 3;
+	Duration timeout = 3;
 
 	// Retries is the number of consecutive failures needed to consider a
 	// container as unhealthy. Zero means inherit.
 	int32 retries = 4;
-
-	// Start period is the period for container initialization during
-	// which health check failures will note count towards the maximum
-	// number of retries.
-	google.protobuf.Duration start_period = 5;
 }
 
 message MaybeEncryptedRecord {
@@ -998,35 +864,4 @@ message MaybeEncryptedRecord {
 	Algorithm algorithm = 1;
 	bytes data = 2;
 	bytes nonce = 3;
-}
-
-
-message RootRotation {
-	bytes ca_cert = 1 [(gogoproto.customname) = "CACert"];
-	bytes ca_key = 2 [(gogoproto.customname) = "CAKey"];
-	// cross-signed CA cert is the CACert that has been cross-signed by the previous root
-	bytes cross_signed_ca_cert = 3 [(gogoproto.customname) = "CrossSignedCACert"];
-}
-
-// Privileges specifies security configuration/permissions.
-message Privileges {
-	// CredentialSpec for managed service account (Windows only).
-	message CredentialSpec {
-		oneof source {
-			string file = 1;
-			string registry = 2;
-		}
-	}
-	CredentialSpec credential_spec = 1;
-
-	// SELinuxContext contains the SELinux labels for the container.
-	message SELinuxContext {
-		bool disable = 1;
-
-		string user = 2;
-		string role = 3;
-		string type = 4;
-		string level = 5;
-	}
-	SELinuxContext selinux_context = 2 [(gogoproto.customname) = "SELinuxContext"];
 }

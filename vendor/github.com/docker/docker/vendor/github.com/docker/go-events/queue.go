@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 // Queue accepts all messages into a queue for asynchronous consumption
@@ -31,7 +31,7 @@ func NewQueue(dst Sink) *Queue {
 }
 
 // Write accepts the events into the queue, only failing if the queue has
-// been closed.
+// beend closed.
 func (eq *Queue) Write(event Event) error {
 	eq.mu.Lock()
 	defer eq.mu.Unlock()

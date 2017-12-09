@@ -38,12 +38,14 @@ func TestHealthStates(t *testing.T) {
 	}
 
 	c := &container.Container{
-		ID:   "id",
-		Name: "name",
-		Config: &containertypes.Config{
-			Image: "image_name",
-			Labels: map[string]string{
-				"com.docker.swarm.task.id": "id",
+		CommonContainer: container.CommonContainer{
+			ID:   "id",
+			Name: "name",
+			Config: &containertypes.Config{
+				Image: "image_name",
+				Labels: map[string]string{
+					"com.docker.swarm.task.id": "id",
+				},
 			},
 		},
 	}
@@ -85,7 +87,7 @@ func TestHealthStates(t *testing.T) {
 			}
 		case <-timer.C:
 			if expectedErr != nil {
-				t.Fatal("time limit exceeded, didn't get expected error")
+				t.Fatalf("time limit exceeded, didn't get expected error")
 			}
 		}
 	}

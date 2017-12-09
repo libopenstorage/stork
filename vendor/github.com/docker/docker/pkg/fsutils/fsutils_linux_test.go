@@ -6,9 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"syscall"
 	"testing"
-
-	"golang.org/x/sys/unix"
 )
 
 func testSupportsDType(t *testing.T, expected bool, mkfsCommand string, mkfsArg ...string) {
@@ -54,7 +53,7 @@ func testSupportsDType(t *testing.T, expected bool, mkfsCommand string, mkfsArg 
 	}
 
 	// loopback-mount the image.
-	// for ease of setting up loopback device, we use os/exec rather than unix.Mount
+	// for ease of setting up loopback device, we use os/exec rather than syscall.Mount
 	out, err = exec.Command("mount", "-o", "loop", imageFileName, mountpoint).CombinedOutput()
 	if len(out) > 0 {
 		t.Log(string(out))
@@ -63,7 +62,7 @@ func testSupportsDType(t *testing.T, expected bool, mkfsCommand string, mkfsArg 
 		t.Skip("skipping the test because mount failed")
 	}
 	defer func() {
-		if err := unix.Unmount(mountpoint, 0); err != nil {
+		if err := syscall.Unmount(mountpoint, 0); err != nil {
 			t.Fatal(err)
 		}
 	}()

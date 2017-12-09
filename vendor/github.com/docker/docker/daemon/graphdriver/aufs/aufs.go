@@ -33,22 +33,21 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/vbatts/tar-split/tar/storage"
 
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/docker/docker/pkg/directory"
 	"github.com/docker/docker/pkg/idtools"
-	"github.com/docker/docker/pkg/locker"
 	mountpk "github.com/docker/docker/pkg/mount"
-	"github.com/docker/docker/pkg/system"
+
+	"github.com/opencontainers/runc/libcontainer/label"
 	rsystem "github.com/opencontainers/runc/libcontainer/system"
-	"github.com/opencontainers/selinux/go-selinux/label"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"github.com/vbatts/tar-split/tar/storage"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -76,7 +75,6 @@ type Driver struct {
 	pathCacheLock sync.Mutex
 	pathCache     map[string]string
 	naiveDiff     graphdriver.DiffDriver
-	locker        *locker.Locker
 }
 
 // Init returns a new AUFS driver.
@@ -114,7 +112,6 @@ func Init(root string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 		gidMaps:   gidMaps,
 		pathCache: make(map[string]string),
 		ctr:       graphdriver.NewRefCounter(graphdriver.NewFsChecker(graphdriver.FsMagicAufs)),
-		locker:    locker.New(),
 	}
 
 	rootUID, rootGID, err := idtools.GetRootUIDGID(uidMaps, gidMaps)
@@ -272,10 +269,41 @@ func (a *Driver) createDirsFor(id string) error {
 	return nil
 }
 
+// Helper function to debug EBUSY errors on remove.
+func debugEBusy(mountPath string) (out []string, err error) {
+	// lsof is not part of GNU coreutils. This is a best effort
+	// attempt to detect offending processes.
+	c := exec.Command("lsof")
+
+	r, err := c.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("Assigning pipes failed with %v", err)
+	}
+
+	if err := c.Start(); err != nil {
+		return nil, fmt.Errorf("Starting %s failed with %v", c.Path, err)
+	}
+
+	defer func() {
+		waiterr := c.Wait()
+		if waiterr != nil && err == nil {
+			err = fmt.Errorf("Waiting for %s failed with %v", c.Path, waiterr)
+		}
+	}()
+
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		entry := sc.Text()
+		if strings.Contains(entry, mountPath) {
+			out = append(out, entry, "\n")
+		}
+	}
+
+	return out, nil
+}
+
 // Remove will unmount and remove the given id.
 func (a *Driver) Remove(id string) error {
-	a.locker.Lock(id)
-	defer a.locker.Unlock(id)
 	a.pathCacheLock.Lock()
 	mountpoint, exists := a.pathCache[id]
 	a.pathCacheLock.Unlock()
@@ -283,41 +311,34 @@ func (a *Driver) Remove(id string) error {
 		mountpoint = a.getMountpoint(id)
 	}
 
-	logger := logrus.WithFields(logrus.Fields{
-		"module": "graphdriver",
-		"driver": "aufs",
-		"layer":  id,
-	})
-
 	var retries int
 	for {
 		mounted, err := a.mounted(mountpoint)
 		if err != nil {
-			if os.IsNotExist(err) {
-				break
-			}
 			return err
 		}
 		if !mounted {
 			break
 		}
 
-		err = a.unmount(mountpoint)
-		if err == nil {
-			break
+		if err := a.unmount(mountpoint); err != nil {
+			if err != syscall.EBUSY {
+				return fmt.Errorf("aufs: unmount error: %s: %v", mountpoint, err)
+			}
+			if retries >= 5 {
+				out, debugErr := debugEBusy(mountpoint)
+				if debugErr == nil {
+					logrus.Warnf("debugEBusy returned %v", out)
+				}
+				return fmt.Errorf("aufs: unmount error after retries: %s: %v", mountpoint, err)
+			}
+			// If unmount returns EBUSY, it could be a transient error. Sleep and retry.
+			retries++
+			logrus.Warnf("unmount failed due to EBUSY: retry count: %d", retries)
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
-
-		if err != unix.EBUSY {
-			return errors.Wrapf(err, "aufs: unmount error: %s", mountpoint)
-		}
-		if retries >= 5 {
-			return errors.Wrapf(err, "aufs: unmount error after retries: %s", mountpoint)
-		}
-		// If unmount returns EBUSY, it could be a transient error. Sleep and retry.
-		retries++
-		logger.Warnf("unmount failed due to EBUSY: retry count: %d", retries)
-		time.Sleep(100 * time.Millisecond)
-		continue
+		break
 	}
 
 	// Atomically remove each directory in turn by first moving it out of the
@@ -325,23 +346,26 @@ func (a *Driver) Remove(id string) error {
 	// the whole tree.
 	tmpMntPath := path.Join(a.mntPath(), fmt.Sprintf("%s-removing", id))
 	if err := os.Rename(mountpoint, tmpMntPath); err != nil && !os.IsNotExist(err) {
-		if err == unix.EBUSY {
-			logger.WithField("dir", mountpoint).WithError(err).Warn("os.Rename err due to EBUSY")
+		if err == syscall.EBUSY {
+			logrus.Warn("os.Rename err due to EBUSY")
+			out, debugErr := debugEBusy(mountpoint)
+			if debugErr == nil {
+				logrus.Warnf("debugEBusy returned %v", out)
+			}
 		}
-		return errors.Wrapf(err, "error preparing atomic delete of aufs mountpoint for id: %s", id)
+		return err
 	}
-	if err := system.EnsureRemoveAll(tmpMntPath); err != nil {
-		return errors.Wrapf(err, "error removing aufs layer %s", id)
-	}
+	defer os.RemoveAll(tmpMntPath)
 
 	tmpDiffpath := path.Join(a.diffPath(), fmt.Sprintf("%s-removing", id))
 	if err := os.Rename(a.getDiffPath(id), tmpDiffpath); err != nil && !os.IsNotExist(err) {
-		return errors.Wrapf(err, "error preparing atomic delete of aufs diff dir for id: %s", id)
+		return err
 	}
+	defer os.RemoveAll(tmpDiffpath)
 
 	// Remove the layers file for the id
 	if err := os.Remove(path.Join(a.rootPath(), "layers", id)); err != nil && !os.IsNotExist(err) {
-		return errors.Wrapf(err, "error removing layers dir for %s", id)
+		return err
 	}
 
 	a.pathCacheLock.Lock()
@@ -353,8 +377,6 @@ func (a *Driver) Remove(id string) error {
 // Get returns the rootfs path for the id.
 // This will mount the dir at its given path
 func (a *Driver) Get(id, mountLabel string) (string, error) {
-	a.locker.Lock(id)
-	defer a.locker.Unlock(id)
 	parents, err := a.getParentLayerPaths(id)
 	if err != nil && !os.IsNotExist(err) {
 		return "", err
@@ -390,8 +412,6 @@ func (a *Driver) Get(id, mountLabel string) (string, error) {
 
 // Put unmounts and updates list of active mounts.
 func (a *Driver) Put(id string) error {
-	a.locker.Lock(id)
-	defer a.locker.Unlock(id)
 	a.pathCacheLock.Lock()
 	m, exists := a.pathCache[id]
 	if !exists {
@@ -584,9 +604,9 @@ func (a *Driver) aufsMount(ro []string, rw, target, mountLabel string) (err erro
 
 	offset := 54
 	if useDirperm() {
-		offset += len(",dirperm1")
+		offset += len("dirperm1")
 	}
-	b := make([]byte, unix.Getpagesize()-len(mountLabel)-offset) // room for xino & mountLabel
+	b := make([]byte, syscall.Getpagesize()-len(mountLabel)-offset) // room for xino & mountLabel
 	bp := copy(b, fmt.Sprintf("br:%s=rw", rw))
 
 	index := 0
@@ -610,7 +630,7 @@ func (a *Driver) aufsMount(ro []string, rw, target, mountLabel string) (err erro
 	for ; index < len(ro); index++ {
 		layer := fmt.Sprintf(":%s=ro+wh", ro[index])
 		data := label.FormatMountLabel(fmt.Sprintf("append%s", layer), mountLabel)
-		if err = mount("none", target, "aufs", unix.MS_REMOUNT, data); err != nil {
+		if err = mount("none", target, "aufs", syscall.MS_REMOUNT, data); err != nil {
 			return
 		}
 	}

@@ -102,10 +102,6 @@ type TransportCredentials interface {
 	// authentication protocol on rawConn for clients. It returns the authenticated
 	// connection and the corresponding auth information about the connection.
 	// Implementations must use the provided context to implement timely cancellation.
-	// gRPC will try to reconnect if the error returned is a temporary error
-	// (io.EOF, context.DeadlineExceeded or err.Temporary() == true).
-	// If the returned error is a wrapper error, implementations should make sure that
-	// the error implements Temporary() to have the correct retry behaviors.
 	ClientHandshake(context.Context, string, net.Conn) (net.Conn, AuthInfo, error)
 	// ServerHandshake does the authentication handshake for servers. It returns
 	// the authenticated connection and the corresponding auth information about
@@ -169,7 +165,9 @@ func (c *tlsCreds) ClientHandshake(ctx context.Context, addr string, rawConn net
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
-	return conn, TLSInfo{conn.ConnectionState()}, nil
+	// TODO(zhaoq): Omit the auth info for client now. It is more for
+	// information than anything else.
+	return conn, nil, nil
 }
 
 func (c *tlsCreds) ServerHandshake(rawConn net.Conn) (net.Conn, AuthInfo, error) {

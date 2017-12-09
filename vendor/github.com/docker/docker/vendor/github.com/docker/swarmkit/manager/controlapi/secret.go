@@ -2,18 +2,25 @@ package controlapi
 
 import (
 	"crypto/subtle"
+	"regexp"
 	"strings"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/swarmkit/api"
-	"github.com/docker/swarmkit/api/validation"
 	"github.com/docker/swarmkit/identity"
 	"github.com/docker/swarmkit/log"
 	"github.com/docker/swarmkit/manager/state/store"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
+
+// Currently this is contains the unimplemented secret functions in order to satisfy the interface
+
+// MaxSecretSize is the maximum byte length of the `Secret.Spec.Data` field.
+const MaxSecretSize = 500 * 1024 // 500KB
+
+var validSecretNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9]+(?:[a-zA-Z0-9-_.]*[a-zA-Z0-9])?$`)
 
 // assumes spec is not nil
 func secretFromSecretSpec(spec *api.SecretSpec) *api.Secret {
@@ -54,11 +61,12 @@ func (s *Server) UpdateSecret(ctx context.Context, request *api.UpdateSecretRequ
 	if request.SecretID == "" || request.SecretVersion == nil {
 		return nil, grpc.Errorf(codes.InvalidArgument, errInvalidArgument.Error())
 	}
+
 	var secret *api.Secret
 	err := s.store.Update(func(tx store.Tx) error {
 		secret = store.GetSecret(tx, request.SecretID)
 		if secret == nil {
-			return grpc.Errorf(codes.NotFound, "secret %s not found", request.SecretID)
+			return nil
 		}
 
 		// Check if the Name is different than the current name, or the secret is non-nil and different
@@ -76,6 +84,9 @@ func (s *Server) UpdateSecret(ctx context.Context, request *api.UpdateSecretRequ
 	})
 	if err != nil {
 		return nil, err
+	}
+	if secret == nil {
+		return nil, grpc.Errorf(codes.NotFound, "secret %s not found", request.SecretID)
 	}
 
 	log.G(ctx).WithFields(logrus.Fields{
@@ -148,7 +159,7 @@ func (s *Server) ListSecrets(ctx context.Context, request *api.ListSecretsReques
 	return &api.ListSecretsResponse{Secrets: respSecrets}, nil
 }
 
-// CreateSecret creates and returns a `CreateSecretResponse` with a `Secret` based
+// CreateSecret creates and return a `CreateSecretResponse` with a `Secret` based
 // on the provided `CreateSecretRequest.SecretSpec`.
 // - Returns `InvalidArgument` if the `CreateSecretRequest.SecretSpec` is malformed,
 //   or if the secret data is too long or contains invalid characters.
@@ -239,19 +250,23 @@ func validateSecretSpec(spec *api.SecretSpec) error {
 	if spec == nil {
 		return grpc.Errorf(codes.InvalidArgument, errInvalidArgument.Error())
 	}
-	if err := validateConfigOrSecretAnnotations(spec.Annotations); err != nil {
+	if err := validateSecretAnnotations(spec.Annotations); err != nil {
 		return err
 	}
-	// Check if secret driver is defined
-	if spec.Driver != nil {
-		// Ensure secret driver has a name
-		if spec.Driver.Name == "" {
-			return grpc.Errorf(codes.InvalidArgument, "secret driver must have a name")
-		}
-		return nil
+
+	if len(spec.Data) >= MaxSecretSize || len(spec.Data) < 1 {
+		return grpc.Errorf(codes.InvalidArgument, "secret data must be larger than 0 and less than %d bytes", MaxSecretSize)
 	}
-	if err := validation.ValidateSecretPayload(spec.Data); err != nil {
-		return grpc.Errorf(codes.InvalidArgument, "%s", err.Error())
+	return nil
+}
+
+func validateSecretAnnotations(m api.Annotations) error {
+	if m.Name == "" {
+		return grpc.Errorf(codes.InvalidArgument, "name must be provided")
+	} else if len(m.Name) > 64 || !validSecretNameRegexp.MatchString(m.Name) {
+		// if the name doesn't match the regex
+		return grpc.Errorf(codes.InvalidArgument,
+			"invalid name, only 64 [a-zA-Z0-9-_.] characters allowed, and the start and end character must be [a-zA-Z0-9]")
 	}
 	return nil
 }

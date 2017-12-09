@@ -1,13 +1,12 @@
 package bridge
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 // Enumeration type saying which versions of IP protocol to process.
@@ -38,7 +37,7 @@ func setupBridgeNetFiltering(config *networkConfiguration, i *bridgeInterface) e
 					logrus.Warnf("running inside docker container, ignoring missing kernel params: %v", err)
 					err = nil
 				} else {
-					err = errors.New("please ensure that br_netfilter kernel module is loaded")
+					err = fmt.Errorf("please ensure that br_netfilter kernel module is loaded")
 				}
 			}
 		}

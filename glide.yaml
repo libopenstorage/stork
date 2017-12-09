@@ -23,13 +23,14 @@ import:
   - pkg/api/v1/helper
 - package: k8s.io/apimachinery
   version: kubernetes-1.8.2
+  subpackages:
+  - pkg/runtime
 - package: k8s.io/api
   version: kubernetes-1.8.2
 - package: k8s.io/client-go
   version: kubernetes-1.8.2
 - package: github.com/portworx/sched-ops
-  version: master
-  vcs: git
+  version: master 
   repo: git@github.com:portworx/sched-ops.git
 - package: github.com/aws/aws-sdk-go
   version: a881d8ac1079e5f917d926c04c32ace8a9f68d22
@@ -63,5 +64,8 @@ import:
   version: ^0.7.1
 - package: go.pedge.io/dlog
   version: 292aa66beb49590f5c6da27331b90506b1c3cbbc
-  vcs: git
   repo: git@github.com:peter-edge/dlog-go.git
+  vcs: git
+- package: github.com/kubernetes-incubator/external-storage
+  subpackages:
+  - snapshot/pkg/apis/crd/v1

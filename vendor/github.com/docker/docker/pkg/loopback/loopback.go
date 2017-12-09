@@ -1,13 +1,13 @@
-// +build linux,cgo
+// +build linux
 
 package loopback
 
 import (
 	"fmt"
 	"os"
+	"syscall"
 
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
+	"github.com/Sirupsen/logrus"
 )
 
 func getLoopbackBackingFile(file *os.File) (uint64, uint64, error) {
@@ -31,13 +31,12 @@ func SetCapacity(file *os.File) error {
 // FindLoopDeviceFor returns a loopback device file for the specified file which
 // is backing file of a loop back device.
 func FindLoopDeviceFor(file *os.File) *os.File {
-	var stat unix.Stat_t
-	err := unix.Stat(file.Name(), &stat)
+	stat, err := file.Stat()
 	if err != nil {
 		return nil
 	}
-	targetInode := stat.Ino
-	targetDevice := stat.Dev
+	targetInode := stat.Sys().(*syscall.Stat_t).Ino
+	targetDevice := stat.Sys().(*syscall.Stat_t).Dev
 
 	for i := 0; true; i++ {
 		path := fmt.Sprintf("/dev/loop%d", i)

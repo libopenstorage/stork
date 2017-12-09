@@ -2,7 +2,6 @@
 package idm
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/docker/libnetwork/bitseq"
@@ -19,7 +18,7 @@ type Idm struct {
 // New returns an instance of id manager for a [start,end] set of numerical ids
 func New(ds datastore.DataStore, id string, start, end uint64) (*Idm, error) {
 	if id == "" {
-		return nil, errors.New("Invalid id")
+		return nil, fmt.Errorf("Invalid id")
 	}
 	if end <= start {
 		return nil, fmt.Errorf("Invalid set range: [%d, %d]", start, end)
@@ -36,7 +35,7 @@ func New(ds datastore.DataStore, id string, start, end uint64) (*Idm, error) {
 // GetID returns the first available id in the set
 func (i *Idm) GetID() (uint64, error) {
 	if i.handle == nil {
-		return 0, errors.New("ID set is not initialized")
+		return 0, fmt.Errorf("ID set is not initialized")
 	}
 	ordinal, err := i.handle.SetAny()
 	return i.start + ordinal, err
@@ -45,11 +44,11 @@ func (i *Idm) GetID() (uint64, error) {
 // GetSpecificID tries to reserve the specified id
 func (i *Idm) GetSpecificID(id uint64) error {
 	if i.handle == nil {
-		return errors.New("ID set is not initialized")
+		return fmt.Errorf("ID set is not initialized")
 	}
 
 	if id < i.start || id > i.end {
-		return errors.New("Requested id does not belong to the set")
+		return fmt.Errorf("Requested id does not belong to the set")
 	}
 
 	return i.handle.Set(id - i.start)
@@ -58,11 +57,11 @@ func (i *Idm) GetSpecificID(id uint64) error {
 // GetIDInRange returns the first available id in the set within a [start,end] range
 func (i *Idm) GetIDInRange(start, end uint64) (uint64, error) {
 	if i.handle == nil {
-		return 0, errors.New("ID set is not initialized")
+		return 0, fmt.Errorf("ID set is not initialized")
 	}
 
 	if start < i.start || end > i.end {
-		return 0, errors.New("Requested range does not belong to the set")
+		return 0, fmt.Errorf("Requested range does not belong to the set")
 	}
 
 	ordinal, err := i.handle.SetAnyInRange(start-i.start, end-i.start)

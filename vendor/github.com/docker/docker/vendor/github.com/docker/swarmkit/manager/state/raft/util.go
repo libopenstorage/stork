@@ -8,7 +8,6 @@ import (
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/manager/state"
 	"github.com/docker/swarmkit/manager/state/store"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -18,8 +17,6 @@ func dial(addr string, protocol string, creds credentials.TransportCredentials, 
 	grpcOptions := []grpc.DialOption{
 		grpc.WithBackoffMaxDelay(2 * time.Second),
 		grpc.WithTransportCredentials(creds),
-		grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor),
-		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
 	}
 
 	if timeout != 0 {
@@ -59,7 +56,7 @@ func WaitForLeader(ctx context.Context, n *Node) error {
 // committed to raft. This ensures that we can see and serve informations
 // related to the cluster.
 func WaitForCluster(ctx context.Context, n *Node) (cluster *api.Cluster, err error) {
-	watch, cancel := state.Watch(n.MemoryStore().WatchQueue(), api.EventCreateCluster{})
+	watch, cancel := state.Watch(n.MemoryStore().WatchQueue(), state.EventCreateCluster{})
 	defer cancel()
 
 	var clusters []*api.Cluster
@@ -76,7 +73,7 @@ func WaitForCluster(ctx context.Context, n *Node) (cluster *api.Cluster, err err
 	} else {
 		select {
 		case e := <-watch:
-			cluster = e.(api.EventCreateCluster).Cluster
+			cluster = e.(state.EventCreateCluster).Cluster
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
