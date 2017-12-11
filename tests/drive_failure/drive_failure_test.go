@@ -20,7 +20,7 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-var _ = Describe("Induce drive failure on of the nodes", func() {
+var _ = Describe("Induce drive failure on one of the nodes", func() {
 	testName := "drivefailure"
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error
@@ -29,10 +29,9 @@ var _ = Describe("Induce drive failure on of the nodes", func() {
 		Step("get nodes for all apps in test and induce drive failure on one of the nodes", func() {
 			for _, ctx := range contexts {
 				var (
-					drives               []string
-					appNodes             []node.Node
-					nodeWithDrive        node.Node
-					driveToFail, driveID string
+					drives        []string
+					appNodes      []node.Node
+					nodeWithDrive node.Node
 				)
 
 				Step(fmt.Sprintf("get nodes where %s app is running", ctx.App.Key), func() {
@@ -46,17 +45,19 @@ var _ = Describe("Induce drive failure on of the nodes", func() {
 					drives, err = Inst().V.GetStorageDevices(nodeWithDrive)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(drives).NotTo(BeEmpty())
-					driveToFail = drives[0]
 				})
 
-				Step(fmt.Sprintf("induce a drive failure on %v on node %v", driveToFail, nodeWithDrive), func() {
-					driveID, err = Inst().N.YankDrive(nodeWithDrive, driveToFail, node.ConnectionOpts{
-						Timeout:         1 * time.Minute,
-						TimeBeforeRetry: 5 * time.Second,
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					Step("wait for the drive to fail", func() {
+				driveInfoMap := make(map[string]string)
+				Step(fmt.Sprintf("induce a failure on all drives on the node %v", nodeWithDrive), func() {
+					for _, driveToFail := range drives {
+						driveID, err := Inst().N.YankDrive(nodeWithDrive, driveToFail, node.ConnectionOpts{
+							Timeout:         1 * time.Minute,
+							TimeBeforeRetry: 5 * time.Second,
+						})
+						driveInfoMap[driveToFail] = driveID
+						Expect(err).NotTo(HaveOccurred())
+					}
+					Step("wait for the drives to fail", func() {
 						time.Sleep(30 * time.Second)
 					})
 
@@ -66,12 +67,17 @@ var _ = Describe("Induce drive failure on of the nodes", func() {
 
 				})
 
-				Step(fmt.Sprintf("recover drive and the storage driver"), func() {
-					err = Inst().N.RecoverDrive(nodeWithDrive, driveToFail, driveID, node.ConnectionOpts{
-						Timeout:         1 * time.Minute,
-						TimeBeforeRetry: 5 * time.Second,
+				Step(fmt.Sprintf("recover all drives and the storage driver"), func() {
+					for _, driveToFail := range drives {
+						err = Inst().N.RecoverDrive(nodeWithDrive, driveToFail, driveInfoMap[driveToFail], node.ConnectionOpts{
+							Timeout:         2 * time.Minute,
+							TimeBeforeRetry: 5 * time.Second,
+						})
+						Expect(err).NotTo(HaveOccurred())
+					}
+					Step("wait for the drives to recover", func() {
+						time.Sleep(30 * time.Second)
 					})
-					Expect(err).NotTo(HaveOccurred())
 
 					err = Inst().V.RecoverDriver(nodeWithDrive)
 					Expect(err).NotTo(HaveOccurred())

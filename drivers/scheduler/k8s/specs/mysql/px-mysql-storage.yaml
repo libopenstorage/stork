@@ -5,7 +5,7 @@ metadata:
     name: px-mysql-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   repl: "2"
+   repl: "3"
 ---
 ##### Portworx persistent volume claim
 kind: PersistentVolumeClaim
