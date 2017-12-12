@@ -57,8 +57,10 @@ You can either update the default kube scheduler to use stork or start a new
 scheduler instance which can use stork. We will start a new scheduler instance here and
 configure it to use stork. We will call the new scheduler 'stork'.
 
-This new scheduler instance is defined in [specs/stork-scheduler.yaml](specs/stork-scheduler.yaml).
-You will just need to update the version of kube scheduler that you want to use. This should be the same version as your kubernetes cluster. 
+This new scheduler instance is defined in [specs/stork-scheduler.yaml](specs/stork-scheduler.yaml). This spec starts
+3 replicas of the scheduler.
+
+You will need to update the version of kube scheduler that you want to use. This should be the same version as your kubernetes cluster. 
 Example for Kubernetes v1.8.1 it would be:
 ```
 image: gcr.io/google_containers/kube-scheduler-amd64:v1.8.1
@@ -68,13 +70,15 @@ You can deploy it by running the following command:
 ```
 # kubectl create -f stork-scheduler.yaml
 ```
-Verify that the scheduler pod is running:
+Verify that the scheduler pods are running:
 
 ```
 # kubectl get pods --namespace=kube-system
 NAME                              READY     STATUS    RESTARTS   AGE
 ....
-stork-scheduler-b77668f67-tjrfr   1/1       Running   0          19m
+stork-scheduler-9d6cb4546-gqdq2            1/1       Running   0          32m
+stork-scheduler-9d6cb4546-k4z8t            1/1       Running   0          32m
+stork-scheduler-9d6cb4546-tfkh4            1/1       Running   0          30m
 ....
 ```
 
