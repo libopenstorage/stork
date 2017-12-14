@@ -38,7 +38,7 @@ func setup(t *testing.T) {
 	storkVolumeDriver, err = storkdriver.Get(volumeDriverName)
 	require.NoError(t, err, "Error getting stork driver %v", volumeDriverName)
 
-	err = storkVolumeDriver.Init()
+	err = storkVolumeDriver.Init(nil)
 	require.NoError(t, err, "Error initializing stork driver %v", volumeDriverName)
 
 	nodeDriver, err = node.Get(nodeDriverName)

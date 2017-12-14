@@ -12,7 +12,7 @@ import (
 // interfaces.
 type Driver interface {
 	// Init initializes the volume driver.
-	Init() error
+	Init(interface{}) error
 
 	// String returns the string name of this driver.
 	String() string

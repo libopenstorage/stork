@@ -32,7 +32,7 @@ func (m Driver) String() string {
 }
 
 // Init Initialize the mock driver
-func (m Driver) Init() error {
+func (m Driver) Init(_ interface{}) error {
 	return nil
 }
 

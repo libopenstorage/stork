@@ -53,7 +53,7 @@ func run(c *cli.Context) {
 		os.Exit(-1)
 	}
 
-	if err = d.Init(); err != nil {
+	if err = d.Init(nil); err != nil {
 		log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
 		os.Exit(-1)
 	}
