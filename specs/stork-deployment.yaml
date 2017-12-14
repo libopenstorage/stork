@@ -114,7 +114,7 @@ spec:
         imagePullPolicy: Always
         args:
           ["--driver", "pxd", "--verbose"]
-        image: openstorage/stork:0.1
+        image: openstorage/stork:0.2
         resources:
           requests:
             cpu: '0.1'
