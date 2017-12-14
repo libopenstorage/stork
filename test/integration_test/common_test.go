@@ -61,9 +61,13 @@ func setup(t *testing.T) {
 }
 
 func TestMain(t *testing.T) {
-	t.Run("setup", setup)
+	// If setup fails stop the test
+	if passed := t.Run("setup", setup); !passed {
+		t.FailNow()
+	}
 	t.Run("Extender", testExtender)
 	t.Run("HealthMonitor", testHealthMonitor)
+	t.Run("Snapshot", testSnapshot)
 }
 
 func generateInstanceID(t *testing.T, testName string) string {

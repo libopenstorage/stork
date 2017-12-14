@@ -6,10 +6,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,6 +87,8 @@ func driverNodeErrorTest(t *testing.T) {
 	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+
+	time.Sleep(1 * time.Minute)
 
 	err = volumeDriver.StopDriver(scheduledNodes[0])
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])

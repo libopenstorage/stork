@@ -1,0 +1,19 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: stork-snapshot-sc
+provisioner: stork-snapshot
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-clone
+  annotations:
+    snapshot.alpha.kubernetes.io/snapshot: mysql-snapshot
+spec:
+  accessModes:
+     - ReadWriteOnce
+  storageClassName: stork-snapshot-sc
+  resources:
+    requests:
+      storage: 2Gi
