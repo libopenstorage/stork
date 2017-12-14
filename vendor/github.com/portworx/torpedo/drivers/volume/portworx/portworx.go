@@ -3,6 +3,7 @@ package portworx
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
+	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
@@ -151,20 +153,20 @@ func (d *portworx) CleanupVolume(name string) error {
 }
 
 func (d *portworx) ValidateCreateVolume(name string, params map[string]string) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		vols, err := d.getVolDriver().Inspect([]string{name})
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 
 		if len(vols) != 1 {
-			return nil, &ErrFailedToInspectVolume{
+			return nil, true, &ErrFailedToInspectVolume{
 				ID:    name,
 				Cause: fmt.Sprintf("Volume inspect result has invalid length. Expected:1 Actual:%v", len(vols)),
 			}
 		}
 
-		return vols[0], nil
+		return vols[0], false, nil
 	}
 
 	out, err := task.DoRetryWithTimeout(t, 10*time.Second, 2*time.Second)
@@ -309,17 +311,17 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 
 func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	name := d.schedOps.GetVolumeName(vol)
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		vols, err := d.volDriver.Inspect([]string{name})
 		if err != nil && err == volume.ErrEnoEnt {
-			return nil, nil
+			return nil, false, nil
 		} else if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 		if len(vols) > 0 {
-			return nil, fmt.Errorf("Volume %v is not yet removed from the system", name)
+			return nil, true, fmt.Errorf("Volume %v is not yet removed from the system", name)
 		}
-		return nil, nil
+		return nil, false, nil
 	}
 
 	_, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
@@ -338,7 +340,7 @@ func (d *portworx) ValidateVolumeCleanup() error {
 }
 
 func (d *portworx) StopDriver(n node.Node) error {
-	return d.schedOps.DisableOnNode(n)
+	return d.schedOps.DisableOnNode(n, d.nodeDriver)
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
@@ -349,19 +351,24 @@ func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, 
 	return volName, volParams, nil
 }
 
+func (d *portworx) RandomizeVolumeName(params string) string {
+	re := regexp.MustCompile("(" + api.Name + "=)([0-9A-Za-z_-]+),?")
+	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New())
+}
+
 func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		cluster, err := d.getClusterManager().Enumerate()
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 		if cluster.Status != api.Status_STATUS_OK {
-			return nil, &ErrFailedToWaitForPx{
+			return nil, true, &ErrFailedToWaitForPx{
 				Cause: fmt.Sprintf("px cluster is still not up. Status: %v", cluster.Status),
 			}
 		}
 
-		return &cluster, nil
+		return &cluster, false, nil
 	}
 
 	cluster, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
@@ -374,24 +381,24 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 
 // Wait for Portworx to be up on given node
 func (d *portworx) WaitForNode(n node.Node) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
-			return "", &ErrFailedToWaitForPx{
+			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: err.Error(),
 			}
 		}
 
 		if pxNode.Status != api.Status_STATUS_OK {
-			return "", &ErrFailedToWaitForPx{
+			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
 					api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
 
-		return "", nil
+		return "", false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
@@ -402,17 +409,17 @@ func (d *portworx) WaitForNode(n node.Node) error {
 }
 
 func (d *portworx) WaitForUpgrade(n node.Node, newVersion string) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
-			return nil, &ErrFailedToWaitForPx{
+			return nil, true, &ErrFailedToWaitForPx{
 				Node:  n,
 				Cause: err.Error(),
 			}
 		}
 
 		if pxNode.Status != api.Status_STATUS_OK {
-			return nil, &ErrFailedToWaitForPx{
+			return nil, true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
 					api.Status_STATUS_OK, pxNode.Status),
@@ -421,12 +428,12 @@ func (d *portworx) WaitForUpgrade(n node.Node, newVersion string) error {
 
 		pxVersion := pxNode.NodeLabels[pxVersionLabel]
 		if !strings.HasPrefix(pxVersion, newVersion) {
-			return nil, &ErrFailedToUpgradeVolumeDriver{
+			return nil, true, &ErrFailedToUpgradeVolumeDriver{
 				Version: newVersion,
 				Cause:   fmt.Sprintf("Version on node %v is still %v", n.VolDriverNodeID, pxVersion),
 			}
 		}
-		return nil, nil
+		return nil, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second); err != nil {
@@ -494,7 +501,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
-	return d.schedOps.EnableOnNode(n)
+	return d.schedOps.EnableOnNode(n, d.nodeDriver)
 }
 
 func (d *portworx) UpgradeDriver(version string) error {

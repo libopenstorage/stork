@@ -101,11 +101,10 @@
 			"revisionTime": "2016-01-25T20:49:56Z"
 		},
 		{
-			"checksumSHA1": "Bra/9XucW0ivjIalL27XqSw2dTk=",
-			"origin": "github.com/kubernetes-incubator/external-storage/vendor/github.com/golang/groupcache/lru",
+			"checksumSHA1": "nbCxiVT48CWEg6l8L4SEJ5VfN9c=",
 			"path": "github.com/golang/groupcache/lru",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "84a468cf14b4376def5d68c722b139b881c450a4",
+			"revisionTime": "2017-11-01T20:31:31Z"
 		},
 		{
 			"checksumSHA1": "yqF125xVSkmfLpIVGrLlfE05IUk=",
@@ -204,15 +203,15 @@
 			"checksumSHA1": "d9PxF1XQGLMJZRct2R8qVM/eYlE=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/github.com/hashicorp/golang-lru",
 			"path": "github.com/hashicorp/golang-lru",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "2nOpYjx8Sn57bqlZq17yM4YJuM4=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/github.com/hashicorp/golang-lru/simplelru",
 			"path": "github.com/hashicorp/golang-lru/simplelru",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "vt+P9D2yWDO3gdvdgCzwqunlhxU=",
@@ -232,15 +231,15 @@
 			"checksumSHA1": "K6exl2ouL7d8cR2i378EzZOdRVI=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/howeyc/gopass",
 			"path": "github.com/howeyc/gopass",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "UVO2SkAXrDSdvDhXjjpR1j/JS7M=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/imdario/mergo",
 			"path": "github.com/imdario/mergo",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "YdyJtOObZ6xNx9bSYsTogfGvlgg=",
@@ -257,68 +256,68 @@
 		{
 			"checksumSHA1": "QPUnQ1lomVTuD30unRHDo29a4eg=",
 			"path": "github.com/kubernetes-incubator/external-storage/lib/controller",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "g9tZTY/K9iOQWvE+3nJ4QS/pccU=",
 			"path": "github.com/kubernetes-incubator/external-storage/lib/leaderelection",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "iYPm0nngevy/cnzhzJlkfaoa9lY=",
 			"path": "github.com/kubernetes-incubator/external-storage/lib/leaderelection/resourcelock",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "PrR2kXzYmim3jxk0yiqBhZtOdpM=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "BNrILwgafy9rShay9gMdtgTZhQ0=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "25n2vaGX6WU+BRo+36C2VdVdLyU=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/cache",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "HB30HgKqIWQFywIQo4kPxGoeaoU=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/populator",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "NPFTLFPhF+mVnPs5ZH6Ewy9fTjo=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/reconciler",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "ocqizY0uWXud56QokA+M1UUewAU=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "+2bmrFTi6OL22QbtthrvFTSIQgA=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "bSy1V6lM4A2/vJyX/6rQE6PVo7A=",
+			"checksumSHA1": "lVyufvJG8HZpbENeZELSERDo91I=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "XxSculDWJ8paPj2VbSbbxPDSb7Q=",
@@ -376,8 +375,8 @@
 			"checksumSHA1": "epxGRLxy5hM83o7bQjo/gLaD7Jw=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/api/spec",
 			"path": "github.com/libopenstorage/openstorage/api/spec",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "aQTxVW/uz6EHNA7ro5/SC2ii05c=",
@@ -395,15 +394,15 @@
 			"checksumSHA1": "/bl8X4ayadp0Bou8MzMkxfXiQ2c=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/pkg/parser",
 			"path": "github.com/libopenstorage/openstorage/pkg/parser",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "FvNAwo77o7tbO7vKT/6D1dyNjDQ=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/pkg/units",
 			"path": "github.com/libopenstorage/openstorage/pkg/units",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "k/7fOTc90hiyiKySUhSyN2ddZcs=",
@@ -454,8 +453,8 @@
 			"checksumSHA1": "3YJklSuzSE1Rt8A+2dhiWSmf/fw=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/github.com/pborman/uuid",
 			"path": "github.com/pborman/uuid",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "K1Y3/a6mmpc31MzB2pvsC5fHrek=",
@@ -478,72 +477,72 @@
 			"revisionTime": "2017-11-17T19:00:05Z"
 		},
 		{
-			"checksumSHA1": "YjC3saCnFVaIwFO7Ur5YcOiNVFc=",
+			"checksumSHA1": "aA8MNkuxo0MeyV3rtbsqZGS6TxQ=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/portworx/sched-ops/k8s",
 			"path": "github.com/portworx/sched-ops/k8s",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
-			"checksumSHA1": "7H6/b0nFnh2kCbmbK/tAb+cvMA8=",
+			"checksumSHA1": "IAa1RlxdS+a88YGary5duoB09p4=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/portworx/sched-ops/task",
 			"path": "github.com/portworx/sched-ops/task",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
-			"checksumSHA1": "w0qnrLoldUnpLsGvOaNsLu2Oot4=",
+			"checksumSHA1": "/zoq1igjU65lqWKXI4l2Ka2wrAQ=",
 			"path": "github.com/portworx/torpedo/drivers/node",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
-			"checksumSHA1": "hveSeWQfCqFazIcJTb4h3I83/qk=",
+			"checksumSHA1": "ZNzoXsweNaMA7wc1p8UoxTA82lk=",
 			"path": "github.com/portworx/torpedo/drivers/node/ssh",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "wjV/B+A4p9yj2iZXjQ116JpCZus=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
-			"checksumSHA1": "sugssuwICXVAtAwRR4j0Iw1dYwk=",
+			"checksumSHA1": "UrNfw6AE2qm6hqP4HCx+loK5tqI=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/k8s",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "gicT7JrFO4AWSDZhO4NJ/t1vmZ8=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/spec",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
-			"checksumSHA1": "8cQn1OE+VzbgTZDo/obAoxVIAkM=",
+			"checksumSHA1": "iWFdPEtz/8vM6FjeqFARGf0YzZM=",
 			"path": "github.com/portworx/torpedo/drivers/volume",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
-			"checksumSHA1": "SEWntWjVwpoJowNxhf9OKsRXNg8=",
+			"checksumSHA1": "VcRrLdansK+b6AR18cEMkMeMHvc=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
-			"checksumSHA1": "+wPGAPa/9p/ie0rn4LQApKhhF0Q=",
+			"checksumSHA1": "bqu2/peDAMiU+dpTRLwS5xk45kE=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx/schedops",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "VC6jgTB9GKVetejp30GOQKQIc3Y=",
 			"path": "github.com/portworx/torpedo/pkg/errors",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "BYvROBsiyAXK4sq6yhDe8RgT4LM=",
@@ -599,29 +598,29 @@
 			"checksumSHA1": "MlEHIE/60sB86Lmf0MPTIXHzKzE=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/crypto/curve25519",
 			"path": "golang.org/x/crypto/curve25519",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "X6Q8nYb+KXh+64AKHwWOOcyijHQ=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/crypto/ed25519",
 			"path": "golang.org/x/crypto/ed25519",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "LXFcVx8I587SnWmKycSDEq9yvK8=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/crypto/ed25519/internal/edwards25519",
 			"path": "golang.org/x/crypto/ed25519/internal/edwards25519",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "U8Hfwou4jfW3wHPoIuz8Oi4KxTc=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/crypto/ssh",
 			"path": "golang.org/x/crypto/ssh",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "X1NTlfcau2XcV6WtAHF6b/DECOA=",
@@ -633,8 +632,8 @@
 			"checksumSHA1": "dr5+PfIRzXeN+l1VG+s0lea9qz8=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/golang.org/x/net/context",
 			"path": "golang.org/x/net/context",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "Iv1YK4j9U0IgQl3/nu3FRjupk4I=",
@@ -676,36 +675,36 @@
 			"checksumSHA1": "fX3coo8RWra4CXbcQ7bjqSsGCDM=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/golang.org/x/text/cases",
 			"path": "golang.org/x/text/cases",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "SEAto7VJlxvEF9C0k+QHzRi769c=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/golang.org/x/text/internal",
 			"path": "golang.org/x/text/internal",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "hyNCcTwMQnV6/MK8uUW9E5H0J0M=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/golang.org/x/text/internal/tag",
 			"path": "golang.org/x/text/internal/tag",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "FsrSRUeWwNbzu7manThK2rL7F3k=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/golang.org/x/text/language",
 			"path": "golang.org/x/text/language",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "IV4MN7KGBSocu/5NR3le3sxup4Y=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/golang.org/x/text/runes",
 			"path": "golang.org/x/text/runes",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "tltivJ/uj/lqLk05IqGfCv2F/E8=",
@@ -717,8 +716,8 @@
 			"checksumSHA1": "QB2i98ahuhLf9XWZfRRO22uN2p4=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/golang.org/x/text/secure/precis",
 			"path": "golang.org/x/text/secure/precis",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "ziMb9+ANGRJSSIuxYdRbA+cDRBQ=",
@@ -965,29 +964,29 @@
 			"checksumSHA1": "FsBDOCVn0sySqy5zNrzbern/kHk=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/pkg/apimachinery",
 			"path": "k8s.io/apimachinery/pkg/apimachinery",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "3EqHWfoyUDlTEIIt5AgSAg9jF5Q=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/pkg/apimachinery/announced",
 			"path": "k8s.io/apimachinery/pkg/apimachinery/announced",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "ZZ7hXY37IH3tJrn72JOTS5kr5CQ=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/pkg/apimachinery/registered",
 			"path": "k8s.io/apimachinery/pkg/apimachinery/registered",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "ZfbdkO5t+0fb59pLvB8OHRx+IN0=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/pkg/apis/meta/internalversion",
 			"path": "k8s.io/apimachinery/pkg/apis/meta/internalversion",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "/J5Z9PPsxArxw7LS2LgJARAgOm8=",
@@ -1101,8 +1100,8 @@
 			"checksumSHA1": "ZafNsuBNEOinRgqaCFmTnhHm2gQ=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/pkg/util/cache",
 			"path": "k8s.io/apimachinery/pkg/util/cache",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "2g3yhAcIQkh5Ew7/jiBIq4qNvJE=",
@@ -1142,10 +1141,9 @@
 		},
 		{
 			"checksumSHA1": "PE+KbfLQ+OIFksZDePrAbEC9zV0=",
-			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/pkg/util/mergepatch",
 			"path": "k8s.io/apimachinery/pkg/util/mergepatch",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "9d38e20d609d27e00d4ec18f7b9db67105a2bde0",
+			"revisionTime": "2017-09-21T23:17:36Z"
 		},
 		{
 			"checksumSHA1": "v/3Yvh+jcINyOF/EtWz7yzJdDC4=",
@@ -1167,17 +1165,16 @@
 		},
 		{
 			"checksumSHA1": "EIMm7qjGJtYM6eo0nfzqiLomShQ=",
-			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/pkg/util/strategicpatch",
 			"path": "k8s.io/apimachinery/pkg/util/strategicpatch",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "9d38e20d609d27e00d4ec18f7b9db67105a2bde0",
+			"revisionTime": "2017-09-21T23:17:36Z"
 		},
 		{
 			"checksumSHA1": "m1Bf7l8/zGUuacsQeE6F0NXskBo=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/pkg/util/uuid",
 			"path": "k8s.io/apimachinery/pkg/util/uuid",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "CLTr3JJ2TyTLx6kgymR6sAGByNc=",
@@ -1217,10 +1214,9 @@
 		},
 		{
 			"checksumSHA1": "BpFF036Wu0m6pOIpVZcOftgzrE4=",
-			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/apimachinery/third_party/forked/golang/json",
 			"path": "k8s.io/apimachinery/third_party/forked/golang/json",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "9d38e20d609d27e00d4ec18f7b9db67105a2bde0",
+			"revisionTime": "2017-09-21T23:17:36Z"
 		},
 		{
 			"checksumSHA1": "6fYMMjAbff1bWCfLo1gklASPnEY=",
@@ -1412,22 +1408,22 @@
 			"checksumSHA1": "gc2fJMsET0ZYX+WuEIMJrlihWH4=",
 			"origin": "github.com/portworx/torpedo/vendor/k8s.io/client-go/tools/auth",
 			"path": "k8s.io/client-go/tools/auth",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "Mn+hrNfeUzFt3kF6c4WR9sr0tLs=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/client-go/tools/cache",
 			"path": "k8s.io/client-go/tools/cache",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "WbzlQVv0GiM4eG9tCqCRd0GxtpI=",
 			"origin": "github.com/portworx/torpedo/vendor/k8s.io/client-go/tools/clientcmd",
 			"path": "k8s.io/client-go/tools/clientcmd",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "Z3VsN/loY2PvJj5Lr7sb/jTCLLU=",
@@ -1439,15 +1435,27 @@
 			"checksumSHA1": "9Wlfp4lj3dke8If8fdbD9JRF1xA=",
 			"origin": "github.com/portworx/torpedo/vendor/k8s.io/client-go/tools/clientcmd/api/latest",
 			"path": "k8s.io/client-go/tools/clientcmd/api/latest",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "2ciO1G3y0MgMEgNa3LhQ/SIMxjQ=",
 			"origin": "github.com/portworx/torpedo/vendor/k8s.io/client-go/tools/clientcmd/api/v1",
 			"path": "k8s.io/client-go/tools/clientcmd/api/v1",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
+		},
+		{
+			"checksumSHA1": "UlwKiOe4F98SBUWOlMcU7DxcrnM=",
+			"path": "k8s.io/client-go/tools/leaderelection",
+			"revision": "3c9596422809744570e7b344a5597b4ad8aaabfb",
+			"revisionTime": "2017-10-27T03:29:17Z"
+		},
+		{
+			"checksumSHA1": "GGl0LCcuY/guD+0XsDrKIbbFt7I=",
+			"path": "k8s.io/client-go/tools/leaderelection/resourcelock",
+			"revision": "3c9596422809744570e7b344a5597b4ad8aaabfb",
+			"revisionTime": "2017-10-27T03:29:17Z"
 		},
 		{
 			"checksumSHA1": "fFJHFs7O/tbJdfAob6OlMu1dzfU=",
@@ -1459,15 +1467,14 @@
 			"checksumSHA1": "anyR30xPqZyIXFyS1IAZ7LTPih8=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/client-go/tools/pager",
 			"path": "k8s.io/client-go/tools/pager",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "K+p90XDgjStU1PTj+xtRp2c65DQ=",
-			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/client-go/tools/record",
 			"path": "k8s.io/client-go/tools/record",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "3c9596422809744570e7b344a5597b4ad8aaabfb",
+			"revisionTime": "2017-10-27T03:29:17Z"
 		},
 		{
 			"checksumSHA1": "/OmdOm7If5oWsdFiaBmmTHGsVo8=",
@@ -1497,8 +1504,8 @@
 			"checksumSHA1": "JHqy7DdWoSJx//oqEyYXLQHEzrY=",
 			"origin": "github.com/portworx/torpedo/vendor/k8s.io/client-go/util/homedir",
 			"path": "k8s.io/client-go/util/homedir",
-			"revision": "3515db5882b63af3d1164ecfe188baf9ca537c9c",
-			"revisionTime": "2017-11-21T23:39:41Z"
+			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
+			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
 			"checksumSHA1": "L8GTMw2mqnaFT48eShpaTniKN6M=",
@@ -1531,25 +1538,37 @@
 			"revisionTime": "2017-09-30T18:30:36Z"
 		},
 		{
+			"checksumSHA1": "YnVHV4xJimMPxqv2kEs7eLxEg2c=",
+			"path": "k8s.io/kubernetes/pkg/apis/componentconfig",
+			"revision": "457ea0c0c5d89d2c7c13a553ae09098c4ff31650",
+			"revisionTime": "2017-09-30T18:30:36Z"
+		},
+		{
+			"checksumSHA1": "I2IFQnJBAESbT2TyDAgbt8teTiU=",
+			"path": "k8s.io/kubernetes/pkg/client/leaderelectionconfig",
+			"revision": "457ea0c0c5d89d2c7c13a553ae09098c4ff31650",
+			"revisionTime": "2017-09-30T18:30:36Z"
+		},
+		{
 			"checksumSHA1": "ZrTaeC7FGDZyxdnW41RVd3djHH8=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/kubernetes/pkg/util/goroutinemap",
 			"path": "k8s.io/kubernetes/pkg/util/goroutinemap",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "3ltLCoHaJUEjDOPC8lTk2FnyVnk=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff",
 			"path": "k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "pxNIv1K1Vycz1FoE6WfoyroN8Dw=",
 			"origin": "github.com/kubernetes-incubator/external-storage/vendor/k8s.io/kubernetes/pkg/util/version",
 			"path": "k8s.io/kubernetes/pkg/util/version",
-			"revision": "a4f04595ee36f7056430e1793e0f8576a01b5be9",
-			"revisionTime": "2017-12-03T04:51:10Z"
+			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "Ps3BTdDMZC7kxUTGxpV4Tv4b3sU=",

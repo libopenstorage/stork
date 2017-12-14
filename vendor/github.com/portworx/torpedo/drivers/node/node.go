@@ -53,6 +53,12 @@ type FindOpts struct {
 	ConnectionOpts
 }
 
+// SystemctlOpts provide options for systemctl operation
+type SystemctlOpts struct {
+	Action string
+	ConnectionOpts
+}
+
 // TestConnectionOpts provide additional options for test connection operation
 type TestConnectionOpts struct {
 	ConnectionOpts
@@ -78,6 +84,9 @@ type Driver interface {
 
 	// FindFiles finds and returns the files for the given path regex and the node
 	FindFiles(path string, node Node, options FindOpts) (string, error)
+
+	// Systemctl runs a systemctl command for the given service on the node
+	Systemctl(node Node, service string, options SystemctlOpts) error
 
 	// TestConnection tests connection to given node. returns nil if driver can connect to given node
 	TestConnection(node Node, options ConnectionOpts) error
@@ -139,6 +148,13 @@ func (d *notSupportedDriver) FindFiles(path string, node Node, options FindOpts)
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "FindFiles()",
+	}
+}
+
+func (d *notSupportedDriver) Systemctl(node Node, service string, options SystemctlOpts) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "Systemctl()",
 	}
 }
 

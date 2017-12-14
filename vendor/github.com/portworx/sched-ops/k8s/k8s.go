@@ -7,11 +7,17 @@ import (
 	"sync"
 	"time"
 
+	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	snap_client "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1beta2"
 	"k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/typed/apps/v1beta2"
 	"k8s.io/client-go/rest"
@@ -36,6 +42,7 @@ type Ops interface {
 	PodOps
 	StorageClassOps
 	PersistentVolumeClaimOps
+	SnapshotOps
 }
 
 // NamespaceOps is an interface to perform namespace operations
@@ -154,12 +161,25 @@ type PersistentVolumeClaimOps interface {
 	DeletePersistentVolumeClaim(*v1.PersistentVolumeClaim) error
 	// ValidatePersistentVolumeClaim validates the given pvc
 	ValidatePersistentVolumeClaim(*v1.PersistentVolumeClaim) error
-	// GetVolumeForPersistentVolumeClaim returns the back volume for the given PVC
+	// GetVolumeForPersistentVolumeClaim returns the volumeID for the given PVC
 	GetVolumeForPersistentVolumeClaim(*v1.PersistentVolumeClaim) (string, error)
 	// GetPersistentVolumeClaimParams fetches custom parameters for the given PVC
 	GetPersistentVolumeClaimParams(*v1.PersistentVolumeClaim) (map[string]string, error)
 	// GetPersistentVolumeClaimStatus returns the status of the given pvc
 	GetPersistentVolumeClaimStatus(*v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaimStatus, error)
+}
+
+type SnapshotOps interface {
+	// CreateSnapshot creates the given snapshot
+	CreateSnapshot(*snap_v1.VolumeSnapshot) (*snap_v1.VolumeSnapshot, error)
+	// DeleteSnapshot deletes the given snapshot
+	DeleteSnapshot(name string, namespace string) error
+	// ValidateSnapshot validates the given snapshot
+	ValidateSnapshot(name string, namespace string) error
+	// GetVolumeForSnapshot returns the volumeID for the given snapshot
+	GetVolumeForSnapshot(name string, namespace string) (string, error)
+	// GetSnapshotStatus returns the status of the given snapshot
+	GetSnapshotStatus(name string, namespace string) (*snap_v1.VolumeSnapshotStatus, error)
 }
 
 var (
@@ -168,7 +188,8 @@ var (
 )
 
 type k8sOps struct {
-	client *kubernetes.Clientset
+	client     *kubernetes.Clientset
+	snapClient *rest.RESTClient
 }
 
 // Instance returns a singleton instance of k8sOps type
@@ -182,7 +203,7 @@ func Instance() Ops {
 // Initialize the k8s client if uninitialized
 func (k *k8sOps) initK8sClient() error {
 	if k.client == nil {
-		k8sClient, err := getK8sClient()
+		k8sClient, snapClient, err := getK8sClient()
 		if err != nil {
 			return err
 		}
@@ -194,6 +215,7 @@ func (k *k8sOps) initK8sClient() error {
 		}
 
 		k.client = k8sClient
+		k.snapClient = snapClient
 	}
 	return nil
 }
@@ -396,6 +418,34 @@ func (k *k8sOps) RemoveLabelOnNode(name, key string) error {
 // which is invoked when the v1.Node object is changed.
 type NodeWatchFunc func(node *v1.Node) error
 
+// handleWatch is internal function that handles the Node-watch.  On channel shutdown (ie. stop watch),
+// it'll attempt to reestablish its watch function.
+func (k *k8sOps) handleWatch(watchInterface watch.Interface, node *v1.Node, watchNodeFn NodeWatchFunc) {
+	for {
+		select {
+		case event, more := <-watchInterface.ResultChan():
+			if !more {
+				logrus.Debug("Kubernetes NodeWatch closed (attempting to reestablish)")
+
+				t := func() (interface{}, bool, error) {
+					err := k.WatchNode(node, watchNodeFn)
+					return "", true, err
+				}
+				if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+					logrus.WithError(err).Error("Could not reestablish the NodeWatch")
+				} else {
+					logrus.Debug("NodeWatch reestablished")
+				}
+				return
+			}
+			if k8sNode, ok := event.Object.(*v1.Node); ok {
+				// CHECKME: handle errors?
+				watchNodeFn(k8sNode)
+			}
+		}
+	}
+}
+
 func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn NodeWatchFunc) error {
 	if node == nil {
 		return fmt.Errorf("no node given to watch")
@@ -405,29 +455,32 @@ func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn NodeWatchFunc) error {
 		return err
 	}
 
-	// let's use internal FieldsSelector, instead of LabelsSelector (labels are volatile)
-	listOptions := meta_v1.SingleObject(node.ObjectMeta)
+	nodeHostname, has := node.GetLabels()[hostnameKey]
+	if !has || nodeHostname == "" {
+		return fmt.Errorf("no hostname label")
+	}
+
+	requirement, err := labels.NewRequirement(
+		hostnameKey,
+		selection.DoubleEquals,
+		[]string{nodeHostname},
+	)
+	if err != nil {
+		return fmt.Errorf("Could not create Label requirement: %s", err)
+	}
+
+	listOptions := meta_v1.ListOptions{
+		LabelSelector: requirement.String(),
+		Watch:         true,
+	}
+
 	watchInterface, err := k.client.Core().Nodes().Watch(listOptions)
 	if err != nil {
 		return err
 	}
 
 	// fire off watch function
-	go func() {
-		for {
-			select {
-			case event, more := <-watchInterface.ResultChan():
-				if !more {
-					// log.Warn("Kubernetes node watch channel closed")
-					return
-				}
-				if k8sNode, ok := event.Object.(*v1.Node); ok {
-					// CHECKME: handle errors?
-					watchNodeFn(k8sNode)
-				}
-			}
-		}
-	}()
+	go k.handleWatch(watchInterface, node, watchNodeFn)
 	return nil
 }
 
@@ -541,14 +594,14 @@ func (k *k8sOps) DescribeDeployment(depName string, depNamespace string) (*apps_
 }
 
 func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
-			return "", err
+			return "", true, err
 		}
 
 		dep, err := k.appsClient().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
 		if err != nil {
-			return "", err
+			return "", true, err
 		}
 
 		requiredReplicas := *dep.Spec.Replicas
@@ -564,7 +617,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 						PersistentVolumeClaims(dep.Namespace).
 						Get(vol.PersistentVolumeClaim.ClaimName, meta_v1.GetOptions{})
 					if err != nil {
-						return "", err
+						return "", true, err
 					}
 
 					if k.isPVCShared(claim) {
@@ -580,7 +633,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 		}
 
 		if requiredReplicas > dep.Status.AvailableReplicas {
-			return "", &ErrAppNotReady{
+			return "", true, &ErrAppNotReady{
 				ID: dep.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Available replicas: %v",
 					requiredReplicas, dep.Status.AvailableReplicas),
@@ -588,7 +641,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 		}
 
 		if requiredReplicas > dep.Status.ReadyReplicas {
-			return "", &ErrAppNotReady{
+			return "", true, &ErrAppNotReady{
 				ID: dep.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v",
 					requiredReplicas, dep.Status.ReadyReplicas),
@@ -597,14 +650,14 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 
 		pods, err := k.GetDeploymentPods(deployment)
 		if err != nil || pods == nil {
-			return "", &ErrAppNotReady{
+			return "", true, &ErrAppNotReady{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
 			}
 		}
 
 		if len(pods) == 0 {
-			return "", &ErrAppNotReady{
+			return "", true, &ErrAppNotReady{
 				ID:    dep.Name,
 				Cause: "Application has 0 pods",
 			}
@@ -622,10 +675,10 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 		}
 
 		if runningCount >= requiredReplicas {
-			return "", nil
+			return "", false, nil
 		}
 
-		return "", &ErrAppNotReady{
+		return "", true, &ErrAppNotReady{
 			ID:    dep.Name,
 			Cause: fmt.Sprintf("pod(s): %#v not yet ready", notRunningPods),
 		}
@@ -638,35 +691,35 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 }
 
 func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
-			return "", err
+			return "", true, err
 		}
 
 		dep, err := k.appsClient().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
 		if err != nil {
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
-				return "", nil
+				return "", true, nil
 			}
-			return "", err
+			return "", true, err
 		}
 
 		pods, err := k.GetDeploymentPods(deployment)
 		if err != nil {
-			return "", &ErrAppNotTerminated{
+			return "", true, &ErrAppNotTerminated{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
 			}
 		}
 
 		if pods != nil && len(pods) > 0 {
-			return "", &ErrAppNotTerminated{
+			return "", true, &ErrAppNotTerminated{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("pods: %#v is still present", pods),
 			}
 		}
 
-		return "", nil
+		return "", false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
@@ -767,25 +820,25 @@ func (k *k8sOps) DescribeStatefulSet(ssetName string, ssetNamespace string) (*ap
 }
 
 func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
-			return "", err
+			return "", true, err
 		}
 		sset, err := k.appsClient().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
 		if err != nil {
-			return "", err
+			return "", true, err
 		}
 
 		if *sset.Spec.Replicas != sset.Status.Replicas { // Not sure if this is even needed but for now let's have one check before
 			//readiness check
-			return "", &ErrAppNotReady{
+			return "", true, &ErrAppNotReady{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Observed replicas: %v", *sset.Spec.Replicas, sset.Status.Replicas),
 			}
 		}
 
 		if *sset.Spec.Replicas != sset.Status.ReadyReplicas {
-			return "", &ErrAppNotReady{
+			return "", true, &ErrAppNotReady{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v", *sset.Spec.Replicas, sset.Status.ReadyReplicas),
 			}
@@ -793,7 +846,7 @@ func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet) error {
 
 		pods, err := k.GetStatefulSetPods(statefulset)
 		if err != nil || pods == nil {
-			return "", &ErrAppNotReady{
+			return "", true, &ErrAppNotReady{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
 			}
@@ -801,14 +854,14 @@ func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet) error {
 
 		for _, pod := range pods {
 			if !k.IsPodRunning(pod) {
-				return "", &ErrAppNotReady{
+				return "", true, &ErrAppNotReady{
 					ID:    sset.Name,
 					Cause: fmt.Sprintf("pod: %v is not yet ready", pod.Name),
 				}
 			}
 		}
 
-		return "", nil
+		return "", false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
@@ -822,36 +875,36 @@ func (k *k8sOps) GetStatefulSetPods(statefulset *apps_api.StatefulSet) ([]v1.Pod
 }
 
 func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
-			return "", err
+			return "", true, err
 		}
 
 		sset, err := k.appsClient().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
 		if err != nil {
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
-				return "", nil
+				return "", false, nil
 			}
 
-			return "", err
+			return "", true, err
 		}
 
 		pods, err := k.GetStatefulSetPods(statefulset)
 		if err != nil {
-			return "", &ErrAppNotTerminated{
+			return "", true, &ErrAppNotTerminated{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("Failed to get pods for statefulset. Err: %v", err),
 			}
 		}
 
 		if pods != nil && len(pods) > 0 {
-			return "", &ErrAppNotTerminated{
+			return "", true, &ErrAppNotTerminated{
 				ID:    sset.Name,
 				Cause: fmt.Sprintf("pods: %#v is still present", pods),
 			}
 		}
 
-		return "", nil
+		return "", false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
@@ -994,23 +1047,23 @@ func (k *k8sOps) DeletePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) erro
 }
 
 func (k *k8sOps) ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
-			return "", err
+			return "", true, err
 		}
 
 		result, err := k.client.CoreV1().
 			PersistentVolumeClaims(pvc.Namespace).
 			Get(pvc.Name, meta_v1.GetOptions{})
 		if err != nil {
-			return "", err
+			return "", true, err
 		}
 
 		if result.Status.Phase == v1.ClaimBound {
-			return "", nil
+			return "", false, nil
 		}
 
-		return "", &ErrPVCNotReady{
+		return "", true, &ErrPVCNotReady{
 			ID:    result.Name,
 			Cause: fmt.Sprintf("PVC expected status: %v PVC actual status: %v", v1.ClaimBound, result.Status.Phase),
 		}
@@ -1071,9 +1124,14 @@ func (k *k8sOps) GetPersistentVolumeClaimParams(pvc *v1.PersistentVolumeClaim) (
 	requestGB := uint64(roundUpSize(capacity.Value(), 1024*1024*1024))
 	params["size"] = fmt.Sprintf("%dG", requestGB)
 
-	scName, ok := result.Annotations[pvcStorageClassKey]
-	if !ok {
-		return nil, fmt.Errorf("failed to get storage class for pvc: %v", result.Name)
+	var scName string
+	if pvc.Spec.StorageClassName == nil {
+		scName, ok = result.Annotations[pvcStorageClassKey]
+		if !ok {
+			return nil, fmt.Errorf("failed to get storage class for pvc: %v", result.Name)
+		}
+	} else {
+		scName = *pvc.Spec.StorageClassName
 	}
 
 	sc, err := k.client.StorageV1().StorageClasses().Get(scName, meta_v1.GetOptions{})
@@ -1102,50 +1160,162 @@ func (k *k8sOps) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
 
 // PVCs APIs - END
 
+// Snapshot APIs - BEGIN
+
+func (k *k8sOps) CreateSnapshot(snap *snap_v1.VolumeSnapshot) (*snap_v1.VolumeSnapshot, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	var result snap_v1.VolumeSnapshot
+	if err := k.snapClient.Post().
+		Name(snap.Metadata.Name).
+		Resource(snap_v1.VolumeSnapshotResourcePlural).
+		Namespace(snap.Metadata.Namespace).
+		Body(snap).
+		Do().Into(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (k *k8sOps) DeleteSnapshot(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	return k.snapClient.Delete().
+		Name(name).
+		Resource(snap_v1.VolumeSnapshotResourcePlural).
+		Namespace(namespace).
+		Do().Error()
+}
+
+func (k *k8sOps) ValidateSnapshot(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		status, err := k.GetSnapshotStatus(name, namespace)
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, condition := range status.Conditions {
+			if condition.Type == snap_v1.VolumeSnapshotConditionReady && condition.Status == v1.ConditionTrue {
+				return "", true, nil
+			} else if condition.Type == snap_v1.VolumeSnapshotConditionError && condition.Status == v1.ConditionTrue {
+				return "", false, &ErrSnapshotFailed{
+					ID:    name,
+					Cause: fmt.Sprintf("Snapshot Status %v", status),
+				}
+			}
+		}
+
+		return "", true, &ErrSnapshotNotReady{
+			ID:    name,
+			Cause: fmt.Sprintf("Snapshot Status %v", status),
+		}
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *k8sOps) GetVolumeForSnapshot(name string, namespace string) (string, error) {
+	if err := k.initK8sClient(); err != nil {
+		return "", err
+	}
+
+	var result snap_v1.VolumeSnapshot
+	if err := k.snapClient.Get().
+		Name(name).
+		Resource(snap_v1.VolumeSnapshotResourcePlural).
+		Namespace(namespace).
+		Do().Into(&result); err != nil {
+		return "", err
+	}
+	return result.Metadata.Name, nil
+}
+
+func (k *k8sOps) GetSnapshotStatus(name string, namespace string) (*snap_v1.VolumeSnapshotStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	var result snap_v1.VolumeSnapshot
+	if err := k.snapClient.Get().
+		Name(name).
+		Resource(snap_v1.VolumeSnapshotResourcePlural).
+		Namespace(namespace).
+		Do().Into(&result); err != nil {
+		return nil, err
+	}
+	return &result.Status, nil
+}
+
+// Snapshot APIs - END
+
 func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 	return k.client.AppsV1beta2()
 }
 
 // getK8sClient instantiates a k8s client
-func getK8sClient() (*kubernetes.Clientset, error) {
+func getK8sClient() (*kubernetes.Clientset, *rest.RESTClient, error) {
 	var k8sClient *kubernetes.Clientset
+	var restClient *rest.RESTClient
 	var err error
 
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if len(kubeconfig) > 0 {
-		k8sClient, err = loadClientFromKubeconfig(kubeconfig)
+		k8sClient, restClient, err = loadClientFromKubeconfig(kubeconfig)
 	} else {
-		k8sClient, err = loadClientFromServiceAccount()
+		k8sClient, restClient, err = loadClientFromServiceAccount()
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if k8sClient == nil {
-		return nil, ErrK8SApiAccountNotSet
+		return nil, nil, ErrK8SApiAccountNotSet
 	}
 
-	return k8sClient, nil
+	return k8sClient, restClient, nil
 }
 
 // loadClientFromServiceAccount loads a k8s client from a ServiceAccount specified in the pod running px
-func loadClientFromServiceAccount() (*kubernetes.Clientset, error) {
+func loadClientFromServiceAccount() (*kubernetes.Clientset, *rest.RESTClient, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return kubernetes.NewForConfig(config)
+	return loadClientFor(config)
 }
 
-func loadClientFromKubeconfig(kubeconfig string) (*kubernetes.Clientset, error) {
+func loadClientFromKubeconfig(kubeconfig string) (*kubernetes.Clientset, *rest.RESTClient, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return kubernetes.NewForConfig(config)
+	return loadClientFor(config)
+}
+
+func loadClientFor(config *rest.Config) (*kubernetes.Clientset, *rest.RESTClient, error) {
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	snapClient, _, err := snap_client.NewClient(config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return client, snapClient, nil
 }
 
 func roundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {
