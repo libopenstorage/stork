@@ -89,12 +89,14 @@ func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
 	}
 
 	info := &storkvolume.Info{}
-	info.VolumeID = volumeID
+	info.VolumeID = vols[0].Id
+	info.VolumeName = vols[0].Locator.Name
 	for _, rset := range vols[0].ReplicaSets {
 		for _, node := range rset.Nodes {
 			info.DataNodes = append(info.DataNodes, node)
 		}
 	}
+	info.ParentID = vols[0].Source.Parent
 	return info, nil
 }
 

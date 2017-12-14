@@ -82,8 +82,9 @@ func (m *Driver) ProvisionVolume(
 	}
 
 	volume := &storkvolume.Info{
-		VolumeID: volumeName,
-		Size:     size,
+		VolumeID:   volumeName,
+		VolumeName: volumeName,
+		Size:       size,
 	}
 
 	for i := 0; i < len(replicaIndexes); i++ {
