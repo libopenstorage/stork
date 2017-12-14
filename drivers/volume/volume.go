@@ -34,10 +34,14 @@ type Driver interface {
 type Info struct {
 	// VolumeID is a unique identifier for the volume
 	VolumeID string
+	// VolumeName is the name for the volume
+	VolumeName string
 	// DataNodes is a list of nodes where the data for the volume resides
 	DataNodes []string
 	// Size is the size of the volume in GB
 	Size uint64
+	// ParentID points to the ID of the parent volume for snapshots
+	ParentID string
 }
 
 // NodeStatus Status of driver on a node
