@@ -53,6 +53,9 @@ type Driver interface {
 
 	// UpgradeDriver upgrades the volume driver to the given version
 	UpgradeDriver(version string) error
+
+	// RandomizeVolumeName randomizes the volume name from the given name
+	RandomizeVolumeName(name string) string
 }
 
 var (

@@ -67,3 +67,27 @@ type ErrPVCNotReady struct {
 func (e *ErrPVCNotReady) Error() string {
 	return fmt.Sprintf("PVC %v is not ready yet. Cause: %v", e.ID, e.Cause)
 }
+
+// ErrSnapshotNotReady error type for when a snapshot is not yet ready/bound
+type ErrSnapshotNotReady struct {
+	// ID is the identifier of the snapshot
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrSnapshotNotReady) Error() string {
+	return fmt.Sprintf("Snapshot %v is not ready yet. Cause: %v", e.ID, e.Cause)
+}
+
+// ErrSnapshotFailed error type for when a snapshot has failed
+type ErrSnapshotFailed struct {
+	// ID is the identifier of the snapshot
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrSnapshotFailed) Error() string {
+	return fmt.Sprintf("Snapshot %v has failed. Cause: %v", e.ID, e.Cause)
+}

@@ -13,11 +13,12 @@ import (
 var ErrTimedOut = errors.New("timed out performing task")
 
 // DoRetryWithTimeout performs given task with given timeout and timeBeforeRetry
-func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
+func DoRetryWithTimeout(t func() (interface{}, bool, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
 	done := make(chan bool, 1)
 	quit := make(chan bool, 1)
 	var out interface{}
 	var err error
+	var retry bool
 
 	go func() {
 		count := 0
@@ -29,8 +30,8 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 				}
 
 			default:
-				out, err = t()
-				if err == nil {
+				out, retry, err = t()
+				if err == nil || !retry {
 					done <- true
 					return
 				}
@@ -45,7 +46,7 @@ func DoRetryWithTimeout(t func() (interface{}, error), timeout, timeBeforeRetry 
 
 	select {
 	case <-done:
-		return out, nil
+		return out, err
 	case <-time.After(timeout):
 		quit <- true
 		return out, ErrTimedOut

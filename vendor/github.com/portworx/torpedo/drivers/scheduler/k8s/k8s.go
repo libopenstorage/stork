@@ -8,10 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strings"
 	"time"
 
+	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -22,6 +22,8 @@ import (
 	apps_api "k8s.io/api/apps/v1beta2"
 	"k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -39,15 +41,15 @@ type k8s struct {
 }
 
 func (k *k8s) IsNodeReady(n node.Node) error {
-	t := func() (interface{}, error) {
+	t := func() (interface{}, bool, error) {
 		if err := k8s_ops.Instance().IsNodeReady(n.Name); err != nil {
-			return "", &scheduler.ErrNodeNotReady{
+			return "", true, &scheduler.ErrNodeNotReady{
 				Node:  n,
 				Cause: err.Error(),
 			}
 		}
 
-		return "", nil
+		return "", false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
@@ -118,15 +120,16 @@ func (k *k8s) ParseSpecs(specDir string) ([]interface{}, error) {
 			}
 
 			if len(bytes.TrimSpace(specContents)) > 0 {
-				obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
+				obj, err := decodeSpec(specContents)
 				if err != nil {
+					logrus.Warnf("Error decoding spec from %v: %v", fileName, err)
 					return nil, err
 				}
 
 				specObj, err := validateSpec(obj)
 				if err != nil {
 					logrus.Warnf("Error parsing spec from %v: %v", fileName, err)
-					return nil, nil
+					return nil, err
 				}
 
 				specs = append(specs, specObj)
@@ -135,6 +138,22 @@ func (k *k8s) ParseSpecs(specDir string) ([]interface{}, error) {
 	}
 
 	return specs, nil
+}
+
+func decodeSpec(specContents []byte) (runtime.Object, error) {
+	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
+	if err != nil {
+		scheme := runtime.NewScheme()
+		if err := snap_v1.AddToScheme(scheme); err != nil {
+			return nil, err
+		}
+		codecs := serializer.NewCodecFactory(scheme)
+		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return obj, nil
 }
 
 func validateSpec(in interface{}) (interface{}, error) {
@@ -147,6 +166,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*storage_api.StorageClass); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*snap_v1.VolumeSnapshot); ok {
 		return specObj, nil
 	}
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
@@ -252,7 +273,7 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		obj.Namespace = ns.Name
 		sc, err := k8sOps.CreateStorageClass(obj)
 		if err != nil {
-			if matched, _ := regexp.MatchString(".+ already exists", err.Error()); !matched {
+			if !strings.Contains(err.Error(), "already exists") {
 				return nil, &scheduler.ErrFailedToScheduleApp{
 					App:   app,
 					Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
@@ -282,6 +303,18 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 
 		logrus.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 		return pvc, nil
+	} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+		obj.Metadata.Namespace = ns.Name
+		snap, err := k8sOps.CreateSnapshot(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", snap.Metadata.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
+		return snap, nil
 	}
 
 	return nil, nil
@@ -442,8 +475,8 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 
 func (k *k8s) waitForCleanup(ctx *scheduler.Context, podList []v1.Pod) error {
 	for _, pod := range podList {
-		t := func() (interface{}, error) {
-			return nil, k.validateVolumeDirCleanup(pod.UID, ctx.App)
+		t := func() (interface{}, bool, error) {
+			return nil, true, k.validateVolumeDirCleanup(pod.UID, ctx.App)
 		}
 		if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 			return err
@@ -519,30 +552,15 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
-	k8sOps := k8s_ops.Instance()
-	var pods []v1.Pod
-	var err error
-	for _, spec := range ctx.App.SpecList {
-		if obj, ok := spec.(*apps_api.Deployment); ok {
-			pods, err = k8sOps.GetDeploymentPods(obj)
-			if err != nil {
-				return &scheduler.ErrFailedToDeleteTasks{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-				}
-			}
-		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			pods, err = k8sOps.GetStatefulSetPods(obj)
-			if err != nil {
-				return &scheduler.ErrFailedToDeleteTasks{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-				}
-			}
+	pods, err := k.getPodsForApp(ctx)
+	if err != nil {
+		return &scheduler.ErrFailedToDeleteTasks{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 		}
 	}
 
-	if err := k8sOps.DeletePods(pods); err != nil {
+	if err := k8s_ops.Instance().DeletePods(pods); err != nil {
 		return &scheduler.ErrFailedToDeleteTasks{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
@@ -600,6 +618,15 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate snapshot: %v. Err: %v", obj.Metadata.Name, err),
+				}
+			}
+
+			logrus.Infof("[%v] Validated snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		}
 	}
 
@@ -625,7 +652,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 			vols = append(vols, volToBeDeleted)
 			if err := k8sOps.DeletePersistentVolumeClaim(obj); err != nil {
-				if matched, _ := regexp.MatchString(".+ not found", err.Error()); !matched {
+				if !strings.Contains(err.Error(), "not found") {
 					return nil, &scheduler.ErrFailedToDestroyStorage{
 						App:   ctx.App,
 						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
@@ -633,6 +660,16 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				}
 			}
 			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			if err := k8sOps.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
+				if !strings.Contains(err.Error(), "not found") {
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy Snapshot: %v. Err: %v", obj.Metadata.Name, err),
+					}
+				}
+			}
+			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		}
 	}
 
@@ -640,55 +677,58 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 }
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
-	k8sOps := k8s_ops.Instance()
-	var result []node.Node
-	var pods []v1.Pod
-	var err error
-	for _, spec := range ctx.App.SpecList {
-		if obj, ok := spec.(*apps_api.Deployment); ok {
-			pods, err = k8sOps.GetDeploymentPods(obj)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToGetNodesForApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-				}
-			}
-		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			pods, err = k8sOps.GetStatefulSetPods(obj)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToGetNodesForApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to get pods due to: %v", err),
-				}
-			}
+	pods, err := k.getPodsForApp(ctx)
+	if err != nil {
+		return nil, &scheduler.ErrFailedToGetNodesForApp{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 		}
 	}
 
 	// We should have pods from a supported application at this point
-	nodeMap := make(map[string]node.Node)
-	for _, n := range node.GetNodes() {
-		nodeMap[n.Name] = n
-	}
+	var result []node.Node
+	nodeMap := node.GetNodesByName()
 
 	for _, p := range pods {
-		if len(p.Spec.NodeName) > 0 {
-			n, ok := nodeMap[p.Spec.NodeName]
-			if !ok {
-				return nil, &scheduler.ErrFailedToGetNodesForApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("node: %v not present in k8s map", p.Spec.NodeName),
-				}
+		n, ok := nodeMap[p.Spec.NodeName]
+		if !ok {
+			return nil, &scheduler.ErrFailedToGetNodesForApp{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("node: %v not present in node map", p.Spec.NodeName),
 			}
-
-			if contains(result, n) {
-				continue
-			}
-
-			result = append(result, n)
 		}
+
+		if node.Contains(result, n) {
+			continue
+		}
+
+		result = append(result, n)
 	}
 
 	return result, nil
+}
+
+func (k *k8s) getPodsForApp(ctx *scheduler.Context) ([]v1.Pod, error) {
+	k8sOps := k8s_ops.Instance()
+	var pods []v1.Pod
+
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			depPods, err := k8sOps.GetDeploymentPods(obj)
+			if err != nil {
+				return nil, err
+			}
+			pods = append(pods, depPods...)
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ssPods, err := k8sOps.GetStatefulSetPods(obj)
+			if err != nil {
+				return nil, err
+			}
+			pods = append(pods, ssPods...)
+		}
+	}
+
+	return pods, nil
 }
 
 func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
@@ -786,15 +826,6 @@ func dumpPodStatusRecursively(pod v1.Pod) string {
 	}
 	buf.WriteString(insertLineBreak("END Pod"))
 	return buf.String()
-}
-
-func contains(nodes []node.Node, n node.Node) bool {
-	for _, value := range nodes {
-		if value.Name == n.Name {
-			return true
-		}
-	}
-	return false
 }
 
 func init() {

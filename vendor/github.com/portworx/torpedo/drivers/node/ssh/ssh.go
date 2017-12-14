@@ -139,8 +139,9 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 		rebootCmd = rebootCmd + " -f"
 	}
 
-	t := func() (interface{}, error) {
-		return s.doCmd(addr, rebootCmd, true)
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(addr, rebootCmd, true)
+		return out, true, err
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
@@ -167,8 +168,9 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 		shutdownCmd = "halt"
 	}
 
-	t := func() (interface{}, error) {
-		return s.doCmd(addr, shutdownCmd, true)
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(addr, shutdownCmd, true)
+		return out, true, err
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
@@ -201,8 +203,9 @@ func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string
 		findCmd += " -maxdepth " + strconv.Itoa(options.MaxDepth)
 	}
 
-	t := func() (interface{}, error) {
-		return s.doCmd(addr, findCmd, true)
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(addr, findCmd, true)
+		return out, true, err
 	}
 
 	out, err := task.DoRetryWithTimeout(t,
@@ -216,6 +219,32 @@ func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string
 		}
 	}
 	return out.(string), nil
+}
+
+func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
+	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
+	if err != nil {
+		return &node.ErrFailedToRunSystemctlOnNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
+		}
+	}
+
+	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(addr, systemctlCmd, false)
+		return out, true, err
+	}
+
+	if _, err := task.DoRetryWithTimeout(t,
+		options.ConnectionOpts.Timeout,
+		options.ConnectionOpts.TimeBeforeRetry); err != nil {
+		return &node.ErrFailedToRunSystemctlOnNode{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+	return nil
 }
 
 func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
@@ -259,8 +288,9 @@ func (s *ssh) getAddrToConnect(n node.Node, options node.ConnectionOpts) (string
 
 func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string, error) {
 	for _, addr := range n.Addresses {
-		t := func() (interface{}, error) {
-			return s.doCmd(addr, "hostname", false)
+		t := func() (interface{}, bool, error) {
+			out, err := s.doCmd(addr, "hostname", false)
+			return out, true, err
 		}
 		if _, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); err == nil {
 			n.UsableAddr = addr
