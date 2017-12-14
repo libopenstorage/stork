@@ -44,7 +44,7 @@ func (p *portworx) String() string {
 	return driverName
 }
 
-func (p *portworx) Init() error {
+func (p *portworx) Init(_ interface{}) error {
 	var endpoint string
 	svc, err := k8sutils.GetService(serviceName, namespace)
 	if err == nil {

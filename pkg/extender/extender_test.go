@@ -37,7 +37,7 @@ func setup(t *testing.T) {
 	if !ok {
 		t.Fatalf("Error casting mockdriver")
 	}
-	if err = storkdriver.Init(); err != nil {
+	if err = storkdriver.Init(nil); err != nil {
 		t.Fatalf("Error initializing mock volume driver: %v", err)
 	}
 
