@@ -28,7 +28,7 @@ This will create the Docker image `$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):
 Now that you have stork in a container image, you can just create a pod config for it and run it in your Kubernetes cluster. We do this via a deployment.
 
 ## Create a Deployment
-A Deployment manages a Replica Set which in turn manages the pods, thereby making stork resilient to failures. The deployment spec is defined in [specs/stork-deployment.yaml](specs/stork-deployment.yaml).
+A Deployment manages a Replica Set which in turn manages the pods, thereby making stork resilient to failures. The deployment spec is defined in [specs/stork-deployment.yaml](https://raw.githubusercontent.com/libopenstorage/stork/master/specs/stork-deployment.yaml).
 By default the deployment does the following
 * Uses the latest stable image of stork to start a pod. You can update the tag to use a specific version or use your own stork image.
 * Creates a service to provide an endpoint that can be used to reach the extender. 
@@ -57,7 +57,7 @@ You can either update the default kube scheduler to use stork or start a new
 scheduler instance which can use stork. We will start a new scheduler instance here and
 configure it to use stork. We will call the new scheduler 'stork'.
 
-This new scheduler instance is defined in [specs/stork-scheduler.yaml](specs/stork-scheduler.yaml). This spec starts
+This new scheduler instance is defined in [specs/stork-scheduler.yaml](https://raw.githubusercontent.com/libopenstorage/stork/master/specs/stork-scheduler.yaml). This spec starts
 3 replicas of the scheduler.
 
 You will need to update the version of kube scheduler that you want to use. This should be the same version as your kubernetes cluster. 
