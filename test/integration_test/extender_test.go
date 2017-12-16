@@ -94,6 +94,7 @@ func driverNodeErrorTest(t *testing.T) {
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
 	stoppedNode := scheduledNodes[0]
 
+	time.Sleep(1 * time.Minute)
 	err = schedulerDriver.DeleteTasks(ctxs[0])
 	require.NoError(t, err, "Error deleting pod")
 	time.Sleep(10 * time.Second)
