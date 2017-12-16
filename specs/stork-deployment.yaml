@@ -99,7 +99,7 @@ spec:
       maxSurge: 1
       maxUnavailable: 1
     type: RollingUpdate
-  replicas: 1
+  replicas: 3
   template:
     metadata:
       annotations:
@@ -108,12 +108,13 @@ spec:
         name: stork
         tier: control-plane
     spec:
-      hostname: stork
       containers:
-      - command: ["/stork"]
+      - command:
+        - /stork
+        - --driver=pxd
+        - --verbose
+        - --leader-elect=true
         imagePullPolicy: Always
-        args:
-          ["--driver", "pxd", "--verbose"]
         image: openstorage/stork:0.2
         resources:
           requests:
