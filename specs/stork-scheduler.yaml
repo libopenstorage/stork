@@ -50,7 +50,7 @@ spec:
                     operator: In
                     values:
                     - stork-scheduler
-              topologyKey: "kubernetes.io/hostname":
+              topologyKey: "kubernetes.io/hostname"
       hostPID: false
       volumes: []
       serviceAccountName: stork-account
