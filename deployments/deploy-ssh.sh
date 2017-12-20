@@ -93,7 +93,6 @@ spec:
     args: [ "$VERBOSE",
             "--trace",
             "--failFast",
-            "$FOCUS_ARG",
             "$SKIP_ARG",
              "--slowSpecThreshold", "600",
             "bin/basic.test",
