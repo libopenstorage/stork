@@ -13,6 +13,7 @@ spec:
       labels:
         component: scheduler
         tier: control-plane
+      name: stork-scheduler
     spec:
       containers:
       - command:
@@ -40,6 +41,16 @@ spec:
           privileged: false
         volumeMounts: []
       hostNetwork: false
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "name"
+                    operator: In
+                    values:
+                    - stork-scheduler
+              topologyKey: "kubernetes.io/hostname":
       hostPID: false
       volumes: []
       serviceAccountName: stork-account
