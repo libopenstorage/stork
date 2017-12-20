@@ -75,8 +75,14 @@ func InitInstance() {
 
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
-	err := Inst().V.ValidateVolumeCleanup()
-	expect(err).NotTo(haveOccurred())
+	timeToWait := 60 * time.Second
+	Step(fmt.Sprintf("wait for %s before validating resource cleanup", timeToWait), func() {
+		time.Sleep(timeToWait)
+	})
+	Step(fmt.Sprintf("validate cleanup of resources used by the test suite"), func() {
+		err := Inst().V.ValidateVolumeCleanup()
+		expect(err).NotTo(haveOccurred())
+	})
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
