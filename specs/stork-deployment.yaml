@@ -125,6 +125,16 @@ spec:
         name: stork
       hostNetwork: false
       hostPID: false
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "name"
+                    operator: In
+                    values:
+                    - stork
+              topologyKey: "kubernetes.io/hostname"
+
       volumes: []
       serviceAccountName: stork-account
-
