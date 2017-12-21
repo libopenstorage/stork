@@ -193,22 +193,25 @@ func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
 
 func (d *portworx) RecoverDriver(n node.Node) error {
 
-	t := func() (interface{}, error) {
-		return nil, d.maintenanceOp(n, enterMaintenancePath)
+	t := func() (interface{}, bool, error) {
+		if err := d.maintenanceOp(n, enterMaintenancePath); err != nil {
+			return nil, true, err
+		}
+		return nil, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-	t = func() (interface{}, error) {
+	t = func() (interface{}, bool, error) {
 		apiNode, err := d.getClusterManager().Inspect(n.Name)
 		if err != nil {
-			return nil, err
+			return nil, true, err
 		}
 		if apiNode.Status == api.Status_STATUS_MAINTENANCE {
-			return nil, nil
+			return nil, false, nil
 		}
-		return nil, fmt.Errorf("Node %v is not in Maintenance mode", n.Name)
+		return nil, true, fmt.Errorf("Node %v is not in Maintenance mode", n.Name)
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
@@ -217,8 +220,11 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
-	t = func() (interface{}, error) {
-		return nil, d.maintenanceOp(n, exitMaintenancePath)
+	t = func() (interface{}, bool, error) {
+		if err := d.maintenanceOp(n, exitMaintenancePath); err != nil {
+			return nil, true, err
+		}
+		return nil, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
