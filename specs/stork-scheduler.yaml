@@ -1,3 +1,71 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stork-scheduler-account
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: stork-scheduler-role
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resourceNames: ["kube-scheduler"]
+    resources: ["endpoints"]
+    verbs: ["delete", "get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["bindings", "pods/binding"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods/status"]
+    verbs: ["patch", "update"]
+  - apiGroups: [""]
+    resources: ["replicationcontrollers", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["app", "extensions"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: stork-scheduler-role-binding
+subjects:
+- kind: ServiceAccount
+  name: stork-scheduler-account
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: stork-scheduler-role
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
@@ -53,5 +121,4 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       hostPID: false
       volumes: []
-      serviceAccountName: stork-account
-
+      serviceAccountName: stork-scheduler-account
