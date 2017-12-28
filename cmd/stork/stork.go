@@ -25,6 +25,8 @@ import (
 	"k8s.io/kubernetes/pkg/client/leaderelectionconfig"
 )
 
+var ext *extender.Extender
+
 func main() {
 	// Parse empty flags to suppress warnings from the snapshotter which uses
 	// glog
@@ -85,8 +87,28 @@ func run(c *cli.Context) {
 		log.SetLevel(log.DebugLevel)
 	}
 
+	d, err := volume.Get(driverName)
+	if err != nil {
+		log.Fatalf("Error getting Stork Driver %v: %v", driverName, err)
+		os.Exit(-1)
+	}
+
+	if err = d.Init(nil); err != nil {
+		log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
+		os.Exit(-1)
+	}
+
+	ext = &extender.Extender{
+		Driver: d,
+	}
+
+	if err = ext.Start(); err != nil {
+		log.Fatalf("Error starting scheduler extender: %v", err)
+		os.Exit(-1)
+	}
+
 	runFunc := func(_ <-chan struct{}) {
-		runStork(driverName)
+		runStork(d)
 	}
 
 	leaderConfig := leaderelectionconfig.DefaultLeaderElectionConfiguration()
@@ -161,32 +183,12 @@ func run(c *cli.Context) {
 	}
 }
 
-func runStork(driverName string) {
-	d, err := volume.Get(driverName)
-	if err != nil {
-		log.Fatalf("Error getting Stork Driver %v: %v", driverName, err)
-		os.Exit(-1)
-	}
-
-	if err = d.Init(nil); err != nil {
-		log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
-		os.Exit(-1)
-	}
-
-	extender := &extender.Extender{
-		Driver: d,
-	}
-
-	if err = extender.Start(); err != nil {
-		log.Fatalf("Error starting scheduler extender: %v", err)
-		os.Exit(-1)
-	}
-
+func runStork(d volume.Driver) {
 	monitor := &monitor.Monitor{
 		Driver: d,
 	}
 
-	if err = monitor.Start(); err != nil {
+	if err := monitor.Start(); err != nil {
 		log.Fatalf("Error starting storage monitor: %v", err)
 		os.Exit(-1)
 	}
@@ -195,7 +197,7 @@ func runStork(driverName string) {
 		Driver: d,
 	}
 
-	if err = snapshotController.Start(); err != nil {
+	if err := snapshotController.Start(); err != nil {
 		log.Fatalf("Error starting snapshot controller: %v", err)
 		os.Exit(-1)
 	}
@@ -206,7 +208,7 @@ func runStork(driverName string) {
 		select {
 		case <-signalChan:
 			log.Printf("Shutdown signal received, exiting...")
-			if err := extender.Stop(); err != nil {
+			if err := ext.Stop(); err != nil {
 				log.Warnf("Error stopping extender: %v", err)
 			}
 			if err := monitor.Stop(); err != nil {
