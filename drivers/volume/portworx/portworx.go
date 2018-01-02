@@ -414,7 +414,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		}
 	}
 
-	return d.schedOps.ValidateRemoveLabels(vol)
+	return nil
 }
 
 func (d *portworx) ValidateVolumeCleanup() error {
