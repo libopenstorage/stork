@@ -80,7 +80,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["configmaps"]
-    verbs: ["get", "update"]
+    verbs: ["get", "create", "update"]
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get"]
