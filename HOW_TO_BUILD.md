@@ -17,7 +17,7 @@ Torpedo uses [Ginkgo](https://github.com/onsi/ginkgo) as the testing framework.
 
 Make sure you change the environment variables above to match your docker repository.
 
-To build Torpedo using a docker build container: `make docker-build`
+To build the Torpedo container without deploying: `make container`
 
 
 #### To build a specific ginkgo test

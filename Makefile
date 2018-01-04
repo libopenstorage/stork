@@ -79,17 +79,6 @@ container:
 deploy: container
 	sudo docker push $(TORPEDO_IMG)
 
-docker-build:
-	docker build -t torpedo/docker-build -f Dockerfile.build .
-	@echo "Building torpedo using docker"
-	docker run \
-		--privileged \
-		-v $(shell pwd):/go/src/github.com/portworx/torpedo \
-		-e DOCKER_HUB_REPO=$(DOCKER_HUB_REPO) \
-		-e DOCKER_HUB_TORPEDO_IMAGE=$(DOCKER_HUB_TORPEDO_IMAGE) \
-		-e DOCKER_HUB_TAG=$(DOCKER_HUB_TAG) \
-		torpedo/docker-build make all
-
 clean:
 	-sudo rm -rf bin
 	@echo "Deleting image "$(TORPEDO_IMG)
