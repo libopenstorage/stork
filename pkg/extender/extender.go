@@ -180,6 +180,13 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	}
 	respList := schedulerapi.HostPriorityList{}
 	driverVolumes, err := e.Driver.GetPodVolumes(pod)
+	driverNodes, err := e.Driver.GetNodes()
+
+	// Create a map for ID->Hostname
+	idMap := make(map[string]string)
+	for _, node := range driverNodes {
+		idMap[node.ID] = node.Hostname
+	}
 
 	priorityMap := make(map[string]int)
 	if err != nil {
@@ -198,7 +205,11 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			for _, datanode := range volume.DataNodes {
 				for _, node := range args.Nodes.Items {
 					for _, address := range node.Status.Addresses {
-						if datanode == address.Address {
+						if address.Type != v1.NodeHostName {
+							continue
+						}
+
+						if idMap[datanode] == address.Address {
 							// Increment score for every volume that is required by
 							// the pod and is present on the node
 							_, ok := priorityMap[node.Name]

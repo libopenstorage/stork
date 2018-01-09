@@ -104,7 +104,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 
 	found := false
 	for _, dNode := range driverNodes {
-		if dNode.ID == appNode.Name {
+		if dNode.Hostname == appNode.Name {
 			found = true
 			break
 		}
@@ -112,8 +112,10 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 	require.Equal(t, true, found, "Scheduled node not found in driver node list")
 
 	scores := make(map[string]int)
+	idMap := make(map[string]string)
 	for _, dNode := range driverNodes {
-		scores[dNode.ID] = 0
+		scores[dNode.Hostname] = 0
+		idMap[dNode.ID] = dNode.Hostname
 	}
 
 	highScore := 0
@@ -123,9 +125,10 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 		require.NoError(t, err, "Error inspecting volume %v", vol)
 
 		for _, dataNode := range volInfo.DataNodes {
-			scores[dataNode] = scores[dataNode] + 10
-			if scores[dataNode] > highScore {
-				highScore = scores[dataNode]
+			hostname := idMap[dataNode]
+			scores[hostname] = scores[hostname] + 10
+			if scores[hostname] > highScore {
+				highScore = scores[hostname]
 			}
 		}
 	}

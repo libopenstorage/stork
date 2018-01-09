@@ -150,6 +150,9 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 			Hostname: n.Hostname,
 			Status:   p.mapNodeStatus(n.Status),
 		}
+		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
+		nodeInfo.IPs = append(nodeInfo.IPs, n.DataIp)
+
 		nodes = append(nodes, nodeInfo)
 	}
 	return nodes, nil
@@ -192,7 +195,6 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 				return nil, err
 			}
 			volumes = append(volumes, volumeInfo)
-
 		}
 	}
 	return volumes, nil
