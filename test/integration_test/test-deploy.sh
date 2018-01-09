@@ -50,8 +50,8 @@ for i in $(seq 1 100) ; do
 done
 
 kubectl logs stork-test  -n kube-system -f
-test_status=$(kubectl get pod stork-test -n kube-system -o json | jq ".status.phase")
-if [ "$test_status" == "Completed" ]; then
+test_status=$(kubectl get pod stork-test -n kube-system -o json | jq ".status.phase" -r)
+if [ "$test_status" == "Succeeded" ]; then
     echo "Tests passed"
     exit 0
 elif [ "$test_status" == "Failed" ]; then
