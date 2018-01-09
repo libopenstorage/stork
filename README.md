@@ -8,8 +8,76 @@ Stork is a Cloud Native storage orchestration runtime scheduler plugin. It trans
 
 Stork is intended to allow storage operators such as Portworx, EMC-RexRay, and Kubernetes Local Storage to extend upon scheduler actions and allow for a storage-implementation specific orchestration actions around what the orchestrator is trying to do. The most basic example is when the scheduler is trying to spawn a container that is part of a pod - Stork will allow for the storage provider to specify an appropriate node on which that container needs to run such that it's data access is local to the runtime of the contaner. This is one of many orchestration scenarios that is adressed by this project.
 
-## Stork as a Kubernetes Scheduler Extension
-Stork is implemented as a Kubernetes native scheduler extension. It registers with the Kubernetes scheduler and helps filter and prioritize pods to provide optimal placement for storage providers.
+# Features
+## Hyper-Convergence
+Stork can be used to co-locate pods with where their data is located. This is achieved by using a
+[kubernetes scheduler extender](https://github.com/kubernetes/kubernetes/issues/11470).
+The scheduler is configured to use stork as an extender. So everytime a pod is being scheduled,
+the scheduler will send filter and prioritize requests to stork. Stork will then
+check with the storage driver
+You can either configure the default kubernetes scheduler to communicate with
+stork or launch another instance of kube-scheduler.
+
+## Health Monitoring
+Stork will monitor the health of the volume driver on the different nodes. If the volume driver on a node becomes
+unhealthy pods on that node using volumes from the driver will not be able to access their data. In this case stork will
+relocate  pods on to other nodes so that they can continue running.
+
+## Volume Snapshots
+Stork uses the external-storage project from [kubernetes-incuabator](https://github.com/kubernetes-incubator/external-storage)
+to add support for snapshots.
+
+### Creating Snapshots
+If you have a PVC called mysql-data, you can create a snapshot for that PVC by
+applying the following spec:
+
+```
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-snapshot
+    namespace: default
+    spec:
+      persistentVolumeClaimName: mysql-data
+```
+
+You can then check the status of the snapshots using kubectl:
+```
+$ kubectl get volumesnapshot,volumesnapshotdatas
+NAME                             AGE
+volumesnapshots/mysql-snapshot   6s
+NAME                                                                           AGE
+volumesnapshotdatas/k8s-volume-snapshot-179503e6-f979-11e7-971d-627221250ade   4s
+```
+
+### Restoring from Snapshots
+You can then create PVCs from this snapshot by using the snapshot name and the stork-snapshot-sc storageclass.
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-snap-clone
+  annotations:
+    snapshot.alpha.kubernetes.io/snapshot: mysql-snapshot
+spec:
+  accessModes:
+     - ReadWriteOnce
+  storageClassName: stork-snapshot-sc
+  resources:
+    requests:
+      storage: 2Gi
+```
+
+You should then see a PVC created by Stork based on that snapshot
+```
+$ kubectl get pvc
+NAME               STATUS    VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS        AGE
+mysql-data         Bound     pvc-d8959cf1-f978-11e7-9319-0214683e8447   2Gi        RWO            px-mysql-sc         5m
+mysql-snap-clone   Bound     pvc-853f549b-f979-11e7-9319-0214683e8447   2Gi        RWO            stork-snapshot-sc   56s
+```
+
+
+
 
 # Building Stork
 Stork is written in Golang. To build Stork:
@@ -48,7 +116,9 @@ Verify that the stork pod is running:
 # kubectl get pods --namespace=kube-system
 NAME                              READY     STATUS    RESTARTS   AGE
 ....
-stork-98b64f47f-5wh2b             1/1       Running   0          27m
+stork-6dc5d66997-4rs2w            1/1       Running   1          27m
+stork-6dc5d66997-fl8wr            1/1       Running   1          27m
+stork-6dc5d66997-xvnbj            1/1       Running   1          27m
 ....
 ```
 
@@ -76,9 +146,9 @@ Verify that the scheduler pods are running:
 # kubectl get pods --namespace=kube-system
 NAME                              READY     STATUS    RESTARTS   AGE
 ....
-stork-scheduler-9d6cb4546-gqdq2            1/1       Running   0          32m
-stork-scheduler-9d6cb4546-k4z8t            1/1       Running   0          32m
-stork-scheduler-9d6cb4546-tfkh4            1/1       Running   0          30m
+stork-scheduler-9d6cb4546-gqdq2   1/1       Running   0          32m
+stork-scheduler-9d6cb4546-k4z8t   1/1       Running   0          32m
+stork-scheduler-9d6cb4546-tfkh4   1/1       Running   0          30m
 ....
 ```
 
@@ -149,4 +219,5 @@ The above spec will create a mysql pod with a Portworx volume having 2 replicas.
 The pod will then get scheduled on a node in the cluster where one of the replicas is located.
 If one of those nodes does not have enough cpu or memory resources then it will get scheduled on any other node in the cluster
 where the driver (in this case Portworx) is running.
+
 
