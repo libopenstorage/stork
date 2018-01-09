@@ -56,6 +56,14 @@ type Driver interface {
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
+
+	// RecoverDriver will recover a volume driver from a failure/storage down state.
+	// This could be used by a volume driver to recover itself from any underlying storage
+	// failure.
+	RecoverDriver(n node.Node) error
+
+	// GetStorageDevices returns the list of storage devices used by the given node.
+	GetStorageDevices(n node.Node) ([]string, error)
 }
 
 var (

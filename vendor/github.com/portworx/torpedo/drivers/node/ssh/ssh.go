@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/portworx/sched-ops/task"
@@ -180,6 +181,65 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 		}
 	}
 
+	return nil
+}
+
+func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.ConnectionOpts) (string, error) {
+	// Currently only works for iSCSI drives
+	// TODO: Make it generic (Add support dev mapper devices)
+	addr, err := s.getAddrToConnect(n, options)
+	if err != nil {
+		return "", &node.ErrFailedToYankDrive{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
+		}
+	}
+
+	// Get the HBA number for the drive which would be then used to recover the drive
+	hbaCmd := "lsscsi | grep -n " + driveNameToFail + "| awk -F\":\" '{print $2}'" + "| awk -F\"[\" '{print $2}'"
+	driveID, err := s.doCmd(addr, hbaCmd, false)
+	if err != nil {
+		return "", &node.ErrFailedToYankDrive{
+			Node:  n,
+			Cause: fmt.Sprintf("unable to find HBA attribute of the drive %v due to: %v", driveNameToFail, err),
+		}
+	}
+
+	driveID = strings.TrimRight(driveID, "\n")
+	driveNameToFail = strings.Trim(driveNameToFail, "/")
+	devices := strings.Split(driveNameToFail, "/")
+
+	// Disable the block device, so that it returns IO errors
+	yankCommand := "echo 1 > /sys/block/" + devices[len(devices)-1] + "/device/delete"
+
+	_, err = s.doCmd(addr, yankCommand, false)
+	if err != nil {
+		return "", &node.ErrFailedToYankDrive{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to yank drive %v due to: %v", driveNameToFail, err),
+		}
+	}
+	return driveID, nil
+}
+
+func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRecover string, options node.ConnectionOpts) error {
+	addr, err := s.getAddrToConnect(n, options)
+	if err != nil {
+		return &node.ErrFailedToRecoverDrive{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
+		}
+	}
+
+	// Enable the drive by rescaning
+	recoverCmd := "echo \" - - -\" > /sys/class/scsi_host/host" + driveUUIDToRecover + "/scan"
+	_, err = s.doCmd(addr, recoverCmd, false)
+	if err != nil {
+		return &node.ErrFailedToRecoverDrive{
+			Node:  n,
+			Cause: fmt.Sprintf("Unable to rescan the drive (%v): %v", driveNameToRecover, err),
+		}
+	}
 	return nil
 }
 
