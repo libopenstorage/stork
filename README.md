@@ -35,7 +35,7 @@ By default the deployment does the following
 * Creates a ConfigMap which can be used by a scheduler to communicate with stork.
 * Uses the Portworx (pxd) driver for stork.
 
-## Run Stork in the Kubernetes
+## Run Stork in your Kubernetes cluster
 In order to run stork in your Kubernetes cluster, just create the deployment specified in the config above in a Kubernetes cluster:
 
 ```
