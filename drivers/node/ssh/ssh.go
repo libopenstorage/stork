@@ -243,6 +243,26 @@ func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRe
 	return nil
 }
 
+func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpts) (string, error) {
+	addr, err := s.getAddrToConnect(n, options)
+	if err != nil {
+		return "", &node.ErrFailedToRunCommand{
+			Addr:  n.Name,
+			Cause: fmt.Sprintf("failed to get node address due to: %v", err),
+		}
+	}
+
+	output, err := s.doCmd(addr, command, false)
+	if err != nil {
+		return "", &node.ErrFailedToRunCommand{
+			Addr:  n.Name,
+			Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+		}
+	}
+
+	return output, nil
+}
+
 func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
 	addr, err := s.getAddrToConnect(n, options.ConnectionOpts)
 	if err != nil {

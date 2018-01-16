@@ -99,6 +99,7 @@ var _ = Describe("Reboot all nodes test", func() {
 })
 
 var _ = AfterSuite(func() {
+	CollectSupport()
 	ValidateCleanup()
 })
 

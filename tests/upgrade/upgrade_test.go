@@ -55,6 +55,7 @@ var _ = Describe("Upgrade volume driver", func() {
 })
 
 var _ = AfterSuite(func() {
+	CollectSupport()
 	ValidateCleanup()
 })
 

@@ -158,6 +158,7 @@ var _ = Describe("App tasks down", func() {
 })
 
 var _ = AfterSuite(func() {
+	CollectSupport()
 	ValidateCleanup()
 })
 

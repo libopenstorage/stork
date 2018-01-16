@@ -37,6 +37,7 @@ var _ = Describe("Scaled Setup and teardown", func() {
 })
 
 var _ = AfterSuite(func() {
+	CollectSupport()
 	ValidateCleanup()
 })
 

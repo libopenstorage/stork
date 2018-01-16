@@ -100,6 +100,7 @@ var _ = Describe("Induce drive failure on one of the nodes", func() {
 })
 
 var _ = AfterSuite(func() {
+	CollectSupport()
 	ValidateCleanup()
 })
 
