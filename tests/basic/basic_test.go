@@ -51,19 +51,14 @@ var _ = Describe("Volume driver down", func() {
 					Expect(appNodes).NotTo(BeEmpty())
 				})
 
-				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
-					Inst().V.String(), ctx.App.Key, appNodes), func() {
-					for _, n := range appNodes {
-						err = Inst().V.StopDriver(n)
-						Expect(err).NotTo(HaveOccurred())
-					}
-
-					Step("wait for few seconds for driver to go down", func() {
-						time.Sleep(10 * time.Second)
+				Step(
+					fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
+						Inst().V.String(), ctx.App.Key, appNodes),
+					func() {
+						StopVolDriverAndWait(appNodes)
 					})
-				})
 
-				Step("restarting volume driver", func() {
+				Step("starting volume driver", func() {
 					StartVolDriverAndWait(appNodes)
 				})
 			}
@@ -99,14 +94,7 @@ var _ = Describe("Volume driver and app down", func() {
 
 				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
 					Inst().V.String(), ctx.App.Key, appNodes), func() {
-					for _, n := range appNodes {
-						err = Inst().V.StopDriver(n)
-						Expect(err).NotTo(HaveOccurred())
-					}
-
-					Step("wait for few seconds for driver to go down", func() {
-						time.Sleep(20 * time.Second)
-					})
+					StopVolDriverAndWait(appNodes)
 				})
 
 				Step(fmt.Sprintf("destroy app: %s", ctx.App.Key), func() {

@@ -30,7 +30,7 @@ import:
 - package: k8s.io/client-go
   version: kubernetes-1.8.2
 - package: github.com/portworx/sched-ops
-  version: master 
+  version: master
   repo: git@github.com:portworx/sched-ops.git
 - package: github.com/aws/aws-sdk-go
   version: a881d8ac1079e5f917d926c04c32ace8a9f68d22

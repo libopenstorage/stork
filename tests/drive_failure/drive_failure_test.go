@@ -84,7 +84,7 @@ var _ = Describe("Induce drive failure on one of the nodes", func() {
 				})
 
 				Step(fmt.Sprintf("check if volume driver is up"), func() {
-					err = Inst().V.WaitForNode(nodeWithDrive)
+					err = Inst().V.WaitDriverUpOnNode(nodeWithDrive)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			}

@@ -67,7 +67,7 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	d.updateNodes(cluster.Nodes)
 
 	for _, n := range node.GetWorkerNodes() {
-		if err := d.WaitForNode(n); err != nil {
+		if err := d.WaitDriverUpOnNode(n); err != nil {
 			return err
 		}
 	}
@@ -406,7 +406,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	_, err := task.DoRetryWithTimeout(t, 3*time.Minute, 5*time.Second)
 	if err != nil {
 		return &ErrFailedToDeleteVolume{
 			ID:    name,
@@ -461,8 +461,7 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 	return cluster.(*api.Cluster), nil
 }
 
-// Wait for Portworx to be up on given node
-func (d *portworx) WaitForNode(n node.Node) error {
+func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
@@ -480,6 +479,52 @@ func (d *portworx) WaitForNode(n node.Node) error {
 			}
 		}
 
+		logrus.Infof("px on node %s is now up. status: %v", pxNode.Id, pxNode.Status)
+
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
+	t := func() (interface{}, bool, error) {
+		// Check if px is down on all node addresses. We don't want to keep track
+		// which was the actual interface px was listening on before it went down
+		for _, addr := range n.Addresses {
+			cManager, err := d.getClusterManagerByAddress(addr)
+			if err != nil {
+				return "", true, err
+			}
+
+			pxNode, err := cManager.Inspect(n.VolDriverNodeID)
+			if err != nil {
+				if regexp.MustCompile(`.+timeout|connection refused.*`).MatchString(err.Error()) {
+					logrus.Infof("px on node %s addr %s is down as inspect returned: %v",
+						n.Name, addr, err.Error())
+					continue
+				}
+
+				return "", true, &ErrFailedToWaitForPx{
+					Node:  n,
+					Cause: err.Error(),
+				}
+			}
+
+			if pxNode.Status != api.Status_STATUS_OFFLINE {
+				return "", true, &ErrFailedToWaitForPx{
+					Node: n,
+					Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
+						api.Status_STATUS_OFFLINE, pxNode.Status),
+				}
+			}
+		}
+
+		logrus.Infof("px on node %s is now down.", n.Name)
 		return "", false, nil
 	}
 
@@ -616,6 +661,16 @@ func (d *portworx) getClusterManager() cluster.Cluster {
 	}
 	return d.clusterManager
 
+}
+
+func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, error) {
+	pxEndpoint := d.constructURL(addr)
+	cClient, err := clusterclient.NewClusterClient(pxEndpoint, "v1")
+	if err != nil {
+		return nil, err
+	}
+
+	return clusterclient.ClusterManager(cClient), nil
 }
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {

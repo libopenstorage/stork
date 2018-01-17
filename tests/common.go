@@ -187,7 +187,27 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.WaitForNode(n)
+				err := Inst().V.WaitDriverUpOnNode(n)
+				expect(err).NotTo(haveOccurred())
+			}
+		})
+
+	})
+}
+
+// StopVolDriverAndWait stops volume driver on given app nodes and waits till driver is down
+func StopVolDriverAndWait(appNodes []node.Node) {
+	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
+		Step(fmt.Sprintf("stop volume driver on nodes: %v", appNodes), func() {
+			for _, n := range appNodes {
+				err := Inst().V.StopDriver(n)
+				expect(err).NotTo(haveOccurred())
+			}
+		})
+
+		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
+			for _, n := range appNodes {
+				err := Inst().V.WaitDriverDownOnNode(n)
 				expect(err).NotTo(haveOccurred())
 			}
 		})
