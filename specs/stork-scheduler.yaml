@@ -107,8 +107,6 @@ spec:
             cpu: '0.1'
         securityContext:
           privileged: false
-        volumeMounts: []
-      hostNetwork: false
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -120,5 +118,4 @@ spec:
                     - stork-scheduler
               topologyKey: "kubernetes.io/hostname"
       hostPID: false
-      volumes: []
       serviceAccountName: stork-scheduler-account
