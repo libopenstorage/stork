@@ -33,6 +33,31 @@ var _ = Describe("Upgrade volume driver", func() {
 			}
 		})
 
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+})
+
+var _ = PDescribe("Upgrade and Downgrade volume driver", func() {
+	It("upgrade and downgrade volume driver and ensure everything is running fine", func() {
+		contexts := ScheduleAndValidate("upgradevolumedriver")
+
+		Step("start the upgrade of volume driver", func() {
+			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeVersion)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Step("validate all apps after upgrade", func() {
+			for _, ctx := range contexts {
+				ValidateContext(ctx)
+			}
+		})
+
 		Step("start the downgrade of volume driver", func() {
 			err := Inst().V.UpgradeDriver(Inst().StorageDriverBaseVersion)
 			Expect(err).NotTo(HaveOccurred())

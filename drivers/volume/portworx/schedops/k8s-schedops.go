@@ -12,7 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
-	"k8s.io/api/core/v1"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -22,8 +22,6 @@ const (
 	PXNamespace = "kube-system"
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
-	// PXImage is the image for portworx driver
-	PXImage = "portworx/px-enterprise"
 	// k8sPxServiceLabelKey is the label key used for px systemd service control
 	k8sPxServiceLabelKey = "px/service"
 	// k8sServiceOperationStart is label value for starting Portworx service
@@ -258,24 +256,12 @@ func (k *k8sSchedOps) UpgradePortworx(version string) error {
 		return err
 	}
 
-	image := fmt.Sprintf("%s:%s", PXImage, version)
+	dsNew := ds.DeepCopy()
+	logrus.Infof("upgrading portworx from %s to %s", ds.Spec.Template.Spec.Containers[0].Image,
+		version)
+	dsNew.Spec.Template.Spec.Containers[0].Image = version
 
-	found := false
-	envList := ds.Spec.Template.Spec.Containers[0].Env
-	for i := range envList {
-		envVar := &envList[i]
-		if envVar.Name == pxImageEnvVar {
-			envVar.Value = image
-			found = true
-			break
-		}
-	}
-	if !found {
-		imageEnv := v1.EnvVar{Name: pxImageEnvVar, Value: image}
-		ds.Spec.Template.Spec.Containers[0].Env = append(ds.Spec.Template.Spec.Containers[0].Env, imageEnv)
-	}
-
-	if err := k8sOps.UpdateDaemonSet(ds); err != nil {
+	if err := k8sOps.UpdateDaemonSet(dsNew); err != nil {
 		return err
 	}
 
