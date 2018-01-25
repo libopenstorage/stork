@@ -31,6 +31,7 @@ const (
 	maintenanceOpRetries    = 3
 	enterMaintenancePath    = "/entermaintenance"
 	exitMaintenancePath     = "/exitmaintenance"
+	pxSystemdServiceName    = "portworx.service"
 )
 
 type portworx struct {
@@ -422,7 +423,12 @@ func (d *portworx) ValidateVolumeCleanup() error {
 }
 
 func (d *portworx) StopDriver(n node.Node) error {
-	return d.schedOps.DisableOnNode(n, d.nodeDriver)
+	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+		Action: "stop",
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}})
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
@@ -628,7 +634,12 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
-	return d.schedOps.EnableOnNode(n, d.nodeDriver)
+	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+		Action: "start",
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}})
 }
 
 func (d *portworx) UpgradeDriver(version string) error {

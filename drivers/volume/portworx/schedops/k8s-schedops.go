@@ -22,12 +22,6 @@ const (
 	PXNamespace = "kube-system"
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
-	// k8sPxServiceLabelKey is the label key used for px systemd service control
-	k8sPxServiceLabelKey = "px/service"
-	// k8sServiceOperationStart is label value for starting Portworx service
-	k8sServiceOperationStart = "start"
-	// k8sServiceOperationStop is label value for stopping Portworx service
-	k8sServiceOperationStop = "stop"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
 	// pxImageEnvVar is the env variable in portworx daemon set specifying portworx image to be used
@@ -60,19 +54,11 @@ func (e *errLabelAbsent) Error() string {
 
 type k8sSchedOps struct{}
 
-func (k *k8sSchedOps) DisableOnNode(n node.Node, _ node.Driver) error {
-	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStop)
-}
-
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateOnNode",
 	}
-}
-
-func (k *k8sSchedOps) EnableOnNode(n node.Node, _ node.Driver) error {
-	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStart)
 }
 
 func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
