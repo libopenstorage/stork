@@ -426,7 +426,7 @@ func (d *portworx) StopDriver(n node.Node) error {
 	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "stop",
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
+			Timeout:         5 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		}})
 }
