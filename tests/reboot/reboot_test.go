@@ -95,7 +95,7 @@ var _ = Describe("Reboot one node test", func() {
 })
 
 var _ = Describe("Reboot all nodes test", func() {
-	rebootNodesTest("rebootallnodes", false)
+	rebootNodesTest("rebootallnodes", true)
 })
 
 var _ = AfterSuite(func() {
