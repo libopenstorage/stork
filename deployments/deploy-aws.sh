@@ -123,6 +123,7 @@ spec:
             "bin/reboot.test",
             "bin/scale.test",
             "bin/upgrade.test",
+            "bin/drive_failure.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--node-driver", "aws",
