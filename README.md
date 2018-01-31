@@ -2,7 +2,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/libopenstorage/stork)](https://goreportcard.com/report/libopenstorage/stork)
 
 # Stork - Storage Orchestration Runtime for Kubernetes
-Stork is a Cloud Native storage orchestration runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage providor, it's capabilities and state.
+Stork is a Cloud Native storage orchestration runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage provider, it's capabilities and state.
 
 <div style="text-align:center"><img src="images/stork.png" alt="Drawing" style="width: 50px;"/></div>
 
@@ -12,7 +12,7 @@ Stork is intended to allow storage operators such as Portworx, EMC-RexRay, and K
 ## Hyper-Convergence
 Stork can be used to co-locate pods with where their data is located. This is achieved by using a
 [kubernetes scheduler extender](https://github.com/kubernetes/kubernetes/issues/11470).
-The scheduler is configured to use stork as an extender. So everytime a pod is being scheduled,
+The scheduler is configured to use stork as an extender. So every time a pod is being scheduled,
 the scheduler will send filter and prioritize requests to stork. Stork will then
 check with the storage driver
 You can either configure the default kubernetes scheduler to communicate with
@@ -219,5 +219,4 @@ The above spec will create a mysql pod with a Portworx volume having 2 replicas.
 The pod will then get scheduled on a node in the cluster where one of the replicas is located.
 If one of those nodes does not have enough cpu or memory resources then it will get scheduled on any other node in the cluster
 where the driver (in this case Portworx) is running.
-
 
