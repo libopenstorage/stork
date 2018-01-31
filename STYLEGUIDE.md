@@ -1,6 +1,6 @@
 # Style Guide
 
-This is the official stork style guide for golang code. This is in addition to the offical style guide at https://github.com/golang/go/wiki/CodeReviewComments.
+This is the official stork style guide for golang code. This is in addition to the official style guide at https://github.com/golang/go/wiki/CodeReviewComments.
 
 This is just a rough outline for now, we will formalize this as we go.
 
@@ -34,7 +34,7 @@ func init() {
 // private functions but only if they just apply to this struct, otherwise in a common file
 ```
 
-* All new code must pass `go vet`, `errcheck`, `golint`. For `errcheck`, this means no more unchecked errors. Use of `_ = someFnThatReturnsError()` will be audited soon, and in general should not be used anymore. `golint` means all public types need comments to pass, which means both (A) we will have better code documentation and (B) we will think more about what should actually be public. `errcheck` and `golint` are great detterrents.
+* All new code must pass `go vet`, `errcheck`, `golint`. For `errcheck`, this means no more unchecked errors. Use of `_ = someFnThatReturnsError()` will be audited soon, and in general should not be used anymore. `golint` means all public types need comments to pass, which means both (A) we will have better code documentation and (B) we will think more about what should actually be public. `errcheck` and `golint` are great deterrents.
 
 * All packages have a file named `name_of_package.go`, ie in `api/server`, we have `server.go`.
 
