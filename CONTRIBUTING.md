@@ -8,10 +8,9 @@ in the Issue and the PR.
 
 ## Adding New Drivers
 * Please file a bug and submit a PR for adding new volume drivers.
-* Author(s) are exepcted to run all the integration tests with their driver and provide the logs of the result with the PR.
+* Author(s) are expected to run all the integration tests with their driver and provide the logs of the result with the PR.
 * Author(s) will be asked to run the integration tests before each release to make sure there are no issues.
 * Driver which aren't maintained regularly or fall behind will be removed after providing warnings to the Author(s).
 
 # Licensing
 The specification and code is licensed under the Apache 2.0 license found in the LICENSE file of this repository.
-
