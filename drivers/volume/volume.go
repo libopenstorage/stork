@@ -60,7 +60,8 @@ const (
 type NodeInfo struct {
 	// ID is a unique identifier for the node
 	ID string
-	// Hostname of the node
+	// Hostname of the node. Should be in lower case because Kubernetes
+	// converts it to lower case
 	Hostname string
 	// IPs List of IPs associated with the node
 	IPs []string

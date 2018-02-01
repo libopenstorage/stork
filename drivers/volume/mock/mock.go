@@ -92,7 +92,7 @@ func (m *Driver) ProvisionVolume(
 		if len(m.nodes) <= nodeIndex {
 			return fmt.Errorf("Node not found")
 		}
-		volume.DataNodes = append(volume.DataNodes, m.nodes[nodeIndex].Hostname)
+		volume.DataNodes = append(volume.DataNodes, m.nodes[nodeIndex].ID)
 	}
 
 	m.volumes[volumeName] = volume

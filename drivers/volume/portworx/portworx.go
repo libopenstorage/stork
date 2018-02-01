@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"fmt"
+	"strings"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter"
@@ -147,7 +148,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	for _, n := range cluster.Nodes {
 		nodeInfo := &storkvolume.NodeInfo{
 			ID:       n.Id,
-			Hostname: n.Hostname,
+			Hostname: strings.ToLower(n.Hostname),
 			Status:   p.mapNodeStatus(n.Status),
 		}
 		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
