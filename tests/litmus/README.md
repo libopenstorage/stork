@@ -6,17 +6,22 @@ This program is the most basic program you should run before even running a comp
 #
 ### Step 1: Execute the test
 
-Note: This will panic and restart your server!
 
+Create a volume for your storage backend.  Let's call the volume `vol` in this example.
 ```
-$ docker run --privileged --rm -it -v /test:/test gourao/litmus litmus run /test/foo.txt
+$ docker volume create --driver=XYZ vol1
+```
+
+Now run the test.  Note: This will panic and restart your server!
+```
+$ docker run --privileged --rm -it -v vol:/test gourao/litmus litmus run /test/foo.txt
 ```
 
 ### Step 2: Ensure that you do not have any data loss
 After your machine restarts, verify that there is no data loss or corruption
 
 ```
-$ docker run --privileged --rm -it -v /test:/test gourao/litmus litmus verify /test/foo.txt
+$ docker run --privileged --rm -it -v vol:/test gourao/litmus litmus verify /test/foo.txt
 ```
 
 # Running Litmus in Kubernetes
