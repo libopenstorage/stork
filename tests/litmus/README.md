@@ -1,3 +1,20 @@
 # Litmus Test
 
 This program is the most basic program you should run before even running a complete torpedo test suite.  It performs the most basic sanity check - does the storage backend even honor the `sync` command.  That is, will it persist data to disk, or is it cheating by holding data in memory for performance.  If a storage backend fails with this test, it is unsuitable for any production workload. 
+
+# Building
+```
+$ gcc litmus.c -o litmus
+```
+
+# Running
+Note - your system *will* panic during the test.  When it restarts, you need to ensure that the contents of your target file contain the string `Hello World`.  If it does not, you should not use this storage backend.
+
+
+```
+$ ./litmus <path-to-target-storage/test.file
+# --- system will panic and reboot here
+# --- after reboot, verify contents of test.file
+$ cat test.file
+Hello World
+```
