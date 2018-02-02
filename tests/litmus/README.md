@@ -9,7 +9,7 @@ This program is the most basic program you should run before even running a comp
 
 Create a volume for your storage backend.  Let's call the volume `vol` in this example.
 ```
-$ docker volume create --driver=XYZ vol1
+$ docker volume create --driver=XYZ vol
 ```
 
 Now run the test.  Note: This will panic and restart your server!
