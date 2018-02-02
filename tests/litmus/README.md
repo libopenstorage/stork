@@ -19,9 +19,11 @@ Note - your system *will* panic during the test.  When it restarts, you need to 
 
 
 ```
-$ ./litmus <path-to-target-storage/test.file
+$ ./litmus run <path-to-target-storage/test.file
 # --- system will panic and reboot here
 # --- after reboot, verify contents of test.file
 $ cat test.file
 Hello World
+$ --- or
+$ ./litmus verify <path-to-target-storage/test.file
 ```

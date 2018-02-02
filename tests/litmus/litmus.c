@@ -44,7 +44,7 @@ int main(int argc, char **argv)
 		syncfs(fd);
 
 		/* cause a kernel panic */
-		// system("echo c > /proc/sysrq-trigger");
+		system("echo c > /proc/sysrq-trigger");
 	} else {
 		char buf[13];
 		fd = open(argv[2], O_RDONLY);
