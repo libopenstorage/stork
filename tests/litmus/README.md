@@ -3,6 +3,21 @@
 This program is the most basic program you should run before even running a complete torpedo test suite.  It performs the most basic sanity check - does the storage backend even honor the `sync` command.  That is, will it persist data to disk, or is it cheating by holding data in memory for performance.  If a storage backend fails with this test, it is unsuitable for any production workload. 
 
 # Running Litmus in Docker
+#
+### Step 1: Execute the test
+
+Note: This will panic and restart your server!
+
+```
+$ docker run --privileged --rm -it -v /test:/test gourao/litmus litmus run /test/foo.txt
+```
+
+### Step 2: Ensure that you do not have any data loss
+After your machine restarts, verify that there is no data loss or corruption
+
+```
+$ docker run --privileged --rm -it -v /test:/test gourao/litmus litmus verify /test/foo.txt
+```
 
 # Running Litmus in Kubernetes
 
