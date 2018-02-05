@@ -142,7 +142,7 @@ spec:
         - --verbose
         - --leader-elect=true
         imagePullPolicy: Always
-        image: openstorage/stork:1.0
+        image: openstorage/stork:1.0.1
         resources:
           requests:
             cpu: '0.1'
