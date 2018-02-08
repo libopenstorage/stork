@@ -30,3 +30,9 @@ For e.g:
 ```
 ginkgo build  tests/basic
 ```
+
+#### Vendoring
+
+For vendoring, we use [glide](https://github.com/Masterminds/glide)
+
+To update vendor directory, run `make vendor`

@@ -541,7 +541,7 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	return nil
 }
 
-func (d *portworx) WaitForUpgrade(n node.Node, newVersion string) error {
+func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
@@ -559,11 +559,21 @@ func (d *portworx) WaitForUpgrade(n node.Node, newVersion string) error {
 			}
 		}
 
+		// filter out first 3 octets from the tag
+		matches := regexp.MustCompile(`^(\d+\.\d+\.\d+).*`).FindStringSubmatch(tag)
+		if len(matches) != 2 {
+			return nil, false, &ErrFailedToUpgradeVolumeDriver{
+				Version: fmt.Sprintf("%s:%s", image, tag),
+				Cause:   fmt.Sprintf("failed to parse first 3 octets of version from new version tag: %s", tag),
+			}
+		}
+
 		pxVersion := pxNode.NodeLabels[pxVersionLabel]
-		if !strings.HasPrefix(pxVersion, newVersion) {
+		if !strings.HasPrefix(pxVersion, matches[1]) {
 			return nil, true, &ErrFailedToUpgradeVolumeDriver{
-				Version: newVersion,
-				Cause:   fmt.Sprintf("Version on node %v is still %v", n.VolDriverNodeID, pxVersion),
+				Version: fmt.Sprintf("%s:%s", image, tag),
+				Cause: fmt.Sprintf("version on node %s is still %s. It was expected to begin with: %s",
+					n.VolDriverNodeID, pxVersion, matches[1]),
 			}
 		}
 		return nil, false, nil
@@ -643,7 +653,20 @@ func (d *portworx) StartDriver(n node.Node) error {
 }
 
 func (d *portworx) UpgradeDriver(version string) error {
-	if err := d.schedOps.UpgradePortworx(version); err != nil {
+	if len(version) == 0 {
+		return fmt.Errorf("no version supplied for upgrading portworx")
+	}
+
+	parts := strings.Split(version, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid version: %s given to upgrade portworx", version)
+	}
+
+	logrus.Infof("upgrading portworx to %s", version)
+
+	image := parts[0]
+	tag := parts[1]
+	if err := d.schedOps.UpgradePortworx(image, tag); err != nil {
 		return &ErrFailedToUpgradeVolumeDriver{
 			Version: version,
 			Cause:   err.Error(),
@@ -651,7 +674,7 @@ func (d *portworx) UpgradeDriver(version string) error {
 	}
 
 	for _, n := range node.GetWorkerNodes() {
-		if err := d.WaitForUpgrade(n, version); err != nil {
+		if err := d.WaitForUpgrade(n, image, tag); err != nil {
 			return err
 		}
 	}

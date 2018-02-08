@@ -41,7 +41,7 @@ func (d *dcosSchedOps) GetServiceEndpoint() (string, error) {
 	return "", nil
 }
 
-func (d *dcosSchedOps) UpgradePortworx(version string) error {
+func (d *dcosSchedOps) UpgradePortworx(image, tag string) error {
 	// TOOD: Implement this method
 	return nil
 }

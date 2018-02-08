@@ -23,8 +23,8 @@ type Driver interface {
 	GetVolumeName(v *volume.Volume) string
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
 	GetServiceEndpoint() (string, error)
-	// UpgradePortworx upgrades portworx to the given version
-	UpgradePortworx(version string) error
+	// UpgradePortworx upgrades portworx to the given docker image and tag
+	UpgradePortworx(image, tag string) error
 }
 
 var (

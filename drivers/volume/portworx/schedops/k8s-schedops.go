@@ -12,7 +12,10 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
-	"github.com/sirupsen/logrus"
+	batch_v1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -235,41 +238,99 @@ func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
 	return "", err
 }
 
-func (k *k8sSchedOps) UpgradePortworx(version string) error {
-	k8sOps := k8s.Instance()
-	ds, err := k8sOps.GetDaemonSet(PXDaemonSet, PXNamespace)
+func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
+	inst := k8s.Instance()
+
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "talisman",
+		},
+		Subjects: []rbacv1.Subject{{
+			Kind:      "ServiceAccount",
+			Name:      "talisman",
+			Namespace: "kube-system",
+		}},
+		RoleRef: rbacv1.RoleRef{
+			Kind: "ClusterRole",
+			Name: "cluster-admin",
+		},
+	}
+	binding, err := inst.CreateClusterRoleBinding(binding)
 	if err != nil {
 		return err
 	}
 
-	dsNew := ds.DeepCopy()
-	logrus.Infof("upgrading portworx from %s to %s", ds.Spec.Template.Spec.Containers[0].Image,
-		version)
-	dsNew.Spec.Template.Spec.Containers[0].Image = version
-
-	if err := k8sOps.UpdateDaemonSet(dsNew); err != nil {
+	account := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "talisman",
+			Namespace: "kube-system",
+		},
+	}
+	account, err = inst.CreateServiceAccount(account)
+	if err != nil {
 		return err
 	}
 
-	// Sleep for a short duration so that the daemon set updates its status
-	time.Sleep(10 * time.Second)
-
-	t := func() (interface{}, bool, error) {
-		ds, err := k8sOps.GetDaemonSet(PXDaemonSet, PXNamespace)
-		if err != nil {
-			return nil, true, err
-		}
-
-		if ds.Status.DesiredNumberScheduled == ds.Status.UpdatedNumberScheduled {
-			return nil, false, nil
-		}
-		return nil, true, fmt.Errorf("Only %v nodes have been updated out of %v nodes",
-			ds.Status.UpdatedNumberScheduled, ds.Status.DesiredNumberScheduled)
+	// create a talisman job
+	var valOne int32 = 1
+	job := &batch_v1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "talisman",
+			Namespace: "kube-system",
+		},
+		Spec: batch_v1.JobSpec{
+			BackoffLimit: &valOne,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					ServiceAccountName: "talisman",
+					Containers: []corev1.Container{
+						{
+							Name:  "talisman",
+							Image: "portworx/talisman:latest",
+							Args: []string{
+								"-operation", "upgrade", "-ocimonimage", ociImage, "-ocimontag", ociTag,
+							},
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 20*time.Minute, 30*time.Second); err != nil {
+	job, err = inst.CreateJob(job)
+	if err != nil {
 		return err
 	}
+
+	numNodes, err := inst.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	jobTimeout := time.Duration(len(numNodes.Items)) * 10 * time.Minute
+
+	err = inst.ValidateJob(job.Name, job.Namespace, jobTimeout)
+	if err != nil {
+		return err
+	}
+
+	// cleanup
+	err = inst.DeleteJob(job.Name, job.Namespace)
+	if err != nil {
+		return err
+	}
+
+	err = inst.DeleteClusterRoleBinding(binding.Name)
+	if err != nil {
+		return err
+	}
+
+	err = inst.DeleteServiceAccount(account.Name, account.Namespace)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

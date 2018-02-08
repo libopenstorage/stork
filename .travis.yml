@@ -5,12 +5,13 @@ services:
 language: go
 go:
   - 1.8.3
-before_install:  
+before_install:
   - sudo apt-get update -yq
   - sudo apt-get -o Dpkg::Options::="--force-confnew" install -yq docker-ce
 script:
   - make all
-  - if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then 
+after_success:
+  - if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
       docker login -u="${DOCKER_USER}" -p="${DOCKER_PASS}";
       make deploy;
     fi
@@ -21,5 +22,5 @@ notifications:
       - piyush@portworx.com
       - jv@portworx.com
       - harsh@portworx.com
-    on_success: always
+    on_success: change
     on_failure: always
