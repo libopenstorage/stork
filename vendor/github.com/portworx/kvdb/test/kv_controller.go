@@ -2,9 +2,9 @@ package test
 
 import (
 	"fmt"
-	"strings"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,11 +18,11 @@ const (
 )
 
 var (
-	names = []string{"infra0", "infra1", "infra2"}
+	names      = []string{"infra0", "infra1", "infra2"}
 	clientUrls = []string{"http://127.0.0.1:20379", "http://127.0.0.1:21379", "http://127.0.0.1:22379"}
-	peerPorts = []string{"20380", "21380", "22380"}
-	dataDirs = []string{"/tmp/node0", "/tmp/node1", "/tmp/node2"}
-	cmds map[int]*exec.Cmd
+	peerPorts  = []string{"20380", "21380", "22380"}
+	dataDirs   = []string{"/tmp/node0", "/tmp/node1", "/tmp/node2"}
+	cmds       map[int]*exec.Cmd
 )
 
 // RunControllerTests is a test suite for kvdb controller APIs
@@ -48,6 +48,7 @@ func RunControllerTests(datastoreInit kvdb.DatastoreInit, t *testing.T) {
 	testAddMember(kv, t)
 	testRemoveMember(kv, t)
 	testReAdd(kv, t)
+	testMemberStatus(kv, t)
 	controllerLog("Stopping all etcd processes")
 	for _, cmd := range cmds {
 		cmd.Process.Kill()
@@ -88,7 +89,6 @@ func testRemoveMember(kv kvdb.Kvdb, t *testing.T) {
 	require.NoError(t, err, "Error on ListMembers")
 	require.Equal(t, 3, len(list), "List returned different length of cluster")
 
-	
 	// Remove node 1
 	index = 1
 	controllerLog("Removing node 1")
@@ -125,7 +125,28 @@ func testReAdd(kv kvdb.Kvdb, t *testing.T) {
 
 }
 
-func startEtcd(index int, initCluster map[string][]string, initState string) (*exec.Cmd, error){
+func testMemberStatus(kv kvdb.Kvdb, t *testing.T) {
+	controllerLog("testMemberStatus")
+	// Stop node 2
+	index := 2
+	cmd, _ := cmds[index]
+	cmd.Process.Kill()
+	delete(cmds, index)
+
+	// Wait for some time for etcd to detect a node offline
+	time.Sleep(5 * time.Second)
+
+	list, err := kv.ListMembers()
+	require.NoError(t, err, "Error on ListMembers")
+	require.Equal(t, 3, len(list), "List returned different length of cluster")
+
+	downMember, ok := list[names[index]]
+	require.True(t, ok, "Could not find down member")
+	require.Equal(t, len(downMember.ClientUrls), 0, "Unexpected no. of client urls on down member")
+	require.False(t, downMember.IsHealthy, "Unexpected health of down member")
+}
+
+func startEtcd(index int, initCluster map[string][]string, initState string) (*exec.Cmd, error) {
 	peerURL := urlPrefix + localhost + ":" + peerPorts[index]
 	clientURL := clientUrls[index]
 	initialCluster := ""
@@ -135,22 +156,22 @@ func startEtcd(index int, initCluster map[string][]string, initState string) (*e
 	fmt.Println("Starting etcd for node ", index, "with initial cluster: ", initialCluster)
 	initialCluster = strings.TrimSuffix(initialCluster, ",")
 	etcdArgs := []string{
-		"--name="+
-		names[index],
-		"--initial-advertise-peer-urls="+
-		peerURL,
-		"--listen-peer-urls="+
-		peerURL,
-		"--listen-client-urls="+
-		clientURL,
-		"--advertise-client-urls="+
-		clientURL,
-		"--initial-cluster="+
-		initialCluster,
-		"--data-dir="+
-		dataDirs[index],
-		"--initial-cluster-state="+
-		initState,
+		"--name=" +
+			names[index],
+		"--initial-advertise-peer-urls=" +
+			peerURL,
+		"--listen-peer-urls=" +
+			peerURL,
+		"--listen-client-urls=" +
+			clientURL,
+		"--advertise-client-urls=" +
+			clientURL,
+		"--initial-cluster=" +
+			initialCluster,
+		"--data-dir=" +
+			dataDirs[index],
+		"--initial-cluster-state=" +
+			initState,
 	}
 
 	cmd := exec.Command("/tmp/test-etcd/etcd", etcdArgs...)

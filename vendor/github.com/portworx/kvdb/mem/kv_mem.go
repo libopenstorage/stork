@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/common"
 )
@@ -801,9 +801,13 @@ func (kv *snapMem) Delete(snapKey string) (*kvdb.KVPair, error) {
 	key := kv.domain + snapKey
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
-	kvp := kv.m[key]
+	kvp, ok := kv.m[key]
+	if !ok {
+		return nil, kvdb.ErrNotFound
+	}
+	kvPair := kvp.KVPair
 	delete(kv.m, key)
-	return &kvp.KVPair, nil
+	return &kvPair, nil
 }
 
 func (kv *snapMem) DeleteTree(prefix string) error {

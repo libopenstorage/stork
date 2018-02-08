@@ -32,6 +32,9 @@ func NodeInterface() string {
 func SetNodeInterface(name string) bool {
 	defer nodeMu.Unlock()
 	nodeMu.Lock()
+	if nodeID != nil {
+		return true
+	}
 	return setNodeInterface(name)
 }
 

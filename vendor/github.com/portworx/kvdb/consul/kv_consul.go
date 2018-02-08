@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/portworx/kvdb"
@@ -280,6 +280,10 @@ func (kv *consulKV) Create(
 				return nil, fmt.Errorf("Failed to set ttl")
 			}
 		}
+	}
+	if err == kvdb.ErrModified {
+		// key already exists since compare and set with index 0 failed.
+		err = kvdb.ErrExist
 	}
 	return kvPair, err
 }
@@ -654,6 +658,12 @@ func (kv *consulKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 			} else {
 				if kvp.Action == kvdb.KVDelete {
 					_, err = snapDb.Delete(kvp.Key)
+					// A Delete key was issued between our first lowestKvdbIndex Put
+					// and Enumerate APIs in this function
+					if err == kvdb.ErrNotFound {
+						err = nil
+					}
+
 				} else {
 					_, err = snapDb.SnapPut(kvp)
 				}

@@ -1,10 +1,10 @@
-hash: 7fbb7762ca24018d85593d5860afe1ffdd0e8970ad757943857d73310da17953
-updated: 2017-12-13T13:55:00.933378823-08:00
+hash: d9bc78ae5bcb8582314ad60a3e7188e4fe84c5492ba98f27eceb1f439c1699a0
+updated: 2018-02-07T18:01:29.859438234-08:00
 imports:
 - name: github.com/armon/go-metrics
   version: 7aa49fde808223f8dadfdbfd3a20ff6c19e5f9ec
 - name: github.com/aws/aws-sdk-go
-  version: a881d8ac1079e5f917d926c04c32ace8a9f68d22
+  version: 586c9ba6027a527800564282bb843d7e6e7985c9
   subpackages:
   - aws
   - aws/awserr
@@ -43,7 +43,7 @@ imports:
   subpackages:
   - spew
 - name: github.com/docker/distribution
-  version: f4118485915abb8b163442717326597908eee6aa
+  version: fea8bd51143307d3454703eadecbeeb778aa75e8
   subpackages:
   - digestset
   - reference
@@ -67,13 +67,13 @@ imports:
   - client
   - pkg/tlsconfig
 - name: github.com/docker/go-connections
-  version: 3ede32e2033de7505e6500d6c868c2b9ed9f169d
+  version: f93969bf7d9f98c09610cc485214a6300944bd18
   subpackages:
   - nat
   - sockets
   - tlsconfig
 - name: github.com/docker/go-units
-  version: 0dadbb0345b35ec7ef35e228dabb8de89a65bf52
+  version: d59758554a3d3911fa25c0269de1ebe2f1912c39
 - name: github.com/donovanhide/eventsource
   version: 3ed64d21fb0b6bd8b49bcfec08f3004daee8723d
 - name: github.com/emicklei/go-restful
@@ -134,7 +134,7 @@ imports:
 - name: github.com/hashicorp/errwrap
   version: 7554cd9344cec97297fa6649b055a8c98c2a1e55
 - name: github.com/hashicorp/go-immutable-radix
-  version: 8aac2701530899b64bdea735a1de8da899815220
+  version: 7f3cd4390caab3250a57f30efdb2a65dd7649ecf
 - name: github.com/hashicorp/go-msgpack
   version: fa3f63826f7c23912c15263591e65d54d080b458
   subpackages:
@@ -186,7 +186,7 @@ imports:
   - pkg/units
   - volume
 - name: github.com/libopenstorage/systemutils
-  version: e1d137f6f38d9c5aa1ca3e12fe8f6fc8ecf88cf1
+  version: dc0e35340804a0ada0792a3c9ce51d33ddd53cc8
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -200,13 +200,13 @@ imports:
   version: 57fdcb988a5c543893cc61bce354a6e24ab70022
   repo: https://github.com/mattn/go-isatty
 - name: github.com/Microsoft/go-winio
-  version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
+  version: 7da180ee92d8bd8bb8c37fc560e673e6557c392f
 - name: github.com/miekg/dns
-  version: 3bbde607ac2132f47c307b292594a1af4f619fde
+  version: 5364553f1ee9cddc7ac8b62dce148309c386695b
 - name: github.com/mohae/deepcopy
   version: c48cc78d482608239f6c4c92a4abd87eb8761c90
 - name: github.com/onsi/ginkgo
-  version: cb73bd0f14eb8d91a9801647edbebe6ddb5b4cb4
+  version: 747514b53ddd06d5d37d096c1cb313cfe620d7d4
   subpackages:
   - config
   - internal/codelocation
@@ -226,7 +226,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: c1fb6682134d162f37c13f42e7157653a7de7d2b
+  version: a9c79f175573664afefe4fe0f3827c66263abcbb
   subpackages:
   - format
   - internal/assertion
@@ -242,15 +242,15 @@ imports:
 - name: github.com/opencontainers/go-digest
   version: 279bed98673dd5bef374d3b6e4b09e2af76183bf
 - name: github.com/pborman/uuid
-  version: e533369306653d193b93dae055f6083cbf8ba54f
+  version: c65b2f87fee37d1c7854c9164a450713c28d50cd
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/pkg/errors
-  version: 8842a6e0cc595d1cc9d931f6c875883967280e32
+  version: 30136e27e2ac8d167177e8a583aa4c3fea5be833
 - name: github.com/portworx/kvdb
-  version: 231bb043ca715e254d4a914aaf5b0a6314746361
+  version: 75b56ce843b0cdd3168e98bcd7728d86beac5e29
 - name: github.com/portworx/sched-ops
-  version: 5d4d93b823cff5f9cf620dab8764fbf60c05878a
+  version: 3fd5ae11f1ea102d5a453991b9f0697b533b91fe
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s
@@ -262,7 +262,7 @@ imports:
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/Sirupsen/logrus
-  version: d682213848ed68c0a260ca37d6dd5ace8423f5ba
+  version: 768a92a02685ee7535069fc1581341b41bab9b72
 - name: github.com/sirupsen/logrus
   version: 33a34430d1c3dc71777fdd677864928e5b5812bc
 - name: github.com/spf13/pflag
@@ -274,7 +274,7 @@ imports:
   subpackages:
   - logrus
 - name: golang.org/x/crypto
-  version: faadfbdc035307d901e69eea569f5dda451a3ee3
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - curve25519
   - ed25519

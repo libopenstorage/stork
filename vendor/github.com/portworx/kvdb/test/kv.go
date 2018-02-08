@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/portworx/kvdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -215,7 +215,8 @@ func create(kv kvdb.Kvdb, t *testing.T) {
 		"Expected action KVCreate, actual %v", kvp.Action)
 
 	_, err = kv.Create(key, []byte("bar"), 0)
-	assert.Error(t, err, "Create on existing key should have errored.")
+	assert.True(t, err == kvdb.ErrExist,
+		"Create on existing key should have errored.")
 }
 
 func createWithTTL(kv kvdb.Kvdb, t *testing.T) {
@@ -285,6 +286,7 @@ func deleteKey(kv kvdb.Kvdb, t *testing.T) {
 
 	_, err = kv.Delete(key)
 	assert.Error(t, err, "Delete should fail on non existent key")
+	assert.EqualError(t, err, kvdb.ErrNotFound.Error(), "Invalid error returned : %v", err)
 }
 
 func deleteTree(kv kvdb.Kvdb, t *testing.T) {
@@ -510,14 +512,17 @@ func snapshot(kv kvdb.Kvdb, t *testing.T) {
 	preSnapDataVersion := make(map[string]uint64)
 	inputData := make(map[string]string)
 	inputDataVersion := make(map[string]uint64)
+	deleteKeys := make(map[string]string)
 
 	key := "key"
 	value := "bar"
+	keyd := "key-delete"
+	valued := "bar-delete"
 	count := 100
 	doneUpdate := make(chan bool, 2)
 	emptyKeyName := ""
 	updateFn := func(count int, v string, dataMap map[string]string,
-		versionMap map[string]uint64) {
+		versionMap map[string]uint64, isDelete bool) {
 		for i := 0; i < count; i++ {
 			suffix := strconv.Itoa(i)
 			inputKey := prefix + key + suffix
@@ -526,18 +531,28 @@ func snapshot(kv kvdb.Kvdb, t *testing.T) {
 				emptyKeyName = inputKey
 				inputValue = ""
 			}
-			kv, err := kv.Put(inputKey, []byte(inputValue), 0)
+			kvp, err := kv.Put(inputKey, []byte(inputValue), 0)
 			assert.NoError(t, err, "Unexpected error on Put")
 			dataMap[inputKey] = inputValue
-			versionMap[inputKey] = kv.ModifiedIndex
+			versionMap[inputKey] = kvp.ModifiedIndex
+			deleteKey := prefix + keyd + suffix
+			if !isDelete {
+				_, err := kv.Put(deleteKey, []byte(valued), 0)
+				assert.NoError(t, err, "Unexpected error on Put")
+				deleteKeys[deleteKey] = deleteKey
+			} else {
+				_, err := kv.Delete(deleteKey)
+				assert.NoError(t, err, "Unexpected error on Delete")
+			}
+
 		}
 		doneUpdate <- true
 	}
 
-	updateFn(count, value, preSnapData, preSnapDataVersion)
+	updateFn(count, value, preSnapData, preSnapDataVersion, false)
 	<-doneUpdate
 	newValue := "bar2"
-	go updateFn(count, newValue, inputData, inputDataVersion)
+	go updateFn(count, newValue, inputData, inputDataVersion, true)
 	time.Sleep(20 * time.Millisecond)
 
 	snap, snapVersion, err := kv.Snapshot(prefix)
@@ -547,11 +562,15 @@ func snapshot(kv kvdb.Kvdb, t *testing.T) {
 	kvPairs, err := snap.Enumerate(prefix)
 	assert.NoError(t, err, "Unexpected error on Enumerate")
 
-	assert.Equal(t, len(kvPairs), count,
-		"Expecting %d keys under %s got: %d, kv: %v",
-		count, prefix, len(kvPairs), kvPairs)
-
+	processedKeys := 0
 	for i := range kvPairs {
+		if strings.Contains(kvPairs[i].Key, keyd) {
+			_, ok := deleteKeys[kvPairs[i].Key]
+			assert.True(t, ok, "Key not found in deleteKeys list (%v)", kvPairs[i].Key)
+			delete(deleteKeys, kvPairs[i].Key)
+			continue
+		}
+		processedKeys++
 		currValue, ok1 := inputData[kvPairs[i].Key]
 		currVersion, ok2 := inputDataVersion[kvPairs[i].Key]
 		preSnapValue, ok3 := preSnapData[kvPairs[i].Key]
@@ -580,6 +599,10 @@ func snapshot(kv kvdb.Kvdb, t *testing.T) {
 					" expected %v got %v", preSnapValue, string(kvPairs[i].Value))
 		}
 	}
+	assert.Equal(t, count, processedKeys,
+		"Expecting %d keys under %s got: %d, kv: %v",
+		processedKeys, prefix, len(kvPairs), kvPairs)
+
 }
 
 func getLockMethods(kv kvdb.Kvdb) []func(string) (*kvdb.KVPair, error) {

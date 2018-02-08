@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/cloudfoundry/gosigar"
 )
@@ -29,7 +29,11 @@ func (s *system) start() {
 			s.Lock()
 			s.totalTicks = float64(total1 - total0)
 			s.ticks = s.totalTicks - idleTicks
-			s.cpuUsage = 100 * s.ticks / s.totalTicks
+			if s.totalTicks > 0 {
+				s.cpuUsage = 100 * s.ticks / s.totalTicks
+			} else {
+				s.cpuUsage = 0
+			}
 			s.Unlock()
 		}
 	}()

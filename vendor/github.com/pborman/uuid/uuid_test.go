@@ -277,9 +277,11 @@ func TestNode(t *testing.T) {
 	if ni := NodeInterface(); ni != "" {
 		t.Errorf("NodeInterface got %q, want %q", ni, "")
 	}
+	nodeID = nil // Reset global state for next test
 	if SetNodeInterface("xyzzy") {
 		t.Error("SetNodeInterface succeeded on a bad interface name")
 	}
+	nodeID = nil // Reset global state for next test
 	if !SetNodeInterface("") {
 		t.Error("SetNodeInterface failed")
 	}
@@ -355,6 +357,7 @@ func TestSHA1(t *testing.T) {
 
 func TestNodeID(t *testing.T) {
 	nid := []byte{1, 2, 3, 4, 5, 6}
+	nodeID = nil // Reset global state for next test
 	SetNodeInterface("")
 	s := NodeInterface()
 	if runtime.GOARCH != "js" {

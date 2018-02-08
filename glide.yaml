@@ -14,7 +14,7 @@ import:
   - cluster
   - volume
 - package: golang.org/x/crypto
-  version: faadfbdc035307d901e69eea569f5dda451a3ee3
+  version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh
 - package: k8s.io/kubernetes
@@ -33,7 +33,7 @@ import:
   version: master
   repo: git@github.com:portworx/sched-ops.git
 - package: github.com/aws/aws-sdk-go
-  version: a881d8ac1079e5f917d926c04c32ace8a9f68d22
+  version: ^1.7.3
   subpackages:
   - aws
   - aws/awserr

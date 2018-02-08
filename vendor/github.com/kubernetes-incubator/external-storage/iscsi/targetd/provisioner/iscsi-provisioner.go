@@ -19,7 +19,7 @@ package provisioner
 import (
 	"errors"
 	"fmt"
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/kubernetes-incubator/external-storage/lib/controller"
 	"github.com/kubernetes-incubator/external-storage/lib/util"
 	"github.com/magiconair/properties"

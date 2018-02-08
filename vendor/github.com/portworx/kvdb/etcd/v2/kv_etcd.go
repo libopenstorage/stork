@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 
 	e "github.com/coreos/etcd/client"
@@ -211,7 +211,17 @@ func (kv *etcdKV) Delete(key string) (*kvdb.KVPair, error) {
 	if err == nil {
 		return kv.resultToKv(result), err
 	}
-	return nil, err
+
+	switch err.(type) {
+	case e.Error:
+		etcdErr := err.(e.Error)
+		if etcdErr.Code == e.ErrorCodeKeyNotFound {
+			return nil, kvdb.ErrNotFound
+		}
+		return nil, err
+	default:
+		return nil, err
+	}
 }
 
 func (kv *etcdKV) DeleteTree(prefix string) error {
@@ -511,6 +521,9 @@ func (kv *etcdKV) setWithRetry(ctx context.Context, key, value string,
 
 out:
 	outErr := err
+	if outErr != nil && strings.Contains(outErr.Error(), kvdb.ErrExist.Error()) {
+		outErr = kvdb.ErrExist
+	}
 	// It's possible that update succeeded but the re-update failed.
 	// Check only if the original error was a cluster error.
 	if i > 0 && i < kv.GetRetryCount() && err != nil {
@@ -762,6 +775,11 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 			kvPair.ModifiedIndex > lowestKvdbIndex {
 			if kvPair.Action == kvdb.KVDelete {
 				_, err = snapDb.Delete(kvPair.Key)
+				// A Delete key was issued between our first lowestKvdbIndex Put
+				// and Enumerate APIs in this function
+				if err == kvdb.ErrNotFound {
+					err = nil
+				}
 			} else {
 				_, err = snapDb.SnapPut(kvPair)
 			}
