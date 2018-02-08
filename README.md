@@ -9,7 +9,7 @@ Torpedo is a test suite to qualify storage providers for stateful containers run
 <div style="text-align:center"><img src="images/torpedo.png" alt="Drawing" style="width: 50px;"/></div>
 
 ## CSI
-CSI is a specification for Linux Container Storage Interfaces.  It defines the control plane interraction between a cloud native scheduler such as Kubernetes, and a cloud native storage provider.  The specification is available [here](https://github.com/container-storage-interface/spec/blob/master/spec.md).
+CSI is a specification for Linux Container Storage Interfaces.  It defines the control plane interaction between a cloud native scheduler such as Kubernetes, and a cloud native storage provider.  The specification is available [here](https://github.com/container-storage-interface/spec/blob/master/spec.md).
 
 The Torpedo test suite natively supports the CSI specification for external volume support into Kubernetes and Mesosphere.  It operates as a CSI enabled orchestrator (scheduler) to communicate with external storage providers that support CSI.
 
