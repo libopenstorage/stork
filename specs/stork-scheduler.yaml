@@ -90,6 +90,7 @@ spec:
         - --leader-elect=true
         - --scheduler-name=stork
         - --policy-configmap=stork-config
+        - --policy-configmap-namespace=kube-system
         - --lock-object-name=stork-scheduler
         image: gcr.io/google_containers/kube-scheduler-amd64:<kube_version>
         livenessProbe:
