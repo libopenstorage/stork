@@ -4,6 +4,10 @@ metadata:
   name: stork-config
   namespace: kube-system
 data:
+  # The default list of predicates and priorities can change depending on your version
+  # of Kubernetes, so please update those as required. The requirement to manually specify this
+  # list will go away with Kubernetes v1.10 where it will use the defaults if nothing is
+  # specified.
   policy.cfg: |-
     {
       "kind": "Policy",
