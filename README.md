@@ -36,9 +36,9 @@ apiVersion: volumesnapshot.external-storage.k8s.io/v1
 kind: VolumeSnapshot
 metadata:
   name: mysql-snapshot
-    namespace: default
-    spec:
-      persistentVolumeClaimName: mysql-data
+  namespace: default
+spec:
+  persistentVolumeClaimName: mysql-data
 ```
 
 You can then check the status of the snapshots using kubectl:
