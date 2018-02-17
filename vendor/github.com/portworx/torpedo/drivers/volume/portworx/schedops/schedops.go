@@ -11,12 +11,8 @@ import (
 
 // Driver is the interface for portworx operations under various schedulers
 type Driver interface {
-	// DisableOnNode disable portworx on given node
-	DisableOnNode(n node.Node, ndriver node.Driver) error
 	// ValidateOnNode validates portworx on given node (from scheduler perspective)
 	ValidateOnNode(n node.Node) error
-	// EnableOnNode enable portworx on given node
-	EnableOnNode(n node.Node, ndriver node.Driver) error
 	// ValidateAddLabels validates whether the labels for the volume are applied appropriately on the vol replica nodes
 	ValidateAddLabels(replicaNodes []api.Node, v *api.Volume) error
 	// ValidateRemoveLabels validates whether the volume labels have been removed
@@ -27,8 +23,8 @@ type Driver interface {
 	GetVolumeName(v *volume.Volume) string
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
 	GetServiceEndpoint() (string, error)
-	// UpgradePortworx upgrades portworx to the given version
-	UpgradePortworx(version string) error
+	// UpgradePortworx upgrades portworx to the given docker image and tag
+	UpgradePortworx(image, tag string) error
 }
 
 var (

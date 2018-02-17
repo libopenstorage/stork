@@ -31,6 +31,7 @@ const (
 	maintenanceOpRetries    = 3
 	enterMaintenancePath    = "/entermaintenance"
 	exitMaintenancePath     = "/exitmaintenance"
+	pxSystemdServiceName    = "portworx.service"
 )
 
 type portworx struct {
@@ -67,7 +68,7 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	d.updateNodes(cluster.Nodes)
 
 	for _, n := range node.GetWorkerNodes() {
-		if err := d.WaitForNode(n); err != nil {
+		if err := d.WaitDriverUpOnNode(n); err != nil {
 			return err
 		}
 	}
@@ -406,7 +407,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	_, err := task.DoRetryWithTimeout(t, 3*time.Minute, 5*time.Second)
 	if err != nil {
 		return &ErrFailedToDeleteVolume{
 			ID:    name,
@@ -422,7 +423,12 @@ func (d *portworx) ValidateVolumeCleanup() error {
 }
 
 func (d *portworx) StopDriver(n node.Node) error {
-	return d.schedOps.DisableOnNode(n, d.nodeDriver)
+	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+		Action: "stop",
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         5 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}})
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
@@ -461,8 +467,7 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 	return cluster.(*api.Cluster), nil
 }
 
-// Wait for Portworx to be up on given node
-func (d *portworx) WaitForNode(n node.Node) error {
+func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
@@ -479,6 +484,8 @@ func (d *portworx) WaitForNode(n node.Node) error {
 					api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
+
+		logrus.Infof("px on node %s is now up. status: %v", pxNode.Id, pxNode.Status)
 
 		return "", false, nil
 	}
@@ -490,7 +497,51 @@ func (d *portworx) WaitForNode(n node.Node) error {
 	return nil
 }
 
-func (d *portworx) WaitForUpgrade(n node.Node, newVersion string) error {
+func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
+	t := func() (interface{}, bool, error) {
+		// Check if px is down on all node addresses. We don't want to keep track
+		// which was the actual interface px was listening on before it went down
+		for _, addr := range n.Addresses {
+			cManager, err := d.getClusterManagerByAddress(addr)
+			if err != nil {
+				return "", true, err
+			}
+
+			pxNode, err := cManager.Inspect(n.VolDriverNodeID)
+			if err != nil {
+				if regexp.MustCompile(`.+timeout|connection refused.*`).MatchString(err.Error()) {
+					logrus.Infof("px on node %s addr %s is down as inspect returned: %v",
+						n.Name, addr, err.Error())
+					continue
+				}
+
+				return "", true, &ErrFailedToWaitForPx{
+					Node:  n,
+					Cause: err.Error(),
+				}
+			}
+
+			if pxNode.Status != api.Status_STATUS_OFFLINE {
+				return "", true, &ErrFailedToWaitForPx{
+					Node: n,
+					Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
+						api.Status_STATUS_OFFLINE, pxNode.Status),
+				}
+			}
+		}
+
+		logrus.Infof("px on node %s is now down.", n.Name)
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
@@ -508,11 +559,21 @@ func (d *portworx) WaitForUpgrade(n node.Node, newVersion string) error {
 			}
 		}
 
+		// filter out first 3 octets from the tag
+		matches := regexp.MustCompile(`^(\d+\.\d+\.\d+).*`).FindStringSubmatch(tag)
+		if len(matches) != 2 {
+			return nil, false, &ErrFailedToUpgradeVolumeDriver{
+				Version: fmt.Sprintf("%s:%s", image, tag),
+				Cause:   fmt.Sprintf("failed to parse first 3 octets of version from new version tag: %s", tag),
+			}
+		}
+
 		pxVersion := pxNode.NodeLabels[pxVersionLabel]
-		if !strings.HasPrefix(pxVersion, newVersion) {
+		if !strings.HasPrefix(pxVersion, matches[1]) {
 			return nil, true, &ErrFailedToUpgradeVolumeDriver{
-				Version: newVersion,
-				Cause:   fmt.Sprintf("Version on node %v is still %v", n.VolDriverNodeID, pxVersion),
+				Version: fmt.Sprintf("%s:%s", image, tag),
+				Cause: fmt.Sprintf("version on node %s is still %s. It was expected to begin with: %s",
+					n.VolDriverNodeID, pxVersion, matches[1]),
 			}
 		}
 		return nil, false, nil
@@ -583,11 +644,29 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
-	return d.schedOps.EnableOnNode(n, d.nodeDriver)
+	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+		Action: "start",
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		}})
 }
 
 func (d *portworx) UpgradeDriver(version string) error {
-	if err := d.schedOps.UpgradePortworx(version); err != nil {
+	if len(version) == 0 {
+		return fmt.Errorf("no version supplied for upgrading portworx")
+	}
+
+	parts := strings.Split(version, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid version: %s given to upgrade portworx", version)
+	}
+
+	logrus.Infof("upgrading portworx to %s", version)
+
+	image := parts[0]
+	tag := parts[1]
+	if err := d.schedOps.UpgradePortworx(image, tag); err != nil {
 		return &ErrFailedToUpgradeVolumeDriver{
 			Version: version,
 			Cause:   err.Error(),
@@ -595,7 +674,7 @@ func (d *portworx) UpgradeDriver(version string) error {
 	}
 
 	for _, n := range node.GetWorkerNodes() {
-		if err := d.WaitForUpgrade(n, version); err != nil {
+		if err := d.WaitForUpgrade(n, image, tag); err != nil {
 			return err
 		}
 	}
@@ -616,6 +695,16 @@ func (d *portworx) getClusterManager() cluster.Cluster {
 	}
 	return d.clusterManager
 
+}
+
+func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, error) {
+	pxEndpoint := d.constructURL(addr)
+	cClient, err := clusterclient.NewClusterClient(pxEndpoint, "v1")
+	if err != nil {
+		return nil, err
+	}
+
+	return clusterclient.ClusterManager(cClient), nil
 }
 
 func (d *portworx) maintenanceOp(n node.Node, op string) error {

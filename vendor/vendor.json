@@ -505,72 +505,71 @@
 			"revisionTime": "2017-11-17T19:00:05Z"
 		},
 		{
-			"checksumSHA1": "aA8MNkuxo0MeyV3rtbsqZGS6TxQ=",
-			"origin": "github.com/portworx/torpedo/vendor/github.com/portworx/sched-ops/k8s",
+			"checksumSHA1": "ARiZOSWRcC9Uthj2tMfbGKOVSUk=",
 			"path": "github.com/portworx/sched-ops/k8s",
-			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
-			"revisionTime": "2017-12-09T02:05:35Z"
+			"revision": "2801d90fa64a750cec052748c1f523d9ead25e9d",
+			"revisionTime": "2018-02-17T04:09:48Z"
 		},
 		{
-			"checksumSHA1": "IAa1RlxdS+a88YGary5duoB09p4=",
+			"checksumSHA1": "XDeteytxpf2kmvacQSYeE3DP40M=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/portworx/sched-ops/task",
 			"path": "github.com/portworx/sched-ops/task",
-			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
-			"revisionTime": "2017-12-09T02:05:35Z"
+			"revision": "ab1e78fa54dfe6317bdbee206df84d60981d5543",
+			"revisionTime": "2018-02-17T00:39:16Z"
 		},
 		{
-			"checksumSHA1": "CYg70se1SHKXEzGGNfRh0mVMpac=",
+			"checksumSHA1": "jGTQ3I/cJtz7APzDbcQ6FuEEC+k=",
 			"path": "github.com/portworx/torpedo/drivers/node",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
-			"checksumSHA1": "3h++8PxT+n7Wu6dRFSLC8EOQYMg=",
+			"checksumSHA1": "DNwZHYj8UqYNIJwq3M5SwGJG4Jw=",
 			"path": "github.com/portworx/torpedo/drivers/node/ssh",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
 			"checksumSHA1": "wjV/B+A4p9yj2iZXjQ116JpCZus=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
-			"checksumSHA1": "UrNfw6AE2qm6hqP4HCx+loK5tqI=",
+			"checksumSHA1": "w4993tXq+i+wBT1d8c03Un3tkGI=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/k8s",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
 			"checksumSHA1": "gicT7JrFO4AWSDZhO4NJ/t1vmZ8=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/spec",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
-			"checksumSHA1": "e6fEmxuKxWEXnJ9smoCImS6wRb4=",
+			"checksumSHA1": "976l8rovvargmAjtqFDTNR5JwE0=",
 			"path": "github.com/portworx/torpedo/drivers/volume",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
-			"checksumSHA1": "1rTVuJ5yBow6CP+ZH09A4aHOMUk=",
+			"checksumSHA1": "v3wEVSmWmH5bsyTSUsk0Uu0Roi0=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
-			"checksumSHA1": "t2a6CrFbWJxFuhbX2zwtK1gFctA=",
+			"checksumSHA1": "mLkNQbxr+igayNj5OOx44Z7K0iQ=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx/schedops",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
 			"checksumSHA1": "VC6jgTB9GKVetejp30GOQKQIc3Y=",
 			"path": "github.com/portworx/torpedo/pkg/errors",
-			"revision": "4984d40e85493236db6afacaa1c8e8c591ed6ad6",
-			"revisionTime": "2018-01-04T19:54:50Z"
+			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
+			"revisionTime": "2018-02-17T04:57:04Z"
 		},
 		{
 			"checksumSHA1": "BYvROBsiyAXK4sq6yhDe8RgT4LM=",

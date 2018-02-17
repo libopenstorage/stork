@@ -12,7 +12,10 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
-	"k8s.io/api/core/v1"
+	batch_v1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -22,14 +25,6 @@ const (
 	PXNamespace = "kube-system"
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
-	// PXImage is the image for portworx driver
-	PXImage = "portworx/px-enterprise"
-	// k8sPxServiceLabelKey is the label key used for px systemd service control
-	k8sPxServiceLabelKey = "px/service"
-	// k8sServiceOperationStart is label value for starting Portworx service
-	k8sServiceOperationStart = "start"
-	// k8sServiceOperationStop is label value for stopping Portworx service
-	k8sServiceOperationStop = "stop"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
 	// pxImageEnvVar is the env variable in portworx daemon set specifying portworx image to be used
@@ -62,19 +57,11 @@ func (e *errLabelAbsent) Error() string {
 
 type k8sSchedOps struct{}
 
-func (k *k8sSchedOps) DisableOnNode(n node.Node, _ node.Driver) error {
-	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStop)
-}
-
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateOnNode",
 	}
-}
-
-func (k *k8sSchedOps) EnableOnNode(n node.Node, _ node.Driver) error {
-	return k8s.Instance().AddLabelOnNode(n.Name, k8sPxServiceLabelKey, k8sServiceOperationStart)
 }
 
 func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
@@ -251,53 +238,99 @@ func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
 	return "", err
 }
 
-func (k *k8sSchedOps) UpgradePortworx(version string) error {
-	k8sOps := k8s.Instance()
-	ds, err := k8sOps.GetDaemonSet(PXDaemonSet, PXNamespace)
+func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
+	inst := k8s.Instance()
+
+	binding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "talisman",
+		},
+		Subjects: []rbacv1.Subject{{
+			Kind:      "ServiceAccount",
+			Name:      "talisman",
+			Namespace: "kube-system",
+		}},
+		RoleRef: rbacv1.RoleRef{
+			Kind: "ClusterRole",
+			Name: "cluster-admin",
+		},
+	}
+	binding, err := inst.CreateClusterRoleBinding(binding)
 	if err != nil {
 		return err
 	}
 
-	image := fmt.Sprintf("%s:%s", PXImage, version)
-
-	found := false
-	envList := ds.Spec.Template.Spec.Containers[0].Env
-	for i := range envList {
-		envVar := &envList[i]
-		if envVar.Name == pxImageEnvVar {
-			envVar.Value = image
-			found = true
-			break
-		}
+	account := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "talisman",
+			Namespace: "kube-system",
+		},
 	}
-	if !found {
-		imageEnv := v1.EnvVar{Name: pxImageEnvVar, Value: image}
-		ds.Spec.Template.Spec.Containers[0].Env = append(ds.Spec.Template.Spec.Containers[0].Env, imageEnv)
-	}
-
-	if err := k8sOps.UpdateDaemonSet(ds); err != nil {
+	account, err = inst.CreateServiceAccount(account)
+	if err != nil {
 		return err
 	}
 
-	// Sleep for a short duration so that the daemon set updates its status
-	time.Sleep(10 * time.Second)
-
-	t := func() (interface{}, bool, error) {
-		ds, err := k8sOps.GetDaemonSet(PXDaemonSet, PXNamespace)
-		if err != nil {
-			return nil, true, err
-		}
-
-		if ds.Status.DesiredNumberScheduled == ds.Status.UpdatedNumberScheduled {
-			return nil, false, nil
-		}
-		return nil, true, fmt.Errorf("Only %v nodes have been updated out of %v nodes",
-			ds.Status.UpdatedNumberScheduled, ds.Status.DesiredNumberScheduled)
+	// create a talisman job
+	var valOne int32 = 1
+	job := &batch_v1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "talisman",
+			Namespace: "kube-system",
+		},
+		Spec: batch_v1.JobSpec{
+			BackoffLimit: &valOne,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					ServiceAccountName: "talisman",
+					Containers: []corev1.Container{
+						{
+							Name:  "talisman",
+							Image: "portworx/talisman:latest",
+							Args: []string{
+								"-operation", "upgrade", "-ocimonimage", ociImage, "-ocimontag", ociTag,
+							},
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 20*time.Minute, 30*time.Second); err != nil {
+	job, err = inst.CreateJob(job)
+	if err != nil {
 		return err
 	}
+
+	numNodes, err := inst.GetNodes()
+	if err != nil {
+		return err
+	}
+
+	jobTimeout := time.Duration(len(numNodes.Items)) * 10 * time.Minute
+
+	err = inst.ValidateJob(job.Name, job.Namespace, jobTimeout)
+	if err != nil {
+		return err
+	}
+
+	// cleanup
+	err = inst.DeleteJob(job.Name, job.Namespace)
+	if err != nil {
+		return err
+	}
+
+	err = inst.DeleteClusterRoleBinding(binding.Name)
+	if err != nil {
+		return err
+	}
+
+	err = inst.DeleteServiceAccount(account.Name, account.Namespace)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
