@@ -447,16 +447,6 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	}
 
-	appNamespace := getAppNamespaceName(ctx.App, ctx.UID)
-	if err := k8sOps.DeleteNamespace(appNamespace); err != nil {
-		return &scheduler.ErrFailedToDestroyApp{
-			App:   ctx.App,
-			Cause: fmt.Sprintf("Failed to destroy namespace: %#v. Err: %v", appNamespace, err),
-		}
-	}
-
-	logrus.Infof("[%v] Destroyed Namespace: %v", ctx.App.Key, appNamespace)
-
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
 		if err := k.WaitForDestroy(ctx); err != nil {
 			return err
@@ -560,7 +550,7 @@ func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
 		}
 	}
 
-	if err := k8s_ops.Instance().DeletePods(pods); err != nil {
+	if err := k8s_ops.Instance().DeletePods(pods, false); err != nil {
 		return &scheduler.ErrFailedToDeleteTasks{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("failed to delete pods due to: %v", err),

@@ -2,9 +2,8 @@ package task
 
 import (
 	"errors"
+	"log"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 //TODO: export the type: type Task func() (string, error)
@@ -36,7 +35,7 @@ func DoRetryWithTimeout(t func() (interface{}, bool, error), timeout, timeBefore
 					return
 				}
 
-				logrus.Infof("%v. Retry count: %v Next retry in: %v", err, count, timeBeforeRetry)
+				log.Printf("%v. Retry count: %v Next retry in: %v", err, count, timeBeforeRetry)
 				time.Sleep(timeBeforeRetry)
 			}
 

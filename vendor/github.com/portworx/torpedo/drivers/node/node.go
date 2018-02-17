@@ -79,6 +79,9 @@ type Driver interface {
 	// RebootNode reboots the given node
 	RebootNode(node Node, options RebootNodeOpts) error
 
+	// RunCommand runs the given command on the node and returns the output
+	RunCommand(node Node, command string, options ConnectionOpts) (string, error)
+
 	// ShutdownNode shuts down the given node
 	ShutdownNode(node Node, options ShutdownNodeOpts) error
 
@@ -141,6 +144,13 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootNode()",
+	}
+}
+
+func (d *notSupportedDriver) RunCommand(node Node, command string, options ConnectionOpts) (string, error) {
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RunCommand()",
 	}
 }
 

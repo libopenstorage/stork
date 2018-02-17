@@ -45,8 +45,11 @@ type Driver interface {
 	// Start must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
 
-	// WaitForNode must wait till the volume driver becomes usable on a given node
-	WaitForNode(n node.Node) error
+	// WaitDriverUpOnNode must wait till the volume driver becomes usable on a given node
+	WaitDriverUpOnNode(n node.Node) error
+
+	// WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
+	WaitDriverDownOnNode(n node.Node) error
 
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
