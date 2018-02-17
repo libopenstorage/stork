@@ -84,7 +84,7 @@ test:
 	done
 
 integration-test:
-	@echo "Building stork tests"
+	@echo "Building stork integration tests"
 	@cd test/integration_test && go test -tags integrationtest -v -c -o stork.test
 
 integration-test-container:

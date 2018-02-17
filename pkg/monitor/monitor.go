@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	storklog "github.com/libopenstorage/stork/pkg/log"
+	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 )
@@ -81,7 +81,7 @@ func (m *Monitor) driverMonitor() {
 				// If not online, look at all the pods on that node
 				// For any Running pod on that node using volume by the driver, kill the pod
 				if node.Status != volume.NodeOnline {
-					pods, err := k8sutils.GetAllPods()
+					pods, err := k8s.Instance().GetPods("")
 					if err != nil {
 						log.Errorf("Error getting pods: %v", err)
 						continue
@@ -102,7 +102,7 @@ func (m *Monitor) driverMonitor() {
 						if pod.Spec.NodeName == node.Hostname &&
 							(pod.Status.Phase == v1.PodRunning || pod.Status.Phase == v1.PodFailed) {
 							storklog.PodLog(&pod).Infof("Deleting Pod from Node: %v", pod.Spec.NodeName)
-							err = k8sutils.DeletePod(pod.Name, pod.Namespace, true)
+							err = k8s.Instance().DeletePods([]v1.Pod{pod}, true)
 							if err != nil {
 								storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
 								continue
