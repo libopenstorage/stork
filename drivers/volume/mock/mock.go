@@ -3,6 +3,7 @@ package mock
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
@@ -16,6 +17,12 @@ const (
 	driverName       = "MockDriver"
 	storageClassName = "mockDriverStorageClass"
 	provisionerName  = "kubernetes.io/mock-volume"
+	// RackLabel Label used for the mock driver to set rack information
+	RackLabel = "mock/rack"
+	// ZoneLabel Label used for the mock driver to set zone information
+	ZoneLabel = "mock/zone"
+	// RegionLabel Label used for the mock driver to set region information
+	RegionLabel = "mock/region"
 )
 
 // Driver Mock driver for tests
@@ -37,7 +44,7 @@ func (m Driver) Init(_ interface{}) error {
 }
 
 // CreateCluster Creates a cluster with specified number of nodes
-func (m *Driver) CreateCluster(numNodes int) error {
+func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 	if len(m.nodes) > 0 {
 		m.nodes = m.nodes[:0]
 	}
@@ -46,6 +53,18 @@ func (m *Driver) CreateCluster(numNodes int) error {
 			ID:       "node" + strconv.Itoa(i+1),
 			Hostname: "node" + strconv.Itoa(i+1),
 			Status:   storkvolume.NodeOnline,
+		}
+		for _, n := range nodes.Items {
+			for _, address := range n.Status.Addresses {
+				if address.Type == v1.NodeHostName {
+					if address.Address == node.Hostname || strings.HasPrefix(address.Address, node.Hostname+".") {
+						node.Rack = n.Labels[RackLabel]
+						node.Zone = n.Labels[ZoneLabel]
+						node.Region = n.Labels[RegionLabel]
+					}
+				}
+			}
+
 		}
 		m.nodes = append(m.nodes, node)
 	}

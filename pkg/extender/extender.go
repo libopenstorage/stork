@@ -19,10 +19,19 @@ import (
 const (
 	filter     = "filter"
 	prioritize = "prioritize"
-	// priorityScore Score by which each node is bumped if it has data for a volume
-	priorityScore = 100
+	// nodePriorityScore Score by which each node is bumped if it has data for a volume
+	nodePriorityScore = 100
+	// rackPriorityScore Score by which each node is bumped if it is in the same
+	// rack as a node which has data for the volume
+	rackPriorityScore = 50
+	// zonePriorityScore Score by which each node is bumped if it lies in the
+	// same zone as a node which has data for the volume
+	zonePriorityScore = 25
+	// regionPriorityScore Score by which each node is bumped if it lies in the
+	// same region as a node which has data for the volume
+	regionPriorityScore = 10
 	// defaultScore Score assigned to a node which doesn't have data for any volume
-	defaultScore = 10
+	defaultScore = 5
 )
 
 // Extender Scheduler extender
@@ -169,6 +178,57 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 }
 
+func (e *Extender) getNodeScore(
+	node v1.Node,
+	volumeInfo *volume.Info,
+	rackInfo *localityInfo,
+	zoneInfo *localityInfo,
+	regionInfo *localityInfo,
+	idMap map[string]string,
+) int {
+	for _, address := range node.Status.Addresses {
+		if address.Type != v1.NodeHostName {
+			continue
+		}
+		nodeRack := rackInfo.HostnameMap[address.Address]
+		nodeZone := zoneInfo.HostnameMap[address.Address]
+		nodeRegion := regionInfo.HostnameMap[address.Address]
+
+		for _, region := range regionInfo.PreferredLocality {
+			if region == nodeRegion || nodeRegion == "" {
+				for _, zone := range zoneInfo.PreferredLocality {
+					if zone == nodeZone || nodeZone == "" {
+						for _, rack := range rackInfo.PreferredLocality {
+							if rack == nodeRack || nodeRack == "" {
+								for _, datanode := range volumeInfo.DataNodes {
+									if e.isHostnameMatch(idMap[datanode], address.Address) {
+										return nodePriorityScore
+									}
+								}
+								if nodeRack != "" {
+									return rackPriorityScore
+								}
+							}
+						}
+						if nodeZone != "" {
+							return zonePriorityScore
+						}
+					}
+				}
+				if nodeRegion != "" {
+					return regionPriorityScore
+				}
+			}
+		}
+	}
+	return 0
+}
+
+type localityInfo struct {
+	HostnameMap       map[string]string
+	PreferredLocality []string
+}
+
 func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	defer func() {
@@ -191,9 +251,66 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)
 	}
 	respList := schedulerapi.HostPriorityList{}
-	priorityMap := make(map[string]int)
 
 	driverVolumes, err := e.Driver.GetPodVolumes(pod)
+	driverNodes, err := e.Driver.GetNodes()
+
+	// Create a map for ID->Hostname and Hostname->Rack
+	idMap := make(map[string]string)
+	var rackInfo, zoneInfo, regionInfo localityInfo
+	rackInfo.HostnameMap = make(map[string]string)
+	zoneInfo.HostnameMap = make(map[string]string)
+	regionInfo.HostnameMap = make(map[string]string)
+	for _, dnode := range driverNodes {
+		// Replace driver's hostname with the kubernetes hostname to make is
+		// easier to match nodes when calculating scores
+		for _, knode := range args.Nodes.Items {
+			for _, address := range knode.Status.Addresses {
+				if address.Type == v1.NodeHostName {
+					if e.isHostnameMatch(dnode.Hostname, address.Address) {
+						dnode.Hostname = address.Address
+					}
+				}
+			}
+		}
+		idMap[dnode.ID] = dnode.Hostname
+		storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
+		// For any node that is offline remove the locality info so that we
+		// don't prioritize nodes close to it
+		if dnode.Status == volume.NodeOnline {
+			// Add region info into zone and zone info into rack so that we can
+			// differentiate same names in different localities
+			regionInfo.HostnameMap[dnode.Hostname] = dnode.Region
+			if regionInfo.HostnameMap[dnode.Hostname] != "" {
+				zoneInfo.HostnameMap[dnode.Hostname] = regionInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Zone
+			} else {
+				zoneInfo.HostnameMap[dnode.Hostname] = dnode.Zone
+			}
+			if zoneInfo.HostnameMap[dnode.Hostname] != "" {
+				rackInfo.HostnameMap[dnode.Hostname] = zoneInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Rack
+			} else {
+				rackInfo.HostnameMap[dnode.Hostname] = dnode.Rack
+			}
+		} else {
+			rackInfo.HostnameMap[dnode.Hostname] = ""
+			zoneInfo.HostnameMap[dnode.Hostname] = ""
+			regionInfo.HostnameMap[dnode.Hostname] = ""
+		}
+	}
+
+	storklog.PodLog(pod).Debugf("rackMap: %v", rackInfo.HostnameMap)
+	storklog.PodLog(pod).Debugf("zoneMap: %v", zoneInfo.HostnameMap)
+	storklog.PodLog(pod).Debugf("regionMap: %v", regionInfo.HostnameMap)
+	// Intialize scores to 0
+	priorityMap := make(map[string]int)
+	for _, node := range args.Nodes.Items {
+		for _, address := range node.Status.Addresses {
+			if address.Type == v1.NodeHostName {
+				priorityMap[address.Address] = 0
+			}
+		}
+	}
+
 	if err != nil {
 		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
@@ -213,41 +330,34 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			idMap[node.ID] = node.Hostname
 		}
 		for _, volume := range driverVolumes {
-			storklog.PodLog(pod).Debugf("Volume allocated on nodes:")
+			storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
+			// Get the racks, zones and regions where the volume is located
+			rackInfo.PreferredLocality = rackInfo.PreferredLocality[:0]
+			zoneInfo.PreferredLocality = zoneInfo.PreferredLocality[:0]
+			regionInfo.PreferredLocality = regionInfo.PreferredLocality[:0]
 			for _, node := range volume.DataNodes {
-				log.Debugf("%+v", node)
+				log.Debugf("ID: %v Hostname: %v", node, idMap[node])
+				regionInfo.PreferredLocality = append(regionInfo.PreferredLocality, regionInfo.HostnameMap[idMap[node]])
+				zoneInfo.PreferredLocality = append(zoneInfo.PreferredLocality, zoneInfo.HostnameMap[idMap[node]])
+				rackInfo.PreferredLocality = append(rackInfo.PreferredLocality, rackInfo.HostnameMap[idMap[node]])
 			}
+			storklog.PodLog(pod).Debugf("Volume %v allocated on racks: %v", volume.VolumeName, rackInfo.PreferredLocality)
+			storklog.PodLog(pod).Debugf("Volume %v allocated in zones: %v", volume.VolumeName, zoneInfo.PreferredLocality)
+			storklog.PodLog(pod).Debugf("Volume %v allocated in regions: %v", volume.VolumeName, regionInfo.PreferredLocality)
 
-			for _, datanode := range volume.DataNodes {
-				for _, node := range args.Nodes.Items {
-					for _, address := range node.Status.Addresses {
-						if address.Type != v1.NodeHostName {
-							continue
-						}
-
-						if e.isHostnameMatch(idMap[datanode], address.Address) {
-							// Increment score for every volume that is required by
-							// the pod and is present on the node
-							_, ok := priorityMap[node.Name]
-							if !ok {
-								priorityMap[node.Name] = priorityScore
-							} else {
-								priorityMap[node.Name] += priorityScore
-							}
-						}
-					}
-				}
+			for _, node := range args.Nodes.Items {
+				priorityMap[node.Name] += e.getNodeScore(node, volume, &rackInfo, &zoneInfo, &regionInfo, idMap)
 			}
 		}
 	}
 
 sendResponse:
 	// For any nodes that didn't have any volumes, assign it a
-	// default score so that it doesn't get completelt ignored
+	// default score so that it doesn't get completely ignored
 	// by the scheduler
 	for _, node := range args.Nodes.Items {
 		score, ok := priorityMap[node.Name]
-		if !ok {
+		if !ok || score == 0 {
 			score = defaultScore
 		}
 		hostPriority := schedulerapi.HostPriority{Host: node.Name, Score: score}

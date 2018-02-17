@@ -22,6 +22,11 @@ const (
 	nodeDriverName      = "ssh"
 	volumeDriverName    = "pxd"
 	schedulerDriverName = "k8s"
+
+	nodeScore   = 100
+	rackScore   = 50
+	zoneScore   = 25
+	regionScore = 10
 )
 
 var nodeDriver node.Driver
@@ -112,27 +117,66 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 	require.Equal(t, true, found, "Scheduled node not found in driver node list")
 
 	scores := make(map[string]int)
-	idMap := make(map[string]string)
+	idMap := make(map[string]*storkdriver.NodeInfo)
+	rackMap := make(map[string][]string)
+	zoneMap := make(map[string][]string)
+	regionMap := make(map[string][]string)
 	for _, dNode := range driverNodes {
 		scores[dNode.Hostname] = 0
-		idMap[dNode.ID] = dNode.Hostname
+		idMap[dNode.ID] = dNode
+		if dNode.Status == storkdriver.NodeOnline {
+			if dNode.Rack != "" {
+				rackMap[dNode.Rack] = append(rackMap[dNode.Rack], dNode.Hostname)
+			}
+			if dNode.Zone != "" {
+				zoneMap[dNode.Zone] = append(rackMap[dNode.Zone], dNode.Hostname)
+			}
+			if dNode.Region != "" {
+				regionMap[dNode.Region] = append(rackMap[dNode.Region], dNode.Hostname)
+			}
+		}
 	}
 
-	highScore := 0
 	// Calculate scores for each node
 	for _, vol := range volumes {
 		volInfo, err := storkVolumeDriver.InspectVolume(vol)
 		require.NoError(t, err, "Error inspecting volume %v", vol)
 
 		for _, dataNode := range volInfo.DataNodes {
-			hostname := idMap[dataNode]
-			scores[hostname] = scores[hostname] + 10
-			if scores[hostname] > highScore {
-				highScore = scores[hostname]
+			hostname := idMap[dataNode].Hostname
+			scores[hostname] += nodeScore
+
+			if idMap[dataNode].Rack != "" {
+				for _, node := range rackMap[idMap[dataNode].Rack] {
+					if dataNode != node {
+						scores[node] += rackScore
+					}
+				}
+			}
+			if idMap[dataNode].Zone != "" {
+				for _, node := range zoneMap[idMap[dataNode].Zone] {
+					if dataNode != node {
+						scores[node] += zoneScore
+					}
+				}
+			}
+			if idMap[dataNode].Rack != "" {
+				for _, node := range regionMap[idMap[dataNode].Region] {
+					if dataNode != node {
+						scores[node] += regionScore
+					}
+				}
 			}
 		}
 	}
 
-	logrus.Debugf("Scores: %v", scores)
+	highScore := 0
+	for _, score := range scores {
+		if score > highScore {
+			highScore = score
+		}
+	}
+
+	logrus.Infof("Scores: %v", scores)
 	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
 }

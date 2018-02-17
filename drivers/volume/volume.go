@@ -65,6 +65,12 @@ type NodeInfo struct {
 	Hostname string
 	// IPs List of IPs associated with the node
 	IPs []string
+	// Rack Specifies the rack within the datacenter where the node is located
+	Rack string
+	// Zone Specifies the zone where the rack is located
+	Zone string
+	// Region Specifies the region where the datacenter is located
+	Region string
 	// Status of the node
 	Status NodeStatus
 }

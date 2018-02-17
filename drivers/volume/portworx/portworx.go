@@ -20,6 +20,7 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8shelper "k8s.io/kubernetes/pkg/api/v1/helper"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 )
 
 // TODO: Make some of these configurable
@@ -44,6 +45,9 @@ const (
 
 	// pvcNamespaceLabel is the key of the label used to store the PVC namespace
 	pvcNamespaceLabel = "namespace"
+
+	// pxRackLabelKey Label for rack information
+	pxRackLabelKey = "px/rack"
 )
 
 type portworx struct {
@@ -166,6 +170,21 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
 		nodeInfo.IPs = append(nodeInfo.IPs, n.DataIp)
 
+		labels, err := k8s.Instance().GetLabelsOnNode(nodeInfo.Hostname)
+		if err == nil {
+			if rack, ok := labels[pxRackLabelKey]; ok {
+				nodeInfo.Rack = rack
+			}
+			if zone, ok := labels[kubeletapis.LabelZoneFailureDomain]; ok {
+				nodeInfo.Zone = zone
+			}
+			if region, ok := labels[kubeletapis.LabelZoneRegion]; ok {
+				nodeInfo.Region = region
+			}
+		} else {
+			logrus.Errorf("Error getting labels for node %v: %v", nodeInfo.Hostname, err)
+		}
+
 		nodes = append(nodes, nodeInfo)
 	}
 	return nodes, nil
@@ -196,7 +215,7 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 			if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
 				provisioner = val
 			} else {
-				storageClass, err := k8sutils.GetStorageClass(storageClassName, pod.Namespace)
+				storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
 				if err != nil {
 					return nil, err
 				}
