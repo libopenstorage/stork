@@ -10,9 +10,10 @@ import (
 	snapshotcontroller "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
@@ -49,10 +50,15 @@ func (s *SnapshotController) Start() error {
 		return err
 	}
 
-	clientset, err := k8sutils.GetK8sClient()
+	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return err
 	}
+
+	if clientset == nil {
+		return k8s.ErrK8SApiAccountNotSet
+	}
+
 	aeclientset, err := apiextensionsclient.NewForConfig(config)
 	if err != nil {
 		return err

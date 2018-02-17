@@ -14,11 +14,12 @@ import (
 	"github.com/libopenstorage/openstorage/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/snapshot"
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8shelper "k8s.io/kubernetes/pkg/api/v1/helper"
 )
 
 // TODO: Make some of these configurable
@@ -56,7 +57,7 @@ func (p *portworx) String() string {
 
 func (p *portworx) Init(_ interface{}) error {
 	var endpoint string
-	svc, err := k8sutils.GetService(serviceName, namespace)
+	svc, err := k8s.Instance().GetService(serviceName, namespace)
 	if err == nil {
 		endpoint = svc.Spec.ClusterIP
 	} else {
@@ -175,12 +176,14 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 	for _, volume := range pod.Spec.Volumes {
 		volumeName := ""
 		if volume.PersistentVolumeClaim != nil {
-			pvc, err := k8sutils.GetPVC(volume.PersistentVolumeClaim.ClaimName, pod.Namespace)
+			pvc, err := k8s.Instance().GetPersistentVolumeClaim(
+				volume.PersistentVolumeClaim.ClaimName,
+				pod.Namespace)
 			if err != nil {
 				return nil, err
 			}
 
-			storageClassName := k8sutils.GetStorageClassName(pvc)
+			storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 			if storageClassName == "" {
 				logrus.Debugf("Empty StorageClass in PVC %v for pod %v, ignoring",
 					pvc.Name, pod.Name)

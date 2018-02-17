@@ -115,7 +115,7 @@ func driverNodeErrorTest(t *testing.T) {
 	err = volumeDriver.StartDriver(stoppedNode)
 	require.NoError(t, err, "Error starting driver on Node %+v", scheduledNodes[0])
 
-	err = volumeDriver.WaitForNode(stoppedNode)
+	err = volumeDriver.WaitDriverUpOnNode(stoppedNode)
 	require.NoError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)

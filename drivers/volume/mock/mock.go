@@ -7,9 +7,9 @@ import (
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
-	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	k8shelper "k8s.io/kubernetes/pkg/api/v1/helper"
 )
 
 const (
@@ -161,7 +161,7 @@ func (m Driver) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 				}
 			}
 
-			storageClassName := k8sutils.GetStorageClassName(pvc)
+			storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 			if storageClassName == "" {
 				logrus.Debugf("Empty StorageClass in PVC %v for pod %v, ignoring",
 					pvc.Name, pod.Name)
