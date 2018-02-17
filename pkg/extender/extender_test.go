@@ -71,10 +71,14 @@ func newPod(podName string, volumes []string) *v1.Pod {
 	return pod
 }
 
-func newNode(hostname string, ip string) *v1.Node {
+func newNode(hostname string, ip string, rack string, zone string, region string) *v1.Node {
 	node := v1.Node{}
 
 	node.Name = hostname
+	node.Labels = make(map[string]string)
+	node.Labels[mock.RackLabel] = rack
+	node.Labels[mock.ZoneLabel] = zone
+	node.Labels[mock.RegionLabel] = region
 
 	hostNameAddress := v1.NodeAddress{
 		Type:    v1.NodeHostName,
@@ -238,6 +242,8 @@ func TestExtender(t *testing.T) {
 	t.Run("multipleVolumeTest", multipleVolumeTest)
 	t.Run("driverErrorTest", driverErrorTest)
 	t.Run("driverNodeErrorStateTest", driverNodeErrorStateTest)
+	t.Run("zoneTest", zoneTest)
+	t.Run("regionTest", regionTest)
 	t.Run("teardown", teardown)
 }
 
@@ -247,9 +253,9 @@ func TestExtender(t *testing.T) {
 func noPVCTest(t *testing.T) {
 	pod := newPod("noPVCPod", nil)
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3"))
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "a", "us-east-1"))
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -275,9 +281,9 @@ func noPVCTest(t *testing.T) {
 func noDriverVolumeTest(t *testing.T) {
 	pod := newPod("noDriverVolumeTest", nil)
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3"))
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "a", "us-east-1"))
 
 	podVolume := v1.Volume{}
 	podVolume.PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
@@ -305,14 +311,19 @@ func noDriverVolumeTest(t *testing.T) {
 // Create a pod with a PVC using the mock storage class.
 // Place the data on nodes n1, n2. Send requests with node n3, n4, n5
 // The filter response should return all the input nodes
-// The prioritize response should return all nodes with equal priority
+// The prioritize response should return all n3 with highest priority because of
+// rack locality
 func noDriverNodeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3"))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4"))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5"))
+	requestNodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack4", "", ""))
+	requestNodes.Items = nodes.Items
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "", ""))
 
-	if err := driver.CreateCluster(5); err != nil {
+	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 	pod := newPod("noDriverNode", []string{"noDriverNode"})
@@ -321,37 +332,38 @@ func noDriverNodeTest(t *testing.T) {
 	if err := driver.ProvisionVolume("noDriverNode", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
-	filterResponse, err := sendFilterRequest(pod, nodes)
+	filterResponse, err := sendFilterRequest(pod, requestNodes)
 	if err != nil {
 		t.Fatalf("Error sending filter request: %v", err)
 	}
-	verifyFilterResponse(t, nodes, []int{0, 1, 2}, filterResponse)
+	verifyFilterResponse(t, requestNodes, []int{0, 1, 2}, filterResponse)
 
-	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	prioritizeResponse, err := sendPrioritizeRequest(pod, requestNodes)
 	if err != nil {
 		t.Fatalf("Error sending prioritize request: %v", err)
 	}
 	verifyPrioritizeResponse(
 		t,
-		nodes,
-		[]int{defaultScore, defaultScore, defaultScore},
+		requestNodes,
+		[]int{rackPriorityScore, defaultScore, defaultScore},
 		prioritizeResponse)
 }
 
 // Create a pod with a PVC using the mock storage class.
 // Place the data on nodes n1, n2. Send requests with node n1, n2, n3, n4, n5
 // The filter response should return all the input nodes
-// The prioritize response should assign higher values to n1 and n2
+// The prioritize response should assign higher values to n1 and n2, followed by
+// n3 and n4 for rack locality and then n5
 func singleVolumeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1.domain", "192.168.0.1"))
-	nodes.Items = append(nodes.Items, *newNode("node2.domain", "192.168.0.2"))
-	nodes.Items = append(nodes.Items, *newNode("node3.domain", "192.168.0.3"))
-	nodes.Items = append(nodes.Items, *newNode("node4.domain", "192.168.0.4"))
-	nodes.Items = append(nodes.Items, *newNode("node5.domain", "192.168.0.5"))
+	nodes.Items = append(nodes.Items, *newNode("node1.domain", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2.domain", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3.domain", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4.domain", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5.domain", "192.168.0.5", "rack3", "", ""))
 
 	provNodes := []int{0, 1}
-	if err := driver.CreateCluster(5); err != nil {
+	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
@@ -373,7 +385,11 @@ func singleVolumeTest(t *testing.T) {
 	verifyPrioritizeResponse(
 		t,
 		nodes,
-		[]int{priorityScore, priorityScore, defaultScore, defaultScore, defaultScore},
+		[]int{nodePriorityScore,
+			nodePriorityScore,
+			rackPriorityScore,
+			rackPriorityScore,
+			defaultScore},
 		prioritizeResponse)
 }
 
@@ -382,17 +398,17 @@ func singleVolumeTest(t *testing.T) {
 // Place the data for volume2 on nodes n2, n3.
 // Send requests with node n1, n2, n3, n4, n5
 // The filter response should return all the input nodes
-// The prioritize response should assign highest values to n2,
-// followed by n1 and n3. n4 and n5 should have the lowest priorities
+// The prioritize response should assign priorities in the following order
+// n2 (both volumes local) >> n1 and n3 (one volume local each) >> n5 (both volumes on same rack) >> n4 (one volume on same rack)
 func multipleVolumeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3"))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4"))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5"))
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack2", "", ""))
 
-	if err := driver.CreateCluster(5); err != nil {
+	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
@@ -420,7 +436,11 @@ func multipleVolumeTest(t *testing.T) {
 	verifyPrioritizeResponse(
 		t,
 		nodes,
-		[]int{priorityScore, 2 * priorityScore, priorityScore, defaultScore, defaultScore},
+		[]int{nodePriorityScore,
+			2 * nodePriorityScore,
+			nodePriorityScore,
+			rackPriorityScore,
+			2 * rackPriorityScore},
 		prioritizeResponse)
 }
 
@@ -431,13 +451,13 @@ func multipleVolumeTest(t *testing.T) {
 // The prioritize response should return all nodes with equal priority
 func driverErrorTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3"))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4"))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5"))
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack1", "", ""))
 
-	if err := driver.CreateCluster(5); err != nil {
+	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
@@ -470,16 +490,19 @@ func driverErrorTest(t *testing.T) {
 // Put n1 in error state.
 // The filter response should return n2, n3, n4, n5. Use these nodes for
 // prioritize request.
-// The prioritize response should assign highest value to n2
+// The prioritize response should assign highest value to n2, followed n4 since
+// it in the same rack as n2.
+// n4 (data on same rack but node down) and n5 (no locality) should have the
+// lowest scores.
 func driverNodeErrorStateTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1.domain", "192.168.0.1"))
-	nodes.Items = append(nodes.Items, *newNode("node2.domain", "192.168.0.2"))
-	nodes.Items = append(nodes.Items, *newNode("node3.domain", "192.168.0.3"))
-	nodes.Items = append(nodes.Items, *newNode("node4.domain", "192.168.0.4"))
-	nodes.Items = append(nodes.Items, *newNode("node5.domain", "192.168.0.5"))
+	nodes.Items = append(nodes.Items, *newNode("node1.domain", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2.domain", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3.domain", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4.domain", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5.domain", "192.168.0.5", "rack3", "", ""))
 
-	if err := driver.CreateCluster(5); err != nil {
+	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
@@ -507,6 +530,109 @@ func driverNodeErrorStateTest(t *testing.T) {
 	verifyPrioritizeResponse(
 		t,
 		nodes,
-		[]int{priorityScore, defaultScore, defaultScore, defaultScore},
+		[]int{nodePriorityScore,
+			defaultScore,
+			rackPriorityScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Create a pod with a PVC using the mock storage class.
+// Place the data for volume1 on nodes n1, n2.
+// Place the data for volume2 on nodes n2, n3.
+// Send requests with node n1, n2, n3, n4, n5
+// The filter response should return n1, n2, n3, n4, n5. Use these nodes for prioritize request.
+// The prioritize response should assign priorities in the following order
+// n2 (both volumes local) >> n1 (one volume local and other in same zone) >> n3 (one volume local) >> n4 (one volume in same zone) >> n5 (no locality)
+func zoneTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "a", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "a", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "b", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack2", "b", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack1", "c", ""))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	pod := newPod("zoneTest", []string{"volume1", "volume2"})
+	provNodes := []int{0, 1}
+	if err := driver.ProvisionVolume("volume1", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	provNodes = []int{1, 2}
+	if err := driver.ProvisionVolume("volume2", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]int{nodePriorityScore + zonePriorityScore,
+			2 * nodePriorityScore,
+			nodePriorityScore,
+			zonePriorityScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Create a pod with a PVC using the mock storage class.
+// Place the data for volume1 on nodes n1, n2.
+// Place the data for volume2 on nodes n2, n3.
+// Send requests with node n1, n2, n3, n4, n5
+// The filter response should return n1, n2, n3, n4, n5. Use these nodes for prioritize request.
+// The prioritize response should assign priorities in the following order
+// n2 (both volumes local) >> n1 (one volume local and other in same zone) >> n3 (one volume local and other in same region) >> n4 and n5 (no locality)
+func regionTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "b", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack2", "b", "us-east-2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack1", "c", "us-east-2"))
+
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	pod := newPod("regionTest", []string{"volume1", "volume2"})
+	provNodes := []int{0, 1}
+	if err := driver.ProvisionVolume("volume1", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	provNodes = []int{1, 2}
+	if err := driver.ProvisionVolume("volume2", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]int{nodePriorityScore + zonePriorityScore,
+			2 * nodePriorityScore,
+			nodePriorityScore + regionPriorityScore,
+			defaultScore,
+			defaultScore},
 		prioritizeResponse)
 }
