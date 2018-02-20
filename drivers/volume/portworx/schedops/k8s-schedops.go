@@ -26,9 +26,9 @@ const (
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
-	k8sPodsRootDir = "/var/lib/kubelet/pods"
-	// pxImageEnvVar is the env variable in portworx daemon set specifying portworx image to be used
-	pxImageEnvVar = "PX_IMAGE"
+	k8sPodsRootDir         = "/var/lib/kubelet/pods"
+	talismanServiceAccount = "talisman-account"
+	talismanImage          = "portworx/talisman:latest"
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -282,11 +282,11 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 			BackoffLimit: &valOne,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "talisman",
+					ServiceAccountName: talismanServiceAccount,
 					Containers: []corev1.Container{
 						{
 							Name:  "talisman",
-							Image: "portworx/talisman:latest",
+							Image: talismanImage,
 							Args: []string{
 								"-operation", "upgrade", "-ocimonimage", ociImage, "-ocimontag", ociTag,
 							},
