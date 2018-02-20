@@ -205,7 +205,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return err
 	}
 	t = func() (interface{}, bool, error) {
-		apiNode, err := d.getClusterManager().Inspect(n.Name)
+		apiNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
 			return nil, true, err
 		}
