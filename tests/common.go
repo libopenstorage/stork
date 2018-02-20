@@ -229,7 +229,7 @@ func CollectSupport() {
 			expect(nodes).NotTo(beEmpty())
 
 			journalCmd := fmt.Sprintf(
-				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
+				"sudo su -c 'echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v'",
 				time.Now().Format(time.RFC3339))
 			for _, n := range nodes {
 				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{

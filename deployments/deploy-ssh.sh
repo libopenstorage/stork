@@ -109,7 +109,7 @@ spec:
     tty: true
     env:
     - name: TORPEDO_SSH_USER
-      value: "root"
+      value: "${TORPEDO_SSH_USER}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
   restartPolicy: Never
