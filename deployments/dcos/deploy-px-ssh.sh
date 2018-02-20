@@ -18,11 +18,11 @@ if [ -z "${TORPEDO_IMG}" ]; then
 fi
 
 if [ -z "${TORPEDO_SSH_USER}" ]; then
-    TORPEDO_SSH_USER="vagrant"
+    TORPEDO_SSH_USER="root"
 fi
 
-if [ -z "${TORPEDO_SSH_PASSWORD}" ]; then
-    TORPEDO_SSH_PASSWORD="vagrant"
+if [ -z "${TORPEDO_SSH_KEY}" ]; then
+    TORPEDO_SSH_KEY="/vagrant/id_rsa"
 fi
 
 dcos_version=`dcos --version | grep "dcos.version"| cut -d'=' -f2`
@@ -44,12 +44,18 @@ cat <<EOF > torpedo.json
         "cmd": "ginkgo $VERBOSE --trace --failFast $SKIP_ARG $FOCUS_ARG --slowSpecThreshold 600 bin/basic.test bin/reboot.test bin/scale.test bin/upgrade.test bin/drive_failure.test -- --spec-dir ../drivers/scheduler/dcos/specs --scheduler dcos --node-driver ssh",
         "env": {
             "TORPEDO_SSH_USER": "${TORPEDO_SSH_USER}",
-            "TORPEDO_SSH_PASSWORD": "${TORPEDO_SSH_PASSWORD}"
+            "TORPEDO_SSH_PASSWORD": "${TORPEDO_SSH_PASSWORD}",
+            "TORPEDO_SSH_KEY": "/torpedo/ssh/key"
         },
         "volumes": [
             {
                 "containerPath": "/var/run/docker.sock",
                 "hostPath": "/var/run/docker.sock",
+                "mode": "RW"
+            },
+            {
+                "containerPath": "/torpedo/ssh/key",
+                "hostPath": "${TORPEDO_SSH_KEY}",
                 "mode": "RW"
             }
         ],
