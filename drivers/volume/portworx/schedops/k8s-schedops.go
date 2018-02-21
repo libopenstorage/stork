@@ -247,8 +247,8 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 		},
 		Subjects: []rbacv1.Subject{{
 			Kind:      "ServiceAccount",
-			Name:      "talisman",
-			Namespace: "kube-system",
+			Name:      talismanServiceAccount,
+			Namespace: PXNamespace,
 		}},
 		RoleRef: rbacv1.RoleRef{
 			Kind: "ClusterRole",
@@ -262,8 +262,8 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 
 	account := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "talisman",
-			Namespace: "kube-system",
+			Name:      talismanServiceAccount,
+			Namespace: PXNamespace,
 		},
 	}
 	account, err = inst.CreateServiceAccount(account)
@@ -276,7 +276,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 	job := &batch_v1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "talisman",
-			Namespace: "kube-system",
+			Namespace: PXNamespace,
 		},
 		Spec: batch_v1.JobSpec{
 			BackoffLimit: &valOne,
