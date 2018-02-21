@@ -109,11 +109,7 @@ var _ = Describe("Volume driver and app down", func() {
 				Step("restarting volume driver", func() {
 					StartVolDriverAndWait(appNodes)
 				})
-			}
-		})
 
-		Step("wait for destroy of apps and volumes", func() {
-			for _, ctx := range contexts {
 				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
 					err = Inst().S.WaitForDestroy(ctx)
 					Expect(err).NotTo(HaveOccurred())
