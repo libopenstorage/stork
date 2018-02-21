@@ -215,7 +215,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return nil, true, fmt.Errorf("Node %v is not in Maintenance mode", n.Name)
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
 		return &ErrFailedToRecoverDriver{
 			Node:  n,
 			Cause: err.Error(),
