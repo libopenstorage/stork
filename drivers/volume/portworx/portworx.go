@@ -34,6 +34,22 @@ const (
 	pxSystemdServiceName    = "portworx.service"
 )
 
+const (
+	defaultRetryInterval              = 10 * time.Second
+	maintenanceOpTimeout              = 1 * time.Minute
+	maintenanceWaitTimeout            = 2 * time.Minute
+	validateCreateVolumeTimeout       = 10 * time.Second
+	validateCreateVolumeRetryInterval = 2 * time.Second
+	validateDeleteVolumeTimeout       = 3 * time.Minute
+	validateClusterStartTimeout       = 2 * time.Minute
+	validateNodeStartTimeout          = 2 * time.Minute
+	validateNodeStopTimeout           = 2 * time.Minute
+	stopDriverTimeout                 = 5 * time.Minute
+	startDriverTimeout                = 2 * time.Minute
+	upgradeTimeout                    = 10 * time.Minute
+	upgradeRetryInterval              = 30 * time.Second
+)
+
 type portworx struct {
 	clusterManager  cluster.Cluster
 	volDriver       volume.VolumeDriver
@@ -201,7 +217,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return nil, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 	t = func() (interface{}, bool, error) {
@@ -215,7 +231,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return nil, true, fmt.Errorf("Node %v is not in Maintenance mode", n.Name)
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, maintenanceWaitTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToRecoverDriver{
 			Node:  n,
 			Cause: err.Error(),
@@ -228,7 +244,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return nil, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -252,7 +268,7 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		return vols[0], false, nil
 	}
 
-	out, err := task.DoRetryWithTimeout(t, 10*time.Second, 2*time.Second)
+	out, err := task.DoRetryWithTimeout(t, validateCreateVolumeTimeout, validateCreateVolumeRetryInterval)
 	if err != nil {
 		return &ErrFailedToInspectVolume{
 			ID:    name,
@@ -407,7 +423,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(t, 3*time.Minute, 5*time.Second)
+	_, err := task.DoRetryWithTimeout(t, validateDeleteVolumeTimeout, defaultRetryInterval)
 	if err != nil {
 		return &ErrFailedToDeleteVolume{
 			ID:    name,
@@ -426,8 +442,8 @@ func (d *portworx) StopDriver(n node.Node) error {
 	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "stop",
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         5 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
+			Timeout:         stopDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
 		}})
 }
 
@@ -459,7 +475,7 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 		return &cluster, false, nil
 	}
 
-	cluster, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
+	cluster, err := task.DoRetryWithTimeout(t, validateClusterStartTimeout, defaultRetryInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +506,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateNodeStartTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -534,7 +550,7 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateNodeStopTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -579,7 +595,7 @@ func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 		return nil, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, upgradeTimeout, upgradeRetryInterval); err != nil {
 		return err
 	}
 	return nil
@@ -647,8 +663,8 @@ func (d *portworx) StartDriver(n node.Node) error {
 	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "start",
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
+			Timeout:         startDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
 		}})
 }
 
