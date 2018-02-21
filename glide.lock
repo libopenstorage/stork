@@ -1,10 +1,10 @@
 hash: d9bc78ae5bcb8582314ad60a3e7188e4fe84c5492ba98f27eceb1f439c1699a0
-updated: 2018-02-07T18:01:29.859438234-08:00
+updated: 2018-02-20T18:46:40.526349882-08:00
 imports:
 - name: github.com/armon/go-metrics
   version: 7aa49fde808223f8dadfdbfd3a20ff6c19e5f9ec
 - name: github.com/aws/aws-sdk-go
-  version: 586c9ba6027a527800564282bb843d7e6e7985c9
+  version: f9a6880d84e16e2a37055793e17164a228d637f4
   subpackages:
   - aws
   - aws/awserr
@@ -22,6 +22,7 @@ imports:
   - aws/request
   - aws/session
   - aws/signer/v4
+  - internal/sdkrand
   - internal/shareddefaults
   - private/protocol
   - private/protocol/ec2query
@@ -83,7 +84,7 @@ imports:
 - name: github.com/emicklei/go-restful-swagger12
   version: dcef7f55730566d41eae5db10e7d6981829720f6
 - name: github.com/fatih/color
-  version: 570b54cabe6b8eb0bc2dfce68d964677d63b5260
+  version: 507f6050b8568533fb3f5504de8e5205fa62a114
 - name: github.com/gambol99/go-marathon
   version: 6b00a5b651b1beb2c6821863f7c60df490bd46c8
 - name: github.com/ghodss/yaml
@@ -195,10 +196,8 @@ imports:
   - jwriter
 - name: github.com/mattn/go-colorable
   version: 5411d3eea5978e6cdc258b30de592b60df6aba96
-  repo: https://github.com/mattn/go-colorable
 - name: github.com/mattn/go-isatty
   version: 57fdcb988a5c543893cc61bce354a6e24ab70022
-  repo: https://github.com/mattn/go-isatty
 - name: github.com/Microsoft/go-winio
   version: 7da180ee92d8bd8bb8c37fc560e673e6557c392f
 - name: github.com/miekg/dns
@@ -250,7 +249,7 @@ imports:
 - name: github.com/portworx/kvdb
   version: 75b56ce843b0cdd3168e98bcd7728d86beac5e29
 - name: github.com/portworx/sched-ops
-  version: 3fd5ae11f1ea102d5a453991b9f0697b533b91fe
+  version: edf34ca8c6e9e7e631faa7d2e04deda1505b822b
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s

@@ -1,3 +1,101 @@
+Release v1.13.1 (2018-02-20)
+===
+
+### Service Client Updates
+* `service/autoscaling`: Updates service API and documentation
+  * Amazon EC2 Auto Scaling support for service-linked roles
+* `aws/endpoints`: Updated Regions and Endpoints metadata.
+* `service/waf`: Updates service API and documentation
+  * The new PermissionPolicy APIs in AWS WAF Regional allow customers to attach resource-based policies to their entities.
+* `service/waf-regional`: Updates service API and documentation
+
+Release v1.13.0 (2018-02-19)
+===
+
+### Service Client Updates
+* `service/config`: Updates service API
+  * With this release, AWS Config updated the ConfigurationItemStatus enum values. The values prior to this update did not represent appropriate values returned by GetResourceConfigHistory. You must update your code to enumerate the new enum values so this is a breaking change. To map old properties to new properties, use the following descriptions: New discovered resource - Old property: Discovered, New property: ResourceDiscovered. Updated resource - Old property: Ok, New property: OK. Deleted resource - Old property: Deleted, New property: ResourceDeleted or ResourceDeletedNotRecorded. Not-recorded resource - Old property: N/A, New property: ResourceNotRecorded or ResourceDeletedNotRecorded.
+
+Release v1.12.79 (2018-02-16)
+===
+
+### Service Client Updates
+* `service/rds`: Updates service API and documentation
+  * Updates RDS API to indicate whether a DBEngine supports read replicas.
+
+Release v1.12.78 (2018-02-15)
+===
+
+### Service Client Updates
+* `aws/endpoints`: Updated Regions and Endpoints metadata.
+* `service/gamelift`: Updates service API and documentation
+  * Updates to allow Fleets to run on On-Demand or Spot instances.
+* `service/mediaconvert`: Updates service API and documentation
+  * Nielsen ID3 tags can now be inserted into transport stream (TS) and HLS outputs. For more information on Nielsen configuration you can go to https://docs.aws.amazon.com/mediaconvert/latest/apireference/jobs.html#jobs-nielsenconfiguration
+
+Release v1.12.77 (2018-02-14)
+===
+
+### Service Client Updates
+* `service/appsync`: Updates service API and documentation
+* `aws/endpoints`: Updated Regions and Endpoints metadata.
+* `service/lex-models`: Updates service API and documentation
+
+Release v1.12.76 (2018-02-13)
+===
+
+### Service Client Updates
+* `aws/endpoints`: Updated Regions and Endpoints metadata.
+* `service/glacier`: Updates service documentation
+  * Documentation updates for glacier
+* `service/route53`: Updates service API
+  * Added support for creating Private Hosted Zones and metric-based healthchecks in the ap-northeast-3 region for whitelisted customers.
+
+Release v1.12.75 (2018-02-12)
+===
+
+### Service Client Updates
+* `service/cognito-idp`: Updates service API and documentation
+* `service/ec2`: Updates service API and documentation
+  * Network interfaces now supply the following additional status of "associated" to better distinguish the current status.
+* `aws/endpoints`: Updated Regions and Endpoints metadata.
+* `service/guardduty`: Updates service API and documentation
+  * Added PortProbeAction information to the Action section of the port probe-type finding.
+* `service/kms`: Updates service API
+  * This release of AWS Key Management Service includes support for InvalidArnException in the RetireGrant API.
+* `service/rds`: Updates service documentation
+  * Aurora MySQL now supports MySQL 5.7.
+
+Release v1.12.74 (2018-02-09)
+===
+
+### Service Client Updates
+* `service/ec2`: Updates service API and documentation
+  * Users can now better understand the longer ID opt-in status of their account using the two new APIs DescribeAggregateIdFormat and DescribePrincipalIdFormat
+* `service/lex-models`: Updates service API and documentation
+* `service/runtime.lex`: Updates service API and documentation
+
+Release v1.12.73 (2018-02-08)
+===
+
+### Service Client Updates
+* `service/appstream`: Updates service API and documentation
+  * Adds support for allowing customers to provide a redirect URL for a stack. Users will be redirected to the link provided by the admin at the end of their streaming session.
+* `service/budgets`: Updates service API and documentation
+  * Making budgetLimit and timePeriod optional, and updating budgets docs.
+* `service/dms`: Updates service API, documentation, and paginators
+  * This release includes the addition of two new APIs: describe replication instance task logs and reboot instance. The first allows user to see how much storage each log for a task on a given instance is occupying. The second gives users the option to reboot the application software on the instance and force a fail over for MAZ instances to test robustness of their integration with our service.
+* `service/ds`: Updates service API
+  * Updated the regex of some input parameters to support longer EC2 identifiers.
+* `service/dynamodb`: Updates service API and documentation
+  * Amazon DynamoDB now supports server-side encryption using a default service key (alias/aws/dynamodb) from the AWS Key Management Service (KMS). AWS KMS is a service that combines secure, highly available hardware and software to provide a key management system scaled for the cloud. AWS KMS is used via the AWS Management Console or APIs to centrally create encryption keys, define the policies that control how keys can be used, and audit key usage to prove they are being used correctly. For more information, see the Amazon DynamoDB Developer Guide.
+* `service/gamelift`: Updates service API and documentation
+  * Amazon GameLift FlexMatch added the StartMatchBackfill API.  This API allows developers to add new players to an existing game session using the same matchmaking rules and player data that were used to initially create the session.
+* `service/medialive`: Updates service API and documentation
+  * AWS Elemental MediaLive has added support for updating channel settings for idle channels. You can now update channel name, channel outputs and output destinations, encoder settings, user role ARN, and input specifications. Channel settings can be updated in the console or with API calls. Please note that running channels need to be stopped before they can be updated. We've also deprecated the 'Reserved' field.
+* `service/mediastore`: Updates service API and documentation
+  * AWS Elemental MediaStore now supports per-container CORS configuration.
+
 Release v1.12.72 (2018-02-07)
 ===
 

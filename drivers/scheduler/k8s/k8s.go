@@ -411,7 +411,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 					podList = append(podList, pods...)
 				}
 			}
-			if err := k8sOps.DeleteDeployment(obj); err != nil {
+			if err := k8sOps.DeleteDeployment(obj.Name, obj.Namespace); err != nil {
 				return &scheduler.ErrFailedToDestroyApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Deployment: %v. Err: %v", obj.Name, err),
@@ -427,7 +427,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 					podList = append(podList, pods...)
 				}
 			}
-			if err := k8sOps.DeleteStatefulSet(obj); err != nil {
+			if err := k8sOps.DeleteStatefulSet(obj.Name, obj.Namespace); err != nil {
 				return &scheduler.ErrFailedToDestroyApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy StatefulSet: %v. Err: %v", obj.Name, err),
@@ -436,7 +436,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 
 			logrus.Infof("[%v]Destroyed StatefulSet: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.Service); ok {
-			if err := k8sOps.DeleteService(obj); err != nil {
+			if err := k8sOps.DeleteService(obj.Name, obj.Namespace); err != nil {
 				return &scheduler.ErrFailedToDestroyApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Service: %v. Err: %v", obj.Name, err),
@@ -641,7 +641,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				Name: obj.Name,
 			}
 			vols = append(vols, volToBeDeleted)
-			if err := k8sOps.DeletePersistentVolumeClaim(obj); err != nil {
+			if err := k8sOps.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
 				if !strings.Contains(err.Error(), "not found") {
 					return nil, &scheduler.ErrFailedToDestroyStorage{
 						App:   ctx.App,

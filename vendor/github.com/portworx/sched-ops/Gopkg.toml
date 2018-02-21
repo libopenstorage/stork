@@ -30,10 +30,6 @@
   name = "github.com/kubernetes-incubator/external-storage"
 
 [[constraint]]
-  name = "github.com/sirupsen/logrus"
-  version = "1.0.4"
-
-[[constraint]]
   branch = "release-1.8"
   name = "k8s.io/api"
 
