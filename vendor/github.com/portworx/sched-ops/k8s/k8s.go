@@ -906,7 +906,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 			}
 		}
 
-		if readyCount == requiredReplicas {
+		if readyCount >= requiredReplicas {
 			return "", false, nil
 		}
 
