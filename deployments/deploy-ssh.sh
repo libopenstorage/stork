@@ -126,7 +126,7 @@ function debug_log_then_exit {
   exit 1
 }
 
-for i in $(seq 1 300) ; do
+for i in $(seq 1 600) ; do
   printf .
   state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
   if [ "$state" == "Running" ] || [ "$state" == "Completed" ]; then
