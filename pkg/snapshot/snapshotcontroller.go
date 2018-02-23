@@ -13,7 +13,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	log "github.com/sirupsen/logrus"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 )
 
@@ -82,7 +81,7 @@ func (s *SnapshotController) Start() error {
 
 	s.stopChannel = make(chan struct{})
 
-	go snapController.Run(s.stopChannel)
+	snapController.Run(s.stopChannel)
 
 	serverVersion, err := clientset.Discovery().ServerVersion()
 	if err != nil {
@@ -97,7 +96,7 @@ func (s *SnapshotController) Start() error {
 		snapProvisioner,
 		serverVersion.GitVersion,
 	)
-	go provisioner.Run(wait.NeverStop)
+	provisioner.Run(s.stopChannel)
 
 	s.started = true
 	return nil
