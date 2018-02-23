@@ -344,11 +344,11 @@ func noDriverNodeTest(t *testing.T) {
 // The prioritize response should assign higher values to n1 and n2
 func singleVolumeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3"))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4"))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5"))
+	nodes.Items = append(nodes.Items, *newNode("node1.domain", "192.168.0.1"))
+	nodes.Items = append(nodes.Items, *newNode("node2.domain", "192.168.0.2"))
+	nodes.Items = append(nodes.Items, *newNode("node3.domain", "192.168.0.3"))
+	nodes.Items = append(nodes.Items, *newNode("node4.domain", "192.168.0.4"))
+	nodes.Items = append(nodes.Items, *newNode("node5.domain", "192.168.0.5"))
 
 	provNodes := []int{0, 1}
 	if err := driver.CreateCluster(5); err != nil {
