@@ -317,7 +317,7 @@
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "ocqizY0uWXud56QokA+M1UUewAU=",
+			"checksumSHA1": "jfAWcaV89uEtaMzOz0Gi9mMlqOo=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller",
 			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
 			"revisionTime": "2017-12-14T03:25:23Z"
