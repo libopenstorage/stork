@@ -84,6 +84,18 @@ func (e *Extender) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// The driver might not return fully qualified hostnames, so check if the short
+// hostname matches too
+func (e *Extender) isHostnameMatch(driverHostname string, k8sHostname string) bool {
+	if driverHostname == k8sHostname {
+		return true
+	}
+	if strings.HasPrefix(k8sHostname, driverHostname+".") {
+		return true
+	}
+	return false
+}
+
 func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	defer func() {
@@ -127,7 +139,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 					}
 
 					for _, driverNode := range driverNodes {
-						if driverNode.Hostname == address.Address &&
+						if e.isHostnameMatch(driverNode.Hostname, address.Address) &&
 							driverNode.Status == volume.NodeOnline {
 							filteredNodes = append(filteredNodes, node)
 						}
@@ -155,18 +167,6 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	if err := encoder.Encode(response); err != nil {
 		storklog.PodLog(pod).Fatalf("Error encoding filter response: %+v : %v", response, err)
 	}
-}
-
-// The driver might not return fully qualified hostnames, so check if the short
-// hostname matches too
-func (e *Extender) isHostnameMatch(driverHostname string, k8sHostname string) bool {
-	if driverHostname == k8sHostname {
-		return true
-	}
-	if strings.HasPrefix(k8sHostname, driverHostname+".") {
-		return true
-	}
-	return false
 }
 
 func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Request) {
