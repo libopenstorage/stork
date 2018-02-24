@@ -157,6 +157,18 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 }
 
+// The driver might not return fully qualified hostnames, so check if the short
+// hostname matches too
+func (e *Extender) isHostnameMatch(driverHostname string, k8sHostname string) bool {
+	if driverHostname == k8sHostname {
+		return true
+	}
+	if strings.HasPrefix(k8sHostname, driverHostname+".") {
+		return true
+	}
+	return false
+}
+
 func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	defer func() {
@@ -209,7 +221,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 							continue
 						}
 
-						if idMap[datanode] == address.Address {
+						if e.isHostnameMatch(idMap[datanode], address.Address) {
 							// Increment score for every volume that is required by
 							// the pod and is present on the node
 							_, ok := priorityMap[node.Name]
