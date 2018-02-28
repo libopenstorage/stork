@@ -5,6 +5,7 @@ apk add jq
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
+sed -i 's/'stork:.*'/'stork:master'/g' specs/stork-deployment.yaml
 
 echo "Creating stork deployment"
 kubectl delete -f /specs/stork-deployment.yaml
