@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -866,22 +867,6 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 			}
 		}
 
-		if requiredReplicas > dep.Status.AvailableReplicas {
-			return "", true, &ErrAppNotReady{
-				ID: dep.Name,
-				Cause: fmt.Sprintf("Expected replicas: %v Available replicas: %v",
-					requiredReplicas, dep.Status.AvailableReplicas),
-			}
-		}
-
-		if requiredReplicas > dep.Status.ReadyReplicas {
-			return "", true, &ErrAppNotReady{
-				ID: dep.Name,
-				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v",
-					requiredReplicas, dep.Status.ReadyReplicas),
-			}
-		}
-
 		pods, err := k.GetDeploymentPods(deployment)
 		if err != nil || pods == nil {
 			return "", true, &ErrAppNotReady{
@@ -893,7 +878,24 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 		if len(pods) == 0 {
 			return "", true, &ErrAppNotReady{
 				ID:    dep.Name,
-				Cause: "Application has 0 pods",
+				Cause: "Deployment has 0 pods",
+			}
+		}
+
+		podsOverviewString := k.generatePodsOverviewString(pods)
+		if requiredReplicas > dep.Status.AvailableReplicas {
+			return "", true, &ErrAppNotReady{
+				ID: dep.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Available replicas: %v Current pods overview:\n%s",
+					requiredReplicas, dep.Status.AvailableReplicas, podsOverviewString),
+			}
+		}
+
+		if requiredReplicas > dep.Status.ReadyReplicas {
+			return "", true, &ErrAppNotReady{
+				ID: dep.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v Current pods overview:\n%s",
+					requiredReplicas, dep.Status.ReadyReplicas, podsOverviewString),
 			}
 		}
 
@@ -914,7 +916,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 
 		return "", true, &ErrAppNotReady{
 			ID:    dep.Name,
-			Cause: fmt.Sprintf("pod(s): %#v not yet ready", notReadyPods),
+			Cause: fmt.Sprintf("Pod(s): %#v not yet ready", notReadyPods),
 		}
 	}
 
@@ -1068,31 +1070,6 @@ func (k *k8sOps) ValidateDaemonSet(name, namespace string, timeout time.Duration
 			return "", true, err
 		}
 
-		if ds.Status.DesiredNumberScheduled != ds.Status.UpdatedNumberScheduled {
-			return "", true, &ErrAppNotReady{
-				ID: name,
-				Cause: fmt.Sprintf("Not all pods are updated. expected: %v updated: %v",
-					ds.Status.DesiredNumberScheduled, ds.Status.UpdatedNumberScheduled),
-			}
-		}
-
-		if ds.Status.NumberUnavailable > 0 {
-			return "", true, &ErrAppNotReady{
-				ID: name,
-				Cause: fmt.Sprintf("%d pods are not available. available: %d ready: %d updated: %d",
-					ds.Status.NumberUnavailable, ds.Status.NumberAvailable,
-					ds.Status.NumberReady, ds.Status.UpdatedNumberScheduled),
-			}
-		}
-
-		if ds.Status.DesiredNumberScheduled != ds.Status.NumberReady {
-			return "", true, &ErrAppNotReady{
-				ID: name,
-				Cause: fmt.Sprintf("expected ready: %v actual ready: %v",
-					ds.Status.DesiredNumberScheduled, ds.Status.NumberReady),
-			}
-		}
-
 		pods, err := k.GetDaemonSetPods(ds)
 		if err != nil || pods == nil {
 			return "", true, &ErrAppNotReady{
@@ -1104,7 +1081,34 @@ func (k *k8sOps) ValidateDaemonSet(name, namespace string, timeout time.Duration
 		if len(pods) == 0 {
 			return "", true, &ErrAppNotReady{
 				ID:    ds.Name,
-				Cause: "Application has 0 pods",
+				Cause: "DaemonSet has 0 pods",
+			}
+		}
+
+		podsOverviewString := k.generatePodsOverviewString(pods)
+
+		if ds.Status.DesiredNumberScheduled != ds.Status.UpdatedNumberScheduled {
+			return "", true, &ErrAppNotReady{
+				ID: name,
+				Cause: fmt.Sprintf("Not all pods are updated. expected: %v updated: %v. Current pods overview:\n%s",
+					ds.Status.DesiredNumberScheduled, ds.Status.UpdatedNumberScheduled, podsOverviewString),
+			}
+		}
+
+		if ds.Status.NumberUnavailable > 0 {
+			return "", true, &ErrAppNotReady{
+				ID: name,
+				Cause: fmt.Sprintf("%d pods are not available. available: %d ready: %d. Current pods overview:\n%s",
+					ds.Status.NumberUnavailable, ds.Status.NumberAvailable,
+					ds.Status.NumberReady, podsOverviewString),
+			}
+		}
+
+		if ds.Status.DesiredNumberScheduled != ds.Status.NumberReady {
+			return "", true, &ErrAppNotReady{
+				ID: name,
+				Cause: fmt.Sprintf("Expected ready: %v Actual ready:%v Current pods overview:\n%s",
+					ds.Status.DesiredNumberScheduled, ds.Status.NumberReady, podsOverviewString),
 			}
 		}
 
@@ -1124,14 +1128,26 @@ func (k *k8sOps) ValidateDaemonSet(name, namespace string, timeout time.Duration
 
 		return "", true, &ErrAppNotReady{
 			ID:    ds.Name,
-			Cause: fmt.Sprintf("pod(s): %#v not yet ready", notReadyPods),
+			Cause: fmt.Sprintf("Pod(s): %#v not yet ready", notReadyPods),
 		}
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, timeout, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, 15*time.Second); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (k *k8sOps) generatePodsOverviewString(pods []v1.Pod) string {
+	var buffer bytes.Buffer
+	for _, p := range pods {
+		running := k.IsPodRunning(p)
+		ready := k.IsPodReady(p)
+		podString := fmt.Sprintf("  pod name:%s namespace:%s running:%v ready:%v node:%s\n", p.Name, p.Namespace, running, ready, p.Status.HostIP)
+		buffer.WriteString(podString)
+	}
+
+	return buffer.String()
 }
 
 func (k *k8sOps) UpdateDaemonSet(ds *apps_api.DaemonSet) (*apps_api.DaemonSet, error) {
@@ -1259,21 +1275,6 @@ func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet, timeout 
 			return "", true, err
 		}
 
-		if *sset.Spec.Replicas != sset.Status.Replicas { // Not sure if this is even needed but for now let's have one check before
-			//readiness check
-			return "", true, &ErrAppNotReady{
-				ID:    sset.Name,
-				Cause: fmt.Sprintf("Expected replicas: %v Observed replicas: %v", *sset.Spec.Replicas, sset.Status.Replicas),
-			}
-		}
-
-		if *sset.Spec.Replicas != sset.Status.ReadyReplicas {
-			return "", true, &ErrAppNotReady{
-				ID:    sset.Name,
-				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v", *sset.Spec.Replicas, sset.Status.ReadyReplicas),
-			}
-		}
-
 		pods, err := k.GetStatefulSetPods(statefulset)
 		if err != nil || pods == nil {
 			return "", true, &ErrAppNotReady{
@@ -1282,11 +1283,37 @@ func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet, timeout 
 			}
 		}
 
+		if len(pods) == 0 {
+			return "", true, &ErrAppNotReady{
+				ID:    sset.Name,
+				Cause: "StatefulSet has 0 pods",
+			}
+		}
+
+		podsOverviewString := k.generatePodsOverviewString(pods)
+
+		if *sset.Spec.Replicas != sset.Status.Replicas { // Not sure if this is even needed but for now let's have one check before
+			//readiness check
+			return "", true, &ErrAppNotReady{
+				ID: sset.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Observed replicas: %v. Current pods overview:\n%s",
+					*sset.Spec.Replicas, sset.Status.Replicas, podsOverviewString),
+			}
+		}
+
+		if *sset.Spec.Replicas != sset.Status.ReadyReplicas {
+			return "", true, &ErrAppNotReady{
+				ID: sset.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v Current pods overview:\n%s",
+					*sset.Spec.Replicas, sset.Status.ReadyReplicas, podsOverviewString),
+			}
+		}
+
 		for _, pod := range pods {
 			if !k.IsPodReady(pod) {
 				return "", true, &ErrAppNotReady{
 					ID:    sset.Name,
-					Cause: fmt.Sprintf("pod: %v is not yet ready", pod.Name),
+					Cause: fmt.Sprintf("Pod: %v is not yet ready", pod.Name),
 				}
 			}
 		}
