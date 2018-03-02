@@ -35,6 +35,10 @@ const (
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
 )
 
+const (
+	statefulSetValidateTimeout = 15 * time.Minute
+)
+
 type k8s struct {
 	specFactory    *spec.Factory
 	nodeDriverName string
@@ -375,7 +379,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			if err := k8sOps.ValidateStatefulSet(obj); err != nil {
+			if err := k8sOps.ValidateStatefulSet(obj, statefulSetValidateTimeout); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v. Err: %v", obj.Name, err),

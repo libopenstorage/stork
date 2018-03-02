@@ -1,5 +1,5 @@
 hash: 9dc2c81fd7d68f9434e2a3b87fdfa3ad8c4380ca4f7012c30c3761c24e1485e9
-updated: 2018-02-22T15:45:34.712080316-08:00
+updated: 2018-03-01T16:26:28.839169835-08:00
 imports:
 - name: github.com/armon/go-metrics
   version: 7aa49fde808223f8dadfdbfd3a20ff6c19e5f9ec
@@ -249,7 +249,7 @@ imports:
 - name: github.com/portworx/kvdb
   version: 75b56ce843b0cdd3168e98bcd7728d86beac5e29
 - name: github.com/portworx/sched-ops
-  version: 09f7132bc31a4a69adce0b544fbe9c254d5d393a
+  version: afe3d0cf85130782170a036629549a42bd522b62
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s

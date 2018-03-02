@@ -125,8 +125,8 @@ type StatefulSetOps interface {
 	CreateStatefulSet(*apps_api.StatefulSet) (*apps_api.StatefulSet, error)
 	// DeleteStatefulSet deletes the given statefulset
 	DeleteStatefulSet(name, namespace string) error
-	// ValidateStatefulSet validates the given statefulset if it's running and healthy
-	ValidateStatefulSet(*apps_api.StatefulSet) error
+	// ValidateStatefulSet validates the given statefulset if it's running and healthy within the give timeout
+	ValidateStatefulSet(s *apps_api.StatefulSet, timeout time.Duration) error
 	// ValidateTerminatedStatefulSet validates if given deployment is terminated
 	ValidateTerminatedStatefulSet(*apps_api.StatefulSet) error
 	// GetStatefulSetPods returns pods for the given statefulset
@@ -210,7 +210,9 @@ type PodOps interface {
 	GetPods(string) (*v1.PodList, error)
 	// GetPodsByOwner returns pods for the given owner and namespace
 	GetPodsByOwner(types.UID, string) ([]v1.Pod, error)
-	// GetPodsUsingVolumePluginByNodeName returns all pods who use PVCs provided by the given volume plugin
+	// GetPodsUsingVolumePlugin returns all pods who use PVCs provided by the given volume plugin
+	GetPodsUsingVolumePlugin(plugin string) ([]v1.Pod, error)
+	// GetPodsUsingVolumePluginByNodeName returns all pods who use PVCs provided by the given volume plugin on the given node
 	GetPodsUsingVolumePluginByNodeName(nodeName, plugin string) ([]v1.Pod, error)
 	// GetPodByUID returns pod with the given UID, or error if nothing found
 	GetPodByUID(types.UID, string) (*v1.Pod, error)
@@ -1247,7 +1249,7 @@ func (k *k8sOps) DescribeStatefulSet(ssetName string, ssetNamespace string) (*ap
 	return &sset.Status, err
 }
 
-func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet) error {
+func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet, timeout time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
 			return "", true, err
@@ -1292,7 +1294,7 @@ func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, 10*time.Second); err != nil {
 		return err
 	}
 	return nil
@@ -1479,16 +1481,24 @@ func (k *k8sOps) GetPodsByOwner(ownerUID types.UID, namespace string) ([]v1.Pod,
 	return result, nil
 }
 
-func (k *k8sOps) GetPodsUsingVolumePluginByNodeName(nodeName, plugin string) ([]v1.Pod, error) {
-	if err := k.initK8sClient(); err != nil {
-		return nil, err
-	}
+func (k *k8sOps) GetPodsUsingVolumePlugin(plugin string) ([]v1.Pod, error) {
+	return k.listPluginPodsWithOptions(meta_v1.ListOptions{}, plugin)
+}
 
+func (k *k8sOps) GetPodsUsingVolumePluginByNodeName(nodeName, plugin string) ([]v1.Pod, error) {
 	listOptions := meta_v1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	}
 
-	nodePods, err := k.client.CoreV1().Pods("").List(listOptions)
+	return k.listPluginPodsWithOptions(listOptions, plugin)
+}
+
+func (k *k8sOps) listPluginPodsWithOptions(opts meta_v1.ListOptions, plugin string) ([]v1.Pod, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	nodePods, err := k.client.CoreV1().Pods("").List(opts)
 	if err != nil {
 		return nil, err
 	}
