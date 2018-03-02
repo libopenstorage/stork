@@ -104,6 +104,15 @@ By default the deployment does the following
 * Uses the Portworx (pxd) driver for stork.
 
 ## Run Stork in your Kubernetes cluster
+You can either update the default kube scheduler to use stork or start a new
+scheduler instance which can use stork. 
+Once this has been deployed the scheduler can be used to schedule any pods with the added advantage that it will
+also try to optimize the storage requirements for the pod.
+
+### Start a new scheduler instance and configure it with Stork (recommended)
+You might not always have access to your default scheduler to update it's config options.
+So the recommended way to start stork is to launch another instance of the scheduler and configure it to use stork
+
 In order to run stork in your Kubernetes cluster, just create the deployment specified in the config above in a Kubernetes cluster:
 
 ```
@@ -122,13 +131,9 @@ stork-6dc5d66997-xvnbj            1/1       Running   1          27m
 ....
 ```
 
-## Specify Stork to be used by a scheduler
-You can either update the default kube scheduler to use stork or start a new
-scheduler instance which can use stork. We will start a new scheduler instance here and
-configure it to use stork. We will call the new scheduler 'stork'.
-
-This new scheduler instance is defined in [specs/stork-scheduler.yaml](https://raw.githubusercontent.com/libopenstorage/stork/master/specs/stork-scheduler.yaml). This spec starts
-3 replicas of the scheduler.
+We will then start a new scheduler instance here and configure it to use stork. We will call the new scheduler 'stork'.
+This new scheduler instance is defined in [specs/stork-scheduler.yaml](https://raw.githubusercontent.com/libopenstorage/stork/master/specs/stork-scheduler.yaml).
+This spec starts 3 replicas of the scheduler.
 
 You will need to update the version of kube scheduler that you want to use. This should be the same version as your kubernetes cluster. 
 Example for Kubernetes v1.8.1 it would be:
@@ -152,8 +157,44 @@ stork-scheduler-9d6cb4546-tfkh4   1/1       Running   0          30m
 ....
 ```
 
-Once this has been deployed the scheduler can be used to schedule any pods with the added advantage that it will
-also try to optimize the storage requirements for the pod.
+### Configure your default scheduler with Stork
+When using stork with the default scheduler, stork needs to be run as a deamon set. This is to avoid a deadlock
+when trying to schedule the stork pods from the scheduler.
+
+First create the stork daemonset defined in [specs/stork-daemonset.yaml](https://raw.githubusercontent.com/libopenstorage/stork/master/specs/stork-daemonset.yaml)
+
+```
+# kubectl create -f stork-daemonset.yaml
+```
+
+Verify that the stork pod is running:
+
+```
+# kubectl get pods --namespace=kube-system
+NAME                              READY     STATUS    RESTARTS   AGE
+....
+stork-6dc5d66997-4rs2w            1/1       Running   1          27m
+stork-6dc5d66997-fl8wr            1/1       Running   1          27m
+stork-6dc5d66997-xvnbj            1/1       Running   1          27m
+....
+```
+
+To configure your default scheduler to use stork add the following arguments to the scheduler and restart the scheduler if required:
+```
+--policy-configmap=stork-config --policy-configmap-namespace=kube-system
+```
+
+You will also need to make sure that the kube-scheduler clusterrole has permissions to read config maps. If not, run the following command:
+```
+# kubectl edit clusterrole -n kube-system system:kube-scheduler
+```
+
+And add the following permissions:
+```
+- apiGroups: ['']
+  resources: ['configmaps']
+  verbs: ['get']
+```
 
 ## Specify the Stork scheduler for pods
 In order to schedule a given pod using the Stork scheduler, specify the name of the scheduler in that pod spec:
