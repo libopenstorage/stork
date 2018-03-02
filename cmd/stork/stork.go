@@ -42,7 +42,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "stork"
 	app.Usage = "STorage Orchestartor Runtime for Kubernetes (STORK)"
-	app.Version = "1.0.1"
+	app.Version = "1.0.2"
 	app.Action = run
 
 	app.Flags = []cli.Flag{
