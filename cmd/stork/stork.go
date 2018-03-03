@@ -10,6 +10,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/extender"
+	"github.com/libopenstorage/stork/pkg/initializer"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	log "github.com/sirupsen/logrus"
@@ -56,7 +57,7 @@ func main() {
 		},
 		cli.BoolTFlag{
 			Name:  "leader-elect",
-			Usage: "Enable leader election",
+			Usage: "Enable leader election (default: true)",
 		},
 		cli.StringFlag{
 			Name:  "lock-object-name",
@@ -67,6 +68,22 @@ func main() {
 			Name:  "lock-object-namespace",
 			Usage: "Namespace for the lock object (default: kube-system)",
 			Value: "kube-system",
+		},
+		cli.BoolTFlag{
+			Name:  "snapshotter",
+			Usage: "Enable snapshotter (default: true)",
+		},
+		cli.BoolTFlag{
+			Name:  "extender",
+			Usage: "Enable scheduler extender for hyperconvergence (default: true)",
+		},
+		cli.BoolTFlag{
+			Name:  "health-monitor",
+			Usage: "Enable health monitoring of storage (default: true)",
+		},
+		cli.BoolFlag{
+			Name:  "app-initializer",
+			Usage: "EXPERIMENTAL: Enable application initializer to update scheduler name automatically (default: false)",
 		},
 	}
 
@@ -79,7 +96,6 @@ func run(c *cli.Context) {
 	driverName := c.String("driver")
 	if len(driverName) == 0 {
 		log.Fatalf("driver option is required")
-		os.Exit(-1)
 	}
 
 	verbose := c.Bool("verbose")
@@ -90,25 +106,24 @@ func run(c *cli.Context) {
 	d, err := volume.Get(driverName)
 	if err != nil {
 		log.Fatalf("Error getting Stork Driver %v: %v", driverName, err)
-		os.Exit(-1)
 	}
 
 	if err = d.Init(nil); err != nil {
 		log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
-		os.Exit(-1)
 	}
 
-	ext = &extender.Extender{
-		Driver: d,
-	}
+	if c.Bool("extender") {
+		ext = &extender.Extender{
+			Driver: d,
+		}
 
-	if err = ext.Start(); err != nil {
-		log.Fatalf("Error starting scheduler extender: %v", err)
-		os.Exit(-1)
+		if err = ext.Start(); err != nil {
+			log.Fatalf("Error starting scheduler extender: %v", err)
+		}
 	}
 
 	runFunc := func(_ <-chan struct{}) {
-		runStork(d)
+		runStork(d, c)
 	}
 
 	leaderConfig := leaderelectionconfig.DefaultLeaderElectionConfiguration()
@@ -118,13 +133,11 @@ func run(c *cli.Context) {
 		config, err := rest.InClusterConfig()
 		if err != nil {
 			log.Fatalf("Error getting cluster config: %v", err)
-			os.Exit(-1)
 		}
 
 		k8sClient, err := clientset.NewForConfig(config)
 		if err != nil {
 			log.Fatalf("Error getting client, %v", err)
-			os.Exit(-1)
 		}
 
 		leaderConfig.ResourceLock = resourcelock.ConfigMapsResourceLock
@@ -139,7 +152,6 @@ func run(c *cli.Context) {
 		id, err := os.Hostname()
 		if err != nil {
 			log.Fatalf("Error getting hostname: %v", err)
-			os.Exit(-1)
 		}
 
 		lockConfig := resourcelock.ResourceLockConfig{
@@ -155,7 +167,6 @@ func run(c *cli.Context) {
 			lockConfig)
 		if err != nil {
 			log.Fatalf("Error creating resource lock: %v", err)
-			os.Exit(-1)
 		}
 
 		leaderElector, err := leaderelection.NewLeaderElector(
@@ -174,7 +185,6 @@ func run(c *cli.Context) {
 			})
 		if err != nil {
 			log.Fatalf("Error creating leader elector: %v", err)
-			os.Exit(-1)
 		}
 
 		leaderElector.Run()
@@ -183,23 +193,32 @@ func run(c *cli.Context) {
 	}
 }
 
-func runStork(d volume.Driver) {
+func runStork(d volume.Driver, c *cli.Context) {
+	initializer := &initializer.Initializer{
+		Driver: d,
+	}
+	if c.Bool("app-initializer") {
+		if err := initializer.Start(); err != nil {
+			log.Fatalf("Error starting initializer: %v", err)
+		}
+	}
+
 	monitor := &monitor.Monitor{
 		Driver: d,
 	}
-
-	if err := monitor.Start(); err != nil {
-		log.Fatalf("Error starting storage monitor: %v", err)
-		os.Exit(-1)
+	if c.Bool("health-monitor") {
+		if err := monitor.Start(); err != nil {
+			log.Fatalf("Error starting storage monitor: %v", err)
+		}
 	}
 
 	snapshotController := &snapshotcontroller.SnapshotController{
 		Driver: d,
 	}
-
-	if err := snapshotController.Start(); err != nil {
-		log.Fatalf("Error starting snapshot controller: %v", err)
-		os.Exit(-1)
+	if c.Bool("snapshotter") {
+		if err := snapshotController.Start(); err != nil {
+			log.Fatalf("Error starting snapshot controller: %v", err)
+		}
 	}
 
 	signalChan := make(chan os.Signal, 1)

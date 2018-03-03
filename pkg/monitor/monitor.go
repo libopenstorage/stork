@@ -88,7 +88,7 @@ func (m *Monitor) driverMonitor() {
 					}
 					for _, pod := range pods.Items {
 
-						volumes, err := m.Driver.GetPodVolumes(&pod)
+						volumes, err := m.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
 						if err != nil {
 							storklog.PodLog(&pod).Errorf("Error getting volumes for pod: %v", err)
 							continue

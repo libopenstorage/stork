@@ -17,6 +17,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
+	"k8s.io/api/apps/v1beta1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8shelper "k8s.io/kubernetes/pkg/api/v1/helper"
@@ -194,40 +195,47 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return nodes, nil
 }
 
-func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
+func (p *portworx) isPortworxPVC(pvc *v1.PersistentVolumeClaim) bool {
+	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+	if storageClassName == "" {
+		logrus.Debugf("Empty StorageClass in PVC %v", pvc.Name)
+		return false
+	}
+
+	provisioner := ""
+	// Check for the provisioner in the PVC annotation. If not populated
+	// try getting the provisioner from the Storage class.
+	if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
+		provisioner = val
+	} else {
+		storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
+		if err != nil {
+			logrus.Errorf("Error getting storageclass for storageclass %v in pvc %v: %v", storageClassName, pvc.Name, err)
+			return false
+		}
+		provisioner = storageClass.Provisioner
+	}
+
+	if provisioner != provisionerName && provisioner != snapshotcontroller.GetProvisionerName() {
+		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
+		return false
+	}
+	return true
+}
+
+func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
 	var volumes []*storkvolume.Info
-	for _, volume := range pod.Spec.Volumes {
+	for _, volume := range podSpec.Volumes {
 		volumeName := ""
 		if volume.PersistentVolumeClaim != nil {
 			pvc, err := k8s.Instance().GetPersistentVolumeClaim(
 				volume.PersistentVolumeClaim.ClaimName,
-				pod.Namespace)
+				namespace)
 			if err != nil {
 				return nil, err
 			}
 
-			storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-			if storageClassName == "" {
-				logrus.Debugf("Empty StorageClass in PVC %v for pod %v, ignoring",
-					pvc.Name, pod.Name)
-				continue
-			}
-
-			provisioner := ""
-			// Check for the provisioner in the PVC annotation. If not populated
-			// try getting the provisioner from the Storage class.
-			if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
-				provisioner = val
-			} else {
-				storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
-				if err != nil {
-					return nil, err
-				}
-				provisioner = storageClass.Provisioner
-			}
-
-			if provisioner != provisionerName && provisioner != snapshotcontroller.GetProvisionerName() {
-				logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner, ignoring")
+			if !p.isPortworxPVC(pvc) {
 				continue
 			}
 
@@ -250,6 +258,17 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 		}
 	}
 	return volumes, nil
+}
+
+func (p *portworx) GetStatefulSetTemplates(ss *v1beta1.StatefulSet) (
+	[]v1.PersistentVolumeClaim, error) {
+	var templates []v1.PersistentVolumeClaim
+	for _, t := range ss.Spec.VolumeClaimTemplates {
+		if p.isPortworxPVC(&t) {
+			templates = append(templates, t)
+		}
+	}
+	return templates, nil
 }
 
 func (p *portworx) GetSnapshotPlugin() snapshotVolume.Plugin {
