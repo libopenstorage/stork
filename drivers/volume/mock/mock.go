@@ -10,7 +10,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-	k8shelper "k8s.io/kubernetes/pkg/api/v1/helper"
+	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 const (
@@ -160,16 +160,16 @@ func (m Driver) GetNodes() ([]*storkvolume.NodeInfo, error) {
 }
 
 // GetPodVolumes Get the Volumes in the Pod that use the mock driver
-func (m Driver) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
+func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
 	if m.interfaceError != nil {
 		return nil, m.interfaceError
 	}
 	var volumes []*storkvolume.Info
-	for _, volume := range pod.Spec.Volumes {
+	for _, volume := range podSpec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
 		}
 	}
-	for _, volume := range pod.Spec.Volumes {
+	for _, volume := range podSpec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
 			pvc, ok := m.pvcs[volume.PersistentVolumeClaim.ClaimName]
 			if !ok {
@@ -182,8 +182,7 @@ func (m Driver) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 
 			storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 			if storageClassName == "" {
-				logrus.Debugf("Empty StorageClass in PVC %v for pod %v, ignoring",
-					pvc.Name, pod.Name)
+				logrus.Debugf("Empty StorageClass in PVC %v , ignoring", pvc.Name)
 				continue
 			}
 
@@ -207,6 +206,12 @@ func (m Driver) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 //GetSnapshotPlugin Returns nil since snapshot is not supported in the mock driver
 func (m *Driver) GetSnapshotPlugin() snapshotVolume.Plugin {
 	return nil
+}
+
+// GetVolumeClaimTemplates Not implemented for mock driver
+func (m *Driver) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
+	[]v1.PersistentVolumeClaim, error) {
+	return nil, &errors.ErrNotImplemented{}
 }
 
 func init() {
