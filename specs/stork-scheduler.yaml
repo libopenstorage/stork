@@ -77,6 +77,8 @@ metadata:
     tier: control-plane
   name: stork-scheduler
   namespace: kube-system
+  initializers:
+    pending: []
 spec:
   replicas: 3
   template:

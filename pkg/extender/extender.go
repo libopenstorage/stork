@@ -13,7 +13,7 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-	schedulerapi "k8s.io/kubernetes/plugin/pkg/scheduler/api"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
 
 const (
@@ -128,7 +128,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 
 	filteredNodes := []v1.Node{}
-	driverVolumes, err := e.Driver.GetPodVolumes(pod)
+	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
 
 	if err != nil {
 		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
@@ -252,7 +252,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	}
 	respList := schedulerapi.HostPriorityList{}
 
-	driverVolumes, err := e.Driver.GetPodVolumes(pod)
+	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
 	driverNodes, err := e.Driver.GetNodes()
 
 	// Create a map for ID->Hostname and Hostname->Rack

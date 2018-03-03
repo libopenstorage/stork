@@ -1,7 +1,29 @@
 #!/bin/bash -x
 
+initializer="false"
+for i in "$@"
+do
+case $i in
+    --with-initializer)
+        echo "Starting test with initializer"
+        initializer="true"
+        shift
+        ;;
+esac
+done
+
 apk update
 apk add jq
+
+if [ "$initializer" == "true" ] ; then
+    # Remove schedule name from all specs
+    find /testspecs/specs -name '*.yaml' | xargs sed -i '/schedulerName: stork/d'
+    # Create the initializer
+    kubectl delete -f /specs/stork-initializer.yaml
+    kubectl create -f /specs/stork-initializer.yaml
+    # Enable it in the stork spec
+    sed -i s/'#- --app-initializer=true'/'- --app-initializer=true'/g /specs/stork-deployment.yaml
+fi
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
@@ -39,6 +61,7 @@ done
 
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
+
 kubectl delete -f /testspecs/stork-test-pod.yaml
 kubectl create -f /testspecs/stork-test-pod.yaml
 
