@@ -191,23 +191,27 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)
 	}
 	respList := schedulerapi.HostPriorityList{}
-	driverVolumes, err := e.Driver.GetPodVolumes(pod)
-	driverNodes, err := e.Driver.GetNodes()
-
-	// Create a map for ID->Hostname
-	idMap := make(map[string]string)
-	for _, node := range driverNodes {
-		idMap[node.ID] = node.Hostname
-	}
-
 	priorityMap := make(map[string]int)
+
+	driverVolumes, err := e.Driver.GetPodVolumes(pod)
 	if err != nil {
 		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
 			http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
 			return
 		}
+		goto sendResponse
 	} else if len(driverVolumes) > 0 {
+		driverNodes, err := e.Driver.GetNodes()
+		if err != nil {
+			storklog.PodLog(pod).Errorf("Error getting nodes for driver: %v", err)
+			goto sendResponse
+		}
+		// Create a map for ID->Hostname
+		idMap := make(map[string]string)
+		for _, node := range driverNodes {
+			idMap[node.ID] = node.Hostname
+		}
 		for _, volume := range driverVolumes {
 			storklog.PodLog(pod).Debugf("Volume allocated on nodes:")
 			for _, node := range volume.DataNodes {
@@ -237,6 +241,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		}
 	}
 
+sendResponse:
 	// For any nodes that didn't have any volumes, assign it a
 	// default score so that it doesn't get completelt ignored
 	// by the scheduler
