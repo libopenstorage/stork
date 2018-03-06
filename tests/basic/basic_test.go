@@ -61,6 +61,10 @@ var _ = Describe("Volume driver down", func() {
 				Step("starting volume driver", func() {
 					StartVolDriverAndWait(appNodes)
 				})
+
+				Step("Giving few seconds for volume driver to stabilize", func() {
+					time.Sleep(20 * time.Second)
+				})
 			}
 		})
 
