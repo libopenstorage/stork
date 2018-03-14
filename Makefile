@@ -68,12 +68,19 @@ vet:
 
 errcheck:
 	go get -v github.com/kisielk/errcheck
-	errcheck -tags "$(TAGS)" $(PKGS)
+	errcheck -verbose -blank -tags "$(TAGS) unittest integrationtest" $(PKGS)
 
 pretest: lint vet errcheck
 
 test:
-	go test -tags unittest $(TESTFLAGS) $(PKGS)
+	echo "" > coverage.txt
+	for pkg in $(PKGS);	do \
+		go test -tags unittest -coverprofile=profile.out -covermode=atomic $(TESTFLAGS) $${pkg}; \
+		if [ -f profile.out ]; then \
+			cat profile.out >> coverage.txt; \
+			rm profile.out; \
+		fi; \
+	done
 
 integration-test:
 	@echo "Building stork tests"
