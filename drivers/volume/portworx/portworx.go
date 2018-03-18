@@ -97,7 +97,9 @@ func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
 			info.DataNodes = append(info.DataNodes, node)
 		}
 	}
-	info.ParentID = vols[0].Source.Parent
+	if vols[0].Source != nil {
+		info.ParentID = vols[0].Source.Parent
+	}
 	return info, nil
 }
 
