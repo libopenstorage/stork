@@ -22,6 +22,7 @@ import (
 	apps_api "k8s.io/api/apps/v1beta2"
 	"k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
@@ -633,9 +634,11 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
 			if err := k8sOps.DeleteStorageClass(obj.Name); err != nil {
-				return nil, &scheduler.ErrFailedToDestroyStorage{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
+				if !errors.IsNotFound(err) {
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
+					}
 				}
 			}
 			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
@@ -646,7 +649,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 			vols = append(vols, volToBeDeleted)
 			if err := k8sOps.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
-				if !strings.Contains(err.Error(), "not found") {
+				if !errors.IsNotFound(err) {
 					return nil, &scheduler.ErrFailedToDestroyStorage{
 						App:   ctx.App,
 						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
@@ -656,7 +659,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
 			if err := k8sOps.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
-				if !strings.Contains(err.Error(), "not found") {
+				if !errors.IsNotFound(err) {
 					return nil, &scheduler.ErrFailedToDestroyStorage{
 						App:   ctx.App,
 						Cause: fmt.Sprintf("Failed to destroy Snapshot: %v. Err: %v", obj.Metadata.Name, err),
