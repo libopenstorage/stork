@@ -20,7 +20,7 @@ BIN :=$(BASE_DIR)/bin
 .DEFAULT_GOAL=all
 .PHONY: test clean
 
-all: stork vet lint container integration-test
+all: stork vet lint integration-test
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -90,9 +90,13 @@ stork:
 	@echo "Building the stork binary"
 	@cd cmd/stork && go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
-container:
+container: help
 	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."
 	sudo docker build --tag $(STORK_IMG) -f Dockerfile .
+
+help:
+	@echo "Updating help file"
+	go-md2man -in help.md -out help.1
 
 deploy:
 	sudo docker push $(STORK_IMG)
