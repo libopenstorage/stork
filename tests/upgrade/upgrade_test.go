@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -18,9 +19,12 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-var _ = Describe("Upgrade volume driver", func() {
+var _ = Describe("UpgradeVolumeDriver", func() {
 	It("upgrade volume driver and ensure everything is running fine", func() {
-		contexts := ScheduleAndValidate("upgradevolumedriver")
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradevolumedriver-%d", i))...)
+		}
 
 		Step("start the upgrade of volume driver", func() {
 			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeVersion)
@@ -43,9 +47,12 @@ var _ = Describe("Upgrade volume driver", func() {
 	})
 })
 
-var _ = PDescribe("Upgrade and Downgrade volume driver", func() {
+var _ = PDescribe("UpgradeDowngradeVolumeDriver", func() {
 	It("upgrade and downgrade volume driver and ensure everything is running fine", func() {
-		contexts := ScheduleAndValidate("upgradevolumedriver")
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradedowngradevolumedriver-%d", i))...)
+		}
 
 		Step("start the upgrade of volume driver", func() {
 			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeVersion)
@@ -63,19 +70,9 @@ var _ = PDescribe("Upgrade and Downgrade volume driver", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		Step("validate all apps after downgrade", func() {
-			for _, ctx := range contexts {
-				ValidateContext(ctx)
-			}
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
 	})
 })
 

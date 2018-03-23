@@ -22,10 +22,12 @@ var _ = BeforeSuite(func() {
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("Setup and teardown", func() {
+var _ = Describe("SetupTeardown", func() {
 	It("has to setup, validate and teardown apps", func() {
 		var contexts []*scheduler.Context
-		contexts = ScheduleAndValidate("setupteardown")
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("setupteardown-%d", i))...)
+		}
 
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -37,10 +39,13 @@ var _ = Describe("Setup and teardown", func() {
 })
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
-var _ = Describe("Volume driver down", func() {
+var _ = Describe("VolumeDriverDown", func() {
 	It("has to schedule apps and stop volume driver on app nodes", func() {
 		var err error
-		contexts := ScheduleAndValidate("voldriverdown")
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdown-%d", i))...)
+		}
 
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
@@ -79,13 +84,49 @@ var _ = Describe("Volume driver down", func() {
 	})
 })
 
+// Volume Driver Plugin has crashed - and the client container should not be impacted.
+var _ = Describe("VolumeDriverCrash", func() {
+	It("has to schedule apps and crash volume driver on app nodes", func() {
+		var err error
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldrivercrash-%d", i))...)
+		}
+
+		Step("get nodes for all apps in test and crash volume driver", func() {
+			for _, ctx := range contexts {
+				var appNodes []node.Node
+				Step(fmt.Sprintf("get nodes for %s app", ctx.App.Key), func() {
+					appNodes, err = Inst().S.GetNodesForApp(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(appNodes).NotTo(BeEmpty())
+				})
+
+				Step(
+					fmt.Sprintf("crash volume driver %s on app %s's nodes: %v",
+						Inst().V.String(), ctx.App.Key, appNodes),
+					func() {
+						CrashVolDriverAndWait(appNodes)
+					})
+			}
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+	})
+})
+
 // Volume driver plugin is down and the client container gets terminated.
 // There is a lost unmount call in this case. When the volume driver is
 // back up, we should be able to detach and delete the volume.
-var _ = Describe("Volume driver and app down", func() {
+var _ = Describe("VolumeDriverAppDown", func() {
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
 		var err error
-		contexts := ScheduleAndValidate("voldriverappdown")
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverappdown-%d", i))...)
+		}
 
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
@@ -126,11 +167,13 @@ var _ = Describe("Volume driver and app down", func() {
 })
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
-var _ = Describe("App tasks down", func() {
+var _ = Describe("AppTasksDown", func() {
 	It("has to schedule app and delete app tasks", func() {
 		var err error
 		var contexts []*scheduler.Context
-		contexts = ScheduleAndValidate("apptasksdown")
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("apptasksdown-%d", i))...)
+		}
 
 		Step("delete all application tasks", func() {
 			for _, ctx := range contexts {
@@ -139,7 +182,13 @@ var _ = Describe("App tasks down", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				ValidateAndDestroy(ctx, nil)
+				ValidateContext(ctx)
+			}
+		})
+
+		Step("teardown all apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
 			}
 		})
 	})

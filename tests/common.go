@@ -1,14 +1,17 @@
 package tests
 
 import (
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
 	// import aws driver to invoke it's init
@@ -32,6 +35,7 @@ const (
 	nodeDriverCliFlag                  = "node-driver"
 	storageDriverCliFlag               = "storage-driver"
 	specDirCliFlag                     = "spec-dir"
+	appListCliFlag                     = "app-list"
 	logLocationCliFlag                 = "log-location"
 	scaleFactorCliFlag                 = "scale-factor"
 	storageDriverUpgradeVersionCliFlag = "storage-driver-upgrade-version"
@@ -43,11 +47,15 @@ const (
 	defaultNodeDriver     = "ssh"
 	defaultStorageDriver  = "pxd"
 	defaultLogLocation    = "/mnt/torpedo_support_dir"
-	defaultAppScaleFactor = 10
+	defaultAppScaleFactor = 1
 	// TODO: These are Portworx specific versions and will not work with other storage drivers.
 	// Eventually we should remove the defaults and make it mandatory with documentation.
 	defaultStorageDriverUpgradeVersion = "1.2.11.6"
 	defaultStorageDriverBaseVersion    = "1.2.11.5"
+)
+
+const (
+	waitResourceCleanup = 2 * time.Minute
 )
 
 var (
@@ -74,12 +82,16 @@ func InitInstance() {
 
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
-	timeToWait := 60 * time.Second
-	Step(fmt.Sprintf("wait for %s before validating resource cleanup", timeToWait), func() {
-		time.Sleep(timeToWait)
-	})
 	Step(fmt.Sprintf("validate cleanup of resources used by the test suite"), func() {
-		err := Inst().V.ValidateVolumeCleanup()
+		t := func() (interface{}, bool, error) {
+			if err := Inst().V.ValidateVolumeCleanup(); err != nil {
+				return "", true, err
+			}
+
+			return "", false, nil
+		}
+
+		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
 		expect(err).NotTo(haveOccurred())
 	})
 }
@@ -161,7 +173,9 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 
 	Step("schedule applications", func() {
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{})
+		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+			AppKeys: Inst().AppList,
+		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
 	})
@@ -200,7 +214,7 @@ func StopVolDriverAndWait(appNodes []node.Node) {
 	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
 		Step(fmt.Sprintf("stop volume driver on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.StopDriver(n)
+				err := Inst().V.StopDriver(n, false)
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -215,10 +229,39 @@ func StopVolDriverAndWait(appNodes []node.Node) {
 	})
 }
 
+// CrashVolDriverAndWait crashes volume driver on given app nodes and waits till driver is back up
+func CrashVolDriverAndWait(appNodes []node.Node) {
+	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
+		Step(fmt.Sprintf("crash volume driver on nodes: %v", appNodes), func() {
+			for _, n := range appNodes {
+				err := Inst().V.StopDriver(n, true)
+				expect(err).NotTo(haveOccurred())
+			}
+		})
+
+		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
+			for _, n := range appNodes {
+				err := Inst().V.WaitDriverUpOnNode(n)
+				expect(err).NotTo(haveOccurred())
+			}
+		})
+
+	})
+}
+
 // ValidateAndDestroy validates application and then destroys them
-func ValidateAndDestroy(ctx *scheduler.Context, opts map[string]bool) {
-	ValidateContext(ctx)
-	TearDownContext(ctx, opts)
+func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
+	Step("validate apps", func() {
+		for _, ctx := range contexts {
+			ValidateContext(ctx)
+		}
+	})
+
+	Step("destroy apps", func() {
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
 }
 
 // CollectSupport creates a support bundle
@@ -259,6 +302,7 @@ type Torpedo struct {
 	V                           volume.Driver
 	N                           node.Driver
 	SpecDir                     string
+	AppList                     []string
 	LogLoc                      string
 	ScaleFactor                 int
 	StorageDriverUpgradeVersion string
@@ -268,7 +312,7 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc string
+	var s, n, v, specDir, logLoc, appListCSV string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -278,8 +322,7 @@ func ParseFlags() {
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
-	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot,
-		"Root directory containing the application spec files")
+	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
@@ -287,21 +330,23 @@ func ParseFlags() {
 		"Version of storage driver to be upgraded to")
 	flag.StringVar(&volBaseVersion, storageDriverBaseVersionCliFlag, defaultStorageDriverBaseVersion,
 		"Version of storage driver to be downgraded to")
+	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 
 	flag.Parse()
 
+	appList, err := splitCsv(appListCSV)
+	if err != nil {
+		logrus.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+	}
+
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
 		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
-		os.Exit(-1)
 	} else if volumeDriver, err = volume.Get(v); err != nil {
 		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
-		os.Exit(-1)
 	} else if nodeDriver, err = node.Get(n); err != nil {
 		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
-		os.Exit(-1)
 	} else if err := os.MkdirAll(logLoc, os.ModeDir); err != nil {
 		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
-		os.Exit(-1)
 	} else {
 		once.Do(func() {
 			instance = &Torpedo{
@@ -314,9 +359,22 @@ func ParseFlags() {
 				ScaleFactor:                 appScaleFactor,
 				StorageDriverUpgradeVersion: volUpgradeVersion,
 				StorageDriverBaseVersion:    volBaseVersion,
+				AppList:                     appList,
 			}
 		})
 	}
+}
+
+func splitCsv(in string) ([]string, error) {
+	r := csv.NewReader(strings.NewReader(in))
+	r.TrimLeadingSpace = true
+	records, err := r.ReadAll()
+	if err != nil || len(records) < 1 {
+		return []string{}, err
+	} else if len(records) > 1 {
+		return []string{}, fmt.Errorf("Multiline CSV not supported")
+	}
+	return records[0], err
 }
 
 func init() {

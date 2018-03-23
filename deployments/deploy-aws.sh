@@ -121,7 +121,6 @@ spec:
              "--slowSpecThreshold", "600",
             "bin/basic.test",
             "bin/reboot.test",
-            "bin/scale.test",
             "bin/upgrade.test",
             "bin/drive_failure.test",
             "--",

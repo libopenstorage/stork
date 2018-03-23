@@ -90,18 +90,18 @@ spec:
   - name: torpedo
     image: ${TORPEDO_IMG}
     command: [ "ginkgo" ]
-    args: [ "$VERBOSE",
-            "--trace",
+    args: [ "--trace",
             "--failFast",
             "$SKIP_ARG",
              "--slowSpecThreshold", "600",
+            "$VERBOSE",
             "bin/basic.test",
             "bin/reboot.test",
-            "bin/scale.test",
             "bin/upgrade.test",
             "bin/drive_failure.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
+            "--app-list", "$APP_LIST",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
             "$UPGRADE_VERSION_ARG",
@@ -129,7 +129,10 @@ function debug_log_then_exit {
 for i in $(seq 1 600) ; do
   printf .
   state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
-  if [ "$state" == "Running" ] || [ "$state" == "Completed" ]; then
+  if [ "$state" == "Error" ]; then
+    echo "Error: Torpedo finished with $state state"
+    debug_log_then_exit
+  elif [ "$state" == "Running" ] || [ "$state" == "Completed" ]; then
     echo ""
     kubectl logs -f torpedo
     sleep 5

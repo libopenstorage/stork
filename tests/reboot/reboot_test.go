@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -23,7 +24,10 @@ var _ = BeforeSuite(func() {
 func rebootNodesTest(testName string, allNodes bool) {
 	It("has to scheduler apps and reboot app node(s)", func() {
 		var err error
-		contexts := ScheduleAndValidate(testName)
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
+		}
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
 			for _, ctx := range contexts {
@@ -81,20 +85,15 @@ func rebootNodesTest(testName string, allNodes bool) {
 			}
 		})
 
-		Step("validate and destroy apps", func() {
-			for _, ctx := range contexts {
-				ValidateAndDestroy(ctx, nil)
-			}
-		})
-
+		ValidateAndDestroy(contexts, nil)
 	})
 }
 
-var _ = Describe("Reboot one node test", func() {
+var _ = Describe("RebootOneNode", func() {
 	rebootNodesTest("rebootonenode", false)
 })
 
-var _ = Describe("Reboot all nodes test", func() {
+var _ = Describe("RebootAllNodes", func() {
 	rebootNodesTest("rebootallnodes", true)
 })
 

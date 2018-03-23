@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -20,11 +21,14 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-var _ = Describe("Induce drive failure on one of the nodes", func() {
+var _ = Describe("DriveFailure", func() {
 	testName := "drivefailure"
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error
-		contexts := ScheduleAndValidate(testName)
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
+		}
 
 		Step("get nodes for all apps in test and induce drive failure on one of the nodes", func() {
 			for _, ctx := range contexts {
@@ -90,12 +94,7 @@ var _ = Describe("Induce drive failure on one of the nodes", func() {
 			}
 		})
 
-		Step("validate and destroy apps", func() {
-			for _, ctx := range contexts {
-				ValidateAndDestroy(ctx, nil)
-			}
-		})
-
+		ValidateAndDestroy(contexts, nil)
 	})
 })
 

@@ -174,7 +174,12 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*snap_v1.VolumeSnapshot); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*v1.Secret); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*v1.ConfigMap); ok {
+		return specObj, nil
 	}
+
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
 }
 
@@ -362,6 +367,18 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		}
 		logrus.Infof("[%v] Created Service: %v", app.Key, svc.Name)
 		return svc, nil
+	} else if obj, ok := spec.(*v1.Secret); ok {
+		obj.Namespace = ns.Name
+		secret, err := k8sOps.CreateSecret(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Secret: %v. Err: %v", secret.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
+		return secret, nil
 	}
 
 	return nil, nil

@@ -45,9 +45,11 @@ const (
 	validateNodeStartTimeout          = 2 * time.Minute
 	validateNodeStopTimeout           = 2 * time.Minute
 	stopDriverTimeout                 = 5 * time.Minute
+	crashDriverTimeout                = 2 * time.Minute
 	startDriverTimeout                = 2 * time.Minute
 	upgradeTimeout                    = 10 * time.Minute
 	upgradeRetryInterval              = 30 * time.Second
+	waitVolDriverToCrash              = 1 * time.Minute
 )
 
 type portworx struct {
@@ -438,13 +440,31 @@ func (d *portworx) ValidateVolumeCleanup() error {
 	return d.schedOps.ValidateVolumeCleanup(d.nodeDriver)
 }
 
-func (d *portworx) StopDriver(n node.Node) error {
-	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
-		Action: "stop",
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         stopDriverTimeout,
+func (d *portworx) StopDriver(n node.Node, force bool) error {
+	var err error
+	if force {
+		pxCrashCmd := "sudo kill -9 px-storage"
+		_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
 			TimeBeforeRetry: defaultRetryInterval,
-		}})
+		})
+		if err != nil {
+			logrus.Warnf("failed to run cmd: %s. err: %v", pxCrashCmd, err)
+			return err
+		}
+
+		logrus.Infof("Sleeping for %v for crash to take effect", waitVolDriverToCrash)
+		time.Sleep(waitVolDriverToCrash)
+	} else {
+		err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+			Action: "stop",
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         stopDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			}})
+	}
+
+	return err
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {

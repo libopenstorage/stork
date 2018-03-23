@@ -41,7 +41,7 @@ cat <<EOF > torpedo.json
         "docker": {
             "image": "${TORPEDO_IMG}" $FORCE_PULL_IMAGE
         },
-        "cmd": "ginkgo $VERBOSE --trace --failFast $SKIP_ARG $FOCUS_ARG --slowSpecThreshold 600 bin/basic.test bin/reboot.test bin/scale.test bin/upgrade.test bin/drive_failure.test -- --spec-dir ../drivers/scheduler/dcos/specs --scheduler dcos --node-driver ssh",
+        "cmd": "ginkgo $VERBOSE --trace --failFast $SKIP_ARG $FOCUS_ARG --slowSpecThreshold 600 bin/basic.test bin/reboot.test bin/upgrade.test bin/drive_failure.test -- --spec-dir ../drivers/scheduler/dcos/specs --scheduler dcos --node-driver ssh",
         "env": {
             "TORPEDO_SSH_USER": "${TORPEDO_SSH_USER}",
             "TORPEDO_SSH_PASSWORD": "${TORPEDO_SSH_PASSWORD}",

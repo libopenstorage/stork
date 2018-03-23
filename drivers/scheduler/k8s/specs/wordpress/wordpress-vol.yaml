@@ -1,0 +1,24 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: portworx-sc-repl3-shared
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  priority_io: "high"
+  shared: "true"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wp-pv-claim
+  labels:
+    app: wordpress
+  annotations:
+    volume.beta.kubernetes.io/storage-class: portworx-sc-repl3-shared
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
