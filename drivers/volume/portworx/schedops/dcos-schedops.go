@@ -35,6 +35,11 @@ func (d *dcosSchedOps) ValidateVolumeCleanup(n node.Driver) error {
 	return nil
 }
 
+func (d *dcosSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
+	// TODO: Implement this
+	return nil
+}
+
 func (d *dcosSchedOps) GetServiceEndpoint() (string, error) {
 	// PX driver is accessed directly on agent nodes. There is no DC/OS level
 	// service endpoint which can be used to redirect the calls to PX driver

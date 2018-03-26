@@ -690,6 +690,21 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return vols, nil
 }
 
+func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	var vols []*volume.Volume
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			vol := &volume.Volume{
+				ID:   string(obj.UID),
+				Name: obj.Name,
+			}
+			vols = append(vols, vol)
+		}
+	}
+
+	return vols, nil
+}
+
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 	pods, err := k.getPodsForApp(ctx)
 	if err != nil {

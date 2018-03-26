@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/sirupsen/logrus"
 	batch_v1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -142,6 +143,51 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 		return &ErrLabelNotRemovedFromNode{
 			Label: pvcLabel,
 			Nodes: staleLabelNodes,
+		}
+	}
+
+	return nil
+}
+
+func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
+	pvName := k.GetVolumeName(vol)
+	if len(pvName) == 0 {
+		return fmt.Errorf("failed to get PV name for : %v", vol)
+	}
+
+	pods, err := k8s.Instance().GetPodsUsingPV(pvName)
+	if err != nil {
+		return err
+	}
+
+	for _, p := range pods {
+		if running := k8s.Instance().IsPodRunning(p); !running {
+			continue
+		}
+
+		containerPaths := getContainerPVCMountMap(p)
+		for containerName, path := range containerPaths {
+			output, err := k8s.Instance().RunCommandInPod([]string{"mount"}, p.Name, containerName, p.Namespace)
+			if err != nil {
+				logrus.Errorf("failed to run command commmad in pod: %s err: %v", p.Name, err)
+				return err
+			}
+
+			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) on %s.+", path))
+			mounts := strings.Split(output, "\n")
+			pxMountFound := false
+			for _, line := range mounts {
+				pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
+				if len(pxMounts) > 0 {
+					logrus.Debugf("pod: [%s] %s have PX mount: %v", p.Namespace, p.Name, pxMounts)
+					pxMountFound = true
+					break
+				}
+			}
+
+			if !pxMountFound {
+				return fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", p.Namespace, p.Name, mounts)
+			}
 		}
 	}
 
@@ -332,6 +378,37 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 	}
 
 	return nil
+}
+
+// getContainerPVCMountMap is a helper routine to return map of containers in the pod that
+// have a PVC. The values in the map are the mount paths of the PVC
+func getContainerPVCMountMap(pod corev1.Pod) map[string]string {
+	containerPaths := make(map[string]string)
+
+	// Each pvc in a pod spec has a associated name (which is different from the actual PVC name).
+	// These names get referenced by containers in a pod. So first let's get a map of these names.
+	// e.g below PVC "px-nginx-pvc" has a name "nginx-persistent-storage" below
+	//  volumes:
+	//  - name: nginx-persistent-storage
+	//    persistentVolumeClaim:
+	//      claimName: px-nginx-pvc
+	pvcNamesInSpec := make(map[string]string)
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil {
+			pvcNamesInSpec[v.Name] = v.PersistentVolumeClaim.ClaimName
+		}
+	}
+
+	// Now find containers in the pod that use above PVCs and also get their destination mount paths
+	for _, c := range pod.Spec.Containers {
+		for _, cMount := range c.VolumeMounts {
+			if _, ok := pvcNamesInSpec[cMount.Name]; ok {
+				containerPaths[c.Name] = cMount.MountPath
+			}
+		}
+	}
+
+	return containerPaths
 }
 
 func separateFilePaths(volDirList string) []string {

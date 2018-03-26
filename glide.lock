@@ -1,5 +1,5 @@
-hash: 9dc2c81fd7d68f9434e2a3b87fdfa3ad8c4380ca4f7012c30c3761c24e1485e9
-updated: 2018-03-02T11:54:04.108586161-08:00
+hash: b68754059c0ee448bfdbe08134a81ca5b855d40da86e7f097a027c0d193e955e
+updated: 2018-03-25T15:50:37.29009359-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 7aa49fde808223f8dadfdbfd3a20ff6c19e5f9ec
@@ -75,6 +75,10 @@ imports:
   - tlsconfig
 - name: github.com/docker/go-units
   version: d59758554a3d3911fa25c0269de1ebe2f1912c39
+- name: github.com/docker/spdystream
+  version: 449fdfce4d962303d702fec724ef0ad181c92528
+  subpackages:
+  - spdy
 - name: github.com/donovanhide/eventsource
   version: 3ed64d21fb0b6bd8b49bcfec08f3004daee8723d
 - name: github.com/emicklei/go-restful
@@ -249,7 +253,7 @@ imports:
 - name: github.com/portworx/kvdb
   version: 75b56ce843b0cdd3168e98bcd7728d86beac5e29
 - name: github.com/portworx/sched-ops
-  version: f164dd1fb79872a405d4b2ceb8beaf4335825a52
+  version: bf9b3e0ea092ad152b23575fd82bc4806246eb5c
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s
@@ -396,9 +400,12 @@ imports:
   - pkg/util/diff
   - pkg/util/errors
   - pkg/util/framer
+  - pkg/util/httpstream
+  - pkg/util/httpstream/spdy
   - pkg/util/intstr
   - pkg/util/json
   - pkg/util/net
+  - pkg/util/remotecommand
   - pkg/util/runtime
   - pkg/util/sets
   - pkg/util/validation
@@ -407,9 +414,10 @@ imports:
   - pkg/util/yaml
   - pkg/version
   - pkg/watch
+  - third_party/forked/golang/netutil
   - third_party/forked/golang/reflect
 - name: k8s.io/client-go
-  version: 35ccd4336052e7d73018b1382413534936f34eee
+  version: 2ae454230481a7cb5544325e12ad7658ecccd19b
   subpackages:
   - discovery
   - kubernetes
@@ -448,8 +456,11 @@ imports:
   - tools/clientcmd/api/v1
   - tools/metrics
   - tools/reference
+  - tools/remotecommand
   - transport
+  - transport/spdy
   - util/cert
+  - util/exec
   - util/flowcontrol
   - util/homedir
   - util/integer

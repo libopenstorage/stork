@@ -19,6 +19,8 @@ type Driver interface {
 	ValidateRemoveLabels(v *volume.Volume) error
 	// ValidateVolumeCleanup validates that volume dir does not exist and no data present inside it
 	ValidateVolumeCleanup(d node.Driver) error
+	// ValidateVolumeSetup checks if the given volume is setup correctly
+	ValidateVolumeSetup(v *volume.Volume) error
 	// GetVolumeName returns the volume name based on the volume object recevied
 	GetVolumeName(v *volume.Volume) string
 	// GetServiceEndpoint returns the hostname of portworx service if it is present

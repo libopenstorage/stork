@@ -39,6 +39,9 @@ type Driver interface {
 	// ValidateVolumeCleanup checks if the necessary cleanup has happened for the volumes by this driver
 	ValidateVolumeCleanup() error
 
+	// ValidateVolumeSetup validates if the given volume is setup correctly in the cluster
+	ValidateVolumeSetup(vol *Volume) error
+
 	// Stop must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
 	StopDriver(n node.Node, force bool) error
 

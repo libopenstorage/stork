@@ -28,7 +28,7 @@ import:
 - package: k8s.io/api
   version: kubernetes-1.8.2
 - package: k8s.io/client-go
-  version: kubernetes-1.8.2
+  version: v5.0.1
 - package: github.com/portworx/sched-ops
   version: master
   repo: git@github.com:portworx/sched-ops.git

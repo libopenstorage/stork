@@ -71,6 +71,9 @@ type Driver interface {
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context) ([]*volume.Volume, error)
 
+	// GetVolumes returns all storage volumes for the given context
+	GetVolumes(*Context) ([]*volume.Volume, error)
+
 	// Describe generates a bundle that can be used by support - logs, cores, states, etc
 	Describe(*Context) (string, error)
 }

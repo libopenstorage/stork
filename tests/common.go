@@ -107,6 +107,18 @@ func ValidateContext(ctx *scheduler.Context) {
 			err := Inst().S.WaitForRunning(ctx)
 			expect(err).NotTo(haveOccurred())
 		})
+
+		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+			vols, err := Inst().S.GetVolumes(ctx)
+			expect(err).NotTo(haveOccurred())
+
+			for _, vol := range vols {
+				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
+					err := Inst().V.ValidateVolumeSetup(vol)
+					expect(err).NotTo(haveOccurred())
+				})
+			}
+		})
 	})
 }
 
@@ -126,7 +138,7 @@ func ValidateVolumes(ctx *scheduler.Context) {
 		})
 
 		for vol, params := range vols {
-			Step(fmt.Sprintf("get %s app's volume inspected by the volume driver", ctx.App.Key), func() {
+			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				expect(err).NotTo(haveOccurred())
 			})
