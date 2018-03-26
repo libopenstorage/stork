@@ -132,18 +132,12 @@ for i in $(seq 1 600) ; do
   if [ "$state" == "Error" ]; then
     echo "Error: Torpedo finished with $state state"
     debug_log_then_exit
-  elif [ "$state" == "Running" ] || [ "$state" == "Completed" ]; then
+  elif [ "$state" == "Running" ]; then
     echo ""
     kubectl logs -f torpedo
-    sleep 5
-    endState=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
-    if [ "$endState" == "Running" ] || [ "$endState" == "Completed" ]; then
-        echo "Success: Torpedo finished with $endState state"
-        exit 0
-    else
-        echo "Error: Torpedo finished with $endState state"
-        debug_log_then_exit
-    fi
+  elif [ "$state" == "Completed" ]; then
+    echo "Success: Torpedo finished with $state state"
+    exit 0
   fi
 
   sleep 1
