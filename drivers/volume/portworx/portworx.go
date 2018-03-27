@@ -18,6 +18,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,8 +33,11 @@ const (
 	// namespace is the kubernetes namespace in which portworx daemon set runs
 	namespace = "kube-system"
 
-	//provisionerName is the name for the driver provisioner
+	// provisionerName is the name for the driver provisioner
 	provisionerName = "kubernetes.io/portworx-volume"
+
+	// pvcProvisionerAnnotation is the annotation on PVC which has the provisioner name
+	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
 )
 
 type portworx struct {
@@ -164,6 +168,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 	var volumes []*storkvolume.Info
 	for _, volume := range pod.Spec.Volumes {
+		volumeName := ""
 		if volume.PersistentVolumeClaim != nil {
 			pvc, err := k8sutils.GetPVC(volume.PersistentVolumeClaim.ClaimName, pod.Namespace)
 			if err != nil {
@@ -177,12 +182,21 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 				continue
 			}
 
+			provisioner := ""
+			// Try getting the provisioner from the Storage class. If that has been
+			// deleted, check for the provisioner in the PVC annotation
 			storageClass, err := k8sutils.GetStorageClass(storageClassName, pod.Namespace)
-			if err != nil {
+			if kerrors.IsNotFound(err) {
+				if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
+					provisioner = val
+				}
+			} else if err != nil {
 				return nil, err
+			} else {
+				provisioner = storageClass.Provisioner
 			}
 
-			if storageClass.Provisioner != provisionerName && storageClass.Provisioner != snapshotcontroller.GetProvisionerName() {
+			if provisioner != provisionerName && provisioner != snapshotcontroller.GetProvisionerName() {
 				logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner, ignoring")
 				continue
 			}
@@ -192,8 +206,13 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 					Name: volume.PersistentVolumeClaim.ClaimName,
 				}
 			}
+			volumeName = pvc.Spec.VolumeName
+		} else if volume.PortworxVolume != nil {
+			volumeName = volume.PortworxVolume.VolumeID
+		}
 
-			volumeInfo, err := p.InspectVolume(pvc.Spec.VolumeName)
+		if volumeName != "" {
+			volumeInfo, err := p.InspectVolume(volumeName)
 			if err != nil {
 				return nil, err
 			}
