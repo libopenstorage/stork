@@ -1,3 +1,29 @@
+//go:generate swagger generate spec -m -o ../../api/swagger/swagger.json
+
+// Package classification OSD API.
+//
+// OpenStorage is a clustered implementation of the Open Storage specification and relies on the Docker runtime.
+// It allows you to run stateful services in Docker in a multi-host environment.
+// It plugs into Docker volumes to provide storage to a container and plugs into Swarm to operate in a clustered environment.
+//
+// Terms Of Service:
+//
+// there are no TOS at this moment, use at your own risk we take no responsibility
+//
+//     Schemes: http, https
+//     Host: localhost
+//     BasePath: /v1
+//     Version: 1.0.0
+//     License: APACHE2 https://opensource.org/licenses/Apache-2.0
+//     Contact: Luis Pabon<luis@portworx.com>
+//
+//     Consumes:
+//     - application/json
+//
+//     Produces:
+//     - application/json
+//
+// swagger:meta
 package main
 
 import (
@@ -17,6 +43,7 @@ import (
 	osdcli "github.com/libopenstorage/openstorage/cli"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/config"
+	"github.com/libopenstorage/openstorage/csi"
 	"github.com/libopenstorage/openstorage/graph/drivers"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers"
@@ -209,6 +236,22 @@ func start(c *cli.Context) error {
 		if d != "" && cfg.Osd.ClusterConfig.DefaultDriver == d {
 			isDefaultSet = true
 		}
+
+		// Start CSI Server for this driver
+		cm, err := cluster.Inst()
+		if err != nil {
+			return fmt.Errorf("Unable to find cluster instance: %v", err)
+		}
+		csiServer, err := csi.NewOsdCsiServer(&csi.OsdCsiServerConfig{
+			Net:        "unix",
+			Address:    fmt.Sprintf("/var/lib/osd/driver/%s-csi.sock", d),
+			DriverName: d,
+			Cluster:    cm,
+		})
+		if err != nil {
+			return fmt.Errorf("Failed to start CSI server for driver %s: %v", d, err)
+		}
+		csiServer.Start()
 	}
 
 	if cfg.Osd.ClusterConfig.DefaultDriver != "" && !isDefaultSet {

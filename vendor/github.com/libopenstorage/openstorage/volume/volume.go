@@ -130,12 +130,40 @@ type QuiesceDriver interface {
 	Unquiesce(volumeID string) error
 }
 
+// CloudBackupDriver interface provides Cloud backup features
+type CloudBackupDriver interface {
+	// Backup uploads snapshot of a volume to cloud
+	Backup(input *api.BackupRequest) error
+	// BackupRestore downloads a cloud backup and restores it to a volume
+	BackupRestore(input *api.BackupRestoreRequest) *api.BackupRestoreResponse
+	// BackupEnumerate enumerates the backups for a given cluster/credential/volumeID
+	BackupEnumerate(input *api.BackupEnumerateRequest) *api.BackupEnumerateResponse
+	// BackupDelete deletes the backups in cloud
+	BackupDelete(input *api.BackupDeleteRequest) error
+	// BackupStatus indicates the most recent status of backup/restores
+	BackupStatus(input *api.BackupStsRequest) *api.BackupStsResponse
+	// BackupCatalogue displays listing of backup content
+	BackupCatalogue(input *api.BackupCatalogueRequest) *api.BackupCatalogueResponse
+	// History displays past backup/restore operations on a volume
+	BackupHistory(*api.BackupHistoryRequest) *api.BackupHistoryResponse
+	// ChangeBackupState allows a current backup state transisions(pause/resume/stop)
+	BackupStateChange(input *api.BackupStateChangeRequest) error
+	// BackupSchedCreate creates a schedule backup volume to cloud
+	BackupSchedCreate(input *api.BackupScheduleInfo) *api.BackupSchedResponse
+	// BackupSchedDelete delete a volume backup schedule to cloud
+	BackupSchedDelete(input *api.BackupSchedDeleteRequest) error
+	// BackupSchedEnumerate enumerates the configured backup schedules in the cluster
+	BackupSchedEnumerate() *api.BackupSchedEnumerateResponse
+}
+
 // ProtoDriver must be implemented by all volume drivers.  It specifies the
 // most basic functionality, such as creating and deleting volumes.
 type ProtoDriver interface {
 	SnapshotDriver
 	StatsDriver
 	QuiesceDriver
+	CredsDriver
+	CloudBackupDriver
 	// Name returns the name of the driver.
 	Name() string
 	// Type of this driver
@@ -192,6 +220,18 @@ type BlockDriver interface {
 	// Detach device from the host.
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
 	Detach(volumeID string, options map[string]string) error
+}
+
+// CredsDriver provides methods to handle credentials
+type CredsDriver interface {
+	// CredsCreate creates credential for a given cloud provider
+	CredsCreate(params map[string]string) (string, error)
+	// CredsList lists the configured credentials in the cluster
+	CredsEnumerate() (map[string]interface{}, error)
+	// CredsDelete deletes the credential associated credUUID
+	CredsDelete(credUUID string) error
+	// CredsValidate validates the credential associated credUUID
+	CredsValidate(credUUID string) error
 }
 
 // VolumeDriverProvider provides VolumeDrivers.

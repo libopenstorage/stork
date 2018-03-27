@@ -20,6 +20,11 @@ var (
 	// QuiesceNotSupported implements quiesce/unquiesce by returning not
 	// supported error.
 	QuiesceNotSupported = &quiesceNotSupported{}
+	// CredsNotSupported implements credentials by returning not supported error
+	CredsNotSupported = &credsNotSupported{}
+	// CloudBackupNotSupported implements cloudBackupDriver by returning
+	//  Not supported error
+	CloudBackupNotSupported = &cloudBackupNotSupported{}
 )
 
 type blockNotSupported struct{}
@@ -88,4 +93,116 @@ func (s *quiesceNotSupported) Quiesce(
 
 func (s *quiesceNotSupported) Unquiesce(volumeID string) error {
 	return ErrNotSupported
+}
+
+type credsNotSupported struct{}
+
+func (c *credsNotSupported) CredsCreate(
+	params map[string]string,
+) (string, error) {
+	return "", ErrNotSupported
+}
+
+func (c *credsNotSupported) CredsDelete(
+	uuid string,
+) error {
+	return ErrNotSupported
+}
+
+func (c *credsNotSupported) CredsEnumerate() (map[string]interface{}, error) {
+	creds := make(map[string]interface{}, 0)
+	return creds, ErrNotSupported
+}
+
+func (c *credsNotSupported) CredsValidate(
+	uuid string,
+) error {
+	return ErrNotSupported
+}
+
+type cloudBackupNotSupported struct{}
+
+func (cl *cloudBackupNotSupported) Backup(
+	input *api.BackupRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) BackupRestore(
+	input *api.BackupRestoreRequest,
+) *api.BackupRestoreResponse {
+	response := api.BackupRestoreResponse{
+		RestoreErr: ErrNotSupported.Error(),
+	}
+	return &response
+}
+
+func (cl *cloudBackupNotSupported) BackupEnumerate(
+	input *api.BackupEnumerateRequest,
+) *api.BackupEnumerateResponse {
+	response := api.BackupEnumerateResponse{
+		EnumerateErr: ErrNotSupported.Error(),
+	}
+	return &response
+}
+
+func (cl *cloudBackupNotSupported) BackupDelete(
+	input *api.BackupDeleteRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) BackupStatus(
+	input *api.BackupStsRequest,
+) *api.BackupStsResponse {
+	response := api.BackupStsResponse{
+		StsErr: ErrNotSupported.Error(),
+	}
+	return &response
+}
+
+func (cl *cloudBackupNotSupported) BackupCatalogue(
+	input *api.BackupCatalogueRequest,
+) *api.BackupCatalogueResponse {
+	response := api.BackupCatalogueResponse{
+		CatalogueErr: ErrNotSupported.Error(),
+	}
+	return &response
+}
+
+func (cl *cloudBackupNotSupported) BackupHistory(
+	input *api.BackupHistoryRequest,
+) *api.BackupHistoryResponse {
+	response := api.BackupHistoryResponse{
+		HistoryErr: ErrNotSupported.Error(),
+	}
+	return &response
+}
+
+func (cl *cloudBackupNotSupported) BackupStateChange(
+	input *api.BackupStateChangeRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) BackupSchedCreate(
+	input *api.BackupScheduleInfo,
+) *api.BackupSchedResponse {
+	response := api.BackupSchedResponse{
+		SchedCreateErr: ErrNotSupported.Error(),
+	}
+	return &response
+}
+
+func (cl *cloudBackupNotSupported) BackupSchedDelete(
+	input *api.BackupSchedDeleteRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) BackupSchedEnumerate() *api.BackupSchedEnumerateResponse {
+	response := api.BackupSchedEnumerateResponse{
+		SchedEnumerateErr: ErrNotSupported.Error(),
+	}
+	return &response
 }

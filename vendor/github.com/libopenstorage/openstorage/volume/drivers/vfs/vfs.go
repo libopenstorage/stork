@@ -33,6 +33,8 @@ type driver struct {
 	volume.SnapshotDriver
 	volume.StoreEnumerator
 	volume.StatsDriver
+	volume.CredsDriver
+	volume.CloudBackupDriver
 }
 
 // Init Driver intialization.
@@ -43,6 +45,8 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 		volume.SnapshotNotSupported,
 		common.NewDefaultStoreEnumerator(Name, kvdb.Instance()),
 		volume.StatsNotSupported,
+		volume.CredsNotSupported,
+		volume.CloudBackupNotSupported,
 	}, nil
 }
 

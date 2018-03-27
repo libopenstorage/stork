@@ -32,6 +32,11 @@ const (
 	talismanImage          = "portworx/talisman:latest"
 )
 
+const (
+	podExecTimeout       = 2 * time.Minute
+	defaultRetryInterval = 10 * time.Second
+)
+
 // errLabelPresent error type for a label being present on a node
 type errLabelPresent struct {
 	// label is the label key
@@ -165,16 +170,28 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 			continue
 		}
 
+		logrus.Infof("[debug] pod [%s] %s is running", p.Namespace, p.Name)
+
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
-			output, err := k8s.Instance().RunCommandInPod([]string{"mount"}, p.Name, containerName, p.Namespace)
+			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) on %s.+", path))
+
+			t := func() (interface{}, bool, error) {
+				output, err := k8s.Instance().RunCommandInPod([]string{"mount"}, p.Name, containerName, p.Namespace)
+				if err != nil {
+					logrus.Errorf("failed to run command commmad in pod: %s err: %v", p.Name, err)
+					return nil, true, err
+				}
+
+				return output, false, nil
+			}
+
+			output, err := task.DoRetryWithTimeout(t, podExecTimeout, defaultRetryInterval)
 			if err != nil {
-				logrus.Errorf("failed to run command commmad in pod: %s err: %v", p.Name, err)
 				return err
 			}
 
-			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) on %s.+", path))
-			mounts := strings.Split(output, "\n")
+			mounts := strings.Split(output.(string), "\n")
 			pxMountFound := false
 			for _, line := range mounts {
 				pxMounts := pxMountCheckRegex.FindStringSubmatch(line)

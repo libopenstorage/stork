@@ -51,7 +51,6 @@ type SpecHandler interface {
 	// 	(resultant_VolumeSpec, source, locator, nil)
 	// If the options have invalid values then it returns:
 	//	(nil, nil, nil, error)
-
 	SpecFromOpts(opts map[string]string) (
 		*api.VolumeSpec,
 		*api.VolumeLocator,
@@ -87,6 +86,8 @@ var (
 	haRegex         = regexp.MustCompile(api.SpecHaLevel + "=([0-9]+),?")
 	cosRegex        = regexp.MustCompile(api.SpecPriority + "=([A-Za-z]+),?")
 	sharedRegex     = regexp.MustCompile(api.SpecShared + "=([A-Za-z]+),?")
+	journalRegex    = regexp.MustCompile(api.SpecJournal + "=([A-Za-z]+),?")
+	nfsRegex        = regexp.MustCompile(api.SpecNfs + "=([A-Za-z]+),?")
 	cascadedRegex   = regexp.MustCompile(api.SpecCascaded + "=([A-Za-z]+),?")
 	passphraseRegex = regexp.MustCompile(api.SpecPassphrase + "=([0-9A-Za-z_@./#&+-]+),?")
 	stickyRegex     = regexp.MustCompile(api.SpecSticky + "=([A-Za-z]+),?")
@@ -99,6 +100,7 @@ var (
 	compressedRegex   = regexp.MustCompile(api.SpecCompressed + "=([A-Za-z]+),?")
 	snapScheduleRegex = regexp.MustCompile(api.SpecSnapshotSchedule +
 		`=([A-Za-z0-9:;@=#]+),?`)
+	ioProfileRegex = regexp.MustCompile(api.SpecIoProfile + "=([0-9A-Za-z_-]+),?")
 )
 
 type specHandler struct {
@@ -237,6 +239,18 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 			} else {
 				spec.Shared = shared
 			}
+		case api.SpecJournal:
+			if journal, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				spec.Journal = journal
+			}
+		case api.SpecNfs:
+			if nfs, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				spec.Nfs = nfs
+			}
 		case api.SpecCascaded:
 			if cascaded, err := strconv.ParseBool(v); err != nil {
 				return nil, nil, nil, err
@@ -347,6 +361,12 @@ func (d *specHandler) SpecOptsFromString(
 	if ok, shared := d.getVal(sharedRegex, str); ok {
 		opts[api.SpecShared] = shared
 	}
+	if ok, journal := d.getVal(journalRegex, str); ok {
+		opts[api.SpecJournal] = journal
+	}
+	if ok, nfs := d.getVal(nfsRegex, str); ok {
+		opts[api.SpecNfs] = nfs
+	}
 	if ok, cascaded := d.getVal(cascadedRegex, str); ok {
 		opts[api.SpecCascaded] = cascaded
 	}
@@ -378,6 +398,9 @@ func (d *specHandler) SpecOptsFromString(
 	if ok, sched := d.getVal(snapScheduleRegex, str); ok {
 		opts[api.SpecSnapshotSchedule] = strings.Replace(sched, "#", ",", -1)
 	}
+	if ok, ioProfile := d.getVal(ioProfileRegex, str); ok {
+		opts[api.SpecIoProfile] = ioProfile
+	}
 
 	return true, opts, name
 }
@@ -389,7 +412,6 @@ func (d *specHandler) SpecFromString(
 	if !ok {
 		return false, d.DefaultSpec(), nil, nil, name
 	}
-
 	spec, locator, source, err := d.SpecFromOpts(opts)
 	if err != nil {
 		return false, d.DefaultSpec(), nil, nil, name

@@ -1,5 +1,5 @@
-hash: b68754059c0ee448bfdbe08134a81ca5b855d40da86e7f097a027c0d193e955e
-updated: 2018-03-25T15:50:37.29009359-07:00
+hash: 4fc8426e19f0d0d81cb1a4078559672742ddabac44fb6dde505f81601d752419
+updated: 2018-03-26T17:51:51.980260837-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 7aa49fde808223f8dadfdbfd3a20ff6c19e5f9ec
@@ -178,7 +178,7 @@ imports:
   - proto/state
   - types
 - name: github.com/libopenstorage/openstorage
-  version: 02fe99c7963fcdc7ba7122da34027a2e1148cf56
+  version: e354d4650fb692f8bd0dd5f0ef08f7627349c923
   subpackages:
   - api
   - api/client
