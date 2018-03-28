@@ -20,7 +20,7 @@ BIN :=$(BASE_DIR)/bin
 .DEFAULT_GOAL=all
 .PHONY: test clean
 
-all: stork vet lint container integration-test
+all: stork vet lint integration-test
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -68,12 +68,19 @@ vet:
 
 errcheck:
 	go get -v github.com/kisielk/errcheck
-	errcheck -tags "$(TAGS)" $(PKGS)
+	errcheck -verbose -blank -tags "$(TAGS) unittest integrationtest" $(PKGS)
 
 pretest: lint vet errcheck
 
 test:
-	go test -tags unittest $(TESTFLAGS) $(PKGS)
+	echo "" > coverage.txt
+	for pkg in $(PKGS);	do \
+		go test -tags unittest -coverprofile=profile.out -covermode=atomic $(TESTFLAGS) $${pkg}; \
+		if [ -f profile.out ]; then \
+			cat profile.out >> coverage.txt; \
+			rm profile.out; \
+		fi; \
+	done
 
 integration-test:
 	@echo "Building stork tests"
@@ -90,9 +97,13 @@ stork:
 	@echo "Building the stork binary"
 	@cd cmd/stork && go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
-container:
+container: help
 	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."
 	sudo docker build --tag $(STORK_IMG) -f Dockerfile .
+
+help:
+	@echo "Updating help file"
+	go-md2man -in help.md -out help.1
 
 deploy:
 	sudo docker push $(STORK_IMG)

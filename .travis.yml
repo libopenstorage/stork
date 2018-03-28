@@ -3,8 +3,11 @@ dist: trusty
 language: go
 go:
   - 1.8.3
+before_install:
+  - sudo apt-get update -yq
+  - sudo apt-get install go-md2man -y
 script:
-  - make && make pretest && make test && make integration-test && make integration-test-container &&
+  - make && make pretest && make test && make container && make integration-test && make integration-test-container &&
     if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
       docker login -u "${DOCKER_USER}" -p "${DOCKER_PASSWORD}";
       make deploy;
@@ -14,3 +17,5 @@ notifications:
   email:
     on_success: always
     on_failure: always
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

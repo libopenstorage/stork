@@ -4,10 +4,6 @@ metadata:
   name: stork-config
   namespace: kube-system
 data:
-  # The default list of predicates and priorities can change depending on your version
-  # of Kubernetes, so please update those as required. The requirement to manually specify this
-  # list will go away with Kubernetes v1.10 where it will use the defaults if nothing is
-  # specified.
   policy.cfg: |-
     {
       "kind": "Policy",
@@ -84,7 +80,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["configmaps"]
-    verbs: ["get", "create", "update"]
+    verbs: ["get", "update"]
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get"]
@@ -116,7 +112,7 @@ spec:
       targetPort: 8099
 ---
 apiVersion: extensions/v1beta1
-kind: Deployment
+kind: DaemonSet
 metadata:
   annotations:
     scheduler.alpha.kubernetes.io/critical-pod: ""
@@ -125,12 +121,6 @@ metadata:
   name: stork
   namespace: kube-system
 spec:
-  strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
-    type: RollingUpdate
-  replicas: 3
   template:
     metadata:
       annotations:
@@ -152,18 +142,11 @@ spec:
             cpu: '0.1'
         securityContext:
           privileged: false
+        volumeMounts: []
         name: stork
+      hostNetwork: false
       hostPID: false
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: "name"
-                    operator: In
-                    values:
-                    - stork
-              topologyKey: "kubernetes.io/hostname"
+      volumes: []
       serviceAccountName: stork-account
 ---
 kind: StorageClass
@@ -171,4 +154,3 @@ apiVersion: storage.k8s.io/v1
 metadata:
   name: stork-snapshot-sc
 provisioner: stork-snapshot
-
