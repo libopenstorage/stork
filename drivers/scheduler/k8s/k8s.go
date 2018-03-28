@@ -42,6 +42,7 @@ const (
 	volDirCleanupTimeout       = 5 * time.Minute
 	k8sObjectCreateTimeout     = 2 * time.Minute
 	findFilesOnWorkerTimeout   = 1 * time.Minute
+	deleteTasksWaitTimeout     = 1 * time.Minute
 	defaultRetryInterval       = 10 * time.Second
 )
 
@@ -598,6 +599,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
+	k8sOps := k8s_ops.Instance()
 	pods, err := k.getPodsForApp(ctx)
 	if err != nil {
 		return &scheduler.ErrFailedToDeleteTasks{
@@ -606,12 +608,28 @@ func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
 		}
 	}
 
-	if err := k8s_ops.Instance().DeletePods(pods); err != nil {
+	if err := k8sOps.DeletePods(pods); err != nil {
 		return &scheduler.ErrFailedToDeleteTasks{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
 		}
 	}
+
+	// Ensure the pods are deleted and removed from the system
+	for _, pod := range pods {
+		t := func() (interface{}, bool, error) {
+			_, err := k8sOps.GetPodByUID(pod.UID, pod.Namespace)
+			if err != nil && err == k8s_ops.ErrPodsNotFound {
+				return nil, false, nil
+			}
+			return nil, true, err
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, deleteTasksWaitTimeout, defaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
