@@ -1,8 +1,8 @@
 hash: 4fc8426e19f0d0d81cb1a4078559672742ddabac44fb6dde505f81601d752419
-updated: 2018-03-26T17:51:51.980260837-07:00
+updated: 2018-03-28T14:42:00.150173563-07:00
 imports:
 - name: github.com/armon/go-metrics
-  version: 7aa49fde808223f8dadfdbfd3a20ff6c19e5f9ec
+  version: 783273d703149aaeb9897cf58613d5af48861c25
 - name: github.com/aws/aws-sdk-go
   version: f9a6880d84e16e2a37055793e17164a228d637f4
   subpackages:
@@ -44,7 +44,7 @@ imports:
   subpackages:
   - spew
 - name: github.com/docker/distribution
-  version: fea8bd51143307d3454703eadecbeeb778aa75e8
+  version: 83389a148052d74ac602f5f1d62f86ff2f3c4aa5
   subpackages:
   - digestset
   - reference
@@ -68,13 +68,13 @@ imports:
   - client
   - pkg/tlsconfig
 - name: github.com/docker/go-connections
-  version: f93969bf7d9f98c09610cc485214a6300944bd18
+  version: 7395e3f8aa162843a74ed6d48e79627d9792ac55
   subpackages:
   - nat
   - sockets
   - tlsconfig
 - name: github.com/docker/go-units
-  version: d59758554a3d3911fa25c0269de1ebe2f1912c39
+  version: 47565b4f722fb6ceae66b95f853feed578a4a51c
 - name: github.com/docker/spdystream
   version: 449fdfce4d962303d702fec724ef0ad181c92528
   subpackages:
@@ -94,7 +94,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a
+  version: 6ecc596bd756a16c6e93e4ef9225ecdb9f54ed2c
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -147,7 +147,7 @@ imports:
 - name: github.com/hashicorp/go-multierror
   version: b7773ae218740a7be65057fc60b366a49b538a44
 - name: github.com/hashicorp/go-sockaddr
-  version: 9b4c5fa5b10a683339a270d664474b9f4aee62fc
+  version: 6d291a969b86c4b633730bfc6b8b9d64c3aafed9
 - name: github.com/hashicorp/golang-lru
   version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
@@ -155,30 +155,30 @@ imports:
 - name: github.com/hashicorp/logutils
   version: 0dc08b1671f34c4250ce212759ebd880f743d883
 - name: github.com/hashicorp/memberlist
-  version: 3d8438da9589e7b608a83ffac1ef8211486bcb7c
+  version: 2288bf30e9c8d7b5f6549bf62e07120d72fd4b6c
 - name: github.com/howeyc/gopass
   version: bf9dde6d0d2c004a008c27aaee91170c786f6db8
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/jmespath/go-jmespath
-  version: dd801d4f4ce7ac746e7e7b4489d2fa600b3b096b
+  version: c2b33e8439af944379acbdd9c3a5fe0bc44bd8a5
 - name: github.com/json-iterator/go
   version: 36b14963da70d11297d313183d7e6388c8510e1e
 - name: github.com/juju/ratelimit
   version: 5b9ff866471762aa2ab2dced63c9fb6f53921342
 - name: github.com/kubernetes-incubator/external-storage
-  version: 18543a856d3cbeaa95498832f64a8cc166c04fdd
+  version: 0b0384e38b1c0ee040fe71ea5cf1fc44434ff778
   subpackages:
   - snapshot/pkg/apis/crd/v1
   - snapshot/pkg/client
 - name: github.com/libopenstorage/gossip
-  version: aa5bca5fb84334d7d29c26b5ccd7c819f344beac
+  version: b3655d98ea02660f2e543d62f6af728a0c324116
   subpackages:
   - proto
   - proto/state
   - types
 - name: github.com/libopenstorage/openstorage
-  version: e354d4650fb692f8bd0dd5f0ef08f7627349c923
+  version: 6a6f2b47c4940f90435ab80d810a566208326e43
   subpackages:
   - api
   - api/client
@@ -187,6 +187,8 @@ imports:
   - api/spec
   - cluster
   - config
+  - osdconfig
+  - pkg/dbg
   - pkg/parser
   - pkg/units
   - volume
@@ -199,17 +201,17 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/mattn/go-colorable
-  version: 5411d3eea5978e6cdc258b30de592b60df6aba96
+  version: efa589957cd060542a26d2dd7832fd6a6c6c3ade
 - name: github.com/mattn/go-isatty
-  version: 57fdcb988a5c543893cc61bce354a6e24ab70022
+  version: 6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c
 - name: github.com/Microsoft/go-winio
   version: 7da180ee92d8bd8bb8c37fc560e673e6557c392f
 - name: github.com/miekg/dns
-  version: 5364553f1ee9cddc7ac8b62dce148309c386695b
+  version: 22cb769f47009091f1bc4bf9fffa398bbf6ca68f
 - name: github.com/mohae/deepcopy
   version: c48cc78d482608239f6c4c92a4abd87eb8761c90
 - name: github.com/onsi/ginkgo
-  version: 747514b53ddd06d5d37d096c1cb313cfe620d7d4
+  version: 03ffd3f46debf00c49ed76d5dbb564ef4839adfe
   subpackages:
   - config
   - internal/codelocation
@@ -229,7 +231,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: a9c79f175573664afefe4fe0f3827c66263abcbb
+  version: 649b44d988ce182cabcda7dba01fcf3b6179ad19
   subpackages:
   - format
   - internal/assertion
@@ -249,11 +251,14 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/pkg/errors
-  version: 30136e27e2ac8d167177e8a583aa4c3fea5be833
+  version: 816c9085562cd7ee03e7f8188a1cfd942858cded
 - name: github.com/portworx/kvdb
-  version: 75b56ce843b0cdd3168e98bcd7728d86beac5e29
+  version: b69988874e5dfea60561441f8d04e4d40ebc6c3c
+  subpackages:
+  - common
+  - mem
 - name: github.com/portworx/sched-ops
-  version: bf9b3e0ea092ad152b23575fd82bc4806246eb5c
+  version: 7395635a8f5ed8f837c1fcfdfa26df2fa8b8f874
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s
@@ -265,7 +270,7 @@ imports:
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/Sirupsen/logrus
-  version: 768a92a02685ee7535069fc1581341b41bab9b72
+  version: 90150a8ed11b6ce285e77e8af2b0109559ce4777
 - name: github.com/sirupsen/logrus
   version: 33a34430d1c3dc71777fdd677864928e5b5812bc
 - name: github.com/spf13/pflag
@@ -274,8 +279,6 @@ imports:
   version: 292aa66beb49590f5c6da27331b90506b1c3cbbc
   repo: git@github.com:peter-edge/dlog-go.git
   vcs: git
-  subpackages:
-  - logrus
 - name: golang.org/x/crypto
   version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
@@ -364,7 +367,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apiextensions-apiserver
-  version: e509bb64fe1116e12a32273a2032426aa1a5fd26
+  version: 10b55e130fc1162aba4f16406798909e48397aee
   subpackages:
   - pkg/apis/apiextensions
   - pkg/apis/apiextensions/v1beta1

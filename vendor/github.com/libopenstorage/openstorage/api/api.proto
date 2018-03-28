@@ -22,8 +22,9 @@ enum Status {
   STATUS_NEEDS_REBOOT = 10;
   STATUS_STORAGE_REBALANCE = 11;
   STATUS_STORAGE_DRIVE_REPLACE = 12;
+  STATUS_NOT_IN_QUORUM_NO_STORAGE = 13;
   // Add statuses before MAX and update the number for MAX
-  STATUS_MAX = 13;
+  STATUS_MAX = 14;
 }
 
 enum DriverType {
@@ -193,6 +194,8 @@ message StorageResource {
   string rotation_speed = 11;
   // Timestamp of last time this device was scanned.
   google.protobuf.Timestamp last_scan = 12;
+  // True if dedicated for metadata.
+  bool metadata = 13;
 }
 
 // StoragePool groups different storage devices based on their CosType
@@ -426,15 +429,27 @@ message VolumeCreateRequest {
 }
 
 // VolumeResponse is a structure that wraps an error.
-// swagger:response
+// swagger:response volumeResponse
 message VolumeResponse {
+  // Error message
+  //
+  // in: body
+  // Required: true
   string error = 1;
 }
 
-// swagger:response
+// VolumeCreateResponse
+// swagger:response volumeCreateResponse
 message VolumeCreateResponse {
   // ID of the newly created volume
+  //
+  // in: body
+  // Required: true
   string id = 1;
+  // Volume Response
+  //
+  // in: body
+  // Required: true
   VolumeResponse volume_response = 2;
 }
 
@@ -465,9 +480,18 @@ message VolumeSetRequest {
   map<string, string> options = 4;
 }
 
-// swagger:response
+// VolumeSetResponse
+// swagger:response volumeSetResponse
 message VolumeSetResponse {
+  // Volume
+  //
+  // in: body
+  // Required: true
   Volume volume = 1;
+  //VolumeResponse
+  //
+  // in: body
+  // Required: true
   VolumeResponse volume_response = 2;
 }
 
@@ -480,11 +504,17 @@ message SnapCreateRequest {
   bool readonly = 3;
 }
 
-// swagger:response
+// SnapCreateRequest specifies a response that get's returned when creating a snapshot.
+// swagger:response snapCreateResponse
 message SnapCreateResponse {
+  // VolumeCreateResponse
+  //
+  // in: body
+  // Required: true
   VolumeCreateResponse volume_create_response = 1;
 }
 
+// VolumeInfo 
 // swagger:model
 message VolumeInfo {
   string volume_id = 1;
@@ -502,16 +532,22 @@ message GraphDriverChanges {
   GraphDriverChangeType kind = 2;
 }
 
-// swagger:response
+// ClusterResponse specifies a response that gets returned when requesting the cluster
+// swagger:response clusterResponse
 message ClusterResponse {
+  // Error code
+  // 
+  // in: body
   string error = 1;
 }
 
+// Active Request
 // swagger:model
 message ActiveRequest {
   map<int64, string> ReqestKV = 1;
 }
 
+// Active Requests
 // swagger:model
 message ActiveRequests {
   int64 RequestCount = 1;

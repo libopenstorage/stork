@@ -174,7 +174,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
-			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.*) on %s.+", path))
+			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) on %s.+", path))
 
 			t := func() (interface{}, bool, error) {
 				output, err := k8s.Instance().RunCommandInPod([]string{"mount"}, p.Name, containerName, p.Namespace)

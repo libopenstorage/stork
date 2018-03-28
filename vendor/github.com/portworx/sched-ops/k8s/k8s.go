@@ -71,10 +71,12 @@ type Ops interface {
 
 // NamespaceOps is an interface to perform namespace operations
 type NamespaceOps interface {
+	// GetNamespace returns a namespace object for given name
+	GetNamespace(name string) (*v1.Namespace, error)
 	// CreateNamespace creates a namespace with given name and metadata
-	CreateNamespace(string, map[string]string) (*v1.Namespace, error)
+	CreateNamespace(name string, metadata map[string]string) (*v1.Namespace, error)
 	// DeleteNamespace deletes a namespace with given name
-	DeleteNamespace(string) error
+	DeleteNamespace(name string) error
 }
 
 // NodeOps is an interface to perform k8s node operations
@@ -124,24 +126,28 @@ type ServiceOps interface {
 
 // StatefulSetOps is an interface to perform k8s stateful set operations
 type StatefulSetOps interface {
+	// GetStatefulSet returns a statefulset for given name and namespace
+	GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error)
 	// CreateStatefulSet creates the given statefulset
-	CreateStatefulSet(*apps_api.StatefulSet) (*apps_api.StatefulSet, error)
+	CreateStatefulSet(ss *apps_api.StatefulSet) (*apps_api.StatefulSet, error)
 	// DeleteStatefulSet deletes the given statefulset
 	DeleteStatefulSet(name, namespace string) error
 	// ValidateStatefulSet validates the given statefulset if it's running and healthy within the give timeout
-	ValidateStatefulSet(s *apps_api.StatefulSet, timeout time.Duration) error
+	ValidateStatefulSet(ss *apps_api.StatefulSet, timeout time.Duration) error
 	// ValidateTerminatedStatefulSet validates if given deployment is terminated
-	ValidateTerminatedStatefulSet(*apps_api.StatefulSet) error
+	ValidateTerminatedStatefulSet(ss *apps_api.StatefulSet) error
 	// GetStatefulSetPods returns pods for the given statefulset
-	GetStatefulSetPods(*apps_api.StatefulSet) ([]v1.Pod, error)
+	GetStatefulSetPods(ss *apps_api.StatefulSet) ([]v1.Pod, error)
 	// DescribeStatefulSet gets status of the statefulset
-	DescribeStatefulSet(string, string) (*apps_api.StatefulSetStatus, error)
+	DescribeStatefulSet(name, namespace string) (*apps_api.StatefulSetStatus, error)
 	// GetStatefulSetsUsingStorageClass returns all statefulsets using given storage class
 	GetStatefulSetsUsingStorageClass(scName string) ([]apps_api.StatefulSet, error)
 }
 
 // DeploymentOps is an interface to perform k8s deployment operations
 type DeploymentOps interface {
+	// GetDeployment returns a deployment for the give name and namespace
+	GetDeployment(name, namespace string) (*apps_api.Deployment, error)
 	// CreateDeployment creates the given deployment
 	CreateDeployment(*apps_api.Deployment) (*apps_api.Deployment, error)
 	// DeleteDeployment deletes the given deployment
@@ -153,7 +159,7 @@ type DeploymentOps interface {
 	// GetDeploymentPods returns pods for the given deployment
 	GetDeploymentPods(*apps_api.Deployment) ([]v1.Pod, error)
 	// DescribeDeployment gets the deployment status
-	DescribeDeployment(string, string) (*apps_api.DeploymentStatus, error)
+	DescribeDeployment(name, namespace string) (*apps_api.DeploymentStatus, error)
 	// GetDeploymentsUsingStorageClass returns all deployments using the given storage class
 	GetDeploymentsUsingStorageClass(scName string) ([]apps_api.Deployment, error)
 }
@@ -239,14 +245,18 @@ type PodOps interface {
 
 // StorageClassOps is an interface to perform k8s storage class operations
 type StorageClassOps interface {
+	// GetStorageClass returns the storage class for the give namme
+	GetStorageClass(name string) (*storage_api.StorageClass, error)
 	// CreateStorageClass creates the given storage class
-	CreateStorageClass(*storage_api.StorageClass) (*storage_api.StorageClass, error)
+	CreateStorageClass(sc *storage_api.StorageClass) (*storage_api.StorageClass, error)
 	// DeleteStorageClass deletes the given storage class
-	DeleteStorageClass(string) error
+	DeleteStorageClass(name string) error
 	// GetStorageClassParams returns the parameters of the given sc in the native map format
-	GetStorageClassParams(*storage_api.StorageClass) (map[string]string, error)
+	GetStorageClassParams(sc *storage_api.StorageClass) (map[string]string, error)
 	// ValidateStorageClass validates the given storage class
-	ValidateStorageClass(string) (*storage_api.StorageClass, error)
+	// TODO: This is currently the same as GetStorageClass. If no one is using it,
+	// we should remove this method
+	ValidateStorageClass(name string) (*storage_api.StorageClass, error)
 }
 
 // PersistentVolumeClaimOps is an interface to perform k8s PVC operations
@@ -277,6 +287,8 @@ type PersistentVolumeClaimOps interface {
 
 // SnapshotOps is an interface to perform k8s VolumeSnapshot operations
 type SnapshotOps interface {
+	// GetSnapshot returns the snapshot for given name and namespace
+	GetSnapshot(name string, namespace string) (*snap_v1.VolumeSnapshot, error)
 	// CreateSnapshot creates the given snapshot
 	CreateSnapshot(*snap_v1.VolumeSnapshot) (*snap_v1.VolumeSnapshot, error)
 	// DeleteSnapshot deletes the given snapshot
@@ -352,6 +364,16 @@ func (k *k8sOps) initK8sClient() error {
 	return nil
 }
 
+// Namespace APIs - BEGIN
+
+func (k *k8sOps) GetNamespace(name string) (*v1.Namespace, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().Namespaces().Get(name, meta_v1.GetOptions{})
+}
+
 func (k *k8sOps) CreateNamespace(name string, metadata map[string]string) (*v1.Namespace, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -372,6 +394,8 @@ func (k *k8sOps) DeleteNamespace(name string) error {
 
 	return k.client.CoreV1().Namespaces().Delete(name, &meta_v1.DeleteOptions{})
 }
+
+// Namespace APIs - END
 
 func (k *k8sOps) GetNodes() (*v1.NodeList, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -831,12 +855,8 @@ func (k *k8sOps) GetService(svcName string, svcNS string) (*v1.Service, error) {
 	if svcName == "" {
 		return nil, fmt.Errorf("cannot return service obj without service name")
 	}
-	svc, err := k.client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return svc, nil
 
+	return k.client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
 }
 
 func (k *k8sOps) DescribeService(svcName string, svcNamespace string) (*v1.ServiceStatus, error) {
@@ -871,6 +891,14 @@ func (k *k8sOps) ValidateDeletedService(svcName string, svcNS string) error {
 
 // Deployment APIs - BEGIN
 
+func (k *k8sOps) GetDeployment(name, namespace string) (*apps_api.Deployment, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.appsClient().Deployments(namespace).Get(name, meta_v1.GetOptions{})
+}
+
 func (k *k8sOps) CreateDeployment(deployment *apps_api.Deployment) (*apps_api.Deployment, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -894,11 +922,8 @@ func (k *k8sOps) DeleteDeployment(name, namespace string) error {
 	})
 }
 
-func (k *k8sOps) DescribeDeployment(depName string, depNamespace string) (*apps_api.DeploymentStatus, error) {
-	if err := k.initK8sClient(); err != nil {
-		return nil, err
-	}
-	dep, err := k.appsClient().Deployments(depNamespace).Get(depName, meta_v1.GetOptions{})
+func (k *k8sOps) DescribeDeployment(depName, depNamespace string) (*apps_api.DeploymentStatus, error) {
+	dep, err := k.GetDeployment(depName, depNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -907,11 +932,7 @@ func (k *k8sOps) DescribeDeployment(depName string, depNamespace string) (*apps_
 
 func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 	t := func() (interface{}, bool, error) {
-		if err := k.initK8sClient(); err != nil {
-			return "", true, err
-		}
-
-		dep, err := k.appsClient().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
+		dep, err := k.GetDeployment(deployment.Name, deployment.Namespace)
 		if err != nil {
 			return "", true, err
 		}
@@ -1005,11 +1026,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 
 func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment) error {
 	t := func() (interface{}, bool, error) {
-		if err := k.initK8sClient(); err != nil {
-			return "", true, err
-		}
-
-		dep, err := k.appsClient().Deployments(deployment.Namespace).Get(deployment.Name, meta_v1.GetOptions{})
+		dep, err := k.GetDeployment(deployment.Name, deployment.Namespace)
 		if err != nil {
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
 				return "", true, nil
@@ -1308,6 +1325,14 @@ func (k *k8sOps) ValidateJob(name, namespace string, timeout time.Duration) erro
 
 // StatefulSet APIs - BEGIN
 
+func (k *k8sOps) GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.appsClient().StatefulSets(namespace).Get(name, meta_v1.GetOptions{})
+}
+
 func (k *k8sOps) CreateStatefulSet(statefulset *apps_api.StatefulSet) (*apps_api.StatefulSet, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -1332,22 +1357,17 @@ func (k *k8sOps) DeleteStatefulSet(name, namespace string) error {
 }
 
 func (k *k8sOps) DescribeStatefulSet(ssetName string, ssetNamespace string) (*apps_api.StatefulSetStatus, error) {
-	if err := k.initK8sClient(); err != nil {
-		return nil, err
-	}
-	sset, err := k.appsClient().StatefulSets(ssetNamespace).Get(ssetName, meta_v1.GetOptions{})
+	sset, err := k.GetStatefulSet(ssetName, ssetNamespace)
 	if err != nil {
 		return nil, err
 	}
+
 	return &sset.Status, err
 }
 
 func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet, timeout time.Duration) error {
 	t := func() (interface{}, bool, error) {
-		if err := k.initK8sClient(); err != nil {
-			return "", true, err
-		}
-		sset, err := k.appsClient().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
+		sset, err := k.GetStatefulSet(statefulset.Name, statefulset.Namespace)
 		if err != nil {
 			return "", true, err
 		}
@@ -1410,11 +1430,7 @@ func (k *k8sOps) GetStatefulSetPods(statefulset *apps_api.StatefulSet) ([]v1.Pod
 
 func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet) error {
 	t := func() (interface{}, bool, error) {
-		if err := k.initK8sClient(); err != nil {
-			return "", true, err
-		}
-
-		sset, err := k.appsClient().StatefulSets(statefulset.Namespace).Get(statefulset.Name, meta_v1.GetOptions{})
+		sset, err := k.GetStatefulSet(statefulset.Name, statefulset.Namespace)
 		if err != nil {
 			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
 				return "", false, nil
@@ -1724,6 +1740,14 @@ func (k *k8sOps) IsPodBeingManaged(pod v1.Pod) bool {
 
 // StorageClass APIs - BEGIN
 
+func (k *k8sOps) GetStorageClass(name string) (*storage_api.StorageClass, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.StorageV1().StorageClasses().Get(name, meta_v1.GetOptions{})
+}
+
 func (k *k8sOps) CreateStorageClass(sc *storage_api.StorageClass) (*storage_api.StorageClass, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -1741,11 +1765,7 @@ func (k *k8sOps) DeleteStorageClass(name string) error {
 }
 
 func (k *k8sOps) GetStorageClassParams(sc *storage_api.StorageClass) (map[string]string, error) {
-	if err := k.initK8sClient(); err != nil {
-		return nil, err
-	}
-
-	sc, err := k.client.StorageV1().StorageClasses().Get(sc.Name, meta_v1.GetOptions{})
+	sc, err := k.GetStorageClass(sc.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -1754,16 +1774,7 @@ func (k *k8sOps) GetStorageClassParams(sc *storage_api.StorageClass) (map[string
 }
 
 func (k *k8sOps) ValidateStorageClass(name string) (*storage_api.StorageClass, error) {
-	if err := k.initK8sClient(); err != nil {
-		return nil, err
-	}
-
-	sc, err := k.client.StorageV1().StorageClasses().Get(name, meta_v1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	return sc, nil
+	return k.GetStorageClass(name)
 }
 
 // StorageClass APIs - END
@@ -2028,7 +2039,7 @@ func (k *k8sOps) GetVolumeForSnapshot(name string, namespace string) (string, er
 	return result.Metadata.Name, nil
 }
 
-func (k *k8sOps) GetSnapshotStatus(name string, namespace string) (*snap_v1.VolumeSnapshotStatus, error) {
+func (k *k8sOps) GetSnapshot(name string, namespace string) (*snap_v1.VolumeSnapshot, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
@@ -2041,7 +2052,17 @@ func (k *k8sOps) GetSnapshotStatus(name string, namespace string) (*snap_v1.Volu
 		Do().Into(&result); err != nil {
 		return nil, err
 	}
-	return &result.Status, nil
+
+	return &result, nil
+}
+
+func (k *k8sOps) GetSnapshotStatus(name string, namespace string) (*snap_v1.VolumeSnapshotStatus, error) {
+	snapshot, err := k.GetSnapshot(name, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &snapshot.Status, nil
 }
 
 // Snapshot APIs - END
@@ -2301,5 +2322,5 @@ func (k *k8sOps) getStorageClassForPVC(pvc *v1.PersistentVolumeClaim) (*storage_
 		return nil, fmt.Errorf("PVC: %s does not have a storage class", pvc.Name)
 	}
 
-	return k.client.StorageV1().StorageClasses().Get(scName, meta_v1.GetOptions{})
+	return k.GetStorageClass(scName)
 }

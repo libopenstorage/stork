@@ -3,7 +3,7 @@ dist: trusty
 language: go
 go:
   - 1.6
-before_install:  
+before_install:
   - sudo apt-get update -yq
 script:
   - make test

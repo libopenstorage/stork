@@ -18,18 +18,20 @@ package discovery
 
 import (
 	"fmt"
+	"path/filepath"
+	"reflect"
+	"testing"
+
 	esUtil "github.com/kubernetes-incubator/external-storage/lib/util"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/cache"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/common"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/deleter"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/util"
-	"path/filepath"
-	"testing"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/api/v1/helper"
-	"reflect"
+	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	"k8s.io/kubernetes/pkg/util/mount"
 )
 
 const (
@@ -94,18 +96,18 @@ func TestDiscoverVolumes_Basic(t *testing.T) {
 	vols := map[string][]*util.FakeDirEntry{
 		"dir1": {
 			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile, Capacity: 100 * 1024},
-			{Name: "mount2", Hash: 0x79412c38, VolumeType: util.FakeEntryBlock, Capacity: 100 * 1024 * 1024},
+			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock, Capacity: 100 * 1024 * 1024},
 		},
 		"dir2": {
 			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
-			{Name: "mount2", Hash: 0x7c4130f1, VolumeType: util.FakeEntryBlock},
+			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
 	test := &testConfig{
 		dirLayout:       vols,
 		expectedVolumes: vols,
 	}
-	d := testSetup(t, test)
+	d := testSetup(t, test, false)
 
 	d.DiscoverLocalVolumes()
 	verifyCreatedPVs(t, test)
@@ -115,18 +117,18 @@ func TestDiscoverVolumes_BasicTwice(t *testing.T) {
 	vols := map[string][]*util.FakeDirEntry{
 		"dir1": {
 			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile},
-			{Name: "mount2", Hash: 0x79412c38, VolumeType: util.FakeEntryBlock},
+			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock},
 		},
 		"dir2": {
 			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
-			{Name: "mount2", Hash: 0x7c4130f1, VolumeType: util.FakeEntryBlock},
+			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
 	test := &testConfig{
 		dirLayout:       vols,
 		expectedVolumes: vols,
 	}
-	d := testSetup(t, test)
+	d := testSetup(t, test, false)
 
 	d.DiscoverLocalVolumes()
 	verifyCreatedPVs(t, test)
@@ -143,7 +145,7 @@ func TestDiscoverVolumes_NoDir(t *testing.T) {
 		dirLayout:       vols,
 		expectedVolumes: vols,
 	}
-	d := testSetup(t, test)
+	d := testSetup(t, test, false)
 
 	d.DiscoverLocalVolumes()
 	verifyCreatedPVs(t, test)
@@ -157,7 +159,7 @@ func TestDiscoverVolumes_EmptyDir(t *testing.T) {
 		dirLayout:       vols,
 		expectedVolumes: vols,
 	}
-	d := testSetup(t, test)
+	d := testSetup(t, test, false)
 
 	d.DiscoverLocalVolumes()
 	verifyCreatedPVs(t, test)
@@ -167,18 +169,18 @@ func TestDiscoverVolumes_NewVolumesLater(t *testing.T) {
 	vols := map[string][]*util.FakeDirEntry{
 		"dir1": {
 			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile},
-			{Name: "mount2", Hash: 0x79412c38, VolumeType: util.FakeEntryBlock},
+			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock},
 		},
 		"dir2": {
 			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
-			{Name: "mount2", Hash: 0x7c4130f1, VolumeType: util.FakeEntryBlock},
+			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
 	test := &testConfig{
 		dirLayout:       vols,
 		expectedVolumes: vols,
 	}
-	d := testSetup(t, test)
+	d := testSetup(t, test, false)
 
 	d.DiscoverLocalVolumes()
 
@@ -188,7 +190,7 @@ func TestDiscoverVolumes_NewVolumesLater(t *testing.T) {
 	newVols := map[string][]*util.FakeDirEntry{
 		"dir1": {
 			{Name: "mount3", Hash: 0xf34b8003, VolumeType: util.FakeEntryFile},
-			{Name: "mount4", Hash: 0x144e29de, VolumeType: util.FakeEntryBlock},
+			{Name: "symlink3", Hash: 0x4d24d329, VolumeType: util.FakeEntryBlock},
 		},
 	}
 	test.volUtil.AddNewDirEntries(testMountDir, newVols)
@@ -215,7 +217,7 @@ func TestDiscoverVolumes_CreatePVFails(t *testing.T) {
 		dirLayout:       vols,
 		expectedVolumes: map[string][]*util.FakeDirEntry{},
 	}
-	d := testSetup(t, test)
+	d := testSetup(t, test, false)
 
 	d.DiscoverLocalVolumes()
 
@@ -233,7 +235,7 @@ func TestDiscoverVolumes_BadVolume(t *testing.T) {
 		dirLayout:       vols,
 		expectedVolumes: map[string][]*util.FakeDirEntry{},
 	}
-	d := testSetup(t, test)
+	d := testSetup(t, test, false)
 
 	d.DiscoverLocalVolumes()
 
@@ -245,11 +247,11 @@ func TestDiscoverVolumes_CleaningInProgress(t *testing.T) {
 	vols := map[string][]*util.FakeDirEntry{
 		"dir1": {
 			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile, Capacity: 100 * 1024},
-			{Name: "mount2", Hash: 0x79412c38, VolumeType: util.FakeEntryBlock, Capacity: 100 * 1024 * 1024},
+			{Name: "symlink2", Hash: 0x23645a36, VolumeType: util.FakeEntryBlock, Capacity: 100 * 1024 * 1024},
 		},
 		"dir2": {
 			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
-			{Name: "mount2", Hash: 0x7c4130f1, VolumeType: util.FakeEntryBlock},
+			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
 
@@ -260,14 +262,14 @@ func TestDiscoverVolumes_CleaningInProgress(t *testing.T) {
 		},
 		"dir2": {
 			{Name: "mount1", Hash: 0xa7aafa3c, VolumeType: util.FakeEntryFile},
-			{Name: "mount2", Hash: 0x7c4130f1, VolumeType: util.FakeEntryBlock},
+			{Name: "symlink2", Hash: 0x226458a3, VolumeType: util.FakeEntryBlock},
 		},
 	}
 	test := &testConfig{
 		dirLayout:       vols,
 		expectedVolumes: expectedVols,
 	}
-	d := testSetup(t, test)
+	d := testSetup(t, test, false)
 
 	// Mark dir1/mount2 PV as being cleaned. This one should not get created
 	pvName := getPVName(vols["dir1"][1])
@@ -277,25 +279,39 @@ func TestDiscoverVolumes_CleaningInProgress(t *testing.T) {
 	verifyCreatedPVs(t, test)
 }
 
-func testSetup(t *testing.T, test *testConfig) *Discoverer {
+func testSetup(t *testing.T, test *testConfig, useAlphaAPI bool) *Discoverer {
 	test.cache = cache.NewVolumeCache()
 	test.volUtil = util.NewFakeVolumeUtil(false /*deleteShouldFail*/, map[string][]*util.FakeDirEntry{})
 	test.volUtil.AddNewDirEntries(testMountDir, test.dirLayout)
 	test.apiUtil = util.NewFakeAPIUtil(test.apiShouldFail, test.cache)
 	test.procTable = deleter.NewProcTable()
 
+	fm := &mount.FakeMounter{
+		MountPoints: []mount.MountPoint{
+			{Path: "/discoveryPath/dir1/mount1"},
+			{Path: "/discoveryPath/dir1/mount2"},
+			{Path: "/discoveryPath/dir2/mount1"},
+			{Path: "/discoveryPath/dir2/mount2"},
+			{Path: "/discoveryPath/dir1"},
+			{Path: "/discoveryPath/dir2"},
+			{Path: "/discoveryPath/dir1/mount3"},
+			{Path: "/discoveryPath/dir1/mount4"},
+		},
+	}
+
 	userConfig := &common.UserConfig{
 		Node:            testNode,
 		DiscoveryMap:    scMapping,
 		NodeLabelsForPV: nodeLabelsForPV,
+		UseAlphaAPI:     useAlphaAPI,
 	}
 	runConfig := &common.RuntimeConfig{
-		UserConfig:    userConfig,
-		Cache:         test.cache,
-		VolUtil:       test.volUtil,
-		APIUtil:       test.apiUtil,
-		Name:          testProvisionerName,
-		BlockDisabled: false,
+		UserConfig: userConfig,
+		Cache:      test.cache,
+		VolUtil:    test.volUtil,
+		APIUtil:    test.apiUtil,
+		Name:       testProvisionerName,
+		Mounter:    fm,
 	}
 	d, err := NewDiscoverer(runConfig, test.procTable)
 	if err != nil {
@@ -316,17 +332,26 @@ func findSCName(t *testing.T, targetDir string, test *testConfig) string {
 }
 
 func verifyNodeAffinity(t *testing.T, pv *v1.PersistentVolume) {
-	affinity, err := helper.GetStorageNodeAffinityFromAnnotation(pv.Annotations)
-	if err != nil {
-		t.Errorf("Could not get node affinity from annotation: %v", err)
-		return
-	}
-	if affinity == nil {
-		t.Errorf("No node affinity found")
-		return
-	}
+	var err error
+	var volumeNodeAffinity *v1.VolumeNodeAffinity
+	var nodeAffinity *v1.NodeAffinity
+	var selector *v1.NodeSelector
 
-	selector := affinity.RequiredDuringSchedulingIgnoredDuringExecution
+	volumeNodeAffinity = pv.Spec.NodeAffinity
+	if volumeNodeAffinity == nil {
+		nodeAffinity, err = helper.GetStorageNodeAffinityFromAnnotation(pv.Annotations)
+		if err != nil {
+			t.Errorf("Could not get node affinity from annotation: %v", err)
+			return
+		}
+		if nodeAffinity == nil {
+			t.Errorf("No node affinity found")
+			return
+		}
+		selector = nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	} else {
+		selector = volumeNodeAffinity.Required
+	}
 	if selector == nil {
 		t.Errorf("NodeAffinity node selector is nil")
 		return
@@ -435,7 +460,8 @@ func verifyCreatedPVs(t *testing.T, test *testConfig) {
 	for pvName, createdPV := range createdPVs {
 		expectedPV, found := expectedPVs[pvName]
 		if !found {
-			t.Errorf("Did not expect created PVs %v", pvName)
+			t.Errorf("Did not find expected PVs %v", pvName)
+			continue
 		}
 		if createdPV.Spec.PersistentVolumeSource.Local.Path != expectedPV.path {
 			t.Errorf("Expected path %q, got %q", expectedPV.path, createdPV.Spec.PersistentVolumeSource.Local.Path)
@@ -493,5 +519,51 @@ func TestRoundDownCapacityPretty(t *testing.T) {
 		if actual != tt.expected {
 			t.Errorf("roundDownCapacityPretty(%d): expected %d, actual %d", tt.n, tt.expected, actual)
 		}
+	}
+}
+
+func TestDiscoverVolumes_NotMountPoint(t *testing.T) {
+	vols := map[string][]*util.FakeDirEntry{
+		"dir1": {
+			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile, Capacity: 100 * 1024},
+			// mount5 is not listed in the FakeMounter MountPoints setup for testing
+			{Name: "mount5", Hash: 0x79412c38, VolumeType: util.FakeEntryFile, Capacity: 100 * 1024 * 1024},
+		},
+	}
+	expectedVols := map[string][]*util.FakeDirEntry{
+		"dir1": {
+			{Name: "mount1", Hash: 0xaaaafef5, VolumeType: util.FakeEntryFile, Capacity: 100 * 1024},
+		},
+	}
+	test := &testConfig{
+		dirLayout:       vols,
+		expectedVolumes: expectedVols,
+	}
+	d := testSetup(t, test, false)
+
+	d.DiscoverLocalVolumes()
+	verifyCreatedPVs(t, test)
+}
+
+func TestUseAlphaAPI(t *testing.T) {
+	vols := map[string][]*util.FakeDirEntry{}
+	test := &testConfig{
+		dirLayout:       vols,
+		expectedVolumes: vols,
+	}
+	d := testSetup(t, test, false)
+	if d.UseAlphaAPI {
+		t.Fatal("UseAlphaAPI should be false")
+	}
+	if len(d.nodeAffinityAnn) != 0 || d.nodeAffinity == nil {
+		t.Fatal("the value nodeAffinityAnn shouldn't be set while nodeAffinity should")
+	}
+
+	d = testSetup(t, test, true)
+	if !d.UseAlphaAPI {
+		t.Fatal("UseAlphaAPI should be true")
+	}
+	if d.nodeAffinity != nil || len(d.nodeAffinityAnn) == 0 {
+		t.Fatal("the value nodeAffinityAnn should be set while nodeAffinity should not")
 	}
 }

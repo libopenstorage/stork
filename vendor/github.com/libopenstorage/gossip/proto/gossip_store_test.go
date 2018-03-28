@@ -290,8 +290,8 @@ func TestGossipStoreUpdateData(t *testing.T) {
 				t.Error("Wrongly Updated latest data d: ", n, " o: ", nodeInfo)
 			}
 			olderTime := n.LastUpdateTs.UnixNano() + 1000
-			ts := time.Unix(0, olderTime)
-			if ts != nodeInfo.LastUpdateTs {
+			ts := time.Unix(0, olderTime).UnixNano()
+			if ts != nodeInfo.LastUpdateTs.UnixNano() {
 				t.Error("Wrongly Updated latest data d: ", n, " o: ", nodeInfo)
 			}
 		}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"sync"
@@ -206,8 +207,12 @@ func Version(url string, options map[string]string) (string, error) {
 }
 
 func TestStart() error {
-	cmd = exec.Command("etcd", "--advertise-client-urls", "http://127.0.0.1:2379")
-	return cmd.Start()
+	dataDir := "/tmp/etcd"
+	os.RemoveAll(dataDir)
+	cmd = exec.Command("etcd", "--advertise-client-urls", "http://127.0.0.1:2379", "--data-dir", dataDir)
+	err := cmd.Start()
+	time.Sleep(5 * time.Second)
+	return err
 }
 
 func TestStop() error {

@@ -133,7 +133,7 @@ func TestConfigServerTLSServerCertsOnly(t *testing.T) {
 	if !tlsConfig.PreferServerCipherSuites {
 		t.Fatal("Expected server to prefer cipher suites")
 	}
-	if tlsConfig.MinVersion != tls.VersionTLS10 {
+	if tlsConfig.MinVersion != tls.VersionTLS12 {
 		t.Fatal("Unexpected server TLS version")
 	}
 }
@@ -329,7 +329,6 @@ func TestConfigClientDefaultWithTLSMinimumModifier(t *testing.T) {
 // minimum version should be set accordingly
 func TestConfigServerTLSMinVersionIsSetBasedOnOptions(t *testing.T) {
 	versions := []uint16{
-		tls.VersionTLS11,
 		tls.VersionTLS12,
 	}
 	key, cert := getCertAndKey()

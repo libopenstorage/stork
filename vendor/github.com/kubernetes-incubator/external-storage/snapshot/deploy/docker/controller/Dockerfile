@@ -14,4 +14,7 @@
 
 FROM busybox:glibc
 COPY snapshot-controller /bin/snapshot-controller
+# Root CA certificates
+COPY etc /etc
+COPY usr /usr
 ENTRYPOINT ["/bin/snapshot-controller"]

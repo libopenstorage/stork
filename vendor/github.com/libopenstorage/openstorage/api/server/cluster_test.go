@@ -2,69 +2,23 @@ package server
 
 import (
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"testing"
+	"time"
 
-	types "github.com/libopenstorage/gossip/types"
+	"github.com/golang/mock/gomock"
+	"github.com/libopenstorage/gossip/types"
 	"github.com/libopenstorage/openstorage/api"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/cluster"
-	mockcluster "github.com/libopenstorage/openstorage/cluster/mock"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/golang/mock/gomock"
-	"github.com/kubernetes-csi/csi-test/utils"
 )
 
-type testCluster struct {
-	c       *mockcluster.MockCluster
-	mc      *gomock.Controller
-	oldInst func() (cluster.Cluster, error)
-}
-
-func newTestClutser(t *testing.T) *testCluster {
-	tester := &testCluster{}
-
-	// Save already set value of cluster.Inst to set it back
-	// when we finish the tests by the defer()
-	tester.oldInst = cluster.Inst
-
-	// Create mock controller
-	tester.mc = gomock.NewController(&utils.SafeGoroutineTester{})
-
-	// Create a new mock cluster
-	tester.c = mockcluster.NewMockCluster(tester.mc)
-
-	// Override cluster.Inst to return our mock cluster
-	cluster.Inst = func() (cluster.Cluster, error) {
-		return tester.c, nil
-	}
-
-	return tester
-}
-
-func (c *testCluster) MockCluster() *mockcluster.MockCluster {
-	return c.c
-}
-
-func (c *testCluster) Finish() {
-	cluster.Inst = c.oldInst
-	c.mc.Finish()
-}
 func TestClusterEnumerateSuccess(t *testing.T) {
 
 	// Create a new global test cluster
-	tc := newTestClutser(t)
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
 	defer tc.Finish()
-
-	// create an instance of clusterAPI to get access to
-	// versions endpoint handler
-
-	capi := &clusterApi{}
-
-	// create a HTTP Test server
-	ts := httptest.NewServer(http.HandlerFunc(capi.enumerate))
 
 	// create a cluster client to make the REST call
 	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
@@ -101,22 +55,65 @@ func TestClusterEnumerateSuccess(t *testing.T) {
 	assert.NotNil(t, resp)
 
 	assert.EqualValues(t, "cluster-dummy-id", resp.Id)
+}
 
+func TestInspectNodeSuccess(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	nodeID := "dummy-node-id-121"
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		Inspect(nodeID).
+		Return(api.Node{
+			Id:       nodeID,
+			Hostname: "dummy-hostname",
+			Status:   api.Status_STATUS_OK,
+		}, nil)
+
+	// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+	resp, err := restClient.Inspect(nodeID)
+
+	assert.NoError(t, err)
+	assert.EqualValues(t, nodeID, resp.Id)
+	assert.EqualValues(t, api.Status_STATUS_OK, resp.Status)
+
+	// mock the cluster response with IP
+	nodeIP := "192.168.1.1"
+
+	tc.MockCluster().
+		EXPECT().
+		Inspect(nodeIP).
+		Return(api.Node{
+			Id:       nodeID,
+			Hostname: "dummy-hostname",
+			Status:   api.Status_STATUS_OK,
+		}, nil)
+
+	// make the REST call
+	restClient = clusterclient.ClusterManager(c)
+	resp, err = restClient.Inspect(nodeIP)
+
+	assert.NoError(t, err)
+	assert.EqualValues(t, nodeID, resp.Id)
+	assert.EqualValues(t, api.Status_STATUS_OK, resp.Status)
 }
 
 func TestGossipStateSuccess(t *testing.T) {
 
 	// Create a new global test cluster
-	tc := newTestClutser(t)
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
 	defer tc.Finish()
-
-	// create an instance of clusterAPI to get access to
-	// versions endpoint handler
-
-	capi := &clusterApi{}
-
-	// create a HTTP Test server
-	ts := httptest.NewServer(http.HandlerFunc(capi.gossipState))
 
 	// create a cluster client to make the REST call
 	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
@@ -154,22 +151,14 @@ func TestGossipStateSuccess(t *testing.T) {
 
 	assert.Len(t, resp.NodeStatus, 3)
 	assert.EqualValues(t, "node1-id", resp.NodeStatus[0].Id)
-
 }
 
 func TestGossipStateFailed(t *testing.T) {
 
 	// Create a new global test cluster
-	tc := newTestClutser(t)
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
 	defer tc.Finish()
-
-	// create an instance of clusterAPI to get access to
-	// versions endpoint handler
-
-	capi := &clusterApi{}
-
-	// create a HTTP Test server
-	ts := httptest.NewServer(http.HandlerFunc(capi.gossipState))
 
 	// create a cluster client to make the REST call
 	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
@@ -190,23 +179,77 @@ func TestGossipStateFailed(t *testing.T) {
 	assert.Len(t, resp.NodeStatus, 0)
 
 }
+
+func TestPeerStatusSuccess(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	listenerName := "pxd"
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		PeerStatus(listenerName).
+		Return(map[string]api.Status{
+			"node-1": api.Status_STATUS_OK,
+			"node-2": api.Status_STATUS_OK,
+		}, nil)
+
+		// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+
+	statusMap, err := restClient.PeerStatus(listenerName)
+	assert.NoError(t, err)
+	assert.Equal(t, len(statusMap), 2)
+
+	for _, v := range statusMap {
+		assert.Equal(t, v, api.Status_STATUS_OK)
+	}
+}
+
+func TestNodeHealthSuccess(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		NodeStatus().
+		Return(api.Status_STATUS_OK, nil)
+
+		// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+
+	status, err := restClient.NodeStatus()
+	assert.NoError(t, err)
+	assert.Equal(t, api.Status_STATUS_OK, status)
+
+}
 func TestClusterNodeStatusSuccess(t *testing.T) {
 
 	// Create a new global test cluster
-	c := newTestClutser(t)
-	defer c.Finish()
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
 
-	// Create an instance of clusterAPI to get access to
-	// nodeStatus receiver
-	capi := &clusterApi{}
-
-	// Send call to server
-	ts := httptest.NewServer(http.HandlerFunc(capi.nodeStatus))
 	restClient, err := clusterclient.NewClusterClient(ts.URL, "v1")
 	assert.NoError(t, err)
 
 	// Set expections
-	c.MockCluster().
+	tc.MockCluster().
 		EXPECT().
 		NodeStatus().
 		Return(api.Status_STATUS_OK, nil).
@@ -221,16 +264,9 @@ func TestClusterNodeStatusSuccess(t *testing.T) {
 func TestNodeRemoveSuccess(t *testing.T) {
 
 	// Create a new global test cluster
-	tc := newTestClutser(t)
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
 	defer tc.Finish()
-
-	// create an instance of clusterAPI to get access to
-	// versions endpoint handler
-
-	capi := &clusterApi{}
-
-	// create a HTTP Test server
-	ts := httptest.NewServer(http.HandlerFunc(capi.delete))
 
 	// create a cluster client to make the REST call
 	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
@@ -260,16 +296,9 @@ func TestNodeRemoveSuccess(t *testing.T) {
 func TestNodeRemoveFailed(t *testing.T) {
 
 	// Create a new global test cluster
-	tc := newTestClutser(t)
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
 	defer tc.Finish()
-
-	// create an instance of clusterAPI to get access to
-	// versions endpoint handler
-
-	capi := &clusterApi{}
-
-	// create a HTTP Test server
-	ts := httptest.NewServer(http.HandlerFunc(capi.delete))
 
 	// create a cluster client to make the REST call
 	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
@@ -298,17 +327,11 @@ func TestNodeRemoveFailed(t *testing.T) {
 }
 
 func TestEnableGossipSuccess(t *testing.T) {
+
 	// Create a new global test cluster
-	tc := newTestClutser(t)
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
 	defer tc.Finish()
-
-	// create an instance of clusterAPI to get access to
-	// versions endpoint handler
-
-	capi := &clusterApi{}
-
-	// create a HTTP Test server
-	ts := httptest.NewServer(http.HandlerFunc(capi.enableGossip))
 
 	// mock the cluster response
 	tc.MockCluster().
@@ -329,17 +352,11 @@ func TestEnableGossipSuccess(t *testing.T) {
 }
 
 func TestDisableGossipSuccess(t *testing.T) {
+
 	// Create a new global test cluster
-	tc := newTestClutser(t)
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
 	defer tc.Finish()
-
-	// create an instance of clusterAPI to get access to
-	// versions endpoint handler
-
-	capi := &clusterApi{}
-
-	// create a HTTP Test server
-	ts := httptest.NewServer(http.HandlerFunc(capi.disableGossip))
 
 	// mock the cluster response
 	tc.MockCluster().
@@ -358,27 +375,60 @@ func TestDisableGossipSuccess(t *testing.T) {
 	assert.NoError(t, resp)
 
 }
-
-func TestSetLoggingURLSuccess(t *testing.T) {
+func TestEnumerateAlertsSuccess(t *testing.T) {
 
 	// Create a new global test cluster
-	tc := newTestClutser(t)
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
 	defer tc.Finish()
 
-	// create an instance of clusterAPI to get access to
-	// versions endpoint handler
-
-	capi := &clusterApi{}
-
-	// create a HTTP Test server
-	ts := httptest.NewServer(http.HandlerFunc(capi.setLoggingURL))
-
-	loggingURL := "http://ip-address:port/dummy-logging-url"
+	// time frame is exactly 24 hrs from current time.
+	endTime := time.Now()
+	startTime := endTime.Add(-24 * time.Hour)
 
 	// mock the cluster response
 	tc.MockCluster().
 		EXPECT().
-		SetLoggingURL(loggingURL).
+		EnumerateAlerts(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&api.Alerts{
+			Alert: []*api.Alert{
+				&api.Alert{
+					AlertType: 1,
+					Id:        123,
+					Resource:  api.ResourceType_RESOURCE_TYPE_NODE,
+				},
+			},
+		}, nil)
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+	resp, err := restClient.EnumerateAlerts(startTime, endTime, api.ResourceType_RESOURCE_TYPE_NODE)
+
+	assert.NoError(t, err)
+
+	assert.Len(t, resp.Alert, 1)
+	assert.EqualValues(t, 123, resp.Alert[0].GetId())
+	assert.EqualValues(t, api.ResourceType_RESOURCE_TYPE_NODE, resp.Alert[0].GetResource())
+}
+
+func TestClearAlertSuccess(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// alertId
+	alertID := int64(12345)
+
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		ClearAlert(api.ResourceType_RESOURCE_TYPE_NODE, gomock.Any()).
 		Return(nil)
 
 	// create a cluster client to make the REST call
@@ -387,8 +437,141 @@ func TestSetLoggingURLSuccess(t *testing.T) {
 
 	// make the REST call
 	restClient := clusterclient.ClusterManager(c)
-	resp := restClient.SetLoggingURL(loggingURL)
-
+	resp := restClient.ClearAlert(api.ResourceType_RESOURCE_TYPE_NODE, alertID)
 	assert.NoError(t, resp)
+}
 
+func TestClearAlertFailed(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// alertId
+	alertID := int64(12345)
+
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		ClearAlert(api.ResourceType_RESOURCE_TYPE_NODE, gomock.Any()).
+		Return(fmt.Errorf("Error in clearing alert"))
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+	resp := restClient.ClearAlert(api.ResourceType_RESOURCE_TYPE_NODE, alertID)
+	assert.Error(t, resp)
+	assert.Contains(t, resp.Error(), "Error in clearing alert")
+}
+
+func TestEraseAlertSuccess(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// alertId
+	alertID := int64(12345)
+
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		EraseAlert(gomock.Any(), gomock.Any()).
+		Return(nil)
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+	resp := restClient.EraseAlert(api.ResourceType_RESOURCE_TYPE_NODE, alertID)
+	assert.NoError(t, resp)
+}
+
+func TestEraseAlertFailed(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// alertId
+	alertID := int64(12345)
+
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		EraseAlert(gomock.Any(), gomock.Any()).
+		Return(fmt.Errorf("Error in Erasing alert"))
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+	resp := restClient.EraseAlert(api.ResourceType_RESOURCE_TYPE_NODE, alertID)
+	assert.Error(t, resp)
+	assert.Contains(t, resp.Error(), "Error in Erasing alert")
+}
+
+func TestGetNodeIdFromIpSuccess(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	nodeIP := "192.168.1.10"
+	nodeID := "dummy-node-id-ip"
+
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		GetNodeIdFromIp(nodeIP).
+		Return(nodeID, nil)
+
+	// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+	id, err := restClient.GetNodeIdFromIp(nodeIP)
+
+	assert.NoError(t, err)
+	assert.EqualValues(t, nodeID, id)
+}
+
+func TestGetNodeIdFromIpFailed(t *testing.T) {
+
+	// Create a new global test cluster
+	ts, tc := testClusterServer(t)
+	defer ts.Close()
+	defer tc.Finish()
+
+	// create a cluster client to make the REST call
+	c, err := clusterclient.NewClusterClient(ts.URL, "v1")
+	assert.NoError(t, err)
+
+	nodeIP := "192.168.1.10"
+	// mock the cluster response
+	tc.MockCluster().
+		EXPECT().
+		GetNodeIdFromIp(nodeIP).
+		Return(nodeIP, fmt.Errorf("Failed to locate IP in this cluster."))
+
+	// make the REST call
+	restClient := clusterclient.ClusterManager(c)
+	id, err := restClient.GetNodeIdFromIp(nodeIP)
+
+	assert.EqualValues(t, nodeIP, id)
+	// Client code fix should be able to error respons: todo
+	assert.Contains(t, err.Error(), "error 500")
 }

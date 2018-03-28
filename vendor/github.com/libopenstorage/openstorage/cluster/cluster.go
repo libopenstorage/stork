@@ -9,6 +9,7 @@ import (
 	"github.com/libopenstorage/gossip/types"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/config"
+	"github.com/libopenstorage/openstorage/osdconfig"
 	"github.com/portworx/kvdb"
 )
 
@@ -49,14 +50,10 @@ type NodeEntry struct {
 
 // ClusterInfo is the basic info about the cluster and its nodes
 type ClusterInfo struct {
-	Size          int
-	Status        api.Status
-	Id            string
-	NodeEntries   map[string]NodeEntry
-	LoggingURL    string
-	ManagementURL string
-	FluentDConfig api.FluentDConfig
-	TunnelConfig  api.TunnelConfig
+	Size        int
+	Status      api.Status
+	Id          string
+	NodeEntries map[string]NodeEntry
 }
 
 // ClusterInitState is the snapshot state which should be used to initialize
@@ -183,6 +180,9 @@ type ClusterData interface {
 	// Key is the node id
 	GetData() (map[string]*api.Node, error)
 
+	// GetNodeIdFromIp returns a Node Id given an IP.
+	GetNodeIdFromIp(idIp string) (string, error)
+
 	// EnableUpdate cluster data updates to be sent to listeners
 	EnableUpdates() error
 
@@ -191,18 +191,6 @@ type ClusterData interface {
 
 	// GetGossipState returns the state of nodes according to gossip
 	GetGossipState() *ClusterState
-
-	// SetLoggingURL sets the loggingurl for the stats
-	// Deprecated
-	SetLoggingURL(loggingURL string) error
-
-	SetManagementURL(managementURL string) error
-
-	SetFluentDConfig(fluentdConfig api.FluentDConfig) error
-
-	SetTunnelConfig(tunnelConfig api.TunnelConfig) error
-
-	GetTunnelConfig() api.TunnelConfig
 }
 
 // ClusterStatus interface provides apis for cluster and node status
@@ -259,12 +247,13 @@ type Cluster interface {
 	// It also causes this node to join the cluster.
 	// nodeInitialized indicates if the caller of this method expects the node
 	// to have been in an already-initialized state.
-	Start(clusterSize int, nodeInitialized bool) error
+	Start(clusterSize int, nodeInitialized bool, gossipPort string) error
 
 	ClusterData
 	ClusterRemove
 	ClusterStatus
 	ClusterAlerts
+	osdconfig.ConfigCaller
 }
 
 // ClusterNotify is the callback function listeners can use to notify cluster manager

@@ -55,7 +55,9 @@ func Start() error {
 
 	//consul agent -server -client=0.0.0.0  -data-dir /opt/consul/data -bind 0.0.0.0 -syslog -bootstrap-expect 1 -advertise 127.0.0.1
 	cmd = exec.Command("consul", "agent", "-server", "-advertise", "127.0.0.1", "-bind", "0.0.0.0", "-data-dir", "/tmp/consul", "-bootstrap-expect", "1")
-	return cmd.Start()
+	err := cmd.Start()
+	time.Sleep(5 * time.Second)
+	return err
 }
 
 func Stop() error {

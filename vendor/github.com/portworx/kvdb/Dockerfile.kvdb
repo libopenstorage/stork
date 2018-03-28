@@ -5,6 +5,8 @@ RUN \
   apt-get update -yq && \
   apt-get install -yq --no-install-recommends \
     btrfs-tools \
+    gcc \
+    g++ \
     ca-certificates && \
   apt-get clean && \
   rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -13,8 +15,8 @@ RUN apt-get update && \
   apt-get -y install unzip curl make git
 
 RUN curl -L https://redirector.gvt1.com/edgedl/go/go1.9.2.linux-amd64.tar.gz | tar -C /usr/local/ -xz  &&\
-  curl -L https://github.com/coreos/etcd/releases/download/v3.2.9/etcd-v3.2.9-linux-amd64.tar.gz -o /tmp/etcd-v3.2.9-linux-amd64.tar.gz  &&\
-  mkdir -p /tmp/test-etcd && tar xzvf /tmp/etcd-v3.2.9-linux-amd64.tar.gz -C /tmp/test-etcd --strip-components=1 && cp /tmp/test-etcd/etcd /usr/local/bin  &&\
+  curl -L https://github.com/coreos/etcd/releases/download/v3.2.15/etcd-v3.2.15-linux-amd64.tar.gz -o /tmp/etcd-v3.2.15-linux-amd64.tar.gz  &&\
+  mkdir -p /tmp/test-etcd && tar xzvf /tmp/etcd-v3.2.15-linux-amd64.tar.gz -C /tmp/test-etcd --strip-components=1 && cp /tmp/test-etcd/etcd /usr/local/bin  &&\
   curl -L https://releases.hashicorp.com/consul/1.0.0/consul_1.0.0_linux_amd64.zip -o /tmp/consul.zip && \
   mkdir -p /tmp/test-consul && unzip /tmp/consul.zip -d /tmp/test-consul && cp /tmp/test-consul/consul /usr/local/bin/
 
@@ -25,18 +27,16 @@ ENV GOROOT /usr/local/go
 RUN mkdir -p /go/src/github.com/portworx/kvdb
 ADD . /go/src/github.com/portworx/kvdb
 WORKDIR /go/src/github.com/portworx/kvdb
+
+RUN go get github.com/coreos/etcd
+WORKDIR /go/src/github.com/coreos/etcd
+RUN git checkout v3.3.1
+
+WORKDIR /go/src/github.com/portworx/kvdb
+
 RUN make testdeps
 
-RUN go get github.com/boltdb/bolt
-
-RUN go get github.com/ugorji/go/codec
-WORKDIR /go/src/github.com/ugorji/go/codec
-RUN git checkout faddd6128c66c4708f45fdc007f575f75e592a3c
-
 WORKDIR /go/src/google.golang.org/grpc
-RUN git checkout 8712952b7d646dbbbc6fb73a782174f3115060f3
-
-WORKDIR /go/src/github.com/coreos/etcd
-RUN git checkout v3.2.6
+RUN git checkout v1.7.5
 
 WORKDIR /go/src/github.com/portworx/kvdb

@@ -6,11 +6,6 @@ ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'vendor' | grep -v 'sanity')
 endif
 
-ifndef LINT_PKGS
-LINT_DIRS := "./csi"
-LINT_PKGS := $(shell go list $(LINT_DIRS) | grep -v vendor)
-endif
-
 ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS := -gcflags "-N -l"
 endif
@@ -94,7 +89,7 @@ proto:
 
 lint:
 	go get -v github.com/golang/lint/golint
-	golint -set_exit_status $(LINT_PKGS)
+	golint $(PKGS)
 
 vet:
 	go vet $(PKGS)
@@ -110,6 +105,12 @@ test:
 
 docs:
 	go generate ./cmd/osd/main.go
+	swagger validate api/swagger/swagger.json
+
+generate-mockfiles:
+	go generate $(PKGS)
+
+generate: docs generate-mockfiles
 
 docker-build-osd-dev:
 	docker build -t openstorage/osd-dev -f Dockerfile.osd-dev .
@@ -217,7 +218,9 @@ clean: $(OSDSANITY)-clean
 	install-flexvolume-plugin \
 	$(OSDSANITY)-install \
 	$(OSDSANITY)-clean \
-	clean
+	clean \
+	generate \
+	generate-mockfiles
 
 $(GOPATH)/bin/cover:
 	go get golang.org/x/tools/cmd/cover
