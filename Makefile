@@ -73,6 +73,7 @@ errcheck:
 pretest: lint vet errcheck
 
 test:
+	set -e
 	echo "" > coverage.txt
 	for pkg in $(PKGS);	do \
 		go test -tags unittest -coverprofile=profile.out -covermode=atomic $(TESTFLAGS) $${pkg}; \
