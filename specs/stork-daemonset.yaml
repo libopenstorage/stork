@@ -83,6 +83,12 @@ rules:
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["deployments", "deployments/extensions"]
+    verbs: ["list", "get", "watch", "patch", "update", "initialize"]
+  - apiGroups: [""]
+    resources: ["statefulsets", "statefulsets/extensions"]
+    verbs: ["list", "get", "watch", "patch", "update", "initialize"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -134,6 +140,9 @@ spec:
         - --driver=pxd
         - --verbose
         - --leader-elect=true
+        # Uncomment the line below if you want to enable the feature to
+        # automatically update schedulerName
+        #- --app-initializer=true
         imagePullPolicy: Always
         image: openstorage/stork:1.0.3
         resources:
