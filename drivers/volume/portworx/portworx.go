@@ -38,6 +38,9 @@ const (
 
 	// pvcProvisionerAnnotation is the annotation on PVC which has the provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
+
+	// pvcNameLabel is the key of the label used to store the PVC name
+	pvcNameLabel = "pvc"
 )
 
 type portworx struct {
@@ -274,6 +277,9 @@ func (p *portworx) SnapshotRestore(
 	logrus.Debugf("SnapshotRestore for pvc: %+v", pvc)
 	locator := &api.VolumeLocator{
 		Name: "pvc-" + string(pvc.UID),
+		VolumeLabels: map[string]string{
+			pvcNameLabel: pvc.Name,
+		},
 	}
 	volumeID, err := p.volDriver.Snapshot(snapID, false, locator)
 	if err != nil {
