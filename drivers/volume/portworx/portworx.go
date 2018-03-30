@@ -41,6 +41,9 @@ const (
 
 	// pvcNameLabel is the key of the label used to store the PVC name
 	pvcNameLabel = "pvc"
+
+	// pvcNamespaceLabel is the key of the label used to store the PVC namespace
+	pvcNamespaceLabel = "namespace"
 )
 
 type portworx struct {
@@ -278,7 +281,8 @@ func (p *portworx) SnapshotRestore(
 	locator := &api.VolumeLocator{
 		Name: "pvc-" + string(pvc.UID),
 		VolumeLabels: map[string]string{
-			pvcNameLabel: pvc.Name,
+			pvcNameLabel:      pvc.Name,
+			pvcNamespaceLabel: pvc.Namespace,
 		},
 	}
 	volumeID, err := p.volDriver.Snapshot(snapID, false, locator)
