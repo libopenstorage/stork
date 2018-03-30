@@ -1,5 +1,5 @@
 hash: 4fc8426e19f0d0d81cb1a4078559672742ddabac44fb6dde505f81601d752419
-updated: 2018-03-28T14:42:00.150173563-07:00
+updated: 2018-03-30T13:22:16.377081637-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 783273d703149aaeb9897cf58613d5af48861c25
@@ -207,7 +207,7 @@ imports:
 - name: github.com/Microsoft/go-winio
   version: 7da180ee92d8bd8bb8c37fc560e673e6557c392f
 - name: github.com/miekg/dns
-  version: 22cb769f47009091f1bc4bf9fffa398bbf6ca68f
+  version: 5b169d1842fbc764c22df259de0a17085c48d8c2
 - name: github.com/mohae/deepcopy
   version: c48cc78d482608239f6c4c92a4abd87eb8761c90
 - name: github.com/onsi/ginkgo
@@ -258,7 +258,7 @@ imports:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: 7395635a8f5ed8f837c1fcfdfa26df2fa8b8f874
+  version: 3e163f97f4c5565ffc81bdc2a96e611b071d25cd
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s

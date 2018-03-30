@@ -34,6 +34,10 @@ const (
 	// SchedName is the name of the kubernetes scheduler driver implementation
 	SchedName      = "k8s"
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
+	// DeploymentSuffix is the suffix for deployment names stored as keys in maps
+	DeploymentSuffix = "-dep"
+	// StatefulSetSuffix is the suffix for statefulset names stored as keys in maps
+	StatefulSetSuffix = "-ss"
 )
 
 const (
@@ -944,6 +948,65 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 	return buf.String(), nil
 }
 
+func (k *k8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
+	k8sOps := k8s_ops.Instance()
+	for _, spec := range ctx.App.SpecList {
+		logrus.Infof("Scale all Deployments")
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
+			if err != nil {
+				return err
+			}
+			newScaleFactor := scaleFactorMap[obj.Name+DeploymentSuffix]
+			*dep.Spec.Replicas = newScaleFactor
+			if _, err := k8sOps.UpdateDeployment(dep); err != nil {
+				return &scheduler.ErrFailedToUpdateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to update Deployment: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Infof("Deployment %s scaled to %d successfully.", obj.Name, newScaleFactor)
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			logrus.Infof("Scale all Stateful sets")
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return err
+			}
+			newScaleFactor := scaleFactorMap[obj.Name+StatefulSetSuffix]
+			*ss.Spec.Replicas = newScaleFactor
+			if _, err := k8sOps.UpdateStatefulSet(ss); err != nil {
+				return &scheduler.ErrFailedToUpdateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to update StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Infof("StatefulSet %s scaled to %d successfully.", obj.Name, int(newScaleFactor))
+		}
+	}
+	return nil
+}
+
+func (k *k8s) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
+	k8sOps := k8s_ops.Instance()
+	scaleFactorMap := make(map[string]int32, len(ctx.App.SpecList))
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
+			if err != nil {
+				return scaleFactorMap, err
+			}
+			scaleFactorMap[obj.Name+DeploymentSuffix] = *dep.Spec.Replicas
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return scaleFactorMap, err
+			}
+			scaleFactorMap[obj.Name+StatefulSetSuffix] = *ss.Spec.Replicas
+		}
+	}
+	return scaleFactorMap, nil
+}
+
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }
@@ -955,9 +1018,9 @@ func dumpPodStatusRecursively(pod v1.Pod) string {
 	for _, conStat := range pod.Status.ContainerStatuses {
 		buf.WriteString(insertLineBreak(conStat.Name))
 		buf.WriteString(fmt.Sprintf("%v\n", conStat))
-		buf.WriteString(insertLineBreak("END Container"))
+		buf.WriteString(insertLineBreak("END container"))
 	}
-	buf.WriteString(insertLineBreak("END Pod"))
+	buf.WriteString(insertLineBreak("END pod"))
 	return buf.String()
 }
 

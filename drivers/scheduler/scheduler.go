@@ -76,6 +76,12 @@ type Driver interface {
 
 	// Describe generates a bundle that can be used by support - logs, cores, states, etc
 	Describe(*Context) (string, error)
+
+	// Scale the current applications using the new scales from the GetScaleFactorMap.
+	ScaleApplication(*Context, map[string]int32) error
+
+	// Get a map of current applications to their new scales, based on "factor"
+	GetScaleFactorMap(*Context) (map[string]int32, error)
 }
 
 var (

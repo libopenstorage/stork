@@ -130,6 +130,8 @@ type StatefulSetOps interface {
 	GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error)
 	// CreateStatefulSet creates the given statefulset
 	CreateStatefulSet(ss *apps_api.StatefulSet) (*apps_api.StatefulSet, error)
+	// UpdateStatefulSet creates the given statefulset
+	UpdateStatefulSet(ss *apps_api.StatefulSet) (*apps_api.StatefulSet, error)
 	// DeleteStatefulSet deletes the given statefulset
 	DeleteStatefulSet(name, namespace string) error
 	// ValidateStatefulSet validates the given statefulset if it's running and healthy within the give timeout
@@ -150,6 +152,8 @@ type DeploymentOps interface {
 	GetDeployment(name, namespace string) (*apps_api.Deployment, error)
 	// CreateDeployment creates the given deployment
 	CreateDeployment(*apps_api.Deployment) (*apps_api.Deployment, error)
+	// UpdateDeployment updates the given deployment
+	UpdateDeployment(*apps_api.Deployment) (*apps_api.Deployment, error)
 	// DeleteDeployment deletes the given deployment
 	DeleteDeployment(name, namespace string) error
 	// ValidateDeployment validates the given deployment if it's running and healthy
@@ -930,6 +934,13 @@ func (k *k8sOps) DescribeDeployment(depName, depNamespace string) (*apps_api.Dep
 	return &dep.Status, err
 }
 
+func (k *k8sOps) UpdateDeployment(deployment *apps_api.Deployment) (*apps_api.Deployment, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.appsClient().Deployments(deployment.Namespace).Update(deployment)
+}
+
 func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 	t := func() (interface{}, bool, error) {
 		dep, err := k.GetDeployment(deployment.Name, deployment.Namespace)
@@ -1363,6 +1374,13 @@ func (k *k8sOps) DescribeStatefulSet(ssetName string, ssetNamespace string) (*ap
 	}
 
 	return &sset.Status, err
+}
+
+func (k *k8sOps) UpdateStatefulSet(statefulset *apps_api.StatefulSet) (*apps_api.StatefulSet, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.appsClient().StatefulSets(statefulset.Namespace).Update(statefulset)
 }
 
 func (k *k8sOps) ValidateStatefulSet(statefulset *apps_api.StatefulSet, timeout time.Duration) error {

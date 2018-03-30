@@ -194,6 +194,53 @@ var _ = Describe("AppTasksDown", func() {
 	})
 })
 
+// This test scales up and down an application and checks if app has actually scaled accordingly
+var _ = Describe("AppScaleUpAndDown", func() {
+	It("has to scale up and scale down the app", func() {
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i))...)
+		}
+
+		Step("scale up all applications", func() {
+			for _, ctx := range contexts {
+				Step(fmt.Sprintf("updating scale for app: %s", ctx.App.Key), func() {
+					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for name, scale := range applicationScaleUpMap {
+						applicationScaleUpMap[name] = scale + 1
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				ValidateContext(ctx)
+			}
+		})
+		Step("scale down all applications", func() {
+			for _, ctx := range contexts {
+				Step("scale down all deployments/stateful sets ", func() {
+					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					for name, scale := range applicationScaleDownMap {
+						applicationScaleDownMap[name] = scale - 1
+					}
+					err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				ValidateContext(ctx)
+			}
+		})
+		Step("teardown all apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+
+	})
+})
+
 var _ = AfterSuite(func() {
 	CollectSupport()
 	ValidateCleanup()
