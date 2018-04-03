@@ -43,7 +43,7 @@ type Driver interface {
 	ValidateVolumeSetup(vol *Volume) error
 
 	// Stop must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
-	StopDriver(n node.Node, force bool) error
+	StopDriver(nodes []node.Node, force bool) error
 
 	// Start must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
