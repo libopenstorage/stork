@@ -18,7 +18,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -189,16 +188,15 @@ func (p *portworx) GetPodVolumes(pod *v1.Pod) ([]*storkvolume.Info, error) {
 			}
 
 			provisioner := ""
-			// Try getting the provisioner from the Storage class. If that has been
-			// deleted, check for the provisioner in the PVC annotation
-			storageClass, err := k8sutils.GetStorageClass(storageClassName, pod.Namespace)
-			if kerrors.IsNotFound(err) {
-				if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
-					provisioner = val
-				}
-			} else if err != nil {
-				return nil, err
+			// Check for the provisioner in the PVC annotation. If not populated
+			// try getting the provisioner from the Storage class.
+			if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
+				provisioner = val
 			} else {
+				storageClass, err := k8sutils.GetStorageClass(storageClassName, pod.Namespace)
+				if err != nil {
+					return nil, err
+				}
 				provisioner = storageClass.Provisioner
 			}
 
