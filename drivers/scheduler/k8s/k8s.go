@@ -673,15 +673,9 @@ func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
 
 	// Ensure the pods are deleted and removed from the system
 	for _, pod := range pods {
-		t := func() (interface{}, bool, error) {
-			_, err := k8sOps.GetPodByUID(pod.UID, pod.Namespace)
-			if err != nil && err == k8s_ops.ErrPodsNotFound {
-				return nil, false, nil
-			}
-			return nil, true, err
-		}
-
-		if _, err := task.DoRetryWithTimeout(t, deleteTasksWaitTimeout, defaultRetryInterval); err != nil {
+		err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
+		if err != nil {
+			logrus.Errorf("k8s DeleteTasks failed to wait for pod: [%s] %s to terminate. err: %v", pod.Namespace, pod.Name, err)
 			return err
 		}
 	}
