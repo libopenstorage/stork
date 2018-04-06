@@ -118,11 +118,9 @@ EOF
 
 echo "Waiting for torpedo to start running"
 
-function debug_log_then_exit {
+function describe_pod_then_exit {
   echo "Pod description:"
   kubectl describe pod torpedo
-  echo "Pod logs:"
-  kubectl logs torpedo
   exit 1
 }
 
@@ -131,7 +129,7 @@ for i in $(seq 1 600) ; do
   state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
   if [ "$state" == "Error" ]; then
     echo "Error: Torpedo finished with $state state"
-    debug_log_then_exit
+    describe_pod_then_exit
   elif [ "$state" == "Running" ]; then
     echo ""
     kubectl logs -f torpedo
@@ -144,4 +142,4 @@ for i in $(seq 1 600) ; do
 done
 
 echo "Error: Failed to wait for torpedo to start running..."
-debug_log_then_exit
+describe_pod_then_exit
