@@ -18,11 +18,13 @@ metadata:
   name: wordpress
   labels:
     app: wordpress
+    tier: frontend
 spec:
   selector:
     matchLabels:
       app: wordpress
-  replicas: 3
+      tier: frontend
+  replicas: 2
   strategy:
     type: Recreate
   template:
@@ -31,6 +33,20 @@ spec:
         app: wordpress
         tier: frontend
     spec:
+      initContainers:
+      - image: samuelmyers/mysql-dump:1.0
+        name: mysql-dump
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-pass
+              key: password
+      - image: samuelmyers/wordpress-extract:1.0
+        name: wordpress-extract
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /wordpress
       containers:
       - image: wordpress:4.8-apache
         name: wordpress
@@ -48,6 +64,12 @@ spec:
         volumeMounts:
         - name: wordpress-persistent-storage
           mountPath: /var/www/html
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          timeoutSeconds: 1
       volumes:
       - name: wordpress-persistent-storage
         persistentVolumeClaim:

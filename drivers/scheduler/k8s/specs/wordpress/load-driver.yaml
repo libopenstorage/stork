@@ -1,0 +1,35 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: load-driver
+  labels:
+    app: wordpress
+    tier: load-driver
+spec:
+  selector:
+    matchLabels:
+      app: wordpress
+      tier: load-driver
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        tier: load-driver
+    spec:
+      initContainers:
+      - image: samuelmyers/ping-test:1.0
+        name: wait-until-wordpress-up
+        env:
+        - name: HOST
+          value: "wordpress:80"
+      containers:
+      - image: centminmod/docker-centos6-siege
+        name: siege
+        args:
+        - "siege"
+        - "--benchmark"
+        - "--time=24H"
+        - "http://wordpress:80"
