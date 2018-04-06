@@ -166,11 +166,11 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 	}
 
 	for _, p := range pods {
-		if running := k8s.Instance().IsPodRunning(p); !running {
+		if ready := k8s.Instance().IsPodReady(p); !ready {
 			continue
 		}
 
-		logrus.Infof("[debug] pod [%s] %s is running", p.Namespace, p.Name)
+		logrus.Infof("[debug] pod [%s] %s is ready.", p.Namespace, p.Name)
 
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
@@ -179,7 +179,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 			t := func() (interface{}, bool, error) {
 				output, err := k8s.Instance().RunCommandInPod([]string{"mount"}, p.Name, containerName, p.Namespace)
 				if err != nil {
-					logrus.Errorf("failed to run command commmad in pod: %s err: %v", p.Name, err)
+					logrus.Errorf("failed to run command in pod: %v err: %v", p, err)
 					return nil, true, err
 				}
 
