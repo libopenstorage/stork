@@ -204,11 +204,11 @@ var _ = Describe("AppScaleUpAndDown", func() {
 
 		Step("scale up all applications", func() {
 			for _, ctx := range contexts {
-				Step(fmt.Sprintf("updating scale for app: %s", ctx.App.Key), func() {
+				Step(fmt.Sprintf("updating scale for app: %s by %d ", ctx.App.Key, len(node.GetWorkerNodes())), func() {
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleUpMap {
-						applicationScaleUpMap[name] = scale + 1
+						applicationScaleUpMap[name] = scale + int32(len(node.GetWorkerNodes()))
 					}
 					err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
 					Expect(err).NotTo(HaveOccurred())
