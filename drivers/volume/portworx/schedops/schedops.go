@@ -21,6 +21,8 @@ type Driver interface {
 	ValidateVolumeCleanup(d node.Driver) error
 	// ValidateVolumeSetup checks if the given volume is setup correctly
 	ValidateVolumeSetup(v *volume.Volume) error
+	// ValidateSnapshot validates the snapshot volume
+	ValidateSnapshot(volumeParams map[string]string, parent *api.Volume) error
 	// GetVolumeName returns the volume name based on the volume object recevied
 	GetVolumeName(v *volume.Volume) string
 	// GetServiceEndpoint returns the hostname of portworx service if it is present

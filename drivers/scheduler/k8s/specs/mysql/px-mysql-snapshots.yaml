@@ -1,0 +1,22 @@
+##### Portworx PVC Snapshot
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ns.{{NAMESPACE}}-name.mysql-snapshot
+  annotations:
+    px/snapshot-source-pvc: mysql-data
+spec:
+   storageClassName: px-mysql-sc
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---
+##### Portworx Stork Snapshot
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-snapshot
+spec:
+  persistentVolumeClaimName: mysql-data

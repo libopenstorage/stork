@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -32,7 +33,9 @@ import (
 
 const (
 	// SchedName is the name of the kubernetes scheduler driver implementation
-	SchedName      = "k8s"
+	SchedName = "k8s"
+	// SnapshotParent is the parameter key for the parent of a snapshot
+	SnapshotParent = "snapshot_parent"
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
 	// DeploymentSuffix is the suffix for deployment names stored as keys in maps
 	DeploymentSuffix = "-dep"
@@ -48,6 +51,10 @@ const (
 	findFilesOnWorkerTimeout   = 1 * time.Minute
 	deleteTasksWaitTimeout     = 1 * time.Minute
 	defaultRetryInterval       = 10 * time.Second
+)
+
+var (
+	namespaceRegex = regexp.MustCompile("{{NAMESPACE}}")
 )
 
 type k8s struct {
@@ -355,6 +362,7 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 
 	} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		obj.Namespace = ns.Name
+		k.substituteNamespaceInPVC(obj, ns.Name)
 		pvc, err := k8sOps.CreatePersistentVolumeClaim(obj)
 		if errors.IsAlreadyExists(err) {
 			if pvc, err = k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace); err == nil {
@@ -395,10 +403,18 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	return nil, nil
 }
 
+func (k *k8s) substituteNamespaceInPVC(pvc *v1.PersistentVolumeClaim, ns string) {
+	pvc.Name = namespaceRegex.ReplaceAllString(pvc.Name, ns)
+	for k, v := range pvc.Annotations {
+		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
+	}
+}
+
 func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 	if obj, ok := spec.(*apps_api.Deployment); ok {
 		obj.Namespace = ns.Name
+		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
 		dep, err := k8sOps.CreateDeployment(obj)
 		if errors.IsAlreadyExists(err) {
 			if dep, err = k8sOps.GetDeployment(obj.Name, obj.Namespace); err == nil {
@@ -412,11 +428,13 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 				Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", obj.Name, err),
 			}
 		}
+
 		logrus.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
 		return dep, nil
 
 	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 		obj.Namespace = ns.Name
+		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
 		ss, err := k8sOps.CreateStatefulSet(obj)
 		if errors.IsAlreadyExists(err) {
 			if ss, err = k8sOps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
@@ -452,6 +470,7 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 		logrus.Infof("[%v] Created Service: %v", app.Key, svc.Name)
 		return svc, nil
+
 	} else if obj, ok := spec.(*v1.Secret); ok {
 		obj.Namespace = ns.Name
 		secret, err := k8sOps.CreateSecret(obj)
@@ -473,6 +492,18 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 	}
 
 	return nil, nil
+}
+
+func (k *k8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.Volume {
+	var updatedVolumes []v1.Volume
+	for _, vol := range volumes {
+		if vol.VolumeSource.PersistentVolumeClaim != nil {
+			claimName := namespaceRegex.ReplaceAllString(vol.VolumeSource.PersistentVolumeClaim.ClaimName, ns)
+			vol.VolumeSource.PersistentVolumeClaim.ClaimName = claimName
+		}
+		updatedVolumes = append(updatedVolumes, vol)
+	}
+	return updatedVolumes
 }
 
 func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
@@ -547,7 +578,7 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 				}
 			}
 
-			logrus.Infof("[%v]Destroyed StatefulSet: %v", ctx.App.Key, obj.Name)
+			logrus.Infof("[%v] Destroyed StatefulSet: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.Service); ok {
 			if err := k8sOps.DeleteService(obj.Name, obj.Namespace); err != nil {
 				return &scheduler.ErrFailedToDestroyApp{
@@ -689,14 +720,6 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			vol, err := k8sOps.GetVolumeForPersistentVolumeClaim(obj)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToGetVolumeParameters{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get volume for PVC: %v. Err: %v", obj.Name, err),
-				}
-			}
-
 			params, err := k8sOps.GetPersistentVolumeClaimParams(obj)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
@@ -704,7 +727,32 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 					Cause: fmt.Sprintf("failed to get params for volume: %v. Err: %v", obj.Name, err),
 				}
 			}
-			result[vol] = params
+
+			pvc, err := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get PVC: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			for k, v := range pvc.Annotations {
+				params[k] = v
+			}
+
+			result[pvc.Spec.VolumeName] = params
+		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			snap, err := k8sOps.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get Snapshot: %v. Err: %v", obj.Metadata.Name, err),
+				}
+			}
+
+			result[snap.Metadata.Name] = map[string]string{
+				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
+			}
 		}
 	}
 

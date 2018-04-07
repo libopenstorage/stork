@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -27,7 +28,13 @@ const (
 	// PXDaemonSet is the name of portworx daemon set in k8s deployment
 	PXDaemonSet = "portworx"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
-	k8sPodsRootDir         = "/var/lib/kubelet/pods"
+	k8sPodsRootDir = "/var/lib/kubelet/pods"
+	// snapshotAnnotation is the annotation used to get the parent of a PVC
+	snapshotAnnotation = "px/snapshot-source-pvc"
+	// storkSnapshotAnnotation is the annotation used get the snapshot of Stork created clone
+	storkSnapshotAnnotation = "snapshot.alpha.kubernetes.io/snapshot"
+	// pvcLabel is the label used on volume to identify the pvc name
+	pvcLabel               = "pvc"
 	talismanServiceAccount = "talisman-account"
 	talismanImage          = "portworx/talisman:latest"
 )
@@ -71,7 +78,7 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 }
 
 func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
-	pvc, ok := vol.Locator.VolumeLabels["pvc"]
+	pvc, ok := vol.Locator.VolumeLabels[pvcLabel]
 	if !ok {
 		return nil
 	}
@@ -208,6 +215,53 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 		}
 	}
 
+	return nil
+}
+
+func (k *k8sSchedOps) ValidateSnapshot(params map[string]string, parent *api.Volume) error {
+	if parentPVCAnnotation, ok := params[snapshotAnnotation]; ok {
+		logrus.Debugf("Validating annotation based snapshot/clone")
+		return k.validateVolumeClone(parent, parentPVCAnnotation)
+	} else if snapshotAnnotation, ok := params[storkSnapshotAnnotation]; ok {
+		logrus.Debugf("Validating Stork clone")
+		return k.validateStorkClone(parent, snapshotAnnotation)
+	}
+	logrus.Debugf("Validating Stork snapshot")
+	return k.validateStorkSnapshot(parent, params)
+}
+
+func (k *k8sSchedOps) validateVolumeClone(parent *api.Volume, parentAnnotation string) error {
+	parentPVCName, exists := parent.Locator.VolumeLabels[pvcLabel]
+	if !exists {
+		return fmt.Errorf("Parent volume does not have a PVC label")
+	}
+
+	if parentPVCName != parentAnnotation {
+		return fmt.Errorf("Parent name [%s] does not match the source PVC annotation "+
+			"[%s] on the clone/snapshot", parentPVCName, parentAnnotation)
+	}
+	return nil
+}
+
+func (k *k8sSchedOps) validateStorkClone(parent *api.Volume, snapshotAnnotation string) error {
+	parentName := parent.Locator.Name
+	if parentName != snapshotAnnotation {
+		return fmt.Errorf("Parent name [%s] does not match the snapshot annotation "+
+			"[%s] on the clone PVC", parentName, snapshotAnnotation)
+	}
+	return nil
+}
+
+func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[string]string) error {
+	parentName, exists := parent.Locator.VolumeLabels[pvcLabel]
+	if !exists {
+		return fmt.Errorf("Parent volume does not have a PVC label")
+	}
+
+	if parentName != params[k8s_driver.SnapshotParent] {
+		return fmt.Errorf("Parent PVC name [%s] does not match the snapshot's source "+
+			"PVC [%s]", parentName, params[k8s_driver.SnapshotParent])
+	}
 	return nil
 }
 
