@@ -1,7 +1,7 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: portworx-sc-cms-repl3-shared
+  name: portworx-sc-repl3-shared
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
@@ -16,7 +16,7 @@ metadata:
   labels:
     app: wordpress
   annotations:
-    volume.beta.kubernetes.io/storage-class: portworx-sc-cms-repl3-shared
+    volume.beta.kubernetes.io/storage-class: portworx-sc-repl3-shared
 spec:
   accessModes:
     - ReadWriteMany

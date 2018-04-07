@@ -96,28 +96,3 @@ clean:
 	@echo "Deleting image "$(TORPEDO_IMG)
 	-docker rmi -f $(TORPEDO_IMG)
 	go clean -i $(PKGS)
-
-DOCKER_HUB_SIDECAR_TAG=1.0
-SIDECAR_WORDPRESS_IMG=$(DOCKER_HUB_REPO)/wordpress-extract:$(DOCKER_HUB_SIDECAR_TAG)
-SIDECAR_MYSQL_IMG=$(DOCKER_HUB_REPO)/mysql-dump:$(DOCKER_HUB_SIDECAR_TAG)
-SIDECAR_PING_IMG=$(DOCKER_HUB_REPO)/ping-test:$(DOCKER_HUB_SIDECAR_TAG)
-SIDECAR_DIR=drivers/scheduler/sidecars
-
-sidecar: sidecar-wordpress-extract sidecar-wordpress sidecar-mysql sidecar-ping
-
-sidecar-wordpress-extract:
-	wget http://objects.liquidweb.services/triv/mwch-base.tar.gz
-	tar -xvzf mwch-base.tar.gz -C $(SIDECAR_DIR)
-
-sidecar-wordpress:
-	docker build -t $(SIDECAR_WORDPRESS_IMG) -f $(SIDECAR_DIR)/mysql-dump.dockerfile $(SIDECAR_DIR)
-	docker push $(SIDECAR_WORDPRESS_IMG)
-
-sidecar-mysql:
-	docker build -t $(SIDECAR_MYSQL_IMG) -f $(SIDECAR_DIR)/wordpress-extract.dockerfile $(SIDECAR_DIR)
-	docker push $(SIDECAR_MYSQL_IMG)
-
-sidecar-ping:
-	docker build -t $(SIDECAR_PING_IMG) -f $(SIDECAR_DIR)/ping-test.dockerfile $(SIDECAR_DIR)
-	docker push $(SIDECAR_PING_IMG)
-
