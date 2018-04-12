@@ -50,7 +50,7 @@ const (
 	k8sObjectCreateTimeout     = 2 * time.Minute
 	k8sDestroyTimeout          = 2 * time.Minute
 	findFilesOnWorkerTimeout   = 1 * time.Minute
-	deleteTasksWaitTimeout     = 1 * time.Minute
+	deleteTasksWaitTimeout     = 3 * time.Minute
 	defaultRetryInterval       = 10 * time.Second
 )
 
