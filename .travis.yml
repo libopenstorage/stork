@@ -12,7 +12,7 @@ script:
   - make all
 after_success:
   - if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
-      docker login -u="${DOCKER_USER}" -p="${DOCKER_PASS}";
+      echo "${DOCKER_PASS}" | docker login -u="${DOCKER_USER}" --password-stdin;
       make deploy;
     fi
 notifications:
