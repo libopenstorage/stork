@@ -48,6 +48,7 @@ const (
 	k8sNodeReadyTimeout        = 5 * time.Minute
 	volDirCleanupTimeout       = 5 * time.Minute
 	k8sObjectCreateTimeout     = 2 * time.Minute
+	k8sDestroyTimeout          = 2 * time.Minute
 	findFilesOnWorkerTimeout   = 1 * time.Minute
 	deleteTasksWaitTimeout     = 1 * time.Minute
 	defaultRetryInterval       = 10 * time.Second
@@ -555,7 +556,16 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 					podList = append(podList, pods...)
 				}
 			}
-			if err := k8sOps.DeleteDeployment(obj.Name, obj.Namespace); err != nil {
+			t := func() (interface{}, bool, error) {
+				err := k8sOps.DeleteDeployment(obj.Name, obj.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				return nil, false, nil
+			}
+
+			_, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+			if err != nil {
 				return &scheduler.ErrFailedToDestroyApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Deployment: %v. Err: %v", obj.Name, err),
@@ -571,16 +581,34 @@ func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 					podList = append(podList, pods...)
 				}
 			}
-			if err := k8sOps.DeleteStatefulSet(obj.Name, obj.Namespace); err != nil {
+			t := func() (interface{}, bool, error) {
+				err := k8sOps.DeleteStatefulSet(obj.Name, obj.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				return nil, false, nil
+			}
+
+			_, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+			if err != nil {
 				return &scheduler.ErrFailedToDestroyApp{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to destroy StatefulSet: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to destroy stateful set: %v. Err: %v", obj.Name, err),
 				}
 			}
 
 			logrus.Infof("[%v] Destroyed StatefulSet: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.Service); ok {
-			if err := k8sOps.DeleteService(obj.Name, obj.Namespace); err != nil {
+			t := func() (interface{}, bool, error) {
+				err := k8sOps.DeleteService(obj.Name, obj.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				return nil, false, nil
+			}
+
+			_, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+			if err != nil {
 				return &scheduler.ErrFailedToDestroyApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to destroy Service: %v. Err: %v", obj.Name, err),
