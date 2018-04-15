@@ -9,13 +9,13 @@ if [ -z "${SCALE_FACTOR}" ]; then
 fi
 
 SKIP_ARG=""
-if [ -n "${SKIP_TESTS}" ]; then
-    SKIP_ARG="--skip=$SKIP_TESTS"
+if [ -n "$SKIP_TESTS" ]; then
+    SKIP_ARG="--skip=$(echo $SKIP_TESTS | sed -e 's/,/ | /g')"
 fi
 
 FOCUS_ARG=""
-if [ -n "${FOCUS_TESTS}" ]; then
-    FOCUS_ARG="--focus=$FOCUS_TESTS"
+if [ -n "$FOCUS_TESTS" ]; then
+    FOCUS_ARG="--focus=$(echo $FOCUS_TESTS | sed -e 's/,/ | /g')"
 fi
 
 UPGRADE_VERSION_ARG=""
@@ -92,8 +92,9 @@ spec:
     command: [ "ginkgo" ]
     args: [ "--trace",
             "--failFast",
+            "$FOCUS_ARG",
             "$SKIP_ARG",
-             "--slowSpecThreshold", "600",
+            "--slowSpecThreshold", "600",
             "$VERBOSE",
             "bin/basic.test",
             "bin/reboot.test",
