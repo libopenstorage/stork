@@ -8,6 +8,12 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
+    FAIL_FAST="--failFast"
+else
+    FAIL_FAST="-keepGoing"
+fi
+
 SKIP_ARG=""
 if [ -n "$SKIP_TESTS" ]; then
     SKIP_ARG="--skip=$(echo $SKIP_TESTS | sed -e 's/,/ | /g')"
@@ -91,11 +97,11 @@ spec:
     image: ${TORPEDO_IMG}
     command: [ "ginkgo" ]
     args: [ "--trace",
-            "--failFast",
-            "$FOCUS_ARG",
-            "$SKIP_ARG",
+            "$FAIL_FAST",
             "--slowSpecThreshold", "600",
             "$VERBOSE",
+            "$FOCUS_ARG",
+            "$SKIP_ARG",
             "bin/basic.test",
             "bin/reboot.test",
             "bin/upgrade.test",
