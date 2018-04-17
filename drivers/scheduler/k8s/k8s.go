@@ -44,7 +44,7 @@ const (
 )
 
 const (
-	statefulSetValidateTimeout = 15 * time.Minute
+	statefulSetValidateTimeout = 20 * time.Minute
 	k8sNodeReadyTimeout        = 5 * time.Minute
 	volDirCleanupTimeout       = 5 * time.Minute
 	k8sObjectCreateTimeout     = 2 * time.Minute
