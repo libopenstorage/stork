@@ -96,3 +96,13 @@ clean:
 	@echo "Deleting image "$(TORPEDO_IMG)
 	-docker rmi -f $(TORPEDO_IMG)
 	go clean -i $(PKGS)
+
+DOCKER_HUB_SIDECAR_TAG=1.2.23
+SIDECAR_WP_CLI_IMG=$(DOCKER_HUB_REPO)/wp-cli:$(DOCKER_HUB_SIDECAR_TAG)
+SIDECAR_DIR=drivers/scheduler/sidecars
+
+sidecar: sidecar-wp-cli
+
+sidecar-wp-cli:
+	docker build -t $(SIDECAR_WP_CLI_IMG) -f $(SIDECAR_DIR)/wp-cli.dockerfile $(SIDECAR_DIR)
+	docker push $(SIDECAR_WP_CLI_IMG)

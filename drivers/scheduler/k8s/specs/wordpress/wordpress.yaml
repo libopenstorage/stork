@@ -1,27 +1,15 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: wordpress
-  labels:
-    app: wordpress
-spec:
-  ports:
-    - port: 80
-  selector:
-    app: wordpress
-    tier: frontend
-  type: NodePort
----
 apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   name: wordpress
   labels:
     app: wordpress
+    tier: frontend
 spec:
   selector:
     matchLabels:
       app: wordpress
+      tier: frontend
   replicas: 3
   strategy:
     type: Recreate
@@ -31,6 +19,16 @@ spec:
         app: wordpress
         tier: frontend
     spec:
+      initContainers:
+      - image: alpine:3.7
+        name: wait-for-installer
+        args:
+        - "sh"
+        - "-c"
+        - "while [ ! -f '/wordpress/installed' ]; do sleep 1; done"
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /wordpress
       containers:
       - image: wordpress:4.8-apache
         name: wordpress
@@ -48,7 +46,31 @@ spec:
         volumeMounts:
         - name: wordpress-persistent-storage
           mountPath: /var/www/html
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+        resources:
+          requests:
+            memory: "2Gi"
       volumes:
       - name: wordpress-persistent-storage
         persistentVolumeClaim:
           claimName: wp-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  labels:
+    app: wordpress
+spec:
+  ports:
+    - port: 80
+      name: web
+  selector:
+    app: wordpress
+    tier: frontend
+  type: NodePort
