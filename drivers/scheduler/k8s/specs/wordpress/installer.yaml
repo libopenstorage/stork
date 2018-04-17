@@ -24,7 +24,7 @@ spec:
         name: installer
         env:
         - name: WORDPRESS_URL
-          value: "https://wordpress.portworx.internal"
+          value: "http://wordpress"
         - name: WORDPRESS_THEME
           value: "twentysixteen"
         - name: WORDPRESS_PLUGINS
