@@ -36,7 +36,7 @@ func stopDriverTest(t *testing.T) {
 
 	// Stop the driver and after 3 minutes verify that it moved to another node
 	// where the volume is located
-	err = volumeDriver.StopDriver(scheduledNodes[0])
+	err = volumeDriver.StopDriver(scheduledNodes, false)
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
 	stoppedNode := scheduledNodes[0]
 

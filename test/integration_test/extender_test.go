@@ -90,7 +90,7 @@ func driverNodeErrorTest(t *testing.T) {
 
 	time.Sleep(1 * time.Minute)
 
-	err = volumeDriver.StopDriver(scheduledNodes[0])
+	err = volumeDriver.StopDriver(scheduledNodes, false)
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
 	stoppedNode := scheduledNodes[0]
 
