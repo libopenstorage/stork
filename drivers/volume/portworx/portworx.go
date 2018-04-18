@@ -35,21 +35,21 @@ const (
 )
 
 const (
-	defaultRetryInterval              = 10 * time.Second
-	maintenanceOpTimeout              = 1 * time.Minute
-	maintenanceWaitTimeout            = 2 * time.Minute
-	validateCreateVolumeTimeout       = 10 * time.Second
-	validateCreateVolumeRetryInterval = 2 * time.Second
-	validateDeleteVolumeTimeout       = 3 * time.Minute
-	validateClusterStartTimeout       = 2 * time.Minute
-	validateNodeStartTimeout          = 2 * time.Minute
-	validateNodeStopTimeout           = 2 * time.Minute
-	stopDriverTimeout                 = 5 * time.Minute
-	crashDriverTimeout                = 2 * time.Minute
-	startDriverTimeout                = 2 * time.Minute
-	upgradeTimeout                    = 10 * time.Minute
-	upgradeRetryInterval              = 30 * time.Second
-	waitVolDriverToCrash              = 1 * time.Minute
+	defaultRetryInterval        = 10 * time.Second
+	maintenanceOpTimeout        = 1 * time.Minute
+	maintenanceWaitTimeout      = 2 * time.Minute
+	inspectVolumeTimeout        = 10 * time.Second
+	inspectVolumeRetryInterval  = 2 * time.Second
+	validateDeleteVolumeTimeout = 3 * time.Minute
+	validateClusterStartTimeout = 2 * time.Minute
+	validateNodeStartTimeout    = 2 * time.Minute
+	validateNodeStopTimeout     = 2 * time.Minute
+	stopDriverTimeout           = 5 * time.Minute
+	crashDriverTimeout          = 2 * time.Minute
+	startDriverTimeout          = 2 * time.Minute
+	upgradeTimeout              = 10 * time.Minute
+	upgradeRetryInterval        = 30 * time.Second
+	waitVolDriverToCrash        = 1 * time.Minute
 )
 
 type portworx struct {
@@ -270,7 +270,7 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		return vols[0], false, nil
 	}
 
-	out, err := task.DoRetryWithTimeout(t, validateCreateVolumeTimeout, validateCreateVolumeRetryInterval)
+	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
 	if err != nil {
 		return &ErrFailedToInspectVolume{
 			ID:    name,
@@ -492,6 +492,40 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 	logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
 	time.Sleep(waitVolDriverToCrash)
 	return nil
+}
+
+func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, error) {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.getVolDriver().Inspect([]string{name})
+		if err != nil {
+			return nil, true, err
+		}
+		if len(vols) != 1 {
+			return nil, true, fmt.Errorf("Incorrect number of volumes returned")
+		}
+		return vols[0], false, nil
+	}
+
+	v, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	if err != nil {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+
+	pxVol := v.(*api.Volume)
+	for _, n := range node.GetNodes() {
+		if n.VolDriverNodeID == pxVol.AttachedOn {
+			return &n, nil
+		}
+	}
+
+	return nil, &ErrFailedToInspectVolume{
+		ID:    name,
+		Cause: "Volume is not attached on any node",
+	}
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {

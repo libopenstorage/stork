@@ -84,6 +84,56 @@ var _ = Describe("VolumeDriverDown", func() {
 	})
 })
 
+// Volume Driver Plugin is down, unavailable on the nodes where the volumes are
+// attached - and the client container should not be impacted.
+var _ = Describe("VolumeDriverDownAttachedNode", func() {
+	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
+		var contexts []*scheduler.Context
+		for i := 0; i < Inst().ScaleFactor; i++ {
+			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldriverdownattachednode-%d", i))...)
+		}
+
+		Step("get nodes for all apps in test and restart volume driver", func() {
+			for _, ctx := range contexts {
+				var appNodes []node.Node
+
+				Step(fmt.Sprintf("get nodes for %s app", ctx.App.Key), func() {
+					volumes, err := Inst().S.GetVolumes(ctx)
+					Expect(err).NotTo(HaveOccurred())
+
+					nodeMap := make(map[string]struct{})
+					for _, v := range volumes {
+						n, err := Inst().V.GetNodeForVolume(v)
+						Expect(err).NotTo(HaveOccurred())
+
+						if _, exists := nodeMap[n.Name]; !exists {
+							nodeMap[n.Name] = struct{}{}
+							appNodes = append(appNodes, *n)
+						}
+					}
+				})
+
+				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
+					Inst().V.String(), ctx.App.Key, appNodes), func() {
+					StopVolDriverAndWait(appNodes)
+				})
+
+				Step("starting volume driver", func() {
+					StartVolDriverAndWait(appNodes)
+				})
+
+				Step("Giving few seconds for volume driver to stabilize", func() {
+					time.Sleep(20 * time.Second)
+				})
+			}
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		ValidateAndDestroy(contexts, opts)
+	})
+})
+
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
 var _ = Describe("VolumeDriverCrash", func() {
 	It("has to schedule apps and crash volume driver on app nodes", func() {
