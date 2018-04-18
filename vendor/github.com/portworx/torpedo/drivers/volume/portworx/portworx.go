@@ -34,6 +34,24 @@ const (
 	pxSystemdServiceName    = "portworx.service"
 )
 
+const (
+	defaultRetryInterval              = 10 * time.Second
+	maintenanceOpTimeout              = 1 * time.Minute
+	maintenanceWaitTimeout            = 2 * time.Minute
+	validateCreateVolumeTimeout       = 10 * time.Second
+	validateCreateVolumeRetryInterval = 2 * time.Second
+	validateDeleteVolumeTimeout       = 3 * time.Minute
+	validateClusterStartTimeout       = 2 * time.Minute
+	validateNodeStartTimeout          = 2 * time.Minute
+	validateNodeStopTimeout           = 2 * time.Minute
+	stopDriverTimeout                 = 5 * time.Minute
+	crashDriverTimeout                = 2 * time.Minute
+	startDriverTimeout                = 2 * time.Minute
+	upgradeTimeout                    = 10 * time.Minute
+	upgradeRetryInterval              = 30 * time.Second
+	waitVolDriverToCrash              = 1 * time.Minute
+)
+
 type portworx struct {
 	clusterManager  cluster.Cluster
 	volDriver       volume.VolumeDriver
@@ -201,11 +219,11 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return nil, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 	t = func() (interface{}, bool, error) {
-		apiNode, err := d.getClusterManager().Inspect(n.Name)
+		apiNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
 		if err != nil {
 			return nil, true, err
 		}
@@ -215,7 +233,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return nil, true, fmt.Errorf("Node %v is not in Maintenance mode", n.Name)
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, maintenanceWaitTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToRecoverDriver{
 			Node:  n,
 			Cause: err.Error(),
@@ -228,7 +246,7 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return nil, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, maintenanceOpTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -252,7 +270,7 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		return vols[0], false, nil
 	}
 
-	out, err := task.DoRetryWithTimeout(t, 10*time.Second, 2*time.Second)
+	out, err := task.DoRetryWithTimeout(t, validateCreateVolumeTimeout, validateCreateVolumeRetryInterval)
 	if err != nil {
 		return &ErrFailedToInspectVolume{
 			ID:    name,
@@ -279,8 +297,25 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		}
 	}
 
-	if vol.IsSnapshot() {
-		logrus.Infof("Warning: Param/Option testing of snapshots is currently not supported. Skipping")
+	if vol.Source != nil && vol.Source.Parent != "" {
+		parent, err := d.getVolDriver().Inspect([]string{vol.Source.Parent})
+		if err != nil || len(parent) == 0 {
+			return &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: fmt.Sprintf("Could not get parent with ID [%s]", vol.Source.Parent),
+			}
+		} else if len(parent) > 1 {
+			return &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: fmt.Sprintf("Expected:1 Got:%v parents for ID [%s]", len(parent), vol.Source.Parent),
+			}
+		}
+		if err := d.schedOps.ValidateSnapshot(params, parent[0]); err != nil {
+			return &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: fmt.Sprintf("Snapshot/Clone validation failed. %v", err),
+			}
+		}
 		return nil
 	}
 
@@ -407,7 +442,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 		return nil, false, nil
 	}
 
-	_, err := task.DoRetryWithTimeout(t, 3*time.Minute, 5*time.Second)
+	_, err := task.DoRetryWithTimeout(t, validateDeleteVolumeTimeout, defaultRetryInterval)
 	if err != nil {
 		return &ErrFailedToDeleteVolume{
 			ID:    name,
@@ -422,13 +457,41 @@ func (d *portworx) ValidateVolumeCleanup() error {
 	return d.schedOps.ValidateVolumeCleanup(d.nodeDriver)
 }
 
-func (d *portworx) StopDriver(n node.Node) error {
-	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
-		Action: "stop",
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         5 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		}})
+func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
+	return d.schedOps.ValidateVolumeSetup(vol)
+}
+
+func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
+	var err error
+	for _, n := range nodes {
+		logrus.Infof("Stopping volume driver on %s.", n.Name)
+		if force {
+			pxCrashCmd := "sudo kill -9 px-storage"
+			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+			if err != nil {
+				logrus.Warnf("failed to run cmd : %s. on node %s err: %v", pxCrashCmd, n.Name, err)
+				return err
+			}
+		} else {
+			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+				Action: "stop",
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         stopDriverTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+				}})
+			if err != nil {
+				logrus.Warnf("failed to run systemctl stopcmd  on node %s err: %v", n.Name, err)
+				return err
+			}
+		}
+
+	}
+	logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
+	time.Sleep(waitVolDriverToCrash)
+	return nil
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
@@ -459,7 +522,7 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 		return &cluster, false, nil
 	}
 
-	cluster, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
+	cluster, err := task.DoRetryWithTimeout(t, validateClusterStartTimeout, defaultRetryInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +553,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateNodeStartTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -534,7 +597,7 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateNodeStopTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -579,7 +642,7 @@ func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 		return nil, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, upgradeTimeout, upgradeRetryInterval); err != nil {
 		return err
 	}
 	return nil
@@ -647,8 +710,8 @@ func (d *portworx) StartDriver(n node.Node) error {
 	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "start",
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
+			Timeout:         startDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
 		}})
 }
 

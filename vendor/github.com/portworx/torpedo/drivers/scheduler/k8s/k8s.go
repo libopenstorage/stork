@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	apps_api "k8s.io/api/apps/v1beta2"
 	"k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,8 +33,29 @@ import (
 
 const (
 	// SchedName is the name of the kubernetes scheduler driver implementation
-	SchedName      = "k8s"
+	SchedName = "k8s"
+	// SnapshotParent is the parameter key for the parent of a snapshot
+	SnapshotParent = "snapshot_parent"
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
+	// DeploymentSuffix is the suffix for deployment names stored as keys in maps
+	DeploymentSuffix = "-dep"
+	// StatefulSetSuffix is the suffix for statefulset names stored as keys in maps
+	StatefulSetSuffix = "-ss"
+)
+
+const (
+	statefulSetValidateTimeout = 20 * time.Minute
+	k8sNodeReadyTimeout        = 5 * time.Minute
+	volDirCleanupTimeout       = 5 * time.Minute
+	k8sObjectCreateTimeout     = 2 * time.Minute
+	k8sDestroyTimeout          = 2 * time.Minute
+	findFilesOnWorkerTimeout   = 1 * time.Minute
+	deleteTasksWaitTimeout     = 3 * time.Minute
+	defaultRetryInterval       = 10 * time.Second
+)
+
+var (
+	namespaceRegex = regexp.MustCompile("{{NAMESPACE}}")
 )
 
 type k8s struct {
@@ -52,7 +75,7 @@ func (k *k8s) IsNodeReady(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, k8sNodeReadyTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -169,7 +192,12 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*snap_v1.VolumeSnapshot); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*v1.Secret); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*v1.ConfigMap); ok {
+		return specObj, nil
 	}
+
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
 }
 
@@ -218,35 +246,45 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 	var contexts []*scheduler.Context
 	for _, app := range apps {
-		appNamespace := getAppNamespaceName(app, instanceID)
-		ns, err := k8s_ops.Instance().CreateNamespace(appNamespace, map[string]string{
-			"creater": "torpedo",
-			"app":     app.Key,
-		})
+		ns, err := k.createNamespace(app, instanceID)
 		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", appNamespace, err),
-			}
+			return nil, err
 		}
 
 		var specObjects []interface{}
-
 		for _, spec := range app.SpecList {
-			obj, err := k.createStorageObject(spec, ns, app)
+			t := func() (interface{}, bool, error) {
+				obj, err := k.createStorageObject(spec, ns, app)
+				if err != nil {
+					return nil, true, err
+				}
+				return obj, false, nil
+			}
+
+			obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
 			if err != nil {
 				return nil, err
 			}
+
 			if obj != nil {
 				specObjects = append(specObjects, obj)
 			}
 		}
 
 		for _, spec := range app.SpecList {
-			obj, err := k.createCoreObject(spec, ns, app)
+			t := func() (interface{}, bool, error) {
+				obj, err := k.createCoreObject(spec, ns, app)
+				if err != nil {
+					return nil, true, err
+				}
+				return obj, false, nil
+			}
+
+			obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
 			if err != nil {
 				return nil, err
 			}
+
 			if obj != nil {
 				specObjects = append(specObjects, obj)
 			}
@@ -267,49 +305,95 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	return contexts, nil
 }
 
+func (k *k8s) createNamespace(app *spec.AppSpec, instanceID string) (*v1.Namespace, error) {
+	k8sOps := k8s_ops.Instance()
+	appNamespace := getAppNamespaceName(app, instanceID)
+
+	t := func() (interface{}, bool, error) {
+		ns, err := k8sOps.CreateNamespace(appNamespace,
+			map[string]string{
+				"creater": "torpedo",
+				"app":     app.Key,
+			})
+
+		if errors.IsAlreadyExists(err) {
+			if ns, err = k8sOps.GetNamespace(appNamespace); err == nil {
+				return ns, false, nil
+			}
+		}
+
+		if err != nil {
+			return nil, true, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", appNamespace, err),
+			}
+		}
+
+		return ns, false, nil
+	}
+
+	nsObj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	return nsObj.(*v1.Namespace), nil
+}
+
 func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 	if obj, ok := spec.(*storage_api.StorageClass); ok {
 		obj.Namespace = ns.Name
 		sc, err := k8sOps.CreateStorageClass(obj)
-		if err != nil {
-			if !strings.Contains(err.Error(), "already exists") {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
-				}
+		if errors.IsAlreadyExists(err) {
+			if sc, err = k8sOps.GetStorageClass(obj.Name); err == nil {
+				logrus.Infof("[%v] Found existing storage class: %v", app.Key, sc.Name)
+				return sc, nil
 			}
-
-			sc, err = k8sOps.ValidateStorageClass(obj.Name)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToScheduleApp{
-					App:   app,
-					Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", sc.Name, err),
-				}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create storage class: %v. Err: %v", obj.Name, err),
 			}
 		}
 
 		logrus.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
 		return sc, nil
+
 	} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		obj.Namespace = ns.Name
+		k.substituteNamespaceInPVC(obj, ns.Name)
 		pvc, err := k8sOps.CreatePersistentVolumeClaim(obj)
+		if errors.IsAlreadyExists(err) {
+			if pvc, err = k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing PVC: %v", app.Key, pvc.Name)
+				return pvc, nil
+			}
+		}
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", pvc.Name, err),
+				Cause: fmt.Sprintf("Failed to create PVC: %v. Err: %v", obj.Name, err),
 			}
 		}
 
 		logrus.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 		return pvc, nil
+
 	} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
 		obj.Metadata.Namespace = ns.Name
 		snap, err := k8sOps.CreateSnapshot(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing snapshot: %v", app.Key, snap.Metadata.Name)
+				return snap, nil
+			}
+		}
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", snap.Metadata.Name, err),
+				Cause: fmt.Sprintf("Failed to create Snapshot: %v. Err: %v", obj.Metadata.Name, err),
 			}
 		}
 
@@ -320,46 +404,157 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	return nil, nil
 }
 
+func (k *k8s) substituteNamespaceInPVC(pvc *v1.PersistentVolumeClaim, ns string) {
+	pvc.Name = namespaceRegex.ReplaceAllString(pvc.Name, ns)
+	for k, v := range pvc.Annotations {
+		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
+	}
+}
+
 func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 	if obj, ok := spec.(*apps_api.Deployment); ok {
 		obj.Namespace = ns.Name
+		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
 		dep, err := k8sOps.CreateDeployment(obj)
+		if errors.IsAlreadyExists(err) {
+			if dep, err = k8sOps.GetDeployment(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
+				return dep, nil
+			}
+		}
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", dep.Name, err),
+				Cause: fmt.Sprintf("Failed to create Deployment: %v. Err: %v", obj.Name, err),
 			}
 		}
+
 		logrus.Infof("[%v] Created deployment: %v", app.Key, dep.Name)
 		return dep, nil
 
 	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 		obj.Namespace = ns.Name
+		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
 		ss, err := k8sOps.CreateStatefulSet(obj)
+		if errors.IsAlreadyExists(err) {
+			if ss, err = k8sOps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
+				return ss, nil
+			}
+		}
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", ss.Name, err),
+				Cause: fmt.Sprintf("Failed to create StatefulSet: %v. Err: %v", obj.Name, err),
 			}
 		}
+
 		logrus.Infof("[%v] Created StatefulSet: %v", app.Key, ss.Name)
 		return ss, nil
 
 	} else if obj, ok := spec.(*v1.Service); ok {
 		obj.Namespace = ns.Name
 		svc, err := k8sOps.CreateService(obj)
+		if errors.IsAlreadyExists(err) {
+			if svc, err = k8sOps.GetService(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Service: %v", app.Key, svc.Name)
+				return svc, nil
+			}
+		}
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", svc.Name, err),
+				Cause: fmt.Sprintf("Failed to create Service: %v. Err: %v", obj.Name, err),
 			}
 		}
+
 		logrus.Infof("[%v] Created Service: %v", app.Key, svc.Name)
 		return svc, nil
+
+	} else if obj, ok := spec.(*v1.Secret); ok {
+		obj.Namespace = ns.Name
+		secret, err := k8sOps.CreateSecret(obj)
+		if errors.IsAlreadyExists(err) {
+			if secret, err = k8sOps.GetSecret(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Secret: %v", app.Key, secret.Name)
+				return secret, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Secret: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
+		return secret, nil
 	}
 
 	return nil, nil
+}
+
+func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spec.AppSpec) (interface{}, error) {
+	k8sOps := k8s_ops.Instance()
+	var pods interface{}
+	var err error
+	if obj, ok := spec.(*apps_api.Deployment); ok {
+		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+			if pods, err = k8sOps.GetDeploymentPods(obj); err != nil {
+				logrus.Warnf("[%s] Error getting deployment pods. Err: %v", app.Key, err)
+			}
+		}
+		err := k8sOps.DeleteDeployment(obj.Name, obj.Namespace)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy Deployment: %v. Err: %v", obj.Name, err),
+			}
+		}
+	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+			if pods, err = k8sOps.GetStatefulSetPods(obj); err != nil {
+				logrus.Warnf("[%v] Error getting statefulset pods. Err: %v", app.Key, err)
+			}
+		}
+		err := k8sOps.DeleteStatefulSet(obj.Name, obj.Namespace)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy stateful set: %v. Err: %v", obj.Name, err),
+			}
+		}
+	} else if obj, ok := spec.(*v1.Service); ok {
+		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+			if pods, err = k8sOps.GetService(obj.Name, obj.Namespace); err != nil {
+				logrus.Warnf("[%v] Error getting service pods. Err: %v", app.Key, err)
+			}
+		}
+		err := k8sOps.DeleteService(obj.Name, obj.Namespace)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy Service: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Destroyed Service: %v", app.Key, obj.Name)
+	}
+	return pods, nil
+
+}
+
+func (k *k8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.Volume {
+	var updatedVolumes []v1.Volume
+	for _, vol := range volumes {
+		if vol.VolumeSource.PersistentVolumeClaim != nil {
+			claimName := namespaceRegex.ReplaceAllString(vol.VolumeSource.PersistentVolumeClaim.ClaimName, ns)
+			vol.VolumeSource.PersistentVolumeClaim.ClaimName = claimName
+		}
+		updatedVolumes = append(updatedVolumes, vol)
+	}
+	return updatedVolumes
 }
 
 func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
@@ -375,7 +570,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			if err := k8sOps.ValidateStatefulSet(obj); err != nil {
+			if err := k8sOps.ValidateStatefulSet(obj, statefulSetValidateTimeout); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v. Err: %v", obj.Name, err),
@@ -400,66 +595,34 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
-	k8sOps := k8s_ops.Instance()
 	var podList []v1.Pod
+	var pods interface{}
+	var err error
 	for _, spec := range ctx.App.SpecList {
-		if obj, ok := spec.(*apps_api.Deployment); ok {
-			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-				if pods, err := k8sOps.GetDeploymentPods(obj); err != nil {
-					logrus.Warnf("[%v] Error getting deployment pods. Err: %v", ctx.App.Key, err)
-				} else {
-					podList = append(podList, pods...)
-				}
+		t := func() (interface{}, bool, error) {
+			currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
+			if err != nil {
+				return nil, true, err
 			}
-			if err := k8sOps.DeleteDeployment(obj); err != nil {
-				return &scheduler.ErrFailedToDestroyApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to destroy Deployment: %v. Err: %v", obj.Name, err),
-				}
-			}
-
-			logrus.Infof("[%v] Destroyed deployment: %v", ctx.App.Key, obj.Name)
-		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-				if pods, err := k8sOps.GetStatefulSetPods(obj); err != nil {
-					logrus.Warnf("[%v] Error getting statefulset pods. Err: %v", ctx.App.Key, err)
-				} else {
-					podList = append(podList, pods...)
-				}
-			}
-			if err := k8sOps.DeleteStatefulSet(obj); err != nil {
-				return &scheduler.ErrFailedToDestroyApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to destroy StatefulSet: %v. Err: %v", obj.Name, err),
-				}
-			}
-
-			logrus.Infof("[%v]Destroyed StatefulSet: %v", ctx.App.Key, obj.Name)
-		} else if obj, ok := spec.(*v1.Service); ok {
-			if err := k8sOps.DeleteService(obj); err != nil {
-				return &scheduler.ErrFailedToDestroyApp{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to destroy Service: %v. Err: %v", obj.Name, err),
-				}
-			}
-
-			logrus.Infof("[%v] Destroyed Service: %v", ctx.App.Key, obj.Name)
+			return currPods, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, defaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
 		}
 	}
-
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-		if err := k.WaitForDestroy(ctx); err != nil {
+		if err = k.WaitForDestroy(ctx); err != nil {
 			return err
 		}
-		if err := k.waitForCleanup(ctx, podList); err != nil {
+		if err = k.waitForCleanup(ctx, podList); err != nil {
 			return err
 		}
 	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err := k.WaitForDestroy(ctx); err != nil {
+		if err = k.WaitForDestroy(ctx); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -468,7 +631,7 @@ func (k *k8s) waitForCleanup(ctx *scheduler.Context, podList []v1.Pod) error {
 		t := func() (interface{}, bool, error) {
 			return nil, true, k.validateVolumeDirCleanup(pod.UID, ctx.App)
 		}
-		if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+		if _, err := task.DoRetryWithTimeout(t, volDirCleanupTimeout, defaultRetryInterval); err != nil {
 			return err
 		}
 		logrus.Infof("Validated resource cleanup for pod: %v", pod.UID)
@@ -481,8 +644,8 @@ func (k *k8s) validateVolumeDirCleanup(podUID types.UID, app *spec.AppSpec) erro
 	driver, _ := node.Get(k.nodeDriverName)
 	options := node.FindOpts{
 		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         1 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
+			Timeout:         findFilesOnWorkerTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
 		},
 		MinDepth: 1,
 		MaxDepth: 1,
@@ -542,6 +705,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 }
 
 func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
+	k8sOps := k8s_ops.Instance()
 	pods, err := k.getPodsForApp(ctx)
 	if err != nil {
 		return &scheduler.ErrFailedToDeleteTasks{
@@ -550,12 +714,22 @@ func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
 		}
 	}
 
-	if err := k8s_ops.Instance().DeletePods(pods, false); err != nil {
+	if err := k8sOps.DeletePods(pods, false); err != nil {
 		return &scheduler.ErrFailedToDeleteTasks{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
 		}
 	}
+
+	// Ensure the pods are deleted and removed from the system
+	for _, pod := range pods {
+		err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
+		if err != nil {
+			logrus.Errorf("k8s DeleteTasks failed to wait for pod: [%s] %s to terminate. err: %v", pod.Namespace, pod.Name, err)
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -565,14 +739,6 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			vol, err := k8sOps.GetVolumeForPersistentVolumeClaim(obj)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToGetVolumeParameters{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get volume for PVC: %v. Err: %v", obj.Name, err),
-				}
-			}
-
 			params, err := k8sOps.GetPersistentVolumeClaimParams(obj)
 			if err != nil {
 				return nil, &scheduler.ErrFailedToGetVolumeParameters{
@@ -580,7 +746,32 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 					Cause: fmt.Sprintf("failed to get params for volume: %v. Err: %v", obj.Name, err),
 				}
 			}
-			result[vol] = params
+
+			pvc, err := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get PVC: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			for k, v := range pvc.Annotations {
+				params[k] = v
+			}
+
+			result[pvc.Spec.VolumeName] = params
+		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			snap, err := k8sOps.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get Snapshot: %v. Err: %v", obj.Metadata.Name, err),
+				}
+			}
+
+			result[snap.Metadata.Name] = map[string]string{
+				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
+			}
 		}
 	}
 
@@ -591,7 +782,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
-			if _, err := k8sOps.ValidateStorageClass(obj.Name); err != nil {
+			if _, err := k8sOps.GetStorageClass(obj.Name); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate StorageClass: %v. Err: %v", obj.Name, err),
@@ -629,9 +820,11 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
 			if err := k8sOps.DeleteStorageClass(obj.Name); err != nil {
-				return nil, &scheduler.ErrFailedToDestroyStorage{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
+				if !errors.IsNotFound(err) {
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
+					}
 				}
 			}
 			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
@@ -641,8 +834,8 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				Name: obj.Name,
 			}
 			vols = append(vols, volToBeDeleted)
-			if err := k8sOps.DeletePersistentVolumeClaim(obj); err != nil {
-				if !strings.Contains(err.Error(), "not found") {
+			if err := k8sOps.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
+				if !errors.IsNotFound(err) {
 					return nil, &scheduler.ErrFailedToDestroyStorage{
 						App:   ctx.App,
 						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
@@ -652,7 +845,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
 			if err := k8sOps.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
-				if !strings.Contains(err.Error(), "not found") {
+				if !errors.IsNotFound(err) {
 					return nil, &scheduler.ErrFailedToDestroyStorage{
 						App:   ctx.App,
 						Cause: fmt.Sprintf("Failed to destroy Snapshot: %v. Err: %v", obj.Metadata.Name, err),
@@ -660,6 +853,21 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				}
 			}
 			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+		}
+	}
+
+	return vols, nil
+}
+
+func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	var vols []*volume.Volume
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			vol := &volume.Volume{
+				ID:   string(obj.UID),
+				Name: obj.Name,
+			}
+			vols = append(vols, vol)
 		}
 	}
 
@@ -691,8 +899,9 @@ func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 		if node.Contains(result, n) {
 			continue
 		}
-
-		result = append(result, n)
+		if k8s_ops.Instance().IsPodRunning(p) {
+			result = append(result, n)
+		}
 	}
 
 	return result, nil
@@ -801,6 +1010,65 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 	return buf.String(), nil
 }
 
+func (k *k8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
+	k8sOps := k8s_ops.Instance()
+	for _, spec := range ctx.App.SpecList {
+		logrus.Infof("Scale all Deployments")
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
+			if err != nil {
+				return err
+			}
+			newScaleFactor := scaleFactorMap[obj.Name+DeploymentSuffix]
+			*dep.Spec.Replicas = newScaleFactor
+			if _, err := k8sOps.UpdateDeployment(dep); err != nil {
+				return &scheduler.ErrFailedToUpdateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to update Deployment: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Infof("Deployment %s scaled to %d successfully.", obj.Name, newScaleFactor)
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			logrus.Infof("Scale all Stateful sets")
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return err
+			}
+			newScaleFactor := scaleFactorMap[obj.Name+StatefulSetSuffix]
+			*ss.Spec.Replicas = newScaleFactor
+			if _, err := k8sOps.UpdateStatefulSet(ss); err != nil {
+				return &scheduler.ErrFailedToUpdateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to update StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+			logrus.Infof("StatefulSet %s scaled to %d successfully.", obj.Name, int(newScaleFactor))
+		}
+	}
+	return nil
+}
+
+func (k *k8s) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
+	k8sOps := k8s_ops.Instance()
+	scaleFactorMap := make(map[string]int32, len(ctx.App.SpecList))
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
+			if err != nil {
+				return scaleFactorMap, err
+			}
+			scaleFactorMap[obj.Name+DeploymentSuffix] = *dep.Spec.Replicas
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return scaleFactorMap, err
+			}
+			scaleFactorMap[obj.Name+StatefulSetSuffix] = *ss.Spec.Replicas
+		}
+	}
+	return scaleFactorMap, nil
+}
+
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }
@@ -812,9 +1080,9 @@ func dumpPodStatusRecursively(pod v1.Pod) string {
 	for _, conStat := range pod.Status.ContainerStatuses {
 		buf.WriteString(insertLineBreak(conStat.Name))
 		buf.WriteString(fmt.Sprintf("%v\n", conStat))
-		buf.WriteString(insertLineBreak("END Container"))
+		buf.WriteString(insertLineBreak("END container"))
 	}
-	buf.WriteString(insertLineBreak("END Pod"))
+	buf.WriteString(insertLineBreak("END pod"))
 	return buf.String()
 }
 

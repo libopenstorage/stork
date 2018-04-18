@@ -10,8 +10,10 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/sirupsen/logrus"
 	batch_v1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -27,8 +29,19 @@ const (
 	PXDaemonSet = "portworx"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
-	// pxImageEnvVar is the env variable in portworx daemon set specifying portworx image to be used
-	pxImageEnvVar = "PX_IMAGE"
+	// snapshotAnnotation is the annotation used to get the parent of a PVC
+	snapshotAnnotation = "px/snapshot-source-pvc"
+	// storkSnapshotAnnotation is the annotation used get the snapshot of Stork created clone
+	storkSnapshotAnnotation = "snapshot.alpha.kubernetes.io/snapshot"
+	// pvcLabel is the label used on volume to identify the pvc name
+	pvcLabel               = "pvc"
+	talismanServiceAccount = "talisman-account"
+	talismanImage          = "portworx/talisman:latest"
+)
+
+const (
+	podExecTimeout       = 2 * time.Minute
+	defaultRetryInterval = 10 * time.Second
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -65,7 +78,7 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 }
 
 func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
-	pvc, ok := vol.Locator.VolumeLabels["pvc"]
+	pvc, ok := vol.Locator.VolumeLabels[pvcLabel]
 	if !ok {
 		return nil
 	}
@@ -145,6 +158,110 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 		}
 	}
 
+	return nil
+}
+
+func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
+	pvName := k.GetVolumeName(vol)
+	if len(pvName) == 0 {
+		return fmt.Errorf("failed to get PV name for : %v", vol)
+	}
+
+	pods, err := k8s.Instance().GetPodsUsingPV(pvName)
+	if err != nil {
+		return err
+	}
+
+	for _, p := range pods {
+		if ready := k8s.Instance().IsPodReady(p); !ready {
+			continue
+		}
+
+		logrus.Infof("[debug] pod [%s] %s is ready.", p.Namespace, p.Name)
+
+		containerPaths := getContainerPVCMountMap(p)
+		for containerName, path := range containerPaths {
+			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) on %s.+", path))
+
+			t := func() (interface{}, bool, error) {
+				output, err := k8s.Instance().RunCommandInPod([]string{"mount"}, p.Name, containerName, p.Namespace)
+				if err != nil {
+					logrus.Errorf("failed to run command in pod: %v err: %v", p, err)
+					return nil, true, err
+				}
+
+				return output, false, nil
+			}
+
+			output, err := task.DoRetryWithTimeout(t, podExecTimeout, defaultRetryInterval)
+			if err != nil {
+				return err
+			}
+
+			mounts := strings.Split(output.(string), "\n")
+			pxMountFound := false
+			for _, line := range mounts {
+				pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
+				if len(pxMounts) > 0 {
+					logrus.Debugf("pod: [%s] %s have PX mount: %v", p.Namespace, p.Name, pxMounts)
+					pxMountFound = true
+					break
+				}
+			}
+
+			if !pxMountFound {
+				return fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", p.Namespace, p.Name, mounts)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (k *k8sSchedOps) ValidateSnapshot(params map[string]string, parent *api.Volume) error {
+	if parentPVCAnnotation, ok := params[snapshotAnnotation]; ok {
+		logrus.Debugf("Validating annotation based snapshot/clone")
+		return k.validateVolumeClone(parent, parentPVCAnnotation)
+	} else if snapshotAnnotation, ok := params[storkSnapshotAnnotation]; ok {
+		logrus.Debugf("Validating Stork clone")
+		return k.validateStorkClone(parent, snapshotAnnotation)
+	}
+	logrus.Debugf("Validating Stork snapshot")
+	return k.validateStorkSnapshot(parent, params)
+}
+
+func (k *k8sSchedOps) validateVolumeClone(parent *api.Volume, parentAnnotation string) error {
+	parentPVCName, exists := parent.Locator.VolumeLabels[pvcLabel]
+	if !exists {
+		return fmt.Errorf("Parent volume does not have a PVC label")
+	}
+
+	if parentPVCName != parentAnnotation {
+		return fmt.Errorf("Parent name [%s] does not match the source PVC annotation "+
+			"[%s] on the clone/snapshot", parentPVCName, parentAnnotation)
+	}
+	return nil
+}
+
+func (k *k8sSchedOps) validateStorkClone(parent *api.Volume, snapshotAnnotation string) error {
+	parentName := parent.Locator.Name
+	if parentName != snapshotAnnotation {
+		return fmt.Errorf("Parent name [%s] does not match the snapshot annotation "+
+			"[%s] on the clone PVC", parentName, snapshotAnnotation)
+	}
+	return nil
+}
+
+func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[string]string) error {
+	parentName, exists := parent.Locator.VolumeLabels[pvcLabel]
+	if !exists {
+		return fmt.Errorf("Parent volume does not have a PVC label")
+	}
+
+	if parentName != params[k8s_driver.SnapshotParent] {
+		return fmt.Errorf("Parent PVC name [%s] does not match the snapshot's source "+
+			"PVC [%s]", parentName, params[k8s_driver.SnapshotParent])
+	}
 	return nil
 }
 
@@ -247,8 +364,8 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 		},
 		Subjects: []rbacv1.Subject{{
 			Kind:      "ServiceAccount",
-			Name:      "talisman",
-			Namespace: "kube-system",
+			Name:      talismanServiceAccount,
+			Namespace: PXNamespace,
 		}},
 		RoleRef: rbacv1.RoleRef{
 			Kind: "ClusterRole",
@@ -262,8 +379,8 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 
 	account := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "talisman",
-			Namespace: "kube-system",
+			Name:      talismanServiceAccount,
+			Namespace: PXNamespace,
 		},
 	}
 	account, err = inst.CreateServiceAccount(account)
@@ -276,17 +393,17 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 	job := &batch_v1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "talisman",
-			Namespace: "kube-system",
+			Namespace: PXNamespace,
 		},
 		Spec: batch_v1.JobSpec{
 			BackoffLimit: &valOne,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "talisman",
+					ServiceAccountName: talismanServiceAccount,
 					Containers: []corev1.Container{
 						{
 							Name:  "talisman",
-							Image: "portworx/talisman:latest",
+							Image: talismanImage,
 							Args: []string{
 								"-operation", "upgrade", "-ocimonimage", ociImage, "-ocimontag", ociTag,
 							},
@@ -332,6 +449,37 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 	}
 
 	return nil
+}
+
+// getContainerPVCMountMap is a helper routine to return map of containers in the pod that
+// have a PVC. The values in the map are the mount paths of the PVC
+func getContainerPVCMountMap(pod corev1.Pod) map[string]string {
+	containerPaths := make(map[string]string)
+
+	// Each pvc in a pod spec has a associated name (which is different from the actual PVC name).
+	// These names get referenced by containers in a pod. So first let's get a map of these names.
+	// e.g below PVC "px-nginx-pvc" has a name "nginx-persistent-storage" below
+	//  volumes:
+	//  - name: nginx-persistent-storage
+	//    persistentVolumeClaim:
+	//      claimName: px-nginx-pvc
+	pvcNamesInSpec := make(map[string]string)
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil {
+			pvcNamesInSpec[v.Name] = v.PersistentVolumeClaim.ClaimName
+		}
+	}
+
+	// Now find containers in the pod that use above PVCs and also get their destination mount paths
+	for _, c := range pod.Spec.Containers {
+		for _, cMount := range c.VolumeMounts {
+			if _, ok := pvcNamesInSpec[cMount.Name]; ok {
+				containerPaths[c.Name] = cMount.MountPath
+			}
+		}
+	}
+
+	return containerPaths
 }
 
 func separateFilePaths(volDirList string) []string {
