@@ -258,7 +258,7 @@ imports:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: 3e163f97f4c5565ffc81bdc2a96e611b071d25cd
+  version: 880f483cfadc5c54406d059a14996b24c5086bfb
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s
