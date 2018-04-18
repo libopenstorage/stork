@@ -714,7 +714,7 @@ func (k *k8s) DeleteTasks(ctx *scheduler.Context) error {
 		}
 	}
 
-	if err := k8sOps.DeletePods(pods); err != nil {
+	if err := k8sOps.DeletePods(pods, false); err != nil {
 		return &scheduler.ErrFailedToDeleteTasks{
 			App:   ctx.App,
 			Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
