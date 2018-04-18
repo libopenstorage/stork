@@ -29,7 +29,7 @@ func simpleSnapshotTest(t *testing.T) {
 	err = schedulerDriver.InspectVolumes(ctxs[0])
 	require.NoError(t, err, "Error waiting for volumes")
 	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 2, len(volumeNames), "Should only have two volumes")
+	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
 
 	snapVolInfo, err := storkVolumeDriver.InspectVolume("mysql-snapshot")
 	require.NoError(t, err, "Error getting snapshot volume")
