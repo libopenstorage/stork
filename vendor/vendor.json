@@ -55,6 +55,18 @@
 			"revisionTime": "2017-12-13T11:07:31Z"
 		},
 		{
+			"checksumSHA1": "5Z0J6IIV39bPOf0NOVHLolGwcfo=",
+			"path": "github.com/docker/spdystream",
+			"revision": "bc6354cbbc295e925e4c611ffe90c1f287ee54db",
+			"revisionTime": "2017-09-12T18:36:27Z"
+		},
+		{
+			"checksumSHA1": "Gaf5SDyC0xV32LdjPCyUGvH5BhI=",
+			"path": "github.com/docker/spdystream/spdy",
+			"revision": "bc6354cbbc295e925e4c611ffe90c1f287ee54db",
+			"revisionTime": "2017-09-12T18:36:27Z"
+		},
+		{
 			"checksumSHA1": "TYSGkh0h648wwbQv+qmqMcqNP4Y=",
 			"path": "github.com/emicklei/go-restful",
 			"revision": "2dd44038f0b95ae693b266c5f87593b5d2fdd78d",
@@ -505,71 +517,71 @@
 			"revisionTime": "2017-11-17T19:00:05Z"
 		},
 		{
-			"checksumSHA1": "ARiZOSWRcC9Uthj2tMfbGKOVSUk=",
+			"checksumSHA1": "XSjLH4W/H4X7KVgvN6C9Q83j4tM=",
 			"path": "github.com/portworx/sched-ops/k8s",
-			"revision": "2801d90fa64a750cec052748c1f523d9ead25e9d",
-			"revisionTime": "2018-02-17T04:09:48Z"
+			"revision": "f67bc0b7d46931f0ab57da1b8667bab22e95319f",
+			"revisionTime": "2018-04-17T23:52:39Z"
 		},
 		{
-			"checksumSHA1": "XDeteytxpf2kmvacQSYeE3DP40M=",
+			"checksumSHA1": "5Nh7ppJlsyP/6c2zK5joEHz3I30=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/portworx/sched-ops/task",
 			"path": "github.com/portworx/sched-ops/task",
-			"revision": "ab1e78fa54dfe6317bdbee206df84d60981d5543",
-			"revisionTime": "2018-02-17T00:39:16Z"
+			"revision": "5f73dd63ae925b6c3df0fcf8227f4d3952be6742",
+			"revisionTime": "2018-03-28T22:50:24Z"
 		},
 		{
 			"checksumSHA1": "jGTQ3I/cJtz7APzDbcQ6FuEEC+k=",
 			"path": "github.com/portworx/torpedo/drivers/node",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
 			"checksumSHA1": "DNwZHYj8UqYNIJwq3M5SwGJG4Jw=",
 			"path": "github.com/portworx/torpedo/drivers/node/ssh",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
-			"checksumSHA1": "wjV/B+A4p9yj2iZXjQ116JpCZus=",
+			"checksumSHA1": "szs3YAkLpDbwGoGuHGsXHd9fsc0=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
-			"checksumSHA1": "w4993tXq+i+wBT1d8c03Un3tkGI=",
+			"checksumSHA1": "6LyOC4lyQO8zAXcs/G0m7S33exg=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/k8s",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
 			"checksumSHA1": "gicT7JrFO4AWSDZhO4NJ/t1vmZ8=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/spec",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
-			"checksumSHA1": "976l8rovvargmAjtqFDTNR5JwE0=",
+			"checksumSHA1": "X0via7TzWNorW4GtemynP39M/Tc=",
 			"path": "github.com/portworx/torpedo/drivers/volume",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
-			"checksumSHA1": "v3wEVSmWmH5bsyTSUsk0Uu0Roi0=",
+			"checksumSHA1": "eqq5nsd/RnVQ5CrUjOfSnlCaXaM=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
-			"checksumSHA1": "mLkNQbxr+igayNj5OOx44Z7K0iQ=",
+			"checksumSHA1": "31ylNk96/L3xz1QLgDJ9QlZyEdE=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx/schedops",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
 			"checksumSHA1": "VC6jgTB9GKVetejp30GOQKQIc3Y=",
 			"path": "github.com/portworx/torpedo/pkg/errors",
-			"revision": "d132f905dbcbc1bb984cb67e1cfea01ac39a29e1",
-			"revisionTime": "2018-02-17T04:57:04Z"
+			"revision": "e518e95dae6e5cb74a38378ec709a48056d4991e",
+			"revisionTime": "2018-04-18T01:52:08Z"
 		},
 		{
 			"checksumSHA1": "BYvROBsiyAXK4sq6yhDe8RgT4LM=",
@@ -1166,6 +1178,18 @@
 			"revisionTime": "2017-10-31T22:04:28Z"
 		},
 		{
+			"checksumSHA1": "uJwRt+/kPDql/wVf5xIfZarxExM=",
+			"path": "k8s.io/apimachinery/pkg/util/httpstream",
+			"revision": "5134afd2c0c91158afac0d8a28bd2177185a3bcc",
+			"revisionTime": "2017-10-31T22:04:28Z"
+		},
+		{
+			"checksumSHA1": "95AtIVOvhm3tdHF6dzPYeKscJkI=",
+			"path": "k8s.io/apimachinery/pkg/util/httpstream/spdy",
+			"revision": "5134afd2c0c91158afac0d8a28bd2177185a3bcc",
+			"revisionTime": "2017-10-31T22:04:28Z"
+		},
+		{
 			"checksumSHA1": "ieO7YmZYJWIoMdp50TsezwaJ8EE=",
 			"path": "k8s.io/apimachinery/pkg/util/intstr",
 			"revision": "5134afd2c0c91158afac0d8a28bd2177185a3bcc",
@@ -1195,6 +1219,12 @@
 			"path": "k8s.io/apimachinery/pkg/util/rand",
 			"revision": "dce4b4c82a887c0e7bdd83c5d9dd13e2d4514f78",
 			"revisionTime": "2017-12-13T11:07:31Z"
+		},
+		{
+			"checksumSHA1": "BNrzpAyZ2o9Gpl2pBSKclfh/9jQ=",
+			"path": "k8s.io/apimachinery/pkg/util/remotecommand",
+			"revision": "5134afd2c0c91158afac0d8a28bd2177185a3bcc",
+			"revisionTime": "2017-10-31T22:04:28Z"
 		},
 		{
 			"checksumSHA1": "vAQvCm3B23He0Xr/PsgGra6WI04=",
@@ -1260,6 +1290,12 @@
 		{
 			"checksumSHA1": "BpFF036Wu0m6pOIpVZcOftgzrE4=",
 			"path": "k8s.io/apimachinery/third_party/forked/golang/json",
+			"revision": "5134afd2c0c91158afac0d8a28bd2177185a3bcc",
+			"revisionTime": "2017-10-31T22:04:28Z"
+		},
+		{
+			"checksumSHA1": "P88hiTy7/2eb/eavJxPz9nqRA+s=",
+			"path": "k8s.io/apimachinery/third_party/forked/golang/netutil",
 			"revision": "5134afd2c0c91158afac0d8a28bd2177185a3bcc",
 			"revisionTime": "2017-10-31T22:04:28Z"
 		},
@@ -1581,14 +1617,32 @@
 			"revisionTime": "2017-12-06T18:53:11Z"
 		},
 		{
+			"checksumSHA1": "20P98TYv33aPql2HAuDtILBTHoo=",
+			"path": "k8s.io/client-go/tools/remotecommand",
+			"revision": "27ca8df00321648f57856d9dcb0e7f8ba37badc7",
+			"revisionTime": "2018-04-17T14:44:47Z"
+		},
+		{
 			"checksumSHA1": "ovP8dqDsXe94Zz+g/JW9n+nDQhQ=",
 			"path": "k8s.io/client-go/transport",
 			"revision": "78700dec6369ba22221b72770783300f143df150",
 			"revisionTime": "2017-12-06T18:53:11Z"
 		},
 		{
+			"checksumSHA1": "z6ktalStv2wJypDrcFFaSpfWqNg=",
+			"path": "k8s.io/client-go/transport/spdy",
+			"revision": "27ca8df00321648f57856d9dcb0e7f8ba37badc7",
+			"revisionTime": "2018-04-17T14:44:47Z"
+		},
+		{
 			"checksumSHA1": "2yokbokTrzhLqCtYPvxjcGmXuLw=",
 			"path": "k8s.io/client-go/util/cert",
+			"revision": "78700dec6369ba22221b72770783300f143df150",
+			"revisionTime": "2017-12-06T18:53:11Z"
+		},
+		{
+			"checksumSHA1": "UdDZlxcUjHNGrgZ60irOAvri4Gc=",
+			"path": "k8s.io/client-go/util/exec",
 			"revision": "78700dec6369ba22221b72770783300f143df150",
 			"revisionTime": "2017-12-06T18:53:11Z"
 		},
