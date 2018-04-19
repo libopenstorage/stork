@@ -45,7 +45,7 @@ func simpleSnapshotTest(t *testing.T) {
 	for _, volume := range volumeNames {
 		if volume == parentVolName {
 			found = true
-		} else {
+		} else if volume != snapVolInfo.VolumeName {
 			cloneVolName = volume
 		}
 	}
