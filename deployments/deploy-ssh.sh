@@ -16,12 +16,14 @@ fi
 
 SKIP_ARG=""
 if [ -n "$SKIP_TESTS" ]; then
-    SKIP_ARG="--skip=$(echo $SKIP_TESTS | sed -e 's/,/ | /g')"
+    skipRegex=$(echo $SKIP_TESTS | sed -e 's/,/}|{/g')
+    SKIP_ARG="--skip={$skipRegex}"
 fi
 
 FOCUS_ARG=""
 if [ -n "$FOCUS_TESTS" ]; then
-    FOCUS_ARG="--focus=$(echo $FOCUS_TESTS | sed -e 's/,/ | /g')"
+    focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
+    FOCUS_ARG="--focus={$focusRegex}"
 fi
 
 UPGRADE_VERSION_ARG=""

@@ -21,7 +21,7 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-var _ = Describe("DriveFailure", func() {
+var _ = Describe("{DriveFailure}", func() {
 	testName := "drivefailure"
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error

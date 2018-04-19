@@ -22,7 +22,7 @@ var _ = BeforeSuite(func() {
 })
 
 // This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("SetupTeardown", func() {
+var _ = Describe("{SetupTeardown}", func() {
 	It("has to setup, validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
@@ -39,7 +39,7 @@ var _ = Describe("SetupTeardown", func() {
 })
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
-var _ = Describe("VolumeDriverDown", func() {
+var _ = Describe("{VolumeDriverDown}", func() {
 	It("has to schedule apps and stop volume driver on app nodes", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -86,7 +86,7 @@ var _ = Describe("VolumeDriverDown", func() {
 
 // Volume Driver Plugin is down, unavailable on the nodes where the volumes are
 // attached - and the client container should not be impacted.
-var _ = Describe("VolumeDriverDownAttachedNode", func() {
+var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
@@ -135,7 +135,7 @@ var _ = Describe("VolumeDriverDownAttachedNode", func() {
 })
 
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
-var _ = Describe("VolumeDriverCrash", func() {
+var _ = Describe("{VolumeDriverCrash}", func() {
 	It("has to schedule apps and crash volume driver on app nodes", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -170,7 +170,7 @@ var _ = Describe("VolumeDriverCrash", func() {
 // Volume driver plugin is down and the client container gets terminated.
 // There is a lost unmount call in this case. When the volume driver is
 // back up, we should be able to detach and delete the volume.
-var _ = Describe("VolumeDriverAppDown", func() {
+var _ = Describe("{VolumeDriverAppDown}", func() {
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -217,7 +217,7 @@ var _ = Describe("VolumeDriverAppDown", func() {
 })
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
-var _ = Describe("AppTasksDown", func() {
+var _ = Describe("{AppTasksDown}", func() {
 	It("has to schedule app and delete app tasks", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -245,7 +245,7 @@ var _ = Describe("AppTasksDown", func() {
 })
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
-var _ = Describe("AppScaleUpAndDown", func() {
+var _ = Describe("{AppScaleUpAndDown}", func() {
 	It("has to scale up and scale down the app", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {

@@ -21,7 +21,7 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-var _ = Describe("RebootOneNode", func() {
+var _ = Describe("{RebootOneNode}", func() {
 	It("has to schedule apps and reboot node(s) with volumes", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -90,7 +90,7 @@ var _ = Describe("RebootOneNode", func() {
 	})
 })
 
-var _ = Describe("RebootAllNodes", func() {
+var _ = Describe("{RebootAllNodes}", func() {
 	It("has to scheduler apps and reboot app node(s)", func() {
 		var err error
 		var contexts []*scheduler.Context

@@ -19,7 +19,7 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-var _ = Describe("UpgradeVolumeDriver", func() {
+var _ = Describe("{UpgradeVolumeDriver}", func() {
 	It("upgrade volume driver and ensure everything is running fine", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
@@ -47,7 +47,7 @@ var _ = Describe("UpgradeVolumeDriver", func() {
 	})
 })
 
-var _ = PDescribe("UpgradeDowngradeVolumeDriver", func() {
+var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 	It("upgrade and downgrade volume driver and ensure everything is running fine", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {

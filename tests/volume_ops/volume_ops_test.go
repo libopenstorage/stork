@@ -22,7 +22,7 @@ var _ = BeforeSuite(func() {
 })
 
 // Volume Replication Decrease
-var _ = Describe("VolumeReplicationDecrease", func() {
+var _ = Describe("{VolumeReplicationDecrease}", func() {
 	It("has to schedule apps and decrease replication factor on all volumes of the apps", func() {
 		var err error
 		var contexts []*scheduler.Context
@@ -86,7 +86,7 @@ var _ = Describe("VolumeReplicationDecrease", func() {
 })
 
 // Volume replication increase
-var _ = Describe("VolumeReplicationIncrease", func() {
+var _ = Describe("{VolumeReplicationIncrease}", func() {
 	It("has to schedule apps and increase replication factor on all volumes of the apps", func() {
 		var err error
 		var contexts []*scheduler.Context
