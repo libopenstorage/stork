@@ -3,6 +3,7 @@
 package integrationtest
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -31,7 +32,15 @@ func simpleSnapshotTest(t *testing.T) {
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
 
-	snapVolInfo, err := storkVolumeDriver.InspectVolume("mysql-snapshot")
+	snapshotName := ""
+	for _, volume := range volumeNames {
+		if strings.HasPrefix(volume, "snapshot") {
+			snapshotName = volume
+		}
+	}
+	require.NotEmpty(t, snapshotName, "snapshot not found in list of volumes: %v", volumeNames)
+
+	snapVolInfo, err := storkVolumeDriver.InspectVolume(snapshotName)
 	require.NoError(t, err, "Error getting snapshot volume")
 	require.NotNil(t, snapVolInfo.ParentID, "ParentID is nil for snapshot")
 

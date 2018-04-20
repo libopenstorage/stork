@@ -43,8 +43,12 @@ const (
 	// pvcNameLabel is the key of the label used to store the PVC name
 	pvcNameLabel = "pvc"
 
-	// pvcNamespaceLabel is the key of the label used to store the PVC namespace
-	pvcNamespaceLabel = "namespace"
+	// storkSnapNameLabel is the key of the label used to store the stork Snapshot name
+	storkSnapNameLabel = "stork-snap"
+
+	// namespaceLabel is the key of the label used to store the namespace of PVC
+	// and snapshots
+	namespaceLabel = "namespace"
 
 	// pxRackLabelKey Label for rack information
 	pxRackLabelKey = "px/rack"
@@ -252,6 +256,10 @@ func (p *portworx) GetSnapshotPlugin() snapshotVolume.Plugin {
 	return p
 }
 
+func (p *portworx) getSnapshotName(tags *map[string]string) string {
+	return "snapshot-" + (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotUIDTag]
+}
+
 func (p *portworx) SnapshotCreate(pv *v1.PersistentVolume, tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
 	if pv == nil || pv.Spec.PortworxVolume == nil {
 		return nil, nil, fmt.Errorf("Invalid PV: %v", pv)
@@ -260,8 +268,13 @@ func (p *portworx) SnapshotCreate(pv *v1.PersistentVolume, tags *map[string]stri
 	volumeID := spec.PortworxVolume.VolumeID
 
 	logrus.Debugf("SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
+	snapName := p.getSnapshotName(tags)
 	locator := &api.VolumeLocator{
-		Name: (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNameTag],
+		Name: snapName,
+		VolumeLabels: map[string]string{
+			storkSnapNameLabel: (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNameTag],
+			namespaceLabel:     (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNamespaceTag],
+		},
 	}
 	snapshotID, err := p.volDriver.Snapshot(volumeID, true, locator)
 	if err != nil {
@@ -301,8 +314,8 @@ func (p *portworx) SnapshotRestore(
 	locator := &api.VolumeLocator{
 		Name: "pvc-" + string(pvc.UID),
 		VolumeLabels: map[string]string{
-			pvcNameLabel:      pvc.Name,
-			pvcNamespaceLabel: pvc.Namespace,
+			pvcNameLabel:   pvc.Name,
+			namespaceLabel: pvc.Namespace,
 		},
 	}
 	volumeID, err := p.volDriver.Snapshot(snapID, false, locator)
