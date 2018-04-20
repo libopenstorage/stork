@@ -31,7 +31,18 @@ func simpleSnapshotTest(t *testing.T) {
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 2, len(volumeNames), "Should only have two volumes")
 
-	snapVolInfo, err := storkVolumeDriver.InspectVolume("mysql-snapshot")
+	snapshotName := ""
+	for _, volume := range volumeNames {
+		volInfo, err := storkVolumeDriver.InspectVolume(volume)
+		require.NoError(t, err, "Error getting volume info")
+		if volInfo.ParentID != "" {
+			snapshotName = volInfo.ParentID
+			break
+		}
+	}
+	require.NotEmpty(t, snapshotName, "snapshot not found in list of volumes: %v", volumeNames)
+
+	snapVolInfo, err := storkVolumeDriver.InspectVolume(snapshotName)
 	require.NoError(t, err, "Error getting snapshot volume")
 	require.NotNil(t, snapVolInfo.ParentID, "ParentID is nil for snapshot")
 
