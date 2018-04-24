@@ -294,7 +294,6 @@ Note: Syslog hook also support connecting to local syslog (Ex. "/dev/log" or "/v
 | [Telegram](https://github.com/rossmcdonald/telegram_hook) | Hook for logging errors to [Telegram](https://telegram.org/) |
 | [TraceView](https://github.com/evalphobia/logrus_appneta) | Hook for logging to [AppNeta TraceView](https://www.appneta.com/products/traceview/) |
 | [Typetalk](https://github.com/dragon3/logrus-typetalk-hook) | Hook for logging to [Typetalk](https://www.typetalk.in/) |
-| [logz.io](https://github.com/ripcurld00d/logrus-logzio-hook) | Hook for logging to [logz.io](https://logz.io), a Log as a Service using Logstash |
 | [SQS-Hook](https://github.com/tsarpaul/logrus_sqs) | Hook for logging to [Amazon Simple Queue Service (SQS)](https://aws.amazon.com/sqs/) |
 
 #### Level logging
@@ -373,6 +372,8 @@ The built-in logging formatters are:
     field to `true`.  To force no colored output even if there is a TTY  set the
     `DisableColors` field to `true`. For Windows, see
     [github.com/mattn/go-colorable](https://github.com/mattn/go-colorable).
+  * When colors are enabled, levels are truncated to 4 characters by default. To disable
+    truncation set the `DisableLevelTruncation` field to `true`.
   * All options are listed in the [generated docs](https://godoc.org/github.com/sirupsen/logrus#TextFormatter).
 * `logrus.JSONFormatter`. Logs fields as JSON.
   * All options are listed in the [generated docs](https://godoc.org/github.com/sirupsen/logrus#JSONFormatter).
@@ -496,7 +497,7 @@ logrus.RegisterExitHandler(handler)
 
 #### Thread safety
 
-By default Logger is protected by mutex for concurrent writes, this mutex is invoked when calling hooks and writing logs.
+By default, Logger is protected by a mutex for concurrent writes. The mutex is held when calling hooks and writing logs.
 If you are sure such locking is not needed, you can call logger.SetNoLock() to disable the locking.
 
 Situation when locking is not needed includes:

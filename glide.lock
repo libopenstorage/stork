@@ -1,5 +1,5 @@
 hash: 4fc8426e19f0d0d81cb1a4078559672742ddabac44fb6dde505f81601d752419
-updated: 2018-03-30T13:22:16.377081637-07:00
+updated: 2018-04-24T14:26:40.081407545-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 783273d703149aaeb9897cf58613d5af48861c25
@@ -36,7 +36,7 @@ imports:
   - service/ssm
   - service/sts
 - name: github.com/cloudfoundry/gosigar
-  version: dcb1afc219e4c99f21c37fb1ec22ed9ffe443317
+  version: 1375283248c3c5fa82163113c0ef15e79390f644
   subpackages:
   - sys/windows
 - name: github.com/davecgh/go-spew
@@ -94,7 +94,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 6ecc596bd756a16c6e93e4ef9225ecdb9f54ed2c
+  version: bda519ae5f4cbc60d391ff8610711627a08b86ae
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -167,7 +167,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 5b9ff866471762aa2ab2dced63c9fb6f53921342
 - name: github.com/kubernetes-incubator/external-storage
-  version: 0b0384e38b1c0ee040fe71ea5cf1fc44434ff778
+  version: 0efa529d2c966f7b5677cfceccdf0cf4bb6334ae
   subpackages:
   - snapshot/pkg/apis/crd/v1
   - snapshot/pkg/client
@@ -178,7 +178,7 @@ imports:
   - proto/state
   - types
 - name: github.com/libopenstorage/openstorage
-  version: 6a6f2b47c4940f90435ab80d810a566208326e43
+  version: 8597d9ca590c1051f0f80fbed3b8ad1e1062c93a
   subpackages:
   - api
   - api/client
@@ -207,11 +207,11 @@ imports:
 - name: github.com/Microsoft/go-winio
   version: 7da180ee92d8bd8bb8c37fc560e673e6557c392f
 - name: github.com/miekg/dns
-  version: 5b169d1842fbc764c22df259de0a17085c48d8c2
+  version: 01d59357d468872339068bcd5d55a00e2463051f
 - name: github.com/mohae/deepcopy
   version: c48cc78d482608239f6c4c92a4abd87eb8761c90
 - name: github.com/onsi/ginkgo
-  version: 03ffd3f46debf00c49ed76d5dbb564ef4839adfe
+  version: 6d8be987c536ebd84576a5a46208e7b7a3c796b0
   subpackages:
   - config
   - internal/codelocation
@@ -231,7 +231,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 649b44d988ce182cabcda7dba01fcf3b6179ad19
+  version: b7d1a52235cc433a76c556aa3f4229e63b95e7da
   subpackages:
   - format
   - internal/assertion
@@ -258,7 +258,7 @@ imports:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: 880f483cfadc5c54406d059a14996b24c5086bfb
+  version: ae090d611c16ebd3caa95299c4d64c6f5496e1c2
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s
@@ -270,7 +270,7 @@ imports:
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/Sirupsen/logrus
-  version: 90150a8ed11b6ce285e77e8af2b0109559ce4777
+  version: 778f2e774c725116edbc3d039dc0dfc1cc62aae8
 - name: github.com/sirupsen/logrus
   version: 33a34430d1c3dc71777fdd677864928e5b5812bc
 - name: github.com/spf13/pflag
