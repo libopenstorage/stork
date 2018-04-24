@@ -88,7 +88,7 @@ Stork is written in Golang. To build Stork:
 # git clone git@github.com:libopenstorage/stork.git
 # export DOCKER_HUB_REPO=myrepo
 # export DOCKER_HUB_STORK_IMAGE=stork
-# export DOCKER_HUB_TAG=latest
+# export DOCKER_HUB_STORK_TAG=latest
 # make
 ```
 
