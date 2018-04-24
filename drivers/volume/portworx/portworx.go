@@ -518,10 +518,15 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	}
 
 	pxVol := v.(*api.Volume)
-	for _, n := range node.GetNodes() {
+	for _, n := range node.GetWorkerNodes() {
 		if n.VolDriverNodeID == pxVol.AttachedOn {
 			return &n, nil
 		}
+	}
+
+	// Snapshots may not be attached to a node
+	if pxVol.Source.Parent != "" {
+		return nil, nil
 	}
 
 	return nil, &ErrFailedToInspectVolume{

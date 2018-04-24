@@ -106,6 +106,10 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 						n, err := Inst().V.GetNodeForVolume(v)
 						Expect(err).NotTo(HaveOccurred())
 
+						if n == nil {
+							continue
+						}
+
 						if _, exists := nodeMap[n.Name]; !exists {
 							nodeMap[n.Name] = struct{}{}
 							appNodes = append(appNodes, *n)
