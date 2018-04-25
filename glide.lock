@@ -1,5 +1,5 @@
 hash: 4fc8426e19f0d0d81cb1a4078559672742ddabac44fb6dde505f81601d752419
-updated: 2018-04-24T14:26:40.081407545-07:00
+updated: 2018-04-25T15:40:31.812522097-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 783273d703149aaeb9897cf58613d5af48861c25
@@ -178,7 +178,7 @@ imports:
   - proto/state
   - types
 - name: github.com/libopenstorage/openstorage
-  version: 8597d9ca590c1051f0f80fbed3b8ad1e1062c93a
+  version: 74ee22dd53509702188a07820d516a639ca1637f
   subpackages:
   - api
   - api/client
@@ -191,6 +191,7 @@ imports:
   - pkg/dbg
   - pkg/parser
   - pkg/units
+  - secrets
   - volume
 - name: github.com/libopenstorage/systemutils
   version: dc0e35340804a0ada0792a3c9ce51d33ddd53cc8
@@ -258,7 +259,7 @@ imports:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: ae090d611c16ebd3caa95299c4d64c6f5496e1c2
+  version: e029c8279bb408012b8e631f32fde8a1493f2268
   repo: git@github.com:portworx/sched-ops.git
   subpackages:
   - k8s
@@ -269,10 +270,10 @@ imports:
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
-- name: github.com/Sirupsen/logrus
-  version: 778f2e774c725116edbc3d039dc0dfc1cc62aae8
 - name: github.com/sirupsen/logrus
   version: 33a34430d1c3dc71777fdd677864928e5b5812bc
+- name: github.com/Sirupsen/logrus
+  version: 778f2e774c725116edbc3d039dc0dfc1cc62aae8
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: go.pedge.io/dlog
@@ -301,10 +302,12 @@ imports:
   - idna
   - internal/iana
   - internal/socket
+  - internal/timeseries
   - ipv4
   - ipv6
   - lex/httplex
   - proxy
+  - trace
 - name: golang.org/x/sys
   version: a2e06a18b0d52d8cb2010e04b372a1965d8e3439
   subpackages:
@@ -335,6 +338,30 @@ imports:
   - unicode/bidi
   - unicode/norm
   - width
+- name: google.golang.org/genproto
+  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
+  subpackages:
+  - googleapis/api/annotations
+  - googleapis/rpc/status
+- name: google.golang.org/grpc
+  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
+  subpackages:
+  - balancer
+  - codes
+  - connectivity
+  - credentials
+  - grpclb/grpc_lb_v1/messages
+  - grpclog
+  - internal
+  - keepalive
+  - metadata
+  - naming
+  - peer
+  - resolver
+  - stats
+  - status
+  - tap
+  - transport
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/yaml.v2
