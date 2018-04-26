@@ -20,6 +20,19 @@ check with the storage driver
 You can either configure the default kubernetes scheduler to communicate with
 stork or launch another instance of kube-scheduler.
 
+### Initializer (Experimental)
+If you are not able to update the schedulerName for you applications to use
+stork, you can enable the app-initializer feature. This uses the Kubernetes
+[AdmissionController Initializer](https://kubernetes.io/docs/admin/extensible-admission-controllers/#initializers)
+feature to automatically update the scheduler to stork if your application
+(deployment or statefulset) is using volumes backed by the configured driver.
+
+To enable the Initializer you need to:
+* [Enable the Intializer feature in your Kubernetes cluster](https://kubernetes.io/docs/admin/extensible-admission-controllers/#enable-initializers-alpha-feature)
+since it is an alpha feature.
+* Add "--app-initializer=true" option to stork (in either the deployment or daemonset spec file)
+* Add the [stork-initializer spec](specs/stork-initializer.yaml) to you Kubernetes cluster using `kubectl create -f stork-initializer.yaml`
+
 ## Health Monitoring
 Stork will monitor the health of the volume driver on the different nodes. If the volume driver on a node becomes
 unhealthy pods on that node using volumes from the driver will not be able to access their data. In this case stork will
