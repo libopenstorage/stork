@@ -19,6 +19,8 @@ spec:
         app: wordpress
         tier: installer
     spec:
+      securityContext:
+        fsGroup: 1000
       containers:
       - image: samuelmyers/wp-cli:1.2.23
         name: installer
