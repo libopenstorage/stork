@@ -305,51 +305,51 @@
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "PrR2kXzYmim3jxk0yiqBhZtOdpM=",
+			"checksumSHA1": "gO1F7vW45DAl4zwxsSJTjgy+TJg=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
-			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "BNrILwgafy9rShay9gMdtgTZhQ0=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client",
-			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "25n2vaGX6WU+BRo+36C2VdVdLyU=",
+			"checksumSHA1": "V7X6Xskjew4qSbwfZC4w1bFuboI=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/cache",
-			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "HB30HgKqIWQFywIQo4kPxGoeaoU=",
+			"checksumSHA1": "UWFGAB05V8u4tgBHQueAK+j+klA=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/populator",
-			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
 			"checksumSHA1": "NPFTLFPhF+mVnPs5ZH6Ewy9fTjo=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/reconciler",
-			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "jfAWcaV89uEtaMzOz0Gi9mMlqOo=",
+			"checksumSHA1": "uo8k5VZtwwecifJnSfDeUzoP2n8=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller",
-			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "+2bmrFTi6OL22QbtthrvFTSIQgA=",
+			"checksumSHA1": "qU87Jiwi0Q5t797PKCdcDLRM6ys=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter",
-			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "lVyufvJG8HZpbENeZELSERDo91I=",
+			"checksumSHA1": "RCXqx7/emuR21j3Dlq+GyT3Phf8=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume",
-			"revision": "c98db1936483df4e036bcb29fce49c2cac5a976c",
+			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
