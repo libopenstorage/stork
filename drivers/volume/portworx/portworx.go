@@ -260,7 +260,11 @@ func (p *portworx) getSnapshotName(tags *map[string]string) string {
 	return "snapshot-" + (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotUIDTag]
 }
 
-func (p *portworx) SnapshotCreate(pv *v1.PersistentVolume, tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
+func (p *portworx) SnapshotCreate(
+	snapshot *crdv1.VolumeSnapshot,
+	pv *v1.PersistentVolume,
+	tags *map[string]string,
+) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
 	if pv == nil || pv.Spec.PortworxVolume == nil {
 		return nil, nil, fmt.Errorf("Invalid PV: %v", pv)
 	}
