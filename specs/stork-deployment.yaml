@@ -14,7 +14,6 @@ data:
       "apiVersion": "v1",
       "predicates": [
         {"name": "MaxAzureDiskVolumeCount"},
-        {"name": "NoVolumeNodeConflict"},
         {"name": "PodToleratesNodeTaints"},
         {"name": "CheckNodeMemoryPressure"},
         {"name": "NoVolumeZoneConflict"},
