@@ -8,38 +8,47 @@ function wait_for_mysql() {
     done
 }
 
-cd /wordpress
+function log() {
+    echo "$(date) $@"
+}
+
 wait_for_mysql
 
-echo ":: Downloading wordpress..."
+log ":: Downloading wordpress to temp directory..."
+mkdir -p /tmp/wordpress
+cd /tmp/wordpress
 wp core download
 
-echo ":: Generating wordpress config..."
+log ":: Moving wordpress to PX shared volume..."
+mv /tmp/wordpress/* /wordpress/
+cd /wordpress
+
+log ":: Generating wordpress config..."
 wp config create --dbname=pwx --dbhost="${WORDPRESS_DB_HOST}" --dbuser="root" --dbpass="${WORDPRESS_DB_PASSWORD}" --force
 
-echo ":: Generating wordpress database..."
+log ":: Generating wordpress database..."
 wp db create --dbuser=root --dbpass="${WORDPRESS_DB_PASSWORD}"
 
-echo ":: Allowing wordpress pods to come online"
+log ":: Allowing wordpress pods to come online"
 touch /wordpress/installed
 
-echo ":: Waiting for wordpress to come online..."
+log ":: Waiting for wordpress to come online..."
 while ! curl --connect-timeout 2 'wordpress:80' ; do sleep 1 ; done
 
-echo ":: Installing wordpress..."
+log ":: Installing wordpress..."
 wp core install --url="${WORDPRESS_URL}" --title="TestWordPress" --admin_user="admin" --admin_password="correcthorsebatterystaple" --admin_email="noreply@portworx.com" --skip-email
 
-echo ":: Generating junk posts..."
+log ":: Generating junk posts..."
 wp post generate --count=100
 
-echo ":: Installing plugins..."
+log ":: Installing plugins..."
 for plugin_name in ${WORDPRESS_PLUGINS//,/ }
 do
     wp plugin install "${plugin_name}" --activate
 done
 
-echo ":: Installing theme..."
+log ":: Installing theme..."
 wp theme install "${WORDPRESS_THEME}" --activate
 
-echo ":: Sleeping forever. Exec into me for debugging"
+log ":: Sleeping forever. Exec into me for debugging"
 while true; do sleep 30; done;

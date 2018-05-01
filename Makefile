@@ -97,7 +97,7 @@ clean:
 	-docker rmi -f $(TORPEDO_IMG)
 	go clean -i $(PKGS)
 
-DOCKER_HUB_SIDECAR_TAG=1.2.23
+DOCKER_HUB_SIDECAR_TAG=1.2.24
 SIDECAR_WP_CLI_IMG=$(DOCKER_HUB_REPO)/wp-cli:$(DOCKER_HUB_SIDECAR_TAG)
 SIDECAR_DIR=drivers/scheduler/sidecars
 

@@ -22,7 +22,7 @@ spec:
       securityContext:
         fsGroup: 1000
       containers:
-      - image: samuelmyers/wp-cli:1.2.23
+      - image: samuelmyers/wp-cli:1.2.24
         name: installer
         env:
         - name: WORDPRESS_URL
