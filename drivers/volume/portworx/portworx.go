@@ -85,7 +85,11 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	if err != nil {
 		return err
 	}
-	d.updateNodes(cluster.Nodes)
+
+	err = d.updateNodes(cluster.Nodes)
+	if err != nil {
+		return err
+	}
 
 	for _, n := range node.GetWorkerNodes() {
 		if err := d.WaitDriverUpOnNode(n); err != nil {
@@ -106,22 +110,28 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	return nil
 }
 
-func (d *portworx) updateNodes(pxNodes []api.Node) {
-	for _, n := range node.GetNodes() {
-		d.updateNode(n, pxNodes)
+func (d *portworx) updateNodes(pxNodes []api.Node) error {
+	for _, n := range node.GetWorkerNodes() {
+		if err := d.updateNode(n, pxNodes); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) {
+func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
-			if address == pxNode.DataIp || address == pxNode.MgmtIp {
+			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
 				n.VolDriverNodeID = pxNode.Id
 				node.UpdateNode(n)
-				return
+				return nil
 			}
 		}
 	}
+
+	return fmt.Errorf("failed to find px node for node: %v", n)
 }
 
 func (d *portworx) CleanupVolume(name string) error {
