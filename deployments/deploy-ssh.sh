@@ -108,6 +108,7 @@ spec:
             "bin/reboot.test",
             "bin/upgrade.test",
             "bin/drive_failure.test",
+            "bin/volume_ops.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
