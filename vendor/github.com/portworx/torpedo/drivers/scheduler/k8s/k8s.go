@@ -769,8 +769,41 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				}
 			}
 
-			result["snapshot-"+string(snap.Metadata.UID)] = map[string]string{
+			result[snap.Metadata.Name] = map[string]string{
 				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
+			}
+
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVCs for StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				params, err := k8sOps.GetPersistentVolumeClaimParams(&pvc)
+				if err != nil {
+					return nil, &scheduler.ErrFailedToGetVolumeParameters{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("failed to get params for volume: %v. Err: %v", pvc.Name, err),
+					}
+				}
+
+				for k, v := range pvc.Annotations {
+					params[k] = v
+				}
+
+				result[pvc.Spec.VolumeName] = params
 			}
 		}
 	}
@@ -808,6 +841,23 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			if err := k8sOps.ValidatePVCsForStatefulSet(ss); err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			logrus.Infof("[%v] Validated PVCs from StatefulSet: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -827,13 +877,14 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					}
 				}
 			}
+
 			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			volToBeDeleted := &volume.Volume{
+			vols = append(vols, &volume.Volume{
 				ID:   string(obj.UID),
 				Name: obj.Name,
-			}
-			vols = append(vols, volToBeDeleted)
+			})
+
 			if err := k8sOps.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
 				if !errors.IsNotFound(err) {
 					return nil, &scheduler.ErrFailedToDestroyStorage{
@@ -842,6 +893,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					}
 				}
 			}
+
 			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
 			if err := k8sOps.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
@@ -852,7 +904,34 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					}
 				}
 			}
+
 			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(obj)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVCs for StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:   string(pvc.UID),
+					Name: pvc.Name,
+				})
+
+				if err := k8sOps.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
+					if !errors.IsNotFound(err) {
+						return nil, &scheduler.ErrFailedToDestroyStorage{
+							App:   ctx.App,
+							Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", pvc.Name, err),
+						}
+					}
+				}
+			}
+
+			logrus.Infof("[%v] Destroyed PVCs for StatefulSet: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -860,6 +939,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 }
 
 func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	k8sOps := k8s_ops.Instance()
 	var vols []*volume.Volume
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
@@ -868,6 +948,29 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				Name: obj.Name,
 			}
 			vols = append(vols, vol)
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToGetStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vols = append(vols, &volume.Volume{
+					ID:   string(pvc.UID),
+					Name: pvc.Name,
+				})
+			}
 		}
 	}
 

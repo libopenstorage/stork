@@ -73,3 +73,27 @@ type ErrFailedToRecoverDriver struct {
 func (e *ErrFailedToRecoverDriver) Error() string {
 	return fmt.Sprintf("Failed to wait for px to be up on: %v due to err: %v", e.Node.Name, e.Cause)
 }
+
+// ErrFailedToSetReplicationFactor error type for failing to set replication factor to given value
+type ErrFailedToSetReplicationFactor struct {
+	// ID is the ID/name of the volume for which we could not set the replication factor
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToSetReplicationFactor) Error() string {
+	return fmt.Sprintf("Failed to set replication factor of the volume: %v due to err: %v", e.ID, e.Cause)
+}
+
+// ErrFailedToGetReplicationFactor error type for failing to get/query the current replication factor
+type ErrFailedToGetReplicationFactor struct {
+	// ID is the ID/name of the volume for which we could not get the replication factor
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetReplicationFactor) Error() string {
+	return fmt.Sprintf("Failed to get replication factor of the volume: %v due to err: %v", e.ID, e.Cause)
+}

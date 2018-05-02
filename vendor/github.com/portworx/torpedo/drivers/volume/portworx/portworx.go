@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"regexp"
 	"strings"
@@ -35,21 +36,22 @@ const (
 )
 
 const (
-	defaultRetryInterval              = 10 * time.Second
-	maintenanceOpTimeout              = 1 * time.Minute
-	maintenanceWaitTimeout            = 2 * time.Minute
-	validateCreateVolumeTimeout       = 10 * time.Second
-	validateCreateVolumeRetryInterval = 2 * time.Second
-	validateDeleteVolumeTimeout       = 3 * time.Minute
-	validateClusterStartTimeout       = 2 * time.Minute
-	validateNodeStartTimeout          = 2 * time.Minute
-	validateNodeStopTimeout           = 2 * time.Minute
-	stopDriverTimeout                 = 5 * time.Minute
-	crashDriverTimeout                = 2 * time.Minute
-	startDriverTimeout                = 2 * time.Minute
-	upgradeTimeout                    = 10 * time.Minute
-	upgradeRetryInterval              = 30 * time.Second
-	waitVolDriverToCrash              = 1 * time.Minute
+	defaultRetryInterval             = 10 * time.Second
+	maintenanceOpTimeout             = 1 * time.Minute
+	maintenanceWaitTimeout           = 2 * time.Minute
+	inspectVolumeTimeout             = 10 * time.Second
+	inspectVolumeRetryInterval       = 2 * time.Second
+	validateDeleteVolumeTimeout      = 3 * time.Minute
+	validateReplicationUpdateTimeout = 10 * time.Minute
+	validateClusterStartTimeout      = 2 * time.Minute
+	validateNodeStartTimeout         = 2 * time.Minute
+	validateNodeStopTimeout          = 2 * time.Minute
+	stopDriverTimeout                = 5 * time.Minute
+	crashDriverTimeout               = 2 * time.Minute
+	startDriverTimeout               = 2 * time.Minute
+	upgradeTimeout                   = 10 * time.Minute
+	upgradeRetryInterval             = 30 * time.Second
+	waitVolDriverToCrash             = 1 * time.Minute
 )
 
 type portworx struct {
@@ -83,7 +85,11 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	if err != nil {
 		return err
 	}
-	d.updateNodes(cluster.Nodes)
+
+	err = d.updateNodes(cluster.Nodes)
+	if err != nil {
+		return err
+	}
 
 	for _, n := range node.GetWorkerNodes() {
 		if err := d.WaitDriverUpOnNode(n); err != nil {
@@ -104,22 +110,28 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	return nil
 }
 
-func (d *portworx) updateNodes(pxNodes []api.Node) {
-	for _, n := range node.GetNodes() {
-		d.updateNode(n, pxNodes)
+func (d *portworx) updateNodes(pxNodes []api.Node) error {
+	for _, n := range node.GetWorkerNodes() {
+		if err := d.updateNode(n, pxNodes); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) {
+func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
-			if address == pxNode.DataIp || address == pxNode.MgmtIp {
+			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
 				n.VolDriverNodeID = pxNode.Id
 				node.UpdateNode(n)
-				return
+				return nil
 			}
 		}
 	}
+
+	return fmt.Errorf("failed to find px node for node: %v", n)
 }
 
 func (d *portworx) CleanupVolume(name string) error {
@@ -270,7 +282,7 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		return vols[0], false, nil
 	}
 
-	out, err := task.DoRetryWithTimeout(t, validateCreateVolumeTimeout, validateCreateVolumeRetryInterval)
+	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
 	if err != nil {
 		return &ErrFailedToInspectVolume{
 			ID:    name,
@@ -494,6 +506,45 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 	return nil
 }
 
+func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, error) {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.getVolDriver().Inspect([]string{name})
+		if err != nil {
+			return nil, true, err
+		}
+		if len(vols) != 1 {
+			return nil, true, fmt.Errorf("Incorrect number of volumes returned")
+		}
+		return vols[0], false, nil
+	}
+
+	v, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	if err != nil {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+
+	pxVol := v.(*api.Volume)
+	for _, n := range node.GetWorkerNodes() {
+		if n.VolDriverNodeID == pxVol.AttachedOn {
+			return &n, nil
+		}
+	}
+
+	// Snapshots may not be attached to a node
+	if pxVol.Source.Parent != "" {
+		return nil, nil
+	}
+
+	return nil, &ErrFailedToInspectVolume{
+		ID:    name,
+		Cause: "Volume is not attached on any node",
+	}
+}
+
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
 	ok, volParams, volName := spec.NewSpecHandler().SpecOptsFromString(params)
 	if !ok {
@@ -646,6 +697,123 @@ func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 		return err
 	}
 	return nil
+}
+
+func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error) {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.volDriver.Inspect([]string{name})
+		if err != nil && err == volume.ErrEnoEnt {
+			return 0, false, volume.ErrEnoEnt
+		} else if err != nil {
+			return 0, true, err
+		}
+		if len(vols) == 1 {
+			return vols[0].Spec.HaLevel, false, nil
+		}
+		return 0, false, fmt.Errorf("Extra volumes with the same volume name/ID seen") //Shouldn't reach this line
+	}
+
+	iReplFactor, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval)
+	if err != nil {
+		return 0, &ErrFailedToGetReplicationFactor{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+	replFactor, ok := iReplFactor.(int64)
+	if !ok {
+		return 0, &ErrFailedToGetReplicationFactor{
+			ID:    name,
+			Cause: fmt.Sprintf("Replication factor is not of type int64"),
+		}
+	}
+
+	return replFactor, nil
+}
+
+func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64) error {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.volDriver.Inspect([]string{name})
+		if err != nil && err == volume.ErrEnoEnt {
+			return nil, false, volume.ErrEnoEnt
+		} else if err != nil {
+			return nil, true, err
+		}
+
+		if len(vols) == 1 {
+			spec := &api.VolumeSpec{
+				HaLevel:          int64(replFactor),
+				SnapshotInterval: math.MaxUint32,
+				ReplicaSet:       &api.ReplicaSet{},
+			}
+			locator := &api.VolumeLocator{
+				Name:         vols[0].Locator.Name,
+				VolumeLabels: vols[0].Locator.VolumeLabels,
+			}
+			err = d.volDriver.Set(vols[0].Id, locator, spec)
+			if err != nil {
+				return nil, false, err
+			}
+			quitFlag := false
+			wdt := time.After(validateReplicationUpdateTimeout)
+			for !quitFlag && !(areRepSetsFinal(vols[0], replFactor) && isClean(vols[0])) {
+				select {
+				case <-wdt:
+					quitFlag = true
+				default:
+					vols, err = d.volDriver.Inspect([]string{name})
+					if err != nil && err == volume.ErrEnoEnt {
+						return nil, false, volume.ErrEnoEnt
+					} else if err != nil {
+						return nil, true, err
+					}
+					time.Sleep(defaultRetryInterval)
+				}
+			}
+			if !(areRepSetsFinal(vols[0], replFactor) && isClean(vols[0])) {
+				return 0, false, fmt.Errorf("Volume didn't successfully change to replication factor of %d", replFactor)
+			}
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("Extra volumes with the same volume name/ID seen") //Shouldn't reach this line
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval); err != nil {
+		return &ErrFailedToSetReplicationFactor{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+
+	return nil
+}
+
+func (d *portworx) GetMaxReplicationFactor() int64 {
+	return 3
+}
+
+func (d *portworx) GetMinReplicationFactor() int64 {
+	return 1
+}
+
+func isClean(vol *api.Volume) bool {
+	for _, v := range vol.RuntimeState {
+		if v.GetRuntimeState()["RuntimeState"] != "clean" {
+			return false
+		}
+	}
+	return true
+}
+
+func areRepSetsFinal(vol *api.Volume, replFactor int64) bool {
+	for _, rs := range vol.ReplicaSets {
+		if int64(len(rs.GetNodes())) != replFactor {
+			return false
+		}
+	}
+	return true
 }
 
 func (d *portworx) setDriver() error {

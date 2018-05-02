@@ -67,6 +67,18 @@ func (e *ErrFailedToValidateStorage) Error() string {
 	return fmt.Sprintf("Failed to validate storage for app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
+// ErrFailedToGetStorage error type for failing to get an app's storage
+type ErrFailedToGetStorage struct {
+	// App is the app whose storage could not be retrieved
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetStorage) Error() string {
+	return fmt.Sprintf("Failed to get storage for app: %v due to err: %v", e.App.Key, e.Cause)
+}
+
 // ErrFailedToValidateApp error type for failing to validate an app
 type ErrFailedToValidateApp struct {
 	// App is the app whose validation failed
