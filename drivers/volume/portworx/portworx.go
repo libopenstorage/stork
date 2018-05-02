@@ -378,7 +378,7 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 
 // TODO: Implement FindSnapshot
 func (p *portworx) FindSnapshot(tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
-	return nil, nil, nil
+	return nil, nil, &errors.ErrNotImplemented{}
 }
 
 func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {

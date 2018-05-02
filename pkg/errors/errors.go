@@ -13,3 +13,11 @@ type ErrNotFound struct {
 func (e *ErrNotFound) Error() string {
 	return fmt.Sprintf("%v with UID/Name: %v not found", e.Type, e.ID)
 }
+
+// ErrNotImplemented error type for methods not implemented
+type ErrNotImplemented struct {
+}
+
+func (e *ErrNotImplemented) Error() string {
+	return "Method not implemented"
+}
