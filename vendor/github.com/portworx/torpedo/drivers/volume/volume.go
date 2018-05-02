@@ -54,6 +54,9 @@ type Driver interface {
 	// WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
 	WaitDriverDownOnNode(n node.Node) error
 
+	// GetNodeForVolume returns the node on which the volume is attached
+	GetNodeForVolume(vol *Volume) (*node.Node, error)
+
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
 
@@ -70,6 +73,18 @@ type Driver interface {
 
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
+
+	// GetVolumeReplicationFactor returns the current replication factor of the volume.
+	GetReplicationFactor(vol *Volume) (int64, error)
+
+	// SetReplicationFactor sets the volume's replication factor to the passed param rf.
+	SetReplicationFactor(vol *Volume, rf int64) error
+
+	// GetMaxReplicationFactor returns the max supported repl factor of a volume
+	GetMaxReplicationFactor() int64
+
+	// GetMinReplicationFactor returns the min supported repl factor of a volume
+	GetMinReplicationFactor() int64
 }
 
 var (
