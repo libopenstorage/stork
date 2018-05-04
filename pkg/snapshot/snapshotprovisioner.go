@@ -66,9 +66,9 @@ func (p *snapshotProvisioner) snapshotRestore(
 	// restore snapshot
 	pvSrc, labels, err := plugin.SnapshotRestore(&snapshotData, options.PVC, options.PVName, options.Parameters)
 	if err != nil {
-		log.Warnf("failed to snapshot %#v, err: %v", spec, err)
+		log.Warnf("failed to clone %#v, err: %v", spec, err)
 	} else {
-		log.Infof("snapshot %#v to snap %#v", spec, pvSrc)
+		log.Infof("cloned %#v to snap %#v", spec, pvSrc)
 	}
 
 	return pvSrc, labels, err

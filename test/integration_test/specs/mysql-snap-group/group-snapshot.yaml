@@ -1,0 +1,11 @@
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-group-snapshot
+  annotations:
+    portworx/snapshot-type: local
+    portworx/type: db
+    portworx/tier: prod
+spec:
+  persistentVolumeClaimName: mysql-data-1
+
