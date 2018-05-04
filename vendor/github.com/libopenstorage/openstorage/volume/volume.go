@@ -104,6 +104,8 @@ type SnapshotDriver interface {
 	Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator) (string, error)
 	// Restore restores volume to specified snapshot.
 	Restore(volumeID string, snapshotID string) error
+	// GroupSnapshot takes a snapshot of specified volumegroup.
+	SnapshotGroup(groupID string, labels map[string]string) (*api.GroupSnapCreateResponse, error)
 }
 
 // StatsDriver interface provides stats features
@@ -130,12 +132,42 @@ type QuiesceDriver interface {
 	Unquiesce(volumeID string) error
 }
 
+// CloudBackupDriver interface provides Cloud backup features
+type CloudBackupDriver interface {
+	// CloudBackupCreate uploads snapshot of a volume to the cloud
+	CloudBackupCreate(input *api.CloudBackupCreateRequest) error
+	// CloudBackupRestore downloads a cloud backup and restores it to a volume
+	CloudBackupRestore(input *api.CloudBackupRestoreRequest) (*api.CloudBackupRestoreResponse, error)
+	// CloudBackupEnumerate enumerates the backups for a given cluster/credential/volumeID
+	CloudBackupEnumerate(input *api.CloudBackupEnumerateRequest) (*api.CloudBackupEnumerateResponse, error)
+	// CloudBackupDelete deletes the specified backup in cloud
+	CloudBackupDelete(input *api.CloudBackupDeleteRequest) error
+	// CloudBackupDelete deletes all the backups for a given volume in cloud
+	CloudBackupDeleteAll(input *api.CloudBackupDeleteAllRequest) error
+	// CloudBackupStatus indicates the most recent status of backup/restores
+	CloudBackupStatus(input *api.CloudBackupStatusRequest) (*api.CloudBackupStatusResponse, error)
+	// CloudBackupCatalog displays listing of backup content
+	CloudBackupCatalog(input *api.CloudBackupCatalogRequest) (*api.CloudBackupCatalogResponse, error)
+	// CloudBackupHistory displays past backup/restore operations on a volume
+	CloudBackupHistory(input *api.CloudBackupHistoryRequest) (*api.CloudBackupHistoryResponse, error)
+	// CloudBackupStateChange allows a current backup state transisions(pause/resume/stop)
+	CloudBackupStateChange(input *api.CloudBackupStateChangeRequest) error
+	// CloudBackupSchedCreate creates a schedule backup volume to cloud
+	CloudBackupSchedCreate(input *api.CloudBackupSchedCreateRequest) (*api.CloudBackupSchedCreateResponse, error)
+	// CloudBackupSchedDelete delete a volume backup schedule to cloud
+	CloudBackupSchedDelete(input *api.CloudBackupSchedDeleteRequest) error
+	// CloudBackupSchedEnumerate enumerates the configured backup schedules in the cluster
+	CloudBackupSchedEnumerate() (*api.CloudBackupSchedEnumerateResponse, error)
+}
+
 // ProtoDriver must be implemented by all volume drivers.  It specifies the
 // most basic functionality, such as creating and deleting volumes.
 type ProtoDriver interface {
 	SnapshotDriver
 	StatsDriver
 	QuiesceDriver
+	CredsDriver
+	CloudBackupDriver
 	// Name returns the name of the driver.
 	Name() string
 	// Type of this driver
@@ -192,6 +224,18 @@ type BlockDriver interface {
 	// Detach device from the host.
 	// Errors ErrEnoEnt, ErrVolDetached may be returned.
 	Detach(volumeID string, options map[string]string) error
+}
+
+// CredsDriver provides methods to handle credentials
+type CredsDriver interface {
+	// CredsCreate creates credential for a given cloud provider
+	CredsCreate(params map[string]string) (string, error)
+	// CredsList lists the configured credentials in the cluster
+	CredsEnumerate() (map[string]interface{}, error)
+	// CredsDelete deletes the credential associated credUUID
+	CredsDelete(credUUID string) error
+	// CredsValidate validates the credential associated credUUID
+	CredsValidate(credUUID string) error
 }
 
 // VolumeDriverProvider provides VolumeDrivers.

@@ -32,12 +32,12 @@ func (c *clusterClient) Name() string {
 }
 
 func (c *clusterClient) Enumerate() (api.Cluster, error) {
-	cluster := api.Cluster{}
+	clusterInfo := api.Cluster{}
 
-	if err := c.c.Get().Resource(clusterPath + "/enumerate").Do().Unmarshal(&cluster); err != nil {
-		return cluster, err
+	if err := c.c.Get().Resource(clusterPath + "/enumerate").Do().Unmarshal(&clusterInfo); err != nil {
+		return clusterInfo, err
 	}
-	return cluster, nil
+	return clusterInfo, nil
 }
 
 func (c *clusterClient) SetSize(size int) error {
@@ -79,6 +79,15 @@ func (c *clusterClient) UpdateLabels(nodeLabels map[string]string) error {
 
 func (c *clusterClient) GetData() (map[string]*api.Node, error) {
 	return nil, nil
+}
+
+func (c *clusterClient) GetNodeIdFromIp(idIp string) (string, error) {
+	var resp string
+	request := c.c.Get().Resource(clusterPath + "/getnodeidfromip/" + idIp)
+	if err := request.Do().Unmarshal(&resp); err != nil {
+		return idIp, err
+	}
+	return resp, nil
 }
 
 func (c *clusterClient) NodeStatus() (api.Status, error) {
@@ -128,7 +137,7 @@ func (c *clusterClient) Shutdown() error {
 	return nil
 }
 
-func (c *clusterClient) Start(int, bool) error {
+func (c *clusterClient) Start(int, bool, string) error {
 	return nil
 }
 
@@ -140,94 +149,6 @@ func (c *clusterClient) DisableUpdates() error {
 func (c *clusterClient) EnableUpdates() error {
 	c.c.Put().Resource(clusterPath + "/enablegossip").Do()
 	return nil
-}
-
-func (c *clusterClient) SetLoggingURL(loggingURL string) error {
-
-	resp := api.ClusterResponse{}
-
-	request := c.c.Put().Resource(clusterPath + loggingurl)
-	request.QueryOption("url", loggingURL)
-	if err := request.Do().Unmarshal(&resp); err != nil {
-		return err
-	}
-
-	if resp.Error != "" {
-		return errors.New(resp.Error)
-	}
-
-	return nil
-
-}
-
-func (c *clusterClient) SetManagementURL(managementURL string) error {
-
-	resp := api.ClusterResponse{}
-
-	request := c.c.Put().Resource(clusterPath + managementurl)
-	request.QueryOption("url", managementURL)
-	if err := request.Do().Unmarshal(&resp); err != nil {
-		return err
-	}
-
-	if resp.Error != "" {
-		return errors.New(resp.Error)
-	}
-
-	return nil
-
-}
-
-func (c *clusterClient) SetFluentDConfig(fluentDConfig api.FluentDConfig) error {
-	resp := api.ClusterResponse{}
-	request := c.c.Put().Resource(clusterPath + fluentdhost)
-	request.Body(&fluentDConfig)
-
-	if err := request.Do().Unmarshal(&resp); err != nil {
-		return err
-	}
-
-	if resp.Error != "" {
-		return errors.New(resp.Error)
-	}
-
-	return nil
-}
-
-func (c *clusterClient) GetFluentDConfig() api.FluentDConfig {
-	tc := api.FluentDConfig{}
-
-	if err := c.c.Get().Resource(clusterPath + fluentdhost).Do().Unmarshal(&tc); err != nil {
-		return api.FluentDConfig{}
-	}
-
-	return tc
-}
-
-func (c *clusterClient) SetTunnelConfig(tunnelConfig api.TunnelConfig) error {
-	resp := api.ClusterResponse{}
-
-	request := c.c.Put().Resource(clusterPath + tunnelconfigurl)
-	request.Body(&tunnelConfig)
-	if err := request.Do().Unmarshal(&resp); err != nil {
-		return err
-	}
-
-	if resp.Error != "" {
-		return errors.New(resp.Error)
-	}
-
-	return nil
-}
-
-func (c *clusterClient) GetTunnelConfig() api.TunnelConfig {
-	tc := api.TunnelConfig{}
-
-	if err := c.c.Get().Resource(clusterPath + tunnelconfigurl).Do().Unmarshal(&tc); err != nil {
-		return api.TunnelConfig{}
-	}
-
-	return tc
 }
 
 func (c *clusterClient) GetGossipState() *cluster.ClusterState {

@@ -20,6 +20,11 @@ var (
 	// QuiesceNotSupported implements quiesce/unquiesce by returning not
 	// supported error.
 	QuiesceNotSupported = &quiesceNotSupported{}
+	// CredsNotSupported implements credentials by returning not supported error
+	CredsNotSupported = &credsNotSupported{}
+	// CloudBackupNotSupported implements cloudBackupDriver by returning
+	// Not supported error
+	CloudBackupNotSupported = &cloudBackupNotSupported{}
 )
 
 type blockNotSupported struct{}
@@ -40,6 +45,10 @@ func (s *snapshotNotSupported) Snapshot(volumeID string, readonly bool, locator 
 
 func (s *snapshotNotSupported) Restore(volumeID, snapshotID string) error {
 	return ErrNotSupported
+}
+
+func (s *snapshotNotSupported) SnapshotGroup(groupID string, labels map[string]string) (*api.GroupSnapCreateResponse, error) {
+	return nil, ErrNotSupported
 }
 
 type ioNotSupported struct{}
@@ -88,4 +97,101 @@ func (s *quiesceNotSupported) Quiesce(
 
 func (s *quiesceNotSupported) Unquiesce(volumeID string) error {
 	return ErrNotSupported
+}
+
+type credsNotSupported struct{}
+
+func (c *credsNotSupported) CredsCreate(
+	params map[string]string,
+) (string, error) {
+	return "", ErrNotSupported
+}
+
+func (c *credsNotSupported) CredsDelete(
+	uuid string,
+) error {
+	return ErrNotSupported
+}
+
+func (c *credsNotSupported) CredsEnumerate() (map[string]interface{}, error) {
+	creds := make(map[string]interface{}, 0)
+	return creds, ErrNotSupported
+}
+
+func (c *credsNotSupported) CredsValidate(
+	uuid string,
+) error {
+	return ErrNotSupported
+}
+
+type cloudBackupNotSupported struct{}
+
+func (cl *cloudBackupNotSupported) CloudBackupCreate(
+	input *api.CloudBackupCreateRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupRestore(
+	input *api.CloudBackupRestoreRequest,
+) (*api.CloudBackupRestoreResponse, error) {
+	return nil, ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupEnumerate(
+	input *api.CloudBackupEnumerateRequest,
+) (*api.CloudBackupEnumerateResponse, error) {
+	return nil, ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupDelete(
+	input *api.CloudBackupDeleteRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupDeleteAll(
+	input *api.CloudBackupDeleteAllRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupStatus(
+	input *api.CloudBackupStatusRequest,
+) (*api.CloudBackupStatusResponse, error) {
+	return nil, ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupCatalog(
+	input *api.CloudBackupCatalogRequest,
+) (*api.CloudBackupCatalogResponse, error) {
+	return nil, ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupHistory(
+	input *api.CloudBackupHistoryRequest,
+) (*api.CloudBackupHistoryResponse, error) {
+	return nil, ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupStateChange(
+	input *api.CloudBackupStateChangeRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupSchedCreate(
+	input *api.CloudBackupSchedCreateRequest,
+) (*api.CloudBackupSchedCreateResponse, error) {
+	return nil, ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupSchedDelete(
+	input *api.CloudBackupSchedDeleteRequest,
+) error {
+	return ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupSchedEnumerate() (*api.CloudBackupSchedEnumerateResponse, error) {
+	return nil, ErrNotSupported
 }

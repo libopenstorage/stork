@@ -881,8 +881,9 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 			vols = append(vols, &volume.Volume{
-				ID:   string(obj.UID),
-				Name: obj.Name,
+				ID:        string(obj.UID),
+				Name:      obj.Name,
+				Namespace: obj.Namespace,
 			})
 
 			if err := k8sOps.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
@@ -917,8 +918,9 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 			for _, pvc := range pvcList.Items {
 				vols = append(vols, &volume.Volume{
-					ID:   string(pvc.UID),
-					Name: pvc.Name,
+					ID:        string(pvc.UID),
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
 				})
 
 				if err := k8sOps.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
@@ -944,8 +946,9 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 			vol := &volume.Volume{
-				ID:   string(obj.UID),
-				Name: obj.Name,
+				ID:        string(obj.UID),
+				Name:      obj.Name,
+				Namespace: obj.Namespace,
 			}
 			vols = append(vols, vol)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
@@ -967,14 +970,31 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 			for _, pvc := range pvcList.Items {
 				vols = append(vols, &volume.Volume{
-					ID:   string(pvc.UID),
-					Name: pvc.Name,
+					ID:        string(pvc.UID),
+					Name:      pvc.Name,
+					Namespace: pvc.Namespace,
 				})
 			}
 		}
 	}
 
 	return vols, nil
+}
+
+func (k *k8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
+	var snaps []*volume.Snapshot
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			snap := &volume.Snapshot{
+				ID:        string(obj.Metadata.UID),
+				Name:      obj.Metadata.Name,
+				Namespace: obj.Metadata.Namespace,
+			}
+			snaps = append(snaps, snap)
+		}
+	}
+
+	return snaps, nil
 }
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
