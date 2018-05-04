@@ -355,6 +355,11 @@ func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return nil, nil
 }
 
+func (d *dcos) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
+	// TODO: Add implementation
+	return nil, nil
+}
+
 func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string]string) error) error {
 	// DC/OS does not have volume objects like Kubernetes. We get the volume information from
 	// the app spec and get the options parsed from the respective volume driver
