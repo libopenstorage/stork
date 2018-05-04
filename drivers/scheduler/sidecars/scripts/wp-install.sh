@@ -12,6 +12,24 @@ function log() {
     echo "$(date) $@"
 }
 
+function am_i_first() {
+    mkdir /wordpress/inprogress >/dev/null 2>&1
+    echo $?
+}
+
+function sleep_forever() {
+    log ":: Sleeping forever. Exec into me for debugging"
+    while true; do sleep 30; done;
+}
+
+if [ "$(am_i_first)" = "0" ]
+then
+    log ":: This is the first installer. Proceeding with installation"
+else
+    log ":: This is not the first installer"
+    sleep_forever
+fi
+
 wait_for_mysql
 
 log ":: Downloading wordpress to temp directory..."
@@ -50,5 +68,4 @@ done
 log ":: Installing theme..."
 wp theme install "${WORDPRESS_THEME}" --activate
 
-log ":: Sleeping forever. Exec into me for debugging"
-while true; do sleep 30; done;
+sleep_forever
