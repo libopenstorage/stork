@@ -1,26 +1,9 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: mysql-data-1
+  name: mysql-data
   annotations:
     volume.beta.kubernetes.io/storage-class: px-mysql-sc
-    type: db
-    tier: prod
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
----
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
-  name: mysql-data-2
-  annotations:
-    volume.beta.kubernetes.io/storage-class: px-mysql-sc
-    type: db
-    tier: prod
 spec:
   accessModes:
     - ReadWriteOnce
@@ -72,4 +55,4 @@ spec:
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-data-1
+          claimName: mysql-data

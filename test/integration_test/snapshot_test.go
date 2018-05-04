@@ -16,6 +16,7 @@ import (
 func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("groupSnapshotTest", groupSnapshotTest)
+	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 }
 
 func simpleSnapshotTest(t *testing.T) {
@@ -99,6 +100,8 @@ func groupSnapshotTest(t *testing.T) {
 		}
 	}
 
+	require.Len(t, dataVolumesNames, 2, "should have only 2 data volumes")
+
 	snaps, err := schedulerDriver.GetSnapshots(ctxs[0])
 	require.NoError(t, err, "failed to get snapshots")
 	require.Len(t, snaps, 1, "should have received exactly one snapshot")
@@ -136,9 +139,68 @@ func groupSnapshotTest(t *testing.T) {
 			parentVolInfo, err := storkVolumeDriver.InspectVolume(snapVolInfo.ParentID)
 			require.NoError(t, err, "Error getting snapshot parent volume")
 			require.NotNil(t, parentVolInfo, fmt.Sprintf("got empty volume info for vol ID: %s", snapVolInfo.ParentID))
+
+			// check if parent vol is correct
+			found := false
+			parentVolName := parentVolInfo.VolumeName
+			for _, dataVol := range dataVolumesNames {
+				if dataVol == parentVolName {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "Parent volume (%s) not found in list of volumes: %v", parentVolName, dataVolumesNames)
 		}
 	}
 	verifyScheduledNode(t, scheduledNodes[0], dataVolumesNames)
+	destroyAndWait(t, ctxs)
+}
 
+func cloudSnapshotTest(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-restore"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0])
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	err = schedulerDriver.InspectVolumes(ctxs[0])
+	require.NoError(t, err, "Error waiting for volumes")
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
+
+	dataVolumesNames := make([]string, 0)
+	for _, volume := range volumeNames {
+		if !strings.HasPrefix(volume, "snapshot") {
+			dataVolumesNames = append(dataVolumesNames, volume)
+		}
+	}
+
+	require.Len(t, dataVolumesNames, 2, "should have only 2 data volumes")
+
+	snaps, err := schedulerDriver.GetSnapshots(ctxs[0])
+	require.NoError(t, err, "failed to get snapshots")
+	require.Len(t, snaps, 1, "should have received exactly one snapshot")
+
+	for _, snap := range snaps {
+		s, err := k8s.Instance().GetSnapshot(snap.Name, snap.Namespace)
+		require.NoError(t, err, "failed to query snapshot object")
+		require.NotNil(t, s, "got nil snapshot object from k8s api")
+
+		require.NotEmpty(t, s.Spec.SnapshotDataName, "snapshot object has empty snapshot data field")
+
+		sData, err := k8s.Instance().GetSnapshotData(s.Spec.SnapshotDataName)
+		require.NoError(t, err, "failed to query snapshot data object")
+
+		snapType := sData.Spec.PortworxSnapshot.SnapshotType
+		require.Equal(t, snapType, crdv1.PortworxSnapshotTypeCloud)
+	}
+
+	verifyScheduledNode(t, scheduledNodes[0], dataVolumesNames)
 	destroyAndWait(t, ctxs)
 }
