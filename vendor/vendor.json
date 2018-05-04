@@ -429,6 +429,12 @@
 			"revisionTime": "2018-04-24T20:30:52Z"
 		},
 		{
+			"checksumSHA1": "+yDFX0Koi0sVgdn4IEgDttVH9nM=",
+			"path": "github.com/libopenstorage/openstorage/pkg/dbg",
+			"revision": "c364d09e9d74c373f8a31c78fc8b5ec4b88b1304",
+			"revisionTime": "2018-05-02T00:22:20Z"
+		},
+		{
 			"checksumSHA1": "/bl8X4ayadp0Bou8MzMkxfXiQ2c=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/pkg/parser",
 			"path": "github.com/libopenstorage/openstorage/pkg/parser",
