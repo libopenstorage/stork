@@ -370,16 +370,15 @@ func (p *portworx) SnapshotCreate(
 			}
 
 			if len(pendingMsg) > 0 {
-				logrus.Infof("cloudsnap backup: %s started successfully and is pending. %s", snapshotID, pendingMsg)
 				return false, nil
 			}
 
-			logrus.Infof("cloudsnap backup: %s of vol: %s created successfully.", snapshotID, volumeID)
+			logrus.Infof("Cloudsnap backup: %s of vol: %s created successfully.", snapshotID, volumeID)
 			snapStatusConditions = getReadySnapshotConditions()
 			return true, nil
 		})
 		if err != nil {
-			logrus.Error(err)
+			logrus.Error("Cloudsnap backup failed due to: %v", err)
 			return nil, getErrorSnapshotConditions(err), err
 		}
 	case crdv1.PortworxSnapshotTypeLocal:
@@ -392,7 +391,7 @@ func (p *portworx) SnapshotCreate(
 				return nil, getErrorSnapshotConditions(err), err
 			}
 
-			infoStr := fmt.Sprintf("creating group snapshot: [%s] %s", snap.Metadata.Namespace, snap.Metadata.Name)
+			infoStr := fmt.Sprintf("Creating group snapshot: [%s] %s", snap.Metadata.Namespace, snap.Metadata.Name)
 			if len(groupID) > 0 {
 				infoStr = fmt.Sprintf("%s. Group ID: %s", infoStr, groupID)
 			}
@@ -550,7 +549,8 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 func (p *portworx) SnapshotRestore(
 	snapshotData *crdv1.VolumeSnapshotData,
 	pvc *v1.PersistentVolumeClaim,
-	_ string, parameters map[string]string,
+	_ string,
+	parameters map[string]string,
 ) (*v1.PersistentVolumeSource, map[string]string, error) {
 	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
 		return nil, nil, fmt.Errorf("Invalid Snapshot spec")
@@ -620,7 +620,7 @@ func (p *portworx) SnapshotRestore(
 		err = wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
 			srcCloudSnapID, pendingMsg, err := p.checkCloudSnapStatus("restore", restoredVolumeID)
 			if err != nil {
-				logrus.Infof("cloudsnap restore of %s to %s failed due to: %v", srcCloudSnapID, restoredVolumeID, err)
+				logrus.Errorf("cloudsnap restore of %s to %s failed due to: %v", srcCloudSnapID, restoredVolumeID, err)
 				return true, err
 			}
 
@@ -893,7 +893,7 @@ func (p *portworx) findParentPVCBySnapID(snapID string) (*v1.PersistentVolumeCla
 	return k8s.Instance().GetPersistentVolumeClaim(parentPV.Spec.ClaimRef.Name, parentPV.Spec.ClaimRef.Namespace)
 }
 
-func (p *portworx) waitForCloudSnapCompletion(op, volID string) error {
+func (p *portworx) waitForCloudSnapCompletion(op api.CloudBackupOpType, volID string) error {
 	return wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
 		_, pendingMsg, err := p.checkCloudSnapStatus(op, volID)
 		if err != nil {
@@ -977,7 +977,7 @@ func (p *portworx) revertSnapObjs(snapObjs []*crdv1.VolumeSnapshot) {
 			return true, nil
 		})
 		if err != nil {
-			failedDeletions[fmt.Sprintf("[%s] %s")] = err
+			failedDeletions[fmt.Sprintf("[%s] %s", snap.Metadata.Namespace, snap.Metadata.Name)] = err
 		}
 	}
 
