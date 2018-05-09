@@ -1166,7 +1166,7 @@ func (k *k8sOps) CreateDaemonSet(ds *apps_api.DaemonSet) (*apps_api.DaemonSet, e
 		return nil, err
 	}
 
-	return k.client.Apps().DaemonSets(ds.Namespace).Create(ds)
+	return k.appsClient().DaemonSets(ds.Namespace).Create(ds)
 }
 
 func (k *k8sOps) ListDaemonSets(namespace string, listOpts meta_v1.ListOptions) ([]apps_api.DaemonSet, error) {
@@ -1174,7 +1174,7 @@ func (k *k8sOps) ListDaemonSets(namespace string, listOpts meta_v1.ListOptions) 
 		return nil, err
 	}
 
-	dsList, err := k.client.Apps().DaemonSets(namespace).List(listOpts)
+	dsList, err := k.appsClient().DaemonSets(namespace).List(listOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -1303,7 +1303,7 @@ func (k *k8sOps) DeleteDaemonSet(name, namespace string) error {
 	}
 
 	policy := meta_v1.DeletePropagationForeground
-	return k.client.Apps().DaemonSets(namespace).Delete(
+	return k.appsClient().DaemonSets(namespace).Delete(
 		name,
 		&meta_v1.DeleteOptions{PropagationPolicy: &policy})
 }
