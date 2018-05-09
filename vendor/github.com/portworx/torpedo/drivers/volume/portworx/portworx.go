@@ -262,6 +262,21 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 		return err
 	}
 
+	t = func() (interface{}, bool, error) {
+		apiNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
+		if err != nil {
+			return nil, true, err
+		}
+		if apiNode.Status == api.Status_STATUS_OK {
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("Node %v is not up after exiting  Maintenance mode", n.Name)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, maintenanceWaitTimeout, defaultRetryInterval); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -591,7 +606,8 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 			}
 		}
 
-		if pxNode.Status != api.Status_STATUS_OK {
+		fmt.Printf("RK Node Status => %v", pxNode.Status)
+		if pxNode.Status != api.Status_STATUS_OK || d.getStorageStatus(n) != "Up" {
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
@@ -951,6 +967,30 @@ func (d *portworx) maintenanceOp(n node.Node, op string) error {
 
 func (d *portworx) constructURL(ip string) string {
 	return fmt.Sprintf("http://%s:%d", ip, pxdRestPort)
+}
+
+func (d *portworx) getStorageStatus(n node.Node) string {
+	const (
+		storageInfoKey = "STORAGE-INFO"
+		statusKey      = "Status"
+	)
+	pxNode, err := d.getClusterManager().Inspect(n.VolDriverNodeID)
+	if err != nil {
+		return err.Error()
+	}
+
+	storageInfo, ok := pxNode.NodeData[storageInfoKey]
+	if !ok {
+		return fmt.Sprintf("Unable to find storage info for node: %v", n.Name)
+	}
+	storageInfoMap := storageInfo.(map[string]interface{})
+
+	statusInfo, ok := storageInfoMap[statusKey]
+	if !ok || storageInfoMap == nil {
+		return fmt.Sprintf("Unable to find status info for node: %v", n.Name)
+	}
+	status := statusInfo.(string)
+	return status
 }
 
 func init() {
