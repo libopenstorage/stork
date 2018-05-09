@@ -78,9 +78,16 @@ const (
 )
 
 const (
-	cloudSnapStatusDone   = "Done"
-	cloudSnapStatusFailed = "Failed"
+	cloudSnapStatusDone    = "Done"
+	cloudSnapStatusPending = "Pending"
+	cloudSnapStatusFailed  = "Failed"
 )
+
+type cloudSnapStatus struct {
+	status      string
+	msg         string
+	cloudSnapID string
+}
 
 // snapshot annotation constants
 const (
@@ -362,25 +369,15 @@ func (p *portworx) SnapshotCreate(
 			return nil, getErrorSnapshotConditions(err), err
 		}
 
-		err = wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
-			var pendingMsg string
-			snapshotID, pendingMsg, err = p.checkCloudSnapStatus("backup", volumeID)
-			if err != nil {
-				return true, err
-			}
-
-			if len(pendingMsg) > 0 {
-				return false, nil
-			}
-
-			logrus.Infof("Cloudsnap backup: %s of vol: %s created successfully.", snapshotID, volumeID)
-			snapStatusConditions = getReadySnapshotConditions()
-			return true, nil
-		})
+		status, err := p.waitForCloudSnapCompletion(api.CloudBackupOp, volumeID, false)
 		if err != nil {
-			logrus.Error("Cloudsnap backup failed due to: %v", err)
+			logrus.Error("Cloudsnap backup: %s failed due to: %v", status.cloudSnapID, err)
 			return nil, getErrorSnapshotConditions(err), err
 		}
+
+		snapshotID = status.cloudSnapID
+		logrus.Infof("Cloudsnap backup: %s of vol: %s created successfully.", snapshotID, volumeID)
+		snapStatusConditions = getReadySnapshotConditions()
 	case crdv1.PortworxSnapshotTypeLocal:
 		if isGroupSnap(snap) {
 			groupID := snap.Metadata.Annotations[pxSnapshotGroupIDKey]
@@ -506,7 +503,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 			r := csv.NewReader(strings.NewReader(snapDataSrc.PortworxSnapshot.SnapshotData))
 			snapDataNames, err := r.Read()
 			if err != nil {
-				logrus.Errorf("failed to parse snap data csv. err: %v", err)
+				logrus.Errorf("Failed to parse snap data csv. err: %v", err)
 				return err
 			}
 
@@ -516,7 +513,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 					snapData, err := k8s.Instance().GetSnapshotData(snapDataName)
 					if err != nil {
 						lastError = err
-						logrus.Errorf("failed to get volume snapshot data: %s due to err: %v", snapDataName, err)
+						logrus.Errorf("Failed to get volume snapshot data: %s due to err: %v", snapDataName, err)
 						continue
 					}
 
@@ -534,7 +531,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 					})
 					if err != nil {
 						lastError = err
-						logrus.Errorf("failed to get volume snapshot: [%s] %s due to err: %v", snapNamespace, snapName, err)
+						logrus.Errorf("Failed to get volume snapshot: [%s] %s due to err: %v", snapNamespace, snapName, err)
 						continue
 					}
 				}
@@ -615,23 +612,9 @@ func (p *portworx) SnapshotRestore(
 		}
 
 		restoredVolumeID = response.RestoreVolumeID
-		logrus.Infof("cloudsnap restore of %s to %s started successfully.", snapID, restoredVolumeID)
+		logrus.Infof("Cloudsnap restore of %s to %s started successfully.", snapID, restoredVolumeID)
 
-		err = wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
-			srcCloudSnapID, pendingMsg, err := p.checkCloudSnapStatus("restore", restoredVolumeID)
-			if err != nil {
-				logrus.Errorf("cloudsnap restore of %s to %s failed due to: %v", srcCloudSnapID, restoredVolumeID, err)
-				return true, err
-			}
-
-			if len(pendingMsg) > 0 {
-				logrus.Infof("cloudsnap restore of %s to %s is still pending. %s", srcCloudSnapID, restoredVolumeID, pendingMsg)
-				return false, nil
-			}
-
-			logrus.Infof("cloudsnap restore of %s to %s completed successfully", srcCloudSnapID, restoredVolumeID)
-			return true, nil
-		})
+		_, err = p.waitForCloudSnapCompletion(api.CloudRestoreOp, restoredVolumeID, true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -702,13 +685,14 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 			return getErrorSnapshotConditions(err), false, err
 		}
 
-		_, pendingMsg, err := p.checkCloudSnapStatus("backup", pv.Spec.PortworxVolume.VolumeID)
-		if err != nil {
+		csStatus := p.checkCloudSnapStatus(api.CloudBackupOp, pv.Spec.PortworxVolume.VolumeID)
+		if csStatus.status == cloudSnapStatusFailed {
+			err = fmt.Errorf(csStatus.msg)
 			return getErrorSnapshotConditions(err), false, err
 		}
 
-		if len(pendingMsg) > 0 {
-			pendingCond := getPendingSnapshotConditions(pendingMsg)
+		if csStatus.status == cloudSnapStatusPending {
+			pendingCond := getPendingSnapshotConditions(csStatus.msg)
 			return &pendingCond, false, nil
 		}
 	}
@@ -735,13 +719,13 @@ func (p *portworx) createVolumeSnapshotCRD(
 	groupID string,
 	groupLabels map[string]string,
 	groupSnap *crdv1.VolumeSnapshot) (*crdv1.VolumeSnapshot, error) {
-	parentPVC, err := p.findParentPVCBySnapID(pxSnapID)
+	parentPVCOrVolID, err := p.findParentPVCOrVolID(pxSnapID)
 	if err != nil {
 		return nil, err
 	}
 
 	namespace := groupSnap.Metadata.Namespace
-	volumeSnapshotName := fmt.Sprintf("%s-%s", groupSnap.Metadata.Name, parentPVC.GetName())
+	volumeSnapshotName := fmt.Sprintf("%s-%s", groupSnap.Metadata.Name, parentPVCOrVolID)
 	snapDataSource := &crdv1.VolumeSnapshotDataSource{
 		PortworxSnapshot: &crdv1.PortworxVolumeSnapshotSource{
 			SnapshotID:   pxSnapID,
@@ -774,8 +758,9 @@ func (p *portworx) createVolumeSnapshotCRD(
 			Labels:    snapLabels,
 		},
 		Spec: crdv1.VolumeSnapshotSpec{
-			SnapshotDataName:          snapData.Metadata.Name,
-			PersistentVolumeClaimName: parentPVC.Name,
+			SnapshotDataName: snapData.Metadata.Name,
+			// this is best effort as can be vol ID if PVC is deleted
+			PersistentVolumeClaimName: parentPVCOrVolID,
 		},
 		Status: crdv1.VolumeSnapshotStatus{
 			Conditions: snapStatus,
@@ -870,73 +855,122 @@ func (p *portworx) createVolumeSnapshotData(
 	return result, nil
 }
 
-func (p *portworx) findParentPVCBySnapID(snapID string) (*v1.PersistentVolumeClaim, error) {
+// findParentPVCOrVolID is a best effort routine that attempts to find parent PVC name for
+// given snapshot ID. If not found, it returns the Parent volumeID
+func (p *portworx) findParentPVCOrVolID(snapID string) (string, error) {
 	snapInfo, err := p.InspectVolume(snapID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if len(snapInfo.ParentID) == 0 {
-		return nil, fmt.Errorf("Portworx snapshot: %s does not have parent set", snapID)
+		return "", fmt.Errorf("Portworx snapshot: %s does not have parent set", snapID)
 	}
 
 	snapParentInfo, err := p.InspectVolume(snapInfo.ParentID)
 	if err != nil {
-		return nil, err
+		logrus.Warnf("Parent volume: %s for snapshot: %s is not found due to: %v", snapInfo.ParentID, snapID, err)
+		return snapInfo.ParentID, nil
 	}
 
 	parentPV, err := k8s.Instance().GetPersistentVolume(snapParentInfo.VolumeName)
 	if err != nil {
-		return nil, err
+		logrus.Warnf("Parent PV: %s of snapshot: %s is not found due to: %v", snapParentInfo.VolumeName, snapID, err)
+		return snapInfo.ParentID, nil
 	}
 
-	return k8s.Instance().GetPersistentVolumeClaim(parentPV.Spec.ClaimRef.Name, parentPV.Spec.ClaimRef.Namespace)
+	pvc, err := k8s.Instance().GetPersistentVolumeClaim(parentPV.Spec.ClaimRef.Name, parentPV.Spec.ClaimRef.Namespace)
+	if err != nil {
+		return snapInfo.ParentID, nil
+	}
+
+	return pvc.GetName(), nil
 }
 
-func (p *portworx) waitForCloudSnapCompletion(op api.CloudBackupOpType, volID string) error {
-	return wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
-		_, pendingMsg, err := p.checkCloudSnapStatus(op, volID)
-		if err != nil {
+func (p *portworx) waitForCloudSnapCompletion(op api.CloudBackupOpType, volID string, verbose bool) (cloudSnapStatus, error) {
+	csStatus := cloudSnapStatus{
+		status: cloudSnapStatusFailed,
+		msg:    fmt.Sprintf("cloudsnap status unknown"),
+	}
+
+	err := wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
+		csStatus = p.checkCloudSnapStatus(op, volID)
+		switch csStatus.status {
+		case cloudSnapStatusFailed:
+			err := fmt.Errorf("Cloudsnap %s of %s failed due to: %s", op, volID, csStatus.msg)
+			if verbose {
+				logrus.Errorf(err.Error())
+			}
 			return true, err
-		}
-
-		if len(pendingMsg) > 0 {
+		case cloudSnapStatusDone:
+			if verbose {
+				logrus.Infof("Cloudsnap %s of %s completed successfully", op, volID)
+			}
+			return true, nil
+		case cloudSnapStatusPending:
+			if verbose {
+				logrus.Infof("Cloudsnap %s of %s is still pending. %s", op, volID, csStatus.msg)
+			}
 			return false, nil
+		default:
+			err := fmt.Errorf("received unexpected status for cloudsnap %s of %s. status: %s", op, volID, csStatus.status)
+			return false, err
 		}
-
-		return true, nil
 	})
+
+	return csStatus, err
 }
 
-func (p *portworx) checkCloudSnapStatus(op, volID string) (string /* cs ID */, string /* pending msg */, error) {
+func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) cloudSnapStatus {
 	response, err := p.volDriver.CloudBackupStatus(&api.CloudBackupStatusRequest{
 		SrcVolumeID: volID,
 	})
 	if err != nil {
-		return "", "", err
+		return cloudSnapStatus{
+			status: cloudSnapStatusFailed,
+			msg:    err.Error(),
+		}
 	}
 
 	csStatus, present := response.Statuses[volID]
 	if !present {
-		return "", "", fmt.Errorf("failed to get cloudsnap status for volume: %s", volID)
+		return cloudSnapStatus{
+			status: cloudSnapStatusFailed,
+			msg:    fmt.Sprintf("failed to get cloudsnap status for volume: %s", volID),
+		}
 	}
 
 	statusStr := getCloudSnapStatusString(&csStatus)
 
 	if csStatus.Status == cloudSnapStatusFailed {
-		return csStatus.ID, "", fmt.Errorf("cloudsnap %s for %s failed. %s", op, volID, statusStr)
+		return cloudSnapStatus{
+			status:      cloudSnapStatusFailed,
+			cloudSnapID: csStatus.ID,
+			msg:         fmt.Sprintf("cloudsnap %s for %s failed. %s", op, volID, statusStr),
+		}
 	}
 
 	if csStatus.CompletedTime.IsZero() {
-		return csStatus.ID, fmt.Sprintf("cloudsnap %s for %s still not completed. %s", op, volID, statusStr), nil
-
+		return cloudSnapStatus{
+			status:      cloudSnapStatusPending,
+			cloudSnapID: csStatus.ID,
+			msg:         fmt.Sprintf("cloudsnap %s for %s still not completed. %s", op, volID, statusStr),
+		}
 	}
 
 	if !strings.Contains(csStatus.Status, cloudSnapStatusDone) {
-		return csStatus.ID, fmt.Sprintf("cloudsnap %s for %s still not done. %s", op, volID, statusStr), nil
+		return cloudSnapStatus{
+			status:      cloudSnapStatusPending,
+			cloudSnapID: csStatus.ID,
+			msg:         fmt.Sprintf("cloudsnap %s for %s still not done. %s", op, volID, statusStr),
+		}
 	}
 
-	return csStatus.ID, "", nil
+	return cloudSnapStatus{
+		status:      cloudSnapStatusDone,
+		cloudSnapID: csStatus.ID,
+		msg:         fmt.Sprintf("cloudsnap %s for %s done.", op, volID),
+	}
 }
 
 // revertPXSnaps deletes all given snapIDs
