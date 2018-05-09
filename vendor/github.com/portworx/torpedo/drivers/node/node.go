@@ -95,7 +95,7 @@ type Driver interface {
 	TestConnection(node Node, options ConnectionOpts) error
 
 	// YankDrive simulates a failure on the provided drive on the given node.
-	// It returns the UUID of the drive which can be used to recover it back
+	// It returns the bus ID of the drive which can be used to recover it back
 	YankDrive(node Node, driveNameToFail string, options ConnectionOpts) (string, error)
 
 	// RecoverDrive recovers the given drive from failure on the given node.

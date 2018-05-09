@@ -5,9 +5,9 @@ import (
 	"io/ioutil"
 	"path"
 
+	"github.com/mohae/deepcopy"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"k8s.io/client-go/kubernetes/scheme"
 )
 
 // Factory is an application spec factory
@@ -29,13 +29,11 @@ func (f *Factory) register(id string, app *AppSpec) {
 // Get returns a registered application
 func (f *Factory) Get(id string) (*AppSpec, error) {
 	if d, ok := appSpecFactory[id]; ok && d.Enabled {
-		dCopy, err := scheme.Scheme.DeepCopy(d)
-		if err != nil {
-			logrus.Errorf("Failed to create a copy of spec object: %#v Err: %v", d, err)
-			return nil, err
+		dCopy := deepcopy.Copy(d)
+		if copy, ok := dCopy.(*AppSpec); ok {
+			return copy, nil
 		}
-
-		return dCopy.(*AppSpec), nil
+		return nil, fmt.Errorf("error creating copy of spec: %v", d)
 	}
 
 	return nil, &errors.ErrNotFound{
@@ -49,13 +47,12 @@ func (f *Factory) GetAll() []*AppSpec {
 	var specs []*AppSpec
 	for _, val := range appSpecFactory {
 		if val.Enabled {
-			valCopy, err := scheme.Scheme.DeepCopy(val)
-			if err != nil {
-				logrus.Errorf("Failed to create a copy of spec object: %#v Err: %v", val, err)
-				return nil
+			valCopy := deepcopy.Copy(val)
+			if copy, ok := valCopy.(*AppSpec); ok {
+				specs = append(specs, copy)
+			} else {
+				logrus.Errorf("Error creating copy of spec: %v", val)
 			}
-
-			specs = append(specs, valCopy.(*AppSpec))
 		}
 	}
 
