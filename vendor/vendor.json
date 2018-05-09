@@ -449,6 +449,12 @@
 			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
+			"checksumSHA1": "J7Lr7DbO7CJBb6s2Sd/JSjXJe9c=",
+			"path": "github.com/libopenstorage/openstorage/secrets",
+			"revision": "23123c49498ef980280211885fdf409d5497515a",
+			"revisionTime": "2018-04-25T00:44:01Z"
+		},
+		{
 			"checksumSHA1": "LPyekP2pr0xL38mZGKpvQTbGuGU=",
 			"path": "github.com/libopenstorage/openstorage/volume",
 			"revision": "8597d9ca590c1051f0f80fbed3b8ad1e1062c93a",
