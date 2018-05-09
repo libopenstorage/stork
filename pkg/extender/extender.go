@@ -13,7 +13,7 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-	schedulerapi "k8s.io/kubernetes/plugin/pkg/scheduler/api"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
 
 const (

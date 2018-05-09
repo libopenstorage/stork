@@ -142,7 +142,7 @@ spec:
         - --leader-elect=true
         # Uncomment the line below if you want to enable the feature to
         # automatically update schedulerName
-        #- -- app-initializer=true
+        #- --app-initializer=true
         imagePullPolicy: Always
         image: openstorage/stork:1.0.3
         resources:

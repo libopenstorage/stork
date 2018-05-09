@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/client/leaderelectionconfig"
 )
 
@@ -147,7 +147,7 @@ func run(c *cli.Context) {
 		eventBroadcaster := record.NewBroadcaster()
 		eventBroadcaster.StartLogging(glog.Infof)
 		eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: core_v1.New(k8sClient.Core().RESTClient()).Events("")})
-		recorder := eventBroadcaster.NewRecorder(api.Scheme, api_v1.EventSource{Component: "stork"})
+		recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, api_v1.EventSource{Component: "stork"})
 
 		id, err := os.Hostname()
 		if err != nil {

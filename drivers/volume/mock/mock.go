@@ -9,9 +9,8 @@ import (
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/apps/v1beta1"
 	"k8s.io/api/core/v1"
-	k8shelper "k8s.io/kubernetes/pkg/api/v1/helper"
+	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 const (
@@ -209,8 +208,8 @@ func (m *Driver) GetSnapshotPlugin() snapshotVolume.Plugin {
 	return nil
 }
 
-// GetStatefulSetTemplates Not implemented for mock driver
-func (m *Driver) GetStatefulSetTemplates(*v1beta1.StatefulSet) (
+// GetVolumeClaimTemplates Not implemented for mock driver
+func (m *Driver) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 	[]v1.PersistentVolumeClaim, error) {
 	return nil, &errors.ErrNotImplemented{}
 }

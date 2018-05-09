@@ -4,7 +4,6 @@ import (
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/apps/v1beta1"
 	"k8s.io/api/core/v1"
 )
 
@@ -27,9 +26,9 @@ type Driver interface {
 	// GetPodVolumes Get all the volumes used by a pod backed by the driver
 	GetPodVolumes(*v1.PodSpec, string) ([]*Info, error)
 
-	// GetStatefulSetTemplates Get all the volume templates used by a StatefulSet backed by
+	// GetVolumeClaimTemplates Get all the volume templates from the list backed by
 	// the driver
-	GetStatefulSetTemplates(*v1beta1.StatefulSet) ([]v1.PersistentVolumeClaim, error)
+	GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) ([]v1.PersistentVolumeClaim, error)
 
 	// GetSnapshotPlugin Get the snapshot plugin to be used for the driver
 	GetSnapshotPlugin() snapshotVolume.Plugin

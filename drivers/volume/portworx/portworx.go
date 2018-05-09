@@ -17,10 +17,9 @@ import (
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/apps/v1beta1"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8shelper "k8s.io/kubernetes/pkg/api/v1/helper"
+	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 )
 
@@ -260,15 +259,15 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 	return volumes, nil
 }
 
-func (p *portworx) GetStatefulSetTemplates(ss *v1beta1.StatefulSet) (
+func (p *portworx) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim) (
 	[]v1.PersistentVolumeClaim, error) {
-	var templates []v1.PersistentVolumeClaim
-	for _, t := range ss.Spec.VolumeClaimTemplates {
+	var pxTemplates []v1.PersistentVolumeClaim
+	for _, t := range templates {
 		if p.isPortworxPVC(&t) {
-			templates = append(templates, t)
+			pxTemplates = append(pxTemplates, t)
 		}
 	}
-	return templates, nil
+	return pxTemplates, nil
 }
 
 func (p *portworx) GetSnapshotPlugin() snapshotVolume.Plugin {

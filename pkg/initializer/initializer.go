@@ -1,21 +1,19 @@
 package initializer
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	storklog "github.com/libopenstorage/stork/pkg/log"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/apps/v1beta1"
+	appv1 "k8s.io/api/apps/v1"
+	appv1beta1 "k8s.io/api/apps/v1beta1"
+	appv1beta2 "k8s.io/api/apps/v1beta2"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -45,19 +43,6 @@ func (i *Initializer) Start() error {
 		return fmt.Errorf("Initializer has already been started")
 	}
 
-	err := i.startInitializerController("deployments", &v1beta1.Deployment{})
-	if err != nil {
-		return fmt.Errorf("Error creating init controller for deployments: %v", err)
-	}
-	err = i.startInitializerController("statefulsets", &v1beta1.StatefulSet{})
-	if err != nil {
-		return fmt.Errorf("Error creating init controller for statefulsets: %v", err)
-	}
-	i.started = true
-	return nil
-}
-
-func (i *Initializer) startInitializerController(resource string, objType runtime.Object) error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return fmt.Errorf("Error getting cluster config: %v", err)
@@ -68,7 +53,45 @@ func (i *Initializer) startInitializerController(resource string, objType runtim
 		return fmt.Errorf("Error getting client, %v", err)
 	}
 
-	restClient := k8sClient.Apps().RESTClient()
+	restClient := k8sClient.AppsV1beta1().RESTClient()
+	err = i.startInitializerController(restClient, k8sClient, "deployments", &appv1beta1.Deployment{})
+	if err != nil {
+		return fmt.Errorf("Error creating init controller for deployments: %v", err)
+	}
+	err = i.startInitializerController(restClient, k8sClient, "statefulsets", &appv1beta1.StatefulSet{})
+	if err != nil {
+		return fmt.Errorf("Error creating init controller for statefulsets: %v", err)
+	}
+
+	restClient = k8sClient.AppsV1beta2().RESTClient()
+	err = i.startInitializerController(restClient, k8sClient, "deployments", &appv1beta2.Deployment{})
+	if err != nil {
+		return fmt.Errorf("Error creating init controller for deployments: %v", err)
+	}
+	err = i.startInitializerController(restClient, k8sClient, "statefulsets", &appv1beta2.StatefulSet{})
+	if err != nil {
+		return fmt.Errorf("Error creating init controller for statefulsets: %v", err)
+	}
+
+	restClient = k8sClient.AppsV1().RESTClient()
+	err = i.startInitializerController(restClient, k8sClient, "deployments", &appv1.Deployment{})
+	if err != nil {
+		return fmt.Errorf("Error creating init controller for deployments: %v", err)
+	}
+	err = i.startInitializerController(restClient, k8sClient, "statefulsets", &appv1.StatefulSet{})
+	if err != nil {
+		return fmt.Errorf("Error creating init controller for statefulsets: %v", err)
+	}
+	i.started = true
+	return nil
+}
+
+func (i *Initializer) startInitializerController(
+	restClient rest.Interface,
+	k8sClient *kubernetes.Clientset,
+	resource string,
+	objType runtime.Object,
+) error {
 	resyncPeriod := 30 * time.Second
 
 	i.stopChannel = make(chan struct{})
@@ -113,125 +136,20 @@ func (i *Initializer) Stop() error {
 	return nil
 }
 
-func (i *Initializer) initializeStatefulSet(ss *v1beta1.StatefulSet, clientset *kubernetes.Clientset) error {
-	if ss.ObjectMeta.GetInitializers() == nil {
-		return nil
-	}
-
-	pendingInitializers := ss.ObjectMeta.GetInitializers().Pending
-	if storkInitializerName != pendingInitializers[0].Name {
-		return nil
-	}
-
-	oldData, err := json.Marshal(ss)
-	if err != nil {
-		return err
-	}
-
-	o, err := runtime.NewScheme().DeepCopy(ss)
-	if err != nil {
-		return err
-	}
-	updatedStatefulSet := o.(*v1beta1.StatefulSet)
-
-	if len(pendingInitializers) == 1 {
-		updatedStatefulSet.ObjectMeta.Initializers.Pending = nil
-	} else if len(pendingInitializers) > 1 {
-		updatedStatefulSet.ObjectMeta.Initializers.Pending = append(pendingInitializers[:0], pendingInitializers[1:]...)
-	}
-
-	// Only check to update scheduler name if it is set to the default
-	if ss.Spec.Template.Spec.SchedulerName == defaultSchedulerName {
-		// Remove the initializer even if we get errors in this step
-		driverVolumeTemplates, err := i.Driver.GetStatefulSetTemplates(ss)
-		if err != nil {
-			storklog.StatefulSetLog(ss).Infof("Error getting volume templates for statefulset: %v", err)
-		} else if len(driverVolumeTemplates) > 0 {
-			updatedStatefulSet.Spec.Template.Spec.SchedulerName = storkSchedulerName
-		}
-	}
-
-	newData, err := json.Marshal(updatedStatefulSet)
-	if err != nil {
-		return err
-	}
-
-	patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, v1beta1.StatefulSet{})
-	if err != nil {
-		return err
-	}
-
-	_, err = clientset.Apps().StatefulSets(ss.Namespace).Patch(ss.Name, types.StrategicMergePatchType, patchBytes)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (i *Initializer) initializeDeployment(deployment *v1beta1.Deployment, clientset *kubernetes.Clientset) error {
-	if deployment.ObjectMeta.GetInitializers() == nil {
-		return nil
-	}
-
-	pendingInitializers := deployment.ObjectMeta.GetInitializers().Pending
-	if storkInitializerName != pendingInitializers[0].Name {
-		return nil
-	}
-
-	oldData, err := json.Marshal(deployment)
-	if err != nil {
-		return err
-	}
-
-	o, err := runtime.NewScheme().DeepCopy(deployment)
-	if err != nil {
-		return err
-	}
-	updatedDeployment := o.(*v1beta1.Deployment)
-
-	if len(pendingInitializers) == 1 {
-		updatedDeployment.ObjectMeta.Initializers.Pending = nil
-	} else if len(pendingInitializers) > 1 {
-		updatedDeployment.ObjectMeta.Initializers.Pending = append(pendingInitializers[:0], pendingInitializers[1:]...)
-	}
-
-	// Only check to update scheduler name if it is set to the default
-	if deployment.Spec.Template.Spec.SchedulerName == defaultSchedulerName {
-		// Remove the initializer even if we get errors in this step
-		driverVolumes, err := i.Driver.GetPodVolumes(&deployment.Spec.Template.Spec, deployment.Namespace)
-		if err != nil {
-			if _, ok := err.(*volume.ErrPVCPending); ok {
-				updatedDeployment.Spec.Template.Spec.SchedulerName = storkSchedulerName
-			} else {
-				storklog.DeploymentLog(deployment).Errorf("Error getting volumes for pod: %v", err)
-			}
-		} else if len(driverVolumes) != 0 {
-			updatedDeployment.Spec.Template.Spec.SchedulerName = storkSchedulerName
-		}
-	}
-
-	newData, err := json.Marshal(updatedDeployment)
-	if err != nil {
-		return err
-	}
-
-	patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, v1beta1.Deployment{})
-	if err != nil {
-		return err
-	}
-
-	_, err = clientset.Extensions().Deployments(deployment.Namespace).Patch(deployment.Name, types.StrategicMergePatchType, patchBytes)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 func (i *Initializer) initializeObject(obj interface{}, clientset *kubernetes.Clientset) error {
 	switch obj.(type) {
-	case *v1beta1.StatefulSet:
-		return i.initializeStatefulSet(obj.(*v1beta1.StatefulSet), clientset)
-	case *v1beta1.Deployment:
-		return i.initializeDeployment(obj.(*v1beta1.Deployment), clientset)
+	case *appv1.StatefulSet:
+		return i.initializeStatefulSetV1(obj.(*appv1.StatefulSet), clientset)
+	case *appv1beta1.StatefulSet:
+		return i.initializeStatefulSetV1Beta1(obj.(*appv1beta1.StatefulSet), clientset)
+	case *appv1beta2.StatefulSet:
+		return i.initializeStatefulSetV1Beta2(obj.(*appv1beta2.StatefulSet), clientset)
+	case *appv1.Deployment:
+		return i.initializeDeploymentV1(obj.(*appv1.Deployment), clientset)
+	case *appv1beta1.Deployment:
+		return i.initializeDeploymentV1Beta1(obj.(*appv1beta1.Deployment), clientset)
+	case *appv1beta2.Deployment:
+		return i.initializeDeploymentV1Beta2(obj.(*appv1beta2.Deployment), clientset)
 	default:
 		return fmt.Errorf("unsupported app type: %v", obj)
 	}
