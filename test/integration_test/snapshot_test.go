@@ -90,13 +90,22 @@ func groupSnapshotTest(t *testing.T) {
 	err = schedulerDriver.InspectVolumes(ctxs[0])
 	require.NoError(t, err, "Error waiting for volumes")
 
-	allVolumeNames := getVolumeNames(t, ctxs[0])
-	require.Len(t, allVolumeNames, 3, "Should only have two volumes and 1 snapshot")
+	allVolumes, err := schedulerDriver.GetVolumes(ctxs[0])
+	require.NoError(t, err, "failed to get volumes")
+	require.Len(t, allVolumes, 2, "should have 2 volumes")
 
 	dataVolumesNames := make([]string, 0)
-	for _, volume := range allVolumeNames {
-		if !strings.HasPrefix(volume, "snapshot") {
-			dataVolumesNames = append(dataVolumesNames, volume)
+	dataVolumesInUse := make([]string, 0)
+	for _, v := range allVolumes {
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(v.Name, v.Namespace)
+		require.NoError(t, err, "failed to get PVC")
+
+		volName, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(pvc)
+		require.NoError(t, err, "failed to get PV name")
+		dataVolumesNames = append(dataVolumesNames, volName)
+
+		if pvc.GetName() == "mysql-data-1" {
+			dataVolumesInUse = append(dataVolumesInUse, volName)
 		}
 	}
 
@@ -152,7 +161,7 @@ func groupSnapshotTest(t *testing.T) {
 			require.True(t, found, "Parent volume (%s) not found in list of volumes: %v", parentVolName, dataVolumesNames)
 		}
 	}
-	verifyScheduledNode(t, scheduledNodes[0], dataVolumesNames)
+	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 	destroyAndWait(t, ctxs)
 }
 
