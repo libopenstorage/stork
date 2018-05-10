@@ -17,6 +17,8 @@ const (
 	SpecParent               = "parent"
 	SpecEphemeral            = "ephemeral"
 	SpecShared               = "shared"
+	SpecJournal              = "journal"
+	SpecSharedv4             = "sharedv4"
 	SpecCascaded             = "cascaded"
 	SpecSticky               = "sticky"
 	SpecSecure               = "secure"
@@ -62,12 +64,49 @@ const (
 	OptTimeoutSec = "TimeoutSec"
 	// OptQuiesceID query parameter use for quiesce
 	OptQuiesceID = "QuiesceID"
+	// OptCredUUID is the UUID of the credential
+	OptCredUUID = "CredUUID"
+	// OptCredType  indicates type of credential
+	OptCredType = "CredType"
+	// OptCredEncrKey is the key used to encrypt data
+	OptCredEncrKey = "CredEncrypt"
+	// OptCredRegion indicates the region for s3
+	OptCredRegion = "CredRegion"
+	// OptCredDisableSSL indicated if SSL should be disabled
+	OptCredDisableSSL = "CredDisableSSL"
+	// OptCredEndpoint indicate the cloud endpoint
+	OptCredEndpoint = "CredEndpoint"
+	// OptCredAccKey for s3
+	OptCredAccessKey = "CredAccessKey"
+	// OptCredSecretKey for s3
+	OptCredSecretKey = "CredSecretKey"
+	// OptCredGoogleProjectID projectID for google cloud
+	OptCredGoogleProjectID = "CredProjectID"
+	// OptCredGoogleJsonKey for google cloud
+	OptCredGoogleJsonKey = "CredJsonKey"
+	// OptCredAzureAccountName is the account name for
+	// azure as the cloud provider
+	OptCredAzureAccountName = "CredAccountName"
+	// OptOptCredAzureAccountKey is the accountkey for
+	// azure as the cloud provider
+	OptCredAzureAccountKey = "CredAccountKey"
+	// OptCloudBackupID is the backID in the cloud
+	OptCloudBackupID = "CloudBackID"
+	// OptSrcVolID is the source volume ID of the backup
+	OptSrcVolID = "SrcVolID"
+	// OptBkupOpState is the desired operational state
+	// (stop/pause/resume) of backup/restore
+	OptBkupOpState = "OpState"
+	// OptBackupSchedUUID is the UUID of the backup-schedule
+	OptBackupSchedUUID = "BkupSchedUUID"
 )
 
-// Api client-server Constants
+// Api clientserver Constants
 const (
 	OsdVolumePath   = "osd-volumes"
 	OsdSnapshotPath = "osd-snapshot"
+	OsdCredsPath    = "osd-creds"
+	OsdBackupPath   = "osd-backup"
 	TimeLayout      = "Jan 2 15:04:05 UTC 2006"
 )
 
@@ -79,32 +118,58 @@ const (
 // Node describes the state of a node.
 // It includes the current physical state (CPU, memory, storage, network usage) as
 // well as the containers running on the system.
+//
+// swagger:model
 type Node struct {
-	Id        string
-	Cpu       float64 // percentage.
-	MemTotal  uint64
-	MemUsed   uint64
-	MemFree   uint64
-	Avgload   int
-	Status    Status
+	// Id of the node.
+	Id string
+	// Cpu usage of the node.
+	Cpu float64 // percentage.
+	// Total Memory of the node
+	MemTotal uint64
+	// Used Memory of the node
+	MemUsed uint64
+	// Free Memory of the node
+	MemFree uint64
+	// Average load (percentage)
+	Avgload int
+	// Node Status see (Status object)
+	Status Status
+	// GenNumber of the node
 	GenNumber uint64
-	Disks     map[string]StorageResource
-	Pools     []StoragePool
-	MgmtIp    string
-	DataIp    string
+	// List of disks on this node.
+	Disks map[string]StorageResource
+	// List of storage pools this node supports
+	Pools []StoragePool
+	// Management IP
+	MgmtIp string
+	// Data IP
+	DataIp string
+	// Timestamp
 	Timestamp time.Time
+	// Start time of this node
 	StartTime time.Time
-	Hostname  string
-	NodeData  map[string]interface{}
+	// Hostname of this node
+	Hostname string
+	// Node data for this node (EX: Public IP, Provider, City..)
+	NodeData map[string]interface{}
 	// User defined labels for node. Key Value pairs
 	NodeLabels map[string]string
 }
 
+// FluentDConfig describes ip and port of a fluentdhost.
+// DEPRECATED
+//
+// swagger:model
 type FluentDConfig struct {
 	IP   string `json:"ip"`
 	Port string `json:"port"`
 }
 
+// TunnelConfig describes key, cert and endpoint of a reverse proxy tunnel
+// DEPRECATED
+//
+// swagger:model
 type TunnelConfig struct {
 	Key      string `json:"key"`
 	Cert     string `json:"cert"`
@@ -112,17 +177,20 @@ type TunnelConfig struct {
 }
 
 // Cluster represents the state of the cluster.
+//
+// swagger:model
 type Cluster struct {
 	Status Status
 
-	// Id is the ID of the cluster.
+	// Id of the cluster.
+	//
+	// required: true
 	Id string
 
-	// NodeId is the ID of the node on which this cluster object
-	// is initialized
+	// Id of the node on which this cluster object is initialized
 	NodeId string
 
-	// Nodes is an array of all the nodes in the cluster.
+	// array of all the nodes in the cluster.
 	Nodes []Node
 
 	// Logging url for the cluster.
@@ -138,6 +206,18 @@ type Cluster struct {
 	TunnelConfig TunnelConfig
 }
 
+// CredCreateRequest is the input for CredCreate command
+type CredCreateRequest struct {
+	// InputParams is map describing cloud provide
+	InputParams map[string]string
+}
+
+// CredCreateResponse is returned for CredCreate command
+type CredCreateResponse struct {
+	// UUID of the credential that was just created
+	UUID string
+}
+
 // StatPoint represents the basic structure of a single Stat reported
 // TODO: This is the first step to introduce stats in openstorage.
 //       Follow up task is to introduce an API for logging stats
@@ -150,6 +230,191 @@ type StatPoint struct {
 	Fields map[string]interface{}
 	// Timestamp in Unix format
 	Timestamp int64
+}
+
+type CloudBackupCreateRequest struct {
+	// VolumeID of the volume for which cloudbackup is requested
+	VolumeID string
+	// CredentialUUID is cloud credential to be used for backup
+	CredentialUUID string
+	// Full indicates if full backup is desired even though incremental is possible
+	Full bool
+}
+
+type CloudBackupRestoreRequest struct {
+	// ID is the backup ID being restored
+	ID string
+	// RestoreVolumeName is optional volume Name of the new volume to be created
+	// in the cluster for restoring the cloudbackup
+	RestoreVolumeName string
+	// CredentialUUID is the credential to be used for restore operation
+	CredentialUUID string
+	// NodeID is the optional NodeID for provisioning restore
+	// volume (ResoreVolumeName should not be specified)
+	NodeID string
+}
+
+type CloudBackupRestoreResponse struct {
+	// RestoreVolumeID is the volumeID to which the backup is being restored
+	RestoreVolumeID string
+}
+
+type CloudBackupGenericRequest struct {
+	// SrcVolumeID is optional Source VolumeID for the request
+	SrcVolumeID string
+	// ClusterID is the optional clusterID for the request
+	ClusterID string
+	// CredentialUUID is the credential for cloud to be used for the request
+	CredentialUUID string
+	// All if set to true, backups for all clusters in the cloud are processed
+	All bool
+}
+
+type CloudBackupInfo struct {
+	// ID is the ID of the cloud backup
+	ID string
+	// SrcVolumeID is Source volumeID of the backup
+	SrcVolumeID string
+	// SrcvolumeName is name of the sourceVolume of the backup
+	SrcVolumeName string
+	// Timestamp is the timestamp at which the source volume
+	// was backed up to cloud
+	Timestamp time.Time
+	// Metadata associated with the backup
+	Metadata map[string]string
+	// Status indicates the status of the backup
+	Status string
+}
+
+type CloudBackupEnumerateRequest struct {
+	CloudBackupGenericRequest
+}
+
+type CloudBackupEnumerateResponse struct {
+	// Backups is list of backups in cloud for given volume/cluster/s
+	Backups []CloudBackupInfo
+}
+
+type CloudBackupDeleteRequest struct {
+	// ID is the ID of the cloud backup
+	ID string
+	// CredentialUUID is the credential for cloud to be used for the request
+	CredentialUUID string
+	// Force Delete cloudbackup even if there are dependencies
+	Force bool
+}
+
+type CloudBackupDeleteAllRequest struct {
+	CloudBackupGenericRequest
+}
+
+type CloudBackupStatusRequest struct {
+	// SrcVolumeID optional volumeID to list status of backup/restore
+	SrcVolumeID string
+	// Local indicates if only those backups/restores that are
+	// active on current node must be returned
+	Local bool
+}
+
+type CloudBackupOpType string
+
+const (
+	CloudBackupOp  = CloudBackupOpType("Backup")
+	CloudRestoreOp = CloudBackupOpType("Restore")
+)
+
+type CloudBackupStatus struct {
+	// ID is the ID for the operation
+	ID string
+	// OpType indicates if this is a backup or restore
+	OpType CloudBackupOpType
+	// State indicates if the op is currently active/done/failed
+	Status string
+	// BytesDone indicates total Bytes uploaded/downloaded
+	BytesDone uint64
+	// StartTime indicates Op's start time
+	StartTime time.Time
+	// CompletedTime indicates Op's completed time
+	CompletedTime time.Time
+	// NodeID is the ID of the node where this Op is active
+	NodeID string
+}
+
+type CloudBackupStatusResponse struct {
+	// statuses is list of currently active/failed/done backup/restores
+	Statuses map[string]CloudBackupStatus
+}
+
+type CloudBackupCatalogRequest struct {
+	// ID is Backup ID in the cloud
+	ID string
+	// CredentialUUID is the credential for cloud
+	CredentialUUID string
+}
+
+type CloudBackupCatalogResponse struct {
+	// Contents is listing of backup contents
+	Contents []string
+}
+
+type CloudBackupHistoryRequest struct {
+	// SrcVolumeID is volumeID for which history of backup/restore
+	// is being requested
+	SrcVolumeID string
+}
+
+type CloudBackupHistoryItem struct {
+	// SrcVolumeID is volume ID which was backedup
+	SrcVolumeID string
+	// TimeStamp is the time at which either backup completed/failed
+	Timestamp time.Time
+	// Status indicates whether backup was completed/failed
+	Status string
+}
+
+type CloudBackupHistoryResponse struct {
+	// HistoryList is list of past backup/restores in the cluster
+	HistoryList []CloudBackupHistoryItem
+}
+
+type CloudBackupStateChangeRequest struct {
+	// SrcVolumeID is volume ID on which backup/restore
+	// state change is being requested
+	SrcVolumeID string
+	// RequestedState is desired state of the op
+	// can be pause/resume/stop
+	RequestedState string
+}
+
+type CloudBackupScheduleInfo struct {
+	// SrcVolumeID is the schedule's source volume
+	SrcVolumeID string
+	// CredentialUUID is the cloud credential used with this schedule
+	CredentialUUID string
+	// Schedule is the frequence of backup
+	Schedule string
+	// MaxBackups are the maximum number of backups retained
+	// in cloud.Older backups are deleted
+	MaxBackups uint
+}
+
+type CloudBackupSchedCreateRequest struct {
+	CloudBackupScheduleInfo
+}
+
+type CloudBackupSchedCreateResponse struct {
+	// UUID is the UUID of the newly created schedule
+	UUID string
+}
+
+type CloudBackupSchedDeleteRequest struct {
+	// UUID is UUID of the schedule to be deleted
+	UUID string
+}
+
+type CloudBackupSchedEnumerateResponse struct {
+	// Schedule is map of schedule uuid to scheduleInfo
+	Schedules map[string]CloudBackupScheduleInfo
 }
 
 // DriverTypeSimpleValueOf returns the string format of DriverType

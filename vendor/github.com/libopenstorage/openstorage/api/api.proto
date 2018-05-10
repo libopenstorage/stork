@@ -22,8 +22,9 @@ enum Status {
   STATUS_NEEDS_REBOOT = 10;
   STATUS_STORAGE_REBALANCE = 11;
   STATUS_STORAGE_DRIVE_REPLACE = 12;
+  STATUS_NOT_IN_QUORUM_NO_STORAGE = 13;
   // Add statuses before MAX and update the number for MAX
-  STATUS_MAX = 13;
+  STATUS_MAX = 14;
 }
 
 enum DriverType {
@@ -95,6 +96,7 @@ enum IoProfile {
   IO_PROFILE_RANDOM= 1;
   IO_PROFILE_DB = 2;
   IO_PROFILE_DB_REMOTE = 3;
+  IO_PROFILE_CMS = 4;
 }
 
 // VolumeState represents the state of a volume.
@@ -158,7 +160,15 @@ enum AttachState {
     ATTACH_STATE_INTERNAL_SWITCH = 2;
 }
 
+enum OperationFlags {
+	OP_FLAGS_UNKNOWN = 0;
+	OP_FLAGS_NONE = 1;
+	// Perform a force_detach during detach operation
+	OP_FLAGS_DETACH_FORCE = 2;
+}
+
 // StorageResource groups properties of a storage device.
+// swagger:model
 message StorageResource {
   // Id is the LUN identifier.
   string id = 1;
@@ -184,6 +194,8 @@ message StorageResource {
   string rotation_speed = 11;
   // Timestamp of last time this device was scanned.
   google.protobuf.Timestamp last_scan = 12;
+  // True if dedicated for metadata.
+  bool metadata = 13;
 }
 
 // StoragePool groups different storage devices based on their CosType
@@ -206,6 +218,7 @@ message StoragePool {
 
 // VolumeLocator is a structure that is attached to a volume
 // and is used to carry opaque metadata.
+// swagger:model
 message VolumeLocator {
   // User friendly identifier
   string name = 1;
@@ -213,6 +226,9 @@ message VolumeLocator {
   map<string, string> volume_labels = 2;
 }
 
+// Source is a structure that can be given to a volume
+// to seed the volume with data.
+// swagger:model
 message Source {
   // A volume id, if specified will create a clone of the parent.
   string parent = 1;
@@ -221,12 +237,16 @@ message Source {
   string seed = 2;
 }
 
+// Group represents VolumeGroup / namespace
+// All volumes in the same group share this object.
+// swagger:model
 message Group {
   // Id common identifier across volumes that have the same group.
   string id = 1;
 }
 
 // VolumeSpec has the properties needed to create a volume.
+// swagger:model
 message VolumeSpec {
   // Ephemeral storage
   bool ephemeral = 1;
@@ -258,7 +278,7 @@ message VolumeSpec {
   bool encrypted = 14;
   // Passphrase for an encrypted volume
   string passphrase = 15;
-  // SnapshotSchedule a well known string that specifies when snapshots should be taken. 
+  // SnapshotSchedule a well known string that specifies when snapshots should be taken.
   string snapshot_schedule = 16;
   // Scale allows autocreation of volumes.
   uint32 scale = 17;
@@ -272,22 +292,29 @@ message VolumeSpec {
   bool compressed = 23;
   // Cascaded is true if this volume can be populated on any node from an external source.
   bool cascaded = 24;
+  // Journal is true if data for the volume goes into the journal.
+  bool journal = 25;
+  // Sharedv4 is true if this volume can be accessed via sharedv4.
+  bool sharedv4 = 26;
 }
 
-// ReplicaSet set of machine IDs (nodes) to which part of this volume is erasure 
+// ReplicaSet set of machine IDs (nodes) to which part of this volume is erasure
 // coded - for clustered storage arrays
+// swagger:model
 message ReplicaSet {
   repeated string nodes = 1;
 }
 
-// RuntimeStateMap is a list of name value mapping of driver specific runtime 
+// RuntimeStateMap is a list of name value mapping of driver specific runtime
 // information.
+// swagger:model
 message RuntimeStateMap {
   map<string, string> runtime_state = 1;
 }
 
 // Volume represents an abstract storage volume.
 // Volume represents an abstract storage volume.
+// swagger:model
 message Volume {
   // Self referential volume ID.
   string id = 1;
@@ -327,13 +354,17 @@ message Volume {
   map<string, string> attach_info = 18;
   // ReplicatSets storage for this volumefor clustered storage arrays.
   repeated ReplicaSet replica_sets = 19;
-  // RuntimeState is a lst of name value mapping of driver specific runtime 
+  // RuntimeState is a lst of name value mapping of driver specific runtime
   // information.
   repeated RuntimeStateMap runtime_state = 20;
   // Error is the Last recorded error.
   string error = 21;
+  // VolumeConsumers are entities that consume this volume
+  repeated VolumeConsumer volume_consumers = 22;
 }
 
+// Stats is a structure that represents last collected stats for a volume
+// swagger:model
 message Stats {
   // Reads completed successfully
   uint64 reads = 1;
@@ -355,6 +386,9 @@ message Stats {
   uint64 interval_ms = 10;
 }
 
+
+// Alert is a structure that represents an alert object
+// swagger:model
 message Alert {
   // Id for Alert
   int64 id = 1;
@@ -365,7 +399,7 @@ message Alert {
   // Message describing the Alert
   string message = 4;
   //Timestamp when Alert occured
-  google.protobuf.Timestamp timestamp = 5;	
+  google.protobuf.Timestamp timestamp = 5;
   // ResourceId where Alert occured
   string resource_id = 6;
   // Resource where Alert occured
@@ -378,10 +412,15 @@ message Alert {
   string unique_tag = 10;
 }
 
+// Alerts is an array of Alert objects
+// swagger:model
 message Alerts {
   repeated Alert alert = 1;
 }
 
+// VolumeCreateRequest is a structure that has the locator, source and spec
+// to create a volume
+// swagger:model
 message VolumeCreateRequest {
   // User specified volume name and labels
   VolumeLocator locator = 1;
@@ -391,17 +430,33 @@ message VolumeCreateRequest {
   VolumeSpec spec = 3;
 }
 
+// VolumeResponse is a structure that wraps an error.
+// swagger:response volumeResponse
 message VolumeResponse {
+  // Error message
+  //
+  // in: body
+  // Required: true
   string error = 1;
 }
 
+// VolumeCreateResponse
+// swagger:response volumeCreateResponse
 message VolumeCreateResponse {
   // ID of the newly created volume
+  //
+  // in: body
+  // Required: true
   string id = 1;
+  // Volume Response
+  //
+  // in: body
+  // Required: true
   VolumeResponse volume_response = 2;
 }
 
 // VolumeStateAction specifies desired actions.
+// swagger:model
 message VolumeStateAction {
   // Attach or Detach volume
   VolumeActionParam attach = 1;
@@ -413,6 +468,8 @@ message VolumeStateAction {
   string device_path = 4;
 }
 
+// VolumeSet specifies a request to update a volume.
+// swagger:model
 message VolumeSetRequest {
   // User specified volume name and labels
   VolumeLocator locator = 1;
@@ -425,11 +482,23 @@ message VolumeSetRequest {
   map<string, string> options = 4;
 }
 
+// VolumeSetResponse
+// swagger:response volumeSetResponse
 message VolumeSetResponse {
+  // Volume
+  //
+  // in: body
+  // Required: true
   Volume volume = 1;
+  //VolumeResponse
+  //
+  // in: body
+  // Required: true
   VolumeResponse volume_response = 2;
 }
 
+// SnapCreateRequest specifies a request to create a snapshot of given volume.
+// swagger:parameters snapVolume
 message SnapCreateRequest {
   // volume id
   string id = 1;
@@ -437,34 +506,93 @@ message SnapCreateRequest {
   bool readonly = 3;
 }
 
+// SnapCreateRequest specifies a response that get's returned when creating a snapshot.
+// swagger:response snapCreateResponse
 message SnapCreateResponse {
+  // VolumeCreateResponse
+  //
+  // in: body
+  // Required: true
   VolumeCreateResponse volume_create_response = 1;
 }
 
+// VolumeInfo
+// swagger:model
 message VolumeInfo {
   string volume_id = 1;
   string path = 2;
   VolumeSpec storage = 3;
 }
 
+// VolumeConsumer identifies a consumer for a Volume. An example of a VolumeConsumer
+// would be a Pod in Kubernetes who has mounted the PersistentVolumeClaim for the
+// Volume
+// swagger: model
+message VolumeConsumer {
+  // Name is the name of the volume consumer
+  string name = 1;
+  // Namespace is the namespace of the volume consumer
+  string namespace = 2;
+  // Type is the type of the consumer. E.g a Kubernetes pod
+  string type = 3;
+  // NodeID is the identifier of the node on which the consumer is running. This
+  // identifier would be from the perspective of the container runtime or
+  // orchestrator under which the volume consumer resides. For example, NodeID
+  //  can be name of a minion in Kubernetes.
+  string node_id = 4;
+  // OwnerName is the name of the entity who owns this volume consumer
+  string owner_name = 5;
+  // OwnerType is the type of the entity who owns this volume consumer. The type would
+  // be from the perspective of the container runtime or the orchestrator under which
+  // the volume consumer resides. For e.g OwnerType can be a Deployment in Kubernetes.
+  string owner_type = 6;
+}
+
 // GraphDriverChanges represent a list of changes between the filesystem layers
 // specified by the ID and Parent.  // Parent may be an empty string, in which
 // case there is no parent.
 // Where the Path is the filesystem path within the layered filesystem
+// swagger:model
 message GraphDriverChanges {
   string path = 1;
   GraphDriverChangeType kind = 2;
 }
 
+// ClusterResponse specifies a response that gets returned when requesting the cluster
+// swagger:response clusterResponse
 message ClusterResponse {
+  // Error code
+  //
+  // in: body
   string error = 1;
 }
 
+// Active Request
+// swagger:model
 message ActiveRequest {
   map<int64, string> ReqestKV = 1;
 }
 
+// Active Requests
+// swagger:model
 message ActiveRequests {
   int64 RequestCount = 1;
   repeated ActiveRequest ActiveRequest = 2;
+}
+
+// GroupSnapCreateRequest specifies a request to create a snapshot of given group.
+// swagger:model
+message GroupSnapCreateRequest {
+  string id = 1;
+  map<string, string> Labels = 2;
+}
+
+// GroupSnapCreateRequest specifies a response that get's returned when creating a group snapshot.
+// swagger:response groupSnapCreateResponse
+message GroupSnapCreateResponse {
+  // Created snapshots
+  //
+  // in: body
+  // Required: true
+  map<string, SnapCreateResponse> snapshots = 1;
 }

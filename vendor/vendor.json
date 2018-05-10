@@ -305,10 +305,10 @@
 			"revisionTime": "2017-12-14T03:25:23Z"
 		},
 		{
-			"checksumSHA1": "gO1F7vW45DAl4zwxsSJTjgy+TJg=",
+			"checksumSHA1": "28VpRtVDalTlqroYk6GyXW92aQ4=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
-			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
-			"revisionTime": "2017-12-14T03:25:23Z"
+			"revision": "26e4149db5ad657fef3dc1e1a256c010276173e7",
+			"revisionTime": "2018-05-01T22:01:36Z"
 		},
 		{
 			"checksumSHA1": "BNrILwgafy9rShay9gMdtgTZhQ0=",
@@ -319,38 +319,38 @@
 		{
 			"checksumSHA1": "V7X6Xskjew4qSbwfZC4w1bFuboI=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/cache",
-			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
-			"revisionTime": "2017-12-14T03:25:23Z"
+			"revision": "26e4149db5ad657fef3dc1e1a256c010276173e7",
+			"revisionTime": "2018-05-01T22:01:36Z"
 		},
 		{
 			"checksumSHA1": "UWFGAB05V8u4tgBHQueAK+j+klA=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/populator",
-			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
-			"revisionTime": "2017-12-14T03:25:23Z"
+			"revision": "26e4149db5ad657fef3dc1e1a256c010276173e7",
+			"revisionTime": "2018-05-01T22:01:36Z"
 		},
 		{
 			"checksumSHA1": "NPFTLFPhF+mVnPs5ZH6Ewy9fTjo=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/reconciler",
-			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
-			"revisionTime": "2017-12-14T03:25:23Z"
+			"revision": "26e4149db5ad657fef3dc1e1a256c010276173e7",
+			"revisionTime": "2018-05-01T22:01:36Z"
 		},
 		{
 			"checksumSHA1": "uo8k5VZtwwecifJnSfDeUzoP2n8=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller",
-			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
-			"revisionTime": "2017-12-14T03:25:23Z"
+			"revision": "26e4149db5ad657fef3dc1e1a256c010276173e7",
+			"revisionTime": "2018-05-01T22:01:36Z"
 		},
 		{
 			"checksumSHA1": "qU87Jiwi0Q5t797PKCdcDLRM6ys=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter",
-			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
-			"revisionTime": "2017-12-14T03:25:23Z"
+			"revision": "26e4149db5ad657fef3dc1e1a256c010276173e7",
+			"revisionTime": "2018-05-01T22:01:36Z"
 		},
 		{
 			"checksumSHA1": "RCXqx7/emuR21j3Dlq+GyT3Phf8=",
 			"path": "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume",
-			"revision": "3db0b71b1c590ab845efaa0b94d9f17fdebd4a15",
-			"revisionTime": "2017-12-14T03:25:23Z"
+			"revision": "26e4149db5ad657fef3dc1e1a256c010276173e7",
+			"revisionTime": "2018-05-01T22:01:36Z"
 		},
 		{
 			"checksumSHA1": "XxSculDWJ8paPj2VbSbbxPDSb7Q=",
@@ -381,47 +381,58 @@
 			"revisionTime": "2017-11-17T19:00:05Z"
 		},
 		{
-			"checksumSHA1": "9F3wARLaDZ3dUe7vnOaW0xb/apA=",
+			"checksumSHA1": "HyrWFd764cikCGnlRAPjo8EyiqU=",
 			"path": "github.com/libopenstorage/openstorage/api",
-			"revision": "58ef68d935db824c2d19af1f0d7a29dacb9d401b",
-			"revisionTime": "2017-11-17T19:00:05Z"
+			"revision": "23123c49498ef980280211885fdf409d5497515a",
+			"revisionTime": "2018-04-25T00:44:01Z"
 		},
 		{
-			"checksumSHA1": "osAF7FLBTn4Pd5EJpSjL1ZlfQvo=",
+			"checksumSHA1": "x1rcMJ+CAwulMKZU7wCLUtffXMI=",
 			"path": "github.com/libopenstorage/openstorage/api/client",
-			"revision": "58ef68d935db824c2d19af1f0d7a29dacb9d401b",
-			"revisionTime": "2017-11-17T19:00:05Z"
+			"revision": "23123c49498ef980280211885fdf409d5497515a",
+			"revisionTime": "2018-04-25T00:44:01Z"
 		},
 		{
-			"checksumSHA1": "YoOtDecSFFszoSCCGHj/xdlThms=",
+			"checksumSHA1": "9mTJSqR9zkUnMh/KH6PErPvvYWc=",
 			"path": "github.com/libopenstorage/openstorage/api/client/cluster",
-			"revision": "58ef68d935db824c2d19af1f0d7a29dacb9d401b",
-			"revisionTime": "2017-11-17T19:00:05Z"
+			"revision": "23123c49498ef980280211885fdf409d5497515a",
+			"revisionTime": "2018-04-25T00:44:01Z"
 		},
 		{
-			"checksumSHA1": "0MPsqA36ArfVEZRb4wJGJpgH+WI=",
+			"checksumSHA1": "1sMkrlXX9KCpIMcqe/mfeqJOsWI=",
 			"path": "github.com/libopenstorage/openstorage/api/client/volume",
-			"revision": "58ef68d935db824c2d19af1f0d7a29dacb9d401b",
-			"revisionTime": "2017-11-17T19:00:05Z"
+			"revision": "23123c49498ef980280211885fdf409d5497515a",
+			"revisionTime": "2018-04-25T00:44:01Z"
 		},
 		{
-			"checksumSHA1": "epxGRLxy5hM83o7bQjo/gLaD7Jw=",
-			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/api/spec",
+			"checksumSHA1": "7zU9+2RwgfiVKDZS+eWanztA6Mk=",
 			"path": "github.com/libopenstorage/openstorage/api/spec",
-			"revision": "50f65067c0124f426b0b3fcfa1048879497763cc",
-			"revisionTime": "2017-12-09T02:05:35Z"
+			"revision": "23123c49498ef980280211885fdf409d5497515a",
+			"revisionTime": "2018-04-25T00:44:01Z"
 		},
 		{
-			"checksumSHA1": "aQTxVW/uz6EHNA7ro5/SC2ii05c=",
+			"checksumSHA1": "nhNobIPXKmGUt60HNOP9ykYwzCs=",
 			"path": "github.com/libopenstorage/openstorage/cluster",
-			"revision": "58ef68d935db824c2d19af1f0d7a29dacb9d401b",
-			"revisionTime": "2017-11-17T19:00:05Z"
+			"revision": "8597d9ca590c1051f0f80fbed3b8ad1e1062c93a",
+			"revisionTime": "2018-04-24T20:30:52Z"
 		},
 		{
 			"checksumSHA1": "WpZGDsdBT8ymiho/pvFRomzdf3o=",
 			"path": "github.com/libopenstorage/openstorage/config",
 			"revision": "58ef68d935db824c2d19af1f0d7a29dacb9d401b",
 			"revisionTime": "2017-11-17T19:00:05Z"
+		},
+		{
+			"checksumSHA1": "ey7GSvCm4l4knab9jOLAWB9sihw=",
+			"path": "github.com/libopenstorage/openstorage/osdconfig",
+			"revision": "8597d9ca590c1051f0f80fbed3b8ad1e1062c93a",
+			"revisionTime": "2018-04-24T20:30:52Z"
+		},
+		{
+			"checksumSHA1": "+yDFX0Koi0sVgdn4IEgDttVH9nM=",
+			"path": "github.com/libopenstorage/openstorage/pkg/dbg",
+			"revision": "c364d09e9d74c373f8a31c78fc8b5ec4b88b1304",
+			"revisionTime": "2018-05-02T00:22:20Z"
 		},
 		{
 			"checksumSHA1": "/bl8X4ayadp0Bou8MzMkxfXiQ2c=",
@@ -438,10 +449,16 @@
 			"revisionTime": "2017-12-09T02:05:35Z"
 		},
 		{
-			"checksumSHA1": "k/7fOTc90hiyiKySUhSyN2ddZcs=",
+			"checksumSHA1": "J7Lr7DbO7CJBb6s2Sd/JSjXJe9c=",
+			"path": "github.com/libopenstorage/openstorage/secrets",
+			"revision": "23123c49498ef980280211885fdf409d5497515a",
+			"revisionTime": "2018-04-25T00:44:01Z"
+		},
+		{
+			"checksumSHA1": "LPyekP2pr0xL38mZGKpvQTbGuGU=",
 			"path": "github.com/libopenstorage/openstorage/volume",
-			"revision": "58ef68d935db824c2d19af1f0d7a29dacb9d401b",
-			"revisionTime": "2017-11-17T19:00:05Z"
+			"revision": "8597d9ca590c1051f0f80fbed3b8ad1e1062c93a",
+			"revisionTime": "2018-04-24T20:30:52Z"
 		},
 		{
 			"checksumSHA1": "D8tjRlFJ9xhAs9nchGptBtZgCIY=",
@@ -510,11 +527,25 @@
 			"revisionTime": "2017-01-30T11:31:45Z"
 		},
 		{
-			"checksumSHA1": "/nn2DBmDPAgTLTTxm/PhGlMc9QU=",
+			"checksumSHA1": "PjYePpeY3So+e9ueJjDhANa3RSY=",
 			"origin": "github.com/libopenstorage/openstorage/vendor/github.com/portworx/kvdb",
 			"path": "github.com/portworx/kvdb",
-			"revision": "58ef68d935db824c2d19af1f0d7a29dacb9d401b",
-			"revisionTime": "2017-11-17T19:00:05Z"
+			"revision": "8597d9ca590c1051f0f80fbed3b8ad1e1062c93a",
+			"revisionTime": "2018-04-24T20:30:52Z"
+		},
+		{
+			"checksumSHA1": "hG1HWajnF4cPYECknG9TY09W7iI=",
+			"origin": "github.com/libopenstorage/openstorage/vendor/github.com/portworx/kvdb/common",
+			"path": "github.com/portworx/kvdb/common",
+			"revision": "8597d9ca590c1051f0f80fbed3b8ad1e1062c93a",
+			"revisionTime": "2018-04-24T20:30:52Z"
+		},
+		{
+			"checksumSHA1": "oZEPo+f5HQhpin2h32V41jwM13k=",
+			"origin": "github.com/libopenstorage/openstorage/vendor/github.com/portworx/kvdb/mem",
+			"path": "github.com/portworx/kvdb/mem",
+			"revision": "8597d9ca590c1051f0f80fbed3b8ad1e1062c93a",
+			"revisionTime": "2018-04-24T20:30:52Z"
 		},
 		{
 			"checksumSHA1": "4utwgVNnfRd/KqXyxGdD/L8EJBk=",
@@ -532,56 +563,56 @@
 		{
 			"checksumSHA1": "jGTQ3I/cJtz7APzDbcQ6FuEEC+k=",
 			"path": "github.com/portworx/torpedo/drivers/node",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
 			"checksumSHA1": "DNwZHYj8UqYNIJwq3M5SwGJG4Jw=",
 			"path": "github.com/portworx/torpedo/drivers/node/ssh",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
-			"checksumSHA1": "iOAkvWRipQiW2Vdu/rDL8N8ZpKE=",
+			"checksumSHA1": "8MOGwuA4rOcoCYDeIwGCzaAcZD4=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
-			"checksumSHA1": "XimfzKGdXaZ9iVBFCSo5asFnsAk=",
+			"checksumSHA1": "G+IYw5qXf/TY7wx/6ezNVLxhjNU=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/k8s",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
 			"checksumSHA1": "gicT7JrFO4AWSDZhO4NJ/t1vmZ8=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/spec",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
-			"checksumSHA1": "UZKV5QwyJJd96+CpRag9HkAZBy4=",
+			"checksumSHA1": "IbEBm5rK06B9VMGkzTTEaImAiOc=",
 			"path": "github.com/portworx/torpedo/drivers/volume",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
 			"checksumSHA1": "5GKUZLVEbZa0lVv3BFq4tGcWYFA=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
 			"checksumSHA1": "31ylNk96/L3xz1QLgDJ9QlZyEdE=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx/schedops",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
 			"checksumSHA1": "VC6jgTB9GKVetejp30GOQKQIc3Y=",
 			"path": "github.com/portworx/torpedo/pkg/errors",
-			"revision": "3649116492df9d98f57fd6922eba5a37125b24c3",
-			"revisionTime": "2018-05-02T20:38:44Z"
+			"revision": "6d1549c45f8aa480321f9c5c82dae2c9c7cc8c5c",
+			"revisionTime": "2018-05-03T19:53:35Z"
 		},
 		{
 			"checksumSHA1": "BYvROBsiyAXK4sq6yhDe8RgT4LM=",

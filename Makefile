@@ -113,5 +113,5 @@ clean:
 	-rm -rf stork
 	@echo "Deleting image "$(STORK_IMG)
 	-sudo docker rmi -f $(STORK_IMG)
-	go clean -i $(PKGS)`
+	go clean -i $(PKGS)
 

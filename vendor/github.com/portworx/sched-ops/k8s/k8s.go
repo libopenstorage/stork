@@ -327,6 +327,12 @@ type SnapshotOps interface {
 	GetVolumeForSnapshot(name string, namespace string) (string, error)
 	// GetSnapshotStatus returns the status of the given snapshot
 	GetSnapshotStatus(name string, namespace string) (*snap_v1.VolumeSnapshotStatus, error)
+	// GetSnapshotData returns the snapshot for given name
+	GetSnapshotData(name string) (*snap_v1.VolumeSnapshotData, error)
+	// CreateSnapshotData creates the given volume snapshot data object
+	CreateSnapshotData(*snap_v1.VolumeSnapshotData) (*snap_v1.VolumeSnapshotData, error)
+	// DeleteSnapshotData deletes the given snapshot
+	DeleteSnapshotData(name string) error
 }
 
 // SecretOps is an interface to perform k8s Secret operations
@@ -2267,6 +2273,48 @@ func (k *k8sOps) GetSnapshotStatus(name string, namespace string) (*snap_v1.Volu
 	}
 
 	return &snapshot.Status, nil
+}
+
+func (k *k8sOps) GetSnapshotData(name string) (*snap_v1.VolumeSnapshotData, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	var result snap_v1.VolumeSnapshotData
+	if err := k.snapClient.Get().
+		Name(name).
+		Resource(snap_v1.VolumeSnapshotDataResourcePlural).
+		Do().Into(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (k *k8sOps) CreateSnapshotData(snapData *snap_v1.VolumeSnapshotData) (*snap_v1.VolumeSnapshotData, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	var result snap_v1.VolumeSnapshotData
+	if err := k.snapClient.Post().
+		Name(snapData.Metadata.Name).
+		Resource(snap_v1.VolumeSnapshotDataResourcePlural).
+		Body(snapData).
+		Do().Into(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (k *k8sOps) DeleteSnapshotData(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	return k.snapClient.Delete().
+		Name(name).
+		Resource(snap_v1.VolumeSnapshotDataResourcePlural).
+		Do().Error()
 }
 
 // Snapshot APIs - END

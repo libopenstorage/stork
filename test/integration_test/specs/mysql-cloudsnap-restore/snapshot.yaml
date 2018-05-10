@@ -1,0 +1,10 @@
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: mysql-cloud-snapshot
+  namespace: default
+  annotations:
+    portworx/snapshot-type: cloud
+spec:
+  persistentVolumeClaimName: mysql-data
+

@@ -9,8 +9,16 @@ import (
 
 // Volume is a generic struct encapsulating volumes in the cluster
 type Volume struct {
-	ID   string
-	Name string
+	ID        string
+	Name      string
+	Namespace string
+}
+
+// Snapshot is a generic struct encapsulating snapshots in the cluster
+type Snapshot struct {
+	ID        string
+	Name      string
+	Namespace string
 }
 
 // Driver defines an external volume driver interface that must be implemented

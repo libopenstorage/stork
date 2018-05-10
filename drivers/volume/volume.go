@@ -42,6 +42,10 @@ type Info struct {
 	Size uint64
 	// ParentID points to the ID of the parent volume for snapshots
 	ParentID string
+	// Labels are user applied labels on the volume
+	Labels map[string]string
+	// VolumeSourceRef is a optional reference to the source of the volume
+	VolumeSourceRef interface{}
 }
 
 // NodeStatus Status of driver on a node

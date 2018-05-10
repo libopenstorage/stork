@@ -51,7 +51,6 @@ type SpecHandler interface {
 	// 	(resultant_VolumeSpec, source, locator, nil)
 	// If the options have invalid values then it returns:
 	//	(nil, nil, nil, error)
-
 	SpecFromOpts(opts map[string]string) (
 		*api.VolumeSpec,
 		*api.VolumeLocator,
@@ -78,7 +77,7 @@ type SpecHandler interface {
 
 var (
 	nameRegex       = regexp.MustCompile(api.Name + "=([0-9A-Za-z_-]+),?")
-	nodesRegex      = regexp.MustCompile(api.SpecNodes + "=([0-9A-Za-z_-]+),?")
+	nodesRegex      = regexp.MustCompile(api.SpecNodes + "=([A-Za-z0-9-_;]+),?")
 	parentRegex     = regexp.MustCompile(api.SpecParent + "=([A-Za-z]+),?")
 	sizeRegex       = regexp.MustCompile(api.SpecSize + "=([0-9A-Za-z]+),?")
 	scaleRegex      = regexp.MustCompile(api.SpecScale + "=([0-9]+),?")
@@ -87,6 +86,8 @@ var (
 	haRegex         = regexp.MustCompile(api.SpecHaLevel + "=([0-9]+),?")
 	cosRegex        = regexp.MustCompile(api.SpecPriority + "=([A-Za-z]+),?")
 	sharedRegex     = regexp.MustCompile(api.SpecShared + "=([A-Za-z]+),?")
+	journalRegex    = regexp.MustCompile(api.SpecJournal + "=([A-Za-z]+),?")
+	sharedv4Regex   = regexp.MustCompile(api.SpecSharedv4 + "=([A-Za-z]+),?")
 	cascadedRegex   = regexp.MustCompile(api.SpecCascaded + "=([A-Za-z]+),?")
 	passphraseRegex = regexp.MustCompile(api.SpecPassphrase + "=([0-9A-Za-z_@./#&+-]+),?")
 	stickyRegex     = regexp.MustCompile(api.SpecSticky + "=([A-Za-z]+),?")
@@ -99,6 +100,7 @@ var (
 	compressedRegex   = regexp.MustCompile(api.SpecCompressed + "=([A-Za-z]+),?")
 	snapScheduleRegex = regexp.MustCompile(api.SpecSnapshotSchedule +
 		`=([A-Za-z0-9:;@=#]+),?`)
+	ioProfileRegex = regexp.MustCompile(api.SpecIoProfile + "=([0-9A-Za-z_-]+),?")
 )
 
 type specHandler struct {
@@ -134,9 +136,7 @@ func (d *specHandler) getVal(r *regexp.Regexp, str string) (bool, string) {
 		return false, ""
 	}
 
-	val := submatches[1]
-
-	return true, val
+	return true, submatches[1]
 }
 
 func (d *specHandler) DefaultSpec() *api.VolumeSpec {
@@ -168,7 +168,7 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 	for k, v := range opts {
 		switch k {
 		case api.SpecNodes:
-			inputNodes := strings.Split(v, ",")
+			inputNodes := strings.Split(strings.Replace(v, ";", ",", -1), ",")
 			for _, node := range inputNodes {
 				if len(node) != 0 {
 					nodeList = append(nodeList, node)
@@ -236,6 +236,18 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 				return nil, nil, nil, err
 			} else {
 				spec.Shared = shared
+			}
+		case api.SpecJournal:
+			if journal, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				spec.Journal = journal
+			}
+		case api.SpecSharedv4:
+			if sharedv4, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				spec.Sharedv4 = sharedv4
 			}
 		case api.SpecCascaded:
 			if cascaded, err := strconv.ParseBool(v); err != nil {
@@ -323,9 +335,11 @@ func (d *specHandler) SpecOptsFromString(
 	if ok, sz := d.getVal(sizeRegex, str); ok {
 		opts[api.SpecSize] = sz
 	}
+
 	if ok, nodes := d.getVal(nodesRegex, str); ok {
-		opts[api.SpecNodes] = nodes
+		opts[api.SpecNodes] = strings.Replace(nodes, ";", ",", -1)
 	}
+
 	if ok, parent := d.getVal(parentRegex, str); ok {
 		opts[api.SpecParent] = parent
 	}
@@ -346,6 +360,12 @@ func (d *specHandler) SpecOptsFromString(
 	}
 	if ok, shared := d.getVal(sharedRegex, str); ok {
 		opts[api.SpecShared] = shared
+	}
+	if ok, journal := d.getVal(journalRegex, str); ok {
+		opts[api.SpecJournal] = journal
+	}
+	if ok, sharedv4 := d.getVal(sharedv4Regex, str); ok {
+		opts[api.SpecSharedv4] = sharedv4
 	}
 	if ok, cascaded := d.getVal(cascadedRegex, str); ok {
 		opts[api.SpecCascaded] = cascaded
@@ -378,6 +398,9 @@ func (d *specHandler) SpecOptsFromString(
 	if ok, sched := d.getVal(snapScheduleRegex, str); ok {
 		opts[api.SpecSnapshotSchedule] = strings.Replace(sched, "#", ",", -1)
 	}
+	if ok, ioProfile := d.getVal(ioProfileRegex, str); ok {
+		opts[api.SpecIoProfile] = ioProfile
+	}
 
 	return true, opts, name
 }
@@ -389,7 +412,6 @@ func (d *specHandler) SpecFromString(
 	if !ok {
 		return false, d.DefaultSpec(), nil, nil, name
 	}
-
 	spec, locator, source, err := d.SpecFromOpts(opts)
 	if err != nil {
 		return false, d.DefaultSpec(), nil, nil, name
