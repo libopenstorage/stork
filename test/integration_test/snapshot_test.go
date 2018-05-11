@@ -184,9 +184,21 @@ func cloudSnapshotTest(t *testing.T) {
 	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
 
 	dataVolumesNames := make([]string, 0)
-	for _, volume := range volumeNames {
-		if !strings.HasPrefix(volume, "snapshot") {
-			dataVolumesNames = append(dataVolumesNames, volume)
+	dataVolumesInUse := make([]string, 0)
+
+	allVolumes, err := schedulerDriver.GetVolumes(ctxs[0])
+	require.NoError(t, err, "failed to get volumes")
+	require.Len(t, allVolumes, 2, "should have 2 volumes")
+	for _, v := range allVolumes {
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(v.Name, v.Namespace)
+		require.NoError(t, err, "failed to get PVC")
+
+		volName, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(pvc)
+		require.NoError(t, err, "failed to get PV name")
+		dataVolumesNames = append(dataVolumesNames, volName)
+
+		if pvc.GetName() == "mysql-data" {
+			dataVolumesInUse = append(dataVolumesInUse, volName)
 		}
 	}
 
@@ -210,6 +222,7 @@ func cloudSnapshotTest(t *testing.T) {
 		require.Equal(t, snapType, crdv1.PortworxSnapshotTypeCloud)
 	}
 
-	verifyScheduledNode(t, scheduledNodes[0], dataVolumesNames)
+	fmt.Printf("checking dataVolumesInUse: %v\n", dataVolumesInUse)
+	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 	destroyAndWait(t, ctxs)
 }
