@@ -90,25 +90,7 @@ func groupSnapshotTest(t *testing.T) {
 	err = schedulerDriver.InspectVolumes(ctxs[0])
 	require.NoError(t, err, "Error waiting for volumes")
 
-	allVolumes, err := schedulerDriver.GetVolumes(ctxs[0])
-	require.NoError(t, err, "failed to get volumes")
-	require.Len(t, allVolumes, 2, "should have 2 volumes")
-
-	dataVolumesNames := make([]string, 0)
-	dataVolumesInUse := make([]string, 0)
-	for _, v := range allVolumes {
-		pvc, err := k8s.Instance().GetPersistentVolumeClaim(v.Name, v.Namespace)
-		require.NoError(t, err, "failed to get PVC")
-
-		volName, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(pvc)
-		require.NoError(t, err, "failed to get PV name")
-		dataVolumesNames = append(dataVolumesNames, volName)
-
-		if pvc.GetName() == "mysql-data-1" {
-			dataVolumesInUse = append(dataVolumesInUse, volName)
-		}
-	}
-
+	dataVolumesNames, dataVolumesInUse := parseDataVolumes(t, "mysql-data-1", ctxs[0])
 	require.Len(t, dataVolumesNames, 2, "should have only 2 data volumes")
 
 	snaps, err := schedulerDriver.GetSnapshots(ctxs[0])
@@ -183,13 +165,7 @@ func cloudSnapshotTest(t *testing.T) {
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
 
-	dataVolumesNames := make([]string, 0)
-	for _, volume := range volumeNames {
-		if !strings.HasPrefix(volume, "snapshot") {
-			dataVolumesNames = append(dataVolumesNames, volume)
-		}
-	}
-
+	dataVolumesNames, dataVolumesInUse := parseDataVolumes(t, "mysql-data", ctxs[0])
 	require.Len(t, dataVolumesNames, 2, "should have only 2 data volumes")
 
 	snaps, err := schedulerDriver.GetSnapshots(ctxs[0])
@@ -210,6 +186,34 @@ func cloudSnapshotTest(t *testing.T) {
 		require.Equal(t, snapType, crdv1.PortworxSnapshotTypeCloud)
 	}
 
-	verifyScheduledNode(t, scheduledNodes[0], dataVolumesNames)
+	fmt.Printf("checking dataVolumesInUse: %v\n", dataVolumesInUse)
+	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 	destroyAndWait(t, ctxs)
+}
+
+func parseDataVolumes(
+	t *testing.T,
+	pvcInUseByTest string,
+	ctx *scheduler.Context) ([]string, []string) {
+	allVolumes, err := schedulerDriver.GetVolumes(ctx)
+	require.NoError(t, err, "failed to get volumes")
+
+	dataVolumesNames := make([]string, 0)
+	dataVolumesInUse := make([]string, 0)
+	for _, v := range allVolumes {
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(v.Name, v.Namespace)
+		require.NoError(t, err, "failed to get PVC")
+
+		volName, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(pvc)
+		require.NoError(t, err, "failed to get PV name")
+		dataVolumesNames = append(dataVolumesNames, volName)
+
+		if pvc.GetName() == pvcInUseByTest {
+			dataVolumesInUse = append(dataVolumesInUse, volName)
+		}
+	}
+
+	require.Len(t, dataVolumesInUse, 1, "should have only 1 data volume in use")
+
+	return dataVolumesNames, dataVolumesInUse
 }
