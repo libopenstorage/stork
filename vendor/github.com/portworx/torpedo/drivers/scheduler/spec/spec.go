@@ -14,3 +14,18 @@ type AppSpec struct {
 	// Enabled indicates if the application is enabled in the factory
 	Enabled bool
 }
+
+// DeepCopy Creates a copy of the AppSpec
+func (in *AppSpec) DeepCopy() *AppSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(AppSpec)
+	out.Key = in.Key
+	out.Enabled = in.Enabled
+	out.SpecList = make([]interface{}, 0)
+	for _, spec := range in.SpecList {
+		out.SpecList = append(out.SpecList, spec)
+	}
+	return out
+}

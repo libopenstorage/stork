@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"path"
 
-	"github.com/mohae/deepcopy"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -29,11 +28,10 @@ func (f *Factory) register(id string, app *AppSpec) {
 // Get returns a registered application
 func (f *Factory) Get(id string) (*AppSpec, error) {
 	if d, ok := appSpecFactory[id]; ok && d.Enabled {
-		dCopy := deepcopy.Copy(d)
-		if copy, ok := dCopy.(*AppSpec); ok {
-			return copy, nil
+		if copy := d.DeepCopy(); copy != nil {
+			return d.DeepCopy(), nil
 		}
-		return nil, fmt.Errorf("error creating copy of spec: %v", d)
+		return nil, fmt.Errorf("error creating copy of app: %v", d)
 	}
 
 	return nil, &errors.ErrNotFound{
@@ -47,11 +45,9 @@ func (f *Factory) GetAll() []*AppSpec {
 	var specs []*AppSpec
 	for _, val := range appSpecFactory {
 		if val.Enabled {
-			valCopy := deepcopy.Copy(val)
-			if copy, ok := valCopy.(*AppSpec); ok {
-				specs = append(specs, copy)
-			} else {
-				logrus.Errorf("Error creating copy of spec: %v", val)
+			valCopy := val.DeepCopy()
+			if valCopy != nil {
+				specs = append(specs, valCopy)
 			}
 		}
 	}
