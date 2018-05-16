@@ -606,7 +606,6 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 			}
 		}
 
-		fmt.Printf("RK Node Status => %v", pxNode.Status)
 		if pxNode.Status != api.Status_STATUS_OK || d.getStorageStatus(n) != "Up" {
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
@@ -623,6 +622,12 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 	if _, err := task.DoRetryWithTimeout(t, validateNodeStartTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
+
+	// Check if PX pod is up
+	if !d.schedOps.IsPXAppRunningOnNode(n) {
+		return fmt.Errorf("PX pod is not up on node: %s", n.Name)
+	}
+	logrus.Infof("PX pod is up on node: %s", n.Name)
 
 	return nil
 }
