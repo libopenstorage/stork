@@ -25,7 +25,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
@@ -743,7 +742,7 @@ func (p *portworx) createVolumeSnapshotCRD(
 	}
 
 	namespace := groupSnap.Metadata.Namespace
-	volumeSnapshotName := fmt.Sprintf("%s-%s", groupSnap.Metadata.Name, parentPVCOrVolID)
+	volumeSnapshotName := fmt.Sprintf("%s-%s-%s", groupSnap.Metadata.Name, parentPVCOrVolID, groupSnap.GetObjectMeta().GetUID())
 	snapDataSource := &crdv1.VolumeSnapshotDataSource{
 		PortworxSnapshot: &crdv1.PortworxVolumeSnapshotSource{
 			SnapshotID:   pxSnapID,
@@ -834,7 +833,7 @@ func (p *portworx) createVolumeSnapshotData(
 
 	snapshotData := &crdv1.VolumeSnapshotData{
 		Metadata: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("%s-%s", snapshotName, uuid.NewUUID()),
+			Name:   snapshotName,
 			Labels: snapLabels,
 		},
 		Spec: crdv1.VolumeSnapshotDataSpec{
