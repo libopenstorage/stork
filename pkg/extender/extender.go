@@ -155,11 +155,18 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 					}
 				}
 			}
+			// If we filtered out all the nodes, the driver isn't running on any
+			// of them, so return an error to avoid scheduling a pod on a
+			// non-driver node
+			if len(filteredNodes) == 0 {
+				storklog.PodLog(pod).Errorf("No nodes in filter request have driver, returning error")
+				http.Error(w, "No node found with driver", http.StatusBadRequest)
+				return
+			}
 		}
 	}
 
-	// If we filtered out all the nodes, or didn't find a PVC that
-	// interested us, return all the nodes from the request
+	// If we didn't find a PVC that interested us, return all the nodes from the request
 	if len(filteredNodes) == 0 {
 		filteredNodes = args.Nodes.Items
 	}

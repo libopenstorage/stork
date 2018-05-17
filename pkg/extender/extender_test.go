@@ -4,7 +4,9 @@ package extender
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
@@ -127,13 +129,20 @@ func sendFilterRequest(
 		return nil, err
 	}
 
-	decoder := json.NewDecoder(resp.Body)
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logrus.Warnf("Error closing decoder: %v", err)
 		}
 	}()
+	if resp.StatusCode != http.StatusOK {
+		contents, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New(strings.TrimSpace(string(contents)))
+	}
 
+	decoder := json.NewDecoder(resp.Body)
 	var filterResult schedulerapi.ExtenderFilterResult
 	if err := decoder.Decode(&filterResult); err != nil {
 		logrus.Errorf("Error decoding filter response: %v", err)
@@ -151,13 +160,21 @@ func sendPrioritizeRequest(
 		return nil, err
 	}
 
-	decoder := json.NewDecoder(resp.Body)
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			logrus.Warnf("Error closing decoder: %v", err)
 		}
 	}()
 
+	if resp.StatusCode != http.StatusOK {
+		contents, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New(strings.TrimSpace(string(contents)))
+	}
+
+	decoder := json.NewDecoder(resp.Body)
 	var priorityList schedulerapi.HostPriorityList
 	if err := decoder.Decode(&priorityList); err != nil {
 		logrus.Errorf("Error decoding filter response: %v", err)
@@ -237,6 +254,7 @@ func TestExtender(t *testing.T) {
 	t.Run("setup", setup)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("noDriverVolumeTest", noDriverVolumeTest)
+	t.Run("noVolumeNodeTest", noVolumeNodeTest)
 	t.Run("noDriverNodeTest", noDriverNodeTest)
 	t.Run("singleVolumeTest", singleVolumeTest)
 	t.Run("multipleVolumeTest", multipleVolumeTest)
@@ -313,7 +331,7 @@ func noDriverVolumeTest(t *testing.T) {
 // The filter response should return all the input nodes
 // The prioritize response should return all n3 with highest priority because of
 // rack locality
-func noDriverNodeTest(t *testing.T) {
+func noVolumeNodeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
 	requestNodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "", ""))
@@ -326,10 +344,10 @@ func noDriverNodeTest(t *testing.T) {
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
-	pod := newPod("noDriverNode", []string{"noDriverNode"})
+	pod := newPod("noVolumeNode", []string{"noVolumeNode"})
 
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("noDriverNode", provNodes, 1); err != nil {
+	if err := driver.ProvisionVolume("noVolumeNode", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, requestNodes)
@@ -347,6 +365,37 @@ func noDriverNodeTest(t *testing.T) {
 		requestNodes,
 		[]int{rackPriorityScore, defaultScore, defaultScore},
 		prioritizeResponse)
+}
+
+// Create a pod with a PVC using the mock storage class.
+// Create a storage cluster with 3 nodes n1,n2,n3.
+// Send filter request with node n4, n5
+// The filter response should return an error
+func noDriverNodeTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	requestNodes := &v1.NodeList{}
+	driverNodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack4", "", ""))
+	requestNodes.Items = nodes.Items
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "", ""))
+
+	driverNodes.Items = nodes.Items[2:4]
+	if err := driver.CreateCluster(3, driverNodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("noDriverNode", []string{"noDriverNode"})
+
+	provNodes := []int{0, 1}
+	if err := driver.ProvisionVolume("noDriverNode", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	filterResponse, err := sendFilterRequest(pod, requestNodes)
+	if err == nil {
+		t.Fatalf("Expected error for filter request, got nil: %v", filterResponse)
+	}
 }
 
 // Create a pod with a PVC using the mock storage class.
