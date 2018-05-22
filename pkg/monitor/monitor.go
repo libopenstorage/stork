@@ -14,12 +14,13 @@ import (
 
 const (
 	defaultIntervalSec = 120
+	minimumIntervalSec = 30
 )
 
 // Monitor Storage driver monitor
 type Monitor struct {
 	Driver      volume.Driver
-	IntervalSec time.Duration
+	IntervalSec int64
 	lock        sync.Mutex
 	started     bool
 	stopChannel chan int
@@ -37,6 +38,8 @@ func (m *Monitor) Start() error {
 
 	if m.IntervalSec == 0 {
 		m.IntervalSec = defaultIntervalSec
+	} else if m.IntervalSec < minimumIntervalSec {
+		return fmt.Errorf("Minimum interval for health monitor is %v seconds", minimumIntervalSec)
 	}
 
 	m.stopChannel = make(chan int)
@@ -111,7 +114,7 @@ func (m *Monitor) driverMonitor() {
 					}
 				}
 			}
-			time.Sleep(m.IntervalSec * time.Second)
+			time.Sleep(time.Duration(m.IntervalSec) * time.Second)
 		case <-m.stopChannel:
 			return
 		}

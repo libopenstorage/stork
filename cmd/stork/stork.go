@@ -43,7 +43,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "stork"
 	app.Usage = "STorage Orchestartor Runtime for Kubernetes (STORK)"
-	app.Version = "1.0.3"
+	app.Version = "1.1"
 	app.Action = run
 
 	app.Flags = []cli.Flag{
@@ -79,7 +79,11 @@ func main() {
 		},
 		cli.BoolTFlag{
 			Name:  "health-monitor",
-			Usage: "Enable health monitoring of storage (default: true)",
+			Usage: "Enable health monitoring of the storage driver (default: true)",
+		},
+		cli.Int64Flag{
+			Name:  "health-monitor-interval",
+			Usage: "The interval in seconds to monitor the health of the storage driver (default: 120, min: 30)",
 		},
 		cli.BoolFlag{
 			Name:  "app-initializer",
@@ -204,8 +208,10 @@ func runStork(d volume.Driver, c *cli.Context) {
 	}
 
 	monitor := &monitor.Monitor{
-		Driver: d,
+		Driver:      d,
+		IntervalSec: c.Int64("health-monitor-interval"),
 	}
+
 	if c.Bool("health-monitor") {
 		if err := monitor.Start(); err != nil {
 			log.Fatalf("Error starting storage monitor: %v", err)
