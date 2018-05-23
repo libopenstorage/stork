@@ -90,14 +90,15 @@ type cloudSnapStatus struct {
 
 // snapshot annotation constants
 const (
-	pxAnnotationPrefix        = "portworx/"
-	pxSnapshotTypeKey         = pxAnnotationPrefix + "snapshot-type"
-	pxSnapshotNamespaceIDKey  = pxAnnotationPrefix + "namespace"
-	pxSnapshotGroupIDKey      = pxAnnotationPrefix + "group-id"
-	pxCloudSnapshotCredsIDKey = pxAnnotationPrefix + "cloud-cred-id"
+	pxAnnotationSelectorKeyPrefix = "portworx.selector/"
+	pxSnapshotNamespaceIDKey      = pxAnnotationSelectorKeyPrefix + "namespace"
+	pxSnapshotGroupIDKey          = pxAnnotationSelectorKeyPrefix + "group-id"
+	pxAnnotationKeyPrefix         = "portworx/"
+	pxSnapshotTypeKey             = pxAnnotationKeyPrefix + "snapshot-type"
+	pxCloudSnapshotCredsIDKey     = pxAnnotationKeyPrefix + "cloud-cred-id"
 )
 
-var pxAnnotationKeyRegex = regexp.MustCompile(fmt.Sprintf("%s(.+)", pxAnnotationPrefix))
+var pxGroupSnapSelectorRegex = regexp.MustCompile(`portworx\.selector/(.+)`)
 
 var snapAPICallBackoff = wait.Backoff{
 	Duration: volumeSnapshotInitialDelay,
@@ -1117,7 +1118,7 @@ func parseGroupLabelsFromAnnotations(annotations map[string]string) map[string]s
 			continue
 		}
 
-		matches := pxAnnotationKeyRegex.FindStringSubmatch(k)
+		matches := pxGroupSnapSelectorRegex.FindStringSubmatch(k)
 		if len(matches) == 2 {
 			groupLabels[matches[1]] = v
 		}
@@ -1132,7 +1133,7 @@ func isGroupSnap(snap *crdv1.VolumeSnapshot) bool {
 			continue
 		}
 
-		matches := pxAnnotationKeyRegex.FindStringSubmatch(k)
+		matches := pxGroupSnapSelectorRegex.FindStringSubmatch(k)
 		if len(matches) == 2 {
 			return true
 		}
