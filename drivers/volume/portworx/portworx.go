@@ -99,6 +99,7 @@ const (
 )
 
 var pxGroupSnapSelectorRegex = regexp.MustCompile(`portworx\.selector/(.+)`)
+var pre14VersionRegex = regexp.MustCompile(`1\.2\..+|1\.3\..+`)
 
 var snapAPICallBackoff = wait.Backoff{
 	Duration: volumeSnapshotInitialDelay,
@@ -377,6 +378,12 @@ func (p *portworx) SnapshotCreate(
 	switch snapType {
 	case crdv1.PortworxSnapshotTypeCloud:
 		logrus.Debugf("Cloud SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
+		err = p.ensureNodesDontMatchVersionPrefix(pre14VersionRegex)
+		if err != nil {
+			err = fmt.Errorf("cloud snapshot is supported only on PX version 1.4 and above. %v", err)
+			return nil, getErrorSnapshotConditions(err), err
+		}
+
 		snapshotCredID = getCredIDFromSnapshot(snap)
 		request := &api.CloudBackupCreateRequest{
 			VolumeID:       volumeID,
@@ -398,6 +405,12 @@ func (p *portworx) SnapshotCreate(
 		snapStatusConditions = getReadySnapshotConditions()
 	case crdv1.PortworxSnapshotTypeLocal:
 		if isGroupSnap(snap) {
+			err = p.ensureNodesDontMatchVersionPrefix(pre14VersionRegex)
+			if err != nil {
+				err = fmt.Errorf("group snapshot is supported only on PX version 1.4 and above. %v", err)
+				return nil, getErrorSnapshotConditions(err), err
+			}
+
 			groupID := snap.Metadata.Annotations[pxSnapshotGroupIDKey]
 			groupLabels := parseGroupLabelsFromAnnotations(snap.Metadata.Annotations)
 
@@ -1078,6 +1091,22 @@ func (p *portworx) validatePVForGroupSnap(pvName, groupID string, groupLabels ma
 		if value, present := volInfo.Labels[k]; !present || value != v {
 			return fmt.Errorf("annotation/label '%s:%s' is not present in volume: %v. Found: %v",
 				k, v, pvName, volInfo.Labels)
+		}
+	}
+
+	return nil
+}
+
+func (p *portworx) ensureNodesDontMatchVersionPrefix(versionRegex *regexp.Regexp) error {
+	result, err := p.clusterManager.Enumerate()
+	if err != nil {
+		return err
+	}
+
+	for _, node := range result.Nodes {
+		version := node.NodeLabels["PX Version"]
+		if versionRegex.MatchString(version) {
+			return fmt.Errorf("node: %s has version: %s", node.Hostname, version)
 		}
 	}
 
