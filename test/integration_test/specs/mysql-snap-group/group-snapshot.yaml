@@ -4,8 +4,8 @@ metadata:
   name: mysql-group-snapshot
   annotations:
     portworx/snapshot-type: local
-    portworx/type: db
-    portworx/tier: prod
+    portworx.selector/type: db
+    portworx.selector/tier: prod
 spec:
   persistentVolumeClaimName: mysql-data-1
 

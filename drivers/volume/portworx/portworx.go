@@ -90,14 +90,15 @@ type cloudSnapStatus struct {
 
 // snapshot annotation constants
 const (
-	pxAnnotationPrefix        = "portworx/"
-	pxSnapshotTypeKey         = pxAnnotationPrefix + "snapshot-type"
-	pxSnapshotNamespaceIDKey  = pxAnnotationPrefix + "namespace"
-	pxSnapshotGroupIDKey      = pxAnnotationPrefix + "group-id"
-	pxCloudSnapshotCredsIDKey = pxAnnotationPrefix + "cloud-cred-id"
+	pxAnnotationSelectorKeyPrefix = "portworx.selector/"
+	pxSnapshotNamespaceIDKey      = pxAnnotationSelectorKeyPrefix + "namespace"
+	pxSnapshotGroupIDKey          = pxAnnotationSelectorKeyPrefix + "group-id"
+	pxAnnotationKeyPrefix         = "portworx/"
+	pxSnapshotTypeKey             = pxAnnotationKeyPrefix + "snapshot-type"
+	pxCloudSnapshotCredsIDKey     = pxAnnotationKeyPrefix + "cloud-cred-id"
 )
 
-var pxAnnotationKeyRegex = regexp.MustCompile(fmt.Sprintf("%s(.+)", pxAnnotationPrefix))
+var pxGroupSnapSelectorRegex = regexp.MustCompile(`portworx\.selector/(.+)`)
 
 var snapAPICallBackoff = wait.Backoff{
 	Duration: volumeSnapshotInitialDelay,
@@ -1109,15 +1110,12 @@ func getCredIDFromSnapshot(snap *crdv1.VolumeSnapshot) (credID string) {
 func parseGroupLabelsFromAnnotations(annotations map[string]string) map[string]string {
 	groupLabels := make(map[string]string, 0)
 	for k, v := range annotations {
-		// filter out known labels
-		if k == pxCloudSnapshotCredsIDKey ||
-			k == pxSnapshotTypeKey ||
-			k == pxSnapshotGroupIDKey ||
-			k == v1.LastAppliedConfigAnnotation {
+		// skip group id annotation
+		if k == pxSnapshotGroupIDKey {
 			continue
 		}
 
-		matches := pxAnnotationKeyRegex.FindStringSubmatch(k)
+		matches := pxGroupSnapSelectorRegex.FindStringSubmatch(k)
 		if len(matches) == 2 {
 			groupLabels[matches[1]] = v
 		}
@@ -1128,11 +1126,7 @@ func parseGroupLabelsFromAnnotations(annotations map[string]string) map[string]s
 
 func isGroupSnap(snap *crdv1.VolumeSnapshot) bool {
 	for k := range snap.Metadata.Annotations {
-		if k == pxCloudSnapshotCredsIDKey || k == pxSnapshotTypeKey {
-			continue
-		}
-
-		matches := pxAnnotationKeyRegex.FindStringSubmatch(k)
+		matches := pxGroupSnapSelectorRegex.FindStringSubmatch(k)
 		if len(matches) == 2 {
 			return true
 		}
