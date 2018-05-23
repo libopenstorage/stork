@@ -1,4 +1,5 @@
 bin/
 *.test
 *.swp
+help-cmdexecutor.1
 help.1
