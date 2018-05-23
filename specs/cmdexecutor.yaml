@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+   name: cmdexecutor
+   namespace: kube-system
+spec:
+  containers:
+  - name: cmdexecutor
+    command:
+    - /cmdexecutor
+    - -pod
+    - default/mysql-1-7bdbbcff95-zl4v4
+    - -cmd
+    - 'uname -a && ${WAIT_CMD}'
+    - -timeout
+    - '30'
+    image: openstorage/cmdexecutor:latest
+    imagePullPolicy: Always
+    resources:
+      requests:
+        cpu: '0.1'
+  serviceAccountName: stork-account
+  restartPolicy: Never

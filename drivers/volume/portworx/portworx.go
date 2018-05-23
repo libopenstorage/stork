@@ -400,7 +400,7 @@ func (p *portworx) SnapshotCreate(
 
 		status, err := p.waitForCloudSnapCompletion(api.CloudBackupOp, volumeID, false)
 		if err != nil {
-			logrus.Error("Cloudsnap backup: %s failed due to: %v", status.cloudSnapID, err)
+			logrus.Errorf("Cloudsnap backup: %s failed due to: %v", status.cloudSnapID, err)
 			return nil, getErrorSnapshotConditions(err), err
 		}
 

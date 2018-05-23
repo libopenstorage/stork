@@ -58,8 +58,8 @@ metadata:
    name: stork-role
 rules:
   - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "delete"]
+    resources: ["pods", "pods/exec"]
+    verbs: ["get", "list", "delete", "create"]
   - apiGroups: [""]
     resources: ["persistentvolumes"]
     verbs: ["get", "list", "watch", "create", "delete"]
