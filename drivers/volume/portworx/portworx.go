@@ -99,6 +99,7 @@ const (
 )
 
 var pxGroupSnapSelectorRegex = regexp.MustCompile(`portworx\.selector/(.+)`)
+var pre14VersionRegex = regexp.MustCompile(`1\.2\..+|1\.3\..+`)
 
 var snapAPICallBackoff = wait.Backoff{
 	Duration: volumeSnapshotInitialDelay,
@@ -377,12 +378,22 @@ func (p *portworx) SnapshotCreate(
 	switch snapType {
 	case crdv1.PortworxSnapshotTypeCloud:
 		logrus.Debugf("Cloud SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
+		ok, msg, err := p.ensureNodesDontMatchVersionPrefix(pre14VersionRegex)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if !ok {
+			err = fmt.Errorf("cloud snapshot is supported only on PX version 1.4 and above. %s", msg)
+			return nil, getErrorSnapshotConditions(err), err
+		}
+
 		snapshotCredID = getCredIDFromSnapshot(snap)
 		request := &api.CloudBackupCreateRequest{
 			VolumeID:       volumeID,
 			CredentialUUID: snapshotCredID,
 		}
-		err := p.volDriver.CloudBackupCreate(request)
+		err = p.volDriver.CloudBackupCreate(request)
 		if err != nil {
 			return nil, getErrorSnapshotConditions(err), err
 		}
@@ -398,10 +409,20 @@ func (p *portworx) SnapshotCreate(
 		snapStatusConditions = getReadySnapshotConditions()
 	case crdv1.PortworxSnapshotTypeLocal:
 		if isGroupSnap(snap) {
+			ok, msg, err := p.ensureNodesDontMatchVersionPrefix(pre14VersionRegex)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !ok {
+				err = fmt.Errorf("group snapshot is supported only on PX version 1.4 and above. %s", msg)
+				return nil, getErrorSnapshotConditions(err), err
+			}
+
 			groupID := snap.Metadata.Annotations[pxSnapshotGroupIDKey]
 			groupLabels := parseGroupLabelsFromAnnotations(snap.Metadata.Annotations)
 
-			err := p.validatePVForGroupSnap(pv.GetName(), groupID, groupLabels)
+			err = p.validatePVForGroupSnap(pv.GetName(), groupID, groupLabels)
 			if err != nil {
 				return nil, getErrorSnapshotConditions(err), err
 			}
@@ -1082,6 +1103,22 @@ func (p *portworx) validatePVForGroupSnap(pvName, groupID string, groupLabels ma
 	}
 
 	return nil
+}
+
+func (p *portworx) ensureNodesDontMatchVersionPrefix(versionRegex *regexp.Regexp) (bool, string, error) {
+	result, err := p.clusterManager.Enumerate()
+	if err != nil {
+		return false, "", err
+	}
+
+	for _, node := range result.Nodes {
+		version := node.NodeLabels["PX Version"]
+		if versionRegex.MatchString(version) {
+			return false, fmt.Sprintf("node: %s has version: %s", node.Hostname, version), nil
+		}
+	}
+
+	return true, "all nodes have expected version", nil
 }
 
 func getSnapshotType(snap *crdv1.VolumeSnapshot) (crdv1.PortworxSnapshotType, error) {
