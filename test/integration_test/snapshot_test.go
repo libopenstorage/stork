@@ -87,7 +87,12 @@ func groupSnapshotTest(t *testing.T) {
 	require.NoError(t, err, "Error getting node for app")
 	require.Len(t, scheduledNodes, 1, "App should be scheduled on one node")
 
-	err = schedulerDriver.InspectVolumes(ctxs[0])
+	for i := 0; i < 3; i++ {
+		err = schedulerDriver.InspectVolumes(ctxs[0])
+		if err == nil {
+			break
+		}
+	}
 	require.NoError(t, err, "Error waiting for volumes")
 
 	dataVolumesNames, dataVolumesInUse := parseDataVolumes(t, "mysql-data-1", ctxs[0])
