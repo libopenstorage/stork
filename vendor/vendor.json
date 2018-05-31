@@ -548,10 +548,10 @@
 			"revisionTime": "2018-04-24T20:30:52Z"
 		},
 		{
-			"checksumSHA1": "znG2Avdf0815vb1uq8/NvjH3BIk=",
+			"checksumSHA1": "oaXYLUD6vbT/t9D53Ux2743UubM=",
 			"path": "github.com/portworx/sched-ops/k8s",
-			"revision": "4a4cd19248f1bd0b525e860b614afff8b92be0d2",
-			"revisionTime": "2018-05-31T23:47:53Z"
+			"revision": "e536fb893e8291448f1af46126aed088b163ddad",
+			"revisionTime": "2018-05-31T23:20:14Z"
 		},
 		{
 			"checksumSHA1": "5Nh7ppJlsyP/6c2zK5joEHz3I30=",
