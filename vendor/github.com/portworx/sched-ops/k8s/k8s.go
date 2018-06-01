@@ -70,6 +70,15 @@ type Ops interface {
 	SnapshotOps
 	SecretOps
 	ConfigMapOps
+	EventOps
+}
+
+// EventOps is an interface to put and get k8s events
+type EventOps interface {
+	// CreateEvent puts an event into k8s etcd
+	CreateEvent(event *v1.Event) (*v1.Event, error)
+	// ListEvents retrieves all events registered with kubernetes
+	ListEvents(namespace string, opts meta_v1.ListOptions) (*v1.EventList, error)
 }
 
 // NamespaceOps is an interface to perform namespace operations
@@ -224,6 +233,10 @@ type RBACOps interface {
 	CreateClusterRoleBinding(role *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error)
 	// CreateServiceAccount creates the given service account
 	CreateServiceAccount(account *v1.ServiceAccount) (*v1.ServiceAccount, error)
+	// DeleteRole deletes the given role
+	DeleteRole(name, namespace string) error
+	// DeleteRoleBinding deletes the given role binding
+	DeleteRoleBinding(name, namespace string) error
 	// DeleteClusterRole deletes the given cluster role
 	DeleteClusterRole(roleName string) error
 	// DeleteClusterRoleBinding deletes the given cluster role binding
@@ -271,6 +284,8 @@ type PodOps interface {
 
 // StorageClassOps is an interface to perform k8s storage class operations
 type StorageClassOps interface {
+	// GetStorageClasses returns all storageClasses that match given optional label selector
+	GetStorageClasses(labelSelector map[string]string) (*storage_api.StorageClassList, error)
 	// GetStorageClass returns the storage class for the give namme
 	GetStorageClass(name string) (*storage_api.StorageClass, error)
 	// CreateStorageClass creates the given storage class
@@ -295,8 +310,8 @@ type PersistentVolumeClaimOps interface {
 	ValidatePersistentVolumeClaim(*v1.PersistentVolumeClaim) error
 	// GetPersistentVolumeClaim returns the PVC for given name and namespace
 	GetPersistentVolumeClaim(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error)
-	// GetPersistentVolumeClaims returns all PVCs in given namespace
-	GetPersistentVolumeClaims(namespace string) (*v1.PersistentVolumeClaimList, error)
+	// GetPersistentVolumeClaims returns all PVCs in given namespace and that match the optional labelSelector
+	GetPersistentVolumeClaims(namespace string, labelSelector map[string]string) (*v1.PersistentVolumeClaimList, error)
 	// GetPersistentVolume returns the PV for given name
 	GetPersistentVolume(pvName string) (*v1.PersistentVolume, error)
 	// GetPersistentVolumes returns all PVs in cluster
@@ -341,10 +356,12 @@ type SecretOps interface {
 	GetSecret(name string, namespace string) (*v1.Secret, error)
 	// CreateSecret creates the given secret
 	CreateSecret(*v1.Secret) (*v1.Secret, error)
-	// UpdateSecret updates the gives secret
+	// UpdateSecret updates the given secret
 	UpdateSecret(*v1.Secret) (*v1.Secret, error)
 	// UpdateSecretData updates or creates a new secret with the given data
 	UpdateSecretData(string, string, map[string][]byte) (*v1.Secret, error)
+	// DeleteSecret deletes the given secret
+	DeleteSecret(name, namespace string) error
 }
 
 // ConfigMapOps is an interface to perform k8s ConfigMap operations
@@ -846,11 +863,11 @@ func (k *k8sOps) RunCommandInPod(cmds []string, podName, containerName, namespac
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("could not execute: %v", err)
+		return execErr.String(), fmt.Errorf("could not execute: %v", err)
 	}
 
 	if execErr.Len() > 0 {
-		return "", fmt.Errorf("stderr: %v", execErr.String())
+		return execErr.String(), nil
 	}
 
 	return execOut.String(), nil
@@ -1595,13 +1612,8 @@ func (k *k8sOps) getListOptionsForStatefulSet(ss *apps_api.StatefulSet) (meta_v1
 		return meta_v1.ListOptions{}, fmt.Errorf("No labels present to retrieve the PVCs")
 	}
 
-	var selectors []string
-	for k, v := range labels {
-		selectors = append(selectors, fmt.Sprintf("%s=%s", k, v))
-	}
-
 	return meta_v1.ListOptions{
-		LabelSelector: strings.Join(selectors, ","),
+		LabelSelector: mapToCSV(labels),
 	}, nil
 }
 
@@ -1673,12 +1685,32 @@ func (k *k8sOps) CreateServiceAccount(account *v1.ServiceAccount) (*v1.ServiceAc
 	return k.client.Core().ServiceAccounts(account.Namespace).Create(account)
 }
 
+func (k *k8sOps) DeleteRole(name, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.client.Rbac().Roles(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
 func (k *k8sOps) DeleteClusterRole(roleName string) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 
 	return k.client.Rbac().ClusterRoles().Delete(roleName, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) DeleteRoleBinding(name, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.client.Rbac().RoleBindings(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -1944,6 +1976,16 @@ func (k *k8sOps) IsPodBeingManaged(pod v1.Pod) bool {
 
 // StorageClass APIs - BEGIN
 
+func (k *k8sOps) GetStorageClasses(labelSelector map[string]string) (*storage_api.StorageClassList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.StorageV1().StorageClasses().List(meta_v1.ListOptions{
+		LabelSelector: mapToCSV(labelSelector),
+	})
+}
+
 func (k *k8sOps) GetStorageClass(name string) (*storage_api.StorageClass, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -2044,8 +2086,10 @@ func (k *k8sOps) GetPersistentVolumeClaim(pvcName string, namespace string) (*v1
 		Get(pvcName, meta_v1.GetOptions{})
 }
 
-func (k *k8sOps) GetPersistentVolumeClaims(namespace string) (*v1.PersistentVolumeClaimList, error) {
-	return k.getPVCsWithListOptions(namespace, meta_v1.ListOptions{})
+func (k *k8sOps) GetPersistentVolumeClaims(namespace string, labelSelector map[string]string) (*v1.PersistentVolumeClaimList, error) {
+	return k.getPVCsWithListOptions(namespace, meta_v1.ListOptions{
+		LabelSelector: mapToCSV(labelSelector),
+	})
 }
 
 func (k *k8sOps) getPVCsWithListOptions(namespace string, listOpts meta_v1.ListOptions) (*v1.PersistentVolumeClaimList, error) {
@@ -2220,7 +2264,7 @@ func (k *k8sOps) ValidateSnapshot(name string, namespace string) error {
 			if condition.Type == snap_v1.VolumeSnapshotConditionReady && condition.Status == v1.ConditionTrue {
 				return "", true, nil
 			} else if condition.Type == snap_v1.VolumeSnapshotConditionError && condition.Status == v1.ConditionTrue {
-				return "", false, &ErrSnapshotFailed{
+				return "", true, &ErrSnapshotFailed{
 					ID:    name,
 					Cause: fmt.Sprintf("Snapshot Status %v", status),
 				}
@@ -2372,6 +2416,16 @@ func (k *k8sOps) UpdateSecretData(name string, ns string, data map[string][]byte
 	return k.UpdateSecret(secret)
 }
 
+func (k *k8sOps) DeleteSecret(name, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.client.CoreV1().Secrets(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
 // Secret APIs - END
 
 // ConfigMap APIs - BEGIN
@@ -2425,6 +2479,22 @@ func (k *k8sOps) UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 }
 
 // ConfigMap APIs - END
+
+// CreateEvent puts an event into k8s etcd
+func (k *k8sOps) CreateEvent(event *v1.Event) (*v1.Event, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.client.CoreV1().Events(event.Namespace).Create(event)
+}
+
+// ListEvents retrieves all events registered with kubernetes
+func (k *k8sOps) ListEvents(namespace string, opts meta_v1.ListOptions) (*v1.EventList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.client.CoreV1().Events(namespace).List(opts)
+}
 
 func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 	return k.client.AppsV1beta2()
@@ -2565,4 +2635,13 @@ func (k *k8sOps) getStorageClassForPVC(pvc *v1.PersistentVolumeClaim) (*storage_
 	}
 
 	return k.GetStorageClass(scName)
+}
+
+func mapToCSV(in map[string]string) string {
+	var items []string
+	for k, v := range in {
+		items = append(items, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return strings.Join(items, ",")
 }
