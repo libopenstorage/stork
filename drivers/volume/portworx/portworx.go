@@ -45,6 +45,7 @@ const (
 	validateReplicationUpdateTimeout = 10 * time.Minute
 	validateClusterStartTimeout      = 2 * time.Minute
 	validateNodeStartTimeout         = 2 * time.Minute
+	validatePXStartTimeout           = 2 * time.Minute
 	validateNodeStopTimeout          = 2 * time.Minute
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
@@ -624,10 +625,19 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 	}
 
 	// Check if PX pod is up
-	if !d.schedOps.IsPXAppRunningOnNode(n) {
-		return fmt.Errorf("PX pod is not up on node: %s", n.Name)
+	t = func() (interface{}, bool, error) {
+		if !d.schedOps.IsPXReadyOnNode(n) {
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, validatePXStartTimeout),
+			}
+		}
+		return "", false, nil
 	}
-	logrus.Infof("PX pod is up on node: %s", n.Name)
+
+	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
+		return err
+	}
 
 	return nil
 }

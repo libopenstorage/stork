@@ -452,7 +452,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 }
 
 // Method to validate if Portworx pod is up and running
-func (k *k8sSchedOps) IsPXAppRunningOnNode(n node.Node) bool {
+func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	pxPods, err := k8s.Instance().GetPodsByNode(n.Name, PXNamespace)
 	if err != nil {
 		logrus.Errorf("Failed to get apps on node %s", n.Name)
