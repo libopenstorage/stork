@@ -1,0 +1,187 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stork-config
+  namespace: kube-system
+data:
+  # The default list of predicates and priorities can change depending on your version
+  # of Kubernetes, so please update those as required. The requirement to manually specify this
+  # list will go away with Kubernetes v1.10 where it will use the defaults if nothing is
+  # specified.
+  policy.cfg: |-
+    {
+      "kind": "Policy",
+      "apiVersion": "v1",
+      "predicates": [
+        {"name": "MaxAzureDiskVolumeCount"},
+        {"name": "PodToleratesNodeTaints"},
+        {"name": "CheckNodeMemoryPressure"},
+        {"name": "NoVolumeZoneConflict"},
+        {"name": "MaxEBSVolumeCount"},
+        {"name": "MaxGCEPDVolumeCount"},
+        {"name": "MatchInterPodAffinity"},
+        {"name": "NoDiskConflict"},
+        {"name": "GeneralPredicates"},
+        {"name": "CheckNodeDiskPressure"}
+      ],
+      "priorities": [
+        {"name": "NodeAffinityPriority", "weight": 1},
+        {"name": "TaintTolerationPriority", "weight": 1},
+        {"name": "SelectorSpreadPriority", "weight": 1},
+        {"name": "InterPodAffinityPriority", "weight": 1},
+        {"name": "LeastRequestedPriority", "weight": 1},
+        {"name": "BalancedResourceAllocation", "weight": 1},
+        {"name": "NodePreferAvoidPodsPriority", "weight": 1}
+      ],
+      "extenders": [
+        {
+          "urlPrefix": "http://stork-service.kube-system.svc.cluster.local:8099",
+          "apiVersion": "v1beta1",
+          "filterVerb": "filter",
+          "prioritizeVerb": "prioritize",
+          "weight": 5,
+          "enableHttps": false,
+          "nodeCacheCapable": false
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stork-account
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+   name: stork-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["create", "list", "watch", "delete"]
+  - apiGroups: ["volumesnapshot.external-storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["volumesnapshot.external-storage.k8s.io"]
+    resources: ["volumesnapshotdatas"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "create", "update"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get"]
+  - apiGroups: ["*"]
+    resources: ["deployments", "deployments/extensions"]
+    verbs: ["list", "get", "watch", "patch", "update", "initialize"]
+  - apiGroups: ["*"]
+    resources: ["statefulsets", "statefulsets/extensions"]
+    verbs: ["list", "get", "watch", "patch", "update", "initialize"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: stork-role-binding
+subjects:
+- kind: ServiceAccount
+  name: stork-account
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: stork-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: stork-service
+  namespace: kube-system
+spec:
+  selector:
+    name: stork
+  ports:
+    - protocol: TCP
+      port: 8099
+      targetPort: 8099
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    scheduler.alpha.kubernetes.io/critical-pod: ""
+  labels:
+    tier: control-plane
+  name: stork
+  namespace: kube-system
+  initializers:
+    pending: []
+spec:
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 3
+  template:
+    metadata:
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ""
+      labels:
+        name: stork
+        tier: control-plane
+    spec:
+      containers:
+      - command:
+        - /stork
+        - --driver=pxd
+        - --verbose
+        - --leader-elect=true
+        # Uncomment the line below if you want to enable the feature to
+        # automatically update schedulerName
+        #- --app-initializer=true
+        imagePullPolicy: Always
+        image: openstorage/stork:1.0.3
+        resources:
+          requests:
+            cpu: '0.1'
+        securityContext:
+          privileged: false
+        name: stork
+      hostPID: false
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "name"
+                    operator: In
+                    values:
+                    - stork
+              topologyKey: "kubernetes.io/hostname"
+      serviceAccountName: stork-account
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: stork-snapshot-sc
+provisioner: stork-snapshot
+
