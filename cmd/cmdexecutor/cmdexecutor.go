@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -11,7 +12,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const defaultStatusCheckTimeout = 15 * time.Minute
+const (
+	defaultStatusCheckTimeout = 15 * time.Minute
+	statusFile                = "/tmp/cmdexecutor-status"
+)
 
 type arrayFlags []string
 
@@ -50,6 +54,13 @@ func main() {
 	}
 
 	logrus.Infof("Using timeout: %v seconds", statusCheckTimeout)
+	_, err := os.Stat(statusFile)
+	if err == nil {
+		err = os.Remove(statusFile)
+		if err != nil {
+			logrus.Fatalf("failed to remove statusfile: %s due to: %v", statusFile, err)
+		}
+	}
 
 	statusFileMap := make(map[string]string, 0)
 	// Start the commands
@@ -79,6 +90,11 @@ func main() {
 	}
 
 	logrus.Infof("successfully executed command: %s on all pods: %v...", command, podList)
+	_, err = os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
+	if err != nil {
+		logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
+	}
+
 	runtime.Goexit()
 }
 
