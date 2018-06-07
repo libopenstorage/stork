@@ -242,6 +242,9 @@ func runStork(d volume.Driver, c *cli.Context) {
 			if err := snapshotController.Stop(); err != nil {
 				log.Warnf("Error stopping snapshot controller: %v", err)
 			}
+			if err := d.Stop(); err != nil {
+				log.Warnf("Error stopping driver: %v", err)
+			}
 			os.Exit(0)
 		}
 	}

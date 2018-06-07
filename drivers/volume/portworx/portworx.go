@@ -25,7 +25,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 )
@@ -116,6 +122,8 @@ var cloudsnapBackoff = wait.Backoff{
 type portworx struct {
 	clusterManager cluster.Cluster
 	volDriver      volume.VolumeDriver
+	store          cache.Store
+	stopChannel    chan struct{}
 }
 
 func (p *portworx) String() string {
@@ -147,7 +155,48 @@ func (p *portworx) Init(_ interface{}) error {
 		return err
 	}
 	p.volDriver = volumeclient.VolumeDriver(clnt)
+
+	p.stopChannel = make(chan struct{})
+	err = p.startNodeCache()
 	return err
+}
+
+func (p *portworx) Stop() error {
+	close(p.stopChannel)
+	return nil
+}
+
+func (p *portworx) startNodeCache() error {
+	resyncPeriod := 30 * time.Second
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("Error getting cluster config: %v", err)
+	}
+
+	k8sClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("Error getting client, %v", err)
+	}
+
+	restClient := k8sClient.Core().RESTClient()
+
+	watchlist := cache.NewListWatchFromClient(restClient, "nodes", v1.NamespaceAll, fields.Everything())
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			return watchlist.List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return watchlist.Watch(options)
+		},
+	}
+	store, controller := cache.NewInformer(lw, &v1.Node{}, resyncPeriod,
+		cache.ResourceEventHandlerFuncs{},
+	)
+	p.store = store
+
+	go controller.Run(p.stopChannel)
+	return nil
 }
 
 func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
@@ -227,6 +276,17 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	}
 }
 
+func (p *portworx) getNodeLabels(hostname string) (map[string]string, error) {
+	obj, exists, err := p.store.GetByKey(hostname)
+	if err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, fmt.Errorf("Node %v not found in cache", hostname)
+	}
+	node := obj.(*v1.Node)
+	return node.Labels, nil
+}
+
 func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	cluster, err := p.clusterManager.Enumerate()
 	if err != nil {
@@ -245,7 +305,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
 		nodeInfo.IPs = append(nodeInfo.IPs, n.DataIp)
 
-		labels, err := k8s.Instance().GetLabelsOnNode(nodeInfo.Hostname)
+		labels, err := p.getNodeLabels(nodeInfo.Hostname)
 		if err == nil {
 			if rack, ok := labels[pxRackLabelKey]; ok {
 				nodeInfo.Rack = rack
