@@ -129,7 +129,6 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 
 	filteredNodes := []v1.Node{}
 	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
-
 	if err != nil {
 		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
@@ -181,7 +180,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		},
 	}
 	if err := encoder.Encode(response); err != nil {
-		storklog.PodLog(pod).Fatalf("Error encoding filter response: %+v : %v", response, err)
+		storklog.PodLog(pod).Errorf("Error encoding filter response: %+v : %v", response, err)
 	}
 }
 
@@ -259,55 +258,6 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	}
 	respList := schedulerapi.HostPriorityList{}
 
-	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
-	driverNodes, err := e.Driver.GetNodes()
-
-	// Create a map for ID->Hostname and Hostname->Rack
-	idMap := make(map[string]string)
-	var rackInfo, zoneInfo, regionInfo localityInfo
-	rackInfo.HostnameMap = make(map[string]string)
-	zoneInfo.HostnameMap = make(map[string]string)
-	regionInfo.HostnameMap = make(map[string]string)
-	for _, dnode := range driverNodes {
-		// Replace driver's hostname with the kubernetes hostname to make is
-		// easier to match nodes when calculating scores
-		for _, knode := range args.Nodes.Items {
-			for _, address := range knode.Status.Addresses {
-				if address.Type == v1.NodeHostName {
-					if e.isHostnameMatch(dnode.Hostname, address.Address) {
-						dnode.Hostname = address.Address
-					}
-				}
-			}
-		}
-		idMap[dnode.ID] = dnode.Hostname
-		storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
-		// For any node that is offline remove the locality info so that we
-		// don't prioritize nodes close to it
-		if dnode.Status == volume.NodeOnline {
-			// Add region info into zone and zone info into rack so that we can
-			// differentiate same names in different localities
-			regionInfo.HostnameMap[dnode.Hostname] = dnode.Region
-			if regionInfo.HostnameMap[dnode.Hostname] != "" {
-				zoneInfo.HostnameMap[dnode.Hostname] = regionInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Zone
-			} else {
-				zoneInfo.HostnameMap[dnode.Hostname] = dnode.Zone
-			}
-			if zoneInfo.HostnameMap[dnode.Hostname] != "" {
-				rackInfo.HostnameMap[dnode.Hostname] = zoneInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Rack
-			} else {
-				rackInfo.HostnameMap[dnode.Hostname] = dnode.Rack
-			}
-		} else {
-			rackInfo.HostnameMap[dnode.Hostname] = ""
-			zoneInfo.HostnameMap[dnode.Hostname] = ""
-			regionInfo.HostnameMap[dnode.Hostname] = ""
-		}
-	}
-
-	storklog.PodLog(pod).Debugf("rackMap: %v", rackInfo.HostnameMap)
-	storklog.PodLog(pod).Debugf("zoneMap: %v", zoneInfo.HostnameMap)
-	storklog.PodLog(pod).Debugf("regionMap: %v", regionInfo.HostnameMap)
 	// Intialize scores to 0
 	priorityMap := make(map[string]int)
 	for _, node := range args.Nodes.Items {
@@ -318,6 +268,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		}
 	}
 
+	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
 	if err != nil {
 		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
@@ -331,11 +282,54 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			storklog.PodLog(pod).Errorf("Error getting nodes for driver: %v", err)
 			goto sendResponse
 		}
-		// Create a map for ID->Hostname
+
+		// Create a map for ID->Hostname and Hostname->Rack
 		idMap := make(map[string]string)
-		for _, node := range driverNodes {
-			idMap[node.ID] = node.Hostname
+		var rackInfo, zoneInfo, regionInfo localityInfo
+		rackInfo.HostnameMap = make(map[string]string)
+		zoneInfo.HostnameMap = make(map[string]string)
+		regionInfo.HostnameMap = make(map[string]string)
+		for _, dnode := range driverNodes {
+			// Replace driver's hostname with the kubernetes hostname to make it
+			// easier to match nodes when calculating scores
+			for _, knode := range args.Nodes.Items {
+				for _, address := range knode.Status.Addresses {
+					if address.Type == v1.NodeHostName {
+						if e.isHostnameMatch(dnode.Hostname, address.Address) {
+							dnode.Hostname = address.Address
+						}
+					}
+				}
+			}
+			idMap[dnode.ID] = dnode.Hostname
+			storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
+			// For any node that is offline remove the locality info so that we
+			// don't prioritize nodes close to it
+			if dnode.Status == volume.NodeOnline {
+				// Add region info into zone and zone info into rack so that we can
+				// differentiate same names in different localities
+				regionInfo.HostnameMap[dnode.Hostname] = dnode.Region
+				if regionInfo.HostnameMap[dnode.Hostname] != "" {
+					zoneInfo.HostnameMap[dnode.Hostname] = regionInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Zone
+				} else {
+					zoneInfo.HostnameMap[dnode.Hostname] = dnode.Zone
+				}
+				if zoneInfo.HostnameMap[dnode.Hostname] != "" {
+					rackInfo.HostnameMap[dnode.Hostname] = zoneInfo.HostnameMap[dnode.Hostname] + "-" + dnode.Rack
+				} else {
+					rackInfo.HostnameMap[dnode.Hostname] = dnode.Rack
+				}
+			} else {
+				rackInfo.HostnameMap[dnode.Hostname] = ""
+				zoneInfo.HostnameMap[dnode.Hostname] = ""
+				regionInfo.HostnameMap[dnode.Hostname] = ""
+			}
 		}
+
+		storklog.PodLog(pod).Debugf("rackMap: %v", rackInfo.HostnameMap)
+		storklog.PodLog(pod).Debugf("zoneMap: %v", zoneInfo.HostnameMap)
+		storklog.PodLog(pod).Debugf("regionMap: %v", regionInfo.HostnameMap)
+
 		for _, volume := range driverVolumes {
 			storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
 			// Get the racks, zones and regions where the volume is located
@@ -377,7 +371,7 @@ sendResponse:
 	}
 
 	if err := encoder.Encode(respList); err != nil {
-		storklog.PodLog(pod).Fatalf("Failed to encode response: %v", err)
+		storklog.PodLog(pod).Errorf("Failed to encode response: %v", err)
 	}
 	return
 }

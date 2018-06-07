@@ -89,7 +89,7 @@ rules:
     verbs: ["get"]
   - apiGroups: [""]
     resources: ["nodes"]
-    verbs: ["get"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["*"]
     resources: ["deployments", "deployments/extensions"]
     verbs: ["list", "get", "watch", "patch", "update", "initialize"]

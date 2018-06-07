@@ -43,6 +43,11 @@ func (m Driver) Init(_ interface{}) error {
 	return nil
 }
 
+// Stop Stops the mock driver
+func (m Driver) Stop() error {
+	return nil
+}
+
 // CreateCluster Creates a cluster with specified number of nodes
 func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 	if len(m.nodes) > 0 {
@@ -64,7 +69,6 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 					}
 				}
 			}
-
 		}
 		m.nodes = append(m.nodes, node)
 	}

@@ -32,6 +32,9 @@ type Driver interface {
 
 	// GetSnapshotPlugin Get the snapshot plugin to be used for the driver
 	GetSnapshotPlugin() snapshotVolume.Plugin
+
+	// Stop the driver
+	Stop() error
 }
 
 // Info Information about a volume
