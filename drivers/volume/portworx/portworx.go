@@ -678,15 +678,20 @@ func (p *portworx) SnapshotRestore(
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
 	case crdv1.PortworxSnapshotTypeLocal:
+		snapshotNamespace, ok := pvc.Annotations[snapshotcontroller.StorkSnapshotSourceNamespaceAnnotation]
+		if !ok {
+			snapshotNamespace = pvc.GetNamespace()
+		}
+
 		// Check if this is a group snapshot
-		snap, err := k8s.Instance().GetSnapshot(snapshotName, pvc.GetNamespace())
+		snap, err := k8s.Instance().GetSnapshot(snapshotName, snapshotNamespace)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		if isGroupSnap(snap) {
 			return nil, nil, fmt.Errorf("volumesnapshot: [%s] %s was used to create group snapshots. "+
-				"To restore, use the volumesnapshots that were created by this group snapshot.", pvc.GetNamespace(), snapshotName)
+				"To restore, use the volumesnapshots that were created by this group snapshot.", snapshotNamespace, snapshotName)
 		}
 
 		locator := &api.VolumeLocator{
