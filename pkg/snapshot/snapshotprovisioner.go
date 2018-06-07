@@ -1,8 +1,11 @@
 package snapshotcontroller
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/kubernetes-incubator/external-storage/lib/controller"
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -18,6 +21,13 @@ import (
 // Most of this has been taken from the kubernetes-incubator snapshot
 // provisioner with some changes. It is a part of the main package there,
 // so can't vendor it in here.
+
+const (
+	storkSnapshotRestoreNamespacesAnnotation = "stork/snapshot-restore-namespaces"
+	// StorkSnapshotSourceNamespaceAnnotation Annotation used to specify the
+	// source of the snapshot when creating a PVC
+	StorkSnapshotSourceNamespaceAnnotation = "stork/snapshot-source-namespace"
+)
 
 type snapshotProvisioner struct {
 	// Kubernetes Client.
@@ -74,6 +84,42 @@ func (p *snapshotProvisioner) snapshotRestore(
 	return pvSrc, labels, err
 }
 
+func (p *snapshotProvisioner) isSnapshotAllowed(
+	snapshot crdv1.VolumeSnapshot,
+	namespace string,
+) bool {
+	allowedNamespaces, ok := snapshot.Metadata.Annotations[storkSnapshotRestoreNamespacesAnnotation]
+	if !ok {
+		return false
+	}
+
+	csvReader := csv.NewReader(strings.NewReader(allowedNamespaces))
+	namespaces, err := csvReader.ReadAll()
+	if err != nil {
+		log.Errorf("Error parsing allowed namespaces: %v", allowedNamespaces)
+		return false
+	}
+
+	if len(namespaces) != 1 {
+		log.Errorf("Invalid allowed namespaces: %v", allowedNamespaces)
+		return false
+	}
+
+	for _, namespaceRegEx := range namespaces[0] {
+		// Add start and end delimiters to match complete strings
+		// Works even if the input already had the delimiters
+		regex, err := regexp.Compile("^" + strings.TrimSpace(namespaceRegEx) + "$")
+		if err != nil {
+			log.Errorf("Invalid regex for allowed namespaces: %v", namespaceRegEx)
+			return false
+		}
+		if regex.MatchString(namespace) {
+			return true
+		}
+	}
+	return false
+}
+
 // Provision creates a storage asset and returns a PV object representing it.
 func (p *snapshotProvisioner) Provision(options controller.VolumeOptions) (*v1.PersistentVolume, error) {
 	if options.PVC.Spec.Selector != nil {
@@ -83,17 +129,26 @@ func (p *snapshotProvisioner) Provision(options controller.VolumeOptions) (*v1.P
 	if !ok {
 		return nil, fmt.Errorf("snapshot annotation not found on PV")
 	}
+	snapshotNamespace, ok := options.PVC.Annotations[StorkSnapshotSourceNamespaceAnnotation]
+	if !ok {
+		snapshotNamespace = options.PVC.Namespace
+	}
 
 	var snapshot crdv1.VolumeSnapshot
 	err := p.crdclient.Get().
 		Resource(crdv1.VolumeSnapshotResourcePlural).
-		Namespace(options.PVC.Namespace).
+		Namespace(snapshotNamespace).
 		Name(snapshotName).
 		Do().Into(&snapshot)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve VolumeSnapshot %s: %v", snapshotName, err)
 	}
+
+	if snapshotNamespace != options.PVC.Namespace &&
+		!p.isSnapshotAllowed(snapshot, options.PVC.Namespace) {
+		return nil, fmt.Errorf("Snapshot %v cannot be used in namespace %v", snapshotName, options.PVC.Namespace)
+	}
+
 	// FIXME: should also check if any VolumeSnapshotData points
 	// to this VolumeSnapshot
 	if len(snapshot.Spec.SnapshotDataName) == 0 {
