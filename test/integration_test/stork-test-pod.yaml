@@ -40,7 +40,8 @@ spec:
   containers:
   - command: ["/stork.test"]
     args:
-      ["-test.v"]
+    - -test.v
+    - -snapshot-scale-count=10
     imagePullPolicy: Always
     image: openstorage/stork_test:latest
     securityContext:
