@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mysql-locker
+  labels:
+    app: mysql-locker
+spec:
+  containers:
+   - name: mysql-locker
+     image: openstorage/mysql-locker:latest
+     imagePullPolicy: Always
+     args:
+     - -host
+     - 192.168.56.80
+     - -port
+     - "32188"
+     env:
+     - name: "MYSQL_PASSWORD"
+       value: "mysql123"
+  restartPolicy: Never

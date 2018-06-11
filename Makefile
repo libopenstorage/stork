@@ -1,4 +1,5 @@
 STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
+MYSQL_LOCKER_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_MYSQL_LOCKER_IMAGE):$(DOCKER_HUB_MYSQL_LOCKER_TAG)
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
 ifndef TAGS
@@ -10,17 +11,28 @@ PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/ve
 endif
 
 ifeq ($(BUILD_TYPE),debug)
-BUILDFLAGS := -gcflags "-N -l"
+BUILDFLAGS += -gcflags "-N -l"
 endif
 
-BASE_DIR := $(shell git rev-parse --show-toplevel)
+BASE_DIR   := $(shell git rev-parse --show-toplevel)
+GIT_SHA    := $(shell git rev-parse --short HEAD)
+GIT_BRANCH := $(subst /,-,$(shell git rev-parse --abbrev-ref HEAD))
+GIT_VER    := $(shell git rev-parse --short HEAD)
+BIN        :=$(BASE_DIR)/bin
 
-BIN :=$(BASE_DIR)/bin
+ifeq (master,$(GIT_BRANCH))
+  VERSION = $(GIT_VER)
+else
+  VERSION = $(GIT_VER)-$(GIT_BRANCH)
+endif
+
+LDFLAGS += -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSION)
+BUILD_OPTIONS := -ldflags "$(LDFLAGS)"
 
 .DEFAULT_GOAL=all
 .PHONY: test clean
 
-all: stork vet lint integration-test
+all: stork mysql-locker vet lint integration-test
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -98,9 +110,17 @@ stork:
 	@echo "Building the stork binary"
 	@cd cmd/stork && go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
+mysql-locker:
+	@echo "Building mysql locker binary"
+	@cd sidecars/mysql-locker && go build $(BUILD_OPTIONS) -o bin/mysql-locker
+
 container: help
 	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."
 	sudo docker build --tag $(STORK_IMG) -f Dockerfile .
+
+	@echo "Building container: cd sidecars/mysql-locker && docker build --tag $(MYSQL_LOCKER_IMG) ."
+	@cd sidecars/mysql-locker && sudo docker build --tag $(MYSQL_LOCKER_IMG) .
+
 
 help:
 	@echo "Updating help file"
@@ -108,10 +128,13 @@ help:
 
 deploy:
 	sudo docker push $(STORK_IMG)
+	sudo docker push $(MYSQL_LOCKER_IMG)
 
 clean:
-	-rm -rf stork
+	-rm -rf $(BIN)
 	@echo "Deleting image "$(STORK_IMG)
 	-sudo docker rmi -f $(STORK_IMG)
+	@echo "Deleting image "$(MYSQL_LOCKER_IMG)
+	-sudo docker rmi -f $(MYSQL_LOCKER_IMG)
 	go clean -i $(PKGS)
 
