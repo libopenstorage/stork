@@ -3,6 +3,7 @@
 package integrationtest
 
 import (
+	"flag"
 	"testing"
 
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
@@ -33,6 +34,8 @@ var nodeDriver node.Driver
 var schedulerDriver scheduler.Driver
 var volumeDriver volume.Driver
 var storkVolumeDriver storkdriver.Driver
+
+var snapshotScaleCount int
 
 // TODO: Start stork scheduler and stork extender
 // TODO: Take driver name from input
@@ -179,4 +182,12 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 
 	logrus.Infof("Scores: %v", scores)
 	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
+}
+
+func init() {
+	flag.IntVar(&snapshotScaleCount,
+		"snapshot-scale-count",
+		10,
+		"Number of volumes to use for scale snapshot test")
+	flag.Parse()
 }

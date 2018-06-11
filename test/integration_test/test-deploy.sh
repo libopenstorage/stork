@@ -1,12 +1,19 @@
 #!/bin/bash -x
 
 initializer="false"
+snapshot_scale=10
 for i in "$@"
 do
 case $i in
     --with-initializer)
         echo "Starting test with initializer"
         initializer="true"
+        shift
+        ;;
+    --snapshot-scale-count)
+        echo "Scale for snapshot test (default 10)"
+        snapshot_scale=$2
+        shift
         shift
         ;;
 esac
@@ -59,6 +66,7 @@ for i in $(seq 1 100) ; do
     fi
 done
 
+sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 

@@ -17,61 +17,13 @@ func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("groupSnapshotTest", groupSnapshotTest)
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
+	t.Run("snapshotScaleTest", snapshotScaleTest)
 }
 
 func simpleSnapshotTest(t *testing.T) {
-	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
-		scheduler.ScheduleOptions{AppKeys: []string{"mysql-snap-restore"}})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
-
-	err = schedulerDriver.WaitForRunning(ctxs[0])
-	require.NoError(t, err, "Error waiting for pod to get to running state")
-
-	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
-	require.NoError(t, err, "Error getting node for app")
-	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
-
-	err = schedulerDriver.InspectVolumes(ctxs[0])
-	require.NoError(t, err, "Error waiting for volumes")
-	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
-
-	snapshotName := ""
-	for _, volume := range volumeNames {
-		if strings.HasPrefix(volume, "snapshot") {
-			snapshotName = volume
-		}
-	}
-	require.NotEmpty(t, snapshotName, "snapshot not found in list of volumes: %v", volumeNames)
-
-	snapVolInfo, err := storkVolumeDriver.InspectVolume(snapshotName)
-	require.NoError(t, err, "Error getting snapshot volume")
-	require.NotNil(t, snapVolInfo.ParentID, "ParentID is nil for snapshot")
-
-	parentVolInfo, err := storkVolumeDriver.InspectVolume(snapVolInfo.ParentID)
-	require.NoError(t, err, "Error getting snapshot parent volume")
-
-	parentVolName := parentVolInfo.VolumeName
-	var cloneVolName string
-
-	found := false
-	for _, volume := range volumeNames {
-		if volume == parentVolName {
-			found = true
-		} else if volume != snapVolInfo.VolumeName {
-			cloneVolName = volume
-		}
-	}
-	require.True(t, found, "Parent volume (%v) not found in list of volumes: %v", parentVolName, volumeNames)
-
-	cloneVolInfo, err := storkVolumeDriver.InspectVolume(cloneVolName)
-	require.NoError(t, err, "Error getting clone volume")
-	require.Equal(t, snapVolInfo.VolumeID, cloneVolInfo.ParentID, "Clone volume does not have snapshot as parent")
-
-	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
-
-	destroyAndWait(t, ctxs)
+	ctx := createSnapshot(t)
+	verifySnapshot(t, ctx)
+	destroyAndWait(t, ctx)
 }
 
 func groupSnapshotTest(t *testing.T) {
@@ -221,4 +173,74 @@ func parseDataVolumes(
 	require.Len(t, dataVolumesInUse, 1, "should have only 1 data volume in use")
 
 	return dataVolumesNames, dataVolumesInUse
+}
+
+func createSnapshot(t *testing.T) []*scheduler.Context {
+	ctx, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-snap-restore"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctx), "Only one task should have started")
+	return ctx
+}
+
+func verifySnapshot(t *testing.T, ctxs []*scheduler.Context) {
+	err := schedulerDriver.WaitForRunning(ctxs[0])
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	err = schedulerDriver.InspectVolumes(ctxs[0])
+	require.NoError(t, err, "Error waiting for volumes")
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
+
+	snapshotName := ""
+	for _, volume := range volumeNames {
+		if strings.HasPrefix(volume, "snapshot") {
+			snapshotName = volume
+		}
+	}
+	require.NotEmpty(t, snapshotName, "snapshot not found in list of volumes: %v", volumeNames)
+
+	snapVolInfo, err := storkVolumeDriver.InspectVolume(snapshotName)
+	require.NoError(t, err, "Error getting snapshot volume")
+	require.NotNil(t, snapVolInfo.ParentID, "ParentID is nil for snapshot")
+
+	parentVolInfo, err := storkVolumeDriver.InspectVolume(snapVolInfo.ParentID)
+	require.NoError(t, err, "Error getting snapshot parent volume")
+
+	parentVolName := parentVolInfo.VolumeName
+	var cloneVolName string
+
+	found := false
+	for _, volume := range volumeNames {
+		if volume == parentVolName {
+			found = true
+		} else if volume != snapVolInfo.VolumeName {
+			cloneVolName = volume
+		}
+	}
+	require.True(t, found, "Parent volume (%v) not found in list of volumes: %v", parentVolName, volumeNames)
+
+	cloneVolInfo, err := storkVolumeDriver.InspectVolume(cloneVolName)
+	require.NoError(t, err, "Error getting clone volume")
+	require.Equal(t, snapVolInfo.VolumeID, cloneVolInfo.ParentID, "Clone volume does not have snapshot as parent")
+
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+}
+
+func snapshotScaleTest(t *testing.T) {
+	ctxs := make([][]*scheduler.Context, snapshotScaleCount)
+	for i := 0; i < snapshotScaleCount; i++ {
+		ctxs[i] = createSnapshot(t)
+	}
+
+	for i := 0; i < snapshotScaleCount; i++ {
+		verifySnapshot(t, ctxs[i])
+	}
+	for i := 0; i < snapshotScaleCount; i++ {
+		destroyAndWait(t, ctxs[i])
+	}
 }
