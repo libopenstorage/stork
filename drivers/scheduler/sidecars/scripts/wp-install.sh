@@ -19,6 +19,7 @@ function am_i_first() {
 
 function sleep_forever() {
     log ":: Sleeping forever. Exec into me for debugging"
+    touch /tmp/alive
     while true; do sleep 30; done;
 }
 

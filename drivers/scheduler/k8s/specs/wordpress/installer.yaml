@@ -22,7 +22,7 @@ spec:
       securityContext:
         fsGroup: 1000
       containers:
-      - image: samuelmyers/wp-cli:1.2.25
+      - image: samuelmyers/wp-cli:1.2.27
         name: installer
         env:
         - name: WORDPRESS_URL
@@ -41,6 +41,13 @@ spec:
         volumeMounts:
         - name: wordpress-persistent-storage
           mountPath: /wordpress
+        readinessProbe:
+          exec:
+            command:
+            - cat
+            - /tmp/alive
+          initialDelaySeconds: 5
+          periodSeconds: 5
       volumes:
       - name: wordpress-persistent-storage
         persistentVolumeClaim:
