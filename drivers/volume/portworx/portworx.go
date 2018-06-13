@@ -460,7 +460,7 @@ func (p *portworx) SnapshotCreate(
 
 		status, err := p.waitForCloudSnapCompletion(api.CloudBackupOp, volumeID, false)
 		if err != nil {
-			logrus.Error("Cloudsnap backup: %s failed due to: %v", status.cloudSnapID, err)
+			logrus.Errorf("Cloudsnap backup: %s failed due to: %v", status.cloudSnapID, err)
 			return nil, getErrorSnapshotConditions(err), err
 		}
 
@@ -759,11 +759,6 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 		return getErrorSnapshotConditions(err), false, nil
 	}
 
-	if snapshotData.Spec.PersistentVolumeRef == nil {
-		err = fmt.Errorf("PersistentVolume reference not set for snapshot: %v", snapshotData)
-		return getErrorSnapshotConditions(err), false, err
-	}
-
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
 	case crdv1.PortworxSnapshotTypeLocal:
 		r := csv.NewReader(strings.NewReader(snapshotData.Spec.PortworxSnapshot.SnapshotID))
@@ -779,6 +774,11 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 			}
 		}
 	case crdv1.PortworxSnapshotTypeCloud:
+		if snapshotData.Spec.PersistentVolumeRef == nil {
+			err = fmt.Errorf("PersistentVolume reference not set for snapshot: %v", snapshotData)
+			return getErrorSnapshotConditions(err), false, err
+		}
+
 		pv, err := k8s.Instance().GetPersistentVolume(snapshotData.Spec.PersistentVolumeRef.Name)
 		if err != nil {
 			return getErrorSnapshotConditions(err), false, err
