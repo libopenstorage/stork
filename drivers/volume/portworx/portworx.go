@@ -219,9 +219,7 @@ func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
 	info.VolumeID = vols[0].Id
 	info.VolumeName = vols[0].Locator.Name
 	for _, rset := range vols[0].ReplicaSets {
-		for _, node := range rset.Nodes {
-			info.DataNodes = append(info.DataNodes, node)
-		}
+		info.DataNodes = append(info.DataNodes, rset.Nodes...)
 	}
 	if vols[0].Source != nil {
 		info.ParentID = vols[0].Source.Parent
@@ -230,7 +228,7 @@ func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
 	if len(vols[0].Locator.GetVolumeLabels()) > 0 {
 		info.Labels = vols[0].Locator.GetVolumeLabels()
 	} else {
-		info.Labels = make(map[string]string, 0)
+		info.Labels = make(map[string]string)
 	}
 
 	for k, v := range vols[0].Spec.GetVolumeLabels() {
@@ -839,7 +837,7 @@ func (p *portworx) createVolumeSnapshotCRD(
 
 	snapStatus := getReadySnapshotConditions()
 
-	snapLabels := make(map[string]string, 0)
+	snapLabels := make(map[string]string)
 	if len(groupID) > 0 {
 		snapLabels[pxSnapshotGroupIDKey] = groupID
 	}
@@ -1079,7 +1077,7 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 
 // revertPXSnaps deletes all given snapIDs
 func (p *portworx) revertPXSnaps(snapIDs []string) {
-	failedDeletions := make(map[string]error, 0)
+	failedDeletions := make(map[string]error)
 	for _, id := range snapIDs {
 		err := p.volDriver.Delete(id)
 		if err != nil {
@@ -1097,12 +1095,11 @@ func (p *portworx) revertPXSnaps(snapIDs []string) {
 		return
 	}
 
-	logrus.Infof("successfully reverted PX snapshots")
-	return
+	logrus.Infof("Successfully reverted PX snapshots")
 }
 
 func (p *portworx) revertSnapObjs(snapObjs []*crdv1.VolumeSnapshot) {
-	failedDeletions := make(map[string]error, 0)
+	failedDeletions := make(map[string]error)
 
 	for _, snap := range snapObjs {
 		err := wait.ExponentialBackoff(snapAPICallBackoff, func() (bool, error) {
@@ -1210,7 +1207,7 @@ func getCredIDFromSnapshot(snap *crdv1.VolumeSnapshot) (credID string) {
 }
 
 func parseGroupLabelsFromAnnotations(annotations map[string]string) map[string]string {
-	groupLabels := make(map[string]string, 0)
+	groupLabels := make(map[string]string)
 	for k, v := range annotations {
 		// skip group id annotation
 		if k == pxSnapshotGroupIDKey {

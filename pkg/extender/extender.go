@@ -373,5 +373,4 @@ sendResponse:
 	if err := encoder.Encode(respList); err != nil {
 		storklog.PodLog(pod).Errorf("Failed to encode response: %v", err)
 	}
-	return
 }
