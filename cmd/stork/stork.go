@@ -230,22 +230,31 @@ func runStork(d volume.Driver, c *cli.Context) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	for {
-		select {
-		case <-signalChan:
-			log.Printf("Shutdown signal received, exiting...")
+		<-signalChan
+		log.Printf("Shutdown signal received, exiting...")
+		if c.Bool("extender") {
 			if err := ext.Stop(); err != nil {
 				log.Warnf("Error stopping extender: %v", err)
 			}
+		}
+		if c.Bool("health-monitor") {
 			if err := monitor.Stop(); err != nil {
 				log.Warnf("Error stopping monitor: %v", err)
 			}
+		}
+		if c.Bool("snapshotter") {
 			if err := snapshotController.Stop(); err != nil {
 				log.Warnf("Error stopping snapshot controller: %v", err)
 			}
-			if err := d.Stop(); err != nil {
-				log.Warnf("Error stopping driver: %v", err)
-			}
-			os.Exit(0)
 		}
+		if c.Bool("app-initializer") {
+			if err := initializer.Stop(); err != nil {
+				log.Warnf("Error stopping app-initializer: %v", err)
+			}
+		}
+		if err := d.Stop(); err != nil {
+			log.Warnf("Error stopping driver: %v", err)
+		}
+		os.Exit(0)
 	}
 }

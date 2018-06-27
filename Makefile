@@ -20,7 +20,7 @@ BIN :=$(BASE_DIR)/bin
 .DEFAULT_GOAL=all
 .PHONY: test clean
 
-all: stork vet lint integration-test
+all: stork vet lint simple integration-test
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
@@ -66,11 +66,17 @@ lint:
 vet:
 	go vet $(PKGS)
 
+$(GOPATH)/bin/gosimple:
+	go get -u honnef.co/go/tools/cmd/gosimple
+
+simple: $(GOPATH)/bin/gosimple
+	$(GOPATH)/bin/gosimple $(PKGS)
+
 errcheck:
 	go get -v github.com/kisielk/errcheck
 	errcheck -verbose -blank -tags "$(TAGS) unittest integrationtest" $(PKGS)
 
-pretest: lint vet errcheck
+pretest: lint vet errcheck simple
 
 test:
 	set -e
