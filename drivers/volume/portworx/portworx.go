@@ -854,6 +854,18 @@ func (p *portworx) FindSnapshot(tags *map[string]string) (*crdv1.VolumeSnapshotD
 	return nil, nil, &errors.ErrNotImplemented{}
 }
 
+func (p *portworx) GetSnapshotType(snap *crdv1.VolumeSnapshot) (string, error) {
+	// TODO: Check if is a portworx snapshot
+	snapType, err := getSnapshotType(snap)
+	if err != nil {
+		return "", err
+	}
+	if isGroupSnap(snap) {
+		return "group " + string(snapType), nil
+	}
+	return string(snapType), nil
+}
+
 func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
 	if pv == nil || pv.Spec.PortworxVolume == nil {
 		return fmt.Errorf("Invalid PV: %v", pv)

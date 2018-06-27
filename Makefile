@@ -2,10 +2,6 @@ STORK_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_IMAGE):$(DOCKER_HUB_STORK_TAG)
 CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HUB_CMD_EXECUTOR_TAG)
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
-ifndef TAGS
-TAGS := daemon
-endif
-
 ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork')
 endif
@@ -27,25 +23,13 @@ else
   VERSION = $(RELEASE_VER)-$(GIT_VER)-$(GIT_BRANCH)
 endif
 
-LDFLAGS += -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSION)
-BUILD_OPTIONS := -ldflags "$(LDFLAGS)"
+LDFLAGS += "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSION)"
+BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 .DEFAULT_GOAL=all
 .PHONY: test clean
 
-all: stork cmdexecutor vet lint simple
-
-deps:
-	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
-
-update-deps:
-	GO15VENDOREXPERIMENT=0 go get -d -v -u -f $(PKGS)
-
-test-deps:
-	GO15VENDOREXPERIMENT=0 go get -d -v -t $(PKGS)
-
-update-test-deps:
-	GO15VENDOREXPERIMENT=0 go get -tags "$(TAGS)" -d -v -t -u -f $(PKGS)
+all: stork storkctl cmdexecutor vet lint simple
 
 vendor-update:
 	GO15VENDOREXPERIMENT=0 GOOS=linux GOARCH=amd64 go get -tags "daemon" -d -v -t -u -f $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor')
@@ -61,12 +45,6 @@ vendor-without-update:
 	govendor add k8s.io/code-generator/^
 
 vendor: vendor-update vendor-without-update
-
-build:
-	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
-
-install:
-	go install -tags "$(TAGS)" $(PKGS)
 
 lint:
 	go get -v golang.org/x/lint/golint
@@ -93,7 +71,7 @@ simple: $(GOPATH)/bin/gosimple
 
 errcheck:
 	go get -v github.com/kisielk/errcheck
-	errcheck -verbose -blank -tags "$(TAGS) unittest integrationtest" $(PKGS)
+	errcheck -verbose -blank $(PKGS)
 
 pretest: lint vet errcheck simple
 
@@ -130,6 +108,12 @@ stork:
 cmdexecutor:
 	@echo "Building command executor binary"
 	@cd cmd/cmdexecutor && go build $(BUILD_OPTIONS) -o $(BIN)/cmdexecutor
+
+storkctl:
+	@echo "Building storkctl"
+	@cd cmd/storkctl && GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/linux/storkctl
+	@cd cmd/storkctl && GOOS=darwin go build $(BUILD_OPTIONS) -o $(BIN)/darwin/storkctl
+	@cd cmd/storkctl && GOOS=windows go build $(BUILD_OPTIONS) -o $(BIN)/windows/storkctl.exe
 
 container: help
 	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."

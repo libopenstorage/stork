@@ -3,12 +3,19 @@ package volume
 import (
 	"strings"
 
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+)
+
+const (
+	// Default snapshot type if drivers don't support different types or can't
+	// find driver
+	defaultSnapType = "Local"
 )
 
 // Driver defines an external volume driver interface.
@@ -39,6 +46,10 @@ type Driver interface {
 
 	// GetSnapshotPlugin Get the snapshot plugin to be used for the driver
 	GetSnapshotPlugin() snapshotVolume.Plugin
+
+	// GetSnapshotType Get the type of the snapshot. Return error is snapshot
+	// doesn't belong to driver
+	GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error)
 
 	// Stop the driver
 	Stop() error
@@ -145,6 +156,44 @@ func Get(name string) (Driver, error) {
 	}
 }
 
+// ClusterPairNotSupported to be used by drivers that don't support pairing
+type ClusterPairNotSupported struct{}
+
+// CreatePair Returns ErrNotSupported
+func (c *ClusterPairNotSupported) CreatePair(*stork_crd.ClusterPair) (string, error) {
+	return "", &errors.ErrNotSupported{}
+}
+
+// DeletePair Returns ErrNotSupported
+func (c *ClusterPairNotSupported) DeletePair(*stork_crd.ClusterPair) error {
+	return &errors.ErrNotSupported{}
+}
+
+// MigrationNotSupported to be used by drivers that don't support migration
+type MigrationNotSupported struct{}
+
+// StartMigration returns ErrNotSupported
+func (m *MigrationNotSupported) StartMigration(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// GetMigrationStatus returns ErrNotSupported
+func (m *MigrationNotSupported) GetMigrationStatus(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// CancelMigration returns ErrNotSupported
+func (m *MigrationNotSupported) CancelMigration(*stork_crd.Migration) error {
+	return &errors.ErrNotSupported{}
+}
+
+// UpdateMigratedPersistentVolumeSpec returns ErrNotSupported
+func (m *MigrationNotSupported) UpdateMigratedPersistentVolumeSpec(
+	runtime.Unstructured,
+) (runtime.Unstructured, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
 // IsNodeMatch There are a couple of things that need to be checked to see if the driver
 // node matched the k8s node since different k8s installs set the node name,
 // hostname and IPs differently
@@ -185,40 +234,14 @@ func isHostnameMatch(driverHostname string, k8sHostname string) bool {
 	return false
 }
 
-// ClusterPairNotSupported to be used by drivers that don't support pairing
-type ClusterPairNotSupported struct{}
+// GetSnapshotType gets the snapshot type
+func GetSnapshotType(snap *snapv1.VolumeSnapshot) string {
+	for _, driver := range volDrivers {
+		snapType, err := driver.GetSnapshotType(snap)
+		if err == nil {
+			return snapType
+		}
+	}
 
-// CreatePair Returns ErrNotSupported
-func (c *ClusterPairNotSupported) CreatePair(*stork_crd.ClusterPair) (string, error) {
-	return "", &errors.ErrNotSupported{}
-}
-
-// DeletePair Returns ErrNotSupported
-func (c *ClusterPairNotSupported) DeletePair(*stork_crd.ClusterPair) error {
-	return &errors.ErrNotSupported{}
-}
-
-// MigrationNotSupported to be used by drivers that don't support migration
-type MigrationNotSupported struct{}
-
-// StartMigration returns ErrNotSupported
-func (m *MigrationNotSupported) StartMigration(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
-	return nil, &errors.ErrNotSupported{}
-}
-
-// GetMigrationStatus returns ErrNotSupported
-func (m *MigrationNotSupported) GetMigrationStatus(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
-	return nil, &errors.ErrNotSupported{}
-}
-
-// CancelMigration returns ErrNotSupported
-func (m *MigrationNotSupported) CancelMigration(*stork_crd.Migration) error {
-	return &errors.ErrNotSupported{}
-}
-
-// UpdateMigratedPersistentVolumeSpec returns ErrNotSupported
-func (m *MigrationNotSupported) UpdateMigratedPersistentVolumeSpec(
-	runtime.Unstructured,
-) (runtime.Unstructured, error) {
-	return nil, &errors.ErrNotSupported{}
+	return defaultSnapType
 }
