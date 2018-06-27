@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
@@ -237,6 +238,11 @@ func (m *Driver) GetSnapshotPlugin() snapshotVolume.Plugin {
 func (m *Driver) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 	[]v1.PersistentVolumeClaim, error) {
 	return nil, &errors.ErrNotImplemented{}
+}
+
+// GetSnapshotType Not implemented for mock driver
+func (m *Driver) GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error) {
+	return "", &errors.ErrNotImplemented{}
 }
 
 func init() {
