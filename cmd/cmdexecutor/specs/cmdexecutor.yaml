@@ -18,6 +18,8 @@ spec:
     - '120'
     - -pod
     - mysql-7594cdb644-srdzx
+    - -taskid
+    - ea545c9b-7b2b-11e8-8cb9-080027ee1df7
     - -cmd
     - mysql --user=root --password=mysql123 -Bse "flush tables with read lock; system ${WAIT_CMD};"
     readinessProbe:

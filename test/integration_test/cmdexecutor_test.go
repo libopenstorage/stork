@@ -45,29 +45,28 @@ func asyncPodCommandTest(t *testing.T) {
 
 		// Positive test cases
 		for _, testCmd := range passCommands {
-			statusFileMap := startCommandInPods(t, testCmd, pods)
+			executors := startCommandInPods(t, testCmd, pods)
 
-			for _, pod := range pods {
-				statusFile := statusFileMap[pod.GetSelfLink()]
-				err = cmdexecutor.CheckFileExistsInPod(pod.GetNamespace(), pod.GetName(), "", statusFile, 120)
-				require.NoError(t, err, fmt.Sprintf("failed to check status file: %s on pod", statusFile))
+			for _, executor := range executors {
+				err = executor.Wait(120)
+				require.NoError(t, err, fmt.Sprintf("failed to wait for command on pod: %s", executor.GetPod()))
 			}
 		}
 
 		// Negative test cases
 		for _, pod := range pods {
-			statusFile, err := cmdexecutor.StartAsyncPodCommand(pod.GetNamespace(), pod.GetName(), "", noWaitPlaceholderCmd)
+			executor := cmdexecutor.Init(pod.GetNamespace(), pod.GetName(), "", noWaitPlaceholderCmd, string(pod.GetUID()))
+			err = executor.Start()
 			require.Error(t, err, "expected error from the start command API")
-			require.Empty(t, statusFile, "expected empty statusFile from start comamnd API")
 		}
 
 		for _, testCmd := range failCommands {
-			statusFileMap := startCommandInPods(t, testCmd, pods)
+			executors := startCommandInPods(t, testCmd, pods)
 
-			for _, pod := range pods {
-				statusFile := statusFileMap[pod.GetSelfLink()]
-				err = cmdexecutor.CheckFileExistsInPod(pod.GetNamespace(), pod.GetName(), "", statusFile, 10)
-				require.Error(t, err, fmt.Sprintf("expected error since status file: %s would not exist on pod", statusFile))
+			for _, executor := range executors {
+				err = executor.Wait(10)
+				require.Error(t, err, fmt.Sprintf("expected error since command: %s should fail on pod: %s",
+					executor.GetCommand(), executor.GetPod()))
 			}
 		}
 	}
@@ -75,16 +74,16 @@ func asyncPodCommandTest(t *testing.T) {
 	destroyAndWait(t, ctxs)
 }
 
-func startCommandInPods(t *testing.T, command string, pods []v1.Pod) map[string]string {
-	statusFileMap := make(map[string]string, 0)
+func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecutor.Executor {
+	executors := make([]cmdexecutor.Executor, 0)
 	for _, pod := range pods {
-		statusFile, err := cmdexecutor.StartAsyncPodCommand(pod.GetNamespace(), pod.GetName(), "", command)
+		executor := cmdexecutor.Init(pod.GetNamespace(), pod.GetName(), "", command, string(pod.GetUID()))
+		err := executor.Start()
 		require.NoError(t, err, "failed to start async command")
-		require.NotEmpty(t, statusFile, "got empty status file")
-		statusFileMap[pod.GetSelfLink()] = statusFile
+		executors = append(executors, executor)
 	}
 
-	return statusFileMap
+	return executors
 }
 
 func getContextPods(ctx *scheduler.Context) ([]v1.Pod, error) {

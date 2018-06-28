@@ -7,15 +7,16 @@ import (
 
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
-	"github.com/skyrings/skyring-common/tools/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
-	statusFileFormat   = "/tmp/stork-cmd-done-%s"
+	// StatusFileFormat is the format specifier used to generate the status file path
+	StatusFileFormat = "/tmp/stork-cmd-done-%s"
+	// KillFileFormat is the format specifier used to generate the kill file path
+	KillFileFormat     = "/tmp/killme-%s"
 	cmdWaitFormat      = "touch %s && tail -f /dev/null;"
 	cmdStatusFormat    = "stat %s"
-	killFile           = "/tmp/killme"
 	waitScriptLocation = "/tmp/wait.sh"
 	waitCmdPlaceholder = "${WAIT_CMD}"
 )
@@ -25,45 +26,77 @@ const (
 	cmdStatusCheckFactor       = 1
 )
 
-// StartAsyncPodCommand starts the given command in the given pod async and returns a status file
-// inside the pod that will be present if the command succeeded.
-func StartAsyncPodCommand(podNamespace, podName, container, command string) (string /*status file */, error) {
-	if !strings.Contains(command, waitCmdPlaceholder) {
-		return "", fmt.Errorf("given command: %s needs to have ${WAIT_CMD} placeholder", command)
-	}
+// Executor is an interace to start and wait for async commands in pods
+type Executor interface {
+	// Start starts the command in the pod asynchronously
+	Start() error
+	// Wait checks if the command started in pod completed successfully
+	//	timeoutInSecs is number of seconds after which the check should timeout.
+	Wait(timeoutInSecs time.Duration) error
+	// GetPod returns the pod in format: <namespace>/<name> for the executor instance
+	GetPod() string
+	// GetContainer returns the container inside the pod for the executor instance
+	GetContainer() string
+	// GetCommand returns the pod command for the executor instance
+	GetCommand() string
+}
 
-	uid, err := uuid.New()
-	if err != nil {
-		return "", fmt.Errorf("failed to generate uuid due to: %v", err)
+type cmdExecutor struct {
+	podNamespace string
+	podName      string
+	container    string
+	command      string
+	statusFile   string
+	taskID       string
+}
+
+// Init creates an instance of a command executor to run the given command
+func Init(podNamespace, podName, container, command, taskID string) Executor {
+	return &cmdExecutor{
+		podNamespace: podNamespace,
+		podName:      podName,
+		container:    container,
+		command:      command,
+		taskID:       taskID,
+	}
+}
+
+func (c *cmdExecutor) Start() error {
+	if !strings.Contains(c.command, waitCmdPlaceholder) {
+		return fmt.Errorf("given command: %s needs to have ${WAIT_CMD} placeholder", c.command)
 	}
 
 	// create status script in target pod
-	statusFile := fmt.Sprintf(statusFileFormat, uid.String())
+	c.statusFile = fmt.Sprintf(StatusFileFormat, c.taskID)
+	killFile := fmt.Sprintf(KillFileFormat, c.taskID)
 	waitScriptCreateCmd := fmt.Sprintf("rm -rf %s %s && echo 'touch %s && while [ ! -f %s ]; do sleep 2; done' > %s && chmod +x %s",
-		statusFile, killFile, statusFile, killFile, waitScriptLocation, waitScriptLocation)
+		c.statusFile, killFile, c.statusFile, killFile, waitScriptLocation, waitScriptLocation)
 	cmdSplit := []string{"/bin/sh", "-c", waitScriptCreateCmd}
-	_, err = k8s.Instance().RunCommandInPod(cmdSplit, podName, container, podNamespace)
+	_, err := k8s.Instance().RunCommandInPod(cmdSplit, c.podName, c.container, c.podNamespace)
 	if err != nil {
-		logrus.Errorf("failed to run command: %s command due to err: %v", command, err)
-		return "", err
+		logrus.Errorf("failed to run command: %s command due to err: %v", c.command, err)
+		return err
 	}
 
-	command = strings.Replace(command, waitCmdPlaceholder, waitScriptLocation, -1)
+	command := strings.Replace(c.command, waitCmdPlaceholder, waitScriptLocation, -1)
 	go func() {
-		logrus.Infof("Running command: %s on pod: [%s] %s", command, podNamespace, podName)
+		logrus.Infof("Running command: %s on pod: [%s] %s", command, c.podNamespace, c.podName)
 		cmdSplit = []string{"/bin/sh", "-c", command}
-		_, err = k8s.Instance().RunCommandInPod(cmdSplit, podName, container, podNamespace)
+		_, err = k8s.Instance().RunCommandInPod(cmdSplit, c.podName, c.container, c.podNamespace)
 		if err != nil {
 			logrus.Errorf("failed to run command: %s command due to err: %v", command, err)
 		}
 	}()
 
-	return statusFile, nil
+	return nil
 }
 
-// CheckFileExistsInPod checks if the given status file exists in the given pod and if found deletes it
-//	timeoutInSecs is number of seconds after which the check should timeout.
-func CheckFileExistsInPod(podNamespace, podName, container, statusFile string, timeoutInSecs time.Duration) error {
+func (c *cmdExecutor) Wait(timeoutInSecs time.Duration) error {
+	if len(c.statusFile) == 0 {
+		return fmt.Errorf("status file for command: %s in pod: [%s] %s is not set",
+			c.command, c.podNamespace, c.podName)
+	}
+
 	cmdStatuCheckSteps := int(timeoutInSecs * time.Second / cmdStatusCheckInitialDelay)
 	if cmdStatuCheckSteps == 0 {
 		cmdStatuCheckSteps = 1
@@ -76,11 +109,13 @@ func CheckFileExistsInPod(podNamespace, podName, container, statusFile string, t
 		Steps:    cmdStatuCheckSteps,
 	}
 
-	logrus.Infof("check status on pod: [%s] %s with backooff: %v", podNamespace, podName, cmdCheckBackoff)
+	logrus.Infof("check status on pod: [%s] %s with backoff: %v and status file: %s",
+		c.podNamespace, c.podName, cmdCheckBackoff, c.statusFile)
 
-	statusCmd := fmt.Sprintf(cmdStatusFormat, statusFile)
+	statusCmd := fmt.Sprintf(cmdStatusFormat, c.statusFile)
 	if err := wait.ExponentialBackoff(cmdCheckBackoff, func() (bool, error) {
-		_, err := k8s.Instance().RunCommandInPod([]string{"/bin/sh", "-c", statusCmd}, podName, container, podNamespace)
+		_, err := k8s.Instance().RunCommandInPod([]string{"/bin/sh", "-c", statusCmd},
+			c.podName, c.container, c.podNamespace)
 		if err != nil {
 			return false, nil
 		}
@@ -96,15 +131,27 @@ func CheckFileExistsInPod(podNamespace, podName, container, statusFile string, t
 		_, err := k8s.Instance().RunCommandInPod([]string{
 			"/bin/sh",
 			"-c",
-			fmt.Sprintf("rm -rf %s", statusFile)}, podName, container, podNamespace)
+			fmt.Sprintf("rm -rf %s", c.statusFile)}, c.podName, c.container, c.podNamespace)
 		if err != nil {
 			return false, nil
 		}
 
 		return true, nil
 	}); err != nil {
-		logrus.Warnf("failed to remove status file: %s due to: %v", statusFile, err)
+		logrus.Warnf("failed to remove status file: %s due to: %v", c.statusFile, err)
 	}
 
 	return nil
+}
+
+func (c *cmdExecutor) GetPod() string {
+	return c.podNamespace + "/" + c.podName
+}
+
+func (c *cmdExecutor) GetCommand() string {
+	return c.command
+}
+
+func (c *cmdExecutor) GetContainer() string {
+	return c.container
 }

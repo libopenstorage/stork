@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -27,13 +28,17 @@ func (i *arrayFlags) Set(value string) error {
 	return nil
 }
 
-func parsePodNameAndNamespace(podString string) (string, string) {
+func parsePodNameAndNamespace(podString string) (string, string, error) {
 	if strings.Contains(podString, "/") {
 		parts := strings.Split(podString, "/")
-		return parts[0], parts[1]
+		if len(parts) != 2 {
+			return "", "", fmt.Errorf("invalid pod string: %s", podString)
+		}
+
+		return parts[0], parts[1], nil
 	}
 
-	return "default", podString
+	return "default", podString, nil
 }
 
 func createPodStringFromNameAndNamespace(namespace, name string) string {
@@ -52,6 +57,10 @@ func main() {
 		logrus.Fatalf("no command specified to the command executor")
 	}
 
+	if len(taskID) == 0 {
+		logrus.Fatalf("no taskid specified to the command executor")
+	}
+
 	logrus.Infof("Using timeout: %v seconds", statusCheckTimeout)
 	_, err := os.Stat(statusFile)
 	if err == nil {
@@ -61,27 +70,31 @@ func main() {
 		}
 	}
 
-	statusFileMap := make(map[string]string, 0)
+	executors := make([]cmdexecutor.Executor, 0)
 	// Start the commands
 	for _, pod := range podList {
-		namespace, name := parsePodNameAndNamespace(pod)
+		namespace, name, err := parsePodNameAndNamespace(pod)
+		if err != nil {
+			logrus.Fatalf("failed to parse pod due to: %v", err)
+		}
+
 		logrus.Infof("pod: [%s] %s", namespace, name)
-		statusFile, err := cmdexecutor.StartAsyncPodCommand(namespace, name, podContainer, command)
+		executor := cmdexecutor.Init(namespace, name, podContainer, command, taskID)
+		err = executor.Start()
 		if err != nil {
 			logrus.Fatalf("failed to run command in pod: [%s] %s due to: %v", namespace, name, err)
 		}
 
-		statusFileMap[createPodStringFromNameAndNamespace(namespace, name)] = statusFile
+		executors = append(executors, executor)
 	}
 
 	// Check command status
 	logrus.Infof("Checking status on command: %s on pods", command)
 	failedPods := make(map[string]error, 0)
-	for podString, statusFile := range statusFileMap {
-		namespace, name := parsePodNameAndNamespace(podString)
-		err := cmdexecutor.CheckFileExistsInPod(namespace, name, podContainer, statusFile, time.Duration(statusCheckTimeout))
+	for _, executor := range executors {
+		err := executor.Wait(time.Duration(statusCheckTimeout))
 		if err != nil {
-			failedPods[podString] = err
+			failedPods[executor.GetPod()] = err
 		}
 	}
 
@@ -102,11 +115,13 @@ var (
 	podContainer       string
 	command            string
 	statusCheckTimeout int64
+	taskID             string
 )
 
 func init() {
 	flag.Var(&podList, "pod", "Pod on which to run the command. Format: <pod-namespace>/<pod-name> e.g dev/pod-12345")
 	flag.StringVar(&podContainer, "container", "", "(Optional) name of the container withing the pod on which to run the command. If not specified, executor will pick the first container.")
 	flag.StringVar(&command, "cmd", "", "The command to run inside the pod")
+	flag.StringVar(&taskID, "taskid", "", "A unique ID the caller can provide which can be later used to clean the status files created by the command executor.")
 	flag.Int64Var(&statusCheckTimeout, "timeout", int64(defaultStatusCheckTimeout), "Time in seconds to wait for the command to succeeded on a single pod")
 }
