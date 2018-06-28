@@ -181,7 +181,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 		}
 		//TODO: Debug why this fails intermittently
 		//Display pod status at this point.
-		logrus.Infof("Pod [%s] %s ready for volume setup check. Status: %v", p.Namespace, p.Name, p.Status)
+		logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", p.Namespace, p.Name, p.Status.Phase, p.Status.InitContainerStatuses, p.Status.ContainerStatuses)
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
 			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) %s.+", path))
