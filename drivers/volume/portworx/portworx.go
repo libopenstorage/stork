@@ -274,12 +274,17 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	}
 }
 
-func (p *portworx) getNodeLabels(hostname string) (map[string]string, error) {
-	obj, exists, err := p.store.GetByKey(hostname)
+func (p *portworx) getNodeLabels(nodeInfo *storkvolume.NodeInfo) (map[string]string, error) {
+	obj, exists, err := p.store.GetByKey(nodeInfo.ID)
 	if err != nil {
 		return nil, err
 	} else if !exists {
-		return nil, fmt.Errorf("Node %v not found in cache", hostname)
+		obj, exists, err = p.store.GetByKey(nodeInfo.Hostname)
+		if err != nil {
+			return nil, err
+		} else if !exists {
+			return nil, fmt.Errorf("Node %v (%v) not found in cache", nodeInfo.ID, nodeInfo.Hostname)
+		}
 	}
 	node := obj.(*v1.Node)
 	return node.Labels, nil
@@ -303,7 +308,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
 		nodeInfo.IPs = append(nodeInfo.IPs, n.DataIp)
 
-		labels, err := p.getNodeLabels(nodeInfo.Hostname)
+		labels, err := p.getNodeLabels(nodeInfo)
 		if err == nil {
 			if rack, ok := labels[pxRackLabelKey]; ok {
 				nodeInfo.Rack = rack
