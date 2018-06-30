@@ -5,7 +5,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/sirupsen/logrus"
+	"go.pedge.io/dlog"
 	"golang.org/x/net/context"
 )
 
@@ -51,10 +51,10 @@ func checkClientError(err error) (*empty.Empty, error) {
 
 func log(methodName string, request proto.Message, response proto.Message, err error, duration time.Duration) {
 	if err != nil {
-		logrus.Errorf("Method: %v Request: %v Response: %v Error: %v Duration: %v",
+		dlog.Errorf("Method: %v Request: %v Response: %v Error: %v Duration: %v",
 			methodName, request.String(), response.String(), err.Error(), duration.String())
 	} else {
-		logrus.Infof("Method: %v Request: %v Response: %v Error: %v Duration: %v",
+		dlog.Infof("Method: %v Request: %v Response: %v Error: %v Duration: %v",
 			methodName, request.String(), response.String(), err.Error(), duration.String())
 	}
 }

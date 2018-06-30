@@ -8,9 +8,17 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/mount"
 )
+
+// On Linux, plugins use a static path for storing execution state,
+// instead of deriving path from daemon's exec-root. This is because
+// plugin socket files are created here and they cannot exceed max
+// path length of 108 bytes.
+func getPluginExecRoot(root string) string {
+	return "/run/docker/plugins"
+}
 
 func (daemon *Daemon) cleanupMountsByID(id string) error {
 	logrus.Debugf("Cleaning up old mountid %s: start.", id)

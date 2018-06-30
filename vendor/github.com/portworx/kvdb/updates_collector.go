@@ -2,7 +2,7 @@ package kvdb
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"strings"
 	"sync"
 )

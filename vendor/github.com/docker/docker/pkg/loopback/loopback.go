@@ -1,4 +1,4 @@
-// +build linux
+// +build linux,cgo
 
 package loopback
 
@@ -7,7 +7,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 func getLoopbackBackingFile(file *os.File) (uint64, uint64, error) {

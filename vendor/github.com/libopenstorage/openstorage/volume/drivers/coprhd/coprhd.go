@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/jmcvetta/napping.v3"
 
-	"github.com/sirupsen/logrus"
+	"go.pedge.io/dlog"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/volume"
@@ -150,7 +150,7 @@ func (d *driver) Create(
 	s, err := d.getAuthSession()
 
 	if err != nil {
-		logrus.Errorf("Failed to create session: %s", err.Error())
+		dlog.Errorf("Failed to create session: %s", err.Error())
 		return "", err
 	}
 
@@ -215,7 +215,7 @@ func (d *driver) Set(
 }
 
 func (d *driver) Shutdown() {
-	logrus.Infof("%s Shutting down", Name)
+	dlog.Infof("%s Shutting down", Name)
 }
 
 func (d *driver) Snapshot(
@@ -227,11 +227,6 @@ func (d *driver) Snapshot(
 
 func (d *driver) Restore(volumeID string, snapID string) error {
 	return volume.ErrNotSupported
-}
-
-func (d *driver) SnapshotGroup(groupID string, labels map[string]string) (*api.GroupSnapCreateResponse, error) {
-
-	return nil, volume.ErrNotSupported
 }
 
 func (d *driver) Status() [][2]string {

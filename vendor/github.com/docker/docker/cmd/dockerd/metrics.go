@@ -4,7 +4,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	metrics "github.com/docker/go-metrics"
 )
 

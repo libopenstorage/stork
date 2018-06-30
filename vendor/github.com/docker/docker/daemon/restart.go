@@ -3,7 +3,7 @@ package daemon
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/container"
 )
 

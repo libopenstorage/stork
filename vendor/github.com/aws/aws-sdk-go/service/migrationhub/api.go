@@ -15,7 +15,7 @@ const opAssociateCreatedArtifact = "AssociateCreatedArtifact"
 
 // AssociateCreatedArtifactRequest generates a "aws/request.Request" representing the
 // client's request for the AssociateCreatedArtifact operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -78,16 +78,15 @@ func (c *MigrationHub) AssociateCreatedArtifactRequest(input *AssociateCreatedAr
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -132,7 +131,7 @@ const opAssociateDiscoveredResource = "AssociateDiscoveredResource"
 
 // AssociateDiscoveredResourceRequest generates a "aws/request.Request" representing the
 // client's request for the AssociateDiscoveredResource operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -184,16 +183,15 @@ func (c *MigrationHub) AssociateDiscoveredResourceRequest(input *AssociateDiscov
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -209,8 +207,8 @@ func (c *MigrationHub) AssociateDiscoveredResourceRequest(input *AssociateDiscov
 //
 //   * ErrCodePolicyErrorException "PolicyErrorException"
 //   Exception raised when there are problems accessing ADS (Application Discovery
-//   Service); most likely due to a misconfigured policy or the ADSCaller role
-//   is missing or not configured correctly.
+//   Service); most likely due to a misconfigured policy or the migrationhub-discovery
+//   role is missing or not configured correctly.
 //
 //   * ErrCodeResourceNotFoundException "ResourceNotFoundException"
 //   Exception raised when the request references a resource (ADS configuration,
@@ -243,7 +241,7 @@ const opCreateProgressUpdateStream = "CreateProgressUpdateStream"
 
 // CreateProgressUpdateStreamRequest generates a "aws/request.Request" representing the
 // client's request for the CreateProgressUpdateStream operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -298,16 +296,15 @@ func (c *MigrationHub) CreateProgressUpdateStreamRequest(input *CreateProgressUp
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -347,7 +344,7 @@ const opDeleteProgressUpdateStream = "DeleteProgressUpdateStream"
 
 // DeleteProgressUpdateStreamRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteProgressUpdateStream operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -394,9 +391,9 @@ func (c *MigrationHub) DeleteProgressUpdateStreamRequest(input *DeleteProgressUp
 //    * The only parameter needed for DeleteProgressUpdateStream is the stream
 //    name (same as a CreateProgressUpdateStream call).
 //
-//    * The call will return, and a background process will asynchronously be
-//    doing the actual delete of the stream and all of its resources (tasks,
-//    associated resources, resource attributes, created artifacts).
+//    * The call will return, and a background process will asynchronously delete
+//    the stream and all of its resources (tasks, associated resources, resource
+//    attributes, created artifacts).
 //
 //    * If the stream takes time to be deleted, it might still show up on a
 //    ListProgressUpdateStreams call.
@@ -420,16 +417,15 @@ func (c *MigrationHub) DeleteProgressUpdateStreamRequest(input *DeleteProgressUp
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -474,7 +470,7 @@ const opDescribeApplicationState = "DescribeApplicationState"
 
 // DescribeApplicationStateRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeApplicationState operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -525,16 +521,15 @@ func (c *MigrationHub) DescribeApplicationStateRequest(input *DescribeApplicatio
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeInvalidInputException "InvalidInputException"
 //   Exception raised when the provided input violates a policy constraint or
@@ -542,8 +537,8 @@ func (c *MigrationHub) DescribeApplicationStateRequest(input *DescribeApplicatio
 //
 //   * ErrCodePolicyErrorException "PolicyErrorException"
 //   Exception raised when there are problems accessing ADS (Application Discovery
-//   Service); most likely due to a misconfigured policy or the ADSCaller role
-//   is missing or not configured correctly.
+//   Service); most likely due to a misconfigured policy or the migrationhub-discovery
+//   role is missing or not configured correctly.
 //
 //   * ErrCodeResourceNotFoundException "ResourceNotFoundException"
 //   Exception raised when the request references a resource (ADS configuration,
@@ -576,7 +571,7 @@ const opDescribeMigrationTask = "DescribeMigrationTask"
 
 // DescribeMigrationTaskRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeMigrationTask operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -627,16 +622,15 @@ func (c *MigrationHub) DescribeMigrationTaskRequest(input *DescribeMigrationTask
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeInvalidInputException "InvalidInputException"
 //   Exception raised when the provided input violates a policy constraint or
@@ -673,7 +667,7 @@ const opDisassociateCreatedArtifact = "DisassociateCreatedArtifact"
 
 // DisassociateCreatedArtifactRequest generates a "aws/request.Request" representing the
 // client's request for the DisassociateCreatedArtifact operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -736,16 +730,15 @@ func (c *MigrationHub) DisassociateCreatedArtifactRequest(input *DisassociateCre
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -790,7 +783,7 @@ const opDisassociateDiscoveredResource = "DisassociateDiscoveredResource"
 
 // DisassociateDiscoveredResourceRequest generates a "aws/request.Request" representing the
 // client's request for the DisassociateDiscoveredResource operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -842,16 +835,15 @@ func (c *MigrationHub) DisassociateDiscoveredResourceRequest(input *Disassociate
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -896,7 +888,7 @@ const opImportMigrationTask = "ImportMigrationTask"
 
 // ImportMigrationTaskRequest generates a "aws/request.Request" representing the
 // client's request for the ImportMigrationTask operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -952,16 +944,15 @@ func (c *MigrationHub) ImportMigrationTaskRequest(input *ImportMigrationTaskInpu
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -1006,7 +997,7 @@ const opListCreatedArtifacts = "ListCreatedArtifacts"
 
 // ListCreatedArtifactsRequest generates a "aws/request.Request" representing the
 // client's request for the ListCreatedArtifacts operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1065,16 +1056,15 @@ func (c *MigrationHub) ListCreatedArtifactsRequest(input *ListCreatedArtifactsIn
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeInvalidInputException "InvalidInputException"
 //   Exception raised when the provided input violates a policy constraint or
@@ -1111,7 +1101,7 @@ const opListDiscoveredResources = "ListDiscoveredResources"
 
 // ListDiscoveredResourcesRequest generates a "aws/request.Request" representing the
 // client's request for the ListDiscoveredResources operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1162,16 +1152,15 @@ func (c *MigrationHub) ListDiscoveredResourcesRequest(input *ListDiscoveredResou
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeInvalidInputException "InvalidInputException"
 //   Exception raised when the provided input violates a policy constraint or
@@ -1208,7 +1197,7 @@ const opListMigrationTasks = "ListMigrationTasks"
 
 // ListMigrationTasksRequest generates a "aws/request.Request" representing the
 // client's request for the ListMigrationTasks operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1267,16 +1256,15 @@ func (c *MigrationHub) ListMigrationTasksRequest(input *ListMigrationTasksInput)
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeInvalidInputException "InvalidInputException"
 //   Exception raised when the provided input violates a policy constraint or
@@ -1284,8 +1272,8 @@ func (c *MigrationHub) ListMigrationTasksRequest(input *ListMigrationTasksInput)
 //
 //   * ErrCodePolicyErrorException "PolicyErrorException"
 //   Exception raised when there are problems accessing ADS (Application Discovery
-//   Service); most likely due to a misconfigured policy or the ADSCaller role
-//   is missing or not configured correctly.
+//   Service); most likely due to a misconfigured policy or the migrationhub-discovery
+//   role is missing or not configured correctly.
 //
 //   * ErrCodeResourceNotFoundException "ResourceNotFoundException"
 //   Exception raised when the request references a resource (ADS configuration,
@@ -1318,7 +1306,7 @@ const opListProgressUpdateStreams = "ListProgressUpdateStreams"
 
 // ListProgressUpdateStreamsRequest generates a "aws/request.Request" representing the
 // client's request for the ListProgressUpdateStreams operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1370,16 +1358,15 @@ func (c *MigrationHub) ListProgressUpdateStreamsRequest(input *ListProgressUpdat
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeInvalidInputException "InvalidInputException"
 //   Exception raised when the provided input violates a policy constraint or
@@ -1411,7 +1398,7 @@ const opNotifyApplicationState = "NotifyApplicationState"
 
 // NotifyApplicationStateRequest generates a "aws/request.Request" representing the
 // client's request for the NotifyApplicationState operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1464,16 +1451,15 @@ func (c *MigrationHub) NotifyApplicationStateRequest(input *NotifyApplicationSta
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -1489,8 +1475,8 @@ func (c *MigrationHub) NotifyApplicationStateRequest(input *NotifyApplicationSta
 //
 //   * ErrCodePolicyErrorException "PolicyErrorException"
 //   Exception raised when there are problems accessing ADS (Application Discovery
-//   Service); most likely due to a misconfigured policy or the ADSCaller role
-//   is missing or not configured correctly.
+//   Service); most likely due to a misconfigured policy or the migrationhub-discovery
+//   role is missing or not configured correctly.
 //
 //   * ErrCodeResourceNotFoundException "ResourceNotFoundException"
 //   Exception raised when the request references a resource (ADS configuration,
@@ -1523,7 +1509,7 @@ const opNotifyMigrationTaskState = "NotifyMigrationTaskState"
 
 // NotifyMigrationTaskStateRequest generates a "aws/request.Request" representing the
 // client's request for the NotifyMigrationTaskState operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1583,16 +1569,15 @@ func (c *MigrationHub) NotifyMigrationTaskStateRequest(input *NotifyMigrationTas
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -1637,7 +1622,7 @@ const opPutResourceAttributes = "PutResourceAttributes"
 
 // PutResourceAttributesRequest generates a "aws/request.Request" representing the
 // client's request for the PutResourceAttributes operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1687,9 +1672,13 @@ func (c *MigrationHub) PutResourceAttributesRequest(input *PutResourceAttributes
 // to call it with both the IP and MAC addresses to prevent overiding the MAC
 // address.
 //
+// Note the instructions regarding the special use case of the ResourceAttributeList
+// (https://docs.aws.amazon.com/migrationhub/latest/ug/API_PutResourceAttributes.html#migrationhub-PutResourceAttributes-request-ResourceAttributeList)
+// parameter when specifying any "VM" related value.
+//
 // Because this is an asynchronous call, it will always return 200, whether
 // an association occurs or not. To confirm if an association was found based
-// on the provided details, call ListAssociatedResource.
+// on the provided details, call ListDiscoveredResources.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1700,16 +1689,15 @@ func (c *MigrationHub) PutResourceAttributesRequest(input *PutResourceAttributes
 //
 // Returned Error Codes:
 //   * ErrCodeAccessDeniedException "AccessDeniedException"
-//   Exception raised when the account making the call is not whitelisted or there
-//   are other authentication errors.
+//   You do not have sufficient access to perform this action.
 //
 //   * ErrCodeInternalServerError "InternalServerError"
 //   Exception raised when there is an internal, configuration, or dependency
 //   error encountered.
 //
 //   * ErrCodeServiceUnavailableException "ServiceUnavailableException"
-//   Exception raised when the service encounters throttled communication with
-//   upstream dependencies or is overloaded with requests.
+//   Exception raised when there is an internal, configuration, or dependency
+//   error encountered.
 //
 //   * ErrCodeDryRunOperation "DryRunOperation"
 //   Exception raised to indicate a successfully authorized action when the DryRun
@@ -2494,7 +2482,7 @@ func (s DisassociateDiscoveredResourceOutput) GoString() string {
 type DiscoveredResource struct {
 	_ struct{} `type:"structure"`
 
-	// The configurationId in ADS that uniquely identifies the on-premises resource.
+	// The configurationId in ADS that uniquely identifies the on-premise resource.
 	//
 	// ConfigurationId is a required field
 	ConfigurationId *string `min:"1" type:"string" required:"true"`
@@ -3412,6 +3400,23 @@ type PutResourceAttributesInput struct {
 	// used to map the task to a resource in the Application Discovery Service (ADS)'s
 	// repository.
 	//
+	// Takes the object array of ResourceAttribute where the Type field is reserved
+	// for the following values: IPV4_ADDRESS | IPV6_ADDRESS | MAC_ADDRESS | FQDN
+	// | VM_MANAGER_ID | VM_MANAGED_OBJECT_REFERENCE | VM_NAME | VM_PATH | BIOS_ID
+	// | MOTHERBOARD_SERIAL_NUMBER where the identifying value can be a string up
+	// to 256 characters.
+	//
+	// If any "VM" related value is set for a ResourceAttribute object, it is required
+	// that VM_MANAGER_ID, as a minimum, is always set. If VM_MANAGER_ID is not
+	// set, then all "VM" fields will be discarded and "VM" fields will not be used
+	// for matching the migration task to a server in Application Discovery Service
+	// (ADS)'s repository. See the Example (https://docs.aws.amazon.com/migrationhub/latest/ug/API_PutResourceAttributes.html#API_PutResourceAttributes_Examples)
+	// section below for a use case of specifying "VM" related values.
+	//
+	//  If a server you are trying to match has multiple IP or MAC addresses, you
+	// should provide as many as you know in separate type/value pairs passed to
+	// the ResourceAttributeList parameter to maximize the chances of matching.
+	//
 	// ResourceAttributeList is a required field
 	ResourceAttributeList []*ResourceAttribute `min:"1" type:"list" required:"true"`
 }
@@ -3503,6 +3508,20 @@ func (s PutResourceAttributesOutput) GoString() string {
 }
 
 // Attribute associated with a resource.
+//
+// Note the corresponding format required per type listed below:
+//
+// IPV4x.x.x.x
+//
+// where x is an integer in the range [0,255]
+//
+// IPV6y : y : y : y : y : y : y : y
+//
+// where y is a hexadecimal between 0 and FFFF. [0, FFFF]
+//
+// MAC_ADDRESS^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$
+//
+// FQDN^[^<>{}\\\\/?,=\\p{Cntrl}]{1,256}$
 type ResourceAttribute struct {
 	_ struct{} `type:"structure"`
 
@@ -3658,9 +3677,6 @@ const (
 
 	// ResourceAttributeTypeMotherboardSerialNumber is a ResourceAttributeType enum value
 	ResourceAttributeTypeMotherboardSerialNumber = "MOTHERBOARD_SERIAL_NUMBER"
-
-	// ResourceAttributeTypeLabel is a ResourceAttributeType enum value
-	ResourceAttributeTypeLabel = "LABEL"
 )
 
 const (

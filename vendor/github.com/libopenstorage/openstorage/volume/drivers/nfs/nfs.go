@@ -10,10 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
-	"math/rand"
-	"strings"
+	"go.pedge.io/dlog"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/config"
@@ -21,8 +18,9 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/seed"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers/common"
-	"github.com/pborman/uuid"
 	"github.com/portworx/kvdb"
+	"math/rand"
+	"strings"
 )
 
 const (
@@ -53,9 +51,9 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 	}
 	server, ok := params["server"]
 	if !ok {
-		logrus.Printf("No NFS server provided, will attempt to bind mount %s", path)
+		dlog.Printf("No NFS server provided, will attempt to bind mount %s", path)
 	} else {
-		logrus.Printf("NFS driver initializing with %s:%s ", server, path)
+		dlog.Printf("NFS driver initializing with %s:%s ", server, path)
 	}
 
 	//support more than one server using CSV
@@ -65,7 +63,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 	// Create a mount manager for this NFS server. Blank sever is OK.
 	mounter, err := mount.New(mount.NFSMount, nil, servers, nil, []string{}, "")
 	if err != nil {
-		logrus.Warnf("Failed to create mount manager for server: %v (%v)", server, err)
+		dlog.Warnf("Failed to create mount manager for server: %v (%v)", server, err)
 		return nil, err
 	}
 	inst := &driver{
@@ -82,7 +80,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 
 	//make directory for each nfs server
 	for _, v := range servers {
-		logrus.Infof("Calling mkdirAll: %s", nfsMountPath+v)
+		dlog.Infof("Calling mkdirAll: %s", nfsMountPath+v)
 		if err := os.MkdirAll(nfsMountPath+v, 0744); err != nil {
 			return nil, err
 		}
@@ -111,7 +109,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 				err = syscall.Mount(src, nfsMountPath+v, "", syscall.MS_BIND, "")
 			}
 			if err != nil {
-				logrus.Printf("Unable to mount %s:%s at %s (%+v)",
+				dlog.Printf("Unable to mount %s:%s at %s (%+v)",
 					v, inst.nfsPath, nfsMountPath+v, err)
 				return nil, err
 			}
@@ -128,7 +126,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 		}
 	}
 
-	logrus.Println("NFS initialized and driver mounted at: ", nfsMountPath)
+	dlog.Println("NFS initialized and driver mounted at: ", nfsMountPath)
 	return inst, nil
 }
 
@@ -162,8 +160,8 @@ func (d *driver) getNFSPath(v *api.Volume) (string, error) {
 	locator := v.GetLocator()
 	server, ok := locator.VolumeLabels["server"]
 	if !ok {
-		logrus.Warnf("No server label found on volume")
-		return "", fmt.Errorf("No server label found on volume: " + v.Id)
+		dlog.Warnf("No server label found on volume")
+		return "", errors.New("No server label found on volume: " + v.Id)
 	}
 
 	return path.Join(nfsMountPath, server), nil
@@ -200,7 +198,7 @@ func (d *driver) getNFSVolumePathById(volumeID string) (string, error) {
 }
 
 //append unix time to volumeID
-func (d *driver) getNewSnapVolName(volumeID string) string {
+func (d *driver) getNewSnapVolID(volumeID string) string {
 	return volumeID + "-" + strconv.FormatUint(uint64(time.Now().Unix()), 10)
 }
 
@@ -213,18 +211,14 @@ func (d *driver) Create(
 	source *api.Source,
 	spec *api.VolumeSpec) (string, error) {
 
-	if len(locator.Name) == 0 {
-		return "", fmt.Errorf("volume name cannot be empty")
+	volumeID := locator.Name
+	if volumeID == "" && source.Parent != "" {
+		volumeID = d.getNewSnapVolID(source.Parent)
+		dlog.Infof("Creating snap vol id: %s", volumeID)
 	}
-
-	if hasSpaces := strings.Contains(locator.Name, " "); hasSpaces {
-		return "", fmt.Errorf("volume name cannot contain space characters")
-	}
-
-	volumeID := strings.TrimSuffix(uuid.New(), "\n")
 
 	if _, err := d.GetVol(volumeID); err == nil {
-		return "", fmt.Errorf("volume with that id already exists")
+		return "", errors.New("Volume with that name already exists")
 	}
 
 	//snapshot passes nil volumelabels
@@ -238,10 +232,10 @@ func (d *driver) Create(
 	if !ok {
 		server, err := d.getNewVolumeServer()
 		if err != nil {
-			logrus.Infof("no nfs servers found...")
+			dlog.Infof("no nfs servers found...")
 			return "", err
 		} else {
-			logrus.Infof("Assigning random nfs server: %s to volume: %s", server, volumeID)
+			dlog.Infof("Assigning random nfs server: %s to volume: %s", server, volumeID)
 		}
 
 		labels["server"] = server
@@ -252,20 +246,20 @@ func (d *driver) Create(
 	volPath := path.Join(volPathParent, volumeID)
 	err := os.MkdirAll(volPath, 0744)
 	if err != nil {
-		logrus.Println(err)
+		dlog.Println(err)
 		return "", err
 	}
 	if source != nil {
 		if len(source.Seed) != 0 {
 			seed, err := seed.New(source.Seed, spec.VolumeLabels)
 			if err != nil {
-				logrus.Warnf("Failed to initailize seed from %q : %v",
+				dlog.Warnf("Failed to initailize seed from %q : %v",
 					source.Seed, err)
 				return "", err
 			}
 			err = seed.Load(path.Join(volPath, config.DataDir))
 			if err != nil {
-				logrus.Warnf("Failed to  seed from %q to %q: %v",
+				dlog.Warnf("Failed to  seed from %q to %q: %v",
 					source.Seed, volPathParent, err)
 				return "", err
 			}
@@ -274,13 +268,13 @@ func (d *driver) Create(
 
 	f, err := os.Create(path.Join(volPathParent, volumeID+nfsBlockFile))
 	if err != nil {
-		logrus.Println(err)
+		dlog.Println(err)
 		return "", err
 	}
 	defer f.Close()
 
 	if err := f.Truncate(int64(spec.Size)); err != nil {
-		logrus.Println(err)
+		dlog.Println(err)
 		return "", err
 	}
 
@@ -302,7 +296,7 @@ func (d *driver) Create(
 func (d *driver) Delete(volumeID string) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
-		logrus.Println(err)
+		dlog.Println(err)
 		return err
 	}
 
@@ -319,7 +313,7 @@ func (d *driver) Delete(volumeID string) error {
 
 	err = d.DeleteVol(volumeID)
 	if err != nil {
-		logrus.Println(err)
+		dlog.Println(err)
 		return err
 	}
 
@@ -333,13 +327,13 @@ func (d *driver) MountedAt(mountpath string) string {
 func (d *driver) Mount(volumeID string, mountpath string, options map[string]string) error {
 	v, err := d.GetVol(volumeID)
 	if err != nil {
-		logrus.Println(err)
+		dlog.Println(err)
 		return err
 	}
 
 	nfsPath, err := d.getNFSPath(v)
 	if err != nil {
-		logrus.Printf("Could not find server for volume: %s", volumeID)
+		dlog.Printf("Could not find server for volume: %s", volumeID)
 		return err
 	}
 
@@ -357,7 +351,7 @@ func (d *driver) Mount(volumeID string, mountpath string, options map[string]str
 			0,
 			nil,
 		); err != nil {
-			logrus.Printf("Cannot mount %s at %s because %+v",
+			dlog.Printf("Cannot mount %s at %s because %+v",
 				path.Join(nfsPath, volumeID), mountpath, err)
 			return err
 		}
@@ -399,9 +393,6 @@ func (d *driver) Snapshot(volumeID string, readonly bool, locator *api.VolumeLoc
 		return "", nil
 	}
 	source := &api.Source{Parent: volumeID}
-	locator.Name = d.getNewSnapVolName(source.Parent)
-
-	logrus.Infof("Creating snap vol name: %s", locator.Name)
 	newVolumeID, err := d.Create(locator, source, vols[0].Spec)
 	if err != nil {
 		return "", nil
@@ -447,11 +438,6 @@ func (d *driver) Restore(volumeID string, snapID string) error {
 	return nil
 }
 
-func (d *driver) SnapshotGroup(groupID string, labels map[string]string) (*api.GroupSnapCreateResponse, error) {
-
-	return nil, volume.ErrNotSupported
-}
-
 func (d *driver) Attach(volumeID string, attachOptions map[string]string) (string, error) {
 
 	nfsPath, err := d.getNFSPathById(volumeID)
@@ -481,10 +467,10 @@ func (d *driver) Set(volumeID string, locator *api.VolumeLocator, spec *api.Volu
 }
 
 func (d *driver) Shutdown() {
-	logrus.Printf("%s Shutting down", Name)
+	dlog.Printf("%s Shutting down", Name)
 
 	for _, v := range d.nfsServers {
-		logrus.Infof("Umounting: %s", nfsMountPath+v)
+		dlog.Infof("Umounting: %s", nfsMountPath+v)
 		syscall.Unmount(path.Join(nfsMountPath, v), 0)
 	}
 }

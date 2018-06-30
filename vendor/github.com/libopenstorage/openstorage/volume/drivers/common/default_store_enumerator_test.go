@@ -3,7 +3,7 @@ package common
 import (
 	"testing"
 
-	"github.com/sirupsen/logrus"
+	"go.pedge.io/dlog"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/volume"
@@ -18,12 +18,12 @@ var (
 )
 
 func init() {
-	kv, err := kvdb.New(mem.Name, "driver_test", []string{}, nil, logrus.Panicf)
+	kv, err := kvdb.New(mem.Name, "driver_test", []string{}, nil, dlog.Panicf)
 	if err != nil {
-		logrus.Panicf("Failed to initialize KVDB")
+		dlog.Panicf("Failed to initialize KVDB")
 	}
 	if err := kvdb.SetInstance(kv); err != nil {
-		logrus.Panicf("Failed to set KVDB instance")
+		dlog.Panicf("Failed to set KVDB instance")
 	}
 	testEnumerator = NewDefaultStoreEnumerator("enumerator_test", kv)
 }

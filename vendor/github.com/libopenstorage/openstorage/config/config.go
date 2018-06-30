@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/libopenstorage/openstorage/volume"
+	"go.pedge.io/dlog/logrus"
 )
 
 const (
@@ -24,9 +25,10 @@ const (
 func init() {
 	os.MkdirAll(volume.MountBase, 0755)
 	os.MkdirAll(GraphDriverAPIBase, 0755)
+	// TODO(pedge) eventually move to osd main.go when everyone is comfortable with dlog
+	dlog_logrus.Register()
 }
 
-// swagger:model
 type ClusterConfig struct {
 	ClusterId     string
 	NodeId        string
@@ -40,7 +42,6 @@ type ClusterConfig struct {
 	FluentDHost   string
 }
 
-// swagger:model
 type Config struct {
 	Osd struct {
 		ClusterConfig ClusterConfig `yaml:"cluster"`

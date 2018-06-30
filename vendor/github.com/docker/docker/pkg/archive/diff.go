@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/pools"
 	"github.com/docker/docker/pkg/system"
@@ -41,9 +41,6 @@ func UnpackLayer(dest string, layer io.Reader, options *TarOptions) (size int64,
 	aufsTempdir := ""
 	aufsHardlinks := make(map[string]*tar.Header)
 
-	if options == nil {
-		options = &TarOptions{}
-	}
 	// Iterate through the files in the archive.
 	for {
 		hdr, err := tr.Next()

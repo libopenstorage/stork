@@ -27,7 +27,6 @@ import (
 	"github.com/golang/glog"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/cloudprovider"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/cloudprovider/providers/openstack"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	k8sVol "k8s.io/kubernetes/pkg/volume"
@@ -40,8 +39,9 @@ type cinderPlugin struct {
 var _ volume.Plugin = &cinderPlugin{}
 
 // Init inits volume plugin
-func (c *cinderPlugin) Init(cloud cloudprovider.Interface) {
+func (c *cinderPlugin) Init(cloud interface{}) error {
 	c.cloud = cloud.(*openstack.OpenStack)
+	return nil
 }
 
 // RegisterPlugin creates an uninitialized cinder plugin
@@ -69,7 +69,11 @@ func (c *cinderPlugin) VolumeDelete(pv *v1.PersistentVolume) error {
 }
 
 // SnapshotCreate creates a VolumeSnapshot from a PersistentVolumeSpec
-func (c *cinderPlugin) SnapshotCreate(pv *v1.PersistentVolume, tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
+func (c *cinderPlugin) SnapshotCreate(
+	snapshot *crdv1.VolumeSnapshot,
+	pv *v1.PersistentVolume,
+	tags *map[string]string,
+) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
 	spec := &pv.Spec
 	if spec == nil || spec.Cinder == nil {
 		return nil, nil, fmt.Errorf("invalid PV spec %v", spec)
@@ -217,5 +221,5 @@ func (c *cinderPlugin) FindSnapshot(tags *map[string]string) (*crdv1.VolumeSnaps
 		}, c.convertSnapshotStatus(statuses[0]), nil
 	}
 
-	return nil, nil, nil
+	return nil, nil, fmt.Errorf("Snapshot not found")
 }

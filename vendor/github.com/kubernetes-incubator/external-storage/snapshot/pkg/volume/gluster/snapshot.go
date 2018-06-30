@@ -22,7 +22,6 @@ import (
 
 	"github.com/golang/glog"
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/cloudprovider"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/pborman/uuid"
 	"k8s.io/api/core/v1"
@@ -49,10 +48,15 @@ func GetPluginName() string {
 	return "glusterfs"
 }
 
-func (h *glusterfsPlugin) Init(_ cloudprovider.Interface) {
+func (h *glusterfsPlugin) Init(_ interface{}) error {
+	return nil
 }
 
-func (h *glusterfsPlugin) SnapshotCreate(pv *v1.PersistentVolume, tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
+func (h *glusterfsPlugin) SnapshotCreate(
+	snapshot *crdv1.VolumeSnapshot,
+	pv *v1.PersistentVolume,
+	tags *map[string]string,
+) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
 	spec := &pv.Spec
 	if spec == nil || spec.Glusterfs == nil {
 		return nil, nil, fmt.Errorf("invalid PV spec %v", spec)
@@ -170,11 +174,7 @@ func (h *glusterfsPlugin) FindSnapshot(tags *map[string]string) (*crdv1.VolumeSn
 	glog.Infof("FindSnapshot by tags: %#v", *tags)
 
 	// TODO: Implement FindSnapshot
-	return &crdv1.VolumeSnapshotDataSource{
-		GlusterSnapshotVolume: &crdv1.GlusterVolumeSnapshotSource{
-			SnapshotID: "",
-		},
-	}, nil, nil
+	return nil, nil, fmt.Errorf("Snapshot not found")
 }
 
 func (h *glusterfsPlugin) SnapshotRestore(snapshotData *crdv1.VolumeSnapshotData, _ *v1.PersistentVolumeClaim, _ string, _ map[string]string) (*v1.PersistentVolumeSource, map[string]string, error) {

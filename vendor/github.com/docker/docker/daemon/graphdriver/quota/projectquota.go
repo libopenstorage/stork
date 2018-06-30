@@ -58,7 +58,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 // Quota limit params - currently we only control blocks hard limit

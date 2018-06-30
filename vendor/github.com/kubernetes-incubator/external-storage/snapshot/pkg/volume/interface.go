@@ -20,15 +20,14 @@ import (
 	"k8s.io/api/core/v1"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/cloudprovider"
 )
 
 // Plugin defines functions that should be implemented by the volume plugin
 type Plugin interface {
 	// Init inits volume plugin
-	Init(cloudprovider.Interface)
+	Init(interface{}) error
 	// SnapshotCreate creates a VolumeSnapshot from a PersistentVolumeSpec
-	SnapshotCreate(*v1.PersistentVolume, *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error)
+	SnapshotCreate(*crdv1.VolumeSnapshot, *v1.PersistentVolume, *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error)
 	// SnapshotDelete deletes a VolumeSnapshot
 	// PersistentVolume is provided for volume types, if any, that need PV Spec to delete snapshot
 	SnapshotDelete(*crdv1.VolumeSnapshotDataSource, *v1.PersistentVolume) error

@@ -2,17 +2,20 @@
 
 // Package classification OSD API.
 //
-// OpenStorage is a clustered implementation of the Open Storage specification and relies on the OCI runtime.
-// It allows you to run stateful services in containers in a multi-host clustered environment.
-// This document represents the API documentaton of Openstorage, for the GO client please visit:
-// https://github.com/libopenstorage/openstorage
+// OpenStorage is a clustered implementation of the Open Storage specification and relies on the Docker runtime.
+// It allows you to run stateful services in Docker in a multi-host environment.
+// It plugs into Docker volumes to provide storage to a container and plugs into Swarm to operate in a clustered environment.
+//
+// Terms Of Service:
+//
+// there are no TOS at this moment, use at your own risk we take no responsibility
 //
 //     Schemes: http, https
 //     Host: localhost
 //     BasePath: /v1
-//     Version: 2.0.0
+//     Version: 1.0.0
 //     License: APACHE2 https://opensource.org/licenses/Apache-2.0
-//     Contact: https://github.com/libopenstorage/openstorage
+//     Contact: Luis Pabon<luis@portworx.com>
 //
 //     Consumes:
 //     - application/json
@@ -30,7 +33,7 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/sirupsen/logrus"
+	"go.pedge.io/dlog"
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/docker/pkg/reexec"
@@ -173,7 +176,7 @@ func start(c *cli.Context) error {
 	scheme := u.Scheme
 	u.Scheme = "http"
 
-	kv, err := kvdb.New(scheme, "openstorage", []string{u.String()}, nil, logrus.Panicf)
+	kv, err := kvdb.New(scheme, "openstorage", []string{u.String()}, nil, dlog.Panicf)
 	if err != nil {
 		return fmt.Errorf("Failed to initialize KVDB: %v (%v)\nSupported datastores: %v", scheme, err, datastores)
 	}
@@ -184,7 +187,7 @@ func start(c *cli.Context) error {
 	// Start the cluster state machine, if enabled.
 	clusterInit := false
 	if cfg.Osd.ClusterConfig.NodeId != "" && cfg.Osd.ClusterConfig.ClusterId != "" {
-		logrus.Infof("OSD enabling cluster mode.")
+		dlog.Infof("OSD enabling cluster mode.")
 		if err := cluster.Init(cfg.Osd.ClusterConfig); err != nil {
 			return fmt.Errorf("Unable to init cluster server: %v", err)
 		}
@@ -197,7 +200,7 @@ func start(c *cli.Context) error {
 	isDefaultSet := false
 	// Start the volume drivers.
 	for d, v := range cfg.Osd.Drivers {
-		logrus.Infof("Starting volume driver: %v", d)
+		dlog.Infof("Starting volume driver: %v", d)
 		if err := volumedrivers.Register(d, v); err != nil {
 			return fmt.Errorf("Unable to start volume driver: %v, %v", d, err)
 		}
@@ -261,7 +264,7 @@ func start(c *cli.Context) error {
 
 	// Start the graph drivers.
 	for d := range cfg.Osd.GraphDrivers {
-		logrus.Infof("Starting graph driver: %v", d)
+		dlog.Infof("Starting graph driver: %v", d)
 		if err := server.StartGraphAPI(d, volume.PluginAPIBase); err != nil {
 			return fmt.Errorf("Unable to start graph plugin: %v", err)
 		}
@@ -272,7 +275,7 @@ func start(c *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("Unable to find cluster instance: %v", err)
 		}
-		if err := cm.Start(0, false, "9002"); err != nil {
+		if err := cm.Start(0, false); err != nil {
 			return fmt.Errorf("Unable to start cluster manager: %v", err)
 		}
 	}
@@ -292,7 +295,7 @@ func showVersion(c *cli.Context) error {
 func wrapAction(f func(*cli.Context) error) func(*cli.Context) {
 	return func(c *cli.Context) {
 		if err := f(c); err != nil {
-			logrus.Warnln(err.Error())
+			dlog.Warnln(err.Error())
 			os.Exit(1)
 		}
 	}

@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/portworx/kvdb"
@@ -32,7 +32,8 @@ const (
 )
 
 var (
-	defaultMachines = []string{"127.0.0.1:8500"}
+	// an incorrect is added to check failover
+	defaultMachines = []string{"3.1.4.1:5926", "127.0.0.1:8500"}
 )
 
 // CKVPairs sortable KVPairs
@@ -76,23 +77,8 @@ type consulLock struct {
 	tag    interface{}
 }
 
-// New constructs a new kvdb.Kvdb.
-func New(
-	domain string,
-	machines []string,
-	options map[string]string,
-	fatalErrorCb kvdb.FatalErrorCB,
-) (kvdb.Kvdb, error) {
-	if len(machines) == 0 {
-		machines = defaultMachines
-	} else {
-		if strings.HasPrefix(machines[0], "http://") {
-			machines[0] = strings.TrimPrefix(machines[0], "http://")
-		} else if strings.HasPrefix(machines[0], "https://") {
-			machines[0] = strings.TrimPrefix(machines[0], "https://")
-		}
-	}
-
+// newKv constructs new kvdb.Kvdb given a single end-point to connect to.
+func newKv(domain, machine string, options map[string]string, fatalErrorCb kvdb.FatalErrorCB) (kvdb.Kvdb, error) {
 	var token string
 	// options provided. Probably auth options
 	if options != nil || len(options) > 0 {
@@ -119,12 +105,17 @@ func New(
 
 	config := api.DefaultConfig()
 	config.HttpClient = http.DefaultClient
-	config.Address = machines[0]
+	config.Address = machine
 	config.Scheme = "http"
 	config.Token = token
 
 	client, err := api.NewClient(config)
 	if err != nil {
+		return nil, err
+	}
+
+	// check heal to ensure communication with consul are working
+	if _, _, err := client.Health().State(api.HealthAny, nil); err != nil {
 		return nil, err
 	}
 
@@ -139,6 +130,34 @@ func New(
 		domain,
 		kvdb.ControllerNotSupported,
 	}, nil
+}
+
+// New constructs a new kvdb.Kvdb given a list of end points to conntect to.
+func New(
+	domain string,
+	machines []string,
+	options map[string]string,
+	fatalErrorCb kvdb.FatalErrorCB,
+) (kvdb.Kvdb, error) {
+	var kv kvdb.Kvdb
+	var err error
+
+	if len(machines) == 0 {
+		machines = defaultMachines
+	}
+
+	for _, machine := range machines {
+		machine := machine
+		if strings.HasPrefix(machine, "http://") {
+			machine = strings.TrimPrefix(machine, "http://")
+		} else if strings.HasPrefix(machine, "https://") {
+			machine = strings.TrimPrefix(machine, "https://")
+		}
+		if kv, err = newKv(domain, machine, options, fatalErrorCb); err == nil {
+			return kv, nil
+		}
+	}
+	return kv, err
 }
 
 // Version returns the supported version for consul api
@@ -331,6 +350,9 @@ func (kv *consulKV) Delete(key string) (*kvdb.KVPair, error) {
 func (kv *consulKV) DeleteTree(key string) error {
 	key = kv.domain + key
 	key = stripConsecutiveForwardslash(key)
+	if !strings.HasSuffix(key, kvdb.DefaultSeparator) {
+		key += kvdb.DefaultSeparator
+	}
 	if _, err := kv.client.KV().DeleteTree(key, nil); err != nil {
 		return err
 	}

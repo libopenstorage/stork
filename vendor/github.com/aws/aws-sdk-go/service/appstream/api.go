@@ -15,7 +15,7 @@ const opAssociateFleet = "AssociateFleet"
 
 // AssociateFleetRequest generates a "aws/request.Request" representing the
 // client's request for the AssociateFleet operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -68,6 +68,10 @@ func (c *AppStream) AssociateFleetRequest(input *AssociateFleetInput) (req *requ
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
 //
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
+//
 //   * ErrCodeResourceNotFoundException "ResourceNotFoundException"
 //   The specified resource was not found.
 //
@@ -102,11 +106,107 @@ func (c *AppStream) AssociateFleetWithContext(ctx aws.Context, input *AssociateF
 	return out, req.Send()
 }
 
+const opCopyImage = "CopyImage"
+
+// CopyImageRequest generates a "aws/request.Request" representing the
+// client's request for the CopyImage operation. The "output" return
+// value will be populated with the request's response once the request completes
+// successfuly.
+//
+// Use "Send" method on the returned Request to send the API call to the service.
+// the "output" return value is not valid until after Send returns without error.
+//
+// See CopyImage for more information on using the CopyImage
+// API call, and error handling.
+//
+// This method is useful when you want to inject custom logic or configuration
+// into the SDK's request lifecycle. Such as custom headers, or retry logic.
+//
+//
+//    // Example sending a request using the CopyImageRequest method.
+//    req, resp := client.CopyImageRequest(params)
+//
+//    err := req.Send()
+//    if err == nil { // resp is now filled
+//        fmt.Println(resp)
+//    }
+//
+// See also, https://docs.aws.amazon.com/goto/WebAPI/appstream-2016-12-01/CopyImage
+func (c *AppStream) CopyImageRequest(input *CopyImageInput) (req *request.Request, output *CopyImageOutput) {
+	op := &request.Operation{
+		Name:       opCopyImage,
+		HTTPMethod: "POST",
+		HTTPPath:   "/",
+	}
+
+	if input == nil {
+		input = &CopyImageInput{}
+	}
+
+	output = &CopyImageOutput{}
+	req = c.newRequest(op, input, output)
+	return
+}
+
+// CopyImage API operation for Amazon AppStream.
+//
+// Copies the image within the same region or to a new region within the same
+// AWS account. Note that any tags you added to the image will not be copied.
+//
+// Returns awserr.Error for service API and SDK errors. Use runtime type assertions
+// with awserr.Error's Code and Message methods to get detailed information about
+// the error.
+//
+// See the AWS API reference guide for Amazon AppStream's
+// API operation CopyImage for usage and error information.
+//
+// Returned Error Codes:
+//   * ErrCodeResourceAlreadyExistsException "ResourceAlreadyExistsException"
+//   The specified resource already exists.
+//
+//   * ErrCodeResourceNotFoundException "ResourceNotFoundException"
+//   The specified resource was not found.
+//
+//   * ErrCodeResourceNotAvailableException "ResourceNotAvailableException"
+//   The specified resource exists and is not in use, but isn't available.
+//
+//   * ErrCodeLimitExceededException "LimitExceededException"
+//   The requested limit exceeds the permitted limit for an account.
+//
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
+//
+//   * ErrCodeIncompatibleImageException "IncompatibleImageException"
+//   The image does not support storage connectors.
+//
+// See also, https://docs.aws.amazon.com/goto/WebAPI/appstream-2016-12-01/CopyImage
+func (c *AppStream) CopyImage(input *CopyImageInput) (*CopyImageOutput, error) {
+	req, out := c.CopyImageRequest(input)
+	return out, req.Send()
+}
+
+// CopyImageWithContext is the same as CopyImage with the addition of
+// the ability to pass a context and additional request options.
+//
+// See CopyImage for details on how to use this API operation.
+//
+// The context must be non-nil and will be used for request cancellation. If
+// the context is nil a panic will occur. In the future the SDK may create
+// sub-contexts for http.Requests. See https://golang.org/pkg/context/
+// for more information on using Contexts.
+func (c *AppStream) CopyImageWithContext(ctx aws.Context, input *CopyImageInput, opts ...request.Option) (*CopyImageOutput, error) {
+	req, out := c.CopyImageRequest(input)
+	req.SetContext(ctx)
+	req.ApplyOptions(opts...)
+	return out, req.Send()
+}
+
 const opCreateDirectoryConfig = "CreateDirectoryConfig"
 
 // CreateDirectoryConfigRequest generates a "aws/request.Request" representing the
 // client's request for the CreateDirectoryConfig operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -146,7 +246,9 @@ func (c *AppStream) CreateDirectoryConfigRequest(input *CreateDirectoryConfigInp
 
 // CreateDirectoryConfig API operation for Amazon AppStream.
 //
-// Creates a directory configuration.
+// Creates a Directory Config object in AppStream 2.0. This object includes
+// the information required to join streaming instances to an Active Directory
+// domain.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -161,6 +263,10 @@ func (c *AppStream) CreateDirectoryConfigRequest(input *CreateDirectoryConfigInp
 //
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
+//
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
 //
 // See also, https://docs.aws.amazon.com/goto/WebAPI/appstream-2016-12-01/CreateDirectoryConfig
 func (c *AppStream) CreateDirectoryConfig(input *CreateDirectoryConfigInput) (*CreateDirectoryConfigOutput, error) {
@@ -188,7 +294,7 @@ const opCreateFleet = "CreateFleet"
 
 // CreateFleetRequest generates a "aws/request.Request" representing the
 // client's request for the CreateFleet operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -228,7 +334,8 @@ func (c *AppStream) CreateFleetRequest(input *CreateFleetInput) (req *request.Re
 
 // CreateFleet API operation for Amazon AppStream.
 //
-// Creates a fleet.
+// Creates a fleet. A fleet consists of streaming instances that run a specified
+// image.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -249,6 +356,10 @@ func (c *AppStream) CreateFleetRequest(input *CreateFleetInput) (req *request.Re
 //
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
+//
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
 //
 //   * ErrCodeInvalidRoleException "InvalidRoleException"
 //   The specified role is invalid.
@@ -288,7 +399,7 @@ const opCreateImageBuilder = "CreateImageBuilder"
 
 // CreateImageBuilderRequest generates a "aws/request.Request" representing the
 // client's request for the CreateImageBuilder operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -328,7 +439,8 @@ func (c *AppStream) CreateImageBuilderRequest(input *CreateImageBuilderInput) (r
 
 // CreateImageBuilder API operation for Amazon AppStream.
 //
-// Creates an image builder.
+// Creates an image builder. An image builder is a virtual machine that is used
+// to create an image.
 //
 // The initial state of the builder is PENDING. When it is ready, the state
 // is RUNNING.
@@ -343,6 +455,10 @@ func (c *AppStream) CreateImageBuilderRequest(input *CreateImageBuilderInput) (r
 // Returned Error Codes:
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
+//
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
 //
 //   * ErrCodeResourceAlreadyExistsException "ResourceAlreadyExistsException"
 //   The specified resource already exists.
@@ -391,7 +507,7 @@ const opCreateImageBuilderStreamingURL = "CreateImageBuilderStreamingURL"
 
 // CreateImageBuilderStreamingURLRequest generates a "aws/request.Request" representing the
 // client's request for the CreateImageBuilderStreamingURL operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -473,7 +589,7 @@ const opCreateStack = "CreateStack"
 
 // CreateStackRequest generates a "aws/request.Request" representing the
 // client's request for the CreateStack operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -513,7 +629,8 @@ func (c *AppStream) CreateStackRequest(input *CreateStackInput) (req *request.Re
 
 // CreateStack API operation for Amazon AppStream.
 //
-// Creates a stack.
+// Creates a stack to start streaming applications to users. A stack consists
+// of an associated fleet, user access policies, and storage configurations.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -525,6 +642,10 @@ func (c *AppStream) CreateStackRequest(input *CreateStackInput) (req *request.Re
 // Returned Error Codes:
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
+//
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
 //
 //   * ErrCodeResourceAlreadyExistsException "ResourceAlreadyExistsException"
 //   The specified resource already exists.
@@ -567,7 +688,7 @@ const opCreateStreamingURL = "CreateStreamingURL"
 
 // CreateStreamingURLRequest generates a "aws/request.Request" representing the
 // client's request for the CreateStreamingURL operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -607,7 +728,9 @@ func (c *AppStream) CreateStreamingURLRequest(input *CreateStreamingURLInput) (r
 
 // CreateStreamingURL API operation for Amazon AppStream.
 //
-// Creates a URL to start a streaming session for the specified user.
+// Creates a temporary URL to start an AppStream 2.0 streaming session for the
+// specified user. A streaming URL enables application streaming to be tested
+// without user setup.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -655,7 +778,7 @@ const opDeleteDirectoryConfig = "DeleteDirectoryConfig"
 
 // DeleteDirectoryConfigRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteDirectoryConfig operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -695,7 +818,9 @@ func (c *AppStream) DeleteDirectoryConfigRequest(input *DeleteDirectoryConfigInp
 
 // DeleteDirectoryConfig API operation for Amazon AppStream.
 //
-// Deletes the specified directory configuration.
+// Deletes the specified Directory Config object from AppStream 2.0. This object
+// includes the information required to join streaming instances to an Active
+// Directory domain.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -737,7 +862,7 @@ const opDeleteFleet = "DeleteFleet"
 
 // DeleteFleetRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteFleet operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -822,7 +947,7 @@ const opDeleteImage = "DeleteImage"
 
 // DeleteImageRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteImage operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -862,9 +987,8 @@ func (c *AppStream) DeleteImageRequest(input *DeleteImageInput) (req *request.Re
 
 // DeleteImage API operation for Amazon AppStream.
 //
-// Deletes the specified image. You cannot delete an image that is currently
-// in use. After you delete an image, you cannot provision new capacity using
-// the image.
+// Deletes the specified image. You cannot delete an image when it is in use.
+// After you delete an image, you cannot provision new capacity using the image.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -912,7 +1036,7 @@ const opDeleteImageBuilder = "DeleteImageBuilder"
 
 // DeleteImageBuilderRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteImageBuilder operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -997,7 +1121,7 @@ const opDeleteStack = "DeleteStack"
 
 // DeleteStackRequest generates a "aws/request.Request" representing the
 // client's request for the DeleteStack operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1037,8 +1161,10 @@ func (c *AppStream) DeleteStackRequest(input *DeleteStackInput) (req *request.Re
 
 // DeleteStack API operation for Amazon AppStream.
 //
-// Deletes the specified stack. After this operation completes, the environment
-// can no longer be activated and any reservations made for the stack are released.
+// Deletes the specified stack. After the stack is deleted, the application
+// streaming environment provided by the stack is no longer available to users.
+// Also, any reservations made for application streaming sessions for the stack
+// are released.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1083,7 +1209,7 @@ const opDescribeDirectoryConfigs = "DescribeDirectoryConfigs"
 
 // DescribeDirectoryConfigsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeDirectoryConfigs operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1123,9 +1249,14 @@ func (c *AppStream) DescribeDirectoryConfigsRequest(input *DescribeDirectoryConf
 
 // DescribeDirectoryConfigs API operation for Amazon AppStream.
 //
-// Describes the specified directory configurations. Note that although the
-// response syntax in this topic includes the account password, this password
-// is not returned in the actual response.
+// Retrieves a list that describes one or more specified Directory Config objects
+// for AppStream 2.0, if the names for these objects are provided. Otherwise,
+// all Directory Config objects in the account are described. These objects
+// include the information required to join streaming instances to an Active
+// Directory domain.
+//
+// Although the response syntax in this topic includes the account password,
+// this password is not returned in the actual response.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1164,7 +1295,7 @@ const opDescribeFleets = "DescribeFleets"
 
 // DescribeFleetsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeFleets operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1204,7 +1335,8 @@ func (c *AppStream) DescribeFleetsRequest(input *DescribeFleetsInput) (req *requ
 
 // DescribeFleets API operation for Amazon AppStream.
 //
-// Describes the specified fleets or all fleets in the account.
+// Retrieves a list that describes one or more specified fleets, if the fleet
+// names are provided. Otherwise, all fleets in the account are described.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1243,7 +1375,7 @@ const opDescribeImageBuilders = "DescribeImageBuilders"
 
 // DescribeImageBuildersRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeImageBuilders operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1283,7 +1415,9 @@ func (c *AppStream) DescribeImageBuildersRequest(input *DescribeImageBuildersInp
 
 // DescribeImageBuilders API operation for Amazon AppStream.
 //
-// Describes the specified image builders or all image builders in the account.
+// Retrieves a list that describes one or more specified image builders, if
+// the image builder names are provided. Otherwise, all image builders in the
+// account are described.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1322,7 +1456,7 @@ const opDescribeImages = "DescribeImages"
 
 // DescribeImagesRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeImages operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1362,7 +1496,8 @@ func (c *AppStream) DescribeImagesRequest(input *DescribeImagesInput) (req *requ
 
 // DescribeImages API operation for Amazon AppStream.
 //
-// Describes the specified images or all images in the account.
+// Retrieves a list that describes one or more specified images, if the image
+// names are provided. Otherwise, all images in the account are described.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1401,7 +1536,7 @@ const opDescribeSessions = "DescribeSessions"
 
 // DescribeSessionsRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeSessions operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1441,10 +1576,10 @@ func (c *AppStream) DescribeSessionsRequest(input *DescribeSessionsInput) (req *
 
 // DescribeSessions API operation for Amazon AppStream.
 //
-// Describes the streaming sessions for the specified stack and fleet. If a
-// user ID is provided, only the streaming sessions for only that user are returned.
-// If an authentication type is not provided, the default is to authenticate
-// users using a streaming URL.
+// Retrieves a list that describes the streaming sessions for a specified stack
+// and fleet. If a user ID is provided for the stack and fleet, only streaming
+// sessions for that user are described. If an authentication type is not provided,
+// the default is to authenticate users using a streaming URL.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1483,7 +1618,7 @@ const opDescribeStacks = "DescribeStacks"
 
 // DescribeStacksRequest generates a "aws/request.Request" representing the
 // client's request for the DescribeStacks operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1523,7 +1658,8 @@ func (c *AppStream) DescribeStacksRequest(input *DescribeStacksInput) (req *requ
 
 // DescribeStacks API operation for Amazon AppStream.
 //
-// Describes the specified stacks or all stacks in the account.
+// Retrieves a list that describes one or more specified stacks, if the stack
+// names are provided. Otherwise, all stacks in the account are described.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1562,7 +1698,7 @@ const opDisassociateFleet = "DisassociateFleet"
 
 // DisassociateFleetRequest generates a "aws/request.Request" representing the
 // client's request for the DisassociateFleet operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1647,7 +1783,7 @@ const opExpireSession = "ExpireSession"
 
 // ExpireSessionRequest generates a "aws/request.Request" representing the
 // client's request for the ExpireSession operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1687,7 +1823,7 @@ func (c *AppStream) ExpireSessionRequest(input *ExpireSessionInput) (req *reques
 
 // ExpireSession API operation for Amazon AppStream.
 //
-// Stops the specified streaming session.
+// Immediately stops the specified streaming session.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1721,7 +1857,7 @@ const opListAssociatedFleets = "ListAssociatedFleets"
 
 // ListAssociatedFleetsRequest generates a "aws/request.Request" representing the
 // client's request for the ListAssociatedFleets operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1761,7 +1897,7 @@ func (c *AppStream) ListAssociatedFleetsRequest(input *ListAssociatedFleetsInput
 
 // ListAssociatedFleets API operation for Amazon AppStream.
 //
-// Lists the fleets associated with the specified stack.
+// Retrieves the name of the fleet that is associated with the specified stack.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1795,7 +1931,7 @@ const opListAssociatedStacks = "ListAssociatedStacks"
 
 // ListAssociatedStacksRequest generates a "aws/request.Request" representing the
 // client's request for the ListAssociatedStacks operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1835,7 +1971,7 @@ func (c *AppStream) ListAssociatedStacksRequest(input *ListAssociatedStacksInput
 
 // ListAssociatedStacks API operation for Amazon AppStream.
 //
-// Lists the stacks associated with the specified fleet.
+// Retrieves the name of the stack with which the specified fleet is associated.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -1869,7 +2005,7 @@ const opListTagsForResource = "ListTagsForResource"
 
 // ListTagsForResourceRequest generates a "aws/request.Request" representing the
 // client's request for the ListTagsForResource operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -1909,8 +2045,8 @@ func (c *AppStream) ListTagsForResourceRequest(input *ListTagsForResourceInput) 
 
 // ListTagsForResource API operation for Amazon AppStream.
 //
-// Lists the tags for the specified AppStream 2.0 resource. You can tag AppStream
-// 2.0 image builders, images, fleets, and stacks.
+// Retrieves a list of all tags for the specified AppStream 2.0 resource. You
+// can tag AppStream 2.0 image builders, images, fleets, and stacks.
 //
 // For more information about tags, see Tagging Your Resources (http://docs.aws.amazon.com/appstream2/latest/developerguide/tagging-basic.html)
 // in the Amazon AppStream 2.0 Developer Guide.
@@ -1952,7 +2088,7 @@ const opStartFleet = "StartFleet"
 
 // StartFleetRequest generates a "aws/request.Request" representing the
 // client's request for the StartFleet operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2011,6 +2147,10 @@ func (c *AppStream) StartFleetRequest(input *StartFleetInput) (req *request.Requ
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
 //
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
+//
 //   * ErrCodeConcurrentModificationException "ConcurrentModificationException"
 //   An API error occurred. Wait a few minutes and try again.
 //
@@ -2040,7 +2180,7 @@ const opStartImageBuilder = "StartImageBuilder"
 
 // StartImageBuilderRequest generates a "aws/request.Request" representing the
 // client's request for the StartImageBuilder operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2099,6 +2239,10 @@ func (c *AppStream) StartImageBuilderRequest(input *StartImageBuilderInput) (req
 //   * ErrCodeConcurrentModificationException "ConcurrentModificationException"
 //   An API error occurred. Wait a few minutes and try again.
 //
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
+//
 //   * ErrCodeIncompatibleImageException "IncompatibleImageException"
 //   The image does not support storage connectors.
 //
@@ -2128,7 +2272,7 @@ const opStopFleet = "StopFleet"
 
 // StopFleetRequest generates a "aws/request.Request" representing the
 // client's request for the StopFleet operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2210,7 +2354,7 @@ const opStopImageBuilder = "StopImageBuilder"
 
 // StopImageBuilderRequest generates a "aws/request.Request" representing the
 // client's request for the StopImageBuilder operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2295,7 +2439,7 @@ const opTagResource = "TagResource"
 
 // TagResourceRequest generates a "aws/request.Request" representing the
 // client's request for the TagResource operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2358,6 +2502,10 @@ func (c *AppStream) TagResourceRequest(input *TagResourceInput) (req *request.Re
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
 //
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
+//
 //   * ErrCodeResourceNotFoundException "ResourceNotFoundException"
 //   The specified resource was not found.
 //
@@ -2387,7 +2535,7 @@ const opUntagResource = "UntagResource"
 
 // UntagResourceRequest generates a "aws/request.Request" representing the
 // client's request for the UntagResource operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2427,7 +2575,8 @@ func (c *AppStream) UntagResourceRequest(input *UntagResourceInput) (req *reques
 
 // UntagResource API operation for Amazon AppStream.
 //
-// Disassociates the specified tags from the specified AppStream 2.0 resource.
+// Disassociates one or more specified tags from the specified AppStream 2.0
+// resource.
 //
 // To list the current tags for your resources, use ListTagsForResource.
 //
@@ -2471,7 +2620,7 @@ const opUpdateDirectoryConfig = "UpdateDirectoryConfig"
 
 // UpdateDirectoryConfigRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateDirectoryConfig operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2511,7 +2660,9 @@ func (c *AppStream) UpdateDirectoryConfigRequest(input *UpdateDirectoryConfigInp
 
 // UpdateDirectoryConfig API operation for Amazon AppStream.
 //
-// Updates the specified directory configuration.
+// Updates the specified Directory Config object in AppStream 2.0. This object
+// includes the information required to join streaming instances to an Active
+// Directory domain.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -2556,7 +2707,7 @@ const opUpdateFleet = "UpdateFleet"
 
 // UpdateFleetRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateFleet operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2617,6 +2768,10 @@ func (c *AppStream) UpdateFleetRequest(input *UpdateFleetInput) (req *request.Re
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
 //
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
+//
 //   * ErrCodeInvalidRoleException "InvalidRoleException"
 //   The specified role is invalid.
 //
@@ -2664,7 +2819,7 @@ const opUpdateStack = "UpdateStack"
 
 // UpdateStackRequest generates a "aws/request.Request" representing the
 // client's request for the UpdateStack operation. The "output" return
-// value will be populated with the request's response once the request complets
+// value will be populated with the request's response once the request completes
 // successfuly.
 //
 // Use "Send" method on the returned Request to send the API call to the service.
@@ -2704,7 +2859,7 @@ func (c *AppStream) UpdateStackRequest(input *UpdateStackInput) (req *request.Re
 
 // UpdateStack API operation for Amazon AppStream.
 //
-// Updates the specified stack.
+// Updates the specified fields for the specified stack.
 //
 // Returns awserr.Error for service API and SDK errors. Use runtime type assertions
 // with awserr.Error's Code and Message methods to get detailed information about
@@ -2729,8 +2884,15 @@ func (c *AppStream) UpdateStackRequest(input *UpdateStackInput) (req *request.Re
 //   * ErrCodeLimitExceededException "LimitExceededException"
 //   The requested limit exceeds the permitted limit for an account.
 //
+//   * ErrCodeInvalidAccountStatusException "InvalidAccountStatusException"
+//   The resource cannot be created because your AWS account is suspended. For
+//   assistance, contact AWS Support.
+//
 //   * ErrCodeIncompatibleImageException "IncompatibleImageException"
 //   The image does not support storage connectors.
+//
+//   * ErrCodeOperationNotPermittedException "OperationNotPermittedException"
+//   The attempted operation is not permitted.
 //
 // See also, https://docs.aws.amazon.com/goto/WebAPI/appstream-2016-12-01/UpdateStack
 func (c *AppStream) UpdateStack(input *UpdateStackInput) (*UpdateStackOutput, error) {
@@ -2993,6 +3155,108 @@ func (s *ComputeCapacityStatus) SetInUse(v int64) *ComputeCapacityStatus {
 // SetRunning sets the Running field's value.
 func (s *ComputeCapacityStatus) SetRunning(v int64) *ComputeCapacityStatus {
 	s.Running = &v
+	return s
+}
+
+type CopyImageInput struct {
+	_ struct{} `type:"structure"`
+
+	// The description that the image will have when it is copied to the destination.
+	DestinationImageDescription *string `type:"string"`
+
+	// The name that the image will have when it is copied to the destination.
+	//
+	// DestinationImageName is a required field
+	DestinationImageName *string `type:"string" required:"true"`
+
+	// The destination region to which the image will be copied. This parameter
+	// is required, even if you are copying an image within the same region.
+	//
+	// DestinationRegion is a required field
+	DestinationRegion *string `min:"1" type:"string" required:"true"`
+
+	// The name of the image to copy.
+	//
+	// SourceImageName is a required field
+	SourceImageName *string `type:"string" required:"true"`
+}
+
+// String returns the string representation
+func (s CopyImageInput) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s CopyImageInput) GoString() string {
+	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *CopyImageInput) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "CopyImageInput"}
+	if s.DestinationImageName == nil {
+		invalidParams.Add(request.NewErrParamRequired("DestinationImageName"))
+	}
+	if s.DestinationRegion == nil {
+		invalidParams.Add(request.NewErrParamRequired("DestinationRegion"))
+	}
+	if s.DestinationRegion != nil && len(*s.DestinationRegion) < 1 {
+		invalidParams.Add(request.NewErrParamMinLen("DestinationRegion", 1))
+	}
+	if s.SourceImageName == nil {
+		invalidParams.Add(request.NewErrParamRequired("SourceImageName"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
+// SetDestinationImageDescription sets the DestinationImageDescription field's value.
+func (s *CopyImageInput) SetDestinationImageDescription(v string) *CopyImageInput {
+	s.DestinationImageDescription = &v
+	return s
+}
+
+// SetDestinationImageName sets the DestinationImageName field's value.
+func (s *CopyImageInput) SetDestinationImageName(v string) *CopyImageInput {
+	s.DestinationImageName = &v
+	return s
+}
+
+// SetDestinationRegion sets the DestinationRegion field's value.
+func (s *CopyImageInput) SetDestinationRegion(v string) *CopyImageInput {
+	s.DestinationRegion = &v
+	return s
+}
+
+// SetSourceImageName sets the SourceImageName field's value.
+func (s *CopyImageInput) SetSourceImageName(v string) *CopyImageInput {
+	s.SourceImageName = &v
+	return s
+}
+
+type CopyImageOutput struct {
+	_ struct{} `type:"structure"`
+
+	// The name of the destination image.
+	DestinationImageName *string `type:"string"`
+}
+
+// String returns the string representation
+func (s CopyImageOutput) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s CopyImageOutput) GoString() string {
+	return s.String()
+}
+
+// SetDestinationImageName sets the DestinationImageName field's value.
+func (s *CopyImageOutput) SetDestinationImageName(v string) *CopyImageOutput {
+	s.DestinationImageName = &v
 	return s
 }
 
@@ -3575,16 +3839,24 @@ type CreateStackInput struct {
 	// The stack name for display.
 	DisplayName *string `type:"string"`
 
+	// The URL that users are redirected to after they click the Send Feedback link.
+	// If no URL is specified, no Send Feedback link is displayed.
+	FeedbackURL *string `type:"string"`
+
 	// The name of the stack.
 	//
 	// Name is a required field
-	Name *string `min:"1" type:"string" required:"true"`
+	Name *string `type:"string" required:"true"`
 
-	// The URL the user is redirected to after the streaming session ends.
+	// The URL that users are redirected to after their streaming session ends.
 	RedirectURL *string `type:"string"`
 
 	// The storage connectors to enable.
 	StorageConnectors []*StorageConnector `type:"list"`
+
+	// The actions that are enabled or disabled for users during their streaming
+	// sessions. By default, these actions are enabled.
+	UserSettings []*UserSetting `min:"1" type:"list"`
 }
 
 // String returns the string representation
@@ -3603,8 +3875,8 @@ func (s *CreateStackInput) Validate() error {
 	if s.Name == nil {
 		invalidParams.Add(request.NewErrParamRequired("Name"))
 	}
-	if s.Name != nil && len(*s.Name) < 1 {
-		invalidParams.Add(request.NewErrParamMinLen("Name", 1))
+	if s.UserSettings != nil && len(s.UserSettings) < 1 {
+		invalidParams.Add(request.NewErrParamMinLen("UserSettings", 1))
 	}
 	if s.StorageConnectors != nil {
 		for i, v := range s.StorageConnectors {
@@ -3613,6 +3885,16 @@ func (s *CreateStackInput) Validate() error {
 			}
 			if err := v.Validate(); err != nil {
 				invalidParams.AddNested(fmt.Sprintf("%s[%v]", "StorageConnectors", i), err.(request.ErrInvalidParams))
+			}
+		}
+	}
+	if s.UserSettings != nil {
+		for i, v := range s.UserSettings {
+			if v == nil {
+				continue
+			}
+			if err := v.Validate(); err != nil {
+				invalidParams.AddNested(fmt.Sprintf("%s[%v]", "UserSettings", i), err.(request.ErrInvalidParams))
 			}
 		}
 	}
@@ -3635,6 +3917,12 @@ func (s *CreateStackInput) SetDisplayName(v string) *CreateStackInput {
 	return s
 }
 
+// SetFeedbackURL sets the FeedbackURL field's value.
+func (s *CreateStackInput) SetFeedbackURL(v string) *CreateStackInput {
+	s.FeedbackURL = &v
+	return s
+}
+
 // SetName sets the Name field's value.
 func (s *CreateStackInput) SetName(v string) *CreateStackInput {
 	s.Name = &v
@@ -3650,6 +3938,12 @@ func (s *CreateStackInput) SetRedirectURL(v string) *CreateStackInput {
 // SetStorageConnectors sets the StorageConnectors field's value.
 func (s *CreateStackInput) SetStorageConnectors(v []*StorageConnector) *CreateStackInput {
 	s.StorageConnectors = v
+	return s
+}
+
+// SetUserSettings sets the UserSettings field's value.
+func (s *CreateStackInput) SetUserSettings(v []*UserSetting) *CreateStackInput {
+	s.UserSettings = v
 	return s
 }
 
@@ -4414,7 +4708,7 @@ type DescribeSessionsInput struct {
 	// using a streaming URL.
 	AuthenticationType *string `type:"string" enum:"AuthenticationType"`
 
-	// The name of the fleet.
+	// The name of the fleet. This value is case-sensitive.
 	//
 	// FleetName is a required field
 	FleetName *string `min:"1" type:"string" required:"true"`
@@ -4427,7 +4721,7 @@ type DescribeSessionsInput struct {
 	// operation. If this value is null, it retrieves the first page.
 	NextToken *string `min:"1" type:"string"`
 
-	// The name of the stack.
+	// The name of the stack. This value is case-sensitive.
 	//
 	// StackName is a required field
 	StackName *string `min:"1" type:"string" required:"true"`
@@ -5475,7 +5769,7 @@ func (s *ListAssociatedFleetsInput) SetStackName(v string) *ListAssociatedFleets
 type ListAssociatedFleetsOutput struct {
 	_ struct{} `type:"structure"`
 
-	// The names of the fleets.
+	// The name of the fleet.
 	Names []*string `type:"list"`
 
 	// The pagination token to use to retrieve the next page of results for this
@@ -5562,7 +5856,7 @@ func (s *ListAssociatedStacksInput) SetNextToken(v string) *ListAssociatedStacks
 type ListAssociatedStacksOutput struct {
 	_ struct{} `type:"structure"`
 
-	// The names of the stacks.
+	// The name of the stack.
 	Names []*string `type:"list"`
 
 	// The pagination token to use to retrieve the next page of results for this
@@ -5650,6 +5944,42 @@ func (s ListTagsForResourceOutput) GoString() string {
 // SetTags sets the Tags field's value.
 func (s *ListTagsForResourceOutput) SetTags(v map[string]*string) *ListTagsForResourceOutput {
 	s.Tags = v
+	return s
+}
+
+// The network details of the fleet instance for the streaming session.
+type NetworkAccessConfiguration struct {
+	_ struct{} `type:"structure"`
+
+	// The resource identifier of the elastic network interface that is attached
+	// to instances in your VPC. All network interfaces have the eni-xxxxxxxx resource
+	// identifier.
+	EniId *string `min:"1" type:"string"`
+
+	// The private IP address of the elastic network interface that is attached
+	// to instances in your VPC.
+	EniPrivateIpAddress *string `min:"1" type:"string"`
+}
+
+// String returns the string representation
+func (s NetworkAccessConfiguration) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s NetworkAccessConfiguration) GoString() string {
+	return s.String()
+}
+
+// SetEniId sets the EniId field's value.
+func (s *NetworkAccessConfiguration) SetEniId(v string) *NetworkAccessConfiguration {
+	s.EniId = &v
+	return s
+}
+
+// SetEniPrivateIpAddress sets the EniPrivateIpAddress field's value.
+func (s *NetworkAccessConfiguration) SetEniPrivateIpAddress(v string) *NetworkAccessConfiguration {
+	s.EniPrivateIpAddress = &v
 	return s
 }
 
@@ -5775,6 +6105,9 @@ type Session struct {
 	// Id is a required field
 	Id *string `min:"1" type:"string" required:"true"`
 
+	// The network details for the streaming session.
+	NetworkAccessConfiguration *NetworkAccessConfiguration `type:"structure"`
+
 	// The name of the stack for the streaming session.
 	//
 	// StackName is a required field
@@ -5819,6 +6152,12 @@ func (s *Session) SetId(v string) *Session {
 	return s
 }
 
+// SetNetworkAccessConfiguration sets the NetworkAccessConfiguration field's value.
+func (s *Session) SetNetworkAccessConfiguration(v *NetworkAccessConfiguration) *Session {
+	s.NetworkAccessConfiguration = v
+	return s
+}
+
 // SetStackName sets the StackName field's value.
 func (s *Session) SetStackName(v string) *Session {
 	s.StackName = &v
@@ -5853,12 +6192,16 @@ type Stack struct {
 	// The stack name for display.
 	DisplayName *string `min:"1" type:"string"`
 
+	// The URL that users are redirected to after they click the Send Feedback link.
+	// If no URL is specified, no Send Feedback link is displayed.
+	FeedbackURL *string `type:"string"`
+
 	// The name of the stack.
 	//
 	// Name is a required field
 	Name *string `min:"1" type:"string" required:"true"`
 
-	// The URL the user is redirected to after the streaming session ends.
+	// The URL that users are redirected to after their streaming session ends.
 	RedirectURL *string `type:"string"`
 
 	// The errors for the stack.
@@ -5866,6 +6209,10 @@ type Stack struct {
 
 	// The storage connectors to enable.
 	StorageConnectors []*StorageConnector `type:"list"`
+
+	// The actions that are enabled or disabled for users during their streaming
+	// sessions. By default these actions are enabled.
+	UserSettings []*UserSetting `min:"1" type:"list"`
 }
 
 // String returns the string representation
@@ -5902,6 +6249,12 @@ func (s *Stack) SetDisplayName(v string) *Stack {
 	return s
 }
 
+// SetFeedbackURL sets the FeedbackURL field's value.
+func (s *Stack) SetFeedbackURL(v string) *Stack {
+	s.FeedbackURL = &v
+	return s
+}
+
 // SetName sets the Name field's value.
 func (s *Stack) SetName(v string) *Stack {
 	s.Name = &v
@@ -5923,6 +6276,12 @@ func (s *Stack) SetStackErrors(v []*StackError) *Stack {
 // SetStorageConnectors sets the StorageConnectors field's value.
 func (s *Stack) SetStorageConnectors(v []*StorageConnector) *Stack {
 	s.StorageConnectors = v
+	return s
+}
+
+// SetUserSettings sets the UserSettings field's value.
+func (s *Stack) SetUserSettings(v []*UserSetting) *Stack {
+	s.UserSettings = v
 	return s
 }
 
@@ -6210,7 +6569,7 @@ func (s *StopImageBuilderOutput) SetImageBuilder(v *ImageBuilder) *StopImageBuil
 	return s
 }
 
-// Describes a storage connector.
+// Describes a connector to enable persistent storage for users.
 type StorageConnector struct {
 	_ struct{} `type:"structure"`
 
@@ -6218,6 +6577,9 @@ type StorageConnector struct {
 	//
 	// ConnectorType is a required field
 	ConnectorType *string `type:"string" required:"true" enum:"StorageConnectorType"`
+
+	// The names of the domains for the G Suite account.
+	Domains []*string `type:"list"`
 
 	// The ARN of the storage connector.
 	ResourceIdentifier *string `min:"1" type:"string"`
@@ -6252,6 +6614,12 @@ func (s *StorageConnector) Validate() error {
 // SetConnectorType sets the ConnectorType field's value.
 func (s *StorageConnector) SetConnectorType(v string) *StorageConnector {
 	s.ConnectorType = &v
+	return s
+}
+
+// SetDomains sets the Domains field's value.
+func (s *StorageConnector) SetDomains(v []*string) *StorageConnector {
+	s.Domains = v
 	return s
 }
 
@@ -6405,7 +6773,7 @@ func (s UntagResourceOutput) GoString() string {
 type UpdateDirectoryConfigInput struct {
 	_ struct{} `type:"structure"`
 
-	// The name of the directory configuration.
+	// The name of the Directory Config object.
 	//
 	// DirectoryName is a required field
 	DirectoryName *string `type:"string" required:"true"`
@@ -6467,7 +6835,7 @@ func (s *UpdateDirectoryConfigInput) SetServiceAccountCredentials(v *ServiceAcco
 type UpdateDirectoryConfigOutput struct {
 	_ struct{} `type:"structure"`
 
-	// Information about the directory configuration.
+	// Information about the Directory Config object.
 	DirectoryConfig *DirectoryConfig `type:"structure"`
 }
 
@@ -6730,16 +7098,24 @@ type UpdateStackInput struct {
 	// The stack name for display.
 	DisplayName *string `type:"string"`
 
+	// The URL that users are redirected to after they click the Send Feedback link.
+	// If no URL is specified, no Send Feedback link is displayed.
+	FeedbackURL *string `type:"string"`
+
 	// The name of the stack.
 	//
 	// Name is a required field
 	Name *string `min:"1" type:"string" required:"true"`
 
-	// The URL the user is redirected to after the streaming session ends.
+	// The URL that users are redirected to after their streaming session ends.
 	RedirectURL *string `type:"string"`
 
 	// The storage connectors to enable.
 	StorageConnectors []*StorageConnector `type:"list"`
+
+	// The actions that are enabled or disabled for users during their streaming
+	// sessions. By default, these actions are enabled.
+	UserSettings []*UserSetting `min:"1" type:"list"`
 }
 
 // String returns the string representation
@@ -6761,6 +7137,9 @@ func (s *UpdateStackInput) Validate() error {
 	if s.Name != nil && len(*s.Name) < 1 {
 		invalidParams.Add(request.NewErrParamMinLen("Name", 1))
 	}
+	if s.UserSettings != nil && len(s.UserSettings) < 1 {
+		invalidParams.Add(request.NewErrParamMinLen("UserSettings", 1))
+	}
 	if s.StorageConnectors != nil {
 		for i, v := range s.StorageConnectors {
 			if v == nil {
@@ -6768,6 +7147,16 @@ func (s *UpdateStackInput) Validate() error {
 			}
 			if err := v.Validate(); err != nil {
 				invalidParams.AddNested(fmt.Sprintf("%s[%v]", "StorageConnectors", i), err.(request.ErrInvalidParams))
+			}
+		}
+	}
+	if s.UserSettings != nil {
+		for i, v := range s.UserSettings {
+			if v == nil {
+				continue
+			}
+			if err := v.Validate(); err != nil {
+				invalidParams.AddNested(fmt.Sprintf("%s[%v]", "UserSettings", i), err.(request.ErrInvalidParams))
 			}
 		}
 	}
@@ -6802,6 +7191,12 @@ func (s *UpdateStackInput) SetDisplayName(v string) *UpdateStackInput {
 	return s
 }
 
+// SetFeedbackURL sets the FeedbackURL field's value.
+func (s *UpdateStackInput) SetFeedbackURL(v string) *UpdateStackInput {
+	s.FeedbackURL = &v
+	return s
+}
+
 // SetName sets the Name field's value.
 func (s *UpdateStackInput) SetName(v string) *UpdateStackInput {
 	s.Name = &v
@@ -6817,6 +7212,12 @@ func (s *UpdateStackInput) SetRedirectURL(v string) *UpdateStackInput {
 // SetStorageConnectors sets the StorageConnectors field's value.
 func (s *UpdateStackInput) SetStorageConnectors(v []*StorageConnector) *UpdateStackInput {
 	s.StorageConnectors = v
+	return s
+}
+
+// SetUserSettings sets the UserSettings field's value.
+func (s *UpdateStackInput) SetUserSettings(v []*UserSetting) *UpdateStackInput {
+	s.UserSettings = v
 	return s
 }
 
@@ -6840,6 +7241,60 @@ func (s UpdateStackOutput) GoString() string {
 // SetStack sets the Stack field's value.
 func (s *UpdateStackOutput) SetStack(v *Stack) *UpdateStackOutput {
 	s.Stack = v
+	return s
+}
+
+// Describes an action and whether the action is enabled or disabled for users
+// during their streaming sessions.
+type UserSetting struct {
+	_ struct{} `type:"structure"`
+
+	// The action that is enabled or disabled.
+	//
+	// Action is a required field
+	Action *string `type:"string" required:"true" enum:"Action"`
+
+	// Indicates whether the action is enabled or disabled.
+	//
+	// Permission is a required field
+	Permission *string `type:"string" required:"true" enum:"Permission"`
+}
+
+// String returns the string representation
+func (s UserSetting) String() string {
+	return awsutil.Prettify(s)
+}
+
+// GoString returns the string representation
+func (s UserSetting) GoString() string {
+	return s.String()
+}
+
+// Validate inspects the fields of the type to determine if they are valid.
+func (s *UserSetting) Validate() error {
+	invalidParams := request.ErrInvalidParams{Context: "UserSetting"}
+	if s.Action == nil {
+		invalidParams.Add(request.NewErrParamRequired("Action"))
+	}
+	if s.Permission == nil {
+		invalidParams.Add(request.NewErrParamRequired("Permission"))
+	}
+
+	if invalidParams.Len() > 0 {
+		return invalidParams
+	}
+	return nil
+}
+
+// SetAction sets the Action field's value.
+func (s *UserSetting) SetAction(v string) *UserSetting {
+	s.Action = &v
+	return s
+}
+
+// SetPermission sets the Permission field's value.
+func (s *UserSetting) SetPermission(v string) *UserSetting {
+	s.Permission = &v
 	return s
 }
 
@@ -6875,6 +7330,23 @@ func (s *VpcConfig) SetSubnetIds(v []*string) *VpcConfig {
 	s.SubnetIds = v
 	return s
 }
+
+const (
+	// ActionClipboardCopyFromLocalDevice is a Action enum value
+	ActionClipboardCopyFromLocalDevice = "CLIPBOARD_COPY_FROM_LOCAL_DEVICE"
+
+	// ActionClipboardCopyToLocalDevice is a Action enum value
+	ActionClipboardCopyToLocalDevice = "CLIPBOARD_COPY_TO_LOCAL_DEVICE"
+
+	// ActionFileUpload is a Action enum value
+	ActionFileUpload = "FILE_UPLOAD"
+
+	// ActionFileDownload is a Action enum value
+	ActionFileDownload = "FILE_DOWNLOAD"
+
+	// ActionPrintingToLocalDevice is a Action enum value
+	ActionPrintingToLocalDevice = "PRINTING_TO_LOCAL_DEVICE"
+)
 
 const (
 	// AuthenticationTypeApi is a AuthenticationType enum value
@@ -7048,6 +7520,9 @@ const (
 	// ImageStateFailed is a ImageState enum value
 	ImageStateFailed = "FAILED"
 
+	// ImageStateCopying is a ImageState enum value
+	ImageStateCopying = "COPYING"
+
 	// ImageStateDeleting is a ImageState enum value
 	ImageStateDeleting = "DELETING"
 )
@@ -7058,6 +7533,17 @@ const (
 
 	// ImageStateChangeReasonCodeImageBuilderNotAvailable is a ImageStateChangeReasonCode enum value
 	ImageStateChangeReasonCodeImageBuilderNotAvailable = "IMAGE_BUILDER_NOT_AVAILABLE"
+
+	// ImageStateChangeReasonCodeImageCopyFailure is a ImageStateChangeReasonCode enum value
+	ImageStateChangeReasonCodeImageCopyFailure = "IMAGE_COPY_FAILURE"
+)
+
+const (
+	// PermissionEnabled is a Permission enum value
+	PermissionEnabled = "ENABLED"
+
+	// PermissionDisabled is a Permission enum value
+	PermissionDisabled = "DISABLED"
 )
 
 const (
@@ -7081,8 +7567,23 @@ const (
 	// StackAttributeStorageConnectors is a StackAttribute enum value
 	StackAttributeStorageConnectors = "STORAGE_CONNECTORS"
 
+	// StackAttributeStorageConnectorHomefolders is a StackAttribute enum value
+	StackAttributeStorageConnectorHomefolders = "STORAGE_CONNECTOR_HOMEFOLDERS"
+
+	// StackAttributeStorageConnectorGoogleDrive is a StackAttribute enum value
+	StackAttributeStorageConnectorGoogleDrive = "STORAGE_CONNECTOR_GOOGLE_DRIVE"
+
 	// StackAttributeRedirectUrl is a StackAttribute enum value
 	StackAttributeRedirectUrl = "REDIRECT_URL"
+
+	// StackAttributeFeedbackUrl is a StackAttribute enum value
+	StackAttributeFeedbackUrl = "FEEDBACK_URL"
+
+	// StackAttributeThemeName is a StackAttribute enum value
+	StackAttributeThemeName = "THEME_NAME"
+
+	// StackAttributeUserSettings is a StackAttribute enum value
+	StackAttributeUserSettings = "USER_SETTINGS"
 )
 
 const (
@@ -7097,6 +7598,9 @@ const (
 const (
 	// StorageConnectorTypeHomefolders is a StorageConnectorType enum value
 	StorageConnectorTypeHomefolders = "HOMEFOLDERS"
+
+	// StorageConnectorTypeGoogleDrive is a StorageConnectorType enum value
+	StorageConnectorTypeGoogleDrive = "GOOGLE_DRIVE"
 )
 
 const (

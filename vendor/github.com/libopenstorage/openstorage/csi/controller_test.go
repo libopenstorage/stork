@@ -23,7 +23,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/kvdb"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -41,7 +41,9 @@ func TestControllerGetCapabilities(t *testing.T) {
 	c := csi.NewControllerClient(s.Conn())
 	r, err := c.ControllerGetCapabilities(
 		context.Background(),
-		&csi.ControllerGetCapabilitiesRequest{})
+		&csi.ControllerGetCapabilitiesRequest{
+			Version: &csi.Version{},
+		})
 	assert.Nil(t, err)
 
 	// Verify
@@ -104,7 +106,7 @@ func TestControllerValidateVolumeCapabilitiesBadArguments(t *testing.T) {
 
 	req := &csi.ValidateVolumeCapabilitiesRequest{}
 
-	// Miss capabilities and id
+	// Missing everything
 	c := csi.NewControllerClient(s.Conn())
 	_, err := c.ValidateVolumeCapabilities(context.Background(), req)
 	assert.NotNil(t, err)
@@ -113,9 +115,21 @@ func TestControllerValidateVolumeCapabilitiesBadArguments(t *testing.T) {
 	assert.True(t, ok)
 
 	assert.Equal(t, serverError.Code(), codes.InvalidArgument)
+	assert.Contains(t, serverError.Message(), "Version")
+
+	// Miss capabilities and id
+	req.Version = &csi.Version{}
+	_, err = c.ValidateVolumeCapabilities(context.Background(), req)
+	assert.NotNil(t, err)
+
+	serverError, ok = status.FromError(err)
+	assert.True(t, ok)
+
+	assert.Equal(t, serverError.Code(), codes.InvalidArgument)
 	assert.Contains(t, serverError.Message(), "capabilities")
 
 	// Miss id and capabilities len is 0
+	req.Version = &csi.Version{}
 	req.VolumeCapabilities = []*csi.VolumeCapability{}
 	_, err = c.ValidateVolumeCapabilities(context.Background(), req)
 	assert.NotNil(t, err)
@@ -127,6 +141,7 @@ func TestControllerValidateVolumeCapabilitiesBadArguments(t *testing.T) {
 	assert.Contains(t, serverError.Message(), "capabilities")
 
 	// Miss id
+	req.Version = &csi.Version{}
 	req.VolumeCapabilities = []*csi.VolumeCapability{
 		&csi.VolumeCapability{},
 	}
@@ -191,6 +206,7 @@ func TestControllerValidateVolumeInvalidId(t *testing.T) {
 	)
 
 	req := &csi.ValidateVolumeCapabilitiesRequest{
+		Version: &csi.Version{},
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -258,6 +274,7 @@ func TestControllerValidateVolumeInvalidCapabilities(t *testing.T) {
 
 	// Setup request
 	req := &csi.ValidateVolumeCapabilitiesRequest{
+		Version: &csi.Version{},
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -349,6 +366,7 @@ func TestControllerValidateVolumeAccessModeSNWR(t *testing.T) {
 
 	// Setup request
 	req := &csi.ValidateVolumeCapabilitiesRequest{
+		Version: &csi.Version{},
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{
 				AccessType: &csi.VolumeCapability_Mount{
@@ -457,6 +475,7 @@ func TestControllerValidateVolumeAccessModeSNRO(t *testing.T) {
 
 	// Setup request
 	req := &csi.ValidateVolumeCapabilitiesRequest{
+		Version: &csi.Version{},
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{
 				AccessType: &csi.VolumeCapability_Mount{
@@ -565,6 +584,7 @@ func TestControllerValidateVolumeAccessModeMNRO(t *testing.T) {
 
 	// Setup request
 	req := &csi.ValidateVolumeCapabilitiesRequest{
+		Version: &csi.Version{},
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{
 				AccessType: &csi.VolumeCapability_Mount{
@@ -673,6 +693,7 @@ func TestControllerValidateVolumeAccessModeMNWR(t *testing.T) {
 
 	// Setup request
 	req := &csi.ValidateVolumeCapabilitiesRequest{
+		Version: &csi.Version{},
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{
 				AccessType: &csi.VolumeCapability_Mount{
@@ -731,6 +752,7 @@ func TestControllerValidateVolumeAccessModeUnknown(t *testing.T) {
 
 	// Setup request
 	req := &csi.ValidateVolumeCapabilitiesRequest{
+		Version: &csi.Version{},
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{
 				AccessType: &csi.VolumeCapability_Mount{
@@ -759,12 +781,21 @@ func TestControllerListVolumesInvalidArguments(t *testing.T) {
 	// Setup request
 	req := &csi.ListVolumesRequest{}
 
-	// Expect error with maxentries set
-	// To be removed once CSI Spec issue #138 is resolved
-	req.MaxEntries = 1
+	// Expect error without version
 	_, err := c.ListVolumes(context.Background(), req)
 	assert.NotNil(t, err)
 	serverError, ok := status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, serverError.Code(), codes.InvalidArgument)
+	assert.Contains(t, serverError.Message(), "Version")
+
+	// Expect error with maxentries set
+	// To be removed once CSI Spec issue #138 is resolved
+	req.Version = &csi.Version{}
+	req.MaxEntries = 1
+	_, err = c.ListVolumes(context.Background(), req)
+	assert.NotNil(t, err)
+	serverError, ok = status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, serverError.Code(), codes.Unimplemented)
 	assert.Contains(t, serverError.Message(), "token")
@@ -784,7 +815,9 @@ func TestControllerListVolumesEnumerateError(t *testing.T) {
 		Times(1)
 
 	// Setup request
-	req := &csi.ListVolumesRequest{}
+	req := &csi.ListVolumesRequest{
+		Version: &csi.Version{},
+	}
 
 	// Expect that the Enumerate call failed
 	_, err := c.ListVolumes(context.Background(), req)
@@ -845,8 +878,12 @@ func TestControllerListVolumes(t *testing.T) {
 		Return(mockVolumeList, nil).
 		Times(1)
 
-	// Test List Volumes
-	req := &csi.ListVolumesRequest{}
+	// Setup request
+	req := &csi.ListVolumesRequest{
+		Version: &csi.Version{},
+	}
+
+	// Expect error without version
 	r, err := c.ListVolumes(context.Background(), req)
 	assert.Nil(t, err)
 	assert.NotNil(t, r)
@@ -858,12 +895,12 @@ func TestControllerListVolumes(t *testing.T) {
 	found := 0
 	for _, mv := range mockVolumeList {
 		for _, v := range volumes {
-			info := v.GetVolume()
+			info := v.GetVolumeInfo()
 			assert.NotNil(t, info)
 
 			if mv.GetId() == info.GetId() {
 				found++
-				assert.Equal(t, info.GetCapacityBytes(), int64(mv.GetSpec().GetSize()))
+				assert.Equal(t, info.GetCapacityBytes(), mv.GetSpec().GetSize())
 
 				attributes := info.GetAttributes()
 				assert.Equal(t, attributes["readonly"], fmt.Sprintf("%v", mv.GetReadonly()))
@@ -893,6 +930,15 @@ func TestControllerCreateVolumeInvalidArguments(t *testing.T) {
 	_, err := c.CreateVolume(context.Background(), req)
 	assert.NotNil(t, err)
 	serverError, ok := status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, serverError.Code(), codes.InvalidArgument)
+	assert.Contains(t, serverError.Message(), "Version")
+
+	// No name
+	req.Version = &csi.Version{}
+	_, err = c.CreateVolume(context.Background(), req)
+	assert.NotNil(t, err)
+	serverError, ok = status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, serverError.Code(), codes.InvalidArgument)
 	assert.Contains(t, serverError.Message(), "Name")
@@ -933,7 +979,8 @@ func TestControllerCreateVolumeFoundByVolumeFromNameConflict(t *testing.T) {
 		{
 			name: "size",
 			req: &csi.CreateVolumeRequest{
-				Name: "size",
+				Version: &csi.Version{},
+				Name:    "size",
 				VolumeCapabilities: []*csi.VolumeCapability{
 					&csi.VolumeCapability{},
 				},
@@ -958,7 +1005,8 @@ func TestControllerCreateVolumeFoundByVolumeFromNameConflict(t *testing.T) {
 		{
 			name: "shared",
 			req: &csi.CreateVolumeRequest{
-				Name: "shared",
+				Version: &csi.Version{},
+				Name:    "shared",
 				VolumeCapabilities: []*csi.VolumeCapability{
 					&csi.VolumeCapability{
 						AccessMode: &csi.VolumeCapability_AccessMode{
@@ -988,7 +1036,8 @@ func TestControllerCreateVolumeFoundByVolumeFromNameConflict(t *testing.T) {
 		{
 			name: "parent",
 			req: &csi.CreateVolumeRequest{
-				Name: "parent",
+				Version: &csi.Version{},
+				Name:    "parent",
 				VolumeCapabilities: []*csi.VolumeCapability{
 					&csi.VolumeCapability{},
 				},
@@ -1045,7 +1094,8 @@ func TestControllerCreateVolumeNoCapacity(t *testing.T) {
 	// Setup request
 	name := "myvol"
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1100,10 +1150,10 @@ func TestControllerCreateVolumeNoCapacity(t *testing.T) {
 	r, err := c.CreateVolume(context.Background(), req)
 	assert.Nil(t, err)
 	assert.NotNil(t, r)
-	volumeInfo := r.GetVolume()
+	volumeInfo := r.GetVolumeInfo()
 
 	assert.Equal(t, id, volumeInfo.GetId())
-	assert.Equal(t, int64(defaultCSIVolumeSize), volumeInfo.GetCapacityBytes())
+	assert.Equal(t, defaultCSIVolumeSize, volumeInfo.GetCapacityBytes())
 }
 
 func TestControllerCreateVolumeFoundByVolumeFromName(t *testing.T) {
@@ -1114,9 +1164,10 @@ func TestControllerCreateVolumeFoundByVolumeFromName(t *testing.T) {
 
 	// Setup request
 	name := "myvol"
-	size := int64(1234)
+	size := uint64(1234)
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1143,7 +1194,7 @@ func TestControllerCreateVolumeFoundByVolumeFromName(t *testing.T) {
 						Name: name,
 					},
 					Spec: &api.VolumeSpec{
-						Size: uint64(size),
+						Size: size,
 					},
 				},
 			}, nil).
@@ -1153,7 +1204,7 @@ func TestControllerCreateVolumeFoundByVolumeFromName(t *testing.T) {
 	r, err := c.CreateVolume(context.Background(), req)
 	assert.Nil(t, err)
 	assert.NotNil(t, r)
-	volumeInfo := r.GetVolume()
+	volumeInfo := r.GetVolumeInfo()
 
 	assert.Equal(t, name, volumeInfo.GetId())
 	assert.Equal(t, size, volumeInfo.GetCapacityBytes())
@@ -1167,9 +1218,10 @@ func TestControllerCreateVolumeBadParameters(t *testing.T) {
 
 	// Setup request
 	name := "myvol"
-	size := int64(1234)
+	size := uint64(1234)
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1197,10 +1249,11 @@ func TestControllerCreateVolumeBadParentId(t *testing.T) {
 
 	// Setup request
 	name := "myvol"
-	size := int64(1234)
+	size := uint64(1234)
 	parent := "badid"
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1257,10 +1310,11 @@ func TestControllerCreateVolumeBadSnapshot(t *testing.T) {
 
 	// Setup request
 	name := "myvol"
-	size := int64(1234)
+	size := uint64(1234)
 	parent := "parent"
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1340,9 +1394,10 @@ func TestControllerCreateVolumeWithSharedVolume(t *testing.T) {
 	for _, mode := range modes {
 		// Setup request
 		name := "myvol"
-		size := int64(1234)
+		size := uint64(1234)
 		req := &csi.CreateVolumeRequest{
-			Name: name,
+			Version: &csi.Version{},
+			Name:    name,
 			VolumeCapabilities: []*csi.VolumeCapability{
 				&csi.VolumeCapability{
 					AccessMode: &csi.VolumeCapability_AccessMode{
@@ -1386,7 +1441,7 @@ func TestControllerCreateVolumeWithSharedVolume(t *testing.T) {
 							Name: name,
 						},
 						Spec: &api.VolumeSpec{
-							Size:   uint64(size),
+							Size:   size,
 							Shared: true,
 						},
 					},
@@ -1397,7 +1452,7 @@ func TestControllerCreateVolumeWithSharedVolume(t *testing.T) {
 		r, err := c.CreateVolume(context.Background(), req)
 		assert.Nil(t, err)
 		assert.NotNil(t, r)
-		volumeInfo := r.GetVolume()
+		volumeInfo := r.GetVolumeInfo()
 
 		assert.Equal(t, id, volumeInfo.GetId())
 		assert.Equal(t, size, volumeInfo.GetCapacityBytes())
@@ -1413,9 +1468,10 @@ func TestControllerCreateVolumeFails(t *testing.T) {
 
 	// Setup request
 	name := "myvol"
-	size := int64(1234)
+	size := uint64(1234)
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1461,9 +1517,10 @@ func TestControllerCreateVolumeNoNewVolumeInfo(t *testing.T) {
 
 	// Setup request
 	name := "myvol"
-	size := int64(1234)
+	size := uint64(1234)
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1522,9 +1579,10 @@ func TestControllerCreateVolume(t *testing.T) {
 
 	// Setup request
 	name := "myvol"
-	size := int64(1234)
+	size := uint64(1234)
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1564,7 +1622,7 @@ func TestControllerCreateVolume(t *testing.T) {
 						Name: name,
 					},
 					Spec: &api.VolumeSpec{
-						Size: uint64(size),
+						Size: size,
 					},
 				},
 			}, nil).
@@ -1574,7 +1632,7 @@ func TestControllerCreateVolume(t *testing.T) {
 	r, err := c.CreateVolume(context.Background(), req)
 	assert.Nil(t, err)
 	assert.NotNil(t, r)
-	volumeInfo := r.GetVolume()
+	volumeInfo := r.GetVolumeInfo()
 
 	assert.Equal(t, id, volumeInfo.GetId())
 	assert.Equal(t, size, volumeInfo.GetCapacityBytes())
@@ -1590,9 +1648,10 @@ func TestControllerCreateVolumeSnapshot(t *testing.T) {
 	// Setup request
 	mockParentID := "parendId"
 	name := "myvol"
-	size := int64(1234)
+	size := uint64(1234)
 	req := &csi.CreateVolumeRequest{
-		Name: name,
+		Version: &csi.Version{},
+		Name:    name,
 		VolumeCapabilities: []*csi.VolumeCapability{
 			&csi.VolumeCapability{},
 		},
@@ -1647,7 +1706,7 @@ func TestControllerCreateVolumeSnapshot(t *testing.T) {
 						Name: name,
 					},
 					Spec: &api.VolumeSpec{
-						Size: uint64(size),
+						Size: size,
 					},
 					Source: &api.Source{
 						Parent: mockParentID,
@@ -1660,7 +1719,7 @@ func TestControllerCreateVolumeSnapshot(t *testing.T) {
 	r, err := c.CreateVolume(context.Background(), req)
 	assert.Nil(t, err)
 	assert.NotNil(t, r)
-	volumeInfo := r.GetVolume()
+	volumeInfo := r.GetVolumeInfo()
 
 	assert.Equal(t, id, volumeInfo.GetId())
 	assert.Equal(t, size, volumeInfo.GetCapacityBytes())
@@ -1681,6 +1740,15 @@ func TestControllerDeleteVolumeInvalidArguments(t *testing.T) {
 	serverError, ok := status.FromError(err)
 	assert.True(t, ok)
 	assert.Equal(t, serverError.Code(), codes.InvalidArgument)
+	assert.Contains(t, serverError.Message(), "Version")
+
+	// No id
+	req.Version = &csi.Version{}
+	_, err = c.DeleteVolume(context.Background(), req)
+	assert.NotNil(t, err)
+	serverError, ok = status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, serverError.Code(), codes.InvalidArgument)
 	assert.Contains(t, serverError.Message(), "Volume id")
 }
 
@@ -1693,6 +1761,7 @@ func TestControllerDeleteVolumeError(t *testing.T) {
 	// No version
 	myid := "myid"
 	req := &csi.DeleteVolumeRequest{
+		Version:  &csi.Version{},
 		VolumeId: myid,
 	}
 
@@ -1732,6 +1801,7 @@ func TestControllerDeleteVolume(t *testing.T) {
 	// No version
 	myid := "myid"
 	req := &csi.DeleteVolumeRequest{
+		Version:  &csi.Version{},
 		VolumeId: myid,
 	}
 

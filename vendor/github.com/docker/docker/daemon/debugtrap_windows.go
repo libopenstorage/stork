@@ -7,7 +7,7 @@ import (
 	"unsafe"
 
 	winio "github.com/Microsoft/go-winio"
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/system"
 )

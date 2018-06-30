@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/kvdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -305,17 +305,26 @@ func deleteTree(kv kvdb.Kvdb, t *testing.T) {
 		assert.NoError(t, err, "Unexpected error on Put")
 	}
 
+	key_with_same_prefix := prefix + "_some"
+	_, err := kv.Put(key_with_same_prefix, []byte("val"), 0)
+	assert.NoError(t, err, "Unexpected error on Put")
+
+	_, err = kv.Get(key_with_same_prefix)
+	assert.NoError(t, err, "Unexpected error on Get")
+
 	for key := range keys {
 		_, err := kv.Get(key)
 		assert.NoError(t, err, "Unexpected error on Get")
 	}
-	err := kv.DeleteTree(prefix)
+	err = kv.DeleteTree(prefix)
 	assert.NoError(t, err, "Unexpected error on DeleteTree")
 
 	for key := range keys {
 		_, err := kv.Get(key)
 		assert.Error(t, err, "Get should fail on all keys after DeleteTree")
 	}
+	_, err = kv.Get(key_with_same_prefix)
+	assert.NoError(t, err, "Unexpected error on Get")
 }
 
 func enumerate(kv kvdb.Kvdb, t *testing.T) {

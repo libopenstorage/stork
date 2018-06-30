@@ -18,7 +18,7 @@ const (
 	SpecEphemeral            = "ephemeral"
 	SpecShared               = "shared"
 	SpecJournal              = "journal"
-	SpecSharedv4             = "sharedv4"
+	SpecNfs                  = "nfs"
 	SpecCascaded             = "cascaded"
 	SpecSticky               = "sticky"
 	SpecSecure               = "secure"
@@ -216,6 +216,8 @@ type CredCreateRequest struct {
 type CredCreateResponse struct {
 	// UUID of the credential that was just created
 	UUID string
+	// CredErr indicates reasonfor failed CredCreate
+	CredErr string
 }
 
 // StatPoint represents the basic structure of a single Stat reported
@@ -232,83 +234,75 @@ type StatPoint struct {
 	Timestamp int64
 }
 
-type CloudBackupCreateRequest struct {
+type BackupRequest struct {
 	// VolumeID of the volume for which cloudbackup is requested
 	VolumeID string
 	// CredentialUUID is cloud credential to be used for backup
 	CredentialUUID string
-	// Full indicates if full backup is desired even though incremental is possible
+	// Full indicates if full backup is desired eventhough incremental is possible
 	Full bool
 }
 
-type CloudBackupRestoreRequest struct {
-	// ID is the backup ID being restored
-	ID string
+type BackupRestoreRequest struct {
+	// CloudBackupID is the backup ID being restored
+	CloudBackupID string
 	// RestoreVolumeName is optional volume Name of the new volume to be created
 	// in the cluster for restoring the cloudbackup
 	RestoreVolumeName string
 	// CredentialUUID is the credential to be used for restore operation
 	CredentialUUID string
-	// NodeID is the optional NodeID for provisioning restore
-	// volume (ResoreVolumeName should not be specified)
+	// NodeID is the optional NodeID for provisionging restore volume(ResoreVolumeID should not be specified)
 	NodeID string
 }
 
-type CloudBackupRestoreResponse struct {
+type BackupRestoreResponse struct {
 	// RestoreVolumeID is the volumeID to which the backup is being restored
 	RestoreVolumeID string
+	// RestoreErr indicates the reason for failure of restore operation
+	RestoreErr string
 }
 
-type CloudBackupGenericRequest struct {
-	// SrcVolumeID is optional Source VolumeID for the request
+type BackupGenericRequest struct {
+	// SrcVolumeID is optional Source VolumeID to list backups for
 	SrcVolumeID string
-	// ClusterID is the optional clusterID for the request
+	// ClusterID is the optional clusterID to list backups for
 	ClusterID string
-	// CredentialUUID is the credential for cloud to be used for the request
-	CredentialUUID string
-	// All if set to true, backups for all clusters in the cloud are processed
+	// All if set to true, backups for all clusters in the cloud are returned
 	All bool
+	// CredentialUUID is the credential for cloud
+	CredentialUUID string
 }
 
-type CloudBackupInfo struct {
-	// ID is the ID of the cloud backup
-	ID string
-	// SrcVolumeID is Source volumeID of the backup
+type BackupEnumerateRequest struct {
+	BackupGenericRequest
+}
+
+type BackupDeleteRequest struct {
+	BackupGenericRequest
+}
+
+type BackupInfo struct {
+	// SrcVolumeID  is Source volumeID of the backup
 	SrcVolumeID string
 	// SrcvolumeName is name of the sourceVolume of the backup
 	SrcVolumeName string
+	// BackupID is cloud backup ID for the above source volume
+	BackupID string
 	// Timestamp is the timestamp at which the source volume
 	// was backed up to cloud
 	Timestamp time.Time
-	// Metadata associated with the backup
-	Metadata map[string]string
-	// Status indicates the status of the backup
+	// Status indicates if this backup was successful
 	Status string
 }
 
-type CloudBackupEnumerateRequest struct {
-	CloudBackupGenericRequest
-}
-
-type CloudBackupEnumerateResponse struct {
+type BackupEnumerateResponse struct {
 	// Backups is list of backups in cloud for given volume/cluster/s
-	Backups []CloudBackupInfo
+	Backups []BackupInfo
+	// EnumerateErr indicates any error encountered while enumerating backups
+	EnumerateErr string
 }
 
-type CloudBackupDeleteRequest struct {
-	// ID is the ID of the cloud backup
-	ID string
-	// CredentialUUID is the credential for cloud to be used for the request
-	CredentialUUID string
-	// Force Delete cloudbackup even if there are dependencies
-	Force bool
-}
-
-type CloudBackupDeleteAllRequest struct {
-	CloudBackupGenericRequest
-}
-
-type CloudBackupStatusRequest struct {
+type BackupStsRequest struct {
 	// SrcVolumeID optional volumeID to list status of backup/restore
 	SrcVolumeID string
 	// Local indicates if only those backups/restores that are
@@ -316,18 +310,9 @@ type CloudBackupStatusRequest struct {
 	Local bool
 }
 
-type CloudBackupOpType string
-
-const (
-	CloudBackupOp  = CloudBackupOpType("Backup")
-	CloudRestoreOp = CloudBackupOpType("Restore")
-)
-
-type CloudBackupStatus struct {
-	// ID is the ID for the operation
-	ID string
+type BackupStatus struct {
 	// OpType indicates if this is a backup or restore
-	OpType CloudBackupOpType
+	OpType string
 	// State indicates if the op is currently active/done/failed
 	Status string
 	// BytesDone indicates total Bytes uploaded/downloaded
@@ -336,34 +321,40 @@ type CloudBackupStatus struct {
 	StartTime time.Time
 	// CompletedTime indicates Op's completed time
 	CompletedTime time.Time
+	//BackupID is the Backup ID for the Op
+	BackupID string
 	// NodeID is the ID of the node where this Op is active
 	NodeID string
 }
 
-type CloudBackupStatusResponse struct {
+type BackupStsResponse struct {
 	// statuses is list of currently active/failed/done backup/restores
-	Statuses map[string]CloudBackupStatus
+	Statuses map[string]BackupStatus
+	// StsErr indicates any error in obtaining the status
+	StsErr string
 }
 
-type CloudBackupCatalogRequest struct {
-	// ID is Backup ID in the cloud
-	ID string
+type BackupCatalogueRequest struct {
+	// CloudBackupID is Backup ID in the cloud
+	CloudBackupID string
 	// CredentialUUID is the credential for cloud
 	CredentialUUID string
 }
 
-type CloudBackupCatalogResponse struct {
+type BackupCatalogueResponse struct {
 	// Contents is listing of backup contents
 	Contents []string
+	// CatalogueErr indicates any error in obtaining cataolgue
+	CatalogueErr string
 }
 
-type CloudBackupHistoryRequest struct {
-	// SrcVolumeID is volumeID for which history of backup/restore
+type BackupHistoryRequest struct {
+	//SrcVolumeID is volumeID for which history of backup/restore
 	// is being requested
 	SrcVolumeID string
 }
 
-type CloudBackupHistoryItem struct {
+type BackupHistoryItem struct {
 	// SrcVolumeID is volume ID which was backedup
 	SrcVolumeID string
 	// TimeStamp is the time at which either backup completed/failed
@@ -372,12 +363,14 @@ type CloudBackupHistoryItem struct {
 	Status string
 }
 
-type CloudBackupHistoryResponse struct {
-	// HistoryList is list of past backup/restores in the cluster
-	HistoryList []CloudBackupHistoryItem
+type BackupHistoryResponse struct {
+	//HistoryList is list of past backup/restores in the cluster
+	HistoryList []BackupHistoryItem
+	//HistoryErr indicates any error in obtaining history
+	HistoryErr string
 }
 
-type CloudBackupStateChangeRequest struct {
+type BackupStateChangeRequest struct {
 	// SrcVolumeID is volume ID on which backup/restore
 	// state change is being requested
 	SrcVolumeID string
@@ -386,35 +379,35 @@ type CloudBackupStateChangeRequest struct {
 	RequestedState string
 }
 
-type CloudBackupScheduleInfo struct {
-	// SrcVolumeID is the schedule's source volume
+type BackupScheduleInfo struct {
+	// SrcVolumeID is the i schedule's source volume
 	SrcVolumeID string
 	// CredentialUUID is the cloud credential used with this schedule
 	CredentialUUID string
-	// Schedule is the frequence of backup
-	Schedule string
+	// BackupSchedule is the frequence of backup
+	BackupSchedule string
 	// MaxBackups are the maximum number of backups retained
 	// in cloud.Older backups are deleted
 	MaxBackups uint
 }
 
-type CloudBackupSchedCreateRequest struct {
-	CloudBackupScheduleInfo
+type BackupSchedDeleteRequest struct {
+	// SchedUUID is UUID of the schedule to be deleted
+	SchedUUID string
 }
 
-type CloudBackupSchedCreateResponse struct {
-	// UUID is the UUID of the newly created schedule
-	UUID string
+type BackupSchedResponse struct {
+	// SchedUUID is the UUID of the newly created schedule
+	SchedUUID string
+	//SchedCreateErr indicates any error while creating backupschedule
+	SchedCreateErr string
 }
 
-type CloudBackupSchedDeleteRequest struct {
-	// UUID is UUID of the schedule to be deleted
-	UUID string
-}
-
-type CloudBackupSchedEnumerateResponse struct {
-	// Schedule is map of schedule uuid to scheduleInfo
-	Schedules map[string]CloudBackupScheduleInfo
+type BackupSchedEnumerateResponse struct {
+	// BackupSchedule is map of schedule uuid to scheduleInfo
+	BackupSchedules map[string]BackupScheduleInfo
+	// SchedEnumerateErr is error encountered while enumerating schedules
+	SchedEnumerateErr string
 }
 
 // DriverTypeSimpleValueOf returns the string format of DriverType
@@ -635,53 +628,4 @@ func (v Volume) DisplayId() string {
 	} else {
 		return v.Id
 	}
-}
-
-// ToStorageNode converts a Node structure to an exported gRPC StorageNode struct
-func (s *Node) ToStorageNode() *StorageNode {
-	node := &StorageNode{
-		Id:       s.Id,
-		Cpu:      s.Cpu,
-		MemTotal: s.MemTotal,
-		MemUsed:  s.MemUsed,
-		MemFree:  s.MemFree,
-		AvgLoad:  int64(s.Avgload),
-		Status:   s.Status,
-		MgmtIp:   s.MgmtIp,
-		DataIp:   s.DataIp,
-		Hostname: s.Hostname,
-	}
-
-	node.Disks = make(map[string]*StorageResource)
-	for k, v := range s.Disks {
-		node.Disks[k] = &v
-	}
-
-	node.NodeLabels = make(map[string]string)
-	for k, v := range s.NodeLabels {
-		node.NodeLabels[k] = v
-	}
-
-	node.Pools = make([]*StoragePool, len(s.Pools))
-	for i, v := range s.Pools {
-		node.Pools[i] = &v
-	}
-
-	return node
-}
-
-// ToStorageCluster converts a Cluster structure to an exported gRPC StorageCluster struct
-func (c *Cluster) ToStorageCluster() *StorageCluster {
-	cluster := &StorageCluster{
-		Status: c.Status,
-		Id:     c.Id,
-		NodeId: c.NodeId,
-	}
-
-	cluster.Nodes = make([]*StorageNode, len(c.Nodes))
-	for i, v := range c.Nodes {
-		cluster.Nodes[i] = v.ToStorageNode()
-	}
-
-	return cluster
 }

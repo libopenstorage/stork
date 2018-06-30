@@ -769,10 +769,33 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				}
 			}
 
-			result[snap.Metadata.Name] = map[string]string{
-				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
+			snapDataName := snap.Spec.SnapshotDataName
+			if len(snapDataName) == 0 {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("snapshot: [%s] %s does not have snapshotdata set", snap.Metadata.Namespace, snap.Metadata.Name),
+				}
 			}
 
+			snapData, err := k8sOps.GetSnapshotData(snapDataName)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get volumesnapshotdata: %s due to: %v", snapDataName, err),
+				}
+			}
+
+			if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+				len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapDataName),
+				}
+			}
+
+			result[snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID] = map[string]string{
+				SnapshotParent: snap.Spec.PersistentVolumeClaimName,
+			}
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {

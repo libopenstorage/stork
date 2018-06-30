@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/common"
 )
@@ -355,7 +355,9 @@ func (kv *memKV) put(
 	kv.dist.NewUpdate(&watchUpdate{key, *kvp, nil})
 
 	if ttl != 0 {
+		logrus.Warnf("Starting delete timer for %v", ttl)
 		time.AfterFunc(time.Second*time.Duration(ttl), func() {
+			logrus.Warnf("Timeout based delete on %v", suffix)
 			// TODO: handle error
 			kv.mutex.Lock()
 			defer kv.mutex.Unlock()
@@ -464,6 +466,10 @@ func (kv *memKV) Delete(key string) (*kvdb.KVPair, error) {
 func (kv *memKV) DeleteTree(prefix string) error {
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
+
+	if len(prefix) > 0 && !strings.HasSuffix(prefix, kvdb.DefaultSeparator) {
+		prefix += kvdb.DefaultSeparator
+	}
 
 	kvp, err := kv.enumerate(prefix)
 	if err != nil {

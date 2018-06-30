@@ -6,6 +6,11 @@ ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'vendor' | grep -v 'sanity')
 endif
 
+ifndef LINT_PKGS
+LINT_DIRS := "./csi"
+LINT_PKGS := $(shell go list $(LINT_DIRS) | grep -v vendor)
+endif
+
 ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS := -gcflags "-N -l"
 endif
@@ -89,7 +94,7 @@ proto:
 
 lint:
 	go get -v github.com/golang/lint/golint
-	golint $(PKGS)
+	golint -set_exit_status $(LINT_PKGS)
 
 vet:
 	go vet $(PKGS)
@@ -105,12 +110,6 @@ test:
 
 docs:
 	go generate ./cmd/osd/main.go
-	swagger validate api/swagger/swagger.json
-
-generate-mockfiles:
-	go generate $(PKGS)
-
-generate: docs generate-mockfiles
 
 docker-build-osd-dev:
 	docker build -t openstorage/osd-dev -f Dockerfile.osd-dev .
@@ -167,11 +166,11 @@ launch: docker-build-osd
 	docker run \
 		--privileged \
 		-d \
-		-v $(shell pwd)/etc:/etc \
+		-v $(shell pwd):/etc \
 		-v /run/docker/plugins:/run/docker/plugins \
 		-v /var/lib/osd/:/var/lib/osd/ \
 		-p 9005:9005 \
-		openstorage/osd -d -f /etc/config/config.yaml
+		openstorage/osd -d -f /etc/config.yaml
 
 # must set HAVE_BTRFS
 launch-local-btrfs: install
@@ -218,9 +217,7 @@ clean: $(OSDSANITY)-clean
 	install-flexvolume-plugin \
 	$(OSDSANITY)-install \
 	$(OSDSANITY)-clean \
-	clean \
-	generate \
-	generate-mockfiles
+	clean
 
 $(GOPATH)/bin/cover:
 	go get golang.org/x/tools/cmd/cover

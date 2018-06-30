@@ -3,15 +3,14 @@ package container
 import (
 	"strconv"
 
-	"golang.org/x/net/context"
-
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/versions"
 	"github.com/docker/docker/cli/command"
 	clientapi "github.com/docker/docker/client"
+	"golang.org/x/net/context"
 )
 
 func waitExitOrRemoved(ctx context.Context, dockerCli *command.DockerCli, containerID string, waitRemove bool) chan int {

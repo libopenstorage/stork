@@ -22,13 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/mock/gomock"
 	"github.com/kubernetes-csi/csi-test/utils"
 	"golang.org/x/net/context"
 
 	mockcluster "github.com/libopenstorage/openstorage/cluster/mock"
-	"github.com/libopenstorage/openstorage/pkg/grpcserver"
 	"github.com/libopenstorage/openstorage/volume"
 	volumedrivers "github.com/libopenstorage/openstorage/volume/drivers"
 	mockdriver "github.com/libopenstorage/openstorage/volume/drivers/mock"
@@ -42,7 +41,7 @@ const (
 // the creation and setup of the gRPC CSI service
 type testServer struct {
 	conn   *grpc.ClientConn
-	server grpcserver.Server
+	server Server
 	m      *mockdriver.MockVolumeDriver
 	c      *mockcluster.MockCluster
 	mc     *gomock.Controller
@@ -113,7 +112,7 @@ func (s *testServer) Conn() *grpc.ClientConn {
 	return s.conn
 }
 
-func (s *testServer) Server() grpcserver.Server {
+func (s *testServer) Server() Server {
 	return s.server
 }
 
@@ -137,7 +136,9 @@ func TestCSIServerStart(t *testing.T) {
 	// Make a call
 	s.MockDriver().EXPECT().Name().Return("mock").Times(2)
 	c := csi.NewIdentityClient(s.Conn())
-	r, err := c.GetPluginInfo(context.Background(), &csi.GetPluginInfoRequest{})
+	r, err := c.GetPluginInfo(context.Background(), &csi.GetPluginInfoRequest{
+		Version: &csi.Version{},
+	})
 	assert.Nil(t, err)
 
 	// Verify

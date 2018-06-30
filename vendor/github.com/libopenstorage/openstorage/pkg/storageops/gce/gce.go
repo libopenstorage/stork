@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
+	"github.com/Sirupsen/logrus"
 	"github.com/libopenstorage/openstorage/pkg/storageops"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
 )
@@ -166,15 +166,15 @@ func (s *gceOps) Create(
 		SourceImage:    v.SourceImage,
 		SourceSnapshot: v.SourceSnapshot,
 		Type:           v.Type,
-		Zone:           path.Base(v.Zone),
+		Zone:           s.inst.Zone,
 	}
 
-	resp, err := s.service.Disks.Insert(s.inst.Project, newDisk.Zone, newDisk).Do()
+	resp, err := s.service.Disks.Insert(s.inst.Project, s.inst.Zone, newDisk).Do()
 	if err != nil {
 		return nil, err
 	}
 
-	if err = s.checkDiskStatus(newDisk.Name, newDisk.Zone, STATUS_READY); err != nil {
+	if err = s.checkDiskStatus(newDisk.Name, STATUS_READY); err != nil {
 		return nil, s.rollbackCreate(resp.Name, err)
 	}
 
@@ -187,30 +187,8 @@ func (s *gceOps) Create(
 }
 
 func (s *gceOps) Delete(id string) error {
-	ctx := context.Background()
-	found := false
-	req := s.service.Disks.AggregatedList(s.inst.Project)
-	if err := req.Pages(ctx, func(page *compute.DiskAggregatedList) error {
-		for _, diskScopedList := range page.Items {
-			for _, disk := range diskScopedList.Disks {
-				if disk.Name == id {
-					found = true
-					_, err := s.service.Disks.Delete(s.inst.Project, path.Base(disk.Zone), id).Do()
-					return err
-				}
-			}
-		}
-		return nil
-	}); err != nil {
-		logrus.Errorf("failed to list disks: %v", err)
-		return err
-	}
-
-	if !found {
-		return fmt.Errorf("failed to delete disk: %s as it wasn't found", id)
-	}
-
-	return nil
+	_, err := s.service.Disks.Delete(s.inst.Project, s.inst.Zone, id).Do()
+	return err
 }
 
 func (s *gceOps) Detach(devicePath string) error {
@@ -291,30 +269,34 @@ func (s *gceOps) Enumerate(
 	setIdentifier string,
 ) (map[string][]interface{}, error) {
 	sets := make(map[string][]interface{})
+	ctx := context.Background()
 	found := false
 
-	allDisks, err := s.getDisksFromAllZones(labels)
-	if err != nil {
-		return nil, err
-	}
+	req := s.service.Disks.List(s.inst.Project, s.inst.Zone)
+	if err := req.Pages(ctx, func(page *compute.DiskList) error {
+		for _, disk := range page.Items {
+			if len(setIdentifier) == 0 {
+				storageops.AddElementToMap(sets, disk, storageops.SetIdentifierNone)
+			} else {
+				found = false
+				for key := range disk.Labels {
+					if key == setIdentifier {
+						storageops.AddElementToMap(sets, disk, key)
+						found = true
+						break
+					}
+				}
 
-	for _, disk := range allDisks {
-		if len(setIdentifier) == 0 {
-			storageops.AddElementToMap(sets, disk, storageops.SetIdentifierNone)
-		} else {
-			found = false
-			for key := range disk.Labels {
-				if key == setIdentifier {
-					storageops.AddElementToMap(sets, disk, key)
-					found = true
-					break
+				if !found {
+					storageops.AddElementToMap(sets, disk, storageops.SetIdentifierNone)
 				}
 			}
-
-			if !found {
-				storageops.AddElementToMap(sets, disk, storageops.SetIdentifierNone)
-			}
 		}
+
+		return nil
+	}); err != nil {
+		logrus.Errorf("failed to list disks: %v", err)
+		return nil, err
 	}
 
 	return sets, nil
@@ -338,18 +320,16 @@ func (s *gceOps) GetDeviceID(disk interface{}) (string, error) {
 }
 
 func (s *gceOps) Inspect(diskNames []*string) ([]interface{}, error) {
-	allDisks, err := s.getDisksFromAllZones(nil)
-	if err != nil {
-		return nil, err
-	}
-
 	var disks []interface{}
+
 	for _, id := range diskNames {
-		if d, ok := allDisks[*id]; ok {
-			disks = append(disks, d)
-		} else {
-			return nil, fmt.Errorf("disk %s not found", *id)
+		var d *compute.Disk
+		d, err := s.service.Disks.Get(s.inst.Project, s.inst.Zone, *id).Do()
+		if err != nil {
+			return nil, err
 		}
+
+		disks = append(disks, d)
 	}
 
 	return disks, nil
@@ -424,10 +404,10 @@ func (s *gceOps) available(v *compute.Disk) bool {
 	return v.Status == STATUS_READY
 }
 
-func (s *gceOps) checkDiskStatus(id string, zone string, desired string) error {
+func (s *gceOps) checkDiskStatus(id string, desired string) error {
 	_, err := task.DoRetryWithTimeout(
 		func() (interface{}, bool, error) {
-			d, err := s.service.Disks.Get(s.inst.Project, zone, id).Do()
+			d, err := s.service.Disks.Get(s.inst.Project, s.inst.Zone, id).Do()
 			if err != nil {
 				return nil, true, err
 			}
@@ -477,12 +457,6 @@ func (s *gceOps) checkSnapStatus(id string, desired string) error {
 
 	return err
 }
-
-// Describe current instance.
-func (s *gceOps) Describe() (interface{}, error) {
-	return s.describeinstance()
-}
-
 func (s *gceOps) describeinstance() (*compute.Instance, error) {
 	return s.service.Instances.Get(s.inst.Project, s.inst.Zone, s.inst.Name).Do()
 }
@@ -616,43 +590,4 @@ func (s *gceOps) waitForAttach(
 	}
 
 	return devicePath.(string), nil
-}
-
-// generateListFilterFromLabels create a filter string based off --filter documentation at
-// https://cloud.google.com/sdk/gcloud/reference/compute/disks/list
-func generateListFilterFromLabels(labels map[string]string) string {
-	var filter string
-	for k, v := range labels {
-		filter = fmt.Sprintf("%s(labels.%s eq %s)", filter, k, v)
-	}
-
-	return filter
-}
-
-func (s *gceOps) getDisksFromAllZones(labels map[string]string) (map[string]*compute.Disk, error) {
-	ctx := context.Background()
-	response := make(map[string]*compute.Disk)
-	var req *compute.DisksAggregatedListCall
-
-	if len(labels) > 0 {
-		filter := generateListFilterFromLabels(labels)
-		req = s.service.Disks.AggregatedList(s.inst.Project).Filter(filter)
-	} else {
-		req = s.service.Disks.AggregatedList(s.inst.Project)
-	}
-
-	if err := req.Pages(ctx, func(page *compute.DiskAggregatedList) error {
-		for _, diskScopedList := range page.Items {
-			for _, disk := range diskScopedList.Disks {
-				response[disk.Name] = disk
-			}
-		}
-
-		return nil
-	}); err != nil {
-		logrus.Errorf("failed to list disks: %v", err)
-		return nil, err
-	}
-
-	return response, nil
 }

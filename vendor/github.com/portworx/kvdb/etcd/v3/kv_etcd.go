@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 
 	"golang.org/x/net/context"
 
@@ -361,8 +361,11 @@ func (et *etcdKV) Delete(key string) (*kvdb.KVPair, error) {
 	)
 	cancel()
 	if err == nil {
-		if result.Deleted != 1 {
-			return nil, fmt.Errorf("Incorrect number of keys: %v deleted", key)
+		if result.Deleted == 0 {
+			return nil, kvdb.ErrNotFound
+		} else if result.Deleted > 1 {
+			return nil, fmt.Errorf("Incorrect number of keys: %v deleted, result: %v",
+				key, result)
 		}
 		kvp.Action = kvdb.KVDelete
 		return kvp, nil
@@ -377,6 +380,9 @@ func (et *etcdKV) Delete(key string) (*kvdb.KVPair, error) {
 
 func (et *etcdKV) DeleteTree(prefix string) error {
 	prefix = et.domain + prefix
+	if !strings.HasSuffix(prefix, kvdb.DefaultSeparator) {
+		prefix += kvdb.DefaultSeparator
+	}
 
 	ctx, cancel := et.Context()
 	_, err := et.kvClient.Delete(

@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/pools"
 	"github.com/docker/docker/pkg/system"
@@ -267,7 +267,7 @@ func (info *FileInfo) addChanges(oldInfo *FileInfo, changes *[]Change) {
 	}
 
 	for name, newChild := range info.children {
-		oldChild, _ := oldChildren[name]
+		oldChild := oldChildren[name]
 		if oldChild != nil {
 			// change?
 			oldStat := oldChild.stat
@@ -279,7 +279,7 @@ func (info *FileInfo) addChanges(oldInfo *FileInfo, changes *[]Change) {
 			// breaks down is if some code intentionally hides a change by setting
 			// back mtime
 			if statDifferent(oldStat, newStat) ||
-				bytes.Compare(oldChild.capability, newChild.capability) != 0 {
+				!bytes.Equal(oldChild.capability, newChild.capability) {
 				change := Change{
 					Path: newChild.path(),
 					Kind: ChangeModify,

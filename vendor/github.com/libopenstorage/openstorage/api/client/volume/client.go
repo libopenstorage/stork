@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"strconv"
-
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	"github.com/libopenstorage/openstorage/volume"
+	"io"
+	"io/ioutil"
+	"strconv"
 )
 
 const (
@@ -447,27 +446,29 @@ func (v *volumeClient) CredsEnumerate() (map[string]interface{}, error) {
 
 // CredsCreate creates credentials for a given cloud provider
 func (v *volumeClient) CredsCreate(params map[string]string) (string, error) {
-	createResponse := api.CredCreateResponse{}
+	response := api.CredCreateResponse{}
 	request := &api.CredCreateRequest{
 		InputParams: params,
 	}
-	req := v.c.Post().Resource(credsPath).Body(request)
-	response := req.Do()
-	if response.Error() != nil {
-		return "", response.FormatError()
+	err := v.c.Post().Resource(credsPath).Body(request).Do().Unmarshal(&response)
+	if err == nil {
+		if response.CredErr != "" {
+			err = errors.New(response.CredErr)
+		}
 	}
-	if err := response.Unmarshal(&createResponse); err != nil {
-		return "", err
-	}
-	return createResponse.UUID, nil
+	return response.UUID, err
 }
 
 // CredsDelete deletes the credential with given UUID
 func (v *volumeClient) CredsDelete(uuid string) error {
+	response := &api.VolumeResponse{}
 	req := v.c.Delete().Resource(credsPath).Instance(uuid)
-	response := req.Do()
-	if response.Error() != nil {
-		return response.FormatError()
+	err := req.Do().Unmarshal(&response)
+	if err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
 	}
 	return nil
 }
@@ -475,207 +476,160 @@ func (v *volumeClient) CredsDelete(uuid string) error {
 // CredsValidate validates the credential by accessuing the cloud
 // provider with the given credential
 func (v *volumeClient) CredsValidate(uuid string) error {
-	req := v.c.Put().Resource(credsPath + "/validate").Instance(uuid)
-	response := req.Do()
-	if response.Error() != nil {
-		return response.FormatError()
+	response := &api.VolumeResponse{}
+	req := v.c.Post().Resource(credsPath + "/validate").Instance(uuid)
+	err := req.Do().Unmarshal(&response)
+	if err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
 	}
 	return nil
 }
 
-// CloudBackupCreate uploads snapshot of a volume to cloud
-func (v *volumeClient) CloudBackupCreate(
-	input *api.CloudBackupCreateRequest,
+// Backup uploads snapshot of a volume to cloud
+func (v *volumeClient) Backup(
+	input *api.BackupRequest,
 ) error {
+	response := &api.VolumeResponse{}
 	req := v.c.Post().Resource(backupPath).Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return response.FormatError()
+	if err := req.Do().Unmarshal(response); err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
 	}
 	return nil
 }
 
-// CloudBackupRestore downloads a cloud backup to a newly created volume
-func (v *volumeClient) CloudBackupRestore(
-	input *api.CloudBackupRestoreRequest,
-) (*api.CloudBackupRestoreResponse, error) {
-	restoreResponse := &api.CloudBackupRestoreResponse{}
+// BackupRestore downloads a cloud backup to a newly created volume
+func (v *volumeClient) BackupRestore(
+	input *api.BackupRestoreRequest,
+) *api.BackupRestoreResponse {
+	response := &api.BackupRestoreResponse{}
 	req := v.c.Post().Resource(backupPath + "/restore").Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return nil, response.FormatError()
+	if err := req.Do().Unmarshal(response); err != nil {
+		response.RestoreErr = err.Error()
 	}
-
-	if err := response.Unmarshal(&restoreResponse); err != nil {
-		return nil, err
-	}
-	return restoreResponse, nil
+	return response
 }
 
-// CloudBackupEnumerate lists the backups for a given cluster/credential/volumeID
-func (v *volumeClient) CloudBackupEnumerate(
-	input *api.CloudBackupEnumerateRequest,
-) (*api.CloudBackupEnumerateResponse, error) {
-	enumerateResponse := &api.CloudBackupEnumerateResponse{}
+// BackupEnumerate lists the backups for a given cluster/credential/volumeID
+func (v *volumeClient) BackupEnumerate(
+	input *api.BackupEnumerateRequest,
+) *api.BackupEnumerateResponse {
+	response := &api.BackupEnumerateResponse{}
 	req := v.c.Get().Resource(backupPath).Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return nil, response.FormatError()
+	if err := req.Do().Unmarshal(response); err != nil {
+		response.EnumerateErr = err.Error()
 	}
+	return response
 
-	if err := response.Unmarshal(&enumerateResponse); err != nil {
-		return nil, err
-	}
-	return enumerateResponse, nil
 }
 
-// CloudBackupDelete deletes the backups in cloud
-func (v *volumeClient) CloudBackupDelete(
-	input *api.CloudBackupDeleteRequest,
+// BackupDelete deletes the backups in cloud
+func (v *volumeClient) BackupDelete(
+	input *api.BackupDeleteRequest,
 ) error {
+	response := &api.VolumeResponse{}
 	req := v.c.Delete().Resource(backupPath).Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return response.FormatError()
+	if err := req.Do().Unmarshal(response); err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
 	}
 	return nil
 }
 
-// CloudBackupDeleteAll deletes all the backups for a volume in cloud
-func (v *volumeClient) CloudBackupDeleteAll(
-	input *api.CloudBackupDeleteAllRequest,
-) error {
-	req := v.c.Delete().Resource(backupPath + "/all").Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return response.FormatError()
+// BackupStatus indicates the most recent status of backup/restores
+func (v *volumeClient) BackupStatus(
+	input *api.BackupStsRequest,
+) *api.BackupStsResponse {
+	response := &api.BackupStsResponse{}
+	req := v.c.Post().Resource(backupPath + "/status").Body(input)
+	if err := req.Do().Unmarshal(response); err != nil {
+		response.StsErr = err.Error()
 	}
-	return nil
+	return response
 }
 
-// CloudBackupStatus gets the most recent status of backup/restores
-func (v *volumeClient) CloudBackupStatus(
-	input *api.CloudBackupStatusRequest,
-) (*api.CloudBackupStatusResponse, error) {
-	statusResponse := &api.CloudBackupStatusResponse{}
-	req := v.c.Get().Resource(backupPath + "/status").Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return nil, response.FormatError()
+// BackupCatalogue displays listing of backup content
+func (v *volumeClient) BackupCatalogue(
+	input *api.BackupCatalogueRequest,
+) *api.BackupCatalogueResponse {
+	response := &api.BackupCatalogueResponse{}
+	req := v.c.Get().Resource(backupPath + "/catalogue").Body(input)
+	if err := req.Do().Unmarshal(response); err != nil {
+		response.CatalogueErr = err.Error()
 	}
-
-	if err := response.Unmarshal(&statusResponse); err != nil {
-		return nil, err
-	}
-	return statusResponse, nil
+	return response
 }
 
-// CloudBackupCatalog displays listing of backup content
-func (v *volumeClient) CloudBackupCatalog(
-	input *api.CloudBackupCatalogRequest,
-) (*api.CloudBackupCatalogResponse, error) {
-	catalogResponse := &api.CloudBackupCatalogResponse{}
-	req := v.c.Get().Resource(backupPath + "/catalog").Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return nil, response.FormatError()
-	}
-
-	if err := response.Unmarshal(&catalogResponse); err != nil {
-		return nil, err
-	}
-	return catalogResponse, nil
-}
-
-// CloudBackupHistory displays past backup/restore operations in the cluster
-func (v *volumeClient) CloudBackupHistory(
-	input *api.CloudBackupHistoryRequest,
-) (*api.CloudBackupHistoryResponse, error) {
-	historyResponse := &api.CloudBackupHistoryResponse{}
+// History displays past backup/restore operations in the cluster
+func (v *volumeClient) BackupHistory(
+	input *api.BackupHistoryRequest,
+) *api.BackupHistoryResponse {
+	response := &api.BackupHistoryResponse{}
 	req := v.c.Get().Resource(backupPath + "/history").Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return nil, response.FormatError()
+	if err := req.Do().Unmarshal(response); err != nil {
+		response.HistoryErr = err.Error()
 	}
+	return response
 
-	if err := response.Unmarshal(&historyResponse); err != nil {
-		return nil, err
-	}
-	return historyResponse, nil
 }
 
-// CloudBackupState allows a current backup
+// ChangeBackupState allows a current backup
 // state transisions(pause/resume/stop)
-func (v *volumeClient) CloudBackupStateChange(
-	input *api.CloudBackupStateChangeRequest,
+func (v *volumeClient) BackupStateChange(
+	input *api.BackupStateChangeRequest,
 ) error {
-	req := v.c.Put().Resource(backupPath + "/statechange").Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return response.FormatError()
+	response := &api.VolumeResponse{}
+	req := v.c.Post().Resource(backupPath + "/statechange").Body(input)
+	if err := req.Do().Unmarshal(response); err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
 	}
 	return nil
 }
 
-// CloudBackupSchedCreate for a volume creates a schedule to backup volume to cloud
-func (v *volumeClient) CloudBackupSchedCreate(
-	input *api.CloudBackupSchedCreateRequest,
-) (*api.CloudBackupSchedCreateResponse, error) {
-	createResponse := &api.CloudBackupSchedCreateResponse{}
-	req := v.c.Post().Resource(backupPath + "/sched").Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return nil, response.FormatError()
+// BackupSchedCreate for a volume creates a schedule to backup volume to cloud
+func (v *volumeClient) BackupSchedCreate(
+	input *api.BackupScheduleInfo,
+) *api.BackupSchedResponse {
+	response := &api.BackupSchedResponse{}
+	req := v.c.Post().Resource(backupPath + "/schedcreate").Body(input)
+	if err := req.Do().Unmarshal(response); err != nil {
+		response.SchedCreateErr = err.Error()
 	}
+	return response
 
-	if err := response.Unmarshal(&createResponse); err != nil {
-		return nil, err
-	}
-	return createResponse, nil
 }
 
-// CloudBackupSchedDelete delete a volume's cloud backup-schedule
-func (v *volumeClient) CloudBackupSchedDelete(
-	input *api.CloudBackupSchedDeleteRequest,
+// BackupSchedDelete delete a volume's cloud backup-schedule
+func (v *volumeClient) BackupSchedDelete(
+	input *api.BackupSchedDeleteRequest,
 ) error {
-	req := v.c.Delete().Resource(backupPath + "/sched").Body(input)
-	response := req.Do()
-	if response.Error() != nil {
-		return response.FormatError()
+	response := &api.VolumeResponse{}
+	req := v.c.Post().Resource(backupPath + "/scheddelete").Body(input)
+	if err := req.Do().Unmarshal(response); err != nil {
+		return err
+	}
+	if response.Error != "" {
+		return errors.New(response.Error)
 	}
 	return nil
 }
 
-// CloudBackupSchedEnumerate enumerates the configured backup-schedules in the cluster
-func (v *volumeClient) CloudBackupSchedEnumerate() (*api.CloudBackupSchedEnumerateResponse, error) {
-	enumerateResponse := &api.CloudBackupSchedEnumerateResponse{}
-	req := v.c.Get().Resource(backupPath + "/sched")
-	response := req.Do()
-	if response.Error() != nil {
-		return nil, response.FormatError()
+// BackupSchedEnumerate enumerates the configured backup-schedules in the cluster
+func (v *volumeClient) BackupSchedEnumerate() *api.BackupSchedEnumerateResponse {
+	response := &api.BackupSchedEnumerateResponse{}
+	req := v.c.Get().Resource(backupPath + "/schedenumerate")
+	if err := req.Do().Unmarshal(response); err != nil {
+		response.SchedEnumerateErr = err.Error()
 	}
-	if err := response.Unmarshal(enumerateResponse); err != nil {
-		return nil, err
-	}
-	return enumerateResponse, nil
-}
-
-func (v *volumeClient) SnapshotGroup(groupID string, labels map[string]string) (*api.GroupSnapCreateResponse, error) {
-
-	response := &api.GroupSnapCreateResponse{}
-	request := &api.GroupSnapCreateRequest{
-		Id:     groupID,
-		Labels: labels,
-	}
-
-	req := v.c.Post().Resource(snapPath + "/snapshotgroup").Body(request)
-	res := req.Do()
-	if res.Error() != nil {
-		return nil, res.FormatError()
-	}
-
-	if err := res.Unmarshal(&response); err != nil {
-		return nil, err
-	}
-	return response, nil
+	return response
 }

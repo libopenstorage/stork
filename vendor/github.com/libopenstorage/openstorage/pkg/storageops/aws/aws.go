@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -14,12 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/opsworks"
 	"github.com/libopenstorage/openstorage/pkg/storageops"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
-)
-
-const (
-	awsDevicePrefix      = "/dev/sd"
-	awsDevicePrefixWithX = "/dev/xvd"
 )
 
 type ec2Ops struct {
@@ -151,10 +146,10 @@ func (s *ec2Ops) waitAttachmentStatus(
 	request := &ec2.DescribeVolumesInput{VolumeIds: []*string{&id}}
 	actual := ""
 	interval := 2 * time.Second
-	logrus.Infof("Waiting for state transition to %q", desired)
+	fmt.Printf("Waiting for state transition to %q", desired)
 
 	var outVol *ec2.Volume
-	for elapsed, runs := 0*time.Second, 0; actual != desired && elapsed < timeout; elapsed, runs = elapsed+interval, runs+1 {
+	for elapsed, runs := 0*time.Second, 0; actual != desired && elapsed < timeout; elapsed += interval {
 		awsVols, err := s.ec2.DescribeVolumes(request)
 		if err != nil {
 			return nil, err
@@ -177,9 +172,10 @@ func (s *ec2Ops) waitAttachmentStatus(
 		}
 		time.Sleep(interval)
 		if (runs % 10) == 0 {
-			logrus.Infof("Tried %d times", runs)
+			fmt.Print(".")
 		}
 	}
+	fmt.Printf("\n")
 	if actual != desired {
 		return nil, fmt.Errorf("Volume %v failed to transition to  %v current state %v",
 			volumeID, desired, actual)
@@ -220,7 +216,7 @@ func (s *ec2Ops) DeviceMappings() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	devPrefix := awsDevicePrefix
+	devPrefix := "/dev/sd"
 	m := make(map[string]string)
 	for _, d := range instance.BlockDeviceMappings {
 		if d.DeviceName != nil && d.Ebs != nil && d.Ebs.VolumeId != nil {
@@ -231,7 +227,7 @@ func (s *ec2Ops) DeviceMappings() (map[string]string, error) {
 			}
 			// AWS EBS volumes get mapped from /dev/sdN -->/dev/xvdN
 			if strings.HasPrefix(devName, devPrefix) {
-				devName = awsDevicePrefixWithX + devName[len(devPrefix):]
+				devName = "/dev/xvd" + devName[len(devPrefix):]
 			}
 			m[devName] = *d.Ebs.VolumeId
 		}
@@ -239,11 +235,7 @@ func (s *ec2Ops) DeviceMappings() (map[string]string, error) {
 	return m, nil
 }
 
-// Describe current instance.
-func (s *ec2Ops) Describe() (interface{}, error) {
-	return s.describe()
-}
-
+// describe current instance.
 func (s *ec2Ops) describe() (*ec2.Instance, error) {
 	request := &ec2.DescribeInstancesInput{
 		InstanceIds: []*string{&s.instance},
@@ -263,40 +255,12 @@ func (s *ec2Ops) describe() (*ec2.Instance, error) {
 	return out.Reservations[0].Instances[0], nil
 }
 
-func (s *ec2Ops) getPrefixFromRootDeviceName(rootDeviceName string) (string, error) {
-	devPrefix := awsDevicePrefix
-	if !strings.HasPrefix(rootDeviceName, devPrefix) {
-		devPrefix = awsDevicePrefixWithX
-		if !strings.HasPrefix(rootDeviceName, devPrefix) {
-			return "", fmt.Errorf("unknown prefix type on root device: %s",
-				rootDeviceName)
-		}
-	}
-	return devPrefix, nil
-}
-
-// getActualDevicePath does an os.Stat on the provided devicePath.
-// If not found it will try all the different devicePrefixes provided by AWS
-// such as /dev/sd and /dev/xvd and return the devicePath which is found
-// or return an error
-func (s *ec2Ops) getActualDevicePath(devicePath string) (string, error) {
-	letter := devicePath[len(devicePath)-1:]
-	devicePath = awsDevicePrefix + letter
-	if _, err := os.Stat(devicePath); err != nil {
-		devicePath = awsDevicePrefixWithX + letter
-		if _, err := os.Stat(devicePath); err != nil {
-			return "", err
-		}
-	}
-	return devicePath, nil
-}
-
 func (s *ec2Ops) FreeDevices(
 	blockDeviceMappings []interface{},
 	rootDeviceName string,
 ) ([]string, error) {
 	initial := []byte("fghijklmnop")
-	devPrefix := awsDevicePrefix
+	devPrefix := "/dev/sd"
 	for _, d := range blockDeviceMappings {
 		dev := d.(*ec2.InstanceBlockDeviceMapping)
 
@@ -309,14 +273,14 @@ func (s *ec2Ops) FreeDevices(
 			continue
 		}
 		if !strings.HasPrefix(devName, devPrefix) {
-			devPrefix = awsDevicePrefixWithX
+			devPrefix = "/dev/xvd"
 			if !strings.HasPrefix(devName, devPrefix) {
 				return nil, fmt.Errorf("bad device name %q", devName)
 			}
 		}
 		letter := devName[len(devPrefix):]
 		// Reset devPrefix for next devices
-		devPrefix = awsDevicePrefix
+		devPrefix = "/dev/sd"
 
 		// AWS instances can have the following device names
 		// /dev/xvd[b-c][a-z]
@@ -333,16 +297,6 @@ func (s *ec2Ops) FreeDevices(
 			return nil, fmt.Errorf("cannot parse device name %q", devName)
 		}
 	}
-
-	// Set the prefix to the same one used as the root drive
-	// The reason we do this is based on the virtualization type AWS might attach
-	// the device "sda" at /dev/sda OR /dev/xvda. So we look at how the root device
-	// is attached and use that prefix
-	devPrefix, err := s.getPrefixFromRootDeviceName(rootDeviceName)
-	if err != nil {
-		return nil, err
-	}
-
 	free := make([]string, len(initial))
 	count := 0
 	for _, b := range initial {
@@ -629,10 +583,9 @@ func (s *ec2Ops) DevicePath(volumeID string) (string, error) {
 		return "", storageops.NewStorageError(storageops.ErrVolInval,
 			"Unable to determine volume attachment path", "")
 	}
-	devicePath, err := s.getActualDevicePath(*vol.Attachments[0].Device)
-	if err != nil {
-		return "", storageops.NewStorageError(storageops.ErrVolInval,
-			err.Error(), "")
+	dev := strings.TrimPrefix(*vol.Attachments[0].Device, "/dev/sd")
+	if dev != *vol.Attachments[0].Device {
+		dev = "/dev/xvd" + dev
 	}
-	return devicePath, nil
+	return dev, nil
 }

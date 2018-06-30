@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"go.pedge.io/dlog"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/volume"
@@ -18,13 +18,13 @@ import (
 )
 
 func init() {
-	kv, err := kvdb.New(mem.Name, "driver_test", []string{}, nil, logrus.Panicf)
+	kv, err := kvdb.New(mem.Name, "driver_test", []string{}, nil, dlog.Panicf)
 	if err != nil {
-		logrus.Panicf("Failed to intialize KVDB")
+		dlog.Panicf("Failed to intialize KVDB")
 	}
 	err = kvdb.SetInstance(kv)
 	if err != nil {
-		logrus.Panicf("Failed to set KVDB instance")
+		dlog.Panicf("Failed to set KVDB instance")
 	}
 }
 

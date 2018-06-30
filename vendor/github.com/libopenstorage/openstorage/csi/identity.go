@@ -17,39 +17,35 @@ limitations under the License.
 package csi
 
 import (
-	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"go.pedge.io/dlog"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
-	csiDriverVersion    = "0.2.0"
+	csiDriverVersion    = "0.1.0"
 	csiDriverNamePrefix = "com.openstorage."
 )
 
-// GetPluginCapabilities is a CSI API
-func (s *OsdCsiServer) GetPluginCapabilities(
-	ctx context.Context,
-	req *csi.GetPluginCapabilitiesRequest,
-) (*csi.GetPluginCapabilitiesResponse, error) {
-	return &csi.GetPluginCapabilitiesResponse{
-		Capabilities: []*csi.PluginCapability{
-			&csi.PluginCapability{
-				Type: &csi.PluginCapability_Service_{
-					Service: &csi.PluginCapability_Service{
-						Type: csi.PluginCapability_Service_CONTROLLER_SERVICE,
-					},
-				},
-			},
+var (
+	csiVersion = &csi.Version{
+		Major: 0,
+		Minor: 1,
+		Patch: 0,
+	}
+)
+
+// GetSupportedVersions is a CSI API which returns the supported CSI version
+func (s *OsdCsiServer) GetSupportedVersions(
+	context.Context,
+	*csi.GetSupportedVersionsRequest) (*csi.GetSupportedVersionsResponse, error) {
+	return &csi.GetSupportedVersionsResponse{
+		SupportedVersions: []*csi.Version{
+			csiVersion,
 		},
 	}, nil
-}
-
-// Probe is a CSI API
-func (s *OsdCsiServer) Probe(
-	ctx context.Context,
-	req *csi.ProbeRequest,
-) (*csi.ProbeResponse, error) {
-	return &csi.ProbeResponse{}, nil
 }
 
 // GetPluginInfo is a CSI API which returns the information about the plugin.
@@ -57,6 +53,13 @@ func (s *OsdCsiServer) Probe(
 func (s *OsdCsiServer) GetPluginInfo(
 	ctx context.Context,
 	req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+
+	dlog.Debugf("GetPluginInfo req[%#v]", req)
+
+	// Check arguments
+	if req.GetVersion() == nil {
+		return nil, status.Error(codes.InvalidArgument, "Version must be provided")
+	}
 
 	return &csi.GetPluginInfoResponse{
 		Name:          csiDriverNamePrefix + s.driver.Name(),

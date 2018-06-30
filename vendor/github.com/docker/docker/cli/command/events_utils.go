@@ -3,7 +3,7 @@ package command
 import (
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	eventtypes "github.com/docker/docker/api/types/events"
 )
 

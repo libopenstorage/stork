@@ -24,8 +24,8 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/util"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
-	"github.com/sirupsen/logrus"
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"go.pedge.io/dlog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -45,6 +45,11 @@ func (s *OsdCsiServer) ControllerGetCapabilities(
 	ctx context.Context,
 	req *csi.ControllerGetCapabilitiesRequest,
 ) (*csi.ControllerGetCapabilitiesResponse, error) {
+
+	version := req.GetVersion()
+	if version == nil {
+		return nil, status.Error(codes.InvalidArgument, "Version must be specified")
+	}
 
 	// Creating and deleting volumes supported
 	capCreateDeleteVolume := &csi.ControllerServiceCapability{
@@ -80,6 +85,7 @@ func (s *OsdCsiServer) ControllerPublishVolume(
 	*csi.ControllerPublishVolumeRequest,
 ) (*csi.ControllerPublishVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "This request is not supported")
+
 }
 
 // ControllerUnpublishVolume is a CSI API which implements the detaching of a volume
@@ -102,6 +108,11 @@ func (s *OsdCsiServer) ValidateVolumeCapabilities(
 	req *csi.ValidateVolumeCapabilitiesRequest,
 ) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 
+	// Probably we may use version in the future, but for now, let's just log it
+	version := req.GetVersion()
+	if version == nil {
+		return nil, status.Error(codes.InvalidArgument, "Version must be specified")
+	}
 	capabilities := req.GetVolumeCapabilities()
 	if capabilities == nil || len(capabilities) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "volume_capabilities must be specified")
@@ -113,11 +124,13 @@ func (s *OsdCsiServer) ValidateVolumeCapabilities(
 	attributes := req.GetVolumeAttributes()
 
 	// Log request
-	logrus.Debugf("ValidateVolumeCapabilities of id %s "+
+	dlog.Debugf("ValidateVolumeCapabilities of id %s "+
 		"capabilities %#v "+
+		"version %#v "+
 		"attributes %#v ",
 		id,
 		capabilities,
+		version,
 		attributes)
 
 	// Check ID is valid with the specified volume capabilities
@@ -129,7 +142,7 @@ func (s *OsdCsiServer) ValidateVolumeCapabilities(
 		errs := fmt.Sprintf(
 			"Driver returned an unexpected number of volumes when one was expected: %d",
 			len(volumes))
-		logrus.Errorln(errs)
+		dlog.Errorln(errs)
 		return nil, status.Error(codes.Internal, errs)
 	}
 	v := volumes[0]
@@ -138,7 +151,7 @@ func (s *OsdCsiServer) ValidateVolumeCapabilities(
 			"Driver volume id [%s] does not equal requested id of: %s",
 			v.Id,
 			id)
-		logrus.Errorln(errs)
+		dlog.Errorln(errs)
 		return nil, status.Error(codes.Internal, errs)
 	}
 
@@ -235,7 +248,14 @@ func (s *OsdCsiServer) ListVolumes(
 	req *csi.ListVolumesRequest,
 ) (*csi.ListVolumesResponse, error) {
 
-	logrus.Debugf("ListVolumes req[%#v]", req)
+	// Future: Once CSI is released, check version
+	// for now, just log it.
+	dlog.Debugf("ListVolumes req[%#v]", req)
+
+	// Check arguments
+	if req.GetVersion() == nil {
+		return nil, status.Error(codes.InvalidArgument, "Version must be provided")
+	}
 
 	// Until the issue #138 on the CSI spec is resolved we will not support
 	// tokenization
@@ -249,27 +269,27 @@ func (s *OsdCsiServer) ListVolumes(
 	volumes, err := s.driver.Enumerate(&api.VolumeLocator{}, nil)
 	if err != nil {
 		errs := fmt.Sprintf("Unable to get list of volumes: %s", err.Error())
-		logrus.Errorln(errs)
+		dlog.Errorln(errs)
 		return nil, status.Error(codes.Internal, errs)
 	}
 	entries := make([]*csi.ListVolumesResponse_Entry, len(volumes))
 	for i, v := range volumes {
 		// Initialize entry
 		entries[i] = &csi.ListVolumesResponse_Entry{
-			Volume: &csi.Volume{},
+			VolumeInfo: &csi.VolumeInfo{},
 		}
 
 		// Required
-		entries[i].Volume.Id = v.Id
+		entries[i].VolumeInfo.Id = v.Id
 
 		// This entry is optional in the API, but OSD has
 		// the information available to provide it
-		entries[i].Volume.CapacityBytes = int64(v.Spec.Size)
+		entries[i].VolumeInfo.CapacityBytes = v.Spec.Size
 
 		// Attributes. We can add or remove as needed since they
 		// are optional and opaque to the Container Orchestrator(CO)
 		// but could be used for debugging using a csi complient client.
-		entries[i].Volume.Attributes = osdVolumeAttributes(v)
+		entries[i].VolumeInfo.Attributes = osdVolumeAttributes(v)
 	}
 
 	return &csi.ListVolumesResponse{
@@ -300,8 +320,12 @@ func (s *OsdCsiServer) CreateVolume(
 ) (*csi.CreateVolumeResponse, error) {
 
 	// Log request
-	logrus.Debugf("CreateVolume req[%#v]", *req)
+	dlog.Debugf("CreateVolume req[%#v]", *req)
 
+	// Check arguments
+	if req.GetVersion() == nil {
+		return nil, status.Error(codes.InvalidArgument, "Version must be provided")
+	}
 	if len(req.GetName()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Name must be provided")
 	}
@@ -313,21 +337,21 @@ func (s *OsdCsiServer) CreateVolume(
 	spec, locator, source, err := s.specHandler.SpecFromOpts(req.GetParameters())
 	if err != nil {
 		e := fmt.Sprintf("Unable to get parameters: %s\n", err.Error())
-		logrus.Errorln(e)
+		dlog.Errorln(e)
 		return nil, status.Error(codes.InvalidArgument, e)
 	}
 
 	// Get Size
 	if req.GetCapacityRange() != nil && req.GetCapacityRange().GetRequiredBytes() != 0 {
-		spec.Size = uint64(req.GetCapacityRange().GetRequiredBytes())
+		spec.Size = req.GetCapacityRange().GetRequiredBytes()
 	} else {
 		spec.Size = defaultCSIVolumeSize
 	}
 
 	// Create response
-	volume := &csi.Volume{}
+	volume := &csi.VolumeInfo{}
 	resp := &csi.CreateVolumeResponse{
-		Volume: volume,
+		VolumeInfo: volume,
 	}
 
 	// Check if the volume has already been created or is in process of creation
@@ -364,7 +388,7 @@ func (s *OsdCsiServer) CreateVolume(
 		parent, err := util.VolumeFromName(s.driver, source.Parent)
 		if err != nil {
 			e := fmt.Sprintf("unable to get parent volume information: %s\n", err.Error())
-			logrus.Errorln(e)
+			dlog.Errorln(e)
 			return nil, status.Error(codes.InvalidArgument, e)
 		}
 
@@ -374,7 +398,7 @@ func (s *OsdCsiServer) CreateVolume(
 		})
 		if err != nil {
 			e := fmt.Sprintf("unable to create snapshot: %s\n", err.Error())
-			logrus.Errorln(e)
+			dlog.Errorln(e)
 			return nil, status.Error(codes.Internal, e)
 		}
 	} else {
@@ -393,7 +417,7 @@ func (s *OsdCsiServer) CreateVolume(
 	v, err = util.VolumeFromName(s.driver, id)
 	if err != nil {
 		e := fmt.Sprintf("Unable to find newly created volume: %s", err.Error())
-		logrus.Errorln(e)
+		dlog.Errorln(e)
 		return nil, status.Error(codes.Internal, e)
 	}
 	osdToCsiVolumeInfo(volume, v)
@@ -407,9 +431,12 @@ func (s *OsdCsiServer) DeleteVolume(
 ) (*csi.DeleteVolumeResponse, error) {
 
 	// Log request
-	logrus.Debugf("DeleteVolume req[%#v]", *req)
+	dlog.Debugf("DeleteVolume req[%#v]", *req)
 
 	// Check arguments
+	if req.GetVersion() == nil {
+		return nil, status.Error(codes.InvalidArgument, "Version must be provided")
+	}
 	if len(req.GetVolumeId()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume id must be provided")
 	}
@@ -429,16 +456,16 @@ func (s *OsdCsiServer) DeleteVolume(
 		e := fmt.Sprintf("Unable to delete volume with id %s: %s",
 			req.GetVolumeId(),
 			err.Error())
-		logrus.Errorln(e)
+		dlog.Errorln(e)
 		return nil, status.Error(codes.Internal, e)
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
-func osdToCsiVolumeInfo(dest *csi.Volume, src *api.Volume) {
+func osdToCsiVolumeInfo(dest *csi.VolumeInfo, src *api.Volume) {
 	dest.Id = src.GetId()
-	dest.CapacityBytes = int64(src.Spec.GetSize())
+	dest.CapacityBytes = src.Spec.GetSize()
 	dest.Attributes = osdVolumeAttributes(src)
 }
 

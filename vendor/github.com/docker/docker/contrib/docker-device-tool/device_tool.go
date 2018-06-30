@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver/devmapper"
 	"github.com/docker/docker/pkg/devicemapper"
 )
@@ -161,7 +161,7 @@ func main() {
 
 		err := devices.MountDevice(args[1], args[2], "")
 		if err != nil {
-			fmt.Println("Can't create snap device: ", err)
+			fmt.Println("Can't mount device: ", err)
 			os.Exit(1)
 		}
 		break

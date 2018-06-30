@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/mount"
@@ -220,7 +220,10 @@ func (d *Driver) Status() [][2]string {
 
 // GetMetadata returns image/container metadata related to graph driver
 func (d *Driver) GetMetadata(id string) (map[string]string, error) {
-	return nil, nil
+	return map[string]string{
+		"Mountpoint": d.mountPath(id),
+		"Dataset":    d.zfsPath(id),
+	}, nil
 }
 
 func (d *Driver) cloneFilesystem(name, parentName string) error {

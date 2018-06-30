@@ -325,7 +325,8 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		}
 	}
 
-	if vol.Source != nil && vol.Source.Parent != "" {
+	// if the volume is a clone or a snap, validate it's parent
+	if vol.IsSnapshot() || vol.IsClone() {
 		parent, err := d.getVolDriver().Inspect([]string{vol.Source.Parent})
 		if err != nil || len(parent) == 0 {
 			return &ErrFailedToInspectVolume{

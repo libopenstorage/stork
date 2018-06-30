@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 const (
@@ -78,11 +78,15 @@ const (
 	EtcdVersion3 = "etcdv3"
 	// MemVersion1 key
 	MemVersion1 = "memv1"
+	// BoltVersion1 key
+	BoltVersion1 = "boltv1"
 )
 
 const (
 	// DefaultLockTryDuration is the maximum time spent trying to acquire lock
 	DefaultLockTryDuration = 300 * time.Second
+	// DefaultSeparator separate key components
+	DefaultSeparator = "/"
 )
 
 var (

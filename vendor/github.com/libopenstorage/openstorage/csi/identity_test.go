@@ -17,11 +17,14 @@ limitations under the License.
 package csi
 
 import (
+	"reflect"
 	"testing"
 
-	csi "github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestNewCSIServerGetPluginInfo(t *testing.T) {
@@ -36,8 +39,18 @@ func TestNewCSIServerGetPluginInfo(t *testing.T) {
 	// Setup client
 	c := csi.NewIdentityClient(s.Conn())
 
-	// Get info
-	r, err := c.GetPluginInfo(context.Background(), &csi.GetPluginInfoRequest{})
+	// No version added
+	_, err := c.GetPluginInfo(context.Background(), &csi.GetPluginInfoRequest{})
+	assert.Error(t, err)
+	serverError, ok := status.FromError(err)
+	assert.True(t, ok)
+	assert.Equal(t, serverError.Code(), codes.InvalidArgument)
+	assert.Contains(t, serverError.Message(), "Version")
+
+	// No version added
+	r, err := c.GetPluginInfo(context.Background(), &csi.GetPluginInfoRequest{
+		Version: &csi.Version{},
+	})
 	assert.NoError(t, err)
 
 	// Verify
@@ -49,4 +62,21 @@ func TestNewCSIServerGetPluginInfo(t *testing.T) {
 	manifest := r.GetManifest()
 	assert.Len(t, manifest, 1)
 	assert.Equal(t, manifest["driver"], "mock")
+}
+
+func TestNewCSIServerGetSupportedVersions(t *testing.T) {
+
+	// Create server and client connection
+	s := newTestServer(t)
+	defer s.Stop()
+
+	// Make a call
+	c := csi.NewIdentityClient(s.Conn())
+	r, err := c.GetSupportedVersions(context.Background(), &csi.GetSupportedVersionsRequest{})
+	assert.Nil(t, err)
+
+	// Verify
+	versions := r.GetSupportedVersions()
+	assert.Equal(t, len(versions), 1)
+	assert.True(t, reflect.DeepEqual(versions[0], csiVersion))
 }

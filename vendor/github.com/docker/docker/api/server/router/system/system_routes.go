@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/api/errors"
 	"github.com/docker/docker/api/server/httputils"
@@ -35,8 +35,8 @@ func (s *systemRouter) getInfo(ctx context.Context, w http.ResponseWriter, r *ht
 	if err != nil {
 		return err
 	}
-	if s.clusterProvider != nil {
-		info.Swarm = s.clusterProvider.Info()
+	if s.cluster != nil {
+		info.Swarm = s.cluster.Info()
 	}
 
 	if versions.LessThan(httputils.VersionFromContext(ctx), "1.25") {

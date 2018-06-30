@@ -228,6 +228,25 @@ type GCEPersistentDiskSnapshotSource struct {
 	SnapshotName string `json:"snapshotId"`
 }
 
+type PortworxSnapshotType string
+
+const (
+	PortworxSnapshotTypeCloud PortworxSnapshotType = "cloud"
+	PortworxSnapshotTypeLocal PortworxSnapshotType = "local"
+)
+
+// PortworxVolumeSnapshotSource is Portworx volume snapshot source
+type PortworxVolumeSnapshotSource struct {
+	// Unique id of the Portworx snapshot.
+	SnapshotID string `json:"snapshotId"`
+	// SnapshotType is the type of the snapshot
+	SnapshotType PortworxSnapshotType `json:"snapshotType,omitempty"`
+	// SnapshotCloudCredID is an optional credentials ID for the snapshot. This is used for cloud snaps.
+	SnapshotCloudCredID string `json:"snapshotCloudCredID,omitempty"`
+	// SnapshotData stores the name of VolumeSnapshotData for this snapshot. This is populated only for group snapshots.
+	SnapshotData string `json:"snapshotData,omitempty"`
+}
+
 // VolumeSnapshotDataSource represents the actual location and type of the snapshot. Only one of its members may be specified.
 type VolumeSnapshotDataSource struct {
 	// HostPath represents a directory on the host.
@@ -251,6 +270,9 @@ type VolumeSnapshotDataSource struct {
 	// CinderVolumeSnapshotSource represents Cinder snapshot resource
 	// +optional
 	CinderSnapshot *CinderVolumeSnapshotSource `json:"cinderVolume,omitempty"`
+	// PortworxVolumeSnapshotSource represents Portworx snapshot resource
+	// +optional
+	PortworxSnapshot *PortworxVolumeSnapshotSource `json:"portworxVolume,omitempty"`
 }
 
 // GetSupportedVolumeFromPVSpec gets supported volume from PV spec
@@ -269,6 +291,9 @@ func GetSupportedVolumeFromPVSpec(spec *core_v1.PersistentVolumeSpec) string {
 	}
 	if spec.Glusterfs != nil {
 		return "glusterfs"
+	}
+	if spec.PortworxVolume != nil {
+		return "pxd"
 	}
 	return ""
 }
@@ -289,6 +314,9 @@ func GetSupportedVolumeFromSnapshotDataSpec(spec *VolumeSnapshotDataSpec) string
 	}
 	if spec.GlusterSnapshotVolume != nil {
 		return "glusterfs"
+	}
+	if spec.PortworxSnapshot != nil {
+		return "pxd"
 	}
 	return ""
 }

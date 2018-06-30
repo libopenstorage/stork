@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/container/stream"
 	"github.com/docker/docker/libcontainerd"
 	"github.com/docker/docker/pkg/stringid"

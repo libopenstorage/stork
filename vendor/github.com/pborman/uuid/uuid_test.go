@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -277,19 +276,14 @@ func TestNode(t *testing.T) {
 	if ni := NodeInterface(); ni != "" {
 		t.Errorf("NodeInterface got %q, want %q", ni, "")
 	}
-	nodeID = nil // Reset global state for next test
 	if SetNodeInterface("xyzzy") {
 		t.Error("SetNodeInterface succeeded on a bad interface name")
 	}
-	nodeID = nil // Reset global state for next test
 	if !SetNodeInterface("") {
 		t.Error("SetNodeInterface failed")
 	}
-
-	if runtime.GOARCH != "js" {
-		if ni := NodeInterface(); ni == "" {
-			t.Error("NodeInterface returned an empty string")
-		}
+	if ni := NodeInterface(); ni == "" {
+		t.Error("NodeInterface returned an empty string")
 	}
 
 	ni := NodeID()
@@ -357,13 +351,10 @@ func TestSHA1(t *testing.T) {
 
 func TestNodeID(t *testing.T) {
 	nid := []byte{1, 2, 3, 4, 5, 6}
-	nodeID = nil // Reset global state for next test
 	SetNodeInterface("")
 	s := NodeInterface()
-	if runtime.GOARCH != "js" {
-		if s == "" || s == "user" {
-			t.Errorf("NodeInterface %q after SetInterface", s)
-		}
+	if s == "" || s == "user" {
+		t.Errorf("NodeInterface %q after SetInteface", s)
 	}
 	node1 := NodeID()
 	if node1 == nil {

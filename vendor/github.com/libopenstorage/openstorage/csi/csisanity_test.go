@@ -28,7 +28,7 @@ import (
 	"github.com/libopenstorage/openstorage/volume/drivers"
 
 	"github.com/kubernetes-csi/csi-test/pkg/sanity"
-	"github.com/sirupsen/logrus"
+	"go.pedge.io/dlog"
 
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/mem"
@@ -45,7 +45,7 @@ var (
 
 func TestCSISanity(t *testing.T) {
 
-	kv, err := kvdb.New(mem.Name, "driver_test", []string{}, nil, logrus.Panicf)
+	kv, err := kvdb.New(mem.Name, "driver_test", []string{}, nil, dlog.Panicf)
 	if err != nil {
 		t.Fatalf("Failed to initialize KVDB")
 	}
@@ -76,7 +76,7 @@ func TestCSISanity(t *testing.T) {
 		t.Fatalf("Unable to find cluster instance: %v", err)
 	}
 	go func() {
-		cm.Start(0, false, "9002")
+		cm.Start(0, false)
 	}()
 
 	// Start CSI Server
@@ -93,8 +93,5 @@ func TestCSISanity(t *testing.T) {
 	defer server.Stop()
 
 	// Start CSI Sanity test
-	sanity.Test(t, &sanity.Config{
-		Address:    server.Address(),
-		TargetPath: "/mnt/openstorage/mount/nfs",
-	})
+	sanity.Test(t, server.Address(), "/mnt/openstorage/mount/nfs")
 }

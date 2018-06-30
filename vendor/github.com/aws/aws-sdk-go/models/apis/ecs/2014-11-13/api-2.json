@@ -670,7 +670,8 @@
         "exitCode":{"shape":"BoxedInteger"},
         "reason":{"shape":"String"},
         "networkBindings":{"shape":"NetworkBindings"},
-        "networkInterfaces":{"shape":"NetworkInterfaces"}
+        "networkInterfaces":{"shape":"NetworkInterfaces"},
+        "healthStatus":{"shape":"HealthStatus"}
       }
     },
     "ContainerDefinition":{
@@ -702,7 +703,8 @@
         "dockerSecurityOptions":{"shape":"StringList"},
         "dockerLabels":{"shape":"DockerLabelsMap"},
         "ulimits":{"shape":"UlimitList"},
-        "logConfiguration":{"shape":"LogConfiguration"}
+        "logConfiguration":{"shape":"LogConfiguration"},
+        "healthCheck":{"shape":"HealthCheck"}
       }
     },
     "ContainerDefinitions":{
@@ -788,14 +790,14 @@
       "type":"structure",
       "required":[
         "serviceName",
-        "taskDefinition",
-        "desiredCount"
+        "taskDefinition"
       ],
       "members":{
         "cluster":{"shape":"String"},
         "serviceName":{"shape":"String"},
         "taskDefinition":{"shape":"String"},
         "loadBalancers":{"shape":"LoadBalancers"},
+        "serviceRegistries":{"shape":"ServiceRegistries"},
         "desiredCount":{"shape":"BoxedInteger"},
         "clientToken":{"shape":"String"},
         "launchType":{"shape":"LaunchType"},
@@ -805,7 +807,8 @@
         "placementConstraints":{"shape":"PlacementConstraints"},
         "placementStrategy":{"shape":"PlacementStrategies"},
         "networkConfiguration":{"shape":"NetworkConfiguration"},
-        "healthCheckGracePeriodSeconds":{"shape":"BoxedInteger"}
+        "healthCheckGracePeriodSeconds":{"shape":"BoxedInteger"},
+        "schedulingStrategy":{"shape":"SchedulingStrategy"}
       }
     },
     "CreateServiceResponse":{
@@ -846,7 +849,8 @@
       "required":["service"],
       "members":{
         "cluster":{"shape":"String"},
-        "service":{"shape":"String"}
+        "service":{"shape":"String"},
+        "force":{"shape":"BoxedBoolean"}
       }
     },
     "DeleteServiceResponse":{
@@ -1050,6 +1054,25 @@
       "type":"list",
       "member":{"shape":"Failure"}
     },
+    "HealthCheck":{
+      "type":"structure",
+      "required":["command"],
+      "members":{
+        "command":{"shape":"StringList"},
+        "interval":{"shape":"BoxedInteger"},
+        "timeout":{"shape":"BoxedInteger"},
+        "retries":{"shape":"BoxedInteger"},
+        "startPeriod":{"shape":"BoxedInteger"}
+      }
+    },
+    "HealthStatus":{
+      "type":"string",
+      "enum":[
+        "HEALTHY",
+        "UNHEALTHY",
+        "UNKNOWN"
+      ]
+    },
     "HostEntry":{
       "type":"structure",
       "required":[
@@ -1104,7 +1127,9 @@
       "members":{
         "capabilities":{"shape":"KernelCapabilities"},
         "devices":{"shape":"DevicesList"},
-        "initProcessEnabled":{"shape":"BoxedBoolean"}
+        "initProcessEnabled":{"shape":"BoxedBoolean"},
+        "sharedMemorySize":{"shape":"BoxedInteger"},
+        "tmpfs":{"shape":"TmpfsList"}
       }
     },
     "ListAttributesRequest":{
@@ -1163,7 +1188,8 @@
         "cluster":{"shape":"String"},
         "nextToken":{"shape":"String"},
         "maxResults":{"shape":"BoxedInteger"},
-        "launchType":{"shape":"LaunchType"}
+        "launchType":{"shape":"LaunchType"},
+        "schedulingStrategy":{"shape":"SchedulingStrategy"}
       }
     },
     "ListServicesResponse":{
@@ -1491,6 +1517,13 @@
         "failures":{"shape":"Failures"}
       }
     },
+    "SchedulingStrategy":{
+      "type":"string",
+      "enum":[
+        "REPLICA",
+        "DAEMON"
+      ]
+    },
     "ServerException":{
       "type":"structure",
       "members":{
@@ -1506,6 +1539,7 @@
         "serviceName":{"shape":"String"},
         "clusterArn":{"shape":"String"},
         "loadBalancers":{"shape":"LoadBalancers"},
+        "serviceRegistries":{"shape":"ServiceRegistries"},
         "status":{"shape":"String"},
         "desiredCount":{"shape":"Integer"},
         "runningCount":{"shape":"Integer"},
@@ -1521,7 +1555,8 @@
         "placementConstraints":{"shape":"PlacementConstraints"},
         "placementStrategy":{"shape":"PlacementStrategies"},
         "networkConfiguration":{"shape":"NetworkConfiguration"},
-        "healthCheckGracePeriodSeconds":{"shape":"BoxedInteger"}
+        "healthCheckGracePeriodSeconds":{"shape":"BoxedInteger"},
+        "schedulingStrategy":{"shape":"SchedulingStrategy"}
       }
     },
     "ServiceEvent":{
@@ -1547,6 +1582,19 @@
       "members":{
       },
       "exception":true
+    },
+    "ServiceRegistries":{
+      "type":"list",
+      "member":{"shape":"ServiceRegistry"}
+    },
+    "ServiceRegistry":{
+      "type":"structure",
+      "members":{
+        "registryArn":{"shape":"String"},
+        "port":{"shape":"BoxedInteger"},
+        "containerName":{"shape":"String"},
+        "containerPort":{"shape":"BoxedInteger"}
+      }
     },
     "Services":{
       "type":"list",
@@ -1682,7 +1730,8 @@
         "group":{"shape":"String"},
         "launchType":{"shape":"LaunchType"},
         "platformVersion":{"shape":"String"},
-        "attachments":{"shape":"Attachments"}
+        "attachments":{"shape":"Attachments"},
+        "healthStatus":{"shape":"HealthStatus"}
       }
     },
     "TaskDefinition":{
@@ -1748,6 +1797,22 @@
       "member":{"shape":"Task"}
     },
     "Timestamp":{"type":"timestamp"},
+    "Tmpfs":{
+      "type":"structure",
+      "required":[
+        "containerPath",
+        "size"
+      ],
+      "members":{
+        "containerPath":{"shape":"String"},
+        "size":{"shape":"Integer"},
+        "mountOptions":{"shape":"StringList"}
+      }
+    },
+    "TmpfsList":{
+      "type":"list",
+      "member":{"shape":"Tmpfs"}
+    },
     "TransportProtocol":{
       "type":"string",
       "enum":[

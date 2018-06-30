@@ -3,7 +3,7 @@ package platform
 import (
 	"runtime"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 var (

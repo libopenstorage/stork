@@ -1,7 +1,7 @@
 package container
 
 import (
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 )
 

@@ -1,4 +1,4 @@
-// +build linux
+// +build linux,cgo
 
 package loopback
 
@@ -8,7 +8,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 // Loopback related errors

@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 )
 
 // ResponseModifier allows authorization plugins to read and modify the content of the http.response

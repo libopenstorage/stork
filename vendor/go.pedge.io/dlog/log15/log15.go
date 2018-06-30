@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/inconshreveable/log15"
 	"go.pedge.io/dlog"
-	"gopkg.in/inconshreveable/log15.v2"
 )
 
 var (

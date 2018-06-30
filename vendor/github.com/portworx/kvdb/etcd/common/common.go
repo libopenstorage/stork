@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -133,7 +134,7 @@ func (ec *etcdCommon) GetAuthInfoFromOptions() (transport.TLSInfo, string, strin
 }
 
 // Version returns the version of the provided etcd server
-func Version(url string, options map[string]string) (string, error) {
+func Version(uri string, options map[string]string) (string, error) {
 	useTLS := false
 	tlsConfig := &tls.Config{}
 	// Check if CA file provided
@@ -169,11 +170,17 @@ func Version(url string, options map[string]string) (string, error) {
 		transport := &http.Transport{TLSClientConfig: tlsConfig}
 		client = &http.Client{Transport: transport}
 	} else {
-		client = &http.Client{}
+		tempURL, _ := url.Parse(uri)
+		if tempURL.Scheme == "https" {
+			transport := &http.Transport{TLSClientConfig: &tls.Config{}}
+			client = &http.Client{Transport: transport}
+		} else {
+			client = &http.Client{}
+		}
 	}
 
 	// Do GET something
-	resp, err := client.Get(url + "/version")
+	resp, err := client.Get(uri + "/version")
 	if err != nil {
 		return "", fmt.Errorf("Error in obtaining etcd version: %v", err)
 	}

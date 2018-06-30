@@ -12,7 +12,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"golang.org/x/net/context"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/logger"
 	"github.com/docker/docker/pkg/filenotify"
 	"github.com/docker/docker/pkg/ioutils"
@@ -137,7 +137,11 @@ func tailFile(f io.ReadSeeker, logWatcher *logger.LogWatcher, tail int, since ti
 		if !since.IsZero() && msg.Timestamp.Before(since) {
 			continue
 		}
-		logWatcher.Msg <- msg
+		select {
+		case <-logWatcher.WatchClose():
+			return
+		case logWatcher.Msg <- msg:
+		}
 	}
 }
 
@@ -252,9 +256,12 @@ func followLogs(f *os.File, logWatcher *logger.LogWatcher, notifyRotate chan int
 
 	handleDecodeErr := func(err error) error {
 		if err == io.EOF {
-			for err := waitRead(); err != nil; {
+			for {
+				err := waitRead()
+				if err == nil {
+					break
+				}
 				if err == errRetry {
-					// retry the waitRead
 					continue
 				}
 				return err

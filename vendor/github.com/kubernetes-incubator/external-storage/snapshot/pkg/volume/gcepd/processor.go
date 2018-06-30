@@ -23,7 +23,6 @@ import (
 
 	"github.com/golang/glog"
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/cloudprovider"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/cloudprovider/providers/gce"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"k8s.io/api/core/v1"
@@ -52,11 +51,16 @@ func GetPluginName() string {
 	return gcePersistentDiskPluginName
 }
 
-func (plugin *gcePersistentDiskPlugin) Init(cloud cloudprovider.Interface) {
+func (plugin *gcePersistentDiskPlugin) Init(cloud interface{}) error {
 	plugin.cloud = cloud.(*gce.Cloud)
+	return nil
 }
 
-func (plugin *gcePersistentDiskPlugin) SnapshotCreate(pv *v1.PersistentVolume, tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
+func (plugin *gcePersistentDiskPlugin) SnapshotCreate(
+	snapshot *crdv1.VolumeSnapshot,
+	pv *v1.PersistentVolume,
+	tags *map[string]string,
+) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
 	spec := &pv.Spec
 	if spec == nil || spec.GCEPersistentDisk == nil {
 		return nil, nil, fmt.Errorf("invalid PV spec %v", spec)
@@ -186,11 +190,7 @@ func (plugin *gcePersistentDiskPlugin) FindSnapshot(tags *map[string]string) (*c
 	glog.Infof("FindSnapshot by tags: %#v", *tags)
 
 	// TODO: Implement FindSnapshot
-	return &crdv1.VolumeSnapshotDataSource{
-		GCEPersistentDiskSnapshot: &crdv1.GCEPersistentDiskSnapshotSource{
-			SnapshotName: "",
-		},
-	}, nil, nil
+	return nil, nil, fmt.Errorf("Snapshot not found")
 }
 
 func (plugin *gcePersistentDiskPlugin) VolumeDelete(pv *v1.PersistentVolume) error {

@@ -1,71 +1,73 @@
 package: github.com/portworx/torpedo
 import:
-- package: github.com/sirupsen/logrus
-  version: 33a34430d1c3dc71777fdd677864928e5b5812bc
+- package: github.com/aws/aws-sdk-go
+  version: ^1.14.16
+  subpackages:
+  - aws
+  - aws/credentials
+  - aws/session
+  - service/ec2
+  - service/ssm
+- package: github.com/docker/docker
+  version: ^17.5.0-ce-rc3
+  subpackages:
+  - client
 - package: github.com/fatih/color
-  version: ^1.5.0
-- package: github.com/libopenstorage/openstorage
+  version: ^1.7.0
+- package: github.com/gambol99/go-marathon
+  version: ^0.7.1
+- package: github.com/kubernetes-incubator/external-storage
+  repo: https://github.com/libopenstorage/external-storage.git
   version: master
   subpackages:
+  - snapshot/pkg/apis/crd/v1
+- package: github.com/libopenstorage/openstorage
+  version: ^2.0.0
+  subpackages:
   - api
+  - api/client
   - api/client/cluster
   - api/client/volume
   - api/spec
   - cluster
   - volume
+- package: github.com/onsi/ginkgo
+  version: ^1.5.0
+- package: github.com/onsi/gomega
+  version: ^1.4.0
+- package: github.com/pborman/uuid
+  version: ^1.1.0
+- package: github.com/portworx/sched-ops
+  subpackages:
+  - k8s
+  - task
+- package: github.com/sirupsen/logrus
+  version: ^1.0.5
 - package: golang.org/x/crypto
   version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
   - ssh
-- package: k8s.io/kubernetes
-  version: v1.8.2
+- package: golang.org/x/net
   subpackages:
-  - pkg/api/v1/helper
-- package: k8s.io/apimachinery
-  version: kubernetes-1.8.2
-  subpackages:
-  - pkg/runtime
+  - context
 - package: k8s.io/api
-  version: kubernetes-1.8.2
+  version: release-1.8
+  subpackages:
+  - apps/v1beta2
+  - batch/v1
+  - core/v1
+  - rbac/v1
+  - storage/v1
+- package: k8s.io/apimachinery
+  version: release-1.8
+  subpackages:
+  - pkg/api/errors
+  - pkg/apis/meta/v1
+  - pkg/runtime
+  - pkg/runtime/serializer
+  - pkg/types
+  - pkg/util/yaml
 - package: k8s.io/client-go
   version: v5.0.1
-- package: github.com/portworx/sched-ops
-  version: master
-  repo: git@github.com:portworx/sched-ops.git
-- package: github.com/aws/aws-sdk-go
-  version: f9a6880d84e16e2a37055793e17164a228d637f4
   subpackages:
-  - aws
-  - aws/awserr
-  - aws/awsutil
-  - aws/client
-  - aws/client/metadata
-  - aws/corehandlers
-  - aws/credentials
-  - aws/credentials/ec2rolecreds
-  - aws/credentials/endpointcreds
-  - aws/credentials/stscreds
-  - aws/defaults
-  - aws/ec2metadata
-  - aws/endpoints
-  - aws/request
-  - aws/session
-  - aws/signer/v4
-  - internal/shareddefaults
-  - private/protocol
-  - private/protocol/ec2query
-  - private/protocol/query
-  - private/protocol/query/queryutil
-  - private/protocol/rest
-  - private/protocol/xml/xmlutil
-  - service/ec2
-  - service/sts
-- package: github.com/gambol99/go-marathon
-  version: ^0.7.1
-- package: go.pedge.io/dlog
-  version: 292aa66beb49590f5c6da27331b90506b1c3cbbc
-  repo: git@github.com:peter-edge/dlog-go.git
-  vcs: git
-- package: github.com/kubernetes-incubator/external-storage
-  subpackages:
-  - snapshot/pkg/apis/crd/v1
+  - kubernetes/scheme

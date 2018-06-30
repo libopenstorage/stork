@@ -84,6 +84,10 @@ type MediaLiveAPI interface {
 	DeleteInputSecurityGroupWithContext(aws.Context, *medialive.DeleteInputSecurityGroupInput, ...request.Option) (*medialive.DeleteInputSecurityGroupOutput, error)
 	DeleteInputSecurityGroupRequest(*medialive.DeleteInputSecurityGroupInput) (*request.Request, *medialive.DeleteInputSecurityGroupOutput)
 
+	DeleteReservation(*medialive.DeleteReservationInput) (*medialive.DeleteReservationOutput, error)
+	DeleteReservationWithContext(aws.Context, *medialive.DeleteReservationInput, ...request.Option) (*medialive.DeleteReservationOutput, error)
+	DeleteReservationRequest(*medialive.DeleteReservationInput) (*request.Request, *medialive.DeleteReservationOutput)
+
 	DescribeChannel(*medialive.DescribeChannelInput) (*medialive.DescribeChannelOutput, error)
 	DescribeChannelWithContext(aws.Context, *medialive.DescribeChannelInput, ...request.Option) (*medialive.DescribeChannelOutput, error)
 	DescribeChannelRequest(*medialive.DescribeChannelInput) (*request.Request, *medialive.DescribeChannelOutput)
@@ -95,6 +99,14 @@ type MediaLiveAPI interface {
 	DescribeInputSecurityGroup(*medialive.DescribeInputSecurityGroupInput) (*medialive.DescribeInputSecurityGroupOutput, error)
 	DescribeInputSecurityGroupWithContext(aws.Context, *medialive.DescribeInputSecurityGroupInput, ...request.Option) (*medialive.DescribeInputSecurityGroupOutput, error)
 	DescribeInputSecurityGroupRequest(*medialive.DescribeInputSecurityGroupInput) (*request.Request, *medialive.DescribeInputSecurityGroupOutput)
+
+	DescribeOffering(*medialive.DescribeOfferingInput) (*medialive.DescribeOfferingOutput, error)
+	DescribeOfferingWithContext(aws.Context, *medialive.DescribeOfferingInput, ...request.Option) (*medialive.DescribeOfferingOutput, error)
+	DescribeOfferingRequest(*medialive.DescribeOfferingInput) (*request.Request, *medialive.DescribeOfferingOutput)
+
+	DescribeReservation(*medialive.DescribeReservationInput) (*medialive.DescribeReservationOutput, error)
+	DescribeReservationWithContext(aws.Context, *medialive.DescribeReservationInput, ...request.Option) (*medialive.DescribeReservationOutput, error)
+	DescribeReservationRequest(*medialive.DescribeReservationInput) (*request.Request, *medialive.DescribeReservationOutput)
 
 	ListChannels(*medialive.ListChannelsInput) (*medialive.ListChannelsOutput, error)
 	ListChannelsWithContext(aws.Context, *medialive.ListChannelsInput, ...request.Option) (*medialive.ListChannelsOutput, error)
@@ -117,6 +129,24 @@ type MediaLiveAPI interface {
 	ListInputsPages(*medialive.ListInputsInput, func(*medialive.ListInputsOutput, bool) bool) error
 	ListInputsPagesWithContext(aws.Context, *medialive.ListInputsInput, func(*medialive.ListInputsOutput, bool) bool, ...request.Option) error
 
+	ListOfferings(*medialive.ListOfferingsInput) (*medialive.ListOfferingsOutput, error)
+	ListOfferingsWithContext(aws.Context, *medialive.ListOfferingsInput, ...request.Option) (*medialive.ListOfferingsOutput, error)
+	ListOfferingsRequest(*medialive.ListOfferingsInput) (*request.Request, *medialive.ListOfferingsOutput)
+
+	ListOfferingsPages(*medialive.ListOfferingsInput, func(*medialive.ListOfferingsOutput, bool) bool) error
+	ListOfferingsPagesWithContext(aws.Context, *medialive.ListOfferingsInput, func(*medialive.ListOfferingsOutput, bool) bool, ...request.Option) error
+
+	ListReservations(*medialive.ListReservationsInput) (*medialive.ListReservationsOutput, error)
+	ListReservationsWithContext(aws.Context, *medialive.ListReservationsInput, ...request.Option) (*medialive.ListReservationsOutput, error)
+	ListReservationsRequest(*medialive.ListReservationsInput) (*request.Request, *medialive.ListReservationsOutput)
+
+	ListReservationsPages(*medialive.ListReservationsInput, func(*medialive.ListReservationsOutput, bool) bool) error
+	ListReservationsPagesWithContext(aws.Context, *medialive.ListReservationsInput, func(*medialive.ListReservationsOutput, bool) bool, ...request.Option) error
+
+	PurchaseOffering(*medialive.PurchaseOfferingInput) (*medialive.PurchaseOfferingOutput, error)
+	PurchaseOfferingWithContext(aws.Context, *medialive.PurchaseOfferingInput, ...request.Option) (*medialive.PurchaseOfferingOutput, error)
+	PurchaseOfferingRequest(*medialive.PurchaseOfferingInput) (*request.Request, *medialive.PurchaseOfferingOutput)
+
 	StartChannel(*medialive.StartChannelInput) (*medialive.StartChannelOutput, error)
 	StartChannelWithContext(aws.Context, *medialive.StartChannelInput, ...request.Option) (*medialive.StartChannelOutput, error)
 	StartChannelRequest(*medialive.StartChannelInput) (*request.Request, *medialive.StartChannelOutput)
@@ -128,6 +158,14 @@ type MediaLiveAPI interface {
 	UpdateChannel(*medialive.UpdateChannelInput) (*medialive.UpdateChannelOutput, error)
 	UpdateChannelWithContext(aws.Context, *medialive.UpdateChannelInput, ...request.Option) (*medialive.UpdateChannelOutput, error)
 	UpdateChannelRequest(*medialive.UpdateChannelInput) (*request.Request, *medialive.UpdateChannelOutput)
+
+	UpdateInput(*medialive.UpdateInputInput) (*medialive.UpdateInputOutput, error)
+	UpdateInputWithContext(aws.Context, *medialive.UpdateInputInput, ...request.Option) (*medialive.UpdateInputOutput, error)
+	UpdateInputRequest(*medialive.UpdateInputInput) (*request.Request, *medialive.UpdateInputOutput)
+
+	UpdateInputSecurityGroup(*medialive.UpdateInputSecurityGroupInput) (*medialive.UpdateInputSecurityGroupOutput, error)
+	UpdateInputSecurityGroupWithContext(aws.Context, *medialive.UpdateInputSecurityGroupInput, ...request.Option) (*medialive.UpdateInputSecurityGroupOutput, error)
+	UpdateInputSecurityGroupRequest(*medialive.UpdateInputSecurityGroupInput) (*request.Request, *medialive.UpdateInputSecurityGroupOutput)
 }
 
 var _ MediaLiveAPI = (*medialive.MediaLive)(nil)

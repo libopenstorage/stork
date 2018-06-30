@@ -11,16 +11,18 @@
   ],
   "swagger": "2.0",
   "info": {
-    "description": "OpenStorage is a clustered implementation of the Open Storage specification and relies on the OCI runtime.\nIt allows you to run stateful services in containers in a multi-host clustered environment.\nThis document represents the API documentaton of Openstorage, for the GO client please visit:\nhttps://github.com/libopenstorage/openstorage",
+    "description": "OpenStorage is a clustered implementation of the Open Storage specification and relies on the Docker runtime.\nIt allows you to run stateful services in Docker in a multi-host environment.\nIt plugs into Docker volumes to provide storage to a container and plugs into Swarm to operate in a clustered environment.",
     "title": "OSD API.",
+    "termsOfService": "there are no TOS at this moment, use at your own risk we take no responsibility",
     "contact": {
-      "url": "https://github.com/libopenstorage/openstorage"
+      "name": "Luis Pabon",
+      "email": "luis@portworx.com"
     },
     "license": {
       "name": "APACHE2",
       "url": "https://opensource.org/licenses/Apache-2.0"
     },
-    "version": "2.0.0"
+    "version": "1.0.0"
   },
   "host": "localhost",
   "basePath": "/v1",
@@ -32,16 +34,20 @@
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "alerts",
+          "enumerate"
         ],
         "operationId": "enumerateAlerts",
         "parameters": [
           {
-            "type": "integer",
-            "description": "Resourcetype to get alerts with.\n0: All\n1: Volume\n2: Node\n3: Cluster\n4: Drive\n",
+            "description": "resourcetype to get alerts with",
             "name": "resource",
             "in": "path",
-            "required": true
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ResourceType"
+            }
           }
         ],
         "responses": {
@@ -61,19 +67,22 @@
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "alerts",
+          "clear"
         ],
         "operationId": "clearAlert",
         "parameters": [
           {
-            "type": "integer",
-            "description": "resourcetype to get alerts with.\n0: All\n1: Volume\n2: Node\n3: Cluster\n4: Drive\n",
+            "description": "resourcetype to get alerts with",
             "name": "resource",
             "in": "path",
-            "required": true
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ResourceType"
+            }
           },
           {
-            "type": "integer",
             "description": "id to get alerts with",
             "name": "id",
             "in": "path",
@@ -95,19 +104,22 @@
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "alerts",
+          "delete"
         ],
         "operationId": "deleteAlert",
         "parameters": [
           {
-            "type": "integer",
-            "description": "resourcetype to get alerts with.\n0: All\n1: Volume\n2: Node\n3: Cluster\n4: Drive\n",
+            "description": "resourcetype to get alerts with",
             "name": "resource",
             "in": "path",
-            "required": true
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ResourceType"
+            }
           },
           {
-            "type": "integer",
             "description": "id to get alerts with",
             "name": "id",
             "in": "path",
@@ -131,7 +143,8 @@
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "enumerate"
         ],
         "summary": "Lists cluster Nodes.",
         "operationId": "enumerateCluster",
@@ -148,35 +161,6 @@
         }
       }
     },
-    "/cluster/getnodeidfromip/{idip}": {
-      "get": {
-        "description": "this will return the node ID for the given node IP",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "cluster"
-        ],
-        "operationId": "GetNodeIdFromIp",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "cluster node ip or id",
-            "name": "idip",
-            "in": "path",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "cluster node ID",
-            "schema": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
     "/cluster/inspect/{id}": {
       "get": {
         "description": "This will return the requested node object",
@@ -184,13 +168,13 @@
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "inspect"
         ],
         "summary": "Inspect cluster Nodes.",
         "operationId": "inspectNode",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get node with",
             "name": "id",
             "in": "path",
@@ -213,7 +197,8 @@
           "application/json"
         ],
         "tags": [
-          "node"
+          "node",
+          "health"
         ],
         "summary": "This will return node health.",
         "operationId": "nodeHealth",
@@ -233,7 +218,8 @@
           "application/json"
         ],
         "tags": [
-          "node"
+          "node",
+          "status"
         ],
         "summary": "This will return the node status .",
         "operationId": "nodeStatus",
@@ -254,15 +240,15 @@
           "application/json"
         ],
         "tags": [
-          "node"
+          "node",
+          "peerstatus"
         ],
         "operationId": "peerStatus",
         "parameters": [
           {
-            "type": "integer",
             "description": "id of the node we want to check.",
             "name": "name",
-            "in": "query",
+            "in": "path",
             "required": true
           }
         ],
@@ -276,172 +262,14 @@
         }
       }
     },
-    "/cluster/secrets/": {
-      "get": {
-        "description": "This will return the value/data for given secret key",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "secrets"
-        ],
-        "summary": "Get the seceret value/data for given key",
-        "operationId": "getSecret",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "secret id/key whose value to be retrived",
-            "name": "id",
-            "in": "query",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "returns the value/data for given key",
-            "schema": {
-              "$ref": "#/definitions/GetSecretResponse"
-            }
-          }
-        }
-      },
-      "put": {
-        "description": "This will set secrets data/value against given key",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "secrets"
-        ],
-        "summary": "Set Secret Value",
-        "operationId": "setSeceret",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "key/id for secrets",
-            "name": "id",
-            "in": "query",
-            "required": true
-          },
-          {
-            "description": "value/data for secrets",
-            "name": "secretvalue",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/SetSecretRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "success"
-          }
-        }
-      }
-    },
-    "/cluster/secrets/defaultsecretkey": {
-      "get": {
-        "description": "This will return the cluster wide secret key",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "secrets"
-        ],
-        "summary": "Get cluster secret key",
-        "operationId": "getDefaultSecretKey",
-        "responses": {
-          "200": {
-            "description": "returns cluster wide secret key",
-            "schema": {
-              "$ref": "#/definitions/GetSecretResponse"
-            }
-          }
-        }
-      },
-      "put": {
-        "description": "This will set the cluster wide default secret key",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "secrets"
-        ],
-        "summary": "Set cluster secret key",
-        "operationId": "setDefaultSecretKey",
-        "parameters": [
-          {
-            "description": "default secret key",
-            "name": "defaultkey",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/DefaultSecretKeyRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "success"
-          }
-        }
-      }
-    },
-    "/cluster/secrets/login": {
-      "post": {
-        "description": "This will initiate session with secret store",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "secrets"
-        ],
-        "summary": "Start session with secret store",
-        "operationId": "secretsLogin",
-        "parameters": [
-          {
-            "description": "config for login to secret store",
-            "name": "SecretLoginConfig",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/SecretLoginRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "success"
-          }
-        }
-      }
-    },
-    "/cluster/secrets/verify": {
-      "get": {
-        "description": "This will return error if session is not estabilished with secrets store",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "secrets"
-        ],
-        "summary": "Validates session with secret store",
-        "operationId": "secretLoginCheck",
-        "responses": {
-          "200": {
-            "description": "validates session with secret store"
-          }
-        }
-      }
-    },
     "/cluster/status": {
       "get": {
         "produces": [
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "status"
         ],
         "summary": "this will return the cluster status.",
         "operationId": "status",
@@ -462,12 +290,13 @@
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "versions"
         ],
         "operationId": "enumerateVersions",
         "responses": {
           "200": {
-            "description": "Supported versions",
+            "description": "anode",
             "schema": {
               "type": "array",
               "items": {
@@ -485,12 +314,13 @@
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "node",
+          "shutdown"
         ],
         "operationId": "shutdownNode",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get node with",
             "name": "id",
             "in": "path",
@@ -512,19 +342,19 @@
           "application/json"
         ],
         "tags": [
-          "cluster"
+          "cluster",
+          "node",
+          "delete"
         ],
         "operationId": "deleteNode",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get node with",
             "name": "id",
             "in": "path",
             "required": true
           },
           {
-            "type": "boolean",
             "description": "forceRemove node",
             "name": "forceRemove",
             "in": "query"
@@ -540,172 +370,44 @@
         }
       }
     },
-    "/config/cluster": {
-      "get": {
-        "description": "This will return the requested cluster configuration object",
+    "/loggingurl": {
+      "put": {
+        "description": "Set Logging url",
         "produces": [
           "application/json"
         ],
         "tags": [
-          "config"
+          "cluster",
+          "loggingurl"
         ],
-        "summary": "Get cluster configuration.",
-        "operationId": "getClusterConfig",
-        "responses": {
-          "200": {
-            "description": "a cluster config",
-            "schema": {
-              "$ref": "#/definitions/ClusterConfig"
-            }
-          }
-        }
-      },
-      "post": {
-        "description": "This will set the requested cluster configuration",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "config"
-        ],
-        "summary": "Set cluster configuration.",
-        "operationId": "setClusterConfig",
+        "operationId": "setLoggingUrl",
+        "deprecated": true,
         "parameters": [
           {
-            "description": "cluster config json",
-            "name": "config",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/ClusterConfig"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "success",
-            "schema": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "/config/enumerate": {
-      "get": {
-        "description": "This will return the node configuration for all nodes",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "config"
-        ],
-        "summary": "Get configuration for all nodes.",
-        "operationId": "enumerate",
-        "responses": {
-          "200": {
-            "description": "node config enumeration",
-            "schema": {
-              "$ref": "#/definitions/NodesConfig"
-            }
-          }
-        }
-      }
-    },
-    "/config/node": {
-      "post": {
-        "description": "This will set the requested node configuration",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "config"
-        ],
-        "summary": "Set node configuration.",
-        "operationId": "setNodeConfig",
-        "parameters": [
-          {
-            "description": "node config json",
-            "name": "config",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/NodeConfig"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "success"
-          }
-        }
-      }
-    },
-    "/config/node/{id}": {
-      "get": {
-        "description": "This will return the requested node configuration object",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "config"
-        ],
-        "summary": "Get node configuration.",
-        "operationId": "getNodeConfig",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "id to get node with",
-            "name": "id",
-            "in": "path",
+            "description": "url to set loggingurl with",
+            "name": "url",
+            "in": "query",
             "required": true
           }
         ],
         "responses": {
           "200": {
-            "description": "a node",
+            "description": "cluster response",
             "schema": {
-              "$ref": "#/definitions/NodeConfig"
+              "$ref": "#/definitions/ClusterResponse"
             }
-          }
-        }
-      },
-      "delete": {
-        "description": "This will delete the requested node configuration object",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "config"
-        ],
-        "summary": "Delete node configuration.",
-        "operationId": "deleteNodeConfig",
-        "parameters": [
-          {
-            "type": "string",
-            "description": "id to reference node",
-            "name": "id",
-            "in": "path",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "success"
           }
         }
       }
     },
     "/osd-snapshots": {
       "get": {
-        "consumes": [
-          "multipart/form-data"
-        ],
         "produces": [
           "application/json"
         ],
         "tags": [
-          "snapshot"
+          "snapshot",
+          "enumerate"
         ],
         "summary": "Enumerate snapshots.",
         "operationId": "enumerateSnaps",
@@ -717,16 +419,28 @@
             "in": "query"
           },
           {
-            "type": "string",
-            "description": "Comma separated volume labels\nexample: {\"label1\",\"label2\"}\n",
+            "example": {
+              "label1": null,
+              "label2": null
+            },
+            "description": "Comma separated volume labels",
             "name": "VolumeLabels",
-            "in": "formData"
+            "in": "formData",
+            "schema": {
+              "type": "object"
+            }
           },
           {
-            "type": "string",
-            "description": "Comma separated snap labels\nexample: {\"label1\",\"label2\"}\n",
+            "example": {
+              "label1": null,
+              "label2": null
+            },
+            "description": "Comma separated snap labels",
             "name": "SnapLabels",
-            "in": "formData"
+            "in": "formData",
+            "schema": {
+              "type": "object"
+            }
           },
           {
             "type": "string",
@@ -754,12 +468,12 @@
           "application/json"
         ],
         "tags": [
-          "snapshot"
+          "snapshot",
+          "create"
         ],
         "operationId": "createSnap",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
             "in": "query",
@@ -791,56 +505,19 @@
         }
       }
     },
-    "/osd-snapshots/groupsnap": {
-      "post": {
-        "description": "Take a snapshot of volumegroup",
-        "produces": [
-          "application/json"
-        ],
-        "tags": [
-          "volumegroup"
-        ],
-        "operationId": "snapVolumeGroup",
-        "parameters": [
-          {
-            "description": "GroupSnap create request",
-            "name": "groupspec",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/GroupSnapCreateRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "group snap create response",
-            "schema": {
-              "$ref": "#/definitions/GroupSnapCreateResponse"
-            }
-          },
-          "default": {
-            "description": "unexpected error",
-            "schema": {
-              "$ref": "#/definitions/GroupSnapCreateResponse"
-            }
-          }
-        }
-      }
-    },
     "/osd-snapshots/restore/{id}": {
       "post": {
         "produces": [
           "application/json"
         ],
         "tags": [
-          "snapshot"
+          "snapshot",
+          "restore"
         ],
         "summary": "Restore snapshot with specified id.",
         "operationId": "restoreSnap",
         "parameters": [
           {
-            "type": "integer",
             "description": "id of snapshot to restore",
             "name": "id",
             "in": "path",
@@ -866,14 +543,12 @@
     "/osd-volumes": {
       "get": {
         "description": "Enumerate all volumes",
-        "consumes": [
-          "multipart/form-data"
-        ],
         "produces": [
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "enumerate"
         ],
         "operationId": "enumerateVolumes",
         "parameters": [
@@ -884,16 +559,28 @@
             "in": "query"
           },
           {
-            "type": "string",
-            "description": "Comma separated name value pairs\nexample: {\"label1\",\"label2\"}\n",
+            "example": {
+              "label1": null,
+              "label2": null
+            },
+            "description": "Comma separated name value pairs",
             "name": "Label",
-            "in": "formData"
+            "in": "formData",
+            "schema": {
+              "type": "object"
+            }
           },
           {
-            "type": "string",
-            "description": "Comma separated name value pairs\nexample: {\"label1\",\"label2\"}\n",
+            "example": {
+              "label1": null,
+              "label2": null
+            },
+            "description": "Comma separated name value pairs",
             "name": "ConfigLabel",
-            "in": "formData"
+            "in": "formData",
+            "schema": {
+              "type": "object"
+            }
           },
           {
             "type": "string",
@@ -920,7 +607,8 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "create"
         ],
         "summary": "Creates a single volume with given spec.",
         "operationId": "createVolume",
@@ -957,13 +645,13 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "quiesce"
         ],
         "summary": "Quiesce volume with specified id.",
         "operationId": "quiesceVolume",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
             "in": "path",
@@ -992,13 +680,13 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "requests"
         ],
         "summary": "Get Requests for volume with specified id.",
         "operationId": "requestsVolume",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
             "in": "path",
@@ -1021,13 +709,13 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "stats"
         ],
         "summary": "Get stats for volume with specified id.",
         "operationId": "statsVolume",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
             "in": "path",
@@ -1050,13 +738,13 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "unquiesce"
         ],
         "summary": "Unquiesce volume with specified id.",
         "operationId": "unquiesceVolume",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
             "in": "path",
@@ -1085,13 +773,13 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "usedsize"
         ],
         "summary": "Get Used size of volume with specified id.",
         "operationId": "usedSizeVolume",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
             "in": "path",
@@ -1107,25 +795,22 @@
     },
     "/osd-volumes/versions": {
       "get": {
+        "description": "This will show all supported versions of the API for this volumeDriver.",
         "produces": [
-          "application/json"
+          "application/json",
+          "parameters:",
+          "name: id",
+          "in: query",
+          "description: id to get volume with",
+          "required: true"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "versions"
         ],
         "summary": "Lists API versions supported by this volumeDriver.",
         "operationId": "listVersions",
-        "responses": {
-          "200": {
-            "description": "Supported versions",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
+        "responses": {}
       }
     },
     "/osd-volumes/{id}": {
@@ -1134,16 +819,16 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "inspect"
         ],
         "summary": "Inspect volume with specified id.",
         "operationId": "inspectVolume",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
-            "in": "path",
+            "in": "query",
             "required": true
           }
         ],
@@ -1161,16 +846,16 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "update"
         ],
         "summary": "Updates a single volume with given spec.",
         "operationId": "setVolume",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
-            "in": "path",
+            "in": "query",
             "required": true
           },
           {
@@ -1203,13 +888,13 @@
           "application/json"
         ],
         "tags": [
-          "volume"
+          "volume",
+          "delete"
         ],
         "summary": "Delete volume with specified id.",
         "operationId": "deleteVolume",
         "parameters": [
           {
-            "type": "integer",
             "description": "id to get volume with",
             "name": "id",
             "in": "path",
@@ -1234,35 +919,7 @@
     }
   },
   "definitions": {
-    "AWSConfig": {
-      "description": "AWS configuration parameters struct",
-      "type": "object",
-      "properties": {
-        "aws_access_key_id": {
-          "type": "string",
-          "x-go-name": "AccessKeyId"
-        },
-        "aws_cmk": {
-          "type": "string",
-          "x-go-name": "Cmk"
-        },
-        "aws_region": {
-          "type": "string",
-          "x-go-name": "Region"
-        },
-        "aws_secret_access_key": {
-          "type": "string",
-          "x-go-name": "SecretAccessKey"
-        },
-        "aws_secret_token_key": {
-          "type": "string",
-          "x-go-name": "SecretTokenKey"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
-    },
     "ActiveRequest": {
-      "description": "Active Request",
       "type": "object",
       "properties": {
         "ReqestKV": {}
@@ -1270,7 +927,6 @@
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
     "ActiveRequests": {
-      "description": "Active Requests",
       "type": "object",
       "properties": {
         "ActiveRequest": {
@@ -1364,413 +1020,6 @@
       "format": "int32",
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
-    "CloudBackupCatalogRequest": {
-      "type": "object",
-      "properties": {
-        "CredentialUUID": {
-          "description": "CredentialUUID is the credential for cloud",
-          "type": "string"
-        },
-        "ID": {
-          "description": "ID is Backup ID in the cloud",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupCatalogResponse": {
-      "type": "object",
-      "properties": {
-        "Contents": {
-          "description": "Contents is listing of backup contents",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupCreateRequest": {
-      "type": "object",
-      "properties": {
-        "CredentialUUID": {
-          "description": "CredentialUUID is cloud credential to be used for backup",
-          "type": "string"
-        },
-        "Full": {
-          "description": "Full indicates if full backup is desired even though incremental is possible",
-          "type": "boolean"
-        },
-        "VolumeID": {
-          "description": "VolumeID of the volume for which cloudbackup is requested",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupDeleteAllRequest": {
-      "type": "object",
-      "properties": {
-        "All": {
-          "description": "All if set to true, backups for all clusters in the cloud are processed",
-          "type": "boolean"
-        },
-        "ClusterID": {
-          "description": "ClusterID is the optional clusterID for the request",
-          "type": "string"
-        },
-        "CredentialUUID": {
-          "description": "CredentialUUID is the credential for cloud to be used for the request",
-          "type": "string"
-        },
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is optional Source VolumeID for the request",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupDeleteRequest": {
-      "type": "object",
-      "properties": {
-        "CredentialUUID": {
-          "description": "CredentialUUID is the credential for cloud to be used for the request",
-          "type": "string"
-        },
-        "Force": {
-          "description": "Force Delete cloudbackup even if there are dependencies",
-          "type": "boolean"
-        },
-        "ID": {
-          "description": "ID is the ID of the cloud backup",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupEnumerateRequest": {
-      "type": "object",
-      "properties": {
-        "All": {
-          "description": "All if set to true, backups for all clusters in the cloud are processed",
-          "type": "boolean"
-        },
-        "ClusterID": {
-          "description": "ClusterID is the optional clusterID for the request",
-          "type": "string"
-        },
-        "CredentialUUID": {
-          "description": "CredentialUUID is the credential for cloud to be used for the request",
-          "type": "string"
-        },
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is optional Source VolumeID for the request",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupEnumerateResponse": {
-      "type": "object",
-      "properties": {
-        "Backups": {
-          "description": "Backups is list of backups in cloud for given volume/cluster/s",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/CloudBackupInfo"
-          }
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupGenericRequest": {
-      "type": "object",
-      "properties": {
-        "All": {
-          "description": "All if set to true, backups for all clusters in the cloud are processed",
-          "type": "boolean"
-        },
-        "ClusterID": {
-          "description": "ClusterID is the optional clusterID for the request",
-          "type": "string"
-        },
-        "CredentialUUID": {
-          "description": "CredentialUUID is the credential for cloud to be used for the request",
-          "type": "string"
-        },
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is optional Source VolumeID for the request",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupHistoryItem": {
-      "type": "object",
-      "properties": {
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is volume ID which was backedup",
-          "type": "string"
-        },
-        "Status": {
-          "description": "Status indicates whether backup was completed/failed",
-          "type": "string"
-        },
-        "Timestamp": {
-          "description": "TimeStamp is the time at which either backup completed/failed",
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupHistoryRequest": {
-      "type": "object",
-      "properties": {
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is volumeID for which history of backup/restore\nis being requested",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupHistoryResponse": {
-      "type": "object",
-      "properties": {
-        "HistoryList": {
-          "description": "HistoryList is list of past backup/restores in the cluster",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/CloudBackupHistoryItem"
-          }
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupInfo": {
-      "type": "object",
-      "properties": {
-        "ID": {
-          "description": "ID is the ID of the cloud backup",
-          "type": "string"
-        },
-        "Metadata": {
-          "description": "Metadata associated with the backup",
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is Source volumeID of the backup",
-          "type": "string"
-        },
-        "SrcVolumeName": {
-          "description": "SrcvolumeName is name of the sourceVolume of the backup",
-          "type": "string"
-        },
-        "Status": {
-          "description": "Status indicates the status of the backup",
-          "type": "string"
-        },
-        "Timestamp": {
-          "description": "Timestamp is the timestamp at which the source volume\nwas backed up to cloud",
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupRestoreRequest": {
-      "type": "object",
-      "properties": {
-        "CredentialUUID": {
-          "description": "CredentialUUID is the credential to be used for restore operation",
-          "type": "string"
-        },
-        "ID": {
-          "description": "ID is the backup ID being restored",
-          "type": "string"
-        },
-        "NodeID": {
-          "description": "NodeID is the optional NodeID for provisioning restore\nvolume (ResoreVolumeName should not be specified)",
-          "type": "string"
-        },
-        "RestoreVolumeName": {
-          "description": "RestoreVolumeName is optional volume Name of the new volume to be created\nin the cluster for restoring the cloudbackup",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupRestoreResponse": {
-      "type": "object",
-      "properties": {
-        "RestoreVolumeID": {
-          "description": "RestoreVolumeID is the volumeID to which the backup is being restored",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupSchedCreateRequest": {
-      "type": "object",
-      "properties": {
-        "CredentialUUID": {
-          "description": "CredentialUUID is the cloud credential used with this schedule",
-          "type": "string"
-        },
-        "MaxBackups": {
-          "description": "MaxBackups are the maximum number of backups retained\nin cloud.Older backups are deleted",
-          "type": "integer",
-          "format": "uint64"
-        },
-        "Schedule": {
-          "description": "Schedule is the frequence of backup",
-          "type": "string"
-        },
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is the schedule's source volume",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupSchedCreateResponse": {
-      "type": "object",
-      "properties": {
-        "UUID": {
-          "description": "UUID is the UUID of the newly created schedule",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupSchedDeleteRequest": {
-      "type": "object",
-      "properties": {
-        "UUID": {
-          "description": "UUID is UUID of the schedule to be deleted",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupSchedEnumerateResponse": {
-      "type": "object",
-      "properties": {
-        "Schedules": {
-          "description": "Schedule is map of schedule uuid to scheduleInfo",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/CloudBackupScheduleInfo"
-          }
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupScheduleInfo": {
-      "type": "object",
-      "properties": {
-        "CredentialUUID": {
-          "description": "CredentialUUID is the cloud credential used with this schedule",
-          "type": "string"
-        },
-        "MaxBackups": {
-          "description": "MaxBackups are the maximum number of backups retained\nin cloud.Older backups are deleted",
-          "type": "integer",
-          "format": "uint64"
-        },
-        "Schedule": {
-          "description": "Schedule is the frequence of backup",
-          "type": "string"
-        },
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is the schedule's source volume",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupStateChangeRequest": {
-      "type": "object",
-      "properties": {
-        "RequestedState": {
-          "description": "RequestedState is desired state of the op\ncan be pause/resume/stop",
-          "type": "string"
-        },
-        "SrcVolumeID": {
-          "description": "SrcVolumeID is volume ID on which backup/restore\nstate change is being requested",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupStatus": {
-      "type": "object",
-      "properties": {
-        "BytesDone": {
-          "description": "BytesDone indicates total Bytes uploaded/downloaded",
-          "type": "integer",
-          "format": "uint64"
-        },
-        "CompletedTime": {
-          "description": "CompletedTime indicates Op's completed time",
-          "type": "string",
-          "format": "date-time"
-        },
-        "ID": {
-          "description": "ID is the ID for the operation",
-          "type": "string"
-        },
-        "NodeID": {
-          "description": "NodeID is the ID of the node where this Op is active",
-          "type": "string"
-        },
-        "OpType": {
-          "description": "OpType indicates if this is a backup or restore",
-          "type": "string"
-        },
-        "StartTime": {
-          "description": "StartTime indicates Op's start time",
-          "type": "string",
-          "format": "date-time"
-        },
-        "Status": {
-          "description": "State indicates if the op is currently active/done/failed",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupStatusRequest": {
-      "type": "object",
-      "properties": {
-        "Local": {
-          "description": "Local indicates if only those backups/restores that are\nactive on current node must be returned",
-          "type": "boolean"
-        },
-        "SrcVolumeID": {
-          "description": "SrcVolumeID optional volumeID to list status of backup/restore",
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "CloudBackupStatusResponse": {
-      "type": "object",
-      "properties": {
-        "Statuses": {
-          "description": "statuses is list of currently active/failed/done backup/restores",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/CloudBackupStatus"
-          }
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
     "Cluster": {
       "type": "object",
       "title": "Cluster represents the state of the cluster.",
@@ -1813,98 +1062,20 @@
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
-    "ClusterConfig": {
-      "description": "ClusterConfig is a cluster level config parameter struct",
-      "type": "object",
-      "properties": {
-        "cluster_id": {
-          "type": "string",
-          "x-go-name": "ClusterId"
-        },
-        "created": {
-          "type": "string",
-          "format": "date-time",
-          "x-go-name": "Created"
-        },
-        "description": {
-          "type": "string",
-          "x-go-name": "Description"
-        },
-        "domain": {
-          "type": "string",
-          "x-go-name": "Domain"
-        },
-        "kvdb": {
-          "$ref": "#/definitions/KvdbConfig"
-        },
-        "mode": {
-          "type": "string",
-          "x-go-name": "Mode"
-        },
-        "private": {
-          "type": "object",
-          "x-go-name": "Private"
-        },
-        "secrets": {
-          "$ref": "#/definitions/SecretsConfig"
-        },
-        "version": {
-          "type": "string",
-          "x-go-name": "Version"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
-    },
     "ClusterNotify": {
       "type": "integer",
       "format": "int32",
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
     "ClusterResponse": {
-      "description": "ClusterResponse specifies a response that gets returned when requesting the cluster",
       "type": "object",
       "properties": {
         "error": {
-          "description": "Error code\n\nin: body",
           "type": "string",
           "x-go-name": "Error"
         }
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "Config": {
-      "type": "object",
-      "properties": {
-        "Osd": {
-          "type": "object",
-          "properties": {
-            "ClusterConfig": {
-              "$ref": "#/definitions/ClusterConfig"
-            },
-            "Drivers": {
-              "description": "map[string]string is volume.VolumeParams equivalent",
-              "type": "object",
-              "additionalProperties": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              }
-            },
-            "GraphDrivers": {
-              "description": "map[string]string is volume.VolumeParams equivalent",
-              "type": "object",
-              "additionalProperties": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/config"
     },
     "CosType": {
       "type": "integer",
@@ -1929,25 +1100,16 @@
       "description": "CredCreateResponse is returned for CredCreate command",
       "type": "object",
       "properties": {
+        "CredErr": {
+          "description": "CredErr indicates reasonfor failed CredCreate",
+          "type": "string"
+        },
         "UUID": {
           "description": "UUID of the credential that was just created",
           "type": "string"
         }
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "DefaultSecretKeyRequest": {
-      "description": "DefaultSecretKeyRequest specify request to set cluster secret key",
-      "type": "object",
-      "properties": {
-        "DefaultSecretKey": {
-          "type": "string"
-        },
-        "Override": {
-          "type": "boolean"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/secrets"
     },
     "DriverType": {
       "type": "integer",
@@ -1974,35 +1136,6 @@
         }
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "GeoConfig": {
-      "description": "GeoConfig holds geographic information",
-      "type": "object",
-      "properties": {
-        "rack": {
-          "type": "string",
-          "x-go-name": "Rack"
-        },
-        "region": {
-          "type": "string",
-          "x-go-name": "Region"
-        },
-        "zone": {
-          "type": "string",
-          "x-go-name": "Zone"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
-    },
-    "GetSecretResponse": {
-      "description": "GetSecretResponse gets secret value for given key",
-      "type": "object",
-      "properties": {
-        "SecretValue": {
-          "type": "object"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/secrets"
     },
     "GraphDriverChangeType": {
       "type": "integer",
@@ -2035,116 +1168,10 @@
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
-    "GroupSnapCreateRequest": {
-      "type": "object",
-      "title": "GroupSnapCreateRequest specifies a request to create a snapshot of given group.",
-      "properties": {
-        "Labels": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "id": {
-          "type": "string",
-          "x-go-name": "Id"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "GroupSnapCreateResponse": {
-      "type": "object",
-      "title": "GroupSnapCreateRequest specifies a response that get's returned when creating a group snapshot.",
-      "required": [
-        "snapshots",
-        "error"
-      ],
-      "properties": {
-        "error": {
-          "description": "Error message\n\nin: body",
-          "type": "string",
-          "x-go-name": "Error"
-        },
-        "snapshots": {
-          "description": "Created snapshots\n\nin: body",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/SnapCreateResponse"
-          },
-          "x-go-name": "Snapshots"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
     "IoProfile": {
       "type": "integer",
       "format": "int32",
       "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "KvdbConfig": {
-      "description": "KvdbConfig stores parameters defining kvdb configuration",
-      "type": "object",
-      "properties": {
-        "acl_token": {
-          "type": "string",
-          "x-go-name": "AclToken"
-        },
-        "ca_file": {
-          "type": "string",
-          "x-go-name": "CAFile"
-        },
-        "cert_file": {
-          "type": "string",
-          "x-go-name": "CertFile"
-        },
-        "cert_key_file": {
-          "type": "string",
-          "x-go-name": "CertKeyFile"
-        },
-        "client_cert_auth": {
-          "type": "string",
-          "x-go-name": "ClientCertAuth"
-        },
-        "discovery": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "x-go-name": "Discovery"
-        },
-        "name": {
-          "type": "string",
-          "x-go-name": "Name"
-        },
-        "password": {
-          "type": "string",
-          "x-go-name": "Password"
-        },
-        "trusted_ca_file": {
-          "type": "string",
-          "x-go-name": "TrustedCAFile"
-        },
-        "username": {
-          "type": "string",
-          "x-go-name": "Username"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
-    },
-    "NetworkConfig": {
-      "description": "NetworkConfig is a network configuration parameters struct",
-      "type": "object",
-      "properties": {
-        "data_interface": {
-          "type": "string",
-          "x-go-name": "DataIface"
-        },
-        "mgt_interface": {
-          "type": "string",
-          "x-go-name": "MgtIface"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
     },
     "Node": {
       "description": "It includes the current physical state (CPU, memory, storage, network usage) as\nwell as the containers running on the system.",
@@ -2241,47 +1268,6 @@
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
-    "NodeConfig": {
-      "description": "NodeConfig is a node level config data",
-      "type": "object",
-      "properties": {
-        "csi_endpoint": {
-          "type": "string",
-          "x-go-name": "CSIEndpoint"
-        },
-        "geo": {
-          "$ref": "#/definitions/GeoConfig"
-        },
-        "network": {
-          "$ref": "#/definitions/NetworkConfig"
-        },
-        "node_id": {
-          "type": "string",
-          "x-go-name": "NodeId"
-        },
-        "private": {
-          "type": "object",
-          "x-go-name": "Private"
-        },
-        "storage": {
-          "$ref": "#/definitions/StorageConfig"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
-    },
-    "NodesConfig": {
-      "description": "NodesConfig contains all of node level data",
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/NodeConfig"
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
-    },
-    "OperationFlags": {
-      "type": "integer",
-      "format": "int32",
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
     "ReplicaSet": {
       "description": "ReplicaSet set of machine IDs (nodes) to which part of this volume is erasure\ncoded - for clustered storage arrays",
       "type": "object",
@@ -2315,53 +1301,6 @@
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
-    "SecretLoginRequest": {
-      "description": "SecretLoginRequest specify secret store and config to initiate\nsecret store session",
-      "type": "object",
-      "properties": {
-        "SecretConfig": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "SecretType": {
-          "type": "string"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/secrets"
-    },
-    "SecretsConfig": {
-      "description": "SecretsConfig is a secrets configuration parameters struct",
-      "type": "object",
-      "properties": {
-        "aws": {
-          "$ref": "#/definitions/AWSConfig"
-        },
-        "cluster_secret_key": {
-          "type": "string",
-          "x-go-name": "ClusterSecretKey"
-        },
-        "secret_type": {
-          "type": "string",
-          "x-go-name": "SecretType"
-        },
-        "vault": {
-          "$ref": "#/definitions/VaultConfig"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
-    },
-    "SetSecretRequest": {
-      "description": "SetSecretRequest stores the given value/data against the key",
-      "type": "object",
-      "properties": {
-        "SecretValue": {
-          "type": "object"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/secrets"
-    },
     "SeverityType": {
       "type": "integer",
       "format": "int32",
@@ -2388,10 +1327,6 @@
     },
     "SnapCreateResponse": {
       "type": "object",
-      "title": "SnapCreateRequest specifies a response that get's returned when creating a snapshot.",
-      "required": [
-        "volume_create_response"
-      ],
       "properties": {
         "volume_create_response": {
           "$ref": "#/definitions/VolumeCreateResponse"
@@ -2516,45 +1451,6 @@
       "format": "int32",
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
-    "StorageConfig": {
-      "description": "StorageConfig is a storage configuration parameters struct",
-      "type": "object",
-      "properties": {
-        "devices": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "x-go-name": "Devices"
-        },
-        "devices_md": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "x-go-name": "DevicesMd"
-        },
-        "max_count": {
-          "type": "integer",
-          "format": "uint32",
-          "x-go-name": "MaxCount"
-        },
-        "max_drive_set_count": {
-          "type": "integer",
-          "format": "uint32",
-          "x-go-name": "MaxDriveSetCount"
-        },
-        "raid_level": {
-          "type": "string",
-          "x-go-name": "RaidLevel"
-        },
-        "raid_level_md": {
-          "type": "string",
-          "x-go-name": "RaidLevelMd"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
-    },
     "StorageMedium": {
       "type": "integer",
       "format": "int32",
@@ -2620,11 +1516,6 @@
         },
         "medium": {
           "$ref": "#/definitions/StorageMedium"
-        },
-        "metadata": {
-          "description": "True if dedicated for metadata.",
-          "type": "boolean",
-          "x-go-name": "Metadata"
         },
         "online": {
           "description": "True if this device is online.",
@@ -2712,49 +1603,6 @@
         }
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "VaultConfig": {
-      "description": "VaultConfig is a vault configuration parameters struct",
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string",
-          "x-go-name": "Address"
-        },
-        "base_path": {
-          "type": "string",
-          "x-go-name": "BasePath"
-        },
-        "ca_cert": {
-          "type": "string",
-          "x-go-name": "CACert"
-        },
-        "ca_path": {
-          "type": "string",
-          "x-go-name": "CAPath"
-        },
-        "client_cert": {
-          "type": "string",
-          "x-go-name": "ClientCert"
-        },
-        "client_key": {
-          "type": "string",
-          "x-go-name": "ClientKey"
-        },
-        "skip_verify": {
-          "type": "string",
-          "x-go-name": "TLSSkipVerify"
-        },
-        "tls_server_name": {
-          "type": "string",
-          "x-go-name": "TLSServerName"
-        },
-        "token": {
-          "type": "string",
-          "x-go-name": "Token"
-        }
-      },
-      "x-go-package": "github.com/libopenstorage/openstorage/osdconfig"
     },
     "Volume": {
       "description": "Volume represents an abstract storage volume.",
@@ -2858,14 +1706,6 @@
           "type": "integer",
           "format": "uint64",
           "x-go-name": "Usage"
-        },
-        "volume_consumers": {
-          "description": "VolumeConsumers are entities that consume this volume",
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/VolumeConsumer"
-          },
-          "x-go-name": "VolumeConsumers"
         }
       },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
@@ -2873,43 +1713,6 @@
     "VolumeActionParam": {
       "type": "integer",
       "format": "int32",
-      "x-go-package": "github.com/libopenstorage/openstorage/api"
-    },
-    "VolumeConsumer": {
-      "description": "VolumeConsumer identifies a consumer for a Volume. An example of a VolumeConsumer\nwould be a Pod in Kubernetes who has mounted the PersistentVolumeClaim for the\nVolume\nswagger: model",
-      "type": "object",
-      "properties": {
-        "name": {
-          "description": "Name is the name of the volume consumer",
-          "type": "string",
-          "x-go-name": "Name"
-        },
-        "namespace": {
-          "description": "Namespace is the namespace of the volume consumer",
-          "type": "string",
-          "x-go-name": "Namespace"
-        },
-        "node_id": {
-          "description": "NodeID is the identifier of the node on which the consumer is running. This\nidentifier would be from the perspective of the container runtime or\norchestrator under which the volume consumer resides. For example, NodeID\ncan be name of a minion in Kubernetes.",
-          "type": "string",
-          "x-go-name": "NodeId"
-        },
-        "owner_name": {
-          "description": "OwnerName is the name of the entity who owns this volume consumer",
-          "type": "string",
-          "x-go-name": "OwnerName"
-        },
-        "owner_type": {
-          "description": "OwnerType is the type of the entity who owns this volume consumer. The type would\nbe from the perspective of the container runtime or the orchestrator under which\nthe volume consumer resides. For e.g OwnerType can be a Deployment in Kubernetes.",
-          "type": "string",
-          "x-go-name": "OwnerType"
-        },
-        "type": {
-          "description": "Type is the type of the consumer. E.g a Kubernetes pod",
-          "type": "string",
-          "x-go-name": "Type"
-        }
-      },
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
     "VolumeCreateRequest": {
@@ -2929,15 +1732,10 @@
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
     "VolumeCreateResponse": {
-      "description": "VolumeCreateResponse",
       "type": "object",
-      "required": [
-        "id",
-        "volume_response"
-      ],
       "properties": {
         "id": {
-          "description": "ID of the newly created volume\n\nin: body",
+          "description": "ID of the newly created volume",
           "type": "string",
           "x-go-name": "Id"
         },
@@ -2948,7 +1746,6 @@
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
     "VolumeInfo": {
-      "description": "VolumeInfo",
       "type": "object",
       "properties": {
         "path": {
@@ -2988,12 +1785,8 @@
     "VolumeResponse": {
       "type": "object",
       "title": "VolumeResponse is a structure that wraps an error.",
-      "required": [
-        "error"
-      ],
       "properties": {
         "error": {
-          "description": "Error message\n\nin: body",
           "type": "string",
           "x-go-name": "Error"
         }
@@ -3025,12 +1818,7 @@
       "x-go-package": "github.com/libopenstorage/openstorage/api"
     },
     "VolumeSetResponse": {
-      "description": "VolumeSetResponse",
       "type": "object",
-      "required": [
-        "volume",
-        "volume_response"
-      ],
       "properties": {
         "volume": {
           "$ref": "#/definitions/Volume"
@@ -3110,6 +1898,11 @@
           "type": "boolean",
           "x-go-name": "Journal"
         },
+        "nfs": {
+          "description": "Nfs is true if this volume can be accessed via nfs.",
+          "type": "boolean",
+          "x-go-name": "Nfs"
+        },
         "passphrase": {
           "description": "Passphrase for an encrypted volume",
           "type": "string",
@@ -3128,11 +1921,6 @@
           "description": "Shared is true if this volume can be remotely accessed.",
           "type": "boolean",
           "x-go-name": "Shared"
-        },
-        "sharedv4": {
-          "description": "Sharedv4 is true if this volume can be accessed via sharedv4.",
-          "type": "boolean",
-          "x-go-name": "Sharedv4"
         },
         "size": {
           "description": "Size specifies the thin provisioned volume size.",
@@ -3204,37 +1992,48 @@
     }
   },
   "responses": {
-    "clusterResponse": {
-      "description": "ClusterResponse specifies a response that gets returned when requesting the cluster"
-    },
-    "groupSnapCreateResponse": {
-      "description": "GroupSnapCreateRequest specifies a response that get's returned when creating a group snapshot.",
-      "schema": {
-        "type": "object",
-        "additionalProperties": {
-          "$ref": "#/definitions/SnapCreateResponse"
+    "ClusterResponse": {
+      "headers": {
+        "error": {
+          "type": "string"
         }
       }
     },
-    "snapCreateResponse": {
-      "description": "SnapCreateRequest specifies a response that get's returned when creating a snapshot.",
+    "SnapCreateResponse": {
       "schema": {
         "$ref": "#/definitions/VolumeCreateResponse"
+      },
+      "headers": {
+        "volume_create_response": {}
       }
     },
-    "volumeCreateResponse": {
-      "description": "VolumeCreateResponse",
+    "VolumeCreateResponse": {
       "schema": {
         "$ref": "#/definitions/VolumeResponse"
+      },
+      "headers": {
+        "id": {
+          "type": "string",
+          "description": "ID of the newly created volume"
+        },
+        "volume_response": {}
       }
     },
-    "volumeResponse": {
-      "description": "VolumeResponse is a structure that wraps an error."
+    "VolumeResponse": {
+      "description": "VolumeResponse is a structure that wraps an error.",
+      "headers": {
+        "error": {
+          "type": "string"
+        }
+      }
     },
-    "volumeSetResponse": {
-      "description": "VolumeSetResponse",
+    "VolumeSetResponse": {
       "schema": {
         "$ref": "#/definitions/VolumeResponse"
+      },
+      "headers": {
+        "volume": {},
+        "volume_response": {}
       }
     }
   }

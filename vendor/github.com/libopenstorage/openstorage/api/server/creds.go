@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -9,6 +10,7 @@ import (
 )
 
 func (vd *volAPI) credsEnumerate(w http.ResponseWriter, r *http.Request) {
+	var err error
 	method := "credsEnumerate"
 
 	d, err := vd.getVolDriver(r)
@@ -19,19 +21,21 @@ func (vd *volAPI) credsEnumerate(w http.ResponseWriter, r *http.Request) {
 
 	creds, err := d.CredsEnumerate()
 	if err != nil {
-		vd.sendError(vd.name, method, w, err.Error(), http.StatusInternalServerError)
+		e := fmt.Errorf("Failed to get credential list: %s", err.Error())
+		vd.sendError(vd.name, method, w, e.Error(), http.StatusBadRequest)
 		return
 	}
 	json.NewEncoder(w).Encode(creds)
 }
 
 func (vd *volAPI) credsCreate(w http.ResponseWriter, r *http.Request) {
-	method := "credsCreate"
+	var err error
 	var input api.CredCreateRequest
 	response := &api.CredCreateResponse{}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		vd.sendError(vd.name, method, w, err.Error(), http.StatusBadRequest)
+		response.CredErr = err.Error()
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 	d, err := vd.getVolDriver(r)
@@ -42,18 +46,20 @@ func (vd *volAPI) credsCreate(w http.ResponseWriter, r *http.Request) {
 
 	response.UUID, err = d.CredsCreate(input.InputParams)
 	if err != nil {
-		vd.sendError(vd.name, method, w, err.Error(), http.StatusInternalServerError)
-		return
+		response.CredErr = err.Error()
 	}
 	json.NewEncoder(w).Encode(response)
 }
 
 func (vd *volAPI) credsDelete(w http.ResponseWriter, r *http.Request) {
-	method := "credsDelete"
+	var err error
+	volumeResponse := &api.VolumeResponse{}
+
 	vars := mux.Vars(r)
 	uuid, ok := vars["uuid"]
 	if !ok {
-		vd.sendError(vd.name, method, w, "Could not parse form for uuid", http.StatusBadRequest)
+		volumeResponse.Error = "Could not parse form for uuid"
+		json.NewEncoder(w).Encode(volumeResponse)
 		return
 	}
 
@@ -62,19 +68,20 @@ func (vd *volAPI) credsDelete(w http.ResponseWriter, r *http.Request) {
 		notFound(w, r)
 		return
 	}
-	if err = d.CredsDelete(uuid); err != nil {
-		vd.sendError(vd.name, method, w, err.Error(), http.StatusInternalServerError)
-		return
+	if err := d.CredsDelete(uuid); err != nil {
+		volumeResponse.Error = err.Error()
 	}
-	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(volumeResponse)
 }
 
 func (vd *volAPI) credsValidate(w http.ResponseWriter, r *http.Request) {
-	method := "credsValidate"
+	var err error
+	volumeResponse := &api.VolumeResponse{}
 	vars := mux.Vars(r)
 	uuid, ok := vars["uuid"]
 	if !ok {
-		vd.sendError(vd.name, method, w, "Could not parse form for uuid", http.StatusBadRequest)
+		volumeResponse.Error = "Could not parse form for uuid"
+		json.NewEncoder(w).Encode(volumeResponse)
 		return
 	}
 	d, err := vd.getVolDriver(r)
@@ -84,8 +91,7 @@ func (vd *volAPI) credsValidate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := d.CredsValidate(uuid); err != nil {
-		vd.sendError(vd.name, method, w, err.Error(), http.StatusInternalServerError)
-		return
+		volumeResponse.Error = err.Error()
 	}
-	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(volumeResponse)
 }

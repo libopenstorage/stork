@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/server/httputils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/backend"
@@ -53,8 +53,10 @@ func newImageBuildOptions(ctx context.Context, r *http.Request) (*types.ImageBui
 	options.CgroupParent = r.FormValue("cgroupparent")
 	options.NetworkMode = r.FormValue("networkmode")
 	options.Tags = r.Form["t"]
+	options.ExtraHosts = r.Form["extrahosts"]
 	options.SecurityOpt = r.Form["securityopt"]
 	options.Squash = httputils.BoolValue(r, "squash")
+	options.Target = r.FormValue("target")
 
 	if r.Form.Get("shmsize") != "" {
 		shmSize, err := strconv.ParseInt(r.Form.Get("shmsize"), 10, 64)
