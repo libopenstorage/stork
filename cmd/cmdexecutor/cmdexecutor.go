@@ -90,7 +90,7 @@ func main() {
 
 	// Check command status
 	logrus.Infof("Checking status on command: %s on pods", command)
-	failedPods := make(map[string]error, 0)
+	failedPods := make(map[string]error)
 	for _, executor := range executors {
 		err := executor.Wait(time.Duration(statusCheckTimeout))
 		if err != nil {
