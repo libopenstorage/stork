@@ -76,6 +76,7 @@ func TestMain(t *testing.T) {
 	t.Run("Extender", testExtender)
 	t.Run("HealthMonitor", testHealthMonitor)
 	t.Run("Snapshot", testSnapshot)
+	t.Run("CmdExecutor", asyncPodCommandTest)
 }
 
 func generateInstanceID(t *testing.T, testName string) string {
