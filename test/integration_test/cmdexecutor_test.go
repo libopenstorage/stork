@@ -49,7 +49,8 @@ func asyncPodCommandTest(t *testing.T) {
 
 			for _, executor := range executors {
 				err = executor.Wait(120)
-				require.NoError(t, err, fmt.Sprintf("failed to wait for command on pod: %s", executor.GetPod()))
+				ns, name := executor.GetPod()
+				require.NoError(t, err, fmt.Sprintf("failed to wait for command on pod: [%s] %s", ns, name))
 			}
 		}
 
@@ -65,8 +66,9 @@ func asyncPodCommandTest(t *testing.T) {
 
 			for _, executor := range executors {
 				err = executor.Wait(10)
-				require.Error(t, err, fmt.Sprintf("expected error since command: %s should fail on pod: %s",
-					executor.GetCommand(), executor.GetPod()))
+				ns, name := executor.GetPod()
+				require.Error(t, err, fmt.Sprintf("expected error since command: %s should fail on pod: [%s] %s",
+					executor.GetCommand(), ns, name))
 			}
 		}
 	}

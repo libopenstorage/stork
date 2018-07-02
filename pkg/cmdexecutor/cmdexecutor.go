@@ -33,8 +33,8 @@ type Executor interface {
 	// Wait checks if the command started in pod completed successfully
 	//	timeoutInSecs is number of seconds after which the check should timeout.
 	Wait(timeoutInSecs time.Duration) error
-	// GetPod returns the pod in format: <namespace>/<name> for the executor instance
-	GetPod() string
+	// GetPod returns the pod namespace and name for the executor instance
+	GetPod() (string, string)
 	// GetContainer returns the container inside the pod for the executor instance
 	GetContainer() string
 	// GetCommand returns the pod command for the executor instance
@@ -144,8 +144,8 @@ func (c *cmdExecutor) Wait(timeoutInSecs time.Duration) error {
 	return nil
 }
 
-func (c *cmdExecutor) GetPod() string {
-	return c.podNamespace + "/" + c.podName
+func (c *cmdExecutor) GetPod() (string, string) {
+	return c.podNamespace, c.podName
 }
 
 func (c *cmdExecutor) GetCommand() string {

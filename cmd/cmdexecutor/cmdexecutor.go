@@ -94,7 +94,8 @@ func main() {
 	for _, executor := range executors {
 		err := executor.Wait(time.Duration(statusCheckTimeout))
 		if err != nil {
-			failedPods[executor.GetPod()] = err
+			ns, name := executor.GetPod()
+			failedPods[fmt.Sprintf("%s/%s", ns, name)] = err
 		}
 	}
 
