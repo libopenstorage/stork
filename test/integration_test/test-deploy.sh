@@ -26,8 +26,7 @@ if [ "$initializer" == "true" ] ; then
     # Remove schedule name from all specs
     find /testspecs/specs -name '*.yaml' | xargs sed -i '/schedulerName: stork/d'
     # Create the initializer
-    kubectl delete -f /specs/stork-initializer.yaml
-    kubectl create -f /specs/stork-initializer.yaml
+    kubectl apply -f /specs/stork-initializer.yaml
     # Enable it in the stork spec
     sed -i s/'#- --app-initializer=true'/'- --app-initializer=true'/g /specs/stork-deployment.yaml
 fi
@@ -37,8 +36,10 @@ sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
 sed -i 's/'stork:.*'/'stork:master'/g' /specs/stork-deployment.yaml
 
 echo "Creating stork deployment"
-kubectl delete -f /specs/stork-deployment.yaml
-kubectl create -f /specs/stork-deployment.yaml
+kubectl apply -f /specs/stork-deployment.yaml
+# Delete the pods to make sure we are waiting for the status from the
+# new pods
+kubectl delete pods -n kube-system -l name=stork
 
 echo "Waiting for stork to be in running state"
 for i in $(seq 1 100) ; do
@@ -52,8 +53,10 @@ for i in $(seq 1 100) ; do
 done
 
 echo "Creating stork scheduler"
-kubectl delete -f /specs/stork-scheduler.yaml
-kubectl create -f /specs/stork-scheduler.yaml
+kubectl apply -f /specs/stork-scheduler.yaml
+# Delete the pods to make sure we are waiting for the status from the
+# new pods
+kubectl delete pods -n kube-system -l name=stork-scheduler
 
 echo "Waiting for stork-scheduler to be in running state"
 for i in $(seq 1 100) ; do
