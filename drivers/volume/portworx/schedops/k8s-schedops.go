@@ -182,10 +182,10 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
-			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) on %s.+", path))
+			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) %s.+", path))
 
 			t := func() (interface{}, bool, error) {
-				output, err := k8s.Instance().RunCommandInPod([]string{"mount"}, p.Name, containerName, p.Namespace)
+				output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, p.Name, containerName, p.Namespace)
 				if err != nil {
 					logrus.Errorf("failed to run command in pod: %v err: %v", p, err)
 					return nil, true, err
