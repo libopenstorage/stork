@@ -7,8 +7,16 @@ before_install:
   - sudo apt-get update -yq
   - sudo apt-get install go-md2man -y
 script:
-  - make && make pretest && make test && make container && make integration-test && make integration-test-container &&
-    if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
+  - |
+    if [ "${TRAVIS_BRANCH}" == "master" ]; then
+      export DOCKER_HUB_STORK_TAG=master
+      export DOCKER_HUB_STORK_TEST_TAG=latest
+    else
+      export DOCKER_HUB_STORK_TAG=`git rev-parse --short HEAD`
+      export DOCKER_HUB_STORK_TEST_TAG=`git rev-parse --short HEAD`
+    fi
+    make && make pretest && make test && make container && make integration-test && make integration-test-container &&
+    if [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
       docker login -u "${DOCKER_USER}" -p "${DOCKER_PASSWORD}";
       make deploy;
       make integration-test-deploy;
