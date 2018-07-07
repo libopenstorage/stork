@@ -60,14 +60,23 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 			Status:   storkvolume.NodeOnline,
 		}
 		for _, n := range nodes.Items {
-			for _, address := range n.Status.Addresses {
-				if address.Type == v1.NodeHostName {
-					if address.Address == node.Hostname || strings.HasPrefix(address.Address, node.Hostname+".") {
-						node.Rack = n.Labels[RackLabel]
-						node.Zone = n.Labels[ZoneLabel]
-						node.Region = n.Labels[RegionLabel]
+			found := false
+			if node.ID == n.Name {
+				found = true
+			} else {
+				for _, address := range n.Status.Addresses {
+					if address.Type == v1.NodeHostName {
+						if address.Address == node.Hostname || strings.HasPrefix(address.Address, node.Hostname+".") {
+							found = true
+							break
+						}
 					}
 				}
+			}
+			if found {
+				node.Rack = n.Labels[RackLabel]
+				node.Zone = n.Labels[ZoneLabel]
+				node.Region = n.Labels[RegionLabel]
 			}
 		}
 		m.nodes = append(m.nodes, node)

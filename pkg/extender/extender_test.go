@@ -73,10 +73,10 @@ func newPod(podName string, volumes []string) *v1.Pod {
 	return pod
 }
 
-func newNode(hostname string, ip string, rack string, zone string, region string) *v1.Node {
+func newNode(name, hostname, ip, rack, zone, region string) *v1.Node {
 	node := v1.Node{}
 
-	node.Name = hostname
+	node.Name = name
 	node.Labels = make(map[string]string)
 	node.Labels[mock.RackLabel] = rack
 	node.Labels[mock.ZoneLabel] = zone
@@ -262,6 +262,7 @@ func TestExtender(t *testing.T) {
 	t.Run("driverNodeErrorStateTest", driverNodeErrorStateTest)
 	t.Run("zoneTest", zoneTest)
 	t.Run("regionTest", regionTest)
+	t.Run("nodeNameTest", nodeNameTest)
 	t.Run("teardown", teardown)
 }
 
@@ -271,9 +272,9 @@ func TestExtender(t *testing.T) {
 func noPVCTest(t *testing.T) {
 	pod := newPod("noPVCPod", nil)
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack1", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
 	if err != nil {
@@ -299,9 +300,9 @@ func noPVCTest(t *testing.T) {
 func noDriverVolumeTest(t *testing.T) {
 	pod := newPod("noDriverVolumeTest", nil)
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack1", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
 
 	podVolume := v1.Volume{}
 	podVolume.PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
@@ -334,12 +335,12 @@ func noDriverVolumeTest(t *testing.T) {
 func noVolumeNodeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
 	requestNodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack3", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack4", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack4", "", ""))
 	requestNodes.Items = nodes.Items
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
 
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
@@ -375,12 +376,12 @@ func noDriverNodeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
 	requestNodes := &v1.NodeList{}
 	driverNodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack3", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack4", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack4", "", ""))
 	requestNodes.Items = nodes.Items
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
 
 	driverNodes.Items = nodes.Items[2:4]
 	if err := driver.CreateCluster(3, driverNodes); err != nil {
@@ -405,11 +406,11 @@ func noDriverNodeTest(t *testing.T) {
 // n3 and n4 for rack locality and then n5
 func singleVolumeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1.domain", "192.168.0.1", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node2.domain", "192.168.0.2", "rack2", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node3.domain", "192.168.0.3", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node4.domain", "192.168.0.4", "rack2", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node5.domain", "192.168.0.5", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node1.domain", "node1.domain", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2.domain", "node2.domain", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3.domain", "node3.domain", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4.domain", "node4.domain", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5.domain", "node5.domain", "192.168.0.5", "rack3", "", ""))
 
 	provNodes := []int{0, 1}
 	if err := driver.CreateCluster(5, nodes); err != nil {
@@ -451,11 +452,11 @@ func singleVolumeTest(t *testing.T) {
 // n2 (both volumes local) >> n1 and n3 (one volume local each) >> n5 (both volumes on same rack) >> n4 (one volume on same rack)
 func multipleVolumeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack3", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack2", "", ""))
 
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
@@ -500,11 +501,11 @@ func multipleVolumeTest(t *testing.T) {
 // The prioritize response should return all nodes with equal priority
 func driverErrorTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "", ""))
 
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
@@ -545,11 +546,11 @@ func driverErrorTest(t *testing.T) {
 // lowest scores.
 func driverNodeErrorStateTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1.domain", "192.168.0.1", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node2.domain", "192.168.0.2", "rack2", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node3.domain", "192.168.0.3", "rack1", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node4.domain", "192.168.0.4", "rack2", "", ""))
-	nodes.Items = append(nodes.Items, *newNode("node5.domain", "192.168.0.5", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node1.domain", "node1.domain", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2.domain", "node2.domain", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3.domain", "node3.domain", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4.domain", "node4.domain", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5.domain", "node5.domain", "192.168.0.5", "rack3", "", ""))
 
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
@@ -595,11 +596,11 @@ func driverNodeErrorStateTest(t *testing.T) {
 // n2 (both volumes local) >> n1 (one volume local and other in same zone) >> n3 (one volume local) >> n4 (one volume in same zone) >> n5 (no locality)
 func zoneTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "a", ""))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "a", ""))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "b", ""))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack2", "b", ""))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack1", "c", ""))
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "a", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "b", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "c", ""))
 
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
@@ -645,11 +646,11 @@ func zoneTest(t *testing.T) {
 // n2 (both volumes local) >> n1 (one volume local and other in same zone) >> n3 (one volume local and other in same region) >> n4 and n5 (no locality)
 func regionTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "rack1", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "rack2", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "rack1", "b", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "rack2", "b", "us-east-2"))
-	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "rack1", "c", "us-east-2"))
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "b", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "us-east-2"))
+	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "c", "us-east-2"))
 
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
@@ -682,6 +683,46 @@ func regionTest(t *testing.T) {
 			2 * nodePriorityScore,
 			nodePriorityScore + regionPriorityScore,
 			defaultScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Use IPs as hostname in kubernetes node object
+func nodeNameTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "192.168.0.1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "192.168.0.2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "192.168.0.3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4", "192.168.0.4", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5", "192.168.0.5", "192.168.0.5", "rack3", "", ""))
+
+	provNodes := []int{0, 1}
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	pod := newPod("nodeNameTest", []string{"nodeNameTest"})
+
+	if err := driver.ProvisionVolume("nodeNameTest", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]int{nodePriorityScore,
+			nodePriorityScore,
+			rackPriorityScore,
+			rackPriorityScore,
 			defaultScore},
 		prioritizeResponse)
 }
