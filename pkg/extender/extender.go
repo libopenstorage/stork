@@ -124,7 +124,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	pod := &args.Pod
 	storklog.PodLog(pod).Debugf("Nodes in filter request:")
 	for _, node := range args.Nodes.Items {
-		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)
+		storklog.PodLog(pod).Debugf("%v %+v", node.Name, node.Status.Addresses)
 	}
 
 	filteredNodes := []v1.Node{}
@@ -141,15 +141,27 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes")
 		} else {
 			for _, node := range args.Nodes.Items {
-				for _, address := range node.Status.Addresses {
-					if address.Type != v1.NodeHostName {
-						continue
-					}
+				for _, driverNode := range driverNodes {
+					if e.isHostnameMatch(driverNode.ID, node.Name) &&
+						driverNode.Status == volume.NodeOnline {
+						filteredNodes = append(filteredNodes, node)
+						break
+					} else {
+						found := false
+						for _, address := range node.Status.Addresses {
+							if address.Type != v1.NodeHostName {
+								continue
+							}
 
-					for _, driverNode := range driverNodes {
-						if e.isHostnameMatch(driverNode.Hostname, address.Address) &&
-							driverNode.Status == volume.NodeOnline {
-							filteredNodes = append(filteredNodes, node)
+							if e.isHostnameMatch(driverNode.Hostname, address.Address) &&
+								driverNode.Status == volume.NodeOnline {
+								filteredNodes = append(filteredNodes, node)
+								found = true
+								break
+							}
+						}
+						if found {
+							break
 						}
 					}
 				}
@@ -172,7 +184,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 
 	storklog.PodLog(pod).Debugf("Nodes in filter response:")
 	for _, node := range filteredNodes {
-		log.Debugf("%+v", node.Status.Addresses)
+		log.Debugf("%v %+v", node.Name, node.Status.Addresses)
 	}
 	response := &schedulerapi.ExtenderFilterResult{
 		Nodes: &v1.NodeList{
@@ -207,7 +219,8 @@ func (e *Extender) getNodeScore(
 						for _, rack := range rackInfo.PreferredLocality {
 							if rack == nodeRack || nodeRack == "" {
 								for _, datanode := range volumeInfo.DataNodes {
-									if e.isHostnameMatch(idMap[datanode], address.Address) {
+									if e.isHostnameMatch(idMap[datanode], address.Address) ||
+										e.isHostnameMatch(idMap[datanode], node.Name) {
 										return nodePriorityScore
 									}
 								}
@@ -293,12 +306,19 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			// Replace driver's hostname with the kubernetes hostname to make it
 			// easier to match nodes when calculating scores
 			for _, knode := range args.Nodes.Items {
+				found := false
 				for _, address := range knode.Status.Addresses {
 					if address.Type == v1.NodeHostName {
-						if e.isHostnameMatch(dnode.Hostname, address.Address) {
+						if e.isHostnameMatch(dnode.Hostname, address.Address) ||
+							e.isHostnameMatch(dnode.ID, knode.Name) {
 							dnode.Hostname = address.Address
+							found = true
+							break
 						}
 					}
+				}
+				if found {
+					break
 				}
 			}
 			idMap[dnode.ID] = dnode.Hostname
