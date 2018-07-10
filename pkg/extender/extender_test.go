@@ -14,6 +14,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/drivers/volume/mock"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
@@ -263,6 +264,7 @@ func TestExtender(t *testing.T) {
 	t.Run("zoneTest", zoneTest)
 	t.Run("regionTest", regionTest)
 	t.Run("nodeNameTest", nodeNameTest)
+	t.Run("invalidRequestsTest", invalidRequestsTest)
 	t.Run("teardown", teardown)
 }
 
@@ -725,4 +727,21 @@ func nodeNameTest(t *testing.T) {
 			rackPriorityScore,
 			defaultScore},
 		prioritizeResponse)
+}
+
+func invalidRequestsTest(t *testing.T) {
+	resp, err := http.Post("http://localhost:8099/invalidPath",
+		"application/json", nil)
+	require.NoError(t, err, "Expected no error for invalid path")
+	require.Equal(t, http.StatusNotFound, resp.StatusCode, "Excected HTTP NotFound for invalid path")
+
+	resp, err = http.Post("http://localhost:8099/filter",
+		"application/json", strings.NewReader("invalidNodes"))
+	require.NoError(t, err, "Expected no error for bad request")
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "Excected HTTP BadRequest for invalid request")
+
+	resp, err = http.Post("http://localhost:8099/prioritize",
+		"application/json", strings.NewReader("invalidNodes"))
+	require.NoError(t, err, "Expected no error for bad request")
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "Excected HTTP BadRequest for invalid request")
 }
