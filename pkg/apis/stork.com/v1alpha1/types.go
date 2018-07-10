@@ -25,8 +25,8 @@ type StorkRule struct {
 
 // StorkRuleItem represents one items in a stork rule spec
 type StorkRuleItem struct {
-	// Selector is a map of key value pairs that are used to select the pods using their labels
-	Selector map[string]string `json:"selector"`
+	// PodSelector is a map of key value pairs that are used to select the pods using their labels
+	PodSelector map[string]string `json:"podSelector"`
 	// Actions are actions to be performed on the pods selected using the selector
 	Actions []StorkRuleAction `json:"actions"`
 }
@@ -38,10 +38,10 @@ type StorkRuleAction struct {
 	// Background indicates that the action needs to be performed in the background
 	// +optional
 	Background bool `json:"background,omitempty"`
-	// RunOnSinglePod indicates that the action needs to be performed on a single pod
+	// RunInSinglePod indicates that the action needs to be performed in a single pod
 	//                from the list of pods that match the selector
 	// +optional
-	RunOnSinglePod bool `json:"runOnAllPods,omitempty"`
+	RunInSinglePod bool `json:"runInSinglePod,omitempty"`
 	// Value is the actual action value for e.g the command to run
 	Value string `json:"value"`
 }
