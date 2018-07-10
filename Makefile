@@ -6,7 +6,7 @@ TAGS := daemon
 endif
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor')
+PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork.com')
 endif
 
 ifeq ($(BUILD_TYPE),debug)
@@ -56,7 +56,12 @@ install:
 
 lint:
 	go get -v github.com/golang/lint/golint
-	for file in $$(find . -name '*.go' | grep -v vendor | grep -v '\.pb\.go' | grep -v '\.pb\.gw\.go'); do \
+	for file in $$(find . -name '*.go' | grep -v vendor | \
+                                       grep -v '\.pb\.go' | \
+                                       grep -v '\.pb\.gw\.go' | \
+                                       grep -v 'externalversions' | \
+                                       grep -v 'versioned' | \
+                                       grep -v 'generated'); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
 			exit 1; \
@@ -99,6 +104,10 @@ integration-test-container:
 
 integration-test-deploy:
 	sudo docker push $(STORK_TEST_IMG)
+
+codegen:
+	@echo "Generating CRD"
+	@hack/update-codegen.sh
 
 stork:
 	@echo "Building the stork binary"
