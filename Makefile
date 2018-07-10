@@ -7,7 +7,7 @@ TAGS := daemon
 endif
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stora/vendor')
+PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor')
 endif
 
 ifndef GOVET_PKGS
@@ -126,7 +126,7 @@ codegen:
 	@echo "Generating CRD"
 	@hack/update-codegen.sh
 
-stork: codegen
+stork:
 	@echo "Building the stork binary"
 	@cd cmd/stork && go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
