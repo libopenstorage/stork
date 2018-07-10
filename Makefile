@@ -70,11 +70,11 @@ install:
 lint:
 	go get -v github.com/golang/lint/golint
 	for file in $$(find . -name '*.go' | grep -v vendor | \
-		                                   grep -v '\.pb\.go' | \
-																			 grep -v '\.pb\.gw\.go' | \
-																			 grep -v 'externalversions' | \
-																			 grep -v 'versioned' | \
-																			 grep -v 'generated'); do \
+                                       grep -v '\.pb\.go' | \
+                                       grep -v '\.pb\.gw\.go' | \
+                                       grep -v 'externalversions' | \
+                                       grep -v 'versioned' | \
+                                       grep -v 'generated'); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
 			exit 1; \
