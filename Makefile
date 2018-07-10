@@ -7,7 +7,11 @@ TAGS := daemon
 endif
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor')
+PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stora/vendor')
+endif
+
+ifndef GOVET_PKGS
+GOVET_PKGS=$(shell  go list ./... | grep -v vendor | grep -v pkg/client/informers/externalversions | grep -v versioned | grep -v pkg/apis/stork.com)
 endif
 
 ifeq ($(BUILD_TYPE),debug)
@@ -69,7 +73,12 @@ install:
 
 lint:
 	go get -v github.com/golang/lint/golint
-	for file in $$(find . -name '*.go' | grep -v vendor | grep -v '\.pb\.go' | grep -v '\.pb\.gw\.go'); do \
+	for file in $$(find . -name '*.go' | grep -v vendor | \
+		                                   grep -v '\.pb\.go' | \
+																			 grep -v '\.pb\.gw\.go' | \
+																			 grep -v 'externalversions' | \
+																			 grep -v 'versioned' | \
+																			 grep -v 'generated'); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
 			exit 1; \
@@ -77,17 +86,17 @@ lint:
 	done
 
 vet:
-	go vet $(PKGS)
+	go vet $(GOVET_PKGS)
 
 $(GOPATH)/bin/gosimple:
 	go get -u honnef.co/go/tools/cmd/gosimple
 
 simple: $(GOPATH)/bin/gosimple
-	$(GOPATH)/bin/gosimple $(PKGS)
+	$(GOPATH)/bin/gosimple $(GOVET_PKGS)
 
 errcheck:
 	go get -v github.com/kisielk/errcheck
-	errcheck -verbose -blank -tags "$(TAGS) unittest integrationtest" $(PKGS)
+	errcheck -verbose -blank -tags "$(TAGS) unittest integrationtest" $(GOVET_PKGS)
 
 pretest: lint vet errcheck simple
 
@@ -113,7 +122,11 @@ integration-test-container:
 integration-test-deploy:
 	sudo docker push $(STORK_TEST_IMG)
 
-stork:
+codegen:
+	@echo "Generating CRD"
+	@hack/update-codegen.sh
+
+stork: codegen
 	@echo "Building the stork binary"
 	@cd cmd/stork && go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
