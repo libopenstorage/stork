@@ -63,6 +63,7 @@ wp post generate --count=100
 log ":: Installing plugins..."
 for plugin_name in ${WORDPRESS_PLUGINS//,/ }
 do
+    log ":: Installing plugin ${plugin_name}"
     wp plugin install "${plugin_name}" --activate
 done
 
