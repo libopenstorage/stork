@@ -30,7 +30,10 @@ var (
 
 // Adds the list of known types to Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(SchemeGroupVersion)
+	scheme.AddKnownTypes(SchemeGroupVersion,
+		&StorkRule{},
+		&StorkRuleList{},
+	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

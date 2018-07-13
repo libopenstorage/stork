@@ -35,6 +35,9 @@ type Driver interface {
 
 	// Stop the driver
 	Stop() error
+
+	// PerformRecovery is an interface for volumes for perform any recovery operations on a boot
+	PerformRecovery() error
 }
 
 // Info Information about a volume

@@ -1,0 +1,10 @@
+apiVersion: stork.com/v1alpha1
+kind: StorkRule
+metadata:
+  name: px-presnap-unsupported-rule
+spec:
+  - podSelector:
+      app: mysql
+    actions:
+    - type: http
+      value: "foo"

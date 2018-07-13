@@ -19,6 +19,8 @@ const (
 	cmdStatusFormat    = "stat %s"
 	waitScriptLocation = "/tmp/wait.sh"
 	waitCmdPlaceholder = "${WAIT_CMD}"
+	// StatusConfigMapName is name of the config map the command executor uses to persist failed statuses
+	StatusConfigMapName = "cmdexecutor-status"
 )
 
 const (
@@ -29,7 +31,7 @@ const (
 // Executor is an interace to start and wait for async commands in pods
 type Executor interface {
 	// Start starts the command in the pod asynchronously
-	Start() error
+	Start(chan error) error
 	// Wait checks if the command started in pod completed successfully
 	//	timeoutInSecs is number of seconds after which the check should timeout.
 	Wait(timeoutInSecs time.Duration) error
@@ -61,7 +63,7 @@ func Init(podNamespace, podName, container, command, taskID string) Executor {
 	}
 }
 
-func (c *cmdExecutor) Start() error {
+func (c *cmdExecutor) Start(errChan chan error) error {
 	if !strings.Contains(c.command, waitCmdPlaceholder) {
 		return fmt.Errorf("given command: %s needs to have ${WAIT_CMD} placeholder", c.command)
 	}
@@ -74,7 +76,9 @@ func (c *cmdExecutor) Start() error {
 	cmdSplit := []string{"/bin/sh", "-c", waitScriptCreateCmd}
 	_, err := k8s.Instance().RunCommandInPod(cmdSplit, c.podName, c.container, c.podNamespace)
 	if err != nil {
-		logrus.Errorf("failed to run command: %s command due to err: %v", c.command, err)
+		err = fmt.Errorf("failed to create wait script in pod: [%s] %s using command: %s due to err: %v",
+			c.podNamespace, c.podName, waitScriptCreateCmd, err)
+		logrus.Errorf(err.Error())
 		return err
 	}
 
@@ -84,8 +88,12 @@ func (c *cmdExecutor) Start() error {
 		cmdSplit = []string{"/bin/sh", "-c", command}
 		_, err = k8s.Instance().RunCommandInPod(cmdSplit, c.podName, c.container, c.podNamespace)
 		if err != nil {
-			logrus.Errorf("failed to run command: %s command due to err: %v", command, err)
+			err = fmt.Errorf("failed to run command: %s in pod: [%s] %s due to err: %v",
+				command, c.podNamespace, c.podName, err)
+			logrus.Errorf(err.Error())
 		}
+
+		errChan <- err
 	}()
 
 	return nil
@@ -122,7 +130,8 @@ func (c *cmdExecutor) Wait(timeoutInSecs time.Duration) error {
 
 		return true, nil
 	}); err != nil {
-		logrus.Errorf("status command: %s failed to run. %v", statusCmd, err)
+		err = fmt.Errorf("status command: %s failed to run in pod: [%s] %s due to %v",
+			statusCmd, c.podNamespace, c.podName, err)
 		return err
 	}
 

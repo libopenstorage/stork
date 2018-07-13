@@ -221,6 +221,11 @@ func (m *Driver) GetSnapshotPlugin() snapshotVolume.Plugin {
 	return nil
 }
 
+// PerformRecovery is an interface for volumes for perform any recovery operations on a boot
+func (m *Driver) PerformRecovery() error {
+	return nil
+}
+
 // GetVolumeClaimTemplates Not implemented for mock driver
 func (m *Driver) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 	[]v1.PersistentVolumeClaim, error) {

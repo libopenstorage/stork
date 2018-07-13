@@ -57,7 +57,8 @@ func asyncPodCommandTest(t *testing.T) {
 		// Negative test cases
 		for _, pod := range pods {
 			executor := cmdexecutor.Init(pod.GetNamespace(), pod.GetName(), "", noWaitPlaceholderCmd, string(pod.GetUID()))
-			err = executor.Start()
+			errChan := make(chan error)
+			err = executor.Start(errChan)
 			require.Error(t, err, "expected error from the start command API")
 		}
 
@@ -80,7 +81,8 @@ func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecut
 	executors := make([]cmdexecutor.Executor, 0)
 	for _, pod := range pods {
 		executor := cmdexecutor.Init(pod.GetNamespace(), pod.GetName(), "", command, string(pod.GetUID()))
-		err := executor.Start()
+		errChan := make(chan error)
+		err := executor.Start(errChan)
 		require.NoError(t, err, "failed to start async command")
 		executors = append(executors, executor)
 	}

@@ -1,0 +1,11 @@
+apiVersion: stork.com/v1alpha1
+kind: StorkRule
+metadata:
+  name: px-presnap-failing-rule
+spec:
+  - podSelector:
+      app: mysql
+    actions:
+    - type: command
+      background: true
+      value: mysql --user=baduser --password=$MYSQL_ROOT_PASSWORD -Bse 'flush tables with read lock;system ${WAIT_CMD};'

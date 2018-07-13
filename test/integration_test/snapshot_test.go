@@ -4,20 +4,27 @@ package integrationtest
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
+
+var snapRuleFailRegex = regexp.MustCompile("^snapshot failed due to err.+failed to run (pre|post)-snap rule.+")
 
 func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("groupSnapshotTest", groupSnapshotTest)
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 	t.Run("snapshotScaleTest", snapshotScaleTest)
+	t.Run("snapshot3DTest", snapshot3DTest)
 }
 
 func simpleSnapshotTest(t *testing.T) {
@@ -102,6 +109,81 @@ func groupSnapshotTest(t *testing.T) {
 	}
 	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 	destroyAndWait(t, ctxs)
+}
+
+func snapshot3DTest(t *testing.T) {
+	ctxsToDestroy := make([]*scheduler.Context, 0)
+	// Positive tests
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-3d-snap"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Len(t, ctxs, 1, "Only one task should have started")
+
+	for _, ctx := range ctxs {
+		err = schedulerDriver.WaitForRunning(ctx)
+		require.NoError(t, err, "Error waiting for pod to get to running state")
+
+		err = schedulerDriver.InspectVolumes(ctx)
+		require.NoError(t, err, "Error validating storage components")
+	}
+
+	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
+
+	// Negative tests
+	ctxs, err = schedulerDriver.Schedule(generateInstanceID(t, ""),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-failing-3d-snap"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Len(t, ctxs, 1, "Only one task should have started")
+
+	for _, ctx := range ctxs {
+		err = schedulerDriver.WaitForRunning(ctx)
+		require.NoError(t, err, "Error waiting for pod to get to running state")
+
+		snaps, err := schedulerDriver.GetSnapshots(ctx)
+		require.NoError(t, err, "failed to get snapshots")
+		require.NotEmpty(t, snaps, "got empty snapshots")
+
+		// all snapshot should fail
+		for _, snap := range snaps {
+			err = verifyFailedSnapshot(snap.Name, snap.Namespace)
+			require.NoError(t, err, "failed to check failure of volumesnapshot")
+		}
+	}
+	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
+
+	destroyAndWait(t, ctxsToDestroy)
+}
+
+func verifyFailedSnapshot(snapName, snapNamespace string) error {
+	failedSnapCheckBackoff := wait.Backoff{
+		Duration: 5 * time.Second,
+		Factor:   1,
+		Steps:    24, // 2 minutes should be enough for the snap to fail
+	}
+
+	t := func() (bool, error) {
+		snapObj, err := k8s.Instance().GetSnapshot(snapName, snapNamespace)
+		if err != nil {
+			return false, err
+		}
+
+		if snapObj.Status.Conditions == nil {
+			return false, nil // conditions not yet populated
+		}
+
+		for _, cond := range snapObj.Status.Conditions {
+			if cond.Type == crdv1.VolumeSnapshotConditionError {
+				if snapRuleFailRegex.MatchString(cond.Message) {
+					logrus.Infof("verified that snapshot has failed as expected due to: %s", cond.Message)
+					return true, nil
+				}
+			}
+		}
+
+		return false, nil
+	}
+
+	return wait.ExponentialBackoff(failedSnapCheckBackoff, t)
 }
 
 func cloudSnapshotTest(t *testing.T) {

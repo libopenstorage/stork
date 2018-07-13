@@ -1,0 +1,60 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data-2
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+  labels:
+    app: mysql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: px-mysql-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: mysql-2
+spec:
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+      name: "mysql-2"
+  template:
+    metadata:
+      labels:
+        app: mysql
+        name: "mysql-2"
+    spec:
+      schedulerName: stork
+      containers:
+      - image: mysql:5.6
+        name: mysql-2
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-data-2

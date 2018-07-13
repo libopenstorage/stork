@@ -9,7 +9,11 @@ import (
 
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/version"
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
+	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -71,6 +75,7 @@ func main() {
 	}
 
 	executors := make([]cmdexecutor.Executor, 0)
+	errChans := make(map[string]chan error)
 	// Start the commands
 	for _, pod := range podList {
 		namespace, name, err := parsePodNameAndNamespace(pod)
@@ -78,36 +83,126 @@ func main() {
 			logrus.Fatalf("failed to parse pod due to: %v", err)
 		}
 
-		logrus.Infof("pod: [%s] %s", namespace, name)
 		executor := cmdexecutor.Init(namespace, name, podContainer, command, taskID)
-		err = executor.Start()
+		errChan := make(chan error)
+		errChans[createPodStringFromNameAndNamespace(namespace, name)] = errChan
+
+		err = executor.Start(errChan)
 		if err != nil {
-			logrus.Fatalf("failed to run command in pod: [%s] %s due to: %v", namespace, name, err)
+			msg := fmt.Sprintf("failed to run command in pod: [%s] %s due to: %v", namespace, name, err)
+			persistStatusErr := persistStatus(msg)
+			if persistStatusErr != nil {
+				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
+			}
+			logrus.Fatalf(msg)
 		}
 
 		executors = append(executors, executor)
 	}
 
+	// Create an aggregrate channel for errors
+	aggChan := make(chan error)
+	for _, ch := range errChans {
+		go func(c chan error) {
+			for err := range c {
+				aggChan <- err
+			}
+		}(ch)
+	}
+
 	// Check command status
-	logrus.Infof("Checking status on command: %s on pods", command)
-	failedPods := make(map[string]error)
+	done := make(chan bool)
+	logrus.Infof("Checking status on command: %s", command)
 	for _, executor := range executors {
-		err := executor.Wait(time.Duration(statusCheckTimeout))
+		ns, name := executor.GetPod()
+		podKey := createPodStringFromNameAndNamespace(ns, name)
+		go func(errChan chan error, doneChan chan bool, execInst cmdexecutor.Executor) {
+			err := execInst.Wait(time.Duration(statusCheckTimeout))
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			doneChan <- true
+		}(errChans[podKey], done, executor)
+	}
+
+	// Wait on the aggregrated channel for errors and completion
+	doneCount := 0
+Loop:
+	for {
+		select {
+		case err := <-aggChan:
+			persistStatusErr := persistStatus(err.Error())
+			if persistStatusErr != nil {
+				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
+			}
+
+			logrus.Fatalf(err.Error())
+		case isDone := <-done:
+			if isDone {
+				doneCount++
+				if doneCount == len(executors) {
+					logrus.Infof("successfully executed command: %s on all pods: %v", command, podList)
+					_, err = os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
+					if err != nil {
+						logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
+					}
+					break Loop
+				}
+			}
+		}
+	}
+}
+
+func persistStatus(status string) error {
+	var err error
+	hostname := os.Getenv("HOSTNAME")
+	if len(hostname) == 0 {
+		hostname, err = os.Hostname()
 		if err != nil {
-			ns, name := executor.GetPod()
-			failedPods[fmt.Sprintf("%s/%s", ns, name)] = err
+			return fmt.Errorf("failed to get hostname of command executor due to: %v", err)
 		}
 	}
 
-	if len(failedPods) > 0 {
-		logrus.Fatalf("pod executor failed as following commands failed. %v", failedPods)
+	if len(hostname) == 0 {
+		return fmt.Errorf("failed to get hostname of command executor")
 	}
 
-	logrus.Infof("successfully executed command: %s on all pods: %v...", command, podList)
-	_, err = os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
+	cm, err := k8s.Instance().GetConfigMap(cmdexecutor.StatusConfigMapName, meta_v1.NamespaceSystem)
 	if err != nil {
-		logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
+		if errors.IsNotFound(err) {
+			// create one
+			defaultData := map[string]string{
+				hostname: "",
+			}
+			cm = &v1.ConfigMap{
+				ObjectMeta: meta_v1.ObjectMeta{
+					Namespace: meta_v1.NamespaceSystem,
+					Name:      cmdexecutor.StatusConfigMapName,
+				},
+				Data: defaultData,
+			}
+			cm, err = k8s.Instance().CreateConfigMap(cm)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
 	}
+
+	cmCopy := cm.DeepCopy()
+	if cmCopy.Data == nil {
+		cmCopy.Data = make(map[string]string)
+	}
+	cmCopy.Data[hostname] = status
+	cm, err = k8s.Instance().UpdateConfigMap(cmCopy)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // command line arguments
