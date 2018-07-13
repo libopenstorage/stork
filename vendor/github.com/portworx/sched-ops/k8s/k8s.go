@@ -375,6 +375,16 @@ type StorkRuleOps interface {
 	DeleteStorkRule(name, namespace string) error
 }
 
+// StorkRuleOps is an interface to perform operations for k8s stork rule
+type StorkRuleOps interface {
+	// GetStorkRule fetches the given stork rule
+	GetStorkRule(name, namespace string) (*v1alpha1.StorkRule, error)
+	// CreateStorkRule creates the given stork rule
+	CreateStorkRule(rule *v1alpha1.StorkRule) (*v1alpha1.StorkRule, error)
+	// DeleteStorkRule deletes the given stork rule
+	DeleteStorkRule(name, namespace string) error
+}
+
 // SecretOps is an interface to perform k8s Secret operations
 type SecretOps interface {
 	// GetSecret gets the secrets object given its name and namespace
