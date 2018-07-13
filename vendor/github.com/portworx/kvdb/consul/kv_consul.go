@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/portworx/kvdb"
@@ -290,8 +290,12 @@ func (kv *consulKV) Create(
 			if ok && err == nil {
 				return kvPair, err
 			}
-			kv.client.Session().Destroy(sessionPair.Session, nil)
-			kv.Delete(key)
+			if _, err := kv.client.Session().Destroy(sessionPair.Session, nil); err != nil {
+				logrus.Error(err)
+			}
+			if _, err := kv.Delete(key); err != nil {
+				logrus.Error(err)
+			}
 			if err != nil {
 				return nil, err
 			}

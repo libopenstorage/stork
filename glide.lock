@@ -1,5 +1,5 @@
-hash: 59a710210a471486a024a9f4ed9d35fbd7be9db3429e5f690941c72a36eaa0a8
-updated: 2018-06-29T12:10:36.42777053-07:00
+hash: 0389066c93e7b93745c4189bbf850e6a865ac65c66cf6b453e660f2959c08fb6
+updated: 2018-07-10T16:49:33.615668164-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 58588f401c2cc130a7308a52ca3bc6c0a76db04b
@@ -199,6 +199,14 @@ imports:
   - pkg/parser
   - pkg/units
   - volume
+- name: github.com/libopenstorage/stork
+  version: ab453b9161a1446526d8563d00fccfa55c418bf1
+  subpackages:
+  - pkg/apis/stork.com
+  - pkg/apis/stork.com/v1alpha1
+  - pkg/client/clientset/versioned
+  - pkg/client/clientset/versioned/scheme
+  - pkg/client/clientset/versioned/typed/stork.com/v1alpha1
 - name: github.com/libopenstorage/systemutils
   version: dc0e35340804a0ada0792a3c9ce51d33ddd53cc8
 - name: github.com/mailru/easyjson
@@ -264,9 +272,9 @@ imports:
 - name: github.com/pkg/errors
   version: 816c9085562cd7ee03e7f8188a1cfd942858cded
 - name: github.com/portworx/kvdb
-  version: 45dfb5a820348d6945106eaeb154c09723b6db83
+  version: 6e8a41f8b9571b8eb05c7aafba1cce3e3048cf99
 - name: github.com/portworx/sched-ops
-  version: c7b40b7910ad52d444779a0fc0ff870f8b2a6574
+  version: 549962c354f6b33996b140624989d1aa2983d554
   subpackages:
   - k8s
   - task
@@ -279,7 +287,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
 - name: github.com/Sirupsen/logrus
-  version: e3292c4c4d7fc915224d48222565b02f6af1900e
+  version: e54a77765aca7bbdd8e56c1c54f60579968b2dc9
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: go.pedge.io/dlog

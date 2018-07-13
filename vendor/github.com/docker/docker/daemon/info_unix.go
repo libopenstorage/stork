@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	daemonconfig "github.com/docker/docker/daemon/config"
 	"github.com/docker/docker/dockerversion"

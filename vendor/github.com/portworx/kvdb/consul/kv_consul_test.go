@@ -50,8 +50,12 @@ func createUsingCAS(kv kvdb.Kvdb, t *testing.T) {
 	assert.Error(t, err, "CompareAndSet did not fail on create")
 }
 func Start() error {
-	os.RemoveAll("/tmp/consul")
-	os.MkdirAll("/tmp/consul", os.ModeDir)
+	if err := os.RemoveAll("/tmp/consul"); err != nil {
+		return err
+	}
+	if err := os.MkdirAll("/tmp/consul", os.ModeDir); err != nil {
+		return err
+	}
 
 	//consul agent -server -client=0.0.0.0  -data-dir /opt/consul/data -bind 0.0.0.0 -syslog -bootstrap-expect 1 -advertise 127.0.0.1
 	cmd = exec.Command("consul", "agent", "-server", "-advertise", "127.0.0.1", "-bind", "0.0.0.0", "-data-dir", "/tmp/consul", "-bootstrap-expect", "1")

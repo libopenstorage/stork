@@ -166,6 +166,18 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/libopenstorage/stork"
+  packages = [
+    "pkg/apis/stork.com",
+    "pkg/apis/stork.com/v1alpha1",
+    "pkg/client/clientset/versioned",
+    "pkg/client/clientset/versioned/scheme",
+    "pkg/client/clientset/versioned/typed/stork.com/v1alpha1"
+  ]
+  revision = "e20ae5a6631a5e3b9629c8d72ff0782bae2d2cbb"
+
+[[projects]]
+  branch = "master"
   name = "github.com/mailru/easyjson"
   packages = [
     "buffer",
@@ -423,6 +435,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "339f1c66438c656720abebafce92f7e5f47cb96331e0f00818a3dda78ce0a755"
+  inputs-digest = "91aa01b5635222431c92ded5d207267ed874575c765bb6c82bf81b0878a8aeec"
   solver-name = "gps-cdcl"
   solver-version = 1

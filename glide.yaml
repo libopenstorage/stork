@@ -1,7 +1,7 @@
 package: github.com/portworx/torpedo
 import:
 - package: github.com/aws/aws-sdk-go
-  version: ^1.14.16
+  version: 5e98666858b97db54a61044bb1150d3b81436860
   subpackages:
   - aws
   - aws/credentials
@@ -31,6 +31,8 @@ import:
   - api/spec
   - cluster
   - volume
+- package: github.com/miekg/dns
+  version: e7c3f513a170118cc2f407db58de97aa20c07c85
 - package: github.com/onsi/ginkgo
   version: ^1.5.0
 - package: github.com/onsi/gomega

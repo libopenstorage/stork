@@ -13,6 +13,7 @@ import (
 	"time"
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -170,6 +171,11 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		if err := snap_v1.AddToScheme(scheme); err != nil {
 			return nil, err
 		}
+
+		if err := stork_api.AddToScheme(scheme); err != nil {
+			return nil, err
+		}
+
 		codecs := serializer.NewCodecFactory(scheme)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
@@ -195,6 +201,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*v1.Secret); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.ConfigMap); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.StorkRule); ok {
 		return specObj, nil
 	}
 
@@ -490,6 +498,24 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 		logrus.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
+	} else if obj, ok := spec.(*stork_api.StorkRule); ok {
+		obj.Namespace = ns.Name
+		rule, err := k8sOps.CreateStorkRule(obj)
+		if errors.IsAlreadyExists(err) {
+			if rule, err = k8sOps.GetStorkRule(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing StorkRule: %v", app.Key, rule.GetName())
+				return rule, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create StorkRule: %v, Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created StorkRule: %v", app.Key, rule.GetName())
+		return rule, nil
 	}
 
 	return nil, nil
@@ -526,11 +552,6 @@ func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 			}
 		}
 	} else if obj, ok := spec.(*v1.Service); ok {
-		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-			if pods, err = k8sOps.GetService(obj.Name, obj.Namespace); err != nil {
-				logrus.Warnf("[%v] Error getting service pods. Err: %v", app.Key, err)
-			}
-		}
 		err := k8sOps.DeleteService(obj.Name, obj.Namespace)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
@@ -540,7 +561,18 @@ func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		logrus.Infof("[%v] Destroyed Service: %v", app.Key, obj.Name)
+	} else if obj, ok := spec.(*stork_api.StorkRule); ok {
+		err := k8sOps.DeleteStorkRule(obj.Name, obj.Namespace)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy StorkRule: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Destroyed StorkRule: %v", app.Key, obj.Name)
 	}
+
 	return pods, nil
 
 }
@@ -588,6 +620,16 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated Service: %v", ctx.App.Key, svc.Name)
+		} else if obj, ok := spec.(*stork_api.StorkRule); ok {
+			svc, err := k8sOps.GetStorkRule(obj.Name, obj.Namespace)
+			if err != nil {
+				return &scheduler.ErrFailedToValidateApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate StorkRule: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			logrus.Infof("[%v] Validated StorkRule: %v", ctx.App.Key, svc.Name)
 		}
 	}
 
@@ -699,8 +741,26 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.StorkRule); ok {
+			_, err := k8sOps.GetStorkRule(obj.Name, obj.Namespace)
+			if err == nil {
+				return &scheduler.ErrFailedToValidateAppDestroy{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("stork rule: %v is still present.", obj.Name),
+				}
+			}
+
+			if errors.IsNotFound(err) {
+				logrus.Infof("[%v] Validated destroy of StorkRule: %v", ctx.App.Key, obj.Name)
+			} else {
+				return &scheduler.ErrFailedToValidateAppDestroy{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to validate destroy of stork rule: %v due to: %v", obj.Name, err),
+				}
+			}
 		}
 	}
+
 	return nil
 }
 

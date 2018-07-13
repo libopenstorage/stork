@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -322,7 +322,7 @@ func NewUpdatesCollector(
 ) (UpdatesCollector, error) {
 	collector := &updatesCollectorImpl{updates: make([]*kvdbUpdate, 0),
 		startIndex: startIndex}
-	logrus.Infof("Starting collector watch at %v", startIndex)
+	logrus.Infof("Starting collector watch on %v at %v", prefix, startIndex)
 	if err := db.WatchTree(prefix, startIndex, nil, collector.watchCb); err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"golang.org/x/net/context"
 
@@ -529,9 +529,9 @@ func (et *etcdKV) CompareAndSet(
 			}
 			if (flags & kvdb.KVModifiedIndex) != 0 {
 				return nil, kvdb.ErrModified
-			} else {
-				return nil, kvdb.ErrValueMismatch
 			}
+
+			return nil, kvdb.ErrValueMismatch
 		}
 		break
 	}
@@ -593,9 +593,9 @@ func (et *etcdKV) CompareAndDelete(
 			}
 			if (flags & kvdb.KVModifiedIndex) != 0 {
 				return nil, kvdb.ErrModified
-			} else {
-				return nil, kvdb.ErrValueMismatch
 			}
+
+			return nil, kvdb.ErrValueMismatch
 		}
 		break
 	}
@@ -1410,9 +1410,9 @@ func isRetryNeeded(err error, fn string, key string, retryCount int) (bool, erro
 			logrus.Errorf("[%v: %v] kvdb grpc timeout: %v, retry count %v \n", fn, key, err, retryCount)
 			time.Sleep(ec.DefaultIntervalBetweenRetries)
 			return true, err
-		} else {
-			// For all other errors return immediately
-			return false, err
 		}
+
+		// For all other errors return immediately
+		return false, err
 	}
 }
