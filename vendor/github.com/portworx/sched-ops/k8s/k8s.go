@@ -22,10 +22,14 @@ import (
 	"k8s.io/api/core/v1"
 	rbac_v1 "k8s.io/api/rbac/v1"
 	storage_api "k8s.io/api/storage/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -49,6 +53,8 @@ const (
 	validatePVCRetryInterval      = 10 * time.Second
 	validateSnapshotTimeout       = 5 * time.Minute
 	validateSnapshotRetryInterval = 10 * time.Second
+	crdCreateTimeout              = 2 * time.Minute
+	crdCreateRetryInterval        = 2 * time.Second
 )
 
 var deleteForegroundPolicy = meta_v1.DeletePropagationForeground
@@ -76,6 +82,7 @@ type Ops interface {
 	SecretOps
 	ConfigMapOps
 	EventOps
+	CRDOps
 }
 
 // EventOps is an interface to put and get k8s events
@@ -375,16 +382,6 @@ type StorkRuleOps interface {
 	DeleteStorkRule(name, namespace string) error
 }
 
-// StorkRuleOps is an interface to perform operations for k8s stork rule
-type StorkRuleOps interface {
-	// GetStorkRule fetches the given stork rule
-	GetStorkRule(name, namespace string) (*v1alpha1.StorkRule, error)
-	// CreateStorkRule creates the given stork rule
-	CreateStorkRule(rule *v1alpha1.StorkRule) (*v1alpha1.StorkRule, error)
-	// DeleteStorkRule deletes the given stork rule
-	DeleteStorkRule(name, namespace string) error
-}
-
 // SecretOps is an interface to perform k8s Secret operations
 type SecretOps interface {
 	// GetSecret gets the secrets object given its name and namespace
@@ -411,16 +408,43 @@ type ConfigMapOps interface {
 	UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 }
 
+type CRDOps interface {
+	// CreateCRD creates the given custom resources
+	CreateCRD(resources []CustomResource) error
+}
+
+// CustomResource is for creating a Kubernetes TPR/CRD
+type CustomResource struct {
+	// Name of the custom resource
+	Name string
+
+	// Plural of the custom resource in plural
+	Plural string
+
+	// Group the custom resource belongs to
+	Group string
+
+	// Version which should be defined in a const above
+	Version string
+
+	// Scope of the CRD. Namespaced or cluster
+	Scope apiextensionsv1beta1.ResourceScope
+
+	// Kind is the serialized interface of the resource.
+	Kind string
+}
+
 var (
 	instance Ops
 	once     sync.Once
 )
 
 type k8sOps struct {
-	client      *kubernetes.Clientset
-	snapClient  *rest.RESTClient
-	storkClient storkclientset.Interface
-	config      *rest.Config
+	client             *kubernetes.Clientset
+	snapClient         *rest.RESTClient
+	storkClient        storkclientset.Interface
+	apiExtensionClient apiextensionsclient.Interface
+	config             *rest.Config
 }
 
 // Instance returns a singleton instance of k8sOps type
@@ -434,20 +458,17 @@ func Instance() Ops {
 // Initialize the k8s client if uninitialized
 func (k *k8sOps) initK8sClient() error {
 	if k.client == nil {
-		k8sClient, snapClient, storkClient, err := k.getK8sClient()
+		err := k.setK8sClient()
 		if err != nil {
 			return err
 		}
 
 		// Quick validation if client connection works
-		_, err = k8sClient.ServerVersion()
+		_, err = k.client.ServerVersion()
 		if err != nil {
 			return fmt.Errorf("failed to connect to k8s server: %s", err)
 		}
 
-		k.client = k8sClient
-		k.snapClient = snapClient
-		k.storkClient = storkClient
 	}
 	return nil
 }
@@ -2675,76 +2696,143 @@ func (k *k8sOps) ListEvents(namespace string, opts meta_v1.ListOptions) (*v1.Eve
 	return k.client.CoreV1().Events(namespace).List(opts)
 }
 
+func (k *k8sOps) CreateCRD(resources []CustomResource) error {
+	for _, resource := range resources {
+		err := k.createCRD(resource)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, resource := range resources {
+		if err := k.waitForCRDInit(resource); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *k8sOps) createCRD(resource CustomResource) error {
+	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
+	crd := &apiextensionsv1beta1.CustomResourceDefinition{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: crdName,
+		},
+		Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
+			Group:   resource.Group,
+			Version: resource.Version,
+			Scope:   resource.Scope,
+			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
+				Singular: resource.Name,
+				Plural:   resource.Plural,
+				Kind:     resource.Kind,
+			},
+		},
+	}
+
+	_, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to create %s CRD: %+v", resource.Name, err)
+		}
+	}
+	return nil
+}
+
+func (k *k8sOps) waitForCRDInit(resource CustomResource) error {
+	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
+	return wait.Poll(crdCreateRetryInterval, crdCreateRetryInterval, func() (bool, error) {
+		crd, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, meta_v1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, cond := range crd.Status.Conditions {
+			switch cond.Type {
+			case apiextensionsv1beta1.Established:
+				if cond.Status == apiextensionsv1beta1.ConditionTrue {
+					return true, nil
+				}
+			case apiextensionsv1beta1.NamesAccepted:
+				if cond.Status == apiextensionsv1beta1.ConditionFalse {
+					return false, fmt.Errorf("name conflict: %v", cond.Reason)
+				}
+			}
+		}
+		return false, nil
+	})
+}
+
 func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 	return k.client.AppsV1beta2()
 }
 
-// getK8sClient instantiates a k8s client
-func (k *k8sOps) getK8sClient() (*kubernetes.Clientset, *rest.RESTClient, storkclientset.Interface, error) {
-	var k8sClient *kubernetes.Clientset
-	var restClient *rest.RESTClient
-	var storkClient storkclientset.Interface
+// setK8sClient instantiates a k8s client
+func (k *k8sOps) setK8sClient() error {
 	var err error
 
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if len(kubeconfig) > 0 {
-		k8sClient, restClient, storkClient, err = k.loadClientFromKubeconfig(kubeconfig)
+		err = k.loadClientFromKubeconfig(kubeconfig)
 	} else {
-		k8sClient, restClient, storkClient, err = k.loadClientFromServiceAccount()
+		err = k.loadClientFromServiceAccount()
 	}
 
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
-	if k8sClient == nil {
-		return nil, nil, nil, ErrK8SApiAccountNotSet
+	if k.client == nil {
+		return ErrK8SApiAccountNotSet
 	}
 
-	return k8sClient, restClient, storkClient, nil
+	return nil
 }
 
 // loadClientFromServiceAccount loads a k8s client from a ServiceAccount specified in the pod running px
-func (k *k8sOps) loadClientFromServiceAccount() (
-	*kubernetes.Clientset, *rest.RESTClient, storkclientset.Interface, error) {
+func (k *k8sOps) loadClientFromServiceAccount() error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
 	k.config = config
-	return loadClientFor(config)
+	return k.loadClientFor(config)
 }
 
-func (k *k8sOps) loadClientFromKubeconfig(kubeconfig string) (
-	*kubernetes.Clientset, *rest.RESTClient, storkclientset.Interface, error) {
+func (k *k8sOps) loadClientFromKubeconfig(kubeconfig string) error {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
 	k.config = config
-	return loadClientFor(config)
+	return k.loadClientFor(config)
 }
 
-func loadClientFor(config *rest.Config) (
-	*kubernetes.Clientset, *rest.RESTClient, storkclientset.Interface, error) {
-	client, err := kubernetes.NewForConfig(config)
+func (k *k8sOps) loadClientFor(config *rest.Config) error {
+	var err error
+	k.client, err = kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
-	snapClient, _, err := snap_client.NewClient(config)
+	k.snapClient, _, err = snap_client.NewClient(config)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
-	storkClient, err := storkclientset.NewForConfig(config)
+	k.storkClient, err = storkclientset.NewForConfig(config)
 	if err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
-	return client, snapClient, storkClient, nil
+	k.apiExtensionClient, err = apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func roundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {
