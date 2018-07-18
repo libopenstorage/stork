@@ -665,14 +665,10 @@ func (p *portworx) SnapshotRestore(
 		return nil, nil, fmt.Errorf("source volumesnapshot name not present in PVC annotations")
 	}
 
-	// Let's verify if source snapshot is complete
-	_, isCompleted, err := p.DescribeSnapshot(snapshotData)
+	// Let's verify if source snapshotdata is complete
+	err := k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false)
 	if err != nil {
-		return nil, nil, fmt.Errorf("snapshot: %s may not be complete. %v", snapshotName, err)
-	}
-
-	if !isCompleted {
-		return nil, nil, fmt.Errorf("snapshot: %s is not yet completed", snapshotName)
+		return nil, nil, fmt.Errorf("snapshot: %s is not complete. %v", snapshotName, err)
 	}
 
 	snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID

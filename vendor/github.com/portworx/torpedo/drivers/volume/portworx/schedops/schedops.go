@@ -29,6 +29,8 @@ type Driver interface {
 	GetServiceEndpoint() (string, error)
 	// UpgradePortworx upgrades portworx to the given docker image and tag
 	UpgradePortworx(image, tag string) error
+	//IsPXReadyOnNode returns true if PX pod is up on that node, else returns false
+	IsPXReadyOnNode(n node.Node) bool
 }
 
 var (
