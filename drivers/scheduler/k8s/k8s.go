@@ -916,7 +916,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
-			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
+			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate snapshot: %v. Err: %v", obj.Metadata.Name, err),
