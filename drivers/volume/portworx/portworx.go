@@ -2,13 +2,11 @@ package portworx
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -21,10 +19,9 @@ import (
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
-	apis_stork "github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/snapshot"
+	"github.com/libopenstorage/stork/pkg/snapshot/rule"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -32,13 +29,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	apis_core "k8s.io/kubernetes/pkg/apis/core"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 )
@@ -87,30 +82,11 @@ const (
 	cloudSnapshotInitialDelay = 5 * time.Second
 	cloudSnapshotFactor       = 1
 	cloudSnapshotSteps        = math.MaxInt32
-
-	// constants
-	cmdExecutorImage         = "openstorage/cmdexecutor:latest"
-	storkServiceAccount      = "stork-account"
-	perPodCommandExecTimeout = 900 // 15 minutes
-
-	defaultRetryInterval = 5 * time.Second
-	defaultRetryFactor   = 1
-	defaultMaxRetrySteps = 12
-	execPodStepLow       = defaultMaxRetrySteps
-	execPodStepMed       = defaultMaxRetrySteps * 3
-	execPodStepsHigh     = math.MaxInt32
-
-	podsWithRunningCommandsKey = "stork/pods-with-running-cmds"
 )
-
-// CommandTask tracks pods where commands for a taskID might still be running
-type CommandTask struct {
-	TaskID string   `json:"taskID"`
-	Pods   []string `json:"pods"`
-}
 
 const (
 	cloudSnapStatusDone    = "Done"
+	cloudSnapStatusActive  = "Active"
 	cloudSnapStatusPending = "Pending"
 	cloudSnapStatusFailed  = "Failed"
 )
@@ -119,11 +95,6 @@ type cloudSnapStatus struct {
 	status      string
 	msg         string
 	cloudSnapID string
-}
-
-type podErrorResponse struct {
-	pod v1.Pod
-	err error
 }
 
 // snapshot annotation constants
@@ -152,18 +123,6 @@ var cloudsnapBackoff = wait.Backoff{
 	Duration: cloudSnapshotInitialDelay,
 	Factor:   cloudSnapshotFactor,
 	Steps:    cloudSnapshotSteps,
-}
-
-var execCmdBackoff = wait.Backoff{
-	Duration: defaultRetryInterval,
-	Factor:   defaultRetryFactor,
-	Steps:    execPodStepsHigh,
-}
-
-var defaultBackOff = wait.Backoff{
-	Duration: defaultRetryInterval,
-	Factor:   defaultRetryFactor,
-	Steps:    defaultMaxRetrySteps,
 }
 
 type portworx struct {
@@ -476,25 +435,37 @@ func (p *portworx) SnapshotCreate(
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
+	backgroundCommandTermChan := make(chan bool, 1)
 	if snap.Metadata.Annotations != nil {
 		preSnapRule, present := snap.Metadata.Annotations[preSnapRuleAnnotationKey]
 		if present && len(preSnapRule) > 0 {
-			logrus.Infof("Running pre-snap rule: %s for snapshot: [%s] %s", preSnapRule, snap.Metadata.Namespace, snap.Metadata.Name)
-			taskID, _ := uuid.New()
+			snapshotcontroller.SnapshotLog(snap).Infof("Running pre-snap rule: %s", preSnapRule)
+			taskID, err := uuid.New()
+			if err != nil {
+				err = fmt.Errorf("failed to generate uuid for snapshot rule tasks due to: %v", err)
+				return nil, getErrorSnapshotConditions(err), err
+			}
 
 			podsWithBackgroundCmds, err := p.executeRuleForSnap(snap, preSnapRule, taskID.String())
 			if err != nil {
 				err = fmt.Errorf("failed to run pre-snap rule: %s due to: %v", preSnapRule, err)
-				logrus.Errorf(err.Error())
+				snapshotcontroller.SnapshotLog(snap).Errorf(err.Error())
 				return nil, getErrorSnapshotConditions(err), err
 			}
 
-			defer func() {
+			go func() {
 				if len(podsWithBackgroundCmds) > 0 {
-					if err = terminateCommandInPods(snap, podsWithBackgroundCmds, taskID.String()); err != nil {
-						logrus.Warnf("failed to terminate background command in pods due to: %v", err)
+					terminate := <-backgroundCommandTermChan
+					if terminate {
+						if err = rule.TerminateCommandInPods(snap, podsWithBackgroundCmds, taskID.String()); err != nil {
+							snapshotcontroller.SnapshotLog(snap).Warnf("failed to terminate background command in pods due to: %v", err)
+						}
 					}
 				}
+			}()
+
+			defer func() {
+				backgroundCommandTermChan <- true // regardless of what happens, always terminate commands
 			}()
 		}
 	}
@@ -511,7 +482,7 @@ func (p *portworx) SnapshotCreate(
 
 	switch snapType {
 	case crdv1.PortworxSnapshotTypeCloud:
-		logrus.Debugf("Cloud SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
+		snapshotcontroller.SnapshotLog(snap).Debugf("Cloud SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
 		ok, msg, err := p.ensureNodesDontMatchVersionPrefix(pre14VersionRegex)
 		if err != nil {
 			return nil, nil, err
@@ -522,24 +493,23 @@ func (p *portworx) SnapshotCreate(
 			return nil, getErrorSnapshotConditions(err), err
 		}
 
-		snapshotCredID = getCredIDFromSnapshot(snap)
 		request := &api.CloudBackupCreateRequest{
 			VolumeID:       volumeID,
-			CredentialUUID: snapshotCredID,
+			CredentialUUID: getCredIDFromSnapshot(snap),
 		}
 		err = p.volDriver.CloudBackupCreate(request)
 		if err != nil {
 			return nil, getErrorSnapshotConditions(err), err
 		}
 
-		status, err := p.waitForCloudSnapCompletion(api.CloudBackupOp, volumeID, false)
+		status, err := p.waitForCloudSnapCompletion(api.CloudBackupOp, volumeID, false, backgroundCommandTermChan)
 		if err != nil {
-			logrus.Errorf("Cloudsnap backup: %s failed due to: %v", status.cloudSnapID, err)
+			snapshotcontroller.SnapshotLog(snap).Errorf("Cloudsnap backup: %s failed due to: %v", status.cloudSnapID, err)
 			return nil, getErrorSnapshotConditions(err), err
 		}
 
 		snapshotID = status.cloudSnapID
-		logrus.Infof("Cloudsnap backup: %s of vol: %s created successfully.", snapshotID, volumeID)
+		snapshotcontroller.SnapshotLog(snap).Infof("Cloudsnap backup: %s of vol: %s created successfully.", snapshotID, volumeID)
 		snapStatusConditions = getReadySnapshotConditions()
 	case crdv1.PortworxSnapshotTypeLocal:
 		if isGroupSnap(snap) {
@@ -596,7 +566,7 @@ func (p *portworx) SnapshotCreate(
 
 				if newSnapResp.GetVolumeCreateResponse().GetVolumeResponse() != nil &&
 					len(newSnapResp.GetVolumeCreateResponse().GetVolumeResponse().GetError()) != 0 {
-					logrus.Errorf("failed to create snapshot for volume: %s due to: %v",
+					snapshotcontroller.SnapshotLog(snap).Errorf("failed to create snapshot for volume: %s due to: %v",
 						volID, newSnapResp.GetVolumeCreateResponse().GetVolumeResponse().GetError())
 					failedSnapVols = append(failedSnapVols, volID)
 					continue
@@ -632,7 +602,7 @@ func (p *portworx) SnapshotCreate(
 			snapshotDataName = strings.Join(snapDataNames, ",")
 			snapStatusConditions = getReadySnapshotConditions()
 		} else {
-			logrus.Debugf("SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
+			snapshotcontroller.SnapshotLog(snap).Debugf("SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
 			snapName := p.getSnapshotName(tags)
 			locator := &api.VolumeLocator{
 				Name: snapName,
@@ -653,19 +623,24 @@ func (p *portworx) SnapshotCreate(
 	if snap.Metadata.Annotations != nil {
 		postSnapRule, present := snap.Metadata.Annotations[postSnapRuleAnnotationKey]
 		if present && len(postSnapRule) > 0 {
-			logrus.Infof("Running post-snap rule: %s for snapshot: [%s] %s", postSnapRule, snap.Metadata.Namespace, snap.Metadata.Name)
-			taskID, _ := uuid.New()
+			snapshotcontroller.SnapshotLog(snap).Infof("Running post-snap rule: %s for snapshot: [%s] %s", postSnapRule)
+			taskID, err := uuid.New()
+			if err != nil {
+				err = fmt.Errorf("failed to generate uuid for snapshot rule tasks due to: %v", err)
+				return nil, getErrorSnapshotConditions(err), err
+			}
 
 			targetPods, err := p.executeRuleForSnap(snap, postSnapRule, taskID.String())
 			if err != nil {
-				logrus.Errorf("failed to run post-snap rule: %s due to: %v", postSnapRule, err)
+				err = fmt.Errorf("failed to run post-snap rule: %s due to: %v", postSnapRule, err)
+				snapshotcontroller.SnapshotLog(snap).Errorf(err.Error())
 				return nil, getErrorSnapshotConditions(err), err
 			}
 
 			defer func() {
 				if len(targetPods) > 0 {
-					if err = terminateCommandInPods(snap, targetPods, taskID.String()); err != nil {
-						logrus.Warnf("failed to terminate background command in pods due to: %v", err)
+					if err = rule.TerminateCommandInPods(snap, targetPods, taskID.String()); err != nil {
+						snapshotcontroller.SnapshotLog(snap).Warnf("failed to terminate background command in pods due to: %v", err)
 					}
 				}
 			}()
@@ -811,7 +786,7 @@ func (p *portworx) SnapshotRestore(
 		restoredVolumeID = response.RestoreVolumeID
 		logrus.Infof("Cloudsnap restore of %s to %s started successfully.", snapID, restoredVolumeID)
 
-		_, err = p.waitForCloudSnapCompletion(api.CloudRestoreOp, restoredVolumeID, true)
+		_, err = p.waitForCloudSnapCompletion(api.CloudRestoreOp, restoredVolumeID, true, nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -910,84 +885,6 @@ func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
 	return p.volDriver.Delete(pv.Spec.PortworxVolume.VolumeID)
 }
 
-func (p *portworx) PerformRecovery() error {
-	var allSnaps *crdv1.VolumeSnapshotList
-	err := wait.ExponentialBackoff(defaultBackOff, func() (bool, error) {
-		var err error
-		allSnaps, err = k8s.Instance().ListSnapshots(v1.NamespaceAll)
-		if err != nil {
-			logrus.Warnf("failed to list all snapshots due to: %v. Will retry.", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		return err
-	}
-
-	if allSnaps == nil {
-		return nil
-	}
-
-	var lastError error
-	for _, snap := range allSnaps.Items {
-		backgroundPodSet := make(map[string]v1.Pod)
-		if snap.Metadata.Annotations != nil {
-			value := snap.Metadata.Annotations[podsWithRunningCommandsKey]
-			if len(value) > 0 {
-				logrus.Infof("Performing recovery to terminate commands for snap: [%s] %s tracker: %v",
-					snap.Metadata.Namespace, snap.Metadata.Name, value)
-				taskTracker := CommandTask{}
-
-				err = json.Unmarshal([]byte(value), &taskTracker)
-				if err != nil {
-					logrus.Warnf("failed to parse annotation to track running commands on pods due to: %v", err)
-					lastError = err
-					continue
-				}
-
-				if len(taskTracker.Pods) == 0 {
-					continue
-				}
-
-				for _, pod := range taskTracker.Pods {
-					namespace, uid := parsePodUIDAndNamespace(pod)
-					p, err := k8s.Instance().GetPodByUID(types.UID(uid), namespace)
-					if err != nil {
-						if err == k8s.ErrPodsNotFound {
-							continue
-						}
-
-						logrus.Warnf("failed to get pod with uid: %s due to: %v", uid, err)
-						lastError = err
-						continue // best effort
-					}
-
-					backgroundPodSet[string(p.GetUID())] = *p
-				}
-
-				err = terminateCommandInPods(&snap, backgroundPodSet, taskTracker.TaskID)
-				if err != nil {
-					logrus.Warnf("failed to terminate running commands in pods due to: %v", err)
-					lastError = err
-					continue // best effort
-				}
-			}
-		}
-	}
-
-	return lastError
-}
-
-func parsePodUIDAndNamespace(podString string) (string, string) {
-	if strings.Contains(podString, "/") {
-		parts := strings.Split(podString, "/")
-		return parts[0], parts[1]
-	}
-
-	return v1.NamespaceDefault, podString
-}
-
 func (p *portworx) createVolumeSnapshotCRD(
 	pxSnapID string,
 	newSnapResp *api.SnapCreateResponse,
@@ -1042,11 +939,11 @@ func (p *portworx) createVolumeSnapshotCRD(
 		},
 	}
 
-	logrus.Infof("Creating VolumeSnapshot object [%#v]", snap)
+	snapshotcontroller.SnapshotLog(snap).Infof("Creating VolumeSnapshot object")
 	err = wait.ExponentialBackoff(snapAPICallBackoff, func() (bool, error) {
 		_, err := k8s.Instance().CreateSnapshot(snap)
 		if err != nil {
-			logrus.Errorf("failed to create volumesnapshot due to err: %v", err)
+			snapshotcontroller.SnapshotLog(snap).Errorf("failed to create volumesnapshot due to err: %v", err)
 			return false, nil
 		}
 
@@ -1057,14 +954,14 @@ func (p *portworx) createVolumeSnapshotCRD(
 		deleteErr := wait.ExponentialBackoff(snapAPICallBackoff, func() (bool, error) {
 			deleteErr := k8s.Instance().DeleteSnapshotData(snapData.Metadata.Name)
 			if err != nil {
-				logrus.Errorf("failed to delete volumesnapshotdata due to err: %v", deleteErr)
+				snapshotcontroller.SnapshotLog(snap).Errorf("failed to delete volumesnapshotdata due to err: %v", deleteErr)
 				return false, nil
 			}
 
 			return true, nil
 		})
 		if deleteErr != nil {
-			logrus.Errorf("failed to revert volumesnapshotdata due to: %v", deleteErr)
+			snapshotcontroller.SnapshotLog(snap).Errorf("failed to revert volumesnapshotdata due to: %v", deleteErr)
 		}
 
 		return nil, err
@@ -1162,7 +1059,12 @@ func (p *portworx) findParentPVCOrVolID(snapID string) (string, error) {
 	return pvc.GetName(), nil
 }
 
-func (p *portworx) waitForCloudSnapCompletion(op api.CloudBackupOpType, volID string, verbose bool) (cloudSnapStatus, error) {
+func (p *portworx) waitForCloudSnapCompletion(
+	op api.CloudBackupOpType,
+	volID string,
+	verbose bool,
+	backgroundCommandTermChan chan bool) (cloudSnapStatus, error) {
+
 	csStatus := cloudSnapStatus{
 		status: cloudSnapStatusFailed,
 		msg:    fmt.Sprintf("cloudsnap status unknown"),
@@ -1173,18 +1075,26 @@ func (p *portworx) waitForCloudSnapCompletion(op api.CloudBackupOpType, volID st
 		switch csStatus.status {
 		case cloudSnapStatusFailed:
 			err := fmt.Errorf("Cloudsnap %s of %s failed due to: %s", op, volID, csStatus.msg)
-			if verbose {
-				logrus.Errorf(err.Error())
-			}
+			logrus.Errorf(err.Error())
 			return true, err
 		case cloudSnapStatusDone:
 			if verbose {
-				logrus.Infof("Cloudsnap %s of %s completed successfully", op, volID)
+				logrus.Infof(csStatus.msg)
 			}
 			return true, nil
+		case cloudSnapStatusActive:
+			if verbose {
+				logrus.Infof(csStatus.msg)
+			}
+
+			if backgroundCommandTermChan != nil {
+				// since cloudsnap is already triggered and active, send signal to terminate background jobs
+				backgroundCommandTermChan <- true
+			}
+			return false, nil
 		case cloudSnapStatusPending:
 			if verbose {
-				logrus.Infof("Cloudsnap %s of %s is still pending. %s", op, volID, csStatus.msg)
+				logrus.Infof(csStatus.msg)
 			}
 			return false, nil
 		default:
@@ -1221,15 +1131,17 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 		return cloudSnapStatus{
 			status:      cloudSnapStatusFailed,
 			cloudSnapID: csStatus.ID,
-			msg:         fmt.Sprintf("cloudsnap %s for %s failed. %s", op, volID, statusStr),
+			msg: fmt.Sprintf("cloudsnap %s id: %s for %s failed.",
+				op, csStatus.ID, volID),
 		}
 	}
 
-	if csStatus.CompletedTime.IsZero() {
+	if csStatus.Status == cloudSnapStatusActive {
 		return cloudSnapStatus{
-			status:      cloudSnapStatusPending,
+			status:      cloudSnapStatusActive,
 			cloudSnapID: csStatus.ID,
-			msg:         fmt.Sprintf("cloudsnap %s for %s still not completed. %s", op, volID, statusStr),
+			msg: fmt.Sprintf("cloudsnap %s id: %s for %s has started and is active.",
+				op, csStatus.ID, volID),
 		}
 	}
 
@@ -1237,14 +1149,15 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 		return cloudSnapStatus{
 			status:      cloudSnapStatusPending,
 			cloudSnapID: csStatus.ID,
-			msg:         fmt.Sprintf("cloudsnap %s for %s still not done. %s", op, volID, statusStr),
+			msg: fmt.Sprintf("cloudsnap %s id: %s for %s still not done. status: %s",
+				op, csStatus.ID, volID, statusStr),
 		}
 	}
 
 	return cloudSnapStatus{
 		status:      cloudSnapStatusDone,
 		cloudSnapID: csStatus.ID,
-		msg:         fmt.Sprintf("cloudsnap %s for %s done.", op, volID),
+		msg:         fmt.Sprintf("cloudsnap %s id: %s for %s done.", op, csStatus.ID, volID),
 	}
 }
 
@@ -1278,7 +1191,7 @@ func (p *portworx) revertSnapObjs(snapObjs []*crdv1.VolumeSnapshot) {
 		err := wait.ExponentialBackoff(snapAPICallBackoff, func() (bool, error) {
 			deleteErr := k8s.Instance().DeleteSnapshot(snap.Metadata.Name, snap.Metadata.Namespace)
 			if deleteErr != nil {
-				logrus.Infof("failed to delete volumesnapshot due to: %v", deleteErr)
+				snapshotcontroller.SnapshotLog(snap).Infof("failed to delete volumesnapshot due to: %v", deleteErr)
 				return false, nil
 			}
 
@@ -1376,7 +1289,7 @@ func (p *portworx) executeRuleForSnap(snap *crdv1.VolumeSnapshot, storkRule, tas
 			groupID := snap.Metadata.Annotations[pxSnapshotGroupIDKey]
 			groupLabels := parseGroupLabelsFromAnnotations(snap.Metadata.Annotations)
 
-			logrus.Infof("looking for PVCs with group labels: %v", groupLabels)
+			snapshotcontroller.SnapshotLog(snap).Infof("looking for PVCs with group labels: %v", groupLabels)
 			pvcs := make([]v1.PersistentVolumeClaim, 0)
 			if len(groupID) > 0 {
 				groupIDPVCs, err := p.getPVCsForGroupID(groupID)
@@ -1393,7 +1306,7 @@ func (p *portworx) executeRuleForSnap(snap *crdv1.VolumeSnapshot, storkRule, tas
 					return nil, err
 				}
 
-				logrus.Infof("found PVCs with group labels: %v", pvcList.Items)
+				snapshotcontroller.SnapshotLog(snap).Infof("found PVCs with group labels: %v", pvcList.Items)
 				pvcs = append(pvcs, pvcList.Items...)
 			}
 
@@ -1417,282 +1330,13 @@ func (p *portworx) executeRuleForSnap(snap *crdv1.VolumeSnapshot, storkRule, tas
 
 	backgroundPodSet := make(map[string]v1.Pod)
 	if len(pods) > 0 {
-		// Get the rule and based on the rule execute it
-		rule, err := k8s.Instance().GetStorkRule(storkRule, snap.GetObjectMeta().GetNamespace())
+		backgroundPodSet, err = rule.ExecuteRuleOnPods(pods, snap, storkRule, snap.GetObjectMeta().GetNamespace(), taskID)
 		if err != nil {
 			return nil, err
-		}
-
-		for _, item := range rule.Spec {
-			logrus.Infof("[debug] pod selector: %v", item.PodSelector)
-			filteredPods := make([]v1.Pod, 0)
-			// filter pods and only uses the ones that match this selector
-			for _, pod := range pods {
-				if hasSubset(pod.GetObjectMeta().GetLabels(), item.PodSelector) {
-					filteredPods = append(filteredPods, pod)
-				}
-			}
-
-			if len(filteredPods) == 0 {
-				logrus.Warnf("none of the pods matched selectors for rule spec: %v", rule.Spec)
-				continue
-			}
-
-			for _, action := range item.Actions {
-				if action.Type == apis_stork.StorkRuleActionCommand {
-					podsForAction := make([]v1.Pod, 0)
-					if action.RunInSinglePod {
-						podsForAction = []v1.Pod{filteredPods[0]}
-					} else {
-						podsForAction = append(podsForAction, filteredPods...)
-					}
-
-					if action.Background {
-						for _, pod := range podsForAction {
-							backgroundPodSet[string(pod.GetUID())] = pod
-						}
-
-						// regardless of the outcome of running the background command, we first update the
-						// snapshot to track pods which might have a running background command
-						updateErr := updateRunningCommandPodListInSnap(snap, podsForAction, taskID)
-						if updateErr != nil {
-							logrus.Warnf("failed to update list of pods with running command in snap due to: %v", updateErr)
-						}
-
-						err = runBackgroundCommandOnPods(podsForAction, action.Value, taskID)
-						if err != nil {
-							return backgroundPodSet, err
-						}
-					} else {
-						_, err = runCommandOnPods(podsForAction, action.Value, execPodStepLow, true)
-						if err != nil {
-							return backgroundPodSet, err
-						}
-					}
-				} else {
-					return backgroundPodSet, fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
-						action.Type, rule.GetNamespace(), rule.GetName())
-				}
-			}
 		}
 	}
 
 	return backgroundPodSet, nil
-}
-
-func terminateCommandInPods(snap *crdv1.VolumeSnapshot, pods map[string]v1.Pod, taskID string) error {
-	killFile := fmt.Sprintf(cmdexecutor.KillFileFormat, taskID)
-	podList := make([]v1.Pod, 0)
-	for _, pod := range pods {
-		podList = append(podList, pod)
-	}
-
-	failedPods, err := runCommandOnPods(podList, fmt.Sprintf("touch %s", killFile), execPodStepsHigh, false)
-
-	updateErr := updateRunningCommandPodListInSnap(snap, failedPods, taskID)
-	if updateErr != nil {
-		logrus.Warnf("failed to update list of pods with running command in snap due to: %v", updateErr)
-	}
-
-	return err
-}
-
-func hasSubset(set map[string]string, subset map[string]string) bool {
-	for k := range subset {
-		v, ok := set[k]
-		if !ok || v != subset[k] {
-			return false
-		}
-	}
-	return true
-}
-
-func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) ([]v1.Pod, error) {
-	var wg sync.WaitGroup
-	backOff := wait.Backoff{
-		Duration: defaultRetryInterval,
-		Factor:   defaultRetryFactor,
-		Steps:    numRetries,
-	}
-	errChannel := make(chan podErrorResponse)
-	finished := make(chan bool, 1)
-
-	for _, pod := range pods {
-		wg.Add(1)
-		go func(pod v1.Pod, errRespChan chan podErrorResponse) {
-			defer wg.Done()
-			err := wait.ExponentialBackoff(backOff, func() (bool, error) {
-				ns, name := pod.GetNamespace(), pod.GetName()
-				pod, err := k8s.Instance().GetPodByUID(pod.GetUID(), ns)
-				if err != nil {
-					if err == k8s.ErrPodsNotFound {
-						logrus.Infof("pod with uuid: %s in namespace: %s is no longer present", string(pod.GetUID()), ns)
-						return true, nil
-					}
-
-					logrus.Warnf("failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()))
-					return false, nil
-				}
-
-				_, err = k8s.Instance().RunCommandInPod([]string{"sh", "-c", cmd}, name, "", ns)
-				if err != nil {
-					logrus.Warnf("failed to run command: %s on pod: [%s] %s due to: %v", cmd, ns, name, err)
-					return false, nil
-				}
-
-				logrus.Infof("command: %s succeeded on pod: [%s] %s", cmd, ns, name)
-				return true, nil
-			})
-			if err != nil {
-				errChannel <- podErrorResponse{
-					pod: pod,
-					err: err,
-				}
-			}
-		}(pod, errChannel)
-	}
-
-	// Put the wait group in a go routine.
-	// By putting the wait group in the go routine we ensure either all pass
-	// and we close the "finished" channel or we wait forever for the wait group
-	// to finish.
-	//
-	// Waiting forever is okay because of the blocking select below.
-	go func() {
-		wg.Wait()
-		close(finished)
-	}()
-
-	failed := make([]v1.Pod, 0)
-	select {
-	case <-finished:
-		if len(failed) > 0 {
-			err := fmt.Errorf("command: %s failed on pods: %s", cmd, podsToString(failed))
-			return failed, err
-		}
-
-		logrus.Infof("command: %s finished successfully on all pods", cmd)
-		return nil, nil
-	case errResp := <-errChannel:
-		failed = append(failed, errResp.pod) // TODO also accumulate atleast the last error
-		if failFast {
-			return failed, fmt.Errorf("command: %s failed in pod: [%s] %s due to: %s",
-				cmd, errResp.pod.GetNamespace(), errResp.pod.GetName(), errResp.err)
-		}
-	}
-
-	return nil, nil
-}
-
-func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID string) error {
-	executorArgs := []string{
-		"/cmdexecutor",
-		"-timeout", strconv.FormatInt(perPodCommandExecTimeout, 10),
-		"-cmd", cmd,
-		"-taskid", taskID,
-	}
-
-	for _, pod := range pods {
-		executorArgs = append(executorArgs, []string{"-pod", fmt.Sprintf("%s/%s", pod.GetNamespace(), pod.GetName())}...)
-	}
-
-	// start async cmd executor pod
-	labels := map[string]string{
-		"app": "cmdexecutor",
-	}
-	executorPod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("pod-cmd-executor-%s", taskID),
-			Namespace: apis_core.NamespaceSystem,
-			Labels:    labels,
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				v1.Container{
-					Name:            "cmdexecutor",
-					Image:           cmdExecutorImage,
-					ImagePullPolicy: v1.PullAlways,
-					Args:            executorArgs,
-					ReadinessProbe: &v1.Probe{
-						Handler: v1.Handler{
-							Exec: &v1.ExecAction{
-								Command: []string{"cat", "/tmp/cmdexecutor-status"},
-							},
-						},
-					},
-				},
-			},
-			RestartPolicy:      v1.RestartPolicyNever,
-			ServiceAccountName: storkServiceAccount,
-		},
-	}
-
-	createdPod, err := k8s.Instance().CreatePod(executorPod)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if createdPod != nil {
-			err := k8s.Instance().DeletePods([]v1.Pod{*createdPod}, false)
-			if err != nil {
-				logrus.Warnf("failed to delete command executor pod: [%s] %s due to: %v",
-					createdPod.GetNamespace(), createdPod.GetName(), err)
-			}
-		}
-	}()
-
-	logrus.Infof("Created pod command executor: [%s] %s", createdPod.GetNamespace(), createdPod.GetName())
-	err = waitForExecPodCompletion(createdPod)
-	if err != nil {
-		cm, statusFetchErr := k8s.Instance().GetConfigMap(cmdexecutor.StatusConfigMapName, metav1.NamespaceSystem)
-		if statusFetchErr != nil {
-			logrus.Warnf("failed to fetch status of command executor from config map due to: %v", statusFetchErr)
-			return err
-		}
-
-		status := cm.Data[createdPod.GetName()]
-		if len(status) == 0 {
-			logrus.Warnf("found empty failure status for command executor pod: %s in config map", createdPod.GetName())
-			return err
-		}
-
-		err = fmt.Errorf("%s. cmd executor failed because: %s", err.Error(), status)
-
-		cmCopy := cm.DeepCopy()
-		delete(cmCopy.Data, createdPod.GetName())
-		cm, cmUpdateErr := k8s.Instance().UpdateConfigMap(cmCopy)
-		if cmUpdateErr != nil {
-			logrus.Warnf("failed to cleanup command executor status config map due to: %v", cmUpdateErr)
-		}
-
-		return err
-	}
-
-	return nil
-}
-
-func waitForExecPodCompletion(pod *v1.Pod) error {
-	logrus.Infof("waiting for pod: [%s] %s readiness with backoff: %v", pod.GetNamespace(), pod.GetName(), execCmdBackoff)
-	return wait.ExponentialBackoff(execCmdBackoff, func() (bool, error) {
-		p, err := k8s.Instance().GetPodByUID(pod.GetUID(), pod.GetNamespace())
-		if err != nil {
-			return false, nil
-		}
-
-		if p.Status.Phase == v1.PodFailed {
-			errMsg := fmt.Sprintf("pod: [%s] %s failed", p.GetNamespace(), p.GetName())
-			logrus.Errorf(errMsg)
-			return true, fmt.Errorf(errMsg)
-		}
-
-		if p.Status.Phase == v1.PodSucceeded {
-			logrus.Infof("pod: [%s] %s succeeded", pod.GetNamespace(), pod.GetName())
-			return true, nil
-		}
-
-		return false, nil
-	})
 }
 
 func (p *portworx) getPVCsForGroupID(groupID string) ([]v1.PersistentVolumeClaim, error) {
@@ -1820,58 +1464,6 @@ func getCloudSnapStatusString(status *api.CloudBackupStatus) string {
 		statusStr = fmt.Sprintf("%s Completion time: %v", statusStr, status.CompletedTime)
 	}
 	return statusStr
-}
-
-// updateRunningCommandPodListInSnap updates the snapshot annotation to track pods which might have a
-// running command
-func updateRunningCommandPodListInSnap(snap *crdv1.VolumeSnapshot, pods []v1.Pod, taskID string) error {
-	podsWithNs := make([]string, 0)
-	for _, p := range pods {
-		podsWithNs = append(podsWithNs, fmt.Sprintf("%s/%s", p.GetNamespace(), p.GetName()))
-	}
-
-	tracker := &CommandTask{
-		TaskID: taskID,
-		Pods:   podsWithNs,
-	}
-
-	trackerBytes, err := json.Marshal(tracker)
-	if err != nil {
-		return fmt.Errorf("failed to update running command pod list in snap due to: %v", err)
-	}
-
-	err = wait.ExponentialBackoff(defaultBackOff, func() (bool, error) {
-		snap, err := k8s.Instance().GetSnapshot(snap.Metadata.Name, snap.Metadata.Namespace)
-		if err != nil {
-			logrus.Warnf("failed to get latest snapshot object due to: %v. Will retry.", err)
-			return false, nil
-		}
-
-		snapCopy := snap.DeepCopy()
-		if len(podsWithNs) == 0 {
-			delete(snapCopy.Metadata.Annotations, podsWithRunningCommandsKey)
-		} else {
-			snapCopy.Metadata.Annotations[podsWithRunningCommandsKey] = string(trackerBytes)
-		}
-
-		if _, err := k8s.Instance().UpdateSnapshot(snapCopy); err != nil {
-			logrus.Warnf("failed to update snapshot due to: %v. Will retry.", err)
-			return false, nil
-		}
-
-		return true, nil
-	})
-	return err
-}
-
-// podsToString is a helper function to create a user-friendly single string from a list of pods
-func podsToString(pods []v1.Pod) string {
-	var podList []string
-	for _, p := range pods {
-		podList = append(podList, fmt.Sprintf("%s/%s", p.GetNamespace(), p.GetName()))
-	}
-
-	return strings.Join(podList, ",")
 }
 
 func init() {

@@ -223,3 +223,16 @@ func (p *snapshotProvisioner) Delete(volume *v1.PersistentVolume) error {
 	// delete PV
 	return plugin.VolumeDelete(volume)
 }
+
+// SnapshotLog formats a log message with snapshot information
+func SnapshotLog(snap *crdv1.VolumeSnapshot) *log.Entry {
+	if snap != nil {
+		return log.WithFields(log.Fields{
+			"Snapshot": fmt.Sprintf("[%s] %s", snap.Metadata.Namespace, snap.Metadata.Name),
+		})
+	}
+
+	return log.WithFields(log.Fields{
+		"Snapshot": snap,
+	})
+}

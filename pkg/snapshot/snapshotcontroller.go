@@ -2,6 +2,7 @@ package snapshotcontroller
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -10,9 +11,14 @@ import (
 	snapshotcontroller "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
+	stork "github.com/libopenstorage/stork/pkg/apis/stork"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/snapshot/rule"
 	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -69,9 +75,31 @@ func (s *SnapshotController) Start() error {
 		return err
 	}
 
+	log.Infof("Registering CRDs")
 	err = client.CreateCRD(aeclientset)
 	if err != nil {
 		return err
+	}
+
+	storkRuleResource := k8s.CustomResource{
+		Name:    "storkrule",
+		Plural:  "storkrules",
+		Group:   stork.GroupName,
+		Version: stork.Version,
+		Scope:   apiextensionsv1beta1.NamespaceScoped,
+		Kind:    reflect.TypeOf(storkapi.StorkRule{}).Name(),
+	}
+
+	err = k8s.Instance().CreateCRD(storkRuleResource)
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("Failed to create CRD due to: %v", err)
+		}
+	}
+
+	err = k8s.Instance().ValidateCRD(storkRuleResource)
+	if err != nil {
+		return fmt.Errorf("Failed to validate stork rules CRD due to: %v", err)
 	}
 
 	err = client.WaitForSnapshotResource(snapshotClient)
@@ -103,6 +131,10 @@ func (s *SnapshotController) Start() error {
 		serverVersion.GitVersion,
 	)
 	provisioner.Run(s.stopChannel)
+
+	if err := rule.PerformRuleRecovery(); err != nil {
+		log.Fatalf("failed to perform recovery for snapshot rules due to: %v", err)
+	}
 
 	s.started = true
 	return nil

@@ -8,12 +8,9 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
+	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
 	"github.com/libopenstorage/stork/pkg/version"
-	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -74,6 +71,11 @@ func main() {
 		}
 	}
 
+	hostname, err := getHostname()
+	if err != nil {
+		logrus.Fatalf(err.Error())
+	}
+
 	executors := make([]cmdexecutor.Executor, 0)
 	errChans := make(map[string]chan error)
 	// Start the commands
@@ -90,7 +92,7 @@ func main() {
 		err = executor.Start(errChan)
 		if err != nil {
 			msg := fmt.Sprintf("failed to run command in pod: [%s] %s due to: %v", namespace, name, err)
-			persistStatusErr := persistStatus(msg)
+			persistStatusErr := status.Persist(hostname, msg)
 			if persistStatusErr != nil {
 				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
 			}
@@ -133,7 +135,7 @@ Loop:
 	for {
 		select {
 		case err := <-aggChan:
-			persistStatusErr := persistStatus(err.Error())
+			persistStatusErr := status.Persist(hostname, err.Error())
 			if persistStatusErr != nil {
 				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
 			}
@@ -155,54 +157,17 @@ Loop:
 	}
 }
 
-func persistStatus(status string) error {
+func getHostname() (string, error) {
 	var err error
 	hostname := os.Getenv("HOSTNAME")
 	if len(hostname) == 0 {
 		hostname, err = os.Hostname()
 		if err != nil {
-			return fmt.Errorf("failed to get hostname of command executor due to: %v", err)
+			return "", fmt.Errorf("failed to get hostname of command executor due to: %v", err)
 		}
 	}
 
-	if len(hostname) == 0 {
-		return fmt.Errorf("failed to get hostname of command executor")
-	}
-
-	cm, err := k8s.Instance().GetConfigMap(cmdexecutor.StatusConfigMapName, meta_v1.NamespaceSystem)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// create one
-			defaultData := map[string]string{
-				hostname: "",
-			}
-			cm = &v1.ConfigMap{
-				ObjectMeta: meta_v1.ObjectMeta{
-					Namespace: meta_v1.NamespaceSystem,
-					Name:      cmdexecutor.StatusConfigMapName,
-				},
-				Data: defaultData,
-			}
-			cm, err = k8s.Instance().CreateConfigMap(cm)
-			if err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-
-	cmCopy := cm.DeepCopy()
-	if cmCopy.Data == nil {
-		cmCopy.Data = make(map[string]string)
-	}
-	cmCopy.Data[hostname] = status
-	cm, err = k8s.Instance().UpdateConfigMap(cmCopy)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return hostname, nil
 }
 
 // command line arguments

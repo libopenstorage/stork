@@ -4,25 +4,18 @@ import (
 	"flag"
 	"os"
 	"os/signal"
-	"reflect"
 	"syscall"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
-	stork "github.com/libopenstorage/stork/pkg/apis/stork.com"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/initializer"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/snapshot"
-	"github.com/portworx/talisman/pkg/crd"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	api_v1 "k8s.io/api/core/v1"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	clientset "k8s.io/client-go/kubernetes"
 	core_v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -225,43 +218,10 @@ func runStork(d volume.Driver, c *cli.Context) {
 		}
 	}
 
-	// Register the CRDs
-	log.Infof("Registering stork CRDs")
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		log.Fatalf("Error building kubeconfig: %s", err.Error())
-	}
-	kubeClient := clientset.NewForConfigOrDie(cfg)
-	apiExtClientset := apiextensionsclient.NewForConfigOrDie(cfg)
-	ctx := crd.Context{
-		Clientset:             kubeClient,
-		APIExtensionClientset: apiExtClientset,
-		Interval:              500 * time.Millisecond,
-		Timeout:               60 * time.Second,
-	}
-	resources := []crd.CustomResource{
-		{
-			Name:    "storkrule",
-			Plural:  "storkrules",
-			Group:   stork.GroupName,
-			Version: stork.Version,
-			Scope:   apiextensionsv1beta1.NamespaceScoped,
-			Kind:    reflect.TypeOf(storkapi.StorkRule{}).Name(),
-		},
-	}
-	err = crd.CreateCRD(ctx, resources)
-	if err != nil {
-		log.Fatalf("failed to create CRD. Err: %v", err)
-	}
-
 	snapshotController := &snapshotcontroller.SnapshotController{
 		Driver: d,
 	}
 	if c.Bool("snapshotter") {
-		if err := d.PerformRecovery(); err != nil {
-			log.Warnf("failed to perform recovery for driver: %s due to: %v", d.String(), err)
-		}
-
 		if err := snapshotController.Start(); err != nil {
 			log.Fatalf("Error starting snapshot controller: %v", err)
 		}

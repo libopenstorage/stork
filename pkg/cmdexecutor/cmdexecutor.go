@@ -19,8 +19,6 @@ const (
 	cmdStatusFormat    = "stat %s"
 	waitScriptLocation = "/tmp/wait.sh"
 	waitCmdPlaceholder = "${WAIT_CMD}"
-	// StatusConfigMapName is name of the config map the command executor uses to persist failed statuses
-	StatusConfigMapName = "cmdexecutor-status"
 )
 
 const (
