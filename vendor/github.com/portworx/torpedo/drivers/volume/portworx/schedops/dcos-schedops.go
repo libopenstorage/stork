@@ -56,6 +56,11 @@ func (d *dcosSchedOps) UpgradePortworx(image, tag string) error {
 	return nil
 }
 
+func (d *dcosSchedOps) IsPXReadyOnNode(n node.Node) bool {
+	// TODO: Implement this method
+	return true
+}
+
 func init() {
 	d := &dcosSchedOps{}
 	Register("dcos", d)

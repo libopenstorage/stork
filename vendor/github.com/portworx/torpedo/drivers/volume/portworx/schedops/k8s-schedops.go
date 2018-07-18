@@ -33,6 +33,9 @@ const (
 	snapshotAnnotation = "px/snapshot-source-pvc"
 	// storkSnapshotAnnotation is the annotation used get the snapshot of Stork created clone
 	storkSnapshotAnnotation = "snapshot.alpha.kubernetes.io/snapshot"
+	// storkSnapshotNameKey is the key name of the label on a portworx volume snapshot that identifies
+	//   the name of the stork volume snapshot
+	storkSnapshotNameKey = "stork-snap"
 	// pvcLabel is the label used on volume to identify the pvc name
 	pvcLabel               = "pvc"
 	talismanServiceAccount = "talisman-account"
@@ -177,14 +180,12 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 			continue
 		}
 
-		logrus.Infof("[debug] pod [%s] %s is ready.", p.Namespace, p.Name)
-
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
-			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) on %s.+", path))
+			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) %s.+", path))
 
 			t := func() (interface{}, bool, error) {
-				output, err := k8s.Instance().RunCommandInPod([]string{"mount"}, p.Name, containerName, p.Namespace)
+				output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, p.Name, containerName, p.Namespace)
 				if err != nil {
 					logrus.Errorf("failed to run command in pod: %v err: %v", p, err)
 					return nil, true, err
@@ -222,9 +223,9 @@ func (k *k8sSchedOps) ValidateSnapshot(params map[string]string, parent *api.Vol
 	if parentPVCAnnotation, ok := params[snapshotAnnotation]; ok {
 		logrus.Debugf("Validating annotation based snapshot/clone")
 		return k.validateVolumeClone(parent, parentPVCAnnotation)
-	} else if snapshotAnnotation, ok := params[storkSnapshotAnnotation]; ok {
+	} else if snapshotName, ok := params[storkSnapshotAnnotation]; ok {
 		logrus.Debugf("Validating Stork clone")
-		return k.validateStorkClone(parent, snapshotAnnotation)
+		return k.validateStorkClone(parent, snapshotName)
 	}
 	logrus.Debugf("Validating Stork snapshot")
 	return k.validateStorkSnapshot(parent, params)
@@ -243,13 +244,22 @@ func (k *k8sSchedOps) validateVolumeClone(parent *api.Volume, parentAnnotation s
 	return nil
 }
 
-func (k *k8sSchedOps) validateStorkClone(parent *api.Volume, snapshotAnnotation string) error {
-	parentName := parent.Locator.Name
-	if parentName != snapshotAnnotation {
-		return fmt.Errorf("Parent name [%s] does not match the snapshot annotation "+
-			"[%s] on the clone PVC", parentName, snapshotAnnotation)
+func (k *k8sSchedOps) validateStorkClone(parent *api.Volume, snapshotName string) error {
+	volumeLabels := parent.Locator.VolumeLabels
+	if volumeLabels != nil {
+		snapName, ok := volumeLabels[storkSnapshotNameKey]
+		if ok && snapName == snapshotName {
+			return nil
+		}
 	}
-	return nil
+
+	parentName := parent.Locator.Name
+	if parentName == snapshotName {
+		return nil
+	}
+
+	return fmt.Errorf("snapshot annotation: %s on the clone PVC matches neither parent volume "+
+		"name: %s nor parent volume labels: %v", snapshotName, parentName, volumeLabels)
 }
 
 func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[string]string) error {
@@ -449,6 +459,22 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 	}
 
 	return nil
+}
+
+// Method to validate if Portworx pod is up and running
+func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
+	pxPods, err := k8s.Instance().GetPodsByNode(n.Name, PXNamespace)
+	if err != nil {
+		logrus.Errorf("Failed to get apps on node %s", n.Name)
+		return false
+	}
+	for _, pod := range pxPods.Items {
+		if pod.Labels["name"] == PXDaemonSet && !k8s.Instance().IsPodReady(pod) {
+			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase)
+			return false
+		}
+	}
+	return true
 }
 
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that

@@ -13,6 +13,8 @@ import (
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snap_client "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
+	"github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
+	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1beta2"
@@ -45,6 +47,8 @@ const (
 	validateStatefulSetPVCTimeout = 15 * time.Minute
 	validatePVCTimeout            = 5 * time.Minute
 	validatePVCRetryInterval      = 10 * time.Second
+	validateSnapshotTimeout       = 5 * time.Minute
+	validateSnapshotRetryInterval = 10 * time.Second
 )
 
 var deleteForegroundPolicy = meta_v1.DeletePropagationForeground
@@ -68,6 +72,7 @@ type Ops interface {
 	StorageClassOps
 	PersistentVolumeClaimOps
 	SnapshotOps
+	StorkRuleOps
 	SecretOps
 	ConfigMapOps
 	EventOps
@@ -247,6 +252,8 @@ type RBACOps interface {
 
 // PodOps is an interface to perform k8s pod operations
 type PodOps interface {
+	// CreatePod creates the given pod
+	CreatePod(pod *v1.Pod) (*v1.Pod, error)
 	// GetPods returns pods for the given namespace
 	GetPods(string) (*v1.PodList, error)
 	// GetPodsByNode returns all pods in given namespace and given k8s node name.
@@ -266,6 +273,8 @@ type PodOps interface {
 	GetPodsUsingVolumePlugin(plugin string) ([]v1.Pod, error)
 	// GetPodsUsingVolumePluginByNodeName returns all pods who use PVCs provided by the given volume plugin on the given node
 	GetPodsUsingVolumePluginByNodeName(nodeName, plugin string) ([]v1.Pod, error)
+	// GetPodByName returns pod for the given pod name and namespace
+	GetPodByName(string, string) (*v1.Pod, error)
 	// GetPodByUID returns pod with the given UID, or error if nothing found
 	GetPodByUID(types.UID, string) (*v1.Pod, error)
 	// DeletePods deletes the given pods
@@ -332,12 +341,16 @@ type PersistentVolumeClaimOps interface {
 type SnapshotOps interface {
 	// GetSnapshot returns the snapshot for given name and namespace
 	GetSnapshot(name string, namespace string) (*snap_v1.VolumeSnapshot, error)
+	// ListSnapshots lists all snapshots in the given namespace
+	ListSnapshots(namespace string) (*snap_v1.VolumeSnapshotList, error)
 	// CreateSnapshot creates the given snapshot
 	CreateSnapshot(*snap_v1.VolumeSnapshot) (*snap_v1.VolumeSnapshot, error)
+	// UpdateSnapshot updates the given snapshot
+	UpdateSnapshot(*snap_v1.VolumeSnapshot) (*snap_v1.VolumeSnapshot, error)
 	// DeleteSnapshot deletes the given snapshot
 	DeleteSnapshot(name string, namespace string) error
-	// ValidateSnapshot validates the given snapshot
-	ValidateSnapshot(name string, namespace string) error
+	// ValidateSnapshot validates the given snapshot.
+	ValidateSnapshot(name string, namespace string, retry bool) error
 	// GetVolumeForSnapshot returns the volumeID for the given snapshot
 	GetVolumeForSnapshot(name string, namespace string) (string, error)
 	// GetSnapshotStatus returns the status of the given snapshot
@@ -348,6 +361,18 @@ type SnapshotOps interface {
 	CreateSnapshotData(*snap_v1.VolumeSnapshotData) (*snap_v1.VolumeSnapshotData, error)
 	// DeleteSnapshotData deletes the given snapshot
 	DeleteSnapshotData(name string) error
+	// ValidateSnapshotData validates the given snapshot data object
+	ValidateSnapshotData(name string, retry bool) error
+}
+
+// StorkRuleOps is an interface to perform operations for k8s stork rule
+type StorkRuleOps interface {
+	// GetStorkRule fetches the given stork rule
+	GetStorkRule(name, namespace string) (*v1alpha1.StorkRule, error)
+	// CreateStorkRule creates the given stork rule
+	CreateStorkRule(rule *v1alpha1.StorkRule) (*v1alpha1.StorkRule, error)
+	// DeleteStorkRule deletes the given stork rule
+	DeleteStorkRule(name, namespace string) error
 }
 
 // SecretOps is an interface to perform k8s Secret operations
@@ -382,9 +407,10 @@ var (
 )
 
 type k8sOps struct {
-	client     *kubernetes.Clientset
-	snapClient *rest.RESTClient
-	config     *rest.Config
+	client      *kubernetes.Clientset
+	snapClient  *rest.RESTClient
+	storkClient storkclientset.Interface
+	config      *rest.Config
 }
 
 // Instance returns a singleton instance of k8sOps type
@@ -398,7 +424,7 @@ func Instance() Ops {
 // Initialize the k8s client if uninitialized
 func (k *k8sOps) initK8sClient() error {
 	if k.client == nil {
-		k8sClient, snapClient, err := k.getK8sClient()
+		k8sClient, snapClient, storkClient, err := k.getK8sClient()
 		if err != nil {
 			return err
 		}
@@ -411,6 +437,7 @@ func (k *k8sOps) initK8sClient() error {
 
 		k.client = k8sClient
 		k.snapClient = snapClient
+		k.storkClient = storkClient
 	}
 	return nil
 }
@@ -1226,6 +1253,13 @@ func (k *k8sOps) ValidateDaemonSet(name, namespace string, timeout time.Duration
 			return "", true, err
 		}
 
+		if ds.Status.ObservedGeneration == 0 {
+			return "", true, &ErrAppNotReady{
+				ID:    name,
+				Cause: "Observed generation is still 0. Check back status after some time",
+			}
+		}
+
 		pods, err := k.GetDaemonSetPods(ds)
 		if err != nil || pods == nil {
 			return "", true, &ErrAppNotReady{
@@ -1759,6 +1793,14 @@ func (k *k8sOps) DeletePods(pods []v1.Pod, force bool) error {
 	return nil
 }
 
+func (k *k8sOps) CreatePod(pod *v1.Pod) (*v1.Pod, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Core().Pods(pod.Namespace).Create(pod)
+}
+
 func (k *k8sOps) GetPods(namespace string) (*v1.PodList, error) {
 	return k.getPodsWithListOptions(namespace, meta_v1.ListOptions{})
 }
@@ -1898,6 +1940,18 @@ func (k *k8sOps) listPluginPodsWithOptions(opts meta_v1.ListOptions, plugin stri
 	return retList, nil
 }
 
+func (k *k8sOps) GetPodByName(podName string, namespace string) (*v1.Pod, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	pod, err := k.client.CoreV1().Pods(namespace).Get(podName, meta_v1.GetOptions{})
+	if err != nil {
+		return nil, ErrPodsNotFound
+	}
+
+	return pod, nil
+}
+
 func (k *k8sOps) GetPodByUID(uid types.UID, namespace string) (*v1.Pod, error) {
 	pods, err := k.GetPods(namespace)
 	if err != nil {
@@ -1932,6 +1986,10 @@ func (k *k8sOps) IsPodRunning(pod v1.Pod) bool {
 }
 
 func (k *k8sOps) IsPodReady(pod v1.Pod) bool {
+	if pod.Status.Phase != v1.PodRunning && pod.Status.Phase != v1.PodSucceeded {
+		return false
+	}
+
 	// If init containers are running, return false since the actual container would not have started yet
 	for _, c := range pod.Status.InitContainerStatuses {
 		if c.State.Running != nil {
@@ -2239,6 +2297,23 @@ func (k *k8sOps) CreateSnapshot(snap *snap_v1.VolumeSnapshot) (*snap_v1.VolumeSn
 	return &result, nil
 }
 
+func (k *k8sOps) UpdateSnapshot(snap *snap_v1.VolumeSnapshot) (*snap_v1.VolumeSnapshot, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	var result snap_v1.VolumeSnapshot
+	if err := k.snapClient.Put().
+		Name(snap.Metadata.Name).
+		Resource(snap_v1.VolumeSnapshotResourcePlural).
+		Namespace(snap.Metadata.Namespace).
+		Body(snap).
+		Do().Into(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (k *k8sOps) DeleteSnapshot(name string, namespace string) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
@@ -2250,7 +2325,7 @@ func (k *k8sOps) DeleteSnapshot(name string, namespace string) error {
 		Do().Error()
 }
 
-func (k *k8sOps) ValidateSnapshot(name string, namespace string) error {
+func (k *k8sOps) ValidateSnapshot(name string, namespace string, retry bool) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
@@ -2262,9 +2337,9 @@ func (k *k8sOps) ValidateSnapshot(name string, namespace string) error {
 
 		for _, condition := range status.Conditions {
 			if condition.Type == snap_v1.VolumeSnapshotConditionReady && condition.Status == v1.ConditionTrue {
-				return "", true, nil
+				return "", false, nil
 			} else if condition.Type == snap_v1.VolumeSnapshotConditionError && condition.Status == v1.ConditionTrue {
-				return "", true, &ErrSnapshotFailed{
+				return "", false, &ErrSnapshotFailed{
 					ID:    name,
 					Cause: fmt.Sprintf("Snapshot Status %v", status),
 				}
@@ -2277,8 +2352,57 @@ func (k *k8sOps) ValidateSnapshot(name string, namespace string) error {
 		}
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
+	if retry {
+		if _, err := task.DoRetryWithTimeout(t, validateSnapshotTimeout, validateSnapshotRetryInterval); err != nil {
+			return err
+		}
+	} else {
+		if _, _, err := t(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *k8sOps) ValidateSnapshotData(name string, retry bool) error {
+	if err := k.initK8sClient(); err != nil {
 		return err
+	}
+
+	t := func() (interface{}, bool, error) {
+		snapData, err := k.GetSnapshotData(name)
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, condition := range snapData.Status.Conditions {
+			if condition.Status == v1.ConditionTrue {
+				if condition.Type == snap_v1.VolumeSnapshotDataConditionReady {
+					return "", false, nil
+				} else if condition.Type == snap_v1.VolumeSnapshotDataConditionError {
+					return "", false, &ErrSnapshotDataFailed{
+						ID:    name,
+						Cause: fmt.Sprintf("SnapshotData Status %v", snapData.Status),
+					}
+				}
+			}
+		}
+
+		return "", true, &ErrSnapshotDataNotReady{
+			ID:    name,
+			Cause: fmt.Sprintf("SnapshotData Status %v", snapData.Status),
+		}
+	}
+
+	if retry {
+		if _, err := task.DoRetryWithTimeout(t, validateSnapshotTimeout, validateSnapshotRetryInterval); err != nil {
+			return err
+		}
+	} else {
+		if _, _, err := t(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -2301,6 +2425,22 @@ func (k *k8sOps) GetSnapshot(name string, namespace string) (*snap_v1.VolumeSnap
 	var result snap_v1.VolumeSnapshot
 	if err := k.snapClient.Get().
 		Name(name).
+		Resource(snap_v1.VolumeSnapshotResourcePlural).
+		Namespace(namespace).
+		Do().Into(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (k *k8sOps) ListSnapshots(namespace string) (*snap_v1.VolumeSnapshotList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	var result snap_v1.VolumeSnapshotList
+	if err := k.snapClient.Get().
 		Resource(snap_v1.VolumeSnapshotResourcePlural).
 		Namespace(namespace).
 		Do().Into(&result); err != nil {
@@ -2362,6 +2502,35 @@ func (k *k8sOps) DeleteSnapshotData(name string) error {
 }
 
 // Snapshot APIs - END
+
+// StorkRule APIs - BEGIN
+func (k *k8sOps) GetStorkRule(name, namespace string) (*v1alpha1.StorkRule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, nil
+	}
+
+	return k.storkClient.Stork().StorkRules(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) CreateStorkRule(rule *v1alpha1.StorkRule) (*v1alpha1.StorkRule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, nil
+	}
+
+	return k.storkClient.Stork().StorkRules(rule.GetNamespace()).Create(rule)
+}
+
+func (k *k8sOps) DeleteStorkRule(name, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	return k.storkClient.Stork().StorkRules(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+// StorkRule APIs - END
 
 // Secret APIs - BEGIN
 
@@ -2501,62 +2670,71 @@ func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 }
 
 // getK8sClient instantiates a k8s client
-func (k *k8sOps) getK8sClient() (*kubernetes.Clientset, *rest.RESTClient, error) {
+func (k *k8sOps) getK8sClient() (*kubernetes.Clientset, *rest.RESTClient, storkclientset.Interface, error) {
 	var k8sClient *kubernetes.Clientset
 	var restClient *rest.RESTClient
+	var storkClient storkclientset.Interface
 	var err error
 
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if len(kubeconfig) > 0 {
-		k8sClient, restClient, err = k.loadClientFromKubeconfig(kubeconfig)
+		k8sClient, restClient, storkClient, err = k.loadClientFromKubeconfig(kubeconfig)
 	} else {
-		k8sClient, restClient, err = k.loadClientFromServiceAccount()
+		k8sClient, restClient, storkClient, err = k.loadClientFromServiceAccount()
 	}
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if k8sClient == nil {
-		return nil, nil, ErrK8SApiAccountNotSet
+		return nil, nil, nil, ErrK8SApiAccountNotSet
 	}
 
-	return k8sClient, restClient, nil
+	return k8sClient, restClient, storkClient, nil
 }
 
 // loadClientFromServiceAccount loads a k8s client from a ServiceAccount specified in the pod running px
-func (k *k8sOps) loadClientFromServiceAccount() (*kubernetes.Clientset, *rest.RESTClient, error) {
+func (k *k8sOps) loadClientFromServiceAccount() (
+	*kubernetes.Clientset, *rest.RESTClient, storkclientset.Interface, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	k.config = config
 	return loadClientFor(config)
 }
 
-func (k *k8sOps) loadClientFromKubeconfig(kubeconfig string) (*kubernetes.Clientset, *rest.RESTClient, error) {
+func (k *k8sOps) loadClientFromKubeconfig(kubeconfig string) (
+	*kubernetes.Clientset, *rest.RESTClient, storkclientset.Interface, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	k.config = config
 	return loadClientFor(config)
 }
 
-func loadClientFor(config *rest.Config) (*kubernetes.Clientset, *rest.RESTClient, error) {
+func loadClientFor(config *rest.Config) (
+	*kubernetes.Clientset, *rest.RESTClient, storkclientset.Interface, error) {
 	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	snapClient, _, err := snap_client.NewClient(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return client, snapClient, nil
+	storkClient, err := storkclientset.NewForConfig(config)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return client, snapClient, storkClient, nil
 }
 
 func roundUpSize(volumeSizeBytes int64, allocationUnitBytes int64) int64 {
