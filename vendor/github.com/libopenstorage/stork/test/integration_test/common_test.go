@@ -118,7 +118,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 			break
 		}
 	}
-	require.Equal(t, true, found, "Scheduled node not found in driver node list")
+	require.Equal(t, true, found, "Scheduled node not found in driver node list. DriverNodes: %v ScheduledNode: %v", driverNodes, appNode)
 
 	scores := make(map[string]int)
 	idMap := make(map[string]*storkdriver.NodeInfo)
