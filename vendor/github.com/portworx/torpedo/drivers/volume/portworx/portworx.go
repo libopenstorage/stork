@@ -45,6 +45,7 @@ const (
 	validateReplicationUpdateTimeout = 10 * time.Minute
 	validateClusterStartTimeout      = 2 * time.Minute
 	validateNodeStartTimeout         = 2 * time.Minute
+	validatePXStartTimeout           = 2 * time.Minute
 	validateNodeStopTimeout          = 2 * time.Minute
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
@@ -324,7 +325,8 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		}
 	}
 
-	if vol.Source != nil && vol.Source.Parent != "" {
+	// if the volume is a clone or a snap, validate it's parent
+	if vol.IsSnapshot() || vol.IsClone() {
 		parent, err := d.getVolDriver().Inspect([]string{vol.Source.Parent})
 		if err != nil || len(parent) == 0 {
 			return &ErrFailedToInspectVolume{
@@ -606,7 +608,6 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 			}
 		}
 
-		fmt.Printf("RK Node Status => %v", pxNode.Status)
 		if pxNode.Status != api.Status_STATUS_OK || d.getStorageStatus(n) != "Up" {
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
@@ -621,6 +622,21 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, validateNodeStartTimeout, defaultRetryInterval); err != nil {
+		return err
+	}
+
+	// Check if PX pod is up
+	t = func() (interface{}, bool, error) {
+		if !d.schedOps.IsPXReadyOnNode(n) {
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, validatePXStartTimeout),
+			}
+		}
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
