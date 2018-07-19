@@ -17,7 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
+	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/client/clientset/versioned/scheme"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"
@@ -28,7 +28,7 @@ type StorkV1alpha1Interface interface {
 	StorkRulesGetter
 }
 
-// StorkV1alpha1Client is used to interact with features provided by the stork.com group.
+// StorkV1alpha1Client is used to interact with features provided by the stork group.
 type StorkV1alpha1Client struct {
 	restClient rest.Interface
 }

@@ -17,7 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
+	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	scheme "github.com/libopenstorage/stork/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
