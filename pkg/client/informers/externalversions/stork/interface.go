@@ -20,7 +20,7 @@ package stork
 
 import (
 	internalinterfaces "github.com/libopenstorage/stork/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/libopenstorage/stork/pkg/client/informers/externalversions/stork.com/v1alpha1"
+	v1alpha1 "github.com/libopenstorage/stork/pkg/client/informers/externalversions/stork/v1alpha1"
 )
 
 // Interface provides access to each of this group's versions.

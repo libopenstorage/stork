@@ -21,7 +21,7 @@ package externalversions
 import (
 	versioned "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/libopenstorage/stork/pkg/client/informers/externalversions/internalinterfaces"
-	stork_com "github.com/libopenstorage/stork/pkg/client/informers/externalversions/stork.com"
+	stork "github.com/libopenstorage/stork/pkg/client/informers/externalversions/stork"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -122,9 +122,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Stork() stork_com.Interface
+	Stork() stork.Interface
 }
 
-func (f *sharedInformerFactory) Stork() stork_com.Interface {
-	return stork_com.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Stork() stork.Interface {
+	return stork.New(f, f.namespace, f.tweakListOptions)
 }

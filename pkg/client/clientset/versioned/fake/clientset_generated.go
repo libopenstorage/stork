@@ -18,8 +18,8 @@ package fake
 
 import (
 	clientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
-	storkv1alpha1 "github.com/libopenstorage/stork/pkg/client/clientset/versioned/typed/stork.com/v1alpha1"
-	fakestorkv1alpha1 "github.com/libopenstorage/stork/pkg/client/clientset/versioned/typed/stork.com/v1alpha1/fake"
+	storkv1alpha1 "github.com/libopenstorage/stork/pkg/client/clientset/versioned/typed/stork/v1alpha1"
+	fakestorkv1alpha1 "github.com/libopenstorage/stork/pkg/client/clientset/versioned/typed/stork/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
