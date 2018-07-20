@@ -2339,7 +2339,7 @@ func (k *k8sOps) ValidateSnapshot(name string, namespace string, retry bool) err
 			if condition.Type == snap_v1.VolumeSnapshotConditionReady && condition.Status == v1.ConditionTrue {
 				return "", false, nil
 			} else if condition.Type == snap_v1.VolumeSnapshotConditionError && condition.Status == v1.ConditionTrue {
-				return "", false, &ErrSnapshotFailed{
+				return "", true, &ErrSnapshotFailed{
 					ID:    name,
 					Cause: fmt.Sprintf("Snapshot Status %v", status),
 				}
@@ -2381,7 +2381,7 @@ func (k *k8sOps) ValidateSnapshotData(name string, retry bool) error {
 				if condition.Type == snap_v1.VolumeSnapshotDataConditionReady {
 					return "", false, nil
 				} else if condition.Type == snap_v1.VolumeSnapshotDataConditionError {
-					return "", false, &ErrSnapshotDataFailed{
+					return "", true, &ErrSnapshotDataFailed{
 						ID:    name,
 						Cause: fmt.Sprintf("SnapshotData Status %v", snapData.Status),
 					}
