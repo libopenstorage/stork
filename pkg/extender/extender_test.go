@@ -648,11 +648,11 @@ func zoneTest(t *testing.T) {
 // n2 (both volumes local) >> n1 (one volume local and other in same zone) >> n3 (one volume local and other in same region) >> n4 and n5 (no locality)
 func regionTest(t *testing.T) {
 	nodes := &v1.NodeList{}
-	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "a", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "b", "us-east-1"))
-	nodes.Items = append(nodes.Items, *newNode("node4", "node4", "192.168.0.4", "rack2", "b", "us-east-2"))
-	nodes.Items = append(nodes.Items, *newNode("node5", "node5", "192.168.0.5", "rack1", "c", "us-east-2"))
+	nodes.Items = append(nodes.Items, *newNode("node11", "node1", "192.168.0.1", "rack1", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node21", "node2", "192.168.0.2", "rack2", "a", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node31", "node3", "192.168.0.3", "rack1", "b", "us-east-1"))
+	nodes.Items = append(nodes.Items, *newNode("node41", "node4", "192.168.0.4", "rack2", "b", "us-east-2"))
+	nodes.Items = append(nodes.Items, *newNode("node51", "node5", "192.168.0.5", "rack1", "c", "us-east-2"))
 
 	if err := driver.CreateCluster(5, nodes); err != nil {
 		t.Fatalf("Error creating cluster: %v", err)
