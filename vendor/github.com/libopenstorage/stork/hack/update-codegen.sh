@@ -26,5 +26,5 @@ hack/vendor/k8s.io/code-generator/generate-groups.sh \
 	all \
   github.com/libopenstorage/stork/pkg/client \
 	github.com/libopenstorage/stork/pkg/apis \
-  "stork.com:v1alpha1" \
+  "stork:v1alpha1" \
   --go-header-file ${SCRIPT_ROOT}/hack/custom-boilerplate.go.txt

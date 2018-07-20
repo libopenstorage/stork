@@ -13,7 +13,7 @@ import (
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snap_client "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
-	"github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
@@ -361,6 +361,8 @@ type SnapshotOps interface {
 	CreateSnapshotData(*snap_v1.VolumeSnapshotData) (*snap_v1.VolumeSnapshotData, error)
 	// DeleteSnapshotData deletes the given snapshot
 	DeleteSnapshotData(name string) error
+	// ValidateSnapshotData validates the given snapshot data object
+	ValidateSnapshotData(name string, retry bool) error
 }
 
 // StorkRuleOps is an interface to perform operations for k8s stork rule
@@ -2347,6 +2349,49 @@ func (k *k8sOps) ValidateSnapshot(name string, namespace string, retry bool) err
 		return "", true, &ErrSnapshotNotReady{
 			ID:    name,
 			Cause: fmt.Sprintf("Snapshot Status %v", status),
+		}
+	}
+
+	if retry {
+		if _, err := task.DoRetryWithTimeout(t, validateSnapshotTimeout, validateSnapshotRetryInterval); err != nil {
+			return err
+		}
+	} else {
+		if _, _, err := t(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *k8sOps) ValidateSnapshotData(name string, retry bool) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	t := func() (interface{}, bool, error) {
+		snapData, err := k.GetSnapshotData(name)
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, condition := range snapData.Status.Conditions {
+			if condition.Status == v1.ConditionTrue {
+				if condition.Type == snap_v1.VolumeSnapshotDataConditionReady {
+					return "", false, nil
+				} else if condition.Type == snap_v1.VolumeSnapshotDataConditionError {
+					return "", false, &ErrSnapshotDataFailed{
+						ID:    name,
+						Cause: fmt.Sprintf("SnapshotData Status %v", snapData.Status),
+					}
+				}
+			}
+		}
+
+		return "", true, &ErrSnapshotDataNotReady{
+			ID:    name,
+			Cause: fmt.Sprintf("SnapshotData Status %v", snapData.Status),
 		}
 	}
 

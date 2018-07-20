@@ -1,5 +1,5 @@
 hash: 0389066c93e7b93745c4189bbf850e6a865ac65c66cf6b453e660f2959c08fb6
-updated: 2018-07-17T17:20:04.912031595-07:00
+updated: 2018-07-20T00:38:15.393838513-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 3c58d8115a78a6879e5df75ae900846768d36895
@@ -207,13 +207,13 @@ imports:
   - pkg/units
   - volume
 - name: github.com/libopenstorage/stork
-  version: 9f16cc0f713dd456d7af585a5d0fa712a6875b02
+  version: c675875fc70ca8271958d60c76fc64fb4f2028fb
   subpackages:
-  - pkg/apis/stork.com
-  - pkg/apis/stork.com/v1alpha1
+  - pkg/apis/stork
+  - pkg/apis/stork/v1alpha1
   - pkg/client/clientset/versioned
   - pkg/client/clientset/versioned/scheme
-  - pkg/client/clientset/versioned/typed/stork.com/v1alpha1
+  - pkg/client/clientset/versioned/typed/stork/v1alpha1
 - name: github.com/libopenstorage/systemutils
   version: dc0e35340804a0ada0792a3c9ce51d33ddd53cc8
 - name: github.com/mailru/easyjson
@@ -227,7 +227,7 @@ imports:
 - name: github.com/mattn/go-isatty
   version: 6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c
 - name: github.com/Microsoft/go-winio
-  version: 67921128fb397dd80339870d2193d6b1e6856fd4
+  version: a6d595ae73cf27a1b8fc32930668708f45ce1c85
 - name: github.com/miekg/dns
   version: e7c3f513a170118cc2f407db58de97aa20c07c85
 - name: github.com/modern-go/concurrent
@@ -281,7 +281,7 @@ imports:
 - name: github.com/portworx/kvdb
   version: 6e8a41f8b9571b8eb05c7aafba1cce3e3048cf99
 - name: github.com/portworx/sched-ops
-  version: 86c0eef1beab610cc304f8444836824cdb21de79
+  version: 2b9e62788f4fe68601425d0b132c73318315db99
   subpackages:
   - k8s
   - task

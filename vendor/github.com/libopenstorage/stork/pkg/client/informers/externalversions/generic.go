@@ -20,7 +20,7 @@ package externalversions
 
 import (
 	"fmt"
-	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
+	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -51,7 +51,7 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=stork.com, Version=v1alpha1
+	// Group=stork.libopenstorage.com, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("storkrules"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().StorkRules().Informer()}, nil
 

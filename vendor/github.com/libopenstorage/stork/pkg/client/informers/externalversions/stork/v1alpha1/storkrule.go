@@ -19,10 +19,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	stork_com_v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork.com/v1alpha1"
+	stork_v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	versioned "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/libopenstorage/stork/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/libopenstorage/stork/pkg/client/listers/stork.com/v1alpha1"
+	v1alpha1 "github.com/libopenstorage/stork/pkg/client/listers/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -69,7 +69,7 @@ func NewFilteredStorkRuleInformer(client versioned.Interface, namespace string, 
 				return client.StorkV1alpha1().StorkRules(namespace).Watch(options)
 			},
 		},
-		&stork_com_v1alpha1.StorkRule{},
+		&stork_v1alpha1.StorkRule{},
 		resyncPeriod,
 		indexers,
 	)
@@ -80,7 +80,7 @@ func (f *storkRuleInformer) defaultInformer(client versioned.Interface, resyncPe
 }
 
 func (f *storkRuleInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&stork_com_v1alpha1.StorkRule{}, f.defaultInformer)
+	return f.factory.InformerFor(&stork_v1alpha1.StorkRule{}, f.defaultInformer)
 }
 
 func (f *storkRuleInformer) Lister() v1alpha1.StorkRuleLister {

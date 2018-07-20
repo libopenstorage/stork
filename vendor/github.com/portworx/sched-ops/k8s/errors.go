@@ -80,6 +80,18 @@ func (e *ErrSnapshotNotReady) Error() string {
 	return fmt.Sprintf("Snapshot %v is not ready yet. Cause: %v", e.ID, e.Cause)
 }
 
+// ErrSnapshotDataNotReady error type for when a snapshot data is not yet ready
+type ErrSnapshotDataNotReady struct {
+	// ID is the identifier of the snapshot data
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrSnapshotDataNotReady) Error() string {
+	return fmt.Sprintf("SnapshotData %v is not ready yet. Cause: %v", e.ID, e.Cause)
+}
+
 // ErrSnapshotFailed error type for when a snapshot has failed
 type ErrSnapshotFailed struct {
 	// ID is the identifier of the snapshot
@@ -90,4 +102,16 @@ type ErrSnapshotFailed struct {
 
 func (e *ErrSnapshotFailed) Error() string {
 	return fmt.Sprintf("Snapshot %v has failed. Cause: %v", e.ID, e.Cause)
+}
+
+// ErrSnapshotDataFailed error type for when a snapshot data has failed
+type ErrSnapshotDataFailed struct {
+	// ID is the identifier of the snapshot data
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrSnapshotDataFailed) Error() string {
+	return fmt.Sprintf("SnapshotData %v has failed. Cause: %v", e.ID, e.Cause)
 }

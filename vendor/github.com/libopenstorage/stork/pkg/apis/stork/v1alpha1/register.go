@@ -5,7 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	stork "github.com/libopenstorage/stork/pkg/apis/stork.com"
+	stork "github.com/libopenstorage/stork/pkg/apis/stork"
 )
 
 // SchemeGroupVersion is group version used to register these objects

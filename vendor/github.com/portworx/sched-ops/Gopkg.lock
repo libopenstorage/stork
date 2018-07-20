@@ -168,13 +168,13 @@
   branch = "master"
   name = "github.com/libopenstorage/stork"
   packages = [
-    "pkg/apis/stork.com",
-    "pkg/apis/stork.com/v1alpha1",
+    "pkg/apis/stork",
+    "pkg/apis/stork/v1alpha1",
     "pkg/client/clientset/versioned",
     "pkg/client/clientset/versioned/scheme",
-    "pkg/client/clientset/versioned/typed/stork.com/v1alpha1"
+    "pkg/client/clientset/versioned/typed/stork/v1alpha1"
   ]
-  revision = "e20ae5a6631a5e3b9629c8d72ff0782bae2d2cbb"
+  revision = "c675875fc70ca8271958d60c76fc64fb4f2028fb"
 
 [[projects]]
   branch = "master"
@@ -435,6 +435,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "91aa01b5635222431c92ded5d207267ed874575c765bb6c82bf81b0878a8aeec"
+  inputs-digest = "902c863f3abb435701fd4435b52cd0e95e621071dd9bc918bdaa9707e7e4d153"
   solver-name = "gps-cdcl"
   solver-version = 1
