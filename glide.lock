@@ -1,5 +1,5 @@
-hash: 0389066c93e7b93745c4189bbf850e6a865ac65c66cf6b453e660f2959c08fb6
-updated: 2018-07-20T00:38:15.393838513-07:00
+hash: 9704572e1301a8769395b7068dbacdc408843aa7e15862eca090667dd205585b
+updated: 2018-07-20T14:48:50.788347817-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 3c58d8115a78a6879e5df75ae900846768d36895
@@ -281,7 +281,7 @@ imports:
 - name: github.com/portworx/kvdb
   version: 6e8a41f8b9571b8eb05c7aafba1cce3e3048cf99
 - name: github.com/portworx/sched-ops
-  version: 2b9e62788f4fe68601425d0b132c73318315db99
+  version: 6d293bf6918c621e1fbd51e608343bf6c5a9c017
   subpackages:
   - k8s
   - task
@@ -294,7 +294,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
 - name: github.com/Sirupsen/logrus
-  version: 92052687f8ec598ff0da626d2909478cfd1e3a3c
+  version: a1f2e46d92096f9157fe71165f6f135d9f0b9c18
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: go.pedge.io/dlog

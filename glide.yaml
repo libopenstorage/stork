@@ -21,6 +21,8 @@ import:
   version: master
   subpackages:
   - snapshot/pkg/apis/crd/v1
+- package: github.com/docker/distribution
+  version: 749f6afb4572201e3c37325d0ffedb6f32be8950
 - package: github.com/libopenstorage/openstorage
   version: ^2.0.0
   subpackages:
