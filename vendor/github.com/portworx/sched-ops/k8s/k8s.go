@@ -24,7 +24,6 @@ import (
 	storage_api "k8s.io/api/storage/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -409,8 +408,10 @@ type ConfigMapOps interface {
 }
 
 type CRDOps interface {
-	// CreateCRD creates the given custom resources
-	CreateCRD(resources []CustomResource) error
+	// CreateCRD creates the given custom resource
+	CreateCRD(resource CustomResource) error
+	// ValidateCRD checks if the given CRD is registered
+	ValidateCRD(resource CustomResource) error
 }
 
 // CustomResource is for creating a Kubernetes TPR/CRD
@@ -2696,24 +2697,7 @@ func (k *k8sOps) ListEvents(namespace string, opts meta_v1.ListOptions) (*v1.Eve
 	return k.client.CoreV1().Events(namespace).List(opts)
 }
 
-func (k *k8sOps) CreateCRD(resources []CustomResource) error {
-	for _, resource := range resources {
-		err := k.createCRD(resource)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, resource := range resources {
-		if err := k.waitForCRDInit(resource); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (k *k8sOps) createCRD(resource CustomResource) error {
+func (k *k8sOps) CreateCRD(resource CustomResource) error {
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: meta_v1.ObjectMeta{
@@ -2733,14 +2717,13 @@ func (k *k8sOps) createCRD(resource CustomResource) error {
 
 	_, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
 	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("failed to create %s CRD: %+v", resource.Name, err)
-		}
+		return err
 	}
+
 	return nil
 }
 
-func (k *k8sOps) waitForCRDInit(resource CustomResource) error {
+func (k *k8sOps) ValidateCRD(resource CustomResource) error {
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
 	return wait.Poll(crdCreateRetryInterval, crdCreateRetryInterval, func() (bool, error) {
 		crd, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, meta_v1.GetOptions{})
