@@ -159,7 +159,7 @@ spec:
         # automatically update schedulerName
         #- --app-initializer=true
         imagePullPolicy: Always
-        image: openstorage/stork:1.1.2
+        image: openstorage/stork:1.1.3
         resources:
           requests:
             cpu: '0.1'
