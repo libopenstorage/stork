@@ -47,7 +47,7 @@ const (
 	nodeUpdateTimeout             = 1 * time.Minute
 	nodeUpdateRetryInterval       = 2 * time.Second
 	deploymentReadyTimeout        = 10 * time.Minute
-	validatePodReadyTimeout       = 5 * time.Minute
+	validatePodReadyTimeout       = 10 * time.Minute
 	validatePodRetryInterval      = 10 * time.Second
 	validateStatefulSetPVCTimeout = 15 * time.Minute
 	validatePVCTimeout            = 5 * time.Minute
@@ -1086,9 +1086,9 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 		}
 
 		requiredReplicas := *dep.Spec.Replicas
+		shared := false
 
 		if requiredReplicas != 1 {
-			shared := false
 			foundPVC := false
 			for _, vol := range dep.Spec.Template.Spec.Volumes {
 				if vol.PersistentVolumeClaim != nil {
@@ -1127,7 +1127,6 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 				Cause: "Deployment has 0 pods",
 			}
 		}
-
 		podsOverviewString := k.generatePodsOverviewString(pods)
 		if requiredReplicas > dep.Status.AvailableReplicas {
 			return "", true, &ErrAppNotReady{
@@ -1142,6 +1141,14 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 				ID: dep.Name,
 				Cause: fmt.Sprintf("Expected replicas: %v Ready replicas: %v Current pods overview:\n%s",
 					requiredReplicas, dep.Status.ReadyReplicas, podsOverviewString),
+			}
+		}
+
+		if requiredReplicas != dep.Status.UpdatedReplicas && shared {
+			return "", true, &ErrAppNotReady{
+				ID: dep.Name,
+				Cause: fmt.Sprintf("Expected replicas: %v Updated replicas: %v Current pods overview:\n%s",
+					requiredReplicas, dep.Status.UpdatedReplicas, podsOverviewString),
 			}
 		}
 
@@ -2106,7 +2113,7 @@ func (k *k8sOps) ValidatePod(pod *v1.Pod) error {
 
 		ready := k.IsPodReady(*currPod)
 		if !ready {
-			return "", true, fmt.Errorf("Pod %s, ID: %s  is not ready. Status %v", pod.Name, pod.UID, pod.Status.Phase)
+			return "", true, fmt.Errorf("Pod %s, ID: %s  is not ready. Status %v", currPod.Name, currPod.UID, currPod.Status.Phase)
 		}
 
 		return "", false, nil
