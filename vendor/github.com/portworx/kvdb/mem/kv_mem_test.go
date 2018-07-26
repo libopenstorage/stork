@@ -12,10 +12,10 @@ import (
 func TestAll(t *testing.T) {
 	options := make(map[string]string)
 	// RunBasic with values as bytes
-	test.Run(New, t, Start, Stop)
+	test.RunBasic(New, t, Start, Stop, options)
 	options[KvUseInterface] = ""
 	//  RunBasic with values as interface
-	test.Run(New, t, Start, Stop)
+	test.RunBasic(New, t, Start, Stop, options)
 	// Run mem specific tests
 	kv, err := New("pwx/test", nil, options, nil)
 	if err != nil {
@@ -82,15 +82,9 @@ func testEnumerateWithSelect(kv kvdb.Kvdb, t *testing.T) {
 	b := &EWS{2, "def"}
 	c := &EWS{3, "abcdef"}
 	prefix := "ews"
-	if _, err := kv.Put(prefix+"/"+"key1", a, 0); err != nil {
-		assert.Fail(t, err.Error())
-	}
-	if _, err := kv.Put(prefix+"/"+"key2", b, 0); err != nil {
-		assert.Fail(t, err.Error())
-	}
-	if _, err := kv.Put(prefix+"/"+"key3", c, 0); err != nil {
-		assert.Fail(t, err.Error())
-	}
+	kv.Put(prefix+"/"+"key1", a, 0)
+	kv.Put(prefix+"/"+"key2", b, 0)
+	kv.Put(prefix+"/"+"key3", c, 0)
 	enumerateSelect := func(val interface{}) bool {
 		v, ok := val.(*EWS)
 		if !ok {

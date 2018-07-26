@@ -361,11 +361,8 @@ func (et *etcdKV) Delete(key string) (*kvdb.KVPair, error) {
 	)
 	cancel()
 	if err == nil {
-		if result.Deleted == 0 {
-			return nil, kvdb.ErrNotFound
-		} else if result.Deleted > 1 {
-			return nil, fmt.Errorf("Incorrect number of keys: %v deleted, result: %v",
-				key, result)
+		if result.Deleted != 1 {
+			return nil, fmt.Errorf("Incorrect number of keys: %v deleted", key)
 		}
 		kvp.Action = kvdb.KVDelete
 		return kvp, nil
@@ -380,9 +377,6 @@ func (et *etcdKV) Delete(key string) (*kvdb.KVPair, error) {
 
 func (et *etcdKV) DeleteTree(prefix string) error {
 	prefix = et.domain + prefix
-	if !strings.HasSuffix(prefix, kvdb.DefaultSeparator) {
-		prefix += kvdb.DefaultSeparator
-	}
 
 	ctx, cancel := et.Context()
 	_, err := et.kvClient.Delete(
@@ -529,9 +523,9 @@ func (et *etcdKV) CompareAndSet(
 			}
 			if (flags & kvdb.KVModifiedIndex) != 0 {
 				return nil, kvdb.ErrModified
+			} else {
+				return nil, kvdb.ErrValueMismatch
 			}
-
-			return nil, kvdb.ErrValueMismatch
 		}
 		break
 	}
@@ -593,9 +587,9 @@ func (et *etcdKV) CompareAndDelete(
 			}
 			if (flags & kvdb.KVModifiedIndex) != 0 {
 				return nil, kvdb.ErrModified
+			} else {
+				return nil, kvdb.ErrValueMismatch
 			}
-
-			return nil, kvdb.ErrValueMismatch
 		}
 		break
 	}
@@ -1410,9 +1404,9 @@ func isRetryNeeded(err error, fn string, key string, retryCount int) (bool, erro
 			logrus.Errorf("[%v: %v] kvdb grpc timeout: %v, retry count %v \n", fn, key, err, retryCount)
 			time.Sleep(ec.DefaultIntervalBetweenRetries)
 			return true, err
+		} else {
+			// For all other errors return immediately
+			return false, err
 		}
-
-		// For all other errors return immediately
-		return false, err
 	}
 }
