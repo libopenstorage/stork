@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +23,7 @@ import (
 	storage_api "k8s.io/api/storage/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -47,6 +47,8 @@ const (
 	nodeUpdateTimeout             = 1 * time.Minute
 	nodeUpdateRetryInterval       = 2 * time.Second
 	deploymentReadyTimeout        = 10 * time.Minute
+	validatePodReadyTimeout       = 5 * time.Minute
+	validatePodRetryInterval      = 10 * time.Second
 	validateStatefulSetPVCTimeout = 15 * time.Minute
 	validatePVCTimeout            = 5 * time.Minute
 	validatePVCRetryInterval      = 10 * time.Second
@@ -82,6 +84,8 @@ type Ops interface {
 	ConfigMapOps
 	EventOps
 	CRDOps
+	ClusterPairOps
+	MigrationOps
 }
 
 // EventOps is an interface to put and get k8s events
@@ -283,6 +287,8 @@ type PodOps interface {
 	GetPodByName(string, string) (*v1.Pod, error)
 	// GetPodByUID returns pod with the given UID, or error if nothing found
 	GetPodByUID(types.UID, string) (*v1.Pod, error)
+	// DeletePod deletes the given pod
+	DeletePod(string, string, bool) error
 	// DeletePods deletes the given pods
 	DeletePods([]v1.Pod, bool) error
 	// IsPodRunning checks if all containers in a pod are in running state
@@ -295,6 +301,8 @@ type PodOps interface {
 	WaitForPodDeletion(uid types.UID, namespace string, timeout time.Duration) error
 	// RunCommandInPod runs given command in the given pod
 	RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error)
+	// ValidatePod validates the given pod if it's ready
+	ValidatePod(pod *v1.Pod) error
 }
 
 // StorageClassOps is an interface to perform k8s storage class operations
@@ -407,11 +415,34 @@ type ConfigMapOps interface {
 	UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 }
 
+// CRDOps is an interface to perfrom k8s Customer Resource operations
 type CRDOps interface {
 	// CreateCRD creates the given custom resource
 	CreateCRD(resource CustomResource) error
 	// ValidateCRD checks if the given CRD is registered
 	ValidateCRD(resource CustomResource) error
+}
+
+// ClusterPairOps is an interface to perfrom k8s ClusterPair operations
+type ClusterPairOps interface {
+	// CreateClusterPair creates the ClusterPair
+	CreateClusterPair(*v1alpha1.ClusterPair) error
+	// GetClusterPair gets the ClusterPair
+	GetClusterPair(string) (*v1alpha1.ClusterPair, error)
+	// DeleteClusterPair deletes the ClusterPair
+	DeleteClusterPair(string) error
+}
+
+// MigrationsOps is an interface to perfrom k8s Migration operations
+type MigrationOps interface {
+	// CreateMigration creates the Migration
+	CreateMigration(*v1alpha1.Migration) error
+	// GetMigration gets the Migration
+	GetMigration(string, string) (*v1alpha1.Migration, error)
+	// UpdateMigration updates the Migration
+	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
+	// DeleteMigration deletes the Migration
+	DeleteMigration(string, string) error
 }
 
 // CustomResource is for creating a Kubernetes TPR/CRD
@@ -988,7 +1019,7 @@ func (k *k8sOps) ValidateDeletedService(svcName string, svcNS string) error {
 
 	_, err := k.client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
 	if err != nil {
-		if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -1145,8 +1176,8 @@ func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment) e
 	t := func() (interface{}, bool, error) {
 		dep, err := k.GetDeployment(deployment.Name, deployment.Namespace)
 		if err != nil {
-			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
-				return "", true, nil
+			if errors.IsNotFound(err) {
+				return "", false, nil
 			}
 			return "", true, err
 		}
@@ -1567,7 +1598,7 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet
 	t := func() (interface{}, bool, error) {
 		sset, err := k.GetStatefulSet(statefulset.Name, statefulset.Namespace)
 		if err != nil {
-			if matched, _ := regexp.MatchString(".+ not found", err.Error()); matched {
+			if errors.IsNotFound(err) {
 				return "", false, nil
 			}
 
@@ -1806,6 +1837,16 @@ func (k *k8sOps) DeleteServiceAccount(accountName, namespace string) error {
 // Pod APIs - BEGIN
 
 func (k *k8sOps) DeletePods(pods []v1.Pod, force bool) error {
+	for _, pod := range pods {
+		if err := k.DeletePod(pod.Name, pod.Namespace, force); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *k8sOps) DeletePod(name string, ns string, force bool) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
@@ -1816,13 +1857,7 @@ func (k *k8sOps) DeletePods(pods []v1.Pod, force bool) error {
 		deleteOptions.GracePeriodSeconds = &gracePeriodSec
 	}
 
-	for _, pod := range pods {
-		if err := k.client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, &deleteOptions); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return k.client.CoreV1().Pods(ns).Delete(name, &deleteOptions)
 }
 
 func (k *k8sOps) CreatePod(pod *v1.Pod) (*v1.Pod, error) {
@@ -2060,6 +2095,26 @@ func (k *k8sOps) IsPodBeingManaged(pod v1.Pod) bool {
 	}
 
 	return false
+}
+
+func (k *k8sOps) ValidatePod(pod *v1.Pod) error {
+	t := func() (interface{}, bool, error) {
+		currPod, err := k.GetPodByUID(pod.UID, pod.Namespace)
+		if err != nil {
+			return "", true, fmt.Errorf("Could not get Pod [%s] %s", pod.Namespace, pod.Name)
+		}
+
+		ready := k.IsPodReady(*currPod)
+		if !ready {
+			return "", true, fmt.Errorf("Pod %s, ID: %s  is not ready. Status %v", pod.Name, pod.UID, pod.Status.Phase)
+		}
+
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, validatePodReadyTimeout, validatePodRetryInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Pod APIs - END
@@ -2681,6 +2736,75 @@ func (k *k8sOps) UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 
 // ConfigMap APIs - END
 
+// ClusterPair APIs - BEGIN
+func (k *k8sOps) GetClusterPair(name string) (*v1alpha1.ClusterPair, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, nil
+	}
+
+	return k.storkClient.Stork().ClusterPairs().Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	_, err := k.storkClient.Stork().ClusterPairs().Create(pair)
+	return err
+}
+
+func (k *k8sOps) DeleteClusterPair(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	return k.storkClient.Stork().ClusterPairs().Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+// ClusterPair APIs - END
+
+// Migration APIs - BEGIN
+func (k *k8sOps) GetMigration(name string, namespace string) (*v1alpha1.Migration, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, nil
+	}
+
+	return k.storkClient.Stork().Migrations(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) CreateMigration(migration *v1alpha1.Migration) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	_, err := k.storkClient.Stork().Migrations(migration.Namespace).Create(migration)
+	return err
+}
+
+func (k *k8sOps) DeleteMigration(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	return k.storkClient.Stork().Migrations(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) UpdateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migration, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, nil
+	}
+
+	return k.storkClient.Stork().Migrations(migration.Namespace).Update(migration)
+}
+
+// Migration APIs - END
+
+// Event APIs - BEGIN
 // CreateEvent puts an event into k8s etcd
 func (k *k8sOps) CreateEvent(event *v1.Event) (*v1.Event, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -2697,6 +2821,9 @@ func (k *k8sOps) ListEvents(namespace string, opts meta_v1.ListOptions) (*v1.Eve
 	return k.client.CoreV1().Events(namespace).List(opts)
 }
 
+// Event APIs - END
+
+// CRD APIs - BEGIN
 func (k *k8sOps) CreateCRD(resource CustomResource) error {
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
@@ -2745,6 +2872,8 @@ func (k *k8sOps) ValidateCRD(resource CustomResource) error {
 		return false, nil
 	})
 }
+
+// CRD APIs - END
 
 func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 	return k.client.AppsV1beta2()

@@ -71,6 +71,8 @@ const (
 	OptQuiesceID = "QuiesceID"
 	// OptCredUUID is the UUID of the credential
 	OptCredUUID = "CredUUID"
+	// OptCredName indicates unique name of credential
+	OptCredName = "CredName"
 	// OptCredType  indicates type of credential
 	OptCredType = "CredType"
 	// OptCredEncrKey is the key used to encrypt data
@@ -138,6 +140,9 @@ const (
 type Node struct {
 	// Id of the node.
 	Id string
+	// SchedulerNodeName is name of the node in scheduler context. It can be
+	// empty if unable to get the name from the scheduler.
+	SchedulerNodeName string
 	// Cpu usage of the node.
 	Cpu float64 // percentage.
 	// Total Memory of the node
@@ -250,6 +255,19 @@ type StatPoint struct {
 type CloudBackupCreateRequest struct {
 	// VolumeID of the volume for which cloudbackup is requested
 	VolumeID string
+	// CredentialUUID is cloud credential to be used for backup
+	CredentialUUID string
+	// Full indicates if full backup is desired even though incremental is possible
+	Full bool
+}
+
+type CloudBackupGroupCreateRequest struct {
+	// GroupID indicates backup request for a volumegroup with this group id
+	GroupID string
+	// Labels indicates backup request for a volume group with these labels
+	// If both GroupID and Labels are specified, volumes matching both
+	// criteria are backed up to cloud
+	Labels map[string]string
 	// CredentialUUID is cloud credential to be used for backup
 	CredentialUUID string
 	// Full indicates if full backup is desired even though incremental is possible
@@ -429,10 +447,30 @@ type CloudBackupScheduleInfo struct {
 	// MaxBackups are the maximum number of backups retained
 	// in cloud.Older backups are deleted
 	MaxBackups uint
+	// GroupID indicates the group of volumes for this cloudbackup schedule
+	GroupID string
+	// Labels indicates a volume group for this cloudsnap schedule
+	Labels map[string]string
 }
 
 type CloudBackupSchedCreateRequest struct {
 	CloudBackupScheduleInfo
+}
+
+type CloudBackupGroupSchedCreateRequest struct {
+	// GroupID indicates the group of volumes for which cloudbackup schedule is
+	// being created
+	GroupID string
+	// Labels indicates a volume group for which this group cloudsnap schedule is
+	// being created. If this is provided GroupId is not needed and vice-versa.
+	Labels map[string]string
+	// CredentialUUID is cloud credential to be used with this schedule
+	CredentialUUID string
+	// Schedule is the frequency of backup
+	Schedule string
+	// MaxBackups are the maximum number of backups retained
+	// in cloud.Older backups are deleted
+	MaxBackups uint
 }
 
 type CloudBackupSchedCreateResponse struct {
@@ -673,16 +711,17 @@ func (v Volume) DisplayId() string {
 // ToStorageNode converts a Node structure to an exported gRPC StorageNode struct
 func (s *Node) ToStorageNode() *StorageNode {
 	node := &StorageNode{
-		Id:       s.Id,
-		Cpu:      s.Cpu,
-		MemTotal: s.MemTotal,
-		MemUsed:  s.MemUsed,
-		MemFree:  s.MemFree,
-		AvgLoad:  int64(s.Avgload),
-		Status:   s.Status,
-		MgmtIp:   s.MgmtIp,
-		DataIp:   s.DataIp,
-		Hostname: s.Hostname,
+		Id:                s.Id,
+		SchedulerNodeName: s.SchedulerNodeName,
+		Cpu:               s.Cpu,
+		MemTotal:          s.MemTotal,
+		MemUsed:           s.MemUsed,
+		MemFree:           s.MemFree,
+		AvgLoad:           int64(s.Avgload),
+		Status:            s.Status,
+		MgmtIp:            s.MgmtIp,
+		DataIp:            s.DataIp,
+		Hostname:          s.Hostname,
 	}
 
 	node.Disks = make(map[string]*StorageResource)

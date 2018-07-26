@@ -6,8 +6,8 @@ import (
 	"net/textproto"
 	"strings"
 
-	"context"
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -25,7 +25,7 @@ type ServeMux struct {
 	marshalers             marshalerRegistry
 	incomingHeaderMatcher  HeaderMatcherFunc
 	outgoingHeaderMatcher  HeaderMatcherFunc
-	metadataAnnotators     []func(context.Context, *http.Request) metadata.MD
+	metadataAnnotator      func(context.Context, *http.Request) metadata.MD
 	protoErrorHandler      ProtoErrorHandlerFunc
 }
 
@@ -87,7 +87,7 @@ func WithOutgoingHeaderMatcher(fn HeaderMatcherFunc) ServeMuxOption {
 // is reading token from cookie and adding it in gRPC context.
 func WithMetadata(annotator func(context.Context, *http.Request) metadata.MD) ServeMuxOption {
 	return func(serveMux *ServeMux) {
-		serveMux.metadataAnnotators = append(serveMux.metadataAnnotators, annotator)
+		serveMux.metadataAnnotator = annotator
 	}
 }
 
@@ -146,7 +146,8 @@ func (s *ServeMux) Handle(meth string, pat Pattern, h HandlerFunc) {
 
 // ServeHTTP dispatches the request to the first handler whose pattern matches to r.Method and r.Path.
 func (s *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	// TODO: use r.Context for go 1.7+
+	ctx := context.Background()
 
 	path := r.URL.Path
 	if !strings.HasPrefix(path, "/") {
