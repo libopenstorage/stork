@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta2
+apiVersion: v1
 kind: Pod 
 metadata:
  name: load-driver
