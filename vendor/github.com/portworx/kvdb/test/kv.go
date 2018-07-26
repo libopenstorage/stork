@@ -46,10 +46,7 @@ func fatalErrorCb() kvdb.FatalErrorCB {
 	}
 }
 
-// StartKvdb is a func literal.
 type StartKvdb func() error
-
-// StopKvdb is a func literal.
 type StopKvdb func() error
 
 // Run runs the test suite.
@@ -87,42 +84,33 @@ func Run(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop S
 	assert.NoError(t, err, "Unable to stop kvdb")
 }
 
-// RunLock runs the lock test suite.
-func RunLock(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb) {
+// RunBasic runs the basic test suite.
+func RunBasic(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb, kvdbOptions map[string]string) {
 	err := start()
 	time.Sleep(3 * time.Second)
 	assert.NoError(t, err, "Unable to start kvdb")
-	kv, err := datastoreInit("pwx/test", nil, nil, fatalErrorCb())
+	kv, err := datastoreInit("pwx/test", nil, kvdbOptions, fatalErrorCb())
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-
-	lockBasic(kv, t)
+	get(kv, t)
+	getInterface(kv, t)
+	create(kv, t)
+	createWithTTL(kv, t)
+	update(kv, t)
+	deleteKey(kv, t)
+	deleteTree(kv, t)
+	enumerate(kv, t)
+	keys(kv, t)
+	concurrentEnum(kv, t)
 	lock(kv, t)
 	lockBetweenRestarts(kv, t, start, stop)
-
-	err = stop()
-	assert.NoError(t, err, "Unable to stop kvdb")
-}
-
-// RunWatch runs the watch test suite.
-func RunWatch(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb) {
-	err := start()
-	time.Sleep(3 * time.Second)
-	assert.NoError(t, err, "Unable to start kvdb")
-	kv, err := datastoreInit("pwx/test", nil, nil, fatalErrorCb())
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-
-	// watchKey(kv, t)
-	// watchTree(kv, t)
-	// watchWithIndex(kv, t)
-	collect(kv, t)
-	// serialization(kv, t)
-	// concurrentEnum(kv, t)
-
-	err = stop()
+	snapshot(kv, t)
+	watchTree(kv, t)
+	watchKey(kv, t)
+	watchWithIndex(kv, t)
+	cas(kv, t)
+	serialization(kv, t)
 	assert.NoError(t, err, "Unable to stop kvdb")
 }
 
@@ -317,26 +305,17 @@ func deleteTree(kv kvdb.Kvdb, t *testing.T) {
 		assert.NoError(t, err, "Unexpected error on Put")
 	}
 
-	keyWithSamePrefix := prefix + "_some"
-	_, err := kv.Put(keyWithSamePrefix, []byte("val"), 0)
-	assert.NoError(t, err, "Unexpected error on Put")
-
-	_, err = kv.Get(keyWithSamePrefix)
-	assert.NoError(t, err, "Unexpected error on Get")
-
 	for key := range keys {
 		_, err := kv.Get(key)
 		assert.NoError(t, err, "Unexpected error on Get")
 	}
-	err = kv.DeleteTree(prefix)
+	err := kv.DeleteTree(prefix)
 	assert.NoError(t, err, "Unexpected error on DeleteTree")
 
 	for key := range keys {
 		_, err := kv.Get(key)
 		assert.Error(t, err, "Get should fail on all keys after DeleteTree")
 	}
-	_, err = kv.Get(keyWithSamePrefix)
-	assert.NoError(t, err, "Unexpected error on Get")
 }
 
 func enumerate(kv kvdb.Kvdb, t *testing.T) {
@@ -644,7 +623,6 @@ func lock(kv kvdb.Kvdb, t *testing.T) {
 	lockMethods := getLockMethods(kv)
 
 	for _, lockMethod := range lockMethods {
-		kv.SetLockTimeout(time.Duration(0))
 		fmt.Println("lock")
 
 		key := "locktest"
@@ -692,9 +670,6 @@ func lock(kv kvdb.Kvdb, t *testing.T) {
 		kvPair, err = lockMethod(key)
 		assert.NoError(t, err, "Failed to lock")
 		assert.Equal(t, done, 1, "Locked before unlock")
-		if done != 1 {
-			logrus.Fatalf("Exiting because done != 1")
-		}
 		fmt.Println("repeat lock unlock twice")
 		err = kv.Unlock(kvPair)
 		assert.NoError(t, err, "Unexpected error from Unlock")
@@ -741,6 +716,7 @@ func lock(kv kvdb.Kvdb, t *testing.T) {
 		assert.True(t, lockTimedout, "lock timeout not called")
 		err = kv.Unlock(kvPair2)
 		kv.SetLockTimeout(5 * time.Second)
+
 	}
 }
 
@@ -814,9 +790,6 @@ func lockBasic(kv kvdb.Kvdb, t *testing.T) {
 
 	tryStart := time.Now()
 	_, err = kv.LockWithTimeout(key, "test", tryDuration, holdDuration)
-	if err == nil {
-		logrus.Fatalf("Exiting because expected error %v %v", tryDuration, holdDuration)
-	}
 	duration := time.Since(tryStart)
 	assert.True(t, duration < tryDuration+time.Second, "try duration")
 	assert.Error(t, err, "lock expired before timeout")
@@ -878,11 +851,6 @@ func watchFn(
 	assert.Equal(data.t, data.action, kvp.Action,
 		"For Key (%v) : Expected action %v actual %v",
 		kvp.Key, data.action, kvp.Action)
-	if data.action != kvp.Action {
-		value := string(kvp.Value)
-		logrus.Panicf("Aborting because (%v != %v) (%v) %v != %v (Value = %v)",
-			data.action, kvp.Action, prefix, data, kvp, value)
-	}
 
 	if string(kvp.Value) == data.stop {
 		return errors.New(data.stop)
@@ -903,7 +871,6 @@ func watchUpdate(kv kvdb.Kvdb, data *watchData) error {
 	atomic.SwapInt32(&data.whichKey, 1)
 	data.action = kvdb.KVCreate
 	fmt.Printf("-")
-	fmt.Printf("XXX Creating watchUpdate key %v\n", data.key)
 	kvp, err = kv.Create(data.key, []byte("bar"), 0)
 	for i := 0; i < data.iterations && err == nil; i++ {
 		fmt.Printf("-")
@@ -913,7 +880,6 @@ func watchUpdate(kv kvdb.Kvdb, data *watchData) error {
 		}
 		atomic.AddInt32(&data.writer, 1)
 		data.action = kvdb.KVSet
-		fmt.Printf("XXX Putting watchUpdate key %v\n", data.key)
 		kvp, err = kv.Put(data.key, []byte("bar"), 0)
 
 		data.updateIndex = kvp.KVDBIndex
@@ -1270,7 +1236,6 @@ func collect(kv kvdb.Kvdb, t *testing.T) {
 
 		fmt.Println("collect")
 
-		// XXX FIXME this is a bug... root should not have the prefix
 		root := "pwx/test/collect"
 		firstLevel := root + "/first"
 		secondLevel := root + "/second"
@@ -1278,7 +1243,7 @@ func collect(kv kvdb.Kvdb, t *testing.T) {
 		kv.DeleteTree(root)
 
 		kvp, _ := kv.Create(firstLevel, []byte("bar"), 0)
-		fmt.Printf("KVP is %v and KV is %v\n", kvp, kv)
+		fmt.Printf("KVP is %v", kvp)
 		collector, _ := kvdb.NewUpdatesCollector(kv, secondLevel,
 			startVersion(kvp.CreatedIndex))
 		time.Sleep(time.Second)
@@ -1349,9 +1314,6 @@ func collect(kv kvdb.Kvdb, t *testing.T) {
 		assert.True(t, err == nil, "Replay encountered error %v", err)
 		assert.True(t, lastLeafIndex == 9, "Last leaf index %v, expected : 9",
 			lastLeafIndex)
-		if lastLeafIndex != 9 {
-			logrus.Fatalf("lastLeafIndex is %v", lastLeafIndex)
-		}
 
 		// Test with kvdb returning error because update index was too old.
 		fourthLevel := root + "/fourth"

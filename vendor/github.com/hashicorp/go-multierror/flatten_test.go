@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -24,12 +25,13 @@ func TestFlatten(t *testing.T) {
 		},
 	}
 
-	expected := `3 errors occurred:
-	* one
-	* two
-	* three
+	expected := strings.TrimSpace(`
+3 errors occurred:
 
-`
+* one
+* two
+* three
+	`)
 	actual := fmt.Sprintf("%s", Flatten(original))
 
 	if expected != actual {

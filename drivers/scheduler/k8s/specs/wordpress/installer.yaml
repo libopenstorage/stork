@@ -1,54 +1,41 @@
-apiVersion: apps/v1beta2
-kind: Deployment
+apiVersion: v1
+kind: Pod
 metadata:
   name: installer
   labels:
     app: wordpress
     tier: installer
 spec:
-  selector:
-    matchLabels:
-      app: wordpress
-      tier: installer
-  replicas: 1
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: wordpress
-        tier: installer
-    spec:
-      securityContext:
-        fsGroup: 1000
-      containers:
-      - image: samuelmyers/wp-cli:1.2.28
-        name: installer
-        env:
-        - name: WORDPRESS_URL
-          value: "http://wordpress"
-        - name: WORDPRESS_THEME
-          value: "twentysixteen"
-        - name: WORDPRESS_PLUGINS
-          value: "bj-lazy-load,contact-form-7,woocommerce,wordpress-seo"
-        - name: WORDPRESS_DB_HOST
-          value: wordpress-mysql
-        - name: WORDPRESS_DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-pass
-              key: password
-        volumeMounts:
-        - name: wordpress-persistent-storage
-          mountPath: /wordpress
-        readinessProbe:
-          exec:
-            command:
-            - cat
-            - /tmp/alive
-          initialDelaySeconds: 5
-          periodSeconds: 5
-      volumes:
-      - name: wordpress-persistent-storage
-        persistentVolumeClaim:
-          claimName: wp-pv-claim
+  securityContext:
+    fsGroup: 1000
+  containers:
+  - image: samuelmyers/wp-cli:1.2.28
+    name: installer
+    env:
+    - name: WORDPRESS_URL
+      value: "http://wordpress"
+    - name: WORDPRESS_THEME
+      value: "twentysixteen"
+    - name: WORDPRESS_PLUGINS
+      value: "bj-lazy-load,contact-form-7,woocommerce,wordpress-seo"
+    - name: WORDPRESS_DB_HOST
+      value: wordpress-mysql
+    - name: WORDPRESS_DB_PASSWORD
+      valueFrom:
+         secretKeyRef:
+           name: mysql-pass
+           key: password
+    volumeMounts:
+    - name: wordpress-persistent-storage
+      mountPath: /wordpress
+    readinessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/alive
+      initialDelaySeconds: 5
+      periodSeconds: 5
+  volumes:
+  - name: wordpress-persistent-storage
+    persistentVolumeClaim:
+      claimName: wp-pv-claim

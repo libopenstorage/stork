@@ -78,15 +78,11 @@ const (
 	EtcdVersion3 = "etcdv3"
 	// MemVersion1 key
 	MemVersion1 = "memv1"
-	// BoltVersion1 key
-	BoltVersion1 = "boltv1"
 )
 
 const (
 	// DefaultLockTryDuration is the maximum time spent trying to acquire lock
 	DefaultLockTryDuration = 300 * time.Second
-	// DefaultSeparator separate key components
-	DefaultSeparator = "/"
 )
 
 var (
@@ -322,7 +318,7 @@ func NewUpdatesCollector(
 ) (UpdatesCollector, error) {
 	collector := &updatesCollectorImpl{updates: make([]*kvdbUpdate, 0),
 		startIndex: startIndex}
-	logrus.Infof("Starting collector watch on %v at %v", prefix, startIndex)
+	logrus.Infof("Starting collector watch at %v", startIndex)
 	if err := db.WatchTree(prefix, startIndex, nil, collector.watchCb); err != nil {
 		return nil, err
 	}

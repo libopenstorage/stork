@@ -36,6 +36,8 @@ errcheck: testdeps
 		github.com/portworx/kvdb \
 		github.com/portworx/kvdb/common \
 		github.com/portworx/kvdb/consul \
+		github.com/portworx/kvdb/etcd/v2 \
+		github.com/portworx/kvdb/etcd/v3 \
 		github.com/portworx/kvdb/mem
 
 pretest: errcheck lint vet
@@ -46,12 +48,12 @@ gotest: testdeps
 test: pretest gotest
 
 docker-build-kvdb-dev:
-	docker build -t portworx/kvdb:test_container -f $(GOPATH)/src/github.com/portworx/kvdb/Dockerfile.kvdb .
+	docker build -t adityadani/kvdb:dev -f $(GOPATH)/src/github.com/portworx/kvdb/Dockerfile.kvdb .
 
 docker-test:
 	docker run \
 		-v $(GOPATH)/src/github.com/portworx/kvdb:/go/src/github.com/portworx/kvdb \
-		portworx/kvdb:test_container \
+		adityadani/kvdb:dev \
 			go test -v --timeout 1h ./...
 
 clean:
