@@ -1755,6 +1755,13 @@
 			"revisionTime": "2018-04-24T21:15:16Z"
 		},
 		{
+			"checksumSHA1": "DD0ES3MkfAlobSt/mjVGwliR17U=",
+			"path": "k8s.io/code-generator",
+			"revision": "9de8e796a74d16d2a285165727d04c185ebca6dc",
+			"revisionTime": "2018-06-01T12:58:03Z",
+			"tree": true
+		},
+		{
 			"checksumSHA1": "dRuB87bmmez7Ym0xaG27Lo1T1AE=",
 			"path": "k8s.io/kube-openapi/pkg/util/proto",
 			"revision": "f08db293d3ef80052d6513ece19792642a289fea",
