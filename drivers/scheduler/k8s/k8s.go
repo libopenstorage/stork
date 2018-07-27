@@ -670,10 +670,10 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated StorkRule: %v", ctx.App.Key, svc.Name)
 		} else if obj, ok := spec.(*v1.Pod); ok {
-			if !k8sOps.IsPodReady(*obj) {
+			if err := k8sOps.ValidatePod(obj); err != nil {
 				return &scheduler.ErrFailedToValidatePod{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate Pod: %s. Err: Pod is not ready", obj.Name),
+					Cause: fmt.Sprintf("Failed to validate Pod: [%s] %s. Err: Pod is not ready %v", obj.Namespace, obj.Name, obj.Status),
 				}
 			}
 
@@ -807,7 +807,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 				}
 			}
 		} else if obj, ok := spec.(*v1.Pod); ok {
-			if _, err := k8sOps.GetPodByName(obj.Name, obj.Namespace); err == nil {
+			if err := k8sOps.WaitForPodDeletion(obj.UID, obj.Namespace, deleteTasksWaitTimeout); err != nil {
 				return &scheduler.ErrFailedToValidatePodDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of pod: %v. Err: %v", obj.Name, err),

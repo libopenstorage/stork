@@ -47,6 +47,8 @@ const (
 	nodeUpdateTimeout             = 1 * time.Minute
 	nodeUpdateRetryInterval       = 2 * time.Second
 	deploymentReadyTimeout        = 10 * time.Minute
+	validatePodReadyTimeout       = 5 * time.Minute
+	validatePodRetryInterval      = 10 * time.Second
 	validateStatefulSetPVCTimeout = 15 * time.Minute
 	validatePVCTimeout            = 5 * time.Minute
 	validatePVCRetryInterval      = 10 * time.Second
@@ -297,6 +299,8 @@ type PodOps interface {
 	WaitForPodDeletion(uid types.UID, namespace string, timeout time.Duration) error
 	// RunCommandInPod runs given command in the given pod
 	RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error)
+	// ValidatePod validates the given pod if it's ready
+	ValidatePod(pod *v1.Pod) error
 }
 
 // StorageClassOps is an interface to perform k8s storage class operations
@@ -991,7 +995,7 @@ func (k *k8sOps) ValidateDeletedService(svcName string, svcNS string) error {
 
 	_, err := k.client.CoreV1().Services(svcNS).Get(svcName, meta_v1.GetOptions{})
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -1148,8 +1152,8 @@ func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment) e
 	t := func() (interface{}, bool, error) {
 		dep, err := k.GetDeployment(deployment.Name, deployment.Namespace)
 		if err != nil {
-			if !errors.IsNotFound(err) {
-				return "", true, nil
+			if errors.IsNotFound(err) {
+				return "", false, nil
 			}
 			return "", true, err
 		}
@@ -1570,7 +1574,7 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet
 	t := func() (interface{}, bool, error) {
 		sset, err := k.GetStatefulSet(statefulset.Name, statefulset.Namespace)
 		if err != nil {
-			if !errors.IsNotFound(err) {
+			if errors.IsNotFound(err) {
 				return "", false, nil
 			}
 
@@ -2067,6 +2071,26 @@ func (k *k8sOps) IsPodBeingManaged(pod v1.Pod) bool {
 	}
 
 	return false
+}
+
+func (k *k8sOps) ValidatePod(pod *v1.Pod) error {
+	t := func() (interface{}, bool, error) {
+		currPod, err := k.GetPodByUID(pod.UID, pod.Namespace)
+		if err != nil {
+			return "", true, fmt.Errorf("Could not get Pod [%s] %s", pod.Namespace, pod.Name)
+		}
+
+		ready := k.IsPodReady(*currPod)
+		if !ready {
+			return "", true, fmt.Errorf("Pod %s, ID: %s  is not ready. Status %v", pod.Name, pod.UID, pod.Status.Phase)
+		}
+
+		return "", false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, validatePodReadyTimeout, validatePodRetryInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Pod APIs - END
