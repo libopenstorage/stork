@@ -13,8 +13,10 @@ import (
 	apis_stork "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
+	"github.com/skyrings/skyring-common/tools/uuid"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,6 +39,21 @@ const (
 	execPodStepMed          = 36
 	execPodStepsHigh        = math.MaxInt32
 )
+
+type ruleType string
+
+const (
+	preSnapRule               ruleType = "preSnapRule"
+	postSnapRule              ruleType = "postSnapRule"
+	storkRuleAnnotationPrefix          = "stork.rule"
+	preSnapRuleAnnotationKey           = storkRuleAnnotationPrefix + "/pre-snapshot"
+	postSnapRuleAnnotationKey          = storkRuleAnnotationPrefix + "/post-snapshot"
+)
+
+var ruleAnnotationKeys = map[ruleType]string{
+	preSnapRule:  preSnapRuleAnnotationKey,
+	postSnapRule: postSnapRuleAnnotationKey,
+}
 
 // pod is a simple type to encapsulate a pod's uid and namespace
 type pod struct {
@@ -67,78 +84,16 @@ var snapAPICallBackoff = wait.Backoff{
 	Steps:    20,
 }
 
-// ExecuteRuleOnPods executes the given rule on the given pods
-func ExecuteRuleOnPods(pods []v1.Pod, snap *crdv1.VolumeSnapshot, ruleName, ruleNamespace, taskID string) (
-	map[string]v1.Pod /*background pods*/, error) {
-	backgroundPodSet := make(map[string]v1.Pod)
-	if len(pods) > 0 {
-		// Get the rule and based on the rule execute it
-		rule, err := k8s.Instance().GetStorkRule(ruleName, ruleNamespace)
-		if err != nil {
-			return nil, err
-		}
+// ExecutePreSnapRuleOnPods executes the pre snapshot rule on the given pods. It returns a channel which the caller can
+// trigger to delete the termination of background commands
+func ExecutePreSnapRuleOnPods(pods []v1.Pod, snap *crdv1.VolumeSnapshot) (chan bool, error) {
+	return executeSnapRuleOnPods(pods, snap, preSnapRule)
+}
 
-		cmdExecutorImage := defaultCmdExecutorImage
-		if rule.GetAnnotations() != nil {
-			if imageOverride, ok := rule.GetAnnotations()[cmdExecutorImageOverrideKey]; ok && len(imageOverride) > 0 {
-				cmdExecutorImage = imageOverride
-			}
-		}
-
-		for _, item := range rule.Spec {
-			filteredPods := make([]v1.Pod, 0)
-			// filter pods and only uses the ones that match this selector
-			for _, pod := range pods {
-				if hasSubset(pod.GetObjectMeta().GetLabels(), item.PodSelector) {
-					filteredPods = append(filteredPods, pod)
-				}
-			}
-
-			if len(filteredPods) == 0 {
-				logrus.Warnf("none of the pods matched selectors for rule spec: %v", rule.Spec)
-				continue
-			}
-
-			for _, action := range item.Actions {
-				if action.Type == apis_stork.StorkRuleActionCommand {
-					podsForAction := make([]v1.Pod, 0)
-					if action.RunInSinglePod {
-						podsForAction = []v1.Pod{filteredPods[0]}
-					} else {
-						podsForAction = append(podsForAction, filteredPods...)
-					}
-
-					if action.Background {
-						for _, pod := range podsForAction {
-							backgroundPodSet[string(pod.GetUID())] = pod
-						}
-
-						// regardless of the outcome of running the background command, we first update the
-						// snapshot to track pods which might have a running background command
-						updateErr := updateRunningCommandPodListInSnap(snap, podsForAction, taskID)
-						if updateErr != nil {
-							logrus.Warnf("failed to update list of pods with running command in snap due to: %v", updateErr)
-						}
-
-						err = runBackgroundCommandOnPods(podsForAction, action.Value, taskID, cmdExecutorImage)
-						if err != nil {
-							return backgroundPodSet, err
-						}
-					} else {
-						_, err = runCommandOnPods(podsForAction, action.Value, execPodStepLow, true)
-						if err != nil {
-							return backgroundPodSet, err
-						}
-					}
-				} else {
-					return backgroundPodSet, fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
-						action.Type, rule.GetNamespace(), rule.GetName())
-				}
-			}
-		}
-	}
-
-	return backgroundPodSet, nil
+// ExecutePostSnapRuleOnPods executes the post snapshot rule for the given snapshot
+func ExecutePostSnapRuleOnPods(pods []v1.Pod, snap *crdv1.VolumeSnapshot) error {
+	_, err := executeSnapRuleOnPods(pods, snap, postSnapRule)
+	return err
 }
 
 // TerminateCommandInPods terminates a previously running background command on given pods for given task ID
@@ -217,6 +172,106 @@ func PerformRuleRecovery() error {
 	}
 
 	return lastError
+}
+
+func executeSnapRuleOnPods(pods []v1.Pod, snap *crdv1.VolumeSnapshot, rType ruleType) (chan bool, error) {
+	backgroundCommandTermChan := make(chan bool, 1)
+	if snap.Metadata.Annotations != nil {
+		ruleName, present := snap.Metadata.Annotations[ruleAnnotationKeys[rType]]
+		if present && len(ruleName) > 0 {
+			log.SnapshotLog(snap).Infof("Running snap rule: %s", ruleName)
+			taskID, err := uuid.New()
+			if err != nil {
+				err = fmt.Errorf("failed to generate uuid for snapshot rule tasks due to: %v", err)
+				return nil, err
+			}
+
+			backgroundPodSet := make(map[string]v1.Pod)
+			if len(pods) > 0 {
+				// Get the rule and based on the rule execute it
+				rule, err := k8s.Instance().GetStorkRule(ruleName, snap.Metadata.Namespace)
+				if err != nil {
+					return nil, err
+				}
+
+				cmdExecutorImage := defaultCmdExecutorImage
+				if rule.GetAnnotations() != nil {
+					if imageOverride, ok := rule.GetAnnotations()[cmdExecutorImageOverrideKey]; ok && len(imageOverride) > 0 {
+						cmdExecutorImage = imageOverride
+					}
+				}
+
+				for _, item := range rule.Spec {
+					filteredPods := make([]v1.Pod, 0)
+					// filter pods and only uses the ones that match this selector
+					for _, pod := range pods {
+						if hasSubset(pod.GetObjectMeta().GetLabels(), item.PodSelector) {
+							filteredPods = append(filteredPods, pod)
+						}
+					}
+
+					if len(filteredPods) == 0 {
+						logrus.Warnf("none of the pods matched selectors for rule spec: %v", rule.Spec)
+						continue
+					}
+
+					for _, action := range item.Actions {
+						if action.Type == apis_stork.StorkRuleActionCommand {
+							podsForAction := make([]v1.Pod, 0)
+							if action.RunInSinglePod {
+								podsForAction = []v1.Pod{filteredPods[0]}
+							} else {
+								podsForAction = append(podsForAction, filteredPods...)
+							}
+
+							if action.Background {
+								if rType == postSnapRule {
+									return nil, fmt.Errorf("background actions are not supported for post snapshot rules")
+								}
+
+								for _, pod := range podsForAction {
+									backgroundPodSet[string(pod.GetUID())] = pod
+								}
+
+								go func() {
+									if len(backgroundPodSet) > 0 {
+										terminate := <-backgroundCommandTermChan
+										if terminate {
+											if err = TerminateCommandInPods(snap, backgroundPodSet, taskID.String()); err != nil {
+												log.SnapshotLog(snap).Warnf("failed to terminate background command in pods due to: %v", err)
+											}
+										}
+									}
+								}()
+
+								// regardless of the outcome of running the background command, we first update the
+								// snapshot to track pods which might have a running background command
+								updateErr := updateRunningCommandPodListInSnap(snap, podsForAction, taskID.String())
+								if updateErr != nil {
+									logrus.Warnf("failed to update list of pods with running command in snap due to: %v", updateErr)
+								}
+
+								err = runBackgroundCommandOnPods(podsForAction, action.Value, taskID.String(), cmdExecutorImage)
+								if err != nil {
+									return backgroundCommandTermChan, err
+								}
+							} else {
+								_, err = runCommandOnPods(podsForAction, action.Value, execPodStepLow, true)
+								if err != nil {
+									return nil, err
+								}
+							}
+						} else {
+							return backgroundCommandTermChan, fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
+								action.Type, rule.GetNamespace(), rule.GetName())
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return backgroundCommandTermChan, nil
 }
 
 // podsToString is a helper function to create a user-friendly single string from a list of pods

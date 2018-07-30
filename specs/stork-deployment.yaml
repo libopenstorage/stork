@@ -100,7 +100,7 @@ rules:
     resources: ["statefulsets", "statefulsets/extensions"]
     verbs: ["list", "get", "watch", "patch", "update", "initialize"]
   - apiGroups: ["extensions"]
-    resources: [" thirdpartyresources", "deployments", "daemonsets", "replicasets"]
+    resources: [" thirdpartyresources"]
     verbs: [ "get", "list", "watch","create","delete"]
 ---
 kind: ClusterRoleBinding
