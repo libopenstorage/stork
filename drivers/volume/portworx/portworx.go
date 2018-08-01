@@ -432,12 +432,12 @@ func (p *portworx) SnapshotCreate(
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
-	podsForSnapshot, err := p.getPodsForSnapshot(snap)
+	pvcsForSnapshot, err := p.getPVCsForSnapshot(snap)
 	if err != nil {
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
-	backgroundCommandTermChan, err := rule.ExecutePreSnapRuleOnPods(podsForSnapshot, snap)
+	backgroundCommandTermChan, err := rule.ExecutePreSnapRule(pvcsForSnapshot, snap)
 	if err != nil {
 		err = fmt.Errorf("failed to run pre-snap rule due to: %v", err)
 		log.SnapshotLog(snap).Errorf(err.Error())
@@ -599,7 +599,7 @@ func (p *portworx) SnapshotCreate(
 		}
 	}
 
-	err = rule.ExecutePostSnapRuleOnPods(podsForSnapshot, snap)
+	err = rule.ExecutePostSnapRule(pvcsForSnapshot, snap)
 	if err != nil {
 		err = fmt.Errorf("failed to run post-snap rule due to: %v", err)
 		log.SnapshotLog(snap).Errorf(err.Error())
@@ -1228,20 +1228,21 @@ func (p *portworx) ensureNodesDontMatchVersionPrefix(versionRegex *regexp.Regexp
 	return true, "all nodes have expected version", nil
 }
 
-func (p *portworx) getPodsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Pod, error) {
+func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.PersistentVolumeClaim, error) {
 	var err error
 	snapType, err := getSnapshotType(snap)
 	if err != nil {
 		return nil, err
 	}
 
-	pods := make([]v1.Pod, 0)
 	switch snapType {
 	case crdv1.PortworxSnapshotTypeCloud:
-		pods, err = k8s.Instance().GetPodsUsingPVC(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
 		if err != nil {
 			return nil, err
 		}
+
+		return []v1.PersistentVolumeClaim{*pvc}, nil
 	case crdv1.PortworxSnapshotTypeLocal:
 		if isGroupSnap(snap) {
 			groupID := snap.Metadata.Annotations[pxSnapshotGroupIDKey]
@@ -1267,26 +1268,19 @@ func (p *portworx) getPodsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Pod, err
 				log.SnapshotLog(snap).Infof("found PVCs with group labels: %v", pvcList.Items)
 				pvcs = append(pvcs, pvcList.Items...)
 			}
-
-			for _, pvc := range pvcs {
-				pvcPods, err := k8s.Instance().GetPodsUsingPVC(pvc.GetName(), pvc.GetNamespace())
-				if err != nil {
-					return nil, err
-				}
-
-				pods = append(pods, pvcPods...)
-			}
-		} else { // local single snapshot
-			pods, err = k8s.Instance().GetPodsUsingPVC(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
-			if err != nil {
-				return nil, err
-			}
+			return pvcs, nil
 		}
+
+		// local single snapshot
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		return []v1.PersistentVolumeClaim{*pvc}, nil
 	default:
 		return nil, fmt.Errorf("invalid snapshot type: %s", snapType)
 	}
-
-	return pods, nil
 }
 
 func (p *portworx) getPVCsForGroupID(groupID string) ([]v1.PersistentVolumeClaim, error) {

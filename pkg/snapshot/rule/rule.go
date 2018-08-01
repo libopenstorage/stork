@@ -84,15 +84,16 @@ var snapAPICallBackoff = wait.Backoff{
 	Steps:    20,
 }
 
-// ExecutePreSnapRuleOnPods executes the pre snapshot rule on the given pods. It returns a channel which the caller can
-// trigger to delete the termination of background commands
-func ExecutePreSnapRuleOnPods(pods []v1.Pod, snap *crdv1.VolumeSnapshot) (chan bool, error) {
-	return executeSnapRuleOnPods(pods, snap, preSnapRule)
+// ExecutePreSnapRule executes the pre snapshot rule. pvcs is a list of PVCs that are associated
+// with the snapshot. It returns a channel which the caller can trigger to delete the termination of background commands
+func ExecutePreSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot) (chan bool, error) {
+	return executeSnapRule(pvcs, snap, preSnapRule)
 }
 
-// ExecutePostSnapRuleOnPods executes the post snapshot rule for the given snapshot
-func ExecutePostSnapRuleOnPods(pods []v1.Pod, snap *crdv1.VolumeSnapshot) error {
-	_, err := executeSnapRuleOnPods(pods, snap, postSnapRule)
+// ExecutePostSnapRule executes the post snapshot rule for the given snapshot. pvcs is a list of PVCs
+// that are associated with the snapshot
+func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot) error {
+	_, err := executeSnapRule(pvcs, snap, postSnapRule)
 	return err
 }
 
@@ -174,7 +175,7 @@ func PerformRuleRecovery() error {
 	return lastError
 }
 
-func executeSnapRuleOnPods(pods []v1.Pod, snap *crdv1.VolumeSnapshot, rType ruleType) (chan bool, error) {
+func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot, rType ruleType) (chan bool, error) {
 	backgroundCommandTermChan := make(chan bool, 1)
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[ruleAnnotationKeys[rType]]
@@ -184,6 +185,16 @@ func executeSnapRuleOnPods(pods []v1.Pod, snap *crdv1.VolumeSnapshot, rType rule
 			if err != nil {
 				err = fmt.Errorf("failed to generate uuid for snapshot rule tasks due to: %v", err)
 				return nil, err
+			}
+
+			pods := make([]v1.Pod, 0)
+			for _, pvc := range pvcs {
+				pvcPods, err := k8s.Instance().GetPodsUsingPVC(pvc.GetName(), pvc.GetNamespace())
+				if err != nil {
+					return nil, err
+				}
+
+				pods = append(pods, pvcPods...)
 			}
 
 			backgroundPodSet := make(map[string]v1.Pod)
