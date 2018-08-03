@@ -97,19 +97,14 @@ func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnap
 	return err
 }
 
-// TerminateCommandInPods terminates a previously running background command on given pods for given task ID
-func TerminateCommandInPods(snap *crdv1.VolumeSnapshot, pods map[string]v1.Pod, taskID string) error {
+// terminateCommandInPods terminates a previously running background command on given pods for given task ID
+func terminateCommandInPods(snap *crdv1.VolumeSnapshot, pods []v1.Pod, taskID string) error {
 	killFile := fmt.Sprintf(cmdexecutor.KillFileFormat, taskID)
-	podList := make([]v1.Pod, 0)
-	for _, pod := range pods {
-		podList = append(podList, pod)
-	}
-
-	failedPods, err := runCommandOnPods(podList, fmt.Sprintf("touch %s", killFile), execPodStepsHigh, false)
+	failedPods, err := runCommandOnPods(pods, fmt.Sprintf("touch %s", killFile), execPodStepsHigh, false)
 
 	updateErr := updateRunningCommandPodListInSnap(snap, failedPods, taskID)
 	if updateErr != nil {
-		logrus.Warnf("failed to update list of pods with running command in snap due to: %v", updateErr)
+		log.SnapshotLog(snap).Warnf("Failed to update list of pods with running command in snap due to: %v", updateErr)
 	}
 
 	return err
@@ -119,7 +114,7 @@ func TerminateCommandInPods(snap *crdv1.VolumeSnapshot, pods map[string]v1.Pod, 
 func PerformRuleRecovery() error {
 	allSnaps, err := k8s.Instance().ListSnapshots(v1.NamespaceAll)
 	if err != nil {
-		logrus.Errorf("failed to list all snapshots due to: %v. Will retry.", err)
+		logrus.Errorf("Failed to list all snapshots due to: %v. Will retry.", err)
 		return err
 	}
 
@@ -132,8 +127,8 @@ func PerformRuleRecovery() error {
 		if snap.Metadata.Annotations != nil {
 			value := snap.Metadata.Annotations[podsWithRunningCommandsKey]
 			if len(value) > 0 {
-				backgroundPodSet := make(map[string]v1.Pod)
-				logrus.Infof("Performing recovery to terminate commands for snap: [%s] %s tracker: %v",
+				backgroundPodList := make([]v1.Pod, 0)
+				log.SnapshotLog(&snap).Infof("Performing recovery to terminate commands tracker: %v",
 					snap.Metadata.Namespace, snap.Metadata.Name, value)
 				taskTracker := commandTask{}
 
@@ -155,14 +150,14 @@ func PerformRuleRecovery() error {
 							continue
 						}
 
-						logrus.Warnf("failed to get pod with uid: %s due to: %v", pod.uid, err)
+						log.SnapshotLog(&snap).Warnf("Failed to get pod with uid: %s due to: %v", pod.uid, err)
 						continue // best effort
 					}
 
-					backgroundPodSet[string(p.GetUID())] = *p
+					backgroundPodList = append(backgroundPodList, *p)
 				}
 
-				err = TerminateCommandInPods(&snap, backgroundPodSet, taskTracker.taskID)
+				err = terminateCommandInPods(&snap, backgroundPodList, taskTracker.taskID)
 				if err != nil {
 					err = fmt.Errorf("failed to terminate running commands in pods due to: %v", err)
 					lastError = err
@@ -175,6 +170,8 @@ func PerformRuleRecovery() error {
 	return lastError
 }
 
+// executeSnapRule executes rules in the given snap. pvcs are used to figure out the pods on which the rule actions will be
+// run on
 func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot, rType ruleType) (chan bool, error) {
 	backgroundCommandTermChan := make(chan bool, 1)
 	if snap.Metadata.Annotations != nil {
@@ -197,19 +194,11 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 				pods = append(pods, pvcPods...)
 			}
 
-			backgroundPodSet := make(map[string]v1.Pod)
 			if len(pods) > 0 {
 				// Get the rule and based on the rule execute it
 				rule, err := k8s.Instance().GetStorkRule(ruleName, snap.Metadata.Namespace)
 				if err != nil {
 					return nil, err
-				}
-
-				cmdExecutorImage := defaultCmdExecutorImage
-				if rule.GetAnnotations() != nil {
-					if imageOverride, ok := rule.GetAnnotations()[cmdExecutorImageOverrideKey]; ok && len(imageOverride) > 0 {
-						cmdExecutorImage = imageOverride
-					}
 				}
 
 				for _, item := range rule.Spec {
@@ -222,55 +211,15 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 					}
 
 					if len(filteredPods) == 0 {
-						logrus.Warnf("none of the pods matched selectors for rule spec: %v", rule.Spec)
+						log.SnapshotLog(snap).Warnf("None of the pods matched selectors for rule spec: %v", rule.Spec)
 						continue
 					}
 
 					for _, action := range item.Actions {
 						if action.Type == apis_stork.StorkRuleActionCommand {
-							podsForAction := make([]v1.Pod, 0)
-							if action.RunInSinglePod {
-								podsForAction = []v1.Pod{filteredPods[0]}
-							} else {
-								podsForAction = append(podsForAction, filteredPods...)
-							}
-
-							if action.Background {
-								if rType == postSnapRule {
-									return nil, fmt.Errorf("background actions are not supported for post snapshot rules")
-								}
-
-								for _, pod := range podsForAction {
-									backgroundPodSet[string(pod.GetUID())] = pod
-								}
-
-								go func() {
-									if len(backgroundPodSet) > 0 {
-										terminate := <-backgroundCommandTermChan
-										if terminate {
-											if err = TerminateCommandInPods(snap, backgroundPodSet, taskID.String()); err != nil {
-												log.SnapshotLog(snap).Warnf("failed to terminate background command in pods due to: %v", err)
-											}
-										}
-									}
-								}()
-
-								// regardless of the outcome of running the background command, we first update the
-								// snapshot to track pods which might have a running background command
-								updateErr := updateRunningCommandPodListInSnap(snap, podsForAction, taskID.String())
-								if updateErr != nil {
-									logrus.Warnf("failed to update list of pods with running command in snap due to: %v", updateErr)
-								}
-
-								err = runBackgroundCommandOnPods(podsForAction, action.Value, taskID.String(), cmdExecutorImage)
-								if err != nil {
-									return backgroundCommandTermChan, err
-								}
-							} else {
-								_, err = runCommandOnPods(podsForAction, action.Value, execPodStepLow, true)
-								if err != nil {
-									return nil, err
-								}
+							err := executeCommandAction(filteredPods, rule, snap, action, backgroundCommandTermChan, rType, taskID)
+							if err != nil {
+								return backgroundCommandTermChan, err
 							}
 						} else {
 							return backgroundCommandTermChan, fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
@@ -285,6 +234,69 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 	return backgroundCommandTermChan, nil
 }
 
+// executeCommandAction executes the command type action on given pods:
+func executeCommandAction(
+	pods []v1.Pod,
+	rule *apis_stork.StorkRule,
+	snap *crdv1.VolumeSnapshot,
+	action apis_stork.StorkRuleAction,
+	backgroundCommandTermChan chan bool,
+	rType ruleType, taskID *uuid.UUID) error {
+	if len(pods) == 0 {
+		return nil
+	}
+
+	podsForAction := make([]v1.Pod, 0)
+	if action.RunInSinglePod {
+		podsForAction = []v1.Pod{pods[0]}
+	} else {
+		podsForAction = append(podsForAction, pods...)
+	}
+
+	cmdExecutorImage := defaultCmdExecutorImage
+	ruleAnnotations := rule.GetAnnotations()
+	if ruleAnnotations != nil {
+		if imageOverride, ok := ruleAnnotations[cmdExecutorImageOverrideKey]; ok && len(imageOverride) > 0 {
+			cmdExecutorImage = imageOverride
+		}
+	}
+
+	if action.Background {
+		if rType == postSnapRule {
+			return fmt.Errorf("background actions are not supported for post snapshot rules")
+		}
+
+		go func() {
+			if len(podsForAction) > 0 {
+				terminate := <-backgroundCommandTermChan
+				if terminate {
+					if err := terminateCommandInPods(snap, podsForAction, taskID.String()); err != nil {
+						log.SnapshotLog(snap).Warnf("failed to terminate background command in pods due to: %v", err)
+					}
+				}
+			}
+		}()
+
+		// regardless of the outcome of running the background command, we first update the
+		// snapshot to track pods which might have a running background command
+		updateErr := updateRunningCommandPodListInSnap(snap, podsForAction, taskID.String())
+		if updateErr != nil {
+			log.SnapshotLog(snap).Warnf("Failed to update list of pods with running command in snap due to: %v", updateErr)
+		}
+
+		err := runBackgroundCommandOnPods(podsForAction, action.Value, taskID.String(), cmdExecutorImage)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := runCommandOnPods(podsForAction, action.Value, execPodStepLow, true)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // podsToString is a helper function to create a user-friendly single string from a list of pods
 func podsToString(pods []v1.Pod) string {
 	var podList []string
@@ -296,7 +308,8 @@ func podsToString(pods []v1.Pod) string {
 }
 
 // updateRunningCommandPodListInSnap updates the snapshot annotation to track pods which might have a
-// running command
+// running command. This allows recovery if we crash while running the commands. One can parse these annotations
+// to terminate the running commands
 func updateRunningCommandPodListInSnap(snap *crdv1.VolumeSnapshot, pods []v1.Pod, taskID string) error {
 	podsWithNs := make([]pod, 0)
 	for _, p := range pods {
@@ -318,7 +331,7 @@ func updateRunningCommandPodListInSnap(snap *crdv1.VolumeSnapshot, pods []v1.Pod
 	err = wait.ExponentialBackoff(snapAPICallBackoff, func() (bool, error) {
 		snap, err := k8s.Instance().GetSnapshot(snap.Metadata.Name, snap.Metadata.Namespace)
 		if err != nil {
-			logrus.Warnf("failed to get latest snapshot object due to: %v. Will retry.", err)
+			logrus.Warnf("Failed to get latest snapshot object due to: %v. Will retry.", err)
 			return false, nil
 		}
 
@@ -330,7 +343,7 @@ func updateRunningCommandPodListInSnap(snap *crdv1.VolumeSnapshot, pods []v1.Pod
 		}
 
 		if _, err := k8s.Instance().UpdateSnapshot(snapCopy); err != nil {
-			logrus.Warnf("failed to update snapshot due to: %v. Will retry.", err)
+			log.SnapshotLog(snap).Warnf("Failed to update snapshot due to: %v. Will retry.", err)
 			return false, nil
 		}
 
@@ -339,7 +352,8 @@ func updateRunningCommandPodListInSnap(snap *crdv1.VolumeSnapshot, pods []v1.Pod
 	return err
 }
 
-// runCommandOnPods runs cmd on given pods
+// runCommandOnPods runs cmd on given pods. If failFast is true, it will return on the first failure. It will
+// return a list of pods that failed.
 func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) ([]v1.Pod, error) {
 	var wg sync.WaitGroup
 	backOff := wait.Backoff{
@@ -359,21 +373,21 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 				pod, err := k8s.Instance().GetPodByUID(pod.GetUID(), ns)
 				if err != nil {
 					if err == k8s.ErrPodsNotFound {
-						logrus.Infof("pod with uuid: %s in namespace: %s is no longer present", string(pod.GetUID()), ns)
+						logrus.Infof("Pod with uuid: %s in namespace: %s is no longer present", string(pod.GetUID()), ns)
 						return true, nil
 					}
 
-					logrus.Warnf("failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()))
+					logrus.Warnf("Failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()))
 					return false, nil
 				}
 
 				_, err = k8s.Instance().RunCommandInPod([]string{"sh", "-c", cmd}, name, "", ns)
 				if err != nil {
-					logrus.Warnf("failed to run command: %s on pod: [%s] %s due to: %v", cmd, ns, name, err)
+					logrus.Warnf("Failed to run command: %s on pod: [%s] %s due to: %v", cmd, ns, name, err)
 					return false, nil
 				}
 
-				logrus.Infof("command: %s succeeded on pod: [%s] %s", cmd, ns, name)
+				logrus.Infof("Command: %s succeeded on pod: [%s] %s", cmd, ns, name)
 				return true, nil
 			})
 			if err != nil {
@@ -404,7 +418,7 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 			return failed, err
 		}
 
-		logrus.Infof("command: %s finished successfully on all pods", cmd)
+		logrus.Infof("Command: %s finished successfully on all pods", cmd)
 		return nil, nil
 	case errResp := <-errChannel:
 		failed = append(failed, errResp.pod) // TODO also accumulate atleast the last error
@@ -417,6 +431,8 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 	return nil, nil
 }
 
+// runBackgroundCommandOnPods will start the given "cmd" on all the given "pods". The taskID is given to
+// the executor pod so it can have unique status files in the target pods where it runs the actual commands
 func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage string) error {
 	executorArgs := []string{
 		"/cmdexecutor",
@@ -446,6 +462,9 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 					Image:           cmdExecutorImage,
 					ImagePullPolicy: v1.PullAlways,
 					Args:            executorArgs,
+					// Below ReadinessProbe checks if the command is ready after finishing all it's tasks. The
+					// cmdExecutorImage will touch this file once it's done and hence having the below probe will
+					// allow the status to get reflected in the pod readiness probe
 					ReadinessProbe: &v1.Probe{
 						Handler: v1.Handler{
 							Exec: &v1.ExecAction{
@@ -469,7 +488,7 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 		if createdPod != nil {
 			err := k8s.Instance().DeletePods([]v1.Pod{*createdPod}, false)
 			if err != nil {
-				logrus.Warnf("failed to delete command executor pod: [%s] %s due to: %v",
+				logrus.Warnf("Failed to delete command executor pod: [%s] %s due to: %v",
 					createdPod.GetNamespace(), createdPod.GetName(), err)
 			}
 		}
@@ -478,9 +497,11 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 	logrus.Infof("Created pod command executor: [%s] %s", createdPod.GetNamespace(), createdPod.GetName())
 	err = waitForExecPodCompletion(createdPod)
 	if err != nil {
+		// Since the command executor failed, fetch it's status using the pod's name as the key. The fetched status
+		// will have more details on why it failed (for e.g what commands failed to run and why)
 		status, statusFetchErr := status.Get(createdPod.GetName())
 		if statusFetchErr != nil {
-			logrus.Warnf("failed to fetch status of command executor due to: %v", statusFetchErr)
+			logrus.Warnf("Failed to fetch status of command executor due to: %v", statusFetchErr)
 			return err
 		}
 
@@ -491,8 +512,9 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 	return nil
 }
 
+// waitForExecPodCompletion waits until the pod has completed (success or failure)
 func waitForExecPodCompletion(pod *v1.Pod) error {
-	logrus.Infof("waiting for pod: [%s] %s readiness with backoff: %v", pod.GetNamespace(), pod.GetName(), execCmdBackoff)
+	logrus.Infof("Waiting for pod: [%s] %s readiness with backoff: %v", pod.GetNamespace(), pod.GetName(), execCmdBackoff)
 	return wait.ExponentialBackoff(execCmdBackoff, func() (bool, error) {
 		p, err := k8s.Instance().GetPodByUID(pod.GetUID(), pod.GetNamespace())
 		if err != nil {
@@ -500,13 +522,13 @@ func waitForExecPodCompletion(pod *v1.Pod) error {
 		}
 
 		if p.Status.Phase == v1.PodFailed {
-			errMsg := fmt.Sprintf("pod: [%s] %s failed", p.GetNamespace(), p.GetName())
+			errMsg := fmt.Sprintf("Pod: [%s] %s failed", p.GetNamespace(), p.GetName())
 			logrus.Errorf(errMsg)
 			return true, fmt.Errorf(errMsg)
 		}
 
 		if p.Status.Phase == v1.PodSucceeded {
-			logrus.Infof("pod: [%s] %s succeeded", pod.GetNamespace(), pod.GetName())
+			logrus.Infof("Pod: [%s] %s succeeded", pod.GetNamespace(), pod.GetName())
 			return true, nil
 		}
 

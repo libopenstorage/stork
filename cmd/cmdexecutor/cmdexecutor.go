@@ -71,6 +71,7 @@ func main() {
 		}
 	}
 
+	// Get hostname which will be used as a key to track status of this command executor's commands
 	hostname, err := getHostname()
 	if err != nil {
 		logrus.Fatalf(err.Error())
@@ -102,12 +103,12 @@ func main() {
 		executors = append(executors, executor)
 	}
 
-	// Create an aggregrate channel for errors
-	aggChan := make(chan error)
+	// Create an aggregrate channel for all error channels for above executors
+	aggErrorChan := make(chan error)
 	for _, ch := range errChans {
 		go func(c chan error) {
 			for err := range c {
-				aggChan <- err
+				aggErrorChan <- err
 			}
 		}(ch)
 	}
@@ -129,12 +130,15 @@ func main() {
 		}(errChans[podKey], done, executor)
 	}
 
-	// Wait on the aggregrated channel for errors and completion
+	// Now go into a wait loop which will exit if either of the 2 things happen
+	//   1) If any of the executors return error    (FAIL)
+	//   2) All the executors complete successfully (PASS)
 	doneCount := 0
 Loop:
 	for {
 		select {
-		case err := <-aggChan:
+		case err := <-aggErrorChan:
+			// If we hit any error, persist the error using hostname as key and then exit
 			persistStatusErr := status.Persist(hostname, err.Error())
 			if persistStatusErr != nil {
 				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
@@ -143,6 +147,7 @@ Loop:
 			logrus.Fatalf(err.Error())
 		case isDone := <-done:
 			if isDone {
+				// as each executor is done, track how many are done
 				doneCount++
 				if doneCount == len(executors) {
 					logrus.Infof("successfully executed command: %s on all pods: %v", command, podList)
@@ -150,6 +155,7 @@ Loop:
 					if err != nil {
 						logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
 					}
+					// All executors are done, we can exit successfully now
 					break Loop
 				}
 			}

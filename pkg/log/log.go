@@ -1,8 +1,6 @@
 package log
 
 import (
-	"fmt"
-
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
@@ -99,7 +97,8 @@ func StatefulSetV1Beta2Log(ss *appv1beta2.StatefulSet) *logrus.Entry {
 func SnapshotLog(snap *crdv1.VolumeSnapshot) *logrus.Entry {
 	if snap != nil {
 		return logrus.WithFields(logrus.Fields{
-			"Snapshot": fmt.Sprintf("[%s] %s", snap.Metadata.Namespace, snap.Metadata.Name),
+			"SnapshotNamespace": snap.Metadata.Namespace,
+			"SnapshotName":      snap.Metadata.Name,
 		})
 	}
 

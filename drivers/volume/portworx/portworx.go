@@ -26,6 +26,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1251,7 +1252,7 @@ func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Persiste
 			log.SnapshotLog(snap).Infof("looking for PVCs with group labels: %v", groupLabels)
 			pvcs := make([]v1.PersistentVolumeClaim, 0)
 			if len(groupID) > 0 {
-				groupIDPVCs, err := p.getPVCsForGroupID(groupID)
+				groupIDPVCs, err := p.getPVCsForGroupID(snap.Metadata.Namespace, groupID)
 				if err != nil {
 					return nil, err
 				}
@@ -1283,21 +1284,37 @@ func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Persiste
 	}
 }
 
-func (p *portworx) getPVCsForGroupID(groupID string) ([]v1.PersistentVolumeClaim, error) {
-	allSCs, err := k8s.Instance().GetStorageClasses(nil)
+func (p *portworx) getPVCsForGroupID(namespace, groupID string) ([]v1.PersistentVolumeClaim, error) {
+	// List all PX volumes for given namespace and group ID
+	vols, err := p.volDriver.Enumerate(
+		&api.VolumeLocator{
+			VolumeLabels: map[string]string{
+				"namespace": namespace,
+			},
+		},
+		map[string]string{
+			api.SpecGroup: groupID,
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	pvcsWithGroupID := make([]v1.PersistentVolumeClaim, 0)
-	for _, sc := range allSCs.Items {
-		for k, v := range sc.Parameters {
-			if k == api.SpecGroup && v == groupID {
-				pvcsForSC, err := k8s.Instance().GetPVCsUsingStorageClass(sc.GetName())
+	for _, vol := range vols {
+		if vol.Locator.VolumeLabels != nil {
+			pvcName, ok := vol.Locator.VolumeLabels[pvcNameLabel]
+			if ok && len(pvcName) > 0 {
+				pvc, err := k8s.Instance().GetPersistentVolumeClaim(pvcName, namespace)
 				if err != nil {
+					if k8s_errors.IsNotFound(err) {
+						// the PVC may have been deleted but the PX volume is still present. Skip this vol.
+						continue
+					}
+
 					return nil, err
 				}
-				pvcsWithGroupID = append(pvcsWithGroupID, pvcsForSC...)
+				pvcsWithGroupID = append(pvcsWithGroupID, *pvc)
 			}
 		}
 	}

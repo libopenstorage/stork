@@ -133,7 +133,8 @@ func (s *SnapshotController) Start() error {
 	provisioner.Run(s.stopChannel)
 
 	if err := rule.PerformRuleRecovery(); err != nil {
-		log.Fatalf("failed to perform recovery for snapshot rules due to: %v", err)
+		log.Errorf("failed to perform recovery for snapshot rules due to: %v", err)
+		return err
 	}
 
 	s.started = true
