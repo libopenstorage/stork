@@ -84,6 +84,37 @@ var snapAPICallBackoff = wait.Backoff{
 	Steps:    20,
 }
 
+// ValidateSnapRule validates the rules if they are present in the given snapshot's annotations
+func ValidateSnapRule(snap *crdv1.VolumeSnapshot) error {
+	if snap.Metadata.Annotations != nil {
+		rTypes := []ruleType{preSnapRule, postSnapRule}
+		for _, rType := range rTypes {
+			ruleName, present := snap.Metadata.Annotations[ruleAnnotationKeys[rType]]
+			if present && len(ruleName) > 0 {
+				rule, err := k8s.Instance().GetStorkRule(ruleName, snap.Metadata.Namespace)
+				if err != nil {
+					return err
+				}
+
+				for _, item := range rule.Spec {
+					for _, action := range item.Actions {
+						if action.Type == apis_stork.StorkRuleActionCommand {
+							if action.Background && rType == postSnapRule {
+								return fmt.Errorf("background actions are not supported for post snapshot rules")
+							}
+						} else {
+							return fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
+								action.Type, rule.GetNamespace(), rule.GetName())
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // ExecutePreSnapRule executes the pre snapshot rule. pvcs is a list of PVCs that are associated
 // with the snapshot. It returns a channel which the caller can trigger to delete the termination of background commands
 func ExecutePreSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot) (chan bool, error) {
@@ -128,8 +159,7 @@ func PerformRuleRecovery() error {
 			value := snap.Metadata.Annotations[podsWithRunningCommandsKey]
 			if len(value) > 0 {
 				backgroundPodList := make([]v1.Pod, 0)
-				log.SnapshotLog(&snap).Infof("Performing recovery to terminate commands tracker: %v",
-					snap.Metadata.Namespace, snap.Metadata.Name, value)
+				log.SnapshotLog(&snap).Infof("Performing recovery to terminate commands tracker: %v", value)
 				taskTracker := commandTask{}
 
 				err := json.Unmarshal([]byte(value), &taskTracker)
@@ -173,6 +203,11 @@ func PerformRuleRecovery() error {
 // executeSnapRule executes rules in the given snap. pvcs are used to figure out the pods on which the rule actions will be
 // run on
 func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot, rType ruleType) (chan bool, error) {
+	// Validate the snap rule. Don't depend on callers to invoke this
+	if err := ValidateSnapRule(snap); err != nil {
+		return nil, err
+	}
+
 	backgroundCommandTermChan := make(chan bool, 1)
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[ruleAnnotationKeys[rType]]
@@ -221,9 +256,6 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 							if err != nil {
 								return backgroundCommandTermChan, err
 							}
-						} else {
-							return backgroundCommandTermChan, fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
-								action.Type, rule.GetNamespace(), rule.GetName())
 						}
 					}
 				}
@@ -262,10 +294,6 @@ func executeCommandAction(
 	}
 
 	if action.Background {
-		if rType == postSnapRule {
-			return fmt.Errorf("background actions are not supported for post snapshot rules")
-		}
-
 		go func() {
 			if len(podsForAction) > 0 {
 				terminate := <-backgroundCommandTermChan

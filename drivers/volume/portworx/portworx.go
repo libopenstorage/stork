@@ -438,6 +438,12 @@ func (p *portworx) SnapshotCreate(
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
+	if err := rule.ValidateSnapRule(snap); err != nil {
+		err = fmt.Errorf("failed to validate snap rule due to: %v", err)
+		log.SnapshotLog(snap).Errorf(err.Error())
+		return nil, getErrorSnapshotConditions(err), err
+	}
+
 	backgroundCommandTermChan, err := rule.ExecutePreSnapRule(pvcsForSnapshot, snap)
 	if err != nil {
 		err = fmt.Errorf("failed to run pre-snap rule due to: %v", err)

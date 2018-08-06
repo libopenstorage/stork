@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var snapRuleFailRegex = regexp.MustCompile("^snapshot failed due to err.+failed to run (pre|post)-snap rule.+")
+var snapRuleFailRegex = regexp.MustCompile("^snapshot failed due to err.+(failed to validate snap rule|failed to run (pre|post)-snap rule).+")
 
 func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
@@ -151,7 +151,7 @@ func snapshot3DTest(t *testing.T) {
 		// all snapshot should fail
 		for _, snap := range snaps {
 			err = verifyFailedSnapshot(snap.Name, snap.Namespace)
-			require.NoError(t, err, "failed to check failure of volumesnapshot")
+			require.NoError(t, err, fmt.Sprintf("failed to check failure of volumesnapshot: [%s] %s", snap.Namespace, snap.Name))
 		}
 	}
 	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
