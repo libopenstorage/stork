@@ -3,7 +3,7 @@ kind: StorkRule
 metadata:
   name: px-presnap-unsupported-rule
   annotations:
-    "openstorage/cmdexecutor-image": "openstorage/cmdexecutor:latest"
+    "stork/cmdexecutor-image": "openstorage/cmdexecutor:latest"
 spec:
   - podSelector:
       app: mysql
