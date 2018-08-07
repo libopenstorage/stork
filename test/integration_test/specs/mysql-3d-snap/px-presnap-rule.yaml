@@ -14,4 +14,10 @@ spec:
       runInSinglePod: true
     - type: command
       background: true
+      runInSinglePod: true
+      # this command is just to test multiple background commands
+      value: mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'show databases;system ${WAIT_CMD};'
+    - type: command
+      background: true
+      # this command will flush tables with read lock
       value: mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'flush tables with read lock;system ${WAIT_CMD};'
