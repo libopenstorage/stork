@@ -1,0 +1,11 @@
+apiVersion: volumesnapshot.external-storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: failing-3d-snapshot-unsupported-rule
+  namespace: default
+  annotations:
+    portworx.selector/app: mysql
+    stork.rule/pre-snapshot: px-presnap-unsupported-rule
+spec:
+  persistentVolumeClaimName: mysql-data-1
+

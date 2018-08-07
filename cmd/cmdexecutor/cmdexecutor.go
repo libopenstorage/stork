@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
+	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/sirupsen/logrus"
 )
@@ -70,7 +71,14 @@ func main() {
 		}
 	}
 
+	// Get hostname which will be used as a key to track status of this command executor's commands
+	hostname, err := getHostname()
+	if err != nil {
+		logrus.Fatalf(err.Error())
+	}
+
 	executors := make([]cmdexecutor.Executor, 0)
+	errChans := make(map[string]chan error)
 	// Start the commands
 	for _, pod := range podList {
 		namespace, name, err := parsePodNameAndNamespace(pod)
@@ -78,36 +86,94 @@ func main() {
 			logrus.Fatalf("failed to parse pod due to: %v", err)
 		}
 
-		logrus.Infof("pod: [%s] %s", namespace, name)
 		executor := cmdexecutor.Init(namespace, name, podContainer, command, taskID)
-		err = executor.Start()
+		errChan := make(chan error)
+		errChans[createPodStringFromNameAndNamespace(namespace, name)] = errChan
+
+		err = executor.Start(errChan)
 		if err != nil {
-			logrus.Fatalf("failed to run command in pod: [%s] %s due to: %v", namespace, name, err)
+			msg := fmt.Sprintf("failed to run command in pod: [%s] %s due to: %v", namespace, name, err)
+			persistStatusErr := status.Persist(hostname, msg)
+			if persistStatusErr != nil {
+				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
+			}
+			logrus.Fatalf(msg)
 		}
 
 		executors = append(executors, executor)
 	}
 
+	// Create an aggregrate channel for all error channels for above executors
+	aggErrorChan := make(chan error)
+	for _, ch := range errChans {
+		go func(c chan error) {
+			for err := range c {
+				aggErrorChan <- err
+			}
+		}(ch)
+	}
+
 	// Check command status
-	logrus.Infof("Checking status on command: %s on pods", command)
-	failedPods := make(map[string]error)
+	done := make(chan bool)
+	logrus.Infof("Checking status on command: %s", command)
 	for _, executor := range executors {
-		err := executor.Wait(time.Duration(statusCheckTimeout))
+		ns, name := executor.GetPod()
+		podKey := createPodStringFromNameAndNamespace(ns, name)
+		go func(errChan chan error, doneChan chan bool, execInst cmdexecutor.Executor) {
+			err := execInst.Wait(time.Duration(statusCheckTimeout))
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			doneChan <- true
+		}(errChans[podKey], done, executor)
+	}
+
+	// Now go into a wait loop which will exit if either of the 2 things happen
+	//   1) If any of the executors return error    (FAIL)
+	//   2) All the executors complete successfully (PASS)
+	doneCount := 0
+Loop:
+	for {
+		select {
+		case err := <-aggErrorChan:
+			// If we hit any error, persist the error using hostname as key and then exit
+			persistStatusErr := status.Persist(hostname, err.Error())
+			if persistStatusErr != nil {
+				logrus.Warnf("failed to persist cmd executor status due to: %v", persistStatusErr)
+			}
+
+			logrus.Fatalf(err.Error())
+		case isDone := <-done:
+			if isDone {
+				// as each executor is done, track how many are done
+				doneCount++
+				if doneCount == len(executors) {
+					logrus.Infof("successfully executed command: %s on all pods: %v", command, podList)
+					_, err = os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
+					if err != nil {
+						logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
+					}
+					// All executors are done, we can exit successfully now
+					break Loop
+				}
+			}
+		}
+	}
+}
+
+func getHostname() (string, error) {
+	var err error
+	hostname := os.Getenv("HOSTNAME")
+	if len(hostname) == 0 {
+		hostname, err = os.Hostname()
 		if err != nil {
-			ns, name := executor.GetPod()
-			failedPods[fmt.Sprintf("%s/%s", ns, name)] = err
+			return "", fmt.Errorf("failed to get hostname of command executor due to: %v", err)
 		}
 	}
 
-	if len(failedPods) > 0 {
-		logrus.Fatalf("pod executor failed as following commands failed. %v", failedPods)
-	}
-
-	logrus.Infof("successfully executed command: %s on all pods: %v...", command, podList)
-	_, err = os.OpenFile(statusFile, os.O_RDONLY|os.O_CREATE, 0666)
-	if err != nil {
-		logrus.Fatalf("failed to create statusfile: %s due to: %v", statusFile, err)
-	}
+	return hostname, nil
 }
 
 // command line arguments
