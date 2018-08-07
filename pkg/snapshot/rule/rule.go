@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	defaultCmdExecutorImage     = "openstorage/cmdexecutor:1.0"
-	cmdExecutorImageOverrideKey = "openstorage/cmdexecutor-image"
+	defaultCmdExecutorImage     = "openstorage/cmdexecutor:0.1"
+	cmdExecutorImageOverrideKey = "stork/cmdexecutor-image"
 	storkServiceAccount         = "stork-account"
 	podsWithRunningCommandsKey  = "stork/pods-with-running-cmds"
 

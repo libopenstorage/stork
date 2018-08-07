@@ -2,6 +2,8 @@ apiVersion: stork.libopenstorage.com/v1alpha1
 kind: StorkRule
 metadata:
   name: px-presnap-unsupported-rule
+  annotations:
+    "stork/cmdexecutor-image": "openstorage/cmdexecutor:latest"
 spec:
   - podSelector:
       app: mysql
