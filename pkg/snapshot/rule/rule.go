@@ -208,7 +208,6 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 		return nil, err
 	}
 
-	backgroundCommandTermChan := make(chan bool, 1)
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[ruleAnnotationKeys[rType]]
 		if present && len(ruleName) > 0 {
@@ -236,6 +235,14 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 					return nil, err
 				}
 
+				// start a watcher thread that will accumulate pods which have background commands to
+				// terminate and also watch a signal channel that indicates when to terminate them
+				backgroundCommandTermChan := make(chan bool, 1)
+				backgroundPodListChan := make(chan v1.Pod)
+				go cmdTerminationWatcher(backgroundPodListChan, backgroundCommandTermChan, snap, taskID.String())
+
+				// backgroundActionPresent is used to track if there is atleast one background action
+				backgroundActionPresent := false
 				for _, item := range rule.Spec {
 					filteredPods := make([]v1.Pod, 0)
 					// filter pods and only uses the ones that match this selector
@@ -251,19 +258,38 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 					}
 
 					for _, action := range item.Actions {
+						if action.Background {
+							backgroundActionPresent = true
+						}
+
 						if action.Type == apis_stork.StorkRuleActionCommand {
-							err := executeCommandAction(filteredPods, rule, snap, action, backgroundCommandTermChan, rType, taskID)
+							err := executeCommandAction(filteredPods, rule, snap, action, backgroundPodListChan, rType, taskID)
 							if err != nil {
-								return backgroundCommandTermChan, err
+								// if any action fails, terminate all background jobs and don't depend on caller
+								// to clean them up
+								if backgroundActionPresent {
+									backgroundCommandTermChan <- true
+									return nil, err
+								}
+
+								backgroundCommandTermChan <- false
+								return nil, err
 							}
 						}
 					}
 				}
+
+				if backgroundActionPresent {
+					return backgroundCommandTermChan, nil
+				}
+
+				backgroundCommandTermChan <- false
+				return nil, nil
 			}
 		}
 	}
 
-	return backgroundCommandTermChan, nil
+	return nil, nil
 }
 
 // executeCommandAction executes the command type action on given pods:
@@ -272,7 +298,7 @@ func executeCommandAction(
 	rule *apis_stork.StorkRule,
 	snap *crdv1.VolumeSnapshot,
 	action apis_stork.StorkRuleAction,
-	backgroundCommandTermChan chan bool,
+	backgroundPodNotifyChan chan v1.Pod,
 	rType ruleType, taskID *uuid.UUID) error {
 	if len(pods) == 0 {
 		return nil
@@ -294,16 +320,9 @@ func executeCommandAction(
 	}
 
 	if action.Background {
-		go func() {
-			if len(podsForAction) > 0 {
-				terminate := <-backgroundCommandTermChan
-				if terminate {
-					if err := terminateCommandInPods(snap, podsForAction, taskID.String()); err != nil {
-						log.SnapshotLog(snap).Warnf("failed to terminate background command in pods due to: %v", err)
-					}
-				}
-			}
-		}()
+		for _, podToTerminate := range podsForAction {
+			backgroundPodNotifyChan <- podToTerminate
+		}
 
 		// regardless of the outcome of running the background command, we first update the
 		// snapshot to track pods which might have a running background command
@@ -562,6 +581,36 @@ func waitForExecPodCompletion(pod *v1.Pod) error {
 
 		return false, nil
 	})
+}
+
+// cmdTerminationWatcher accumulates pods supplied to the given podListChan and when
+// the terminationSignalChan is sent a true signal, it terminates commands on the accumulated
+// pods
+func cmdTerminationWatcher(
+	podListChan chan v1.Pod,
+	terminationSignalChan chan bool,
+	snap *crdv1.VolumeSnapshot,
+	id string) {
+	// For tracking, use a map/set keyed by uid to handle duplicates
+	podsToTerminate := make(map[string]v1.Pod)
+	for {
+		select {
+		case pod := <-podListChan:
+			podsToTerminate[string(pod.GetUID())] = pod
+		case terminate := <-terminationSignalChan:
+			if terminate {
+				podList := make([]v1.Pod, 0)
+				for _, pod := range podsToTerminate {
+					podList = append(podList, pod)
+				}
+
+				if err := terminateCommandInPods(snap, podList, id); err != nil {
+					log.SnapshotLog(snap).Warnf("failed to terminate background command in pods due to: %v", err)
+				}
+			}
+			break
+		}
+	}
 }
 
 func hasSubset(set map[string]string, subset map[string]string) bool {

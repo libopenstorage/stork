@@ -445,17 +445,18 @@ func (p *portworx) SnapshotCreate(
 	}
 
 	backgroundCommandTermChan, err := rule.ExecutePreSnapRule(pvcsForSnapshot, snap)
-	if err != nil {
-		err = fmt.Errorf("failed to run pre-snap rule due to: %v", err)
-		log.SnapshotLog(snap).Errorf(err.Error())
-		return nil, getErrorSnapshotConditions(err), err
-	}
 
 	defer func() {
 		if backgroundCommandTermChan != nil {
 			backgroundCommandTermChan <- true // regardless of what happens, always terminate commands
 		}
 	}()
+
+	if err != nil {
+		err = fmt.Errorf("failed to run pre-snap rule due to: %v", err)
+		log.SnapshotLog(snap).Errorf(err.Error())
+		return nil, getErrorSnapshotConditions(err), err
+	}
 
 	snapStatusConditions := []crdv1.VolumeSnapshotCondition{}
 	var snapshotID, snapshotDataName, snapshotCredID string
