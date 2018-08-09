@@ -265,8 +265,11 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 						if action.Type == apis_stork.StorkRuleActionCommand {
 							err := executeCommandAction(filteredPods, rule, snap, action, backgroundPodListChan, rType, taskID)
 							if err != nil {
+								// if any action fails, terminate all background jobs and don't depend on caller
+								// to clean them up
 								if backgroundActionPresent {
-									return backgroundCommandTermChan, err
+									backgroundCommandTermChan <- true
+									return nil, err
 								}
 
 								backgroundCommandTermChan <- false
