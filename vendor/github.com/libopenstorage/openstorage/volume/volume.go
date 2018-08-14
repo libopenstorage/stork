@@ -101,7 +101,7 @@ type IODriver interface {
 type SnapshotDriver interface {
 	// Snapshot create volume snapshot.
 	// Errors ErrEnoEnt may be returned
-	Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator) (string, error)
+	Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error)
 	// Restore restores volume to specified snapshot.
 	Restore(volumeID string, snapshotID string) error
 	// GroupSnapshot takes a snapshot of specified volumegroup.
@@ -160,6 +160,16 @@ type CloudBackupDriver interface {
 	CloudBackupSchedEnumerate() (*api.CloudBackupSchedEnumerateResponse, error)
 }
 
+// CloudMigrateDriver interface provides Cloud migration features
+type CloudMigrateDriver interface {
+	// CloudMigrateStart starts a migrate operation
+	CloudMigrateStart(request *api.CloudMigrateStartRequest) error
+	// CloudMigrateCancel cancels a migrate operation
+	CloudMigrateCancel(request *api.CloudMigrateCancelRequest) error
+	// CloudMigrateStatus returns status for the migration operations
+	CloudMigrateStatus() (*api.CloudMigrateStatusResponse, error)
+}
+
 // ProtoDriver must be implemented by all volume drivers.  It specifies the
 // most basic functionality, such as creating and deleting volumes.
 type ProtoDriver interface {
@@ -168,10 +178,13 @@ type ProtoDriver interface {
 	QuiesceDriver
 	CredsDriver
 	CloudBackupDriver
+	CloudMigrateDriver
 	// Name returns the name of the driver.
 	Name() string
 	// Type of this driver
 	Type() api.DriverType
+	// Version information of the driver
+	Version() (*api.StorageVersion, error)
 	// Create a new Vol for the specific volume spec.
 	// It returns a system generated VolumeID that uniquely identifies the volume
 	Create(locator *api.VolumeLocator, Source *api.Source, spec *api.VolumeSpec) (string, error)
@@ -194,6 +207,8 @@ type ProtoDriver interface {
 	Status() [][2]string
 	// Shutdown and cleanup.
 	Shutdown()
+	// DU specified volume and potentially the subfolder if provided.
+	Catalog(volumeid, subfolder string, depth string) (api.CatalogResponse, error)
 }
 
 // Enumerator provides a set of interfaces to get details on a set of volumes.
