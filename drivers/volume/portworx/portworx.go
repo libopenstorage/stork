@@ -85,15 +85,8 @@ const (
 	cloudSnapshotSteps        = math.MaxInt32
 )
 
-const (
-	cloudSnapStatusDone    = "Done"
-	cloudSnapStatusActive  = "Active"
-	cloudSnapStatusPending = "Pending"
-	cloudSnapStatusFailed  = "Failed"
-)
-
 type cloudSnapStatus struct {
-	status      string
+	status      api.CloudBackupStatusType
 	msg         string
 	cloudSnapID string
 }
@@ -599,7 +592,7 @@ func (p *portworx) SnapshotCreate(
 					namespaceLabel:     (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNamespaceTag],
 				},
 			}
-			snapshotID, err = p.volDriver.Snapshot(volumeID, true, locator)
+			snapshotID, err = p.volDriver.Snapshot(volumeID, true, locator, true)
 			if err != nil {
 				return nil, getErrorSnapshotConditions(err), err
 			}
@@ -736,7 +729,7 @@ func (p *portworx) SnapshotRestore(
 				namespaceLabel: pvc.Namespace,
 			},
 		}
-		restoredVolumeID, err = p.volDriver.Snapshot(snapID, false, locator)
+		restoredVolumeID, err = p.volDriver.Snapshot(snapID, false, locator, true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -825,12 +818,12 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 		}
 
 		csStatus := p.checkCloudSnapStatus(api.CloudBackupOp, pv.Spec.PortworxVolume.VolumeID)
-		if csStatus.status == cloudSnapStatusFailed {
+		if csStatus.status == api.CloudBackupStatusFailed {
 			err = fmt.Errorf(csStatus.msg)
 			return getErrorSnapshotConditions(err), false, err
 		}
 
-		if csStatus.status == cloudSnapStatusPending {
+		if csStatus.status == api.CloudBackupStatusNotStarted {
 			pendingCond := getPendingSnapshotConditions(csStatus.msg)
 			return &pendingCond, false, nil
 		}
@@ -1033,23 +1026,23 @@ func (p *portworx) waitForCloudSnapCompletion(
 	backgroundCommandTermChan chan bool) (cloudSnapStatus, error) {
 
 	csStatus := cloudSnapStatus{
-		status: cloudSnapStatusFailed,
+		status: api.CloudBackupStatusFailed,
 		msg:    fmt.Sprintf("cloudsnap status unknown"),
 	}
 
 	err := wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
 		csStatus = p.checkCloudSnapStatus(op, volID)
 		switch csStatus.status {
-		case cloudSnapStatusFailed:
+		case api.CloudBackupStatusFailed:
 			err := fmt.Errorf("Cloudsnap %s of %s failed due to: %s", op, volID, csStatus.msg)
 			logrus.Errorf(err.Error())
 			return true, err
-		case cloudSnapStatusDone:
+		case api.CloudBackupStatusDone:
 			if verbose {
 				logrus.Infof(csStatus.msg)
 			}
 			return true, nil
-		case cloudSnapStatusActive:
+		case api.CloudBackupStatusActive:
 			if verbose {
 				logrus.Infof(csStatus.msg)
 			}
@@ -1059,7 +1052,7 @@ func (p *portworx) waitForCloudSnapCompletion(
 				backgroundCommandTermChan <- true
 			}
 			return false, nil
-		case cloudSnapStatusPending:
+		case api.CloudBackupStatusNotStarted:
 			if verbose {
 				logrus.Infof(csStatus.msg)
 			}
@@ -1079,7 +1072,7 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 	})
 	if err != nil {
 		return cloudSnapStatus{
-			status: cloudSnapStatusFailed,
+			status: api.CloudBackupStatusFailed,
 			msg:    err.Error(),
 		}
 	}
@@ -1087,34 +1080,34 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 	csStatus, present := response.Statuses[volID]
 	if !present {
 		return cloudSnapStatus{
-			status: cloudSnapStatusFailed,
+			status: api.CloudBackupStatusFailed,
 			msg:    fmt.Sprintf("failed to get cloudsnap status for volume: %s", volID),
 		}
 	}
 
 	statusStr := getCloudSnapStatusString(&csStatus)
 
-	if csStatus.Status == cloudSnapStatusFailed {
+	if csStatus.Status == api.CloudBackupStatusFailed {
 		return cloudSnapStatus{
-			status:      cloudSnapStatusFailed,
+			status:      api.CloudBackupStatusFailed,
 			cloudSnapID: csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s failed.",
 				op, csStatus.ID, volID),
 		}
 	}
 
-	if csStatus.Status == cloudSnapStatusActive {
+	if csStatus.Status == api.CloudBackupStatusActive {
 		return cloudSnapStatus{
-			status:      cloudSnapStatusActive,
+			status:      api.CloudBackupStatusActive,
 			cloudSnapID: csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s has started and is active.",
 				op, csStatus.ID, volID),
 		}
 	}
 
-	if !strings.Contains(csStatus.Status, cloudSnapStatusDone) {
+	if csStatus.Status != api.CloudBackupStatusDone {
 		return cloudSnapStatus{
-			status:      cloudSnapStatusPending,
+			status:      api.CloudBackupStatusNotStarted,
 			cloudSnapID: csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s still not done. status: %s",
 				op, csStatus.ID, volID, statusStr),
@@ -1122,7 +1115,7 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 	}
 
 	return cloudSnapStatus{
-		status:      cloudSnapStatusDone,
+		status:      api.CloudBackupStatusDone,
 		cloudSnapID: csStatus.ID,
 		msg:         fmt.Sprintf("cloudsnap %s id: %s for %s done.", op, csStatus.ID, volID),
 	}
