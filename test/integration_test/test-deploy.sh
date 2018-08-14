@@ -2,6 +2,7 @@
 
 initializer="false"
 snapshot_scale=10
+image_name="stork:master"
 for i in "$@"
 do
 case $i in
@@ -11,8 +12,14 @@ case $i in
         shift
         ;;
     --snapshot-scale-count)
-        echo "Scale for snapshot test (default 10)"
+        echo "Scale for snapshot test (default 10): $2"
         snapshot_scale=$2
+        shift
+        shift
+        ;;
+    --stork-image)
+        echo "Stork Docker image to use for test: $2"
+        image_name=$2
         shift
         shift
         ;;
@@ -33,7 +40,7 @@ fi
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
-sed -i 's/'stork:.*'/'stork:master'/g' /specs/stork-deployment.yaml
+sed -i 's/'stork:.*'/'"$image_name"'/g' /specs/stork-deployment.yaml
 
 echo "Creating stork deployment"
 kubectl apply -f /specs/stork-deployment.yaml
