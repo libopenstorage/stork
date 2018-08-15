@@ -3,6 +3,7 @@
 initializer="false"
 snapshot_scale=10
 image_name="stork:master"
+test_image_name="stork_test:latest"
 for i in "$@"
 do
 case $i in
@@ -20,6 +21,12 @@ case $i in
     --stork-image)
         echo "Stork Docker image to use for test: $2"
         image_name=$2
+        shift
+        shift
+        ;;
+    --stork-test-image)
+        echo "Stork Test Docker image to use for test: $2"
+        test_image_name=$2
         shift
         shift
         ;;
@@ -79,6 +86,7 @@ done
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
 
 kubectl delete -f /testspecs/stork-test-pod.yaml
 kubectl create -f /testspecs/stork-test-pod.yaml
