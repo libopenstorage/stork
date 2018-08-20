@@ -273,7 +273,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 		})
 		Step("scale down all applications", func() {
 			for _, ctx := range contexts {
-				Step("scale down all deployments/stateful sets ", func() {
+				Step(fmt.Sprintf("scale down app %s by 1", ctx.App.Key), func() {
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleDownMap {
@@ -283,6 +283,11 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
+			}
+			Step("Giving few seconds for scaled applications to stabilize", func() {
+				time.Sleep(10 * time.Second)
+			})
+			for _, ctx := range contexts {
 				ValidateContext(ctx)
 			}
 		})
