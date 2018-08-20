@@ -58,7 +58,7 @@ func setup(t *testing.T) {
 	schedulerDriver, err = scheduler.Get(schedulerDriverName)
 	require.NoError(t, err, "Error getting scheduler driver %v", schedulerDriverName)
 
-	err = schedulerDriver.Init("/specs", volumeDriverName, nodeDriverName)
+	err = schedulerDriver.Init("specs", volumeDriverName, nodeDriverName)
 	require.NoError(t, err, "Error initializing scheduler driver %v", schedulerDriverName)
 
 	volumeDriver, err = volume.Get(volumeDriverName)

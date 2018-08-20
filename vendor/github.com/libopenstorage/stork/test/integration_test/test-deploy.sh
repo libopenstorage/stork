@@ -2,6 +2,8 @@
 
 initializer="false"
 snapshot_scale=10
+image_name="stork:master"
+test_image_name="stork_test:latest"
 for i in "$@"
 do
 case $i in
@@ -11,8 +13,20 @@ case $i in
         shift
         ;;
     --snapshot-scale-count)
-        echo "Scale for snapshot test (default 10)"
+        echo "Scale for snapshot test (default 10): $2"
         snapshot_scale=$2
+        shift
+        shift
+        ;;
+    --stork-image)
+        echo "Stork Docker image to use for test: $2"
+        image_name=$2
+        shift
+        shift
+        ;;
+    --stork-test-image)
+        echo "Stork Test Docker image to use for test: $2"
+        test_image_name=$2
         shift
         shift
         ;;
@@ -33,7 +47,7 @@ fi
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
-sed -i 's/'stork:.*'/'stork:master'/g' /specs/stork-deployment.yaml
+sed -i 's/'stork:.*'/'"$image_name"'/g' /specs/stork-deployment.yaml
 
 echo "Creating stork deployment"
 kubectl apply -f /specs/stork-deployment.yaml
@@ -72,6 +86,7 @@ done
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
 
 kubectl delete -f /testspecs/stork-test-pod.yaml
 kubectl create -f /testspecs/stork-test-pod.yaml

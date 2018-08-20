@@ -1,5 +1,5 @@
 hash: 9704572e1301a8769395b7068dbacdc408843aa7e15862eca090667dd205585b
-updated: 2018-07-27T15:47:30.745286471-07:00
+updated: 2018-08-20T13:58:22.16400267-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: 783273d703149aaeb9897cf58613d5af48861c25
@@ -207,7 +207,7 @@ imports:
   - pkg/units
   - volume
 - name: github.com/libopenstorage/stork
-  version: 454eadc891b46e01ce6caafcf707c37728320a0e
+  version: 130c674ed2ee159bf86e770605d1b6c1f5bc6f64
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
@@ -285,7 +285,7 @@ imports:
 - name: github.com/portworx/kvdb
   version: b69988874e5dfea60561441f8d04e4d40ebc6c3c
 - name: github.com/portworx/sched-ops
-  version: cee4bab7f0e2f4bb3e9616744c760b0fff73f0e5
+  version: 2421ec3f1c2170f99a3aa4972b5596a83bef96ec
   subpackages:
   - k8s
   - task
