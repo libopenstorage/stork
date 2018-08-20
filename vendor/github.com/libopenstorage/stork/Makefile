@@ -58,6 +58,7 @@ vendor-without-update:
 	GOOS=linux GOARCH=amd64 govendor update +vendor
 	GOOS=linux GOARCH=amd64 govendor add +external
 	GOOS=linux GOARCH=amd64 govendor update +vendor
+	govendor add k8s.io/code-generator/^
 
 vendor: vendor-update vendor-without-update
 
