@@ -4,37 +4,37 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// StorkRuleActionType is a type for actions that are supported in a stork rule
-type StorkRuleActionType string
+// RuleActionType is a type for actions that are supported in a stork rule
+type RuleActionType string
 
 const (
-	// StorkRuleActionCommand is a command action
-	StorkRuleActionCommand StorkRuleActionType = "command"
+	// RuleActionCommand is a command action
+	RuleActionCommand RuleActionType = "command"
 )
 
 // +genclient
 // +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// StorkRule denotes an object to declare a rule that performs actions on pods
-type StorkRule struct {
+// Rule denotes an object to declare a rule that performs actions on pods
+type Rule struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
-	Spec            []StorkRuleItem `json:"spec"`
+	Spec            []RuleItem `json:"spec"`
 }
 
-// StorkRuleItem represents one items in a stork rule spec
-type StorkRuleItem struct {
+// RuleItem represents one items in a stork rule spec
+type RuleItem struct {
 	// PodSelector is a map of key value pairs that are used to select the pods using their labels
 	PodSelector map[string]string `json:"podSelector"`
 	// Actions are actions to be performed on the pods selected using the selector
-	Actions []StorkRuleAction `json:"actions"`
+	Actions []RuleAction `json:"actions"`
 }
 
-// StorkRuleAction represents an action in a stork rule item
-type StorkRuleAction struct {
+// RuleAction represents an action in a stork rule item
+type RuleAction struct {
 	// Type is a type of the stork rule action
-	Type StorkRuleActionType `json:"type"`
+	Type RuleActionType `json:"type"`
 	// Background indicates that the action needs to be performed in the background
 	// +optional
 	Background bool `json:"background,omitempty"`
@@ -48,10 +48,10 @@ type StorkRuleAction struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// StorkRuleList is a list of stork rules
-type StorkRuleList struct {
+// RuleList is a list of stork rules
+type RuleList struct {
 	meta.TypeMeta `json:",inline"`
 	meta.ListMeta `json:"metadata,omitempty"`
 
-	Items []StorkRule `json:"items"`
+	Items []Rule `json:"items"`
 }

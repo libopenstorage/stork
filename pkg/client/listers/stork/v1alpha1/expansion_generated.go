@@ -18,10 +18,10 @@ limitations under the License.
 
 package v1alpha1
 
-// StorkRuleListerExpansion allows custom methods to be added to
-// StorkRuleLister.
-type StorkRuleListerExpansion interface{}
+// RuleListerExpansion allows custom methods to be added to
+// RuleLister.
+type RuleListerExpansion interface{}
 
-// StorkRuleNamespaceListerExpansion allows custom methods to be added to
-// StorkRuleNamespaceLister.
-type StorkRuleNamespaceListerExpansion interface{}
+// RuleNamespaceListerExpansion allows custom methods to be added to
+// RuleNamespaceLister.
+type RuleNamespaceListerExpansion interface{}

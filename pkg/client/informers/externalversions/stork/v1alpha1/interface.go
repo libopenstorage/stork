@@ -24,8 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// StorkRules returns a StorkRuleInformer.
-	StorkRules() StorkRuleInformer
+	// Rules returns a RuleInformer.
+	Rules() RuleInformer
 }
 
 type version struct {
@@ -39,7 +39,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// StorkRules returns a StorkRuleInformer.
-func (v *version) StorkRules() StorkRuleInformer {
-	return &storkRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// Rules returns a RuleInformer.
+func (v *version) Rules() RuleInformer {
+	return &ruleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

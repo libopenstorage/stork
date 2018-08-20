@@ -27,16 +27,16 @@ import (
 
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	StorkRulesGetter
+	RulesGetter
 }
 
-// StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.com group.
+// StorkV1alpha1Client is used to interact with features provided by the stork.openstorage.org group.
 type StorkV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *StorkV1alpha1Client) StorkRules(namespace string) StorkRuleInterface {
-	return newStorkRules(c, namespace)
+func (c *StorkV1alpha1Client) Rules(namespace string) RuleInterface {
+	return newRules(c, namespace)
 }
 
 // NewForConfig creates a new StorkV1alpha1Client for the given config.
