@@ -30,7 +30,7 @@ type StorkV1alpha1Interface interface {
 	RulesGetter
 }
 
-// StorkV1alpha1Client is used to interact with features provided by the stork.openstorage.org group.
+// StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.org group.
 type StorkV1alpha1Client struct {
 	restClient rest.Interface
 }

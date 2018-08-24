@@ -1,4 +1,4 @@
-apiVersion: stork.openstorage.org/v1alpha1
+apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Rule
 metadata:
   name: px-presnap-rule

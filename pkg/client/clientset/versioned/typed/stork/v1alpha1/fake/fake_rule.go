@@ -34,9 +34,9 @@ type FakeRules struct {
 	ns   string
 }
 
-var rulesResource = schema.GroupVersionResource{Group: "stork.openstorage.org", Version: "v1alpha1", Resource: "rules"}
+var rulesResource = schema.GroupVersionResource{Group: "stork.libopenstorage.org", Version: "v1alpha1", Resource: "rules"}
 
-var rulesKind = schema.GroupVersionKind{Group: "stork.openstorage.org", Version: "v1alpha1", Kind: "Rule"}
+var rulesKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "Rule"}
 
 // Get takes name of the rule, and returns the corresponding rule object, and an error if there is any.
 func (c *FakeRules) Get(name string, options v1.GetOptions) (result *v1alpha1.Rule, err error) {
