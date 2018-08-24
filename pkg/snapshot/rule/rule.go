@@ -91,14 +91,14 @@ func ValidateSnapRule(snap *crdv1.VolumeSnapshot) error {
 		for _, rType := range rTypes {
 			ruleName, present := snap.Metadata.Annotations[ruleAnnotationKeys[rType]]
 			if present && len(ruleName) > 0 {
-				rule, err := k8s.Instance().GetStorkRule(ruleName, snap.Metadata.Namespace)
+				rule, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 				if err != nil {
 					return err
 				}
 
 				for _, item := range rule.Spec {
 					for _, action := range item.Actions {
-						if action.Type == apis_stork.StorkRuleActionCommand {
+						if action.Type == apis_stork.RuleActionCommand {
 							if action.Background && rType == postSnapRule {
 								return fmt.Errorf("background actions are not supported for post snapshot rules")
 							}
@@ -230,7 +230,7 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 
 			if len(pods) > 0 {
 				// Get the rule and based on the rule execute it
-				rule, err := k8s.Instance().GetStorkRule(ruleName, snap.Metadata.Namespace)
+				rule, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 				if err != nil {
 					return nil, err
 				}
@@ -262,7 +262,7 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 							backgroundActionPresent = true
 						}
 
-						if action.Type == apis_stork.StorkRuleActionCommand {
+						if action.Type == apis_stork.RuleActionCommand {
 							err := executeCommandAction(filteredPods, rule, snap, action, backgroundPodListChan, rType, taskID)
 							if err != nil {
 								// if any action fails, terminate all background jobs and don't depend on caller
@@ -295,9 +295,9 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 // executeCommandAction executes the command type action on given pods:
 func executeCommandAction(
 	pods []v1.Pod,
-	rule *apis_stork.StorkRule,
+	rule *apis_stork.Rule,
 	snap *crdv1.VolumeSnapshot,
-	action apis_stork.StorkRuleAction,
+	action apis_stork.RuleAction,
 	backgroundPodNotifyChan chan v1.Pod,
 	rType ruleType, taskID *uuid.UUID) error {
 	if len(pods) == 0 {

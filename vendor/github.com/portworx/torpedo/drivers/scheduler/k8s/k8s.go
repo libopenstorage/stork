@@ -202,7 +202,7 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.ConfigMap); ok {
 		return specObj, nil
-	} else if specObj, ok := in.(*stork_api.StorkRule); ok {
+	} else if specObj, ok := in.(*stork_api.Rule); ok {
 		return specObj, nil
 	}
 
@@ -498,12 +498,12 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 		logrus.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
-	} else if obj, ok := spec.(*stork_api.StorkRule); ok {
+	} else if obj, ok := spec.(*stork_api.Rule); ok {
 		obj.Namespace = ns.Name
-		rule, err := k8sOps.CreateStorkRule(obj)
+		rule, err := k8sOps.CreateRule(obj)
 		if errors.IsAlreadyExists(err) {
-			if rule, err = k8sOps.GetStorkRule(obj.Name, obj.Namespace); err == nil {
-				logrus.Infof("[%v] Found existing StorkRule: %v", app.Key, rule.GetName())
+			if rule, err = k8sOps.GetRule(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Rule: %v", app.Key, rule.GetName())
 				return rule, nil
 			}
 		}
@@ -511,10 +511,10 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create StorkRule: %v, Err: %v", obj.Name, err),
+				Cause: fmt.Sprintf("Failed to create Rule: %v, Err: %v", obj.Name, err),
 			}
 		}
-		logrus.Infof("[%v] Created StorkRule: %v", app.Key, rule.GetName())
+		logrus.Infof("[%v] Created Rule: %v", app.Key, rule.GetName())
 		return rule, nil
 	}
 
@@ -561,16 +561,16 @@ func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		logrus.Infof("[%v] Destroyed Service: %v", app.Key, obj.Name)
-	} else if obj, ok := spec.(*stork_api.StorkRule); ok {
-		err := k8sOps.DeleteStorkRule(obj.Name, obj.Namespace)
+	} else if obj, ok := spec.(*stork_api.Rule); ok {
+		err := k8sOps.DeleteRule(obj.Name, obj.Namespace)
 		if err != nil {
 			return pods, &scheduler.ErrFailedToDestroyApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to destroy StorkRule: %v. Err: %v", obj.Name, err),
+				Cause: fmt.Sprintf("Failed to destroy Rule: %v. Err: %v", obj.Name, err),
 			}
 		}
 
-		logrus.Infof("[%v] Destroyed StorkRule: %v", app.Key, obj.Name)
+		logrus.Infof("[%v] Destroyed Rule: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
@@ -620,16 +620,16 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated Service: %v", ctx.App.Key, svc.Name)
-		} else if obj, ok := spec.(*stork_api.StorkRule); ok {
-			svc, err := k8sOps.GetStorkRule(obj.Name, obj.Namespace)
+		} else if obj, ok := spec.(*stork_api.Rule); ok {
+			svc, err := k8sOps.GetRule(obj.Name, obj.Namespace)
 			if err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate StorkRule: %v. Err: %v", obj.Name, err),
+					Cause: fmt.Sprintf("Failed to validate Rule: %v. Err: %v", obj.Name, err),
 				}
 			}
 
-			logrus.Infof("[%v] Validated StorkRule: %v", ctx.App.Key, svc.Name)
+			logrus.Infof("[%v] Validated Rule: %v", ctx.App.Key, svc.Name)
 		}
 	}
 
@@ -741,8 +741,8 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 			}
 
 			logrus.Infof("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
-		} else if obj, ok := spec.(*stork_api.StorkRule); ok {
-			_, err := k8sOps.GetStorkRule(obj.Name, obj.Namespace)
+		} else if obj, ok := spec.(*stork_api.Rule); ok {
+			_, err := k8sOps.GetRule(obj.Name, obj.Namespace)
 			if err == nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
@@ -751,7 +751,7 @@ func (k *k8s) WaitForDestroy(ctx *scheduler.Context) error {
 			}
 
 			if errors.IsNotFound(err) {
-				logrus.Infof("[%v] Validated destroy of StorkRule: %v", ctx.App.Key, obj.Name)
+				logrus.Infof("[%v] Validated destroy of Rule: %v", ctx.App.Key, obj.Name)
 			} else {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,

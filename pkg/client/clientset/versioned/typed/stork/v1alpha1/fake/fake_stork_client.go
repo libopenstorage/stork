@@ -28,8 +28,8 @@ type FakeStorkV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeStorkV1alpha1) StorkRules(namespace string) v1alpha1.StorkRuleInterface {
-	return &FakeStorkRules{c, namespace}
+func (c *FakeStorkV1alpha1) Rules(namespace string) v1alpha1.RuleInterface {
+	return &FakeRules{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
