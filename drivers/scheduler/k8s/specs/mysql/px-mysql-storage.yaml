@@ -1,12 +1,3 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  namespace: portworx
-  name: volume-secrets
-type: Opaque
-data:
-  mysql-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
----
 ##### Portworx storage class
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -21,11 +12,6 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: mysql-data
-  annotations:
-    px/secret-name: volume-secrets
-    px/secret-namespace: portworx
-    px/secret-key: mysql-secret
-    volume.beta.kubernetes.io/storage-class: px-mysql-sc
 spec:
   storageClassName: px-mysql-sc
   accessModes:
