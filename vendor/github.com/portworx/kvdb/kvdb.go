@@ -66,6 +66,12 @@ const (
 	RetryCountKey = "RetryCount"
 	// ACLTokenKey is the token value for ACL based KV stores
 	ACLTokenKey = "ACLToken"
+	// CAAuthAddress is the address of CA signing authority (required in consul TLS config)
+	CAAuthAddress = "CAAuthAddress"
+	// InsecureSkipVerify has a value true or false (required in consul TLS config)
+	InsecureSkipVerify = "InsecureSkipVerify"
+	// TransportScheme points to http transport being either http or https.
+	TransportScheme = "TransportScheme"
 )
 
 // List of kvdb endpoints supported versions
@@ -78,11 +84,15 @@ const (
 	EtcdVersion3 = "etcdv3"
 	// MemVersion1 key
 	MemVersion1 = "memv1"
+	// BoltVersion1 key
+	BoltVersion1 = "boltv1"
 )
 
 const (
 	// DefaultLockTryDuration is the maximum time spent trying to acquire lock
 	DefaultLockTryDuration = 300 * time.Second
+	// DefaultSeparator separate key components
+	DefaultSeparator = "/"
 )
 
 var (
@@ -318,7 +328,7 @@ func NewUpdatesCollector(
 ) (UpdatesCollector, error) {
 	collector := &updatesCollectorImpl{updates: make([]*kvdbUpdate, 0),
 		startIndex: startIndex}
-	logrus.Infof("Starting collector watch at %v", startIndex)
+	logrus.Infof("Starting collector watch on %v at %v", prefix, startIndex)
 	if err := db.WatchTree(prefix, startIndex, nil, collector.watchCb); err != nil {
 		return nil, err
 	}

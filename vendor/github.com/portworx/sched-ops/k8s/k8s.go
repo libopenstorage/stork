@@ -79,7 +79,7 @@ type Ops interface {
 	StorageClassOps
 	PersistentVolumeClaimOps
 	SnapshotOps
-	StorkRuleOps
+	RuleOps
 	SecretOps
 	ConfigMapOps
 	EventOps
@@ -377,14 +377,14 @@ type SnapshotOps interface {
 	ValidateSnapshotData(name string, retry bool) error
 }
 
-// StorkRuleOps is an interface to perform operations for k8s stork rule
-type StorkRuleOps interface {
-	// GetStorkRule fetches the given stork rule
-	GetStorkRule(name, namespace string) (*v1alpha1.StorkRule, error)
-	// CreateStorkRule creates the given stork rule
-	CreateStorkRule(rule *v1alpha1.StorkRule) (*v1alpha1.StorkRule, error)
-	// DeleteStorkRule deletes the given stork rule
-	DeleteStorkRule(name, namespace string) error
+// RuleOps is an interface to perform operations for k8s stork rule
+type RuleOps interface {
+	// GetRule fetches the given stork rule
+	GetRule(name, namespace string) (*v1alpha1.Rule, error)
+	// CreateRule creates the given stork rule
+	CreateRule(rule *v1alpha1.Rule) (*v1alpha1.Rule, error)
+	// DeleteRule deletes the given stork rule
+	DeleteRule(name, namespace string) error
 }
 
 // SecretOps is an interface to perform k8s Secret operations
@@ -2089,7 +2089,7 @@ func (k *k8sOps) ValidatePod(pod *v1.Pod) error {
 
 		ready := k.IsPodReady(*currPod)
 		if !ready {
-			return "", true, fmt.Errorf("Pod %s, ID: %s  is not ready. Status %v", pod.Name, pod.UID, pod.Status.Phase)
+			return "", true, fmt.Errorf("Pod %s, ID: %s  is not ready. Status %v", currPod.Name, currPod.UID, currPod.Status.Phase)
 		}
 
 		return "", false, nil
@@ -2573,34 +2573,34 @@ func (k *k8sOps) DeleteSnapshotData(name string) error {
 
 // Snapshot APIs - END
 
-// StorkRule APIs - BEGIN
-func (k *k8sOps) GetStorkRule(name, namespace string) (*v1alpha1.StorkRule, error) {
+// Rule APIs - BEGIN
+func (k *k8sOps) GetRule(name, namespace string) (*v1alpha1.Rule, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, nil
 	}
 
-	return k.storkClient.Stork().StorkRules(namespace).Get(name, meta_v1.GetOptions{})
+	return k.storkClient.Stork().Rules(namespace).Get(name, meta_v1.GetOptions{})
 }
 
-func (k *k8sOps) CreateStorkRule(rule *v1alpha1.StorkRule) (*v1alpha1.StorkRule, error) {
+func (k *k8sOps) CreateRule(rule *v1alpha1.Rule) (*v1alpha1.Rule, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, nil
 	}
 
-	return k.storkClient.Stork().StorkRules(rule.GetNamespace()).Create(rule)
+	return k.storkClient.Stork().Rules(rule.GetNamespace()).Create(rule)
 }
 
-func (k *k8sOps) DeleteStorkRule(name, namespace string) error {
+func (k *k8sOps) DeleteRule(name, namespace string) error {
 	if err := k.initK8sClient(); err != nil {
 		return nil
 	}
 
-	return k.storkClient.Stork().StorkRules(namespace).Delete(name, &meta_v1.DeleteOptions{
+	return k.storkClient.Stork().Rules(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
 
-// StorkRule APIs - END
+// Rule APIs - END
 
 // Secret APIs - BEGIN
 

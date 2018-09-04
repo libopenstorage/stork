@@ -174,7 +174,7 @@
     "pkg/client/clientset/versioned/scheme",
     "pkg/client/clientset/versioned/typed/stork/v1alpha1"
   ]
-  revision = "c675875fc70ca8271958d60c76fc64fb4f2028fb"
+  revision = "d950d641d9c9ceda6d9e245100b076cd8ef7633a"
 
 [[projects]]
   branch = "master"
@@ -435,6 +435,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "902c863f3abb435701fd4435b52cd0e95e621071dd9bc918bdaa9707e7e4d153"
+  inputs-digest = "850d78a1ea181ec963f1434ca356a64657444fbfd6211868ca3a3c22004ef74d"
   solver-name = "gps-cdcl"
   solver-version = 1

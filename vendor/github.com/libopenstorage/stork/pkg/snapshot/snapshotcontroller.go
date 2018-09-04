@@ -82,12 +82,12 @@ func (s *SnapshotController) Start() error {
 	}
 
 	storkRuleResource := k8s.CustomResource{
-		Name:    "storkrule",
-		Plural:  "storkrules",
+		Name:    "rule",
+		Plural:  "rules",
 		Group:   stork.GroupName,
 		Version: stork.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
-		Kind:    reflect.TypeOf(storkapi.StorkRule{}).Name(),
+		Kind:    reflect.TypeOf(storkapi.Rule{}).Name(),
 	}
 
 	err = k8s.Instance().CreateCRD(storkRuleResource)

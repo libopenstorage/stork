@@ -1,8 +1,8 @@
 hash: 9704572e1301a8769395b7068dbacdc408843aa7e15862eca090667dd205585b
-updated: 2018-08-20T13:58:22.16400267-07:00
+updated: 2018-09-04T12:09:03.906655364-07:00
 imports:
 - name: github.com/armon/go-metrics
-  version: 783273d703149aaeb9897cf58613d5af48861c25
+  version: 3c58d8115a78a6879e5df75ae900846768d36895
 - name: github.com/aws/aws-sdk-go
   version: 5e98666858b97db54a61044bb1150d3b81436860
   subpackages:
@@ -38,7 +38,7 @@ imports:
   - service/ssm
   - service/sts
 - name: github.com/cloudfoundry/gosigar
-  version: dcb1afc219e4c99f21c37fb1ec22ed9ffe443317
+  version: 0bb2fe4a1c0cdce8cbe6bfe2c9d375cab4cc15c7
   subpackages:
   - sys/windows
 - name: github.com/davecgh/go-spew
@@ -74,13 +74,13 @@ imports:
   - pkg/system
   - pkg/tlsconfig
 - name: github.com/docker/go-connections
-  version: f549a9393d05688dff0992ef3efd8bbe6c628aeb
+  version: 97c2040d34dfae1d1b1275fa3a78dbdd2f41cf7e
   subpackages:
   - nat
   - sockets
   - tlsconfig
 - name: github.com/docker/go-units
-  version: e30f1e79f3cd72542f2026ceec18d3bd67ab859c
+  version: 47565b4f722fb6ceae66b95f853feed578a4a51c
 - name: github.com/docker/libtrust
   version: aabc10ec26b754e797f9028f4589c5b7bd90dc20
 - name: github.com/docker/spdystream
@@ -102,7 +102,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 6ecc596bd756a16c6e93e4ef9225ecdb9f54ed2c
+  version: 5cf292cae48347c2490ac1a58fe36735fb78df7e
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -145,15 +145,15 @@ imports:
   subpackages:
   - diskcache
 - name: github.com/hashicorp/errwrap
-  version: 7554cd9344cec97297fa6649b055a8c98c2a1e55
+  version: 8a6fb523712970c966eefc6b39ed2c5e74880354
 - name: github.com/hashicorp/go-immutable-radix
-  version: 7f3cd4390caab3250a57f30efdb2a65dd7649ecf
+  version: 27df80928bb34bb1b0d6d0e01b9e679902e7a6b5
 - name: github.com/hashicorp/go-msgpack
   version: fa3f63826f7c23912c15263591e65d54d080b458
   subpackages:
   - codec
 - name: github.com/hashicorp/go-multierror
-  version: b7773ae218740a7be65057fc60b366a49b538a44
+  version: 886a7fbe3eb1c874d46f623bfa70af45f425b3d1
 - name: github.com/hashicorp/go-sockaddr
   version: 6d291a969b86c4b633730bfc6b8b9d64c3aafed9
 - name: github.com/hashicorp/golang-lru
@@ -161,9 +161,9 @@ imports:
   subpackages:
   - simplelru
 - name: github.com/hashicorp/logutils
-  version: 0dc08b1671f34c4250ce212759ebd880f743d883
+  version: a335183dfd075f638afcc820c90591ca3c97eba6
 - name: github.com/hashicorp/memberlist
-  version: 2288bf30e9c8d7b5f6549bf62e07120d72fd4b6c
+  version: b195c8e4fcc6284fff1583fd6ab09e68ca207551
 - name: github.com/howeyc/gopass
   version: bf9dde6d0d2c004a008c27aaee91170c786f6db8
 - name: github.com/hpcloud/tail
@@ -176,7 +176,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/jmespath/go-jmespath
-  version: 3433f3ea46d9f8019119e7dd41274e112a2359a9
+  version: c2b33e8439af944379acbdd9c3a5fe0bc44bd8a5
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/juju/ratelimit
@@ -207,7 +207,7 @@ imports:
   - pkg/units
   - volume
 - name: github.com/libopenstorage/stork
-  version: 130c674ed2ee159bf86e770605d1b6c1f5bc6f64
+  version: d950d641d9c9ceda6d9e245100b076cd8ef7633a
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
@@ -225,9 +225,9 @@ imports:
 - name: github.com/mattn/go-colorable
   version: efa589957cd060542a26d2dd7832fd6a6c6c3ade
 - name: github.com/mattn/go-isatty
-  version: 6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c
+  version: 3fb116b820352b7f0c281308a4d6250c22d94e27
 - name: github.com/Microsoft/go-winio
-  version: f533f7a102197536779ea3a8cb881d639e21ec5a
+  version: 97e4973ce50b2ff5f09635a57e2b88a037aae829
 - name: github.com/miekg/dns
   version: e7c3f513a170118cc2f407db58de97aa20c07c85
 - name: github.com/modern-go/concurrent
@@ -271,11 +271,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opencontainers/go-digest
-  version: 279bed98673dd5bef374d3b6e4b09e2af76183bf
-- name: github.com/opencontainers/runc
-  version: d223e2adae83f62d58448a799a5da05730228089
-  subpackages:
-  - libcontainer/user
+  version: c9281466c8b2f606084ac71339773efd177436e7
 - name: github.com/pborman/uuid
   version: e790cca94e6cc75c7064b1332e63811d4aae1a53
 - name: github.com/peterbourgon/diskv
@@ -283,9 +279,9 @@ imports:
 - name: github.com/pkg/errors
   version: 816c9085562cd7ee03e7f8188a1cfd942858cded
 - name: github.com/portworx/kvdb
-  version: b69988874e5dfea60561441f8d04e4d40ebc6c3c
+  version: 48a2e7f3d3ea055f5c522dc8d2c69e15db80c76a
 - name: github.com/portworx/sched-ops
-  version: 2421ec3f1c2170f99a3aa4972b5596a83bef96ec
+  version: 15e1c751f55cff2238acda02caabde5019a2af8c
   subpackages:
   - k8s
   - task
@@ -296,7 +292,7 @@ imports:
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
 - name: github.com/Sirupsen/logrus
-  version: 55eb11d21d2a31a3cc93838241d04800f52e823d
+  version: 78fa2915c1fa231f62e0438da493688c21ca678e
 - name: github.com/sirupsen/logrus
   version: 3e01752db0189b9157070a0e1668a620f9a85da2
 - name: github.com/spf13/pflag

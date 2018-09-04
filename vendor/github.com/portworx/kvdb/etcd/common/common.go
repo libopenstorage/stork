@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -122,18 +123,21 @@ func (ec *etcdCommon) GetAuthInfoFromOptions() (transport.TLSInfo, string, strin
 			}
 		}
 	}
-	tls := transport.TLSInfo{
-		CAFile:         caFile,
+	t := transport.TLSInfo{
 		CertFile:       certFile,
 		KeyFile:        keyFile,
+		CAFile:         caFile,
 		TrustedCAFile:  trustedCAFile,
 		ClientCertAuth: clientCertAuth,
 	}
-	return tls, username, password, nil
+
+	_ = t.CAFile // required since CAFile is apparently not used and it fails errcheck
+
+	return t, username, password, nil
 }
 
 // Version returns the version of the provided etcd server
-func Version(url string, options map[string]string) (string, error) {
+func Version(uri string, options map[string]string) (string, error) {
 	useTLS := false
 	tlsConfig := &tls.Config{}
 	// Check if CA file provided
@@ -166,46 +170,52 @@ func Version(url string, options map[string]string) (string, error) {
 	var client *http.Client
 	if useTLS {
 		tlsConfig.BuildNameToCertificate()
-		transport := &http.Transport{TLSClientConfig: tlsConfig}
-		client = &http.Client{Transport: transport}
+		client = &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
 	} else {
-		client = &http.Client{}
+		tempURL, _ := url.Parse(uri)
+		if tempURL.Scheme == "https" {
+			transport := &http.Transport{TLSClientConfig: &tls.Config{}}
+			client = &http.Client{Transport: transport}
+		} else {
+			client = &http.Client{}
+		}
 	}
 
 	// Do GET something
-	resp, err := client.Get(url + "/version")
+	resp, err := client.Get(uri + "/version")
 	if err != nil {
-		return "", fmt.Errorf("Error in obtaining etcd version: %v", err)
+		return "", fmt.Errorf("error in obtaining etcd version: %v", err)
 	}
 	defer resp.Body.Close()
 
 	// Dump response
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("Error in obtaining etcd version: %v", err)
+		return "", fmt.Errorf("error in obtaining etcd version: %v", err)
 	}
 
-	var version version.Versions
-	err = json.Unmarshal(data, &version)
+	var ver version.Versions
+	err = json.Unmarshal(data, &ver)
 	if err != nil {
 		// Probably a version less than 2.3. Default to using v2 apis
 		return kvdb.EtcdBaseVersion, nil
 	}
-	if version.Server == "" {
+	if ver.Server == "" {
 		// This should never happen in an ideal scenario unless
 		// etcd messes up. To avoid a crash further in this code
 		// we return an error
-		return "", fmt.Errorf("Unable to determine etcd version (empty response from etcd)")
+		return "", fmt.Errorf("unable to determine etcd version (empty response from etcd)")
 	}
-	if version.Server[0] == '2' || version.Server[0] == '1' {
+	if ver.Server[0] == '2' || ver.Server[0] == '1' {
 		return kvdb.EtcdBaseVersion, nil
-	} else if version.Server[0] == '3' {
+	} else if ver.Server[0] == '3' {
 		return kvdb.EtcdVersion3, nil
 	} else {
-		return "", fmt.Errorf("Unsupported etcd version: %v", version.Server)
+		return "", fmt.Errorf("unsupported etcd version: %v", ver.Server)
 	}
 }
 
+// TestStart starts test
 func TestStart() error {
 	dataDir := "/tmp/etcd"
 	os.RemoveAll(dataDir)
@@ -215,6 +225,7 @@ func TestStart() error {
 	return err
 }
 
+// TestStop stops test
 func TestStop() error {
 	return cmd.Process.Kill()
 }

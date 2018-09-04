@@ -3,10 +3,12 @@ package logrus
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -191,7 +193,7 @@ func TestUserSuppliedLevelFieldHasPrefix(t *testing.T) {
 		log.WithField("level", 1).Info("test")
 	}, func(fields Fields) {
 		assert.Equal(t, fields["level"], "info")
-		assert.Equal(t, fields["fields.level"], 1)
+		assert.Equal(t, fields["fields.level"], 1.0) // JSON has floats only
 	})
 }
 
@@ -207,6 +209,65 @@ func TestDefaultFieldsAreNotPrefixed(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestWithTimeShouldOverrideTime(t *testing.T) {
+	now := time.Now().Add(24 * time.Hour)
+
+	LogAndAssertJSON(t, func(log *Logger) {
+		log.WithTime(now).Info("foobar")
+	}, func(fields Fields) {
+		assert.Equal(t, fields["time"], now.Format(defaultTimestampFormat))
+	})
+}
+
+func TestWithTimeShouldNotOverrideFields(t *testing.T) {
+	now := time.Now().Add(24 * time.Hour)
+
+	LogAndAssertJSON(t, func(log *Logger) {
+		log.WithField("herp", "derp").WithTime(now).Info("blah")
+	}, func(fields Fields) {
+		assert.Equal(t, fields["time"], now.Format(defaultTimestampFormat))
+		assert.Equal(t, fields["herp"], "derp")
+	})
+}
+
+func TestWithFieldShouldNotOverrideTime(t *testing.T) {
+	now := time.Now().Add(24 * time.Hour)
+
+	LogAndAssertJSON(t, func(log *Logger) {
+		log.WithTime(now).WithField("herp", "derp").Info("blah")
+	}, func(fields Fields) {
+		assert.Equal(t, fields["time"], now.Format(defaultTimestampFormat))
+		assert.Equal(t, fields["herp"], "derp")
+	})
+}
+
+func TestTimeOverrideMultipleLogs(t *testing.T) {
+	var buffer bytes.Buffer
+	var firstFields, secondFields Fields
+
+	logger := New()
+	logger.Out = &buffer
+	formatter := new(JSONFormatter)
+	formatter.TimestampFormat = time.StampMilli
+	logger.Formatter = formatter
+
+	llog := logger.WithField("herp", "derp")
+	llog.Info("foo")
+
+	err := json.Unmarshal(buffer.Bytes(), &firstFields)
+	assert.NoError(t, err, "should have decoded first message")
+
+	buffer.Reset()
+
+	time.Sleep(10 * time.Millisecond)
+	llog.Info("bar")
+
+	err = json.Unmarshal(buffer.Bytes(), &secondFields)
+	assert.NoError(t, err, "should have decoded second message")
+
+	assert.NotEqual(t, firstFields["time"], secondFields["time"], "timestamps should not be equal")
 }
 
 func TestDoubleLoggingDoesntPrefixPreviousFields(t *testing.T) {
@@ -255,7 +316,15 @@ func TestParseLevel(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, PanicLevel, l)
 
+	l, err = ParseLevel("PANIC")
+	assert.Nil(t, err)
+	assert.Equal(t, PanicLevel, l)
+
 	l, err = ParseLevel("fatal")
+	assert.Nil(t, err)
+	assert.Equal(t, FatalLevel, l)
+
+	l, err = ParseLevel("FATAL")
 	assert.Nil(t, err)
 	assert.Equal(t, FatalLevel, l)
 
@@ -263,7 +332,15 @@ func TestParseLevel(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, ErrorLevel, l)
 
+	l, err = ParseLevel("ERROR")
+	assert.Nil(t, err)
+	assert.Equal(t, ErrorLevel, l)
+
 	l, err = ParseLevel("warn")
+	assert.Nil(t, err)
+	assert.Equal(t, WarnLevel, l)
+
+	l, err = ParseLevel("WARN")
 	assert.Nil(t, err)
 	assert.Equal(t, WarnLevel, l)
 
@@ -271,11 +348,23 @@ func TestParseLevel(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, WarnLevel, l)
 
+	l, err = ParseLevel("WARNING")
+	assert.Nil(t, err)
+	assert.Equal(t, WarnLevel, l)
+
 	l, err = ParseLevel("info")
 	assert.Nil(t, err)
 	assert.Equal(t, InfoLevel, l)
 
+	l, err = ParseLevel("INFO")
+	assert.Nil(t, err)
+	assert.Equal(t, InfoLevel, l)
+
 	l, err = ParseLevel("debug")
+	assert.Nil(t, err)
+	assert.Equal(t, DebugLevel, l)
+
+	l, err = ParseLevel("DEBUG")
 	assert.Nil(t, err)
 	assert.Equal(t, DebugLevel, l)
 
@@ -298,4 +387,151 @@ func TestGetSetLevelRace(t *testing.T) {
 
 	}
 	wg.Wait()
+}
+
+func TestLoggingRace(t *testing.T) {
+	logger := New()
+
+	var wg sync.WaitGroup
+	wg.Add(100)
+
+	for i := 0; i < 100; i++ {
+		go func() {
+			logger.Info("info")
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+
+func TestLoggingRaceWithHooksOnEntry(t *testing.T) {
+	logger := New()
+	hook := new(ModifyHook)
+	logger.AddHook(hook)
+	entry := logger.WithField("context", "clue")
+
+	var wg sync.WaitGroup
+	wg.Add(100)
+
+	for i := 0; i < 100; i++ {
+		go func() {
+			entry.Info("info")
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+
+func TestReplaceHooks(t *testing.T) {
+	old, cur := &TestHook{}, &TestHook{}
+
+	logger := New()
+	logger.SetOutput(ioutil.Discard)
+	logger.AddHook(old)
+
+	hooks := make(LevelHooks)
+	hooks.Add(cur)
+	replaced := logger.ReplaceHooks(hooks)
+
+	logger.Info("test")
+
+	assert.Equal(t, old.Fired, false)
+	assert.Equal(t, cur.Fired, true)
+
+	logger.ReplaceHooks(replaced)
+	logger.Info("test")
+	assert.Equal(t, old.Fired, true)
+}
+
+// Compile test
+func TestLogrusInterface(t *testing.T) {
+	var buffer bytes.Buffer
+	fn := func(l FieldLogger) {
+		b := l.WithField("key", "value")
+		b.Debug("Test")
+	}
+	// test logger
+	logger := New()
+	logger.Out = &buffer
+	fn(logger)
+
+	// test Entry
+	e := logger.WithField("another", "value")
+	fn(e)
+}
+
+// Implements io.Writer using channels for synchronization, so we can wait on
+// the Entry.Writer goroutine to write in a non-racey way. This does assume that
+// there is a single call to Logger.Out for each message.
+type channelWriter chan []byte
+
+func (cw channelWriter) Write(p []byte) (int, error) {
+	cw <- p
+	return len(p), nil
+}
+
+func TestEntryWriter(t *testing.T) {
+	cw := channelWriter(make(chan []byte, 1))
+	log := New()
+	log.Out = cw
+	log.Formatter = new(JSONFormatter)
+	log.WithField("foo", "bar").WriterLevel(WarnLevel).Write([]byte("hello\n"))
+
+	bs := <-cw
+	var fields Fields
+	err := json.Unmarshal(bs, &fields)
+	assert.Nil(t, err)
+	assert.Equal(t, fields["foo"], "bar")
+	assert.Equal(t, fields["level"], "warning")
+}
+
+func TestLogLevelEnabled(t *testing.T) {
+	log := New()
+	log.SetLevel(PanicLevel)
+	assert.Equal(t, true, log.IsLevelEnabled(PanicLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(FatalLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(ErrorLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(WarnLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(InfoLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(DebugLevel))
+
+	log.SetLevel(FatalLevel)
+	assert.Equal(t, true, log.IsLevelEnabled(PanicLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(FatalLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(ErrorLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(WarnLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(InfoLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(DebugLevel))
+
+	log.SetLevel(ErrorLevel)
+	assert.Equal(t, true, log.IsLevelEnabled(PanicLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(FatalLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(ErrorLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(WarnLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(InfoLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(DebugLevel))
+
+	log.SetLevel(WarnLevel)
+	assert.Equal(t, true, log.IsLevelEnabled(PanicLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(FatalLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(ErrorLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(WarnLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(InfoLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(DebugLevel))
+
+	log.SetLevel(InfoLevel)
+	assert.Equal(t, true, log.IsLevelEnabled(PanicLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(FatalLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(ErrorLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(WarnLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(InfoLevel))
+	assert.Equal(t, false, log.IsLevelEnabled(DebugLevel))
+
+	log.SetLevel(DebugLevel)
+	assert.Equal(t, true, log.IsLevelEnabled(PanicLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(FatalLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(ErrorLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(WarnLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(InfoLevel))
+	assert.Equal(t, true, log.IsLevelEnabled(DebugLevel))
 }
