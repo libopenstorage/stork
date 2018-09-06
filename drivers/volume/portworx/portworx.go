@@ -87,6 +87,10 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		return err
 	}
 
+	if len(cluster.Nodes) == 0 {
+		return fmt.Errorf("cluster inspect returned empty nodes")
+	}
+
 	err = d.updateNodes(cluster.Nodes)
 	if err != nil {
 		return err
@@ -132,7 +136,7 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 		}
 	}
 
-	return fmt.Errorf("failed to find px node for node: %v", n)
+	return fmt.Errorf("failed to find px node for node: %v PX nodes: %v", n, pxNodes)
 }
 
 func (d *portworx) CleanupVolume(name string) error {
