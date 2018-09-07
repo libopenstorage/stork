@@ -11,9 +11,17 @@ import (
 // PodLog Format a log message with pod information
 func PodLog(pod *v1.Pod) *logrus.Entry {
 	if pod != nil {
-		return logrus.WithFields(logrus.Fields{
-			"PodName": pod.Name,
-		})
+		fields := logrus.Fields{
+			"PodName":   pod.Name,
+			"Namespace": pod.Namespace,
+		}
+		for _, owner := range pod.OwnerReferences {
+			if *owner.Controller {
+				fields["Owner"] = owner.Kind + "/" + owner.Name
+				break
+			}
+		}
+		return logrus.WithFields(fields)
 	}
 	return logrus.WithFields(logrus.Fields{
 		"Pod": pod,
@@ -25,6 +33,7 @@ func DeploymentV1Log(deployment *appv1.Deployment) *logrus.Entry {
 	if deployment != nil {
 		return logrus.WithFields(logrus.Fields{
 			"DeploymentName": deployment.Name,
+			"Namespace":      deployment.Namespace,
 		})
 	}
 	return logrus.WithFields(logrus.Fields{
@@ -37,6 +46,7 @@ func DeploymentV1Beta1Log(deployment *appv1beta1.Deployment) *logrus.Entry {
 	if deployment != nil {
 		return logrus.WithFields(logrus.Fields{
 			"DeploymentName": deployment.Name,
+			"Namespace":      deployment.Namespace,
 		})
 	}
 	return logrus.WithFields(logrus.Fields{
@@ -49,6 +59,7 @@ func DeploymentV1Beta2Log(deployment *appv1beta2.Deployment) *logrus.Entry {
 	if deployment != nil {
 		return logrus.WithFields(logrus.Fields{
 			"DeploymentName": deployment.Name,
+			"Namespace":      deployment.Namespace,
 		})
 	}
 	return logrus.WithFields(logrus.Fields{
@@ -61,6 +72,7 @@ func StatefulSetV1Log(ss *appv1.StatefulSet) *logrus.Entry {
 	if ss != nil {
 		return logrus.WithFields(logrus.Fields{
 			"StatefulSetName": ss.Name,
+			"Namespace":       ss.Namespace,
 		})
 	}
 	return logrus.WithFields(logrus.Fields{
@@ -73,6 +85,7 @@ func StatefulSetV1Beta1Log(ss *appv1beta1.StatefulSet) *logrus.Entry {
 	if ss != nil {
 		return logrus.WithFields(logrus.Fields{
 			"StatefulSetName": ss.Name,
+			"Namespace":       ss.Namespace,
 		})
 	}
 	return logrus.WithFields(logrus.Fields{
@@ -85,6 +98,7 @@ func StatefulSetV1Beta2Log(ss *appv1beta2.StatefulSet) *logrus.Entry {
 	if ss != nil {
 		return logrus.WithFields(logrus.Fields{
 			"StatefulSetName": ss.Name,
+			"Namespace":       ss.Namespace,
 		})
 	}
 	return logrus.WithFields(logrus.Fields{
