@@ -33,7 +33,7 @@ BUILD_OPTIONS := -ldflags "$(LDFLAGS)"
 .DEFAULT_GOAL=all
 .PHONY: test clean
 
-all: stork cmdexecutor vet lint simple integration-test
+all: stork cmdexecutor vet lint simple
 
 deps:
 	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
