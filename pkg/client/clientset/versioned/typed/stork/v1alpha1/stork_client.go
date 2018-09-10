@@ -27,12 +27,22 @@ import (
 
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ClusterPairsGetter
+	MigrationsGetter
 	RulesGetter
 }
 
 // StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.org group.
 type StorkV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *StorkV1alpha1Client) ClusterPairs() ClusterPairInterface {
+	return newClusterPairs(c)
+}
+
+func (c *StorkV1alpha1Client) Migrations(namespace string) MigrationInterface {
+	return newMigrations(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) Rules(namespace string) RuleInterface {

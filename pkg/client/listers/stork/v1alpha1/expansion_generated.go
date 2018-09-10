@@ -18,6 +18,18 @@ limitations under the License.
 
 package v1alpha1
 
+// ClusterPairListerExpansion allows custom methods to be added to
+// ClusterPairLister.
+type ClusterPairListerExpansion interface{}
+
+// MigrationListerExpansion allows custom methods to be added to
+// MigrationLister.
+type MigrationListerExpansion interface{}
+
+// MigrationNamespaceListerExpansion allows custom methods to be added to
+// MigrationNamespaceLister.
+type MigrationNamespaceListerExpansion interface{}
+
 // RuleListerExpansion allows custom methods to be added to
 // RuleLister.
 type RuleListerExpansion interface{}

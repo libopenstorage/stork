@@ -53,6 +53,10 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=stork.libopenstorage.org, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("clusterpairs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().ClusterPairs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("migrations"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().Migrations().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("rules"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().Rules().Informer()}, nil
 
