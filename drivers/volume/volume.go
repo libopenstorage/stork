@@ -4,9 +4,11 @@ import (
 	"strings"
 
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
+	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // Driver defines an external volume driver interface.
@@ -37,6 +39,34 @@ type Driver interface {
 
 	// Stop the driver
 	Stop() error
+
+	// ClusterPairPluginInterface Interface to pair clusters
+	ClusterPairPluginInterface
+	// MigratePluginInterface Interface to migrate data between clusters
+	MigratePluginInterface
+}
+
+// ClusterPairPluginInterface Interface to pair clusters
+type ClusterPairPluginInterface interface {
+	// Create a pair with a remote cluster
+	CreatePair(*stork_crd.ClusterPair) (string, error)
+	// Deletes a paring with a remote cluster
+	DeletePair(*stork_crd.ClusterPair) error
+}
+
+// MigratePluginInterface Interface to migrate data between clusters
+type MigratePluginInterface interface {
+	// Start migration of volumes specified by the spec. Should only migrate
+	// volumes, not the specs associated with them
+	StartMigration(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error)
+	// Get the status of migration of the volumes specified in the status
+	// for the migration spec
+	GetMigrationStatus(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error)
+	// Cancel the migration of volumes specified in the status
+	CancelMigration(*stork_crd.Migration) error
+	// Update the PVC spec to point to the migrated volume on the destination
+	// cluster
+	UpdateMigratedPersistentVolumeSpec(object runtime.Unstructured) (runtime.Unstructured, error)
 }
 
 // Info Information about a volume
@@ -150,4 +180,42 @@ func isHostnameMatch(driverHostname string, k8sHostname string) bool {
 		return true
 	}
 	return false
+}
+
+// ClusterPairNotSupported to be used by drivers that don't support pairing
+type ClusterPairNotSupported struct{}
+
+// CreatePair Returns ErrNotSupported
+func (c *ClusterPairNotSupported) CreatePair(*stork_crd.ClusterPair) (string, error) {
+	return "", &errors.ErrNotSupported{}
+}
+
+// DeletePair Returns ErrNotSupported
+func (c *ClusterPairNotSupported) DeletePair(*stork_crd.ClusterPair) error {
+	return &errors.ErrNotSupported{}
+}
+
+// MigrationNotSupported to be used by drivers that don't support migration
+type MigrationNotSupported struct{}
+
+// StartMigration returns ErrNotSupported
+func (m *MigrationNotSupported) StartMigration(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// GetMigrationStatus returns ErrNotSupported
+func (m *MigrationNotSupported) GetMigrationStatus(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// CancelMigration returns ErrNotSupported
+func (m *MigrationNotSupported) CancelMigration(*stork_crd.Migration) error {
+	return &errors.ErrNotSupported{}
+}
+
+// UpdateMigratedPersistentVolumeSpec returns ErrNotSupported
+func (m *MigrationNotSupported) UpdateMigratedPersistentVolumeSpec(
+	runtime.Unstructured,
+) (runtime.Unstructured, error) {
+	return nil, &errors.ErrNotSupported{}
 }
