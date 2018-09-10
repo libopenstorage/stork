@@ -21,3 +21,15 @@ type ErrNotImplemented struct {
 func (e *ErrNotImplemented) Error() string {
 	return "Method not implemented"
 }
+
+// ErrNotSupported error type for methods not supported
+type ErrNotSupported struct {
+	// Feature which is not supported
+	Feature string
+	// Reason why feature is not supported (optional)
+	Reason string
+}
+
+func (e *ErrNotSupported) Error() string {
+	return fmt.Sprintf("%v not supported. Reason: %v", e.Feature, e.Reason)
+}

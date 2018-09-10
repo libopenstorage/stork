@@ -27,6 +27,8 @@ const (
 
 // Driver Mock driver for tests
 type Driver struct {
+	storkvolume.ClusterPairNotSupported
+	storkvolume.MigrationNotSupported
 	nodes          []*storkvolume.NodeInfo
 	volumes        map[string]*storkvolume.Info
 	pvcs           map[string]*v1.PersistentVolumeClaim
