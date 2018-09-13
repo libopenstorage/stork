@@ -264,6 +264,7 @@ func TestExtender(t *testing.T) {
 	t.Run("zoneTest", zoneTest)
 	t.Run("regionTest", regionTest)
 	t.Run("nodeNameTest", nodeNameTest)
+	t.Run("ipTest", ipTest)
 	t.Run("invalidRequestsTest", invalidRequestsTest)
 	t.Run("teardown", teardown)
 }
@@ -332,7 +333,7 @@ func noDriverVolumeTest(t *testing.T) {
 // Create a pod with a PVC using the mock storage class.
 // Place the data on nodes n1, n2. Send requests with node n3, n4, n5
 // The filter response should return all the input nodes
-// The prioritize response should return all n3 with highest priority because of
+// The prioritize response should return n3 with highest priority because of
 // rack locality
 func noVolumeNodeTest(t *testing.T) {
 	nodes := &v1.NodeList{}
@@ -706,6 +707,47 @@ func nodeNameTest(t *testing.T) {
 	pod := newPod("nodeNameTest", []string{"nodeNameTest"})
 
 	if err := driver.ProvisionVolume("nodeNameTest", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	filterResponse, err := sendFilterRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending filter request: %v", err)
+	}
+	verifyFilterResponse(t, nodes, []int{0, 1, 2, 3, 4}, filterResponse)
+
+	prioritizeResponse, err := sendPrioritizeRequest(pod, nodes)
+	if err != nil {
+		t.Fatalf("Error sending prioritize request: %v", err)
+	}
+	verifyPrioritizeResponse(
+		t,
+		nodes,
+		[]int{nodePriorityScore,
+			nodePriorityScore,
+			rackPriorityScore,
+			rackPriorityScore,
+			defaultScore},
+		prioritizeResponse)
+}
+
+// Use different hostnames for scheduler and driver. Only InternalIP should
+// match
+func ipTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("n1", "n1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("n2", "n2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("n3", "n3", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("n4", "n4", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("n5", "n5", "192.168.0.5", "rack3", "", ""))
+
+	provNodes := []int{0, 1}
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+
+	pod := newPod("ipTest", []string{"ipTest"})
+
+	if err := driver.ProvisionVolume("ipTest", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	filterResponse, err := sendFilterRequest(pod, nodes)
