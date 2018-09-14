@@ -1,6 +1,8 @@
 package volume
 
 import (
+	"strings"
+
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -97,7 +99,7 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
-// Get an external storage provider to be used with Stork.
+// Get an external storage provider to be used with Stork
 func Get(name string) (Driver, error) {
 	d, ok := volDrivers[name]
 	if ok {
@@ -108,4 +110,44 @@ func Get(name string) (Driver, error) {
 		ID:   name,
 		Type: "VolumeDriver",
 	}
+}
+
+// IsNodeMatch There are a couple of things that need to be checked to see if the driver
+// node matched the k8s node since different k8s installs set the node name,
+// hostname and IPs differently
+func IsNodeMatch(k8sNode *v1.Node, driverNode *NodeInfo) bool {
+	if driverNode == nil {
+		return false
+	}
+
+	if isHostnameMatch(driverNode.ID, k8sNode.Name) {
+		return true
+	}
+	for _, address := range k8sNode.Status.Addresses {
+		switch address.Type {
+		case v1.NodeHostName:
+			if isHostnameMatch(driverNode.Hostname, address.Address) {
+				return true
+			}
+		case v1.NodeInternalIP:
+			for _, ip := range driverNode.IPs {
+				if ip == address.Address {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// The driver might not return fully qualified hostnames, so check if the short
+// hostname matches too
+func isHostnameMatch(driverHostname string, k8sHostname string) bool {
+	if driverHostname == k8sHostname {
+		return true
+	}
+	if strings.HasPrefix(k8sHostname, driverHostname+".") {
+		return true
+	}
+	return false
 }
