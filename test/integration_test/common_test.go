@@ -117,6 +117,18 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 			found = true
 			break
 		}
+		for _, address := range appNode.Addresses {
+			for _, ip := range dNode.IPs {
+				if ip == address {
+					dNode.Hostname = appNode.Name
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
 	}
 	require.Equal(t, true, found, "Scheduled node not found in driver node list. DriverNodes: %v ScheduledNode: %v", driverNodes, appNode)
 
