@@ -102,46 +102,6 @@ func (e *Extender) getHostname(node *v1.Node) string {
 	return ""
 }
 
-// There are a couple of things that need to be checked to see if the driver
-// node matched the k8s node since different k8s installs set the node name,
-// hostname and IPs differently
-func (e *Extender) isNodeMatch(k8sNode *v1.Node, driverNode *volume.NodeInfo) bool {
-	if driverNode == nil {
-		return false
-	}
-
-	if e.isHostnameMatch(driverNode.ID, k8sNode.Name) {
-		return true
-	}
-	for _, address := range k8sNode.Status.Addresses {
-		switch address.Type {
-		case v1.NodeHostName:
-			if e.isHostnameMatch(driverNode.Hostname, address.Address) {
-				return true
-			}
-		case v1.NodeInternalIP:
-			for _, ip := range driverNode.IPs {
-				if ip == address.Address {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// The driver might not return fully qualified hostnames, so check if the short
-// hostname matches too
-func (e *Extender) isHostnameMatch(driverHostname string, k8sHostname string) bool {
-	if driverHostname == k8sHostname {
-		return true
-	}
-	if strings.HasPrefix(k8sHostname, driverHostname+".") {
-		return true
-	}
-	return false
-}
-
 func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	defer func() {
@@ -181,7 +141,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 				for _, driverNode := range driverNodes {
 					storklog.PodLog(pod).Debugf("nodeInfo: %v", driverNode)
 					if driverNode.Status == volume.NodeOnline &&
-						e.isNodeMatch(&node, driverNode) {
+						volume.IsNodeMatch(&node, driverNode) {
 						filteredNodes = append(filteredNodes, node)
 						break
 					}
@@ -240,7 +200,7 @@ func (e *Extender) getNodeScore(
 						for _, rack := range rackInfo.PreferredLocality {
 							if rack == nodeRack || nodeRack == "" {
 								for _, datanode := range volumeInfo.DataNodes {
-									if e.isNodeMatch(&node, idMap[datanode]) {
+									if volume.IsNodeMatch(&node, idMap[datanode]) {
 										return nodePriorityScore
 									}
 								}
@@ -326,7 +286,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 			// Replace driver's hostname with the kubernetes hostname to make it
 			// easier to match nodes when calculating scores
 			for _, knode := range args.Nodes.Items {
-				if e.isNodeMatch(&knode, dnode) {
+				if volume.IsNodeMatch(&knode, dnode) {
 					dnode.Hostname = e.getHostname(&knode)
 					break
 				}
