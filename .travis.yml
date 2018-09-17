@@ -8,9 +8,9 @@ before_install:
   - sudo apt-get install go-md2man -y
 script:
   - |
-    if [ "${TRAVIS_BRANCH}" == "master" ]; then
-      export DOCKER_HUB_STORK_TAG=master
-      export DOCKER_HUB_STORK_TEST_TAG=latest
+    if [ "${TRAVIS_BRANCH}" == "1.2" ]; then
+      export DOCKER_HUB_STORK_TAG="${TRAVIS_BRANCH}"-dev
+      export DOCKER_HUB_STORK_TEST_TAG="${TRAVIS_BRANCH}"
     else
       export DOCKER_HUB_STORK_TAG=`git rev-parse --short HEAD`
       export DOCKER_HUB_STORK_TEST_TAG=`git rev-parse --short HEAD`
