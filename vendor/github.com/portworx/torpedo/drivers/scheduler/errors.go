@@ -246,3 +246,31 @@ type ErrFailedToUpdateApp struct {
 func (e *ErrFailedToUpdateApp) Error() string {
 	return fmt.Sprintf("Failed to update app: %v due to err: %v", e.App.Key, e.Cause)
 }
+
+// ErrFailedToStopSchedOnNode error type when fail to stop scheduler service on the node
+type ErrFailedToStopSchedOnNode struct {
+	// Node where the service is not stopped
+	Node node.Node
+	// SystemService responsible for scheduling
+	SystemService string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToStopSchedOnNode) Error() string {
+	return fmt.Sprintf("Failed to stop scheduler service %v on node: %v due to err: %v", e.SystemService, e.Node, e.Cause)
+}
+
+// ErrFailedToStartSchedOnNode error type when fail to start scheduler service on the node
+type ErrFailedToStartSchedOnNode struct {
+	// Node where the service is not starting
+	Node node.Node
+	// SystemService responsible for scheduling
+	SystemService string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToStartSchedOnNode) Error() string {
+	return fmt.Sprintf("Failed to start scheduler service %v on node: %v due to err: %v", e.SystemService, e.Node, e.Cause)
+}

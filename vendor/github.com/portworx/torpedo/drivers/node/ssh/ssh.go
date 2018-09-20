@@ -284,6 +284,9 @@ func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string
 	if options.MaxDepth > 0 {
 		findCmd += " -maxdepth " + strconv.Itoa(options.MaxDepth)
 	}
+	if options.Type != "" {
+		findCmd += " -type " + string(options.Type)
+	}
 
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(addr, findCmd, true)
@@ -381,6 +384,22 @@ func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string
 	}
 	return "", fmt.Errorf("no usable address found. Tried: %v. "+
 		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses)
+}
+
+func (s *ssh) SystemCheck(n node.Node, options node.ConnectionOpts) (string, error) {
+	findOpts := node.FindOpts{
+		ConnectionOpts: options,
+		Name:           "core-px*",
+		Type:           node.File,
+	}
+	file, err := s.FindFiles("/var/cores/", n, findOpts)
+	if err != nil {
+		return "", &node.ErrFailedToSystemCheck{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to check for core files due to: %v", err),
+		}
+	}
+	return file, nil
 }
 
 func init() {
