@@ -39,23 +39,11 @@ import (
 )
 
 const (
-	masterLabelKey                = "node-role.kubernetes.io/master"
-	hostnameKey                   = "kubernetes.io/hostname"
-	pvcStorageClassKey            = "volume.beta.kubernetes.io/storage-class"
-	pvcStorageProvisionerKey      = "volume.beta.kubernetes.io/storage-provisioner"
-	labelUpdateMaxRetries         = 5
-	nodeUpdateTimeout             = 1 * time.Minute
-	nodeUpdateRetryInterval       = 2 * time.Second
-	deploymentReadyTimeout        = 10 * time.Minute
-	validatePodReadyTimeout       = 10 * time.Minute
-	validatePodRetryInterval      = 10 * time.Second
-	validateStatefulSetPVCTimeout = 15 * time.Minute
-	validatePVCTimeout            = 5 * time.Minute
-	validatePVCRetryInterval      = 10 * time.Second
-	validateSnapshotTimeout       = 5 * time.Minute
-	validateSnapshotRetryInterval = 10 * time.Second
-	crdCreateTimeout              = 2 * time.Minute
-	crdCreateRetryInterval        = 2 * time.Second
+	masterLabelKey           = "node-role.kubernetes.io/master"
+	hostnameKey              = "kubernetes.io/hostname"
+	pvcStorageClassKey       = "volume.beta.kubernetes.io/storage-class"
+	pvcStorageProvisionerKey = "volume.beta.kubernetes.io/storage-provisioner"
+	labelUpdateMaxRetries    = 5
 )
 
 var deleteForegroundPolicy = meta_v1.DeletePropagationForeground
@@ -86,6 +74,7 @@ type Ops interface {
 	CRDOps
 	ClusterPairOps
 	MigrationOps
+	SetConfig(config *rest.Config)
 }
 
 // EventOps is an interface to put and get k8s events
@@ -129,12 +118,12 @@ type NodeOps interface {
 	// WatchNode sets up a watcher that listens for the changes on Node.
 	WatchNode(node *v1.Node, fn NodeWatchFunc) error
 	// CordonNode cordons the given node
-	CordonNode(nodeName string) error
+	CordonNode(nodeName string, timeout, retryInterval time.Duration) error
 	// UnCordonNode uncordons the given node
-	UnCordonNode(nodeName string) error
+	UnCordonNode(nodeName string, timeout, retryInterval time.Duration) error
 	// DrainPodsFromNode drains given pods from given node. If timeout is set to
 	// a non-zero value, it waits for timeout duration for each pod to get deleted
-	DrainPodsFromNode(nodeName string, pods []v1.Pod, timeout time.Duration) error
+	DrainPodsFromNode(nodeName string, pods []v1.Pod, timeout, retryInterval time.Duration) error
 }
 
 // ServiceOps is an interface to perform k8s service operations
@@ -174,7 +163,7 @@ type StatefulSetOps interface {
 	// GetPVCsForStatefulSet returns all the PVCs for given stateful set
 	GetPVCsForStatefulSet(ss *apps_api.StatefulSet) (*v1.PersistentVolumeClaimList, error)
 	// ValidatePVCsForStatefulSet validates the PVCs for the given stateful set
-	ValidatePVCsForStatefulSet(ss *apps_api.StatefulSet) error
+	ValidatePVCsForStatefulSet(ss *apps_api.StatefulSet, timeout, retryInterval time.Duration) error
 }
 
 // DeploymentOps is an interface to perform k8s deployment operations
@@ -188,7 +177,7 @@ type DeploymentOps interface {
 	// DeleteDeployment deletes the given deployment
 	DeleteDeployment(name, namespace string) error
 	// ValidateDeployment validates the given deployment if it's running and healthy
-	ValidateDeployment(*apps_api.Deployment) error
+	ValidateDeployment(deployment *apps_api.Deployment, timeout, retryInterval time.Duration) error
 	// ValidateTerminatedDeployment validates if given deployment is terminated
 	ValidateTerminatedDeployment(*apps_api.Deployment) error
 	// GetDeploymentPods returns pods for the given deployment
@@ -302,7 +291,7 @@ type PodOps interface {
 	// RunCommandInPod runs given command in the given pod
 	RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error)
 	// ValidatePod validates the given pod if it's ready
-	ValidatePod(pod *v1.Pod) error
+	ValidatePod(pod *v1.Pod, timeout, retryInterval time.Duration) error
 }
 
 // StorageClassOps is an interface to perform k8s storage class operations
@@ -330,7 +319,7 @@ type PersistentVolumeClaimOps interface {
 	// DeletePersistentVolumeClaim deletes the given persistent volume claim
 	DeletePersistentVolumeClaim(name, namespace string) error
 	// ValidatePersistentVolumeClaim validates the given pvc
-	ValidatePersistentVolumeClaim(*v1.PersistentVolumeClaim) error
+	ValidatePersistentVolumeClaim(vv *v1.PersistentVolumeClaim, timeout, retryInterval time.Duration) error
 	// GetPersistentVolumeClaim returns the PVC for given name and namespace
 	GetPersistentVolumeClaim(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error)
 	// GetPersistentVolumeClaims returns all PVCs in given namespace and that match the optional labelSelector
@@ -364,7 +353,7 @@ type SnapshotOps interface {
 	// DeleteSnapshot deletes the given snapshot
 	DeleteSnapshot(name string, namespace string) error
 	// ValidateSnapshot validates the given snapshot.
-	ValidateSnapshot(name string, namespace string, retry bool) error
+	ValidateSnapshot(name string, namespace string, retry bool, timeout, retryInterval time.Duration) error
 	// GetVolumeForSnapshot returns the volumeID for the given snapshot
 	GetVolumeForSnapshot(name string, namespace string) (string, error)
 	// GetSnapshotStatus returns the status of the given snapshot
@@ -376,7 +365,7 @@ type SnapshotOps interface {
 	// DeleteSnapshotData deletes the given snapshot
 	DeleteSnapshotData(name string) error
 	// ValidateSnapshotData validates the given snapshot data object
-	ValidateSnapshotData(name string, retry bool) error
+	ValidateSnapshotData(name string, retry bool, timeout, retryInterval time.Duration) error
 }
 
 // RuleOps is an interface to perform operations for k8s stork rule
@@ -420,7 +409,7 @@ type CRDOps interface {
 	// CreateCRD creates the given custom resource
 	CreateCRD(resource CustomResource) error
 	// ValidateCRD checks if the given CRD is registered
-	ValidateCRD(resource CustomResource) error
+	ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error
 }
 
 // ClusterPairOps is an interface to perfrom k8s ClusterPair operations
@@ -429,20 +418,24 @@ type ClusterPairOps interface {
 	CreateClusterPair(*v1alpha1.ClusterPair) error
 	// GetClusterPair gets the ClusterPair
 	GetClusterPair(string) (*v1alpha1.ClusterPair, error)
+	// ListClusterPairs gets all the ClusterPairs
+	ListClusterPairs() (*v1alpha1.ClusterPairList, error)
 	// DeleteClusterPair deletes the ClusterPair
 	DeleteClusterPair(string) error
 }
 
-// MigrationsOps is an interface to perfrom k8s Migration operations
+// MigrationOps is an interface to perfrom k8s Migration operations
 type MigrationOps interface {
 	// CreateMigration creates the Migration
 	CreateMigration(*v1alpha1.Migration) error
 	// GetMigration gets the Migration
-	GetMigration(string, string) (*v1alpha1.Migration, error)
+	GetMigration(string) (*v1alpha1.Migration, error)
+	// ListMigrations lists all the Migration
+	ListMigrations() (*v1alpha1.MigrationList, error)
 	// UpdateMigration updates the Migration
 	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// DeleteMigration deletes the Migration
-	DeleteMigration(string, string) error
+	DeleteMigration(string) error
 }
 
 // CustomResource is for creating a Kubernetes TPR/CRD
@@ -485,6 +478,12 @@ func Instance() Ops {
 		instance = &k8sOps{}
 	})
 	return instance
+}
+
+func (k *k8sOps) SetConfig(config *rest.Config) {
+	// Set the config and reset the client
+	k.config = config
+	k.client = nil
 }
 
 // Initialize the k8s client if uninitialized
@@ -790,7 +789,7 @@ func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn NodeWatchFunc) error {
 	return nil
 }
 
-func (k *k8sOps) CordonNode(nodeName string) error {
+func (k *k8sOps) CordonNode(nodeName string, timeout, retryInterval time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
 			return nil, true, err
@@ -812,14 +811,14 @@ func (k *k8sOps) CordonNode(nodeName string) error {
 
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, nodeUpdateTimeout, nodeUpdateRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (k *k8sOps) UnCordonNode(nodeName string) error {
+func (k *k8sOps) UnCordonNode(nodeName string, timeout, retryInterval time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
 			return nil, true, err
@@ -841,22 +840,22 @@ func (k *k8sOps) UnCordonNode(nodeName string) error {
 
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, nodeUpdateTimeout, nodeUpdateRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (k *k8sOps) DrainPodsFromNode(nodeName string, pods []v1.Pod, timeout time.Duration) error {
-	err := k.CordonNode(nodeName)
+func (k *k8sOps) DrainPodsFromNode(nodeName string, pods []v1.Pod, timeout time.Duration, retryInterval time.Duration) error {
+	err := k.CordonNode(nodeName, timeout, retryInterval)
 	if err != nil {
 		return err
 	}
 
 	err = k.DeletePods(pods, false)
 	if err != nil {
-		e := k.UnCordonNode(nodeName) // rollback cordon
+		e := k.UnCordonNode(nodeName, timeout, retryInterval) // rollback cordon
 		if e != nil {
 			log.Printf("failed to uncordon node: %s", nodeName)
 		}
@@ -1078,7 +1077,7 @@ func (k *k8sOps) UpdateDeployment(deployment *apps_api.Deployment) (*apps_api.De
 	return k.appsClient().Deployments(deployment.Namespace).Update(deployment)
 }
 
-func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
+func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment, timeout, retryInterval time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		dep, err := k.GetDeployment(deployment.Name, deployment.Namespace)
 		if err != nil {
@@ -1173,7 +1172,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment) error {
 		}
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, deploymentReadyTimeout, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
 	return nil
@@ -1677,7 +1676,7 @@ func (k *k8sOps) GetPVCsForStatefulSet(ss *apps_api.StatefulSet) (*v1.Persistent
 	return k.getPVCsWithListOptions(ss.Namespace, listOptions)
 }
 
-func (k *k8sOps) ValidatePVCsForStatefulSet(ss *apps_api.StatefulSet) error {
+func (k *k8sOps) ValidatePVCsForStatefulSet(ss *apps_api.StatefulSet, timeout, retryTimeout time.Duration) error {
 	listOptions, err := k.getListOptionsForStatefulSet(ss)
 	if err != nil {
 		return err
@@ -1694,7 +1693,7 @@ func (k *k8sOps) ValidatePVCsForStatefulSet(ss *apps_api.StatefulSet) error {
 		}
 
 		for _, pvc := range pvcList.Items {
-			if err := k.ValidatePersistentVolumeClaim(&pvc); err != nil {
+			if err := k.ValidatePersistentVolumeClaim(&pvc, timeout, retryTimeout); err != nil {
 				return nil, true, err
 			}
 		}
@@ -1702,7 +1701,7 @@ func (k *k8sOps) ValidatePVCsForStatefulSet(ss *apps_api.StatefulSet) error {
 		return nil, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validateStatefulSetPVCTimeout, validatePVCRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryTimeout); err != nil {
 		return err
 	}
 	return nil
@@ -2104,7 +2103,7 @@ func (k *k8sOps) IsPodBeingManaged(pod v1.Pod) bool {
 	return false
 }
 
-func (k *k8sOps) ValidatePod(pod *v1.Pod) error {
+func (k *k8sOps) ValidatePod(pod *v1.Pod, timeout, retryInterval time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		currPod, err := k.GetPodByUID(pod.UID, pod.Namespace)
 		if err != nil {
@@ -2118,7 +2117,7 @@ func (k *k8sOps) ValidatePod(pod *v1.Pod) error {
 
 		return "", false, nil
 	}
-	if _, err := task.DoRetryWithTimeout(t, validatePodReadyTimeout, validatePodRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
 	return nil
@@ -2200,7 +2199,7 @@ func (k *k8sOps) DeletePersistentVolumeClaim(name, namespace string) error {
 	return k.client.CoreV1().PersistentVolumeClaims(namespace).Delete(name, &meta_v1.DeleteOptions{})
 }
 
-func (k *k8sOps) ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) error {
+func (k *k8sOps) ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim, timeout, retryInterval time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		if err := k.initK8sClient(); err != nil {
 			return "", true, err
@@ -2223,7 +2222,7 @@ func (k *k8sOps) ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) er
 		}
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validatePVCTimeout, validatePVCRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
 	return nil
@@ -2419,7 +2418,7 @@ func (k *k8sOps) DeleteSnapshot(name string, namespace string) error {
 		Do().Error()
 }
 
-func (k *k8sOps) ValidateSnapshot(name string, namespace string, retry bool) error {
+func (k *k8sOps) ValidateSnapshot(name string, namespace string, retry bool, timeout, retryInterval time.Duration) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
@@ -2447,7 +2446,7 @@ func (k *k8sOps) ValidateSnapshot(name string, namespace string, retry bool) err
 	}
 
 	if retry {
-		if _, err := task.DoRetryWithTimeout(t, validateSnapshotTimeout, validateSnapshotRetryInterval); err != nil {
+		if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 			return err
 		}
 	} else {
@@ -2459,7 +2458,7 @@ func (k *k8sOps) ValidateSnapshot(name string, namespace string, retry bool) err
 	return nil
 }
 
-func (k *k8sOps) ValidateSnapshotData(name string, retry bool) error {
+func (k *k8sOps) ValidateSnapshotData(name string, retry bool, timeout, retryInterval time.Duration) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
@@ -2490,7 +2489,7 @@ func (k *k8sOps) ValidateSnapshotData(name string, retry bool) error {
 	}
 
 	if retry {
-		if _, err := task.DoRetryWithTimeout(t, validateSnapshotTimeout, validateSnapshotRetryInterval); err != nil {
+		if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 			return err
 		}
 	} else {
@@ -2746,15 +2745,23 @@ func (k *k8sOps) UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 // ClusterPair APIs - BEGIN
 func (k *k8sOps) GetClusterPair(name string) (*v1alpha1.ClusterPair, error) {
 	if err := k.initK8sClient(); err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	return k.storkClient.Stork().ClusterPairs().Get(name, meta_v1.GetOptions{})
 }
 
+func (k *k8sOps) ListClusterPairs() (*v1alpha1.ClusterPairList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ClusterPairs().List(meta_v1.ListOptions{})
+}
+
 func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) error {
 	if err := k.initK8sClient(); err != nil {
-		return nil
+		return err
 	}
 
 	_, err := k.storkClient.Stork().ClusterPairs().Create(pair)
@@ -2763,7 +2770,7 @@ func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) error {
 
 func (k *k8sOps) DeleteClusterPair(name string) error {
 	if err := k.initK8sClient(); err != nil {
-		return nil
+		return err
 	}
 
 	return k.storkClient.Stork().ClusterPairs().Delete(name, &meta_v1.DeleteOptions{
@@ -2774,39 +2781,47 @@ func (k *k8sOps) DeleteClusterPair(name string) error {
 // ClusterPair APIs - END
 
 // Migration APIs - BEGIN
-func (k *k8sOps) GetMigration(name string, namespace string) (*v1alpha1.Migration, error) {
+func (k *k8sOps) GetMigration(name string) (*v1alpha1.Migration, error) {
 	if err := k.initK8sClient(); err != nil {
-		return nil, nil
+		return nil, err
 	}
 
-	return k.storkClient.Stork().Migrations(namespace).Get(name, meta_v1.GetOptions{})
+	return k.storkClient.Stork().Migrations().Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListMigrations() (*v1alpha1.MigrationList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().Migrations().List(meta_v1.ListOptions{})
 }
 
 func (k *k8sOps) CreateMigration(migration *v1alpha1.Migration) error {
 	if err := k.initK8sClient(); err != nil {
-		return nil
+		return err
 	}
 
-	_, err := k.storkClient.Stork().Migrations(migration.Namespace).Create(migration)
+	_, err := k.storkClient.Stork().Migrations().Create(migration)
 	return err
 }
 
-func (k *k8sOps) DeleteMigration(name string, namespace string) error {
+func (k *k8sOps) DeleteMigration(name string) error {
 	if err := k.initK8sClient(); err != nil {
-		return nil
+		return err
 	}
 
-	return k.storkClient.Stork().Migrations(namespace).Delete(name, &meta_v1.DeleteOptions{
+	return k.storkClient.Stork().Migrations().Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
 
 func (k *k8sOps) UpdateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migration, error) {
 	if err := k.initK8sClient(); err != nil {
-		return nil, nil
+		return nil, err
 	}
 
-	return k.storkClient.Stork().Migrations(migration.Namespace).Update(migration)
+	return k.storkClient.Stork().Migrations().Update(migration)
 }
 
 // Migration APIs - END
@@ -2857,9 +2872,9 @@ func (k *k8sOps) CreateCRD(resource CustomResource) error {
 	return nil
 }
 
-func (k *k8sOps) ValidateCRD(resource CustomResource) error {
+func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error {
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
-	return wait.Poll(crdCreateRetryInterval, crdCreateRetryInterval, func() (bool, error) {
+	return wait.Poll(timeout, retryInterval, func() (bool, error) {
 		crd, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, meta_v1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -2890,13 +2905,17 @@ func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 func (k *k8sOps) setK8sClient() error {
 	var err error
 
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if len(kubeconfig) > 0 {
-		err = k.loadClientFromKubeconfig(kubeconfig)
+	if k.config != nil {
+		err = k.loadClientFor(k.config)
 	} else {
-		err = k.loadClientFromServiceAccount()
-	}
+		kubeconfig := os.Getenv("KUBECONFIG")
+		if len(kubeconfig) > 0 {
+			err = k.loadClientFromKubeconfig(kubeconfig)
+		} else {
+			err = k.loadClientFromServiceAccount()
+		}
 
+	}
 	if err != nil {
 		return err
 	}

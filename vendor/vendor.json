@@ -50,8 +50,8 @@
 			"checksumSHA1": "DUX4pOK9NKSAzC6RRXniLviyByA=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/armon/go-metrics",
 			"path": "github.com/armon/go-metrics",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "0rido7hYHQtfq3UJzVT5LClLAWc=",
@@ -70,15 +70,15 @@
 			"checksumSHA1": "BwBXwFar+Dsn8GJ0V1TjUqSrIsk=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/cloudfoundry/gosigar",
 			"path": "github.com/cloudfoundry/gosigar",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "tnB8CBzekPnkcZ6SYs0FJn09GRA=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/cloudfoundry/gosigar/sys/windows",
 			"path": "github.com/cloudfoundry/gosigar/sys/windows",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "CSPbwbyzqA6sfORicn4HFtIhF/c=",
@@ -110,15 +110,15 @@
 			"checksumSHA1": "5Z0J6IIV39bPOf0NOVHLolGwcfo=",
 			"origin": "github.com/portworx/sched-ops/vendor/github.com/docker/spdystream",
 			"path": "github.com/docker/spdystream",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "Gaf5SDyC0xV32LdjPCyUGvH5BhI=",
 			"origin": "github.com/portworx/sched-ops/vendor/github.com/docker/spdystream/spdy",
 			"path": "github.com/docker/spdystream/spdy",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "PiQ8cQu0gW0OadnWeMeUoCv3wI0=",
@@ -260,8 +260,8 @@
 			"checksumSHA1": "yNyE9MrpDJQAxOxSipSIBgBhuNQ=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/google/uuid",
 			"path": "github.com/google/uuid",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "b7x/5HeWIHXwSRNED5Envt6tRjs=",
@@ -362,36 +362,36 @@
 			"checksumSHA1": "ByRdQMv2yl16W6Tp9gUW1nNmpuI=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/hashicorp/errwrap",
 			"path": "github.com/hashicorp/errwrap",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "mCCQqlVo0CPUr29LXH4Oe4Ww3JA=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/hashicorp/go-immutable-radix",
 			"path": "github.com/hashicorp/go-immutable-radix",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "TNlVzNR1OaajcNi3CbQ3bGbaLGU=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/hashicorp/go-msgpack/codec",
 			"path": "github.com/hashicorp/go-msgpack/codec",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "cFcwn0Zxefithm9Q9DioRNcGbqg=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/hashicorp/go-multierror",
 			"path": "github.com/hashicorp/go-multierror",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "J47ySO1q0gcnmoMnir1q1loKzCk=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/hashicorp/go-sockaddr",
 			"path": "github.com/hashicorp/go-sockaddr",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "UquR8kc0nKU285HwLbkievlLQz4=",
@@ -409,15 +409,15 @@
 			"checksumSHA1": "v8LPIrksMLyWuVyNVJul0BbQONM=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/hashicorp/logutils",
 			"path": "github.com/hashicorp/logutils",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "q6yTL5vSGnWxUtcocVU3YIG/HNc=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/hashicorp/memberlist",
 			"path": "github.com/hashicorp/memberlist",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "rdvlhEF8ygHwLiqTOfkdf3g8RWo=",
@@ -532,22 +532,22 @@
 			"checksumSHA1": "vFfkjHnBqYAPlQffYfnX73ckal0=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/gossip",
 			"path": "github.com/libopenstorage/gossip",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "IiolWeHfrC/jE34fo49lKlxowZA=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/gossip/proto",
 			"path": "github.com/libopenstorage/gossip/proto",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "J3jmnywWXsbtBGHcgwXNQx2yyHc=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/gossip/proto/state",
 			"path": "github.com/libopenstorage/gossip/proto/state",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "3RvM9PQCYNAmG9Uj3/Pp0l4Sqbc=",
@@ -584,8 +584,8 @@
 			"checksumSHA1": "7zU9+2RwgfiVKDZS+eWanztA6Mk=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/api/spec",
 			"path": "github.com/libopenstorage/openstorage/api/spec",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "0vFQks8RvJB2w2Obd3MXyOwyzDA=",
@@ -597,8 +597,8 @@
 			"checksumSHA1": "rXca8Luqis/xGllssLbxYiUH+2g=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/config",
 			"path": "github.com/libopenstorage/openstorage/config",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "gCdOX8jgmtx9/VhPuR6d5VSStW0=",
@@ -622,15 +622,15 @@
 			"checksumSHA1": "/bl8X4ayadp0Bou8MzMkxfXiQ2c=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/pkg/parser",
 			"path": "github.com/libopenstorage/openstorage/pkg/parser",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "FvNAwo77o7tbO7vKT/6D1dyNjDQ=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/openstorage/pkg/units",
 			"path": "github.com/libopenstorage/openstorage/pkg/units",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "6P2V8V8ULpI/LzUqUF4PlloSP6A=",
@@ -654,8 +654,8 @@
 			"checksumSHA1": "oVL3+16sMoRufI8Llouj0fWeLVA=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/libopenstorage/systemutils",
 			"path": "github.com/libopenstorage/systemutils",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "T8soMJArSZrYnhmdpAnq1bVxQ6Q=",
@@ -688,8 +688,8 @@
 			"checksumSHA1": "6Lc+XN/s3FXClvNhJDxWgTnjjwU=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/miekg/dns",
 			"path": "github.com/miekg/dns",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "ZTcgWKWHsrX0RXYVXn5Xeb8Q0go=",
@@ -720,26 +720,26 @@
 		{
 			"checksumSHA1": "ej/nPWuth4LSs7agNOGvh3WM4D4=",
 			"path": "github.com/operator-framework/operator-sdk/pkg/k8sclient",
-			"revision": "8a241de9275e61a2c3ad8e736046470183cfa521",
-			"revisionTime": "2018-08-15T23:15:05Z"
+			"revision": "4d42f93038639104cedc4f01bd68205bb9d3e8f9",
+			"revisionTime": "2018-09-18T21:52:04Z"
 		},
 		{
-			"checksumSHA1": "Kev+sb49uywjZxrbYdJiA9KGXTA=",
+			"checksumSHA1": "ronk4a2upNXR9gGlox6q4ciIJO4=",
 			"path": "github.com/operator-framework/operator-sdk/pkg/sdk",
-			"revision": "8a241de9275e61a2c3ad8e736046470183cfa521",
-			"revisionTime": "2018-08-15T23:15:05Z"
+			"revision": "4d42f93038639104cedc4f01bd68205bb9d3e8f9",
+			"revisionTime": "2018-09-18T21:52:04Z"
 		},
 		{
 			"checksumSHA1": "afsAJlsQHND8qDYXjiQxsFFwjx4=",
 			"path": "github.com/operator-framework/operator-sdk/pkg/sdk/internal/metrics",
-			"revision": "8a241de9275e61a2c3ad8e736046470183cfa521",
-			"revisionTime": "2018-08-15T23:15:05Z"
+			"revision": "4d42f93038639104cedc4f01bd68205bb9d3e8f9",
+			"revisionTime": "2018-09-18T21:52:04Z"
 		},
 		{
-			"checksumSHA1": "Z3xo4tnSqxCCZ/2pMDR12vMQino=",
+			"checksumSHA1": "nz5+4Op2V0y8MlNdTMjQCvU7NPw=",
 			"path": "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
-			"revision": "8a241de9275e61a2c3ad8e736046470183cfa521",
-			"revisionTime": "2018-08-15T23:15:05Z"
+			"revision": "4d42f93038639104cedc4f01bd68205bb9d3e8f9",
+			"revisionTime": "2018-09-18T21:52:04Z"
 		},
 		{
 			"checksumSHA1": "3YJklSuzSE1Rt8A+2dhiWSmf/fw=",
@@ -791,70 +791,70 @@
 			"revisionTime": "2018-09-24T17:05:04Z"
 		},
 		{
-			"checksumSHA1": "LbW9FVAOXdVMutKgU/vLdAibeFQ=",
+			"checksumSHA1": "C1f5S8c8rlAi6i3JiKq+RBJzohk=",
 			"path": "github.com/portworx/sched-ops/k8s",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "5Nh7ppJlsyP/6c2zK5joEHz3I30=",
 			"path": "github.com/portworx/sched-ops/task",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
-			"checksumSHA1": "k8QloQaVvMWeK16tWAcRDKTJ47Y=",
+			"checksumSHA1": "1HpCBB73R8EVxxg5c7cupsQmpiU=",
 			"path": "github.com/portworx/torpedo/drivers/node",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
-			"checksumSHA1": "uPxb/KczWCSj9Q7rMUQ83eeVFXQ=",
+			"checksumSHA1": "6CzbKa5pBY/3Pg8wCnI+D6v06rg=",
 			"path": "github.com/portworx/torpedo/drivers/node/ssh",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
-			"checksumSHA1": "5I0RFPysG2s3k1540Gnpr+g1oWE=",
+			"checksumSHA1": "Yo9Zju7JfFWKG/Bwvfm4u1mlCQI=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
-			"checksumSHA1": "5ds5U5Xz9jlsvTzgfYiMfl/+5nE=",
+			"checksumSHA1": "Eb3PrXrEg8z4euUtStlo/BO1YUA=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/k8s",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "FHpSvq/iCnDZViR/b3E2WhnwXmo=",
 			"path": "github.com/portworx/torpedo/drivers/scheduler/spec",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "IbEBm5rK06B9VMGkzTTEaImAiOc=",
 			"path": "github.com/portworx/torpedo/drivers/volume",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "NFsmIeEB9aVeTb+PKG+6Z8JGAa0=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "1mk0xlPJLTNglzOpFVvUUFvKXxU=",
 			"path": "github.com/portworx/torpedo/drivers/volume/portworx/schedops",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "VC6jgTB9GKVetejp30GOQKQIc3Y=",
 			"path": "github.com/portworx/torpedo/pkg/errors",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "5IUpj+w/TVy3rj8oL3lFS0p7TEc=",
@@ -920,8 +920,8 @@
 			"checksumSHA1": "tnMZLo/kR9Kqx6GtmWwowtTLlA8=",
 			"origin": "github.com/portworx/torpedo/vendor/github.com/sean-/seed",
 			"path": "github.com/sean-/seed",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "aB+ZDcX9agmLOO+/dKINbhbCbsg=",
@@ -963,8 +963,8 @@
 			"checksumSHA1": "MlEHIE/60sB86Lmf0MPTIXHzKzE=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/crypto/curve25519",
 			"path": "golang.org/x/crypto/curve25519",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "X6Q8nYb+KXh+64AKHwWOOcyijHQ=",
@@ -984,8 +984,8 @@
 			"checksumSHA1": "nnD48uEKLyuT9T+DZHrSbMkMRCE=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/crypto/ssh",
 			"path": "golang.org/x/crypto/ssh",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "BGm8lKZmvJbf/YOJLeL1rw2WVjA=",
@@ -997,8 +997,8 @@
 			"checksumSHA1": "uX2McdP4VcQ6zkAF0Q4oyd0rFtU=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/net/bpf",
 			"path": "golang.org/x/net/bpf",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "GtamqiJoL7PGHsN454AoffBFMa8=",
@@ -1040,15 +1040,15 @@
 			"checksumSHA1": "5JWn/wMC+EWNDKI/AYE4JifQF54=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/net/internal/iana",
 			"path": "golang.org/x/net/internal/iana",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "O8Z9KiPj+CAJPq4CxOJpFhNvYJw=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/net/internal/socket",
 			"path": "golang.org/x/net/internal/socket",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "UxahDzW2v4mf/+aFxruuupaoIwo=",
@@ -1061,15 +1061,15 @@
 			"checksumSHA1": "zPTKyZ1C55w1fk1W+/qGE15jaek=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/net/ipv4",
 			"path": "golang.org/x/net/ipv4",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "3L3n7qKMO9X8E1ibA5mExKvwbmI=",
 			"origin": "github.com/portworx/torpedo/vendor/golang.org/x/net/ipv6",
 			"path": "golang.org/x/net/ipv6",
-			"revision": "15912e10abcc029f76cb2539eba0e5e9a1d07a3e",
-			"revisionTime": "2018-09-25T02:01:32Z"
+			"revision": "8046dab61ea3ecb0d9ac7bf6574a57734ce0f214",
+			"revisionTime": "2018-10-09T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "3xyuaSNmClqG4YWC7g0isQIbUTc=",
@@ -1506,8 +1506,8 @@
 			"checksumSHA1": "byaZc4/ja52U1d8CXDy4bx9JaLM=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/api/scheduling/v1beta1",
 			"path": "k8s.io/api/scheduling/v1beta1",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "7Y6uEhC0vMY5Ytc9jES6yQ2wVs0=",
@@ -1779,15 +1779,15 @@
 			"checksumSHA1": "FR8QEDIjGsSdUX4rXVlGP18uSyA=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/apimachinery/pkg/util/httpstream",
 			"path": "k8s.io/apimachinery/pkg/util/httpstream",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "IMjQA9VgWXGfadze+u8jNUUZZlw=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/apimachinery/pkg/util/httpstream/spdy",
 			"path": "k8s.io/apimachinery/pkg/util/httpstream/spdy",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "esYmNzZvo9NZy89gY8U97T025Lg=",
@@ -1817,8 +1817,8 @@
 			"checksumSHA1": "PvefNiZTc/uwwPAOkBKZ3ST25Tc=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/apimachinery/pkg/util/remotecommand",
 			"path": "k8s.io/apimachinery/pkg/util/remotecommand",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "KukExlfAW/1KcERlUZ4owXuXpXw=",
@@ -1891,8 +1891,8 @@
 			"checksumSHA1": "OGbsdDRP+y4F++eGe/dh3FIWThg=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/apimachinery/third_party/forked/golang/netutil",
 			"path": "k8s.io/apimachinery/third_party/forked/golang/netutil",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "pFnczmxFMAB2lpvobsFssg9Zt4Q=",
@@ -2119,8 +2119,8 @@
 			"checksumSHA1": "S9JHuu0Bwyc7RumKvhMJC49MtkU=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/client-go/kubernetes/typed/scheduling/v1beta1",
 			"path": "k8s.io/client-go/kubernetes/typed/scheduling/v1beta1",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "G5RT/7WJWB42L2rvJOCZYUBv/u8=",
@@ -2162,8 +2162,8 @@
 			"checksumSHA1": "ilihkLzytTmhvOcCmJJmubYwak0=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/client-go/pkg/apis/clientauthentication/v1beta1",
 			"path": "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "Mbvnezsq0bnfb8yjUqT9UbKhpuM=",
@@ -2307,8 +2307,8 @@
 			"checksumSHA1": "20P98TYv33aPql2HAuDtILBTHoo=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/client-go/tools/remotecommand",
 			"path": "k8s.io/client-go/tools/remotecommand",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "rw/lca3VK2hZk7+kzK0PDZ3V8Jk=",
@@ -2320,8 +2320,8 @@
 			"checksumSHA1": "z6ktalStv2wJypDrcFFaSpfWqNg=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/client-go/transport/spdy",
 			"path": "k8s.io/client-go/transport/spdy",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "lTGzV+HgAXM6vWKFfedFLlIl94E=",
@@ -2339,15 +2339,15 @@
 			"checksumSHA1": "KSB22yQOaax0P/RkHCDp80u+Jcs=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/client-go/util/connrotation",
 			"path": "k8s.io/client-go/util/connrotation",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "vOdL2QO08zL5IS+UBOVJMGwgbFI=",
 			"origin": "github.com/portworx/sched-ops/vendor/k8s.io/client-go/util/exec",
 			"path": "k8s.io/client-go/util/exec",
-			"revision": "aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c",
-			"revisionTime": "2018-09-18T22:29:44Z"
+			"revision": "dfb008bca0202bb6ce034d8d05e2c9b2ea6b856a",
+			"revisionTime": "2018-10-04T23:30:04Z"
 		},
 		{
 			"checksumSHA1": "yXKT7cJNCv5vjwGKhpc/DUsQg+A=",
