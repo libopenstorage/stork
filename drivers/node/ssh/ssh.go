@@ -80,6 +80,7 @@ func (s *ssh) Init() error {
 				ssh_pkg.Password(s.password),
 			},
 			HostKeyCallback: ssh_pkg.InsecureIgnoreHostKey(),
+			Timeout:         time.Second * 5,
 		}
 	} else if s.keyPath != "" {
 		pubkey, err := getKeyFile(s.keyPath)
@@ -92,6 +93,7 @@ func (s *ssh) Init() error {
 				ssh_pkg.PublicKeys(pubkey),
 			},
 			HostKeyCallback: ssh_pkg.InsecureIgnoreHostKey(),
+			Timeout:         time.Second * 5,
 		}
 
 	} else {
