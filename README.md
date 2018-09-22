@@ -39,59 +39,17 @@ unhealthy pods on that node using volumes from the driver will not be able to ac
 relocate  pods on to other nodes so that they can continue running.
 
 ## Volume Snapshots
+
 Stork uses the external-storage project from [kubernetes-incuabator](https://github.com/kubernetes-incubator/external-storage)
 to add support for snapshots.
 
-### Creating Snapshots
-If you have a PVC called mysql-data, you can create a snapshot for that PVC by
-applying the following spec:
+Refer to [Snapshots with Stork](doc/snaps.md) for instructions on creating and using snapshots with Stork.
 
-```
-apiVersion: volumesnapshot.external-storage.k8s.io/v1
-kind: VolumeSnapshot
-metadata:
-  name: mysql-snapshot
-  namespace: default
-spec:
-  persistentVolumeClaimName: mysql-data
-```
+### 3DSnaps
 
-You can then check the status of the snapshots using kubectl:
-```
-$ kubectl get volumesnapshot,volumesnapshotdatas
-NAME                             AGE
-volumesnapshots/mysql-snapshot   6s
-NAME                                                                           AGE
-volumesnapshotdatas/k8s-volume-snapshot-179503e6-f979-11e7-971d-627221250ade   4s
-```
+3DSnaps provides app-consistent cluster wide snapshots. It allows you to specify pre and post rules that are run on the application pods using the volumes. This allows users to quiesce the applications before the snapshot is taken and resume I/O after the snapshot is taken. The commands will be run in pods which are using the PVC being snapshotted.
 
-### Restoring from Snapshots
-You can then create PVCs from this snapshot by using the snapshot name and the stork-snapshot-sc storageclass.
-```
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mysql-snap-clone
-  annotations:
-    snapshot.alpha.kubernetes.io/snapshot: mysql-snapshot
-spec:
-  accessModes:
-     - ReadWriteOnce
-  storageClassName: stork-snapshot-sc
-  resources:
-    requests:
-      storage: 2Gi
-```
-
-You should then see a PVC created by Stork based on that snapshot
-```
-$ kubectl get pvc
-NAME               STATUS    VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS        AGE
-mysql-data         Bound     pvc-d8959cf1-f978-11e7-9319-0214683e8447   2Gi        RWO            px-mysql-sc         5m
-mysql-snap-clone   Bound     pvc-853f549b-f979-11e7-9319-0214683e8447   2Gi        RWO            stork-snapshot-sc   56s
-```
-
-
+Read [Configuring 3DSnaps](/doc/snaps-3d.md) for further details on 3DSnaps.
 
 
 # Building Stork
