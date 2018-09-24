@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/sirupsen/logrus"
@@ -54,7 +55,7 @@ func Run() error {
 func Register(
 	gkv *schema.GroupVersionKind,
 	namespace string,
-	resyncPeriod int,
+	resyncPeriod time.Duration,
 	handler sdk.Handler) error {
 	logrus.Debugf("Registering controller for %v", gkv)
 	if controllerInst == nil {
