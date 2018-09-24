@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/heptio/ark/pkg/util/collections"
@@ -34,7 +35,7 @@ import (
 )
 
 const (
-	resyncPeriod                     = 30
+	resyncPeriod                     = 30 * time.Second
 	storkMigrationReplicasAnnotation = "stork.openstorage.org/migrationReplicas"
 )
 
