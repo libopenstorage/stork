@@ -127,7 +127,7 @@ var (
 
 // Register registers the given volume driver
 func Register(name string, d Driver) error {
-	logrus.Infof("Registering volume driver: %v", name)
+	logrus.Debugf("Registering volume driver: %v", name)
 	volDrivers[name] = d
 	return nil
 }
