@@ -14,7 +14,7 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
-RELEASE_VER := 1.1.1
+RELEASE_VER := 1.2.0
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
 GIT_BRANCH  := $(subst /,-,$(shell git rev-parse --abbrev-ref HEAD))

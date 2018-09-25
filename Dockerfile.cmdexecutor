@@ -4,7 +4,7 @@ MAINTAINER Portworx Inc. <support@portworx.com>
 LABEL name="openstorage/cmdexecutor" \
       maintainer="support@portworx.com" \
       vendor="Portworx Inc." \
-      version="1.1" \
+      version="1.2.0" \
       release="1" \
       summary="STORK Command executor" \
       description="CLI to execute async commands for Kubernetes Pods" \
