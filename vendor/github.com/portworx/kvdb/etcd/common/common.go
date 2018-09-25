@@ -216,9 +216,11 @@ func Version(uri string, options map[string]string) (string, error) {
 }
 
 // TestStart starts test
-func TestStart() error {
+func TestStart(removeData bool) error {
 	dataDir := "/tmp/etcd"
-	os.RemoveAll(dataDir)
+	if removeData {
+		os.RemoveAll(dataDir)
+	}
 	cmd = exec.Command("etcd", "--advertise-client-urls", "http://127.0.0.1:2379", "--data-dir", dataDir)
 	err := cmd.Start()
 	time.Sleep(5 * time.Second)

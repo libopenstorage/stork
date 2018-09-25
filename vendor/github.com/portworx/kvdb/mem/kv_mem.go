@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/common"
+	"github.com/sirupsen/logrus"
 )
 
 const (

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/heptio/ark/pkg/util/collections"
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	crdclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter"
@@ -19,6 +20,7 @@ import (
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
+	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/snapshot"
@@ -27,6 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,6 +52,9 @@ const (
 
 	// namespace is the kubernetes namespace in which portworx daemon set runs
 	namespace = "kube-system"
+
+	// default API port
+	apiPort = 9001
 
 	// provisionerName is the name for the driver provisioner
 	provisionerName = "kubernetes.io/portworx-volume"
@@ -103,6 +109,7 @@ const (
 
 var pxGroupSnapSelectorRegex = regexp.MustCompile(`portworx\.selector/(.+)`)
 var pre14VersionRegex = regexp.MustCompile(`1\.2\..+|1\.3\..+`)
+var pre2VersionRegex = regexp.MustCompile(`1\.+`)
 
 var snapAPICallBackoff = wait.Backoff{
 	Duration: volumeSnapshotInitialDelay,
@@ -141,13 +148,14 @@ func (p *portworx) Init(_ interface{}) error {
 	}
 
 	logrus.Infof("Using %v as endpoint for portworx volume driver", endpoint)
-	clnt, err := clusterclient.NewClusterClient("http://"+endpoint+":9001", "v1")
+	endpointPort := fmt.Sprintf("http://%v:%v", endpoint, apiPort)
+	clnt, err := clusterclient.NewClusterClient(endpointPort, "v1")
 	if err != nil {
 		return err
 	}
 	p.clusterManager = clusterclient.ClusterManager(clnt)
 
-	clnt, err = volumeclient.NewDriverClient("http://"+endpoint+":9001", "pxd", "", "stork")
+	clnt, err = volumeclient.NewDriverClient(endpointPort, "pxd", "", "stork")
 	if err != nil {
 		return err
 	}
@@ -470,7 +478,11 @@ func (p *portworx) SnapshotCreate(
 		}
 
 		if !ok {
-			err = fmt.Errorf("cloud snapshot is supported only on PX version 1.4 and above. %s", msg)
+			err = &errors.ErrNotSupported{
+				Feature: "Cloud snapshots",
+				Reason:  "Only supported on PX version 1.4 onwards: " + msg,
+			}
+
 			return nil, getErrorSnapshotConditions(err), err
 		}
 
@@ -500,7 +512,11 @@ func (p *portworx) SnapshotCreate(
 			}
 
 			if !ok {
-				err = fmt.Errorf("group snapshot is supported only on PX version 1.4 and above. %s", msg)
+				err = &errors.ErrNotSupported{
+					Feature: "Group snapshots",
+					Reason:  "Only supported on PX version 1.4 onwards: " + msg,
+				}
+
 				return nil, getErrorSnapshotConditions(err), err
 			}
 
@@ -1425,6 +1441,172 @@ func getCloudSnapStatusString(status *api.CloudBackupStatus) string {
 		statusStr = fmt.Sprintf("%s Completion time: %v", statusStr, status.CompletedTime)
 	}
 	return statusStr
+}
+
+func (p *portworx) CreatePair(pair *stork_crd.ClusterPair) (string, error) {
+	ok, msg, err := p.ensureNodesDontMatchVersionPrefix(pre2VersionRegex)
+	if err != nil {
+		return "", err
+	}
+
+	if !ok {
+		err = &errors.ErrNotSupported{
+			Feature: "Cluster pair",
+			Reason:  "Only supported on PX version 2.0 onwards: " + msg,
+		}
+	}
+
+	port := uint64(apiPort)
+	if p, ok := pair.Spec.Options["port"]; ok {
+		port, err = strconv.ParseUint(p, 10, 32)
+		if err != nil {
+			return "", fmt.Errorf("invalid port (%v) specified for cluster pair: %v", p, err)
+		}
+	}
+	resp, err := p.clusterManager.CreatePair(&api.ClusterPairCreateRequest{
+		RemoteClusterIp:    pair.Spec.Options["ip"],
+		RemoteClusterToken: pair.Spec.Options["token"],
+		RemoteClusterPort:  uint32(port),
+	})
+	if err != nil {
+		return "", err
+	}
+	return resp.RemoteClusterId, nil
+}
+
+func (p *portworx) DeletePair(pair *stork_crd.ClusterPair) error {
+	return p.clusterManager.DeletePair(pair.Status.RemoteStorageID)
+}
+
+func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+	ok, msg, err := p.ensureNodesDontMatchVersionPrefix(pre2VersionRegex)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		err = &errors.ErrNotSupported{
+			Feature: "Migration",
+			Reason:  "Only supported on PX version 2.0 onwards: " + msg,
+		}
+	}
+
+	if len(migration.Spec.Selectors) != 0 {
+		return nil, fmt.Errorf("selectors are not supported yet")
+	}
+
+	if len(migration.Spec.Namespaces) == 0 {
+		return nil, fmt.Errorf("namespaces for migration cannot be empty")
+	}
+
+	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair)
+	if err != nil {
+		return nil, fmt.Errorf("error getting clusterpair: %v", err)
+	}
+	volumeInfos := make([]*stork_crd.VolumeInfo, 0)
+	for _, namespace := range migration.Spec.Namespaces {
+		pvcList, err := k8s.Instance().GetPersistentVolumeClaims(namespace, migration.Spec.Selectors)
+		if err != nil {
+			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)
+		}
+		for _, pvc := range pvcList.Items {
+			if !p.isPortworxPVC(&pvc) {
+				continue
+			}
+			volumeInfo := &stork_crd.VolumeInfo{}
+			volumeInfo.PersistentVolumeClaim = pvc.Name
+			volumeInfo.Namespace = pvc.Namespace
+			volumeInfos = append(volumeInfos, volumeInfo)
+
+			volume, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+			if err != nil {
+				volumeInfo.Status = stork_crd.MigrationStatusFailed
+				volumeInfo.Reason = fmt.Sprintf("Error getting volume for PVC: %v", err)
+				logrus.Errorf("%v: %v", pvc.Name, volumeInfo.Reason)
+				continue
+			}
+			volumeInfo.Volume = volume
+			err = p.volDriver.CloudMigrateStart(&api.CloudMigrateStartRequest{
+				Operation: api.CloudMigrate_MigrateVolume,
+				ClusterId: clusterPair.Status.RemoteStorageID,
+				TargetId:  volume,
+			})
+			if err != nil {
+				volumeInfo.Status = stork_crd.MigrationStatusFailed
+				volumeInfo.Reason = fmt.Sprintf("Error starting migration for volume: %v", err)
+				logrus.Errorf("%v: %v", pvc.Name, volumeInfo.Reason)
+				continue
+			}
+			volumeInfo.Status = stork_crd.MigrationStatusInProgress
+			volumeInfo.Reason = fmt.Sprintf("Volume migration has started")
+		}
+	}
+
+	return volumeInfos, nil
+}
+
+func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+	status, err := p.volDriver.CloudMigrateStatus()
+	if err != nil {
+		return nil, err
+	}
+
+	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair)
+	if err != nil {
+		return nil, fmt.Errorf("error getting clusterpair: %v", err)
+	}
+
+	clusterInfo, ok := status.Info[clusterPair.Status.RemoteStorageID]
+	if !ok {
+		return nil, fmt.Errorf("migration status not found for remote cluster %v", clusterPair.Status.RemoteStorageID)
+	}
+
+	for _, vInfo := range migration.Status.Volumes {
+		found := false
+		for _, mInfo := range clusterInfo.List {
+			if vInfo.Volume == mInfo.LocalVolumeName {
+				found = true
+				if mInfo.Status == api.CloudMigrate_Failed {
+					vInfo.Status = stork_crd.MigrationStatusFailed
+					vInfo.Reason = fmt.Sprintf("Migration %v failed for volume", mInfo.CurrentStage)
+				} else if mInfo.CurrentStage == api.CloudMigrate_Done &&
+					mInfo.Status == api.CloudMigrate_Complete {
+					vInfo.Status = stork_crd.MigrationStatusSuccessful
+					vInfo.Reason = fmt.Sprintf("Migration succesful for volume")
+				}
+				break
+			}
+		}
+
+		// If we didn't get the status for a volume mark it as failed
+		if !found {
+			vInfo.Status = stork_crd.MigrationStatusFailed
+		}
+	}
+
+	return migration.Status.Volumes, nil
+}
+
+func (p *portworx) CancelMigration(migration *stork_crd.Migration) error {
+	logrus.Warnf("Canceling migration not supported for Portworx, ignoring")
+	return nil
+}
+
+func (p *portworx) UpdateMigratedPersistentVolumeSpec(
+	object runtime.Unstructured,
+) (runtime.Unstructured, error) {
+	portworxSpec, err := collections.GetMap(object.UnstructuredContent(), "spec.portworxVolume")
+	if err != nil {
+		return nil, err
+	}
+
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return nil, err
+	}
+
+	portworxSpec["volumeID"] = metadata.GetName()
+	return object, nil
 }
 
 func init() {

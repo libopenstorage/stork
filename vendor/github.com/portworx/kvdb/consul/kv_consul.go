@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/hashicorp/consul/api"
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/common"
 	"github.com/portworx/kvdb/mem"
+	"github.com/sirupsen/logrus"
 )
 
 const (

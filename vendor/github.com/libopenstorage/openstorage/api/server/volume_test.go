@@ -12,16 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	version = "v1"
-)
-
 func TestVolumeCreateSuccess(t *testing.T) {
 
 	var err error
 
-	ts, testVolDriver := Setup(t)
-
+	// Setup volume rest functions server
+	ts, testVolDriver := testRestServer(t)
 	defer ts.Close()
 	defer testVolDriver.Stop()
 
@@ -31,7 +27,6 @@ func TestVolumeCreateSuccess(t *testing.T) {
 	// Setup request
 	name := "myvol"
 	size := uint64(1234)
-
 	req := &api.VolumeCreateRequest{
 		Locator: &api.VolumeLocator{Name: name},
 		Source:  &api.Source{},
@@ -47,9 +42,33 @@ func TestVolumeCreateSuccess(t *testing.T) {
 
 	// create a volume client
 	driverclient := volumeclient.VolumeDriver(cl)
-
 	res, err := driverclient.Create(req.GetLocator(), req.GetSource(), req.GetSpec())
+	assert.Nil(t, err)
+	assert.Equal(t, id, res)
 
+	// Create a new global test cluster
+	tc := newTestCluster(t)
+	defer tc.Finish()
+
+	// Mock cluster
+	nodeId := "nodeid"
+	tc.MockCluster().
+		EXPECT().
+		GetNodeIdFromIp("192.168.1.1").
+		Return(nodeId, nil).Times(1)
+
+	// create a volume client with Replica IPs
+	rset := &api.ReplicaSet{Nodes: []string{"192.168.1.1"}}
+	req.Spec.ReplicaSet = rset
+	expectedSpec := req.Spec.Copy()
+	expectedSpec.ReplicaSet.Nodes = []string{nodeId}
+
+	testVolDriver.MockDriver().
+		EXPECT().
+		Create(req.GetLocator(), req.GetSource(), expectedSpec).
+		Return(id, nil)
+
+	res, err = driverclient.Create(req.GetLocator(), req.GetSource(), req.GetSpec())
 	assert.Nil(t, err)
 	assert.Equal(t, id, res)
 }
@@ -58,7 +77,7 @@ func TestVolumeCreateFailed(t *testing.T) {
 
 	var err error
 
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -86,11 +105,54 @@ func TestVolumeCreateFailed(t *testing.T) {
 	assert.Contains(t, err.Error(), "error in create")
 }
 
+func TestVolumeCreateGetNodeIdFromIpFailed(t *testing.T) {
+
+	var err error
+
+	ts, testVolDriver := testRestServer(t)
+
+	defer ts.Close()
+	defer testVolDriver.Stop()
+
+	client, err := volumeclient.NewDriverClient(ts.URL, mockDriverName, version, mockDriverName)
+	assert.Nil(t, err)
+	assert.NotNil(t, client)
+
+	nodeIp := "192.168.1.1"
+
+	// Create a new global test cluster
+	tc := newTestCluster(t)
+	defer tc.Finish()
+
+	// Mock cluster
+	tc.MockCluster().
+		EXPECT().
+		GetNodeIdFromIp(nodeIp).
+		Return(nodeIp, fmt.Errorf("Failed to locate IP in this cluster."))
+
+	// create a volume client with Replica IPs
+	name := "myvol"
+	size := uint64(1234)
+	req := &api.VolumeCreateRequest{
+		Locator: &api.VolumeLocator{Name: name},
+		Source:  &api.Source{},
+		Spec:    &api.VolumeSpec{Size: size, ReplicaSet: &api.ReplicaSet{Nodes: []string{nodeIp}}},
+	}
+
+	// create a volume client
+	driverclient := volumeclient.VolumeDriver(client)
+
+	res, err := driverclient.Create(req.GetLocator(), req.GetSource(), req.GetSpec())
+	assert.NotNil(t, err)
+	assert.EqualValues(t, "", res)
+	assert.Contains(t, err.Error(), "Failed to locate IP")
+}
+
 func TestVolumeDeleteSuccess(t *testing.T) {
 
 	var err error
 
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -115,7 +177,7 @@ func TestVolumeDeleteSuccess(t *testing.T) {
 func TestVolumeDeleteFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -141,7 +203,7 @@ func TestVolumeDeleteFailed(t *testing.T) {
 func TestVolumeSnapshotCreateSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -173,10 +235,10 @@ func TestVolumeSnapshotCreateSuccess(t *testing.T) {
 	assert.EqualValues(t, id, res)
 }
 
-func TestVolumeSnapshotCreateFailed(testObj *testing.T) {
+func TestVolumeSnapshotCreateFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(testObj)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -186,7 +248,7 @@ func TestVolumeSnapshotCreateFailed(testObj *testing.T) {
 
 	client, err := volumeclient.NewDriverClient(ts.URL, mockDriverName, version, mockDriverName)
 
-	assert.Nil(testObj, err)
+	assert.Nil(t, err)
 
 	req := &api.SnapCreateRequest{Id: id,
 		Locator:  &api.VolumeLocator{Name: name},
@@ -204,15 +266,15 @@ func TestVolumeSnapshotCreateFailed(testObj *testing.T) {
 
 	res, err := driverclient.Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator())
 
-	assert.NotNil(testObj, err)
-	assert.Contains(testObj, err.Error(), "error in snapshot create")
-	assert.EqualValues(testObj, "", res)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "error in snapshot create")
+	assert.EqualValues(t, "", res)
 }
 
 func TestVolumeInspectSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -259,7 +321,7 @@ func TestVolumeInspectSuccess(t *testing.T) {
 func TestVolumeInspectFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -288,7 +350,7 @@ func TestVolumeInspectFailed(t *testing.T) {
 func TestVolumeSetSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -344,7 +406,7 @@ func TestVolumeSetSuccess(t *testing.T) {
 func TestVolumeSetFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -385,7 +447,7 @@ func TestVolumeSetFailed(t *testing.T) {
 func TestVolumeAttachSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -439,7 +501,7 @@ func TestVolumeAttachSuccess(t *testing.T) {
 func TestVolumeAttachFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -478,7 +540,7 @@ func TestVolumeAttachFailed(t *testing.T) {
 func TestVolumeDetachSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -532,7 +594,7 @@ func TestVolumeDetachSuccess(t *testing.T) {
 func TestVolumeDetachFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -570,7 +632,7 @@ func TestVolumeDetachFailed(t *testing.T) {
 func TestVolumeMountSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -626,7 +688,7 @@ func TestVolumeMountSuccess(t *testing.T) {
 func TestVolumeMountFailedNoMountPath(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -660,7 +722,7 @@ func TestVolumeMountFailedNoMountPath(t *testing.T) {
 func TestVolumeStatsSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -694,7 +756,7 @@ func TestVolumeStatsSuccess(t *testing.T) {
 func TestVolumeStatsFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -723,7 +785,7 @@ func TestVolumeStatsFailed(t *testing.T) {
 func TestVolumeUnmountSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -779,7 +841,7 @@ func TestVolumeUnmountSuccess(t *testing.T) {
 func TestVolumeUnmountFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -818,7 +880,7 @@ func TestVolumeUnmountFailed(t *testing.T) {
 func TestVolumeQuiesceSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -845,7 +907,7 @@ func TestVolumeQuiesceSuccess(t *testing.T) {
 func TestVolumeQuiesceFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -874,7 +936,7 @@ func TestVolumeQuiesceFailed(t *testing.T) {
 /* TODO(ram-infrac) : Test case is failing, recheck
 func TestVolumeUnquiesceSuccess(t *testing.T) {
 
-        ts, testVolDriver := Setup(t)
+        ts, testVolDriver := testRestServer(t)
 
 	ts.Close()
 	testVolDriver.Stop()
@@ -901,7 +963,7 @@ func TestVolumeUnquiesceSuccess(t *testing.T) {
 func TestVolumeUnquiesceFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -927,7 +989,7 @@ func TestVolumeUnquiesceFailed(t *testing.T) {
 func TestVolumeRestoreSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -954,7 +1016,7 @@ func TestVolumeRestoreSuccess(t *testing.T) {
 func TestVolumeRestoreFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -981,7 +1043,7 @@ func TestVolumeRestoreFailed(t *testing.T) {
 func TestVolumeUsedSizeSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1008,7 +1070,7 @@ func TestVolumeUsedSizeSuccess(t *testing.T) {
 func TestVolumeUsedSizeFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1035,7 +1097,7 @@ func TestVolumeUsedSizeFailed(t *testing.T) {
 func TestVolumeEnumerateSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1087,7 +1149,7 @@ func TestVolumeEnumerateSuccess(t *testing.T) {
 func TestVolumeEnumerateFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1125,7 +1187,7 @@ func TestVolumeEnumerateFailed(t *testing.T) {
 func TestVolumeSnapshotEnumerateSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1173,7 +1235,7 @@ func TestVolumeSnapshotEnumerateSuccess(t *testing.T) {
 func TestVolumeSnapshotEnumerateFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1208,7 +1270,7 @@ func TestVolumeSnapshotEnumerateFailed(t *testing.T) {
 func TestVolumeGetActiveRequestsSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1248,7 +1310,7 @@ func TestVolumeGetActiveRequestsSuccess(t *testing.T) {
 func TestVolumeGetActiveRequestsFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1273,7 +1335,7 @@ func TestVolumeGetActiveRequestsFailed(t *testing.T) {
 func TestCredsCreateSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1308,7 +1370,7 @@ func TestCredsCreateSuccess(t *testing.T) {
 func TestCredsCreateFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1344,7 +1406,7 @@ func TestCredsCreateFailed(t *testing.T) {
 func TestCredsEnumerateSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1375,7 +1437,7 @@ func TestCredsEnumerateSuccess(t *testing.T) {
 func TestCredsEnumerateFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1402,7 +1464,7 @@ func TestCredsEnumerateFailed(t *testing.T) {
 func TestCredsValidateSuccess(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1428,7 +1490,7 @@ func TestCredsValidateSuccess(t *testing.T) {
 func TestCredsValidateFailed(t *testing.T) {
 
 	var err error
-	ts, testVolDriver := Setup(t)
+	ts, testVolDriver := testRestServer(t)
 
 	defer ts.Close()
 	defer testVolDriver.Stop()
@@ -1450,4 +1512,65 @@ func TestCredsValidateFailed(t *testing.T) {
 
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "error in creds validate")
+}
+
+func TestGroupSnapshotCreateSuccess(t *testing.T) {
+
+	var err error
+	ts, testVolDriver := testRestServer(t)
+
+	defer ts.Close()
+	defer testVolDriver.Stop()
+
+	id := "mygroupid"
+	labels := map[string]string{
+		"app":    "app1",
+		"region": "region1",
+	}
+
+	client, err := volumeclient.NewDriverClient(ts.URL, mockDriverName, version, mockDriverName)
+
+	assert.Nil(t, err)
+
+	req := &api.GroupSnapCreateRequest{Id: id,
+		Labels: labels,
+	}
+
+	snapshots := map[string]*api.SnapCreateResponse{
+		"vol1": &api.SnapCreateResponse{
+			VolumeCreateResponse: &api.VolumeCreateResponse{
+				Id: id,
+				VolumeResponse: &api.VolumeResponse{
+					Error: responseStatus(err),
+				},
+			},
+		},
+		"vol2": &api.SnapCreateResponse{
+			VolumeCreateResponse: &api.VolumeCreateResponse{
+				Id: id,
+				VolumeResponse: &api.VolumeResponse{
+					Error: responseStatus(err),
+				},
+			},
+		},
+	}
+
+	response := &api.GroupSnapCreateResponse{
+		Snapshots: snapshots,
+		Error:     responseStatus(err),
+	}
+
+	//mock Snapshot call
+	testVolDriver.MockDriver().
+		EXPECT().
+		SnapshotGroup(req.GetId(), req.GetLabels()).
+		Return(response, nil)
+
+	// create client
+	driverclient := volumeclient.VolumeDriver(client)
+
+	res, err := driverclient.SnapshotGroup(req.GetId(), req.GetLabels())
+
+	assert.Nil(t, err)
+	assert.Equal(t, len(response.Snapshots), len(res.Snapshots))
 }

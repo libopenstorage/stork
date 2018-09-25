@@ -137,7 +137,7 @@ func testEnumerateWithSelect(kv kvdb.Kvdb, t *testing.T) {
 	assert.Equal(t, 0, len(output), "Unexpected output")
 }
 
-func Start() error {
+func Start(remove bool) error {
 	return nil
 }
 

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/portworx/kvdb"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,14 +47,14 @@ func fatalErrorCb() kvdb.FatalErrorCB {
 }
 
 // StartKvdb is a func literal.
-type StartKvdb func() error
+type StartKvdb func(bool) error
 
 // StopKvdb is a func literal.
 type StopKvdb func() error
 
 // Run runs the test suite.
 func Run(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb) {
-	err := start()
+	err := start(true)
 	assert.NoError(t, err, "Unable to start kvdb")
 	// Wait for kvdb to start
 	time.Sleep(5 * time.Second)
@@ -89,7 +89,7 @@ func Run(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop S
 
 // RunLock runs the lock test suite.
 func RunLock(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb) {
-	err := start()
+	err := start(true)
 	time.Sleep(3 * time.Second)
 	assert.NoError(t, err, "Unable to start kvdb")
 	kv, err := datastoreInit("pwx/test", nil, nil, fatalErrorCb())
@@ -107,7 +107,7 @@ func RunLock(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, st
 
 // RunWatch runs the watch test suite.
 func RunWatch(datastoreInit kvdb.DatastoreInit, t *testing.T, start StartKvdb, stop StopKvdb) {
-	err := start()
+	err := start(true)
 	time.Sleep(3 * time.Second)
 	assert.NoError(t, err, "Unable to start kvdb")
 	kv, err := datastoreInit("pwx/test", nil, nil, fatalErrorCb())
@@ -761,7 +761,7 @@ func lockBetweenRestarts(kv kvdb.Kvdb, t *testing.T, start StartKvdb, stop StopK
 		time.Sleep(30 * time.Second)
 
 		fmt.Println("starting kvdb")
-		err = start()
+		err = start(false)
 		assert.NoError(t, err, "Unable to start kvdb")
 		time.Sleep(30 * time.Second)
 

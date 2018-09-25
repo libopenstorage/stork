@@ -1,7 +1,10 @@
 package gexec_test
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -59,29 +62,51 @@ var _ = Describe(".BuildWithEnvironment", func() {
 })
 
 var _ = Describe(".BuildIn", func() {
+	const (
+		target = "github.com/onsi/gomega/gexec/_fixture/firefly/"
+	)
+
 	var (
-		gopath string
+		original string
+		gopath   string
 	)
 
 	BeforeEach(func() {
-		gopath = os.Getenv("GOPATH")
-		Expect(gopath).NotTo(BeEmpty())
-		Expect(os.Setenv("GOPATH", "/tmp")).To(Succeed())
-		Expect(os.Environ()).To(ContainElement("GOPATH=/tmp"))
+		var err error
+		original = os.Getenv("GOPATH")
+		gopath, err = ioutil.TempDir("", "")
+		Expect(err).NotTo(HaveOccurred())
+		copyFile(filepath.Join("_fixture", "firefly", "main.go"), filepath.Join(gopath, "src", target), "main.go")
+		Expect(os.Setenv("GOPATH", filepath.Join(os.TempDir(), "emptyFakeGopath"))).To(Succeed())
+		Expect(os.Environ()).To(ContainElement(fmt.Sprintf("GOPATH=%s", filepath.Join(os.TempDir(), "emptyFakeGopath"))))
 	})
 
 	AfterEach(func() {
-		Expect(os.Setenv("GOPATH", gopath)).To(Succeed())
+		if original == "" {
+			Expect(os.Unsetenv("GOPATH")).To(Succeed())
+		} else {
+			Expect(os.Setenv("GOPATH", original)).To(Succeed())
+		}
+		if gopath != "" {
+			os.RemoveAll(gopath)
+		}
 	})
 
 	It("appends the gopath env var", func() {
-		_, err := gexec.BuildIn(gopath, "github.com/onsi/gomega/gexec/_fixture/firefly/")
+		_, err := gexec.BuildIn(gopath, target)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("resets GOPATH to its original value", func() {
-		_, err := gexec.BuildIn(gopath, "github.com/onsi/gomega/gexec/_fixture/firefly/")
+		_, err := gexec.BuildIn(gopath, target)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(os.Getenv("GOPATH")).To(Equal("/tmp"))
+		Expect(os.Getenv("GOPATH")).To(Equal(filepath.Join(os.TempDir(), "emptyFakeGopath")))
 	})
 })
+
+func copyFile(source, directory, basename string) {
+	Expect(os.MkdirAll(directory, 0755)).To(Succeed())
+	content, err := ioutil.ReadFile(source)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(ioutil.WriteFile(filepath.Join(directory, basename), content, 0644)).To(Succeed())
+}

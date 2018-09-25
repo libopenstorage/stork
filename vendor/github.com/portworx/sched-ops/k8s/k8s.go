@@ -84,6 +84,8 @@ type Ops interface {
 	ConfigMapOps
 	EventOps
 	CRDOps
+	ClusterPairOps
+	MigrationOps
 }
 
 // EventOps is an interface to put and get k8s events
@@ -419,6 +421,28 @@ type CRDOps interface {
 	CreateCRD(resource CustomResource) error
 	// ValidateCRD checks if the given CRD is registered
 	ValidateCRD(resource CustomResource) error
+}
+
+// ClusterPairOps is an interface to perfrom k8s ClusterPair operations
+type ClusterPairOps interface {
+	// CreateClusterPair creates the ClusterPair
+	CreateClusterPair(*v1alpha1.ClusterPair) error
+	// GetClusterPair gets the ClusterPair
+	GetClusterPair(string) (*v1alpha1.ClusterPair, error)
+	// DeleteClusterPair deletes the ClusterPair
+	DeleteClusterPair(string) error
+}
+
+// MigrationsOps is an interface to perfrom k8s Migration operations
+type MigrationOps interface {
+	// CreateMigration creates the Migration
+	CreateMigration(*v1alpha1.Migration) error
+	// GetMigration gets the Migration
+	GetMigration(string, string) (*v1alpha1.Migration, error)
+	// UpdateMigration updates the Migration
+	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
+	// DeleteMigration deletes the Migration
+	DeleteMigration(string, string) error
 }
 
 // CustomResource is for creating a Kubernetes TPR/CRD
@@ -2719,6 +2743,75 @@ func (k *k8sOps) UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 
 // ConfigMap APIs - END
 
+// ClusterPair APIs - BEGIN
+func (k *k8sOps) GetClusterPair(name string) (*v1alpha1.ClusterPair, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, nil
+	}
+
+	return k.storkClient.Stork().ClusterPairs().Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	_, err := k.storkClient.Stork().ClusterPairs().Create(pair)
+	return err
+}
+
+func (k *k8sOps) DeleteClusterPair(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	return k.storkClient.Stork().ClusterPairs().Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+// ClusterPair APIs - END
+
+// Migration APIs - BEGIN
+func (k *k8sOps) GetMigration(name string, namespace string) (*v1alpha1.Migration, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, nil
+	}
+
+	return k.storkClient.Stork().Migrations(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) CreateMigration(migration *v1alpha1.Migration) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	_, err := k.storkClient.Stork().Migrations(migration.Namespace).Create(migration)
+	return err
+}
+
+func (k *k8sOps) DeleteMigration(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return nil
+	}
+
+	return k.storkClient.Stork().Migrations(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) UpdateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migration, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, nil
+	}
+
+	return k.storkClient.Stork().Migrations(migration.Namespace).Update(migration)
+}
+
+// Migration APIs - END
+
+// Event APIs - BEGIN
 // CreateEvent puts an event into k8s etcd
 func (k *k8sOps) CreateEvent(event *v1.Event) (*v1.Event, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -2735,6 +2828,9 @@ func (k *k8sOps) ListEvents(namespace string, opts meta_v1.ListOptions) (*v1.Eve
 	return k.client.CoreV1().Events(namespace).List(opts)
 }
 
+// Event APIs - END
+
+// CRD APIs - BEGIN
 func (k *k8sOps) CreateCRD(resource CustomResource) error {
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
@@ -2783,6 +2879,8 @@ func (k *k8sOps) ValidateCRD(resource CustomResource) error {
 		return false, nil
 	})
 }
+
+// CRD APIs - END
 
 func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 	return k.client.AppsV1beta2()

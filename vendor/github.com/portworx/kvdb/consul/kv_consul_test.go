@@ -20,7 +20,7 @@ func TestAll(t *testing.T) {
 	test.Run(New, t, Start, Stop)
 
 	// Run consul specific tests
-	err := Start()
+	err := Start(true)
 	assert.NoError(t, err, "Unable to start kvdb")
 	// Wait for kvdb to start
 	time.Sleep(5 * time.Second)
@@ -49,12 +49,14 @@ func createUsingCAS(kv kvdb.Kvdb, t *testing.T) {
 	_, err = kv.CompareAndSet(kvPair, kvdb.KVModifiedIndex, []byte("some"))
 	assert.Error(t, err, "CompareAndSet did not fail on create")
 }
-func Start() error {
-	if err := os.RemoveAll("/tmp/consul"); err != nil {
-		return err
-	}
-	if err := os.MkdirAll("/tmp/consul", os.ModeDir); err != nil {
-		return err
+func Start(removeDir bool) error {
+	if removeDir {
+		if err := os.RemoveAll("/tmp/consul"); err != nil {
+			return err
+		}
+		if err := os.MkdirAll("/tmp/consul", os.ModeDir); err != nil {
+			return err
+		}
 	}
 
 	//consul agent -server -client=0.0.0.0  -data-dir /opt/consul/data -bind 0.0.0.0 -syslog -bootstrap-expect 1 -advertise 127.0.0.1

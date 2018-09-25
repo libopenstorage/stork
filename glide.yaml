@@ -24,7 +24,7 @@ import:
 - package: github.com/docker/distribution
   version: 749f6afb4572201e3c37325d0ffedb6f32be8950
 - package: github.com/libopenstorage/openstorage
-  version: ^2.0.0
+  version: v3.0.0-beta
   subpackages:
   - api
   - api/client
@@ -55,7 +55,7 @@ import:
   subpackages:
   - context
 - package: k8s.io/api
-  version: release-1.8
+  version: release-1.10
   subpackages:
   - apps/v1beta2
   - batch/v1
@@ -63,7 +63,7 @@ import:
   - rbac/v1
   - storage/v1
 - package: k8s.io/apimachinery
-  version: release-1.8
+  version: release-1.10
   subpackages:
   - pkg/api/errors
   - pkg/apis/meta/v1
@@ -72,6 +72,17 @@ import:
   - pkg/types
   - pkg/util/yaml
 - package: k8s.io/client-go
-  version: v5.0.1
+  version: v7.0.0
   subpackages:
   - kubernetes/scheme
+- package: github.com/golang/protobuf
+  version: v1.2.0
+  subpackages:
+  - jsonpb
+  - proto
+  - protoc-gen-go/descriptor
+  - ptypes
+  - ptypes/any
+  - ptypes/duration
+  - ptypes/struct
+  - ptypes/timestamp

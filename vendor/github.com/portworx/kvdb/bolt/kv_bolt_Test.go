@@ -123,8 +123,10 @@ func testEnumerateWithSelect(kv kvdb.Kvdb, t *testing.T) {
 	assert.Equal(t, 0, len(output), "Unexpected output")
 }
 
-func Start() error {
-	os.RemoveAll("px.db")
+func Start(removeDir bool) error {
+	if removeDir {
+		os.RemoveAll("px.db")
+	}
 	return nil
 }
 

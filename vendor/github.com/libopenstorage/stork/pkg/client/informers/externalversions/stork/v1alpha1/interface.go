@@ -24,6 +24,10 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterPairs returns a ClusterPairInformer.
+	ClusterPairs() ClusterPairInformer
+	// Migrations returns a MigrationInformer.
+	Migrations() MigrationInformer
 	// Rules returns a RuleInformer.
 	Rules() RuleInformer
 }
@@ -37,6 +41,16 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ClusterPairs returns a ClusterPairInformer.
+func (v *version) ClusterPairs() ClusterPairInformer {
+	return &clusterPairInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Migrations returns a MigrationInformer.
+func (v *version) Migrations() MigrationInformer {
+	return &migrationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Rules returns a RuleInformer.

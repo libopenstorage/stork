@@ -7,9 +7,13 @@ import (
 	"os"
 	"path"
 
-	"go.pedge.io/dlog"
+	"github.com/sirupsen/logrus"
 
 	"github.com/gorilla/mux"
+	"github.com/libopenstorage/openstorage/cluster"
+	"github.com/libopenstorage/openstorage/objectstore"
+	sched "github.com/libopenstorage/openstorage/schedpolicy"
+	"github.com/libopenstorage/openstorage/secrets"
 )
 
 // Route is a specification and  handler for a REST endpoint.
@@ -111,10 +115,38 @@ func StartVolumePluginAPI(
 	return nil
 }
 
-// StartClusterAPI starts a REST server to receive driver configuration commands
-// from the CLI/UX to control the OSD cluster.
-func StartClusterAPI(clusterApiBase string, clusterPort uint16) error {
-	clusterApi := newClusterAPI()
+func CheckNullClusterServerConfiguration(config *cluster.ClusterServerConfiguration) {
+
+	// Set config managers to null/generic implementation if passed as null
+	if config.ConfigSecretManager == nil {
+		config.ConfigSecretManager = secrets.NewDefaultSecrets()
+	}
+
+	if config.ConfigSchedManager == nil {
+		config.ConfigSchedManager = sched.NewDefaultSchedulePolicy()
+	}
+
+	if config.ConfigObjectStoreManager == nil {
+		config.ConfigObjectStoreManager = objectstore.NewDefaultObjectStore()
+	}
+
+}
+
+func StartClusterApiWithConfiguration(
+	config cluster.ClusterServerConfiguration,
+	clusterApiBase string,
+	clusterPort uint16,
+) error {
+
+	CheckNullClusterServerConfiguration(&config)
+	// newClusterAPI now must take a ClusterServerConfiguration.
+	// This makes it so that it does not have to create the fake server by default.
+	// The caller is the one who creates the manager and passes it in.
+	//
+	// newClusterAPI now calls RegisterManager according to the config.
+	clusterApi := newClusterAPI(config)
+
+	// start server as before
 	if err := startServer("osd", clusterApiBase, clusterPort, clusterApi.Routes()); err != nil {
 		return err
 	}
@@ -122,8 +154,26 @@ func StartClusterAPI(clusterApiBase string, clusterPort uint16) error {
 	return nil
 }
 
+// StartClusterAPI starts a REST server to receive driver configuration commands
+// from the CLI/UX to control the OSD cluster.
+func StartClusterAPI(clusterApiBase string, clusterPort uint16) error {
+	return StartClusterApiWithConfiguration(
+		cluster.ClusterServerConfiguration{},
+		clusterApiBase,
+		clusterPort,
+	)
+}
+
+//old version compatible
 func GetClusterAPIRoutes() []*Route {
-	clusterApi := newClusterAPI()
+	return GetClusterAPIRoutesWithConfiguration(
+		cluster.ClusterServerConfiguration{},
+	)
+}
+
+func GetClusterAPIRoutesWithConfiguration(config cluster.ClusterServerConfiguration) []*Route {
+	CheckNullClusterServerConfiguration(&config)
+	clusterApi := newClusterAPI(config)
 	return clusterApi.Routes()
 }
 
@@ -141,15 +191,15 @@ func startServer(name string, sockBase string, port uint16, routes []*Route) err
 	os.Remove(socket)
 	os.MkdirAll(path.Dir(socket), 0755)
 
-	dlog.Printf("Starting REST service on socket : %+v", socket)
+	logrus.Printf("Starting REST service on socket : %+v", socket)
 	listener, err = net.Listen("unix", socket)
 	if err != nil {
-		dlog.Warnln("Cannot listen on UNIX socket: ", err)
+		logrus.Warnln("Cannot listen on UNIX socket: ", err)
 		return err
 	}
 	go http.Serve(listener, router)
 	if port != 0 {
-		dlog.Printf("Starting REST service on port : %v", port)
+		logrus.Printf("Starting REST service on port : %v", port)
 		go http.ListenAndServe(fmt.Sprintf(":%d", port), router)
 	}
 	return nil
@@ -158,7 +208,7 @@ func startServer(name string, sockBase string, port uint16, routes []*Route) err
 type restServer interface {
 	Routes() []*Route
 	String() string
-	logRequest(request string, id string) dlog.Logger
+	logRequest(request string, id string) *logrus.Entry
 	sendError(request string, id string, w http.ResponseWriter, msg string, code int)
 }
 
@@ -168,8 +218,8 @@ type restBase struct {
 	name    string
 }
 
-func (rest *restBase) logRequest(request string, id string) dlog.Logger {
-	return dlog.WithFields(map[string]interface{}{
+func (rest *restBase) logRequest(request string, id string) *logrus.Entry {
+	return logrus.WithFields(map[string]interface{}{
 		"Driver":  rest.name,
 		"Request": request,
 		"ID":      id,
@@ -181,6 +231,6 @@ func (rest *restBase) sendError(request string, id string, w http.ResponseWriter
 }
 
 func notFound(w http.ResponseWriter, r *http.Request) {
-	dlog.Warnf("Not found: %+v ", r.URL)
+	logrus.Warnf("Not found: %+v ", r.URL)
 	http.NotFound(w, r)
 }

@@ -18,4 +18,8 @@ limitations under the License.
 
 package v1alpha1
 
+type ClusterPairExpansion interface{}
+
+type MigrationExpansion interface{}
+
 type RuleExpansion interface{}

@@ -11,6 +11,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/cluster"
+	"github.com/libopenstorage/openstorage/objectstore"
+	sched "github.com/libopenstorage/openstorage/schedpolicy"
+	"github.com/libopenstorage/openstorage/secrets"
 )
 
 const (
@@ -20,39 +23,28 @@ const (
 
 type clusterApi struct {
 	restBase
+	SecretManager      secrets.Secrets
+	SchedPolicyManager sched.SchedulePolicyProvider
+	ObjectStoreManager objectstore.ObjectStore
 }
 
-func (c *clusterApi) Routes() []*Route {
-	return []*Route{
-		{verb: "GET", path: "/cluster/versions", fn: c.versions},
-		{verb: "GET", path: clusterPath("/enumerate", cluster.APIVersion), fn: c.enumerate},
-		{verb: "GET", path: clusterPath("/gossipstate", cluster.APIVersion), fn: c.gossipState},
-		{verb: "GET", path: clusterPath("/nodestatus", cluster.APIVersion), fn: c.nodeStatus},
-		{verb: "GET", path: clusterPath("/nodehealth", cluster.APIVersion), fn: c.nodeHealth},
-		{verb: "GET", path: clusterPath("/status", cluster.APIVersion), fn: c.status},
-		{verb: "GET", path: clusterPath("/peerstatus", cluster.APIVersion), fn: c.peerStatus},
-		{verb: "GET", path: clusterPath("/inspect/{id}", cluster.APIVersion), fn: c.inspect},
-		{verb: "DELETE", path: clusterPath("", cluster.APIVersion), fn: c.delete},
-		{verb: "DELETE", path: clusterPath("/{id}", cluster.APIVersion), fn: c.delete},
-		{verb: "PUT", path: clusterPath("/enablegossip", cluster.APIVersion), fn: c.enableGossip},
-		{verb: "PUT", path: clusterPath("/disablegossip", cluster.APIVersion), fn: c.disableGossip},
-		{verb: "PUT", path: clusterPath("/shutdown", cluster.APIVersion), fn: c.shutdown},
-		{verb: "PUT", path: clusterPath("/shutdown/{id}", cluster.APIVersion), fn: c.shutdown},
-		{verb: "GET", path: clusterPath("/alerts/{resource}", cluster.APIVersion), fn: c.enumerateAlerts},
-		{verb: "PUT", path: clusterPath("/alerts/{resource}/{id}", cluster.APIVersion), fn: c.clearAlert},
-		{verb: "DELETE", path: clusterPath("/alerts/{resource}/{id}", cluster.APIVersion), fn: c.eraseAlert},
+func newClusterAPI(config cluster.ClusterServerConfiguration) restServer {
+	return &clusterApi{
+		restBase: restBase{
+			version: cluster.APIVersion,
+			name:    "Cluster API",
+		},
+		SecretManager:      config.ConfigSecretManager,
+		SchedPolicyManager: config.ConfigSchedManager,
+		ObjectStoreManager: config.ConfigObjectStoreManager,
 	}
-}
-
-func newClusterAPI() restServer {
-	return &clusterApi{restBase{version: cluster.APIVersion, name: "Cluster API"}}
 }
 
 func (c *clusterApi) String() string {
 	return c.name
 }
 
-// swagger:operation GET /cluster/enumerate cluster enumerate enumerateCluster
+// swagger:operation GET /cluster/enumerate cluster enumerateCluster
 //
 // Lists cluster Nodes.
 //
@@ -107,7 +99,7 @@ func (c *clusterApi) setSize(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(clusterResponse)
 }
 
-// swagger:operation GET /cluster/inspect/{id} cluster inspect inspectNode
+// swagger:operation GET /cluster/inspect/{id} cluster inspectNode
 //
 // Inspect cluster Nodes.
 //
@@ -121,6 +113,7 @@ func (c *clusterApi) setSize(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get node with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //      description: a node
@@ -147,50 +140,6 @@ func (c *clusterApi) inspect(w http.ResponseWriter, r *http.Request) {
 	} else {
 		json.NewEncoder(w).Encode(nodeStats)
 	}
-}
-
-// swagger:operation PUT /loggingurl cluster loggingurl setLoggingUrl
-//
-// Set Logging url
-// ---
-// produces:
-// - application/json
-// deprecated: true
-// parameters:
-// - name: url
-//   in: query
-//   description: url to set loggingurl with
-//   required: true
-// responses:
-//  '200':
-//    description: cluster response
-//    schema:
-//     $ref: '#/definitions/ClusterResponse'
-func (c *clusterApi) setLoggingURL(w http.ResponseWriter, r *http.Request) {
-	method := "set Logging URL"
-
-	inst, err := cluster.Inst()
-
-	if err != nil {
-		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	params := r.URL.Query()
-	loggingURL := params["url"]
-	if len(loggingURL) == 0 {
-		c.sendError(c.name, method, w, "Missing url param  url", http.StatusBadRequest)
-		return
-	}
-
-	err = inst.SetLoggingURL(strings.TrimSpace(loggingURL[0]))
-
-	if err != nil {
-		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(&api.ClusterResponse{})
 }
 
 func (c *clusterApi) enableGossip(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +185,48 @@ func (c *clusterApi) gossipState(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// swagger:operation GET /cluster/status cluster status status
+// swagger:operation GET /cluster/getnodeidfromip/{idip} cluster GetNodeIdFromIp
+//
+// this will return the node ID for the given node IP
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: idip
+//   in: path
+//   description: cluster node ip or id
+//   required: true
+//   type: string
+// responses:
+//   '200':
+//      description: cluster node ID
+//      schema:
+//         type: string
+func (c *clusterApi) getNodeIdFromIp(w http.ResponseWriter, r *http.Request) {
+	method := "getnodeidfromip"
+	inst, err := cluster.Inst()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	vars := mux.Vars(r)
+	nodeIP, ok := vars["idip"]
+
+	if !ok || nodeIP == "" {
+		c.sendError(c.name, method, w, "Missing id param", http.StatusBadRequest)
+		return
+	}
+
+	if nodeID, err := inst.GetNodeIdFromIp(nodeIP); err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+	} else {
+		json.NewEncoder(w).Encode(nodeID)
+	}
+}
+
+// swagger:operation GET /cluster/status cluster status
 //
 // this will return the cluster status.
 //
@@ -282,7 +272,7 @@ func nodeStatusIntl() (api.Status, error) {
 	return resp, nil
 }
 
-// swagger:operation GET /cluster/nodestatus node status nodeStatus
+// swagger:operation GET /cluster/nodestatus node nodeStatus
 //
 // This will return the node status .
 //
@@ -306,7 +296,7 @@ func (c *clusterApi) nodeStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(st)
 }
 
-// swagger:operation GET /cluster/nodehealth node health nodeHealth
+// swagger:operation GET /cluster/nodehealth node nodeHealth
 //
 // This will return node health.
 //
@@ -336,7 +326,7 @@ func (c *clusterApi) nodeHealth(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(nodeOkMsg + "\n"))
 }
 
-// swagger:operation GET /cluster/peerstatus node peerstatus peerStatus
+// swagger:operation GET /cluster/peerstatus node peerStatus
 //
 // This will return the peer node status
 //
@@ -345,9 +335,10 @@ func (c *clusterApi) nodeHealth(w http.ResponseWriter, r *http.Request) {
 // - application/json
 // parameters:
 // - name: name
-//   in: path
+//   in: query
 //   description: id of the node we want to check.
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //      description: node status of requested node
@@ -377,7 +368,7 @@ func (c *clusterApi) peerStatus(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// swagger:operation DELETE /cluster/{id} cluster node delete deleteNode
+// swagger:operation DELETE /cluster/{id} cluster deleteNode
 //
 // This will delete a node from the cluster
 //
@@ -389,10 +380,12 @@ func (c *clusterApi) peerStatus(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get node with
 //   required: true
+//   type: integer
 // - name: forceRemove
 //   in: query
 //   description: forceRemove node
 //   required: false
+//   type: boolean
 // responses:
 //   '200':
 //      description: delete node success
@@ -441,7 +434,7 @@ func (c *clusterApi) delete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(clusterResponse)
 }
 
-// swagger:operation PUT /cluster/{id} cluster node shutdown shutdownNode
+// swagger:operation PUT /cluster/{id} cluster shutdownNode
 //
 // This will shutdown a node (Not Implemented)
 //
@@ -453,6 +446,7 @@ func (c *clusterApi) delete(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get node with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //      description: shutdown success
@@ -463,7 +457,7 @@ func (c *clusterApi) shutdown(w http.ResponseWriter, r *http.Request) {
 	c.sendNotImplemented(w, method)
 }
 
-// swagger:operation GET /cluster/versions cluster versions enumerateVersions
+// swagger:operation GET /cluster/versions cluster enumerateVersions
 //
 // Lists API Versions supported by this cluster
 //
@@ -472,7 +466,7 @@ func (c *clusterApi) shutdown(w http.ResponseWriter, r *http.Request) {
 // - application/json
 // responses:
 //   '200':
-//      description: anode
+//      description: Supported versions
 //      schema:
 //         type: array
 //         items:
@@ -485,7 +479,7 @@ func (c *clusterApi) versions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(versions)
 }
 
-// swagger:operation GET /cluster/alerts/{resource} cluster alerts enumerate enumerateAlerts
+// swagger:operation GET /cluster/alerts/{resource} cluster enumerateAlerts
 //
 // This will return a list of alerts for the requested resource
 //
@@ -495,10 +489,15 @@ func (c *clusterApi) versions(w http.ResponseWriter, r *http.Request) {
 // parameters:
 // - name: resource
 //   in: path
-//   description: resourcetype to get alerts with
+//   description: |
+//    Resourcetype to get alerts with.
+//    0: All
+//    1: Volume
+//    2: Node
+//    3: Cluster
+//    4: Drive
 //   required: true
-//   schema:
-//    "$ref": "#/definitions/ResourceType"
+//   type: integer
 // responses:
 //   '200':
 //      description: Alerts object
@@ -558,7 +557,7 @@ func (c *clusterApi) enumerateAlerts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(alerts)
 }
 
-// swagger:operation PUT /cluster/alerts/{resource}/{id} cluster alerts clear clearAlert
+// swagger:operation PUT /cluster/alerts/{resource}/{id} cluster clearAlert
 //
 // This will clear alert {id} with resourcetype {resource}
 //
@@ -568,14 +567,20 @@ func (c *clusterApi) enumerateAlerts(w http.ResponseWriter, r *http.Request) {
 // parameters:
 // - name: resource
 //   in: path
-//   description: resourcetype to get alerts with
+//   description: |
+//    resourcetype to get alerts with.
+//    0: All
+//    1: Volume
+//    2: Node
+//    3: Cluster
+//    4: Drive
 //   required: true
-//   schema:
-//    "$ref": "#/definitions/ResourceType"
+//   type: integer
 // - name: id
 //   in: path
 //   description: id to get alerts with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //      description: Alerts object
@@ -603,7 +608,7 @@ func (c *clusterApi) clearAlert(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode("Successfully cleared Alert")
 }
 
-// swagger:operation DELETE /cluster/alerts/{resource}/{id} cluster alerts delete deleteAlert
+// swagger:operation DELETE /cluster/alerts/{resource}/{id} cluster deleteAlert
 //
 // This delete clear alert {id} with resourcetype {resource}
 //
@@ -613,14 +618,20 @@ func (c *clusterApi) clearAlert(w http.ResponseWriter, r *http.Request) {
 // parameters:
 // - name: resource
 //   in: path
-//   description: resourcetype to get alerts with
+//   description: |
+//    resourcetype to get alerts with.
+//    0: All
+//    1: Volume
+//    2: Node
+//    3: Cluster
+//    4: Drive
 //   required: true
-//   schema:
-//    "$ref": "#/definitions/ResourceType"
+//   type: integer
 // - name: id
 //   in: path
 //   description: id to get alerts with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //      description: Alerts object
@@ -687,6 +698,10 @@ func (c *clusterApi) sendNotImplemented(w http.ResponseWriter, method string) {
 
 func clusterVersion(route, version string) string {
 	return "/" + version + "/" + route
+}
+
+func clusterSecretPath(route, version string) string {
+	return clusterPath("/secrets"+route, version)
 }
 
 func clusterPath(route, version string) string {

@@ -17,20 +17,39 @@ const (
 
 var m Manager
 
-func TestAll(t *testing.T) {
-	setup(t)
+func TestNFSMounter(t *testing.T) {
+	setupNFS(t)
+	allTests(t)
+}
+
+func TestBindMounter(t *testing.T) {
+	setupBindMounter(t)
+	allTests(t)
+}
+func allTests(t *testing.T) {
 	load(t)
 	mountTest(t)
 	inspect(t)
+	reload(t)
 	hasMounts(t)
 	refcounts(t)
 	exists(t)
 	shutdown(t)
 }
 
-func setup(t *testing.T) {
+func setupNFS(t *testing.T) {
 	var err error
 	m, err = New(NFSMount, nil, []string{""}, nil, []string{}, trashLocation)
+	if err != nil {
+		t.Fatalf("Failed to setup test %v", err)
+	}
+	cleandir(source)
+	cleandir(dest)
+}
+
+func setupBindMounter(t *testing.T) {
+	var err error
+	m, err = New(BindMount, nil, []string{""}, nil, []string{}, trashLocation)
 	if err != nil {
 		t.Fatalf("Failed to setup test %v", err)
 	}
@@ -68,6 +87,22 @@ func inspect(t *testing.T) {
 	require.NotZero(t, 1, len(s), "Expect 1 source path, actual %v", s)
 	err = m.Unmount(source, dest, 0, 0, nil)
 	require.NoError(t, err, "Failed in unmount")
+}
+
+func reload(t *testing.T) {
+	p := m.Inspect(source)
+	require.Equal(t, 0, len(p), "Expect 0 mounts actual %v mounts", len(p))
+
+	err := m.Mount(0, source, dest, "", syscall.MS_BIND, "", 0, nil)
+	require.NoError(t, err, "Failed in mount")
+
+	syscall.Unmount(dest, 0)
+	p = m.Inspect(source)
+	require.Equal(t, 1, len(p), "Expect 1 mounts actual %v mounts", len(p))
+	require.Equal(t, dest, p[0].Path, "Expect %q got %q", dest, p[0].Path)
+	require.NoError(t, m.Reload(source), "Reload mounts")
+	p = m.Inspect(source)
+	require.Equal(t, 0, len(p), "Expect 0 mounts actual %v mounts", len(p))
 }
 
 func hasMounts(t *testing.T) {

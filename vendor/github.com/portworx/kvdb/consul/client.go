@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/hashicorp/consul/api"
 	"github.com/portworx/kvdb"
+	"github.com/sirupsen/logrus"
 )
 
 const (

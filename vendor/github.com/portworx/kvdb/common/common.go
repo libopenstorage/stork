@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/portworx/kvdb"
+	"github.com/sirupsen/logrus"
 )
 
 var (

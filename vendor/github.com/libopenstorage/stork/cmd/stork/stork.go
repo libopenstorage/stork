@@ -6,11 +6,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/golang/glog"
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/initializer"
+	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	log "github.com/sirupsen/logrus"
@@ -24,6 +25,12 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/client/leaderelectionconfig"
+)
+
+const (
+	defaultLockObjectName      = "stork"
+	defaultLockObjectNamespace = "kube-system"
+	eventComponentName         = "stork"
 )
 
 var ext *extender.Extender
@@ -62,12 +69,12 @@ func main() {
 		cli.StringFlag{
 			Name:  "lock-object-name",
 			Usage: "Name for the lock object (default: stork)",
-			Value: "stork",
+			Value: defaultLockObjectName,
 		},
 		cli.StringFlag{
 			Name:  "lock-object-namespace",
 			Usage: "Namespace for the lock object (default: kube-system)",
-			Value: "kube-system",
+			Value: defaultLockObjectNamespace,
 		},
 		cli.BoolTFlag{
 			Name:  "snapshotter",
@@ -84,6 +91,10 @@ func main() {
 		cli.Int64Flag{
 			Name:  "health-monitor-interval",
 			Usage: "The interval in seconds to monitor the health of the storage driver (default: 120, min: 30)",
+		},
+		cli.BoolTFlag{
+			Name:  "migration-controller",
+			Usage: "Start the migration controller (default: true)",
 		},
 		cli.BoolFlag{
 			Name:  "app-initializer",
@@ -116,6 +127,20 @@ func run(c *cli.Context) {
 		log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
 	}
 
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		log.Fatalf("Error getting cluster config: %v", err)
+	}
+
+	k8sClient, err := clientset.NewForConfig(config)
+	if err != nil {
+		log.Fatalf("Error getting client, %v", err)
+	}
+
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: core_v1.New(k8sClient.Core().RESTClient()).Events("")})
+	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, api_v1.EventSource{Component: eventComponentName})
+
 	if c.Bool("extender") {
 		ext = &extender.Extender{
 			Driver: d,
@@ -127,31 +152,17 @@ func run(c *cli.Context) {
 	}
 
 	runFunc := func(_ <-chan struct{}) {
-		runStork(d, c)
+		runStork(d, recorder, c)
 	}
 
 	leaderConfig := leaderelectionconfig.DefaultLeaderElectionConfiguration()
 	leaderConfig.LeaderElect = c.BoolT("leader-elect")
 
 	if leaderConfig.LeaderElect {
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			log.Fatalf("Error getting cluster config: %v", err)
-		}
-
-		k8sClient, err := clientset.NewForConfig(config)
-		if err != nil {
-			log.Fatalf("Error getting client, %v", err)
-		}
 
 		leaderConfig.ResourceLock = resourcelock.ConfigMapsResourceLock
 		lockObjectName := c.String("lock-object-name")
 		lockObjectNamespace := c.String("lock-object-namespace")
-
-		eventBroadcaster := record.NewBroadcaster()
-		eventBroadcaster.StartLogging(glog.Infof)
-		eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: core_v1.New(k8sClient.Core().RESTClient()).Events("")})
-		recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, api_v1.EventSource{Component: "stork"})
 
 		id, err := os.Hostname()
 		if err != nil {
@@ -197,7 +208,11 @@ func run(c *cli.Context) {
 	}
 }
 
-func runStork(d volume.Driver, c *cli.Context) {
+func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
+	if err := controller.Init(); err != nil {
+		log.Fatalf("Error initializing controller: %v", err)
+	}
+
 	initializer := &initializer.Initializer{
 		Driver: d,
 	}
@@ -225,6 +240,22 @@ func runStork(d volume.Driver, c *cli.Context) {
 		if err := snapshotController.Start(); err != nil {
 			log.Fatalf("Error starting snapshot controller: %v", err)
 		}
+	}
+
+	if c.Bool("migration-controller") {
+		migration := migration.Migration{
+			Driver:   d,
+			Recorder: recorder,
+		}
+		if err := migration.Init(); err != nil {
+			log.Fatalf("Error initializing migration: %v", err)
+		}
+	}
+
+	// The controller should be started at the end
+	err := controller.Run()
+	if err != nil {
+		log.Fatalf("Error starting controller: %v", err)
 	}
 
 	signalChan := make(chan os.Signal, 1)

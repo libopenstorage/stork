@@ -26,20 +26,24 @@
 
 
 [[constraint]]
-  branch = "master"
+  version = "v5.1.0"
   name = "github.com/kubernetes-incubator/external-storage"
 
 [[constraint]]
-  branch = "release-1.8"
+  branch = "master"
+  name = "github.com/libopenstorage/stork"
+
+[[constraint]]
+  version = "kubernetes-1.11.0"
   name = "k8s.io/api"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
-  branch = "release-1.8"
+  version = "kubernetes-1.11.0"
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "v5.0.1"
+  version = "8.0.0"
 
 [prune]
   go-tests = true

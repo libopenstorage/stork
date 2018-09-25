@@ -142,18 +142,29 @@ func New(
 		// The time required for a request to fail - 30 sec
 		//HeaderTimeoutPerRequest: time.Duration(10) * time.Second,
 	}
-	c, err := e.New(cfg)
+	kvClient, err := e.New(cfg)
 	if err != nil {
 		return nil, err
 	}
+	// Creating a separate client for maintenance APIs. Currently the maintenance client
+	// is only used for the Status API, to fetch the endpoint status. However if the Status
+	// API errors out for an endpoint, the etcd client code marks the pinned address as not reachable
+	// instead of the actual endpoint for which the Status command failed. This causes the etcd
+	// balancer to go into a retry loop trying to fix its healthy endpoints.
+	// https://github.com/etcd-io/etcd/blob/v3.3.1/clientv3/retry.go#L102
+	mClient, err := e.New(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	if domain != "" && !strings.HasSuffix(domain, "/") {
 		domain = domain + "/"
 	}
 	return &etcdKV{
 		common.BaseKvdb{FatalCb: fatalErrorCb},
-		c,
-		e.NewAuth(c),
-		e.NewMaintenance(c),
+		kvClient,
+		e.NewAuth(kvClient),
+		e.NewMaintenance(mClient),
 		domain,
 		etcdCommon,
 	}, nil
@@ -501,7 +512,7 @@ func (et *etcdKV) CompareAndSet(
 			} // retry is needed
 
 			// server timeout
-			kvPair, err := et.Get(key)
+			kvPair, err := et.Get(kvp.Key)
 			if err != nil {
 				return nil, txnErr
 			}
@@ -548,13 +559,13 @@ func (et *etcdKV) CompareAndDelete(
 	flags kvdb.KVFlags,
 ) (*kvdb.KVPair, error) {
 	key := et.domain + kvp.Key
-	ctx, cancel := et.Context()
 
 	cmp := e.Compare(e.Value(key), "=", string(kvp.Value))
 	if (flags & kvdb.KVModifiedIndex) != 0 {
 		cmp = e.Compare(e.ModRevision(key), "=", int64(kvp.ModifiedIndex))
 	}
 	for i := 0; i < timeoutMaxRetry; i++ {
+		ctx, cancel := et.Context()
 		txnResponse, txnErr := et.kvClient.Txn(ctx).
 			If(cmp).
 			Then(e.OpDelete(key)).
@@ -571,7 +582,7 @@ func (et *etcdKV) CompareAndDelete(
 			} // retry is needed
 
 			// server timeout
-			_, err := et.Get(key)
+			_, err := et.Get(kvp.Key)
 			if err == kvdb.ErrNotFound {
 				// Our command succeeded
 				return kvp, nil

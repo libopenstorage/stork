@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/errors"
+	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers"
 )
@@ -66,7 +67,50 @@ func (vd *volAPI) parseID(r *http.Request) (string, error) {
 	return "", fmt.Errorf("could not parse snap ID")
 }
 
-// swagger:operation POST /osd-volumes volume create createVolume
+func (vd *volAPI) nodeIPtoIds(nodes []string) ([]string, error) {
+	nodeIds := make([]string, 0)
+
+	// Get cluster instance
+	c, err := cluster.Inst()
+	if err != nil {
+		return nodeIds, err
+	}
+
+	if c == nil {
+		return nodeIds, fmt.Errorf("failed to get cluster instance.")
+	}
+
+	for _, idIp := range nodes {
+		if idIp != "" {
+			id, err := c.GetNodeIdFromIp(idIp)
+			if err != nil {
+				return nodeIds, err
+			}
+			nodeIds = append(nodeIds, id)
+		}
+	}
+
+	return nodeIds, err
+}
+
+// Convert any replica set node values which are IPs to the corresponding Node ID.
+// Update the replica set node list.
+func (vd *volAPI) updateReplicaSpecNodeIPstoIds(rspecRef *api.ReplicaSet) error {
+	if rspecRef != nil && len(rspecRef.Nodes) > 0 {
+		nodeIds, err := vd.nodeIPtoIds(rspecRef.Nodes)
+		if err != nil {
+			return err
+		}
+
+		if len(nodeIds) > 0 {
+			rspecRef.Nodes = nodeIds
+		}
+	}
+
+	return nil
+}
+
+// swagger:operation POST /osd-volumes volume createVolume
 //
 // Creates a single volume with given spec.
 //
@@ -105,6 +149,14 @@ func (vd *volAPI) create(w http.ResponseWriter, r *http.Request) {
 		notFound(w, r)
 		return
 	}
+
+	if dcReq.Spec != nil {
+		if err = vd.updateReplicaSpecNodeIPstoIds(dcReq.Spec.ReplicaSet); err != nil {
+			vd.sendError(vd.name, method, w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
 	id, err := d.Create(dcReq.Locator, dcReq.Source, dcReq.Spec)
 	dcRes.VolumeResponse = &api.VolumeResponse{Error: responseStatus(err)}
 	dcRes.Id = id
@@ -137,7 +189,7 @@ func processErrorForVolSetResponse(action *api.VolumeStateAction, err error, res
 	}
 }
 
-// swagger:operation PUT /osd-volumes/{id} volume update setVolume
+// swagger:operation PUT /osd-volumes/{id} volume setVolume
 //
 // Updates a single volume with given spec.
 //
@@ -146,9 +198,10 @@ func processErrorForVolSetResponse(action *api.VolumeStateAction, err error, res
 // - application/json
 // parameters:
 // - name: id
-//   in: query
+//   in: path
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // - name: spec
 //   in: body
 //   description: spec to set volume with
@@ -198,6 +251,12 @@ func (vd *volAPI) volumeSet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Locator != nil || req.Spec != nil {
+		if req.Spec != nil {
+			if err = vd.updateReplicaSpecNodeIPstoIds(req.Spec.ReplicaSet); err != nil {
+				vd.sendError(vd.name, method, w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
 		err = d.Set(volumeID, req.Locator, req.Spec)
 	}
 
@@ -248,7 +307,7 @@ func (vd *volAPI) volumeSet(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// swagger:operation GET /osd-volumes/{id} volume inspect inspectVolume
+// swagger:operation GET /osd-volumes/{id} volume inspectVolume
 //
 // Inspect volume with specified id.
 //
@@ -257,9 +316,10 @@ func (vd *volAPI) volumeSet(w http.ResponseWriter, r *http.Request) {
 // - application/json
 // parameters:
 // - name: id
-//   in: query
+//   in: path
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //     description: volume get response
@@ -291,7 +351,7 @@ func (vd *volAPI) inspect(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(dk)
 }
 
-// swagger:operation DELETE /osd-volumes/{id} volume delete deleteVolume
+// swagger:operation DELETE /osd-volumes/{id} volume deleteVolume
 //
 // Delete volume with specified id.
 //
@@ -303,6 +363,7 @@ func (vd *volAPI) inspect(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //     description: volume set response
@@ -339,11 +400,13 @@ func (vd *volAPI) delete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(volumeResponse)
 }
 
-// swagger:operation GET /osd-volumes volume enumerate enumerateVolumes
+// swagger:operation GET /osd-volumes volume enumerateVolumes
 //
 // Enumerate all volumes
 //
 // ---
+// consumes:
+// - multipart/form-data
 // produces:
 // - application/json
 // parameters:
@@ -354,18 +417,18 @@ func (vd *volAPI) delete(w http.ResponseWriter, r *http.Request) {
 //   type: string
 // - name: Label
 //   in: formData
-//   description: Comma separated name value pairs
+//   description: |
+//    Comma separated name value pairs
+//    example: {"label1","label2"}
 //   required: false
-//   schema:
-//    type: object
-//	  example: {"label1","label2"} # Example value
+//   type: string
 // - name: ConfigLabel
 //   in: formData
-//   description: Comma separated name value pairs
+//   description: |
+//    Comma separated name value pairs
+//    example: {"label1","label2"}
 //   required: false
-//   schema:
-//    type: object
-//	  example: {"label1","label2"} # Example value
+//   type: string
 // - name: VolumeID
 //   in: query
 //   description: Volume UUID
@@ -433,7 +496,7 @@ func (vd *volAPI) enumerate(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(vols)
 }
 
-// swagger:operation POST /osd-snapshots snapshot create createSnap
+// swagger:operation POST /osd-snapshots snapshot createSnap
 //
 // Take a snapshot of volume in SnapCreateRequest
 //
@@ -445,6 +508,7 @@ func (vd *volAPI) enumerate(w http.ResponseWriter, r *http.Request) {
 //   in: query
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // - name: spec
 //   in: body
 //   description: spec to create snap with
@@ -487,7 +551,7 @@ func (vd *volAPI) snap(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(&snapRes)
 }
 
-// swagger:operation POST /osd-snapshots/restore/{id} snapshot restore restoreSnap
+// swagger:operation POST /osd-snapshots/restore/{id} snapshot restoreSnap
 //
 // Restore snapshot with specified id.
 //
@@ -499,6 +563,7 @@ func (vd *volAPI) snap(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id of snapshot to restore
 //   required: true
+//   type: integer
 // responses:
 //  '200':
 //    description: Restored volume
@@ -542,11 +607,13 @@ func (vd *volAPI) restore(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(volumeResponse)
 }
 
-// swagger:operation GET /osd-snapshots snapshot enumerate enumerateSnaps
+// swagger:operation GET /osd-snapshots snapshot enumerateSnaps
 //
 // Enumerate snapshots.
 //
 // ---
+// consumes:
+// - multipart/form-data
 // produces:
 // - application/json
 // parameters:
@@ -557,18 +624,18 @@ func (vd *volAPI) restore(w http.ResponseWriter, r *http.Request) {
 //   type: string
 // - name: VolumeLabels
 //   in: formData
-//   description: Comma separated volume labels
+//   description: |
+//    Comma separated volume labels
+//    example: {"label1","label2"}
 //   required: false
-//   schema:
-//    type: object
-//	  example: {"label1","label2"} # Example value
+//   type: string
 // - name: SnapLabels
 //   in: formData
-//   description: Comma separated snap labels
+//   description: |
+//    Comma separated snap labels
+//    example: {"label1","label2"}
 //   required: false
-//   schema:
-//    type: object
-//	  example: {"label1","label2"} # Example value
+//   type: string
 // - name: uuid
 //   in: query
 //   description: Snap UUID
@@ -620,7 +687,7 @@ func (vd *volAPI) snapEnumerate(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(snaps)
 }
 
-// swagger:operation GET /osd-volumes/stats/{id} volume stats statsVolume
+// swagger:operation GET /osd-volumes/stats/{id} volume statsVolume
 //
 // Get stats for volume with specified id.
 //
@@ -632,6 +699,7 @@ func (vd *volAPI) snapEnumerate(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // responses:
 //  '200':
 //   description: volume set response
@@ -676,7 +744,7 @@ func (vd *volAPI) stats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
-// swagger:operation GET /osd-volumes/usedsize/{id} volume usedsize usedSizeVolume
+// swagger:operation GET /osd-volumes/usedsize/{id} volume usedSizeVolume
 //
 // Get Used size of volume with specified id.
 //
@@ -688,6 +756,7 @@ func (vd *volAPI) stats(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // responses:
 //  '200':
 //   description: volume set response
@@ -718,7 +787,7 @@ func (vd *volAPI) usedsize(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(used)
 }
 
-// swagger:operation POST /osd-volumes/requests/{id} volume requests requestsVolume
+// swagger:operation POST /osd-volumes/requests/{id} volume requestsVolume
 //
 // Get Requests for volume with specified id.
 //
@@ -730,6 +799,7 @@ func (vd *volAPI) usedsize(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //     description: volume set response
@@ -755,7 +825,7 @@ func (vd *volAPI) requests(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(requests)
 }
 
-// swagger:operation GET /osd-volumes/quiesce/{id} volume quiesce quiesceVolume
+// swagger:operation GET /osd-volumes/quiesce/{id} volume quiesceVolume
 //
 // Quiesce volume with specified id.
 //
@@ -767,6 +837,7 @@ func (vd *volAPI) requests(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //     description: volume set response
@@ -819,7 +890,7 @@ func (vd *volAPI) quiesce(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(volumeResponse)
 }
 
-// swagger:operation POST /osd-volumes/unquiesce/{id} volume unquiesce unquiesceVolume
+// swagger:operation POST /osd-volumes/unquiesce/{id} volume unquiesceVolume
 //
 // Unquiesce volume with specified id.
 //
@@ -831,6 +902,7 @@ func (vd *volAPI) quiesce(w http.ResponseWriter, r *http.Request) {
 //   in: path
 //   description: id to get volume with
 //   required: true
+//   type: integer
 // responses:
 //   '200':
 //     description: volume set response
@@ -864,25 +936,66 @@ func (vd *volAPI) unquiesce(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(volumeResponse)
 }
 
-// swagger:route GET /osd-volumes/versions volume versions listVersions
+// swagger:operation POST /osd-snapshots/groupsnap volumegroup snapVolumeGroup
 //
-// Lists API versions supported by this volumeDriver.
-//
-// This will show all supported versions of the API for this volumeDriver.
+// Take a snapshot of volumegroup
 //
 // ---
 // produces:
 // - application/json
 // parameters:
-// - name: id
-//   in: query
-//   description: id to get volume with
+// - name: groupspec
+//   in: body
+//   description: GroupSnap create request
 //   required: true
+//   schema:
+//    "$ref": "#/definitions/GroupSnapCreateRequest"
 // responses:
 //   '200':
-//     description: volume set response
-//	   type: array
-//      items: string
+//     description: group snap create response
+//     schema:
+//      "$ref": "#/definitions/GroupSnapCreateResponse"
+//   default:
+//     description: unexpected error
+//     schema:
+//      "$ref": "#/definitions/GroupSnapCreateResponse"
+func (vd *volAPI) snapGroup(w http.ResponseWriter, r *http.Request) {
+	var snapReq api.GroupSnapCreateRequest
+	var snapRes *api.GroupSnapCreateResponse
+	method := "snapGroup"
+
+	if err := json.NewDecoder(r.Body).Decode(&snapReq); err != nil {
+		vd.sendError(vd.name, method, w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	d, err := vd.getVolDriver(r)
+	if err != nil {
+		notFound(w, r)
+		return
+	}
+	snapRes, err = d.SnapshotGroup(snapReq.Id, snapReq.Labels)
+	if err != nil {
+		vd.sendError(vd.name, method, w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	json.NewEncoder(w).Encode(&snapRes)
+}
+
+// swagger:operation GET /osd-volumes/versions volume listVersions
+//
+// Lists API versions supported by this volumeDriver.
+//
+// ---
+// produces:
+// - application/json
+// responses:
+//   '200':
+//      description: Supported versions
+//      schema:
+//         type: array
+//         items:
+//            type: string
 func (vd *volAPI) versions(w http.ResponseWriter, r *http.Request) {
 	versions := []string{
 		volume.APIVersion,
@@ -915,6 +1028,10 @@ func backupPath(route, version string) string {
 	return volVersion(api.OsdBackupPath+route, version)
 }
 
+func migratePath(route, version string) string {
+	return volVersion(route, version)
+}
+
 func (vd *volAPI) Routes() []*Route {
 	return []*Route{
 		{verb: "GET", path: "/" + api.OsdVolumePath + "/versions", fn: vd.versions},
@@ -934,20 +1051,25 @@ func (vd *volAPI) Routes() []*Route {
 		{verb: "POST", path: snapPath("", volume.APIVersion), fn: vd.snap},
 		{verb: "GET", path: snapPath("", volume.APIVersion), fn: vd.snapEnumerate},
 		{verb: "POST", path: snapPath("/restore/{id}", volume.APIVersion), fn: vd.restore},
+		{verb: "POST", path: snapPath("/snapshotgroup", volume.APIVersion), fn: vd.snapGroup},
 		{verb: "GET", path: credsPath("", volume.APIVersion), fn: vd.credsEnumerate},
 		{verb: "POST", path: credsPath("", volume.APIVersion), fn: vd.credsCreate},
 		{verb: "DELETE", path: credsPath("/{uuid}", volume.APIVersion), fn: vd.credsDelete},
-		{verb: "POST", path: credsPath("/validate/{uuid}", volume.APIVersion), fn: vd.credsValidate},
-		{verb: "POST", path: backupPath("", volume.APIVersion), fn: vd.backup},
-		{verb: "POST", path: backupPath("/restore", volume.APIVersion), fn: vd.backuprestore},
-		{verb: "GET", path: backupPath("", volume.APIVersion), fn: vd.backupenumerate},
-		{verb: "DELETE", path: backupPath("", volume.APIVersion), fn: vd.backupdelete},
-		{verb: "POST", path: backupPath("/status", volume.APIVersion), fn: vd.backupstatus},
-		{verb: "GET", path: backupPath("/catalogue", volume.APIVersion), fn: vd.backupcatalogue},
-		{verb: "GET", path: backupPath("/history", volume.APIVersion), fn: vd.backuphistory},
-		{verb: "POST", path: backupPath("/statechange", volume.APIVersion), fn: vd.backupstatechange},
-		{verb: "POST", path: backupPath("/schedcreate", volume.APIVersion), fn: vd.backupschedcreate},
-		{verb: "POST", path: backupPath("/scheddelete", volume.APIVersion), fn: vd.backupscheddelete},
-		{verb: "GET", path: backupPath("/schedenumerate", volume.APIVersion), fn: vd.backupschedenumerate},
+		{verb: "PUT", path: credsPath("/validate/{uuid}", volume.APIVersion), fn: vd.credsValidate},
+		{verb: "POST", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupCreate},
+		{verb: "POST", path: backupPath("/restore", volume.APIVersion), fn: vd.cloudBackupRestore},
+		{verb: "GET", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupEnumerate},
+		{verb: "DELETE", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupDelete},
+		{verb: "DELETE", path: backupPath("/all", volume.APIVersion), fn: vd.cloudBackupDeleteAll},
+		{verb: "GET", path: backupPath("/status", volume.APIVersion), fn: vd.cloudBackupStatus},
+		{verb: "GET", path: backupPath("/catalog", volume.APIVersion), fn: vd.cloudBackupCatalog},
+		{verb: "GET", path: backupPath("/history", volume.APIVersion), fn: vd.cloudBackupHistory},
+		{verb: "PUT", path: backupPath("/statechange", volume.APIVersion), fn: vd.cloudBackupStateChange},
+		{verb: "POST", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedCreate},
+		{verb: "DELETE", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedDelete},
+		{verb: "GET", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedEnumerate},
+		{verb: "POST", path: migratePath(api.OsdMigrateStartPath, volume.APIVersion), fn: vd.cloudMigrateStart},
+		{verb: "POST", path: migratePath(api.OsdMigrateCancelPath, volume.APIVersion), fn: vd.cloudMigrateCancel},
+		{verb: "GET", path: migratePath(api.OsdMigrateStatusPath, volume.APIVersion), fn: vd.cloudMigrateStatus},
 	}
 }

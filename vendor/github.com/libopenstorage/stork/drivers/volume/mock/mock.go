@@ -27,6 +27,8 @@ const (
 
 // Driver Mock driver for tests
 type Driver struct {
+	storkvolume.ClusterPairNotSupported
+	storkvolume.MigrationNotSupported
 	nodes          []*storkvolume.NodeInfo
 	volumes        map[string]*storkvolume.Info
 	pvcs           map[string]*v1.PersistentVolumeClaim
@@ -59,6 +61,7 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 			Hostname: "node" + strconv.Itoa(i+1),
 			Status:   storkvolume.NodeOnline,
 		}
+		node.IPs = append(node.IPs, "192.168.0."+strconv.Itoa(i+1))
 		for _, n := range nodes.Items {
 			found := false
 			if node.ID == n.Name {
@@ -66,10 +69,14 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 			} else {
 				for _, address := range n.Status.Addresses {
 					if address.Type == v1.NodeHostName {
-						if address.Address == node.Hostname || strings.HasPrefix(address.Address, node.Hostname+".") {
+						if address.Address == node.Hostname ||
+							strings.HasPrefix(address.Address, node.Hostname+".") {
 							found = true
 							break
 						}
+					} else if address.Type == v1.NodeInternalIP && address.Address == node.IPs[0] {
+						found = true
+						break
 					}
 				}
 			}

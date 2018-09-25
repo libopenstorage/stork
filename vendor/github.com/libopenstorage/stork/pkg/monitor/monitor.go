@@ -68,6 +68,18 @@ func (m *Monitor) Stop() error {
 	return nil
 }
 
+func (m *Monitor) isSameNode(k8sNodeName string, driverNode *volume.NodeInfo) bool {
+	if k8sNodeName == driverNode.Hostname {
+		return true
+	}
+	node, err := k8s.Instance().GetNodeByName(k8sNodeName)
+	if err != nil {
+		log.Errorf("Error getting node %v: %v", k8sNodeName, err)
+		return false
+	}
+	return volume.IsNodeMatch(node, driverNode)
+}
+
 func (m *Monitor) driverMonitor() {
 	defer close(m.done)
 	for {
@@ -102,7 +114,7 @@ func (m *Monitor) driverMonitor() {
 							continue
 						}
 
-						if pod.Spec.NodeName == node.Hostname &&
+						if m.isSameNode(pod.Spec.NodeName, node) &&
 							(pod.Status.Phase == v1.PodRunning || pod.Status.Phase == v1.PodFailed) {
 							storklog.PodLog(&pod).Infof("Deleting Pod from Node: %v", pod.Spec.NodeName)
 							err = k8s.Instance().DeletePods([]v1.Pod{pod}, true)

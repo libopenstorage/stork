@@ -15,11 +15,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/docker/docker/pkg/mount"
 	"github.com/libopenstorage/openstorage/pkg/chattr"
 	"github.com/libopenstorage/openstorage/pkg/keylock"
 	"github.com/libopenstorage/openstorage/pkg/options"
 	"github.com/libopenstorage/openstorage/pkg/sched"
-	"go.pedge.io/dlog"
+	"github.com/sirupsen/logrus"
 )
 
 // Manager defines the interface for keep track of volume driver mounts.
@@ -83,6 +84,8 @@ const (
 	// CustomMount indicates a custom mount type with its
 	// own defined way of handling mount table
 	CustomMount
+	// BindMount indicates a bind mount point
+	BindMount
 )
 
 const mountPathRemoveDelay = 30 * time.Second
@@ -110,6 +113,7 @@ type PathMap map[string]string
 
 // PathInfo is a reference counted path
 type PathInfo struct {
+	Root string
 	Path string
 }
 
@@ -132,6 +136,8 @@ type Mounter struct {
 	kl            keylock.KeyLock
 	trashLocation string
 }
+
+type findMountPoint func(source *mount.Info, destination string, mountInfo []*mount.Info) (bool, string, string)
 
 // DefaultMounter defaults to syscall implementation.
 type DefaultMounter struct {
@@ -294,27 +300,85 @@ func (m *Mounter) maybeRemoveDevice(device string) {
 	}
 }
 
-func (m *Mounter) hasPath(path string) (string, bool) {
+// reload from newM
+func (m *Mounter) reload(device string, newM *Info) error {
 	m.Lock()
 	defer m.Unlock()
-	p, ok := m.paths[path]
-	return p, ok
-}
 
-func (m *Mounter) addPath(path, device string) {
-	m.Lock()
-	defer m.Unlock()
-	m.paths[path] = device
-}
-
-func (m *Mounter) deletePath(path string) bool {
-	m.Lock()
-	defer m.Unlock()
-	if _, pathExists := m.paths[path]; pathExists {
-		delete(m.paths, path)
-		return true
+	// New mountable has no mounts, delete old mounts.
+	if newM == nil {
+		delete(m.mounts, device)
+		return nil
 	}
-	return false
+
+	// Old mountable had no mounts, copy over new mounts.
+	oldM, ok := m.mounts[device]
+	if !ok {
+		m.mounts[device] = newM
+		return nil
+	}
+
+	// Overwrite old mount entries into new mount table, preserving refcnt.
+	for _, oldP := range oldM.Mountpoint {
+		for j, newP := range newM.Mountpoint {
+			if newP.Path == oldP.Path {
+				newM.Mountpoint[j] = oldP
+				break
+			}
+		}
+	}
+
+	// Purge old mounts.
+	m.mounts[device] = newM
+	return nil
+}
+
+func (m *Mounter) load(prefixes []string, fmp findMountPoint) error {
+	info, err := mount.GetMounts()
+	if err != nil {
+		return err
+	}
+DeviceLoop:
+	for _, v := range info {
+		var (
+			sourcePath, devicePath string
+			foundPrefix            bool
+		)
+		for _, devPrefix := range prefixes {
+			foundPrefix, sourcePath, devicePath = fmp(v, devPrefix, info)
+			if foundPrefix {
+				break
+			}
+		}
+		if !foundPrefix {
+			continue
+		}
+		mount, ok := m.mounts[sourcePath]
+		if !ok {
+			mount = &Info{
+				Device:     devicePath,
+				Fs:         v.Fstype,
+				Minor:      v.Minor,
+				Mountpoint: make([]*PathInfo, 0),
+			}
+			m.mounts[sourcePath] = mount
+		}
+		// Allow Load to be called multiple times.
+		for _, p := range mount.Mountpoint {
+			if p.Path == v.Mountpoint {
+				continue DeviceLoop
+			}
+		}
+		mount.Mountpoint = append(
+			mount.Mountpoint,
+			&PathInfo{
+				Root: normalizeMountPath(v.Root),
+				Path: normalizeMountPath(v.Mountpoint),
+			},
+		)
+		m.paths[v.Mountpoint] = sourcePath
+	}
+	return nil
 }
 
 // Mount new mountpoint for specified device.
@@ -347,9 +411,9 @@ func (m *Mounter) Mount(
 			return ErrMountpathNotAllowed
 		}
 	}
-	dev, ok := m.hasPath(path)
+	dev, ok := m.HasTarget(path)
 	if ok && dev != device {
-		dlog.Warnf("cannot mount %q,  device %q is mounted at %q", device, dev, path)
+		logrus.Warnf("cannot mount %q,  device %q is mounted at %q", device, dev, path)
 		return ErrExist
 	}
 	m.Lock()
@@ -368,8 +432,9 @@ func (m *Mounter) Mount(
 	defer info.Unlock()
 
 	// Validate input params
-	if fs != info.Fs {
-		dlog.Warnf("%s Existing mountpoint has fs %q cannot change to %q",
+	// FS check is not needed if it is a bind mount
+	if !strings.HasPrefix(info.Fs, fs) && (flags&syscall.MS_BIND) != syscall.MS_BIND {
+		logrus.Warnf("%s Existing mountpoint has fs %q cannot change to %q",
 			device, info.Fs, fs)
 		return ErrEinval
 	}
@@ -377,6 +442,8 @@ func (m *Mounter) Mount(
 	// Try to find the mountpoint. If it already exists, do nothing
 	for _, p := range info.Mountpoint {
 		if p.Path == path {
+			logrus.Warnf("%q mountpoint for device %q already exists",
+				device, path)
 			return nil
 		}
 	}
@@ -404,7 +471,6 @@ func (m *Mounter) Mount(
 	}
 
 	info.Mountpoint = append(info.Mountpoint, &PathInfo{Path: path})
-	m.addPath(path, device)
 
 	return nil
 }
@@ -430,6 +496,8 @@ func (m *Mounter) Unmount(
 	info, ok := m.mounts[device]
 	if !ok {
 		m.Unlock()
+		logrus.Warnf("Unable to unmount device %q path %q: %v",
+			devPath, path, ErrEnoent.Error())
 		return ErrEnoent
 	}
 	m.Unlock()
@@ -443,10 +511,6 @@ func (m *Mounter) Unmount(
 		if err != nil {
 			return err
 		}
-		if pathExists := m.deletePath(path); !pathExists {
-			dlog.Warnf("Path %q for device %q does not exist in pathMap",
-				path, device)
-		}
 		// Blow away this mountpoint.
 		info.Mountpoint[i] = info.Mountpoint[len(info.Mountpoint)-1]
 		info.Mountpoint = info.Mountpoint[0 : len(info.Mountpoint)-1]
@@ -457,7 +521,7 @@ func (m *Mounter) Unmount(
 
 		return nil
 	}
-	dlog.Warnf("Device %q is not mounted at path %q", path, device)
+	logrus.Warnf("Device %q is not mounted at path %q", device, path)
 	return nil
 }
 
@@ -467,18 +531,18 @@ func (m *Mounter) removeMountPath(path string) error {
 
 	if devicePath, mounted := m.HasTarget(path); !mounted {
 		if err := m.makeMountpathWriteable(path); err != nil {
-			dlog.Warnf("Failed to make path: %v writeable. Err: %v", path, err)
+			logrus.Warnf("Failed to make path: %v writeable. Err: %v", path, err)
 			return err
 		}
 	} else {
-		dlog.Infof("Not making %v writeable as %v is mounted on it", path, devicePath)
+		logrus.Infof("Not making %v writeable as %v is mounted on it", path, devicePath)
 		return nil
 	}
 
 	if _, err := os.Stat(path); err == nil {
-		dlog.Infof("Removing mount path directory: %v", path)
+		logrus.Infof("Removing mount path directory: %v", path)
 		if err = os.Remove(path); err != nil {
-			dlog.Warnf("Failed to remove path: %v Err: %v", path, err)
+			logrus.Warnf("Failed to remove path: %v Err: %v", path, err)
 			return err
 		}
 	}
@@ -496,7 +560,7 @@ func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) erro
 
 			if err = os.Symlink(mountPath, symlinkPath); err != nil {
 				if !os.IsExist(err) {
-					dlog.Errorf("Error creating sym link %s => %s. Err: %v", symlinkPath, mountPath, err)
+					logrus.Errorf("Error creating sym link %s => %s. Err: %v", symlinkPath, mountPath, err)
 				}
 			}
 
@@ -513,7 +577,7 @@ func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) erro
 				sched.Periodic(time.Second),
 				time.Now().Add(mountPathRemoveDelay),
 				true /* run only once */); err != nil {
-				dlog.Errorf("Failed to schedule task to remove path:%v. Err: %v", mountPath, err)
+				logrus.Errorf("Failed to schedule task to remove path:%v. Err: %v", mountPath, err)
 				return err
 			}
 		} else {
@@ -527,7 +591,7 @@ func (m *Mounter) RemoveMountPath(mountPath string, opts map[string]string) erro
 func (m *Mounter) EmptyTrashDir() error {
 	files, err := ioutil.ReadDir(m.trashLocation)
 	if err != nil {
-		dlog.Errorf("failed to read trash dir: %s. Err: %v", m.trashLocation, err)
+		logrus.Errorf("failed to read trash dir: %s. Err: %v", m.trashLocation, err)
 		return err
 	}
 
@@ -536,7 +600,7 @@ func (m *Mounter) EmptyTrashDir() error {
 			func(sched.Interval) {
 				e := m.removeSoftlinkAndTarget(path.Join(m.trashLocation, file.Name()))
 				if e != nil {
-					dlog.Errorf("failed to remove link: %s. Err: %v", path.Join(m.trashLocation, file.Name()), e)
+					logrus.Errorf("failed to remove link: %s. Err: %v", path.Join(m.trashLocation, file.Name()), e)
 					err = e
 					// continue with other directories
 				}
@@ -544,7 +608,7 @@ func (m *Mounter) EmptyTrashDir() error {
 			sched.Periodic(time.Second),
 			time.Now().Add(mountPathRemoveDelay),
 			true /* run only once */); err != nil {
-			dlog.Errorf("Failed to cleanup of trash dir. Err: %v", err)
+			logrus.Errorf("Failed to cleanup of trash dir. Err: %v", err)
 			return err
 		}
 	}
@@ -606,6 +670,8 @@ func New(
 		return NewDeviceMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case NFSMount:
 		return NewNFSMounter(identifiers, mountImpl, allowedDirs)
+	case BindMount:
+		return NewBindMounter(identifiers, mountImpl, allowedDirs, trashLocation)
 	case CustomMount:
 		return NewCustomMounter(identifiers, mountImpl, customMounter, allowedDirs)
 	}

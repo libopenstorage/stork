@@ -9,6 +9,10 @@ import (
 	"github.com/libopenstorage/gossip/types"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/config"
+	"github.com/libopenstorage/openstorage/objectstore"
+	"github.com/libopenstorage/openstorage/osdconfig"
+	sched "github.com/libopenstorage/openstorage/schedpolicy"
+	"github.com/libopenstorage/openstorage/secrets"
 	"github.com/portworx/kvdb"
 )
 
@@ -32,6 +36,17 @@ const (
 	APIBase = "/var/lib/osd/cluster/"
 )
 
+// ClusterServerConfiguration holds manager implementation
+// Caller has to create the manager and passes it in
+type ClusterServerConfiguration struct {
+	// holds implementation to Secrets interface
+	ConfigSecretManager secrets.Secrets
+	// holds implementeation to SchedulePolicy interface
+	ConfigSchedManager sched.SchedulePolicyProvider
+	// holds implementation to ObjectStore interface
+	ConfigObjectStoreManager objectstore.ObjectStore
+}
+
 // NodeEntry is used to discover other nodes in the cluster
 // and setup the gossip protocol with them.
 type NodeEntry struct {
@@ -49,14 +64,10 @@ type NodeEntry struct {
 
 // ClusterInfo is the basic info about the cluster and its nodes
 type ClusterInfo struct {
-	Size          int
-	Status        api.Status
-	Id            string
-	NodeEntries   map[string]NodeEntry
-	LoggingURL    string
-	ManagementURL string
-	FluentDConfig api.FluentDConfig
-	TunnelConfig  api.TunnelConfig
+	Size        int
+	Status      api.Status
+	Id          string
+	NodeEntries map[string]NodeEntry
 }
 
 // ClusterInitState is the snapshot state which should be used to initialize
@@ -183,6 +194,9 @@ type ClusterData interface {
 	// Key is the node id
 	GetData() (map[string]*api.Node, error)
 
+	// GetNodeIdFromIp returns a Node Id given an IP.
+	GetNodeIdFromIp(idIp string) (string, error)
+
 	// EnableUpdate cluster data updates to be sent to listeners
 	EnableUpdates() error
 
@@ -191,18 +205,6 @@ type ClusterData interface {
 
 	// GetGossipState returns the state of nodes according to gossip
 	GetGossipState() *ClusterState
-
-	// SetLoggingURL sets the loggingurl for the stats
-	// Deprecated
-	SetLoggingURL(loggingURL string) error
-
-	SetManagementURL(managementURL string) error
-
-	SetFluentDConfig(fluentdConfig api.FluentDConfig) error
-
-	SetTunnelConfig(tunnelConfig api.TunnelConfig) error
-
-	GetTunnelConfig() api.TunnelConfig
 }
 
 // ClusterStatus interface provides apis for cluster and node status
@@ -259,12 +261,20 @@ type Cluster interface {
 	// It also causes this node to join the cluster.
 	// nodeInitialized indicates if the caller of this method expects the node
 	// to have been in an already-initialized state.
-	Start(clusterSize int, nodeInitialized bool) error
+	// All managers will default returning NotSupported.
+	Start(clusterSize int, nodeInitialized bool, gossipPort string) error
+
+	// Like Start, but have the ability to pass in managers to the cluster object
+	StartWithConfiguration(clusterMaxSize int, nodeInitialized bool, gossipPort string, config *ClusterServerConfiguration) error
 
 	ClusterData
 	ClusterRemove
 	ClusterStatus
 	ClusterAlerts
+	osdconfig.ConfigCaller
+	secrets.Secrets
+	sched.SchedulePolicyProvider
+	objectstore.ObjectStore
 }
 
 // ClusterNotify is the callback function listeners can use to notify cluster manager
