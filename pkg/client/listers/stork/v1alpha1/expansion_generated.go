@@ -26,10 +26,6 @@ type ClusterPairListerExpansion interface{}
 // MigrationLister.
 type MigrationListerExpansion interface{}
 
-// MigrationNamespaceListerExpansion allows custom methods to be added to
-// MigrationNamespaceLister.
-type MigrationNamespaceListerExpansion interface{}
-
 // RuleListerExpansion allows custom methods to be added to
 // RuleLister.
 type RuleListerExpansion interface{}

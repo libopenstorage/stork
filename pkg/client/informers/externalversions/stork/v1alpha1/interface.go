@@ -50,7 +50,7 @@ func (v *version) ClusterPairs() ClusterPairInformer {
 
 // Migrations returns a MigrationInformer.
 func (v *version) Migrations() MigrationInformer {
-	return &migrationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &migrationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Rules returns a RuleInformer.

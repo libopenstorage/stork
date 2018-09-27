@@ -713,7 +713,7 @@ func (m *MigrationController) createCRD() error {
 		Plural:  storkv1.MigrationResourcePlural,
 		Group:   stork.GroupName,
 		Version: stork.Version,
-		Scope:   apiextensionsv1beta1.NamespaceScoped,
+		Scope:   apiextensionsv1beta1.ClusterScoped,
 		Kind:    reflect.TypeOf(storkv1.Migration{}).Name(),
 	}
 	err := k8s.Instance().CreateCRD(resource)
