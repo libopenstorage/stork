@@ -55,6 +55,18 @@ func GetWorkerNodes() []Node {
 	return nodeList
 }
 
+// GetStorageDriverNodes returns only the worker node where storage
+// driver is installed
+func GetStorageDriverNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if n.Type == TypeWorker && n.IsStorageDriverInstalled {
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
 // GetNodesByName returns map of nodes where the node name is the key
 func GetNodesByName() map[string]Node {
 	nodeMap := make(map[string]Node)
