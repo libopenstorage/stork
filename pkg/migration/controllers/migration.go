@@ -201,7 +201,7 @@ func (m *MigrationController) migrateVolumes(migration *storkv1.Migration) error
 			m.Recorder.Event(migration,
 				v1.EventTypeNormal,
 				string(vInfo.Status),
-				fmt.Sprintf("Volume %v migrated successfuly", vInfo.Volume))
+				fmt.Sprintf("Volume %v migrated successfully", vInfo.Volume))
 		}
 	}
 
@@ -555,6 +555,10 @@ func (m *MigrationController) prepareApplicationResource(
 	}
 	replicas := spec["replicas"].(int64)
 	annotations, err := collections.GetMap(content, "metadata.annotations")
+	if err != nil {
+		return nil, err
+	}
+
 	annotations[storkMigrationReplicasAnnotation] = strconv.FormatInt(replicas, 10)
 	spec["replicas"] = 0
 	return object, nil
