@@ -1454,6 +1454,7 @@ func (p *portworx) CreatePair(pair *stork_crd.ClusterPair) (string, error) {
 			Feature: "Cluster pair",
 			Reason:  "Only supported on PX version 2.0 onwards: " + msg,
 		}
+		return "", err
 	}
 
 	port := uint64(apiPort)
@@ -1489,6 +1490,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 			Feature: "Migration",
 			Reason:  "Only supported on PX version 2.0 onwards: " + msg,
 		}
+		return nil, err
 	}
 
 	if len(migration.Spec.Selectors) != 0 {
@@ -1572,7 +1574,7 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 				} else if mInfo.CurrentStage == api.CloudMigrate_Done &&
 					mInfo.Status == api.CloudMigrate_Complete {
 					vInfo.Status = stork_crd.MigrationStatusSuccessful
-					vInfo.Reason = fmt.Sprintf("Migration succesful for volume")
+					vInfo.Reason = fmt.Sprintf("Migration successful for volume")
 				}
 				break
 			}

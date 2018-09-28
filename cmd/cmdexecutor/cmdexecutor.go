@@ -187,7 +187,7 @@ var (
 
 func init() {
 	flag.Var(&podList, "pod", "Pod on which to run the command. Format: <pod-namespace>/<pod-name> e.g dev/pod-12345")
-	flag.StringVar(&podContainer, "container", "", "(Optional) name of the container withing the pod on which to run the command. If not specified, executor will pick the first container.")
+	flag.StringVar(&podContainer, "container", "", "(Optional) name of the container within the pod on which to run the command. If not specified, executor will pick the first container.")
 	flag.StringVar(&command, "cmd", "", "The command to run inside the pod")
 	flag.StringVar(&taskID, "taskid", "", "A unique ID the caller can provide which can be later used to clean the status files created by the command executor.")
 	flag.Int64Var(&statusCheckTimeout, "timeout", int64(defaultStatusCheckTimeout), "Time in seconds to wait for the command to succeeded on a single pod")

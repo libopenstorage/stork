@@ -26,7 +26,7 @@ const (
 	cmdStatusCheckFactor       = 1
 )
 
-// Executor is an interace to start and wait for async commands in pods
+// Executor is an interface to start and wait for async commands in pods
 type Executor interface {
 	// Start starts the command in the pod asynchronously
 	Start(chan error) error
