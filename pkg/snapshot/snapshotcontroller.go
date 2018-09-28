@@ -130,7 +130,7 @@ func (s *SnapshotController) Start() error {
 		snapProvisioner,
 		serverVersion.GitVersion,
 	)
-	provisioner.Run(s.stopChannel)
+	go provisioner.Run(s.stopChannel)
 
 	if err := rule.PerformRuleRecovery(); err != nil {
 		log.Errorf("failed to perform recovery for snapshot rules due to: %v", err)
