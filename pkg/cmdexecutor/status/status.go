@@ -74,7 +74,7 @@ func Get(key string) (string, error) {
 		return "", fmt.Errorf("found empty failure status for key: %s in config map", key)
 	}
 
-	err = fmt.Errorf("cmd executor failed because: %s", status)
+	logrus.Errorf("%v cmd executor failed because: %s", key, status)
 
 	cmCopy := cm.DeepCopy()
 	delete(cmCopy.Data, key)
