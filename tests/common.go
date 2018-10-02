@@ -65,6 +65,7 @@ var (
 	expect       = gomega.Expect
 	haveOccurred = gomega.HaveOccurred
 	beEmpty      = gomega.BeEmpty
+	beNil        = gomega.BeNil
 )
 
 // InitInstance is the ginkgo spec for initializing torpedo
@@ -290,6 +291,21 @@ func CollectSupport() {
 				if err != nil {
 					logrus.Warnf("failed to run cmd: %s. err: %v", journalCmd, err)
 				}
+			}
+		})
+	})
+}
+
+// PerformSystemCheck check if core files are present on each node
+func PerformSystemCheck() {
+	context(fmt.Sprintf("checking for core files..."), func() {
+		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
+			nodes := node.GetWorkerNodes()
+			expect(nodes).NotTo(beEmpty())
+			for _, n := range nodes {
+				file, err := Inst().N.SystemCheck(n)
+				expect(err).To(beNil())
+				expect(file).To(beEmpty())
 			}
 		})
 	})

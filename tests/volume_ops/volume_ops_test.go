@@ -151,6 +151,7 @@ var _ = Describe("{VolumeReplicationIncrease}", func() {
 })
 
 var _ = AfterSuite(func() {
+	PerformSystemCheck()
 	CollectSupport()
 	ValidateCleanup()
 })

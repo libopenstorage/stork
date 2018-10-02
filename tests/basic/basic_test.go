@@ -301,6 +301,7 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 })
 
 var _ = AfterSuite(func() {
+	PerformSystemCheck()
 	CollectSupport()
 	ValidateCleanup()
 })

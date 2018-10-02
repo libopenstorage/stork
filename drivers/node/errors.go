@@ -83,3 +83,13 @@ type ErrFailedToRecoverDrive struct {
 func (e *ErrFailedToRecoverDrive) Error() string {
 	return fmt.Sprintf("Failed to recover a drive on: %v. Cause: %v", e.Node.Name, e.Cause)
 }
+
+// ErrFailedToSystemCheck error type when we fail to check for core files
+type ErrFailedToSystemCheck struct {
+	Node Node
+	Cause string
+}
+
+func (e *ErrFailedToSystemCheck) Error() string {
+	return fmt.Sprintf("System check failed on: %v. Cause: %v", e.Node.Name, e.Cause)
+}
