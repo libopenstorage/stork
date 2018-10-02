@@ -60,11 +60,11 @@ wp core install --url="${WORDPRESS_URL}" --title="TestWordPress" --admin_user="a
 log ":: Generating junk posts..."
 wp post generate --count=100
 
-log ":: Installing plugins..."
+log "Installing plugins..."
 for plugin_name in ${WORDPRESS_PLUGINS//,/ }
 do
     log ":: Installing plugin ${plugin_name}"
-    wp plugin install "${plugin_name}" --activate
+    wp plugin install /home/www-data/"${plugin_name}" --activate
 done
 
 log ":: Installing theme..."

@@ -9,7 +9,7 @@ spec:
   securityContext:
     fsGroup: 1000
   containers:
-  - image: samuelmyers/wp-cli:1.2.28
+  - image: rohitpx/wp-cli:1.0
     name: installer
     env:
     - name: WORDPRESS_URL
@@ -17,7 +17,7 @@ spec:
     - name: WORDPRESS_THEME
       value: "twentysixteen"
     - name: WORDPRESS_PLUGINS
-      value: "bj-lazy-load,contact-form-7,woocommerce,wordpress-seo"
+      value: "bj-lazy-load.zip,contact-form-7.5.0.4.zip,woocommerce.3.4.5.zip,wordpress-seo.8.3.zip"
     - name: WORDPRESS_DB_HOST
       value: wordpress-mysql
     - name: WORDPRESS_DB_PASSWORD
