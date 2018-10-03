@@ -114,7 +114,7 @@ type Driver interface {
 	RecoverDrive(node Node, driveNameToRecover string, driveUUID string, options ConnectionOpts) error
 
 	// SystemCheck checks whether core files are present on the given node.
-	SystemCheck(node Node) (string, error)
+	SystemCheck(node Node, options ConnectionOpts) (string, error)
 }
 
 // Register registers the given node driver
@@ -211,7 +211,7 @@ func (d *notSupportedDriver) TestConnection(node Node, options ConnectionOpts) e
 	}
 }
 
-func (d* notSupportedDriver) SystemCheck(node Node) (string, error) {
+func (d* notSupportedDriver) SystemCheck(node Node, options ConnectionOpts) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SystemCheck()",

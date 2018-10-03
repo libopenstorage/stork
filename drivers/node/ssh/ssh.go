@@ -387,8 +387,9 @@ func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string
 		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses)
 }
 
-func (s *ssh) SystemCheck(n node.Node) (string, error) {
+func (s *ssh) SystemCheck(n node.Node, options node.ConnectionOpts) (string, error) {
 	findOpts := node.FindOpts{
+		ConnectionOpts: options,
 		Name:  "core-px*",
 		Type: node.File,
 	}

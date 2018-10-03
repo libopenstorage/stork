@@ -303,8 +303,11 @@ func PerformSystemCheck() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
-				file, err := Inst().N.SystemCheck(n)
-				expect(err).To(beNil())
+				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				expect(err).NotTo(haveOccurred())
 				expect(file).To(beEmpty())
 			}
 		})
