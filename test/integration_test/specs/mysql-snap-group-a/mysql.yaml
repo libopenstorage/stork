@@ -4,6 +4,7 @@ metadata:
   name: mysql-data-1
   annotations:
     volume.beta.kubernetes.io/storage-class: px-mysql-sc
+  labels:
     type: db
     tier: prod
 spec:
@@ -19,6 +20,7 @@ metadata:
   name: mysql-data-2
   annotations:
     volume.beta.kubernetes.io/storage-class: px-mysql-sc
+  labels:
     type: db
     tier: prod
 spec:

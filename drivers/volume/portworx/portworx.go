@@ -1285,6 +1285,14 @@ func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Persiste
 				log.SnapshotLog(snap).Infof("found PVCs with group labels: %v", pvcList.Items)
 				pvcs = append(pvcs, pvcList.Items...)
 			}
+
+			for _, pvc := range pvcs {
+				if pvc.Status.Phase == v1.ClaimPending {
+					return nil, fmt.Errorf("PVC: [%s] %s is still in %s phase. Group snapshot will trigger after all PVCs are bound",
+						pvc.Namespace, pvc.Name, pvc.Status.Phase)
+				}
+			}
+
 			return pvcs, nil
 		}
 
