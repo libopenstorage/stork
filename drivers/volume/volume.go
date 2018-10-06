@@ -34,6 +34,9 @@ type Driver interface {
 	// the driver
 	GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) ([]v1.PersistentVolumeClaim, error)
 
+	// OwnsPVC returns true if the PVC is owned by the driver
+	OwnsPVC(pvc *v1.PersistentVolumeClaim) bool
+
 	// GetSnapshotPlugin Get the snapshot plugin to be used for the driver
 	GetSnapshotPlugin() snapshotVolume.Plugin
 

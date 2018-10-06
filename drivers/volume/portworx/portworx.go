@@ -334,7 +334,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return nodes, nil
 }
 
-func (p *portworx) isPortworxPVC(pvc *v1.PersistentVolumeClaim) bool {
+func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName == "" {
 		logrus.Debugf("Empty StorageClass in PVC %v", pvc.Name)
@@ -374,7 +374,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 				return nil, err
 			}
 
-			if !p.isPortworxPVC(pvc) {
+			if !p.OwnsPVC(pvc) {
 				continue
 			}
 
@@ -403,7 +403,7 @@ func (p *portworx) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim)
 	[]v1.PersistentVolumeClaim, error) {
 	var pxTemplates []v1.PersistentVolumeClaim
 	for _, t := range templates {
-		if p.isPortworxPVC(&t) {
+		if p.OwnsPVC(&t) {
 			pxTemplates = append(pxTemplates, t)
 		}
 	}
@@ -1520,7 +1520,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)
 		}
 		for _, pvc := range pvcList.Items {
-			if !p.isPortworxPVC(&pvc) {
+			if !p.OwnsPVC(&pvc) {
 				continue
 			}
 			volumeInfo := &stork_crd.VolumeInfo{}
