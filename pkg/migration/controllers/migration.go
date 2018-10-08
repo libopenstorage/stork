@@ -629,6 +629,13 @@ func (m *MigrationController) applyResources(
 		if err != nil {
 			return err
 		}
+
+		// Don't create if the namespace already exists on the remote cluster
+		_, err = client.CoreV1().Namespaces().Get(namespace.Name, metav1.GetOptions{})
+		if err == nil {
+			continue
+		}
+
 		_, err = client.CoreV1().Namespaces().Create(&v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   namespace.Name,
