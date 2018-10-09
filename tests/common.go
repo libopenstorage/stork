@@ -14,15 +14,18 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
+
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
 	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
+
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
+
 	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
@@ -55,7 +58,9 @@ const (
 )
 
 const (
-	waitResourceCleanup = 2 * time.Minute
+	waitResourceCleanup  = 2 * time.Minute
+	defaultTimeout       = 5 * time.Minute
+	defaultRetryInterval = 10 * time.Second
 )
 
 var (
@@ -105,7 +110,7 @@ func ValidateContext(ctx *scheduler.Context) {
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-			err := Inst().S.WaitForRunning(ctx)
+			err := Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 
@@ -128,7 +133,7 @@ func ValidateVolumes(ctx *scheduler.Context) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			err = Inst().S.InspectVolumes(ctx)
+			err = Inst().S.InspectVolumes(ctx, defaultTimeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 

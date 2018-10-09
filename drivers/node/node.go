@@ -61,7 +61,7 @@ type FindOpts struct {
 	Name     string
 	MinDepth int
 	MaxDepth int
-	Type	 FindType
+	Type     FindType
 	ConnectionOpts
 }
 
@@ -211,7 +211,7 @@ func (d *notSupportedDriver) TestConnection(node Node, options ConnectionOpts) e
 	}
 }
 
-func (d* notSupportedDriver) SystemCheck(node Node, options ConnectionOpts) (string, error) {
+func (d *notSupportedDriver) SystemCheck(node Node, options ConnectionOpts) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SystemCheck()",

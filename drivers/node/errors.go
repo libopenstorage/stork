@@ -86,7 +86,7 @@ func (e *ErrFailedToRecoverDrive) Error() string {
 
 // ErrFailedToSystemCheck error type when we fail to check for core files
 type ErrFailedToSystemCheck struct {
-	Node Node
+	Node  Node
 	Cause string
 }
 

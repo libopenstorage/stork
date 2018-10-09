@@ -632,11 +632,11 @@ func (k *k8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.
 	return updatedVolumes
 }
 
-func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
+func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
-			if err := k8sOps.ValidateDeployment(obj); err != nil {
+			if err := k8sOps.ValidateDeployment(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Deployment: %v. Err: %v", obj.Name, err),
@@ -645,7 +645,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			if err := k8sOps.ValidateStatefulSet(obj, statefulSetValidateTimeout); err != nil {
+			if err := k8sOps.ValidateStatefulSet(obj, timeout*time.Duration(*obj.Spec.Replicas)); err != nil {
 				return &scheduler.ErrFailedToValidateApp{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate StatefulSet: %v. Err: %v", obj.Name, err),
@@ -674,7 +674,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated Rule: %v", ctx.App.Key, svc.Name)
 		} else if obj, ok := spec.(*v1.Pod); ok {
-			if err := k8sOps.ValidatePod(obj); err != nil {
+			if err := k8sOps.ValidatePod(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidatePod{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate Pod: [%s] %s. Err: Pod is not ready %v", obj.Namespace, obj.Name, obj.Status),
@@ -955,7 +955,7 @@ func (k *k8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 	return result, nil
 }
 
-func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
+func (k *k8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
@@ -968,7 +968,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			if err := k8sOps.ValidatePersistentVolumeClaim(obj); err != nil {
+			if err := k8sOps.ValidatePersistentVolumeClaim(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate PVC: %v. Err: %v", obj.Name, err),
@@ -977,7 +977,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
-			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true); err != nil {
+			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate snapshot: %v. Err: %v", obj.Metadata.Name, err),
@@ -994,7 +994,7 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context) error {
 				}
 			}
 
-			if err := k8sOps.ValidatePVCsForStatefulSet(ss); err != nil {
+			if err := k8sOps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(*obj.Spec.Replicas), retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate PVCs for statefulset: %v. Err: %v", ss.Name, err),

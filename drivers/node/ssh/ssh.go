@@ -315,7 +315,6 @@ func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 		}
 	}
 
-
 	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(addr, systemctlCmd, false)
@@ -390,13 +389,13 @@ func (s *ssh) getOneUsableAddr(n node.Node, options node.ConnectionOpts) (string
 func (s *ssh) SystemCheck(n node.Node, options node.ConnectionOpts) (string, error) {
 	findOpts := node.FindOpts{
 		ConnectionOpts: options,
-		Name:  "core-px*",
-		Type: node.File,
+		Name:           "core-px*",
+		Type:           node.File,
 	}
 	file, err := s.FindFiles("/var/cores/", n, findOpts)
 	if err != nil {
 		return "", &node.ErrFailedToSystemCheck{
-			Node: n,
+			Node:  n,
 			Cause: fmt.Sprintf("failed to check for core files due to: %v", err),
 		}
 	}

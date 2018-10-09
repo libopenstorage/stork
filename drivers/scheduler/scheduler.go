@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -51,7 +52,7 @@ type Driver interface {
 	Schedule(instanceID string, opts ScheduleOptions) ([]*Context, error)
 
 	// WaitForRunning waits for application to start running.
-	WaitForRunning(*Context) error
+	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
 
 	// Destroy removes a application. It does not delete the volumes of the task.
 	Destroy(*Context, map[string]bool) error
@@ -66,7 +67,7 @@ type Driver interface {
 	GetVolumeParameters(*Context) (map[string]map[string]string, error)
 
 	// InspectVolumes inspects a storage volume.
-	InspectVolumes(*Context) error
+	InspectVolumes(cc *Context, timeout, retryInterval time.Duration) error
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context) ([]*volume.Volume, error)
