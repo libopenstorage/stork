@@ -24,7 +24,7 @@ func noPVCTest(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	destroyAndWait(t, ctxs)
@@ -36,7 +36,7 @@ func singlePVCTest(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
@@ -57,7 +57,7 @@ func statefulsetTest(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for elasticsearch statefulset to get to running state")
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
@@ -82,7 +82,7 @@ func multiplePVCTest(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
@@ -102,7 +102,7 @@ func driverNodeErrorTest(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
@@ -125,7 +125,7 @@ func driverNodeErrorTest(t *testing.T) {
 	require.NoError(t, err, "Error deleting pod")
 	time.Sleep(10 * time.Second)
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state after deletion")
 
 	scheduledNodes, err = schedulerDriver.GetNodesForApp(ctxs[0])

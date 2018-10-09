@@ -20,7 +20,7 @@ func stopDriverTest(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
@@ -42,7 +42,7 @@ func stopDriverTest(t *testing.T) {
 
 	time.Sleep(3 * time.Minute)
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state after stopping driver")
 
 	scheduledNodes, err = schedulerDriver.GetNodesForApp(ctxs[0])

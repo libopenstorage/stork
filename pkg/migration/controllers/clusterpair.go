@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork "github.com/libopenstorage/stork/pkg/apis/stork"
@@ -19,6 +20,11 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+)
+
+const (
+	validateCRDInterval time.Duration = 5 * time.Second
+	validateCRDTimeout  time.Duration = 1 * time.Minute
 )
 
 //ClusterPairController pair
@@ -153,5 +159,5 @@ func (c *ClusterPairController) createCRD() error {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource)
+	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }

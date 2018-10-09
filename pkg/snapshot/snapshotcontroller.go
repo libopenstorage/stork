@@ -28,6 +28,8 @@ const (
 	snapshotProvisionerID                 = "stork"
 	provisionerIDAnn                      = "snapshotProvisionerIdentity"
 	defaultSyncDuration     time.Duration = 60 * time.Second
+	validateCrdInterval     time.Duration = 5 * time.Second
+	validateCrdTimeout      time.Duration = 1 * time.Minute
 )
 
 // SnapshotController Snapshot Controller
@@ -97,7 +99,7 @@ func (s *SnapshotController) Start() error {
 		}
 	}
 
-	err = k8s.Instance().ValidateCRD(storkRuleResource)
+	err = k8s.Instance().ValidateCRD(storkRuleResource, validateCrdTimeout, validateCrdInterval)
 	if err != nil {
 		return fmt.Errorf("Failed to validate stork rules CRD due to: %v", err)
 	}
