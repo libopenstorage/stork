@@ -1,8 +1,7 @@
-package snapshotcontroller
+package snapshot
 
 import (
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
@@ -11,14 +10,10 @@ import (
 	snapshotcontroller "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
-	stork "github.com/libopenstorage/stork/pkg/apis/stork"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/snapshot/rule"
+	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -32,8 +27,8 @@ const (
 	validateCrdTimeout      time.Duration = 1 * time.Minute
 )
 
-// SnapshotController Snapshot Controller
-type SnapshotController struct {
+// Controller Snapshot Controller
+type Controller struct {
 	Driver      volume.Driver
 	lock        sync.Mutex
 	started     bool
@@ -46,11 +41,11 @@ func GetProvisionerName() string {
 }
 
 // Start Starts the snapshot controller
-func (s *SnapshotController) Start() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (c *Controller) Start() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
-	if s.started {
+	if c.started {
 		return fmt.Errorf("Extender has already been started")
 	}
 	config, err := rest.InClusterConfig()
@@ -83,41 +78,20 @@ func (s *SnapshotController) Start() error {
 		return err
 	}
 
-	storkRuleResource := k8s.CustomResource{
-		Name:    "rule",
-		Plural:  "rules",
-		Group:   stork.GroupName,
-		Version: stork.Version,
-		Scope:   apiextensionsv1beta1.NamespaceScoped,
-		Kind:    reflect.TypeOf(storkapi.Rule{}).Name(),
-	}
-
-	err = k8s.Instance().CreateCRD(storkRuleResource)
-	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("Failed to create CRD due to: %v", err)
-		}
-	}
-
-	err = k8s.Instance().ValidateCRD(storkRuleResource, validateCrdTimeout, validateCrdInterval)
-	if err != nil {
-		return fmt.Errorf("Failed to validate stork rules CRD due to: %v", err)
-	}
-
 	err = client.WaitForSnapshotResource(snapshotClient)
 	if err != nil {
 		return err
 	}
 
 	plugins := make(map[string]snapshotvolume.Plugin)
-	plugins[s.Driver.String()] = s.Driver.GetSnapshotPlugin()
+	plugins[c.Driver.String()] = c.Driver.GetSnapshotPlugin()
 
 	snapController := snapshotcontroller.NewSnapshotController(snapshotClient, snapshotScheme,
 		clientset, &plugins, defaultSyncDuration)
 
-	s.stopChannel = make(chan struct{})
+	c.stopChannel = make(chan struct{})
 
-	snapController.Run(s.stopChannel)
+	snapController.Run(c.stopChannel)
 
 	serverVersion, err := clientset.Discovery().ServerVersion()
 	if err != nil {
@@ -132,28 +106,28 @@ func (s *SnapshotController) Start() error {
 		snapProvisioner,
 		serverVersion.GitVersion,
 	)
-	go provisioner.Run(s.stopChannel)
+	go provisioner.Run(c.stopChannel)
 
 	if err := rule.PerformRuleRecovery(); err != nil {
 		log.Errorf("failed to perform recovery for snapshot rules due to: %v", err)
 		return err
 	}
 
-	s.started = true
+	c.started = true
 	return nil
 }
 
 // Stop Stops the snapshot controller
-func (s *SnapshotController) Stop() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (c *Controller) Stop() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
-	if !s.started {
+	if !c.started {
 		return fmt.Errorf("Extender has not been started")
 	}
 
-	close(s.stopChannel)
+	close(c.stopChannel)
 
-	s.started = false
+	c.started = false
 	return nil
 }

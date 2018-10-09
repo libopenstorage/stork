@@ -23,8 +23,7 @@ import (
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/libopenstorage/stork/pkg/snapshot"
-	"github.com/libopenstorage/stork/pkg/snapshot/rule"
+	snapshot "github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -358,7 +357,7 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 		provisioner = storageClass.Provisioner
 	}
 
-	if provisioner != provisionerName && provisioner != snapshotcontroller.GetProvisionerName() {
+	if provisioner != provisionerName && provisioner != snapshot.GetProvisionerName() {
 		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
@@ -442,13 +441,7 @@ func (p *portworx) SnapshotCreate(
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
-	if err := rule.ValidateSnapRule(snap); err != nil {
-		err = fmt.Errorf("failed to validate snap rule due to: %v", err)
-		log.SnapshotLog(snap).Errorf(err.Error())
-		return nil, getErrorSnapshotConditions(err), err
-	}
-
-	backgroundCommandTermChan, err := rule.ExecutePreSnapRule(pvcsForSnapshot, snap)
+	backgroundCommandTermChan, err := snapshot.ExecutePreSnapRule(snap, pvcsForSnapshot)
 
 	defer func() {
 		if backgroundCommandTermChan != nil {
@@ -619,7 +612,7 @@ func (p *portworx) SnapshotCreate(
 		}
 	}
 
-	err = rule.ExecutePostSnapRule(pvcsForSnapshot, snap)
+	err = snapshot.ExecutePostSnapRule(pvcsForSnapshot, snap)
 	if err != nil {
 		err = fmt.Errorf("failed to run post-snap rule due to: %v", err)
 		log.SnapshotLog(snap).Errorf(err.Error())
@@ -725,7 +718,7 @@ func (p *portworx) SnapshotRestore(
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
 	case crdv1.PortworxSnapshotTypeLocal:
-		snapshotNamespace, ok := pvc.Annotations[snapshotcontroller.StorkSnapshotSourceNamespaceAnnotation]
+		snapshotNamespace, ok := pvc.Annotations[snapshot.StorkSnapshotSourceNamespaceAnnotation]
 		if !ok {
 			snapshotNamespace = pvc.GetNamespace()
 		}

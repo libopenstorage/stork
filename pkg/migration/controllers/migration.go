@@ -41,10 +41,10 @@ const (
 
 // MigrationController migrationcontroller
 type MigrationController struct {
-	Driver            volume.Driver
-	Recorder          record.EventRecorder
-	discoveryHelper   discovery.Helper
-	dynamicClientPool dynamic.ClientPool
+	Driver           volume.Driver
+	Recorder         record.EventRecorder
+	discoveryHelper  discovery.Helper
+	dynamicInterface dynamic.Interface
 }
 
 // Init Initialize the migration controller
@@ -73,7 +73,10 @@ func (m *MigrationController) Init() error {
 	if err != nil {
 		return err
 	}
-	m.dynamicClientPool = dynamic.NewDynamicClientPool(config)
+	m.dynamicInterface, err = dynamic.NewForConfig(config)
+	if err != nil {
+		return err
+	}
 
 	return controller.Register(
 		&schema.GroupVersionKind{
@@ -424,13 +427,12 @@ func (m *MigrationController) getResources(
 			}
 
 			for _, ns := range migration.Spec.Namespaces {
-				dynamicClient, err := m.dynamicClientPool.ClientForGroupVersionKind(groupVersion.WithKind(""))
+				dynamicClient := m.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
 				if err != nil {
 					return nil, err
 				}
-				client := dynamicClient.Resource(&resource, ns)
 
-				objectsList, err := client.List(metav1.ListOptions{})
+				objectsList, err := dynamicClient.List(metav1.ListOptions{})
 				if err != nil {
 					return nil, err
 				}
@@ -648,12 +650,11 @@ func (m *MigrationController) applyResources(
 		}
 	}
 
-	remoteDynamicClientPool := dynamic.NewDynamicClientPool(remoteConfig)
+	remoteDynamicInterface, err := dynamic.NewForConfig(remoteConfig)
+	if err != nil {
+		return nil
+	}
 	for _, o := range objects {
-		dynamicClient, err := remoteDynamicClientPool.ClientForGroupVersionKind(o.GetObjectKind().GroupVersionKind())
-		if err != nil {
-			return err
-		}
 		metadata, err := meta.Accessor(o)
 		if err != nil {
 			return err
@@ -662,17 +663,19 @@ func (m *MigrationController) applyResources(
 		if err != nil {
 			return err
 		}
-		logrus.Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 		resource := &metav1.APIResource{
 			Name:       strings.ToLower(objectType.GetKind()) + "s",
 			Namespaced: len(metadata.GetNamespace()) > 0,
 		}
-		client := dynamicClient.Resource(resource, metadata.GetNamespace())
+		dynamicClient := remoteDynamicInterface.Resource(
+			o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+
+		logrus.Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 		unstructured, ok := o.(*unstructured.Unstructured)
 		if !ok {
 			return fmt.Errorf("Unable to cast object to unstructured: %v", o)
 		}
-		_, err = client.Create(unstructured)
+		_, err = dynamicClient.Create(unstructured)
 		if err != nil && apierrors.IsAlreadyExists(err) {
 			switch objectType.GetKind() {
 			// Don't want to delete the Volume resources
@@ -681,9 +684,9 @@ func (m *MigrationController) applyResources(
 			default:
 				// Delete the resource if it already exists on the destination
 				// cluster and try creating again
-				err = client.Delete(metadata.GetName(), &metav1.DeleteOptions{})
+				err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
 				if err == nil {
-					_, err = client.Create(unstructured)
+					_, err = dynamicClient.Create(unstructured)
 				} else {
 					logrus.Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
 				}
