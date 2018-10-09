@@ -89,6 +89,9 @@ const (
 	cloudSnapshotInitialDelay = 5 * time.Second
 	cloudSnapshotFactor       = 1
 	cloudSnapshotSteps        = math.MaxInt32
+
+	validateSnapshotTimeout       = 5 * time.Minute
+	validateSnapshotRetryInterval = 10 * time.Second
 )
 
 type cloudSnapStatus struct {
@@ -711,7 +714,7 @@ func (p *portworx) SnapshotRestore(
 	}
 
 	// Let's verify if source snapshotdata is complete
-	err := k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false)
+	err := k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
 	if err != nil {
 		return nil, nil, fmt.Errorf("snapshot: %s is not complete. %v", snapshotName, err)
 	}

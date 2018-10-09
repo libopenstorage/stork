@@ -5,6 +5,7 @@ package integrationtest
 import (
 	"flag"
 	"testing"
+	"time"
 
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
@@ -28,6 +29,9 @@ const (
 	rackScore   = 50
 	zoneScore   = 25
 	regionScore = 10
+
+	defaultWaitTimeout  time.Duration = 5 * time.Minute
+	defaultWaitInterval time.Duration = 10 * time.Second
 )
 
 var nodeDriver node.Driver

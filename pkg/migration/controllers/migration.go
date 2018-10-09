@@ -721,5 +721,5 @@ func (m *MigrationController) createCRD() error {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource)
+	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }
