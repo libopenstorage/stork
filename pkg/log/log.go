@@ -2,11 +2,14 @@ package log
 
 import (
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/sirupsen/logrus"
 	appv1 "k8s.io/api/apps/v1"
 	appv1beta1 "k8s.io/api/apps/v1beta1"
 	appv1beta2 "k8s.io/api/apps/v1beta2"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // PodLog Format a log message with pod information
@@ -119,4 +122,29 @@ func SnapshotLog(snap *crdv1.VolumeSnapshot) *logrus.Entry {
 	return logrus.WithFields(logrus.Fields{
 		"Snapshot": snap,
 	})
+}
+
+// RuleLog formats a log message with Rule information
+func RuleLog(
+	rule *storkv1.Rule,
+	object runtime.Object,
+) *logrus.Entry {
+	fields := logrus.Fields{}
+	metadata, err := meta.Accessor(object)
+	if err == nil {
+		fields["Name"] = metadata.GetName()
+		namespace := metadata.GetNamespace()
+		if namespace != "" {
+			fields["Namespace"] = namespace
+		}
+	}
+	objectType, err := meta.TypeAccessor(object)
+	if err == nil {
+		fields["Kind"] = objectType.GetKind()
+	}
+	if rule != nil {
+		fields["Rule"] = rule.Name
+	}
+	return logrus.WithFields(fields)
+
 }

@@ -1,4 +1,4 @@
-package snapshotcontroller
+package snapshot
 
 import (
 	"encoding/csv"

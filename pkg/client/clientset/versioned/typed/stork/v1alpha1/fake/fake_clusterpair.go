@@ -59,7 +59,7 @@ func (c *FakeClusterPairs) List(opts v1.ListOptions) (result *v1alpha1.ClusterPa
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &v1alpha1.ClusterPairList{}
+	list := &v1alpha1.ClusterPairList{ListMeta: obj.(*v1alpha1.ClusterPairList).ListMeta}
 	for _, item := range obj.(*v1alpha1.ClusterPairList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
