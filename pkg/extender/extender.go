@@ -118,7 +118,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	pod := &args.Pod
+	pod := args.Pod
 	storklog.PodLog(pod).Debugf("Nodes in filter request:")
 	for _, node := range args.Nodes.Items {
 		storklog.PodLog(pod).Debugf("%v %+v", node.Name, node.Status.Addresses)
@@ -244,7 +244,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		return
 	}
 
-	pod := &args.Pod
+	pod := args.Pod
 	storklog.PodLog(pod).Debugf("Nodes in prioritize request:")
 	for _, node := range args.Nodes.Items {
 		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)

@@ -59,7 +59,7 @@ func (c *FakeMigrations) List(opts v1.ListOptions) (result *v1alpha1.MigrationLi
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &v1alpha1.MigrationList{}
+	list := &v1alpha1.MigrationList{ListMeta: obj.(*v1alpha1.MigrationList).ListMeta}
 	for _, item := range obj.(*v1alpha1.MigrationList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)

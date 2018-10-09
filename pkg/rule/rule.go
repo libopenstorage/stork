@@ -9,8 +9,7 @@ import (
 	"sync"
 	"time"
 
-	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	apis_stork "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
 	"github.com/libopenstorage/stork/pkg/log"
@@ -18,17 +17,20 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/apis/core"
 )
 
 const (
-	defaultCmdExecutorImage     = "openstorage/cmdexecutor:0.1"
-	cmdExecutorImageOverrideKey = "stork/cmdexecutor-image"
-	storkServiceAccount         = "stork-account"
-	podsWithRunningCommandsKey  = "stork/pods-with-running-cmds"
+	defaultCmdExecutorImage              = "openstorage/cmdexecutor:0.1"
+	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
+	storkServiceAccount                  = "stork-account"
+	podsWithRunningCommandsKeyDeprecated = "stork/pods-with-running-cmds"
+	podsWithRunningCommandsKey           = "stork.libopenstorage.org/pods-with-running-cmds"
 
 	// constants
 	perPodCommandExecTimeout = 900 // 15 minutes
@@ -40,20 +42,15 @@ const (
 	execPodStepsHigh        = math.MaxInt32
 )
 
-type ruleType string
+// Type The type of rule to be executed
+type Type string
 
 const (
-	preSnapRule               ruleType = "preSnapRule"
-	postSnapRule              ruleType = "postSnapRule"
-	storkRuleAnnotationPrefix          = "stork.rule"
-	preSnapRuleAnnotationKey           = storkRuleAnnotationPrefix + "/pre-snapshot"
-	postSnapRuleAnnotationKey          = storkRuleAnnotationPrefix + "/post-snapshot"
+	// PreExecRule This type of rule is to be run before an operation
+	PreExecRule Type = "preExecRule"
+	// PostExecRule This type of rule is to be run after an operation
+	PostExecRule Type = "postExecRule"
 )
-
-var ruleAnnotationKeys = map[ruleType]string{
-	preSnapRule:  preSnapRuleAnnotationKey,
-	postSnapRule: postSnapRuleAnnotationKey,
-}
 
 // pod is a simple type to encapsulate a pod's uid and namespace
 type pod struct {
@@ -78,36 +75,23 @@ var execCmdBackoff = wait.Backoff{
 	Steps:    execPodStepsHigh,
 }
 
-var snapAPICallBackoff = wait.Backoff{
+var ownerAPICallBackoff = wait.Backoff{
 	Duration: 2 * time.Second,
 	Factor:   1.5,
 	Steps:    20,
 }
 
-// ValidateSnapRule validates the rules if they are present in the given snapshot's annotations
-func ValidateSnapRule(snap *crdv1.VolumeSnapshot) error {
-	if snap.Metadata.Annotations != nil {
-		rTypes := []ruleType{preSnapRule, postSnapRule}
-		for _, rType := range rTypes {
-			ruleName, present := snap.Metadata.Annotations[ruleAnnotationKeys[rType]]
-			if present && len(ruleName) > 0 {
-				rule, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
-				if err != nil {
-					return err
+// ValidateRule validates a rule
+func ValidateRule(rule *storkv1.Rule, ruleType Type) error {
+	for _, item := range rule.Spec {
+		for _, action := range item.Actions {
+			if action.Type == storkv1.RuleActionCommand {
+				if action.Background && ruleType == PostExecRule {
+					return fmt.Errorf("background actions are not supported for post snapshot rules")
 				}
-
-				for _, item := range rule.Spec {
-					for _, action := range item.Actions {
-						if action.Type == apis_stork.RuleActionCommand {
-							if action.Background && rType == postSnapRule {
-								return fmt.Errorf("background actions are not supported for post snapshot rules")
-							}
-						} else {
-							return fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
-								action.Type, rule.GetNamespace(), rule.GetName())
-						}
-					}
-				}
+			} else {
+				return fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
+					action.Type, rule.GetNamespace(), rule.GetName())
 			}
 		}
 	}
@@ -115,178 +99,150 @@ func ValidateSnapRule(snap *crdv1.VolumeSnapshot) error {
 	return nil
 }
 
-// ExecutePreSnapRule executes the pre snapshot rule. pvcs is a list of PVCs that are associated
-// with the snapshot. It returns a channel which the caller can trigger to delete the termination of background commands
-func ExecutePreSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot) (chan bool, error) {
-	return executeSnapRule(pvcs, snap, preSnapRule)
-}
-
-// ExecutePostSnapRule executes the post snapshot rule for the given snapshot. pvcs is a list of PVCs
-// that are associated with the snapshot
-func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot) error {
-	_, err := executeSnapRule(pvcs, snap, postSnapRule)
-	return err
-}
-
 // terminateCommandInPods terminates a previously running background command on given pods for given task ID
-func terminateCommandInPods(snap *crdv1.VolumeSnapshot, pods []v1.Pod, taskID string) error {
+func terminateCommandInPods(owner runtime.Object, pods []v1.Pod, taskID string) error {
 	killFile := fmt.Sprintf(cmdexecutor.KillFileFormat, taskID)
 	failedPods, err := runCommandOnPods(pods, fmt.Sprintf("touch %s", killFile), execPodStepsHigh, false)
 
-	updateErr := updateRunningCommandPodListInSnap(snap, failedPods, taskID)
+	updateErr := updateRunningCommandPodListInOwner(owner, failedPods, taskID)
 	if updateErr != nil {
-		log.SnapshotLog(snap).Warnf("Failed to update list of pods with running command in snap due to: %v", updateErr)
+		log.RuleLog(nil, owner).Warnf("Failed to update list of pods with running command in snap due to: %v", updateErr)
 	}
 
 	return err
 }
 
 // PerformRuleRecovery terminates potential background commands running pods for the given snapshot
-func PerformRuleRecovery() error {
-	allSnaps, err := k8s.Instance().ListSnapshots(v1.NamespaceAll)
+func PerformRuleRecovery(
+	owner runtime.Object,
+) error {
+	metadata, err := meta.Accessor(owner)
 	if err != nil {
-		logrus.Errorf("Failed to list all snapshots due to: %v. Will retry.", err)
 		return err
 	}
 
-	if allSnaps == nil {
-		return nil
-	}
+	annotations := metadata.GetAnnotations()
+	if annotations != nil {
+		value := annotations[podsWithRunningCommandsKey]
+		if len(value) > 0 {
+			backgroundPodList := make([]v1.Pod, 0)
+			log.RuleLog(nil, owner).Infof("Performing recovery to terminate commands tracker: %v", value)
+			taskTracker := commandTask{}
 
-	var lastError error
-	for _, snap := range allSnaps.Items {
-		if snap.Metadata.Annotations != nil {
-			value := snap.Metadata.Annotations[podsWithRunningCommandsKey]
-			if len(value) > 0 {
-				backgroundPodList := make([]v1.Pod, 0)
-				log.SnapshotLog(&snap).Infof("Performing recovery to terminate commands tracker: %v", value)
-				taskTracker := commandTask{}
-
-				err := json.Unmarshal([]byte(value), &taskTracker)
-				if err != nil {
-					err = fmt.Errorf("failed to parse annotation to track running commands on pods due to: %v", err)
-					lastError = err
-					continue
-				}
-
-				if len(taskTracker.pods) == 0 {
-					continue
-				}
-
-				for _, pod := range taskTracker.pods {
-					p, err := k8s.Instance().GetPodByUID(types.UID(pod.uid), pod.namespace)
-					if err != nil {
-						if err == k8s.ErrPodsNotFound {
-							continue
-						}
-
-						log.SnapshotLog(&snap).Warnf("Failed to get pod with uid: %s due to: %v", pod.uid, err)
-						continue // best effort
-					}
-
-					backgroundPodList = append(backgroundPodList, *p)
-				}
-
-				err = terminateCommandInPods(&snap, backgroundPodList, taskTracker.taskID)
-				if err != nil {
-					err = fmt.Errorf("failed to terminate running commands in pods due to: %v", err)
-					lastError = err
-					continue
-				}
-			}
-		}
-	}
-
-	return lastError
-}
-
-// executeSnapRule executes rules in the given snap. pvcs are used to figure out the pods on which the rule actions will be
-// run on
-func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot, rType ruleType) (chan bool, error) {
-	// Validate the snap rule. Don't depend on callers to invoke this
-	if err := ValidateSnapRule(snap); err != nil {
-		return nil, err
-	}
-
-	if snap.Metadata.Annotations != nil {
-		ruleName, present := snap.Metadata.Annotations[ruleAnnotationKeys[rType]]
-		if present && len(ruleName) > 0 {
-			log.SnapshotLog(snap).Infof("Running snap rule: %s", ruleName)
-			taskID, err := uuid.New()
+			err := json.Unmarshal([]byte(value), &taskTracker)
 			if err != nil {
-				err = fmt.Errorf("failed to generate uuid for snapshot rule tasks due to: %v", err)
-				return nil, err
+				return fmt.Errorf("failed to parse annotation to track running commands on pods due to: %v", err)
 			}
 
-			pods := make([]v1.Pod, 0)
-			for _, pvc := range pvcs {
-				pvcPods, err := k8s.Instance().GetPodsUsingPVC(pvc.GetName(), pvc.GetNamespace())
-				if err != nil {
-					return nil, err
-				}
-
-				pods = append(pods, pvcPods...)
+			if len(taskTracker.pods) == 0 {
+				return nil
 			}
 
-			if len(pods) > 0 {
-				// Get the rule and based on the rule execute it
-				rule, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
+			for _, pod := range taskTracker.pods {
+				p, err := k8s.Instance().GetPodByUID(types.UID(pod.uid), pod.namespace)
 				if err != nil {
-					return nil, err
-				}
-
-				// start a watcher thread that will accumulate pods which have background commands to
-				// terminate and also watch a signal channel that indicates when to terminate them
-				backgroundCommandTermChan := make(chan bool, 1)
-				backgroundPodListChan := make(chan v1.Pod)
-				go cmdTerminationWatcher(backgroundPodListChan, backgroundCommandTermChan, snap, taskID.String())
-
-				// backgroundActionPresent is used to track if there is atleast one background action
-				backgroundActionPresent := false
-				for _, item := range rule.Spec {
-					filteredPods := make([]v1.Pod, 0)
-					// filter pods and only uses the ones that match this selector
-					for _, pod := range pods {
-						if hasSubset(pod.GetObjectMeta().GetLabels(), item.PodSelector) {
-							filteredPods = append(filteredPods, pod)
-						}
-					}
-
-					if len(filteredPods) == 0 {
-						log.SnapshotLog(snap).Warnf("None of the pods matched selectors for rule spec: %v", rule.Spec)
+					if err == k8s.ErrPodsNotFound {
 						continue
 					}
 
-					for _, action := range item.Actions {
-						if action.Background {
-							backgroundActionPresent = true
-						}
-
-						if action.Type == apis_stork.RuleActionCommand {
-							err := executeCommandAction(filteredPods, rule, snap, action, backgroundPodListChan, rType, taskID)
-							if err != nil {
-								// if any action fails, terminate all background jobs and don't depend on caller
-								// to clean them up
-								if backgroundActionPresent {
-									backgroundCommandTermChan <- true
-									return nil, err
-								}
-
-								backgroundCommandTermChan <- false
-								return nil, err
-							}
-						}
-					}
+					log.RuleLog(nil, owner).Warnf("Failed to get pod with uid: %s due to: %v", pod.uid, err)
+					continue // best effort
 				}
 
-				if backgroundActionPresent {
-					return backgroundCommandTermChan, nil
-				}
+				backgroundPodList = append(backgroundPodList, *p)
+			}
 
-				backgroundCommandTermChan <- false
-				return nil, nil
+			err = terminateCommandInPods(owner, backgroundPodList, taskTracker.taskID)
+			if err != nil {
+				return fmt.Errorf("failed to terminate running commands in pods due to: %v", err)
 			}
 		}
+	}
+
+	return nil
+}
+
+// ExecuteRule executes rules for the given owner. PVCs are used to figure out the pods on which the rule actions will be
+// run on
+func ExecuteRule(
+	rule *storkv1.Rule,
+	rType Type,
+	owner runtime.Object,
+	pvcs []v1.PersistentVolumeClaim,
+) (chan bool, error) {
+	// Validate the rule. Don't depend on callers to invoke this
+	if err := ValidateRule(rule, rType); err != nil {
+		return nil, err
+	}
+
+	log.RuleLog(rule, owner).Infof("Running rule")
+	taskID, err := uuid.New()
+	if err != nil {
+		err = fmt.Errorf("failed to generate uuid for rule tasks due to: %v", err)
+		return nil, err
+	}
+
+	pods := make([]v1.Pod, 0)
+	for _, pvc := range pvcs {
+		pvcPods, err := k8s.Instance().GetPodsUsingPVC(pvc.GetName(), pvc.GetNamespace())
+		if err != nil {
+			return nil, err
+		}
+
+		pods = append(pods, pvcPods...)
+	}
+
+	if len(pods) > 0 {
+		// start a watcher thread that will accumulate pods which have background commands to
+		// terminate and also watch a signal channel that indicates when to terminate them
+		backgroundCommandTermChan := make(chan bool, 1)
+		backgroundPodListChan := make(chan v1.Pod)
+		go cmdTerminationWatcher(backgroundPodListChan, backgroundCommandTermChan, owner, taskID.String())
+
+		// backgroundActionPresent is used to track if there is atleast one background action
+		backgroundActionPresent := false
+		for _, item := range rule.Spec {
+			filteredPods := make([]v1.Pod, 0)
+			// filter pods and only uses the ones that match this selector
+			for _, pod := range pods {
+				if hasSubset(pod.GetObjectMeta().GetLabels(), item.PodSelector) {
+					filteredPods = append(filteredPods, pod)
+				}
+			}
+
+			if len(filteredPods) == 0 {
+				log.RuleLog(rule, owner).Warnf("None of the pods matched selectors for rule spec: %v", rule.Spec)
+				continue
+			}
+
+			for _, action := range item.Actions {
+				if action.Background {
+					backgroundActionPresent = true
+				}
+
+				if action.Type == storkv1.RuleActionCommand {
+					err := executeCommandAction(filteredPods, rule, owner, action, backgroundPodListChan, rType, taskID)
+					if err != nil {
+						// if any action fails, terminate all background jobs and don't depend on caller
+						// to clean them up
+						if backgroundActionPresent {
+							backgroundCommandTermChan <- true
+							return nil, err
+						}
+
+						backgroundCommandTermChan <- false
+						return nil, err
+					}
+				}
+			}
+		}
+
+		if backgroundActionPresent {
+			return backgroundCommandTermChan, nil
+		}
+
+		backgroundCommandTermChan <- false
+		return nil, nil
 	}
 
 	return nil, nil
@@ -295,11 +251,11 @@ func executeSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot
 // executeCommandAction executes the command type action on given pods:
 func executeCommandAction(
 	pods []v1.Pod,
-	rule *apis_stork.Rule,
-	snap *crdv1.VolumeSnapshot,
-	action apis_stork.RuleAction,
+	rule *storkv1.Rule,
+	owner runtime.Object,
+	action storkv1.RuleAction,
 	backgroundPodNotifyChan chan v1.Pod,
-	rType ruleType, taskID *uuid.UUID) error {
+	rType Type, taskID *uuid.UUID) error {
 	if len(pods) == 0 {
 		return nil
 	}
@@ -325,10 +281,10 @@ func executeCommandAction(
 		}
 
 		// regardless of the outcome of running the background command, we first update the
-		// snapshot to track pods which might have a running background command
-		updateErr := updateRunningCommandPodListInSnap(snap, podsForAction, taskID.String())
+		// owner to track pods which might have a running background command
+		updateErr := updateRunningCommandPodListInOwner(owner, podsForAction, taskID.String())
 		if updateErr != nil {
-			log.SnapshotLog(snap).Warnf("Failed to update list of pods with running command in snap due to: %v", updateErr)
+			log.RuleLog(rule, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 		}
 
 		err := runBackgroundCommandOnPods(podsForAction, action.Value, taskID.String(), cmdExecutorImage)
@@ -354,10 +310,14 @@ func podsToString(pods []v1.Pod) string {
 	return strings.Join(podList, ",")
 }
 
-// updateRunningCommandPodListInSnap updates the snapshot annotation to track pods which might have a
+// updateRunningCommandPodListInOwner updates the owner annotation to track pods which might have a
 // running command. This allows recovery if we crash while running the commands. One can parse these annotations
 // to terminate the running commands
-func updateRunningCommandPodListInSnap(snap *crdv1.VolumeSnapshot, pods []v1.Pod, taskID string) error {
+func updateRunningCommandPodListInOwner(
+	owner runtime.Object,
+	pods []v1.Pod,
+	taskID string,
+) error {
 	podsWithNs := make([]pod, 0)
 	for _, p := range pods {
 		podsWithNs = append(podsWithNs, pod{
@@ -372,25 +332,31 @@ func updateRunningCommandPodListInSnap(snap *crdv1.VolumeSnapshot, pods []v1.Pod
 
 	trackerBytes, err := json.Marshal(tracker)
 	if err != nil {
-		return fmt.Errorf("failed to update running command pod list in snap due to: %v", err)
+		return fmt.Errorf("failed to update running command pod list in owner due to: %v", err)
 	}
 
-	err = wait.ExponentialBackoff(snapAPICallBackoff, func() (bool, error) {
-		snap, err := k8s.Instance().GetSnapshot(snap.Metadata.Name, snap.Metadata.Namespace)
+	err = wait.ExponentialBackoff(ownerAPICallBackoff, func() (bool, error) {
+		owner, err := k8s.Instance().GetObject(owner)
 		if err != nil {
-			logrus.Warnf("Failed to get latest snapshot object due to: %v. Will retry.", err)
+			logrus.Warnf("Failed to get latest owner due to: %v. Will retry.", err)
 			return false, nil
 		}
 
-		snapCopy := snap.DeepCopy()
-		if len(podsWithNs) == 0 {
-			delete(snapCopy.Metadata.Annotations, podsWithRunningCommandsKey)
-		} else {
-			snapCopy.Metadata.Annotations[podsWithRunningCommandsKey] = string(trackerBytes)
+		ownerCopy := owner.DeepCopyObject()
+		metadata, err := meta.Accessor(ownerCopy)
+		if err != nil {
+			return false, err
 		}
 
-		if _, err := k8s.Instance().UpdateSnapshot(snapCopy); err != nil {
-			log.SnapshotLog(snap).Warnf("Failed to update snapshot due to: %v. Will retry.", err)
+		annotations := metadata.GetAnnotations()
+		if len(podsWithNs) == 0 {
+			delete(annotations, podsWithRunningCommandsKey)
+		} else {
+			annotations[podsWithRunningCommandsKey] = string(trackerBytes)
+		}
+
+		if _, err := k8s.Instance().UpdateObject(owner); err != nil {
+			log.RuleLog(nil, owner).Warnf("Failed to update owner due to: %v. Will retry.", err)
 			return false, nil
 		}
 
@@ -589,7 +555,7 @@ func waitForExecPodCompletion(pod *v1.Pod) error {
 func cmdTerminationWatcher(
 	podListChan chan v1.Pod,
 	terminationSignalChan chan bool,
-	snap *crdv1.VolumeSnapshot,
+	owner runtime.Object,
 	id string) {
 	// For tracking, use a map/set keyed by uid to handle duplicates
 	podsToTerminate := make(map[string]v1.Pod)
@@ -604,8 +570,8 @@ func cmdTerminationWatcher(
 					podList = append(podList, pod)
 				}
 
-				if err := terminateCommandInPods(snap, podList, id); err != nil {
-					log.SnapshotLog(snap).Warnf("failed to terminate background command in pods due to: %v", err)
+				if err := terminateCommandInPods(owner, podList, id); err != nil {
+					log.RuleLog(nil, owner).Warnf("failed to terminate background command in pods due to: %v", err)
 				}
 			}
 			break
