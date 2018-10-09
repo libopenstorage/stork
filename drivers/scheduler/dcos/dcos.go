@@ -409,6 +409,16 @@ func (d *dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, erro
 	return nil, nil
 }
 
+func (d *dcos) StopSchedOnNode(node node.Node) error {
+	//TODO implement this method
+	return nil
+}
+
+func (d *dcos) StartSchedOnNode(node node.Node) error {
+	//TODO implement this method
+	return nil
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

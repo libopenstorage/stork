@@ -42,6 +42,9 @@ const (
 	DeploymentSuffix = "-dep"
 	// StatefulSetSuffix is the suffix for statefulset names stored as keys in maps
 	StatefulSetSuffix = "-ss"
+	// SystemdSchedServiceName is the name of the system service resposible for scheduling
+	// TODO Change this when running on openshift for the proper service name
+	SystemdSchedServiceName = "kubelet"
 )
 
 const (
@@ -53,6 +56,7 @@ const (
 	findFilesOnWorkerTimeout   = 1 * time.Minute
 	deleteTasksWaitTimeout     = 3 * time.Minute
 	defaultRetryInterval       = 10 * time.Second
+	defaultTimeout             = 2 * time.Minute
 )
 
 var (
@@ -1341,6 +1345,46 @@ func (k *k8s) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error
 		}
 	}
 	return scaleFactorMap, nil
+}
+
+func (k *k8s) StopSchedOnNode(n node.Node) error {
+	driver, _ := node.Get(k.nodeDriverName)
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         findFilesOnWorkerTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "stop",
+	}
+	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	if err != nil {
+		return &scheduler.ErrFailedToStopSchedOnNode {
+			Node:          n,
+			SystemService: SystemdSchedServiceName,
+			Cause:         err.Error(),
+		}
+	}
+	return nil
+}
+
+func (k *k8s) StartSchedOnNode(n node.Node) error {
+	driver, _ := node.Get(k.nodeDriverName)
+	systemOpts := node.SystemctlOpts{
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         defaultTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		},
+		Action: "start",
+	}
+	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	if err != nil {
+		return &scheduler.ErrFailedToStartSchedOnNode {
+			Node:          n,
+			SystemService: SystemdSchedServiceName,
+			Cause:         err.Error(),
+		}
+	}
+	return nil
 }
 
 func insertLineBreak(note string) string {

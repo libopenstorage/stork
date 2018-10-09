@@ -85,6 +85,12 @@ type Driver interface {
 
 	// Get a map of current applications to their new scales, based on "factor"
 	GetScaleFactorMap(*Context) (map[string]int32, error)
+
+	// Stop scheduler service on the given node
+	StopSchedOnNode(n node.Node) error
+
+	// Start scheduler service on the given node
+	StartSchedOnNode(n node.Node) error
 }
 
 var (
