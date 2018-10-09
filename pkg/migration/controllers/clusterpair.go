@@ -119,7 +119,7 @@ func getClusterPairSchedulerConfig(clusterPairName string) (*restclient.Config, 
 		clusterPair.Spec.Config,
 		clusterPair.Spec.Config.CurrentContext,
 		&clientcmd.ConfigOverrides{},
-		nil)
+		clientcmd.NewDefaultClientConfigLoadingRules())
 	return remoteClientConfig.ClientConfig()
 }
 
