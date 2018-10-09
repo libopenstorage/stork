@@ -87,12 +87,16 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		return err
 	}
 
+	if len(cluster.Nodes) == 0 {
+		return fmt.Errorf("cluster inspect returned empty nodes")
+	}
+
 	err = d.updateNodes(cluster.Nodes)
 	if err != nil {
 		return err
 	}
 
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		if err := d.WaitDriverUpOnNode(n); err != nil {
 			return err
 		}
@@ -122,17 +126,27 @@ func (d *portworx) updateNodes(pxNodes []api.Node) error {
 }
 
 func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
+	isPX, err := d.schedOps.IsPXEnabled(n)
+	if err != nil {
+		return err
+	}
+	// No need to check in pxNodes if px is not installed
+	if !isPX {
+		return nil
+	}
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
 				n.VolDriverNodeID = pxNode.Id
+				n.IsStorageDriverInstalled = isPX
 				node.UpdateNode(n)
 				return nil
 			}
 		}
 	}
 
-	return fmt.Errorf("failed to find px node for node: %v", n)
+	// Return error where PX is not explicitly disabled but was not found installed
+	return fmt.Errorf("failed to find px node for node: %v PX nodes: %v", n, pxNodes)
 }
 
 func (d *portworx) CleanupVolume(name string) error {
@@ -495,7 +509,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 	for _, n := range nodes {
 		logrus.Infof("Stopping volume driver on %s.", n.Name)
 		if force {
-			pxCrashCmd := "sudo kill -9 px-storage"
+			pxCrashCmd := "sudo pkill -9 px-storage"
 			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
 				Timeout:         crashDriverTimeout,
 				TimeBeforeRetry: defaultRetryInterval,
@@ -545,7 +559,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	}
 
 	pxVol := v.(*api.Volume)
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		if n.VolDriverNodeID == pxVol.AttachedOn {
 			return &n, nil
 		}
@@ -936,7 +950,7 @@ func (d *portworx) UpgradeDriver(version string) error {
 		}
 	}
 
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		if err := d.WaitForUpgrade(n, image, tag); err != nil {
 			return err
 		}

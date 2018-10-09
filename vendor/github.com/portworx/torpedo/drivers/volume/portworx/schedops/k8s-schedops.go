@@ -37,7 +37,11 @@ const (
 	//   the name of the stork volume snapshot
 	storkSnapshotNameKey = "stork-snap"
 	// pvcLabel is the label used on volume to identify the pvc name
-	pvcLabel               = "pvc"
+	pvcLabel = "pvc"
+	// pxenable is label used to check whethere px installation is enabled/disabled on node
+	pxEnabled = "px/enabled"
+	// nodeType is label used to check kubernetes node-type
+	dcosNodeType           = "kubernetes.dcos.io/node-type"
 	talismanServiceAccount = "talisman-account"
 	talismanImage          = "portworx/talisman:latest"
 )
@@ -184,7 +188,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 		logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", p.Namespace, p.Name, p.Status.Phase, p.Status.InitContainerStatuses, p.Status.ContainerStatuses)
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
-			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+) %s.+", path))
+			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+) %s.+", path))
 
 			t := func() (interface{}, bool, error) {
 				output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, p.Name, containerName, p.Namespace)
@@ -477,6 +481,35 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 		}
 	}
 	return true
+}
+
+// IsPXEnabled returns true  if px is enabled on given node
+func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
+	t := func() (interface{}, bool, error) {
+		node, err := k8s.Instance().GetNodeByName(n.Name)
+		if err != nil {
+			logrus.Errorf("Failed to get node %v", err)
+			return nil, true, err
+		}
+		return node, false, nil
+	}
+
+	node, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		logrus.Errorf("Failed to get node %v", err)
+		return false, err
+	}
+
+	kubeNode := node.(*corev1.Node)
+	// if node has px/enabled label set to false or node-type public or
+	// has any taints then px is disabled on node
+	if kubeNode.Labels[pxEnabled] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
+		logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+		return false, nil
+	}
+
+	logrus.Infof("PX is enabled on node %v.", n.Name)
+	return true, nil
 }
 
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that

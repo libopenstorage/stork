@@ -29,6 +29,7 @@ const (
 	SpecScale                = "scale"
 	SpecFilesystem           = "fs"
 	SpecBlockSize            = "block_size"
+	SpecQueueDepth           = "queue_depth"
 	SpecHaLevel              = "repl"
 	SpecPriority             = "io_priority"
 	SpecSnapshotInterval     = "snap_interval"
@@ -746,7 +747,10 @@ func (s *Node) ToStorageNode() *StorageNode {
 func (c *Cluster) ToStorageCluster() *StorageCluster {
 	cluster := &StorageCluster{
 		Status: c.Status,
-		Id:     c.Id,
+
+		// Due to history, the cluster ID is normally the name of the cluster, not the
+		// unique identifier
+		Name: c.Id,
 	}
 
 	return cluster

@@ -29,6 +29,7 @@ var (
 		"could not be found in the cluster map.")
 	ErrNodeDecommissioned   = errors.New("Node is decomissioned.")
 	ErrRemoveCausesDataLoss = errors.New("Cannot remove node without data loss")
+	ErrNotImplemented       = errors.New("Not Implemented")
 )
 
 // ClusterServerConfiguration holds manager implementation
@@ -45,16 +46,17 @@ type ClusterServerConfiguration struct {
 // NodeEntry is used to discover other nodes in the cluster
 // and setup the gossip protocol with them.
 type NodeEntry struct {
-	Id              string
-	MgmtIp          string
-	DataIp          string
-	GenNumber       uint64
-	StartTime       time.Time
-	MemTotal        uint64
-	Hostname        string
-	Status          api.Status
-	NodeLabels      map[string]string
-	NonQuorumMember bool
+	Id                string
+	SchedulerNodeName string
+	MgmtIp            string
+	DataIp            string
+	GenNumber         uint64
+	StartTime         time.Time
+	MemTotal          uint64
+	Hostname          string
+	Status            api.Status
+	NodeLabels        map[string]string
+	NonQuorumMember   bool
 }
 
 // ClusterInfo is the basic info about the cluster and its nodes
@@ -242,8 +244,6 @@ type ClusterAlerts interface {
 	// Enumerate enumerates alerts on this cluster for the given resource
 	// within a specific time range.
 	EnumerateAlerts(timeStart, timeEnd time.Time, resource api.ResourceType) (*api.Alerts, error)
-	// ClearAlert clears an alert for the given resource
-	ClearAlert(resource api.ResourceType, alertID int64) error
 	// EraseAlert erases an alert for the given resource
 	EraseAlert(resource api.ResourceType, alertID int64) error
 }
@@ -294,6 +294,11 @@ type Cluster interface {
 
 	// Like Start, but have the ability to pass in managers to the cluster object
 	StartWithConfiguration(clusterMaxSize int, nodeInitialized bool, gossipPort string, config *ClusterServerConfiguration) error
+
+	// Get a unique identifier for this cluster. Depending on the implementation, this could
+	// be different than the _id_ from ClusterInfo. This id _must_ be unique across
+	// any cluster.
+	Uuid() string
 
 	ClusterData
 	ClusterRemove
@@ -409,12 +414,7 @@ func (nc *NullClusterListener) EnumerateAlerts(
 ) (*api.Alerts, error) {
 	return nil, nil
 }
-func (nc *NullClusterListener) ClearAlert(
-	resource api.ResourceType,
-	alertID int64,
-) error {
-	return nil
-}
+
 func (nc *NullClusterListener) EraseAlert(
 	resource api.ResourceType,
 	alertID int64,
