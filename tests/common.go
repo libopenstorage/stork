@@ -110,7 +110,8 @@ func ValidateContext(ctx *scheduler.Context) {
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-			err := Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
+			appScaleFactor := time.Duration(Inst().ScaleFactor)
+			err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 
@@ -133,7 +134,8 @@ func ValidateVolumes(ctx *scheduler.Context) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			err = Inst().S.InspectVolumes(ctx, defaultTimeout, defaultRetryInterval)
+			appScaleFactor := time.Duration(Inst().ScaleFactor)
+			err = Inst().S.InspectVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 
