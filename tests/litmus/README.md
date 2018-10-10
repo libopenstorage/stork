@@ -26,6 +26,53 @@ $ docker run --privileged --rm -it -v vol:/test gourao/litmus litmus verify /tes
 
 # Running Litmus in Kubernetes
 
+An example of running the litmus test is available via `litmus-run.yaml` and `litmus-verify.yaml`
+
+### How to run
+
+```
+kubectl create -f litmus-run.yaml
+```
+
+You should see the `ContainerCreating`
+
+> Note: This pod will likely `Error` out with some arbitrary error as the run will make the node panic, and therefore the pod never fully completes, this is ok and expected.
+
+```
+▶ kubectl get po
+NAME                     READY     STATUS              RESTARTS   AGE
+litmus-run-q28zl             0/1       ContainerCreating   0          3m
+```
+
+You should also notice a worker node in `NotReady` state as it reboots.
+
+```
+▶ kubectl get no
+NAME                            STATUS     ROLES     AGE       VERSION
+ip-172-31-37-92.ec2.internal    Ready      node      2h        v1.10.2
+ip-172-31-48-7.ec2.internal     NotReady   node      2h        v1.10.2
+ip-172-31-51-193.ec2.internal   Ready      master    2h        v1.10.2
+ip-172-31-59-143.ec2.internal   Ready      master    2h        v1.10.2
+ip-172-31-59-61.ec2.internal    Ready      master    2h        v1.10.2
+ip-172-31-79-153.ec2.internal   Ready      node      2h        v1.10.2
+```
+
+### How to verify
+
+Once the node is back in `Ready` state, you can run the verify step.
+
+```
+kubectl delete po litmus-run-q28zl
+kubectl create -f litmus-verify.yaml
+```
+
+Verify the output of the test.
+
+```
+▶ kubectl logs litmus-verify-d4kkb
+/test/foo.txt has no corruption
+```
+
 # Building from source
 If you want to build the binaries from source, follow these instructions.
 

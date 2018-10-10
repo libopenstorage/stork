@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: litmus-verify
+  labels:
+    purpose: litmus-testing-verify
+spec:
+  template:
+    spec:
+      containers:
+      - name: litmus-container-verify
+        image: gourao/litmus
+        command: ["litmus"]
+        args: ["verify", "/test/foo.txt"]
+        volumeMounts:
+        - name: litmus-data
+          mountPath: /test
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - SYS_ADMIN
+      volumes:
+      - name: litmus-data
+        persistentVolumeClaim:
+          claimName: litmus-data
+      restartPolicy: Never
+  backoffLimit: 0

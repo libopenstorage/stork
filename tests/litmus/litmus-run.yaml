@@ -1,0 +1,54 @@
+apiVersion: storage.k8s.io/v1beta1
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: litmus-volume
+provisioner: kubernetes.io/portworx-volume
+parameters:
+   repl: "1"
+
+---
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: litmus-data
+   annotations:
+     volume.beta.kubernetes.io/storage-class: litmus-volume
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+
+---
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: litmus-run
+  labels:
+    purpose: litmus-testing-run
+spec:
+  template:
+    spec:
+      containers:
+      - name: litmus-container-run
+        image: gourao/litmus
+        command: ["litmus"]
+        args: ["run", "/test/foo.txt"]
+        volumeMounts:
+        - name: litmus-data
+          mountPath: /test
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - SYS_ADMIN
+      volumes:
+      - name: litmus-data
+        persistentVolumeClaim:
+          claimName: litmus-data
+      restartPolicy: Never
+  backoffLimit: 0
