@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/restmapper"
 )
 
 // Helper exposes functions for interacting with the Kubernetes discovery
@@ -45,6 +45,10 @@ type Helper interface {
 	// Refresh pulls an updated set of Ark-backuppable resources from the
 	// discovery API.
 	Refresh() error
+
+	// APIGroups gets the current set of supported APIGroups
+	// in the cluster.
+	APIGroups() []metav1.APIGroup
 }
 
 type helper struct {
@@ -56,6 +60,7 @@ type helper struct {
 	mapper       meta.RESTMapper
 	resources    []*metav1.APIResourceList
 	resourcesMap map[schema.GroupVersionResource]metav1.APIResource
+	apiGroups    []metav1.APIGroup
 }
 
 var _ Helper = &helper{}
@@ -91,11 +96,11 @@ func (h *helper) Refresh() error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	groupResources, err := discovery.GetAPIGroupResources(h.discoveryClient)
+	groupResources, err := restmapper.GetAPIGroupResources(h.discoveryClient)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	mapper := discovery.NewRESTMapper(groupResources, dynamic.VersionInterfaces)
+	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
 	shortcutExpander, err := kcmdutil.NewShortcutExpander(mapper, h.discoveryClient, h.logger)
 	if err != nil {
 		return errors.WithStack(err)
@@ -108,9 +113,7 @@ func (h *helper) Refresh() error {
 	}
 
 	h.resources = discovery.FilteredBy(
-		discovery.ResourcePredicateFunc(func(groupVersion string, r *metav1.APIResource) bool {
-			return discovery.SupportsAllVerbs{Verbs: []string{"list", "create"}}.Match(groupVersion, r)
-		}),
+		discovery.ResourcePredicateFunc(filterByVerbs),
 		preferredResources,
 	)
 
@@ -129,7 +132,17 @@ func (h *helper) Refresh() error {
 		}
 	}
 
+	apiGroupList, err := h.discoveryClient.ServerGroups()
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	h.apiGroups = apiGroupList.Groups
+
 	return nil
+}
+
+func filterByVerbs(groupVersion string, r *metav1.APIResource) bool {
+	return discovery.SupportsAllVerbs{Verbs: []string{"list", "create", "get", "delete"}}.Match(groupVersion, r)
 }
 
 // sortResources sources resources by moving extensions to the end of the slice. The order of all
@@ -162,4 +175,10 @@ func (h *helper) Resources() []*metav1.APIResourceList {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	return h.resources
+}
+
+func (h *helper) APIGroups() []metav1.APIGroup {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	return h.apiGroups
 }

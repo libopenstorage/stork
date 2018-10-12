@@ -24,12 +24,17 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/kubernetes/typed/apps/v1beta2"
@@ -74,6 +79,7 @@ type Ops interface {
 	CRDOps
 	ClusterPairOps
 	MigrationOps
+	ObjectOps
 	SetConfig(config *rest.Config)
 }
 
@@ -438,6 +444,14 @@ type MigrationOps interface {
 	DeleteMigration(string) error
 }
 
+// ObjectOps is an interface to perform generic Object operations
+type ObjectOps interface {
+	// GetObject returns the latest object given a generic Object
+	GetObject(object runtime.Object) (runtime.Object, error)
+	// UpdateObject updates a generic Object
+	UpdateObject(object runtime.Object) (runtime.Object, error)
+}
+
 // CustomResource is for creating a Kubernetes TPR/CRD
 type CustomResource struct {
 	// Name of the custom resource
@@ -470,6 +484,7 @@ type k8sOps struct {
 	storkClient        storkclientset.Interface
 	apiExtensionClient apiextensionsclient.Interface
 	config             *rest.Config
+	dynamicInterface   dynamic.Interface
 }
 
 // Instance returns a singleton instance of k8sOps type
@@ -2897,6 +2912,49 @@ func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval tim
 
 // CRD APIs - END
 
+// Object APIs - BEGIN
+
+func (k *k8sOps) getDynamicClient(object runtime.Object) (dynamic.ResourceInterface, error) {
+
+	objectType, err := meta.TypeAccessor(object)
+	if err != nil {
+		return nil, err
+	}
+
+	return k.dynamicInterface.Resource(object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(strings.ToLower(objectType.GetKind()) + "s")), nil
+}
+
+// GetObject returns the latest object given a generic Object
+func (k *k8sOps) GetObject(object runtime.Object) (runtime.Object, error) {
+	client, err := k.getDynamicClient(object)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return nil, err
+	}
+	return client.Get(metadata.GetName(), metav1.GetOptions{}, "")
+}
+
+// UpdateObject updates a generic Object
+func (k *k8sOps) UpdateObject(object runtime.Object) (runtime.Object, error) {
+	unstructured, ok := object.(*unstructured.Unstructured)
+	if !ok {
+		return nil, fmt.Errorf("Unable to cast object to unstructured: %v", object)
+	}
+
+	client, err := k.getDynamicClient(object)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.Update(unstructured, "")
+}
+
+// Object APIs - BEGIN
+
 func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
 	return k.client.AppsV1beta2()
 }
@@ -2966,6 +3024,11 @@ func (k *k8sOps) loadClientFor(config *rest.Config) error {
 	}
 
 	k.apiExtensionClient, err = apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	k.dynamicInterface, err = dynamic.NewForConfig(config)
 	if err != nil {
 		return err
 	}
