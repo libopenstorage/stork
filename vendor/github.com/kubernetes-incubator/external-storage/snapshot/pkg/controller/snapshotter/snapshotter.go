@@ -25,7 +25,7 @@ import (
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/cache"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -129,11 +129,16 @@ func (vs *volumeSnapshotter) getPVFromVolumeSnapshot(uniqueSnapshotName string, 
 	}
 
 	pvName := pvc.Spec.VolumeName
-	pv, err := vs.coreClient.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
+	pv, err := vs.getPVFromName(pvName)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve PV %s from the API server: %q", pvName, err)
 	}
 	return pv, nil
+}
+
+// Helper function to get PV from PV name
+func (vs *volumeSnapshotter) getPVFromName(pvName string) (*v1.PersistentVolume, error) {
+	return vs.coreClient.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
 }
 
 // TODO: cache the VolumeSnapshotData list since this is only needed when controller restarts, checks
@@ -286,7 +291,11 @@ func (vs *volumeSnapshotter) deleteSnapshot(spec *crdv1.VolumeSnapshotDataSpec) 
 		return fmt.Errorf("%s is not supported volume for %#v", volumeType, spec)
 	}
 	source := spec.VolumeSnapshotDataSource
-	err := plugin.SnapshotDelete(&source, nil /* *v1.PersistentVolume */)
+	pv, err := vs.getPVFromName(spec.PersistentVolumeRef.Name)
+	if err != nil {
+		glog.Warningf("failed to retrieve PV %s from the API server: %q", spec.PersistentVolumeRef.Name, err)
+	}
+	err = plugin.SnapshotDelete(&source, pv)
 	if err != nil {
 		return fmt.Errorf("failed to delete snapshot %#v, err: %v", source, err)
 	}
@@ -538,9 +547,10 @@ func (vs *volumeSnapshotter) createVolumeSnapshotData(uniqueSnapshotName, pvName
 		conditions := *snapStatus
 		ind := len(conditions) - 1
 		lastCondition = crdv1.VolumeSnapshotDataCondition{
-			Type:    (crdv1.VolumeSnapshotDataConditionType)(conditions[ind].Type),
-			Status:  conditions[ind].Status,
-			Message: conditions[ind].Message,
+			Type:               (crdv1.VolumeSnapshotDataConditionType)(conditions[ind].Type),
+			Status:             conditions[ind].Status,
+			Message:            conditions[ind].Message,
+			LastTransitionTime: metav1.Now(),
 		}
 	}
 	// Generate snapshotData name with the UID of snapshot object
@@ -744,6 +754,62 @@ func (vs *volumeSnapshotter) updateVolumeSnapshotMetadata(snapshot *crdv1.Volume
 	return &cloudTags, nil
 }
 
+// Propagates the VolumeSnapshot condition to VolumeSnapshotData
+func (vs *volumeSnapshotter) propagateVolumeSnapshotCondition(snapshotDataName string, condition *crdv1.VolumeSnapshotCondition) error {
+	var snapshotDataObj crdv1.VolumeSnapshotData
+	err := vs.restClient.Get().
+		Name(snapshotDataName).
+		Resource(crdv1.VolumeSnapshotDataResourcePlural).
+		Do().Into(&snapshotDataObj)
+	if err != nil {
+		return err
+	}
+
+	newCondition := &crdv1.VolumeSnapshotDataCondition{
+		Type:               (crdv1.VolumeSnapshotDataConditionType)(condition.Type),
+		Status:             condition.Status,
+		Message:            condition.Message,
+		LastTransitionTime: condition.LastTransitionTime,
+	}
+	oldStatus := snapshotDataObj.Status.DeepCopy()
+
+	status := snapshotDataObj.Status
+	isEqual := false
+	if oldStatus.Conditions == nil || len(oldStatus.Conditions) == 0 || newCondition.Type != oldStatus.Conditions[len(oldStatus.Conditions)-1].Type {
+		status.Conditions = append(status.Conditions, *newCondition)
+	} else {
+		oldCondition := oldStatus.Conditions[len(oldStatus.Conditions)-1]
+		if newCondition.Status == oldCondition.Status {
+			newCondition.LastTransitionTime = oldCondition.LastTransitionTime
+		}
+		status.Conditions[len(status.Conditions)-1] = *newCondition
+		isEqual = newCondition.Type == oldCondition.Type &&
+			newCondition.Status == oldCondition.Status &&
+			newCondition.Reason == oldCondition.Reason &&
+			newCondition.Message == oldCondition.Message &&
+			newCondition.LastTransitionTime.Equal(&oldCondition.LastTransitionTime)
+	}
+	if !isEqual {
+		var newSnapshotDataObj crdv1.VolumeSnapshotData
+		snapshotDataObj.Status = status
+		if snapshotDataObj.Status.CreationTimestamp.IsZero() && newCondition.Type == crdv1.VolumeSnapshotDataConditionReady {
+			snapshotDataObj.Status.CreationTimestamp = newCondition.LastTransitionTime
+		}
+		err = vs.restClient.Put().
+			Name(snapshotDataName).
+			Resource(crdv1.VolumeSnapshotDataResourcePlural).
+			Body(&snapshotDataObj).
+			Do().Into(&newSnapshotDataObj)
+		if err != nil {
+			return err
+		}
+		glog.Infof("VolumeSnapshot status propagated to VolumeSnapshotData")
+		return nil
+	}
+
+	return nil
+}
+
 // Update VolumeSnapshot status if the condition is changed.
 func (vs *volumeSnapshotter) UpdateVolumeSnapshotStatus(snapshot *crdv1.VolumeSnapshot, condition *crdv1.VolumeSnapshotCondition) (*crdv1.VolumeSnapshot, error) {
 	var snapshotObj crdv1.VolumeSnapshot
@@ -788,6 +854,10 @@ func (vs *volumeSnapshotter) UpdateVolumeSnapshotStatus(snapshot *crdv1.VolumeSn
 			return nil, err
 		}
 		glog.Infof("UpdateVolumeSnapshotStatus finishes %+v", newSnapshotObj)
+		err = vs.propagateVolumeSnapshotCondition(snapshotObj.Spec.SnapshotDataName, &snapshotObj.Status.Conditions[len(snapshotObj.Status.Conditions)-1])
+		if err != nil {
+			return nil, err
+		}
 		return &newSnapshotObj, nil
 	}
 
