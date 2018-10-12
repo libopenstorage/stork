@@ -2,7 +2,7 @@ sudo: required
 dist: trusty
 language: go
 go:
-  - 1.9.2
+  - 1.10.4
 before_install:
   - sudo apt-get update -yq
   - sudo apt-get install go-md2man -y
