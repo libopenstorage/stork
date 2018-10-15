@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -81,6 +80,7 @@ type Ops interface {
 	MigrationOps
 	ObjectOps
 	SetConfig(config *rest.Config)
+	SetClient(client *kubernetes.Clientset, snapClient rest.Interface, storkClient storkclientset.Interface, apiExtensionClient apiextensionsclient.Interface, dynamicInterface dynamic.Interface)
 }
 
 // EventOps is an interface to put and get k8s events
@@ -322,6 +322,8 @@ type StorageClassOps interface {
 type PersistentVolumeClaimOps interface {
 	// CreatePersistentVolumeClaim creates the given persistent volume claim
 	CreatePersistentVolumeClaim(*v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error)
+	// UpdatePersistentVolumeClaim updates an existing persistent volume claim
+	UpdatePersistentVolumeClaim(*v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error)
 	// DeletePersistentVolumeClaim deletes the given persistent volume claim
 	DeletePersistentVolumeClaim(name, namespace string) error
 	// ValidatePersistentVolumeClaim validates the given pvc
@@ -428,6 +430,8 @@ type ClusterPairOps interface {
 	ListClusterPairs() (*v1alpha1.ClusterPairList, error)
 	// DeleteClusterPair deletes the ClusterPair
 	DeleteClusterPair(string) error
+	// ValidateClusterPair validates clusterpair status
+	ValidateClusterPair(name string, timeout, retryInterval time.Duration) error
 }
 
 // MigrationOps is an interface to perfrom k8s Migration operations
@@ -442,6 +446,8 @@ type MigrationOps interface {
 	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// DeleteMigration deletes the Migration
 	DeleteMigration(string) error
+	// ValidateMigration validate the Migration status
+	ValidateMigration(name string, timeout, retryInterval time.Duration) error
 }
 
 // ObjectOps is an interface to perform generic Object operations
@@ -480,7 +486,7 @@ var (
 
 type k8sOps struct {
 	client             *kubernetes.Clientset
-	snapClient         *rest.RESTClient
+	snapClient         rest.Interface
 	storkClient        storkclientset.Interface
 	apiExtensionClient apiextensionsclient.Interface
 	config             *rest.Config
@@ -499,6 +505,32 @@ func (k *k8sOps) SetConfig(config *rest.Config) {
 	// Set the config and reset the client
 	k.config = config
 	k.client = nil
+}
+
+// NewInstance returns new instance of k8sOps by using given config
+func NewInstance(config string) (Ops, error) {
+	newInstance := &k8sOps{}
+	err := newInstance.loadClientFromKubeconfig(config)
+	if err != nil {
+		logrus.Errorf("Unable to set new instance: %v", err)
+		return nil, err
+	}
+	return newInstance, nil
+}
+
+// Set the k8s clients
+func (k *k8sOps) SetClient(
+	client *kubernetes.Clientset,
+	snapClient rest.Interface,
+	storkClient storkclientset.Interface,
+	apiExtensionClient apiextensionsclient.Interface,
+	dynamicInterface dynamic.Interface) {
+
+	k.client = client
+	k.snapClient = snapClient
+	k.storkClient = storkClient
+	k.apiExtensionClient = apiExtensionClient
+	k.dynamicInterface = dynamicInterface
 }
 
 // Initialize the k8s client if uninitialized
@@ -2206,6 +2238,19 @@ func (k *k8sOps) CreatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1
 	return k.client.CoreV1().PersistentVolumeClaims(ns).Create(pvc)
 }
 
+func (k *k8sOps) UpdatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	ns := pvc.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return k.client.CoreV1().PersistentVolumeClaims(ns).Update(pvc)
+}
+
 func (k *k8sOps) DeletePersistentVolumeClaim(name, namespace string) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
@@ -2793,6 +2838,42 @@ func (k *k8sOps) DeleteClusterPair(name string) error {
 	})
 }
 
+func (k *k8sOps) ValidateClusterPair(name string, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		clusterPair, err := k.GetClusterPair(name)
+		if err != nil {
+			return "", true, err
+		}
+
+		if clusterPair.Status.SchedulerStatus == v1alpha1.ClusterPairStatusReady &&
+			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusReady {
+			return "", false, nil
+		} else if clusterPair.Status.SchedulerStatus == v1alpha1.ClusterPairStatusError ||
+			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusError {
+			return "", true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("Storage Status %v \t Schedular Status %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
+				Type:  clusterPair,
+			}
+		}
+
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  name,
+			Cause: fmt.Sprintf("Storage Status %v \t Schedular Status %v", clusterPair.Status.StorageStatus, clusterPair.Status.SchedulerStatus),
+			Type:  clusterPair,
+		}
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ClusterPair APIs - END
 
 // Migration APIs - BEGIN
@@ -2837,6 +2918,40 @@ func (k *k8sOps) UpdateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migra
 	}
 
 	return k.storkClient.Stork().Migrations().Update(migration)
+}
+
+func (k *k8sOps) ValidateMigration(name string, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetMigration(name)
+		if err != nil {
+			return "", true, err
+		}
+
+		if resp.Status.Status == v1alpha1.MigrationStatusSuccessful {
+			return "", false, nil
+		} else if resp.Status.Status == v1alpha1.MigrationStatusFailed {
+			return "", true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
+				Type:  resp,
+			}
+		}
+
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  name,
+			Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
+			Type:  resp,
+		}
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Migration APIs - END
@@ -2935,7 +3050,7 @@ func (k *k8sOps) GetObject(object runtime.Object) (runtime.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.Get(metadata.GetName(), metav1.GetOptions{}, "")
+	return client.Get(metadata.GetName(), meta_v1.GetOptions{}, "")
 }
 
 // UpdateObject updates a generic Object
@@ -2950,7 +3065,7 @@ func (k *k8sOps) UpdateObject(object runtime.Object) (runtime.Object, error) {
 		return nil, err
 	}
 
-	return client.Update(unstructured, "")
+	return client.Update(unstructured, meta_v1.UpdateOptions{})
 }
 
 // Object APIs - BEGIN
