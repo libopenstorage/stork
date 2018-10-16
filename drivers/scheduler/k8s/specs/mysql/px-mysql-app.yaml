@@ -55,10 +55,20 @@ spec:
         volumeMounts:
         - name: mysql-persistent-storage
           mountPath: /var/lib/mysql
+        - mountPath: /var/lib/mysql-aggr
+          name: mysql-persistent-storage-aggr
+        - mountPath: /var/lib/mysql-seq
+          name: mysql-persistent-storage-seq
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
           claimName: mysql-data
+      - name: mysql-persistent-storage-aggr
+        persistentVolumeClaim:
+          claimName: mysql-data-aggr
+      - name: mysql-persistent-storage-seq
+        persistentVolumeClaim:
+          claimName: mysql-data-seq
 ---
 apiVersion: apps/v1beta2
 kind: Deployment

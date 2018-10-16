@@ -429,6 +429,12 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 			if requestedSpec.SnapshotInterval != vol.Spec.SnapshotInterval {
 				return errFailedToInspectVolume(name, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)
 			}
+		case api.SpecSnapshotSchedule:
+			// TODO currently volume spec has a different format than request
+			// i.e request "daily=12:00,7" turns into "- freq: daily\n  hour: 12\n  retain: 7\n" in volume spec
+			//if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
+			//	return errFailedToInspectVolume(name, k, requestedSpec.SnapshotSchedule, vol.Spec.SnapshotSchedule)
+			//}
 		case api.SpecAggregationLevel:
 			if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
 				return errFailedToInspectVolume(name, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
@@ -442,16 +448,20 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 				return errFailedToInspectVolume(name, k, requestedSpec.Sticky, vol.Spec.Sticky)
 			}
 		case api.SpecGroup:
-			if requestedSpec.Group != vol.Spec.Group {
+			if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group){
 				return errFailedToInspectVolume(name, k, requestedSpec.Group, vol.Spec.Group)
 			}
 		case api.SpecGroupEnforce:
 			if requestedSpec.GroupEnforced != vol.Spec.GroupEnforced {
 				return errFailedToInspectVolume(name, k, requestedSpec.GroupEnforced, vol.Spec.GroupEnforced)
 			}
+		// portworx injects pvc name and namespace labels so response object won't be equal to request
 		case api.SpecLabels:
-			if !reflect.DeepEqual(requestedLocator.VolumeLabels, vol.Locator.VolumeLabels) {
-				return errFailedToInspectVolume(name, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+			for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
+				if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey];
+				!exists || requestedLabelValue != labelValue {
+					return errFailedToInspectVolume(name, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+				}
 			}
 		case api.SpecIoProfile:
 			if requestedSpec.IoProfile != vol.Spec.IoProfile {

@@ -4,4 +4,4 @@ metadata:
     name: px-elasticdata-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   repl: "3"
+  repl: "3"
