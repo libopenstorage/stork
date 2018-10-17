@@ -28,9 +28,9 @@ const (
 	execPodStepsHigh        = math.MaxInt32
 
 	storkRuleAnnotationPrefixDeprecated = "stork.rule"
-	storkRuleAnnotationPrefix           = "rule.stork.libopenstorage.org"
-	preSnapRuleAnnotationKey            = storkRuleAnnotationPrefix + "/pre-snapshot"
-	postSnapRuleAnnotationKey           = storkRuleAnnotationPrefix + "/post-snapshot"
+	storkRuleAnnotationPrefix           = "stork.libopenstorage.org"
+	preSnapRuleAnnotationKey            = storkRuleAnnotationPrefix + "/pre-snapshot-rule"
+	postSnapRuleAnnotationKey           = storkRuleAnnotationPrefix + "/post-snapshot-rule"
 	preSnapRuleAnnotationKeyDeprecated  = storkRuleAnnotationPrefixDeprecated + "/pre-snapshot"
 	postSnapRuleAnnotationKeyDeprecated = storkRuleAnnotationPrefixDeprecated + "/post-snapshot"
 )
