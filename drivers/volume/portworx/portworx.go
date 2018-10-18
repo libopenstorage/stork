@@ -33,6 +33,7 @@ const (
 	enterMaintenancePath    = "/entermaintenance"
 	exitMaintenancePath     = "/exitmaintenance"
 	pxSystemdServiceName    = "portworx.service"
+	storageStatusUp         = "Up"
 )
 
 const (
@@ -44,7 +45,7 @@ const (
 	validateDeleteVolumeTimeout      = 3 * time.Minute
 	validateReplicationUpdateTimeout = 10 * time.Minute
 	validateClusterStartTimeout      = 2 * time.Minute
-	validateNodeStartTimeout         = 2 * time.Minute
+	validateNodeStartTimeout         = 3 * time.Minute
 	validatePXStartTimeout           = 2 * time.Minute
 	validateNodeStopTimeout          = 2 * time.Minute
 	stopDriverTimeout                = 5 * time.Minute
@@ -448,7 +449,7 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 				return errFailedToInspectVolume(name, k, requestedSpec.Sticky, vol.Spec.Sticky)
 			}
 		case api.SpecGroup:
-			if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group){
+			if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
 				return errFailedToInspectVolume(name, k, requestedSpec.Group, vol.Spec.Group)
 			}
 		case api.SpecGroupEnforce:
@@ -458,8 +459,7 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		// portworx injects pvc name and namespace labels so response object won't be equal to request
 		case api.SpecLabels:
 			for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
-				if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey];
-				!exists || requestedLabelValue != labelValue {
+				if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
 					return errFailedToInspectVolume(name, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
 				}
 			}
@@ -632,11 +632,20 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 			}
 		}
 
-		if pxNode.Status != api.Status_STATUS_OK || d.getStorageStatus(n) != "Up" {
+		if pxNode.Status != api.Status_STATUS_OK {
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
 					api.Status_STATUS_OK, pxNode.Status),
+			}
+		}
+
+		storageStatus := d.getStorageStatus(n)
+		if storageStatus != storageStatusUp {
+			return "", true, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("px cluster is usable but storage status is not ok. Expected: %v Actual: %v",
+					storageStatusUp, storageStatus),
 			}
 		}
 
