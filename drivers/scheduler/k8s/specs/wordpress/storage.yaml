@@ -8,6 +8,7 @@ parameters:
   priority_io: "high"
   shared: "true"
   io_profile: "cms"
+allowVolumeExpansion: true
 ---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -18,6 +19,7 @@ parameters:
   repl: "3"
   io_profile: "db"
   priority_io: "high"
+allowVolumeExpansion: true
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

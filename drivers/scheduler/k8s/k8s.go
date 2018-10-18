@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -1123,6 +1124,68 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	}
 
 	return vols, nil
+}
+
+func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
+	k8sOps := k8s_ops.Instance()
+	var vols []*volume.Volume
+	for _, spec := range ctx.App.SpecList {
+		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			vol, err := k.resizePVCBy1GB(ctx, obj.DeepCopy())
+			if err != nil {
+				return nil, err
+			}
+			vols = append(vols, vol)
+		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
+			if err != nil || pvcList == nil {
+				return nil, &scheduler.ErrFailedToResizeStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v. Err: %v", ss.Name, err),
+				}
+			}
+
+			for _, pvc := range pvcList.Items {
+				vol, err := k.resizePVCBy1GB(ctx, pvc.DeepCopy());
+				if err != nil {
+					return nil, err
+				}
+				vols = append(vols, vol)
+			}
+		}
+	}
+
+	return vols, nil
+}
+
+func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeClaim) (*volume.Volume, error) {
+	k8sOps := k8s_ops.Instance()
+	storageSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+	extraAmount, _ := resource.ParseQuantity("1Gi")
+	storageSize.Add(extraAmount)
+	pvc.Spec.Resources.Requests[v1.ResourceStorage] = storageSize
+	if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
+		return nil, &scheduler.ErrFailedToResizeStorage{
+			App:   ctx.App,
+			Cause: err.Error(),
+		}
+	}
+	sizeInt64, _ := storageSize.AsInt64()
+	vol := &volume.Volume{
+		ID:        string(pvc.UID),
+		Name:      pvc.Name,
+		Namespace: pvc.Namespace,
+		Size:      uint64(sizeInt64),
+	}
+	return vol, nil
 }
 
 func (k *k8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {

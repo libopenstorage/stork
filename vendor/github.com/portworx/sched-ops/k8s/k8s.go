@@ -315,6 +315,8 @@ type StorageClassOps interface {
 type PersistentVolumeClaimOps interface {
 	// CreatePersistentVolumeClaim creates the given persistent volume claim
 	CreatePersistentVolumeClaim(*v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error)
+	// UpdatePersistentVolumeClaim updates an existing persistent volume claim
+	UpdatePersistentVolumeClaim(*v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error)
 	// DeletePersistentVolumeClaim deletes the given persistent volume claim
 	DeletePersistentVolumeClaim(name, namespace string) error
 	// ValidatePersistentVolumeClaim validates the given pvc
@@ -2182,6 +2184,19 @@ func (k *k8sOps) CreatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1
 	}
 
 	return k.client.CoreV1().PersistentVolumeClaims(ns).Create(pvc)
+}
+
+func (k *k8sOps) UpdatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (*v1.PersistentVolumeClaim, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	ns := pvc.Namespace
+	if len(ns) == 0 {
+		ns = v1.NamespaceDefault
+	}
+
+	return k.client.CoreV1().PersistentVolumeClaims(ns).Update(pvc)
 }
 
 func (k *k8sOps) DeletePersistentVolumeClaim(name, namespace string) error {

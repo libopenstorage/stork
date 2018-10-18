@@ -355,6 +355,11 @@ func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	return nil, nil
 }
 
+func (d *dcos) ResizeVolume(cxt *scheduler.Context) ([]*volume.Volume, error) {
+	//TODO implement this method
+	return nil, nil
+}
+
 func (d *dcos) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	// TODO: Add implementation
 	return nil, nil

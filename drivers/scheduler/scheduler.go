@@ -75,6 +75,9 @@ type Driver interface {
 	// GetVolumes returns all storage volumes for the given context
 	GetVolumes(*Context) ([]*volume.Volume, error)
 
+	// ResizeVolume resizes all the volumes of a given context
+	ResizeVolume(*Context) ([]*volume.Volume, error)
+
 	// GetSnapshots returns all storage snapshots for the given context
 	GetSnapshots(*Context) ([]*volume.Snapshot, error)
 
