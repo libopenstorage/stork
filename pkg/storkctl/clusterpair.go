@@ -7,12 +7,13 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
 var clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
 
-func newGetClusterPairCommand(cmdFactory Factory) *cobra.Command {
+func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var err error
 	getClusterPairCommand := &cobra.Command{
 		Use:     "clusterpair",
@@ -25,29 +26,29 @@ func newGetClusterPairCommand(cmdFactory Factory) *cobra.Command {
 				for _, pairName := range args {
 					pair, err := k8s.Instance().GetClusterPair(pairName)
 					if err != nil {
-						handleError(err)
+						handleError(err, ioStreams.ErrOut)
 					}
 					clusterPairs.Items = append(clusterPairs.Items, *pair)
 				}
 			} else {
 				clusterPairs, err = k8s.Instance().ListClusterPairs()
 				if err != nil {
-					handleError(err)
+					handleError(err, ioStreams.ErrOut)
 				}
 			}
 
 			if len(clusterPairs.Items) == 0 {
-				handleEmptyList()
+				handleEmptyList(ioStreams.Out)
 				return
 			}
 
 			outputFormat, err := cmdFactory.GetOutputFormat()
 			if err != nil {
-				handleError(err)
+				handleError(err, ioStreams.ErrOut)
 			}
 
-			if err := printObjects(c, clusterPairs, outputFormat, clusterPairColumns, clusterPairPrinter); err != nil {
-				handleError(err)
+			if err := printObjects(c, clusterPairs, outputFormat, clusterPairColumns, clusterPairPrinter, ioStreams.Out); err != nil {
+				handleError(err, ioStreams.ErrOut)
 			}
 		},
 	}

@@ -2,6 +2,7 @@ package storkctl
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -15,12 +16,20 @@ func toTimeString(t metav1.Time) string {
 	return t.Format(time.RFC822)
 }
 
-func handleError(err error) {
-	fmt.Printf("Error: %v\n", err)
+func handleError(err error, errOut io.Writer) {
+	msg := fmt.Sprintf("Error: %v", err)
+	printMsg(msg, errOut)
 	os.Exit(1)
 }
 
-func handleEmptyList() {
-	fmt.Println("No resources found.")
+func handleEmptyList(out io.Writer) {
+	msg := fmt.Sprintf("No resources found.")
+	printMsg(msg, out)
 	os.Exit(0)
+}
+
+func printMsg(msg string, out io.Writer) {
+	if _, printErr := fmt.Fprintln(out, msg); printErr != nil {
+		fmt.Println(msg)
+	}
 }
