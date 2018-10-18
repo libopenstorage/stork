@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	if err := storkctl.NewCommand().Execute(); err != nil {
+	if err := storkctl.NewCommand(os.Stdin, os.Stdout, os.Stdout).Execute(); err != nil {
 		os.Exit(1)
 	}
 }

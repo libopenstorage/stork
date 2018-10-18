@@ -10,13 +10,14 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
 var defaultStrokSnapshotStorageClass = "stork-snapshot-sc"
 var pvcSubcommand = "persistentvolumeclaims"
 var pvcAliases = []string{"persistentvolumeclaim", "volume", "pvc"}
 
-func newCreatePVCCommand(cmdFactory Factory) *cobra.Command {
+func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var snapName string
 	var pvcName string
 	var sourceNamespace string
@@ -28,19 +29,19 @@ func newCreatePVCCommand(cmdFactory Factory) *cobra.Command {
 		Short:   "Create persistent volume claims (PVCs) from snapshots",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				handleError(fmt.Errorf("Exactly one argument needs to be provided for pvc name"))
+				handleError(fmt.Errorf("Exactly one argument needs to be provided for pvc name"), ioStreams.ErrOut)
 			} else {
 				pvcName = args[0]
 			}
 			if len(snapName) == 0 {
-				handleError(fmt.Errorf("Snapshot name needs to be given"))
+				handleError(fmt.Errorf("Snapshot name needs to be given"), ioStreams.ErrOut)
 			}
 			if len(size) == 0 {
-				handleError(fmt.Errorf("Size needs to be provided"))
+				handleError(fmt.Errorf("Size needs to be provided"), ioStreams.ErrOut)
 			}
 			quantity, err := resource.ParseQuantity(size)
 			if err != nil {
-				handleError(fmt.Errorf("Invalid size: %v", err))
+				handleError(fmt.Errorf("Invalid size: %v", err), ioStreams.ErrOut)
 			}
 
 			namespace := cmdFactory.GetNamespace()
@@ -64,11 +65,11 @@ func newCreatePVCCommand(cmdFactory Factory) *cobra.Command {
 				},
 			}
 			if len(sourceNamespace) != 0 {
-				pvc.Annotations[snapshotcontroller.StorkSnapshotSourceNamespaceAnnotation] = sourceNamespace
+				pvc.Annotations[snapshot.StorkSnapshotSourceNamespaceAnnotation] = sourceNamespace
 			}
 			_, err = k8s.Instance().CreatePersistentVolumeClaim(pvc)
 			if err != nil {
-				handleError(err)
+				handleError(err, ioStreams.ErrOut)
 			}
 			fmt.Printf("PersistentVolumeClaim %v created successfully\n", pvcName)
 		},
