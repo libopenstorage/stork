@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -18,7 +19,7 @@ const (
 
 var clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
 
-func newGetClusterPairCommand(cmdFactory Factory) *cobra.Command {
+func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var err error
 	getClusterPairCommand := &cobra.Command{
 		Use:     clusterPairSubcommand,
@@ -31,29 +32,29 @@ func newGetClusterPairCommand(cmdFactory Factory) *cobra.Command {
 				for _, pairName := range args {
 					pair, err := k8s.Instance().GetClusterPair(pairName)
 					if err != nil {
-						handleError(err)
+						handleError(err, ioStreams.ErrOut)
 					}
 					clusterPairs.Items = append(clusterPairs.Items, *pair)
 				}
 			} else {
 				clusterPairs, err = k8s.Instance().ListClusterPairs()
 				if err != nil {
-					handleError(err)
+					handleError(err, ioStreams.ErrOut)
 				}
 			}
 
 			if len(clusterPairs.Items) == 0 {
-				handleEmptyList()
+				handleEmptyList(ioStreams.Out)
 				return
 			}
 
 			outputFormat, err := cmdFactory.GetOutputFormat()
 			if err != nil {
-				handleError(err)
+				handleError(err, ioStreams.ErrOut)
 			}
 
-			if err := printObjects(c, clusterPairs, outputFormat, clusterPairColumns, clusterPairPrinter); err != nil {
-				handleError(err)
+			if err := printObjects(c, clusterPairs, outputFormat, clusterPairColumns, clusterPairPrinter, ioStreams.Out); err != nil {
+				handleError(err, ioStreams.ErrOut)
 			}
 		},
 	}
@@ -80,14 +81,14 @@ func clusterPairPrinter(clusterPairList *storkv1.ClusterPairList, writer io.Writ
 	return nil
 }
 
-func newGenerateClusterPairCommand(cmdFactory Factory) *cobra.Command {
+func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	generateClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
 		Short: "Generate a spec to be used for cluster pairing from a remote cluster",
 		Run: func(c *cobra.Command, args []string) {
 			config, err := cmdFactory.RawConfig()
 			if err != nil {
-				handleError(err)
+				handleError(err, ioStreams.ErrOut)
 			}
 
 			clusterPair := &storkv1.ClusterPair{
@@ -106,8 +107,8 @@ func newGenerateClusterPairCommand(cmdFactory Factory) *cobra.Command {
 					},
 				},
 			}
-			if err = printEncoded(c, clusterPair, "yaml"); err != nil {
-				handleError(err)
+			if err = printEncoded(c, clusterPair, "yaml", ioStreams.Out); err != nil {
+				handleError(err, ioStreams.ErrOut)
 			}
 		},
 	}

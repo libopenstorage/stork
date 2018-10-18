@@ -2,18 +2,19 @@ package storkctl
 
 import (
 	"github.com/spf13/cobra"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
-func newCreateCommand(cmdFactory Factory) *cobra.Command {
+func newCreateCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	createCommands := &cobra.Command{
 		Use:   "create",
 		Short: "Create stork resources",
 	}
 
 	createCommands.AddCommand(
-		newCreateSnapshotCommand(cmdFactory),
-		newCreateMigrationCommand(cmdFactory),
-		newCreatePVCCommand(cmdFactory),
+		newCreateSnapshotCommand(cmdFactory, ioStreams),
+		newCreateMigrationCommand(cmdFactory, ioStreams),
+		newCreatePVCCommand(cmdFactory, ioStreams),
 	)
 
 	return createCommands
