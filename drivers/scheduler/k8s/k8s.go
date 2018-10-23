@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"strconv"
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -49,15 +50,16 @@ const (
 )
 
 const (
-	statefulSetValidateTimeout = 20 * time.Minute
-	k8sNodeReadyTimeout        = 5 * time.Minute
-	volDirCleanupTimeout       = 5 * time.Minute
-	k8sObjectCreateTimeout     = 2 * time.Minute
-	k8sDestroyTimeout          = 2 * time.Minute
-	findFilesOnWorkerTimeout   = 1 * time.Minute
-	deleteTasksWaitTimeout     = 3 * time.Minute
-	defaultRetryInterval       = 10 * time.Second
-	defaultTimeout             = 2 * time.Minute
+	statefulSetValidateTimeout   = 20 * time.Minute
+	k8sNodeReadyTimeout          = 5 * time.Minute
+	volDirCleanupTimeout         = 5 * time.Minute
+	k8sObjectCreateTimeout       = 2 * time.Minute
+	k8sDestroyTimeout            = 2 * time.Minute
+	findFilesOnWorkerTimeout     = 1 * time.Minute
+	deleteTasksWaitTimeout       = 3 * time.Minute
+	defaultRetryInterval         = 10 * time.Second
+	defaultTimeout               = 2 * time.Minute
+	resizeSupportedAnnotationKey = "torpedo/resize-supported"
 )
 
 var (
@@ -1131,7 +1133,8 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			vol, err := k.resizePVCBy1GB(ctx, obj.DeepCopy())
+			updatedPVC, _ := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			vol, err := k.resizePVCBy1GB(ctx, updatedPVC)
 			if err != nil {
 				return nil, err
 			}
@@ -1154,7 +1157,7 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
-				vol, err := k.resizePVCBy1GB(ctx, pvc.DeepCopy());
+				vol, err := k.resizePVCBy1GB(ctx, &pvc);
 				if err != nil {
 					return nil, err
 				}
@@ -1169,13 +1172,21 @@ func (k *k8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
 func (k* k8s) resizePVCBy1GB(ctx *scheduler.Context , pvc *v1.PersistentVolumeClaim) (*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
 	storageSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
-	extraAmount, _ := resource.ParseQuantity("1Gi")
-	storageSize.Add(extraAmount)
-	pvc.Spec.Resources.Requests[v1.ResourceStorage] = storageSize
-	if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
-		return nil, &scheduler.ErrFailedToResizeStorage{
-			App:   ctx.App,
-			Cause: err.Error(),
+
+	// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
+	resizeSupported := true
+	if annotationValue, hasKey := pvc.Annotations[resizeSupportedAnnotationKey]; hasKey {
+		resizeSupported, _ = strconv.ParseBool(annotationValue)
+	}
+	if resizeSupported {
+		extraAmount, _ := resource.ParseQuantity("1Gi")
+		storageSize.Add(extraAmount)
+		pvc.Spec.Resources.Requests[v1.ResourceStorage] = storageSize
+		if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
+			return nil, &scheduler.ErrFailedToResizeStorage{
+				App:   ctx.App,
+				Cause: err.Error(),
+			}
 		}
 	}
 	sizeInt64, _ := storageSize.AsInt64()

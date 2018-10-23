@@ -902,6 +902,39 @@ func (d *portworx) GetMinReplicationFactor() int64 {
 	return 1
 }
 
+func (d *portworx) GetAggregationLevel(vol *torpedovolume.Volume) (int64, error) {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.volDriver.Inspect([]string{name})
+		if err != nil && err == volume.ErrEnoEnt {
+			return 0, false, volume.ErrEnoEnt
+		} else if err != nil {
+			return 0, true, err
+		}
+		if len(vols) == 1 {
+			return vols[0].Spec.AggregationLevel, false, nil
+		}
+		return 0, false, fmt.Errorf("Extra volumes with the same volume name/ID seen") //Shouldn't reach this line
+	}
+
+	iAggrLevel, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	if err != nil {
+		return 0, &ErrFailedToGetAggregationLevel{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+	aggrLevel, ok := iAggrLevel.(uint32)
+	if !ok {
+		return 0, &ErrFailedToGetAggregationLevel{
+			ID:    name,
+			Cause: fmt.Sprintf("Aggregation level is not of type uint32"),
+		}
+	}
+
+	return int64(aggrLevel), nil
+}
+
 func isClean(vol *api.Volume) bool {
 	for _, v := range vol.RuntimeState {
 		if v.GetRuntimeState()["RuntimeState"] != "clean" {

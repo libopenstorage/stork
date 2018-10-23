@@ -97,6 +97,9 @@ type Driver interface {
 
 	// GetMinReplicationFactor returns the min supported repl factor of a volume
 	GetMinReplicationFactor() int64
+
+	// GetAggregationLevel returns the aggregation level for the given volume
+	GetAggregationLevel(vol *Volume) (int64, error)
 }
 
 var (
@@ -125,4 +128,8 @@ func Get(name string) (Driver, error) {
 		ID:   name,
 		Type: "VolumeDriver",
 	}
+}
+
+func (v *Volume) String() string{
+	return v.Name
 }

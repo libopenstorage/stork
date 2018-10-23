@@ -20,6 +20,7 @@ metadata:
    name: mysql-snap-clone
    annotations:
      snapshot.alpha.kubernetes.io/snapshot: mysql-snapshot
+     torpedo/resize-supported: "false"
 spec:
    storageClassName: stork-snapshot-sc
    accessModes:

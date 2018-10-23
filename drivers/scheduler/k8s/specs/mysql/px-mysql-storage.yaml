@@ -26,8 +26,8 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
    fs: "ext4"
    block_size: "512b"
-   repl: "1"
-   aggregation_level: "3"
+   repl: "2"
+   aggregation_level: "2"
    io_profile: "random"
    priority_io: "high"
    shared: "false"
