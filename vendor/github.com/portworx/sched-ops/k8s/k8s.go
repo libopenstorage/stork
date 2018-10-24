@@ -507,6 +507,17 @@ func (k *k8sOps) SetConfig(config *rest.Config) {
 	k.client = nil
 }
 
+// NewInstance returns new instance of k8sOps
+func NewInstance(destKubeConfig string) Ops {
+	newInstance := &k8sOps{}
+	err := newInstance.loadClientFromKubeconfig(destKubeConfig)
+	if err != nil {
+		logrus.Info("Unable to set new instance", err)
+		return nil
+	}
+	return newInstance
+}
+
 // Initialize the k8s client if uninitialized
 func (k *k8sOps) initK8sClient() error {
 	if k.client == nil {
