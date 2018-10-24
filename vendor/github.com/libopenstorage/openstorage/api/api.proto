@@ -189,9 +189,9 @@ message StorageResource {
   // Storage medium.
   StorageMedium medium = 3;
   // True if this device is online.
-  bool online = 4;;
+  bool online = 4;
   // IOPS
-  uint64 iops = 5;;
+  uint64 iops = 5;
   // SeqWrite
   double seq_write = 6;
   // SeqRead
@@ -199,7 +199,7 @@ message StorageResource {
   // RandRW
   double randRW  = 8;
   // Total size in bytes.
-  uint64 size = 9;;
+  uint64 size = 9;
   // Physical Bytes used.
   uint64 used = 10;
   // True if this device is rotational.
@@ -257,6 +257,14 @@ message Group {
   string id = 1;
 }
 
+// IoStrategy defines how I/O should be performed to backing storage media.
+message IoStrategy {
+  // AsyncIO enables kaio. 
+  bool async_io = 1;
+  // EarlyAck enables acks for async I/O at the source.
+  bool early_ack = 2;
+}
+
 // VolumeSpec has the properties needed to create a volume.
 // swagger:model
 message VolumeSpec {
@@ -280,7 +288,7 @@ message VolumeSpec {
   uint32 snapshot_interval = 9;
   // VolumeLabels configuration labels
   map<string, string> volume_labels = 10;
-  // Shared is true if this volume can be remotely accessed.
+  // Shared is true if this volume can be concurrently accessed by multiple users.
   bool shared = 11;
   // ReplicaSet is the desired set of nodes for the volume data.
   ReplicaSet replica_set = 12;
@@ -309,10 +317,15 @@ message VolumeSpec {
   // Sharedv4 is true if this volume can be accessed via sharedv4.
   bool sharedv4 = 26;
   // QueueDepth defines the desired block device queue depth
-  int32 queue_depth = 27;
+  uint32 queue_depth = 27;
   // Use to force a file system type which is not recommended.
   // The driver may still refuse to use the file system type.
   bool force_unsupported_fs_type = 28;
+  // Nodiscard specifies if the volume will be mounted with discard support disabled.
+  // i.e. FS will not release allocated blocks back to the backing storage pool.
+  bool nodiscard = 29;
+  // IoStrategy preferred strategy for I/O.
+  IoStrategy io_strategy = 30;
 }
 
 // VolumeSpecUpdate provides a method to set any of the VolumeSpec of an existing volume
@@ -350,7 +363,7 @@ message VolumeSpecUpdate {
   // Sharedv4 is true if this volume can be accessed via sharedv4.
   oneof sharedv4_opt { bool sharedv4 = 24; }
   // QueueDepth defines the desired block device queue depth
-  oneof queue_depth_opt { int32 queue_depth = 25; }
+  oneof queue_depth_opt { uint32 queue_depth = 25; }
 }
 
 // ReplicaSet set of machine IDs (nodes) to which part of this volume is erasure
@@ -491,29 +504,29 @@ message SdkAlertsCountSpan {
 // SdkAlertsOption contains options for filtering alerts.
 message SdkAlertsOption {
     oneof opt {
-        // min_severity_type to query using severity type.
+        // Query using minimum severity type.
         SeverityType min_severity_type = 1;
-        // is_cleared indicates querying for alerts cleared flag.
+        // Query using cleared flag.
         bool is_cleared = 2;
-        // time_span to query in a given time span range.
+        // Query using a time span during which alert was last seen.
         SdkAlertsTimeSpan time_span = 3;
-        // count_span to query in a given count range.
+        // Query using a count span in which alert count exists.
         SdkAlertsCountSpan count_span = 4;
     }
 }
 
 // SdkAlertsResourceTypeQuery queries for alerts using only resource id.
 message SdkAlertsResourceTypeQuery {
-    // resource_type is the resource type of alerts to query with.
+    // Resource type used to build query.
     ResourceType resource_type = 1;
 }
 
 // SdkAlertsAlertTypeQuery queries for alerts using alert type
 // and it requires that resource type be provided as well.
 message SdkAlertsAlertTypeQuery {
-    // resource_type is the resource type of alerts to query with.
+    // Resource type used to build query.
     ResourceType resource_type = 1;
-    // alert_type is the alert type of the alerts to query with.
+    // Alert type used to build query.
     int64 alert_type = 2;
 }
 
@@ -521,11 +534,11 @@ message SdkAlertsAlertTypeQuery {
 // and it requires that both alert type and resource type be provided
 // as well.
 message SdkAlertsResourceIdQuery {
-    // resource_type is the resource type of alerts to query with.
+    // Resource type used to build query.
     ResourceType resource_type = 1;
-    // alert_type is the alert type of the alerts to query with.
+    // Alert type used to build query.
     int64 alert_type = 2;
-    // resource_id is the resource id of the alerts to query with.
+    // Resource ID used to build query.
     string resource_id = 3;
 }
 
@@ -533,18 +546,22 @@ message SdkAlertsResourceIdQuery {
 // Each query object is one of the three query types and a list of
 // options.
 message SdkAlertsQuery {
+    // One of the query types can be used to build SdkAlertsQuery.
     oneof query {
+        // Query only using resource type.
         SdkAlertsResourceTypeQuery resource_type_query = 1;
+        // Query using alert type and resource type.
         SdkAlertsAlertTypeQuery alert_type_query = 2;
+        // Query using resource id, alert type and resource type.
         SdkAlertsResourceIdQuery resource_id_query = 3;
     }
-    // opts is a list of options associated with one of the queries.
+    // Opts is a list of options associated with one of the queries.
     repeated SdkAlertsOption opts = 4;
 }
 
 // SdkAlertsEnumerateRequest is a request message to enumerate alerts.
 message SdkAlertsEnumerateRequest {
-    // queries is a list of queries to find matching alerts.
+    // It is a list of queries to find matching alerts.
     // Output of each of these queries is added to a global pool
     // and returned as output of an RPC call.
     // In that sense alerts are fetched if they match any of the
@@ -554,9 +571,19 @@ message SdkAlertsEnumerateRequest {
 
 // SdkAlertsEnumerateResponse is a list of alerts.
 message SdkAlertsEnumerateResponse {
-    // alerts is a list of alert objects retured from RPC call.
+    // Response contains a list of alerts.
     repeated Alert alerts = 1;
 }
+
+// SdkAlertsDeleteRequest is a request message to delete alerts.
+message SdkAlertsDeleteRequest {
+  // It takes a list of queries to find matching alerts.
+  // Matching alerts are deleted.
+  repeated SdkAlertsQuery queries = 1;
+}
+
+// SdkAlertsDeleteResponse is empty.
+message SdkAlertsDeleteResponse {}
 
 // OpenStorageAlerts defines rpc's for alerts.
 service OpenStorageAlerts {
@@ -595,12 +622,30 @@ service OpenStorageAlerts {
                 get: "/v1/alerts"
             };
     }
+    // Delete allows deleting alerts.
+    //
+    // #### Delete
+    // Delete allows 3 different types of queries as defined below:
+    //
+    // * Query that takes only resource type as input
+    // * Query that takes resource type and alert type as input and
+    // * Query that takes resource id, alert type and resource type as input.
+    //
+    // #### Input
+    // SdkAlertsEnumerateRequest takes a list of such queries and all alerts
+    // that match at least one of the queries are deleted.
+    rpc Delete(SdkAlertsDeleteRequest)
+    returns (SdkAlertsDeleteResponse) {
+      option(google.api.http) = {
+                delete: "/v1/alerts"
+            };
+    }
 }
 
 // Define a schedule policy request
 message SdkSchedulePolicyCreateRequest {
     // Schedule Policy
-    SdkSchedulePolicy SchedulePolicy = 1;
+    SdkSchedulePolicy schedule_policy = 1;
 }
 
 // Alerts is an array of Alert objects
@@ -1056,6 +1101,17 @@ service OpenStorageVolume {
         body: "*"
       };
     }
+
+  // Sets the snapshot schedules. This information is saved in the VolumeSpec.snapshot_schedule
+  // as `policy=<name>,...`. This function will overwrite any policy values
+  // in the volume. To delete the policies in the volume send no policies.
+  rpc SnapshotScheduleUpdate(SdkVolumeSnapshotScheduleUpdateRequest)
+    returns (SdkVolumeSnapshotScheduleUpdateResponse) {
+      option(google.api.http) = {
+        post: "/v1/volumes/snapshot/schedules/{volume_id}"
+        body: "*"
+      };
+    }
 }
 
 // OpenStorageMountAttach is a service used to manage node access to a volume.
@@ -1069,7 +1125,7 @@ service OpenStorageMountAttach {
   rpc Attach(SdkVolumeAttachRequest)
     returns (SdkVolumeAttachResponse) {
       option(google.api.http) = {
-        post: "/v1/volumes/attach"
+        post: "/v1/mountattach/attach"
         body: "*"
       };
     }
@@ -1078,7 +1134,7 @@ service OpenStorageMountAttach {
   rpc Detach(SdkVolumeDetachRequest)
     returns (SdkVolumeDetachResponse) {
       option(google.api.http) = {
-        post: "/v1/volumes/detach"
+        post: "/v1/mountattach/detach"
         body: "*"
       };
     }
@@ -1087,7 +1143,7 @@ service OpenStorageMountAttach {
   rpc Mount(SdkVolumeMountRequest)
     returns(SdkVolumeMountResponse) {
       option(google.api.http) = {
-        post: "/v1/volumes/mount"
+        post: "/v1/mountattach/mount"
         body: "*"
       };
     }
@@ -1096,7 +1152,7 @@ service OpenStorageMountAttach {
   rpc Unmount(SdkVolumeUnmountRequest)
       returns(SdkVolumeUnmountResponse) {
       option(google.api.http) = {
-        post: "/v1/volumes/unmount"
+        post: "/v1/mountattach/unmount"
         body: "*"
       };
     }
@@ -1391,7 +1447,7 @@ message SdkSchedulePolicyCreateResponse {
 // Define a request to update a schedule policy
 message SdkSchedulePolicyUpdateRequest {
   // Schedule Policy
-  SdkSchedulePolicy SchedulePolicy = 1;
+  SdkSchedulePolicy schedule_policy = 1;
 }
 
 // Empty response
@@ -1475,6 +1531,12 @@ message SdkSchedulePolicyIntervalMonthly{
   int32 minute = 3;
 }
 
+// Defines a periodic schedule
+message SdkSchedulePolicyIntervalPeriodic{
+  // Specify the number of seconds between intervals
+  int64 seconds = 1;
+}
+
 // Defines a schedule policy interval
 message SdkSchedulePolicyInterval {
   // Number of instances to retain
@@ -1488,6 +1550,8 @@ message SdkSchedulePolicyInterval {
     SdkSchedulePolicyIntervalWeekly weekly = 201;
     // Monthly policy
     SdkSchedulePolicyIntervalMonthly monthly = 202;
+    // Periodic policy
+    SdkSchedulePolicyIntervalPeriodic periodic = 203;
   }
 }
 
@@ -1885,6 +1949,18 @@ message SdkVolumeSnapshotEnumerateWithFiltersResponse {
   repeated string volume_snapshot_ids = 1;
 }
 
+// Defines a request to update the snapshot schedule of a volume
+message SdkVolumeSnapshotScheduleUpdateRequest {
+  // Id of volume
+  string volume_id = 1;
+  // Names of schedule policies
+  repeated string snapshot_schedule_names = 2;
+}
+
+// Empty response
+message SdkVolumeSnapshotScheduleUpdateResponse {
+}
+
 // Empty request
 message SdkClusterInspectCurrentRequest {
 }
@@ -1982,10 +2058,15 @@ message SdkCloudBackupCreateRequest {
   string credential_id = 2;
   // Full indicates if full backup is desired even though incremental is possible
   bool full = 3;
+  // Name of the task performing this backup. This value is required and used for
+  // idempotency.
+  string name = 4;
 }
 
 // Empty response
 message SdkCloudBackupCreateResponse {
+  // Name of the task performing the backup
+  string name = 1;
 }
 
 // Defines a request to restore a volume from an existing backup stored by
@@ -2001,6 +2082,8 @@ message SdkCloudBackupRestoreRequest {
   // Optional for provisioning restore
   // volume (ResoreVolumeName should not be specified)
   string node_id = 4;
+  // Name of the task performing this restore
+  string name = 5;
 }
 
 // Defines a response when restoring a volume from a backup stored by
@@ -2008,6 +2091,8 @@ message SdkCloudBackupRestoreRequest {
 message SdkCloudBackupRestoreResponse {
   // VolumeID to which the backup is being restored
   string restore_volume_id = 1;
+  // Name of the task performing the restore
+  string name = 2;
 }
 
 // Defines a request to delete a single backup stored by a cloud provider
@@ -2131,24 +2216,32 @@ message SdkCloudBackupStatus {
   google.protobuf.Timestamp completed_time = 6;
   // NodeID is the ID of the node where this Op is active
   string node_id = 7;
+  // SourceVolumeID is the the volume that is either being backed up to cloud
+  // or target volume to which a backup is being restored
+  string src_volume_id = 8;
+  // Info currently indicates the failure cause for failed backup/restore
+  repeated string info = 9;
 }
 
 // Defines a request to retreive the status of a backup or restore for a
 // specified volume
 message SdkCloudBackupStatusRequest {
-  // This is an optional value which is used to get information on the
-  // status of a backup for the specified volume. If no volume id is provided,
-  // then status for all volumes is returned.
+  // VolumeId is an optional value which is used to get information on the
+  // status of a backup for the specified volume. If no volume id and name
+  // is provided, then status for all volumes is returned.
   string volume_id = 1;
   // Local indicates if only those backups/restores that are
   // active on current node must be returned
   bool local = 2;
+  // Name of the backup/restore task, if this is specified,
+  // volume_id is ignored.
+  string name = 3;
 }
 
 // Defines a response containing the status of the backups for a specified volume
 message SdkCloudBackupStatusResponse {
   // Statuses is list of currently active/failed/done backup/restores where
-  // the key is the volume ids of current volumes being backed up or restored
+  // the key is the id of the task performing backup/restore.
   map<string, SdkCloudBackupStatus> statuses = 1;
 }
 
@@ -2207,9 +2300,9 @@ enum SdkCloudBackupRequestedState {
 // Defines a request to change the state of a backup or restore to or
 // from a cloud provider
 message SdkCloudBackupStateChangeRequest {
-  // Describes the volume id on which backup/restore
+  // Describes the backup/restore Name
   // state change is being requested
-  string src_volume_id = 1;
+  string name = 1;
   // The desired state of the operation
   SdkCloudBackupRequestedState requested_state = 2;
 }
@@ -2230,6 +2323,8 @@ message SdkCloudBackupScheduleInfo{
   // MaxBackups are the maximum number of backups retained
   // in cloud.Older backups are deleted
   uint64 max_backups = 4;
+  // Full indicates if scheduled backups should always be full and never incremental.
+  bool full = 5;
 }
 
 // Defines a request to create a schedule for volume backups to a
@@ -2311,6 +2406,8 @@ message SdkServiceCapability {
       VOLUME = 7;
       // Alert enumeration
       ALERTS = 8;
+      // Mount/Attach Support
+      MOUNT_ATTACH = 9;
     }
 
     // Type of service supported
@@ -2343,7 +2440,7 @@ message SdkVersion {
     // SDK version major value of this specification
     Major = 0;
     // SDK version minor value of this specification
-    Minor = 10;
+    Minor = 18;
     // SDK version patch value of this specification
     Patch = 0;
   }
@@ -2409,37 +2506,42 @@ message CloudMigrateStartRequest {
     string cluster_id = 2;
     // Depending on the operation type this can be a VolumeID or VolumeGroupID
     string target_id = 3;
+    // (Optional) Unique TaskId assocaiated with this migration. If not provided one will
+    // be generated and returned in the response
+    string task_id = 4;
+}
+
+// Response to start a cloud migration
+message CloudMigrateStartResponse {
+    // TaskId assocaiated with the migration that was started
+    string task_id = 1;
 }
 
 // Request to stop a cloud migration
 message CloudMigrateCancelRequest {
-    // The type of operation to cancel
-    CloudMigrate.OperationType operation = 1;
-    // ID of the cluster to which migration should be cancelled
-    string cluster_id = 2;
-    // Depending on the operation type this can be a VolumeID or VolumeGroupID
-    string target_id = 3;
+    // The id of the task to cancel
+    string task_id = 1;
 }
 
 message CloudMigrateInfo {
+    // Task id associated with this migration
+    string task_id = 1;
     // ID of the cluster where the volume is being migrated
-    string cluster_id = 1;
+    string cluster_id = 2;
     // ID of the volume on the local cluster
-    string local_volume_id = 2;
+    string local_volume_id = 3;
     // Name of the volume on the local cluster
-    string local_volume_name = 3;
+    string local_volume_name = 4;
     // ID of the volume on the remote cluster
-    string remote_volume_id = 4;
+    string remote_volume_id = 5;
     // ID of the cloudbackup used for the migration
-    string cloudbackup_id = 5;
+    string cloudbackup_id = 6;
     // Current stage of the volume migration
-    CloudMigrate.Stage current_stage = 6;
+    CloudMigrate.Stage current_stage = 7;
     // Status of the current stage
-    CloudMigrate.Status status = 7;
+    CloudMigrate.Status status = 8;
     // Last time the status was updated
-    google.protobuf.Timestamp last_update = 8;
-    // Time of the last successful migration of the volume
-    google.protobuf.Timestamp last_success = 9;
+    google.protobuf.Timestamp last_update = 9;
 }
 
 message CloudMigrateInfoList {
@@ -2486,19 +2588,23 @@ message ClusterPairProcessRequest {
 // Response after a pairing has been processed
 // swagger:response
 message ClusterPairProcessResponse {
+    // ID of the cluster which processed the pair request
     //
     // in: body
-    // ID of the cluster which processed the pair request
     string remote_cluster_id = 1;
     // Name of the cluster which processed the pair request
     //
     // in: body
     string remote_cluster_name = 2;
+    // List of endpoints that can be used to communicate with the cluster
+    //
+    // in: body
+    repeated string remote_cluster_endpoints = 3;
     // Key/value pair of options returned on successful pairing
     // Opaque to openstorage and interpreted by the drivers
     //
     // in: body
-    map<string, string> options = 3;
+    map<string, string> options = 4;
 }
 
 // Request to to delete a cluster pair
@@ -2529,17 +2635,15 @@ message ClusterPairInfo {
     string id = 1;
     // Name of the cluster
     string name = 2;
-    // IP of the cluster
-    string ip = 3;
-    // Port for the cluster
-    uint32 port = 4;
+    // Endpoints of the cluster
+    repeated string endpoints = 3;
     // Flag used to determine if communication is over a secure channel
-    bool secure = 5;
+    bool secure = 4;
     // Token associated with cluster
-    string token = 6;
+    string token = 5;
     // Key/value pair of options associated with the cluster
     // Opaque to openstorage and interpreted by the drivers
-    map<string, string> options = 7;
+    map<string, string> options = 6;
 }
 
 // Request to get a cluster pair
