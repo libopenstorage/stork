@@ -287,9 +287,6 @@ func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string
 	if options.Type != "" {
 		findCmd += " -type " + string(options.Type)
 	}
-	if options.Empty {
-		findCmd += " -empty"
-	}
 
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(addr, findCmd, true)
