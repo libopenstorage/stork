@@ -62,6 +62,7 @@ type FindOpts struct {
 	MinDepth int
 	MaxDepth int
 	Type     FindType
+	Empty    bool
 	ConnectionOpts
 }
 

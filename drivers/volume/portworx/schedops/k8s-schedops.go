@@ -311,6 +311,12 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 
 	orphanPodsMap := make(map[string][]string)
 	dirtyVolPodsMap := make(map[string][]string)
+	dirFindOpts := node.FindOpts{
+		ConnectionOpts: connOpts,
+		MaxDepth:       1,
+		MinDepth:       1,
+		Type:           node.Directory,
+	}
 
 	for nodeName, volDirPaths := range nodeToPodsMap {
 		var orphanPods []string
@@ -328,39 +334,55 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 			if found {
 				continue
 			}
-			orphanPods = append(orphanPods, podUID)
 
-			// Check if there are files under portworx volume
-			// We use a depth of 2 because the files stored in the volume are in the pvc
-			// directory under the portworx-volume folder for that pod. For instance,
-			// ../kubernetes-io~portworx-volume/pvc-<id>/<all_user_files>
 			n := nodeMap[nodeName]
-			findFileOpts := node.FindOpts{
-				ConnectionOpts: connOpts,
-				MinDepth:       2,
-				MaxDepth:       2,
-			}
-			files, _ := d.FindFiles(path, n, findFileOpts)
-			if len(strings.TrimSpace(files)) > 0 {
-				dirtyVolPods = append(dirtyVolPods, podUID)
+			// Check if /var/lib/kubelet/pods/{podUID}/volumes/kubernetes.io~portworx-volume is empty
+			if !isDirEmpty(path, n, d) {
+				pvcDirsFind, _ := d.FindFiles(path, n, dirFindOpts)
+				pvcDirs := separateFilePaths(pvcDirsFind)
+				for _, pvcDir := range pvcDirs {
+					// Check if /var/lib/kubelet/pods/{podUID}/volumes/kubernetes.io~portworx-volume/{pvc} is empty
+					if isDirEmpty(pvcDir, n, d) {
+						orphanPods = append(orphanPods, podUID)
+					} else {
+						dirtyVolPods = append(dirtyVolPods, podUID)
+					}
+				}
 			}
 		}
 
 		if len(orphanPods) > 0 {
 			orphanPodsMap[nodeName] = orphanPods
-			if len(dirtyVolPods) > 0 {
-				dirtyVolPodsMap[nodeName] = dirtyVolPods
-			}
+		}
+		if len(dirtyVolPods) > 0 {
+			dirtyVolPodsMap[nodeName] = dirtyVolPods
 		}
 	}
 
-	if len(orphanPodsMap) == 0 {
+	if len(dirtyVolPodsMap) == 0 {
 		return nil
 	}
 	return &ErrFailedToCleanupVolume{
 		OrphanPods:   orphanPodsMap,
 		DirtyVolPods: dirtyVolPodsMap,
 	}
+}
+
+func isDirEmpty(path string, n node.Node, d node.Driver) bool {
+	emptyDirsFindOpts := node.FindOpts{
+		ConnectionOpts: node.ConnectionOpts {
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+			},
+		MaxDepth:       0,
+		MinDepth:       0,
+		Type:           node.Directory,
+		Empty:          true,
+	}
+	if emptyDir, _ := d.FindFiles(path, n, emptyDirsFindOpts); len(emptyDir) == 0 {
+		return false
+	}
+	return true
 }
 
 func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
