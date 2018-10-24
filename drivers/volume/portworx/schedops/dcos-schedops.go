@@ -66,6 +66,13 @@ func (d *dcosSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	// TODO: Implement this method
 	return true, nil
 }
+
+// GetStorageInfo returns cluster pair info from destination clusterrefereced by kubeconfig
+func (d *dcosSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, error) {
+	// TODO: Implement this methid
+	return nil, nil
+}
+
 func init() {
 	d := &dcosSchedOps{}
 	Register("dcos", d)

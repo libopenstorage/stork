@@ -370,14 +370,14 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 
 func isDirEmpty(path string, n node.Node, d node.Driver) bool {
 	emptyDirsFindOpts := node.FindOpts{
-		ConnectionOpts: node.ConnectionOpts {
+		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         1 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
-			},
-		MaxDepth:       0,
-		MinDepth:       0,
-		Type:           node.Directory,
-		Empty:          true,
+		},
+		MaxDepth: 0,
+		MinDepth: 0,
+		Type:     node.Directory,
+		Empty:    true,
 	}
 	if emptyDir, _ := d.FindFiles(path, n, emptyDirsFindOpts); len(emptyDir) == 0 {
 		return false
@@ -534,6 +534,32 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	return true, nil
 }
 
+// GetStorageInfo returns cluster pair info from destination cluster refereced by kubeconfig
+func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, error) {
+	var addrs []string
+	var pxNodes []node.Node
+
+	pxNode, err := getPXNode(destKubeConfig)
+	if err != nil {
+		logrus.Errorf("Error getting Node %v : %v", pxNode, err)
+		return pxNodes, err
+	}
+	logrus.Info("px node on remote :", pxNode.Name)
+	for _, addr := range pxNode.Status.Addresses {
+		if addr.Type == corev1.NodeExternalIP || addr.Type == corev1.NodeInternalIP {
+			addrs = append(addrs, addr.Address)
+		}
+	}
+	newNode := node.Node{
+		Name:      pxNode.Name,
+		Addresses: addrs,
+		Type:      node.TypeWorker,
+	}
+
+	pxNodes = append(pxNodes, newNode)
+	return pxNodes, nil
+}
+
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
 func getContainerPVCMountMap(pod corev1.Pod) map[string]string {
@@ -581,6 +607,31 @@ func extractPodUID(volDirPath string) string {
 		return match[1]
 	}
 	return ""
+}
+
+// return PX node
+func getPXNode(destKubeConfig string) (corev1.Node, error) {
+	var workerNode corev1.Node
+	// get schd-ops/k8s instance of destination cluster
+	destClient := k8s.NewInstance(destKubeConfig)
+	if destClient == nil {
+		return workerNode, fmt.Errorf("Unable to get new instance")
+	}
+	nodes, err := destClient.GetNodes()
+	if err != nil {
+		return workerNode, err
+	}
+
+	// TODO(ram-infrac) :find px node, right now it's assumed that px is installed
+	// on all worker node
+	for _, node := range nodes.Items {
+		if !destClient.IsNodeMaster(node) {
+			workerNode = node
+			break
+		}
+	}
+
+	return workerNode, nil
 }
 
 func init() {

@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,11 @@ const (
 	exitMaintenancePath     = "/exitmaintenance"
 	pxSystemdServiceName    = "portworx.service"
 	storageStatusUp         = "Up"
+	tokenKey                = "token"
+	clusterIP               = "clusterip"
+	clusterPort             = "clusterport"
+	remoteKubeConfigPath    = "/tmp/kubeconfig"
+	tokenPath               = "/pairtoken"
 )
 
 const (
@@ -62,6 +68,10 @@ type portworx struct {
 	schedOps        schedops.Driver
 	nodeDriver      node.Driver
 	refreshEndpoint bool
+}
+
+type tokenResp struct {
+	token string
 }
 
 func (d *portworx) String() string {
@@ -1050,6 +1060,36 @@ func (d *portworx) UpgradeDriver(version string) error {
 	return nil
 }
 
+// GetStorGetClusterPairingInfo return underlying storage details
+func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
+	pairInfo := make(map[string]string)
+	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
+	if err != nil {
+		logrus.Info("err getting remote cluster info", err)
+		return pairInfo, err
+	}
+
+	resp, err := d.getClusterToken(pxNodes[0], tokenPath)
+	if err != nil {
+		return pairInfo, err
+	}
+	logrus.Info("Response for token:", resp)
+
+	// TODO: we shoul parse result directly
+	tokResp := &tokenResp{}
+	err = resp.Unmarshal(tokResp)
+	if err != nil {
+		return pairInfo, err
+	}
+
+	// file up cluster pair info
+	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
+	pairInfo[tokenKey] = tokResp.token
+	pairInfo[clusterPort] = strconv.Itoa(pxdRestPort)
+
+	return pairInfo, nil
+}
+
 func (d *portworx) getVolDriver() volume.VolumeDriver {
 	if d.refreshEndpoint {
 		d.setDriver()
@@ -1075,6 +1115,18 @@ func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, err
 	return clusterclient.ClusterManager(cClient), nil
 }
 
+func (d *portworx) getClusterToken(n node.Node, op string) (*client.Response, error) {
+	url := d.constructURL(n.Addresses[0])
+	c, err := client.NewClient(url, "", "")
+	if err != nil {
+		return nil, err
+	}
+	req := c.Get().Resource(op)
+	resp := req.Do()
+
+	return resp, nil
+
+}
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	url := d.constructURL(n.Addresses[0])
 	c, err := client.NewClient(url, "", "")

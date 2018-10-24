@@ -424,6 +424,11 @@ func (d *dcos) StartSchedOnNode(node node.Node) error {
 	return nil
 }
 
+func (d *dcos) CreateCRDObjects(pathCRDSpec string) error {
+	// TODO: Implement this method
+	return nil
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)
