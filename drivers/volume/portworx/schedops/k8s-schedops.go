@@ -609,7 +609,7 @@ func extractPodUID(volDirPath string) string {
 	return ""
 }
 
-// return PX node
+// return PX node on k8s cluster provided by kubeconfig file
 func getPXNode(destKubeConfig string) (corev1.Node, error) {
 	var workerNode corev1.Node
 	// get schd-ops/k8s instance of destination cluster

@@ -39,7 +39,7 @@ const (
 	clusterIP               = "clusterip"
 	clusterPort             = "clusterport"
 	remoteKubeConfigPath    = "/tmp/kubeconfig"
-	tokenPath               = "/pairtoken"
+	tokenPath               = "/v1/cluster/pairtoken"
 )
 
 const (
@@ -1060,12 +1060,12 @@ func (d *portworx) UpgradeDriver(version string) error {
 	return nil
 }
 
-// GetStorGetClusterPairingInfo return underlying storage details
+// GetClusterPairingInfo return underlying storage details
 func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
 	if err != nil {
-		logrus.Info("err getting remote cluster info", err)
+		logrus.Errorf("err retriving remote px nodes: %v", err)
 		return pairInfo, err
 	}
 
@@ -1117,7 +1117,7 @@ func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, err
 
 func (d *portworx) getClusterToken(n node.Node, op string) (*client.Response, error) {
 	url := d.constructURL(n.Addresses[0])
-	c, err := client.NewClient(url, "", "")
+	c, err := client.NewClient(url+tokenPath, "", "")
 	if err != nil {
 		return nil, err
 	}
