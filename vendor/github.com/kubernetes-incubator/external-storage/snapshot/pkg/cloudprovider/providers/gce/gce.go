@@ -1225,7 +1225,7 @@ func (gce *Cloud) computeHostTags(hosts []*gceInstance) ([]string, error) {
 	nodeInstancePrefix := gce.nodeInstancePrefix
 	for _, host := range hosts {
 		if !strings.HasPrefix(host.Name, gce.nodeInstancePrefix) {
-			glog.Warningf("instance '%s' does not conform to prefix '%s', ignoring filter", host, gce.nodeInstancePrefix)
+			glog.Warningf("instance '%v' does not conform to prefix '%s', ignoring filter", host, gce.nodeInstancePrefix)
 			nodeInstancePrefix = ""
 		}
 
@@ -2408,7 +2408,7 @@ func (gce *Cloud) CreateRoute(clusterName string, nameHint string, route *cloudp
 	}).Do()
 	if err != nil {
 		if isHTTPErrorCode(err, http.StatusConflict) {
-			glog.Info("Route %v already exists.")
+			glog.Infof("Route %v already exists.", routeName)
 			return nil
 		}
 		return err

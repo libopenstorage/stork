@@ -16,19 +16,25 @@ package up
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
 	"github.com/operator-framework/operator-sdk/commands/operator-sdk/cmd/cmdutil"
-	cmdError "github.com/operator-framework/operator-sdk/commands/operator-sdk/error"
+	ansibleOperator "github.com/operator-framework/operator-sdk/pkg/ansible/operator"
+	proxy "github.com/operator-framework/operator-sdk/pkg/ansible/proxy"
 	"github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
-
+	sdkVersion "github.com/operator-framework/operator-sdk/version"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 func NewLocalCmd() *cobra.Command {
@@ -56,18 +62,20 @@ var (
 )
 
 const (
-	gocmd             = "go"
-	run               = "run"
-	cmd               = "cmd"
-	main              = "main.go"
 	defaultConfigPath = ".kube/config"
 )
 
 func upLocalFunc(cmd *cobra.Command, args []string) {
 	mustKubeConfig()
-	cmdutil.MustInProjectRoot()
-	c := cmdutil.GetConfig()
-	upLocal(c.ProjectName)
+	switch cmdutil.GetOperatorType() {
+	case cmdutil.OperatorTypeGo:
+		cmdutil.MustInProjectRoot()
+		upLocal()
+	case cmdutil.OperatorTypeAnsible:
+		upLocalAnsible()
+	default:
+		log.Fatal("failed to determine operator type")
+	}
 }
 
 // mustKubeConfig checks if the kubeconfig file exists.
@@ -76,31 +84,31 @@ func mustKubeConfig() {
 	if len(kubeConfig) == 0 {
 		usr, err := user.Current()
 		if err != nil {
-			cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to determine user's home dir: %v", err))
+			log.Fatalf("failed to determine user's home dir: %v", err)
 		}
 		kubeConfig = filepath.Join(usr.HomeDir, defaultConfigPath)
 	}
 
 	_, err := os.Stat(kubeConfig)
 	if err != nil && os.IsNotExist(err) {
-		cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to find the kubeconfig file (%v): %v", kubeConfig, err))
+		log.Fatalf("failed to find the kubeconfig file (%v): %v", kubeConfig, err)
 	}
 }
 
-func upLocal(projectName string) {
-	args := []string{run, filepath.Join(cmd, projectName, main)}
+func upLocal() {
+	args := []string{"run", filepath.Join("cmd", "manager", "main.go")}
 	if operatorFlags != "" {
 		extraArgs := strings.Split(operatorFlags, " ")
 		args = append(args, extraArgs...)
 	}
-	dc := exec.Command(gocmd, args...)
+	dc := exec.Command("go", args...)
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
 		err := dc.Process.Kill()
 		if err != nil {
-			cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to terminate the operator: %v", err))
+			log.Fatalf("failed to terminate the operator: %v", err)
 		}
 		os.Exit(0)
 	}()
@@ -109,6 +117,44 @@ func upLocal(projectName string) {
 	dc.Env = append(os.Environ(), fmt.Sprintf("%v=%v", k8sutil.KubeConfigEnvVar, kubeConfig), fmt.Sprintf("%v=%v", k8sutil.WatchNamespaceEnvVar, namespace))
 	err := dc.Run()
 	if err != nil {
-		cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to run operator locally: %v", err))
+		log.Fatalf("failed to run operator locally: %v", err)
 	}
+}
+
+func upLocalAnsible() {
+	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{Namespace: namespace})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	printVersion()
+	logrus.Infof("watching namespace: %s", namespace)
+	done := make(chan error)
+
+	// start the proxy
+	err = proxy.Run(done, proxy.Options{
+		Address:    "localhost",
+		Port:       8888,
+		KubeConfig: mgr.GetConfig(),
+	})
+	if err != nil {
+		logrus.Fatalf("error starting proxy: %v", err)
+	}
+
+	// start the operator
+	go ansibleOperator.Run(done, mgr, "./watches.yaml")
+
+	// wait for either to finish
+	err = <-done
+	if err == nil {
+		logrus.Info("Exiting")
+	} else {
+		logrus.Fatal(err.Error())
+	}
+}
+
+func printVersion() {
+	logrus.Infof("Go Version: %s", runtime.Version())
+	logrus.Infof("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH)
+	logrus.Infof("operator-sdk Version: %v", sdkVersion.Version)
 }

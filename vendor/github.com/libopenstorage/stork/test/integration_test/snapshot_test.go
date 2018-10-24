@@ -29,7 +29,7 @@ func testSnapshot(t *testing.T) {
 
 func simpleSnapshotTest(t *testing.T) {
 	ctx := createSnapshot(t, []string{"mysql-snap-restore"})
-	verifySnapshot(t, ctx, "mysql-data")
+	verifySnapshot(t, ctx, "mysql-data", defaultWaitTimeout)
 	destroyAndWait(t, ctx)
 }
 
@@ -40,7 +40,7 @@ func groupSnapshotTest(t *testing.T) {
 	require.Len(t, ctxs, 2, "Only one task should have started")
 
 	for _, ctx := range ctxs {
-		err = schedulerDriver.WaitForRunning(ctx)
+		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for pod to get to running state")
 
 		scheduledNodes, err := schedulerDriver.GetNodesForApp(ctx)
@@ -48,7 +48,7 @@ func groupSnapshotTest(t *testing.T) {
 		require.Len(t, scheduledNodes, 1, "App should be scheduled on one node")
 
 		for i := 0; i < 3; i++ {
-			err = schedulerDriver.InspectVolumes(ctx)
+			err = schedulerDriver.InspectVolumes(ctx, defaultWaitTimeout, defaultWaitInterval)
 			if err == nil {
 				break
 			}
@@ -125,10 +125,10 @@ func snapshot3DTest(t *testing.T) {
 	require.Len(t, ctxs, 1, "Only one task should have started")
 
 	for _, ctx := range ctxs {
-		err = schedulerDriver.WaitForRunning(ctx)
+		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for pod to get to running state")
 
-		err = schedulerDriver.InspectVolumes(ctx)
+		err = schedulerDriver.InspectVolumes(ctx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error validating storage components")
 	}
 
@@ -141,7 +141,7 @@ func snapshot3DTest(t *testing.T) {
 	require.Len(t, ctxs, 1, "Only one task should have started")
 
 	for _, ctx := range ctxs {
-		err = schedulerDriver.WaitForRunning(ctx)
+		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for pod to get to running state")
 
 		snaps, err := schedulerDriver.GetSnapshots(ctx)
@@ -197,14 +197,14 @@ func cloudSnapshotTest(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0])
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
 	require.NoError(t, err, "Error getting node for app")
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
-	err = schedulerDriver.InspectVolumes(ctxs[0])
+	err = schedulerDriver.InspectVolumes(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for volumes")
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
@@ -270,15 +270,15 @@ func createSnapshot(t *testing.T, appKeys []string) []*scheduler.Context {
 	return ctx
 }
 
-func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest string) {
-	err := schedulerDriver.WaitForRunning(ctxs[0])
+func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest string, waitTimeout time.Duration) {
+	err := schedulerDriver.WaitForRunning(ctxs[0], waitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
 	require.NoError(t, err, "Error getting node for app")
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
-	err = schedulerDriver.InspectVolumes(ctxs[0])
+	err = schedulerDriver.InspectVolumes(ctxs[0], waitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for volumes")
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
@@ -340,8 +340,13 @@ func snapshotScaleTest(t *testing.T) {
 		ctxs[i] = createSnapshot(t, []string{"mysql-snap-restore"})
 	}
 
+	timeout := defaultWaitTimeout
+	// Increase the timeout if scale is more than 10
+	if snapshotScaleCount > 10 {
+		timeout *= time.Duration((snapshotScaleCount / 10) + 1)
+	}
 	for i := 0; i < snapshotScaleCount; i++ {
-		verifySnapshot(t, ctxs[i], "mysql-data")
+		verifySnapshot(t, ctxs[i], "mysql-data", timeout)
 	}
 	for i := 0; i < snapshotScaleCount; i++ {
 		destroyAndWait(t, ctxs[i])

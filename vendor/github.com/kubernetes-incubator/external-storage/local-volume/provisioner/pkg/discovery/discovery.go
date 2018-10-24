@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"path/filepath"
@@ -29,7 +30,8 @@ import (
 	esUtil "github.com/kubernetes-incubator/external-storage/lib/util"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/deleter"
 	"k8s.io/api/core/v1"
-	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	storagev1listers "k8s.io/client-go/listers/storage/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 // Discoverer finds available volumes and creates PVs for them
@@ -42,11 +44,21 @@ type Discoverer struct {
 	CleanupTracker  *deleter.CleanupStatusTracker
 	nodeAffinityAnn string
 	nodeAffinity    *v1.VolumeNodeAffinity
+	classLister     storagev1listers.StorageClassLister
 }
 
 // NewDiscoverer creates a Discoverer object that will scan through
 // the configured directories and create local PVs for any new directories found
 func NewDiscoverer(config *common.RuntimeConfig, cleanupTracker *deleter.CleanupStatusTracker) (*Discoverer, error) {
+	sharedInformer := config.InformerFactory.Storage().V1().StorageClasses()
+	sharedInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		// We don't need an actual event handler for StorageClasses,
+		// but we must pass a non-nil one to cache.NewInformer()
+		AddFunc:    nil,
+		UpdateFunc: nil,
+		DeleteFunc: nil,
+	})
+
 	labelMap := make(map[string]string)
 	for _, labelName := range config.NodeLabelsForPV {
 		labelVal, ok := config.Node.Labels[labelName]
@@ -61,7 +73,7 @@ func NewDiscoverer(config *common.RuntimeConfig, cleanupTracker *deleter.Cleanup
 			return nil, fmt.Errorf("Failed to generate node affinity: %v", err)
 		}
 		tmpAnnotations := map[string]string{}
-		err = helper.StorageNodeAffinityToAlphaAnnotation(tmpAnnotations, nodeAffinity)
+		err = StorageNodeAffinityToAlphaAnnotation(tmpAnnotations, nodeAffinity)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to convert node affinity to alpha annotation: %v", err)
 		}
@@ -69,7 +81,8 @@ func NewDiscoverer(config *common.RuntimeConfig, cleanupTracker *deleter.Cleanup
 			RuntimeConfig:   config,
 			Labels:          labelMap,
 			CleanupTracker:  cleanupTracker,
-			nodeAffinityAnn: tmpAnnotations[v1.AlphaStorageNodeAffinityAnnotation]}, nil
+			classLister:     sharedInformer.Lister(),
+			nodeAffinityAnn: tmpAnnotations[common.AlphaStorageNodeAffinityAnnotation]}, nil
 	}
 
 	volumeNodeAffinity, err := generateVolumeNodeAffinity(config.Node)
@@ -81,6 +94,7 @@ func NewDiscoverer(config *common.RuntimeConfig, cleanupTracker *deleter.Cleanup
 		RuntimeConfig:  config,
 		Labels:         labelMap,
 		CleanupTracker: cleanupTracker,
+		classLister:    sharedInformer.Lister(),
 		nodeAffinity:   volumeNodeAffinity}, nil
 }
 
@@ -143,8 +157,39 @@ func (d *Discoverer) DiscoverLocalVolumes() {
 	}
 }
 
+func (d *Discoverer) getReclaimPolicyFromStorageClass(name string) (v1.PersistentVolumeReclaimPolicy, error) {
+	class, err := d.classLister.Get(name)
+	if err != nil {
+		return "", err
+	}
+	if class.ReclaimPolicy != nil {
+		return *class.ReclaimPolicy, nil
+	}
+	return v1.PersistentVolumeReclaimDelete, nil
+}
+
+func (d *Discoverer) getMountOptionsFromStorageClass(name string) ([]string, error) {
+	class, err := d.classLister.Get(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return class.MountOptions, nil
+}
+
 func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConfig) {
 	glog.V(7).Infof("Discovering volumes at hostpath %q, mount path %q for storage class %q", config.HostDir, config.MountDir, class)
+
+	reclaimPolicy, err := d.getReclaimPolicyFromStorageClass(class)
+	if err != nil {
+		glog.Errorf("Failed to get ReclaimPolicy from storage class %q: %v", class, err)
+		return
+	}
+
+	if reclaimPolicy != v1.PersistentVolumeReclaimRetain && reclaimPolicy != v1.PersistentVolumeReclaimDelete {
+		glog.Errorf("Unsupported ReclaimPolicy %q from storage class %q, supported policy are Retain and Delete.", reclaimPolicy, class)
+		return
+	}
 
 	files, err := d.VolUtil.ReadDir(config.MountDir)
 	if err != nil {
@@ -168,7 +213,7 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 	for _, file := range files {
 		startTime := time.Now()
 		filePath := filepath.Join(config.MountDir, file)
-		volMode, err := d.getVolumeMode(filePath)
+		volMode, err := common.GetVolumeMode(d.VolUtil, filePath)
 		if err != nil {
 			glog.Error(err)
 			continue
@@ -177,10 +222,9 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 		pvName := generatePVName(file, d.Node.Name, class)
 		pv, exists := d.Cache.GetPV(pvName)
 		if exists {
-			if volMode == v1.PersistentVolumeBlock && (pv.Spec.VolumeMode == nil ||
-				*pv.Spec.VolumeMode != v1.PersistentVolumeBlock) {
-				errStr := fmt.Sprintf("Incorrect Volume Mode: PV %q (path %q) was not created in block mode. "+
-					"Please check if BlockVolume features gate has been enabled for the cluster.", pvName, filePath)
+			if pv.Spec.VolumeMode != nil && *pv.Spec.VolumeMode == v1.PersistentVolumeBlock &&
+				volMode == v1.PersistentVolumeFilesystem {
+				errStr := fmt.Sprintf("Incorrect Volume Mode: PV %q requires block mode but path %q was in fs mode.", pvName, filePath)
 				glog.Errorf(errStr)
 				d.Recorder.Eventf(pv, v1.EventTypeWarning, common.EventVolumeFailedDelete, errStr)
 			}
@@ -196,7 +240,14 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 			continue
 		}
 
+		mountOptions, err := d.getMountOptionsFromStorageClass(class)
+		if err != nil {
+			glog.Errorf("Failed to get mount options from storage class %s: %v", class, err)
+			continue
+		}
+
 		var capacityByte int64
+		desireVolumeMode := v1.PersistentVolumeMode(config.VolumeMode)
 		switch volMode {
 		case v1.PersistentVolumeBlock:
 			capacityByte, err = d.VolUtil.GetBlockCapacityByte(filePath)
@@ -204,7 +255,15 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 				glog.Errorf("Path %q block stats error: %v", filePath, err)
 				continue
 			}
+			if desireVolumeMode == v1.PersistentVolumeBlock && len(mountOptions) != 0 {
+				glog.Warningf("Path %q will be used to create block volume, "+
+					"mount options %v will not take effect.", filePath, mountOptions)
+			}
 		case v1.PersistentVolumeFilesystem:
+			if desireVolumeMode == v1.PersistentVolumeBlock {
+				glog.Errorf("Path %q of filesystem mode cannot be used to create block volume", filePath)
+				continue
+			}
 			// Validate that this path is an actual mountpoint
 			if _, isMntPnt := mountPointMap[filePath]; isMntPnt == false {
 				glog.Errorf("Path %q is not an actual mountpoint", filePath)
@@ -220,30 +279,8 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 			continue
 		}
 
-		d.createPV(file, class, config, capacityByte, volMode, startTime)
+		d.createPV(file, class, reclaimPolicy, mountOptions, config, capacityByte, desireVolumeMode, startTime)
 	}
-}
-
-func (d *Discoverer) getVolumeMode(fullPath string) (v1.PersistentVolumeMode, error) {
-	isdir, errdir := d.VolUtil.IsDir(fullPath)
-	if isdir {
-		return v1.PersistentVolumeFilesystem, nil
-	}
-	// check for Block before returning errdir
-	isblk, errblk := d.VolUtil.IsBlock(fullPath)
-	if isblk {
-		return v1.PersistentVolumeBlock, nil
-	}
-
-	if errdir == nil && errblk == nil {
-		return "", fmt.Errorf("Skipping file %q: not a directory nor block device", fullPath)
-	}
-
-	// report the first error found
-	if errdir != nil {
-		return "", fmt.Errorf("Directory check for %q failed: %s", fullPath, errdir)
-	}
-	return "", fmt.Errorf("Block device check for %q failed: %s", fullPath, errblk)
 }
 
 func generatePVName(file, node, class string) string {
@@ -255,21 +292,23 @@ func generatePVName(file, node, class string) string {
 	return fmt.Sprintf("local-pv-%x", h.Sum32())
 }
 
-func (d *Discoverer) createPV(file, class string, config common.MountConfig, capacityByte int64, volMode v1.PersistentVolumeMode, startTime time.Time) {
+func (d *Discoverer) createPV(file, class string, reclaimPolicy v1.PersistentVolumeReclaimPolicy, mountOptions []string, config common.MountConfig, capacityByte int64, volMode v1.PersistentVolumeMode, startTime time.Time) {
 	pvName := generatePVName(file, d.Node.Name, class)
 	outsidePath := filepath.Join(config.HostDir, file)
 
-	glog.Infof("Found new volume of volumeMode %q at host path %q with capacity %d, creating Local PV %q",
-		volMode, outsidePath, capacityByte, pvName)
+	glog.Infof("Found new volume at host path %q with capacity %d, creating Local PV %q, required volumeMode %q",
+		outsidePath, capacityByte, pvName, volMode)
 
 	localPVConfig := &common.LocalPVConfig{
 		Name:            pvName,
 		HostPath:        outsidePath,
 		Capacity:        roundDownCapacityPretty(capacityByte),
 		StorageClass:    class,
+		ReclaimPolicy:   reclaimPolicy,
 		ProvisionerName: d.Name,
 		VolumeMode:      volMode,
 		Labels:          d.Labels,
+		MountOptions:    mountOptions,
 	}
 
 	if d.UseAlphaAPI {
@@ -277,6 +316,10 @@ func (d *Discoverer) createPV(file, class string, config common.MountConfig, cap
 		localPVConfig.AffinityAnn = d.nodeAffinityAnn
 	} else {
 		localPVConfig.NodeAffinity = d.nodeAffinity
+	}
+
+	if config.FsType != "" {
+		localPVConfig.FsType = &config.FsType
 	}
 
 	pvSpec := common.CreateLocalPVSpec(localPVConfig)
@@ -307,4 +350,32 @@ func roundDownCapacityPretty(capacityBytes int64) int64 {
 		}
 	}
 	return capacityBytes
+}
+
+// GetStorageNodeAffinityFromAnnotation gets the json serialized data from PersistentVolume.Annotations
+// and converts it to the NodeAffinity type in core.
+func GetStorageNodeAffinityFromAnnotation(annotations map[string]string) (*v1.NodeAffinity, error) {
+	if len(annotations) > 0 && annotations[common.AlphaStorageNodeAffinityAnnotation] != "" {
+		var affinity v1.NodeAffinity
+		err := json.Unmarshal([]byte(annotations[common.AlphaStorageNodeAffinityAnnotation]), &affinity)
+		if err != nil {
+			return nil, err
+		}
+		return &affinity, nil
+	}
+	return nil, nil
+}
+
+// StorageNodeAffinityToAlphaAnnotation converts NodeAffinity type to Alpha annotation for use in PersistentVolumes
+func StorageNodeAffinityToAlphaAnnotation(annotations map[string]string, affinity *v1.NodeAffinity) error {
+	if affinity == nil {
+		return nil
+	}
+
+	json, err := json.Marshal(*affinity)
+	if err != nil {
+		return err
+	}
+	annotations[common.AlphaStorageNodeAffinityAnnotation] = string(json)
+	return nil
 }

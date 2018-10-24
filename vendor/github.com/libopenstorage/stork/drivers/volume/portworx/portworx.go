@@ -89,6 +89,9 @@ const (
 	cloudSnapshotInitialDelay = 5 * time.Second
 	cloudSnapshotFactor       = 1
 	cloudSnapshotSteps        = math.MaxInt32
+
+	validateSnapshotTimeout       = 5 * time.Minute
+	validateSnapshotRetryInterval = 10 * time.Second
 )
 
 type cloudSnapStatus struct {
@@ -334,7 +337,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return nodes, nil
 }
 
-func (p *portworx) isPortworxPVC(pvc *v1.PersistentVolumeClaim) bool {
+func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName == "" {
 		logrus.Debugf("Empty StorageClass in PVC %v", pvc.Name)
@@ -374,7 +377,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 				return nil, err
 			}
 
-			if !p.isPortworxPVC(pvc) {
+			if !p.OwnsPVC(pvc) {
 				continue
 			}
 
@@ -403,7 +406,7 @@ func (p *portworx) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim)
 	[]v1.PersistentVolumeClaim, error) {
 	var pxTemplates []v1.PersistentVolumeClaim
 	for _, t := range templates {
-		if p.isPortworxPVC(&t) {
+		if p.OwnsPVC(&t) {
 			pxTemplates = append(pxTemplates, t)
 		}
 	}
@@ -711,7 +714,7 @@ func (p *portworx) SnapshotRestore(
 	}
 
 	// Let's verify if source snapshotdata is complete
-	err := k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false)
+	err := k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
 	if err != nil {
 		return nil, nil, fmt.Errorf("snapshot: %s is not complete. %v", snapshotName, err)
 	}
@@ -852,6 +855,18 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 // TODO: Implement FindSnapshot
 func (p *portworx) FindSnapshot(tags *map[string]string) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
 	return nil, nil, &errors.ErrNotImplemented{}
+}
+
+func (p *portworx) GetSnapshotType(snap *crdv1.VolumeSnapshot) (string, error) {
+	// TODO: Check if is a portworx snapshot
+	snapType, err := getSnapshotType(snap)
+	if err != nil {
+		return "", err
+	}
+	if isGroupSnap(snap) {
+		return "group " + string(snapType), nil
+	}
+	return string(snapType), nil
 }
 
 func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
@@ -1285,6 +1300,14 @@ func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Persiste
 				log.SnapshotLog(snap).Infof("found PVCs with group labels: %v", pvcList.Items)
 				pvcs = append(pvcs, pvcList.Items...)
 			}
+
+			for _, pvc := range pvcs {
+				if pvc.Status.Phase == v1.ClaimPending {
+					return nil, fmt.Errorf("PVC: [%s] %s is still in %s phase. Group snapshot will trigger after all PVCs are bound",
+						pvc.Namespace, pvc.Name, pvc.Status.Phase)
+				}
+			}
+
 			return pvcs, nil
 		}
 
@@ -1512,7 +1535,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)
 		}
 		for _, pvc := range pvcList.Items {
-			if !p.isPortworxPVC(&pvc) {
+			if !p.OwnsPVC(&pvc) {
 				continue
 			}
 			volumeInfo := &stork_crd.VolumeInfo{}

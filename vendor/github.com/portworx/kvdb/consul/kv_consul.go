@@ -31,6 +31,12 @@ const (
 	refreshDelay = 5 * time.Second
 )
 
+const (
+	// session ttl limits for consul
+	ttlLowerLimit = 10           // 10 seconds
+	ttlUpperLimit = 60 * 60 * 24 // 1 days
+)
+
 var (
 	// an incorrect is added to check failover
 	defaultMachines = []string{"3.1.4.1:5926", "127.0.0.1:8500"}
@@ -228,14 +234,19 @@ func (kv *consulKV) createTTLSession(
 	}
 
 	if ttl > 0 {
-		if ttl < 20 {
+		if ttl < ttlLowerLimit*2 { // multiply by 2 because we divide ttl values later by 2
+			return nil, kvdb.ErrTTLNotSupported
+		}
+		if ttl > ttlUpperLimit*2 {
 			return nil, kvdb.ErrTTLNotSupported
 		}
 		// Future Use : To Support TTL values
 		for retries := 1; retries <= MaxRenewRetries; retries++ {
 			// Consul doubles the ttl value. Hence we divide it by 2
 			// Consul does not support ttl values less than 10.
-			// Hence we set our lower limit to 20
+			// Hence we set our lower limit to 20.
+			// Consul does not support ttl values more than 1 day.
+			// Hence we set our upper limit to 2 days.
 			session, err := kv.renewSession(pair, ttl/2, noCreate)
 			if err == nil {
 				pair.Session = session
@@ -667,6 +678,7 @@ func (kv *consulKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		// create a watch to get all changes
 		// between lowestKvdbIndex and highestKvdbIndex
 		done := make(chan error)
+		watchClosed := false
 		mutex := &sync.Mutex{}
 		cb := func(
 			prefix string,
@@ -680,7 +692,7 @@ func (kv *consulKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 			ok := false
 
 			if err != nil {
-				if err == kvdb.ErrWatchStopped {
+				if err == kvdb.ErrWatchStopped && watchClosed {
 					return nil
 				}
 				watchErr = err
@@ -743,6 +755,7 @@ func (kv *consulKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 
 			return nil
 		errordone:
+			watchClosed = true
 			done <- sendErr
 			return watchErr
 		}

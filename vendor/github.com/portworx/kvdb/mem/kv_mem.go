@@ -355,9 +355,7 @@ func (kv *memKV) put(
 	kv.dist.NewUpdate(&watchUpdate{key, *kvp, nil})
 
 	if ttl != 0 {
-		logrus.Warnf("Starting delete timer for %v", ttl)
 		time.AfterFunc(time.Second*time.Duration(ttl), func() {
-			logrus.Warnf("Timeout based delete on %v", suffix)
 			// TODO: handle error
 			kv.mutex.Lock()
 			defer kv.mutex.Unlock()

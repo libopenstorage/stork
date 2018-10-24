@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/heptio/ark/pkg/util/collections"
@@ -34,7 +35,7 @@ import (
 )
 
 const (
-	resyncPeriod                     = 30
+	resyncPeriod                     = 30 * time.Second
 	storkMigrationReplicasAnnotation = "stork.openstorage.org/migrationReplicas"
 )
 
@@ -254,7 +255,7 @@ func resourceToBeMigrated(migration *storkv1.Migration, resource metav1.APIResou
 	}
 }
 
-func objectToBeMigrated(
+func (m *MigrationController) objectToBeMigrated(
 	resourceMap map[types.UID]bool,
 	object runtime.Unstructured,
 	namespace string,
@@ -263,9 +264,12 @@ func objectToBeMigrated(
 	if err != nil {
 		return false, err
 	}
+
+	// Skip if we've already processed this object
 	if _, ok := resourceMap[metadata.GetUID()]; ok {
 		return false, nil
 	}
+
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
 		return false, err
@@ -281,15 +285,56 @@ func objectToBeMigrated(
 		if metadata.GetName() == "kubernetes" {
 			return false, nil
 		}
-	case "PersistentVolume":
-		spec, err := collections.GetMap(object.UnstructuredContent(), "spec.claimRef")
+	case "PersistentVolumeClaim":
+		metadata, err := meta.Accessor(object)
 		if err != nil {
 			return false, err
 		}
-		if spec["namespace"] == namespace {
-			return true, nil
+		pvcName := metadata.GetName()
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+		if err != nil {
+			return false, err
 		}
-		return false, nil
+		if pvc.Status.Phase != v1.ClaimBound {
+			return false, nil
+		}
+
+		if !m.Driver.OwnsPVC(pvc) {
+			return false, nil
+		}
+		return true, nil
+	case "PersistentVolume":
+		phase, err := collections.GetString(object.UnstructuredContent(), "status.phase")
+		if err != nil {
+			return false, err
+		}
+		if phase != string(v1.ClaimBound) {
+			return false, nil
+		}
+		pvcName, err := collections.GetString(object.UnstructuredContent(), "spec.claimRef.name")
+		if err != nil {
+			return false, err
+		}
+		if pvcName == "" {
+			return false, nil
+		}
+
+		pvcNamespace, err := collections.GetString(object.UnstructuredContent(), "spec.claimRef.namespace")
+		if err != nil {
+			return false, err
+		}
+		if pvcNamespace != namespace {
+			return false, nil
+		}
+
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(pvcName, pvcNamespace)
+		if err != nil {
+			return false, err
+		}
+		if !m.Driver.OwnsPVC(pvc) {
+			return false, nil
+		}
+		return true, nil
 	case "Secret":
 		secretType, err := collections.GetString(object.UnstructuredContent(), "type")
 		if err != nil {
@@ -399,7 +444,7 @@ func (m *MigrationController) getResources(
 						return nil, fmt.Errorf("Error casting object: %v", o)
 					}
 
-					migrate, err := objectToBeMigrated(resourceMap, runtimeObject, ns)
+					migrate, err := m.objectToBeMigrated(resourceMap, runtimeObject, ns)
 					if err != nil {
 						return nil, fmt.Errorf("Error processing object %v: %v", runtimeObject, err)
 					}
@@ -585,6 +630,13 @@ func (m *MigrationController) applyResources(
 		if err != nil {
 			return err
 		}
+
+		// Don't create if the namespace already exists on the remote cluster
+		_, err = client.CoreV1().Namespaces().Get(namespace.Name, metav1.GetOptions{})
+		if err == nil {
+			continue
+		}
+
 		_, err = client.CoreV1().Namespaces().Create(&v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   namespace.Name,
@@ -661,7 +713,7 @@ func (m *MigrationController) createCRD() error {
 		Plural:  storkv1.MigrationResourcePlural,
 		Group:   stork.GroupName,
 		Version: stork.Version,
-		Scope:   apiextensionsv1beta1.NamespaceScoped,
+		Scope:   apiextensionsv1beta1.ClusterScoped,
 		Kind:    reflect.TypeOf(storkv1.Migration{}).Name(),
 	}
 	err := k8s.Instance().CreateCRD(resource)
@@ -669,5 +721,5 @@ func (m *MigrationController) createCRD() error {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource)
+	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }

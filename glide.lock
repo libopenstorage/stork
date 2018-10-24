@@ -1,5 +1,5 @@
-hash: f5b41b87d2c86e609e402aee89d6c69a482570d383eeb98a1895b9a362f32c65
-updated: 2018-09-24T19:00:01.483394394-07:00
+hash: 6c2d8f49ec9bc242dfed5178bc794a57303c6fc67f2f91e146ba833eed5f856c
+updated: 2018-10-23T22:35:02.779185941-07:00
 imports:
 - name: github.com/armon/go-metrics
   version: f0300d1749da6fa982027e449ec0c7a145510c3c
@@ -38,7 +38,7 @@ imports:
   - service/ssm
   - service/sts
 - name: github.com/cenkalti/backoff
-  version: adb73d5bf0d9237fab19ff58aebf658449e326df
+  version: 62661b46c4093e2c1f38d943e663db1a29873e80
 - name: github.com/cloudfoundry/gosigar
   version: 50ddd08d81d770b1e0ce2c969a46e46c73580e2a
   subpackages:
@@ -94,7 +94,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: fa25069db393aecc09b71267d0489b357781c860
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -113,6 +113,8 @@ imports:
   - ptypes/duration
   - ptypes/struct
   - ptypes/timestamp
+- name: github.com/google/btree
+  version: 7d79101e329e5a3adf994758c578dab82b90c017
 - name: github.com/google/go-querystring
   version: 44c6ddd0a2342c386950e880b658017258da92fc
   subpackages:
@@ -127,6 +129,10 @@ imports:
   - OpenAPIv2
   - compiler
   - extensions
+- name: github.com/gregjones/httpcache
+  version: 787624de3eb7bd915c329cba748687a3b22666a6
+  subpackages:
+  - diskcache
 - name: github.com/grpc-ecosystem/grpc-gateway
   version: 8cc3a55af3bcf171a1c23a90c4df9cf591706104
   subpackages:
@@ -153,8 +159,6 @@ imports:
   version: a335183dfd075f638afcc820c90591ca3c97eba6
 - name: github.com/hashicorp/memberlist
   version: b195c8e4fcc6284fff1583fd6ab09e68ca207551
-- name: github.com/howeyc/gopass
-  version: bf9dde6d0d2c004a008c27aaee91170c786f6db8
 - name: github.com/hpcloud/tail
   version: a1dbeea552b7c8df4b542c66073e393de198a800
   subpackages:
@@ -169,9 +173,9 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/konsorten/go-windows-terminal-sequences
-  version: b729f2633dfe35f4d1d8a32385f6685610ce1cb5
+  version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/kubernetes-incubator/external-storage
-  version: ee7c9faa18b89191678347481d1d2840b3d8f3f4
+  version: cd82aca42900f43309fd9ebbc141684d78974446
   repo: https://github.com/libopenstorage/external-storage.git
   subpackages:
   - snapshot/pkg/apis/crd/v1
@@ -201,7 +205,7 @@ imports:
   - secrets
   - volume
 - name: github.com/libopenstorage/stork
-  version: ca466f7d1a8ba2ea1a6b1434519e21923d08faad
+  version: abf1e99a5f902c630bbafdea4059ca1cfe318da2
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
@@ -261,31 +265,33 @@ imports:
 - name: github.com/opencontainers/go-digest
   version: c9281466c8b2f606084ac71339773efd177436e7
 - name: github.com/operator-framework/operator-sdk
-  version: d23344453ec6124f1555fafc2e66230f98410bbb
+  version: d4a6b28b3249a1f07068406cc48679f525d07cfc
   subpackages:
   - pkg/util/k8sutil
 - name: github.com/pborman/uuid
   version: adf5a7427709b9deb95d29d3fa8a2bf9cfd388f1
+- name: github.com/peterbourgon/diskv
+  version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/pkg/errors
-  version: c059e472caf75dbe73903f6521a20abac245b17f
+  version: 059132a15dd08d6704c67711dae0cf35ab991756
 - name: github.com/portworx/kvdb
-  version: 4958ba7add921b4cffc71e41a28bae4dae8bf4c3
+  version: 110b9af2ff2bfd4aa6b611f9dc4c8599bc56ad20
   subpackages:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: aefea4b3aeb1b848a7cfc4dc7e73e988cc14ce5c
+  version: 3497461783cd315f1dadbf710e0c4f4ba2e81dc7
   subpackages:
   - k8s
   - task
 - name: github.com/sean-/seed
   version: e2103e2c35297fb7e17febb81e49b312087a2372
-- name: github.com/Sirupsen/logrus
-  version: 33a1e118e113c7d1dd24a80f80670864cd598519
 - name: github.com/sirupsen/logrus
-  version: 3e01752db0189b9157070a0e1668a620f9a85da2
+  version: ad15b42461921f1fb3529b058c6786c6a45d5162
+- name: github.com/Sirupsen/logrus
+  version: 4fabf2fffcecfd47f802869b7b92d75e43c5a095
 - name: github.com/spf13/pflag
-  version: 5ccb023bc27df288a957c5e994cd44fd19619465
+  version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto
   version: 81e90905daefcd6fd217b62423c0908922eadb30
   subpackages:
@@ -315,7 +321,7 @@ imports:
   - proxy
   - trace
 - name: golang.org/x/sys
-  version: a2e06a18b0d52d8cb2010e04b372a1965d8e3439
+  version: 95c6576299259db960f6c5b9b69ea52422860fce
   subpackages:
   - unix
   - windows
@@ -377,7 +383,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 670d4cfef0544295bc27a114dbac37980d83185a
 - name: k8s.io/api
-  version: 12444147eb1150aa5c80d2aae532cbc5b7be73d0
+  version: 072894a440bdee3a891dea811fe42902311cd2a3
   subpackages:
   - admissionregistration/v1alpha1
   - admissionregistration/v1beta1
@@ -403,6 +409,7 @@ imports:
   - rbac/v1alpha1
   - rbac/v1beta1
   - scheduling/v1alpha1
+  - scheduling/v1beta1
   - settings/v1alpha1
   - storage/v1
   - storage/v1alpha1
@@ -416,7 +423,7 @@ imports:
   - pkg/client/clientset/clientset/scheme
   - pkg/client/clientset/clientset/typed/apiextensions/v1beta1
 - name: k8s.io/apimachinery
-  version: e386b2658ed20923da8cc9250e552f082899a1ee
+  version: 103fd098999dc9c0c88536f5c9ad2e5da39373ae
   subpackages:
   - pkg/api/errors
   - pkg/api/meta
@@ -458,9 +465,10 @@ imports:
   - third_party/forked/golang/netutil
   - third_party/forked/golang/reflect
 - name: k8s.io/client-go
-  version: 23781f4d6632d88e869066eaebb743857aa1ef9b
+  version: 7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65
   subpackages:
   - discovery
+  - dynamic
   - kubernetes
   - kubernetes/scheme
   - kubernetes/typed/admissionregistration/v1alpha1
@@ -487,12 +495,14 @@ imports:
   - kubernetes/typed/rbac/v1alpha1
   - kubernetes/typed/rbac/v1beta1
   - kubernetes/typed/scheduling/v1alpha1
+  - kubernetes/typed/scheduling/v1beta1
   - kubernetes/typed/settings/v1alpha1
   - kubernetes/typed/storage/v1
   - kubernetes/typed/storage/v1alpha1
   - kubernetes/typed/storage/v1beta1
   - pkg/apis/clientauthentication
   - pkg/apis/clientauthentication/v1alpha1
+  - pkg/apis/clientauthentication/v1beta1
   - pkg/version
   - plugin/pkg/client/auth/exec
   - rest
@@ -508,6 +518,7 @@ imports:
   - transport
   - transport/spdy
   - util/cert
+  - util/connrotation
   - util/exec
   - util/flowcontrol
   - util/homedir

@@ -55,7 +55,7 @@ import:
   subpackages:
   - context
 - package: k8s.io/api
-  version: release-1.10
+  version: kubernetes-1.11.0
   subpackages:
   - apps/v1beta2
   - batch/v1
@@ -63,7 +63,7 @@ import:
   - rbac/v1
   - storage/v1
 - package: k8s.io/apimachinery
-  version: release-1.10
+  version: kubernetes-1.11.0
   subpackages:
   - pkg/api/errors
   - pkg/apis/meta/v1
@@ -72,7 +72,7 @@ import:
   - pkg/types
   - pkg/util/yaml
 - package: k8s.io/client-go
-  version: v7.0.0
+  version: kubernetes-1.11.0
   subpackages:
   - kubernetes/scheme
 - package: github.com/golang/protobuf
@@ -86,3 +86,13 @@ import:
   - ptypes/duration
   - ptypes/struct
   - ptypes/timestamp
+- package: github.com/libopenstorage/stork
+  version: master
+  subpackages:
+  - pkg/apis/stork
+  - pkg/apis/stork/v1alpha1
+  - pkg/client/clientset/versioned
+  - pkg/client/clientset/versioned/scheme
+  - pkg/client/clientset/versioned/typed/stork/v1alpha1
+- package: github.com/json-iterator/go
+  version: f2b4162afba35581b6d4a50d3b8f34e33c144682

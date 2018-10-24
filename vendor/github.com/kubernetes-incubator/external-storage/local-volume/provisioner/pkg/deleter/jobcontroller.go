@@ -37,8 +37,7 @@ import (
 )
 
 const (
-	resyncPeriod = 120 * time.Second
-	maxRetries   = 10
+	maxRetries = 10
 	// JobContainerName is name of the container running the cleanup process.
 	JobContainerName = "cleaner"
 	// JobNamePrefix is the prefix of the name of the cleaning job.
@@ -68,28 +67,28 @@ var _ JobController = &jobController{}
 
 type jobController struct {
 	*common.RuntimeConfig
-	namespace   string
-	client      kubernetes.Interface
-	queue       workqueue.RateLimitingInterface
-	jobInformer cache.SharedIndexInformer
-	jobLister   batchlisters.JobLister
+	namespace string
+	queue     workqueue.RateLimitingInterface
+	jobLister batchlisters.JobLister
 }
 
 // NewJobController instantiates  a new job controller.
-func NewJobController(client kubernetes.Interface, namespace string, labelmap map[string]string,
-	config *common.RuntimeConfig) (JobController, error) {
+func NewJobController(labelmap map[string]string, config *common.RuntimeConfig) (JobController, error) {
+	namespace := config.Namespace
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 	labelset := labels.Set(labelmap)
 	optionsModifier := func(options *meta_v1.ListOptions) {
 		options.LabelSelector = labels.SelectorFromSet(labelset).String()
 	}
 
-	informer := cache.NewSharedIndexInformer(
-		cache.NewFilteredListWatchFromClient(client.BatchV1().RESTClient(), "jobs", namespace, optionsModifier),
-		&batch_v1.Job{},
-		resyncPeriod,
-		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-	)
+	informer := config.InformerFactory.InformerFor(&batch_v1.Job{}, func(client kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+		return cache.NewSharedIndexInformer(
+			cache.NewFilteredListWatchFromClient(client.BatchV1().RESTClient(), "jobs", namespace, optionsModifier),
+			&batch_v1.Job{},
+			resyncPeriod,
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
+	})
 
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -119,10 +118,8 @@ func NewJobController(client kubernetes.Interface, namespace string, labelmap ma
 	return &jobController{
 		RuntimeConfig: config,
 		namespace:     namespace,
-		client:        client,
 		queue:         queue,
 		jobLister:     batchlisters.NewJobLister(informer.GetIndexer()),
-		jobInformer:   informer,
 	}, nil
 
 }
@@ -134,15 +131,6 @@ func (c *jobController) Run(stopCh <-chan struct{}) {
 
 	glog.Infof("Starting Job controller")
 	defer glog.Infof("Shutting down Job controller")
-
-	go c.jobInformer.Run(stopCh)
-	// wait for the caches to synchronize before starting the worker
-	if !cache.WaitForCacheSync(stopCh, c.jobInformer.HasSynced) {
-		utilruntime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
-		return
-	}
-
-	glog.Infof("Job controller synced and ready")
 
 	// runWorker will loop until "something bad" happens.  The .Until will
 	// then rekick the worker after one second
@@ -265,20 +253,27 @@ func (c *jobController) RemoveJob(pvName string) (CleanupState, *time.Time, erro
 }
 
 // NewCleanupJob creates manifest for a cleaning job.
-func NewCleanupJob(pv *apiv1.PersistentVolume, imageName string, nodeName string, namespace string, blkdevPath string,
-	config common.MountConfig) *batch_v1.Job {
-	// Exec scripts expect devicepath as environment variables.
-	env := []apiv1.EnvVar{{Name: common.LocalPVEnv, Value: blkdevPath}}
+func NewCleanupJob(pv *apiv1.PersistentVolume, volMode apiv1.PersistentVolumeMode, imageName string, nodeName string, namespace string, mountPath string,
+	config common.MountConfig) (*batch_v1.Job, error) {
 	priv := true
 	// Container definition
 	jobContainer := apiv1.Container{
-		Name:    JobContainerName,
-		Image:   imageName,
-		Command: config.BlockCleanerCommand,
-		Env:     env,
+		Name:  JobContainerName,
+		Image: imageName,
 		SecurityContext: &apiv1.SecurityContext{
 			Privileged: &priv,
 		},
+	}
+	if volMode == apiv1.PersistentVolumeBlock {
+		jobContainer.Command = config.BlockCleanerCommand
+		jobContainer.Env = []apiv1.EnvVar{{Name: common.LocalPVEnv, Value: mountPath}}
+	} else if volMode == apiv1.PersistentVolumeFilesystem {
+		// We only have one way to clean filesystem, so no need to customize
+		// filesystem cleaner command.
+		jobContainer.Command = []string{"/scripts/fsclean.sh"}
+		jobContainer.Env = []apiv1.EnvVar{{Name: common.LocalFilesystemEnv, Value: mountPath}}
+	} else {
+		return nil, fmt.Errorf("unknown PersistentVolume mode: %v", volMode)
 	}
 	mountName := common.GenerateMountName(&config)
 	volumes := []apiv1.Volume{
@@ -305,7 +300,7 @@ func NewCleanupJob(pv *apiv1.PersistentVolume, imageName string, nodeName string
 
 	// Annotate job with useful information that cannot be set as labels due to label name restrictions.
 	annotations := map[string]string{
-		DeviceAnnotation:    blkdevPath,
+		DeviceAnnotation:    mountPath,
 		StartTimeAnnotation: time.Now().Format(time.RFC3339Nano),
 	}
 
@@ -326,7 +321,7 @@ func NewCleanupJob(pv *apiv1.PersistentVolume, imageName string, nodeName string
 	job.Spec.Template.Spec = podTemplate.Spec
 	job.Spec.Template.Spec.RestartPolicy = apiv1.RestartPolicyOnFailure
 
-	return job
+	return job, nil
 }
 
 func generateCleaningJobName(pvName string) string {

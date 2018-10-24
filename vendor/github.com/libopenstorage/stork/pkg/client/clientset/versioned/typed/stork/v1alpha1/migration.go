@@ -30,7 +30,7 @@ import (
 // MigrationsGetter has a method to return a MigrationInterface.
 // A group's client should implement this interface.
 type MigrationsGetter interface {
-	Migrations(namespace string) MigrationInterface
+	Migrations() MigrationInterface
 }
 
 // MigrationInterface has methods to work with Migration resources.
@@ -50,14 +50,12 @@ type MigrationInterface interface {
 // migrations implements MigrationInterface
 type migrations struct {
 	client rest.Interface
-	ns     string
 }
 
 // newMigrations returns a Migrations
-func newMigrations(c *StorkV1alpha1Client, namespace string) *migrations {
+func newMigrations(c *StorkV1alpha1Client) *migrations {
 	return &migrations{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -65,7 +63,6 @@ func newMigrations(c *StorkV1alpha1Client, namespace string) *migrations {
 func (c *migrations) Get(name string, options v1.GetOptions) (result *v1alpha1.Migration, err error) {
 	result = &v1alpha1.Migration{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("migrations").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -78,7 +75,6 @@ func (c *migrations) Get(name string, options v1.GetOptions) (result *v1alpha1.M
 func (c *migrations) List(opts v1.ListOptions) (result *v1alpha1.MigrationList, err error) {
 	result = &v1alpha1.MigrationList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("migrations").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Do().
@@ -90,7 +86,6 @@ func (c *migrations) List(opts v1.ListOptions) (result *v1alpha1.MigrationList, 
 func (c *migrations) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("migrations").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Watch()
@@ -100,7 +95,6 @@ func (c *migrations) Watch(opts v1.ListOptions) (watch.Interface, error) {
 func (c *migrations) Create(migration *v1alpha1.Migration) (result *v1alpha1.Migration, err error) {
 	result = &v1alpha1.Migration{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("migrations").
 		Body(migration).
 		Do().
@@ -112,7 +106,6 @@ func (c *migrations) Create(migration *v1alpha1.Migration) (result *v1alpha1.Mig
 func (c *migrations) Update(migration *v1alpha1.Migration) (result *v1alpha1.Migration, err error) {
 	result = &v1alpha1.Migration{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("migrations").
 		Name(migration.Name).
 		Body(migration).
@@ -127,7 +120,6 @@ func (c *migrations) Update(migration *v1alpha1.Migration) (result *v1alpha1.Mig
 func (c *migrations) UpdateStatus(migration *v1alpha1.Migration) (result *v1alpha1.Migration, err error) {
 	result = &v1alpha1.Migration{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("migrations").
 		Name(migration.Name).
 		SubResource("status").
@@ -140,7 +132,6 @@ func (c *migrations) UpdateStatus(migration *v1alpha1.Migration) (result *v1alph
 // Delete takes name of the migration and deletes it. Returns an error if one occurs.
 func (c *migrations) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("migrations").
 		Name(name).
 		Body(options).
@@ -151,7 +142,6 @@ func (c *migrations) Delete(name string, options *v1.DeleteOptions) error {
 // DeleteCollection deletes a collection of objects.
 func (c *migrations) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("migrations").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Body(options).
@@ -163,7 +153,6 @@ func (c *migrations) DeleteCollection(options *v1.DeleteOptions, listOptions v1.
 func (c *migrations) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.Migration, err error) {
 	result = &v1alpha1.Migration{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("migrations").
 		SubResource(subresources...).
 		Name(name).

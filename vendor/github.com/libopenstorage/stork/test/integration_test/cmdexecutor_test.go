@@ -36,7 +36,7 @@ func asyncPodCommandTest(t *testing.T) {
 	}
 
 	for _, ctx := range ctxs {
-		err = schedulerDriver.WaitForRunning(ctx)
+		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for pod to get to running state")
 
 		pods, err := getContextPods(ctx)

@@ -15,29 +15,42 @@
 package sdk
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	k8sutil "github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 // ExposeMetricsPort generate a Kubernetes Service to expose metrics port
-func ExposeMetricsPort() {
+func ExposeMetricsPort() *v1.Service {
 	http.Handle("/"+k8sutil.PrometheusMetricsPortName, promhttp.Handler())
 	go http.ListenAndServe(":"+strconv.Itoa(k8sutil.PrometheusMetricsPort), nil)
 
 	service, err := k8sutil.InitOperatorService()
 	if err != nil {
 		logrus.Errorf("failed to initialize service object for operator metrics: %v", err)
-		return
+		return nil
 	}
-	err = Create(service)
+	kubeconfig, err := config.GetConfig()
+	if err != nil {
+		panic(err)
+	}
+	runtimeClient, err := client.New(kubeconfig, client.Options{})
+	if err != nil {
+		panic(err)
+	}
+	err = runtimeClient.Create(context.TODO(), service)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logrus.Errorf("failed to create service for operator metrics: %v", err)
-		return
+		return nil
 	}
 	logrus.Infof("Metrics service %s created", service.Name)
+	return service
 }

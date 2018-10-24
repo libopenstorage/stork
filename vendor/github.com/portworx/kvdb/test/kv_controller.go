@@ -2,9 +2,12 @@ package test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,10 +21,10 @@ const (
 )
 
 var (
-	names      = []string{"infra0", "infra1", "infra2"}
-	clientUrls = []string{"http://127.0.0.1:20379", "http://127.0.0.1:21379", "http://127.0.0.1:22379"}
-	peerPorts  = []string{"20380", "21380", "22380"}
-	dataDirs   = []string{"/tmp/node0", "/tmp/node1", "/tmp/node2"}
+	names      = []string{"infra0", "infra1", "infra2", "infra3", "infra4"}
+	clientUrls = []string{"http://127.0.0.1:20379", "http://127.0.0.1:21379", "http://127.0.0.1:22379", "http://127.0.0.1:23379", "http://127.0.0.1:24379"}
+	peerPorts  = []string{"20380", "21380", "22380", "23380", "24380"}
+	dataDirs   = []string{"/tmp/node0", "/tmp/node1", "/tmp/node2", "/tmp/node3", "/tmp/node4"}
 	cmds       map[int]*exec.Cmd
 )
 
@@ -39,7 +42,7 @@ func RunControllerTests(datastoreInit kvdb.DatastoreInit, t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	cmds[index] = cmd
-	kv, err := datastoreInit("pwx/test", []string{clientUrls[index]}, nil, fatalErrorCb())
+	kv, err := datastoreInit("pwx/test", clientUrls, nil, fatalErrorCb())
 	if err != nil {
 		cmd.Process.Kill()
 		t.Fatalf(err.Error())
@@ -127,23 +130,89 @@ func testReAdd(kv kvdb.Kvdb, t *testing.T) {
 
 func testMemberStatus(kv kvdb.Kvdb, t *testing.T) {
 	controllerLog("testMemberStatus")
-	// Stop node 2
-	index := 2
-	cmd, _ := cmds[index]
-	cmd.Process.Kill()
-	delete(cmds, index)
+
+	index := 3
+	controllerLog("Adding node 3")
+	initCluster, err := kv.AddMember(localhost, peerPorts[index], names[index])
+	require.NoError(t, err, "Error on AddMember")
+	cmd, err := startEtcd(index, initCluster, "existing")
+	require.NoError(t, err, "Error on start etcd")
+	cmds[index] = cmd
 
 	// Wait for some time for etcd to detect a node offline
 	time.Sleep(5 * time.Second)
 
-	list, err := kv.ListMembers()
-	require.NoError(t, err, "Error on ListMembers")
-	require.Equal(t, 3, len(list), "List returned different length of cluster")
+	index = 4
+	controllerLog("Adding node 4")
+	initCluster, err = kv.AddMember(localhost, peerPorts[index], names[index])
+	require.NoError(t, err, "Error on AddMember")
+	cmd, err = startEtcd(index, initCluster, "existing")
+	require.NoError(t, err, "Error on start etcd")
+	cmds[index] = cmd
 
-	downMember, ok := list[names[index]]
-	require.True(t, ok, "Could not find down member")
-	require.Equal(t, len(downMember.ClientUrls), 0, "Unexpected no. of client urls on down member")
-	require.False(t, downMember.IsHealthy, "Unexpected health of down member")
+	// Wait for some time for etcd to detect a node offline
+	time.Sleep(5 * time.Second)
+
+	// Stop node 2
+	stoppedIndex := 2
+	cmd, _ = cmds[stoppedIndex]
+	cmd.Process.Kill()
+	delete(cmds, stoppedIndex)
+
+	// Stop node 3
+	stoppedIndex2 := 3
+	cmd, _ = cmds[stoppedIndex2]
+	cmd.Process.Kill()
+	delete(cmds, stoppedIndex2)
+
+	// Wait for some time for etcd to detect a node offline
+	time.Sleep(5 * time.Second)
+
+	numOfGoroutines := 16
+	var wg sync.WaitGroup
+	wg.Add(numOfGoroutines)
+
+	checkMembers := func(id string, wait int) {
+		defer wg.Done()
+		// Add a sleep so that all go routines run just around the same time
+		time.Sleep(time.Duration(wait) * time.Second)
+		controllerLog("Listing Members for goroutine no. " + id)
+		list, err := kv.ListMembers()
+		fmt.Println("list: ", list)
+		require.NoError(t, err, "%v: Error on ListMembers", id)
+		require.Equal(t, 5, len(list), "%v: List returned different length of cluster", id)
+
+		downMember, ok := list[names[stoppedIndex]]
+		require.True(t, ok, "%v: Could not find down member", id)
+		require.Equal(t, len(downMember.ClientUrls), 0, "%v: Unexpected no. of client urls on down member", id)
+		require.False(t, downMember.IsHealthy, "%v: Unexpected health of down member", id)
+
+		for name, m := range list {
+			if name == names[stoppedIndex] {
+				continue
+			}
+			if name == names[stoppedIndex2] {
+				continue
+			}
+			require.True(t, m.IsHealthy, "%v: Expected member %v to be healthy", id, name)
+		}
+		fmt.Println("checkMembers done for ", id)
+	}
+	for i := 0; i < numOfGoroutines; i++ {
+		go checkMembers(strconv.Itoa(i), numOfGoroutines-1)
+	}
+	c := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(c)
+	}()
+
+	select {
+	case <-c:
+		return
+	case <-time.After(5 * time.Minute):
+		t.Fatalf("testMemberStatus timeout")
+	}
 }
 
 func startEtcd(index int, initCluster map[string][]string, initState string) (*exec.Cmd, error) {
@@ -175,8 +244,8 @@ func startEtcd(index int, initCluster map[string][]string, initState string) (*e
 	}
 
 	cmd := exec.Command("/tmp/test-etcd/etcd", etcdArgs...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = ioutil.Discard
+	cmd.Stderr = ioutil.Discard
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("Failed to run %v(%v) : %v",
 			names[index], etcdArgs, err.Error())

@@ -18,6 +18,7 @@ package controller
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/golang/glog"
@@ -30,6 +31,8 @@ import (
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/util"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -41,48 +44,67 @@ import (
 func StartLocalController(client *kubernetes.Clientset, ptable deleter.ProcTable, config *common.UserConfig) {
 	glog.Info("Initializing volume cache\n")
 
-	provisionerName := fmt.Sprintf("local-volume-provisioner-%v-%v", config.Node.Name, config.Node.UID)
+	var provisionerName string
+	if config.UseNodeNameOnly {
+		provisionerName = fmt.Sprintf("local-volume-provisioner-%v", config.Node.Name)
+	} else {
+		provisionerName = fmt.Sprintf("local-volume-provisioner-%v-%v", config.Node.Name, config.Node.UID)
+	}
 
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: v1core.New(client.CoreV1().RESTClient()).Events("")})
 	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: provisionerName})
 
+	// We choose a random resync period between MinResyncPeriod and 2 *
+	// MinResyncPeriod, so that local provisioners deployed on multiple nodes
+	// at same time don't list the apiserver simultaneously.
+	resyncPeriod := time.Duration(config.MinResyncPeriod.Seconds()*(1+rand.Float64())) * time.Second
+
 	runtimeConfig := &common.RuntimeConfig{
-		UserConfig: config,
-		Cache:      cache.NewVolumeCache(),
-		VolUtil:    util.NewVolumeUtil(),
-		APIUtil:    util.NewAPIUtil(client),
-		Client:     client,
-		Name:       provisionerName,
-		Recorder:   recorder,
-		Mounter:    mount.New("" /* default mount path */),
+		UserConfig:      config,
+		Cache:           cache.NewVolumeCache(),
+		VolUtil:         util.NewVolumeUtil(),
+		APIUtil:         util.NewAPIUtil(client),
+		Client:          client,
+		Name:            provisionerName,
+		Recorder:        recorder,
+		Mounter:         mount.New("" /* default mount path */),
+		InformerFactory: informers.NewSharedInformerFactory(client, resyncPeriod),
 	}
 
-	populator := populator.NewPopulator(runtimeConfig)
-	populator.Start()
+	populator.NewPopulator(runtimeConfig)
 
 	var jobController deleter.JobController
 	var err error
 	if runtimeConfig.UseJobForCleaning {
-		stopCh := make(chan struct{})
-
 		labels := map[string]string{common.NodeNameLabel: config.Node.Name}
-		jobController, err = deleter.NewJobController(client, runtimeConfig.Namespace, labels, runtimeConfig)
+		jobController, err = deleter.NewJobController(labels, runtimeConfig)
 		if err != nil {
-			glog.Fatalf("Error starting jobController: %v", err)
+			glog.Fatalf("Error initializing jobController: %v", err)
 		}
-		go jobController.Run(stopCh)
 		glog.Infof("Enabling Jobs based cleaning.")
 	}
 	cleanupTracker := &deleter.CleanupStatusTracker{ProcTable: ptable, JobController: jobController}
 
 	discoverer, err := discovery.NewDiscoverer(runtimeConfig, cleanupTracker)
 	if err != nil {
-		glog.Fatalf("Error starting discoverer: %v", err)
+		glog.Fatalf("Error initializing discoverer: %v", err)
 	}
 
 	deleter := deleter.NewDeleter(runtimeConfig, cleanupTracker)
 
+	// Start informers after all event listeners are registered.
+	runtimeConfig.InformerFactory.Start(wait.NeverStop)
+	// Wait for all started informers' cache were synced.
+	for v, synced := range runtimeConfig.InformerFactory.WaitForCacheSync(wait.NeverStop) {
+		if !synced {
+			glog.Fatalf("Error syncing informer for %v", v)
+		}
+	}
+	// Run controller logic.
+	if jobController != nil {
+		go jobController.Run(wait.NeverStop)
+	}
 	glog.Info("Controller started\n")
 	for {
 		deleter.DeletePVs()

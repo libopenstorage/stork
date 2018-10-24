@@ -34,6 +34,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -63,16 +64,24 @@ const (
 	ProvisionerNodeLabelsForPV = "nodeLabelsForPV"
 	// ProvisionerUseAlphaAPI shows if we need to use alpha API, default to false
 	ProvisionerUseAlphaAPI = "useAlphaAPI"
+	// AlphaStorageNodeAffinityAnnotation defines node affinity policies for a PersistentVolume.
+	// Value is a string of the json representation of type NodeAffinity
+	AlphaStorageNodeAffinityAnnotation = "volume.alpha.kubernetes.io/node-affinity"
 	// VolumeDelete copied from k8s.io/kubernetes/pkg/controller/volume/events
 	VolumeDelete = "VolumeDelete"
 
 	// LocalPVEnv will contain the device path when script is invoked
 	LocalPVEnv = "LOCAL_PV_BLKDEVICE"
+	// LocalFilesystemEnv will contain the filesystm path when script is invoked
+	LocalFilesystemEnv = "LOCAL_PV_FILESYSTEM"
 	// KubeConfigEnv will (optionally) specify the location of kubeconfig file on the node.
 	KubeConfigEnv = "KUBECONFIG"
 
 	// NodeNameLabel is the name of the label that holds the nodename
 	NodeNameLabel = "kubernetes.io/hostname"
+
+	// DefaultVolumeMode is the default volume mode of created PV object.
+	DefaultVolumeMode = "Filesystem"
 )
 
 // UserConfig stores all the user-defined parameters to the provisioner
@@ -91,6 +100,12 @@ type UserConfig struct {
 	Namespace string
 	// Image of container to use for jobs (optional)
 	JobContainerImage string
+	// MinResyncPeriod is minimum resync period. Resync period in reflectors
+	// will be random between MinResyncPeriod and 2*MinResyncPeriod.
+	MinResyncPeriod metav1.Duration
+	// UseNodeNameOnly indicates if Node.Name should be used in the provisioner name
+	// instead of Node.UID.
+	UseNodeNameOnly bool
 }
 
 // MountConfig stores a configuration for discoverying a specific storageclass
@@ -101,6 +116,14 @@ type MountConfig struct {
 	MountDir string `json:"mountDir" yaml:"mountDir"`
 	// The type of block cleaner to use
 	BlockCleanerCommand []string `json:"blockCleanerCommand" yaml:"blockCleanerCommand"`
+	// The volume mode of created PersistentVolume object,
+	// default to Filesystem if not specified.
+	VolumeMode string `json:"volumeMode" yaml:"volumeMode"`
+	// Filesystem type to mount.
+	// It applies only when the source path is a block device,
+	// and desire volume mode is Filesystem.
+	// Must be a filesystem type supported by the host operating system.
+	FsType string `json:"fsType" yaml:"fsType"`
 }
 
 // RuntimeConfig stores all the objects that the provisioner needs to run
@@ -109,7 +132,7 @@ type RuntimeConfig struct {
 	// Unique name of this provisioner
 	Name string
 	// K8s API client
-	Client *kubernetes.Clientset
+	Client kubernetes.Interface
 	// Cache to store PVs managed by this provisioner
 	Cache *cache.VolumeCache
 	// K8s API layer
@@ -122,6 +145,8 @@ type RuntimeConfig struct {
 	BlockDisabled bool
 	// Mounter used to verify mountpoints
 	Mounter mount.Interface
+	// InformerFactory gives access to informers for the controller.
+	InformerFactory informers.SharedInformerFactory
 }
 
 // LocalPVConfig defines the parameters for creating a local PV
@@ -130,11 +155,14 @@ type LocalPVConfig struct {
 	HostPath        string
 	Capacity        int64
 	StorageClass    string
+	ReclaimPolicy   v1.PersistentVolumeReclaimPolicy
 	ProvisionerName string
 	UseAlphaAPI     bool
 	AffinityAnn     string
 	NodeAffinity    *v1.VolumeNodeAffinity
 	VolumeMode      v1.PersistentVolumeMode
+	MountOptions    []string
+	FsType          *string
 	Labels          map[string]string
 }
 
@@ -160,6 +188,13 @@ type ProvisionerConfiguration struct {
 	// default is false.
 	// +optional
 	UseJobForCleaning bool `json:"useJobForCleaning" yaml:"useJobForCleaning"`
+	// MinResyncPeriod is minimum resync period. Resync period in reflectors
+	// will be random between MinResyncPeriod and 2*MinResyncPeriod.
+	MinResyncPeriod metav1.Duration `json:"minResyncPeriod" yaml:"minResyncPeriod"`
+	// UseNodeNameOnly indicates if Node.Name should be used in the provisioner name
+	// instead of Node.UID. Default is false.
+	// +optional
+	UseNodeNameOnly bool `json:"useNodeNameOnly" yaml:"useNodeNameOnly"`
 }
 
 // CreateLocalPVSpec returns a PV spec that can be used for PV creation
@@ -173,13 +208,14 @@ func CreateLocalPVSpec(config *LocalPVConfig) *v1.PersistentVolume {
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
-			PersistentVolumeReclaimPolicy: v1.PersistentVolumeReclaimDelete,
+			PersistentVolumeReclaimPolicy: config.ReclaimPolicy,
 			Capacity: v1.ResourceList{
 				v1.ResourceName(v1.ResourceStorage): *resource.NewQuantity(int64(config.Capacity), resource.BinarySI),
 			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				Local: &v1.LocalVolumeSource{
-					Path: config.HostPath,
+					Path:   config.HostPath,
+					FSType: config.FsType,
 				},
 			},
 			AccessModes: []v1.PersistentVolumeAccessMode{
@@ -187,10 +223,11 @@ func CreateLocalPVSpec(config *LocalPVConfig) *v1.PersistentVolume {
 			},
 			StorageClassName: config.StorageClass,
 			VolumeMode:       &config.VolumeMode,
+			MountOptions:     config.MountOptions,
 		},
 	}
 	if config.UseAlphaAPI {
-		pv.ObjectMeta.Annotations[v1.AlphaStorageNodeAffinityAnnotation] = config.AffinityAnn
+		pv.ObjectMeta.Annotations[AlphaStorageNodeAffinityAnnotation] = config.AffinityAnn
 	} else {
 		pv.Spec.NodeAffinity = config.NodeAffinity
 	}
@@ -266,11 +303,22 @@ func ConfigMapDataToVolumeConfig(data map[string]string, provisionerConfig *Prov
 		if config.MountDir == "" || config.HostDir == "" {
 			return fmt.Errorf("Storage Class %v is misconfigured, missing HostDir or MountDir parameter", class)
 		}
+
+		if config.VolumeMode == "" {
+			config.VolumeMode = DefaultVolumeMode
+		}
+		volumeMode := v1.PersistentVolumeMode(config.VolumeMode)
+		if volumeMode != v1.PersistentVolumeBlock && volumeMode != v1.PersistentVolumeFilesystem {
+			return fmt.Errorf("unsupported volume mode %s", config.VolumeMode)
+		}
+
 		provisionerConfig.StorageClassConfig[class] = config
-		glog.Infof("StorageClass %q configured with MountDir %q, HostDir %q, BlockCleanerCommand %q",
+		glog.Infof("StorageClass %q configured with MountDir %q, HostDir %q, VolumeMode %q, FsType %q, BlockCleanerCommand %q",
 			class,
 			config.MountDir,
 			config.HostDir,
+			config.VolumeMode,
+			config.FsType,
 			config.BlockCleanerCommand)
 	}
 	return nil
@@ -343,4 +391,27 @@ func GenerateMountName(mount *MountConfig) string {
 	h.Write([]byte(mount.HostDir))
 	h.Write([]byte(mount.MountDir))
 	return fmt.Sprintf("mount-%x", h.Sum32())
+}
+
+// GetVolumeMode check volume mode of given path.
+func GetVolumeMode(volUtil util.VolumeUtil, fullPath string) (v1.PersistentVolumeMode, error) {
+	isdir, errdir := volUtil.IsDir(fullPath)
+	if isdir {
+		return v1.PersistentVolumeFilesystem, nil
+	}
+	// check for Block before returning errdir
+	isblk, errblk := volUtil.IsBlock(fullPath)
+	if isblk {
+		return v1.PersistentVolumeBlock, nil
+	}
+
+	if errdir == nil && errblk == nil {
+		return "", fmt.Errorf("Skipping file %q: not a directory nor block device", fullPath)
+	}
+
+	// report the first error found
+	if errdir != nil {
+		return "", fmt.Errorf("Directory check for %q failed: %s", fullPath, errdir)
+	}
+	return "", fmt.Errorf("Block device check for %q failed: %s", fullPath, errblk)
 }

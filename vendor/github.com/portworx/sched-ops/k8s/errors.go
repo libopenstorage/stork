@@ -3,6 +3,7 @@ package k8s
 import (
 	"errors"
 	"fmt"
+	"reflect"
 )
 
 // ErrK8SApiAccountNotSet is returned when the account used to talk to k8s api is not setup
@@ -114,4 +115,18 @@ type ErrSnapshotDataFailed struct {
 
 func (e *ErrSnapshotDataFailed) Error() string {
 	return fmt.Sprintf("SnapshotData %v has failed. Cause: %v", e.ID, e.Cause)
+}
+
+// ErrFailedToValidateCustomSpec error type when CRD objects does not applied successfully
+type ErrFailedToValidateCustomSpec struct {
+	// Name of CRD object
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+	// Type is the underlying type of CRD objects
+	Type interface{}
+}
+
+func (e *ErrFailedToValidateCustomSpec) Error() string {
+	return fmt.Sprintf("Failed to apply custom spec : %v of type %v due to err: %v", e.Name, reflect.TypeOf(e.Type), e.Cause)
 }

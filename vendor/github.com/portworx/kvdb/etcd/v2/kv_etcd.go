@@ -650,7 +650,7 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 	var updates []*kvdb.KVPair
 	done := make(chan error)
 	mutex := &sync.Mutex{}
-	finalPutDone := false
+	watchClosed := false
 	var lowestKvdbIndex, highestKvdbIndex uint64
 
 	cb := func(
@@ -665,7 +665,7 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		ok := false
 
 		if err != nil {
-			if err == kvdb.ErrWatchStopped {
+			if err == kvdb.ErrWatchStopped && watchClosed {
 				return nil
 			}
 			watchErr = err
@@ -689,13 +689,12 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		m.Lock()
 		defer m.Unlock()
 		updates = append(updates, kvp)
-		if finalPutDone {
-			if kvp.ModifiedIndex >= highestKvdbIndex {
-				// Done applying changes.
-				watchErr = fmt.Errorf("done")
-				sendErr = nil
-				goto errordone
-			}
+		if highestKvdbIndex > 0 && kvp.ModifiedIndex >= highestKvdbIndex {
+			// Done applying changes.
+			watchClosed = true
+			watchErr = fmt.Errorf("done")
+			sendErr = nil
+			goto errordone
 		}
 
 		return nil
@@ -770,10 +769,9 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		return nil, 0, fmt.Errorf("Failed to delete snap bootstrap key: %v, "+
 			"err: %v", bootStrapKey, err)
 	}
-	highestKvdbIndex = kvPair.ModifiedIndex
 
 	mutex.Lock()
-	finalPutDone = true
+	highestKvdbIndex = kvPair.ModifiedIndex
 	mutex.Unlock()
 
 	// wait until the watch finishes

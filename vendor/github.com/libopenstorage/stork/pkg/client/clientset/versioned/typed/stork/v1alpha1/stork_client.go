@@ -41,8 +41,8 @@ func (c *StorkV1alpha1Client) ClusterPairs() ClusterPairInterface {
 	return newClusterPairs(c)
 }
 
-func (c *StorkV1alpha1Client) Migrations(namespace string) MigrationInterface {
-	return newMigrations(c, namespace)
+func (c *StorkV1alpha1Client) Migrations() MigrationInterface {
+	return newMigrations(c)
 }
 
 func (c *StorkV1alpha1Client) Rules(namespace string) RuleInterface {

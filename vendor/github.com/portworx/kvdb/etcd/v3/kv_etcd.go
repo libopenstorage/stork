@@ -10,23 +10,19 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	"github.com/sirupsen/logrus"
-
-	"golang.org/x/net/context"
-
 	e "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/coreos/etcd/etcdserver"
 	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	"github.com/coreos/etcd/mvcc/mvccpb"
-
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/common"
 	ec "github.com/portworx/kvdb/etcd/common"
 	"github.com/portworx/kvdb/mem"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -49,6 +45,8 @@ const (
 
 var (
 	defaultMachines = []string{"http://127.0.0.1:2379"}
+	// mLock is a lock over the maintenanceClient
+	mLock sync.Mutex
 )
 
 // watchQ to collect updates without blocking
@@ -247,9 +245,7 @@ func (et *etcdKV) Create(
 		if ttl < 5 {
 			return nil, kvdb.ErrTTLNotSupported
 		}
-		leaseCtx, leaseCancel := et.Context()
-		leaseResult, err := et.kvClient.Grant(leaseCtx, int64(ttl))
-		leaseCancel()
+		leaseResult, err := et.getLeaseWithRetries(key, int64(ttl))
 		if err != nil {
 			return nil, err
 		}
@@ -293,9 +289,7 @@ func (et *etcdKV) Update(
 		if ttl < 5 {
 			return nil, kvdb.ErrTTLNotSupported
 		}
-		leaseCtx, leaseCancel := et.Context()
-		leaseResult, err := et.kvClient.Grant(leaseCtx, int64(ttl))
-		leaseCancel()
+		leaseResult, err := et.getLeaseWithRetries(key, int64(ttl))
 		if err != nil {
 			return nil, err
 		}
@@ -482,9 +476,7 @@ func (et *etcdKV) CompareAndSet(
 
 	opts := []e.OpOption{}
 	if (flags & kvdb.KVTTL) != 0 {
-		leaseCtx, leaseCancel := et.Context()
-		leaseResult, err = et.kvClient.Grant(leaseCtx, int64(kvp.TTL))
-		leaseCancel()
+		leaseResult, err = et.getLeaseWithRetries(key, kvp.TTL)
 		if err != nil {
 			return nil, err
 		}
@@ -531,7 +523,7 @@ func (et *etcdKV) CompareAndSet(
 		if txnResponse.Succeeded == false {
 			if len(txnResponse.Responses) == 0 {
 				logrus.Infof("Etcd did not return any transaction responses "+
-					"for key (%v)", kvp.Key)
+					"for key (%v) index (%v)", kvp.Key, kvp.ModifiedIndex)
 			} else {
 				for i, responseOp := range txnResponse.Responses {
 					logrus.Infof("Etcd transaction Response: %v %v", i,
@@ -863,8 +855,9 @@ func (et *etcdKV) refreshLock(
 				if err != nil {
 					et.FatalCb(
 						"Error refreshing lock. [Key %v] [Err: %v]"+
-							" [Current Refresh: %v] [Previous Refresh: %v]",
-						keyString, err, currentRefresh, prevRefresh,
+							" [Current Refresh: %v] [Previous Refresh: %v]"+
+							" [Modified Index: %v]",
+						keyString, err, currentRefresh, prevRefresh, kvPair.ModifiedIndex,
 					)
 					l.Err = err
 					l.Unlock()
@@ -935,7 +928,7 @@ func (et *etcdKV) watchStart(
 				logrus.Errorf("Watch on key %v cancelled. Error: %v", key,
 					wresp.Err())
 				watchQ.enqueue(key, nil, kvdb.ErrWatchStopped)
-				break
+				return
 			} else {
 				for _, ev := range wresp.Events {
 					var action string
@@ -956,6 +949,8 @@ func (et *etcdKV) watchStart(
 				}
 			}
 		}
+		logrus.Errorf("Watch on key %v closed without a Cancel response.", key)
+		watchQ.enqueue(key, nil, kvdb.ErrWatchStopped)
 	}()
 
 	select {
@@ -976,7 +971,7 @@ func (et *etcdKV) watchStart(
 func (et *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 	// Create a new bootstrap key
 	var updates []*kvdb.KVPair
-	finalPutDone := false
+	watchClosed := false
 	var lowestKvdbIndex, highestKvdbIndex uint64
 	done := make(chan error)
 	mutex := &sync.Mutex{}
@@ -992,7 +987,7 @@ func (et *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		ok := false
 
 		if err != nil {
-			if err == kvdb.ErrWatchStopped && finalPutDone {
+			if err == kvdb.ErrWatchStopped && watchClosed {
 				return nil
 			}
 			logrus.Errorf("Watch returned error: %v", err)
@@ -1019,14 +1014,13 @@ func (et *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		m.Lock()
 		defer m.Unlock()
 		updates = append(updates, kvp)
-		if finalPutDone {
-			if kvp.ModifiedIndex >= highestKvdbIndex {
-				// Done applying changes.
-				logrus.Infof("Snapshot complete")
-				watchErr = fmt.Errorf("done")
-				sendErr = nil
-				goto errordone
-			}
+		if highestKvdbIndex > 0 && kvp.ModifiedIndex >= highestKvdbIndex {
+			// Done applying changes.
+			logrus.Infof("Snapshot complete")
+			watchClosed = true
+			watchErr = fmt.Errorf("done")
+			sendErr = nil
+			goto errordone
 		}
 
 		return nil
@@ -1103,10 +1097,10 @@ func (et *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		return nil, 0, fmt.Errorf("Failed to create snap bootstrap key %v, "+
 			"err: %v", bootStrapKeyHigh, err)
 	}
-	highestKvdbIndex = kvPair.ModifiedIndex
 
 	mutex.Lock()
-	finalPutDone = true
+	// not sure if we need a lock, but couldnt find any doc which says its ok
+	highestKvdbIndex = kvPair.ModifiedIndex
 	mutex.Unlock()
 
 	// wait until watch finishes
@@ -1308,6 +1302,8 @@ func (et *etcdKV) ListMembers() (map[string]*kvdb.MemberInfo, error) {
 		return nil, err
 	}
 	resp := make(map[string]*kvdb.MemberInfo)
+	mLock.Lock()
+	defer mLock.Unlock()
 	for _, member := range memberListResponse.Members {
 		var (
 			leader     bool
@@ -1375,6 +1371,28 @@ func (et *etcdKV) listenPeerUrls(ip string, port string) []string {
 func (et *etcdKV) constructURL(ip string, port string) string {
 	ip = strings.TrimPrefix(ip, urlPrefix)
 	return urlPrefix + ip + ":" + port
+}
+
+func (et *etcdKV) getLeaseWithRetries(key string, ttl int64) (*e.LeaseGrantResponse, error) {
+	var (
+		leaseResult *e.LeaseGrantResponse
+		leaseErr    error
+		retry       bool
+	)
+	for i := 0; i < timeoutMaxRetry; i++ {
+		leaseCtx, leaseCancel := et.Context()
+		leaseResult, leaseErr = et.kvClient.Grant(leaseCtx, ttl)
+		leaseCancel()
+		if leaseErr != nil {
+			retry, leaseErr = isRetryNeeded(leaseErr, "lease", key, i)
+			if !retry {
+				return nil, leaseErr
+			}
+			continue
+		}
+		return leaseResult, nil
+	}
+	return nil, leaseErr
 }
 
 func getContextWithLeaderRequirement() context.Context {
