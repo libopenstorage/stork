@@ -17,6 +17,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
+	ost_errors "github.com/libopenstorage/openstorage/api/errors"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
@@ -475,7 +476,7 @@ func (p *portworx) SnapshotCreate(
 	switch snapType {
 	case crdv1.PortworxSnapshotTypeCloud:
 		log.SnapshotLog(snap).Debugf("Cloud SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
-		ok, msg, err := p.ensureNodesDontMatchVersionPrefix(pre14VersionRegex)
+		ok, msg, err := p.ensureNodesDontMatchVersionPrefix(pre2VersionRegex)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -483,22 +484,26 @@ func (p *portworx) SnapshotCreate(
 		if !ok {
 			err = &errors.ErrNotSupported{
 				Feature: "Cloud snapshots",
-				Reason:  "Only supported on PX version 1.4 onwards: " + msg,
+				Reason:  "API changes require PX version 2.0 onwards: " + msg,
 			}
 
 			return nil, getErrorSnapshotConditions(err), err
 		}
 
+		taskID := string(snap.Metadata.UID)
 		request := &api.CloudBackupCreateRequest{
 			VolumeID:       volumeID,
 			CredentialUUID: getCredIDFromSnapshot(snap),
+			Name:           taskID,
 		}
-		err = p.volDriver.CloudBackupCreate(request)
+		_, err = p.volDriver.CloudBackupCreate(request)
 		if err != nil {
-			return nil, getErrorSnapshotConditions(err), err
+			if _, ok := err.(*ost_errors.ErrExists); !ok {
+				return nil, getErrorSnapshotConditions(err), err
+			}
 		}
 
-		status, err := p.waitForCloudSnapCompletion(api.CloudBackupOp, volumeID, false, backgroundCommandTermChan)
+		status, err := p.waitForCloudSnapCompletion(api.CloudBackupOp, taskID, false, backgroundCommandTermChan)
 		if err != nil {
 			log.SnapshotLog(snap).Errorf("Cloudsnap backup: %s failed due to: %v", status.cloudSnapID, err)
 			return nil, getErrorSnapshotConditions(err), err
@@ -721,7 +726,6 @@ func (p *portworx) SnapshotRestore(
 
 	snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
 	restoreVolumeName := "pvc-" + string(pvc.UID)
-	var restoredVolumeID string
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
 	case crdv1.PortworxSnapshotTypeLocal:
@@ -748,48 +752,51 @@ func (p *portworx) SnapshotRestore(
 				namespaceLabel: pvc.Namespace,
 			},
 		}
-		restoredVolumeID, err = p.volDriver.Snapshot(snapID, false, locator, true)
+		_, err = p.volDriver.Snapshot(snapID, false, locator, true)
 		if err != nil {
 			return nil, nil, err
 		}
 	case crdv1.PortworxSnapshotTypeCloud:
-		response, err := p.volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
+		taskID := string(pvc.UID)
+		_, err := p.volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
+			Name:              taskID,
 			ID:                snapID,
 			RestoreVolumeName: restoreVolumeName,
 			CredentialUUID:    snapshotData.Spec.PortworxSnapshot.SnapshotCloudCredID,
 		})
 		if err != nil {
-			return nil, nil, err
+			if _, ok := err.(*ost_errors.ErrExists); !ok {
+				return nil, nil, err
+			}
 		}
 
-		restoredVolumeID = response.RestoreVolumeID
-		logrus.Infof("Cloudsnap restore of %s to %s started successfully.", snapID, restoredVolumeID)
+		logrus.Infof("Cloudsnap restore of %s started successfully with taskId %v", snapID, taskID)
 
-		_, err = p.waitForCloudSnapCompletion(api.CloudRestoreOp, restoredVolumeID, true, nil)
+		_, err = p.waitForCloudSnapCompletion(api.CloudRestoreOp, taskID, true, nil)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
 	// create PV from restored volume
-	vols, err := p.volDriver.Inspect([]string{restoredVolumeID})
+	vols, err := p.volDriver.Inspect([]string{restoreVolumeName})
 	if err != nil {
 		return nil, nil, &ErrFailedToInspectVolume{
-			ID:    restoredVolumeID,
+			ID:    restoreVolumeName,
 			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
 		}
 	}
 
 	if len(vols) == 0 {
 		return nil, nil, &errors.ErrNotFound{
-			ID:   restoredVolumeID,
+			ID:   restoreVolumeName,
 			Type: "Volume",
 		}
 	}
 
 	pv := &v1.PersistentVolumeSource{
 		PortworxVolume: &v1.PortworxVolumeSource{
-			VolumeID: restoredVolumeID,
+			VolumeID: vols[0].Id,
 			FSType:   vols[0].Format.String(),
 			ReadOnly: vols[0].Readonly,
 		},
@@ -1052,7 +1059,7 @@ func (p *portworx) findParentPVCOrVolID(snapID string) (string, error) {
 
 func (p *portworx) waitForCloudSnapCompletion(
 	op api.CloudBackupOpType,
-	volID string,
+	taskID string,
 	verbose bool,
 	backgroundCommandTermChan chan bool) (cloudSnapStatus, error) {
 
@@ -1062,10 +1069,10 @@ func (p *portworx) waitForCloudSnapCompletion(
 	}
 
 	err := wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
-		csStatus = p.checkCloudSnapStatus(op, volID)
+		csStatus = p.checkCloudSnapStatus(op, taskID)
 		switch csStatus.status {
 		case api.CloudBackupStatusFailed:
-			err := fmt.Errorf("Cloudsnap %s of %s failed due to: %s", op, volID, csStatus.msg)
+			err := fmt.Errorf("Cloudsnap %s of %s failed due to: %s", op, taskID, csStatus.msg)
 			logrus.Errorf(err.Error())
 			return true, err
 		case api.CloudBackupStatusDone:
@@ -1089,7 +1096,7 @@ func (p *portworx) waitForCloudSnapCompletion(
 			}
 			return false, nil
 		default:
-			err := fmt.Errorf("received unexpected status for cloudsnap %s of %s. status: %s", op, volID, csStatus.status)
+			err := fmt.Errorf("received unexpected status for cloudsnap %s of %s. status: %s", op, taskID, csStatus.status)
 			return false, err
 		}
 	})
@@ -1097,9 +1104,9 @@ func (p *portworx) waitForCloudSnapCompletion(
 	return csStatus, err
 }
 
-func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) cloudSnapStatus {
+func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, taskID string) cloudSnapStatus {
 	response, err := p.volDriver.CloudBackupStatus(&api.CloudBackupStatusRequest{
-		SrcVolumeID: volID,
+		Name: taskID,
 	})
 	if err != nil {
 		return cloudSnapStatus{
@@ -1108,11 +1115,11 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 		}
 	}
 
-	csStatus, present := response.Statuses[volID]
+	csStatus, present := response.Statuses[taskID]
 	if !present {
 		return cloudSnapStatus{
 			status: api.CloudBackupStatusFailed,
-			msg:    fmt.Sprintf("failed to get cloudsnap status for volume: %s", volID),
+			msg:    fmt.Sprintf("failed to get cloudsnap status for task %s", taskID),
 		}
 	}
 
@@ -1123,7 +1130,7 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 			status:      api.CloudBackupStatusFailed,
 			cloudSnapID: csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s failed.",
-				op, csStatus.ID, volID),
+				op, csStatus.ID, taskID),
 		}
 	}
 
@@ -1132,7 +1139,7 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 			status:      api.CloudBackupStatusActive,
 			cloudSnapID: csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s has started and is active.",
-				op, csStatus.ID, volID),
+				op, csStatus.ID, taskID),
 		}
 	}
 
@@ -1141,14 +1148,14 @@ func (p *portworx) checkCloudSnapStatus(op api.CloudBackupOpType, volID string) 
 			status:      api.CloudBackupStatusNotStarted,
 			cloudSnapID: csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s still not done. status: %s",
-				op, csStatus.ID, volID, statusStr),
+				op, csStatus.ID, taskID, statusStr),
 		}
 	}
 
 	return cloudSnapStatus{
 		status:      api.CloudBackupStatusDone,
 		cloudSnapID: csStatus.ID,
-		msg:         fmt.Sprintf("cloudsnap %s id: %s for %s done.", op, csStatus.ID, volID),
+		msg:         fmt.Sprintf("cloudsnap %s id: %s for %s done.", op, csStatus.ID, taskID),
 	}
 }
 
@@ -1551,16 +1558,19 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 				continue
 			}
 			volumeInfo.Volume = volume
-			err = p.volDriver.CloudMigrateStart(&api.CloudMigrateStartRequest{
+			_, err = p.volDriver.CloudMigrateStart(&api.CloudMigrateStartRequest{
+				TaskId:    string(migration.UID) + pvc.Name,
 				Operation: api.CloudMigrate_MigrateVolume,
 				ClusterId: clusterPair.Status.RemoteStorageID,
 				TargetId:  volume,
 			})
 			if err != nil {
-				volumeInfo.Status = stork_crd.MigrationStatusFailed
-				volumeInfo.Reason = fmt.Sprintf("Error starting migration for volume: %v", err)
-				logrus.Errorf("%v: %v", pvc.Name, volumeInfo.Reason)
-				continue
+				if _, ok := err.(*ost_errors.ErrExists); !ok {
+					volumeInfo.Status = stork_crd.MigrationStatusFailed
+					volumeInfo.Reason = fmt.Sprintf("Error starting migration for volume: %v", err)
+					logrus.Errorf("%v: %v", pvc.Name, volumeInfo.Reason)
+					continue
+				}
 			}
 			volumeInfo.Status = stork_crd.MigrationStatusInProgress
 			volumeInfo.Reason = fmt.Sprintf("Volume migration has started")
@@ -1606,6 +1616,7 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 		// If we didn't get the status for a volume mark it as failed
 		if !found {
 			vInfo.Status = stork_crd.MigrationStatusFailed
+			vInfo.Reason = "Unable to find migration status for volume"
 		}
 	}
 
