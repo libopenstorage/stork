@@ -124,10 +124,10 @@ type ClusterListener interface {
 // listen for incoming pairing requests.
 type ClusterListenerPairOps interface {
 	// CreatePair is called when we are pairing with another cluster
-	CreatePair(self *api.Node, response *api.ClusterPairProcessResponse) error
+	CreatePair(response *api.ClusterPairProcessResponse) error
 
 	// ProcessPairRequest is called when we get a pair request from another cluster
-	ProcessPairRequest(self *api.Node, response *api.ClusterPairProcessResponse) error
+	ProcessPairRequest(request *api.ClusterPairProcessRequest, response *api.ClusterPairProcessResponse) error
 }
 
 // ClusterListenerAlertOps is a wrapper over ClusterAlerts interface
@@ -260,6 +260,10 @@ type ClusterPair interface {
 
 	// EnumeratePairs returns list of cluster pairs
 	EnumeratePairs() (*api.ClusterPairsEnumerateResponse, error)
+
+	// RefreshPair Refreshes a cluster pairing by fetching latest information
+	// from the remote cluster
+	RefreshPair(string) error
 
 	// DeletePair Delete a cluster pairing
 	DeletePair(string) error
@@ -423,14 +427,13 @@ func (nc *NullClusterListener) EraseAlert(
 }
 
 func (nc *NullClusterListener) CreatePair(
-	self *api.Node,
 	response *api.ClusterPairProcessResponse,
 ) error {
 	return nil
 }
 
 func (nc *NullClusterListener) ProcessPairRequest(
-	self *api.Node,
+	request *api.ClusterPairProcessRequest,
 	response *api.ClusterPairProcessResponse,
 ) error {
 	return nil

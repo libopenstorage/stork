@@ -36,6 +36,8 @@ var (
 	ErrNotSupported = errors.New("Operation not supported")
 	// ErrVolBusy returned when volume is in busy state
 	ErrVolBusy = errors.New("Volume is busy")
+	// ErrInvalidName returned when Cloudbackup Name/request is invalid
+	ErrInvalidName = errors.New("Invalid name for cloud backup/restore request")
 )
 
 // Constants used by the VolumeDriver
@@ -135,7 +137,7 @@ type QuiesceDriver interface {
 // CloudBackupDriver interface provides Cloud backup features
 type CloudBackupDriver interface {
 	// CloudBackupCreate uploads snapshot of a volume to the cloud
-	CloudBackupCreate(input *api.CloudBackupCreateRequest) error
+	CloudBackupCreate(input *api.CloudBackupCreateRequest) (*api.CloudBackupCreateResponse, error)
 	// CloudBackupGroupCreate creates and then uploads volumegroup snapshots
 	CloudBackupGroupCreate(input *api.CloudBackupGroupCreateRequest) error
 	// CloudBackupRestore downloads a cloud backup and restores it to a volume
@@ -167,7 +169,7 @@ type CloudBackupDriver interface {
 // CloudMigrateDriver interface provides Cloud migration features
 type CloudMigrateDriver interface {
 	// CloudMigrateStart starts a migrate operation
-	CloudMigrateStart(request *api.CloudMigrateStartRequest) error
+	CloudMigrateStart(request *api.CloudMigrateStartRequest) (*api.CloudMigrateStartResponse, error)
 	// CloudMigrateCancel cancels a migrate operation
 	CloudMigrateCancel(request *api.CloudMigrateCancelRequest) error
 	// CloudMigrateStatus returns status for the migration operations
