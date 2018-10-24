@@ -25,7 +25,7 @@ func TestStorkGetVolumeSnapshots(t *testing.T) {
 	f := NewTestFactory()
 	tf := f.TestFactory.WithNamespace("test")
 	defer tf.Cleanup()
-	codec := legacyscheme.Codecs.LegacyCodec(schema.GroupVersion{Version: "v1"})
+	codec := legacyscheme.Codecs.LegacyCodec(schema.GroupVersion{Version: "v1", Group: snapv1.GroupName})
 
 	fakeRestClient := &fake.RESTClient{
 		NegotiatedSerializer: unstructuredSerializer,
