@@ -613,9 +613,10 @@ func extractPodUID(volDirPath string) string {
 func getPXNode(destKubeConfig string) (corev1.Node, error) {
 	var workerNode corev1.Node
 	// get schd-ops/k8s instance of destination cluster
-	destClient := k8s.NewInstance(destKubeConfig)
-	if destClient == nil {
-		return workerNode, fmt.Errorf("Unable to get new instance")
+	destClient, err := k8s.NewInstance(destKubeConfig)
+	if err != nil {
+		logrus.Errorf("Unable to get k8s instance: %v", err)
+		return workerNode, err
 	}
 	nodes, err := destClient.GetNodes()
 	if err != nil {
