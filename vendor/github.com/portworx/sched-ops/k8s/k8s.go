@@ -507,15 +507,15 @@ func (k *k8sOps) SetConfig(config *rest.Config) {
 	k.client = nil
 }
 
-// NewInstance returns new instance of k8sOps
-func NewInstance(destKubeConfig string) Ops {
+// NewInstance returns new instance of k8sOps by using given config
+func NewInstance(config string) (Ops, error) {
 	newInstance := &k8sOps{}
-	err := newInstance.loadClientFromKubeconfig(destKubeConfig)
+	err := newInstance.loadClientFromKubeconfig(config)
 	if err != nil {
-		logrus.Info("Unable to set new instance", err)
-		return nil
+		logrus.Errorf("Unable to set new instance: %v", err)
+		return nil, err
 	}
-	return newInstance
+	return newInstance, nil
 }
 
 // Initialize the k8s client if uninitialized

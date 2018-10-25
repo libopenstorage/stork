@@ -7,10 +7,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
-	"github.com/portworx/torpedo/drivers/node"
 	"time"
 )
 
@@ -22,7 +22,6 @@ func TestVolOps(t *testing.T) {
 var _ = BeforeSuite(func() {
 	InitInstance()
 })
-
 
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {

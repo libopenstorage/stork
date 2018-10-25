@@ -45,6 +45,7 @@ import:
   subpackages:
   - k8s
   - task
+  version: c3085782607379884d70c96f6d509bcd9d73f224
 - package: github.com/sirupsen/logrus
   version: ^1.0.5
 - package: golang.org/x/crypto

@@ -1,5 +1,5 @@
-hash: 6c2d8f49ec9bc242dfed5178bc794a57303c6fc67f2f91e146ba833eed5f856c
-updated: 2018-10-23T22:35:02.779185941-07:00
+hash: 55b9ab7246ab06c2fe5c5cf7a9ab0550b34c309f56cf82231f259ec261ca8564
+updated: 2018-10-25T20:17:21.49551841+05:30
 imports:
 - name: github.com/armon/go-metrics
   version: f0300d1749da6fa982027e449ec0c7a145510c3c
@@ -175,7 +175,7 @@ imports:
 - name: github.com/konsorten/go-windows-terminal-sequences
   version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/kubernetes-incubator/external-storage
-  version: cd82aca42900f43309fd9ebbc141684d78974446
+  version: bc02da24cf1ecc8be052434589c1b7f9081c75a1
   repo: https://github.com/libopenstorage/external-storage.git
   subpackages:
   - snapshot/pkg/apis/crd/v1
@@ -205,7 +205,7 @@ imports:
   - secrets
   - volume
 - name: github.com/libopenstorage/stork
-  version: abf1e99a5f902c630bbafdea4059ca1cfe318da2
+  version: b88865a129c8fc19e6dbf44d665891b2f8b2cbc4
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
@@ -280,7 +280,7 @@ imports:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: 3497461783cd315f1dadbf710e0c4f4ba2e81dc7
+  version: c3085782607379884d70c96f6d509bcd9d73f224
   subpackages:
   - k8s
   - task
