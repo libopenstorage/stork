@@ -40,6 +40,7 @@ const (
 	clusterPort             = "clusterport"
 	remoteKubeConfigPath    = "/tmp/kubeconfig"
 	tokenPath               = "/v1/cluster/pairtoken"
+	objectstorPath          = "/objectstore"
 )
 
 const (
@@ -68,10 +69,6 @@ type portworx struct {
 	schedOps        schedops.Driver
 	nodeDriver      node.Driver
 	refreshEndpoint bool
-}
-
-type tokenResp struct {
-	token string
 }
 
 func (d *portworx) String() string {
@@ -1060,6 +1057,44 @@ func (d *portworx) UpgradeDriver(version string) error {
 	return nil
 }
 
+func (d *portworx) setupObjectstore(pxNode node.Node) error {
+	volDriver, err := d.getVolumeDriverByAddress(pxNode.Addresses[0])
+	if err != nil {
+		return err
+	}
+
+	name := "objVolume"
+	req := &api.VolumeCreateRequest{
+		Locator: &api.VolumeLocator{Name: name},
+		Source:  &api.Source{},
+		Spec: &api.VolumeSpec{
+			Size:    50,
+			Format:  api.FSType_FS_TYPE_EXT4,
+			HaLevel: 1,
+		},
+	}
+	volID, err := volDriver.Create(req.GetLocator(), req.GetSource(), req.GetSpec())
+	if err != nil {
+		logrus.Errorf("Unable to create objectstore volume: %v", volID)
+		return err
+	}
+
+	return createObjectstore(d.constructURL(pxNode.Addresses[0]), volID)
+}
+
+func createObjectstore(pxEndpoint, volID string) error {
+	c, err := client.NewClient(pxEndpoint, "", "")
+	if err != nil {
+		return err
+	}
+	req := c.Post().Resource(objectstorPath)
+	req.QueryOption("volumeid", volID)
+	logrus.Info("Objectstore URL:v", req.URL().String())
+	resp := req.Do()
+
+	return resp.Error()
+}
+
 // GetClusterPairingInfo return underlying storage details
 func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pairInfo := make(map[string]string)
@@ -1069,22 +1104,22 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 		return pairInfo, err
 	}
 
-	resp, err := d.getClusterToken(pxNodes[0], tokenPath)
+	err = d.setupObjectstore(pxNodes[0])
 	if err != nil {
+		logrus.Errorf("Unable to set objectstore: %v", err)
 		return pairInfo, err
 	}
-	logrus.Info("Response for token:", resp)
 
-	// TODO: we shoul parse result directly
-	tokResp := &tokenResp{}
-	err = resp.Unmarshal(tokResp)
+	clusterMgr, err := d.getClusterManagerByAddress(pxNodes[0].Addresses[0])
+	resp, err := clusterMgr.GetPairToken(true)
 	if err != nil {
 		return pairInfo, err
 	}
+	logrus.Info("Response for token:", resp.Token)
 
 	// file up cluster pair info
 	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
-	pairInfo[tokenKey] = tokResp.token
+	pairInfo[tokenKey] = resp.Token
 	pairInfo[clusterPort] = strconv.Itoa(pxdRestPort)
 
 	return pairInfo, nil
@@ -1113,6 +1148,17 @@ func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, err
 	}
 
 	return clusterclient.ClusterManager(cClient), nil
+}
+
+func (d *portworx) getVolumeDriverByAddress(addr string) (volume.VolumeDriver, error) {
+	pxEndpoint := d.constructURL(addr)
+
+	dClient, err := volumeclient.NewDriverClient(pxEndpoint, DriverName, "", pxdClientSchedUserAgent)
+	if err != nil {
+		return nil, err
+	}
+
+	return volumeclient.VolumeDriver(dClient), nil
 }
 
 func (d *portworx) getClusterToken(n node.Node, op string) (*client.Response, error) {
