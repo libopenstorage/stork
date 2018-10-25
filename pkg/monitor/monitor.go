@@ -85,7 +85,7 @@ func (m *Monitor) driverMonitor() {
 	for {
 		select {
 		default:
-			log.Infof("Getting nodes")
+			log.Debugf("Monitoring storage nodes")
 			nodes, err := m.Driver.GetNodes()
 			if err != nil {
 				log.Errorf("Error getting nodes: %v", err)
