@@ -57,14 +57,18 @@ func TestSdkVolumeSnapshotCreate(t *testing.T) {
 
 	volid := "volid"
 	snapid := "snapid"
+	snapName := "snapName"
 	req := &api.SdkVolumeSnapshotCreateRequest{
 		VolumeId: volid,
+		Name:     snapName,
 	}
 
 	// Create response
 	s.MockDriver().
 		EXPECT().
-		Snapshot(req.GetVolumeId(), true, &api.VolumeLocator{}).
+		Snapshot(req.GetVolumeId(), true, &api.VolumeLocator{
+			Name: snapName,
+		}, false).
 		Return(snapid, nil).
 		Times(1)
 
@@ -199,4 +203,114 @@ func TestSdkVolumeSnapshotEnumerate(t *testing.T) {
 	assert.NotNil(t, r.GetVolumeSnapshotIds())
 	assert.Len(t, r.GetVolumeSnapshotIds(), 1)
 	assert.Equal(t, r.GetVolumeSnapshotIds()[0], snapid)
+}
+
+func TestSdkVolumeSnapshotEnumerateWithFilters(t *testing.T) {
+
+	// Create server and client connection
+	s := newTestServer(t)
+	defer s.Stop()
+
+	volid := "volid"
+	snapid := "snapid"
+	labels := map[string]string{
+		"hello": "world",
+	}
+	req := &api.SdkVolumeSnapshotEnumerateWithFiltersRequest{
+		VolumeId: volid,
+		Labels:   labels,
+	}
+
+	// Create response
+	s.MockDriver().
+		EXPECT().
+		SnapEnumerate([]string{volid}, labels).
+		Return([]*api.Volume{
+			&api.Volume{
+				Id: snapid,
+			},
+		}, nil).
+		Times(1)
+
+	// Setup client
+	c := api.NewOpenStorageVolumeClient(s.Conn())
+
+	// Get info
+	r, err := c.SnapshotEnumerateWithFilters(context.Background(), req)
+	assert.NoError(t, err)
+	assert.NotNil(t, r.GetVolumeSnapshotIds())
+	assert.Len(t, r.GetVolumeSnapshotIds(), 1)
+	assert.Equal(t, r.GetVolumeSnapshotIds()[0], snapid)
+}
+
+func TestSdkVolumeSnapshotScheduleUpdate(t *testing.T) {
+
+	// Create server and client connection
+	s := newTestServer(t)
+	defer s.Stop()
+
+	volid := "volid"
+	req := &api.SdkVolumeSnapshotScheduleUpdateRequest{
+		VolumeId:              volid,
+		SnapshotScheduleNames: []string{"mypolicy"},
+	}
+
+	s.MockDriver().
+		EXPECT().
+		Inspect([]string{volid}).
+		Return([]*api.Volume{&api.Volume{Spec: &api.VolumeSpec{}}}, nil).
+		AnyTimes()
+	s.MockCluster().
+		EXPECT().
+		SchedPolicyGet("mypolicy").
+		Return(nil, nil).
+		Times(1)
+	s.MockDriver().
+		EXPECT().
+		Set(volid, nil, &api.VolumeSpec{
+			SnapshotSchedule: "policy=mypolicy",
+		}).
+		Return(nil).
+		Times(1)
+
+	// Setup client
+	c := api.NewOpenStorageVolumeClient(s.Conn())
+
+	// Save snapshot schedule
+	_, err := c.SnapshotScheduleUpdate(context.Background(), req)
+	assert.NoError(t, err)
+}
+
+func TestSdkVolumeSnapshotScheduleUpdateDelete(t *testing.T) {
+
+	// Create server and client connection
+	s := newTestServer(t)
+	defer s.Stop()
+
+	volid := "volid"
+	req := &api.SdkVolumeSnapshotScheduleUpdateRequest{
+		VolumeId: volid,
+	}
+
+	s.MockDriver().
+		EXPECT().
+		Inspect([]string{volid}).
+		Return([]*api.Volume{&api.Volume{Spec: &api.VolumeSpec{
+			SnapshotSchedule: "policy=mypolicy",
+		}}}, nil).
+		AnyTimes()
+	s.MockDriver().
+		EXPECT().
+		Set(volid, nil, &api.VolumeSpec{
+			SnapshotSchedule: "",
+		}).
+		Return(nil).
+		Times(1)
+
+	// Setup client
+	c := api.NewOpenStorageVolumeClient(s.Conn())
+
+	// Save snapshot schedule
+	_, err := c.SnapshotScheduleUpdate(context.Background(), req)
+	assert.NoError(t, err)
 }

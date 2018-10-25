@@ -24,7 +24,7 @@ import:
 - package: github.com/docker/distribution
   version: 749f6afb4572201e3c37325d0ffedb6f32be8950
 - package: github.com/libopenstorage/openstorage
-  version: v3.0.0-beta
+  version: 09ee5d92a4ff827a284d26be193584be88c10cf4
   subpackages:
   - api
   - api/client

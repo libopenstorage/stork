@@ -22,17 +22,17 @@ import (
 	"mime"
 	"net/http"
 
+	"github.com/libopenstorage/openstorage/alerts"
+
 	"github.com/gobuffalo/packr"
-
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/pkg/grpcserver"
 	volumedrivers "github.com/libopenstorage/openstorage/volume/drivers"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 // ServerConfig provides the configuration to the SDK server
@@ -50,6 +50,8 @@ type ServerConfig struct {
 	DriverName string
 	// Cluster interface
 	Cluster cluster.Cluster
+	// AlertsFilterDeleter
+	AlertsFilterDeleter alerts.FilterDeleter
 }
 
 // Server is an implementation of the gRPC SDK interface
@@ -64,6 +66,8 @@ type Server struct {
 	schedulePolicyServer *SchedulePolicyServer
 	cloudBackupServer    *CloudBackupServer
 	credentialServer     *CredentialServer
+	identityServer       *IdentityServer
+	alertsServer         api.OpenStorageAlertsServer
 }
 
 // Interface check
@@ -97,6 +101,9 @@ func New(config *ServerConfig) (*Server, error) {
 	return &Server{
 		GrpcServer: gServer,
 		restPort:   config.RestPort,
+		identityServer: &IdentityServer{
+			driver: d,
+		},
 		clusterServer: &ClusterServer{
 			cluster: config.Cluster,
 		},
@@ -120,6 +127,7 @@ func New(config *ServerConfig) (*Server, error) {
 		credentialServer: &CredentialServer{
 			driver: d,
 		},
+		alertsServer: NewAlertsServer(config.AlertsFilterDeleter),
 	}, nil
 }
 
@@ -136,6 +144,9 @@ func (s *Server) Start() error {
 		api.RegisterOpenStorageCredentialsServer(grpcServer, s.credentialServer)
 		api.RegisterOpenStorageSchedulePolicyServer(grpcServer, s.schedulePolicyServer)
 		api.RegisterOpenStorageCloudBackupServer(grpcServer, s.cloudBackupServer)
+		api.RegisterOpenStorageIdentityServer(grpcServer, s.identityServer)
+		api.RegisterOpenStorageMountAttachServer(grpcServer, s.volumeServer)
+		api.RegisterOpenStorageAlertsServer(grpcServer, s.alertsServer)
 	})
 	if err != nil {
 		return err
@@ -194,7 +205,10 @@ func (s *Server) restServerSetupHandlers() (*http.ServeMux, error) {
 		http.StripPrefix(prefix, http.FileServer(swaggerUIBox)))
 
 	// Create a router just for HTTP REST gRPC Server Gateway
-	gmux := runtime.NewServeMux()
+	gmux := runtime.NewServeMux(
+		runtime.WithMarshalerOption(
+			runtime.MIMEWildcard,
+			&runtime.JSONPb{OrigName: true, EmitDefaults: true}))
 	err := api.RegisterOpenStorageClusterHandlerFromEndpoint(
 		context.Background(),
 		gmux,
@@ -250,6 +264,33 @@ func (s *Server) restServerSetupHandlers() (*http.ServeMux, error) {
 	}
 
 	err = api.RegisterOpenStorageCloudBackupHandlerFromEndpoint(
+		context.Background(),
+		gmux,
+		s.Address(),
+		[]grpc.DialOption{grpc.WithInsecure()})
+	if err != nil {
+		return nil, err
+	}
+
+	err = api.RegisterOpenStorageIdentityHandlerFromEndpoint(
+		context.Background(),
+		gmux,
+		s.Address(),
+		[]grpc.DialOption{grpc.WithInsecure()})
+	if err != nil {
+		return nil, err
+	}
+
+	err = api.RegisterOpenStorageMountAttachHandlerFromEndpoint(
+		context.Background(),
+		gmux,
+		s.Address(),
+		[]grpc.DialOption{grpc.WithInsecure()})
+	if err != nil {
+		return nil, err
+	}
+
+	err = api.RegisterOpenStorageAlertsHandlerFromEndpoint(
 		context.Background(),
 		gmux,
 		s.Address(),

@@ -12,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/opsworks"
+	sh "github.com/codeskyblue/go-sh"
+	oexec "github.com/libopenstorage/openstorage/pkg/exec"
 	"github.com/libopenstorage/openstorage/pkg/storageops"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
@@ -20,27 +22,38 @@ import (
 const (
 	awsDevicePrefix      = "/dev/sd"
 	awsDevicePrefixWithX = "/dev/xvd"
+	awsDevicePrefixWithH = "/dev/hd"
+	awsDevicePrefixNvme  = "/dev/nvme"
 )
 
 type ec2Ops struct {
-	instance string
-	ec2      *ec2.EC2
-	mutex    sync.Mutex
+	instanceType string
+	instance     string
+	ec2          *ec2.EC2
+	mutex        sync.Mutex
 }
 
-// ErrAWSEnvNotAvailable is the error type when aws credentails are not set
-var ErrAWSEnvNotAvailable = fmt.Errorf("AWS credentials are not set in environment")
+var (
+	// ErrAWSEnvNotAvailable is the error type when aws credentials are not set
+	ErrAWSEnvNotAvailable = fmt.Errorf("AWS credentials are not set in environment")
+	nvmeCmd               = oexec.Which("nvme")
+)
 
 // NewEnvClient creates a new AWS storage ops instance using environment vars
 func NewEnvClient() (storageops.Ops, error) {
-	region := os.Getenv("AWS_REGION")
-	if len(region) == 0 {
-		return nil, ErrAWSEnvNotAvailable
+	region, err := storageops.GetEnvValueStrict("AWS_REGION")
+	if err != nil {
+		return nil, err
 	}
 
-	instance := os.Getenv("AWS_INSTANCE_NAME")
-	if len(instance) == 0 {
-		return nil, ErrAWSEnvNotAvailable
+	instance, err := storageops.GetEnvValueStrict("AWS_INSTANCE_NAME")
+	if err != nil {
+		return nil, err
+	}
+
+	instanceType, err := storageops.GetEnvValueStrict("AWS_INSTANCE_TYPE")
+	if err != nil {
+		return nil, err
 	}
 
 	if _, err := credentials.NewEnvCredentials().Get(); err != nil {
@@ -56,16 +69,20 @@ func NewEnvClient() (storageops.Ops, error) {
 		),
 	)
 
-	return NewEc2Storage(instance, ec2), nil
+	return NewEc2Storage(instance, instanceType, ec2), nil
 }
 
 // NewEc2Storage creates a new aws storage ops instance
-func NewEc2Storage(instance string, ec2 *ec2.EC2) storageops.Ops {
+func NewEc2Storage(instance, instanceType string, ec2 *ec2.EC2) storageops.Ops {
 	return &ec2Ops{
-		instance: instance,
-		ec2:      ec2,
+		instance:     instance,
+		instanceType: instanceType,
+		ec2:          ec2,
 	}
 }
+
+// nvmeInstanceTypes are list of instance types whose EBS volumes are exposed as NVMe block devices
+var nvmeInstanceTypes = []string{"c5", "c5d", "i3.metal", "m5", "m5d", "r5", "r5d", "z1d"}
 
 func (s *ec2Ops) filters(
 	labels map[string]string,
@@ -149,22 +166,22 @@ func (s *ec2Ops) waitAttachmentStatus(
 ) (*ec2.Volume, error) {
 	id := volumeID
 	request := &ec2.DescribeVolumesInput{VolumeIds: []*string{&id}}
-	actual := ""
 	interval := 2 * time.Second
 	logrus.Infof("Waiting for state transition to %q", desired)
 
-	var outVol *ec2.Volume
-	for elapsed, runs := 0*time.Second, 0; actual != desired && elapsed < timeout; elapsed, runs = elapsed+interval, runs+1 {
+	f := func() (interface{}, bool, error) {
 		awsVols, err := s.ec2.DescribeVolumes(request)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if len(awsVols.Volumes) != 1 {
-			return nil, fmt.Errorf("expected one volume %v got %v",
+			return nil, false, fmt.Errorf("expected one volume %v got %v",
 				volumeID, len(awsVols.Volumes))
 		}
-		outVol = awsVols.Volumes[0]
-		awsAttachment := awsVols.Volumes[0].Attachments
+
+		var actual string
+		vol := awsVols.Volumes[0]
+		awsAttachment := vol.Attachments
 		if awsAttachment == nil || len(awsAttachment) == 0 {
 			// We have encountered scenarios where AWS returns a nil attachment state
 			// for a volume transitioning from detaching -> attaching.
@@ -173,21 +190,26 @@ func (s *ec2Ops) waitAttachmentStatus(
 			actual = *awsAttachment[0].State
 		}
 		if actual == desired {
-			break
+			return vol, false, nil
 		}
-		time.Sleep(interval)
-		if (runs % 10) == 0 {
-			logrus.Infof("Tried %d times", runs)
-		}
-	}
-	if actual != desired {
-		return nil, fmt.Errorf("Volume %v failed to transition to  %v current state %v",
+		return nil, true, fmt.Errorf("Volume %v failed to transition to  %v current state %v",
 			volumeID, desired, actual)
 	}
-	return outVol, nil
+
+	outVol, err := task.DoRetryWithTimeout(f, timeout, interval)
+	if err != nil {
+		return nil, err
+	}
+	if vol, ok := outVol.(*ec2.Volume); ok {
+		return vol, nil
+	}
+	return nil, storageops.NewStorageError(storageops.ErrVolInval,
+		fmt.Sprintf("Invalid volume object for volume %s", volumeID), "")
 }
 
 func (s *ec2Ops) Name() string { return "aws" }
+
+func (s *ec2Ops) InstanceID() string { return s.instance }
 
 func (s *ec2Ops) ApplyTags(volumeID string, labels map[string]string) error {
 	req := &ec2.CreateTagsInput{
@@ -220,7 +242,7 @@ func (s *ec2Ops) DeviceMappings() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	devPrefix := awsDevicePrefix
+
 	m := make(map[string]string)
 	for _, d := range instance.BlockDeviceMappings {
 		if d.DeviceName != nil && d.Ebs != nil && d.Ebs.VolumeId != nil {
@@ -229,11 +251,15 @@ func (s *ec2Ops) DeviceMappings() (map[string]string, error) {
 			if devName == *instance.RootDeviceName {
 				continue
 			}
-			// AWS EBS volumes get mapped from /dev/sdN -->/dev/xvdN
-			if strings.HasPrefix(devName, devPrefix) {
-				devName = awsDevicePrefixWithX + devName[len(devPrefix):]
+
+			devicePath, err := s.getActualDevicePath(devName, *d.Ebs.VolumeId)
+			if err != nil {
+				return nil, storageops.NewStorageError(
+					storageops.ErrInvalidDevicePath,
+					fmt.Sprintf("unable to get actual device path for %s. %v", devName, err),
+					s.instance)
 			}
-			m[devName] = *d.Ebs.VolumeId
+			m[devicePath] = *d.Ebs.VolumeId
 		}
 	}
 	return m, nil
@@ -268,8 +294,11 @@ func (s *ec2Ops) getPrefixFromRootDeviceName(rootDeviceName string) (string, err
 	if !strings.HasPrefix(rootDeviceName, devPrefix) {
 		devPrefix = awsDevicePrefixWithX
 		if !strings.HasPrefix(rootDeviceName, devPrefix) {
-			return "", fmt.Errorf("unknown prefix type on root device: %s",
-				rootDeviceName)
+			devPrefix = awsDevicePrefixWithH
+			if !strings.HasPrefix(rootDeviceName, devPrefix) {
+				return "", fmt.Errorf("unknown prefix type on root device: %s",
+					rootDeviceName)
+			}
 		}
 	}
 	return devPrefix, nil
@@ -279,16 +308,61 @@ func (s *ec2Ops) getPrefixFromRootDeviceName(rootDeviceName string) (string, err
 // If not found it will try all the different devicePrefixes provided by AWS
 // such as /dev/sd and /dev/xvd and return the devicePath which is found
 // or return an error
-func (s *ec2Ops) getActualDevicePath(devicePath string) (string, error) {
-	letter := devicePath[len(devicePath)-1:]
-	devicePath = awsDevicePrefix + letter
-	if _, err := os.Stat(devicePath); err != nil {
-		devicePath = awsDevicePrefixWithX + letter
-		if _, err := os.Stat(devicePath); err != nil {
-			return "", err
+func (s *ec2Ops) getActualDevicePath(ipDevicePath, volumeID string) (string, error) {
+	letter := ipDevicePath[len(ipDevicePath)-1:]
+	devicePath := awsDevicePrefix + letter
+	if _, err := os.Stat(devicePath); err == nil {
+		return devicePath, nil
+	}
+	devicePath = awsDevicePrefixWithX + letter
+	if _, err := os.Stat(devicePath); err == nil {
+		return devicePath, nil
+	}
+
+	devicePath = awsDevicePrefixWithH + letter
+	if _, err := os.Stat(devicePath); err == nil {
+		return devicePath, nil
+	}
+
+	// Check if the EBS volumes are exposed as NVMe drives
+	found := false
+	for _, instancePrefix := range nvmeInstanceTypes {
+		if strings.HasPrefix(s.instanceType, instancePrefix) {
+			found = true
+			break
 		}
 	}
+
+	if !found {
+		return "", fmt.Errorf("unable to map volume %v with block device mapping %v to an"+
+			" actual device path on the host", volumeID, ipDevicePath)
+	}
+
+	devicePath, err := s.getNvmeDeviceFromVolumeID(volumeID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(devicePath); err != nil {
+		return "", err
+	}
 	return devicePath, nil
+
+}
+
+func (s *ec2Ops) getNvmeDeviceFromVolumeID(volumeID string) (string, error) {
+	// We will use nvme list command to find nvme device mappings
+	// A typical output of nvme list looks like this
+	// # nvme list
+	// Node             SN                   Model                                    Namespace Usage                      Format           FW Rev
+	// ---------------- -------------------- ---------------------------------------- --------- -------------------------- ---------------- --------
+	// /dev/nvme0n1     vol00fd6f8c30dc619f4 Amazon Elastic Block Store               1           0.00   B / 137.44  GB    512   B +  0 B   1.0
+	// /dev/nvme1n1     vol044e12c8c0af45b3d Amazon Elastic Block Store               1           0.00   B / 107.37  GB    512   B +  0 B   1.0
+	trimmedVolumeID := strings.Replace(volumeID, "-", "", 1)
+	out, err := sh.Command(nvmeCmd, "list").Command("grep", trimmedVolumeID).Command("awk", "{print $1}").Output()
+	if err != nil {
+		return "", fmt.Errorf("unable to map %v volume to an nvme device: %v", volumeID, err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func (s *ec2Ops) FreeDevices(
@@ -311,10 +385,14 @@ func (s *ec2Ops) FreeDevices(
 		if !strings.HasPrefix(devName, devPrefix) {
 			devPrefix = awsDevicePrefixWithX
 			if !strings.HasPrefix(devName, devPrefix) {
-				return nil, fmt.Errorf("bad device name %q", devName)
+				devPrefix = awsDevicePrefixWithH
+				if !strings.HasPrefix(devName, devPrefix) {
+					return nil, fmt.Errorf("bad device name %q", devName)
+				}
 			}
 		}
 		letter := devName[len(devPrefix):]
+
 		// Reset devPrefix for next devices
 		devPrefix = awsDevicePrefix
 
@@ -516,6 +594,10 @@ func (s *ec2Ops) Create(
 	return s.refreshVol(resp.VolumeId)
 }
 
+func (s *ec2Ops) DeleteFrom(id, _ string) error {
+	return s.Delete(id)
+}
+
 func (s *ec2Ops) Delete(id string) error {
 	req := &ec2.DeleteVolumeInput{VolumeId: &id}
 	_, err := s.ec2.DeleteVolume(req)
@@ -545,7 +627,7 @@ func (s *ec2Ops) Attach(volumeID string) (string, error) {
 		InstanceId: &s.instance,
 		VolumeId:   &volumeID,
 	}
-	if _, err = s.ec2.AttachVolume(req); err != nil {
+	if _, err := s.ec2.AttachVolume(req); err != nil {
 		return "", err
 	}
 	vol, err := s.waitAttachmentStatus(
@@ -560,9 +642,17 @@ func (s *ec2Ops) Attach(volumeID string) (string, error) {
 }
 
 func (s *ec2Ops) Detach(volumeID string) error {
+	return s.detachInternal(volumeID, s.instance)
+}
+
+func (s *ec2Ops) DetachFrom(volumeID, instanceName string) error {
+	return s.detachInternal(volumeID, instanceName)
+}
+
+func (s *ec2Ops) detachInternal(volumeID, instanceName string) error {
 	force := false
 	req := &ec2.DetachVolumeInput{
-		InstanceId: &s.instance,
+		InstanceId: &instanceName,
 		VolumeId:   &volumeID,
 		Force:      &force,
 	}
@@ -629,7 +719,7 @@ func (s *ec2Ops) DevicePath(volumeID string) (string, error) {
 		return "", storageops.NewStorageError(storageops.ErrVolInval,
 			"Unable to determine volume attachment path", "")
 	}
-	devicePath, err := s.getActualDevicePath(*vol.Attachments[0].Device)
+	devicePath, err := s.getActualDevicePath(*vol.Attachments[0].Device, volumeID)
 	if err != nil {
 		return "", storageops.NewStorageError(storageops.ErrVolInval,
 			err.Error(), "")

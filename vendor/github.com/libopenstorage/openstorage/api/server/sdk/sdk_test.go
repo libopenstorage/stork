@@ -21,6 +21,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/libopenstorage/openstorage/alerts/mock"
+
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
@@ -46,6 +48,7 @@ type testServer struct {
 	server *Server
 	m      *mockdriver.MockVolumeDriver
 	c      *mockcluster.MockCluster
+	a      *mockalerts.MockFilterDeleter
 	mc     *gomock.Controller
 	gw     *httptest.Server
 }
@@ -69,16 +72,18 @@ func newTestServer(t *testing.T) *testServer {
 	tester.mc = gomock.NewController(&utils.SafeGoroutineTester{})
 	tester.m = mockdriver.NewMockVolumeDriver(tester.mc)
 	tester.c = mockcluster.NewMockCluster(tester.mc)
+	tester.a = mockalerts.NewMockFilterDeleter(tester.mc)
 
 	setupMockDriver(tester, t)
 
 	var err error
 	// Setup simple driver
 	tester.server, err = New(&ServerConfig{
-		DriverName: mockDriverName,
-		Net:        "tcp",
-		Address:    "127.0.0.1:0",
-		Cluster:    tester.c,
+		DriverName:          mockDriverName,
+		Net:                 "tcp",
+		Address:             "127.0.0.1:0",
+		Cluster:             tester.c,
+		AlertsFilterDeleter: tester.a,
 	})
 	assert.Nil(t, err)
 	err = tester.server.Start()
@@ -103,6 +108,10 @@ func (s *testServer) MockDriver() *mockdriver.MockVolumeDriver {
 
 func (s *testServer) MockCluster() *mockcluster.MockCluster {
 	return s.c
+}
+
+func (s *testServer) MockFilterDeleter() *mockalerts.MockFilterDeleter {
+	return s.a
 }
 
 func (s *testServer) Stop() {
@@ -151,12 +160,15 @@ func TestSdkGateway(t *testing.T) {
 
 	// Check the gateway works
 	// First setup the mock
+	id := "id"
+	name := "name"
 	cluster := api.Cluster{
-		Id:     "someid",
+		Id:     name,
 		NodeId: "somenodeid",
 		Status: api.Status_STATUS_NOT_IN_QUORUM,
 	}
 	s.MockCluster().EXPECT().Enumerate().Return(cluster, nil).Times(1)
+	s.MockCluster().EXPECT().Uuid().Return(id).Times(1)
 
 	// Then send the request
 	res, err = http.Get(s.GatewayURL() + "/v1/clusters/current")

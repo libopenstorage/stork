@@ -223,13 +223,13 @@ func TestVolumeSnapshotCreateSuccess(t *testing.T) {
 	//mock Snapshot call
 	testVolDriver.MockDriver().
 		EXPECT().
-		Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator()).
+		Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator(), req.GetNoRetry()).
 		Return(id, nil)
 
 	// create client
 	driverclient := volumeclient.VolumeDriver(client)
 
-	res, err := driverclient.Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator())
+	res, err := driverclient.Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator(), req.GetNoRetry())
 
 	assert.Nil(t, err)
 	assert.EqualValues(t, id, res)
@@ -258,13 +258,13 @@ func TestVolumeSnapshotCreateFailed(t *testing.T) {
 	//mock Snapshot call
 	testVolDriver.MockDriver().
 		EXPECT().
-		Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator()).
+		Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator(), req.GetNoRetry()).
 		Return("", fmt.Errorf("error in snapshot create"))
 
 	// create client
 	driverclient := volumeclient.VolumeDriver(client)
 
-	res, err := driverclient.Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator())
+	res, err := driverclient.Snapshot(req.GetId(), req.GetReadonly(), req.GetLocator(), req.GetNoRetry())
 
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "error in snapshot create")
@@ -1573,4 +1573,57 @@ func TestGroupSnapshotCreateSuccess(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Equal(t, len(response.Snapshots), len(res.Snapshots))
+}
+
+func TestVolumeCatalogSuccess(t *testing.T) {
+
+	var err error
+	ts, testVolDriver := testRestServer(t)
+
+	defer ts.Close()
+	defer testVolDriver.Stop()
+
+	client, err := volumeclient.NewDriverClient(ts.URL, mockDriverName, version, mockDriverName)
+	assert.Nil(t, err)
+
+	// vol uuid
+	volid := "dummy-111-uuid"
+
+	testVolDriver.MockDriver().
+		EXPECT().
+		Catalog(volid, "", "0").
+		Return(api.CatalogResponse{}, nil)
+
+	// create client
+	driverclient := volumeclient.VolumeDriver(client)
+	_, err = driverclient.Catalog(volid, "", "0")
+
+	assert.Nil(t, err)
+}
+
+func TestVolumeCatalogFailed(t *testing.T) {
+
+	var err error
+	ts, testVolDriver := testRestServer(t)
+
+	defer ts.Close()
+	defer testVolDriver.Stop()
+
+	client, err := volumeclient.NewDriverClient(ts.URL, mockDriverName, version, mockDriverName)
+	assert.Nil(t, err)
+
+	// vol uuid
+	volid := "dummy-111-uuid"
+
+	testVolDriver.MockDriver().
+		EXPECT().
+		Catalog(volid, "", "0").
+		Return(api.CatalogResponse{}, fmt.Errorf("error in volume catalog"))
+
+	// create client
+	driverclient := volumeclient.VolumeDriver(client)
+	_, err = driverclient.Catalog(volid, "", "0")
+
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "error in volume catalog")
 }

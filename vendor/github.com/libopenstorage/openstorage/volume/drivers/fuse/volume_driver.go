@@ -63,6 +63,13 @@ func (v *volumeDriver) Type() api.DriverType {
 	return api.DriverType_DRIVER_TYPE_FILE
 }
 
+func (v *volumeDriver) Version() (*api.StorageVersion, error) {
+	return &api.StorageVersion{
+		Driver:  v.Name(),
+		Version: "1.0.0",
+	}, nil
+}
+
 func (v *volumeDriver) Create(
 	volumeLocator *api.VolumeLocator,
 	source *api.Source,
@@ -164,3 +171,7 @@ func (v *volumeDriver) Status() [][2]string {
 }
 
 func (v *volumeDriver) Shutdown() {}
+
+func (d *volumeDriver) Catalog(volumeID, path, depth string) (api.CatalogResponse, error) {
+	return api.CatalogResponse{}, volume.ErrNotSupported
+}

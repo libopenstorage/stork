@@ -1,5 +1,7 @@
 package storageops
 
+import "fmt"
+
 const (
 	// SetIdentifierNone is a default identifier to group all disks from a
 	// particular set
@@ -16,7 +18,14 @@ const (
 	// ErrVolAttachedOnRemoteNode is code when a volume is not attached locally
 	// but attached on a remote node
 	ErrVolAttachedOnRemoteNode
+	// ErrVolNotFound is code when a volume is not found
+	ErrVolNotFound
+	// ErrInvalidDevicePath is code when a volume/disk has invalid device path
+	ErrInvalidDevicePath
 )
+
+// ErrNotSupported is returned when a particular operation is not supported
+var ErrNotSupported = fmt.Errorf("operation not supported")
 
 // StorageError error returned for storage operations
 type StorageError struct {
@@ -32,6 +41,8 @@ type StorageError struct {
 type Ops interface {
 	// Name returns name of the storage operations driver
 	Name() string
+	// InstanceID returns the ID of the instance of the default instance the operations are performed on
+	InstanceID() string
 	// Create volume based on input template volume and also apply given labels.
 	Create(template interface{}, labels map[string]string) (interface{}, error)
 	// GetDeviceID returns ID/Name of the given device/disk or snapshot
@@ -41,8 +52,12 @@ type Ops interface {
 	Attach(volumeID string) (string, error)
 	// Detach volumeID.
 	Detach(volumeID string) error
+	// DetachFrom detaches the disk/volume with given ID from the given instance ID
+	DetachFrom(volumeID, instanceID string) error
 	// Delete volumeID.
 	Delete(volumeID string) error
+	// DeleteFrom deletes the given volume/disk from the given instanceID
+	DeleteFrom(volumeID, instanceID string) error
 	// Desribe an instance
 	Describe() (interface{}, error)
 	// FreeDevices returns free block devices on the instance.

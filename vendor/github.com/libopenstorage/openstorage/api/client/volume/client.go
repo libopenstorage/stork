@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"strconv"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
+	ost_errors "github.com/libopenstorage/openstorage/api/errors"
 	"github.com/libopenstorage/openstorage/volume"
 )
 
@@ -36,6 +38,10 @@ func (v *volumeClient) Name() string {
 func (v *volumeClient) Type() api.DriverType {
 	// Block drivers implement the superset.
 	return api.DriverType_DRIVER_TYPE_BLOCK
+}
+
+func (v *volumeClient) Version() (*api.StorageVersion, error) {
+	return nil, volume.ErrNotSupported
 }
 
 func (v *volumeClient) GraphDriverCreate(id string, parent string) error {
@@ -171,13 +177,17 @@ func (v *volumeClient) Delete(volumeID string) error {
 // Snap specified volume. IO to the underlying volume should be quiesced before
 // calling this function.
 // Errors ErrEnoEnt may be returned
-func (v *volumeClient) Snapshot(volumeID string, readonly bool,
-	locator *api.VolumeLocator) (string, error) {
+func (v *volumeClient) Snapshot(volumeID string,
+	readonly bool,
+	locator *api.VolumeLocator,
+	noRetry bool,
+) (string, error) {
 	response := &api.SnapCreateResponse{}
 	request := &api.SnapCreateRequest{
 		Id:       volumeID,
 		Readonly: readonly,
 		Locator:  locator,
+		NoRetry:  noRetry,
 	}
 	if err := v.c.Post().Resource(snapPath).Body(request).Do().Unmarshal(response); err != nil {
 		return "", err
@@ -484,12 +494,35 @@ func (v *volumeClient) CredsValidate(uuid string) error {
 // CloudBackupCreate uploads snapshot of a volume to cloud
 func (v *volumeClient) CloudBackupCreate(
 	input *api.CloudBackupCreateRequest,
-) error {
+) (*api.CloudBackupCreateResponse, error) {
+	createResp := &api.CloudBackupCreateResponse{}
 	req := v.c.Post().Resource(api.OsdBackupPath).Body(input)
+	response := req.Do()
+	if response.Error() != nil {
+		if response.StatusCode() == http.StatusConflict {
+			return nil, &ost_errors.ErrExists{
+				Type: "CloudBackupCreate",
+				ID:   input.Name,
+			}
+		}
+		return nil, response.FormatError()
+	}
+	if err := response.Unmarshal(&createResp); err != nil {
+		return nil, err
+	}
+	return createResp, nil
+}
+
+// CloudBackupGroupCreate uploads snapshots of a volume group to cloud
+func (v *volumeClient) CloudBackupGroupCreate(
+	input *api.CloudBackupGroupCreateRequest,
+) error {
+	req := v.c.Post().Resource(api.OsdBackupPath + "/group").Body(input)
 	response := req.Do()
 	if response.Error() != nil {
 		return response.FormatError()
 	}
+
 	return nil
 }
 
@@ -501,6 +534,12 @@ func (v *volumeClient) CloudBackupRestore(
 	req := v.c.Post().Resource(api.OsdBackupPath + "/restore").Body(input)
 	response := req.Do()
 	if response.Error() != nil {
+		if response.StatusCode() == http.StatusConflict {
+			return nil, &ost_errors.ErrExists{
+				Type: "CloudBackupRestore",
+				ID:   input.Name,
+			}
+		}
 		return nil, response.FormatError()
 	}
 
@@ -632,6 +671,24 @@ func (v *volumeClient) CloudBackupSchedCreate(
 	return createResponse, nil
 }
 
+// CloudBackupGroupSchedCreate for a volume group creates a schedule to backup
+// volume group to the cloud
+func (v *volumeClient) CloudBackupGroupSchedCreate(
+	input *api.CloudBackupGroupSchedCreateRequest,
+) (*api.CloudBackupSchedCreateResponse, error) {
+	createResponse := &api.CloudBackupSchedCreateResponse{}
+	req := v.c.Post().Resource(api.OsdBackupPath + "/schedgroup").Body(input)
+	response := req.Do()
+	if response.Error() != nil {
+		return nil, response.FormatError()
+	}
+
+	if err := response.Unmarshal(&createResponse); err != nil {
+		return nil, err
+	}
+	return createResponse, nil
+}
+
 // CloudBackupSchedDelete delete a volume's cloud backup-schedule
 func (v *volumeClient) CloudBackupSchedDelete(
 	input *api.CloudBackupSchedDeleteRequest,
@@ -678,13 +735,23 @@ func (v *volumeClient) SnapshotGroup(groupID string, labels map[string]string) (
 	return response, nil
 }
 
-func (v *volumeClient) CloudMigrateStart(request *api.CloudMigrateStartRequest) error {
+func (v *volumeClient) CloudMigrateStart(request *api.CloudMigrateStartRequest) (*api.CloudMigrateStartResponse, error) {
+	startResponse := &api.CloudMigrateStartResponse{}
 	req := v.c.Post().Resource(api.OsdMigrateStartPath).Body(request)
 	response := req.Do()
 	if response.Error() != nil {
-		return response.FormatError()
+		if response.StatusCode() == http.StatusConflict {
+			return nil, &ost_errors.ErrExists{
+				Type: "CloudMigrate",
+				ID:   request.TaskId,
+			}
+		}
+		return nil, response.FormatError()
 	}
-	return nil
+	if err := response.Unmarshal(startResponse); err != nil {
+		return nil, err
+	}
+	return startResponse, nil
 }
 
 func (v *volumeClient) CloudMigrateCancel(request *api.CloudMigrateCancelRequest) error {
@@ -707,4 +774,16 @@ func (v *volumeClient) CloudMigrateStatus() (*api.CloudMigrateStatusResponse, er
 		return nil, err
 	}
 	return statusResponse, nil
+}
+
+// Du specified volume id and specifically path (if provided)
+func (v *volumeClient) Catalog(id, subfolder, maxDepth string) (api.CatalogResponse, error) {
+	var catalog api.CatalogResponse
+
+	req := v.c.Get().Resource(volumePath + "/catalog").Instance(id)
+	if err := req.QueryOption(api.OptCatalogSubFolder, subfolder).QueryOption(api.OptCatalogMaxDepth, maxDepth).Do().Unmarshal(&catalog); err != nil {
+		return catalog, err
+	}
+
+	return catalog, nil
 }

@@ -42,7 +42,7 @@ func (b *blockNotSupported) Detach(volumeID string, options map[string]string) e
 
 type snapshotNotSupported struct{}
 
-func (s *snapshotNotSupported) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator) (string, error) {
+func (s *snapshotNotSupported) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error) {
 	return "", ErrNotSupported
 }
 
@@ -131,6 +131,12 @@ type cloudBackupNotSupported struct{}
 
 func (cl *cloudBackupNotSupported) CloudBackupCreate(
 	input *api.CloudBackupCreateRequest,
+) (*api.CloudBackupCreateResponse, error) {
+	return nil, ErrNotSupported
+}
+
+func (cl *cloudBackupNotSupported) CloudBackupGroupCreate(
+	input *api.CloudBackupGroupCreateRequest,
 ) error {
 	return ErrNotSupported
 }
@@ -189,6 +195,12 @@ func (cl *cloudBackupNotSupported) CloudBackupSchedCreate(
 	return nil, ErrNotSupported
 }
 
+func (cl *cloudBackupNotSupported) CloudBackupGroupSchedCreate(
+	input *api.CloudBackupGroupSchedCreateRequest,
+) (*api.CloudBackupSchedCreateResponse, error) {
+	return nil, ErrNotSupported
+}
+
 func (cl *cloudBackupNotSupported) CloudBackupSchedDelete(
 	input *api.CloudBackupSchedDeleteRequest,
 ) error {
@@ -201,8 +213,8 @@ func (cl *cloudBackupNotSupported) CloudBackupSchedEnumerate() (*api.CloudBackup
 
 type cloudMigrateNotSupported struct{}
 
-func (cl *cloudMigrateNotSupported) CloudMigrateStart(request *api.CloudMigrateStartRequest) error {
-	return ErrNotSupported
+func (cl *cloudMigrateNotSupported) CloudMigrateStart(request *api.CloudMigrateStartRequest) (*api.CloudMigrateStartResponse, error) {
+	return nil, ErrNotSupported
 }
 
 func (cl *cloudMigrateNotSupported) CloudMigrateCancel(request *api.CloudMigrateCancelRequest) error {

@@ -8,7 +8,7 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/storageops"
 	"github.com/libopenstorage/openstorage/pkg/storageops/gce"
 	"github.com/libopenstorage/openstorage/pkg/storageops/test"
-	uuid "github.com/satori/go.uuid"
+	"github.com/pborman/uuid"
 	"github.com/stretchr/testify/require"
 	compute "google.golang.org/api/compute/v1"
 )
@@ -19,7 +19,7 @@ const (
 	newDiskDescription = "Disk created by Openstorage tests"
 )
 
-var diskName = fmt.Sprintf("%s-%s", newDiskPrefix, uuid.NewV4())
+var diskName = fmt.Sprintf("%s-%s", newDiskPrefix, uuid.New())
 
 func initGCE(t *testing.T) (storageops.Ops, map[string]interface{}) {
 	driver, err := gce.NewClient()
@@ -45,7 +45,6 @@ func TestAll(t *testing.T) {
 		d, disks := initGCE(t)
 		drivers[d.Name()] = d
 		diskTemplates[d.Name()] = disks
-
 		test.RunTest(drivers, diskTemplates, t)
 	} else {
 		fmt.Printf("skipping GCE tests as environment is not set...\n")

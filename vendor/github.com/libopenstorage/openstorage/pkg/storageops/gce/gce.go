@@ -3,8 +3,10 @@ package gce
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,12 +18,18 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
+	"google.golang.org/api/googleapi"
 )
 
 var notFoundRegex = regexp.MustCompile(`.*notFound`)
 
 const googleDiskPrefix = "/dev/disk/by-id/google-"
 const STATUS_READY = "READY"
+
+const (
+	devicePathMaxRetryCount = 3
+	devicePathRetryInterval = 2 * time.Second
+)
 
 type gceOps struct {
 	inst    *instance
@@ -31,15 +39,10 @@ type gceOps struct {
 
 // instance stores the metadata of the running GCE instance
 type instance struct {
-	ID         string
-	Name       string
-	Hostname   string
-	Zone       string
-	Project    string
-	InternalIP string
-	ExternalIP string
-	LBRequest  string
-	ClientIP   string
+	name     string
+	hostname string
+	zone     string
+	project  string
 }
 
 // IsDevMode checks if the pkg is invoked in developer mode where GCE credentials
@@ -84,10 +87,12 @@ func NewClient() (storageops.Ops, error) {
 
 func (s *gceOps) Name() string { return "gce" }
 
+func (s *gceOps) InstanceID() string { return s.inst.name }
+
 func (s *gceOps) ApplyTags(
 	diskName string,
 	labels map[string]string) error {
-	d, err := s.service.Disks.Get(s.inst.Project, s.inst.Zone, diskName).Do()
+	d, err := s.service.Disks.Get(s.inst.project, s.inst.zone, diskName).Do()
 	if err != nil {
 		return err
 	}
@@ -108,7 +113,7 @@ func (s *gceOps) ApplyTags(
 		Labels:           currentLabels,
 	}
 
-	_, err = s.service.Disks.SetLabels(s.inst.Project, s.inst.Zone, d.Name, rb).Do()
+	_, err = s.service.Disks.SetLabels(s.inst.project, s.inst.zone, d.Name, rb).Do()
 	return err
 }
 
@@ -117,7 +122,7 @@ func (s *gceOps) Attach(diskName string) (string, error) {
 	defer s.mutex.Unlock()
 
 	var d *compute.Disk
-	d, err := s.service.Disks.Get(s.inst.Project, s.inst.Zone, diskName).Do()
+	d, err := s.service.Disks.Get(s.inst.project, s.inst.zone, diskName).Do()
 	if err != nil {
 		return "", err
 	}
@@ -133,9 +138,9 @@ func (s *gceOps) Attach(diskName string) (string, error) {
 	}
 
 	_, err = s.service.Instances.AttachDisk(
-		s.inst.Project,
-		s.inst.Zone,
-		s.inst.Name,
+		s.inst.project,
+		s.inst.zone,
+		s.inst.name,
 		rb).Do()
 	if err != nil {
 		return "", err
@@ -170,7 +175,7 @@ func (s *gceOps) Create(
 		Zone:           path.Base(v.Zone),
 	}
 
-	resp, err := s.service.Disks.Insert(s.inst.Project, newDisk.Zone, newDisk).Do()
+	resp, err := s.service.Disks.Insert(s.inst.project, newDisk.Zone, newDisk).Do()
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +184,7 @@ func (s *gceOps) Create(
 		return nil, s.rollbackCreate(resp.Name, err)
 	}
 
-	d, err := s.service.Disks.Get(s.inst.Project, newDisk.Zone, newDisk.Name).Do()
+	d, err := s.service.Disks.Get(s.inst.project, newDisk.Zone, newDisk.Name).Do()
 	if err != nil {
 		return nil, err
 	}
@@ -187,16 +192,20 @@ func (s *gceOps) Create(
 	return d, err
 }
 
+func (s *gceOps) DeleteFrom(id, _ string) error {
+	return s.Delete(id)
+}
+
 func (s *gceOps) Delete(id string) error {
 	ctx := context.Background()
 	found := false
-	req := s.service.Disks.AggregatedList(s.inst.Project)
+	req := s.service.Disks.AggregatedList(s.inst.project)
 	if err := req.Pages(ctx, func(page *compute.DiskAggregatedList) error {
 		for _, diskScopedList := range page.Items {
 			for _, disk := range diskScopedList.Disks {
 				if disk.Name == id {
 					found = true
-					_, err := s.service.Disks.Delete(s.inst.Project, path.Base(disk.Zone), id).Do()
+					_, err := s.service.Disks.Delete(s.inst.project, path.Base(disk.Zone), id).Do()
 					return err
 				}
 			}
@@ -215,17 +224,25 @@ func (s *gceOps) Delete(id string) error {
 }
 
 func (s *gceOps) Detach(devicePath string) error {
+	return s.detachInternal(devicePath, s.inst.name)
+}
+
+func (s *gceOps) DetachFrom(devicePath, instanceName string) error {
+	return s.detachInternal(devicePath, instanceName)
+}
+
+func (s *gceOps) detachInternal(devicePath, instanceName string) error {
 	_, err := s.service.Instances.DetachDisk(
-		s.inst.Project,
-		s.inst.Zone,
-		s.inst.Name,
+		s.inst.project,
+		s.inst.zone,
+		instanceName,
 		devicePath).Do()
 	if err != nil {
 		return err
 	}
 
 	var d *compute.Disk
-	d, err = s.service.Disks.Get(s.inst.Project, s.inst.Zone, devicePath).Do()
+	d, err = s.service.Disks.Get(s.inst.project, s.inst.zone, devicePath).Do()
 	if err != nil {
 		return err
 	}
@@ -249,21 +266,35 @@ func (s *gceOps) DeviceMappings() (map[string]string, error) {
 			continue
 		}
 
-		m[fmt.Sprintf("%s%s", googleDiskPrefix, d.DeviceName)] = path.Base(d.Source)
+		pathByID := fmt.Sprintf("%s%s", googleDiskPrefix, d.DeviceName)
+		devPath, err := s.diskIDToBlockDevPath(pathByID)
+		if err != nil {
+			return nil, storageops.NewStorageError(
+				storageops.ErrInvalidDevicePath,
+				fmt.Sprintf("unable to find block dev path for %s. %v", pathByID, err),
+				s.inst.name)
+		}
+		m[devPath] = path.Base(d.Source)
 	}
 
 	return m, nil
 }
 
 func (s *gceOps) DevicePath(diskName string) (string, error) {
-	d, err := s.service.Disks.Get(s.inst.Project, s.inst.Zone, diskName).Do()
-	if err != nil {
+	d, err := s.service.Disks.Get(s.inst.project, s.inst.zone, diskName).Do()
+	if gerr, ok := err.(*googleapi.Error); ok &&
+		gerr.Code == http.StatusNotFound {
+		return "", storageops.NewStorageError(
+			storageops.ErrVolNotFound,
+			fmt.Sprintf("Disk: %s not found in zone %s", diskName, s.inst.zone),
+			s.inst.name)
+	} else if err != nil {
 		return "", err
 	}
 
 	if len(d.Users) == 0 {
 		err = storageops.NewStorageError(storageops.ErrVolDetached,
-			fmt.Sprintf("Disk: %s is detached", d.Name), s.inst.Name)
+			fmt.Sprintf("Disk: %s is detached", d.Name), s.inst.name)
 		return "", err
 	}
 
@@ -275,15 +306,23 @@ func (s *gceOps) DevicePath(diskName string) (string, error) {
 
 	for _, instDisk := range inst.Disks {
 		if instDisk.Source == d.SelfLink {
-			return fmt.Sprintf("%s%s", googleDiskPrefix, instDisk.DeviceName), nil
+			pathByID := fmt.Sprintf("%s%s", googleDiskPrefix, instDisk.DeviceName)
+			devPath, err := s.diskIDToBlockDevPathWithRetry(pathByID)
+			if err == nil {
+				return devPath, nil
+			}
+			return "", storageops.NewStorageError(
+				storageops.ErrInvalidDevicePath,
+				fmt.Sprintf("unable to find block dev path for %s. %v", devPath, err),
+				s.inst.name)
 		}
 	}
 
 	return "", storageops.NewStorageError(
 		storageops.ErrVolAttachedOnRemoteNode,
 		fmt.Sprintf("disk %s is not attached on: %s (Attached on: %v)",
-			d.Name, s.inst.Name, d.Users),
-		s.inst.Name)
+			d.Name, s.inst.name, d.Users),
+		s.inst.name)
 }
 
 func (s *gceOps) Enumerate(
@@ -360,7 +399,7 @@ func (s *gceOps) RemoveTags(
 	diskName string,
 	labels map[string]string,
 ) error {
-	d, err := s.service.Disks.Get(s.inst.Project, s.inst.Zone, diskName).Do()
+	d, err := s.service.Disks.Get(s.inst.project, s.inst.zone, diskName).Do()
 	if err != nil {
 		return err
 	}
@@ -376,7 +415,7 @@ func (s *gceOps) RemoveTags(
 			Labels:           currentLabels,
 		}
 
-		_, err = s.service.Disks.SetLabels(s.inst.Project, s.inst.Zone, d.Name, rb).Do()
+		_, err = s.service.Disks.SetLabels(s.inst.project, s.inst.zone, d.Name, rb).Do()
 	}
 
 	return err
@@ -390,7 +429,7 @@ func (s *gceOps) Snapshot(
 		Name: fmt.Sprintf("snap-%d%02d%02d", time.Now().Year(), time.Now().Month(), time.Now().Day()),
 	}
 
-	_, err := s.service.Disks.CreateSnapshot(s.inst.Project, s.inst.Zone, disk, rb).Do()
+	_, err := s.service.Disks.CreateSnapshot(s.inst.project, s.inst.zone, disk, rb).Do()
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +438,7 @@ func (s *gceOps) Snapshot(
 		return nil, err
 	}
 
-	snap, err := s.service.Snapshots.Get(s.inst.Project, rb.Name).Do()
+	snap, err := s.service.Snapshots.Get(s.inst.project, rb.Name).Do()
 	if err != nil {
 		return nil, err
 	}
@@ -408,12 +447,12 @@ func (s *gceOps) Snapshot(
 }
 
 func (s *gceOps) SnapshotDelete(snapID string) error {
-	_, err := s.service.Snapshots.Delete(s.inst.Project, snapID).Do()
+	_, err := s.service.Snapshots.Delete(s.inst.project, snapID).Do()
 	return err
 }
 
 func (s *gceOps) Tags(diskName string) (map[string]string, error) {
-	d, err := s.service.Disks.Get(s.inst.Project, s.inst.Zone, diskName).Do()
+	d, err := s.service.Disks.Get(s.inst.project, s.inst.zone, diskName).Do()
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +467,7 @@ func (s *gceOps) available(v *compute.Disk) bool {
 func (s *gceOps) checkDiskStatus(id string, zone string, desired string) error {
 	_, err := task.DoRetryWithTimeout(
 		func() (interface{}, bool, error) {
-			d, err := s.service.Disks.Get(s.inst.Project, zone, id).Do()
+			d, err := s.service.Disks.Get(s.inst.project, zone, id).Do()
 			if err != nil {
 				return nil, true, err
 			}
@@ -455,7 +494,7 @@ func (s *gceOps) checkDiskStatus(id string, zone string, desired string) error {
 func (s *gceOps) checkSnapStatus(id string, desired string) error {
 	_, err := task.DoRetryWithTimeout(
 		func() (interface{}, bool, error) {
-			snap, err := s.service.Snapshots.Get(s.inst.Project, id).Do()
+			snap, err := s.service.Snapshots.Get(s.inst.project, id).Do()
 			if err != nil {
 				return nil, true, err
 			}
@@ -485,43 +524,28 @@ func (s *gceOps) Describe() (interface{}, error) {
 }
 
 func (s *gceOps) describeinstance() (*compute.Instance, error) {
-	return s.service.Instances.Get(s.inst.Project, s.inst.Zone, s.inst.Name).Do()
+	return s.service.Instances.Get(s.inst.project, s.inst.zone, s.inst.name).Do()
 }
 
 // gceInfo fetches the GCE instance metadata from the metadata server
 func gceInfo(inst *instance) error {
 	var err error
-	inst.ID, err = metadata.InstanceID()
+	inst.zone, err = metadata.Zone()
 	if err != nil {
 		return err
 	}
 
-	inst.Zone, err = metadata.Zone()
+	inst.name, err = metadata.InstanceName()
 	if err != nil {
 		return err
 	}
 
-	inst.Name, err = metadata.InstanceName()
+	inst.hostname, err = metadata.Hostname()
 	if err != nil {
 		return err
 	}
 
-	inst.Hostname, err = metadata.Hostname()
-	if err != nil {
-		return err
-	}
-
-	inst.Project, err = metadata.ProjectID()
-	if err != nil {
-		return err
-	}
-
-	inst.InternalIP, err = metadata.InternalIP()
-	if err != nil {
-		return err
-	}
-
-	inst.ExternalIP, err = metadata.ExternalIP()
+	inst.project, err = metadata.ProjectID()
 	if err != nil {
 		return err
 	}
@@ -531,30 +555,22 @@ func gceInfo(inst *instance) error {
 
 func gceInfoFromEnv(inst *instance) error {
 	var err error
-	inst.Name, err = getEnvValueStrict("GCE_INSTANCE_NAME")
+	inst.name, err = storageops.GetEnvValueStrict("GCE_INSTANCE_NAME")
 	if err != nil {
 		return err
 	}
 
-	inst.Zone, err = getEnvValueStrict("GCE_INSTANCE_ZONE")
+	inst.zone, err = storageops.GetEnvValueStrict("GCE_INSTANCE_ZONE")
 	if err != nil {
 		return err
 	}
 
-	inst.Project, err = getEnvValueStrict("GCE_INSTANCE_PROJECT")
+	inst.project, err = storageops.GetEnvValueStrict("GCE_INSTANCE_PROJECT")
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func getEnvValueStrict(key string) (string, error) {
-	if val := os.Getenv(key); len(val) != 0 {
-		return val, nil
-	}
-
-	return "", fmt.Errorf("env variable %s is not set", key)
 }
 
 func (s *gceOps) rollbackCreate(id string, createErr error) error {
@@ -566,7 +582,7 @@ func (s *gceOps) rollbackCreate(id string, createErr error) error {
 	return createErr
 }
 
-// waitForAttach checks if given disk is detached from the local instance
+// waitForDetach checks if given disk is detached from the local instance
 func (s *gceOps) waitForDetach(
 	diskURL string,
 	timeout time.Duration,
@@ -583,7 +599,7 @@ func (s *gceOps) waitForDetach(
 				if d.Source == diskURL {
 					return nil, true,
 						fmt.Errorf("disk: %s is still attached to instance: %s",
-							diskURL, s.inst.Name)
+							diskURL, s.inst.name)
 				}
 			}
 
@@ -604,7 +620,10 @@ func (s *gceOps) waitForAttach(
 	devicePath, err := task.DoRetryWithTimeout(
 		func() (interface{}, bool, error) {
 			devicePath, err := s.DevicePath(disk.Name)
-			if err != nil {
+			if se, ok := err.(*storageops.StorageError); ok &&
+				se.Code == storageops.ErrVolAttachedOnRemoteNode {
+				return "", false, err
+			} else if err != nil {
 				return "", true, err
 			}
 
@@ -637,9 +656,9 @@ func (s *gceOps) getDisksFromAllZones(labels map[string]string) (map[string]*com
 
 	if len(labels) > 0 {
 		filter := generateListFilterFromLabels(labels)
-		req = s.service.Disks.AggregatedList(s.inst.Project).Filter(filter)
+		req = s.service.Disks.AggregatedList(s.inst.project).Filter(filter)
 	} else {
-		req = s.service.Disks.AggregatedList(s.inst.Project)
+		req = s.service.Disks.AggregatedList(s.inst.project)
 	}
 
 	if err := req.Pages(ctx, func(page *compute.DiskAggregatedList) error {
@@ -656,6 +675,49 @@ func (s *gceOps) getDisksFromAllZones(labels map[string]string) (map[string]*com
 	}
 
 	return response, nil
+}
+
+func (s *gceOps) diskIDToBlockDevPathWithRetry(devPath string) (string, error) {
+	var (
+		retryCount int
+		path       string
+		err        error
+	)
+
+	for {
+		if path, err = s.diskIDToBlockDevPath(devPath); err == nil {
+			return path, nil
+		}
+		logrus.Warnf(err.Error())
+		retryCount++
+		if retryCount >= devicePathMaxRetryCount {
+			break
+		}
+		time.Sleep(devicePathRetryInterval)
+	}
+	return "", err
+}
+
+func (s *gceOps) diskIDToBlockDevPath(devPath string) (string, error) {
+	// check if path is a sym link. If yes, return pointee
+	fi, err := os.Lstat(devPath)
+	if err != nil {
+		return "", err
+	}
+
+	if fi.Mode()&os.ModeSymlink != 0 {
+		output, err := filepath.EvalSymlinks(devPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read symlink due to: %v", err)
+		}
+
+		devPath = strings.TrimSpace(string(output))
+	} else {
+		return "", fmt.Errorf("%s was expected to be a symlink to actual "+
+			"device path", devPath)
+	}
+
+	return devPath, nil
 }
 
 func formatLabels(labels map[string]string) map[string]string {

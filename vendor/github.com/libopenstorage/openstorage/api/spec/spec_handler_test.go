@@ -79,3 +79,41 @@ func TestOptNodes(t *testing.T) {
 	testSpecNodeOptString(t, api.SpecNodes, "node1;node2")
 	testSpecNodeOptString(t, api.SpecNodes, "node1")
 }
+
+func TestQueueDepth(t *testing.T) {
+	testSpecOptString(t, api.SpecQueueDepth, "10")
+}
+
+func TestForceUnsupportedFsType(t *testing.T) {
+	s := NewSpecHandler()
+	spec, _, _, err := s.SpecFromOpts(map[string]string{
+		api.SpecForceUnsupportedFsType: "true",
+	})
+	require.True(t, spec.GetForceUnsupportedFsType())
+	require.NoError(t, err)
+
+	spec, _, _, err = s.SpecFromOpts(map[string]string{
+		api.SpecForceUnsupportedFsType: "false",
+	})
+	require.False(t, spec.GetForceUnsupportedFsType())
+	require.NoError(t, err)
+
+	spec, _, _, err = s.SpecFromOpts(map[string]string{})
+	require.False(t, spec.GetForceUnsupportedFsType())
+	require.NoError(t, err)
+
+	_, _, _, err = s.SpecFromOpts(map[string]string{
+		api.SpecForceUnsupportedFsType: "blah",
+	})
+	require.Error(t, err)
+
+	spec = testSpecFromString(t, api.SpecForceUnsupportedFsType, "true")
+	require.True(t, spec.ForceUnsupportedFsType)
+
+	spec = testSpecFromString(t, api.SpecForceUnsupportedFsType, "false")
+	require.False(t, spec.ForceUnsupportedFsType)
+
+	// Test that it is false when not present
+	spec = testSpecFromString(t, api.SpecRack, "ignore")
+	require.False(t, spec.ForceUnsupportedFsType)
+}
