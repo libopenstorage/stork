@@ -1161,18 +1161,6 @@ func (d *portworx) getVolumeDriverByAddress(addr string) (volume.VolumeDriver, e
 	return volumeclient.VolumeDriver(dClient), nil
 }
 
-func (d *portworx) getClusterToken(n node.Node, op string) (*client.Response, error) {
-	url := d.constructURL(n.Addresses[0])
-	c, err := client.NewClient(url+tokenPath, "", "")
-	if err != nil {
-		return nil, err
-	}
-	req := c.Get().Resource(op)
-	resp := req.Do()
-
-	return resp, nil
-
-}
 func (d *portworx) maintenanceOp(n node.Node, op string) error {
 	url := d.constructURL(n.Addresses[0])
 	c, err := client.NewClient(url, "", "")
