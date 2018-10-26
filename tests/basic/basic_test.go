@@ -256,9 +256,9 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("applicationscaleupdown-%d", i))...)
 		}
 
-		Step("scale up all applications", func() {
+		Step("Scale up and down all app", func() {
 			for _, ctx := range contexts {
-				Step(fmt.Sprintf("updating scale for app: %s by %d ", ctx.App.Key, len(node.GetWorkerNodes())), func() {
+				Step(fmt.Sprintf("scale up app: %s by %d ", ctx.App.Key, len(node.GetWorkerNodes())), func() {
 					applicationScaleUpMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
 					for name, scale := range applicationScaleUpMap {
@@ -268,11 +268,12 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
+				Step("Giving few seconds for scaled up applications to stabilize", func() {
+					time.Sleep(10 * time.Second)
+				})
+
 				ValidateContext(ctx)
-			}
-		})
-		Step("scale down all applications", func() {
-			for _, ctx := range contexts {
+
 				Step(fmt.Sprintf("scale down app %s by 1", ctx.App.Key), func() {
 					applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
 					Expect(err).NotTo(HaveOccurred())
@@ -283,14 +284,14 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-			}
-			Step("Giving few seconds for scaled applications to stabilize", func() {
-				time.Sleep(10 * time.Second)
-			})
-			for _, ctx := range contexts {
+				Step("Giving few seconds for scaled down applications to stabilize", func() {
+					time.Sleep(10 * time.Second)
+				})
+
 				ValidateContext(ctx)
 			}
 		})
+
 		Step("teardown all apps", func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, nil)
