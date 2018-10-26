@@ -1558,8 +1558,9 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 				continue
 			}
 			volumeInfo.Volume = volume
+			taskID := p.getMigrationTaskID(migration, volumeInfo)
 			_, err = p.volDriver.CloudMigrateStart(&api.CloudMigrateStartRequest{
-				TaskId:    string(migration.UID) + pvc.Name,
+				TaskId:    taskID,
 				Operation: api.CloudMigrate_MigrateVolume,
 				ClusterId: clusterPair.Status.RemoteStorageID,
 				TargetId:  volume,
@@ -1578,6 +1579,10 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 	}
 
 	return volumeInfos, nil
+}
+
+func (p *portworx) getMigrationTaskID(migration *stork_crd.Migration, volumeInfo *stork_crd.VolumeInfo) string {
+	return string(migration.UID) + "-" + volumeInfo.Namespace + "-" + volumeInfo.PersistentVolumeClaim
 }
 
 func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
@@ -1599,7 +1604,8 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 	for _, vInfo := range migration.Status.Volumes {
 		found := false
 		for _, mInfo := range clusterInfo.List {
-			if vInfo.Volume == mInfo.LocalVolumeName {
+			taskID := p.getMigrationTaskID(migration, vInfo)
+			if taskID == mInfo.TaskId {
 				found = true
 				if mInfo.Status == api.CloudMigrate_Failed {
 					vInfo.Status = stork_crd.MigrationStatusFailed
