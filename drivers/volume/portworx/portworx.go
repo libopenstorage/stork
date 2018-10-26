@@ -1609,7 +1609,7 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 				found = true
 				if mInfo.Status == api.CloudMigrate_Failed {
 					vInfo.Status = stork_crd.MigrationStatusFailed
-					vInfo.Reason = fmt.Sprintf("Migration %v failed for volume", mInfo.CurrentStage)
+					vInfo.Reason = fmt.Sprintf("Migration %v failed for volume: %v", mInfo.CurrentStage, mInfo.ErrorReason)
 				} else if mInfo.CurrentStage == api.CloudMigrate_Done &&
 					mInfo.Status == api.CloudMigrate_Complete {
 					vInfo.Status = stork_crd.MigrationStatusSuccessful
