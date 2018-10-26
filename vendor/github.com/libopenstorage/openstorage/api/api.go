@@ -47,6 +47,8 @@ const (
 	SpecLabels               = "labels"
 	SpecPriorityAlias        = "priority_io"
 	SpecIoProfile            = "io_profile"
+	SpecAsyncIo              = "async_io"
+	SpecEarlyAck             = "early_ack"
 	// SpecBestEffortLocationProvisioning default is false. If set provisioning request will succeed
 	// even if specified data location parameters could not be satisfied.
 	SpecBestEffortLocationProvisioning = "best_effort_location_provisioning"
@@ -416,6 +418,8 @@ type CloudBackupStatus struct {
 	SrcVolumeID string
 	// Info currently indicates only failure cause in case of failed backup/restore
 	Info []string
+	// CredentialUUID used for this backup/restore op
+	CredentialUUID string
 }
 
 type CloudBackupStatusResponse struct {
@@ -857,12 +861,13 @@ func StringToSdkCloudBackupOpType(s string) SdkCloudBackupOpType {
 
 func (s CloudBackupStatus) ToSdkCloudBackupStatus() *SdkCloudBackupStatus {
 	status := &SdkCloudBackupStatus{
-		BackupId:  s.ID,
-		Optype:    CloudBackupOpTypeToSdkCloudBackupOpType(s.OpType),
-		Status:    CloudBackupStatusTypeToSdkCloudBackupStatusType(s.Status),
-		BytesDone: s.BytesDone,
-		NodeId:    s.NodeID,
-		Info:      s.Info,
+		BackupId:     s.ID,
+		Optype:       CloudBackupOpTypeToSdkCloudBackupOpType(s.OpType),
+		Status:       CloudBackupStatusTypeToSdkCloudBackupStatusType(s.Status),
+		BytesDone:    s.BytesDone,
+		NodeId:       s.NodeID,
+		Info:         s.Info,
+		CredentialId: s.CredentialUUID,
 	}
 
 	status.StartTime, _ = ptypes.TimestampProto(s.StartTime)
