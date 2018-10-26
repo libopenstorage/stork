@@ -3,11 +3,17 @@ package storkctl
 import (
 	"fmt"
 	"io"
+	"reflect"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/printers"
+)
+
+const (
+	clusterPairSubcommand = "clusterpair"
 )
 
 var clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
@@ -15,7 +21,7 @@ var clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", 
 func newGetClusterPairCommand(cmdFactory Factory) *cobra.Command {
 	var err error
 	getClusterPairCommand := &cobra.Command{
-		Use:     "clusterpair",
+		Use:     clusterPairSubcommand,
 		Aliases: []string{"cp"},
 		Short:   "Get cluster pair resources",
 		Run: func(c *cobra.Command, args []string) {
@@ -72,4 +78,39 @@ func clusterPairPrinter(clusterPairList *storkv1.ClusterPairList, writer io.Writ
 		}
 	}
 	return nil
+}
+
+func newGenerateClusterPairCommand(cmdFactory Factory) *cobra.Command {
+	generateClusterPairCommand := &cobra.Command{
+		Use:   clusterPairSubcommand,
+		Short: "Generate a spec to be used for cluster pairing from a remote cluster",
+		Run: func(c *cobra.Command, args []string) {
+			config, err := cmdFactory.RawConfig()
+			if err != nil {
+				handleError(err)
+			}
+
+			clusterPair := &storkv1.ClusterPair{
+				TypeMeta: meta.TypeMeta{
+					Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
+					APIVersion: storkv1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: meta.ObjectMeta{
+					Name: "<insert_name_here>",
+				},
+
+				Spec: storkv1.ClusterPairSpec{
+					Config: config,
+					Options: map[string]string{
+						"<insert_storage_options_here>": "",
+					},
+				},
+			}
+			if err = printEncoded(c, clusterPair, "yaml"); err != nil {
+				handleError(err)
+			}
+		},
+	}
+
+	return generateClusterPairCommand
 }

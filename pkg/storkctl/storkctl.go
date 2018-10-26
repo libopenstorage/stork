@@ -29,6 +29,7 @@ func NewCommand() *cobra.Command {
 		newCreateCommand(cmdFactory),
 		newDeleteCommand(cmdFactory),
 		newGetCommand(cmdFactory),
+		newGenerateCommand(cmdFactory),
 	)
 
 	cmds.PersistentFlags().AddGoFlagSet(flag.CommandLine)

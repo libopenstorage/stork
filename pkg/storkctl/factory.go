@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 const (
@@ -30,6 +31,8 @@ type Factory interface {
 	GetNamespace() string
 	// GetConfig Get the merged config for the server
 	GetConfig() (*rest.Config, error)
+	// RawConfig Gets the raw merged config for the server
+	RawConfig() (clientcmdapi.Config, error)
 	// GetOutputFormat Get the output format
 	GetOutputFormat() (string, error)
 }
@@ -50,15 +53,22 @@ func (f *factory) GetNamespace() string {
 	return f.namespace
 }
 
-func (f *factory) GetConfig() (*rest.Config, error) {
+func (f *factory) getKubeconfig() clientcmd.ClientConfig {
 	configLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	configLoadingRules.ExplicitPath = f.kubeconfig
 
 	configOverrides := &clientcmd.ConfigOverrides{
 		CurrentContext: f.context,
 	}
-	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(configLoadingRules, configOverrides)
-	return kubeconfig.ClientConfig()
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(configLoadingRules, configOverrides)
+}
+
+func (f *factory) GetConfig() (*rest.Config, error) {
+	return f.getKubeconfig().ClientConfig()
+}
+
+func (f *factory) RawConfig() (clientcmdapi.Config, error) {
+	return f.getKubeconfig().RawConfig()
 }
 
 func (f *factory) GetOutputFormat() (string, error) {
