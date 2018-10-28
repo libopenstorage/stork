@@ -25,7 +25,6 @@ func handleError(err error, errOut io.Writer) {
 func handleEmptyList(out io.Writer) {
 	msg := fmt.Sprintf("No resources found.")
 	printMsg(msg, out)
-	os.Exit(0)
 }
 
 func printMsg(msg string, out io.Writer) {
