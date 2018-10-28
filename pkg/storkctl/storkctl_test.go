@@ -7,11 +7,11 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/portworx/sched-ops/k8s"
-
-	"k8s.io/client-go/rest/fake"
-
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/client-go/rest/fake"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
@@ -22,10 +22,15 @@ func TestStork(t *testing.T) {
 func TestStorkGetVolumeSnapshots(t *testing.T) {
 	var snapshots snapv1.VolumeSnapshotList
 
+	scheme := runtime.NewScheme()
+	if err := snapv1.AddToScheme(scheme); err != nil {
+		require.NoError(t, err, "Error adding snapshot to scheme")
+	}
+
 	f := NewTestFactory()
 	tf := f.TestFactory.WithNamespace("test")
 	defer tf.Cleanup()
-	codec := legacyscheme.Codecs.LegacyCodec(schema.GroupVersion{Version: "v1", Group: snapv1.GroupName})
+	codec := serializer.NewCodecFactory(scheme).LegacyCodec(schema.GroupVersion{Version: "v1", Group: snapv1.GroupName})
 
 	fakeRestClient := &fake.RESTClient{
 		NegotiatedSerializer: unstructuredSerializer,
