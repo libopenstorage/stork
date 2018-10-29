@@ -48,8 +48,7 @@ func TestStorkGetVolumeSnapshots(t *testing.T) {
 	cmd.Execute()
 	fmt.Println(buf)
 
-	expected := `NAME      READY     STATUS    RESTARTS   AGE         LABELS
-foo       0/0                 0          <unknown>   <none>
+	expected := `No resources found.
 `
 	if e, a := expected, buf.String(); e != a {
 		t.Errorf("expected %v, got %v", e, a)
