@@ -12,6 +12,7 @@ type Volume struct {
 	ID        string
 	Name      string
 	Namespace string
+	Size      uint64
 }
 
 // Snapshot is a generic struct encapsulating snapshots in the cluster
@@ -40,6 +41,9 @@ type Driver interface {
 	// ValidateCreateVolume validates whether a volume has been created properly.
 	// params are the custom volume options passed when creating the volume.
 	ValidateCreateVolume(name string, params map[string]string) error
+
+	// ValidateUpdateVolume validates if volume changes has been applied
+	ValidateUpdateVolume(vol *Volume) error
 
 	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 	ValidateDeleteVolume(vol *Volume) error
@@ -93,6 +97,9 @@ type Driver interface {
 
 	// GetMinReplicationFactor returns the min supported repl factor of a volume
 	GetMinReplicationFactor() int64
+
+	// GetAggregationLevel returns the aggregation level for the given volume
+	GetAggregationLevel(vol *Volume) (int64, error)
 }
 
 var (
@@ -121,4 +128,8 @@ func Get(name string) (Driver, error) {
 		ID:   name,
 		Type: "VolumeDriver",
 	}
+}
+
+func (v *Volume) String() string{
+	return v.Name
 }

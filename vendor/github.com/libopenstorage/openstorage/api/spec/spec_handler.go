@@ -76,31 +76,33 @@ type SpecHandler interface {
 }
 
 var (
-	nameRegex       = regexp.MustCompile(api.Name + "=([0-9A-Za-z_-]+),?")
-	nodesRegex      = regexp.MustCompile(api.SpecNodes + "=([A-Za-z0-9-_;]+),?")
-	parentRegex     = regexp.MustCompile(api.SpecParent + "=([A-Za-z]+),?")
-	sizeRegex       = regexp.MustCompile(api.SpecSize + "=([0-9A-Za-z]+),?")
-	scaleRegex      = regexp.MustCompile(api.SpecScale + "=([0-9]+),?")
-	fsRegex         = regexp.MustCompile(api.SpecFilesystem + "=([0-9A-Za-z]+),?")
-	bsRegex         = regexp.MustCompile(api.SpecBlockSize + "=([0-9]+),?")
-	haRegex         = regexp.MustCompile(api.SpecHaLevel + "=([0-9]+),?")
-	cosRegex        = regexp.MustCompile(api.SpecPriority + "=([A-Za-z]+),?")
-	sharedRegex     = regexp.MustCompile(api.SpecShared + "=([A-Za-z]+),?")
-	journalRegex    = regexp.MustCompile(api.SpecJournal + "=([A-Za-z]+),?")
-	sharedv4Regex   = regexp.MustCompile(api.SpecSharedv4 + "=([A-Za-z]+),?")
-	cascadedRegex   = regexp.MustCompile(api.SpecCascaded + "=([A-Za-z]+),?")
-	passphraseRegex = regexp.MustCompile(api.SpecPassphrase + "=([0-9A-Za-z_@./#&+-]+),?")
-	stickyRegex     = regexp.MustCompile(api.SpecSticky + "=([A-Za-z]+),?")
-	secureRegex     = regexp.MustCompile(api.SpecSecure + "=([A-Za-z]+),?")
-	zonesRegex      = regexp.MustCompile(api.SpecZones + "=([A-Za-z]+),?")
-	racksRegex      = regexp.MustCompile(api.SpecRacks + "=([A-Za-z]+),?")
-	rackRegex       = regexp.MustCompile(api.SpecRack + "=([A-Za-z]+),?")
-	aggrRegex       = regexp.MustCompile(api.SpecAggregationLevel + "=([0-9]+|" +
-		api.SpecAutoAggregationValue + "),?")
-	compressedRegex   = regexp.MustCompile(api.SpecCompressed + "=([A-Za-z]+),?")
-	snapScheduleRegex = regexp.MustCompile(api.SpecSnapshotSchedule +
-		`=([A-Za-z0-9:;@=#]+),?`)
-	ioProfileRegex = regexp.MustCompile(api.SpecIoProfile + "=([0-9A-Za-z_-]+),?")
+	nameRegex                   = regexp.MustCompile(api.Name + "=([0-9A-Za-z_-]+),?")
+	nodesRegex                  = regexp.MustCompile(api.SpecNodes + "=([A-Za-z0-9-_;]+),?")
+	parentRegex                 = regexp.MustCompile(api.SpecParent + "=([A-Za-z]+),?")
+	sizeRegex                   = regexp.MustCompile(api.SpecSize + "=([0-9A-Za-z]+),?")
+	scaleRegex                  = regexp.MustCompile(api.SpecScale + "=([0-9]+),?")
+	fsRegex                     = regexp.MustCompile(api.SpecFilesystem + "=([0-9A-Za-z]+),?")
+	bsRegex                     = regexp.MustCompile(api.SpecBlockSize + "=([0-9]+),?")
+	queueDepthRegex             = regexp.MustCompile(api.SpecQueueDepth + "=([0-9]+),?")
+	haRegex                     = regexp.MustCompile(api.SpecHaLevel + "=([0-9]+),?")
+	cosRegex                    = regexp.MustCompile(api.SpecPriority + "=([A-Za-z]+),?")
+	sharedRegex                 = regexp.MustCompile(api.SpecShared + "=([A-Za-z]+),?")
+	journalRegex                = regexp.MustCompile(api.SpecJournal + "=([A-Za-z]+),?")
+	sharedv4Regex               = regexp.MustCompile(api.SpecSharedv4 + "=([A-Za-z]+),?")
+	cascadedRegex               = regexp.MustCompile(api.SpecCascaded + "=([A-Za-z]+),?")
+	passphraseRegex             = regexp.MustCompile(api.SpecPassphrase + "=([0-9A-Za-z_@./#&+-]+),?")
+	stickyRegex                 = regexp.MustCompile(api.SpecSticky + "=([A-Za-z]+),?")
+	secureRegex                 = regexp.MustCompile(api.SpecSecure + "=([A-Za-z]+),?")
+	zonesRegex                  = regexp.MustCompile(api.SpecZones + "=([A-Za-z]+),?")
+	racksRegex                  = regexp.MustCompile(api.SpecRacks + "=([A-Za-z]+),?")
+	rackRegex                   = regexp.MustCompile(api.SpecRack + "=([A-Za-z]+),?")
+	aggrRegex                   = regexp.MustCompile(api.SpecAggregationLevel + "=([0-9]+|" + api.SpecAutoAggregationValue + "),?")
+	compressedRegex             = regexp.MustCompile(api.SpecCompressed + "=([A-Za-z]+),?")
+	snapScheduleRegex           = regexp.MustCompile(api.SpecSnapshotSchedule + `=([A-Za-z0-9:;@=#]+),?`)
+	ioProfileRegex              = regexp.MustCompile(api.SpecIoProfile + "=([0-9A-Za-z_-]+),?")
+	asyncIoRegex                = regexp.MustCompile(api.SpecAsyncIo + "=([A-Za-z]+),?")
+	earlyAckRegex               = regexp.MustCompile(api.SpecEarlyAck + "=([A-Za-z]+),?")
+	forceUnsupportedFsTypeRegex = regexp.MustCompile(api.SpecForceUnsupportedFsType + "=([A-Za-z]+),?")
 )
 
 type specHandler struct {
@@ -202,6 +204,12 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 			} else {
 				spec.BlockSize = blockSize
 			}
+		case api.SpecQueueDepth:
+			if queueDepth, err := units.Parse(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				spec.QueueDepth = uint32(queueDepth)
+			}
 		case api.SpecHaLevel:
 			haLevel, _ := strconv.ParseInt(v, 10, 64)
 			spec.HaLevel = haLevel
@@ -282,6 +290,8 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 			locator.VolumeLabels[k] = v
 		case api.SpecRack:
 			locator.VolumeLabels[api.SpecRacks] = v
+		case api.SpecBestEffortLocationProvisioning:
+			locator.VolumeLabels[k] = "true"
 		case api.SpecCompressed:
 			if compressed, err := strconv.ParseBool(v); err != nil {
 				return nil, nil, nil, err
@@ -301,6 +311,30 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 				return nil, nil, nil, err
 			} else {
 				spec.IoProfile = ioProfile
+			}
+		case api.SpecEarlyAck:
+			if earlyAck, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				if spec.IoStrategy == nil {
+					spec.IoStrategy = &api.IoStrategy{}
+				}
+				spec.IoStrategy.EarlyAck = earlyAck
+			}
+		case api.SpecAsyncIo:
+			if asyncIo, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				if spec.IoStrategy == nil {
+					spec.IoStrategy = &api.IoStrategy{}
+				}
+				spec.IoStrategy.AsyncIo = asyncIo
+			}
+		case api.SpecForceUnsupportedFsType:
+			if forceFs, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				spec.ForceUnsupportedFsType = forceFs
 			}
 		default:
 			spec.VolumeLabels[k] = v
@@ -352,6 +386,9 @@ func (d *specHandler) SpecOptsFromString(
 	if ok, bs := d.getVal(bsRegex, str); ok {
 		opts[api.SpecBlockSize] = bs
 	}
+	if ok, qd := d.getVal(queueDepthRegex, str); ok {
+		opts[api.SpecQueueDepth] = qd
+	}
 	if ok, ha := d.getVal(haRegex, str); ok {
 		opts[api.SpecHaLevel] = ha
 	}
@@ -400,6 +437,15 @@ func (d *specHandler) SpecOptsFromString(
 	}
 	if ok, ioProfile := d.getVal(ioProfileRegex, str); ok {
 		opts[api.SpecIoProfile] = ioProfile
+	}
+	if ok, asyncIo := d.getVal(asyncIoRegex, str); ok {
+		opts[api.SpecAsyncIo] = asyncIo
+	}
+	if ok, earlyAck := d.getVal(earlyAckRegex, str); ok {
+		opts[api.SpecEarlyAck] = earlyAck
+	}
+	if ok, forceUnsupportedFsType := d.getVal(forceUnsupportedFsTypeRegex, str); ok {
+		opts[api.SpecForceUnsupportedFsType] = forceUnsupportedFsType
 	}
 
 	return true, opts, name

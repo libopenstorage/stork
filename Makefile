@@ -27,24 +27,15 @@ LDFLAGS += "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSI
 BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 .DEFAULT_GOAL=all
-.PHONY: test clean
+.PHONY: test clean vendor vendor-update
 
 all: stork storkctl cmdexecutor vet lint simple
 
 vendor-update:
-	GO15VENDOREXPERIMENT=0 GOOS=linux GOARCH=amd64 go get -tags "daemon" -d -v -t -u -f $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor')
+	dep ensure -update
 
-vendor-without-update:
-	go get -v github.com/kardianos/govendor
-	rm -rf vendor
-	govendor init
-	GOOS=linux GOARCH=amd64 govendor add +external
-	GOOS=linux GOARCH=amd64 govendor update +vendor
-	GOOS=linux GOARCH=amd64 govendor add +external
-	GOOS=linux GOARCH=amd64 govendor update +vendor
-	govendor add k8s.io/code-generator/^
-
-vendor: vendor-update vendor-without-update
+vendor:
+	dep ensure
 
 lint:
 	go get -v golang.org/x/lint/golint
