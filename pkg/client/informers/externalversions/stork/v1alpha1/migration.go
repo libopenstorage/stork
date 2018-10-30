@@ -21,7 +21,7 @@ package v1alpha1
 import (
 	time "time"
 
-	stork_v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	versioned "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/libopenstorage/stork/pkg/client/informers/externalversions/internalinterfaces"
 	v1alpha1 "github.com/libopenstorage/stork/pkg/client/listers/stork/v1alpha1"
@@ -69,7 +69,7 @@ func NewFilteredMigrationInformer(client versioned.Interface, resyncPeriod time.
 				return client.StorkV1alpha1().Migrations().Watch(options)
 			},
 		},
-		&stork_v1alpha1.Migration{},
+		&storkv1alpha1.Migration{},
 		resyncPeriod,
 		indexers,
 	)
@@ -80,7 +80,7 @@ func (f *migrationInformer) defaultInformer(client versioned.Interface, resyncPe
 }
 
 func (f *migrationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&stork_v1alpha1.Migration{}, f.defaultInformer)
+	return f.factory.InformerFor(&storkv1alpha1.Migration{}, f.defaultInformer)
 }
 
 func (f *migrationInformer) Lister() v1alpha1.MigrationLister {

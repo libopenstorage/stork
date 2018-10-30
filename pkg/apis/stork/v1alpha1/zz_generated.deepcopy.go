@@ -221,11 +221,10 @@ func (in *MigrationStatus) DeepCopyInto(out *MigrationStatus) {
 		in, out := &in.Resources, &out.Resources
 		*out = make([]*ResourceInfo, len(*in))
 		for i := range *in {
-			if (*in)[i] == nil {
-				(*out)[i] = nil
-			} else {
-				(*out)[i] = new(ResourceInfo)
-				(*in)[i].DeepCopyInto((*out)[i])
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(ResourceInfo)
+				**out = **in
 			}
 		}
 	}
@@ -233,11 +232,10 @@ func (in *MigrationStatus) DeepCopyInto(out *MigrationStatus) {
 		in, out := &in.Volumes, &out.Volumes
 		*out = make([]*VolumeInfo, len(*in))
 		for i := range *in {
-			if (*in)[i] == nil {
-				(*out)[i] = nil
-			} else {
-				(*out)[i] = new(VolumeInfo)
-				(*in)[i].DeepCopyInto((*out)[i])
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(VolumeInfo)
+				**out = **in
 			}
 		}
 	}

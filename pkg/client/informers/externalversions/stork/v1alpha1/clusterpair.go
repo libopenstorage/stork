@@ -21,7 +21,7 @@ package v1alpha1
 import (
 	time "time"
 
-	stork_v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	versioned "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/libopenstorage/stork/pkg/client/informers/externalversions/internalinterfaces"
 	v1alpha1 "github.com/libopenstorage/stork/pkg/client/listers/stork/v1alpha1"
@@ -69,7 +69,7 @@ func NewFilteredClusterPairInformer(client versioned.Interface, resyncPeriod tim
 				return client.StorkV1alpha1().ClusterPairs().Watch(options)
 			},
 		},
-		&stork_v1alpha1.ClusterPair{},
+		&storkv1alpha1.ClusterPair{},
 		resyncPeriod,
 		indexers,
 	)
@@ -80,7 +80,7 @@ func (f *clusterPairInformer) defaultInformer(client versioned.Interface, resync
 }
 
 func (f *clusterPairInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&stork_v1alpha1.ClusterPair{}, f.defaultInformer)
+	return f.factory.InformerFor(&storkv1alpha1.ClusterPair{}, f.defaultInformer)
 }
 
 func (f *clusterPairInformer) Lister() v1alpha1.ClusterPairLister {
