@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/common"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -433,6 +433,7 @@ func (kv *memKV) enumerate(prefix string) (kvdb.KVPairs, error) {
 	for k, v := range kv.m {
 		if strings.HasPrefix(k, prefix) && !strings.Contains(k, "/_") {
 			kvpLocal := v.copy()
+			kvpLocal.Key = k
 			kv.normalize(kvpLocal)
 			kvp = append(kvp, kvpLocal)
 		}
@@ -464,6 +465,10 @@ func (kv *memKV) Delete(key string) (*kvdb.KVPair, error) {
 func (kv *memKV) DeleteTree(prefix string) error {
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
+
+	if len(prefix) > 0 && !strings.HasSuffix(prefix, kvdb.DefaultSeparator) {
+		prefix += kvdb.DefaultSeparator
+	}
 
 	kvp, err := kv.enumerate(prefix)
 	if err != nil {
@@ -546,17 +551,20 @@ func (kv *memKV) CompareAndDelete(
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
 
-	if flags != kvdb.KVFlags(0) {
-		return nil, kvdb.ErrNotSupported
-	}
 	result, err := kv.exists(kvp.Key)
 	if err != nil {
 		return nil, err
 	}
-	cpy := result.copy()
-	if !bytes.Equal(cpy.Value, kvp.Value) {
-		return nil, kvdb.ErrNotFound
+
+	if flags&kvdb.KVModifiedIndex > 0 && result.ModifiedIndex != kvp.ModifiedIndex {
+		return nil, kvdb.ErrModified
+	} else {
+		cpy := result.copy()
+		if !bytes.Equal(cpy.Value, kvp.Value) {
+			return nil, kvdb.ErrNotFound
+		}
 	}
+
 	return kv.delete(kvp.Key)
 }
 

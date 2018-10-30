@@ -97,3 +97,15 @@ type ErrFailedToGetReplicationFactor struct {
 func (e *ErrFailedToGetReplicationFactor) Error() string {
 	return fmt.Sprintf("Failed to get replication factor of the volume: %v due to err: %v", e.ID, e.Cause)
 }
+
+// ErrFailedToGetAggregationLevel error type for failing to get/query the aggregation level
+type ErrFailedToGetAggregationLevel struct {
+	// ID is the ID/name of the volume for which we could not get the aggregation level
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetAggregationLevel) Error() string {
+	return fmt.Sprintf("Failed to get aggregation level of the volume: %v due to err: %v", e.ID, e.Cause)
+}

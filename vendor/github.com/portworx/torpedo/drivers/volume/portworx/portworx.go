@@ -33,6 +33,7 @@ const (
 	enterMaintenancePath    = "/entermaintenance"
 	exitMaintenancePath     = "/exitmaintenance"
 	pxSystemdServiceName    = "portworx.service"
+	storageStatusUp         = "Up"
 )
 
 const (
@@ -44,7 +45,7 @@ const (
 	validateDeleteVolumeTimeout      = 3 * time.Minute
 	validateReplicationUpdateTimeout = 10 * time.Minute
 	validateClusterStartTimeout      = 2 * time.Minute
-	validateNodeStartTimeout         = 2 * time.Minute
+	validateNodeStartTimeout         = 3 * time.Minute
 	validatePXStartTimeout           = 2 * time.Minute
 	validateNodeStopTimeout          = 2 * time.Minute
 	stopDriverTimeout                = 5 * time.Minute
@@ -429,6 +430,12 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 			if requestedSpec.SnapshotInterval != vol.Spec.SnapshotInterval {
 				return errFailedToInspectVolume(name, k, requestedSpec.SnapshotInterval, vol.Spec.SnapshotInterval)
 			}
+		case api.SpecSnapshotSchedule:
+			// TODO currently volume spec has a different format than request
+			// i.e request "daily=12:00,7" turns into "- freq: daily\n  hour: 12\n  retain: 7\n" in volume spec
+			//if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
+			//	return errFailedToInspectVolume(name, k, requestedSpec.SnapshotSchedule, vol.Spec.SnapshotSchedule)
+			//}
 		case api.SpecAggregationLevel:
 			if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
 				return errFailedToInspectVolume(name, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
@@ -442,16 +449,19 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 				return errFailedToInspectVolume(name, k, requestedSpec.Sticky, vol.Spec.Sticky)
 			}
 		case api.SpecGroup:
-			if requestedSpec.Group != vol.Spec.Group {
+			if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
 				return errFailedToInspectVolume(name, k, requestedSpec.Group, vol.Spec.Group)
 			}
 		case api.SpecGroupEnforce:
 			if requestedSpec.GroupEnforced != vol.Spec.GroupEnforced {
 				return errFailedToInspectVolume(name, k, requestedSpec.GroupEnforced, vol.Spec.GroupEnforced)
 			}
+		// portworx injects pvc name and namespace labels so response object won't be equal to request
 		case api.SpecLabels:
-			if !reflect.DeepEqual(requestedLocator.VolumeLabels, vol.Locator.VolumeLabels) {
-				return errFailedToInspectVolume(name, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+			for requestedLabelKey, requestedLabelValue := range requestedLocator.VolumeLabels {
+				if labelValue, exists := vol.Locator.VolumeLabels[requestedLabelKey]; !exists || requestedLabelValue != labelValue {
+					return errFailedToInspectVolume(name, k, requestedLocator.VolumeLabels, vol.Locator.VolumeLabels)
+				}
 			}
 		case api.SpecIoProfile:
 			if requestedSpec.IoProfile != vol.Spec.IoProfile {
@@ -467,6 +477,45 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 	}
 
 	logrus.Infof("Successfully inspected volume: %v (%v)", vol.Locator.Name, vol.Id)
+	return nil
+}
+
+func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.getVolDriver().Inspect([]string{name})
+		if err != nil {
+			return nil, true, err
+		}
+
+		if len(vols) != 1 {
+			return nil, true, &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: fmt.Sprintf("Volume inspect result has invalid length. Expected:1 Actual:%v", len(vols)),
+			}
+		}
+
+		return vols[0], false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	if err != nil {
+		return &ErrFailedToInspectVolume{
+			ID:    name,
+			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+		}
+	}
+
+	respVol := out.(*api.Volume)
+
+	// Size Update
+	if respVol.Spec.Size != vol.Size {
+		return &ErrFailedToInspectVolume{
+			ID: name,
+			Cause: fmt.Sprintf("Volume size differs. Expected:%v Actual:%v",
+				vol.Size, respVol.Spec.Size),
+		}
+	}
 	return nil
 }
 
@@ -622,11 +671,20 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 			}
 		}
 
-		if pxNode.Status != api.Status_STATUS_OK || d.getStorageStatus(n) != "Up" {
+		if pxNode.Status != api.Status_STATUS_OK {
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
 					api.Status_STATUS_OK, pxNode.Status),
+			}
+		}
+
+		storageStatus := d.getStorageStatus(n)
+		if storageStatus != storageStatusUp {
+			return "", true, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("px cluster is usable but storage status is not ok. Expected: %v Actual: %v",
+					storageStatusUp, storageStatus),
 			}
 		}
 
@@ -842,6 +900,39 @@ func (d *portworx) GetMaxReplicationFactor() int64 {
 
 func (d *portworx) GetMinReplicationFactor() int64 {
 	return 1
+}
+
+func (d *portworx) GetAggregationLevel(vol *torpedovolume.Volume) (int64, error) {
+	name := d.schedOps.GetVolumeName(vol)
+	t := func() (interface{}, bool, error) {
+		vols, err := d.volDriver.Inspect([]string{name})
+		if err != nil && err == volume.ErrEnoEnt {
+			return 0, false, volume.ErrEnoEnt
+		} else if err != nil {
+			return 0, true, err
+		}
+		if len(vols) == 1 {
+			return vols[0].Spec.AggregationLevel, false, nil
+		}
+		return 0, false, fmt.Errorf("Extra volumes with the same volume name/ID seen") //Shouldn't reach this line
+	}
+
+	iAggrLevel, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	if err != nil {
+		return 0, &ErrFailedToGetAggregationLevel{
+			ID:    name,
+			Cause: err.Error(),
+		}
+	}
+	aggrLevel, ok := iAggrLevel.(uint32)
+	if !ok {
+		return 0, &ErrFailedToGetAggregationLevel{
+			ID:    name,
+			Cause: fmt.Sprintf("Aggregation level is not of type uint32"),
+		}
+	}
+
+	return int64(aggrLevel), nil
 }
 
 func isClean(vol *api.Volume) bool {

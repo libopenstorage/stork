@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/portworx/kvdb"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -38,12 +38,15 @@ type BaseKvdb struct {
 	lock sync.Mutex
 }
 
+// SetFatalCb callback is invoked when an unrecoverable KVDB error happens.
 func (b *BaseKvdb) SetFatalCb(f kvdb.FatalErrorCB) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	b.FatalCb = f
 }
 
+// SetLockTimeout has property such that if the lock is held past this duration,
+// then a configured fatal callback is called.
 func (b *BaseKvdb) SetLockTimeout(timeout time.Duration) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
@@ -51,6 +54,7 @@ func (b *BaseKvdb) SetLockTimeout(timeout time.Duration) {
 	b.LockTimeout = timeout
 }
 
+// CheckLockTimeout checks lock timeout.
 func (b *BaseKvdb) CheckLockTimeout(
 	key string,
 	startTime time.Time,
@@ -63,22 +67,26 @@ func (b *BaseKvdb) CheckLockTimeout(
 	}
 }
 
+// GetLockTimeout gets lock timeout.
 func (b *BaseKvdb) GetLockTimeout() time.Duration {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	return b.LockTimeout
 }
 
+// LockTimedout does lock timedout.
 func (b *BaseKvdb) LockTimedout(key string) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	b.lockTimedout(key)
 }
 
+// lockTimedout function is invoked if lock is held past configured timeout.
 func (b *BaseKvdb) lockTimedout(key string) {
 	b.FatalCb("Lock %s hold timeout triggered", key)
 }
 
+// SerializeAll Serializes all key value pairs to a byte array.
 func (b *BaseKvdb) SerializeAll(kvps kvdb.KVPairs) ([]byte, error) {
 	out, err := json.Marshal(kvps)
 	if err != nil {
@@ -87,6 +95,7 @@ func (b *BaseKvdb) SerializeAll(kvps kvdb.KVPairs) ([]byte, error) {
 	return out, nil
 }
 
+// DeserializeAll Unmarshals a byte stream created from serializeAll into the kvdb tree.
 func (b *BaseKvdb) DeserializeAll(out []byte) (kvdb.KVPairs, error) {
 	var kvps kvdb.KVPairs
 	if err := json.Unmarshal(out, &kvps); err != nil {
@@ -133,6 +142,7 @@ func NewWatchUpdateQueue() WatchUpdateQueue {
 		updates: list.New()}
 }
 
+// Dequeue removes from queue.
 func (w *watchQueue) Dequeue() (string, *kvdb.KVPair, error) {
 	w.m.Lock()
 	for {
