@@ -424,7 +424,8 @@ func (d *dcos) StartSchedOnNode(node node.Node) error {
 	return nil
 }
 
-func (d *dcos) CreateCRDObjects(pathCRDSpec string) error {
+// CreateCRDObjects and Validate their deployment
+func (d *dcos) CreateCRDObjects(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	// TODO: Implement this method
 	return nil
 }

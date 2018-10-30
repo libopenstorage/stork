@@ -1465,14 +1465,11 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 	return nil
 }
 
-func (k *k8s) CreateCRDObjects(pathCRDSpec string) error {
-	specs, err := k.ParseSpecs(pathCRDSpec)
-	if err != nil {
-		return err
-	}
-
+// CreateCRDObjects and Validate their deployment
+func (k *k8s) CreateCRDObjects(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+	var err error
 	k8sOps := k8s_ops.Instance()
-	for _, specObj := range specs {
+	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*stork_api.ClusterPair); ok {
 			logrus.Info("Applying clusterpair specs")
 			err = k8sOps.CreateClusterPair(obj)
@@ -1504,7 +1501,7 @@ func (k *k8s) CreateCRDObjects(pathCRDSpec string) error {
 		}
 	}
 
-	logrus.Info("Custom specs Created Sucessuflly")
+	logrus.Info("Custom specs created successfully")
 	return nil
 }
 

@@ -623,10 +623,9 @@ func getPXNode(destKubeConfig string) (corev1.Node, error) {
 		return workerNode, err
 	}
 
-	// TODO(ram-infrac) :find px node, right now it's assumed that px is installed
-	// on all worker node
+	// get label on node where PX is Enabled
 	for _, node := range nodes.Items {
-		if !destClient.IsNodeMaster(node) {
+		if node.Labels[pxEnabled] == "true" {
 			workerNode = node
 			break
 		}
