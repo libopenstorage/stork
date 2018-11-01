@@ -1,20 +1,8 @@
-FROM registry.access.redhat.com/rhel7-atomic
+FROM alpine:latest
 MAINTAINER Portworx Inc. <support@portworx.com>
 
-LABEL name="openstorage/stork" \
-      maintainer="support@portworx.com" \
-      vendor="Portworx Inc." \
-      version="1.3.0-beta" \
-      release="1" \
-      summary="STORK" \
-      description="Storage Orchestrator Runtime for Kubernetes" \
-      url="https://github.com/libopenstorage/stork" \
-      io.openshift.tags="portworx,storage,pv,pvc,storageclass,stork,persistent,openstorage,cloud" \
-      io.k8s.display-name="STORK" \
-      io.k8s.description="Storage Orchestrator Runtime for Kubernetes"
-
-COPY LICENSE /licenses/
-COPY help.1 /
+RUN wget -O /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator
+RUN chmod +x /usr/local/bin/aws-iam-authenticator
 
 WORKDIR /
 
