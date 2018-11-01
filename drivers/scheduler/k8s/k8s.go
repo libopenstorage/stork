@@ -1216,36 +1216,53 @@ func (k *k8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 }
 
 func (k *k8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
-	pods, err := k.getPodsForApp(ctx)
-	if err != nil {
-		return nil, &scheduler.ErrFailedToGetNodesForApp{
-			App:   ctx.App,
-			Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-		}
-	}
-
-	// We should have pods from a supported application at this point
-	var result []node.Node
-	nodeMap := node.GetNodesByName()
-
-	for _, p := range pods {
-		n, ok := nodeMap[p.Spec.NodeName]
-		if !ok {
-			return nil, &scheduler.ErrFailedToGetNodesForApp{
+	t := func() (interface{}, bool, error) {
+		pods, err := k.getPodsForApp(ctx)
+		if err != nil {
+			return nil, false, &scheduler.ErrFailedToGetNodesForApp{
 				App:   ctx.App,
-				Cause: fmt.Sprintf("node: %v not present in node map", p.Spec.NodeName),
+				Cause: fmt.Sprintf("failed to get pods due to: %v", err),
 			}
 		}
 
-		if node.Contains(result, n) {
-			continue
+		// We should have pods from a supported application at this point
+		var result []node.Node
+		nodeMap := node.GetNodesByName()
+
+		for _, p := range pods {
+			n, ok := nodeMap[p.Spec.NodeName]
+			if !ok {
+				return nil, true, &scheduler.ErrFailedToGetNodesForApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("node: %v not present in node map", p.Spec.NodeName),
+				}
+			}
+
+			if node.Contains(result, n) {
+				continue
+			}
+
+			if k8s_ops.Instance().IsPodRunning(p) {
+				result = append(result, n)
+			}
 		}
-		if k8s_ops.Instance().IsPodRunning(p) {
-			result = append(result, n)
+
+		if len(result) > 0{
+			return result, false, nil
+		}
+
+		return result, true, &scheduler.ErrFailedToGetNodesForApp{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("no pods in running state %v", pods),
 		}
 	}
 
-	return result, nil
+	nodes, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	return nodes.([]node.Node), nil
 }
 
 func (k *k8s) getPodsForApp(ctx *scheduler.Context) ([]v1.Pod, error) {
