@@ -254,7 +254,7 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 		}
 	}
 
-	output, err := s.doCmd(addr, command, false)
+	output, err := s.doCmd(addr, command, options.IgnoreError)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
 			Addr:  n.Name,
@@ -337,6 +337,7 @@ func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 
 func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	var out string
+	var sterr string
 	connection, err := ssh_pkg.Dial("tcp", fmt.Sprintf("%s:%d", addr, DefaultSSHPort), s.sshConfig)
 	if err != nil {
 		return "", &node.ErrFailedToRunCommand{
@@ -354,12 +355,33 @@ func (s *ssh) doCmd(addr string, cmd string, ignoreErr bool) (string, error) {
 	}
 	defer session.Close()
 
-	byteout, err := session.Output(cmd)
-	out = string(byteout)
+	stderr, err := session.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("fail to setup stderr")
+	}
+
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("fail to setup stdout")
+	}
+
+	session.Start(cmd)
+	err = session.Wait()
+	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
+		out = string(resp)
+	} else {
+		return "", fmt.Errorf("fail to read stdout")
+	}
+	if resp, err1 := ioutil.ReadAll(stderr); err1 == nil {
+		sterr = string(resp)
+	} else {
+		return "", fmt.Errorf("fail to read stderr")
+	}
+
 	if ignoreErr == false && err != nil {
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  addr,
-			Cause: fmt.Sprintf("failed to run command due to: %v", err),
+			Cause: fmt.Sprintf("failed to run command due to: %v [%s]", err, sterr),
 		}
 	}
 	return out, nil
