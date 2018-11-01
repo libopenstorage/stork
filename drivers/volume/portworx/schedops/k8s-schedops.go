@@ -534,30 +534,35 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	return true, nil
 }
 
-// GetStorageInfo returns cluster pair info from destination cluster refereced by kubeconfig
+// GetRemotePXNodes returns list of PX node found on destination k8s cluster
+// refereced by kubeconfig
 func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, error) {
 	var addrs []string
-	var pxNodes []node.Node
+	var remoteNodeList []node.Node
 
-	pxNode, err := getPXNode(destKubeConfig)
+	pxNodes, err := getPXNodes(destKubeConfig)
 	if err != nil {
-		logrus.Errorf("Error getting Node %v : %v", pxNode, err)
-		return pxNodes, err
-	}
-	logrus.Info("px node on remote :", pxNode.Name)
-	for _, addr := range pxNode.Status.Addresses {
-		if addr.Type == corev1.NodeExternalIP || addr.Type == corev1.NodeInternalIP {
-			addrs = append(addrs, addr.Address)
-		}
-	}
-	newNode := node.Node{
-		Name:      pxNode.Name,
-		Addresses: addrs,
-		Type:      node.TypeWorker,
+		logrus.Errorf("Error getting PX Nodes %v : %v", pxNodes, err)
+		return nil, err
 	}
 
-	pxNodes = append(pxNodes, newNode)
-	return pxNodes, nil
+	for _, pxNode := range pxNodes {
+		logrus.Info("px node on remote :", pxNode.Name)
+		for _, addr := range pxNode.Status.Addresses {
+			if addr.Type == corev1.NodeExternalIP || addr.Type == corev1.NodeInternalIP {
+				addrs = append(addrs, addr.Address)
+			}
+		}
+		newNode := node.Node{
+			Name:      pxNode.Name,
+			Addresses: addrs,
+			Type:      node.TypeWorker,
+		}
+
+		remoteNodeList = append(remoteNodeList, newNode)
+	}
+
+	return remoteNodeList, nil
 }
 
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that
@@ -609,29 +614,29 @@ func extractPodUID(volDirPath string) string {
 	return ""
 }
 
-// return PX node on k8s cluster provided by kubeconfig file
-func getPXNode(destKubeConfig string) (corev1.Node, error) {
-	var workerNode corev1.Node
+// return PX nodes on k8s cluster provided by kubeconfig file
+func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
+	var pxNodes []corev1.Node
 	// get schd-ops/k8s instance of destination cluster
 	destClient, err := k8s.NewInstance(destKubeConfig)
 	if err != nil {
 		logrus.Errorf("Unable to get k8s instance: %v", err)
-		return workerNode, err
+		return nil, err
 	}
+
 	nodes, err := destClient.GetNodes()
 	if err != nil {
-		return workerNode, err
+		return nil, err
 	}
 
 	// get label on node where PX is Enabled
 	for _, node := range nodes.Items {
 		if node.Labels[pxEnabled] == "true" {
-			workerNode = node
-			break
+			pxNodes = append(pxNodes, node)
 		}
 	}
 
-	return workerNode, nil
+	return pxNodes, nil
 }
 
 func init() {

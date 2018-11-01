@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -293,8 +294,10 @@ type ErrFailedToApplyCustomSpec struct {
 	Name string
 	// Cause is the underlying cause of the error
 	Cause string
+	// Type is the underlying type of CRD objects
+	Type interface{}
 }
 
 func (e *ErrFailedToApplyCustomSpec) Error() string {
-	return fmt.Sprintf("Failed to apply custom spec : %v due to err: %v", e.Name, e.Cause)
+	return fmt.Sprintf("Failed to apply custom spec : %v of type %v due to err: %v", e.Name, reflect.TypeOf(e.Type), e.Cause)
 }

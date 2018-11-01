@@ -39,8 +39,6 @@ const (
 	clusterIP               = "clusterip"
 	clusterPort             = "clusterport"
 	remoteKubeConfigPath    = "/tmp/kubeconfig"
-	tokenPath               = "/v1/cluster/pairtoken"
-	objectstorPath          = "/objectstore"
 )
 
 const (
@@ -1062,16 +1060,19 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
 	if err != nil {
-		logrus.Errorf("err retriving remote px nodes: %v", err)
-		return pairInfo, err
+		logrus.Errorf("err retrieving remote px nodes: %v", err)
+		return nil, err
 	}
 
 	clusterMgr, err := d.getClusterManagerByAddress(pxNodes[0].Addresses[0])
-	resp, err := clusterMgr.GetPairToken(true)
 	if err != nil {
-		return pairInfo, err
+		return nil, err
 	}
-	logrus.Info("Response for token:", resp.Token)
+	resp, err := clusterMgr.GetPairToken(false)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Infof("Response for token: %v", resp.Token)
 
 	// file up cluster pair info
 	pairInfo[clusterIP] = pxNodes[0].Addresses[0]

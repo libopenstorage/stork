@@ -1471,10 +1471,14 @@ func (k *k8s) CreateCRDObjects(ctx *scheduler.Context, timeout, retryInterval ti
 	k8sOps := k8s_ops.Instance()
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*stork_api.ClusterPair); ok {
-			logrus.Info("Applying clusterpair specs")
+			logrus.Info("Applying clusterpair spec")
 			err = k8sOps.CreateClusterPair(obj)
 			if err != nil {
-				logrus.Info("Error Creating Cluster Pair", err)
+				return &scheduler.ErrFailedToApplyCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to apply spec: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
 			}
 			if err := k8sOps.ValidateClusterPair(obj.Name, defaultTimeout, defaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToApplyCustomSpec{
@@ -1487,8 +1491,11 @@ func (k *k8s) CreateCRDObjects(ctx *scheduler.Context, timeout, retryInterval ti
 			logrus.Info("Applying Migration Spec")
 			err = k8sOps.CreateMigration(obj)
 			if err != nil {
-				logrus.Info("Error Creating Migration", err)
-				return err
+				return &scheduler.ErrFailedToApplyCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to apply spec: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
 			}
 			if err := k8sOps.ValidateMigration(obj.Name, defaultTimeout, defaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToApplyCustomSpec{
