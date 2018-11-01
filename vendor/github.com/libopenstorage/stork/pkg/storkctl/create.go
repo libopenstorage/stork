@@ -13,6 +13,7 @@ func newCreateCommand(cmdFactory Factory) *cobra.Command {
 	createCommands.AddCommand(
 		newCreateSnapshotCommand(cmdFactory),
 		newCreateMigrationCommand(cmdFactory),
+		newCreatePVCCommand(cmdFactory),
 	)
 
 	return createCommands

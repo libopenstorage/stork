@@ -113,8 +113,8 @@ func sdkSchedToRetainInternalSpec(
 		}
 		spec = sched.Weekly(
 			sdkWeekdayToTimeWeekday(weekly.GetDay()),
-			int(daily.GetHour()),
-			int(daily.GetMinute())).
+			int(weekly.GetHour()),
+			int(weekly.GetMinute())).
 			Spec()
 	} else if monthly := req.GetMonthly(); monthly != nil {
 		// monthly
@@ -130,6 +130,8 @@ func sdkSchedToRetainInternalSpec(
 			int(monthly.GetHour()),
 			int(monthly.GetMinute())).
 			Spec()
+	} else if periodic := req.GetPeriodic(); periodic != nil {
+		spec = sched.Periodic(time.Duration(req.GetPeriodic().GetSeconds()) * time.Second).Spec()
 	} else {
 		return nil, status.Error(codes.InvalidArgument, "Invalid schedule period type")
 	}
@@ -140,13 +142,17 @@ func sdkSchedToRetainInternalSpec(
 	}, nil
 }
 
-func sdkSchedToRetainInternalSpecYamlByte(req *api.SdkSchedulePolicyInterval) ([]byte, error) {
-	sched, err := sdkSchedToRetainInternalSpec(req)
-	if err != nil {
-		return nil, err
+func sdkSchedToRetainInternalSpecYamlByte(sdkScheds []*api.SdkSchedulePolicyInterval) ([]byte, error) {
+	scheds := make([]*sched.RetainIntervalSpec, 0)
+	for _, sdkSched := range sdkScheds {
+		sched, err := sdkSchedToRetainInternalSpec(sdkSched)
+		if err != nil {
+			return nil, err
+		}
+		scheds = append(scheds, sched)
 	}
 
-	out, err := yaml.Marshal(sched)
+	out, err := yaml.Marshal(scheds)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to create schedule: %v", err)
 	}
@@ -187,6 +193,14 @@ func retainInternalSpecToSdkSched(spec *sched.RetainIntervalSpec) (*api.SdkSched
 				},
 			},
 		}
+	case sched.PeriodicType:
+		resp = &api.SdkSchedulePolicyInterval{
+			PeriodType: &api.SdkSchedulePolicyInterval_Periodic{
+				Periodic: &api.SdkSchedulePolicyIntervalPeriodic{
+					Seconds: int64(time.Duration(spec.Period) / time.Second),
+				},
+			},
+		}
 	default:
 		return nil, status.Errorf(codes.Internal, "Unknown schedule type: %s", spec.Freq)
 	}
@@ -197,14 +211,23 @@ func retainInternalSpecToSdkSched(spec *sched.RetainIntervalSpec) (*api.SdkSched
 
 func retainInternalSpecYamlByteToSdkSched(
 	in []byte,
-) (*api.SdkSchedulePolicyInterval, error) {
+) ([]*api.SdkSchedulePolicyInterval, error) {
 
 	// Get spec from yaml
-	var spec sched.RetainIntervalSpec
-	err := yaml.Unmarshal(in, &spec)
+	var specs []sched.RetainIntervalSpec
+	err := yaml.Unmarshal(in, &specs)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "Failed to retreive schedule")
+		return nil, status.Errorf(codes.Internal, "Failed to retreive schedule: %v", err)
 	}
 
-	return retainInternalSpecToSdkSched(&spec)
+	// Convert each one to Sdk messages
+	scheds := make([]*api.SdkSchedulePolicyInterval, len(specs))
+	for i, spec := range specs {
+		var err error
+		scheds[i], err = retainInternalSpecToSdkSched(&spec)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return scheds, nil
 }

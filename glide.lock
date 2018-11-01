@@ -1,8 +1,6 @@
-hash: 6c2d8f49ec9bc242dfed5178bc794a57303c6fc67f2f91e146ba833eed5f856c
-updated: 2018-10-23T22:35:02.779185941-07:00
+hash: e7f3b86b6ebbdaabeb2d6b5b69432065ef83ef9a4f194d6a17fd40ecf24b8ccd
+updated: 2018-10-25T20:30:36.894939056+05:30
 imports:
-- name: github.com/armon/go-metrics
-  version: f0300d1749da6fa982027e449ec0c7a145510c3c
 - name: github.com/aws/aws-sdk-go
   version: 5e98666858b97db54a61044bb1150d3b81436860
   subpackages:
@@ -39,10 +37,6 @@ imports:
   - service/sts
 - name: github.com/cenkalti/backoff
   version: 62661b46c4093e2c1f38d943e663db1a29873e80
-- name: github.com/cloudfoundry/gosigar
-  version: 50ddd08d81d770b1e0ce2c969a46e46c73580e2a
-  subpackages:
-  - sys/windows
 - name: github.com/docker/distribution
   version: 749f6afb4572201e3c37325d0ffedb6f32be8950
   subpackages:
@@ -139,26 +133,6 @@ imports:
   - runtime
   - runtime/internal
   - utilities
-- name: github.com/hashicorp/errwrap
-  version: 8a6fb523712970c966eefc6b39ed2c5e74880354
-- name: github.com/hashicorp/go-immutable-radix
-  version: 27df80928bb34bb1b0d6d0e01b9e679902e7a6b5
-- name: github.com/hashicorp/go-msgpack
-  version: fa3f63826f7c23912c15263591e65d54d080b458
-  subpackages:
-  - codec
-- name: github.com/hashicorp/go-multierror
-  version: 886a7fbe3eb1c874d46f623bfa70af45f425b3d1
-- name: github.com/hashicorp/go-sockaddr
-  version: 6d291a969b86c4b633730bfc6b8b9d64c3aafed9
-- name: github.com/hashicorp/golang-lru
-  version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
-  subpackages:
-  - simplelru
-- name: github.com/hashicorp/logutils
-  version: a335183dfd075f638afcc820c90591ca3c97eba6
-- name: github.com/hashicorp/memberlist
-  version: b195c8e4fcc6284fff1583fd6ab09e68ca207551
 - name: github.com/hpcloud/tail
   version: a1dbeea552b7c8df4b542c66073e393de198a800
   subpackages:
@@ -175,7 +149,7 @@ imports:
 - name: github.com/konsorten/go-windows-terminal-sequences
   version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/kubernetes-incubator/external-storage
-  version: cd82aca42900f43309fd9ebbc141684d78974446
+  version: bc02da24cf1ecc8be052434589c1b7f9081c75a1
   repo: https://github.com/libopenstorage/external-storage.git
   subpackages:
   - snapshot/pkg/apis/crd/v1
@@ -183,19 +157,17 @@ imports:
 - name: github.com/libopenstorage/gossip
   version: b3655d98ea02660f2e543d62f6af728a0c324116
   subpackages:
-  - proto
-  - proto/state
   - types
 - name: github.com/libopenstorage/openstorage
-  version: 57e6c12460020ddd545de791aefb78e79439cea2
+  version: 09ee5d92a4ff827a284d26be193584be88c10cf4
   subpackages:
   - api
   - api/client
   - api/client/cluster
   - api/client/volume
+  - api/errors
   - api/spec
   - cluster
-  - config
   - objectstore
   - osdconfig
   - pkg/dbg
@@ -205,15 +177,13 @@ imports:
   - secrets
   - volume
 - name: github.com/libopenstorage/stork
-  version: abf1e99a5f902c630bbafdea4059ca1cfe318da2
+  version: b88865a129c8fc19e6dbf44d665891b2f8b2cbc4
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
   - pkg/client/clientset/versioned
   - pkg/client/clientset/versioned/scheme
   - pkg/client/clientset/versioned/typed/stork/v1alpha1
-- name: github.com/libopenstorage/systemutils
-  version: dc0e35340804a0ada0792a3c9ce51d33ddd53cc8
 - name: github.com/mattn/go-colorable
   version: efa589957cd060542a26d2dd7832fd6a6c6c3ade
 - name: github.com/mattn/go-isatty
@@ -280,16 +250,14 @@ imports:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: 3497461783cd315f1dadbf710e0c4f4ba2e81dc7
+  version: c3085782607379884d70c96f6d509bcd9d73f224
   subpackages:
   - k8s
   - task
-- name: github.com/sean-/seed
-  version: e2103e2c35297fb7e17febb81e49b312087a2372
-- name: github.com/sirupsen/logrus
-  version: ad15b42461921f1fb3529b058c6786c6a45d5162
 - name: github.com/Sirupsen/logrus
   version: 4fabf2fffcecfd47f802869b7b92d75e43c5a095
+- name: github.com/sirupsen/logrus
+  version: ad15b42461921f1fb3529b058c6786c6a45d5162
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto
@@ -303,7 +271,6 @@ imports:
 - name: golang.org/x/net
   version: 1c05540f6879653db88113bc4a2b70aec4bd491f
   subpackages:
-  - bpf
   - context
   - context/ctxhttp
   - html
@@ -312,11 +279,7 @@ imports:
   - http2
   - http2/hpack
   - idna
-  - internal/iana
-  - internal/socket
   - internal/timeseries
-  - ipv4
-  - ipv6
   - lex/httplex
   - proxy
   - trace

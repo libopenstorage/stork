@@ -37,22 +37,28 @@ func (s *CloudBackupServer) Create(
 	req *api.SdkCloudBackupCreateRequest,
 ) (*api.SdkCloudBackupCreateResponse, error) {
 
-	if len(req.GetVolumeId()) == 0 {
+	if len(req.GetName()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Must supply a name")
+	} else if len(req.GetVolumeId()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Must supply a volume id")
 	} else if len(req.GetCredentialId()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Must supply credential uuid")
 	}
 
 	// Create the backup
-	if err := s.driver.CloudBackupCreate(&api.CloudBackupCreateRequest{
+	r, err := s.driver.CloudBackupCreate(&api.CloudBackupCreateRequest{
 		VolumeID:       req.GetVolumeId(),
 		CredentialUUID: req.GetCredentialId(),
 		Full:           req.GetFull(),
-	}); err != nil {
+		Name:           req.GetName(),
+	})
+	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to create backup: %v", err)
 	}
 
-	return &api.SdkCloudBackupCreateResponse{}, nil
+	return &api.SdkCloudBackupCreateResponse{
+		Name: r.Name,
+	}, nil
 }
 
 // Restore a backup
@@ -61,7 +67,9 @@ func (s *CloudBackupServer) Restore(
 	req *api.SdkCloudBackupRestoreRequest,
 ) (*api.SdkCloudBackupRestoreResponse, error) {
 
-	if len(req.GetBackupId()) == 0 {
+	if len(req.GetName()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Must provide a name")
+	} else if len(req.GetBackupId()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Must provide backup id")
 	} else if len(req.GetCredentialId()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Must provide credential uuid")
@@ -72,6 +80,7 @@ func (s *CloudBackupServer) Restore(
 		RestoreVolumeName: req.GetRestoreVolumeName(),
 		CredentialUUID:    req.GetCredentialId(),
 		NodeID:            req.GetNodeId(),
+		Name:              req.GetName(),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to restore backup: %v", err)
@@ -79,6 +88,7 @@ func (s *CloudBackupServer) Restore(
 
 	return &api.SdkCloudBackupRestoreResponse{
 		RestoreVolumeId: r.RestoreVolumeID,
+		Name:            r.Name,
 	}, nil
 
 }
@@ -222,8 +232,8 @@ func (s *CloudBackupServer) StateChange(
 	req *api.SdkCloudBackupStateChangeRequest,
 ) (*api.SdkCloudBackupStateChangeResponse, error) {
 
-	if len(req.GetSrcVolumeId()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Must provide volume id")
+	if len(req.GetName()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Must provide name")
 	} else if req.GetRequestedState() == api.SdkCloudBackupRequestedState_SdkCloudBackupRequestedStateUnknown {
 		return nil, status.Error(codes.InvalidArgument, "Must provide requested state")
 	}
@@ -241,7 +251,7 @@ func (s *CloudBackupServer) StateChange(
 	}
 
 	err := s.driver.CloudBackupStateChange(&api.CloudBackupStateChangeRequest{
-		SrcVolumeID:    req.GetSrcVolumeId(),
+		Name:           req.GetName(),
 		RequestedState: rs,
 	})
 	if err != nil {
@@ -263,12 +273,12 @@ func (s *CloudBackupServer) SchedCreate(
 		return nil, status.Error(codes.InvalidArgument, "Must supply source volume id")
 	} else if len(req.GetCloudSchedInfo().GetCredentialId()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Must supply credential uuid")
-	} else if req.GetCloudSchedInfo().GetSchedule() == nil ||
-		req.GetCloudSchedInfo().GetSchedule().GetPeriodType() == nil {
+	} else if req.GetCloudSchedInfo().GetSchedules() == nil ||
+		len(req.GetCloudSchedInfo().GetSchedules()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Must supply Schedule")
 	}
 
-	sched, err := sdkSchedToRetainInternalSpecYamlByte(req.GetCloudSchedInfo().GetSchedule())
+	sched, err := sdkSchedToRetainInternalSpecYamlByte(req.GetCloudSchedInfo().GetSchedules())
 	if err != nil {
 		return nil, err
 	}
@@ -278,6 +288,7 @@ func (s *CloudBackupServer) SchedCreate(
 	bkpRequest.CredentialUUID = req.GetCloudSchedInfo().GetCredentialId()
 	bkpRequest.Schedule = string(sched)
 	bkpRequest.MaxBackups = uint(req.GetCloudSchedInfo().GetMaxBackups())
+	bkpRequest.Full = req.GetCloudSchedInfo().GetFull()
 
 	// Create the backup
 	schedResp, err := s.driver.CloudBackupSchedCreate(&bkpRequest)
@@ -339,17 +350,18 @@ func ToSdkCloudBackupSchedEnumerateResponse(r *api.CloudBackupSchedEnumerateResp
 
 func ToSdkCloudBackupdScheduleInfo(s api.CloudBackupScheduleInfo) *api.SdkCloudBackupScheduleInfo {
 
-	schedule, err := retainInternalSpecYamlByteToSdkSched([]byte(s.Schedule))
+	schedules, err := retainInternalSpecYamlByteToSdkSched([]byte(s.Schedule))
 	if err != nil {
 		return nil
 	}
 	cloudSched := &api.SdkCloudBackupScheduleInfo{
 		SrcVolumeId:  s.SrcVolumeID,
 		CredentialId: s.CredentialUUID,
-		Schedule:     schedule,
+		Schedules:    schedules,
 		// Not sure about go and protobuf type conversion, converting to higher type
 		// converting uint to uint64
 		MaxBackups: uint64(s.MaxBackups),
+		Full:       s.Full,
 	}
 	return cloudSched
 }

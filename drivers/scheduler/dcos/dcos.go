@@ -424,6 +424,12 @@ func (d *dcos) StartSchedOnNode(node node.Node) error {
 	return nil
 }
 
+// CreateCRDObjects and Validate their deployment
+func (d *dcos) CreateCRDObjects(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+	// TODO: Implement this method
+	return nil
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

@@ -20,6 +20,8 @@ const (
 	managementurl   = "/managementurl"
 	fluentdhost     = "/fluentdconfig"
 	tunnelconfigurl = "/tunnelconfig"
+	PairPath        = "/pair"
+	PairTokenPath   = "/pairtoken"
 )
 
 type clusterClient struct {
@@ -35,6 +37,115 @@ func (c *clusterClient) Name() string {
 	return "ClusterManager"
 }
 
+func (c *clusterClient) CreatePair(
+	request *api.ClusterPairCreateRequest,
+) (*api.ClusterPairCreateResponse, error) {
+	resp := &api.ClusterPairCreateResponse{}
+
+	path := clusterPath + PairPath
+	response := c.c.Put().Resource(path).Body(request).Do()
+
+	if response.Error() != nil {
+		return nil, response.FormatError()
+	}
+
+	if err := response.Unmarshal(&resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *clusterClient) ProcessPairRequest(
+	request *api.ClusterPairProcessRequest,
+) (*api.ClusterPairProcessResponse, error) {
+	resp := &api.ClusterPairProcessResponse{}
+
+	path := clusterPath + PairPath
+	response := c.c.Post().Resource(path).Body(request).Do()
+	if response.Error() != nil {
+		return nil, response.FormatError()
+	}
+
+	if err := response.Unmarshal(&resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *clusterClient) DeletePair(
+	pairId string,
+) error {
+
+	path := clusterPath + PairPath
+	response := c.c.Delete().Resource(path).Instance(pairId).Do()
+
+	if response.Error() != nil {
+		return response.FormatError()
+	}
+	return nil
+}
+
+func (c *clusterClient) GetPair(
+	id string,
+) (*api.ClusterPairGetResponse, error) {
+	resp := &api.ClusterPairGetResponse{}
+	path := clusterPath + PairPath
+	response := c.c.Get().Resource(path).Instance(id).Do()
+
+	if response.Error() != nil {
+		return nil, response.FormatError()
+	}
+	if err := response.Unmarshal(&resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *clusterClient) RefreshPair(
+	pairId string,
+) error {
+
+	path := clusterPath + PairPath
+	response := c.c.Put().Resource(path).Instance(pairId).Do()
+
+	if response.Error() != nil {
+		return response.FormatError()
+	}
+	return nil
+}
+
+func (c *clusterClient) EnumeratePairs() (*api.ClusterPairsEnumerateResponse, error) {
+	resp := &api.ClusterPairsEnumerateResponse{}
+	path := clusterPath + PairPath
+	response := c.c.Get().Resource(path).Do()
+
+	if response.Error() != nil {
+		return nil, response.FormatError()
+	}
+	if err := response.Unmarshal(&resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *clusterClient) GetPairToken(
+	resetToken bool,
+) (*api.ClusterPairTokenGetResponse, error) {
+	resp := &api.ClusterPairTokenGetResponse{}
+
+	path := clusterPath + PairTokenPath
+	response := c.c.Get().Resource(path).QueryOption("reset", strconv.FormatBool(resetToken)).Do()
+	if response.Error() != nil {
+		return nil, response.FormatError()
+	}
+
+	if err := response.Unmarshal(&resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// Enumerate returns information about the cluster and its nodes
 func (c *clusterClient) Enumerate() (api.Cluster, error) {
 	clusterInfo := api.Cluster{}
 
@@ -145,6 +256,10 @@ func (c *clusterClient) Start(int, bool, string) error {
 	return nil
 }
 
+func (c *clusterClient) Uuid() string {
+	return ""
+}
+
 func (c *clusterClient) StartWithConfiguration(int, bool, string, *cluster.ClusterServerConfiguration) error {
 	return nil
 }
@@ -179,16 +294,6 @@ func (c *clusterClient) EnumerateAlerts(ts, te time.Time, resource api.ResourceT
 		return nil, err
 	}
 	return &a, nil
-}
-
-func (c *clusterClient) ClearAlert(resource api.ResourceType, alertID int64) error {
-	path := clusterPath + "/alerts/" + strconv.FormatInt(int64(resource), 10) + "/" + strconv.FormatInt(alertID, 10)
-	request := c.c.Put().Resource(path)
-	resp := request.Do()
-	if resp.Error() != nil {
-		return resp.FormatError()
-	}
-	return nil
 }
 
 func (c *clusterClient) EraseAlert(resource api.ResourceType, alertID int64) error {

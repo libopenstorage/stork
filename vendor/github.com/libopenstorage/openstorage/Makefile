@@ -2,6 +2,17 @@ HAS_PACKR := $(shell command -v packr 2> /dev/null)
 HAS_PROTOC_GEN_GRPC_GATEWAY := $(shell command -v protoc-gen-grpc-gateway 2> /dev/null)
 HAS_PROTOC_GEN_SWAGGER := $(shell command -v protoc-gen-swagger 2> /dev/null)
 HAS_PROTOC_GEN_GO := $(shell command -v protoc-gen-go 2> /dev/null)
+HAS_SDKTEST := $(shell command -v sdk-test 2> /dev/null)
+BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+
+ifeq ($(BRANCH), master)
+MOCKSDKSERVERTAG := latest
+else
+MOCKSDKSERVERTAG := $(shell go run tools/sdkver/sdkver.go)
+endif
+
+REGISTRY = openstorage
+IMAGE_MOCKSDKSERVER := $(REGISTRY)/mock-sdk-server:$(MOCKSDKSERVERTAG)
 
 ifndef TAGS
 TAGS := daemon
@@ -83,18 +94,22 @@ $(OSDSANITY)-clean:
 	@$(MAKE) -C cmd/osd-sanity clean
 
 docker-build-proto:
-	docker build -t openstorage/osd-proto -f Dockerfile.proto .
+	docker build -t quay.io/openstorage/osd-proto -f Dockerfile.proto .
 
-docker-proto: docker-build-proto
+docker-proto:
 	docker run \
 		--privileged \
 		-v $(shell pwd):/go/src/github.com/libopenstorage/openstorage \
 		-e "GOPATH=/go" \
+		-e "DOCKER_PROTO=yes" \
 		-e "PATH=/bin:/usr/bin:/usr/local/bin:/go/bin" \
-		openstorage/osd-proto \
+		quay.io/openstorage/osd-proto \
 			make proto
 
 proto:
+ifndef DOCKER_PROTO
+	$(error Do not run directly. Run 'make docker-proto' instead.)
+endif
 ifndef HAS_PROTOC_GEN_GO
 	@echo "Installing protoc-gen-go"
 	go get -u github.com/golang/protobuf/protoc-gen-go
@@ -131,8 +146,8 @@ endif
 	$(PROTOC) -I/usr/local/include -I$(PROTOSRC_PATH) -I$(PROTOS_PATH)/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis --grpc-gateway_out=logtostderr=true:. $(PROTOSRC_PATH)/pkg/flexvolume/flexvolume.proto
 	@echo "Generating protobuf definitions from pkg/jsonpb/testing/testing.proto"
 	$(PROTOC) -I $(PROTOSRC_PATH) $(PROTOSRC_PATH)/pkg/jsonpb/testing/testing.proto --go_out=plugins=grpc:.
-	@echo "Generating gRPC clients"
-	$(MAKE) -C api/client/sdk
+	@echo "Updating SDK versions"
+	go run tools/sdkver/sdkver.go --swagger api/server/sdk/api/api.swagger.json
 
 lint:
 	go get -v github.com/golang/lint/golint
@@ -147,12 +162,22 @@ errcheck:
 
 pretest: lint vet errcheck
 
+install-sdk-test:
+ifndef HAS_SDKTEST
+	@echo "Installing sdk-test"
+	@-go get -d -u github.com/libopenstorage/sdk-test 1>/dev/null 2>&1
+	@(cd $(GOPATH)/src/github.com/libopenstorage/sdk-test/cmd/sdk-test && make install )
+endif
+
+test-sdk: install-sdk-test launch-sdk
+	timeout 30 sh -c 'until curl --silent -X GET -d {} http://localhost:9110/v1/clusters/current | grep STATUS_OK; do sleep 1; done'
+	sdk-test -ginkgo.noColor -ginkgo.noisySkippings=false -sdk.endpoint=localhost:9100 -sdk.cpg=$(GOPATH)/src/github.com/libopenstorage/sdk-test/cmd/sdk-test/cb.yaml
+
 test: packr
 	go test -tags "$(TAGS)" $(TESTFLAGS) $(PKGS)
 
 docs:
 	go generate ./cmd/osd/main.go
-	swagger validate api/swagger/swagger.json
 
 packr:
 ifndef HAS_PACKR
@@ -166,7 +191,7 @@ generate-mockfiles:
 
 generate: docs generate-mockfiles
 
-sdk: proto docker-build-mock-sdk-server
+sdk: docker-proto docker-build-mock-sdk-server
 
 docker-build-mock-sdk-server: packr
 	rm -rf _tmp
@@ -176,10 +201,17 @@ docker-build-mock-sdk-server: packr
 				-tags "$(TAGS)" \
 				-o ./_tmp/osd \
 				./cmd/osd
-	docker build -t openstorage/mock-sdk-server -f Dockerfile.sdk .
+	docker build -t $(IMAGE_MOCKSDKSERVER) -f Dockerfile.sdk .
 	rm -rf _tmp
 
+docker-build-osd-dev-base:
+	docker build -t quay.io/openstorage/osd-dev-base -f Dockerfile.osd-dev-base .
+
+push-mock-sdk-server: docker-build-mock-sdk-server
+	docker push $(IMAGE_MOCKSDKSERVER)
+
 docker-build-osd-dev:
+	# This image is local only and will not be pushed
 	docker build -t openstorage/osd-dev -f Dockerfile.osd-dev .
 
 docker-build: docker-build-osd-dev
@@ -219,7 +251,7 @@ docker-build-osd-internal:
 	rm -rf _tmp
 	mkdir -p _tmp
 	go build -a -tags "$(TAGS)" -o _tmp/osd cmd/osd/main.go
-	docker build -t openstorage/osd -f Dockerfile.osd .
+	docker build -t quay.io/openstorage/osd -f Dockerfile.osd .
 
 docker-build-osd: docker-build-osd-dev
 	docker run \
@@ -230,10 +262,13 @@ docker-build-osd: docker-build-osd-dev
 		openstorage/osd-dev \
 			make docker-build-osd-internal
 
-launch-sdk: sdk
+launch-sdk-quick:
+	@-docker stop sdk > /dev/null 2>&1
 	docker run --rm --name sdk \
 		-d -p 9110:9110 -p 9100:9100 \
-		openstorage/mock-sdk-server
+		$(IMAGE_MOCKSDKSERVER)
+
+launch-sdk: sdk launch-sdk-quick
 
 launch: docker-build-osd
 	docker run \
@@ -245,7 +280,7 @@ launch: docker-build-osd
 		-p 9005:9005 \
 		-p 9100:9100 \
 		-p 9110:9110 \
-		openstorage/osd -d -f /etc/config/config.yaml
+		quay.io/openstorage/osd -d -f /etc/config/config.yaml
 
 # must set HAVE_BTRFS
 launch-local-btrfs: install
@@ -326,3 +361,9 @@ docker-coverage: docker-build-osd-dev
 		-e "TESTFLAGS=$(TESTFLAGS)" \
 		openstorage/osd-dev \
 			make coverage
+
+docker-images: docker-build-proto docker-build-osd-dev-base
+push-docker-images: docker-images
+	docker push quay.io/openstorage/osd-dev-base
+	docker push quay.io/openstorage/osd-proto
+

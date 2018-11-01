@@ -13,6 +13,7 @@ import (
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/cluster"
+	clustermanager "github.com/libopenstorage/openstorage/cluster/manager"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers/common"
 	"github.com/pborman/uuid"
@@ -123,7 +124,7 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 	}
 
 	inst.cl = &clusterListener{}
-	c, err := cluster.Inst()
+	c, err := clustermanager.Inst()
 	if err != nil {
 		logrus.Println("BUSE initializing in single node mode")
 	} else {
@@ -149,6 +150,13 @@ func (d *driver) Name() string {
 
 func (d *driver) Type() api.DriverType {
 	return Type
+}
+
+func (d *driver) Version() (*api.StorageVersion, error) {
+	return &api.StorageVersion{
+		Driver:  d.Name(),
+		Version: "1.0.0",
+	}, nil
 }
 
 // Status diagnostic information
@@ -295,7 +303,7 @@ func (d *driver) Unmount(volumeID string, mountpath string, options map[string]s
 	return d.UpdateVol(v)
 }
 
-func (d *driver) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator) (string, error) {
+func (d *driver) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error) {
 	volIDs := make([]string, 1)
 	volIDs[0] = volumeID
 	vols, err := d.Inspect(volIDs)
@@ -379,4 +387,8 @@ func (cl *clusterListener) Join(
 
 func (cl *clusterListener) String() string {
 	return Name
+}
+
+func (d *driver) Catalog(volumeID, path, depth string) (api.CatalogResponse, error) {
+	return api.CatalogResponse{}, volume.ErrNotSupported
 }

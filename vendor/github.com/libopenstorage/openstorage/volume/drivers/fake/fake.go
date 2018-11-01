@@ -25,8 +25,10 @@ import (
 
 	"strings"
 
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/cluster"
+	clustermanager "github.com/libopenstorage/openstorage/cluster/manager"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers/common"
 	"github.com/pborman/uuid"
@@ -57,7 +59,7 @@ type driver struct {
 
 type fakeCred struct {
 	Id     string
-	Params map[string]string
+	Params map[string]interface{}
 }
 
 type fakeBackups struct {
@@ -93,7 +95,7 @@ func newFakeDriver(params map[string]string) (*driver, error) {
 		kv:                 kv,
 	}
 
-	inst.thisCluster, err = cluster.Inst()
+	inst.thisCluster, err = clustermanager.Inst()
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +120,16 @@ func (d *driver) Name() string {
 
 func (d *driver) Type() api.DriverType {
 	return Type
+}
+
+func (d *driver) Version() (*api.StorageVersion, error) {
+	return &api.StorageVersion{
+		Driver:  d.Name(),
+		Version: "1.0.0-fake",
+		Details: map[string]string{
+			"example": "data",
+		},
+	}, nil
 }
 
 // Status diagnostic information
@@ -147,6 +159,8 @@ func (d *driver) Create(
 
 	if spec.Size == 0 {
 		return "", fmt.Errorf("Volume size cannot be zero")
+	} else if spec.GetHaLevel() == 0 {
+		return "", fmt.Errorf("HA level cannot be zero")
 	}
 
 	volumeID := strings.TrimSuffix(uuid.New(), "\n")
@@ -218,14 +232,19 @@ func (d *driver) Unmount(volumeID string, mountpath string, options map[string]s
 	return d.UpdateVol(v)
 }
 
-func (d *driver) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator) (string, error) {
+func (d *driver) Snapshot(volumeID string, readonly bool, locator *api.VolumeLocator, noRetry bool) (string, error) {
+
+	if len(locator.GetName()) == 0 {
+		return "", fmt.Errorf("Name for snapshot must be provided")
+	}
+
 	volIDs := []string{volumeID}
 	vols, err := d.Inspect(volIDs)
 	if err != nil {
 		return "", nil
 	}
 	source := &api.Source{Parent: volumeID}
-	logrus.Infof("Creating snap vol name: %s", locator.Name)
+	logrus.Infof("Creating snap %s for vol %s", locator.Name, volumeID)
 	newVolumeID, err := d.Create(locator, source, vols[0].Spec)
 	if err != nil {
 		return "", nil
@@ -303,21 +322,51 @@ func (d *driver) Set(volumeID string, locator *api.VolumeLocator, spec *api.Volu
 		v.Spec.Journal = spec.Journal
 		v.Spec.SnapshotInterval = spec.SnapshotInterval
 		v.Spec.IoProfile = spec.IoProfile
+		v.Spec.SnapshotSchedule = spec.SnapshotSchedule
 	}
 
 	return d.UpdateVol(v)
 }
 
 func (d *driver) Shutdown() {}
+func (d *driver) Stats(volumeID string, cumulative bool) (*api.Stats, error) {
+
+	vols, err := d.Inspect([]string{volumeID})
+	if err == kvdb.ErrNotFound {
+		return nil, fmt.Errorf("Volume not found")
+	} else if err != nil {
+		return nil, err
+	} else if len(vols) == 0 {
+		return nil, fmt.Errorf("Volume not found")
+	}
+
+	return &api.Stats{
+		Reads:      uint64(12345),
+		ReadMs:     uint64(1),
+		ReadBytes:  uint64(1234567),
+		Writes:     uint64(9876),
+		WriteMs:    uint64(2),
+		WriteBytes: uint64(7654321),
+		IoProgress: uint64(987),
+		IoMs:       uint64(3),
+		BytesUsed:  uint64(1234567890),
+		IntervalMs: uint64(4),
+	}, nil
+}
 
 func (d *driver) CredsCreate(
 	params map[string]string,
 ) (string, error) {
 
+	// Convert types
+	converted := make(map[string]interface{})
+	for k, v := range params {
+		converted[k] = v
+	}
 	id := uuid.New()
 	_, err := d.kv.Put(credsKeyPrefix+"/"+id, &fakeCred{
 		Id:     id,
-		Params: params,
+		Params: converted,
 	}, 0)
 	if err != nil {
 		return "", err
@@ -362,40 +411,47 @@ func (d *driver) CredsValidate(uuid string) error {
 }
 
 // CloudBackupCreate uploads snapshot of a volume to the cloud
-func (d *driver) CloudBackupCreate(input *api.CloudBackupCreateRequest) error {
-	_, err := d.cloudBackupCreate(input)
-	return err
+func (d *driver) CloudBackupCreate(
+	input *api.CloudBackupCreateRequest,
+) (*api.CloudBackupCreateResponse, error) {
+	name, _, err := d.cloudBackupCreate(input)
+	if err == nil {
+		resp := &api.CloudBackupCreateResponse{Name: name}
+		return resp, err
+	}
+	return nil, err
 }
 
 // cloudBackupCreate uploads snapshot of a volume to the cloud and returns the
-// backup id
-func (d *driver) cloudBackupCreate(input *api.CloudBackupCreateRequest) (string, error) {
+// backup task id
+func (d *driver) cloudBackupCreate(input *api.CloudBackupCreateRequest) (string, string, error) {
 
 	// Confirm credential id
 	if err := d.CredsValidate(input.CredentialUUID); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// Get volume info
 	vols, err := d.Inspect([]string{input.VolumeID})
 	if err != nil {
-		return "", fmt.Errorf("Volume id not found")
+		return "", "", fmt.Errorf("Volume id not found")
 	}
 	if len(vols) < 1 {
-		return "", fmt.Errorf("Internal error. Volume found but no data returned")
+		return "", "", fmt.Errorf("Internal error. Volume found but no data returned")
 	}
 	vol := vols[0]
 	if vol.GetSpec() == nil {
-		return "", fmt.Errorf("Internal error. Volume has no specificiation")
+		return "", "", fmt.Errorf("Internal error. Volume has no specificiation")
 	}
 
+	taskId := uuid.New()
 	// Save cloud backup
 	cloudId := uuid.New()
 	clusterInfo, err := d.thisCluster.Enumerate()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	_, err = d.kv.Put(backupsKeyPrefix+"/"+cloudId, &fakeBackups{
+	_, err = d.kv.Put(backupsKeyPrefix+"/"+taskId, &fakeBackups{
 		Volume:    *vol,
 		ClusterId: clusterInfo.Id,
 		Status: api.CloudBackupStatus{
@@ -419,10 +475,37 @@ func (d *driver) cloudBackupCreate(input *api.CloudBackupCreateRequest) (string,
 		},
 	}, 0)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
+	return taskId, cloudId, nil
+}
 
-	return cloudId, nil
+func (d *driver) backupEntry(Id string, op api.CloudBackupOpType) (*fakeBackups, string, error) {
+	var backup *fakeBackups
+	kvp, err := d.kv.Enumerate(backupsKeyPrefix)
+	if err != nil {
+		return nil, "", err
+	}
+	found := false
+	id := ""
+	for _, v := range kvp {
+		if err := json.Unmarshal(v.Value, &backup); err != nil {
+			return nil, "", err
+		}
+		if backup.Status.OpType != op {
+			continue
+		}
+		if backup.Status.ID == Id {
+			found = true
+			id = v.Key
+			break
+		}
+	}
+	if !found {
+		return nil, "", fmt.Errorf("Failed to find backup")
+	}
+	return backup, id, nil
+
 }
 
 // CloudBackupRestore downloads a cloud backup and restores it to a volume
@@ -434,10 +517,7 @@ func (d *driver) CloudBackupRestore(
 	if err := d.CredsValidate(input.CredentialUUID); err != nil {
 		return nil, err
 	}
-
-	// Get the cloud data
-	var backup *fakeBackups
-	_, err := d.kv.GetVal(backupsKeyPrefix+"/"+input.ID, &backup)
+	backup, _, err := d.backupEntry(input.ID, api.CloudBackupOp)
 	if err != nil {
 		return nil, err
 	}
@@ -494,8 +574,13 @@ func (d *driver) CloudBackupDelete(input *api.CloudBackupDeleteRequest) error {
 		return err
 	}
 
-	d.kv.Delete(backupsKeyPrefix + "/" + input.ID)
-	return nil
+	_, id, err := d.backupEntry(input.ID, api.CloudBackupOp)
+	if err != nil {
+		return err
+	}
+	//_, err := d.kv.Delete(backupsKeyPrefix + "/" + id)
+	_, err = d.kv.Delete(id)
+	return err
 }
 
 // CloudBackupEnumerate enumerates the backups for a given cluster/credential/volumeID
@@ -504,21 +589,6 @@ func (d *driver) CloudBackupEnumerate(input *api.CloudBackupEnumerateRequest) (*
 	// Confirm credential id
 	if err := d.CredsValidate(input.CredentialUUID); err != nil {
 		return nil, err
-	}
-
-	// Get volume info
-	if len(input.SrcVolumeID) != 0 {
-		vols, err := d.Inspect([]string{input.SrcVolumeID})
-		if err != nil {
-			return nil, fmt.Errorf("Volume id not found")
-		}
-		if len(vols) < 1 {
-			return nil, fmt.Errorf("Internal error. Volume found but no data returned")
-		}
-		vol := vols[0]
-		if vol.GetSpec() == nil {
-			return nil, fmt.Errorf("Internal error. Volume has no specificiation")
-		}
 	}
 
 	backups := make([]api.CloudBackupInfo, 0)
@@ -583,13 +653,15 @@ func (d *driver) CloudBackupDeleteAll(input *api.CloudBackupDeleteAllRequest) er
 		if elem.Status.OpType == api.CloudRestoreOp {
 			continue
 		}
-
 		if len(input.SrcVolumeID) == 0 && len(input.ClusterID) == 0 {
-			d.kv.Delete(backupsKeyPrefix + "/" + elem.Info.ID)
+			_, err = d.kv.Delete(v.Key)
 		} else if input.SrcVolumeID == elem.Volume.GetId() {
-			d.kv.Delete(backupsKeyPrefix + "/" + elem.Info.ID)
+			_, err = d.kv.Delete(v.Key)
 		} else if input.ClusterID == elem.ClusterId {
-			d.kv.Delete(backupsKeyPrefix + "/" + elem.Info.ID)
+			_, err = d.kv.Delete(v.Key)
+		}
+		if err != nil {
+			return err
 		}
 	}
 
@@ -616,12 +688,18 @@ func (d *driver) CloudBackupStatus(input *api.CloudBackupStatusRequest) (*api.Cl
 		if err := json.Unmarshal(v.Value, elem); err != nil {
 			return nil, err
 		}
+		splitKey := strings.Split(v.Key, "/")
+		id := splitKey[len(splitKey)-1]
+		if input.Name != "" && id == input.Name {
+			statuses[id] = elem.Status
+			break
+		}
 		if len(input.SrcVolumeID) == 0 && !input.Local {
-			statuses[elem.Volume.GetId()] = elem.Status
+			statuses[id] = elem.Status
 		} else if input.SrcVolumeID == elem.Volume.GetId() {
-			statuses[elem.Volume.GetId()] = elem.Status
+			statuses[id] = elem.Status
 		} else if input.Local && clusterInfo.NodeId == elem.Status.NodeID {
-			statuses[elem.Volume.GetId()] = elem.Status
+			statuses[id] = elem.Status
 		}
 	}
 
@@ -638,12 +716,10 @@ func (d *driver) CloudBackupCatalog(input *api.CloudBackupCatalogRequest) (*api.
 	}
 
 	// Get the cloud data
-	var backup *fakeBackups
-	_, err := d.kv.GetVal(backupsKeyPrefix+"/"+input.ID, &backup)
+	_, _, err := d.backupEntry(input.ID, api.CloudBackupOp)
 	if err != nil {
 		return nil, err
 	}
-
 	return &api.CloudBackupCatalogResponse{
 		Contents: []string{
 			"/one/two/three.gz",
@@ -695,12 +771,12 @@ func (d *driver) CloudBackupHistory(input *api.CloudBackupHistoryRequest) (*api.
 // CloudBackupStateChange allows a current backup state transisions(pause/resume/stop)
 func (d *driver) CloudBackupStateChange(input *api.CloudBackupStateChangeRequest) error {
 
-	if len(input.SrcVolumeID) == 0 {
-		return fmt.Errorf("Source volume id must be provided")
+	if len(input.Name) == 0 {
+		return fmt.Errorf("Name of the task must be provided")
 	}
 
 	resp, err := d.CloudBackupStatus(&api.CloudBackupStatusRequest{
-		SrcVolumeID: input.SrcVolumeID,
+		Name: input.Name,
 	})
 	if err != nil {
 		return err
@@ -726,12 +802,12 @@ func (d *driver) CloudBackupStateChange(input *api.CloudBackupStateChangeRequest
 
 		if save {
 			var elem *fakeBackups
-			_, err := d.kv.GetVal(backupsKeyPrefix+"/"+status.ID, &elem)
+			_, err := d.kv.GetVal(backupsKeyPrefix+"/"+input.Name, &elem)
 			if err != nil {
 				return err
 			}
 			elem.Status = status
-			_, err = d.kv.Update(backupsKeyPrefix+"/"+status.ID, elem, 0)
+			_, err = d.kv.Update(backupsKeyPrefix+"/"+input.Name, elem, 0)
 			if err != nil {
 				return err
 			}
@@ -806,5 +882,21 @@ func (d *driver) CloudBackupSchedEnumerate() (*api.CloudBackupSchedEnumerateResp
 
 	return &api.CloudBackupSchedEnumerateResponse{
 		Schedules: schedules,
+	}, nil
+}
+
+func (d *driver) Catalog(volumeID, path, depth string) (api.CatalogResponse, error) {
+	return api.CatalogResponse{
+		Root: &api.Catalog{
+			Name:         "",
+			Path:         "/var/lib/osd/catalog/12345678",
+			Type:         "Directory",
+			Size:         4096,
+			LastModified: &timestamp.Timestamp{},
+		},
+		Report: &api.Report{
+			Directories: 0,
+			Files:       0,
+		},
 	}, nil
 }

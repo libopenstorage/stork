@@ -68,11 +68,15 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 	if err != nil {
 		return nil, err
 	}
-	instance, err := metadata("instance-id")
+	instanceID, err := metadata("instance-id")
 	if err != nil {
 		return nil, err
 	}
-	logrus.Infof("AWS instance %v zone %v", instance, zone)
+	instanceType, err := metadata("instance-type")
+	if err != nil {
+		return nil, err
+	}
+	logrus.Infof("AWS instance %v with type %v zone %v", instanceID, instanceType, zone)
 
 	accessKey, secretKey, err := authKeys(params)
 	if err != nil {
@@ -90,10 +94,10 @@ func Init(params map[string]string) (volume.VolumeDriver, error) {
 	)
 	d := &Driver{
 		StatsDriver: volume.StatsNotSupported,
-		ops:         aws_ops.NewEc2Storage(instance, ec2),
+		ops:         aws_ops.NewEc2Storage(instanceID, instanceType, ec2),
 		md: &Metadata{
 			zone:     zone,
-			instance: instance,
+			instance: instanceID,
 		},
 		IODriver:           volume.IONotSupported,
 		QuiesceDriver:      volume.QuiesceNotSupported,
@@ -176,6 +180,14 @@ func (d *Driver) Name() string {
 // Type returns the type of the driver
 func (d *Driver) Type() api.DriverType {
 	return Type
+}
+
+// Version returns version information about the driver
+func (d *Driver) Version() (*api.StorageVersion, error) {
+	return &api.StorageVersion{
+		Driver:  d.Name(),
+		Version: "1.0.0",
+	}, nil
 }
 
 // Status returns the current status
@@ -329,6 +341,7 @@ func (d *Driver) Snapshot(
 	volumeID string,
 	readonly bool,
 	locator *api.VolumeLocator,
+	noRetry bool,
 ) (string, error) {
 	vols, err := d.StoreEnumerator.Inspect([]string{volumeID})
 	if err != nil {
@@ -502,4 +515,8 @@ func (d *Driver) Shutdown() {
 
 func (d *Driver) Set(volumeID string, locator *api.VolumeLocator, spec *api.VolumeSpec) error {
 	return volume.ErrNotSupported
+}
+
+func (d *Driver) Catalog(volumeID, path, depth string) (api.CatalogResponse, error) {
+	return api.CatalogResponse{}, volume.ErrNotSupported
 }

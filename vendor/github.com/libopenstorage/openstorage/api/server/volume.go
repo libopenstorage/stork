@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/errors"
-	"github.com/libopenstorage/openstorage/cluster"
+	clustermanager "github.com/libopenstorage/openstorage/cluster/manager"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/libopenstorage/openstorage/volume/drivers"
 )
@@ -60,18 +60,26 @@ func (vd *volAPI) getVolDriver(r *http.Request) (volume.VolumeDriver, error) {
 }
 
 func (vd *volAPI) parseID(r *http.Request) (string, error) {
-	vars := mux.Vars(r)
-	if id, ok := vars["id"]; ok {
-		return string(id), nil
+	if id, err := vd.parseParam(r, "id"); err == nil {
+		return id, nil
 	}
+
 	return "", fmt.Errorf("could not parse snap ID")
+}
+
+func (vd *volAPI) parseParam(r *http.Request, param string) (string, error) {
+	vars := mux.Vars(r)
+	if id, ok := vars[param]; ok {
+		return id, nil
+	}
+	return "", fmt.Errorf("could not parse %s", param)
 }
 
 func (vd *volAPI) nodeIPtoIds(nodes []string) ([]string, error) {
 	nodeIds := make([]string, 0)
 
 	// Get cluster instance
-	c, err := cluster.Inst()
+	c, err := clustermanager.Inst()
 	if err != nil {
 		return nodeIds, err
 	}
@@ -541,7 +549,7 @@ func (vd *volAPI) snap(w http.ResponseWriter, r *http.Request) {
 
 	vd.logRequest(method, string(snapReq.Id)).Infoln("")
 
-	id, err := d.Snapshot(snapReq.Id, snapReq.Readonly, snapReq.Locator)
+	id, err := d.Snapshot(snapReq.Id, snapReq.Readonly, snapReq.Locator, snapReq.NoRetry)
 	snapRes.VolumeCreateResponse = &api.VolumeCreateResponse{
 		Id: id,
 		VolumeResponse: &api.VolumeResponse{
@@ -737,8 +745,7 @@ func (vd *volAPI) stats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := d.Stats(volumeID, cumulative)
 	if err != nil {
-		e := fmt.Errorf("Failed to get stats: %s", err.Error())
-		http.Error(w, e.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	json.NewEncoder(w).Encode(stats)
@@ -1004,6 +1011,75 @@ func (vd *volAPI) versions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(versions)
 }
 
+// swagger:operation GET /osd-volumes/catalog/{id} volume catalogVolume
+//
+// Catalog lists the files and folders on volume with specified id.
+// Path is optional and default the behaviour is a catalog on the root of the volume.
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+//   description: id to get volume with
+//   required: true
+//   type: integer
+// - name: subfolder
+//   in: query
+//   description: Optional path inside mount to catalog.
+//   required: false
+//   type: string
+// - name: depth
+//   in: query
+//   description: Folder depth we wish to return, default is all.
+//   required: false
+//   type: string
+// responses:
+//   '200':
+//     description: volume catalog response
+//     schema:
+//       $ref: '#/definitions/CatalogResponse'
+func (vd *volAPI) catalog(w http.ResponseWriter, r *http.Request) {
+	var err error
+	var volumeID string
+	var subfolder string
+	var depth = "0"
+
+	method := "catalog"
+	d, err := vd.getVolDriver(r)
+	if err != nil {
+		fmt.Println("Volume not found")
+		notFound(w, r)
+		return
+	}
+
+	if volumeID, err = vd.parseParam(r, "id"); err != nil {
+		e := fmt.Errorf("Failed to parse ID: %s", err.Error())
+		vd.sendError(vd.name, method, w, e.Error(), http.StatusBadRequest)
+		return
+	}
+
+	params := r.URL.Query()
+	folderParam := params[string(api.OptCatalogSubFolder)]
+	if len(folderParam) > 0 {
+		subfolder = folderParam[0]
+	}
+
+	depthParam := params[string(api.OptCatalogMaxDepth)]
+	if len(depthParam) > 0 {
+		depth = depthParam[0]
+	}
+
+	dk, err := d.Catalog(volumeID, subfolder, depth)
+	if err != nil {
+		vd.sendError(vd.name, method, w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(dk)
+}
+
 func volVersion(route, version string) string {
 	if version == "" {
 		return "/" + route
@@ -1048,6 +1124,7 @@ func (vd *volAPI) Routes() []*Route {
 		{verb: "GET", path: volPath("/requests/{id}", volume.APIVersion), fn: vd.requests},
 		{verb: "POST", path: volPath("/quiesce/{id}", volume.APIVersion), fn: vd.quiesce},
 		{verb: "POST", path: volPath("/unquiesce/{id}", volume.APIVersion), fn: vd.unquiesce},
+		{verb: "GET", path: volPath("/catalog/{id}", volume.APIVersion), fn: vd.catalog},
 		{verb: "POST", path: snapPath("", volume.APIVersion), fn: vd.snap},
 		{verb: "GET", path: snapPath("", volume.APIVersion), fn: vd.snapEnumerate},
 		{verb: "POST", path: snapPath("/restore/{id}", volume.APIVersion), fn: vd.restore},
@@ -1057,6 +1134,7 @@ func (vd *volAPI) Routes() []*Route {
 		{verb: "DELETE", path: credsPath("/{uuid}", volume.APIVersion), fn: vd.credsDelete},
 		{verb: "PUT", path: credsPath("/validate/{uuid}", volume.APIVersion), fn: vd.credsValidate},
 		{verb: "POST", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupCreate},
+		{verb: "POST", path: backupPath("/group", volume.APIVersion), fn: vd.cloudBackupGroupCreate},
 		{verb: "POST", path: backupPath("/restore", volume.APIVersion), fn: vd.cloudBackupRestore},
 		{verb: "GET", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupEnumerate},
 		{verb: "DELETE", path: backupPath("", volume.APIVersion), fn: vd.cloudBackupDelete},
@@ -1066,6 +1144,7 @@ func (vd *volAPI) Routes() []*Route {
 		{verb: "GET", path: backupPath("/history", volume.APIVersion), fn: vd.cloudBackupHistory},
 		{verb: "PUT", path: backupPath("/statechange", volume.APIVersion), fn: vd.cloudBackupStateChange},
 		{verb: "POST", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedCreate},
+		{verb: "POST", path: backupPath("/schedgroup", volume.APIVersion), fn: vd.cloudBackupGroupSchedCreate},
 		{verb: "DELETE", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedDelete},
 		{verb: "GET", path: backupPath("/sched", volume.APIVersion), fn: vd.cloudBackupSchedEnumerate},
 		{verb: "POST", path: migratePath(api.OsdMigrateStartPath, volume.APIVersion), fn: vd.cloudMigrateStart},

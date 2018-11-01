@@ -22,7 +22,6 @@ func (c *clusterApi) Routes() []*Route {
 		{verb: "PUT", path: clusterPath("/shutdown", cluster.APIVersion), fn: c.shutdown},
 		{verb: "PUT", path: clusterPath("/shutdown/{id}", cluster.APIVersion), fn: c.shutdown},
 		{verb: "GET", path: clusterPath("/alerts/{resource}", cluster.APIVersion), fn: c.enumerateAlerts},
-		{verb: "PUT", path: clusterPath("/alerts/{resource}/{id}", cluster.APIVersion), fn: c.clearAlert},
 		{verb: "DELETE", path: clusterPath("/alerts/{resource}/{id}", cluster.APIVersion), fn: c.eraseAlert},
 		{verb: "GET", path: clusterPath(client.UriCluster, cluster.APIVersion), fn: c.getClusterConf},
 		{verb: "GET", path: clusterPath(client.UriNode+"/{id}", cluster.APIVersion), fn: c.getNodeConf},
@@ -46,5 +45,12 @@ func (c *clusterApi) Routes() []*Route {
 		{verb: "POST", path: clusterPath(client.ObjectStorePath, cluster.APIVersion), fn: c.objectStoreCreate},
 		{verb: "PUT", path: clusterPath(client.ObjectStorePath, cluster.APIVersion), fn: c.objectStoreUpdate},
 		{verb: "DELETE", path: clusterPath(client.ObjectStorePath+"/delete", cluster.APIVersion), fn: c.objectStoreDelete},
+		{verb: "PUT", path: clusterPath(client.PairPath, cluster.APIVersion), fn: c.createPair},
+		{verb: "POST", path: clusterPath(client.PairPath, cluster.APIVersion), fn: c.processPair},
+		{verb: "GET", path: clusterPath(client.PairPath, cluster.APIVersion), fn: c.enumeratePairs},
+		{verb: "GET", path: clusterPath(client.PairPath+"/{id}", cluster.APIVersion), fn: c.getPair},
+		{verb: "PUT", path: clusterPath(client.PairPath+"/{id}", cluster.APIVersion), fn: c.refreshPair},
+		{verb: "DELETE", path: clusterPath(client.PairPath+"/{id}", cluster.APIVersion), fn: c.deletePair},
+		{verb: "GET", path: clusterPath(client.PairTokenPath, cluster.APIVersion), fn: c.getPairToken},
 	}
 }

@@ -19,3 +19,4 @@ COPY help.1 /
 WORKDIR /
 
 COPY ./bin/stork /
+COPY ./bin/linux/storkctl /

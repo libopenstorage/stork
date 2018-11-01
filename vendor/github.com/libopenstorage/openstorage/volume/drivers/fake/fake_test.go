@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/libopenstorage/openstorage/cluster"
+	clustermanager "github.com/libopenstorage/openstorage/cluster/manager"
 	"github.com/libopenstorage/openstorage/config"
 	"github.com/portworx/kvdb"
 	"github.com/portworx/kvdb/mem"
@@ -39,7 +39,7 @@ func init() {
 		logrus.Panicf("Failed to set KVDB instance")
 	}
 
-	cluster.Init(config.ClusterConfig{
+	clustermanager.Init(config.ClusterConfig{
 		ClusterId: "fakecluster",
 		NodeId:    "fakeNode",
 	})
@@ -67,10 +67,10 @@ func TestFakeCredentials(t *testing.T) {
 	assert.Len(t, creds, 1)
 
 	data := creds[id]
-	value, ok := data.(map[string]string)
+	value, ok := data.(map[string]interface{})
 	assert.True(t, ok)
 	assert.NotEmpty(t, value)
-	assert.Equal(t, value["hello"], "world")
+	assert.Equal(t, value["hello"].(string), "world")
 
 	err = d.CredsDelete(id)
 	assert.NoError(t, err)
@@ -88,6 +88,15 @@ func TestFakeCreateVolume(t *testing.T) {
 		Name: "myvol",
 	}, &api.Source{}, &api.VolumeSpec{
 		Size: 1234,
+	})
+	assert.Error(t, err)
+	assert.Empty(t, vid)
+
+	vid, err = d.Create(&api.VolumeLocator{
+		Name: "myvol",
+	}, &api.Source{}, &api.VolumeSpec{
+		Size:    1234,
+		HaLevel: 1,
 	})
 	assert.NoError(t, err)
 	assert.NotEmpty(t, vid)
@@ -121,23 +130,25 @@ func TestFakeCloudBackupCreate(t *testing.T) {
 		VolumeID:       "abc",
 		CredentialUUID: "def",
 	}
-	err = d.CloudBackupCreate(req)
+	r, err := d.CloudBackupCreate(req)
 	assert.Error(t, err)
+	assert.Nil(t, r)
 
 	// Create a vol
 	name := "myvol"
 	size := uint64(1234)
 	volid, err := d.Create(&api.VolumeLocator{Name: name}, &api.Source{}, &api.VolumeSpec{
-		Size: size,
+		Size:    size,
+		HaLevel: 1,
 	})
 	assert.NoError(t, err)
 	assert.NotEmpty(t, volid)
 	req.VolumeID = volid
 
 	// Fail because no cred id
-	err = d.CloudBackupCreate(req)
+	r, err = d.CloudBackupCreate(req)
 	assert.Error(t, err)
-
+	assert.Nil(t, r)
 	// Create cred
 	credid, err := d.CredsCreate(map[string]string{
 		"hello": "world",
@@ -147,16 +158,18 @@ func TestFakeCloudBackupCreate(t *testing.T) {
 	req.CredentialUUID = credid
 
 	// Success
-	err = d.CloudBackupCreate(req)
+	r, err = d.CloudBackupCreate(req)
 	assert.NoError(t, err)
+	assert.NotEmpty(t, r.Name)
 }
 
-func testInitForCloudBackups(t *testing.T, d *driver) (string, *api.CloudBackupCreateRequest, *api.Volume) {
+func testInitForCloudBackups(t *testing.T, d *driver) (string, string, *api.CloudBackupCreateRequest, *api.Volume) {
 	// Create a vol
 	name := "myvol"
 	size := uint64(1234)
 	volid, err := d.Create(&api.VolumeLocator{Name: name}, &api.Source{}, &api.VolumeSpec{
-		Size: size,
+		Size:    size,
+		HaLevel: 1,
 	})
 	assert.NoError(t, err)
 	assert.NotEmpty(t, volid)
@@ -173,23 +186,24 @@ func testInitForCloudBackups(t *testing.T, d *driver) (string, *api.CloudBackupC
 		CredentialUUID: credid,
 	}
 
-	id, err := d.cloudBackupCreate(req)
+	name, id, err := d.cloudBackupCreate(req)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
+	assert.NotEmpty(t, name)
 
 	origvols, err := d.Inspect([]string{volid})
 	assert.NoError(t, err)
 	assert.Len(t, origvols, 1)
 	origvol := origvols[0]
 
-	return id, req, origvol
+	return name, id, req, origvol
 }
 
 func TestFakeCloudBackupRestore(t *testing.T) {
 	d, err := newFakeDriver(map[string]string{})
 	assert.NoError(t, err)
 
-	backupId, createReq, origvol := testInitForCloudBackups(t, d)
+	_, backupId, createReq, origvol := testInitForCloudBackups(t, d)
 	resp, err := d.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 		CredentialUUID:    createReq.CredentialUUID,
 		ID:                backupId,
@@ -211,8 +225,8 @@ func TestFakeCloudBackupDelete(t *testing.T) {
 	d, err := newFakeDriver(map[string]string{})
 	assert.NoError(t, err)
 
-	backupId, createReq, _ := testInitForCloudBackups(t, d)
-	_, err = d.kv.Get(backupsKeyPrefix + "/" + backupId)
+	name, backupId, createReq, _ := testInitForCloudBackups(t, d)
+	_, err = d.kv.Get(backupsKeyPrefix + "/" + name)
 	assert.NoError(t, err)
 
 	err = d.CloudBackupDelete(&api.CloudBackupDeleteRequest{
@@ -230,10 +244,13 @@ func TestFakeCloudBackupEnumerateWithoutMatches(t *testing.T) {
 	assert.NoError(t, err)
 
 	numbackups := 50
+	names := make([]string, 0)
+	id := ""
 	var credBackupReq *api.CloudBackupCreateRequest
 	for i := 0; i < numbackups; i++ {
-		_, credBackupReq, _ = testInitForCloudBackups(t, d)
+		id, _, credBackupReq, _ = testInitForCloudBackups(t, d)
 		assert.NoError(t, err)
+		names = append(names, id)
 	}
 
 	resp, err := d.CloudBackupEnumerate(&api.CloudBackupEnumerateRequest{
@@ -243,6 +260,11 @@ func TestFakeCloudBackupEnumerateWithoutMatches(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, resp.Backups, numbackups)
+	for _, id := range names {
+		_, err := d.kv.Delete(backupsKeyPrefix + "/" + id)
+		assert.NoError(t, err)
+	}
+
 }
 
 func TestFakeCloudBackupEnumerateMatchingVolumes(t *testing.T) {
@@ -252,9 +274,12 @@ func TestFakeCloudBackupEnumerateMatchingVolumes(t *testing.T) {
 	numbackups := 50
 	var credBackupReq *api.CloudBackupCreateRequest
 	var vol *api.Volume
+	names := make([]string, 0)
+	id := ""
 	for i := 0; i < numbackups; i++ {
-		_, credBackupReq, vol = testInitForCloudBackups(t, d)
+		id, _, credBackupReq, vol = testInitForCloudBackups(t, d)
 		assert.NoError(t, err)
+		names = append(names, id)
 	}
 
 	resp, err := d.CloudBackupEnumerate(&api.CloudBackupEnumerateRequest{
@@ -265,6 +290,18 @@ func TestFakeCloudBackupEnumerateMatchingVolumes(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, resp.Backups, 1)
+	for _, id := range names {
+		_, err := d.kv.Delete(backupsKeyPrefix + "/" + id)
+		assert.NoError(t, err)
+	}
+	resp, err = d.CloudBackupEnumerate(&api.CloudBackupEnumerateRequest{
+		CloudBackupGenericRequest: api.CloudBackupGenericRequest{
+			CredentialUUID: credBackupReq.CredentialUUID,
+		},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, resp.Backups, 0)
+
 }
 
 func TestFakeCloudBackupDeleteAllWithoutMatches(t *testing.T) {
@@ -272,10 +309,13 @@ func TestFakeCloudBackupDeleteAllWithoutMatches(t *testing.T) {
 	assert.NoError(t, err)
 
 	numbackups := 50
+	names := make([]string, 0)
+	id := ""
 	var credBackupReq *api.CloudBackupCreateRequest
 	for i := 0; i < numbackups; i++ {
-		_, credBackupReq, _ = testInitForCloudBackups(t, d)
+		id, _, credBackupReq, _ = testInitForCloudBackups(t, d)
 		assert.NoError(t, err)
+		names = append(names, id)
 	}
 
 	resp, err := d.CloudBackupEnumerate(&api.CloudBackupEnumerateRequest{
@@ -311,7 +351,7 @@ func TestFakeCloudBackupDeleteAllVolumeIdMatch(t *testing.T) {
 	var credBackupReq *api.CloudBackupCreateRequest
 	var vol *api.Volume
 	for i := 0; i < numbackups; i++ {
-		_, credBackupReq, vol = testInitForCloudBackups(t, d)
+		_, _, credBackupReq, vol = testInitForCloudBackups(t, d)
 		assert.NoError(t, err)
 	}
 
@@ -339,6 +379,12 @@ func TestFakeCloudBackupDeleteAllVolumeIdMatch(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, resp.Backups, numbackups-1)
+	// Now delete all
+	err = d.CloudBackupDeleteAll(&api.CloudBackupDeleteAllRequest{
+		CloudBackupGenericRequest: api.CloudBackupGenericRequest{
+			CredentialUUID: credBackupReq.CredentialUUID,
+		},
+	})
 }
 
 func TestFakeCloudBackupStatusWithoutMatches(t *testing.T) {
@@ -346,10 +392,11 @@ func TestFakeCloudBackupStatusWithoutMatches(t *testing.T) {
 	assert.NoError(t, err)
 
 	numbackups := 50
+	names := make([]string, 0)
 	for i := 0; i < numbackups; i++ {
 		// create backups
-		backupid, credBackupReq, _ := testInitForCloudBackups(t, d)
-
+		id, backupid, credBackupReq, _ := testInitForCloudBackups(t, d)
+		names = append(names, id)
 		// create restores
 		resp, err := d.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 			CredentialUUID:    credBackupReq.CredentialUUID,
@@ -397,6 +444,11 @@ func TestFakeCloudBackupStatusWithoutMatches(t *testing.T) {
 	}
 	assert.Equal(t, 50, nbackups)
 	assert.Equal(t, 50, nrestores)
+
+	for _, id := range names {
+		_, err := d.kv.Delete(backupsKeyPrefix + "/" + id)
+		assert.NoError(t, err)
+	}
 }
 
 func TestFakeCloudBackupStatusWithMatchingVolume(t *testing.T) {
@@ -406,15 +458,15 @@ func TestFakeCloudBackupStatusWithMatchingVolume(t *testing.T) {
 	numbackups := 50
 	var credBackupReq *api.CloudBackupCreateRequest
 	var vol *api.Volume
-	var backupid string
+	var backupId, name string
 	for i := 0; i < numbackups; i++ {
 		// create backups
-		backupid, credBackupReq, vol = testInitForCloudBackups(t, d)
+		name, backupId, credBackupReq, vol = testInitForCloudBackups(t, d)
 
 		// create restores
 		resp, err := d.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 			CredentialUUID:    credBackupReq.CredentialUUID,
-			ID:                backupid,
+			ID:                backupId,
 			RestoreVolumeName: fmt.Sprintf("restore-%d", i),
 		})
 		assert.NoError(t, err)
@@ -428,14 +480,14 @@ func TestFakeCloudBackupStatusWithMatchingVolume(t *testing.T) {
 
 	// backups and restores
 	assert.Len(t, resp.Statuses, 1)
-	assert.Equal(t, api.CloudBackupOp, resp.Statuses[vol.GetId()].OpType)
+	assert.Equal(t, api.CloudBackupOp, resp.Statuses[name].OpType)
 }
 
 func TestFakeCloudBackupCatalog(t *testing.T) {
 	d, err := newFakeDriver(map[string]string{})
 	assert.NoError(t, err)
 
-	backupId, createReq, _ := testInitForCloudBackups(t, d)
+	_, backupId, createReq, _ := testInitForCloudBackups(t, d)
 
 	resp, err := d.CloudBackupCatalog(&api.CloudBackupCatalogRequest{
 		CredentialUUID: createReq.CredentialUUID,
@@ -458,7 +510,7 @@ func TestFakeCloudBackupHistoryWithoutMatches(t *testing.T) {
 	numbackups := 50
 	for i := 0; i < numbackups; i++ {
 		// create backups
-		backupid, credBackupReq, _ := testInitForCloudBackups(t, d)
+		_, backupid, credBackupReq, _ := testInitForCloudBackups(t, d)
 
 		// create restores
 		resp, err := d.CloudBackupRestore(&api.CloudBackupRestoreRequest{
@@ -484,15 +536,15 @@ func TestFakeCloudBackupHistoryWithMatchingVolume(t *testing.T) {
 	numbackups := 50
 	var credBackupReq *api.CloudBackupCreateRequest
 	var vol *api.Volume
-	var backupid string
+	var id string
 	for i := 0; i < numbackups; i++ {
 		// create backups
-		backupid, credBackupReq, vol = testInitForCloudBackups(t, d)
+		_, id, credBackupReq, vol = testInitForCloudBackups(t, d)
 
 		// create restores
 		resp, err := d.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 			CredentialUUID:    credBackupReq.CredentialUUID,
-			ID:                backupid,
+			ID:                id,
 			RestoreVolumeName: fmt.Sprintf("restore-%d", i),
 		})
 		assert.NoError(t, err)
@@ -512,14 +564,14 @@ func TestFakeCloudBackupStateChange(t *testing.T) {
 	d, err := newFakeDriver(map[string]string{})
 	assert.NoError(t, err)
 
-	backupId, _, vol := testInitForCloudBackups(t, d)
+	name, _, _, vol := testInitForCloudBackups(t, d)
 
 	// Update element on db
 	var elem *fakeBackups
-	_, err = d.kv.GetVal(backupsKeyPrefix+"/"+backupId, &elem)
+	_, err = d.kv.GetVal(backupsKeyPrefix+"/"+name, &elem)
 	assert.NoError(t, err)
 	elem.Status.Status = api.CloudBackupStatusActive
-	_, err = d.kv.Update(backupsKeyPrefix+"/"+backupId, elem, 0)
+	_, err = d.kv.Update(backupsKeyPrefix+"/"+name, elem, 0)
 	assert.NoError(t, err)
 
 	// Confirm db
@@ -528,7 +580,7 @@ func TestFakeCloudBackupStateChange(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, statuses.Statuses, 1)
-	assert.Equal(t, api.CloudBackupStatusActive, statuses.Statuses[vol.GetId()].Status)
+	assert.Equal(t, api.CloudBackupStatusActive, statuses.Statuses[name].Status)
 
 	// No values errors
 	err = d.CloudBackupStateChange(&api.CloudBackupStateChangeRequest{})
@@ -536,7 +588,7 @@ func TestFakeCloudBackupStateChange(t *testing.T) {
 
 	// Pause
 	err = d.CloudBackupStateChange(&api.CloudBackupStateChangeRequest{
-		SrcVolumeID:    vol.GetId(),
+		Name:           name,
 		RequestedState: api.CloudBackupRequestedStatePause,
 	})
 	assert.NoError(t, err)
@@ -547,26 +599,26 @@ func TestFakeCloudBackupStateChange(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, statuses.Statuses, 1)
-	assert.Equal(t, api.CloudBackupStatusPaused, statuses.Statuses[vol.GetId()].Status)
+	assert.Equal(t, api.CloudBackupStatusPaused, statuses.Statuses[name].Status)
 
 	// Resume
 	err = d.CloudBackupStateChange(&api.CloudBackupStateChangeRequest{
-		SrcVolumeID:    vol.GetId(),
+		Name:           name,
 		RequestedState: api.CloudBackupRequestedStateResume,
 	})
 	assert.NoError(t, err)
 
 	// Confirm db
 	statuses, err = d.CloudBackupStatus(&api.CloudBackupStatusRequest{
-		SrcVolumeID: vol.GetId(),
+		Name: name,
 	})
 	assert.NoError(t, err)
 	assert.Len(t, statuses.Statuses, 1)
-	assert.Equal(t, api.CloudBackupStatusActive, statuses.Statuses[vol.GetId()].Status)
+	assert.Equal(t, api.CloudBackupStatusActive, statuses.Statuses[name].Status)
 
 	// Stop
 	err = d.CloudBackupStateChange(&api.CloudBackupStateChangeRequest{
-		SrcVolumeID:    vol.GetId(),
+		Name:           name,
 		RequestedState: api.CloudBackupRequestedStateStop,
 	})
 	assert.NoError(t, err)
@@ -577,11 +629,11 @@ func TestFakeCloudBackupStateChange(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, statuses.Statuses, 1)
-	assert.Equal(t, api.CloudBackupStatusStopped, statuses.Statuses[vol.GetId()].Status)
+	assert.Equal(t, api.CloudBackupStatusStopped, statuses.Statuses[name].Status)
 
 	// Still stopped
 	err = d.CloudBackupStateChange(&api.CloudBackupStateChangeRequest{
-		SrcVolumeID:    vol.GetId(),
+		Name:           name,
 		RequestedState: api.CloudBackupRequestedStateResume,
 	})
 	assert.NoError(t, err)
@@ -592,14 +644,14 @@ func TestFakeCloudBackupStateChange(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, statuses.Statuses, 1)
-	assert.Equal(t, api.CloudBackupStatusStopped, statuses.Statuses[vol.GetId()].Status)
+	assert.Equal(t, api.CloudBackupStatusStopped, statuses.Statuses[name].Status)
 }
 
 func TestFakeCloudBackupSchedule(t *testing.T) {
 	d, err := newFakeDriver(map[string]string{})
 	assert.NoError(t, err)
 
-	_, req, vol := testInitForCloudBackups(t, d)
+	_, _, req, vol := testInitForCloudBackups(t, d)
 
 	maxbackups := uint(10)
 	id, err := d.CloudBackupSchedCreate(&api.CloudBackupSchedCreateRequest{
@@ -636,7 +688,8 @@ func TestFakeSet(t *testing.T) {
 	name := "myvol"
 	size := uint64(1234)
 	volid, err := d.Create(&api.VolumeLocator{Name: name}, &api.Source{}, &api.VolumeSpec{
-		Size: size,
+		Size:    size,
+		HaLevel: 1,
 	})
 	assert.NoError(t, err)
 	assert.NotEmpty(t, volid)

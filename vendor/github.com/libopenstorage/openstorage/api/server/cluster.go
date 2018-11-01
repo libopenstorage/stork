@@ -11,9 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/cluster"
-	"github.com/libopenstorage/openstorage/objectstore"
-	sched "github.com/libopenstorage/openstorage/schedpolicy"
-	"github.com/libopenstorage/openstorage/secrets"
+	clustermanager "github.com/libopenstorage/openstorage/cluster/manager"
 )
 
 const (
@@ -23,20 +21,14 @@ const (
 
 type clusterApi struct {
 	restBase
-	SecretManager      secrets.Secrets
-	SchedPolicyManager sched.SchedulePolicyProvider
-	ObjectStoreManager objectstore.ObjectStore
 }
 
-func newClusterAPI(config cluster.ClusterServerConfiguration) restServer {
+func newClusterAPI() restServer {
 	return &clusterApi{
 		restBase: restBase{
 			version: cluster.APIVersion,
 			name:    "Cluster API",
 		},
-		SecretManager:      config.ConfigSecretManager,
-		SchedPolicyManager: config.ConfigSchedManager,
-		ObjectStoreManager: config.ConfigObjectStoreManager,
 	}
 }
 
@@ -62,7 +54,7 @@ func (c *clusterApi) String() string {
 //            $ref: '#/definitions/Cluster'
 func (c *clusterApi) enumerate(w http.ResponseWriter, r *http.Request) {
 	method := "enumerate"
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -77,7 +69,7 @@ func (c *clusterApi) enumerate(w http.ResponseWriter, r *http.Request) {
 
 func (c *clusterApi) setSize(w http.ResponseWriter, r *http.Request) {
 	method := "set size"
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -121,7 +113,7 @@ func (c *clusterApi) setSize(w http.ResponseWriter, r *http.Request) {
 //       $ref: '#/definitions/Node'
 func (c *clusterApi) inspect(w http.ResponseWriter, r *http.Request) {
 	method := "inspect"
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -145,7 +137,7 @@ func (c *clusterApi) inspect(w http.ResponseWriter, r *http.Request) {
 func (c *clusterApi) enableGossip(w http.ResponseWriter, r *http.Request) {
 	method := "enablegossip"
 
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -160,7 +152,7 @@ func (c *clusterApi) enableGossip(w http.ResponseWriter, r *http.Request) {
 func (c *clusterApi) disableGossip(w http.ResponseWriter, r *http.Request) {
 	method := "disablegossip"
 
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -175,7 +167,7 @@ func (c *clusterApi) disableGossip(w http.ResponseWriter, r *http.Request) {
 func (c *clusterApi) gossipState(w http.ResponseWriter, r *http.Request) {
 	method := "gossipState"
 
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -205,7 +197,7 @@ func (c *clusterApi) gossipState(w http.ResponseWriter, r *http.Request) {
 //         type: string
 func (c *clusterApi) getNodeIdFromIp(w http.ResponseWriter, r *http.Request) {
 	method := "getnodeidfromip"
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -241,7 +233,7 @@ func (c *clusterApi) getNodeIdFromIp(w http.ResponseWriter, r *http.Request) {
 func (c *clusterApi) status(w http.ResponseWriter, r *http.Request) {
 	method := "status"
 
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
@@ -259,7 +251,7 @@ func (c *clusterApi) status(w http.ResponseWriter, r *http.Request) {
 }
 
 func nodeStatusIntl() (api.Status, error) {
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		return api.Status_STATUS_NONE, err
 	}
@@ -353,7 +345,7 @@ func (c *clusterApi) peerStatus(w http.ResponseWriter, r *http.Request) {
 		c.sendError(c.name, method, w, "Missing id param", http.StatusBadRequest)
 		return
 	}
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -414,7 +406,7 @@ func (c *clusterApi) delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -429,7 +421,7 @@ func (c *clusterApi) delete(w http.ResponseWriter, r *http.Request) {
 
 	err = inst.Remove(nodes, forceRemove)
 	if err != nil {
-		clusterResponse.Error = fmt.Errorf("Node Remove: %s", err).Error()
+		clusterResponse.Error = err.Error()
 	}
 	json.NewEncoder(w).Encode(clusterResponse)
 }
@@ -543,7 +535,7 @@ func (c *clusterApi) enumerateAlerts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -555,57 +547,6 @@ func (c *clusterApi) enumerateAlerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(alerts)
-}
-
-// swagger:operation PUT /cluster/alerts/{resource}/{id} cluster clearAlert
-//
-// This will clear alert {id} with resourcetype {resource}
-//
-// ---
-// produces:
-// - application/json
-// parameters:
-// - name: resource
-//   in: path
-//   description: |
-//    resourcetype to get alerts with.
-//    0: All
-//    1: Volume
-//    2: Node
-//    3: Cluster
-//    4: Drive
-//   required: true
-//   type: integer
-// - name: id
-//   in: path
-//   description: id to get alerts with
-//   required: true
-//   type: integer
-// responses:
-//   '200':
-//      description: Alerts object
-//      schema:
-//       type: string
-func (c *clusterApi) clearAlert(w http.ResponseWriter, r *http.Request) {
-	method := "clearAlert"
-
-	resourceType, alertId, err := c.getAlertParams(w, r, method)
-	if err != nil {
-		return
-	}
-
-	inst, err := cluster.Inst()
-	if err != nil {
-		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = inst.ClearAlert(resourceType, alertId)
-	if err != nil {
-		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	json.NewEncoder(w).Encode("Successfully cleared Alert")
 }
 
 // swagger:operation DELETE /cluster/alerts/{resource}/{id} cluster deleteAlert
@@ -645,7 +586,7 @@ func (c *clusterApi) eraseAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inst, err := cluster.Inst()
+	inst, err := clustermanager.Inst()
 	if err != nil {
 		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
 		return
@@ -728,4 +669,186 @@ func handleResourceType(resource string) (api.ResourceType, error) {
 		}
 		return api.ResourceType_RESOURCE_TYPE_NONE, fmt.Errorf("Invalid resource type")
 	}
+}
+
+func (c *clusterApi) createPair(w http.ResponseWriter, r *http.Request) {
+	pairRequest := &api.ClusterPairCreateRequest{}
+	method := "createPair"
+
+	if err := json.NewDecoder(r.Body).Decode(pairRequest); err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	inst, err := clustermanager.Inst()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := inst.CreatePair(pairRequest)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (c *clusterApi) processPair(w http.ResponseWriter, r *http.Request) {
+	processPairRequest := &api.ClusterPairProcessRequest{}
+	method := "processPair"
+
+	if err := json.NewDecoder(r.Body).Decode(processPairRequest); err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	inst, err := clustermanager.Inst()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := inst.ProcessPairRequest(processPairRequest)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (c *clusterApi) enumeratePairs(w http.ResponseWriter, r *http.Request) {
+	method := "enumeratePairs"
+
+	inst, err := clustermanager.Inst()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := inst.EnumeratePairs()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (c *clusterApi) getPair(w http.ResponseWriter, r *http.Request) {
+	method := "getPair"
+
+	vars := mux.Vars(r)
+	id, ok := vars["id"]
+	if !ok {
+		c.sendError(c.name, method, w, "id required for GET Pair request", http.StatusBadRequest)
+		return
+	}
+
+	inst, err := clustermanager.Inst()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := inst.GetPair(id)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (c *clusterApi) refreshPair(w http.ResponseWriter, r *http.Request) {
+	method := "refreshPair"
+
+	vars := mux.Vars(r)
+	id, ok := vars["id"]
+	if !ok {
+		c.sendError(c.name, method, w, "id required for refresh Pair request", http.StatusBadRequest)
+		return
+	}
+
+	inst, err := clustermanager.Inst()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = inst.RefreshPair(id)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode("Successfully refreshed cluster pair")
+}
+
+func (c *clusterApi) deletePair(w http.ResponseWriter, r *http.Request) {
+	method := "deletePair"
+
+	vars := mux.Vars(r)
+	id, ok := vars["id"]
+	if !ok {
+		c.sendError(c.name, method, w, "id required for DELETE Pair request", http.StatusBadRequest)
+		return
+	}
+
+	inst, err := clustermanager.Inst()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = inst.DeletePair(id)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode("Successfully deleted pairing with cluster")
+}
+
+func (c *clusterApi) getPairToken(w http.ResponseWriter, r *http.Request) {
+	method := "getPairToken"
+
+	var err error
+	reset := false
+	params := r.URL.Query()
+	resetString := params["reset"]
+	if resetString != nil {
+		reset, err = strconv.ParseBool(resetString[0])
+		if err != nil {
+			c.sendError(c.name, method, w, "Invalid reset parameter", http.StatusBadRequest)
+			return
+		}
+	}
+
+	inst, err := clustermanager.Inst()
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp, err := inst.GetPairToken(reset)
+	if err != nil {
+		c.sendError(c.name, method, w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(resp)
 }
