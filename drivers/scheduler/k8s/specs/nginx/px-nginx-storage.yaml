@@ -1,24 +1,48 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+type: Opaque
+data:
+  nginx-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
+---
 ##### Portworx storage class
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-    name: px-nginx-sc
+  name: px-nginx-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   repl: "3"
-   shared: "true"
+  repl: "3"
+  shared: "true"
 allowVolumeExpansion: true
 ---
 ##### Portworx persistent volume claim
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-   name: px-nginx-pvc
-   annotations:
-     volume.beta.kubernetes.io/storage-class: px-nginx-sc
+  name: px-nginx-pvc
 spec:
-   accessModes:
-     - ReadWriteMany
-   resources:
-     requests:
-       storage: 1Gi
+  storageClassName: px-nginx-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: px-nginx-pvc-enc
+  annotations:
+    px/secret-name: volume-secrets
+    px/secret-namespace: "{{NAMESPACE}}"
+    px/secret-key: nginx-secret
+    px/secure: "true"
+spec:
+  storageClassName: px-nginx-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi

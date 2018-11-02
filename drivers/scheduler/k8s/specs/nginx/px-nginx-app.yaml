@@ -33,7 +33,12 @@ spec:
         volumeMounts:
         - name: nginx-persistent-storage
           mountPath: /usr/share/nginx/html
+        - name: nginx-persistent-storage-enc
+          mountPath: /usr/share/nginx/html-enc
       volumes:
       - name: nginx-persistent-storage
         persistentVolumeClaim:
           claimName: px-nginx-pvc
+      - name: nginx-persistent-storage-enc
+        persistentVolumeClaim:
+          claimName: px-nginx-pvc-enc
