@@ -103,7 +103,7 @@ codegen:
 
 stork:
 	@echo "Building the stork binary"
-	@cd cmd/stork && go build $(BUILD_OPTIONS) -o $(BIN)/stork
+	@cd cmd/stork && CGO_ENABLED=0 go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
 cmdexecutor:
 	@echo "Building command executor binary"
@@ -111,9 +111,9 @@ cmdexecutor:
 
 storkctl:
 	@echo "Building storkctl"
-	@cd cmd/storkctl && GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/linux/storkctl
-	@cd cmd/storkctl && GOOS=darwin go build $(BUILD_OPTIONS) -o $(BIN)/darwin/storkctl
-	@cd cmd/storkctl && GOOS=windows go build $(BUILD_OPTIONS) -o $(BIN)/windows/storkctl.exe
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/linux/storkctl
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o $(BIN)/darwin/storkctl
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=windows go build $(BUILD_OPTIONS) -o $(BIN)/windows/storkctl.exe
 
 container: help
 	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."
