@@ -1,33 +1,14 @@
 package snapshot
 
 import (
-	"math"
-	"time"
-
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
-	defaultCmdExecutorImage              = "openstorage/cmdexecutor:0.1"
-	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
-	storkServiceAccount                  = "stork-account"
-	podsWithRunningCommandsKeyDeprecated = "stork/pods-with-running-cmds"
-	podsWithRunningCommandsKey           = "stork.libopenstorage.org/pods-with-running-cmds"
-
-	// constants
-	perPodCommandExecTimeout = 900 // 15 minutes
-
-	execPodCmdRetryInterval = 5 * time.Second
-	execPodCmdRetryFactor   = 1
-	execPodStepLow          = 12
-	execPodStepMed          = 36
-	execPodStepsHigh        = math.MaxInt32
-
 	storkRuleAnnotationPrefixDeprecated = "stork.rule"
 	storkRuleAnnotationPrefix           = "stork.libopenstorage.org"
 	preSnapRuleAnnotationKey            = storkRuleAnnotationPrefix + "/pre-snapshot-rule"
@@ -41,35 +22,6 @@ var ruleAnnotationKeyTypes = map[string]rule.Type{
 	postSnapRuleAnnotationKey:           rule.PostExecRule,
 	preSnapRuleAnnotationKeyDeprecated:  rule.PreExecRule,
 	postSnapRuleAnnotationKeyDeprecated: rule.PostExecRule,
-}
-
-// pod is a simple type to encapsulate a pod's uid and namespace
-type pod struct {
-	uid       string
-	namespace string
-}
-
-type podErrorResponse struct {
-	pod v1.Pod
-	err error
-}
-
-// commandTask tracks pods where commands for a taskID might still be running
-type commandTask struct {
-	taskID string
-	pods   []pod
-}
-
-var execCmdBackoff = wait.Backoff{
-	Duration: execPodCmdRetryInterval,
-	Factor:   execPodCmdRetryFactor,
-	Steps:    execPodStepsHigh,
-}
-
-var snapAPICallBackoff = wait.Backoff{
-	Duration: 2 * time.Second,
-	Factor:   1.5,
-	Steps:    20,
 }
 
 // validateSnapRules validates the rules if they are present in the given snapshot's annotations
