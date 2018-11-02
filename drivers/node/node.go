@@ -42,7 +42,6 @@ type Node struct {
 type ConnectionOpts struct {
 	Timeout         time.Duration
 	TimeBeforeRetry time.Duration
-	IgnoreError     bool
 }
 
 // RebootNodeOpts provide additional options for reboot operation

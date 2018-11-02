@@ -555,7 +555,7 @@ func (d *portworx) ValidateVolumeCleanup() error {
 }
 
 func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
-	return d.schedOps.ValidateVolumeSetup(vol, d.nodeDriver)
+	return d.schedOps.ValidateVolumeSetup(vol)
 }
 
 func (d *portworx) StopDriver(nodes []node.Node, force bool) error {

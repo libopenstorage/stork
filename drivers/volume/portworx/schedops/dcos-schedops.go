@@ -35,7 +35,7 @@ func (d *dcosSchedOps) ValidateVolumeCleanup(n node.Driver) error {
 	return nil
 }
 
-func (d *dcosSchedOps) ValidateVolumeSetup(vol *volume.Volume, driver node.Driver) error {
+func (d *dcosSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 	// TODO: Implement this
 	return nil
 }
