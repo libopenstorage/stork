@@ -427,9 +427,11 @@ func (m *MigrationController) getResources(
 			}
 
 			for _, ns := range migration.Spec.Namespaces {
-				dynamicClient := m.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
-				if err != nil {
-					return nil, err
+				var dynamicClient dynamic.ResourceInterface
+				if !resource.Namespaced {
+					dynamicClient = m.dynamicInterface.Resource(groupVersion.WithResource(resource.Name))
+				} else {
+					dynamicClient = m.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
 				}
 
 				objectsList, err := dynamicClient.List(metav1.ListOptions{})
