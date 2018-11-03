@@ -102,7 +102,7 @@ func sendRequest(
 	nodeList *v1.NodeList,
 ) (*http.Response, error) {
 	args := &schedulerapi.ExtenderArgs{
-		Pod:   *pod,
+		Pod:   pod,
 		Nodes: nodeList,
 	}
 

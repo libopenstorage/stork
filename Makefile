@@ -67,10 +67,9 @@ errcheck:
 pretest: lint vet errcheck simple
 
 test:
-	set -e
 	echo "" > coverage.txt
 	for pkg in $(PKGS);	do \
-		go test -tags unittest -coverprofile=profile.out -covermode=atomic $(TESTFLAGS) $${pkg}; \
+		go test -tags unittest -coverprofile=profile.out -covermode=atomic $(TESTFLAGS) $${pkg} || exit 1; \
 		if [ -f profile.out ]; then \
 			cat profile.out >> coverage.txt; \
 			rm profile.out; \
