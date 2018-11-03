@@ -1055,13 +1055,16 @@ func (d *portworx) UpgradeDriver(version string) error {
 	return nil
 }
 
-// GetClusterPairingInfo return underlying storage details
+// GetClusterPairingInfo returns cluster pair information
 func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pairInfo := make(map[string]string)
 	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
 	if err != nil {
 		logrus.Errorf("err retrieving remote px nodes: %v", err)
 		return nil, err
+	}
+	if len(pxNodes) == 0 {
+		return nil, fmt.Errorf("No PX Node found")
 	}
 
 	clusterMgr, err := d.getClusterManagerByAddress(pxNodes[0].Addresses[0])
