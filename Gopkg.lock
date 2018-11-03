@@ -294,7 +294,8 @@
   revision = "b3655d98ea02660f2e543d62f6af728a0c324116"
 
 [[projects]]
-  digest = "1:e2a32d2567711b21d8a5107580fcfd7f2c0c459ca887687650067c22318113f6"
+  branch = "release-4.0"
+  digest = "1:ba7faa477af62674f9b3a65c29bab76ad62d9bbbcacd347c0b99abcc7edcbf02"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -314,8 +315,7 @@
     "volume",
   ]
   pruneopts = "UT"
-  revision = "e6b9d043e6a2f5362b379ce9dfc98f6f98983557"
-  version = "v4.0.0"
+  revision = "144f4ace7f7ccbbd0419f36214a0930e7a861853"
 
 [[projects]]
   digest = "1:ff5ebae34cfbf047d505ee150de27e60570e8c394b3b8fdbb720ff6ac71985fc"

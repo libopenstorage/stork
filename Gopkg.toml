@@ -40,7 +40,7 @@ required = [
 
 [[constraint]]
   name = "github.com/libopenstorage/openstorage"
-  version = "4.0.0"
+  branch = "release-4.0"
 
 [[constraint]]
   branch = "kubernetes-1.11"
