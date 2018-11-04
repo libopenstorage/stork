@@ -1,6 +1,7 @@
 package volume
 
 import (
+	"net"
 	"strings"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -211,6 +212,9 @@ func IsNodeMatch(k8sNode *v1.Node, driverNode *NodeInfo) bool {
 			if isHostnameMatch(driverNode.Hostname, address.Address) {
 				return true
 			}
+			if isResolvedHostnameMatch(driverNode.IPs, address.Address) {
+				return true
+			}
 		case v1.NodeInternalIP:
 			for _, ip := range driverNode.IPs {
 				if ip == address.Address {
@@ -230,6 +234,25 @@ func isHostnameMatch(driverHostname string, k8sHostname string) bool {
 	}
 	if strings.HasPrefix(k8sHostname, driverHostname+".") {
 		return true
+	}
+	return false
+}
+
+// For K8s on DC/OS lookup IPs of the hostname. Could block for invalid
+// hostnames so don't want to do this for other environments currently.
+func isResolvedHostnameMatch(driverIPs []string, k8sHostname string) bool {
+	if strings.HasSuffix(k8sHostname, ".mesos") {
+		k8sIPs, err := net.LookupHost(k8sHostname)
+		if err != nil {
+			return false
+		}
+		for _, dip := range driverIPs {
+			for _, kip := range k8sIPs {
+				if dip == kip {
+					return true
+				}
+			}
+		}
 	}
 	return false
 }
