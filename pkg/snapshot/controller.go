@@ -105,6 +105,12 @@ func (c *Controller) Start() error {
 		snapProvisioner,
 		serverVersion.GitVersion,
 	)
+	// stork already does leader elction, don't need it for each controller
+	if err := controller.LeaderElection(false)(provisioner); err != nil {
+		log.Errorf("failed to disable leader election for snapshot controller: %v", err)
+		return err
+	}
+
 	go provisioner.Run(c.stopChannel)
 
 	if err := performRuleRecovery(); err != nil {
