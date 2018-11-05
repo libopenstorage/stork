@@ -4,7 +4,6 @@ package integrationtest
 
 import (
 	"testing"
-	"time"
 
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
@@ -25,23 +24,15 @@ func sanityClusterPairTest(t *testing.T) {
 	info, err := volumeDriver.GetClusterPairingInfo()
 	require.NoError(t, err, "Error writing to clusterpair.yml: ")
 
-	specReq := ClusterPairRequest{
-		PairName:           remotePairName,
-		ConfigMapName:      remoteConfig,
-		SpecDirPath:        "./migrs/",
-		RemoteIP:           info[clusterIP],
-		RemoteClusterToken: info[clusterToken],
-		RemotePort:         info[clusterPort],
-	}
-	logrus.Info("Writing to spec file", specReq)
-
-	err = CreateClusterPairSpec(specReq)
+	logrus.Infof("recieved %v", info)
+	err = createClusterPair()
 	require.NoError(t, err, "Error creating cluster Spec")
 
-	ctx, err := getContextCRD("cluster-pair")
-	require.NoError(t, err, "Error locating cluster Spec")
+	err = schedulerDriver.RescanSpecs("./specs")
+	require.NoError(t, err, "Unable to parse spec dir")
 
-	err = schedulerDriver.CreateCRDObjects(ctx, 2*time.Minute, 10*time.Second)
+	_, err = schedulerDriver.Schedule("singlemysql",
+		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
 	require.NoError(t, err, "Error applying clusterpair")
 
 	logrus.Info("Validated Cluster Pair Specs")
@@ -59,10 +50,8 @@ func sanityMigrationTest(t *testing.T) {
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
 	// Apply cluster pair spec and check status
-	ctx, err := getContextCRD("migration")
-	require.NoError(t, err, "Error locating migration Spec")
-
-	err = schedulerDriver.CreateCRDObjects(ctx, 10*time.Minute, 10*time.Second)
+	_, err = schedulerDriver.Schedule("migrs",
+		scheduler.ScheduleOptions{AppKeys: []string{"migration"}})
 	require.NoError(t, err, "Error applying migration specs")
 
 	// wait on cluster 2 to get mysql pod running

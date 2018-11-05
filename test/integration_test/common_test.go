@@ -14,6 +14,7 @@ import (
 
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/portworx/sched-ops/k8s"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/node"
@@ -87,10 +88,10 @@ func TestMain(t *testing.T) {
 	if passed := t.Run("setup", setup); !passed {
 		t.FailNow()
 	}
-	t.Run("Extender", testExtender)
+	/*t.Run("Extender", testExtender)
 	t.Run("HealthMonitor", testHealthMonitor)
 	t.Run("Snapshot", testSnapshot)
-	t.Run("CmdExecutor", asyncPodCommandTest)
+	t.Run("CmdExecutor", asyncPodCommandTest)*/
 	t.Run("testBasicCloudMigartion", testBasicCloudMigration)
 }
 
@@ -242,11 +243,11 @@ func CreateClusterPairSpec(req ClusterPairRequest) error {
 	//This should be path of clusterpair yaml
 	f, err := os.Create(req.SpecDirPath + pairFileName)
 	if err != nil {
-		logrus.Error("Unable to create clusterPair.yaml: %v", err)
+		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
 		return err
 	}
 	if err := t.Execute(f, clusterPair); err != nil {
-		logrus.Error("Couldn't write to clsuterPair.yaml: %v", err)
+		logrus.Errorf("Couldn't write to clsuterPair.yaml: %v", err)
 		return err
 	}
 
@@ -325,6 +326,27 @@ func setRemoteConfig(kubeConfig string) error {
 	}
 
 	k8sOps.SetConfig(config)
+	return nil
+}
+
+func createClusterPair() error {
+	f, err := os.Create("./migrs/cluster-pair.yaml")
+	defer f.Close()
+	if err != nil {
+		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
+		return err
+	}
+	cmd := storkctl.NewCommand(os.Stdin, f, os.Stdout)
+	cmd.SetArgs([]string{"generate", "clusterpair", "--kubeconfig", remoteFilePath})
+	if err := cmd.Execute(); err != nil {
+		return err
+	}
+	b, err := ioutil.ReadFile("./migrs/cluster-pair.yaml")
+	if err != nil {
+		logrus.Errorf("read file %v", err)
+		return err
+	}
+	logrus.Infof("file created %v", string(b))
 	return nil
 }
 
