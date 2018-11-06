@@ -10,36 +10,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testBasicCloudMigration(t *testing.T) {
+func testBasicMigration(t *testing.T) {
 	logrus.Info("Basic sanity tests for cloud migration")
-	t.Run("sanityClusterPairTest", sanityClusterPairTest)
 	t.Run("sanityMigrationTest", sanityMigrationTest)
 }
 
-func sanityClusterPairTest(t *testing.T) {
+func sanityMigrationTest(t *testing.T) {
 	var err error
 	err = dumpRemoteKubeConfig(remoteConfig)
-	require.NoError(t, err, "Error writing to clusterpair.yml: ")
+	require.NoError(t, err, "Error writing to clusterpair.yml")
 
 	info, err := volumeDriver.GetClusterPairingInfo()
-	require.NoError(t, err, "Error writing to clusterpair.yml: ")
+	require.NoError(t, err, "Error writing to clusterpair.yml")
 
-	logrus.Infof("recieved %v", info)
-	err = createClusterPair()
+	err = createClusterPair(info)
 	require.NoError(t, err, "Error creating cluster Spec")
 
-	err = schedulerDriver.RescanSpecs("./specs")
+	err = schedulerDriver.RescanSpecs(specDir)
 	require.NoError(t, err, "Unable to parse spec dir")
 
-	_, err = schedulerDriver.Schedule("singlemysql",
+	_, err = schedulerDriver.Schedule("clusterpair",
 		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
 	require.NoError(t, err, "Error applying clusterpair")
 
 	logrus.Info("Validated Cluster Pair Specs")
-}
 
-// apply cloudmigration spec and check status of migrated app
-func sanityMigrationTest(t *testing.T) {
 	//  schedule mysql app
 	ctxs, err := schedulerDriver.Schedule("singlemysql",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
@@ -49,7 +44,6 @@ func sanityMigrationTest(t *testing.T) {
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
-	// Apply cluster pair spec and check status
 	_, err = schedulerDriver.Schedule("migrs",
 		scheduler.ScheduleOptions{AppKeys: []string{"migration"}})
 	require.NoError(t, err, "Error applying migration specs")
