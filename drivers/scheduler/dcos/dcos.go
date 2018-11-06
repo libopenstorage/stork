@@ -424,9 +424,8 @@ func (d *dcos) StartSchedOnNode(node node.Node) error {
 	return nil
 }
 
-// CreateCRDObjects and Validate their deployment
-func (d *dcos) CreateCRDObjects(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
-	// TODO: Implement this method
+func (d *dcos) RescanSpecs(specDir string) error {
+	// TODO implement this method
 	return nil
 }
 

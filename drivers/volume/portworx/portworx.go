@@ -36,8 +36,8 @@ const (
 	pxSystemdServiceName    = "portworx.service"
 	storageStatusUp         = "Up"
 	tokenKey                = "token"
-	clusterIP               = "clusterip"
-	clusterPort             = "clusterport"
+	clusterIP               = "ip"
+	clusterPort             = "port"
 	remoteKubeConfigPath    = "/tmp/kubeconfig"
 )
 
