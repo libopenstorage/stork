@@ -1543,8 +1543,6 @@ func (k *k8s) createCRDObjects(specObj interface{}, timeout, retryInterval time.
 			}
 		}
 	}
-
-	logrus.Info("Custom specs created successfully")
 	return obj, nil
 }
 
