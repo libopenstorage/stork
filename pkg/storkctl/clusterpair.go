@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
@@ -15,6 +16,9 @@ import (
 
 const (
 	clusterPairSubcommand = "clusterpair"
+	cmdPathKey            = "cmd-path"
+	gcloudPath            = "./google-cloud-sdk/bin/gcloud"
+	gcloudBinaryName      = "gcloud"
 )
 
 var clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
@@ -112,6 +116,15 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 				}
 			}
 
+			// Replace gcloud paths in the config
+			if config.AuthInfos[currentAuthInfo] != nil && config.AuthInfos[currentAuthInfo].AuthProvider != nil &&
+				config.AuthInfos[currentAuthInfo].AuthProvider.Config != nil {
+				if cmdPath, present := config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey]; present {
+					if strings.HasSuffix(cmdPath, gcloudBinaryName) {
+						config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey] = gcloudPath
+					}
+				}
+			}
 			clusterPair := &storkv1.ClusterPair{
 				TypeMeta: meta.TypeMeta{
 					Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
@@ -121,7 +134,6 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 					Name: "<insert_name_here>",
 				},
 
-				// Replace gloud paths in the config
 				Spec: storkv1.ClusterPairSpec{
 					Config: config,
 					Options: map[string]string{
