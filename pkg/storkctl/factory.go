@@ -68,7 +68,15 @@ func (f *factory) GetConfig() (*rest.Config, error) {
 }
 
 func (f *factory) RawConfig() (clientcmdapi.Config, error) {
-	return f.getKubeconfig().RawConfig()
+	config, err := f.getKubeconfig().RawConfig()
+	if err != nil {
+		return config, err
+	}
+
+	if f.context != "" {
+		config.CurrentContext = f.context
+	}
+	return config, nil
 }
 
 func (f *factory) GetOutputFormat() (string, error) {

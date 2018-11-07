@@ -91,6 +91,27 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 				handleError(err, ioStreams.ErrOut)
 			}
 
+			// Prune out all but the current-context and related
+			// info
+			currentContext := config.CurrentContext
+			for context := range config.Contexts {
+				if context != currentContext {
+					delete(config.Contexts, context)
+				}
+			}
+			currentCluster := config.Contexts[currentContext].Cluster
+			for cluster := range config.Clusters {
+				if cluster != currentCluster {
+					delete(config.Clusters, cluster)
+				}
+			}
+			currentAuthInfo := config.Contexts[currentContext].AuthInfo
+			for authInfo := range config.AuthInfos {
+				if authInfo != currentAuthInfo {
+					delete(config.AuthInfos, authInfo)
+				}
+			}
+
 			clusterPair := &storkv1.ClusterPair{
 				TypeMeta: meta.TypeMeta{
 					Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
@@ -100,6 +121,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 					Name: "<insert_name_here>",
 				},
 
+				// Replace gloud paths in the config
 				Spec: storkv1.ClusterPairSpec{
 					Config: config,
 					Options: map[string]string{
