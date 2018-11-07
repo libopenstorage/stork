@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
@@ -15,6 +16,9 @@ import (
 
 const (
 	clusterPairSubcommand = "clusterpair"
+	cmdPathKey            = "cmd-path"
+	gcloudPath            = "./google-cloud-sdk/bin/gcloud"
+	gcloudBinaryName      = "gcloud"
 )
 
 var clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
@@ -91,6 +95,36 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 				handleError(err, ioStreams.ErrOut)
 			}
 
+			// Prune out all but the current-context and related
+			// info
+			currentContext := config.CurrentContext
+			for context := range config.Contexts {
+				if context != currentContext {
+					delete(config.Contexts, context)
+				}
+			}
+			currentCluster := config.Contexts[currentContext].Cluster
+			for cluster := range config.Clusters {
+				if cluster != currentCluster {
+					delete(config.Clusters, cluster)
+				}
+			}
+			currentAuthInfo := config.Contexts[currentContext].AuthInfo
+			for authInfo := range config.AuthInfos {
+				if authInfo != currentAuthInfo {
+					delete(config.AuthInfos, authInfo)
+				}
+			}
+
+			// Replace gcloud paths in the config
+			if config.AuthInfos[currentAuthInfo] != nil && config.AuthInfos[currentAuthInfo].AuthProvider != nil &&
+				config.AuthInfos[currentAuthInfo].AuthProvider.Config != nil {
+				if cmdPath, present := config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey]; present {
+					if strings.HasSuffix(cmdPath, gcloudBinaryName) {
+						config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey] = gcloudPath
+					}
+				}
+			}
 			clusterPair := &storkv1.ClusterPair{
 				TypeMeta: meta.TypeMeta{
 					Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
