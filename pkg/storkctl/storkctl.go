@@ -6,6 +6,7 @@ import (
 
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
+	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
@@ -18,7 +19,7 @@ func NewCommand(in io.Reader, out io.Writer, errOut io.Writer) *cobra.Command {
 		Short: "storkctl manages stork resources",
 		PersistentPreRun: func(c *cobra.Command, args []string) {
 			if config, err := cmdFactory.GetConfig(); err != nil {
-				handleError(err, errOut)
+				util.CheckErr(err)
 			} else {
 				k8s.Instance().SetConfig(config)
 			}
@@ -38,7 +39,7 @@ func NewCommand(in io.Reader, out io.Writer, errOut io.Writer) *cobra.Command {
 	cmds.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	err := flag.CommandLine.Parse([]string{})
 	if err != nil {
-		handleError(err, errOut)
+		util.CheckErr(err)
 	}
 
 	return cmds
