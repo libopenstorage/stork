@@ -5,6 +5,7 @@ import (
 
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/storkctl"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 func main() {
