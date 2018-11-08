@@ -3037,7 +3037,17 @@ func (k *k8sOps) getDynamicClient(object runtime.Object) (dynamic.ResourceInterf
 		return nil, err
 	}
 
-	return k.dynamicInterface.Resource(object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(strings.ToLower(objectType.GetKind()) + "s")), nil
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceInterface := k.dynamicInterface.Resource(object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(strings.ToLower(objectType.GetKind()) + "s"))
+	if metadata.GetNamespace() == "" {
+		return resourceInterface, nil
+	} else {
+		return resourceInterface.Namespace(metadata.GetNamespace()), nil
+	}
 }
 
 // GetObject returns the latest object given a generic Object
