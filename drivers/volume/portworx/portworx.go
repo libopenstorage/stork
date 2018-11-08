@@ -988,6 +988,9 @@ func (p *portworx) createVolumeSnapshotData(
 				Name:      snapshotName,
 				Namespace: snapshotNamespace,
 			},
+			// Don't really need the PV but the snapshotter
+			// code looks for this member
+			PersistentVolumeRef:      &v1.ObjectReference{},
 			VolumeSnapshotDataSource: *snapDataSource,
 		},
 		Status: crdv1.VolumeSnapshotDataStatus{
