@@ -1,8 +1,11 @@
 package storkctl
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
 
@@ -85,6 +88,27 @@ func clusterPairPrinter(clusterPairList *storkv1.ClusterPairList, writer io.Writ
 	return nil
 }
 
+func getStringData(fileName string) (string, error) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return "", fmt.Errorf("Error opening file %v: %v", fileName, err)
+	}
+	data, err := ioutil.ReadAll(bufio.NewReader(file))
+	if err != nil {
+		return "", fmt.Errorf("Error reading file %v: %v", fileName, err)
+	}
+
+	return string(data), nil
+}
+
+func getByteData(fileName string) ([]byte, error) {
+	data, err := getStringData(fileName)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(data), nil
+}
+
 func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	generateClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
@@ -116,15 +140,51 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 				}
 			}
 
-			// Replace gcloud paths in the config
-			if config.AuthInfos[currentAuthInfo] != nil && config.AuthInfos[currentAuthInfo].AuthProvider != nil &&
-				config.AuthInfos[currentAuthInfo].AuthProvider.Config != nil {
-				if cmdPath, present := config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey]; present {
-					if strings.HasSuffix(cmdPath, gcloudBinaryName) {
-						config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey] = gcloudPath
+			if config.AuthInfos[currentAuthInfo] != nil {
+				// Replace gcloud paths in the config
+				if config.AuthInfos[currentAuthInfo].AuthProvider != nil &&
+					config.AuthInfos[currentAuthInfo].AuthProvider.Config != nil {
+					if cmdPath, present := config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey]; present {
+						if strings.HasSuffix(cmdPath, gcloudBinaryName) {
+							config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey] = gcloudPath
+						}
 					}
 				}
+
+				// Replace file paths with inline data
+				if config.AuthInfos[currentAuthInfo].ClientCertificate != "" && len(config.AuthInfos[currentAuthInfo].ClientCertificateData) == 0 {
+					config.AuthInfos[currentAuthInfo].ClientCertificateData, err = getByteData(config.AuthInfos[currentAuthInfo].ClientCertificate)
+					if err != nil {
+						handleError(err, ioStreams.ErrOut)
+					}
+					config.AuthInfos[currentAuthInfo].ClientCertificate = ""
+				}
+				if config.AuthInfos[currentAuthInfo].ClientKey != "" && len(config.AuthInfos[currentAuthInfo].ClientKeyData) == 0 {
+					config.AuthInfos[currentAuthInfo].ClientKeyData, err = getByteData(config.AuthInfos[currentAuthInfo].ClientKey)
+					if err != nil {
+						handleError(err, ioStreams.ErrOut)
+					}
+					config.AuthInfos[currentAuthInfo].ClientKey = ""
+				}
+				if config.AuthInfos[currentAuthInfo].TokenFile != "" && len(config.AuthInfos[currentAuthInfo].Token) == 0 {
+					config.AuthInfos[currentAuthInfo].Token, err = getStringData(config.AuthInfos[currentAuthInfo].TokenFile)
+					if err != nil {
+						handleError(err, ioStreams.ErrOut)
+					}
+					config.AuthInfos[currentAuthInfo].TokenFile = ""
+				}
 			}
+			if config.Clusters[currentCluster] != nil &&
+				config.Clusters[currentCluster].CertificateAuthority != "" &&
+				len(config.Clusters[currentCluster].CertificateAuthorityData) == 0 {
+
+				config.Clusters[currentCluster].CertificateAuthorityData, err = getByteData(config.Clusters[currentCluster].CertificateAuthority)
+				if err != nil {
+					handleError(err, ioStreams.ErrOut)
+				}
+				config.Clusters[currentCluster].CertificateAuthority = ""
+			}
+
 			clusterPair := &storkv1.ClusterPair{
 				TypeMeta: meta.TypeMeta{
 					Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
