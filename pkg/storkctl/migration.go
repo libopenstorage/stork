@@ -7,6 +7,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
+	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/printers"
 )
@@ -29,15 +30,15 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 		PreRunE: cobra.ExactArgs(1),
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				handleError(fmt.Errorf("Exactly one name needs to be provided for migration name"), ioStreams.ErrOut)
+				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for migration name"))
 			} else {
 				migrationName = args[0]
 			}
 			if len(clusterPair) == 0 {
-				handleError(fmt.Errorf("ClusterPair name needs to be provided for migration"), ioStreams.ErrOut)
+				util.CheckErr(fmt.Errorf("ClusterPair name needs to be provided for migration"))
 			}
 			if len(namespaceList) == 0 {
-				handleError(fmt.Errorf("Need to provide atleast one namespace to migrate"), ioStreams.ErrOut)
+				util.CheckErr(fmt.Errorf("Need to provide atleast one namespace to migrate"))
 			}
 
 			migration := &storkv1.Migration{
@@ -51,7 +52,7 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 			migration.Name = migrationName
 			err := k8s.Instance().CreateMigration(migration)
 			if err != nil {
-				handleError(err, ioStreams.ErrOut)
+				util.CheckErr(err)
 			}
 			fmt.Printf("Migration %v created successfully\n", migration.Name)
 		},
@@ -79,14 +80,14 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 				for _, migrationName := range args {
 					migration, err := k8s.Instance().GetMigration(migrationName)
 					if err != nil {
-						handleError(err, ioStreams.ErrOut)
+						util.CheckErr(err)
 					}
 					migrations.Items = append(migrations.Items, *migration)
 				}
 			} else {
 				migrations, err = k8s.Instance().ListMigrations()
 				if err != nil {
-					handleError(err, ioStreams.ErrOut)
+					util.CheckErr(err)
 				}
 			}
 
@@ -109,11 +110,11 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 
 			outputFormat, err := cmdFactory.GetOutputFormat()
 			if err != nil {
-				handleError(err, ioStreams.ErrOut)
+				util.CheckErr(err)
 			}
 
 			if err := printObjects(c, migrations, outputFormat, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
-				handleError(err, ioStreams.ErrOut)
+				util.CheckErr(err)
 			}
 		},
 	}
@@ -133,13 +134,13 @@ func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 
 			if len(clusterPair) == 0 {
 				if len(args) == 0 {
-					handleError(fmt.Errorf("Atleast one argument needs to be provided for migration name"), ioStreams.ErrOut)
+					util.CheckErr(fmt.Errorf("Atleast one argument needs to be provided for migration name"))
 				}
 				migrations = args
 			} else {
 				migrationList, err := k8s.Instance().ListMigrations()
 				if err != nil {
-					handleError(err, ioStreams.ErrOut)
+					util.CheckErr(err)
 				}
 				for _, migration := range migrationList.Items {
 					if migration.Spec.ClusterPair == clusterPair {
@@ -150,6 +151,7 @@ func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 
 			if len(migrations) == 0 {
 				handleEmptyList(ioStreams.Out)
+				return
 			}
 
 			deleteMigrations(migrations, ioStreams)
@@ -164,7 +166,7 @@ func deleteMigrations(migrations []string, ioStreams genericclioptions.IOStreams
 	for _, migration := range migrations {
 		err := k8s.Instance().DeleteMigration(migration)
 		if err != nil {
-			handleError(err, ioStreams.ErrOut)
+			util.CheckErr(err)
 		} else {
 			msg := fmt.Sprintf("Migration %v deleted successfully\n", migration)
 			printMsg(msg, ioStreams.Out)
