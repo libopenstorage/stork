@@ -95,6 +95,9 @@ type Driver interface {
 
 	// Start scheduler service on the given node
 	StartSchedOnNode(n node.Node) error
+
+	// CreateCRDObjects and Validate their deployment
+	CreateCRDObjects(ctx *Context, timeout, retryInterval time.Duration) error
 }
 
 var (
