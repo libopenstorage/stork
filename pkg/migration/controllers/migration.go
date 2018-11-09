@@ -112,6 +112,27 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 
 		case storkv1.MigrationStageInitial,
 			storkv1.MigrationStageVolumes:
+			// Make sure the namespaces exist
+			for _, ns := range migration.Spec.Namespaces {
+				_, err := k8s.Instance().GetNamespace(ns)
+				if err != nil {
+					migration.Status.Status = storkv1.MigrationStatusFailed
+					migration.Status.Stage = storkv1.MigrationStageFinal
+					err = fmt.Errorf("Error getting namespace %v: %v", ns, err)
+					logrus.Errorf(err.Error())
+					m.Recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(storkv1.MigrationStatusFailed),
+						err.Error())
+					err = sdk.Update(migration)
+					if err != nil {
+						return err
+					}
+					return nil
+
+				}
+			}
+
 			err := m.migrateVolumes(migration)
 			if err != nil {
 				message := fmt.Sprintf("Error migrating volumes: %v", err)
@@ -172,40 +193,43 @@ func (m *MigrationController) migrateVolumes(migration *storkv1.Migration) error
 		}
 	}
 
-	// Now check the status
-	volumeInfos, err := m.Driver.GetMigrationStatus(migration)
-	if err != nil {
-		return err
-	}
-	if volumeInfos == nil {
-		volumeInfos = make([]*storkv1.VolumeInfo, 0)
-	}
-	migration.Status.Volumes = volumeInfos
-	// Store the new status
-	err = sdk.Update(migration)
-	if err != nil {
-		return err
-	}
+	// Skip checking status if no volumes are being migrated
+	if len(migration.Status.Volumes) != 0 {
+		// Now check the status
+		volumeInfos, err := m.Driver.GetMigrationStatus(migration)
+		if err != nil {
+			return err
+		}
+		if volumeInfos == nil {
+			volumeInfos = make([]*storkv1.VolumeInfo, 0)
+		}
+		migration.Status.Volumes = volumeInfos
+		// Store the new status
+		err = sdk.Update(migration)
+		if err != nil {
+			return err
+		}
 
-	// Now check if there is any failure or success
-	// TODO: On failure of one volume cancel other migrations?
-	for _, vInfo := range volumeInfos {
-		// Return if we have any volume migrations still in progress
-		if vInfo.Status == storkv1.MigrationStatusInProgress {
-			logrus.Infof("Volume Migration still in progress: %v", migration.Name)
-			return nil
-		} else if vInfo.Status == storkv1.MigrationStatusFailed {
-			m.Recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(vInfo.Status),
-				fmt.Sprintf("Error migrating volume %v: %v", vInfo.Volume, vInfo.Reason))
-			migration.Status.Stage = storkv1.MigrationStageFinal
-			migration.Status.Status = storkv1.MigrationStatusFailed
-		} else if vInfo.Status == storkv1.MigrationStatusSuccessful {
-			m.Recorder.Event(migration,
-				v1.EventTypeNormal,
-				string(vInfo.Status),
-				fmt.Sprintf("Volume %v migrated successfully", vInfo.Volume))
+		// Now check if there is any failure or success
+		// TODO: On failure of one volume cancel other migrations?
+		for _, vInfo := range volumeInfos {
+			// Return if we have any volume migrations still in progress
+			if vInfo.Status == storkv1.MigrationStatusInProgress {
+				logrus.Infof("Volume Migration still in progress: %v", migration.Name)
+				return nil
+			} else if vInfo.Status == storkv1.MigrationStatusFailed {
+				m.Recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(vInfo.Status),
+					fmt.Sprintf("Error migrating volume %v: %v", vInfo.Volume, vInfo.Reason))
+				migration.Status.Stage = storkv1.MigrationStageFinal
+				migration.Status.Status = storkv1.MigrationStatusFailed
+			} else if vInfo.Status == storkv1.MigrationStatusSuccessful {
+				m.Recorder.Event(migration,
+					v1.EventTypeNormal,
+					string(vInfo.Status),
+					fmt.Sprintf("Volume %v migrated successfully", vInfo.Volume))
+			}
 		}
 	}
 
