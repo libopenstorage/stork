@@ -34,6 +34,7 @@ func NewCommand(in io.Reader, out io.Writer, errOut io.Writer) *cobra.Command {
 		newDeleteCommand(cmdFactory, ioStreams),
 		newGetCommand(cmdFactory, ioStreams),
 		newGenerateCommand(cmdFactory, ioStreams),
+		newVersionCommand(cmdFactory, ioStreams),
 	)
 
 	cmds.PersistentFlags().AddGoFlagSet(flag.CommandLine)

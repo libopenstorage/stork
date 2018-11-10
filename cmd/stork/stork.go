@@ -14,6 +14,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/snapshot"
+	"github.com/libopenstorage/stork/pkg/version"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	api_v1 "k8s.io/api/core/v1"
@@ -51,7 +52,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "stork"
 	app.Usage = "STorage Orchestartor Runtime for Kubernetes (STORK)"
-	app.Version = "1.3.0-beta"
+	app.Version = version.Version
 	app.Action = run
 
 	app.Flags = []cli.Flag{

@@ -13,15 +13,9 @@ endif
 RELEASE_VER := 1.3.0-beta
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
-GIT_BRANCH  := $(subst /,-,$(shell git rev-parse --abbrev-ref HEAD))
-GIT_VER     := $(shell git rev-parse --short HEAD)
 BIN         :=$(BASE_DIR)/bin
 
-ifeq (master,$(GIT_BRANCH))
-  VERSION = $(RELEASE_VER)-$(GIT_VER)
-else
-  VERSION = $(RELEASE_VER)-$(GIT_VER)-$(GIT_BRANCH)
-endif
+VERSION = $(RELEASE_VER)-$(GIT_SHA)
 
 LDFLAGS += "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSION)"
 BUILD_OPTIONS := -ldflags=$(LDFLAGS)
