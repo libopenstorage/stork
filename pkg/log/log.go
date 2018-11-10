@@ -148,3 +148,16 @@ func RuleLog(
 	return logrus.WithFields(fields)
 
 }
+
+// MigrationLog formats a log message with migration information
+func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
+	if migration != nil {
+		return logrus.WithFields(logrus.Fields{
+			"MigrationName": migration.Name,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{
+		"Migration": migration,
+	})
+}
