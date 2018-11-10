@@ -304,7 +304,7 @@
     "pagination",
   ]
   pruneopts = "UT"
-  revision = "aa00757ee3ab58e53520b6cb910ca0543116400a"
+  revision = "04bc8f551ef2b34dad9d1d26634aa7a4d565f11f"
 
 [[projects]]
   branch = "master"
@@ -350,7 +350,7 @@
     "third_party/kubernetes/pkg/kubectl/cmd/util",
   ]
   pruneopts = "UT"
-  revision = "449cac5806aef3a6c310395f3579643d6a9c74b0"
+  revision = "2781e4e8de08bb33585eb945819ad989bf972b49"
 
 [[projects]]
   digest = "1:8eb1de8112c9924d59bf1d3e5c26f5eaa2bfc2a5fcbb92dc1c2e4546d695f277"
@@ -632,7 +632,7 @@
     "model",
   ]
   pruneopts = "UT"
-  revision = "7e9e6cabbd393fc208072eedef99188d0ce788b6"
+  revision = "0b1957f9d949dfa3084171a6ec5642b38055276a"
 
 [[projects]]
   branch = "master"
@@ -822,7 +822,7 @@
     "internal/gopathwalk",
   ]
   pruneopts = "UT"
-  revision = "77439c55185e6a04040f35d2fe78f2b9bc61d8cc"
+  revision = "92d8274bd7b8a4c65f24bafe401a029e58392704"
 
 [[projects]]
   digest = "1:d2a8db567a76203e3b41c1f632d86485ffd57f8e650a0d1b19d240671c2fddd7"
@@ -852,7 +852,7 @@
     "googleapis/rpc/status",
   ]
   pruneopts = "UT"
-  revision = "5fc9ac5403620be16bcdb0c8e7644b1178472c3b"
+  revision = "b5d43981345bdb2c233eb4bf3277847b48c6fdc6"
 
 [[projects]]
   digest = "1:c3ad9841823db6da420a5625b367913b4ff54bbe60e8e3c98bd20e243e62e2d2"
@@ -974,12 +974,13 @@
   version = "kubernetes-1.11.0"
 
 [[projects]]
-  digest = "1:2f47edcc4d289e6b8230aed29d2cc77f35c97cec3be1e43fa3e7880e5540d8fa"
+  digest = "1:51a09c277d019c6f07be0fc28f0e09c063a831168ae724dba116e490d8692dca"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/equality",
     "pkg/api/errors",
     "pkg/api/meta",
+    "pkg/api/meta/testrestmapper",
     "pkg/api/resource",
     "pkg/api/validation",
     "pkg/api/validation/path",
@@ -1052,13 +1053,14 @@
   version = "kubernetes-1.11.0"
 
 [[projects]]
-  digest = "1:57f92474aab26215914b649626cba32078c2ff925aded1c2321313307b14f730"
+  digest = "1:fab722fcd83e8c9bccd7892f3b7e65c2f1643008cf693b68a2b1ef05aae179e8"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
     "discovery/cached",
     "discovery/fake",
     "dynamic",
+    "dynamic/fake",
     "kubernetes",
     "kubernetes/scheme",
     "kubernetes/typed/admissionregistration/v1alpha1",
@@ -1103,6 +1105,7 @@
     "plugin/pkg/client/auth/oidc",
     "plugin/pkg/client/auth/openstack",
     "rest",
+    "rest/fake",
     "rest/watch",
     "restmapper",
     "scale",
@@ -1147,7 +1150,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:abc32988dce5af61465db4bb87575d5cc97c6edef2858d305ab551ff52d9233e"
+  digest = "1:0c72cfea1067ce171b2d0a57b36eec517fcb3bcf9101091d2058807f07ec85c2"
   name = "k8s.io/code-generator"
   packages = [
     "cmd/client-gen",
@@ -1163,11 +1166,11 @@
     "pkg/util",
   ]
   pruneopts = ""
-  revision = "a3c45993c70d9e77549e9f6422abad5e05e33f4a"
+  revision = "384879d8d5e96ba89dec26f061cd4a0c533f9de4"
 
 [[projects]]
   branch = "master"
-  digest = "1:da31d8be5af84b69ef83b212d833d8e10930cd9e8a876780a20099ea306c4c13"
+  digest = "1:aa52b6c20603be5f6d64dcd44f594ea82baa8f30fa27f16ff580a9f32769efa8"
   name = "k8s.io/gengo"
   packages = [
     "args",
@@ -1180,7 +1183,7 @@
     "types",
   ]
   pruneopts = "UT"
-  revision = "51747d6e00da1fc578d5a333a93bb2abcbce7a95"
+  revision = "7765d7f4899dc5c529e16c90791a600b0914c2a0"
 
 [[projects]]
   branch = "master"
@@ -1188,21 +1191,22 @@
   name = "k8s.io/klog"
   packages = ["."]
   pruneopts = "UT"
-  revision = "b9b56d5dfc9208f60ea747056670942d8b0afdc8"
+  revision = "8139d8cb77af419532b33dfa7dd09fbc5f1d344f"
 
 [[projects]]
   branch = "master"
-  digest = "1:e43c5c2646674fc5962f3833bc40f9b34868ba1bffd2a4fbd349cf340ebfff41"
+  digest = "1:4b8768c5b052c2c2a2ba468ec9392657f8bec881b5a24fd172b4d81b0eac6a55"
   name = "k8s.io/kube-openapi"
   packages = [
     "pkg/util/proto",
+    "pkg/util/proto/testing",
     "pkg/util/proto/validation",
   ]
   pruneopts = "UT"
-  revision = "a9a16210091c9a2b6a937e06a182955c03654c4c"
+  revision = "c59034cc13d587f5ef4e85ca0ade0c1866ae8e1d"
 
 [[projects]]
-  digest = "1:42f794fa2c6b02883c37389eefbcde25b270e59c45b7a287a623b58cd8679ea9"
+  digest = "1:9ee14ca5205cbbca4644eeeaada78d44b05228bc1eea8a57680e1d6730f7b212"
   name = "k8s.io/kubernetes"
   packages = [
     "pkg/api/events",
@@ -1309,8 +1313,10 @@
     "pkg/kubectl",
     "pkg/kubectl/apps",
     "pkg/kubectl/cmd/templates",
+    "pkg/kubectl/cmd/testing",
     "pkg/kubectl/cmd/util",
     "pkg/kubectl/cmd/util/openapi",
+    "pkg/kubectl/cmd/util/openapi/testing",
     "pkg/kubectl/cmd/util/openapi/validation",
     "pkg/kubectl/genericclioptions",
     "pkg/kubectl/genericclioptions/printers",
@@ -1430,6 +1436,7 @@
     "k8s.io/client-go/kubernetes/typed/core/v1",
     "k8s.io/client-go/plugin/pkg/client/auth",
     "k8s.io/client-go/rest",
+    "k8s.io/client-go/rest/fake",
     "k8s.io/client-go/testing",
     "k8s.io/client-go/tools/cache",
     "k8s.io/client-go/tools/clientcmd",
@@ -1448,8 +1455,10 @@
     "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1",
     "k8s.io/kubernetes/pkg/apis/core",
     "k8s.io/kubernetes/pkg/apis/core/v1/helper",
+    "k8s.io/kubernetes/pkg/kubectl/cmd/testing",
     "k8s.io/kubernetes/pkg/kubectl/cmd/util",
     "k8s.io/kubernetes/pkg/kubectl/genericclioptions",
+    "k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource",
     "k8s.io/kubernetes/pkg/kubelet/apis",
     "k8s.io/kubernetes/pkg/printers",
     "k8s.io/kubernetes/pkg/scheduler/api",
