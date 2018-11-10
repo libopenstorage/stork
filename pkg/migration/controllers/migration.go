@@ -14,6 +14,7 @@ import (
 	stork "github.com/libopenstorage/stork/pkg/apis/stork"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
@@ -100,7 +101,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 
 		if migration.Spec.ClusterPair == "" {
 			err := fmt.Errorf("clusterPair to migrate to cannot be empty")
-			logrus.Errorf(err.Error())
+			log.MigrationLog(migration).Errorf(err.Error())
 			m.Recorder.Event(migration,
 				v1.EventTypeWarning,
 				string(storkv1.MigrationStatusFailed),
@@ -119,7 +120,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 					migration.Status.Status = storkv1.MigrationStatusFailed
 					migration.Status.Stage = storkv1.MigrationStageFinal
 					err = fmt.Errorf("Error getting namespace %v: %v", ns, err)
-					logrus.Errorf(err.Error())
+					log.MigrationLog(migration).Errorf(err.Error())
 					m.Recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(storkv1.MigrationStatusFailed),
@@ -136,7 +137,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			err := m.migrateVolumes(migration)
 			if err != nil {
 				message := fmt.Sprintf("Error migrating volumes: %v", err)
-				logrus.Errorf(message)
+				log.MigrationLog(migration).Errorf(message)
 				m.Recorder.Event(migration,
 					v1.EventTypeWarning,
 					string(storkv1.MigrationStatusFailed),
@@ -147,7 +148,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			err := m.migrateResources(migration)
 			if err != nil {
 				message := fmt.Sprintf("Error migrating resources: %v", err)
-				logrus.Errorf(message)
+				log.MigrationLog(migration).Errorf(message)
 				m.Recorder.Event(migration,
 					v1.EventTypeWarning,
 					string(storkv1.MigrationStatusFailed),
@@ -159,7 +160,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			// Do Nothing
 			return nil
 		default:
-			logrus.Errorf("Invalid stage for migration: %v", migration.Status.Stage)
+			log.MigrationLog(migration).Errorf("Invalid stage for migration: %v", migration.Status.Stage)
 		}
 	}
 	return nil
@@ -193,6 +194,7 @@ func (m *MigrationController) migrateVolumes(migration *storkv1.Migration) error
 		}
 	}
 
+	inProgress := false
 	// Skip checking status if no volumes are being migrated
 	if len(migration.Status.Volumes) != 0 {
 		// Now check the status
@@ -213,10 +215,9 @@ func (m *MigrationController) migrateVolumes(migration *storkv1.Migration) error
 		// Now check if there is any failure or success
 		// TODO: On failure of one volume cancel other migrations?
 		for _, vInfo := range volumeInfos {
-			// Return if we have any volume migrations still in progress
 			if vInfo.Status == storkv1.MigrationStatusInProgress {
-				logrus.Infof("Volume Migration still in progress: %v", migration.Name)
-				return nil
+				log.MigrationLog(migration).Infof("Volume migration still in progress: %v", vInfo.Volume)
+				inProgress = true
 			} else if vInfo.Status == storkv1.MigrationStatusFailed {
 				m.Recorder.Event(migration,
 					v1.EventTypeWarning,
@@ -233,6 +234,11 @@ func (m *MigrationController) migrateVolumes(migration *storkv1.Migration) error
 		}
 	}
 
+	// Return if we have any volume migrations still in progress
+	if inProgress {
+		return nil
+	}
+
 	// If the migration hasn't failed move on to the next stage.
 	if migration.Status.Status != storkv1.MigrationStatusFailed {
 		if migration.Spec.IncludeResources {
@@ -246,7 +252,7 @@ func (m *MigrationController) migrateVolumes(migration *storkv1.Migration) error
 			}
 			err = m.migrateResources(migration)
 			if err != nil {
-				logrus.Errorf("Error migrating resources: %v", err)
+				log.MigrationLog(migration).Errorf("Error migrating resources: %v", err)
 				return err
 			}
 		}
@@ -387,7 +393,7 @@ func (m *MigrationController) migrateResources(migration *storkv1.Migration) err
 
 	allObjects, err := m.getResources(migration)
 	if err != nil {
-		logrus.Errorf("Error getting resources: %v", err)
+		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
 		return err
 	}
 
@@ -397,7 +403,7 @@ func (m *MigrationController) migrateResources(migration *storkv1.Migration) err
 			v1.EventTypeWarning,
 			string(storkv1.MigrationStatusFailed),
 			fmt.Sprintf("Error preparing resource: %v", err))
-		logrus.Errorf("Error preparing resources: %v", err)
+		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
 	err = m.applyResources(migration, allObjects)
@@ -406,7 +412,7 @@ func (m *MigrationController) migrateResources(migration *storkv1.Migration) err
 			v1.EventTypeWarning,
 			string(storkv1.MigrationStatusFailed),
 			fmt.Sprintf("Error applying resource: %v", err))
-		logrus.Errorf("Error applying resources: %v", err)
+		log.MigrationLog(migration).Errorf("Error applying resources: %v", err)
 		return err
 	}
 
@@ -696,7 +702,7 @@ func (m *MigrationController) applyResources(
 		dynamicClient := remoteDynamicInterface.Resource(
 			o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
 
-		logrus.Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
+		log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 		unstructured, ok := o.(*unstructured.Unstructured)
 		if !ok {
 			return fmt.Errorf("Unable to cast object to unstructured: %v", o)
@@ -714,7 +720,7 @@ func (m *MigrationController) applyResources(
 				if err == nil {
 					_, err = dynamicClient.Create(unstructured)
 				} else {
-					logrus.Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+					log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
 				}
 			}
 
