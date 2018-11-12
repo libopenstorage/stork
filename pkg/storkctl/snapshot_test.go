@@ -15,22 +15,23 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest/fake"
+	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
 type NewTestCommand func(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command
 
-func testSnapshotsCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, snapshots *snapv1.VolumeSnapshotList, expected string) {
+func testSnapshotsCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, snapshots *snapv1.VolumeSnapshotList, expected string, errorExpected bool) {
 	var err error
 
 	scheme := runtime.NewScheme()
-	if err := snapv1.AddToScheme(scheme); err != nil {
-		require.NoError(t, err, "Error adding snapshot to scheme")
-	}
+	err = snapv1.AddToScheme(scheme)
+	require.NoError(t, err, "Error adding %v to scheme", scheme)
 
 	f := NewTestFactory()
-	f.SetOutputFormat(outputFormatTable)
+	f.setOutputFormat(outputFormatTable)
 	tf := f.TestFactory.WithNamespace("test")
+	f.setNamespace("test")
 	defer tf.Cleanup()
 	codec := serializer.NewCodecFactory(scheme).LegacyCodec(schema.GroupVersion{Version: "v1", Group: snapv1.GroupName})
 
@@ -40,9 +41,7 @@ func testSnapshotsCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []stri
 	}
 	tf.Client = fakeRestClient
 	fakeKubeClient, err := tf.KubernetesClientSet()
-	if err != nil {
-		require.NoError(t, err, "Error getting KubernetesClientSet")
-	}
+	require.NoError(t, err, "Error getting KubernetesClientSet")
 
 	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, nil, nil, nil)
 
@@ -50,12 +49,27 @@ func testSnapshotsCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []stri
 	cmd := newCommand(f, streams)
 	cmd.SetOutput(buf)
 	cmd.SetArgs(cmdArgs)
-	if err = cmd.Execute(); err != nil {
-		require.NoError(t, err, "Error executing command: %v", cmd)
+
+	calledFatal := false
+	if errorExpected {
+		defer cmdutil.DefaultBehaviorOnFatal()
+		cmdutil.BehaviorOnFatal(func(e string, code int) {
+			if calledFatal {
+				return
+			}
+			calledFatal = true
+			require.Equal(t, 1, code, "Unexpected error code")
+			require.Equal(t, expected, e)
+		})
 	}
 
-	if e, a := expected, buf.String(); e != a {
-		t.Errorf("expected %v, got %v", e, a)
+	err = cmd.Execute()
+
+	if errorExpected {
+		require.True(t, calledFatal)
+	} else {
+		require.NoError(t, err, "Error executing command: %v", cmd)
+		require.Equal(t, expected, buf.String())
 	}
 }
 
@@ -63,11 +77,8 @@ func TestGetVolumeSnapshotsNoSnapshots(t *testing.T) {
 	cmdArgs := []string{"volumesnapshots"}
 
 	var snapshots snapv1.VolumeSnapshotList
-
-	expected := `No resources found.
-`
-
-	testSnapshotsCommon(t, newGetCommand, cmdArgs, &snapshots, expected)
+	expected := "No resources found.\n"
+	testSnapshotsCommon(t, newGetCommand, cmdArgs, &snapshots, expected, false)
 }
 
 func TestGetVolumeSnapshotsOneSnapshot(t *testing.T) {
@@ -95,5 +106,53 @@ func TestGetVolumeSnapshotsOneSnapshot(t *testing.T) {
 snap1     persistentVolumeClaimName   Pending                         Local
 `
 
-	testSnapshotsCommon(t, newGetCommand, cmdArgs, &snapshots, expected)
+	testSnapshotsCommon(t, newGetCommand, cmdArgs, &snapshots, expected, false)
+}
+
+func TestCreateSnapshotsNoSnapshotName(t *testing.T) {
+	cmdArgs := []string{"volumesnapshots"}
+
+	var snapshots snapv1.VolumeSnapshotList
+	expected := "error: Exactly one argument needs to be provided for snapshot name"
+	testSnapshotsCommon(t, newCreateCommand, cmdArgs, &snapshots, expected, true)
+}
+
+func TestCreateSnapshotsNoPVCName(t *testing.T) {
+	cmdArgs := []string{"volumesnapshots", "-p", "", "snap1"}
+
+	var snapshots snapv1.VolumeSnapshotList
+	expected := "error: PVC name needs to be given"
+	testSnapshotsCommon(t, newCreateCommand, cmdArgs, &snapshots, expected, true)
+}
+
+func TestCreateSnapshots(t *testing.T) {
+	cmdArgs := []string{"volumesnapshots", "-p", "pvc_name", "snap1"}
+
+	var snapshots snapv1.VolumeSnapshotList
+	expected := "Snapshot snap1 created successfully\n\n"
+	testSnapshotsCommon(t, newCreateCommand, cmdArgs, &snapshots, expected, false)
+}
+
+func TestDeleteSnapshotsNoSnapshotName(t *testing.T) {
+	cmdArgs := []string{"volumesnapshots"}
+
+	var snapshots snapv1.VolumeSnapshotList
+	expected := "error: At least one argument needs to be provided for snapshot name"
+	testSnapshotsCommon(t, newDeleteCommand, cmdArgs, &snapshots, expected, true)
+}
+
+func TestDeleteSnapshotsNoPVCName(t *testing.T) {
+	cmdArgs := []string{"volumesnapshots", "-p", "", "snap1"}
+
+	var snapshots snapv1.VolumeSnapshotList
+	expected := "Snapshot snap1 deleted successfully\n"
+	testSnapshotsCommon(t, newDeleteCommand, cmdArgs, &snapshots, expected, false)
+}
+
+func TestDeleteSnapshotsNoSnapshots(t *testing.T) {
+	cmdArgs := []string{"volumesnapshots", "-p", "pvc_name", "snap1"}
+
+	var snapshots snapv1.VolumeSnapshotList
+	expected := "No resources found.\n"
+	testSnapshotsCommon(t, newDeleteCommand, cmdArgs, &snapshots, expected, false)
 }
