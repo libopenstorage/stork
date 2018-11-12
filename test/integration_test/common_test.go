@@ -94,7 +94,7 @@ func TestMain(t *testing.T) {
 	t.Run("HealthMonitor", testHealthMonitor)
 	t.Run("Snapshot", testSnapshot)
 	t.Run("CmdExecutor", asyncPodCommandTest)
-	t.Run("testBasicMigartion", testBasicMigration)
+	t.Run("Migration", testMigration)
 }
 
 func generateInstanceID(t *testing.T, testName string) string {
@@ -222,13 +222,13 @@ func dumpRemoteKubeConfig(configObject string) error {
 		logrus.Errorf("Error reading config map: %v", err)
 		return err
 	}
-	status := cm.Data["kubeconfig"]
-	if len(status) == 0 {
-		logrus.Info("found empty failure status for key:remoteConifg in config map")
+	config := cm.Data["kubeconfig"]
+	if len(config) == 0 {
+		logrus.Error("found empty remoteConfig in config map")
 		return fmt.Errorf("Empty kubeconfig for remote cluster")
 	}
 	// dump to remoteFilePath
-	return ioutil.WriteFile(remoteFilePath, []byte(status), 0644)
+	return ioutil.WriteFile(remoteFilePath, []byte(config), 0644)
 }
 
 func setRemoteConfig(kubeConfig string) error {
@@ -309,6 +309,47 @@ func addStorageOptions(pairInfo map[string]string) error {
 
 	logrus.Info("cluster-pair.yml created")
 	return nil
+}
+
+func scheduleClusterPair() ([]*scheduler.Context, error) {
+	var err error
+	err = dumpRemoteKubeConfig(remoteConfig)
+	if err != nil {
+		logrus.Errorf("Unable to write clusterconfig: %v", err)
+		return nil, err
+	}
+	info, err := volumeDriver.GetClusterPairingInfo()
+	if err != nil {
+		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
+		return nil, err
+	}
+
+	err = createClusterPair(info)
+	if err != nil {
+		logrus.Errorf("Error creating cluster Spec: %v", err)
+		return nil, err
+	}
+
+	err = schedulerDriver.RescanSpecs(specDir)
+	if err != nil {
+		logrus.Errorf("Unable to parse spec dir: %v", err)
+		return nil, err
+	}
+
+	ctxs, err := schedulerDriver.Schedule("clusterpair",
+		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
+	if err != nil {
+		logrus.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
+		return nil, err
+	}
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	if err != nil {
+		logrus.Errorf("Error waiting to get cluster pair in ready state: %v", err)
+		return nil, err
+	}
+
+	return ctxs, nil
 }
 
 func init() {

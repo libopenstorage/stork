@@ -10,54 +10,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testBasicMigration(t *testing.T) {
+func testMigration(t *testing.T) {
 	logrus.Info("Basic sanity tests for cloud migration")
 	t.Run("sanityMigrationTest", sanityMigrationTest)
 }
 
 func sanityMigrationTest(t *testing.T) {
 	var err error
-	err = dumpRemoteKubeConfig(remoteConfig)
-	require.NoError(t, err, "Error writing to clusterpair.yml")
+	// create, apply and validate cluster pair specs
+	pairCtxs, err := scheduleClusterPair()
+	require.NoError(t, err, "Error scheduling cluster pair")
 
-	info, err := volumeDriver.GetClusterPairingInfo()
-	require.NoError(t, err, "Error writing to clusterpair.yml")
-
-	err = createClusterPair(info)
-	require.NoError(t, err, "Error creating cluster Spec")
-
-	err = schedulerDriver.RescanSpecs(specDir)
-	require.NoError(t, err, "Unable to parse spec dir")
-
-	_, err = schedulerDriver.Schedule("clusterpair",
-		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
-	require.NoError(t, err, "Error applying clusterpair")
-
-	logrus.Info("Validated Cluster Pair Specs")
-
-	//  schedule mysql app
-	ctxs, err := schedulerDriver.Schedule("singlemysql",
+	// schedule mysql app on cluster 1
+	mySQLCtxs, err := schedulerDriver.Schedule("singlemysql",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
 	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+	require.Equal(t, 1, len(mySQLCtxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	err = schedulerDriver.WaitForRunning(mySQLCtxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
-	_, err = schedulerDriver.Schedule("migrs",
+	// apply migration specs
+	migrsCtxs, err := schedulerDriver.Schedule("migration",
 		scheduler.ScheduleOptions{AppKeys: []string{"migration"}})
-	require.NoError(t, err, "Error applying migration specs")
+	require.NoError(t, err, "Error scheduling migration specs")
+
+	err = schedulerDriver.WaitForRunning(migrsCtxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for migration to get to Ready state")
 
 	// wait on cluster 2 to get mysql pod running
 	err = setRemoteConfig(remoteFilePath)
 	require.NoError(t, err, "Error setting remote config")
-
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	err = schedulerDriver.WaitForRunning(mySQLCtxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
-	destroyAndWait(t, ctxs)
+	// destroy mysql app on cluster 2
+	destroyAndWait(t, mySQLCtxs)
 
 	// destroy mysql app on cluster 1
 	err = setRemoteConfig("")
 	require.NoError(t, err, "Error setting remote config")
-	destroyAndWait(t, ctxs)
+	destroyAndWait(t, mySQLCtxs)
+
+	// destroy CRD objects
+	destroyAndWait(t, migrsCtxs)
+	destroyAndWait(t, pairCtxs)
 }
