@@ -55,7 +55,6 @@ const (
 	volDirCleanupTimeout         = 5 * time.Minute
 	k8sObjectCreateTimeout       = 2 * time.Minute
 	k8sDestroyTimeout            = 2 * time.Minute
-	migrationObjectTimeout       = 10 * time.Minute
 	findFilesOnWorkerTimeout     = 1 * time.Minute
 	deleteTasksWaitTimeout       = 3 * time.Minute
 	defaultRetryInterval         = 10 * time.Second
@@ -710,18 +709,24 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 
 			logrus.Infof("[%v] Validated pod: %v", ctx.App.Key, obj.Name)
-		} else if err := k8sOps.ValidateClusterPair(obj.Name, defaultTimeout, defaultRetryInterval); err != nil {
-			return &scheduler.ErrFailedToApplyCustomSpec{
-				Name:  obj.Name,
-				Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),
-				Type:  obj,
+		} else if obj, ok := spec.(*stork_api.ClusterPair); ok {
+			if err := k8sOps.ValidateClusterPair(obj.Name, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToApplyCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
 			}
-		} else if err := k8sOps.ValidateMigration(obj.Name, migrationObjectTimeout, defaultRetryInterval); err != nil {
-			return &scheduler.ErrFailedToApplyCustomSpec{
-				Name:  obj.Name,
-				Cause: fmt.Sprintf("Failed to validate Migration: %v. Err: %v", obj.Name, err),
-				Type:  obj,
+			logrus.Infof("[%v] Validated Cluster Pair: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.Migration); ok {
+			if err := k8sOps.ValidateMigration(obj.Name, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToApplyCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate Migration: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
 			}
+			logrus.Infof("[%v] Validated Migration specs: %v", ctx.App.Key, obj.Name)
 		}
 	}
 

@@ -586,7 +586,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:742f56d0e2239277cd5c2137fd8c9f50102ce41f951631fb7c64cd3bdecbaab4"
+  digest = "1:116f26ecc21f1f416bc3093850d41eecc3dfe9ef10d096c015203ccf17653ad1"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -600,7 +600,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "653a489d5af11bf8f4cf30d4f73c60838a50553f"
+  revision = "a42eea6aefa51420767e8fa42505929dcdb14f74"
 
 [[projects]]
   digest = "1:26663fafdea73a38075b07e8e9d82fc0056379d2be8bb4e13899e8fda7c7dd23"
@@ -822,7 +822,7 @@
     "internal/gopathwalk",
   ]
   pruneopts = "UT"
-  revision = "6d71ab8aade08605ffc36622332264e2f6991952"
+  revision = "680468b7556f697577414fb99a2dbdcb97626720"
 
 [[projects]]
   digest = "1:d2a8db567a76203e3b41c1f632d86485ffd57f8e650a0d1b19d240671c2fddd7"
