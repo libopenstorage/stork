@@ -35,8 +35,10 @@ type Factory interface {
 	RawConfig() (clientcmdapi.Config, error)
 	// GetOutputFormat Get the output format
 	GetOutputFormat() (string, error)
-	// SetOutputFormat Set the output format
-	SetOutputFormat(string)
+	// setOutputFormat Set the output format
+	setOutputFormat(string)
+	// setNamespace Set the namespace
+	setNamespace(string)
 }
 
 // NewFactory Return a new factory interface that can be used by commands
@@ -90,6 +92,10 @@ func (f *factory) GetOutputFormat() (string, error) {
 	}
 }
 
-func (f *factory) SetOutputFormat(outputFormat string) {
+func (f *factory) setOutputFormat(outputFormat string) {
 	f.outputFormat = outputFormat
+}
+
+func (f *factory) setNamespace(namespace string) {
+	f.namespace = namespace
 }
