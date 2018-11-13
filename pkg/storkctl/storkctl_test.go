@@ -20,7 +20,7 @@ import (
 
 type NewTestCommand func(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command
 
-func testSnapshotsCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, snapshots *snapv1.VolumeSnapshotList, expected string) {
+func testSnapshotsCommon(t *testing.T, cmdArgs []string, snapshots *snapv1.VolumeSnapshotList, expected string) {
 	var err error
 
 	scheme := runtime.NewScheme()
@@ -29,7 +29,6 @@ func testSnapshotsCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []stri
 	}
 
 	f := NewTestFactory()
-	f.SetOutputFormat(outputFormatTable)
 	tf := f.TestFactory.WithNamespace("test")
 	defer tf.Cleanup()
 	codec := serializer.NewCodecFactory(scheme).LegacyCodec(schema.GroupVersion{Version: "v1", Group: snapv1.GroupName})
@@ -46,32 +45,32 @@ func testSnapshotsCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []stri
 
 	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, nil, nil, nil)
 
-	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
-	cmd := newCommand(f, streams)
-	cmd.SetOutput(buf)
+	_, bufIn, bufOut, bufErrOut := genericclioptions.NewTestIOStreams()
+	cmd := NewCommand(bufIn, bufOut, bufErrOut)
+	cmd.SetOutput(bufOut)
 	cmd.SetArgs(cmdArgs)
 	if err = cmd.Execute(); err != nil {
 		require.NoError(t, err, "Error executing command: %v", cmd)
 	}
 
-	if e, a := expected, buf.String(); e != a {
+	if e, a := expected, bufOut.String(); e != a {
 		t.Errorf("expected %v, got %v", e, a)
 	}
 }
 
 func TestGetVolumeSnapshotsNoSnapshots(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots"}
+	cmdArgs := []string{"get", "volumesnapshots"}
 
 	var snapshots snapv1.VolumeSnapshotList
 
 	expected := `No resources found.
 `
 
-	testSnapshotsCommon(t, newGetCommand, cmdArgs, &snapshots, expected)
+	testSnapshotsCommon(t, cmdArgs, &snapshots, expected)
 }
 
 func TestGetVolumeSnapshotsOneSnapshot(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots"}
+	cmdArgs := []string{"get", "volumesnapshots"}
 
 	snap := &snapv1.VolumeSnapshot{
 		Metadata: metav1.ObjectMeta{
@@ -95,5 +94,5 @@ func TestGetVolumeSnapshotsOneSnapshot(t *testing.T) {
 snap1     persistentVolumeClaimName   Pending                         Local
 `
 
-	testSnapshotsCommon(t, newGetCommand, cmdArgs, &snapshots, expected)
+	testSnapshotsCommon(t, cmdArgs, &snapshots, expected)
 }
