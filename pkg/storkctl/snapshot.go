@@ -133,7 +133,7 @@ func newDeleteSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 
 			if len(pvcName) == 0 {
 				if len(args) == 0 {
-					util.CheckErr(fmt.Errorf("Atleast one argument needs to be provided for snapshot name"))
+					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for snapshot name"))
 				}
 				snaps = args
 			} else {
