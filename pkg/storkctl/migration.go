@@ -134,7 +134,7 @@ func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 
 			if len(clusterPair) == 0 {
 				if len(args) == 0 {
-					util.CheckErr(fmt.Errorf("Atleast one argument needs to be provided for migration name"))
+					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for migration name"))
 				}
 				migrations = args
 			} else {
