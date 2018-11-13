@@ -54,7 +54,8 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 			if err != nil {
 				util.CheckErr(err)
 			}
-			fmt.Printf("Migration %v created successfully\n", migration.Name)
+			msg := fmt.Sprintf("Migration %v created successfully", migration.Name)
+			printMsg(msg, ioStreams.Out)
 		},
 	}
 	createMigrationCommand.Flags().StringSliceVarP(&namespaceList, "namespaces", "", nil, "Comma separated list of namespaces to migrate")
@@ -168,7 +169,7 @@ func deleteMigrations(migrations []string, ioStreams genericclioptions.IOStreams
 		if err != nil {
 			util.CheckErr(err)
 		} else {
-			msg := fmt.Sprintf("Migration %v deleted successfully\n", migration)
+			msg := fmt.Sprintf("Migration %v deleted successfully", migration)
 			printMsg(msg, ioStreams.Out)
 		}
 	}
