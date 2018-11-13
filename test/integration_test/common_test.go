@@ -283,6 +283,13 @@ func createClusterPair(pairInfo map[string]string) error {
 		return err
 	}
 
+	// stokctl generate command sets k8s_ops to remoteclusterconfig
+	err = setRemoteConfig("")
+	if err != nil {
+		logrus.Errorf("setting kubeconfig to default failed %v", err)
+		return err
+	}
+
 	return addStorageOptions(pairInfo)
 }
 
