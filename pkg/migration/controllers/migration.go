@@ -255,9 +255,10 @@ func (m *MigrationController) migrateVolumes(migration *storkv1.Migration) error
 				log.MigrationLog(migration).Errorf("Error migrating resources: %v", err)
 				return err
 			}
+		} else {
+			migration.Status.Stage = storkv1.MigrationStageFinal
+			migration.Status.Status = storkv1.MigrationStatusSuccessful
 		}
-		migration.Status.Stage = storkv1.MigrationStageFinal
-		migration.Status.Status = storkv1.MigrationStatusSuccessful
 	}
 
 	err = sdk.Update(migration)
