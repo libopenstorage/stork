@@ -1518,7 +1518,6 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 // createCRDObjects and Validate their deployment
 func (k *k8s) createCRDObjects(specObj interface{}, timeout, retryInterval time.Duration) (interface{}, error) {
 	var err error
-	var obj interface{}
 	k8sOps := k8s_ops.Instance()
 	if obj, ok := specObj.(*stork_api.ClusterPair); ok {
 		logrus.Info("Applying clusterpair spec")
@@ -1530,7 +1529,7 @@ func (k *k8s) createCRDObjects(specObj interface{}, timeout, retryInterval time.
 				Type:  obj,
 			}
 		}
-
+		return obj, nil
 	} else if obj, ok := specObj.(*stork_api.Migration); ok {
 		logrus.Info("Applying Migration Spec")
 		err = k8sOps.CreateMigration(obj)
@@ -1541,8 +1540,10 @@ func (k *k8s) createCRDObjects(specObj interface{}, timeout, retryInterval time.
 				Type:  obj,
 			}
 		}
+		return obj, nil
 	}
-	return obj, nil
+
+	return nil, nil
 }
 
 func insertLineBreak(note string) string {
