@@ -87,7 +87,7 @@ func ValidateRule(rule *storkv1.Rule, ruleType Type) error {
 		for _, action := range item.Actions {
 			if action.Type == storkv1.RuleActionCommand {
 				if action.Background && ruleType == PostExecRule {
-					return fmt.Errorf("background actions are not supported for post snapshot rules")
+					return fmt.Errorf("background actions are not supported for post exec rules")
 				}
 			} else {
 				return fmt.Errorf("unsupported action type: %s in rule: [%s] %s",
@@ -106,13 +106,14 @@ func terminateCommandInPods(owner runtime.Object, pods []v1.Pod, taskID string) 
 
 	updateErr := updateRunningCommandPodListInOwner(owner, failedPods, taskID)
 	if updateErr != nil {
-		log.RuleLog(nil, owner).Warnf("Failed to update list of pods with running command in snap due to: %v", updateErr)
+		log.RuleLog(nil, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 	}
 
 	return err
 }
 
-// PerformRuleRecovery terminates potential background commands running pods for the given snapshot
+// PerformRuleRecovery terminates potential background commands running pods for
+// the given owner
 func PerformRuleRecovery(
 	owner runtime.Object,
 ) error {
@@ -336,13 +337,12 @@ func updateRunningCommandPodListInOwner(
 	}
 
 	err = wait.ExponentialBackoff(ownerAPICallBackoff, func() (bool, error) {
-		owner, err := k8s.Instance().GetObject(owner)
+		ownerCopy, err := k8s.Instance().GetObject(owner)
 		if err != nil {
-			logrus.Warnf("Failed to get latest owner due to: %v. Will retry.", err)
+			log.RuleLog(nil, owner).Warnf("Failed to get latest owner due to: %v. Will retry.", err)
 			return false, nil
 		}
 
-		ownerCopy := owner.DeepCopyObject()
 		metadata, err := meta.Accessor(ownerCopy)
 		if err != nil {
 			return false, err
@@ -355,7 +355,7 @@ func updateRunningCommandPodListInOwner(
 			annotations[podsWithRunningCommandsKey] = string(trackerBytes)
 		}
 
-		if _, err := k8s.Instance().UpdateObject(owner); err != nil {
+		if _, err := k8s.Instance().UpdateObject(ownerCopy); err != nil {
 			log.RuleLog(nil, owner).Warnf("Failed to update owner due to: %v. Will retry.", err)
 			return false, nil
 		}

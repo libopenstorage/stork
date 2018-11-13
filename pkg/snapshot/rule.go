@@ -51,9 +51,15 @@ func validateSnapRules(snap *crdv1.VolumeSnapshot) error {
 	return nil
 }
 
+func setKind(snap *crdv1.VolumeSnapshot) {
+	snap.Kind = "VolumeSnapshot"
+	snap.APIVersion = crdv1.SchemeGroupVersion.String()
+}
+
 // ExecutePreSnapRule executes the pre snapshot rule. pvcs is a list of PVCs that are associated
 // with the snapshot. It returns a channel which the caller can trigger to delete the termination of background commands
 func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeClaim) (chan bool, error) {
+	setKind(snap)
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[preSnapRuleAnnotationKey]
 		if !present {
@@ -74,6 +80,7 @@ func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeCl
 // ExecutePostSnapRule executes the post snapshot rule for the given snapshot. pvcs is a list of PVCs
 // that are associated with the snapshot
 func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot) error {
+	setKind(snap)
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[postSnapRuleAnnotationKey]
 		if !present {
@@ -107,6 +114,7 @@ func performRuleRecovery() error {
 
 	var lastError error
 	for _, snap := range allSnaps.Items {
+		setKind(&snap)
 		err := rule.PerformRuleRecovery(&snap)
 		if err != nil {
 			lastError = err
