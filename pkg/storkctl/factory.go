@@ -35,8 +35,6 @@ type Factory interface {
 	RawConfig() (clientcmdapi.Config, error)
 	// GetOutputFormat Get the output format
 	GetOutputFormat() (string, error)
-	// SetOutputFormat Set the output format
-	SetOutputFormat(string)
 }
 
 // NewFactory Return a new factory interface that can be used by commands
@@ -88,8 +86,4 @@ func (f *factory) GetOutputFormat() (string, error) {
 	default:
 		return "", fmt.Errorf("Unsupported output type %v", f.outputFormat)
 	}
-}
-
-func (f *factory) SetOutputFormat(outputFormat string) {
-	f.outputFormat = outputFormat
 }
