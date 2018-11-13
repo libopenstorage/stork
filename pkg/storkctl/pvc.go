@@ -72,7 +72,8 @@ func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStrea
 			if err != nil {
 				util.CheckErr(err)
 			}
-			fmt.Printf("PersistentVolumeClaim %v created successfully\n", pvcName)
+			msg := fmt.Sprintf("PersistentVolumeClaim %v created successfully", pvcName)
+			printMsg(msg, ioStreams.Out)
 		},
 	}
 	createPVCCommand.Flags().StringVarP(&snapName, "snapshot", "s", "", "Name of the snapshot to use to create the PVC")

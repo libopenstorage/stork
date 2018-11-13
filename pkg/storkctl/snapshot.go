@@ -167,7 +167,8 @@ func deleteSnapshots(snaps []string, namespace string, ioStreams genericclioptio
 		if err != nil {
 			util.CheckErr(err)
 		} else {
-			fmt.Printf("Snapshot %v deleted successfully\n", snap)
+			msg := fmt.Sprintf("Snapshot %v deleted successfully", snap)
+			printMsg(msg, ioStreams.Out)
 		}
 	}
 }
