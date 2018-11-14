@@ -39,10 +39,11 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 				clusterPairs = new(storkv1.ClusterPairList)
 				for _, pairName := range args {
 					pair, err := k8s.Instance().GetClusterPair(pairName)
-					if err != nil {
+					if err == nil {
+						clusterPairs.Items = append(clusterPairs.Items, *pair)
+					} else {
 						util.CheckErr(err)
 					}
-					clusterPairs.Items = append(clusterPairs.Items, *pair)
 				}
 			} else {
 				clusterPairs, err = k8s.Instance().ListClusterPairs()
