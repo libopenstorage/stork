@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod 
+metadata:
+ name: load-driver
+ labels:
+   app: wordpress
+   tier: load-driver
+spec:
+  initContainers:
+  - image: appropriate/curl
+    name: wait-until-wordpress-up
+    args:
+    - "sh"
+    - "-c"
+    - "while ! curl --connect-timeout 2 'wordpress:80' ; do sleep 1 ; done"
+  containers:
+  - image: centminmod/docker-centos6-siege
+    name: siege
+    args:
+    - "siege"
+    - "--benchmark"
+    - "--time=24H"
+    - "http://wordpress:80"
