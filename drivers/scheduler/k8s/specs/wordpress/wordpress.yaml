@@ -19,16 +19,6 @@ spec:
         app: wordpress
         tier: frontend
     spec:
-      initContainers:
-      - image: alpine:3.7
-        name: wait-for-installer
-        args:
-        - "sh"
-        - "-c"
-        - "while [ ! -f '/wordpress/installed' ]; do sleep 1; done"
-        volumeMounts:
-        - name: wordpress-persistent-storage
-          mountPath: /wordpress
       containers:
       - image: wordpress:4.8-apache
         name: wordpress
