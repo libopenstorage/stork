@@ -4,7 +4,6 @@ package storkctl
 
 import (
 	"net/http"
-	"reflect"
 	"testing"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -16,37 +15,25 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest/fake"
+	"k8s.io/kubernetes/pkg/apis/core/v1"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
-var codecCrdV1 runtime.Codec
-var codecStorkV1alpha1 runtime.Codec
+var codec runtime.Codec
 
 func init() {
 	scheme := runtime.NewScheme()
 	snapv1.AddToScheme(scheme)
 	v1alpha1.AddToScheme(scheme)
-	codecCrdV1 = serializer.NewCodecFactory(scheme).LegacyCodec(snapv1.SchemeGroupVersion)
-	codecStorkV1alpha1 = serializer.NewCodecFactory(scheme).LegacyCodec(v1alpha1.SchemeGroupVersion)
+	v1.AddToScheme(scheme)
+	codec = serializer.NewCodecFactory(scheme).LegacyCodec(scheme.PrioritizedVersionsAllGroups()...)
 }
 
 type NewTestCommand func(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command
 
 func testCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, obj runtime.Object, expected string, errorExpected bool) {
 	var err error
-	typeName := reflect.ValueOf(obj).Elem().Type().Name()
-
-	var codec runtime.Codec
-	switch typeName {
-	case "VolumeSnapshotList":
-		codec = codecCrdV1
-		break
-	case "ClusterPairList", "MigrationList":
-		codec = codecStorkV1alpha1
-		break
-	}
-	require.NotNilf(t, codec, "Unknown codec for %s", typeName)
 
 	f := NewTestFactory()
 	f.setOutputFormat(outputFormatTable)
@@ -57,7 +44,11 @@ func testCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, obj r
 	fakeRestClient := &fake.RESTClient{
 		NegotiatedSerializer: unstructuredSerializer,
 		Resp:                 &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)},
+		Client: fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)}, nil
+		}),
 	}
+
 	tf.Client = fakeRestClient
 	fakeKubeClient, err := tf.KubernetesClientSet()
 	require.NoError(t, err, "Error getting KubernetesClientSet")
