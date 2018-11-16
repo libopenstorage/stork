@@ -254,15 +254,23 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 		}
 	}
 
-	output, err := s.doCmd(addr, command, false)
-	if err != nil {
-		return "", &node.ErrFailedToRunCommand{
-			Addr:  n.Name,
-			Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+	t := func() (interface{}, bool, error) {
+		output, err := s.doCmd(addr, command, options.IgnoreError)
+		if err != nil {
+			return "", true, &node.ErrFailedToRunCommand{
+				Addr:  n.Name,
+				Cause: fmt.Sprintf("unable to run cmd (%v): %v", command, err),
+			}
 		}
+		return output, false, nil
 	}
 
-	return output, nil
+	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry);
+	if err != nil {
+		return "", err
+	}
+
+	return output.(string), nil
 }
 
 func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
