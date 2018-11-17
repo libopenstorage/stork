@@ -39,10 +39,11 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 				clusterPairs = new(storkv1.ClusterPairList)
 				for _, pairName := range args {
 					pair, err := k8s.Instance().GetClusterPair(pairName)
-					if err != nil {
+					if err == nil {
+						clusterPairs.Items = append(clusterPairs.Items, *pair)
+					} else {
 						util.CheckErr(err)
 					}
-					clusterPairs.Items = append(clusterPairs.Items, *pair)
 				}
 			} else {
 				clusterPairs, err = k8s.Instance().ListClusterPairs()
@@ -128,82 +129,84 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 					delete(config.Contexts, context)
 				}
 			}
-			currentCluster := config.Contexts[currentContext].Cluster
-			for cluster := range config.Clusters {
-				if cluster != currentCluster {
-					delete(config.Clusters, cluster)
+			if config.Contexts[currentContext] != nil {
+				currentCluster := config.Contexts[currentContext].Cluster
+				for cluster := range config.Clusters {
+					if cluster != currentCluster {
+						delete(config.Clusters, cluster)
+					}
 				}
-			}
-			currentAuthInfo := config.Contexts[currentContext].AuthInfo
-			for authInfo := range config.AuthInfos {
-				if authInfo != currentAuthInfo {
-					delete(config.AuthInfos, authInfo)
+				currentAuthInfo := config.Contexts[currentContext].AuthInfo
+				for authInfo := range config.AuthInfos {
+					if authInfo != currentAuthInfo {
+						delete(config.AuthInfos, authInfo)
+					}
 				}
-			}
 
-			if config.AuthInfos[currentAuthInfo] != nil {
-				// Replace gcloud paths in the config
-				if config.AuthInfos[currentAuthInfo].AuthProvider != nil &&
-					config.AuthInfos[currentAuthInfo].AuthProvider.Config != nil {
-					if cmdPath, present := config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey]; present {
-						if strings.HasSuffix(cmdPath, gcloudBinaryName) {
-							config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey] = gcloudPath
+				if config.AuthInfos[currentAuthInfo] != nil {
+					// Replace gcloud paths in the config
+					if config.AuthInfos[currentAuthInfo].AuthProvider != nil &&
+						config.AuthInfos[currentAuthInfo].AuthProvider.Config != nil {
+						if cmdPath, present := config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey]; present {
+							if strings.HasSuffix(cmdPath, gcloudBinaryName) {
+								config.AuthInfos[currentAuthInfo].AuthProvider.Config[cmdPathKey] = gcloudPath
+							}
 						}
 					}
+
+					// Replace file paths with inline data
+					if config.AuthInfos[currentAuthInfo].ClientCertificate != "" && len(config.AuthInfos[currentAuthInfo].ClientCertificateData) == 0 {
+						config.AuthInfos[currentAuthInfo].ClientCertificateData, err = getByteData(config.AuthInfos[currentAuthInfo].ClientCertificate)
+						if err != nil {
+							util.CheckErr(err)
+						}
+						config.AuthInfos[currentAuthInfo].ClientCertificate = ""
+					}
+					if config.AuthInfos[currentAuthInfo].ClientKey != "" && len(config.AuthInfos[currentAuthInfo].ClientKeyData) == 0 {
+						config.AuthInfos[currentAuthInfo].ClientKeyData, err = getByteData(config.AuthInfos[currentAuthInfo].ClientKey)
+						if err != nil {
+							util.CheckErr(err)
+						}
+						config.AuthInfos[currentAuthInfo].ClientKey = ""
+					}
+					if config.AuthInfos[currentAuthInfo].TokenFile != "" && len(config.AuthInfos[currentAuthInfo].Token) == 0 {
+						config.AuthInfos[currentAuthInfo].Token, err = getStringData(config.AuthInfos[currentAuthInfo].TokenFile)
+						if err != nil {
+							util.CheckErr(err)
+						}
+						config.AuthInfos[currentAuthInfo].TokenFile = ""
+					}
+				}
+				if config.Clusters[currentCluster] != nil &&
+					config.Clusters[currentCluster].CertificateAuthority != "" &&
+					len(config.Clusters[currentCluster].CertificateAuthorityData) == 0 {
+
+					config.Clusters[currentCluster].CertificateAuthorityData, err = getByteData(config.Clusters[currentCluster].CertificateAuthority)
+					if err != nil {
+						util.CheckErr(err)
+					}
+					config.Clusters[currentCluster].CertificateAuthority = ""
 				}
 
-				// Replace file paths with inline data
-				if config.AuthInfos[currentAuthInfo].ClientCertificate != "" && len(config.AuthInfos[currentAuthInfo].ClientCertificateData) == 0 {
-					config.AuthInfos[currentAuthInfo].ClientCertificateData, err = getByteData(config.AuthInfos[currentAuthInfo].ClientCertificate)
-					if err != nil {
-						util.CheckErr(err)
-					}
-					config.AuthInfos[currentAuthInfo].ClientCertificate = ""
-				}
-				if config.AuthInfos[currentAuthInfo].ClientKey != "" && len(config.AuthInfos[currentAuthInfo].ClientKeyData) == 0 {
-					config.AuthInfos[currentAuthInfo].ClientKeyData, err = getByteData(config.AuthInfos[currentAuthInfo].ClientKey)
-					if err != nil {
-						util.CheckErr(err)
-					}
-					config.AuthInfos[currentAuthInfo].ClientKey = ""
-				}
-				if config.AuthInfos[currentAuthInfo].TokenFile != "" && len(config.AuthInfos[currentAuthInfo].Token) == 0 {
-					config.AuthInfos[currentAuthInfo].Token, err = getStringData(config.AuthInfos[currentAuthInfo].TokenFile)
-					if err != nil {
-						util.CheckErr(err)
-					}
-					config.AuthInfos[currentAuthInfo].TokenFile = ""
-				}
-			}
-			if config.Clusters[currentCluster] != nil &&
-				config.Clusters[currentCluster].CertificateAuthority != "" &&
-				len(config.Clusters[currentCluster].CertificateAuthorityData) == 0 {
+				clusterPair := &storkv1.ClusterPair{
+					TypeMeta: meta.TypeMeta{
+						Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
+						APIVersion: storkv1.SchemeGroupVersion.String(),
+					},
+					ObjectMeta: meta.ObjectMeta{
+						Name: "<insert_name_here>",
+					},
 
-				config.Clusters[currentCluster].CertificateAuthorityData, err = getByteData(config.Clusters[currentCluster].CertificateAuthority)
-				if err != nil {
+					Spec: storkv1.ClusterPairSpec{
+						Config: config,
+						Options: map[string]string{
+							"<insert_storage_options_here>": "",
+						},
+					},
+				}
+				if err = printEncoded(c, clusterPair, "yaml", ioStreams.Out); err != nil {
 					util.CheckErr(err)
 				}
-				config.Clusters[currentCluster].CertificateAuthority = ""
-			}
-
-			clusterPair := &storkv1.ClusterPair{
-				TypeMeta: meta.TypeMeta{
-					Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
-					APIVersion: storkv1.SchemeGroupVersion.String(),
-				},
-				ObjectMeta: meta.ObjectMeta{
-					Name: "<insert_name_here>",
-				},
-
-				Spec: storkv1.ClusterPairSpec{
-					Config: config,
-					Options: map[string]string{
-						"<insert_storage_options_here>": "",
-					},
-				},
-			}
-			if err = printEncoded(c, clusterPair, "yaml", ioStreams.Out); err != nil {
-				util.CheckErr(err)
 			}
 		},
 	}

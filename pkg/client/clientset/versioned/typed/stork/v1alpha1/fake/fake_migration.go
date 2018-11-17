@@ -123,7 +123,7 @@ func (c *FakeMigrations) DeleteCollection(options *v1.DeleteOptions, listOptions
 // Patch applies the patch and returns the patched migration.
 func (c *FakeMigrations) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.Migration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(migrationsResource, name, pt, data, subresources...), &v1alpha1.Migration{})
+		Invokes(testing.NewRootPatchSubresourceAction(migrationsResource, name, data, subresources...), &v1alpha1.Migration{})
 	if obj == nil {
 		return nil, err
 	}
