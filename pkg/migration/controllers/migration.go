@@ -550,6 +550,17 @@ func (m *MigrationController) prepareResources(
 				continue
 			}
 			o = updatedObject
+		case "Service":
+			updatedObject, err := m.prepareServiceResource(migration, o)
+			if err != nil {
+				m.updateResourceStatus(
+					migration,
+					o,
+					storkv1.MigrationStatusFailed,
+					fmt.Sprintf("Error preparing Service resource: %v", err))
+				continue
+			}
+			o = updatedObject
 		}
 		metadata, err := collections.GetMap(content, "metadata")
 		if err != nil {
@@ -603,6 +614,19 @@ func (m *MigrationController) updateResourceStatus(
 			return
 		}
 	}
+}
+
+func (m *MigrationController) prepareServiceResource(
+	migration *storkv1.Migration,
+	object runtime.Unstructured,
+) (runtime.Unstructured, error) {
+	spec, err := collections.GetMap(object.UnstructuredContent(), "spec")
+	if err != nil {
+		return nil, err
+	}
+	delete(spec, "clusterIP")
+
+	return object, nil
 }
 
 func (m *MigrationController) preparePVResource(
