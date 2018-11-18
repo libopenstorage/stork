@@ -224,8 +224,8 @@ func dumpRemoteKubeConfig(configObject string) error {
 	}
 	config := cm.Data["kubeconfig"]
 	if len(config) == 0 {
-		logrus.Error("found empty remoteConfig in config map")
-		return fmt.Errorf("Empty kubeconfig for remote cluster")
+		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
+		return fmt.Errorf(configErr)
 	}
 	// dump to remoteFilePath
 	return ioutil.WriteFile(remoteFilePath, []byte(config), 0644)
