@@ -631,7 +631,8 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 
 	// get label on node where PX is Enabled
 	for _, node := range nodes.Items {
-		if node.Labels[pxEnabled] == "true" {
+		// worker node and px is not disabled
+		if !destClient.IsNodeMaster(node) && node.Labels[pxEnabled] != "false" {
 			pxNodes = append(pxNodes, node)
 		}
 	}

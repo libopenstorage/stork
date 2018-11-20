@@ -4,6 +4,7 @@ initializer="false"
 snapshot_scale=10
 image_name="stork:master"
 test_image_name="stork_test:latest"
+remote_config_path=""
 for i in "$@"
 do
 case $i in
@@ -30,6 +31,12 @@ case $i in
         shift
         shift
         ;;
+    --remote-config-path)
+        echo "Remote kubeconfig path to use for test: $2"
+        remote_config_path=$2
+        shift
+        shift
+        ;;    
 esac
 done
 
@@ -87,6 +94,10 @@ sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
+
+if [ "$remote_config_path" != "" ]; then
+    kubectl create configmap remoteconfigmap --from-file=$remote_config_path -nkube-system
+fi
 
 kubectl delete -f /testspecs/stork-test-pod.yaml
 kubectl create -f /testspecs/stork-test-pod.yaml
