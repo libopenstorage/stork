@@ -269,6 +269,9 @@ type CloudBackupCreateRequest struct {
 	// Name is optional unique id to be used for this backup
 	// If not specified backup creates this by default
 	Name string
+	// Labels are list of key value pairs to tag the cloud backup. These labels
+	// are stored in the metadata associated with the backup.
+	Labels map[string]string
 }
 
 type CloudBackupCreateResponse struct {
@@ -405,8 +408,12 @@ type CloudBackupStatus struct {
 	OpType CloudBackupOpType
 	// State indicates if the op is currently active/done/failed
 	Status CloudBackupStatusType
-	// BytesDone indicates total Bytes uploaded/downloaded
+	// BytesDone indicates Bytes uploaded/downloaded so far
 	BytesDone uint64
+	// BytesTotal is the total number of bytes being transferred
+	BytesTotal uint64
+	// EtaSeconds estimated time in seconds for backup/restore completion
+	EtaSeconds int64
 	// StartTime indicates Op's start time
 	StartTime time.Time
 	// CompletedTime indicates Op's completed time
@@ -524,6 +531,14 @@ type CloudBackupSchedEnumerateResponse struct {
 	Schedules map[string]CloudBackupScheduleInfo
 }
 
+// Defines the response for CapacityUsage request
+type CapacityUsageResponse struct {
+	CapacityUsageInfo *CapacityUsageInfo
+	// Describes the err if all of the usage details could not be obtained
+	Error error
+}
+
+//
 // DriverTypeSimpleValueOf returns the string format of DriverType
 func DriverTypeSimpleValueOf(s string) (DriverType, error) {
 	obj, err := simpleValueOf("driver_type", DriverType_value, s)
@@ -832,8 +847,8 @@ func (b *CloudBackupInfo) ToSdkCloudBackupInfo() *SdkCloudBackupInfo {
 	return info
 }
 
-func (r *CloudBackupEnumerateResponse) ToSdkCloudBackupEnumerateResponse() *SdkCloudBackupEnumerateResponse {
-	resp := &SdkCloudBackupEnumerateResponse{
+func (r *CloudBackupEnumerateResponse) ToSdkCloudBackupEnumerateWithFiltersResponse() *SdkCloudBackupEnumerateWithFiltersResponse {
+	resp := &SdkCloudBackupEnumerateWithFiltersResponse{
 		Backups: make([]*SdkCloudBackupInfo, len(r.Backups)),
 	}
 
@@ -869,6 +884,8 @@ func (s CloudBackupStatus) ToSdkCloudBackupStatus() *SdkCloudBackupStatus {
 		Info:         s.Info,
 		CredentialId: s.CredentialUUID,
 		SrcVolumeId:  s.SrcVolumeID,
+		EtaSeconds:   s.EtaSeconds,
+		BytesTotal:   s.BytesTotal,
 	}
 
 	status.StartTime, _ = ptypes.TimestampProto(s.StartTime)
