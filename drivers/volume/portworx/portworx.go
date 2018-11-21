@@ -1570,7 +1570,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 				}
 			}
 			volumeInfo.Status = stork_crd.MigrationStatusInProgress
-			volumeInfo.Reason = fmt.Sprintf("Volume migration has started")
+			volumeInfo.Reason = fmt.Sprintf("Volume migration has started. Backup in progress.")
 		}
 	}
 
@@ -1610,6 +1610,12 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 					mInfo.Status == api.CloudMigrate_Complete {
 					vInfo.Status = stork_crd.MigrationStatusSuccessful
 					vInfo.Reason = fmt.Sprintf("Migration successful for volume")
+				} else if mInfo.Status == api.CloudMigrate_InProgress {
+					vInfo.Reason = fmt.Sprintf("Volume migration has started. %v in progress. BytesDone: %v BytesTotal: %v ETA: %v seconds",
+						mInfo.BytesDone,
+						mInfo.BytesTotal,
+						mInfo.CurrentStage.String(),
+						mInfo.EtaSeconds)
 				}
 				break
 			}
