@@ -14,6 +14,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/snapshot"
+	"github.com/libopenstorage/stork/pkg/version"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	api_v1 "k8s.io/api/core/v1"
@@ -25,7 +26,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	"k8s.io/kubernetes/pkg/client/leaderelectionconfig"
+	componentconfig "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1"
 )
 
 const (
@@ -51,7 +52,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "stork"
 	app.Usage = "STorage Orchestartor Runtime for Kubernetes (STORK)"
-	app.Version = "1.1.1"
+	app.Version = version.Version
 	app.Action = run
 
 	app.Flags = []cli.Flag{
@@ -156,12 +157,8 @@ func run(c *cli.Context) {
 		runStork(d, recorder, c)
 	}
 
-	leaderConfig := leaderelectionconfig.DefaultLeaderElectionConfiguration()
-	leaderConfig.LeaderElect = c.BoolT("leader-elect")
+	if c.BoolT("leader-elect") {
 
-	if leaderConfig.LeaderElect {
-
-		leaderConfig.ResourceLock = resourcelock.ConfigMapsResourceLock
 		lockObjectName := c.String("lock-object-name")
 		lockObjectNamespace := c.String("lock-object-namespace")
 
@@ -176,7 +173,7 @@ func run(c *cli.Context) {
 		}
 
 		resourceLock, err := resourcelock.New(
-			leaderConfig.ResourceLock,
+			resourcelock.ConfigMapsResourceLock,
 			lockObjectNamespace,
 			lockObjectName,
 			k8sClient.CoreV1(),
@@ -185,20 +182,23 @@ func run(c *cli.Context) {
 			log.Fatalf("Error creating resource lock: %v", err)
 		}
 
-		leaderElector, err := leaderelection.NewLeaderElector(
-			leaderelection.LeaderElectionConfig{
-				Lock:          resourceLock,
-				LeaseDuration: leaderConfig.LeaseDuration.Duration,
-				RenewDeadline: leaderConfig.RenewDeadline.Duration,
-				RetryPeriod:   leaderConfig.RetryPeriod.Duration,
+		defaultConfig := &componentconfig.LeaderElectionConfiguration{}
+		componentconfig.SetDefaults_LeaderElectionConfiguration(defaultConfig)
 
-				Callbacks: leaderelection.LeaderCallbacks{
-					OnStartedLeading: runFunc,
-					OnStoppedLeading: func() {
-						log.Fatalf("Stork lost master")
-					},
+		leaderElectionConfig := leaderelection.LeaderElectionConfig{
+			Lock:          resourceLock,
+			LeaseDuration: defaultConfig.LeaseDuration.Duration,
+			RenewDeadline: defaultConfig.RenewDeadline.Duration,
+			RetryPeriod:   defaultConfig.RetryPeriod.Duration,
+
+			Callbacks: leaderelection.LeaderCallbacks{
+				OnStartedLeading: runFunc,
+				OnStoppedLeading: func() {
+					log.Fatalf("Stork lost master")
 				},
-			})
+			},
+		}
+		leaderElector, err := leaderelection.NewLeaderElector(leaderElectionConfig)
 		if err != nil {
 			log.Fatalf("Error creating leader elector: %v", err)
 		}
@@ -234,7 +234,7 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		}
 	}
 
-	snapshotController := &snapshotcontroller.SnapshotController{
+	snapshotController := &snapshot.Controller{
 		Driver: d,
 	}
 	if c.Bool("snapshotter") {

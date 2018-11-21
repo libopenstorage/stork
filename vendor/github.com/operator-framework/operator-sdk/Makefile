@@ -9,7 +9,7 @@ else
        Q = @
 endif
 
-VERSION = $(shell git describe --dirty --tags --always)
+VERSION = $(shell git describe --dirty --tags)
 REPO = github.com/operator-framework/operator-sdk
 BUILD_PATH = $(REPO)/commands/operator-sdk
 PKGS = $(shell go list ./... | grep -v /vendor/)
@@ -44,42 +44,15 @@ build/operator-sdk-%-x86_64-apple-darwin: GOARGS = GOOS=darwin GOARCH=amd64
 build/%:
 	$(Q)$(GOARGS) go build -o $@ $(BUILD_PATH)
 	
+DEFAULT_KEY = $(shell gpgconf --list-options gpg \
+								| awk -F: '$$1 == "default-key" { gsub(/"/,""); print $$10}')
 build/%.asc:
-	$(Q){ \
-	default_key=$$(gpgconf --list-options gpg | awk -F: '$$1 == "default-key" { gsub(/"/,""); print toupper($$10)}'); \
-	git_key=$$(git config --get user.signingkey | awk '{ print toupper($$0) }'); \
-	if [ "$${default_key}" = "$${git_key}" ]; then \
-		gpg --output $@ --detach-sig build/$*; \
-		gpg --verify $@ build/$*; \
-	else \
-		echo "git and/or gpg are not configured to have default signing key $${default_key}"; \
-		exit 1; \
-	fi; \
-	}
+ifeq ("$(DEFAULT_KEY)","$(shell git config --get user.signingkey)")
+	$(Q)gpg --output $@ --detach-sig build/$*
+	$(Q)gpg --verify $@ build/$*
+else
+	@echo "git and/or gpg are not configured to have default signing key ${DEFAULT_KEY}"
+	@exit 1
+endif
 
 .PHONY: install release_x86_64 release
-
-test: dep test/sanity test/unit install test/subcommand test/e2e
-
-test/ci-go: test/sanity test/unit test/subcommand test/e2e/go
-
-test/ci-ansible: test/e2e/ansible
-
-test/sanity:
-	./hack/tests/sanity-check.sh
-
-test/unit:
-	./hack/tests/unit.sh
-
-test/subcommand:
-	./hack/tests/test-subcommand.sh
-
-test/e2e: test/e2e/go test/e2e/ansible
-
-test/e2e/go:
-	./hack/tests/e2e-go.sh
-
-test/e2e/ansible:
-	./hack/tests/e2e-ansible.sh
-
-.PHONY: test test/sanity test/unit test/subcommand test/e2e test/e2e/go test/e2e/ansible test/ci-go test/ci-ansible

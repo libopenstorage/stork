@@ -45,9 +45,19 @@ func TestIsRetryNeeded(t *testing.T) {
 	assert.EqualError(t, etcdserver.ErrUnhealthy, err.Error(), "Unexpcted error")
 	assert.True(t, retry, "Expected a retry")
 
+	// etcd is sending the error ErrTimeout over grpc instead of the actual ErrGRPCTimeout
+	// hence isRetryNeeded cannot do an actual error comparison
+	retry, err = isRetryNeeded(fmt.Errorf("etcdserver: request timed out"), fn, key, retryCount)
+	assert.True(t, retry, "Expected a retry")
+
 	// rpctypes.ErrGRPCTimeout
 	retry, err = isRetryNeeded(rpctypes.ErrGRPCTimeout, fn, key, retryCount)
 	assert.EqualError(t, rpctypes.ErrGRPCTimeout, err.Error(), "Unexpcted error")
+	assert.True(t, retry, "Expected a retry")
+
+	// rpctypes.ErrGRPCNoLeader
+	retry, err = isRetryNeeded(rpctypes.ErrGRPCNoLeader, fn, key, retryCount)
+	assert.EqualError(t, rpctypes.ErrGRPCNoLeader, err.Error(), "Unexpcted error")
 	assert.True(t, retry, "Expected a retry")
 
 	// rpctypes.ErrGRPCEmptyKey
@@ -65,6 +75,12 @@ func TestIsRetryNeeded(t *testing.T) {
 	grpcErr = status.New(codes.Unavailable, "desc = some grpc error").Err()
 	retry, err = isRetryNeeded(grpcErr, fn, key, retryCount)
 	assert.EqualError(t, grpcErr, err.Error(), "Unexpcted error")
+	assert.True(t, retry, "Expected a retry")
+
+	// grpc error of ContextDeadlineExceeded
+	gErr := status.New(codes.DeadlineExceeded, "context deadline exceeded").Err()
+	retry, err = isRetryNeeded(gErr, fn, key, retryCount)
+	assert.EqualError(t, gErr, err.Error(), "Unexpcted error")
 	assert.True(t, retry, "Expected a retry")
 }
 

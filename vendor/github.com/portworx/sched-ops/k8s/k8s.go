@@ -81,6 +81,7 @@ type Ops interface {
 	MigrationOps
 	ObjectOps
 	SetConfig(config *rest.Config)
+	SetClient(client *kubernetes.Clientset, snapClient rest.Interface, storkClient storkclientset.Interface, apiExtensionClient apiextensionsclient.Interface, dynamicInterface dynamic.Interface)
 }
 
 // EventOps is an interface to put and get k8s events
@@ -425,13 +426,13 @@ type ClusterPairOps interface {
 	// CreateClusterPair creates the ClusterPair
 	CreateClusterPair(*v1alpha1.ClusterPair) error
 	// GetClusterPair gets the ClusterPair
-	GetClusterPair(string) (*v1alpha1.ClusterPair, error)
+	GetClusterPair(string, string) (*v1alpha1.ClusterPair, error)
 	// ListClusterPairs gets all the ClusterPairs
-	ListClusterPairs() (*v1alpha1.ClusterPairList, error)
+	ListClusterPairs(string) (*v1alpha1.ClusterPairList, error)
 	// DeleteClusterPair deletes the ClusterPair
-	DeleteClusterPair(string) error
+	DeleteClusterPair(string, string) error
 	// ValidateClusterPair validates clusterpair status
-	ValidateClusterPair(name string, timeout, retryInterval time.Duration) error
+	ValidateClusterPair(string, string, time.Duration, time.Duration) error
 }
 
 // MigrationOps is an interface to perfrom k8s Migration operations
@@ -439,15 +440,15 @@ type MigrationOps interface {
 	// CreateMigration creates the Migration
 	CreateMigration(*v1alpha1.Migration) error
 	// GetMigration gets the Migration
-	GetMigration(string) (*v1alpha1.Migration, error)
+	GetMigration(string, string) (*v1alpha1.Migration, error)
 	// ListMigrations lists all the Migration
-	ListMigrations() (*v1alpha1.MigrationList, error)
+	ListMigrations(string) (*v1alpha1.MigrationList, error)
 	// UpdateMigration updates the Migration
 	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// DeleteMigration deletes the Migration
-	DeleteMigration(string) error
+	DeleteMigration(string, string) error
 	// ValidateMigration validate the Migration status
-	ValidateMigration(name string, timeout, retryInterval time.Duration) error
+	ValidateMigration(string, string, time.Duration, time.Duration) error
 }
 
 // ObjectOps is an interface to perform generic Object operations
@@ -486,7 +487,7 @@ var (
 
 type k8sOps struct {
 	client             *kubernetes.Clientset
-	snapClient         *rest.RESTClient
+	snapClient         rest.Interface
 	storkClient        storkclientset.Interface
 	apiExtensionClient apiextensionsclient.Interface
 	config             *rest.Config
@@ -516,6 +517,21 @@ func NewInstance(config string) (Ops, error) {
 		return nil, err
 	}
 	return newInstance, nil
+}
+
+// Set the k8s clients
+func (k *k8sOps) SetClient(
+	client *kubernetes.Clientset,
+	snapClient rest.Interface,
+	storkClient storkclientset.Interface,
+	apiExtensionClient apiextensionsclient.Interface,
+	dynamicInterface dynamic.Interface) {
+
+	k.client = client
+	k.snapClient = snapClient
+	k.storkClient = storkClient
+	k.apiExtensionClient = apiExtensionClient
+	k.dynamicInterface = dynamicInterface
 }
 
 // Initialize the k8s client if uninitialized
@@ -2788,20 +2804,20 @@ func (k *k8sOps) UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 // ConfigMap APIs - END
 
 // ClusterPair APIs - BEGIN
-func (k *k8sOps) GetClusterPair(name string) (*v1alpha1.ClusterPair, error) {
+func (k *k8sOps) GetClusterPair(name string, namespace string) (*v1alpha1.ClusterPair, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.storkClient.Stork().ClusterPairs().Get(name, meta_v1.GetOptions{})
+	return k.storkClient.Stork().ClusterPairs(namespace).Get(name, meta_v1.GetOptions{})
 }
 
-func (k *k8sOps) ListClusterPairs() (*v1alpha1.ClusterPairList, error) {
+func (k *k8sOps) ListClusterPairs(namespace string) (*v1alpha1.ClusterPairList, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.storkClient.Stork().ClusterPairs().List(meta_v1.ListOptions{})
+	return k.storkClient.Stork().ClusterPairs(namespace).List(meta_v1.ListOptions{})
 }
 
 func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) error {
@@ -2809,26 +2825,26 @@ func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) error {
 		return err
 	}
 
-	_, err := k.storkClient.Stork().ClusterPairs().Create(pair)
+	_, err := k.storkClient.Stork().ClusterPairs(pair.Namespace).Create(pair)
 	return err
 }
 
-func (k *k8sOps) DeleteClusterPair(name string) error {
+func (k *k8sOps) DeleteClusterPair(name string, namespace string) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 
-	return k.storkClient.Stork().ClusterPairs().Delete(name, &meta_v1.DeleteOptions{
+	return k.storkClient.Stork().ClusterPairs(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
 
-func (k *k8sOps) ValidateClusterPair(name string, timeout, retryInterval time.Duration) error {
+func (k *k8sOps) ValidateClusterPair(name string, namespace string, timeout, retryInterval time.Duration) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 	t := func() (interface{}, bool, error) {
-		clusterPair, err := k.GetClusterPair(name)
+		clusterPair, err := k.GetClusterPair(name, namespace)
 		if err != nil {
 			return "", true, err
 		}
@@ -2862,20 +2878,20 @@ func (k *k8sOps) ValidateClusterPair(name string, timeout, retryInterval time.Du
 // ClusterPair APIs - END
 
 // Migration APIs - BEGIN
-func (k *k8sOps) GetMigration(name string) (*v1alpha1.Migration, error) {
+func (k *k8sOps) GetMigration(name string, namespace string) (*v1alpha1.Migration, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.storkClient.Stork().Migrations().Get(name, meta_v1.GetOptions{})
+	return k.storkClient.Stork().Migrations(namespace).Get(name, meta_v1.GetOptions{})
 }
 
-func (k *k8sOps) ListMigrations() (*v1alpha1.MigrationList, error) {
+func (k *k8sOps) ListMigrations(namespace string) (*v1alpha1.MigrationList, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.storkClient.Stork().Migrations().List(meta_v1.ListOptions{})
+	return k.storkClient.Stork().Migrations(namespace).List(meta_v1.ListOptions{})
 }
 
 func (k *k8sOps) CreateMigration(migration *v1alpha1.Migration) error {
@@ -2883,16 +2899,16 @@ func (k *k8sOps) CreateMigration(migration *v1alpha1.Migration) error {
 		return err
 	}
 
-	_, err := k.storkClient.Stork().Migrations().Create(migration)
+	_, err := k.storkClient.Stork().Migrations(migration.Namespace).Create(migration)
 	return err
 }
 
-func (k *k8sOps) DeleteMigration(name string) error {
+func (k *k8sOps) DeleteMigration(name string, namespace string) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 
-	return k.storkClient.Stork().Migrations().Delete(name, &meta_v1.DeleteOptions{
+	return k.storkClient.Stork().Migrations(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -2902,15 +2918,15 @@ func (k *k8sOps) UpdateMigration(migration *v1alpha1.Migration) (*v1alpha1.Migra
 		return nil, err
 	}
 
-	return k.storkClient.Stork().Migrations().Update(migration)
+	return k.storkClient.Stork().Migrations(migration.Namespace).Update(migration)
 }
 
-func (k *k8sOps) ValidateMigration(name string, timeout, retryInterval time.Duration) error {
+func (k *k8sOps) ValidateMigration(name string, namespace string, timeout, retryInterval time.Duration) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 	t := func() (interface{}, bool, error) {
-		resp, err := k.GetMigration(name)
+		resp, err := k.GetMigration(name, namespace)
 		if err != nil {
 			return "", true, err
 		}
@@ -3021,7 +3037,17 @@ func (k *k8sOps) getDynamicClient(object runtime.Object) (dynamic.ResourceInterf
 		return nil, err
 	}
 
-	return k.dynamicInterface.Resource(object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(strings.ToLower(objectType.GetKind()) + "s")), nil
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceInterface := k.dynamicInterface.Resource(object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(strings.ToLower(objectType.GetKind()) + "s"))
+	if metadata.GetNamespace() == "" {
+		return resourceInterface, nil
+	} else {
+		return resourceInterface.Namespace(metadata.GetNamespace()), nil
+	}
 }
 
 // GetObject returns the latest object given a generic Object

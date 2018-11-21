@@ -1,5 +1,5 @@
-hash: e7f3b86b6ebbdaabeb2d6b5b69432065ef83ef9a4f194d6a17fd40ecf24b8ccd
-updated: 2018-10-25T20:30:36.894939056+05:30
+hash: 06fd61b981a90894487d7a393039e714d241f1038ed60fdb8465fdfaeac42ac4
+updated: 2018-11-20T20:13:31.096995218-08:00
 imports:
 - name: github.com/aws/aws-sdk-go
   version: 5e98666858b97db54a61044bb1150d3b81436860
@@ -72,7 +72,7 @@ imports:
   - sockets
   - tlsconfig
 - name: github.com/docker/go-units
-  version: 47565b4f722fb6ceae66b95f853feed578a4a51c
+  version: 2fb04c6466a548a03cb009c5569ee1ab1e35398e
 - name: github.com/docker/libtrust
   version: aabc10ec26b754e797f9028f4589c5b7bd90dc20
 - name: github.com/docker/spdystream
@@ -149,7 +149,7 @@ imports:
 - name: github.com/konsorten/go-windows-terminal-sequences
   version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/kubernetes-incubator/external-storage
-  version: bc02da24cf1ecc8be052434589c1b7f9081c75a1
+  version: cd82aca42900f43309fd9ebbc141684d78974446
   repo: https://github.com/libopenstorage/external-storage.git
   subpackages:
   - snapshot/pkg/apis/crd/v1
@@ -177,7 +177,7 @@ imports:
   - secrets
   - volume
 - name: github.com/libopenstorage/stork
-  version: b88865a129c8fc19e6dbf44d665891b2f8b2cbc4
+  version: 31f62c98eeaa1da38b8faf2645822eee7153cfe1
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
@@ -235,7 +235,7 @@ imports:
 - name: github.com/opencontainers/go-digest
   version: c9281466c8b2f606084ac71339773efd177436e7
 - name: github.com/operator-framework/operator-sdk
-  version: d4a6b28b3249a1f07068406cc48679f525d07cfc
+  version: e5a0ab096e1a7c0e6b937d2b41707eccb82c3c77
   subpackages:
   - pkg/util/k8sutil
 - name: github.com/pborman/uuid
@@ -245,19 +245,19 @@ imports:
 - name: github.com/pkg/errors
   version: 059132a15dd08d6704c67711dae0cf35ab991756
 - name: github.com/portworx/kvdb
-  version: 110b9af2ff2bfd4aa6b611f9dc4c8599bc56ad20
+  version: cbc0d300ec8a247e9a03bac5d31f9eb6a872c78c
   subpackages:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: c3085782607379884d70c96f6d509bcd9d73f224
+  version: ba438ebd5262741ebcc54f73a43ecb932e8ec331
   subpackages:
   - k8s
   - task
 - name: github.com/Sirupsen/logrus
-  version: 4fabf2fffcecfd47f802869b7b92d75e43c5a095
+  version: 91da99df23e3bad7f384338a5a8f636d04093d9a
 - name: github.com/sirupsen/logrus
-  version: ad15b42461921f1fb3529b058c6786c6a45d5162
+  version: bcd833dfe83d3cebad139e4a29ed79cb2318bf95
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto

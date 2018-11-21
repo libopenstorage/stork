@@ -22,7 +22,6 @@ import (
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
-	apis "github.com/operator-framework/operator-sdk/test/test-framework/pkg/apis"
 	operator "github.com/operator-framework/operator-sdk/test/test-framework/pkg/apis/cache/v1alpha1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +30,7 @@ import (
 
 var (
 	retryInterval        = time.Second * 5
-	timeout              = time.Second * 60
+	timeout              = time.Second * 30
 	cleanupRetryInterval = time.Second * 1
 	cleanupTimeout       = time.Second * 5
 )
@@ -43,7 +42,7 @@ func TestMemcached(t *testing.T) {
 			APIVersion: "cache.example.com/v1alpha1",
 		},
 	}
-	err := framework.AddToFrameworkScheme(apis.AddToScheme, memcachedList)
+	err := framework.AddToFrameworkScheme(operator.AddToScheme, memcachedList)
 	if err != nil {
 		t.Fatalf("failed to add custom resource scheme to framework: %v", err)
 	}

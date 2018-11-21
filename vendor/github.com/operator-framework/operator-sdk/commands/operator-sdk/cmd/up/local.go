@@ -27,6 +27,7 @@ import (
 	"syscall"
 
 	"github.com/operator-framework/operator-sdk/commands/operator-sdk/cmd/cmdutil"
+	cmdError "github.com/operator-framework/operator-sdk/commands/operator-sdk/error"
 	ansibleOperator "github.com/operator-framework/operator-sdk/pkg/ansible/operator"
 	proxy "github.com/operator-framework/operator-sdk/pkg/ansible/proxy"
 	"github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
@@ -62,19 +63,24 @@ var (
 )
 
 const (
+	gocmd             = "go"
+	run               = "run"
+	cmd               = "cmd"
+	main              = "main.go"
 	defaultConfigPath = ".kube/config"
 )
 
 func upLocalFunc(cmd *cobra.Command, args []string) {
 	mustKubeConfig()
+	cmdutil.MustInProjectRoot()
 	switch cmdutil.GetOperatorType() {
 	case cmdutil.OperatorTypeGo:
-		cmdutil.MustInProjectRoot()
-		upLocal()
+		c := cmdutil.GetConfig()
+		upLocal(c.ProjectName)
 	case cmdutil.OperatorTypeAnsible:
 		upLocalAnsible()
 	default:
-		log.Fatal("failed to determine operator type")
+		cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to determine operator type"))
 	}
 }
 
@@ -84,31 +90,31 @@ func mustKubeConfig() {
 	if len(kubeConfig) == 0 {
 		usr, err := user.Current()
 		if err != nil {
-			log.Fatalf("failed to determine user's home dir: %v", err)
+			cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to determine user's home dir: %v", err))
 		}
 		kubeConfig = filepath.Join(usr.HomeDir, defaultConfigPath)
 	}
 
 	_, err := os.Stat(kubeConfig)
 	if err != nil && os.IsNotExist(err) {
-		log.Fatalf("failed to find the kubeconfig file (%v): %v", kubeConfig, err)
+		cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to find the kubeconfig file (%v): %v", kubeConfig, err))
 	}
 }
 
-func upLocal() {
-	args := []string{"run", filepath.Join("cmd", "manager", "main.go")}
+func upLocal(projectName string) {
+	args := []string{run, filepath.Join(cmd, projectName, main)}
 	if operatorFlags != "" {
 		extraArgs := strings.Split(operatorFlags, " ")
 		args = append(args, extraArgs...)
 	}
-	dc := exec.Command("go", args...)
+	dc := exec.Command(gocmd, args...)
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
 		err := dc.Process.Kill()
 		if err != nil {
-			log.Fatalf("failed to terminate the operator: %v", err)
+			cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to terminate the operator: %v", err))
 		}
 		os.Exit(0)
 	}()
@@ -117,7 +123,7 @@ func upLocal() {
 	dc.Env = append(os.Environ(), fmt.Sprintf("%v=%v", k8sutil.KubeConfigEnvVar, kubeConfig), fmt.Sprintf("%v=%v", k8sutil.WatchNamespaceEnvVar, namespace))
 	err := dc.Run()
 	if err != nil {
-		log.Fatalf("failed to run operator locally: %v", err)
+		cmdError.ExitWithError(cmdError.ExitError, fmt.Errorf("failed to run operator locally: %v", err))
 	}
 }
 
@@ -132,17 +138,14 @@ func upLocalAnsible() {
 	done := make(chan error)
 
 	// start the proxy
-	err = proxy.Run(done, proxy.Options{
+	proxy.RunProxy(done, proxy.Options{
 		Address:    "localhost",
 		Port:       8888,
 		KubeConfig: mgr.GetConfig(),
 	})
-	if err != nil {
-		logrus.Fatalf("error starting proxy: %v", err)
-	}
 
 	// start the operator
-	go ansibleOperator.Run(done, mgr, "./watches.yaml")
+	go ansibleOperator.Run(done, mgr)
 
 	// wait for either to finish
 	err = <-done

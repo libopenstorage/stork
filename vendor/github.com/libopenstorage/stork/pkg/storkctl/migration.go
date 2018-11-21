@@ -7,6 +7,8 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
+	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -14,7 +16,7 @@ var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUM
 var migrationSubcommand = "migrations"
 var migrationAliases = []string{"migration"}
 
-func newCreateMigrationCommand(cmdFactory Factory) *cobra.Command {
+func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var migrationName string
 	var clusterPair string
 	var namespaceList []string
@@ -28,15 +30,15 @@ func newCreateMigrationCommand(cmdFactory Factory) *cobra.Command {
 		PreRunE: cobra.ExactArgs(1),
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				handleError(fmt.Errorf("Exactly one name needs to be provided for migration name"))
+				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for migration name"))
 			} else {
 				migrationName = args[0]
 			}
 			if len(clusterPair) == 0 {
-				handleError(fmt.Errorf("ClusterPair name needs to be provided for migration"))
+				util.CheckErr(fmt.Errorf("ClusterPair name needs to be provided for migration"))
 			}
 			if len(namespaceList) == 0 {
-				handleError(fmt.Errorf("Need to provide atleast one namespace to migrate"))
+				util.CheckErr(fmt.Errorf("Need to provide atleast one namespace to migrate"))
 			}
 
 			migration := &storkv1.Migration{
@@ -50,9 +52,10 @@ func newCreateMigrationCommand(cmdFactory Factory) *cobra.Command {
 			migration.Name = migrationName
 			err := k8s.Instance().CreateMigration(migration)
 			if err != nil {
-				handleError(err)
+				util.CheckErr(err)
 			}
-			fmt.Printf("Migration %v created successfully\n", migration.Name)
+			msg := fmt.Sprintf("Migration %v created successfully", migration.Name)
+			printMsg(msg, ioStreams.Out)
 		},
 	}
 	createMigrationCommand.Flags().StringSliceVarP(&namespaceList, "namespaces", "", nil, "Comma separated list of namespaces to migrate")
@@ -63,7 +66,7 @@ func newCreateMigrationCommand(cmdFactory Factory) *cobra.Command {
 	return createMigrationCommand
 }
 
-func newGetMigrationCommand(cmdFactory Factory) *cobra.Command {
+func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var clusterPair string
 	getMigrationCommand := &cobra.Command{
 		Use:     migrationSubcommand,
@@ -76,16 +79,16 @@ func newGetMigrationCommand(cmdFactory Factory) *cobra.Command {
 			if len(args) > 0 {
 				migrations = new(storkv1.MigrationList)
 				for _, migrationName := range args {
-					migration, err := k8s.Instance().GetMigration(migrationName)
+					migration, err := k8s.Instance().GetMigration(migrationName, cmdFactory.GetNamespace())
 					if err != nil {
-						handleError(err)
+						util.CheckErr(err)
 					}
 					migrations.Items = append(migrations.Items, *migration)
 				}
 			} else {
-				migrations, err = k8s.Instance().ListMigrations()
+				migrations, err = k8s.Instance().ListMigrations(cmdFactory.GetNamespace())
 				if err != nil {
-					handleError(err)
+					util.CheckErr(err)
 				}
 			}
 
@@ -102,17 +105,17 @@ func newGetMigrationCommand(cmdFactory Factory) *cobra.Command {
 			}
 
 			if len(migrations.Items) == 0 {
-				handleEmptyList()
+				handleEmptyList(ioStreams.Out)
 				return
 			}
 
 			outputFormat, err := cmdFactory.GetOutputFormat()
 			if err != nil {
-				handleError(err)
+				util.CheckErr(err)
 			}
 
-			if err := printObjects(c, migrations, outputFormat, migrationColumns, migrationPrinter); err != nil {
-				handleError(err)
+			if err := printObjects(c, migrations, outputFormat, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
+				util.CheckErr(err)
 			}
 		},
 	}
@@ -121,7 +124,7 @@ func newGetMigrationCommand(cmdFactory Factory) *cobra.Command {
 	return getMigrationCommand
 }
 
-func newDeleteMigrationCommand(cmdFactory Factory) *cobra.Command {
+func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var clusterPair string
 	deleteMigrationCommand := &cobra.Command{
 		Use:     migrationSubcommand,
@@ -132,13 +135,13 @@ func newDeleteMigrationCommand(cmdFactory Factory) *cobra.Command {
 
 			if len(clusterPair) == 0 {
 				if len(args) == 0 {
-					handleError(fmt.Errorf("Atleast one argument needs to be provided for migration name"))
+					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for migration name"))
 				}
 				migrations = args
 			} else {
-				migrationList, err := k8s.Instance().ListMigrations()
+				migrationList, err := k8s.Instance().ListMigrations(cmdFactory.GetNamespace())
 				if err != nil {
-					handleError(err)
+					util.CheckErr(err)
 				}
 				for _, migration := range migrationList.Items {
 					if migration.Spec.ClusterPair == clusterPair {
@@ -148,10 +151,11 @@ func newDeleteMigrationCommand(cmdFactory Factory) *cobra.Command {
 			}
 
 			if len(migrations) == 0 {
-				handleEmptyList()
+				handleEmptyList(ioStreams.Out)
+				return
 			}
 
-			deleteMigrations(migrations)
+			deleteMigrations(migrations, cmdFactory.GetNamespace(), ioStreams)
 		},
 	}
 	deleteMigrationCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "Name of the ClusterPair for which to delete ALL migrations")
@@ -159,13 +163,14 @@ func newDeleteMigrationCommand(cmdFactory Factory) *cobra.Command {
 	return deleteMigrationCommand
 }
 
-func deleteMigrations(migrations []string) {
+func deleteMigrations(migrations []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, migration := range migrations {
-		err := k8s.Instance().DeleteMigration(migration)
+		err := k8s.Instance().DeleteMigration(migration, namespace)
 		if err != nil {
-			handleError(err)
+			util.CheckErr(err)
 		} else {
-			fmt.Printf("Migration %v deleted successfully\n", migration)
+			msg := fmt.Sprintf("Migration %v deleted successfully", migration)
+			printMsg(msg, ioStreams.Out)
 		}
 	}
 }

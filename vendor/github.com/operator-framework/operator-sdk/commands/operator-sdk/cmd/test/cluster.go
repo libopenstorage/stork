@@ -152,10 +152,7 @@ func testClusterFunc(cmd *cobra.Command, args []string) error {
 			}
 			defer readCloser.Close()
 			buf := new(bytes.Buffer)
-			_, err = buf.ReadFrom(readCloser)
-			if err != nil {
-				return fmt.Errorf("test failed and failed to read pod logs: %v", err)
-			}
+			buf.ReadFrom(readCloser)
 			return fmt.Errorf("test failed:\n%s", buf.String())
 		}
 	}

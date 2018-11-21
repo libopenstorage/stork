@@ -24,8 +24,7 @@ import (
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/libopenstorage/stork/pkg/snapshot"
-	"github.com/libopenstorage/stork/pkg/snapshot/rule"
+	snapshot "github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -359,7 +358,7 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 		provisioner = storageClass.Provisioner
 	}
 
-	if provisioner != provisionerName && provisioner != snapshotcontroller.GetProvisionerName() {
+	if provisioner != provisionerName && provisioner != snapshot.GetProvisionerName() {
 		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
@@ -443,13 +442,7 @@ func (p *portworx) SnapshotCreate(
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
-	if err := rule.ValidateSnapRule(snap); err != nil {
-		err = fmt.Errorf("failed to validate snap rule due to: %v", err)
-		log.SnapshotLog(snap).Errorf(err.Error())
-		return nil, getErrorSnapshotConditions(err), err
-	}
-
-	backgroundCommandTermChan, err := rule.ExecutePreSnapRule(pvcsForSnapshot, snap)
+	backgroundCommandTermChan, err := snapshot.ExecutePreSnapRule(snap, pvcsForSnapshot)
 
 	defer func() {
 		if backgroundCommandTermChan != nil {
@@ -624,7 +617,7 @@ func (p *portworx) SnapshotCreate(
 		}
 	}
 
-	err = rule.ExecutePostSnapRule(pvcsForSnapshot, snap)
+	err = snapshot.ExecutePostSnapRule(pvcsForSnapshot, snap)
 	if err != nil {
 		err = fmt.Errorf("failed to run post-snap rule due to: %v", err)
 		log.SnapshotLog(snap).Errorf(err.Error())
@@ -729,7 +722,7 @@ func (p *portworx) SnapshotRestore(
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
 	case crdv1.PortworxSnapshotTypeLocal:
-		snapshotNamespace, ok := pvc.Annotations[snapshotcontroller.StorkSnapshotSourceNamespaceAnnotation]
+		snapshotNamespace, ok := pvc.Annotations[snapshot.StorkSnapshotSourceNamespaceAnnotation]
 		if !ok {
 			snapshotNamespace = pvc.GetNamespace()
 		}
@@ -995,6 +988,9 @@ func (p *portworx) createVolumeSnapshotData(
 				Name:      snapshotName,
 				Namespace: snapshotNamespace,
 			},
+			// Don't really need the PV but the snapshotter
+			// code looks for this member
+			PersistentVolumeRef:      &v1.ObjectReference{},
 			VolumeSnapshotDataSource: *snapDataSource,
 		},
 		Status: crdv1.VolumeSnapshotDataStatus{
@@ -1531,7 +1527,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 		return nil, fmt.Errorf("namespaces for migration cannot be empty")
 	}
 
-	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair)
+	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
@@ -1558,8 +1554,9 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 				continue
 			}
 			volumeInfo.Volume = volume
+			taskID := p.getMigrationTaskID(migration, volumeInfo)
 			_, err = p.volDriver.CloudMigrateStart(&api.CloudMigrateStartRequest{
-				TaskId:    string(migration.UID) + pvc.Name,
+				TaskId:    taskID,
 				Operation: api.CloudMigrate_MigrateVolume,
 				ClusterId: clusterPair.Status.RemoteStorageID,
 				TargetId:  volume,
@@ -1580,13 +1577,17 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 	return volumeInfos, nil
 }
 
+func (p *portworx) getMigrationTaskID(migration *stork_crd.Migration, volumeInfo *stork_crd.VolumeInfo) string {
+	return string(migration.UID) + "-" + volumeInfo.Namespace + "-" + volumeInfo.PersistentVolumeClaim
+}
+
 func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
 	status, err := p.volDriver.CloudMigrateStatus()
 	if err != nil {
 		return nil, err
 	}
 
-	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair)
+	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
@@ -1599,11 +1600,12 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 	for _, vInfo := range migration.Status.Volumes {
 		found := false
 		for _, mInfo := range clusterInfo.List {
-			if vInfo.Volume == mInfo.LocalVolumeName {
+			taskID := p.getMigrationTaskID(migration, vInfo)
+			if taskID == mInfo.TaskId {
 				found = true
 				if mInfo.Status == api.CloudMigrate_Failed {
 					vInfo.Status = stork_crd.MigrationStatusFailed
-					vInfo.Reason = fmt.Sprintf("Migration %v failed for volume", mInfo.CurrentStage)
+					vInfo.Reason = fmt.Sprintf("Migration %v failed for volume: %v", mInfo.CurrentStage, mInfo.ErrorReason)
 				} else if mInfo.CurrentStage == api.CloudMigrate_Done &&
 					mInfo.Status == api.CloudMigrate_Complete {
 					vInfo.Status = stork_crd.MigrationStatusSuccessful

@@ -17,15 +17,18 @@ package main
 import (
 	"flag"
 	"log"
+	"math/rand"
 	"runtime"
+	"time"
 
-	"github.com/operator-framework/operator-sdk/pkg/ansible/operator"
+	"github.com/operator-framework/operator-sdk/pkg/ansible/controller"
 	proxy "github.com/operator-framework/operator-sdk/pkg/ansible/proxy"
-	"github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
+	"github.com/operator-framework/operator-sdk/pkg/ansible/runner"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 
 	"github.com/sirupsen/logrus"
 )
@@ -40,14 +43,7 @@ func main() {
 	flag.Parse()
 	logf.SetLogger(logf.ZapLogger(false))
 
-	namespace, err := k8sutil.GetWatchNamespace()
-	if err != nil {
-		log.Fatalf("failed to get watch namespace: %v", err)
-	}
-
-	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{
-		Namespace: namespace,
-	})
+	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,17 +52,14 @@ func main() {
 	done := make(chan error)
 
 	// start the proxy
-	err = proxy.Run(done, proxy.Options{
+	proxy.RunProxy(done, proxy.Options{
 		Address:    "localhost",
 		Port:       8888,
 		KubeConfig: mgr.GetConfig(),
 	})
-	if err != nil {
-		logrus.Fatalf("error starting proxy: %v", err)
-	}
 
 	// start the operator
-	go operator.Run(done, mgr, "/opt/ansible/watches.yaml")
+	go runSDK(done, mgr)
 
 	// wait for either to finish
 	err = <-done
@@ -75,4 +68,24 @@ func main() {
 	} else {
 		logrus.Fatal(err.Error())
 	}
+}
+
+func runSDK(done chan error, mgr manager.Manager) {
+	watches, err := runner.NewFromWatches("/opt/ansible/watches.yaml")
+	if err != nil {
+		logrus.Error("Failed to get watches")
+		done <- err
+		return
+	}
+	rand.Seed(time.Now().Unix())
+	c := signals.SetupSignalHandler()
+
+	for gvk, runner := range watches {
+		controller.Add(mgr, controller.Options{
+			GVK:    gvk,
+			Runner: runner,
+		})
+	}
+	log.Fatal(mgr.Start(c))
+	done <- nil
 }

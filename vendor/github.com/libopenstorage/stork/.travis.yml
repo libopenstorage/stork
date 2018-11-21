@@ -2,7 +2,7 @@ sudo: required
 dist: trusty
 language: go
 go:
-  - 1.10.4
+  - 1.11.2
 before_install:
   - sudo apt-get update -yq
   - sudo apt-get install go-md2man -y
@@ -23,9 +23,11 @@ script:
       docker login -u "${DOCKER_USER}" -p "${DOCKER_PASSWORD}";
       make deploy;
       make integration-test-deploy;
-      aws s3 cp bin/linux/storkctl s3://${BUCKET_NAME}/storkctl/latest/linux/;
-      aws s3 cp bin/windows/storkctl.exe s3://${BUCKET_NAME}/storkctl/latest/windows/;
-      aws s3 cp bin/darwin/storkctl s3://${BUCKET_NAME}/storkctl/latest/darwin/;
+    fi &&
+    if [ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]; then
+      aws s3 cp --acl public-read bin/linux/storkctl s3://${BUCKET_NAME}/storkctl/latest/linux/;
+      aws s3 cp --acl public-read bin/windows/storkctl.exe s3://${BUCKET_NAME}/storkctl/latest/windows/;
+      aws s3 cp --acl public-read bin/darwin/storkctl s3://${BUCKET_NAME}/storkctl/latest/darwin/;
     fi
 notifications:
   email:

@@ -1,6 +1,7 @@
 # User Guide
 
-This guide walks through an example of building a simple memcached-operator using the operator-sdk CLI tool and controller-runtime library API.
+This guide walks through an example of building a simple memcached-operator using tools and libraries provided by the Operator SDK.
+
 To learn how to use Ansible to create a Memcached operator, see [Ansible
 Operator User Guide][ansible_user_guide]. The rest of this document will show
 how to program an operator in Go.
@@ -11,8 +12,8 @@ how to program an operator in Go.
 - [git][git_tool]
 - [go][go_tool] version v1.10+.
 - [docker][docker_tool] version 17.03+.
-- [kubectl][kubectl_tool] version v1.10.0+.
-- Access to a kubernetes v.1.10.0+ cluster.
+- [kubectl][kubectl_tool] version v1.9.0+.
+- Access to a kubernetes v.1.9.0+ cluster.
 
 **Note**: This guide uses [minikube][minikube_tool] version v0.25.0+ as the local kubernetes cluster and quay.io for the public registry.
 
@@ -41,39 +42,52 @@ Use the CLI to create a new memcached-operator project:
 ```sh
 $ mkdir -p $GOPATH/src/github.com/example-inc/
 $ cd $GOPATH/src/github.com/example-inc/
-$ operator-sdk new memcached-operator
+$ operator-sdk new memcached-operator --api-version=cache.example.com/v1alpha1 --kind=Memcached
 $ cd memcached-operator
 ```
 
-To learn about the project directory structure, see [project layout][layout_doc] doc.
+This creates the memcached-operator project specifically for watching the Memcached resource with APIVersion `cache.example.com/v1apha1` and Kind `Memcached`.
 
-### Manager
-The main program for the operator is the manager `cmd/manager/main.go`.
+To learn more about the project directory structure, see [project layout][layout_doc] doc.
 
-The manager will automatically register the scheme for all custom resources defined under `pkg/apis/...` and run all controllers under `pkg/controller/...`.
+## Customize the operator logic
 
-The manager can restrict the namespace that all controllers will watch for resources:
+For this example the memcached-operator will execute the following reconciliation logic for each `Memcached` CR:
+- Create a memcached Deployment if it doesn't exist
+- Ensure that the Deployment size is the same as specified by the `Memcached` CR spec
+- Update the `Memcached` CR status with the names of the memcached pods
+
+### Watch the Memcached CR
+
+By default, the memcached-operator watches `Memcached` resource events as shown in `cmd/memcached-operator/main.go`.
+
 ```Go
-mgr, err := manager.New(cfg, manager.Options{Namespace: namespace})
+func main() {
+  sdk.Watch("cache.example.com/v1alpha1", "Memcached", "default", time.Duration(5)*time.Second)
+  sdk.Handle(stub.NewHandler())
+  sdk.Run(context.TODO())
+}
 ```
-By default this will be the namespace that the operator is running in. To watch all namespaces leave the namespace option empty:
+
+#### Options
+**Worker Count**
+The number of concurrent informer workers can be configured with an additional Watch option. The default value is 1 if an argument is not given.
 ```Go
-mgr, err := manager.New(cfg, manager.Options{Namespace: ""})
+sdk.Watch("cache.example.com/v1alpha1", "Memcached", "default", time.Duration(5)*time.Second, sdk.WithNumWorkers(n))
 ```
 
-**// TODO:** Doc on manager options(Sync period, leader election, registering 3rd party types)
+**Label Selector**
+Label selectors allow the watch to filter resources by kubernetes labels. It can be specified using the standard kubernetes label selector format:
 
-## Add a new Custom Resource Definition
+https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors
 
-Add a new Custom Resource Defintion(CRD) API called Memcached, with APIVersion `cache.example.com/v1apha1` and Kind `Memcached`.
-
-```sh
-$ operator-sdk add api --api-version=cache.example.com/v1alpha1 --kind=Memcached
+```Go
+sdk.Watch("cache.example.com/v1alpha1", "Memcached", "default", time.Duration(5)*time.Second, sdk.WithLabelSelector("app=myapp"))
 ```
 
-This will scaffold the Memcached resource API under `pkg/apis/cache/v1alpha1/...`.
-### Define the spec and status
-Modify the spec and status of the `Memcached` Custom Resource(CR) at `pkg/apis/cache/v1alpha1/memcached_types.go`:
+### Define the Memcached spec and status
+
+Modify the spec and status of the `Memcached` CR at `pkg/apis/cache/v1alpha1/types.go`:
 
 ```Go
 type MemcachedSpec struct {
@@ -85,101 +99,38 @@ type MemcachedStatus struct {
 	Nodes []string `json:"nodes"`
 }
 ```
-
-After modifying the `*_types.go` file always run the following command to update the generated code for that resource type:
+Update the generated code for the CR:
 
 ```sh
 $ operator-sdk generate k8s
 ```
 
-## Add a new Controller
+### Define the Handler
 
-Add a new Controller to the project that will watch and reconcile the Memcached resource:
-```
-$ operator-sdk add controller --api-version=cache.example.com/v1alpha1 --kind=Memcached
-```
-This will scaffold a new Controller implementation under `pkg/controller/memcached/...`
+The reconciliation loop for an event is defined in the `Handle()` function at `pkg/stub/handler.go`.
 
-For this example replace the generated controller file `pkg/controller/memcached/memcached_controller.go` with the example [memcached_controller.go][memcached_controller] implementation.
+Replace the default handler with the reference [memcached handler][memcached_handler] implementation.
 
-The example controller executes the following reconciliation logic for each `Memcached` CR:
-- Create a memcached Deployment if it doesn't exist
-- Ensure that the Deployment size is the same as specified by the `Memcached` CR spec
-- Update the `Memcached` CR status with the names of the memcached pods
+> Note: The provided handler implementation is only meant to demonstrate the use of the SDK APIs and is not representative of the best practices of a reconciliation loop.
 
-The next two subsections explain how the controller watches resources and how the reconcile loop is triggered. Skip to the [Build](#build-and-run-the-operator) section to see how to build and run the operator.
+### Build and run the operator
 
-### Resources watched by the Controller
+Before running the operator, Kubernetes needs to know about the new custom resource definition the operator will be watching.
 
-Inspect the controller implementation at `pkg/controller/memcached/memcached_controller.go` to see how the controller watches resources.
-
-The first watch is for the Memcached type as the primary resource. For each Add/Update/Delete event the reconcile loop will be sent a reconcile `Request` (a namespace/name key) for that Memcached object:
-
-```Go
-err := c.Watch(
-  &source.Kind{Type: &cachev1alpha1.Memcached{}}, &handler.EnqueueRequestForObject{})
-```
-
-The next watch is for Deployments but the event handler will map each event to a reconcile `Request` for the owner of the Deployment. Which in this case is the Memcached object for which the Deployment was created. This allows the controller to watch Deployments as a secondary resource.
-
-```Go
-err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &cachev1alpha1.Memcached{},
-	})
-```
-
-**// TODO:** Doc on eventhandler, arbitrary mapping between watched and reconciled resource.
-
-**// TODO:** Doc on configuring a Controller: number of workers, predicates, watching channels,
-
-### Reconcile loop
-
-Every controller has a Reconciler object with a `Reconcile()` method that implements the reconcile loop. The reconcile loop is passed the `Request` argument which is a Namespace/Name key used to lookup the primary resource object, Memcached, from the cache:
-
-```Go
-func (r *ReconcileMemcached) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-  // Lookup the Memcached instance for this reconcile request
-  memcached := &cachev1alpha1.Memcached{}
-  err := r.client.Get(context.TODO(), request.NamespacedName, memcached)
-  ...
-}  
-```
-
-Based on the return value of `Reconcile()` the reconcile `Request` may be requeued and the loop may be triggered again:
-```Go
-// Reconcile successful - don't requeue
-return reconcile.Result{}, nil
-// Reconcile failed due to error - requeue
-return reconcile.Result{}, err
-// Requeue for any reason other than error
-return reconcile.Result{Requeue: true}, nil
-```
-
-You can set the `Result.RequeueAfter` to requeue the `Request` after a grace period as well:
-```Go
-import "time"
-
-// Reconcile for any reason than error after 5 seconds
-return reconcile.Result{RequeueAfter: time.Second*5}, nil
-```
-
-For a guide on Reconcilers, Clients, and interacting with resource Events, see the [Client API doc][doc_client_api].
-
-## Build and run the operator
-
-Before running the operator, the CRD must be registered with the Kubernetes apiserver:
+Deploy the CRD:
 
 ```sh
-$ kubectl create -f deploy/crds/cache_v1alpha1_memcached_crd.yaml
+$ kubectl create -f deploy/crd.yaml
 ```
 
 Once this is done, there are two ways to run the operator:
 
-- As a Deployment inside a Kubernetes cluster
-- As Go program outside a cluster
+- As pod inside Kubernetes cluster
+- As go program outside cluster
 
-### 1. Run as a Deployment inside the cluster
+#### 1. Run as pod inside a Kubernetes cluster
+
+Run as pod inside a Kubernetes cluster is preferred for production use.
 
 Build the memcached-operator image and push it to a registry:
 ```
@@ -188,14 +139,13 @@ $ sed -i 's|REPLACE_IMAGE|quay.io/example/memcached-operator:v0.0.1|g' deploy/op
 $ docker push quay.io/example/memcached-operator:v0.0.1
 ```
 
-The Deployment manifest is generated at `deploy/operator.yaml`. Be sure to update the deployment image as shown above since the default is just a placeholder.
+Kubernetes deployment manifests are generated in `deploy/operator.yaml`. The deployment image is set to the container image specified above.
 
-Setup RBAC and deploy the memcached-operator:
+Deploy the memcached-operator:
 
 ```sh
-$ kubectl create -f deploy/service_account.yaml
-$ kubectl create -f deploy/role.yaml
-$ kubectl create -f deploy/role_binding.yaml
+$ kubectl create -f deploy/sa.yaml
+$ kubectl create -f deploy/rbac.yaml
 $ kubectl create -f deploy/operator.yaml
 ```
 
@@ -207,7 +157,7 @@ NAME                     DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
 memcached-operator       1         1         1            1           1m
 ```
 
-### 2. Run locally outside the cluster
+#### 2. Run outside the cluster
 
 This method is preferred during development cycle to deploy and test faster.
 
@@ -220,22 +170,27 @@ export OPERATOR_NAME=memcached-operator
 Run the operator locally with the default kubernetes config file present at `$HOME/.kube/config`:
 
 ```sh
-$ operator-sdk up local --namespace=default
-2018/09/30 23:10:11 Go Version: go1.10.2
-2018/09/30 23:10:11 Go OS/Arch: darwin/amd64
-2018/09/30 23:10:11 operator-sdk Version: 0.0.6+git
-2018/09/30 23:10:12 Registering Components.
-2018/09/30 23:10:12 Starting the Cmd.
+$ operator-sdk up local
+INFO[0000] Go Version: go1.10
+INFO[0000] Go OS/Arch: darwin/amd64
+INFO[0000] operator-sdk Version: 0.0.5+git
 ```
 
-You can use a specific kubeconfig via the flag `--kubeconfig=<path/to/kubeconfig>`.
-
-## Create a Memcached CR
-
-Create the example `Memcached` CR that was generated at `deploy/crds/cache_v1alpha1_memcached_cr.yaml`:
+Run the operator locally with a provided kubernetes config file:
 
 ```sh
-$ cat deploy/crds/cache_v1alpha1_memcached_cr.yaml
+$ operator-sdk up local --kubeconfig=config
+INFO[0000] Go Version: go1.10
+INFO[0000] Go OS/Arch: darwin/amd64
+INFO[0000] operator-sdk Version: 0.0.5+git
+```
+
+### Create a Memcached CR
+
+Modify `deploy/cr.yaml` as shown and create a `Memcached` custom resource:
+
+```sh
+$ cat deploy/cr.yaml
 apiVersion: "cache.example.com/v1alpha1"
 kind: "Memcached"
 metadata:
@@ -243,7 +198,7 @@ metadata:
 spec:
   size: 3
 
-$ kubectl apply -f deploy/crds/cache_v1alpha1_memcached_cr.yaml
+$ kubectl apply -f deploy/cr.yaml
 ```
 
 Ensure that the memcached-operator creates the deployment for the CR:
@@ -293,7 +248,7 @@ status:
 Change the `spec.size` field in the memcached CR from 3 to 4 and apply the change:
 
 ```sh
-$ cat deploy/crds/cache_v1alpha1_memcached_cr.yaml
+$ cat deploy/cr.yaml
 apiVersion: "cache.example.com/v1alpha1"
 kind: "Memcached"
 metadata:
@@ -301,7 +256,7 @@ metadata:
 spec:
   size: 4
 
-$ kubectl apply -f deploy/crds/cache_v1alpha1_memcached_cr.yaml
+$ kubectl apply -f deploy/cr.yaml
 ```
 
 Confirm that the operator changes the deployment size:
@@ -317,12 +272,10 @@ example-memcached    4         4         4            4           5m
 Clean up the resources:
 
 ```sh
-$ kubectl delete -f deploy/crds/cache_v1alpha1_memcached_cr.yaml
+$ kubectl delete -f deploy/cr.yaml
 $ kubectl delete -f deploy/operator.yaml
-$ kubectl delete -f deploy/role_binding.yaml
-$ kubectl delete -f deploy/role.yaml
-$ kubectl delete -f deploy/service_account.yaml
 ```
+
 
 ## Advanced Topics
 ### Adding 3rd Party Resources To Your Operator
@@ -362,7 +315,6 @@ func main() {
 ```
 
 [memcached_handler]: ../example/memcached-operator/handler.go.tmpl
-[memcached_controller]: ../example/memcached-operator/memcached_controller.go.tmpl
 [layout_doc]:./project_layout.md
 [ansible_user_guide]:./ansible/user-guide.md
 [dep_tool]:https://golang.github.io/dep/docs/installation.html
@@ -374,6 +326,5 @@ func main() {
 [manager_scheme]: https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/manager/manager.go#L61
 [simple_resource]: https://book.kubebuilder.io/basics/simple_resource.html
 [deployments_register]: https://github.com/kubernetes/api/blob/master/apps/v1/register.go#L41
-[doc_client_api]:./user/client.md
 [runtime_package]: https://godoc.org/k8s.io/apimachinery/pkg/runtime
 [osdk_add_to_scheme]: https://github.com/operator-framework/operator-sdk/blob/4179b6ac459b2b0cb04ab3a1b438c280bd28d1a5/pkg/util/k8sutil/k8sutil.go#L67

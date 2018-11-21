@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 const (
@@ -30,8 +31,14 @@ type Factory interface {
 	GetNamespace() string
 	// GetConfig Get the merged config for the server
 	GetConfig() (*rest.Config, error)
+	// RawConfig Gets the raw merged config for the server
+	RawConfig() (clientcmdapi.Config, error)
 	// GetOutputFormat Get the output format
 	GetOutputFormat() (string, error)
+	// setOutputFormat Set the output format
+	setOutputFormat(string)
+	// setNamespace Set the namespace
+	setNamespace(string)
 }
 
 // NewFactory Return a new factory interface that can be used by commands
@@ -50,15 +57,30 @@ func (f *factory) GetNamespace() string {
 	return f.namespace
 }
 
-func (f *factory) GetConfig() (*rest.Config, error) {
+func (f *factory) getKubeconfig() clientcmd.ClientConfig {
 	configLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	configLoadingRules.ExplicitPath = f.kubeconfig
 
 	configOverrides := &clientcmd.ConfigOverrides{
 		CurrentContext: f.context,
 	}
-	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(configLoadingRules, configOverrides)
-	return kubeconfig.ClientConfig()
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(configLoadingRules, configOverrides)
+}
+
+func (f *factory) GetConfig() (*rest.Config, error) {
+	return f.getKubeconfig().ClientConfig()
+}
+
+func (f *factory) RawConfig() (clientcmdapi.Config, error) {
+	config, err := f.getKubeconfig().RawConfig()
+	if err != nil {
+		return config, err
+	}
+
+	if f.context != "" {
+		config.CurrentContext = f.context
+	}
+	return config, nil
 }
 
 func (f *factory) GetOutputFormat() (string, error) {
@@ -68,4 +90,12 @@ func (f *factory) GetOutputFormat() (string, error) {
 	default:
 		return "", fmt.Errorf("Unsupported output type %v", f.outputFormat)
 	}
+}
+
+func (f *factory) setOutputFormat(outputFormat string) {
+	f.outputFormat = outputFormat
+}
+
+func (f *factory) setNamespace(namespace string) {
+	f.namespace = namespace
 }

@@ -21,7 +21,7 @@ package v1alpha1
 import (
 	time "time"
 
-	stork_v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	versioned "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/libopenstorage/stork/pkg/client/informers/externalversions/internalinterfaces"
 	v1alpha1 "github.com/libopenstorage/stork/pkg/client/listers/stork/v1alpha1"
@@ -70,7 +70,7 @@ func NewFilteredRuleInformer(client versioned.Interface, namespace string, resyn
 				return client.StorkV1alpha1().Rules(namespace).Watch(options)
 			},
 		},
-		&stork_v1alpha1.Rule{},
+		&storkv1alpha1.Rule{},
 		resyncPeriod,
 		indexers,
 	)
@@ -81,7 +81,7 @@ func (f *ruleInformer) defaultInformer(client versioned.Interface, resyncPeriod 
 }
 
 func (f *ruleInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&stork_v1alpha1.Rule{}, f.defaultInformer)
+	return f.factory.InformerFor(&storkv1alpha1.Rule{}, f.defaultInformer)
 }
 
 func (f *ruleInformer) Lister() v1alpha1.RuleLister {

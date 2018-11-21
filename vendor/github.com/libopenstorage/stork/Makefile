@@ -10,41 +10,26 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
-RELEASE_VER := 1.1.1
+RELEASE_VER := 1.3.0-beta
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
-GIT_BRANCH  := $(subst /,-,$(shell git rev-parse --abbrev-ref HEAD))
-GIT_VER     := $(shell git rev-parse --short HEAD)
 BIN         :=$(BASE_DIR)/bin
 
-ifeq (master,$(GIT_BRANCH))
-  VERSION = $(RELEASE_VER)-$(GIT_VER)
-else
-  VERSION = $(RELEASE_VER)-$(GIT_VER)-$(GIT_BRANCH)
-endif
+VERSION = $(RELEASE_VER)-$(GIT_SHA)
 
 LDFLAGS += "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSION)"
 BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 .DEFAULT_GOAL=all
-.PHONY: test clean
+.PHONY: test clean vendor vendor-update
 
 all: stork storkctl cmdexecutor vet lint simple
 
 vendor-update:
-	GO15VENDOREXPERIMENT=0 GOOS=linux GOARCH=amd64 go get -tags "daemon" -d -v -t -u -f $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor')
+	dep ensure -update
 
-vendor-without-update:
-	go get -v github.com/kardianos/govendor
-	rm -rf vendor
-	govendor init
-	GOOS=linux GOARCH=amd64 govendor add +external
-	GOOS=linux GOARCH=amd64 govendor update +vendor
-	GOOS=linux GOARCH=amd64 govendor add +external
-	GOOS=linux GOARCH=amd64 govendor update +vendor
-	govendor add k8s.io/code-generator/^
-
-vendor: vendor-update vendor-without-update
+vendor:
+	dep ensure
 
 lint:
 	go get -v golang.org/x/lint/golint
@@ -76,10 +61,9 @@ errcheck:
 pretest: lint vet errcheck simple
 
 test:
-	set -e
 	echo "" > coverage.txt
 	for pkg in $(PKGS);	do \
-		go test -tags unittest -coverprofile=profile.out -covermode=atomic $(TESTFLAGS) $${pkg}; \
+		go test -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
 		if [ -f profile.out ]; then \
 			cat profile.out >> coverage.txt; \
 			rm profile.out; \
@@ -103,7 +87,7 @@ codegen:
 
 stork:
 	@echo "Building the stork binary"
-	@cd cmd/stork && go build $(BUILD_OPTIONS) -o $(BIN)/stork
+	@cd cmd/stork && CGO_ENABLED=0 go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
 cmdexecutor:
 	@echo "Building command executor binary"
@@ -111,9 +95,9 @@ cmdexecutor:
 
 storkctl:
 	@echo "Building storkctl"
-	@cd cmd/storkctl && GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/linux/storkctl
-	@cd cmd/storkctl && GOOS=darwin go build $(BUILD_OPTIONS) -o $(BIN)/darwin/storkctl
-	@cd cmd/storkctl && GOOS=windows go build $(BUILD_OPTIONS) -o $(BIN)/windows/storkctl.exe
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/linux/storkctl
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=darwin go build $(BUILD_OPTIONS) -o $(BIN)/darwin/storkctl
+	@cd cmd/storkctl && CGO_ENABLED=0 GOOS=windows go build $(BUILD_OPTIONS) -o $(BIN)/windows/storkctl.exe
 
 container: help
 	@echo "Building container: docker build --tag $(STORK_IMG) -f Dockerfile ."

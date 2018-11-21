@@ -17,7 +17,6 @@ package leader
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -39,8 +38,6 @@ var errNoNS = errors.New("namespace not found for current environment")
 // maxBackoffInterval defines the maximum amount of time to wait between
 // attempts to become the leader.
 const maxBackoffInterval = time.Second * 16
-
-const PodNameEnv = "POD_NAME"
 
 // Become ensures that the current pod is the leader within its namespace. If
 // run outside a cluster, it will skip leader election and return nil. It
@@ -159,14 +156,12 @@ func myNS() (string, error) {
 
 // myOwnerRef returns an OwnerReference that corresponds to the pod in which
 // this code is currently running.
-// It expects the environment variable POD_NAME to be set by the downwards API
 func myOwnerRef(ctx context.Context, client crclient.Client, ns string) (*metav1.OwnerReference, error) {
-	podName := os.Getenv(PodNameEnv)
-	if podName == "" {
-		return nil, fmt.Errorf("required env %s not set, please configure downward API", PodNameEnv)
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
 	}
-
-	logrus.Debugf("found podname: %s", podName)
+	logrus.Debugf("found hostname: %s", hostname)
 
 	myPod := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -175,8 +170,8 @@ func myOwnerRef(ctx context.Context, client crclient.Client, ns string) (*metav1
 		},
 	}
 
-	key := crclient.ObjectKey{Namespace: ns, Name: podName}
-	err := client.Get(ctx, key, myPod)
+	key := crclient.ObjectKey{Namespace: ns, Name: hostname}
+	err = client.Get(ctx, key, myPod)
 	if err != nil {
 		logrus.Errorf("failed to get pod: %v", err)
 		return nil, err

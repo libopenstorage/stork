@@ -350,6 +350,7 @@ type MemberInfo struct {
 	Leader     bool
 	DbSize     int64
 	IsHealthy  bool
+	ID         string
 }
 
 // Controller interface provides APIs to manage Kvdb Cluster and Kvdb Clients.
@@ -362,7 +363,7 @@ type Controller interface {
 
 	// RemoveMember removes a member from an existing kvdb cluster
 	// Returns: error if it fails to remove a member
-	RemoveMember(nodeID string) error
+	RemoveMember(nodeName, nodeIP string) error
 
 	// ListMembers enumerates the members of the kvdb cluster
 	// Returns: the nodeID  to memberInfo mappings of all the members
@@ -373,4 +374,8 @@ type Controller interface {
 
 	// GetEndpoints returns the kvdb endpoints for the client
 	GetEndpoints() []string
+
+	// Defragment defrags the underlying database for the given endpoint
+	// with a timeout specified in seconds
+	Defragment(endpoint string, timeout int) error
 }
