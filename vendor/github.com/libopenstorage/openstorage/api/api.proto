@@ -1,4 +1,4 @@
-// Please use the following editor setup for this file:
+
 // Tab size=2; Tabs as spaces; Clean up trailing whitepsace
 //
 // In vim add: au FileType proto setl sw=2 ts=2 expandtab list
@@ -460,6 +460,19 @@ message Stats {
   uint64 interval_ms = 10;
 }
 
+// Provides details on exclusive and shared storage used by
+// snapshot/volume specifically for copy-on-write(COW) snapshots. Deletion
+// of snapshots and overwirte of volume will affect the exclusive storage
+// used by the other dependent snaps and parent volume.
+message CapacityUsageInfo {
+  // Storage consumed exclusively by this single snapshot. Deletion of this
+  // snapshot may increase the free storage available by this amount.
+  int64 exclusive_bytes = 1;
+  // Storage consumed by this snapshot that is shared with parent and children
+  int64 shared_bytes = 2;
+  // TotalBytes used by this volume
+  int64 total_bytes = 3;
+}
 
 // Alert is a structure that represents an alert object
 message Alert {
@@ -621,7 +634,7 @@ service OpenStorageAlerts {
     // and second initialized with SdkAlertsAlertTypeQuery and both
     // eventually packed as list in SdkAlertsEnumerateRequest.
     rpc Enumerate(SdkAlertsEnumerateRequest)
-    returns (SdkAlertsEnumerateResponse) {
+    returns (stream SdkAlertsEnumerateResponse) {
         option(google.api.http) = {
                 get: "/v1/alerts"
             };
@@ -641,7 +654,7 @@ service OpenStorageAlerts {
     rpc Delete(SdkAlertsDeleteRequest)
     returns (SdkAlertsDeleteResponse) {
       option(google.api.http) = {
-                delete: "/v1/alerts"
+                post: "/v1/alerts"
             };
     }
 }
@@ -946,7 +959,7 @@ service OpenStorageCluster {
   rpc InspectCurrent(SdkClusterInspectCurrentRequest)
     returns (SdkClusterInspectCurrentResponse) {
       option(google.api.http) = {
-        get: "/v1/clusters/current"
+        get: "/v1/clusters/inspectcurrent"
       };
     }
 }
@@ -978,7 +991,7 @@ service OpenStorageClusterPair{
   rpc Inspect(SdkClusterPairInspectRequest)
     returns (SdkClusterPairInspectResponse){
       option(google.api.http) = {
-        get: "/v1/clusterpairs/{id}"
+        get: "/v1/clusterpairs/inspect/{id}"
       };
     }
 
@@ -1022,7 +1035,7 @@ service OpenStorageNode {
   rpc Inspect(SdkNodeInspectRequest)
     returns (SdkNodeInspectResponse) {
       option(google.api.http) = {
-        get: "/v1/nodes/node/{node_id}"
+        get: "/v1/nodes/inspect/{node_id}"
       };
     }
 
@@ -1031,7 +1044,7 @@ service OpenStorageNode {
   rpc InspectCurrent(SdkNodeInspectCurrentRequest)
     returns (SdkNodeInspectCurrentResponse) {
       option(google.api.http) = {
-        get: "/v1/nodes/current"
+        get: "/v1/nodes/inspectcurrent"
       };
     }
 
@@ -1091,7 +1104,7 @@ service OpenStorageVolume {
   rpc Inspect(SdkVolumeInspectRequest)
     returns (SdkVolumeInspectResponse) {
       option(google.api.http) = {
-        get: "/v1/volumes/{volume_id}"
+        get: "/v1/volumes/inspect/{volume_id}"
       };
     }
 
@@ -1110,6 +1123,20 @@ service OpenStorageVolume {
     returns (SdkVolumeStatsResponse) {
       option(google.api.http) = {
         get: "/v1/volumes/stats/{volume_id}"
+      };
+    }
+
+  // CapacityUsage returns volume/snapshot's capacity usage details
+  //
+  // ##### Error codes:
+  //
+  // * codes.Aborted : Command was aborted and only total_bytes field is valid
+  // * code.Unimmplemented : Command is not suported this kernel.Only total_bytes
+  // field is valid;
+  rpc CapacityUsage(SdkVolumeCapacityUsageRequest)
+    returns (SdkVolumeCapacityUsageResponse) {
+      option(google.api.http) = {
+        get: "/v1/volumes/usage/{volume_id}"
       };
     }
 
@@ -1247,7 +1274,7 @@ service OpenStorageMigrate {
       };
     }
 
-  // Inspect the status of migration operation  
+  // Inspect the status of migration operation
   rpc Status(SdkCloudMigrateStatusRequest)
     returns (SdkCloudMigrateStatusResponse) {
       option(google.api.http) = {
@@ -1263,7 +1290,7 @@ service OpenStorageObjectstore {
   rpc Inspect(SdkObjectstoreInspectRequest)
     returns(SdkObjectstoreInspectResponse){
       option(google.api.http) = {
-        get: "/v1/objectstores/{objectstore_id}"
+        get: "/v1/objectstores/inspect/{objectstore_id}"
       };
     }
 
@@ -1345,7 +1372,7 @@ service OpenStorageCredentials {
   rpc Inspect(SdkCredentialInspectRequest)
     returns (SdkCredentialInspectResponse) {
       option(google.api.http) = {
-        get: "/v1/credentials/{credential_id}"
+        get: "/v1/credentials/inspect/{credential_id}"
       };
     }
 
@@ -1361,7 +1388,7 @@ service OpenStorageCredentials {
   rpc Validate(SdkCredentialValidateRequest)
     returns (SdkCredentialValidateResponse) {
       option(google.api.http) = {
-        get: "/v1/credentials/{credential_id}/validate"
+        get: "/v1/credentials/validate/{credential_id}"
       };
     }
 }
@@ -1401,7 +1428,7 @@ service OpenStorageSchedulePolicy {
   rpc Inspect(SdkSchedulePolicyInspectRequest)
   returns (SdkSchedulePolicyInspectResponse) {
     option(google.api.http) = {
-      get: "/v1/schedulepolicies/{name}"
+      get: "/v1/schedulepolicies/inspect/{name}"
     };
   }
 
@@ -1472,10 +1499,11 @@ service OpenStorageCloudBackup {
     }
 
   // Return a list of backups for the specified volume
-  rpc Enumerate(SdkCloudBackupEnumerateRequest)
-    returns (SdkCloudBackupEnumerateResponse) {
+  rpc EnumerateWithFilters(SdkCloudBackupEnumerateWithFiltersRequest)
+    returns (SdkCloudBackupEnumerateWithFiltersResponse) {
       option(google.api.http) = {
-        get: "/v1/cloudbackups/volume"
+        post: "/v1/cloudbackups/enumerate/filters"
+        body: "*"
       };
     }
 
@@ -1483,7 +1511,8 @@ service OpenStorageCloudBackup {
   rpc Status(SdkCloudBackupStatusRequest)
     returns (SdkCloudBackupStatusResponse) {
       option(google.api.http) = {
-        get: "/v1/cloudbackups/volume/status"
+        post: "/v1/cloudbackups/status"
+        body: "*"
       };
     }
 
@@ -1491,7 +1520,8 @@ service OpenStorageCloudBackup {
   rpc Catalog(SdkCloudBackupCatalogRequest)
     returns (SdkCloudBackupCatalogResponse) {
       option(google.api.http) = {
-        get: "/v1/cloudbackups/backup/catalog"
+        post: "/v1/cloudbackups/catalog"
+        body: "*"
       };
     }
 
@@ -1499,7 +1529,7 @@ service OpenStorageCloudBackup {
   rpc History(SdkCloudBackupHistoryRequest)
     returns (SdkCloudBackupHistoryResponse) {
       option(google.api.http) = {
-        get: "/v1/cloudbackups/volume/history"
+        get: "/v1/cloudbackups/history/{src_volume_id}"
       };
     }
 
@@ -1964,10 +1994,23 @@ message SdkVolumeStatsRequest {
   bool not_cumulative = 2;
 }
 
+
 // Defines a response containing drive statistics
 message SdkVolumeStatsResponse {
   // Statistics for a single volume
   Stats stats = 1;
+}
+
+// Defines request to retrieve volume/snapshot capacity usage details
+message SdkVolumeCapacityUsageRequest {
+  // Id of the snapshot/volume to get capacity usage details
+  string volume_id = 1;
+}
+
+// Defines response containing volume/snapshot capacity usage details
+message SdkVolumeCapacityUsageResponse {
+  // CapacityUsage details
+  CapacityUsageInfo capacity_usage_info = 1;
 }
 
 // Defines a request to list volumes
@@ -2158,7 +2201,10 @@ message SdkCloudBackupCreateRequest {
   bool full = 3;
   // TaskId of the task performing this backup. This value can be used for
   // idempotency.
-  string task_id= 4;
+  string task_id = 4;
+  // Labels are list of key value pairs to tag the cloud backup. These labels
+  // are stored in the metadata associated with the backup.
+  map<string, string> labels = 5;
 }
 
 // Empty response
@@ -2235,7 +2281,7 @@ message SdkCloudBackupDeleteAllResponse {
 // * For all volumes in a specific cluster: Set `cluster_id` to your desired cluster id
 // and do not provide `volume_id` and `all`.
 // * For all volumes in all clusters: Set `all` to true do not provide `volume_id` and `cluster_id`.
-message SdkCloudBackupEnumerateRequest {
+message SdkCloudBackupEnumerateWithFiltersRequest {
   // (optional) Source id of the volume for the request.
   string src_volume_id = 1;
   // (optional) Cluster id specifies the cluster for the request
@@ -2264,7 +2310,7 @@ message SdkCloudBackupInfo {
 }
 
 // Defines a response which lists all the backups stored by a cloud provider
-message SdkCloudBackupEnumerateResponse {
+message SdkCloudBackupEnumerateWithFiltersResponse {
   repeated SdkCloudBackupInfo backups = 1;
 }
 
@@ -2321,12 +2367,16 @@ message SdkCloudBackupStatus {
   repeated string info = 9;
   // CredentialId is the credential used for cloud with this backup/restore op
   string credential_id  = 10;
+  // BytesTotal is the total number of bytes being transferred
+  uint64 bytes_total = 11;
+  // ETASeconds is the number of seconds for cloud backup completion
+  int64 eta_seconds = 12;
 }
 
 // Defines a request to retreive the status of a backup or restore for a
 // specified volume
 message SdkCloudBackupStatusRequest {
-  // VolumeId is an optional value which is used to get information on the
+  // (optional) VolumeId is a value which is used to get information on the
   // status of a backup for the specified volume. If no volume id and task_id
   // is provided, then status for all volumes is returned.
   string volume_id = 1;
@@ -2541,8 +2591,9 @@ message SdkVersion {
     Major = 0;
     // SDK version minor value of this specification
     Minor = 22;
+
     // SDK version patch value of this specification
-    Patch = 0;
+    Patch = 4;
   }
 
   // The following cannot be set to use the enum Version because the REST
@@ -2595,6 +2646,7 @@ message CloudMigrate {
         InProgress = 3;
         Failed = 4;
         Complete = 5;
+        Canceled = 6;
     }
 }
 
@@ -2611,36 +2663,36 @@ message CloudMigrateStartRequest {
     string task_id = 4;
 }
 
-// Defines a migration request 
+// Defines a migration request
 message SdkCloudMigrateStartRequest {
   // Defines a migration request for a volume
-  message MigrateVolume { 
+  message MigrateVolume {
     string volume_id = 1;
   }
 
   // Defines a migration request for a volume group
-  message MigrateVolumeGroup { 
+  message MigrateVolumeGroup {
     string group_id = 1;
   }
-  
+
   // Defines a migration request for all volumes in a cluster
-  message MigrateAllVolumes { 
+  message MigrateAllVolumes {
   }
 
   // ID of the cluster to which volumes are to be migrated
   string cluster_id = 1;
-  
-  // Unique name assocaiated with this migration. 
+
+  // Unique name assocaiated with this migration.
   // This is a Optional field for idempotency
   string task_id = 2;
-  
+
   oneof opt {
     // Request to migrate a volume
     MigrateVolume volume = 200;
 
     // Request to migrate a volume group
     MigrateVolumeGroup volume_group = 201;
-    
+
     // Request to migrate all volumes
     MigrateAllVolumes all_volumes = 202;
   }
@@ -2695,8 +2747,16 @@ message CloudMigrateInfo {
     google.protobuf.Timestamp last_update = 9;
     // Contains the reason for the migration error
     string error_reason = 10;
-    // time_remaining is the estimated time remaining to completion
-    int64 time_remaining = 11;
+    // StartTime indicates Op's start time
+    google.protobuf.Timestamp start_time = 11;
+    // CompletedTime indicates Op's completed time
+    google.protobuf.Timestamp completed_time = 12;
+    // BytesTotal is the number of bytes being transferred
+    uint64 bytes_total = 13;
+    // BytesDone is the number of bytes already transferred
+    uint64 bytes_done = 14;
+    // ETASeconds the time duration in seconds for cloud migration completion
+    int64 eta_seconds = 15;
 }
 
 message CloudMigrateInfoList {
@@ -2880,7 +2940,7 @@ message ClusterPairsEnumerateResponse {
 
 // Defines a list of cluster pair
 message SdkClusterPairEnumerateResponse {
-  // List of all the cluster pairs 
+  // List of all the cluster pairs
   ClusterPairsEnumerateResponse result = 1;
 }
 
