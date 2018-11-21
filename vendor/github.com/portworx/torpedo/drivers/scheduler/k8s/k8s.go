@@ -710,7 +710,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 
 			logrus.Infof("[%v] Validated pod: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*stork_api.ClusterPair); ok {
-			if err := k8sOps.ValidateClusterPair(obj.Name, timeout, retryInterval); err != nil {
+			if err := k8sOps.ValidateClusterPair(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToApplyCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate cluster Pair: %v. Err: %v", obj.Name, err),
@@ -719,7 +719,7 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated Cluster Pair: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*stork_api.Migration); ok {
-			if err := k8sOps.ValidateMigration(obj.Name, timeout, retryInterval); err != nil {
+			if err := k8sOps.ValidateMigration(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToApplyCustomSpec{
 					Name:  obj.Name,
 					Cause: fmt.Sprintf("Failed to validate Migration: %v. Err: %v", obj.Name, err),
