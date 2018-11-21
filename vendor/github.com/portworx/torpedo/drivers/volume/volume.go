@@ -100,6 +100,9 @@ type Driver interface {
 
 	// GetAggregationLevel returns the aggregation level for the given volume
 	GetAggregationLevel(vol *Volume) (int64, error)
+
+	// GetClusterPairingInfo returns cluster pairing information from remote cluster
+	GetClusterPairingInfo() (map[string]string, error)
 }
 
 var (

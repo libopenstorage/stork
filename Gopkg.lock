@@ -315,7 +315,7 @@
     "diskcache",
   ]
   pruneopts = "UT"
-  revision = "9cad4c3443a7200dd6400aef47183728de563a38"
+  revision = "c63ab54fda8f77302f8d414e19933f2b6026a089"
 
 [[projects]]
   digest = "1:3cbc83a159e161c6cf3e64590ae19da29069ecd8d92f9400ab6fda15e93cbc5f"
@@ -563,7 +563,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:285833418281953e47884c4b20edf2900f3451ad7daab63f5eb6490ffb5fa6b7"
+  digest = "1:199d31b7abebc4e68404defc9e46454a2d73be76db0fd83b553e181d12acc4eb"
   name = "github.com/portworx/kvdb"
   packages = [
     ".",
@@ -571,7 +571,7 @@
     "mem",
   ]
   pruneopts = "UT"
-  revision = "411fb7eaa9ef74007d13b052e85ad819cf114ca9"
+  revision = "3d284390abcf8773537e78f5fb723bad481878ec"
 
 [[projects]]
   branch = "kubernetes-1.11"
@@ -586,7 +586,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:5e90a6f40847b5b3b027d508be9da7de2ff718829329b673d55ddb7b21bff225"
+  digest = "1:f7c54622a604a944bff87fe947edd1a27febb66a57b801f1e553591575eac037"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -600,7 +600,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "23b77e39636e9816c34425da18fa80d0bd8a6b62"
+  revision = "86f28d1fd94ea1df45e8503fffcbc5c15c0b5667"
 
 [[projects]]
   digest = "1:26663fafdea73a38075b07e8e9d82fc0056379d2be8bb4e13899e8fda7c7dd23"
@@ -632,7 +632,7 @@
     "model",
   ]
   pruneopts = "UT"
-  revision = "0b1957f9d949dfa3084171a6ec5642b38055276a"
+  revision = "a04bd04888af6ea6f64ed14244d9bcf2b739ebd6"
 
 [[projects]]
   branch = "master"
@@ -729,7 +729,7 @@
     "ssh/terminal",
   ]
   pruneopts = "UT"
-  revision = "e4dc69e5b2fd71dcaf8bd5d054eb936deb78d1fa"
+  revision = "3d3f9f413869b949e48070b5bc593aa22cc2b8f2"
 
 [[projects]]
   branch = "master"
@@ -813,7 +813,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:5dd1ef8aaee9b34e2933b1be7b2a62bc736cfbe2c82df928f0f99f8a781ddc55"
+  digest = "1:6511064c08bff306dd24fa83ea82e160009fa7572240b70173b25d1dbc3e1872"
   name = "golang.org/x/tools"
   packages = [
     "go/ast/astutil",
@@ -822,7 +822,7 @@
     "internal/gopathwalk",
   ]
   pruneopts = "UT"
-  revision = "92d8274bd7b8a4c65f24bafe401a029e58392704"
+  revision = "a8570e12b66263a4d2bc406de590d7651e494615"
 
 [[projects]]
   digest = "1:d2a8db567a76203e3b41c1f632d86485ffd57f8e650a0d1b19d240671c2fddd7"

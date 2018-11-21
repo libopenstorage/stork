@@ -373,4 +373,8 @@ type Controller interface {
 
 	// GetEndpoints returns the kvdb endpoints for the client
 	GetEndpoints() []string
+
+	// Defragment defrags the underlying database for the given endpoint
+	// with a timeout specified in seconds
+	Defragment(endpoint string, timeout int) error
 }

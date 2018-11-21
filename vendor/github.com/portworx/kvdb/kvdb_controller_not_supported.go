@@ -27,3 +27,7 @@ func (c *controllerNotSupported) SetEndpoints(endpoints []string) error {
 func (c *controllerNotSupported) GetEndpoints() []string {
 	return []string{}
 }
+
+func (c *controllerNotSupported) Defragment(endpoint string, timeout int) error {
+	return ErrNotSupported
+}

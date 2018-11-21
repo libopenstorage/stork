@@ -1632,7 +1632,19 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 }
 
 func (p *portworx) CancelMigration(migration *stork_crd.Migration) error {
-	logrus.Warnf("Canceling migration not supported for Portworx, ignoring")
+	for _, volumeInfo := range migration.Status.Volumes {
+		taskID := p.getMigrationTaskID(migration, volumeInfo)
+		err := p.volDriver.CloudMigrateCancel(&api.CloudMigrateCancelRequest{
+			TaskId: taskID,
+		})
+		// Cancellation is best-effort, so don't return error
+		if err != nil {
+			log.MigrationLog(migration).Warnf("Error canceling migration for PVC: %v Namespace: %v: %v",
+				volumeInfo.PersistentVolumeClaim,
+				volumeInfo.Namespace,
+				err)
+		}
+	}
 	return nil
 }
 
