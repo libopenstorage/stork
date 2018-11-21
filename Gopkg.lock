@@ -575,18 +575,18 @@
 
 [[projects]]
   branch = "kubernetes-1.11"
-  digest = "1:00aad46c48c842098bcb68c49c3f2d6adca2659823d139145ccea84214c4d1f6"
+  digest = "1:82b4bdc88300876bc276e415a8b5d95e579b44d359f9fc192934c8b1fca6c748"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "d7db2ea83f61f06c006a3cc23a23bffeae6be012"
+  revision = "ba438ebd5262741ebcc54f73a43ecb932e8ec331"
 
 [[projects]]
   branch = "master"
-  digest = "1:f7c54622a604a944bff87fe947edd1a27febb66a57b801f1e553591575eac037"
+  digest = "1:cdff4b38209b651b78fb982e5cbd9ca0520ea41e6f3464139ae6a8876ffdfa05"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -600,7 +600,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "86f28d1fd94ea1df45e8503fffcbc5c15c0b5667"
+  revision = "bdf3dca7fd07e2dba833035ad72fb3d54a8b11b6"
 
 [[projects]]
   digest = "1:26663fafdea73a38075b07e8e9d82fc0056379d2be8bb4e13899e8fda7c7dd23"
@@ -1425,7 +1425,6 @@
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/runtime/serializer",
     "k8s.io/apimachinery/pkg/types",
-    "k8s.io/apimachinery/pkg/util/runtime",
     "k8s.io/apimachinery/pkg/util/strategicpatch",
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/apimachinery/pkg/watch",
@@ -1454,6 +1453,7 @@
     "k8s.io/kubernetes/pkg/api/legacyscheme",
     "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1",
     "k8s.io/kubernetes/pkg/apis/core",
+    "k8s.io/kubernetes/pkg/apis/core/v1",
     "k8s.io/kubernetes/pkg/apis/core/v1/helper",
     "k8s.io/kubernetes/pkg/kubectl/cmd/testing",
     "k8s.io/kubernetes/pkg/kubectl/cmd/util",
