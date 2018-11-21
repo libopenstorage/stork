@@ -28,12 +28,12 @@ type FakeStorkV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeStorkV1alpha1) ClusterPairs() v1alpha1.ClusterPairInterface {
-	return &FakeClusterPairs{c}
+func (c *FakeStorkV1alpha1) ClusterPairs(namespace string) v1alpha1.ClusterPairInterface {
+	return &FakeClusterPairs{c, namespace}
 }
 
-func (c *FakeStorkV1alpha1) Migrations() v1alpha1.MigrationInterface {
-	return &FakeMigrations{c}
+func (c *FakeStorkV1alpha1) Migrations(namespace string) v1alpha1.MigrationInterface {
+	return &FakeMigrations{c, namespace}
 }
 
 func (c *FakeStorkV1alpha1) Rules(namespace string) v1alpha1.RuleInterface {

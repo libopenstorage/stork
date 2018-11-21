@@ -31,6 +31,7 @@ import (
 // FakeClusterPairs implements ClusterPairInterface
 type FakeClusterPairs struct {
 	Fake *FakeStorkV1alpha1
+	ns   string
 }
 
 var clusterpairsResource = schema.GroupVersionResource{Group: "stork.libopenstorage.org", Version: "v1alpha1", Resource: "clusterpairs"}
@@ -40,7 +41,8 @@ var clusterpairsKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org"
 // Get takes name of the clusterPair, and returns the corresponding clusterPair object, and an error if there is any.
 func (c *FakeClusterPairs) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(clusterpairsResource, name), &v1alpha1.ClusterPair{})
+		Invokes(testing.NewGetAction(clusterpairsResource, c.ns, name), &v1alpha1.ClusterPair{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -50,7 +52,8 @@ func (c *FakeClusterPairs) Get(name string, options v1.GetOptions) (result *v1al
 // List takes label and field selectors, and returns the list of ClusterPairs that match those selectors.
 func (c *FakeClusterPairs) List(opts v1.ListOptions) (result *v1alpha1.ClusterPairList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(clusterpairsResource, clusterpairsKind, opts), &v1alpha1.ClusterPairList{})
+		Invokes(testing.NewListAction(clusterpairsResource, clusterpairsKind, c.ns, opts), &v1alpha1.ClusterPairList{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -71,13 +74,15 @@ func (c *FakeClusterPairs) List(opts v1.ListOptions) (result *v1alpha1.ClusterPa
 // Watch returns a watch.Interface that watches the requested clusterPairs.
 func (c *FakeClusterPairs) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(clusterpairsResource, opts))
+		InvokesWatch(testing.NewWatchAction(clusterpairsResource, c.ns, opts))
+
 }
 
 // Create takes the representation of a clusterPair and creates it.  Returns the server's representation of the clusterPair, and an error, if there is any.
 func (c *FakeClusterPairs) Create(clusterPair *v1alpha1.ClusterPair) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(clusterpairsResource, clusterPair), &v1alpha1.ClusterPair{})
+		Invokes(testing.NewCreateAction(clusterpairsResource, c.ns, clusterPair), &v1alpha1.ClusterPair{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -87,7 +92,8 @@ func (c *FakeClusterPairs) Create(clusterPair *v1alpha1.ClusterPair) (result *v1
 // Update takes the representation of a clusterPair and updates it. Returns the server's representation of the clusterPair, and an error, if there is any.
 func (c *FakeClusterPairs) Update(clusterPair *v1alpha1.ClusterPair) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(clusterpairsResource, clusterPair), &v1alpha1.ClusterPair{})
+		Invokes(testing.NewUpdateAction(clusterpairsResource, c.ns, clusterPair), &v1alpha1.ClusterPair{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -98,7 +104,8 @@ func (c *FakeClusterPairs) Update(clusterPair *v1alpha1.ClusterPair) (result *v1
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 func (c *FakeClusterPairs) UpdateStatus(clusterPair *v1alpha1.ClusterPair) (*v1alpha1.ClusterPair, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(clusterpairsResource, "status", clusterPair), &v1alpha1.ClusterPair{})
+		Invokes(testing.NewUpdateSubresourceAction(clusterpairsResource, "status", c.ns, clusterPair), &v1alpha1.ClusterPair{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -108,13 +115,14 @@ func (c *FakeClusterPairs) UpdateStatus(clusterPair *v1alpha1.ClusterPair) (*v1a
 // Delete takes name of the clusterPair and deletes it. Returns an error if one occurs.
 func (c *FakeClusterPairs) Delete(name string, options *v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(clusterpairsResource, name), &v1alpha1.ClusterPair{})
+		Invokes(testing.NewDeleteAction(clusterpairsResource, c.ns, name), &v1alpha1.ClusterPair{})
+
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeClusterPairs) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(clusterpairsResource, listOptions)
+	action := testing.NewDeleteCollectionAction(clusterpairsResource, c.ns, listOptions)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ClusterPairList{})
 	return err
@@ -123,7 +131,8 @@ func (c *FakeClusterPairs) DeleteCollection(options *v1.DeleteOptions, listOptio
 // Patch applies the patch and returns the patched clusterPair.
 func (c *FakeClusterPairs) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(clusterpairsResource, name, data, subresources...), &v1alpha1.ClusterPair{})
+		Invokes(testing.NewPatchSubresourceAction(clusterpairsResource, c.ns, name, data, subresources...), &v1alpha1.ClusterPair{})
+
 	if obj == nil {
 		return nil, err
 	}

@@ -29,8 +29,8 @@ import (
 type MigrationLister interface {
 	// List lists all Migrations in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha1.Migration, err error)
-	// Get retrieves the Migration from the index for a given name.
-	Get(name string) (*v1alpha1.Migration, error)
+	// Migrations returns an object that can list and get Migrations.
+	Migrations(namespace string) MigrationNamespaceLister
 	MigrationListerExpansion
 }
 
@@ -52,9 +52,38 @@ func (s *migrationLister) List(selector labels.Selector) (ret []*v1alpha1.Migrat
 	return ret, err
 }
 
-// Get retrieves the Migration from the index for a given name.
-func (s *migrationLister) Get(name string) (*v1alpha1.Migration, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
+// Migrations returns an object that can list and get Migrations.
+func (s *migrationLister) Migrations(namespace string) MigrationNamespaceLister {
+	return migrationNamespaceLister{indexer: s.indexer, namespace: namespace}
+}
+
+// MigrationNamespaceLister helps list and get Migrations.
+type MigrationNamespaceLister interface {
+	// List lists all Migrations in the indexer for a given namespace.
+	List(selector labels.Selector) (ret []*v1alpha1.Migration, err error)
+	// Get retrieves the Migration from the indexer for a given namespace and name.
+	Get(name string) (*v1alpha1.Migration, error)
+	MigrationNamespaceListerExpansion
+}
+
+// migrationNamespaceLister implements the MigrationNamespaceLister
+// interface.
+type migrationNamespaceLister struct {
+	indexer   cache.Indexer
+	namespace string
+}
+
+// List lists all Migrations in the indexer for a given namespace.
+func (s migrationNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.Migration, err error) {
+	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+		ret = append(ret, m.(*v1alpha1.Migration))
+	})
+	return ret, err
+}
+
+// Get retrieves the Migration from the indexer for a given namespace and name.
+func (s migrationNamespaceLister) Get(name string) (*v1alpha1.Migration, error) {
+	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
 	if err != nil {
 		return nil, err
 	}

@@ -1527,7 +1527,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 		return nil, fmt.Errorf("namespaces for migration cannot be empty")
 	}
 
-	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair)
+	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
@@ -1587,7 +1587,7 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 		return nil, err
 	}
 
-	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair)
+	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}

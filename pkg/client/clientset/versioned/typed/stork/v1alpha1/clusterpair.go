@@ -30,7 +30,7 @@ import (
 // ClusterPairsGetter has a method to return a ClusterPairInterface.
 // A group's client should implement this interface.
 type ClusterPairsGetter interface {
-	ClusterPairs() ClusterPairInterface
+	ClusterPairs(namespace string) ClusterPairInterface
 }
 
 // ClusterPairInterface has methods to work with ClusterPair resources.
@@ -50,12 +50,14 @@ type ClusterPairInterface interface {
 // clusterPairs implements ClusterPairInterface
 type clusterPairs struct {
 	client rest.Interface
+	ns     string
 }
 
 // newClusterPairs returns a ClusterPairs
-func newClusterPairs(c *StorkV1alpha1Client) *clusterPairs {
+func newClusterPairs(c *StorkV1alpha1Client, namespace string) *clusterPairs {
 	return &clusterPairs{
 		client: c.RESTClient(),
+		ns:     namespace,
 	}
 }
 
@@ -63,6 +65,7 @@ func newClusterPairs(c *StorkV1alpha1Client) *clusterPairs {
 func (c *clusterPairs) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterPair, err error) {
 	result = &v1alpha1.ClusterPair{}
 	err = c.client.Get().
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -75,6 +78,7 @@ func (c *clusterPairs) Get(name string, options v1.GetOptions) (result *v1alpha1
 func (c *clusterPairs) List(opts v1.ListOptions) (result *v1alpha1.ClusterPairList, err error) {
 	result = &v1alpha1.ClusterPairList{}
 	err = c.client.Get().
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Do().
@@ -86,6 +90,7 @@ func (c *clusterPairs) List(opts v1.ListOptions) (result *v1alpha1.ClusterPairLi
 func (c *clusterPairs) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	opts.Watch = true
 	return c.client.Get().
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Watch()
@@ -95,6 +100,7 @@ func (c *clusterPairs) Watch(opts v1.ListOptions) (watch.Interface, error) {
 func (c *clusterPairs) Create(clusterPair *v1alpha1.ClusterPair) (result *v1alpha1.ClusterPair, err error) {
 	result = &v1alpha1.ClusterPair{}
 	err = c.client.Post().
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		Body(clusterPair).
 		Do().
@@ -106,6 +112,7 @@ func (c *clusterPairs) Create(clusterPair *v1alpha1.ClusterPair) (result *v1alph
 func (c *clusterPairs) Update(clusterPair *v1alpha1.ClusterPair) (result *v1alpha1.ClusterPair, err error) {
 	result = &v1alpha1.ClusterPair{}
 	err = c.client.Put().
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		Name(clusterPair.Name).
 		Body(clusterPair).
@@ -120,6 +127,7 @@ func (c *clusterPairs) Update(clusterPair *v1alpha1.ClusterPair) (result *v1alph
 func (c *clusterPairs) UpdateStatus(clusterPair *v1alpha1.ClusterPair) (result *v1alpha1.ClusterPair, err error) {
 	result = &v1alpha1.ClusterPair{}
 	err = c.client.Put().
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		Name(clusterPair.Name).
 		SubResource("status").
@@ -132,6 +140,7 @@ func (c *clusterPairs) UpdateStatus(clusterPair *v1alpha1.ClusterPair) (result *
 // Delete takes name of the clusterPair and deletes it. Returns an error if one occurs.
 func (c *clusterPairs) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		Name(name).
 		Body(options).
@@ -142,6 +151,7 @@ func (c *clusterPairs) Delete(name string, options *v1.DeleteOptions) error {
 // DeleteCollection deletes a collection of objects.
 func (c *clusterPairs) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
 	return c.client.Delete().
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Body(options).
@@ -153,6 +163,7 @@ func (c *clusterPairs) DeleteCollection(options *v1.DeleteOptions, listOptions v
 func (c *clusterPairs) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterPair, err error) {
 	result = &v1alpha1.ClusterPair{}
 	err = c.client.Patch(pt).
+		Namespace(c.ns).
 		Resource("clusterpairs").
 		SubResource(subresources...).
 		Name(name).
