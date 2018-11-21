@@ -151,7 +151,7 @@ func (c *ClusterPairController) createCRD() error {
 		Plural:  storkv1.ClusterPairResourcePlural,
 		Group:   stork.GroupName,
 		Version: stork.Version,
-		Scope:   apiextensionsv1beta1.ClusterScoped,
+		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(storkv1.ClusterPair{}).Name(),
 	}
 	err := k8s.Instance().CreateCRD(resource)

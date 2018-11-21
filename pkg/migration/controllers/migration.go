@@ -113,6 +113,20 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 
 		case storkv1.MigrationStageInitial,
 			storkv1.MigrationStageVolumes:
+			// Restrict migration only the namespace that the object belongs
+			// to for now
+			for _, ns := range migration.Spec.Namespaces {
+				if ns != migration.Namespace {
+					err := fmt.Errorf("Spec.Namespaces should only contain the current namespace")
+					log.MigrationLog(migration).Errorf(err.Error())
+					m.Recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(storkv1.MigrationStatusFailed),
+						err.Error())
+					return nil
+				}
+			}
+
 			// Make sure the namespaces exist
 			for _, ns := range migration.Spec.Namespaces {
 				_, err := k8s.Instance().GetNamespace(ns)
@@ -773,7 +787,7 @@ func (m *MigrationController) createCRD() error {
 		Plural:  storkv1.MigrationResourcePlural,
 		Group:   stork.GroupName,
 		Version: stork.Version,
-		Scope:   apiextensionsv1beta1.ClusterScoped,
+		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(storkv1.Migration{}).Name(),
 	}
 	err := k8s.Instance().CreateCRD(resource)
