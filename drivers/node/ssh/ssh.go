@@ -265,7 +265,7 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 		return output, false, nil
 	}
 
-	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry);
+	output, err := task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
 	if err != nil {
 		return "", err
 	}
