@@ -30,11 +30,12 @@ func newCreateSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("Exactly one argument needs to be provided for snapshot name"))
-			} else {
-				snapName = args[0]
+				return
 			}
+			snapName = args[0]
 			if len(pvcName) == 0 {
 				util.CheckErr(fmt.Errorf("PVC name needs to be given"))
+				return
 			}
 
 			namespace := cmdFactory.GetNamespace()
@@ -51,6 +52,7 @@ func newCreateSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 			_, err := k8s.Instance().CreateSnapshot(snapshot)
 			if err != nil {
 				util.CheckErr(err)
+				return
 			}
 			msg := fmt.Sprintf("Snapshot %v created successfully\n", snapshot.Metadata.Name)
 			printMsg(msg, ioStreams.Out)
@@ -79,6 +81,7 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 					snapshot, err := k8s.Instance().GetSnapshot(snapName, namespace)
 					if err != nil {
 						util.CheckErr(err)
+						return
 					}
 					snapshots.Items = append(snapshots.Items, *snapshot)
 				}
@@ -86,6 +89,7 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 				snapshots, err = k8s.Instance().ListSnapshots(namespace)
 				if err != nil {
 					util.CheckErr(err)
+					return
 				}
 			}
 
@@ -109,10 +113,12 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 			outputFormat, err := cmdFactory.GetOutputFormat()
 			if err != nil {
 				util.CheckErr(err)
+				return
 			}
 
 			if err := printObjects(c, snapshots, outputFormat, snapshotColumns, snapshotPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
+				return
 			}
 		},
 	}
@@ -134,12 +140,14 @@ func newDeleteSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 			if len(pvcName) == 0 {
 				if len(args) == 0 {
 					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for snapshot name"))
+					return
 				}
 				snaps = args
 			} else {
 				snapshots, err := k8s.Instance().ListSnapshots(namespace)
 				if err != nil {
 					util.CheckErr(err)
+					return
 				}
 				for _, snap := range snapshots.Items {
 					if snap.Spec.PersistentVolumeClaimName == pvcName {
@@ -166,10 +174,10 @@ func deleteSnapshots(snaps []string, namespace string, ioStreams genericclioptio
 		err := k8s.Instance().DeleteSnapshot(snap, namespace)
 		if err != nil {
 			util.CheckErr(err)
-		} else {
-			msg := fmt.Sprintf("Snapshot %v deleted successfully", snap)
-			printMsg(msg, ioStreams.Out)
+			return
 		}
+		msg := fmt.Sprintf("Snapshot %v deleted successfully", snap)
+		printMsg(msg, ioStreams.Out)
 	}
 }
 

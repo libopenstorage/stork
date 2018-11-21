@@ -18,11 +18,12 @@ func NewCommand(in io.Reader, out io.Writer, errOut io.Writer) *cobra.Command {
 		Use:   "storkctl",
 		Short: "storkctl manages stork resources",
 		PersistentPreRun: func(c *cobra.Command, args []string) {
-			if config, err := cmdFactory.GetConfig(); err != nil {
+			config, err := cmdFactory.GetConfig()
+			if err != nil {
 				util.CheckErr(err)
-			} else {
-				k8s.Instance().SetConfig(config)
+				return
 			}
+			k8s.Instance().SetConfig(config)
 		},
 	}
 
@@ -41,6 +42,7 @@ func NewCommand(in io.Reader, out io.Writer, errOut io.Writer) *cobra.Command {
 	err := flag.CommandLine.Parse([]string{})
 	if err != nil {
 		util.CheckErr(err)
+		return nil
 	}
 
 	return cmds

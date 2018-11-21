@@ -43,12 +43,14 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 						clusterPairs.Items = append(clusterPairs.Items, *pair)
 					} else {
 						util.CheckErr(err)
+						return
 					}
 				}
 			} else {
 				clusterPairs, err = k8s.Instance().ListClusterPairs(cmdFactory.GetNamespace())
 				if err != nil {
 					util.CheckErr(err)
+					return
 				}
 			}
 
@@ -60,10 +62,12 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 			outputFormat, err := cmdFactory.GetOutputFormat()
 			if err != nil {
 				util.CheckErr(err)
+				return
 			}
 
 			if err := printObjects(c, clusterPairs, outputFormat, clusterPairColumns, clusterPairPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
+				return
 			}
 		},
 	}
@@ -119,6 +123,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 			config, err := cmdFactory.RawConfig()
 			if err != nil {
 				util.CheckErr(err)
+				return
 			}
 
 			// Prune out all but the current-context and related
@@ -159,6 +164,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 						config.AuthInfos[currentAuthInfo].ClientCertificateData, err = getByteData(config.AuthInfos[currentAuthInfo].ClientCertificate)
 						if err != nil {
 							util.CheckErr(err)
+							return
 						}
 						config.AuthInfos[currentAuthInfo].ClientCertificate = ""
 					}
@@ -166,6 +172,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 						config.AuthInfos[currentAuthInfo].ClientKeyData, err = getByteData(config.AuthInfos[currentAuthInfo].ClientKey)
 						if err != nil {
 							util.CheckErr(err)
+							return
 						}
 						config.AuthInfos[currentAuthInfo].ClientKey = ""
 					}
@@ -173,6 +180,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 						config.AuthInfos[currentAuthInfo].Token, err = getStringData(config.AuthInfos[currentAuthInfo].TokenFile)
 						if err != nil {
 							util.CheckErr(err)
+							return
 						}
 						config.AuthInfos[currentAuthInfo].TokenFile = ""
 					}
@@ -184,6 +192,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 					config.Clusters[currentCluster].CertificateAuthorityData, err = getByteData(config.Clusters[currentCluster].CertificateAuthority)
 					if err != nil {
 						util.CheckErr(err)
+						return
 					}
 					config.Clusters[currentCluster].CertificateAuthority = ""
 				}
@@ -206,6 +215,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 				}
 				if err = printEncoded(c, clusterPair, "yaml", ioStreams.Out); err != nil {
 					util.CheckErr(err)
+					return
 				}
 			}
 		},
