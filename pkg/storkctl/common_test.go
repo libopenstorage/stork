@@ -21,13 +21,19 @@ import (
 )
 
 var codec runtime.Codec
+var fakeStorkClient *fakeclient.Clientset
 
 func init() {
+	resetTest()
+}
+
+func resetTest() {
 	scheme := runtime.NewScheme()
 	snapv1.AddToScheme(scheme)
 	v1alpha1.AddToScheme(scheme)
 	v1.AddToScheme(scheme)
 	codec = serializer.NewCodecFactory(scheme).LegacyCodec(scheme.PrioritizedVersionsAllGroups()...)
+	fakeStorkClient = fakeclient.NewSimpleClientset()
 }
 
 type NewTestCommand func(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command
@@ -43,17 +49,17 @@ func testCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, obj r
 
 	fakeRestClient := &fake.RESTClient{
 		NegotiatedSerializer: unstructuredSerializer,
-		Resp:                 &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)},
-		Client: fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
+	}
+	if obj != nil {
+		fakeRestClient.Resp = &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)}
+		fakeRestClient.Client = fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)}, nil
-		}),
+		})
 	}
 
 	tf.Client = fakeRestClient
 	fakeKubeClient, err := tf.KubernetesClientSet()
 	require.NoError(t, err, "Error getting KubernetesClientSet")
-
-	fakeStorkClient := fakeclient.NewSimpleClientset()
 
 	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil)
 
