@@ -31,18 +31,21 @@ func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStrea
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("Exactly one argument needs to be provided for pvc name"))
-			} else {
-				pvcName = args[0]
+				return
 			}
+			pvcName = args[0]
 			if len(snapName) == 0 {
 				util.CheckErr(fmt.Errorf("Snapshot name needs to be given"))
+				return
 			}
 			if len(size) == 0 {
 				util.CheckErr(fmt.Errorf("Size needs to be provided"))
+				return
 			}
 			quantity, err := resource.ParseQuantity(size)
 			if err != nil {
 				util.CheckErr(fmt.Errorf("Invalid size: %v", err))
+				return
 			}
 
 			namespace := cmdFactory.GetNamespace()
@@ -71,6 +74,7 @@ func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStrea
 			_, err = k8s.Instance().CreatePersistentVolumeClaim(pvc)
 			if err != nil {
 				util.CheckErr(err)
+				return
 			}
 			msg := fmt.Sprintf("PersistentVolumeClaim %v created successfully", pvcName)
 			printMsg(msg, ioStreams.Out)
