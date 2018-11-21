@@ -79,14 +79,14 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 			if len(args) > 0 {
 				migrations = new(storkv1.MigrationList)
 				for _, migrationName := range args {
-					migration, err := k8s.Instance().GetMigration(migrationName)
+					migration, err := k8s.Instance().GetMigration(migrationName, cmdFactory.GetNamespace())
 					if err != nil {
 						util.CheckErr(err)
 					}
 					migrations.Items = append(migrations.Items, *migration)
 				}
 			} else {
-				migrations, err = k8s.Instance().ListMigrations()
+				migrations, err = k8s.Instance().ListMigrations(cmdFactory.GetNamespace())
 				if err != nil {
 					util.CheckErr(err)
 				}
@@ -139,7 +139,7 @@ func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 				}
 				migrations = args
 			} else {
-				migrationList, err := k8s.Instance().ListMigrations()
+				migrationList, err := k8s.Instance().ListMigrations(cmdFactory.GetNamespace())
 				if err != nil {
 					util.CheckErr(err)
 				}
@@ -155,7 +155,7 @@ func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 				return
 			}
 
-			deleteMigrations(migrations, ioStreams)
+			deleteMigrations(migrations, cmdFactory.GetNamespace(), ioStreams)
 		},
 	}
 	deleteMigrationCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "Name of the ClusterPair for which to delete ALL migrations")
@@ -163,9 +163,9 @@ func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	return deleteMigrationCommand
 }
 
-func deleteMigrations(migrations []string, ioStreams genericclioptions.IOStreams) {
+func deleteMigrations(migrations []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, migration := range migrations {
-		err := k8s.Instance().DeleteMigration(migration)
+		err := k8s.Instance().DeleteMigration(migration, namespace)
 		if err != nil {
 			util.CheckErr(err)
 		} else {
