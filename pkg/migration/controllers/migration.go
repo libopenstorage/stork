@@ -167,7 +167,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 }
 
 func (m *MigrationController) migrateVolumes(migration *storkv1.Migration) error {
-	storageStatus, err := getClusterPairStorageStatus(migration.Spec.ClusterPair)
+	storageStatus, err := getClusterPairStorageStatus(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func (m *MigrationController) objectToBeMigrated(
 }
 
 func (m *MigrationController) migrateResources(migration *storkv1.Migration) error {
-	schedulerStatus, err := getClusterPairSchedulerStatus(migration.Spec.ClusterPair)
+	schedulerStatus, err := getClusterPairSchedulerStatus(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
 	}
@@ -672,7 +672,7 @@ func (m *MigrationController) applyResources(
 	migration *storkv1.Migration,
 	objects []runtime.Unstructured,
 ) error {
-	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair)
+	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
 	}

@@ -72,7 +72,6 @@ type ClusterPairSpec struct {
 }
 
 // +genclient
-// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterPair represents pairing with other clusters
@@ -160,7 +159,6 @@ type VolumeInfo struct {
 }
 
 // +genclient
-// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Migration represents migration status

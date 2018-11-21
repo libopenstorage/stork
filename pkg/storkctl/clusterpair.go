@@ -38,7 +38,7 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 			if len(args) > 0 {
 				clusterPairs = new(storkv1.ClusterPairList)
 				for _, pairName := range args {
-					pair, err := k8s.Instance().GetClusterPair(pairName)
+					pair, err := k8s.Instance().GetClusterPair(pairName, cmdFactory.GetNamespace())
 					if err == nil {
 						clusterPairs.Items = append(clusterPairs.Items, *pair)
 					} else {
@@ -46,7 +46,7 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 					}
 				}
 			} else {
-				clusterPairs, err = k8s.Instance().ListClusterPairs()
+				clusterPairs, err = k8s.Instance().ListClusterPairs(cmdFactory.GetNamespace())
 				if err != nil {
 					util.CheckErr(err)
 				}

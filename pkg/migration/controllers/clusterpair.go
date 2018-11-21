@@ -85,7 +85,7 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 			}
 		}
 		if clusterPair.Status.SchedulerStatus != storkv1.ClusterPairStatusReady {
-			remoteConfig, err := getClusterPairSchedulerConfig(clusterPair.Name)
+			remoteConfig, err := getClusterPairSchedulerConfig(clusterPair.Name, clusterPair.Namespace)
 			if err != nil {
 				return err
 			}
@@ -116,8 +116,8 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 	return nil
 }
 
-func getClusterPairSchedulerConfig(clusterPairName string) (*restclient.Config, error) {
-	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName)
+func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*restclient.Config, error) {
+	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
@@ -129,16 +129,16 @@ func getClusterPairSchedulerConfig(clusterPairName string) (*restclient.Config, 
 	return remoteClientConfig.ClientConfig()
 }
 
-func getClusterPairStorageStatus(clusterPairName string) (storkv1.ClusterPairStatusType, error) {
-	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName)
+func getClusterPairStorageStatus(clusterPairName string, namespace string) (storkv1.ClusterPairStatusType, error) {
+	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
 		return storkv1.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair: %v", err)
 	}
 	return clusterPair.Status.StorageStatus, nil
 }
 
-func getClusterPairSchedulerStatus(clusterPairName string) (storkv1.ClusterPairStatusType, error) {
-	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName)
+func getClusterPairSchedulerStatus(clusterPairName string, namespace string) (storkv1.ClusterPairStatusType, error) {
+	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
 		return storkv1.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair: %v", err)
 	}

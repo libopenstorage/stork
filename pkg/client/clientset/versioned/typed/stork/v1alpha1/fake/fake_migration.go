@@ -31,6 +31,7 @@ import (
 // FakeMigrations implements MigrationInterface
 type FakeMigrations struct {
 	Fake *FakeStorkV1alpha1
+	ns   string
 }
 
 var migrationsResource = schema.GroupVersionResource{Group: "stork.libopenstorage.org", Version: "v1alpha1", Resource: "migrations"}
@@ -40,7 +41,8 @@ var migrationsKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", 
 // Get takes name of the migration, and returns the corresponding migration object, and an error if there is any.
 func (c *FakeMigrations) Get(name string, options v1.GetOptions) (result *v1alpha1.Migration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(migrationsResource, name), &v1alpha1.Migration{})
+		Invokes(testing.NewGetAction(migrationsResource, c.ns, name), &v1alpha1.Migration{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -50,7 +52,8 @@ func (c *FakeMigrations) Get(name string, options v1.GetOptions) (result *v1alph
 // List takes label and field selectors, and returns the list of Migrations that match those selectors.
 func (c *FakeMigrations) List(opts v1.ListOptions) (result *v1alpha1.MigrationList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(migrationsResource, migrationsKind, opts), &v1alpha1.MigrationList{})
+		Invokes(testing.NewListAction(migrationsResource, migrationsKind, c.ns, opts), &v1alpha1.MigrationList{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -71,13 +74,15 @@ func (c *FakeMigrations) List(opts v1.ListOptions) (result *v1alpha1.MigrationLi
 // Watch returns a watch.Interface that watches the requested migrations.
 func (c *FakeMigrations) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(migrationsResource, opts))
+		InvokesWatch(testing.NewWatchAction(migrationsResource, c.ns, opts))
+
 }
 
 // Create takes the representation of a migration and creates it.  Returns the server's representation of the migration, and an error, if there is any.
 func (c *FakeMigrations) Create(migration *v1alpha1.Migration) (result *v1alpha1.Migration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(migrationsResource, migration), &v1alpha1.Migration{})
+		Invokes(testing.NewCreateAction(migrationsResource, c.ns, migration), &v1alpha1.Migration{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -87,7 +92,8 @@ func (c *FakeMigrations) Create(migration *v1alpha1.Migration) (result *v1alpha1
 // Update takes the representation of a migration and updates it. Returns the server's representation of the migration, and an error, if there is any.
 func (c *FakeMigrations) Update(migration *v1alpha1.Migration) (result *v1alpha1.Migration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(migrationsResource, migration), &v1alpha1.Migration{})
+		Invokes(testing.NewUpdateAction(migrationsResource, c.ns, migration), &v1alpha1.Migration{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -98,7 +104,8 @@ func (c *FakeMigrations) Update(migration *v1alpha1.Migration) (result *v1alpha1
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 func (c *FakeMigrations) UpdateStatus(migration *v1alpha1.Migration) (*v1alpha1.Migration, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(migrationsResource, "status", migration), &v1alpha1.Migration{})
+		Invokes(testing.NewUpdateSubresourceAction(migrationsResource, "status", c.ns, migration), &v1alpha1.Migration{})
+
 	if obj == nil {
 		return nil, err
 	}
@@ -108,13 +115,14 @@ func (c *FakeMigrations) UpdateStatus(migration *v1alpha1.Migration) (*v1alpha1.
 // Delete takes name of the migration and deletes it. Returns an error if one occurs.
 func (c *FakeMigrations) Delete(name string, options *v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(migrationsResource, name), &v1alpha1.Migration{})
+		Invokes(testing.NewDeleteAction(migrationsResource, c.ns, name), &v1alpha1.Migration{})
+
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeMigrations) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(migrationsResource, listOptions)
+	action := testing.NewDeleteCollectionAction(migrationsResource, c.ns, listOptions)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.MigrationList{})
 	return err
@@ -123,7 +131,8 @@ func (c *FakeMigrations) DeleteCollection(options *v1.DeleteOptions, listOptions
 // Patch applies the patch and returns the patched migration.
 func (c *FakeMigrations) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.Migration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(migrationsResource, name, data, subresources...), &v1alpha1.Migration{})
+		Invokes(testing.NewPatchSubresourceAction(migrationsResource, c.ns, name, data, subresources...), &v1alpha1.Migration{})
+
 	if obj == nil {
 		return nil, err
 	}

@@ -22,9 +22,17 @@ package v1alpha1
 // ClusterPairLister.
 type ClusterPairListerExpansion interface{}
 
+// ClusterPairNamespaceListerExpansion allows custom methods to be added to
+// ClusterPairNamespaceLister.
+type ClusterPairNamespaceListerExpansion interface{}
+
 // MigrationListerExpansion allows custom methods to be added to
 // MigrationLister.
 type MigrationListerExpansion interface{}
+
+// MigrationNamespaceListerExpansion allows custom methods to be added to
+// MigrationNamespaceLister.
+type MigrationNamespaceListerExpansion interface{}
 
 // RuleListerExpansion allows custom methods to be added to
 // RuleLister.
