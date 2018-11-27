@@ -424,7 +424,7 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 						return true, nil
 					}
 
-					logrus.Warnf("Failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()))
+					logrus.Warnf("Failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()), err)
 					return false, nil
 				}
 
