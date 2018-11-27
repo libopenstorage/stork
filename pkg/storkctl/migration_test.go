@@ -35,6 +35,7 @@ func createMigrationAndVerify(t *testing.T, name string, clusterpair string, nam
 	require.Equal(t, clusterpair, migration.Spec.ClusterPair, "Migration clusterpair mismatch")
 	require.Equal(t, namespaces, migration.Spec.Namespaces, "Migration namespace mismatch")
 }
+
 func TestGetMigrationsOneMigration(t *testing.T) {
 	defer resetTest()
 	createMigrationAndVerify(t, "getmigrationtest", "clusterpair1", []string{"namespace1"})
@@ -91,9 +92,22 @@ func TestGetMigrationsWithStatusAndProgress(t *testing.T) {
 func TestCreateMigrationsNoNamespace(t *testing.T) {
 	cmdArgs := []string{"migrations", "-c", "clusterPair1", "migration1"}
 
-	var migrationList storkv1.MigrationList
 	expected := "error: Need to provide atleast one namespace to migrate"
-	testCommon(t, newCreateCommand, cmdArgs, &migrationList, expected, true)
+	testCommon(t, newCreateCommand, cmdArgs, nil, expected, true)
+}
+
+func TestCreateMigrationsNoClusterPair(t *testing.T) {
+	cmdArgs := []string{"migrations", "migration1"}
+
+	expected := "error: ClusterPair name needs to be provided for migration"
+	testCommon(t, newCreateCommand, cmdArgs, nil, expected, true)
+}
+
+func TestCreateMigrationsNoName(t *testing.T) {
+	cmdArgs := []string{"migrations"}
+
+	expected := "error: Exactly one name needs to be provided for migration name"
+	testCommon(t, newCreateCommand, cmdArgs, nil, expected, true)
 }
 
 func TestCreateMigrations(t *testing.T) {

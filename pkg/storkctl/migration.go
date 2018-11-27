@@ -27,7 +27,6 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 		Use:     migrationSubcommand,
 		Aliases: migrationAliases,
 		Short:   "Start a migration",
-		PreRunE: cobra.ExactArgs(1),
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for migration name"))
