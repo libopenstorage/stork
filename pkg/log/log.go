@@ -17,7 +17,7 @@ func PodLog(pod *v1.Pod) *logrus.Entry {
 			"Namespace": pod.Namespace,
 		}
 		for _, owner := range pod.OwnerReferences {
-			if *owner.Controller {
+			if owner.Controller != nil && *owner.Controller {
 				fields["Owner"] = owner.Kind + "/" + owner.Name
 				break
 			}
