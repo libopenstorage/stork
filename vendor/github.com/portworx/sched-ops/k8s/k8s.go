@@ -81,7 +81,7 @@ type Ops interface {
 	MigrationOps
 	ObjectOps
 	SetConfig(config *rest.Config)
-	SetClient(client *kubernetes.Clientset, snapClient rest.Interface, storkClient storkclientset.Interface, apiExtensionClient apiextensionsclient.Interface, dynamicInterface dynamic.Interface)
+	SetClient(client kubernetes.Interface, snapClient rest.Interface, storkClient storkclientset.Interface, apiExtensionClient apiextensionsclient.Interface, dynamicInterface dynamic.Interface)
 }
 
 // EventOps is an interface to put and get k8s events
@@ -429,6 +429,8 @@ type ClusterPairOps interface {
 	GetClusterPair(string, string) (*v1alpha1.ClusterPair, error)
 	// ListClusterPairs gets all the ClusterPairs
 	ListClusterPairs(string) (*v1alpha1.ClusterPairList, error)
+	// UpdateClusterPair updates the ClusterPair
+	UpdateClusterPair(*v1alpha1.ClusterPair) (*v1alpha1.ClusterPair, error)
 	// DeleteClusterPair deletes the ClusterPair
 	DeleteClusterPair(string, string) error
 	// ValidateClusterPair validates clusterpair status
@@ -486,7 +488,7 @@ var (
 )
 
 type k8sOps struct {
-	client             *kubernetes.Clientset
+	client             kubernetes.Interface
 	snapClient         rest.Interface
 	storkClient        storkclientset.Interface
 	apiExtensionClient apiextensionsclient.Interface
@@ -521,7 +523,7 @@ func NewInstance(config string) (Ops, error) {
 
 // Set the k8s clients
 func (k *k8sOps) SetClient(
-	client *kubernetes.Clientset,
+	client kubernetes.Interface,
 	snapClient rest.Interface,
 	storkClient storkclientset.Interface,
 	apiExtensionClient apiextensionsclient.Interface,
@@ -543,7 +545,7 @@ func (k *k8sOps) initK8sClient() error {
 		}
 
 		// Quick validation if client connection works
-		_, err = k.client.ServerVersion()
+		_, err = k.client.Discovery().ServerVersion()
 		if err != nil {
 			return fmt.Errorf("failed to connect to k8s server: %s", err)
 		}
@@ -2827,6 +2829,14 @@ func (k *k8sOps) CreateClusterPair(pair *v1alpha1.ClusterPair) error {
 
 	_, err := k.storkClient.Stork().ClusterPairs(pair.Namespace).Create(pair)
 	return err
+}
+
+func (k *k8sOps) UpdateClusterPair(pair *v1alpha1.ClusterPair) (*v1alpha1.ClusterPair, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ClusterPairs(pair.Namespace).Update(pair)
 }
 
 func (k *k8sOps) DeleteClusterPair(name string, namespace string) error {
