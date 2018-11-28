@@ -23,9 +23,8 @@ func TestGetMigrationsNoMigration(t *testing.T) {
 func createMigrationAndVerify(t *testing.T, name string, clusterpair string, namespaces []string) {
 	cmdArgs := []string{"migrations", "-c", clusterpair, "--namespaces", strings.Join(namespaces, ","), name}
 
-	var migrationList storkv1.MigrationList
 	expected := "Migration " + name + " created successfully\n"
-	testCommon(t, newCreateCommand, cmdArgs, &migrationList, expected, false)
+	testCommon(t, newCreateCommand, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
 	migration, err := k8s.Instance().GetMigration(name, "test")
@@ -67,6 +66,18 @@ func TestGetMigrationsMultiple(t *testing.T) {
 		"getmigrationtest1   clusterpair1                       0/0       0/0         \n"
 	// Should get only one migration if name given
 	cmdArgs = []string{"migrations", "getmigrationtest1"}
+	testCommon(t, newGetCommand, cmdArgs, nil, expected, false)
+}
+
+func TestGetMigrationsWithClusterPair(t *testing.T) {
+	defer resetTest()
+	createMigrationAndVerify(t, "getmigrationtest1", "clusterpair1", []string{"namespace1"})
+	createMigrationAndVerify(t, "getmigrationtest2", "clusterpair2", []string{"namespace1"})
+
+	expected := "NAME                CLUSTERPAIR    STAGE     STATUS    VOLUMES   RESOURCES   CREATED\n" +
+		"getmigrationtest1   clusterpair1                       0/0       0/0         \n"
+
+	cmdArgs := []string{"migrations", "-c", "clusterpair1"}
 	testCommon(t, newGetCommand, cmdArgs, nil, expected, false)
 }
 
@@ -113,6 +124,15 @@ func TestCreateMigrationsNoName(t *testing.T) {
 func TestCreateMigrations(t *testing.T) {
 	defer resetTest()
 	createMigrationAndVerify(t, "createmigration", "clusterpair1", []string{"namespace1"})
+}
+
+func TestCreateDuplicateMigrations(t *testing.T) {
+	defer resetTest()
+	createMigrationAndVerify(t, "createmigration", "clusterpair1", []string{"namespace1"})
+	cmdArgs := []string{"migrations", "-c", "clusterpair1", "--namespaces", "namespace1", "createmigration"}
+
+	expected := "Error from server (AlreadyExists): migrations.stork.libopenstorage.org \"createmigration\" already exists"
+	testCommon(t, newCreateCommand, cmdArgs, nil, expected, true)
 }
 
 func TestDeleteMigrationsNoMigrationName(t *testing.T) {
