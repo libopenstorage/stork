@@ -13,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/initializer"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
+	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/libopenstorage/stork/pkg/version"
 	log "github.com/sirupsen/logrus"
@@ -212,6 +213,10 @@ func run(c *cli.Context) {
 func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 	if err := controller.Init(); err != nil {
 		log.Fatalf("Error initializing controller: %v", err)
+	}
+
+	if err := rule.Init(); err != nil {
+		log.Fatalf("Error initializing rule: %v", err)
 	}
 
 	initializer := &initializer.Initializer{
