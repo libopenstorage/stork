@@ -3,6 +3,7 @@ package storkctl
 import (
 	"fmt"
 
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -33,6 +34,8 @@ type Factory interface {
 	GetConfig() (*rest.Config, error)
 	// RawConfig Gets the raw merged config for the server
 	RawConfig() (clientcmdapi.Config, error)
+	// UpdateConfig Updates the config to be used for API calls
+	UpdateConfig() error
 	// GetOutputFormat Get the output format
 	GetOutputFormat() (string, error)
 	// setOutputFormat Set the output format
@@ -69,6 +72,15 @@ func (f *factory) getKubeconfig() clientcmd.ClientConfig {
 
 func (f *factory) GetConfig() (*rest.Config, error) {
 	return f.getKubeconfig().ClientConfig()
+}
+
+func (f *factory) UpdateConfig() error {
+	config, err := f.GetConfig()
+	if err != nil {
+		return err
+	}
+	k8s.Instance().SetConfig(config)
+	return nil
 }
 
 func (f *factory) RawConfig() (clientcmdapi.Config, error) {

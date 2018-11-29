@@ -4,26 +4,23 @@ import (
 	"flag"
 	"io"
 
-	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
 // NewCommand Create a new storkctl command
-func NewCommand(in io.Reader, out io.Writer, errOut io.Writer) *cobra.Command {
+func NewCommand(cmdFactory Factory, in io.Reader, out io.Writer, errOut io.Writer) *cobra.Command {
 
-	cmdFactory := NewFactory()
 	cmds := &cobra.Command{
 		Use:   "storkctl",
 		Short: "storkctl manages stork resources",
 		PersistentPreRun: func(c *cobra.Command, args []string) {
-			config, err := cmdFactory.GetConfig()
+			err := cmdFactory.UpdateConfig()
 			if err != nil {
 				util.CheckErr(err)
 				return
 			}
-			k8s.Instance().SetConfig(config)
 		},
 	}
 
