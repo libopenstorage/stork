@@ -42,14 +42,15 @@ const (
 
 // MigrationController migrationcontroller
 type MigrationController struct {
-	Driver           volume.Driver
-	Recorder         record.EventRecorder
-	discoveryHelper  discovery.Helper
-	dynamicInterface dynamic.Interface
+	Driver                  volume.Driver
+	Recorder                record.EventRecorder
+	discoveryHelper         discovery.Helper
+	dynamicInterface        dynamic.Interface
+	migrationAdminNamespace string
 }
 
 // Init Initialize the migration controller
-func (m *MigrationController) Init() error {
+func (m *MigrationController) Init(migrationAdminNamespace string) error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return fmt.Errorf("Error getting cluster config: %v", err)
@@ -79,6 +80,7 @@ func (m *MigrationController) Init() error {
 		return err
 	}
 
+	m.migrationAdminNamespace = migrationAdminNamespace
 	return controller.Register(
 		&schema.GroupVersionKind{
 			Group:   stork.GroupName,
@@ -113,20 +115,21 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 
 		case storkv1.MigrationStageInitial,
 			storkv1.MigrationStageVolumes:
-			// Restrict migration only the namespace that the object belongs
-			// to for now
-			for _, ns := range migration.Spec.Namespaces {
-				if ns != migration.Namespace {
-					err := fmt.Errorf("Spec.Namespaces should only contain the current namespace")
-					log.MigrationLog(migration).Errorf(err.Error())
-					m.Recorder.Event(migration,
-						v1.EventTypeWarning,
-						string(storkv1.MigrationStatusFailed),
-						err.Error())
-					return nil
+			// Restrict migration to only the namespace that the object belongs
+			// except for the namespace designated by the admin
+			if migration.Namespace != m.migrationAdminNamespace {
+				for _, ns := range migration.Spec.Namespaces {
+					if ns != migration.Namespace {
+						err := fmt.Errorf("Spec.Namespaces should only contain the current namespace")
+						log.MigrationLog(migration).Errorf(err.Error())
+						m.Recorder.Event(migration,
+							v1.EventTypeWarning,
+							string(storkv1.MigrationStatusFailed),
+							err.Error())
+						return nil
+					}
 				}
 			}
-
 			// Make sure the namespaces exist
 			for _, ns := range migration.Spec.Namespaces {
 				_, err := k8s.Instance().GetNamespace(ns)

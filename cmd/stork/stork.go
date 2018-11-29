@@ -103,6 +103,10 @@ func main() {
 			Name:  "app-initializer",
 			Usage: "EXPERIMENTAL: Enable application initializer to update scheduler name automatically (default: false)",
 		},
+		cli.StringFlag{
+			Name:  "migration-admin-namespace",
+			Usage: "Namespace to be used by a cluster admin which can migrate all other namespaces (default: none)",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -249,11 +253,12 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 	}
 
 	if c.Bool("migration-controller") {
+		migrationAdminNamespace := c.String("migration-admin-namespace")
 		migration := migration.Migration{
 			Driver:   d,
 			Recorder: recorder,
 		}
-		if err := migration.Init(); err != nil {
+		if err := migration.Init(migrationAdminNamespace); err != nil {
 			log.Fatalf("Error initializing migration: %v", err)
 		}
 	}
