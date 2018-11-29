@@ -258,7 +258,7 @@ func createClusterPair(pairInfo map[string]string) error {
 	}
 	defer pairFile.Close()
 
-	cmd := storkctl.NewCommand(os.Stdin, pairFile, os.Stderr)
+	cmd := storkctl.NewCommand(storkctl.NewFactory(), os.Stdin, pairFile, os.Stderr)
 	cmd.SetArgs([]string{"generate", "clusterpair", "--kubeconfig", remoteFilePath})
 	if err := cmd.Execute(); err != nil {
 		logrus.Errorf("Execute storkctl failed: %v", err)

@@ -9,7 +9,8 @@ import (
 )
 
 func main() {
-	if err := storkctl.NewCommand(os.Stdin, os.Stdout, os.Stdout).Execute(); err != nil {
+	factory := storkctl.NewFactory()
+	if err := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stdout).Execute(); err != nil {
 		os.Exit(1)
 	}
 }

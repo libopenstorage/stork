@@ -10,7 +10,6 @@ import (
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
 	"github.com/portworx/sched-ops/k8s"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -55,9 +54,7 @@ func resetTest() {
 	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil)
 }
 
-type NewTestCommand func(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command
-
-func testCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, obj runtime.Object, expected string, errorExpected bool) {
+func testCommon(t *testing.T, cmdArgs []string, obj runtime.Object, expected string, errorExpected bool) {
 	var err error
 
 	if obj != nil {
@@ -68,7 +65,7 @@ func testCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, obj r
 	}
 
 	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
-	cmd := newCommand(testFactory, streams)
+	cmd := NewCommand(testFactory, streams.In, streams.Out, streams.ErrOut)
 	cmd.SetOutput(buf)
 	cmd.SetArgs(cmdArgs)
 

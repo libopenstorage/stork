@@ -10,15 +10,15 @@ import (
 )
 
 func TestGetVolumeSnapshotsNoSnapshots(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots"}
+	cmdArgs := []string{"get", "volumesnapshots"}
 
 	var snapshots snapv1.VolumeSnapshotList
 	expected := "No resources found.\n"
-	testCommon(t, newGetCommand, cmdArgs, &snapshots, expected, false)
+	testCommon(t, cmdArgs, &snapshots, expected, false)
 }
 
 func TestGetVolumeSnapshotsOneSnapshot(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots"}
+	cmdArgs := []string{"get", "volumesnapshots"}
 
 	snap := &snapv1.VolumeSnapshot{
 		Metadata: metav1.ObjectMeta{
@@ -42,53 +42,47 @@ func TestGetVolumeSnapshotsOneSnapshot(t *testing.T) {
 snap1     persistentVolumeClaimName   Pending                         Local
 `
 
-	testCommon(t, newGetCommand, cmdArgs, &snapshots, expected, false)
+	testCommon(t, cmdArgs, &snapshots, expected, false)
 }
 
 func TestCreateSnapshotsNoSnapshotName(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots"}
+	cmdArgs := []string{"create", "volumesnapshots"}
 
-	var snapshots snapv1.VolumeSnapshotList
 	expected := "error: Exactly one argument needs to be provided for snapshot name"
-	testCommon(t, newCreateCommand, cmdArgs, &snapshots, expected, true)
+	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestCreateSnapshotsNoPVCName(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots", "-p", "", "snap1"}
+	cmdArgs := []string{"create", "volumesnapshots", "-p", "", "snap1"}
 
-	var snapshots snapv1.VolumeSnapshotList
 	expected := "error: PVC name needs to be given"
-	testCommon(t, newCreateCommand, cmdArgs, &snapshots, expected, true)
+	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestCreateSnapshots(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots", "-p", "pvc_name", "snap1"}
+	cmdArgs := []string{"create", "volumesnapshots", "-p", "pvc_name", "snap1"}
 
-	var snapshots snapv1.VolumeSnapshotList
 	expected := "Snapshot snap1 created successfully\n\n"
-	testCommon(t, newCreateCommand, cmdArgs, &snapshots, expected, false)
+	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 func TestDeleteSnapshotsNoSnapshotName(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots"}
+	cmdArgs := []string{"delete", "volumesnapshots"}
 
-	var snapshots snapv1.VolumeSnapshotList
 	expected := "error: At least one argument needs to be provided for snapshot name"
-	testCommon(t, newDeleteCommand, cmdArgs, &snapshots, expected, true)
+	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestDeleteSnapshotsNoPVCName(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots", "-p", "", "snap1"}
+	cmdArgs := []string{"delete", "volumesnapshots", "-p", "", "snap1"}
 
-	var snapshots snapv1.VolumeSnapshotList
 	expected := "Snapshot snap1 deleted successfully\n"
-	testCommon(t, newDeleteCommand, cmdArgs, &snapshots, expected, false)
+	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 func TestDeleteSnapshotsNoSnapshots(t *testing.T) {
-	cmdArgs := []string{"volumesnapshots", "-p", "pvc_name", "snap1"}
+	cmdArgs := []string{"delete", "volumesnapshots", "-p", "pvc_name", "snap1"}
 
-	var snapshots snapv1.VolumeSnapshotList
 	expected := "No resources found.\n"
-	testCommon(t, newDeleteCommand, cmdArgs, &snapshots, expected, false)
+	testCommon(t, cmdArgs, nil, expected, false)
 }
