@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	stork "github.com/libopenstorage/stork/pkg/apis/stork"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
@@ -17,6 +19,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"k8s.io/api/core/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,6 +30,9 @@ import (
 )
 
 const (
+	validateCRDInterval time.Duration = 5 * time.Second
+	validateCRDTimeout  time.Duration = 1 * time.Minute
+
 	defaultCmdExecutorImage              = "openstorage/cmdexecutor:0.1"
 	cmdExecutorImageOverrideKey          = "stork.libopenstorage.org/cmdexecutor-image"
 	storkServiceAccount                  = "stork-account"
@@ -79,6 +86,32 @@ var ownerAPICallBackoff = wait.Backoff{
 	Duration: 2 * time.Second,
 	Factor:   1.5,
 	Steps:    20,
+}
+
+// Init initializes the rule executor
+func Init() error {
+	storkRuleResource := k8s.CustomResource{
+		Name:    "rule",
+		Plural:  "rules",
+		Group:   stork.GroupName,
+		Version: stork.Version,
+		Scope:   apiextensionsv1beta1.NamespaceScoped,
+		Kind:    reflect.TypeOf(storkv1.Rule{}).Name(),
+	}
+
+	err := k8s.Instance().CreateCRD(storkRuleResource)
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("Failed to create CRD due to: %v", err)
+		}
+	}
+
+	err = k8s.Instance().ValidateCRD(storkRuleResource, validateCRDTimeout, validateCRDInterval)
+	if err != nil {
+		return fmt.Errorf("Failed to validate stork rules CRD due to: %v", err)
+	}
+
+	return nil
 }
 
 // ValidateRule validates a rule
