@@ -120,6 +120,10 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 		Use:   clusterPairSubcommand,
 		Short: "Generate a spec to be used for cluster pairing from a remote cluster",
 		Run: func(c *cobra.Command, args []string) {
+			if len(args) != 1 {
+				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for clusterpair name"))
+				return
+			}
 			config, err := cmdFactory.RawConfig()
 			if err != nil {
 				util.CheckErr(err)
@@ -203,7 +207,8 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 						APIVersion: storkv1.SchemeGroupVersion.String(),
 					},
 					ObjectMeta: meta.ObjectMeta{
-						Name: "<insert_name_here>",
+						Name:      args[0],
+						Namespace: cmdFactory.GetNamespace(),
 					},
 
 					Spec: storkv1.ClusterPairSpec{
