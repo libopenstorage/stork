@@ -260,19 +260,9 @@ func createClusterPair(pairInfo map[string]string) error {
 
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
-	cmd.SetArgs([]string{"generate", "clusterpair", "--kubeconfig", remoteFilePath, "-n", "mysql-1-pvc-singlemysql"})
+	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath, "-n", "mysql-1-pvc-singlemysql"})
 	if err := cmd.Execute(); err != nil {
 		logrus.Errorf("Execute storkctl failed: %v", err)
-		return err
-	}
-
-	// We don't need this parsing if stokctl generate fill up clusterpair name
-	// and omit StorageStatus section
-	sedCmd := `sed -i 's/<insert_name_here>/` + remotePairName + `/g'` + "  " + pairFileName
-	logrus.Infof("sed Cmd : %v", sedCmd)
-	err = exec.Command("sh", "-c", sedCmd).Run()
-	if err != nil {
-		logrus.Errorf("sed command failed %v", err)
 		return err
 	}
 
