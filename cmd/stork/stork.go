@@ -115,6 +115,7 @@ func main() {
 }
 func run(c *cli.Context) {
 
+	log.Infof("Starting stork version %v", version.Version)
 	driverName := c.String("driver")
 	if len(driverName) == 0 {
 		log.Fatalf("driver option is required")
