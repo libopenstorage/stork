@@ -258,8 +258,9 @@ func createClusterPair(pairInfo map[string]string) error {
 	}
 	defer pairFile.Close()
 
-	cmd := storkctl.NewCommand(storkctl.NewFactory(), os.Stdin, pairFile, os.Stderr)
-	cmd.SetArgs([]string{"generate", "clusterpair", "--kubeconfig", remoteFilePath})
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
+	cmd.SetArgs([]string{"generate", "clusterpair", "--kubeconfig", remoteFilePath, "-n", "mysql-1-pvc-singlemysql "})
 	if err := cmd.Execute(); err != nil {
 		logrus.Errorf("Execute storkctl failed: %v", err)
 		return err
