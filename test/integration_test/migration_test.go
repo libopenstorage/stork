@@ -15,10 +15,6 @@ func testMigration(t *testing.T) {
 
 func sanityMigrationTest(t *testing.T) {
 	var err error
-	// create, apply and validate cluster pair specs
-	pairCtxs, err := scheduleClusterPair()
-	require.NoError(t, err, "Error scheduling cluster pair")
-
 	// schedule mysql app on cluster 1
 	mysqlCtxs, err := schedulerDriver.Schedule("singlemysql",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
@@ -27,6 +23,11 @@ func sanityMigrationTest(t *testing.T) {
 
 	err = schedulerDriver.WaitForRunning(mysqlCtxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	// this is so mysql-1-pvc-namespace is created
+	// create, apply and validate cluster pair specs
+	pairCtxs, err := scheduleClusterPair()
+	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
 	migrationCtxs, err := schedulerDriver.Schedule("migration",
