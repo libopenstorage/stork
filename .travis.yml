@@ -9,10 +9,10 @@ before_install:
   - sudo apt-get install -y awscli
 script:
   - |
-    if [ "${TRAVIS_BRANCH}" == "master" ]; then
-      export DOCKER_HUB_STORK_TAG=master
-      export DOCKER_HUB_STORK_TEST_TAG=latest
-      export DOCKER_HUB_CMD_EXECUTOR_TAG=master
+    if [ "${TRAVIS_BRANCH}" == "2.0" ]; then
+      export DOCKER_HUB_STORK_TAG="${TRAVIS_BRANCH}"-dev
+      export DOCKER_HUB_STORK_TEST_TAG="${TRAVIS_BRANCH}"
+      export DOCKER_HUB_CMD_EXECUTOR_TAG="${TRAVIS_BRANCH}"-dev
     else
       export DOCKER_HUB_STORK_TAG=`git rev-parse --short HEAD`
       export DOCKER_HUB_STORK_TEST_TAG=`git rev-parse --short HEAD`
@@ -25,9 +25,9 @@ script:
       make integration-test-deploy;
     fi &&
     if [ "${TRAVIS_PULL_REQUEST}" == "false" ] && [ "${TRAVIS_BRANCH}" == "master" ]; then
-      aws s3 cp --acl public-read bin/linux/storkctl s3://${BUCKET_NAME}/storkctl/latest/linux/;
-      aws s3 cp --acl public-read bin/windows/storkctl.exe s3://${BUCKET_NAME}/storkctl/latest/windows/;
-      aws s3 cp --acl public-read bin/darwin/storkctl s3://${BUCKET_NAME}/storkctl/latest/darwin/;
+      aws s3 cp --acl public-read bin/linux/storkctl s3://${BUCKET_NAME}/storkctl/"${TRAVIS_BRANCH}"-dev/linux/;
+      aws s3 cp --acl public-read bin/windows/storkctl.exe s3://${BUCKET_NAME}/storkctl/"${TRAVIS_BRANCH}"-dev/windows/;
+      aws s3 cp --acl public-read bin/darwin/storkctl s3://${BUCKET_NAME}/storkctl/"${TRAVIS_BRANCH}"-dev/darwin/;
     fi
 notifications:
   email:
