@@ -56,8 +56,9 @@ const (
 	// default API port
 	apiPort = 9001
 
-	// provisionerName is the name for the driver provisioner
-	provisionerName = "kubernetes.io/portworx-volume"
+	// provisioner names for portworx volumes
+	provisionerName    = "kubernetes.io/portworx-volume"
+	csiProvisionerName = "com.openstorage.pxd"
 
 	// pvcProvisionerAnnotation is the annotation on PVC which has the provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -358,7 +359,7 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 		provisioner = storageClass.Provisioner
 	}
 
-	if provisioner != provisionerName && provisioner != snapshot.GetProvisionerName() {
+	if provisioner != provisionerName && provisioner != csiProvisionerName && provisioner != snapshot.GetProvisionerName() {
 		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
