@@ -50,8 +50,9 @@ const (
 	// namespace is the kubernetes namespace in which portworx daemon set runs
 	namespace = "kube-system"
 
-	// provisionerName is the name for the driver provisioner
-	provisionerName = "kubernetes.io/portworx-volume"
+	// provisioner names for portworx volumes
+	provisionerName    = "kubernetes.io/portworx-volume"
+	csiProvisionerName = "com.openstorage.pxd"
 
 	// pvcProvisionerAnnotation is the annotation on PVC which has the provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -347,7 +348,7 @@ func (p *portworx) isPortworxPVC(pvc *v1.PersistentVolumeClaim) bool {
 		provisioner = storageClass.Provisioner
 	}
 
-	if provisioner != provisionerName && provisioner != snapshotcontroller.GetProvisionerName() {
+	if provisioner != provisionerName && provisioner != csiProvisionerName && provisioner != snapshotcontroller.GetProvisionerName() {
 		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
