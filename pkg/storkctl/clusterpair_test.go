@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func createClusterPairAndVerify(t *testing.T, name string) {
+func createClusterPairAndVerify(t *testing.T, name string, namespace string) {
 	options := map[string]string{
 		"option1": "value1",
 		"option2": "value2",
@@ -20,7 +20,7 @@ func createClusterPairAndVerify(t *testing.T, name string) {
 	clusterPair := &storkv1.ClusterPair{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      name,
-			Namespace: "test",
+			Namespace: namespace,
 		},
 
 		Spec: storkv1.ClusterPairSpec{
@@ -31,66 +31,66 @@ func createClusterPairAndVerify(t *testing.T, name string) {
 	err := k8s.Instance().CreateClusterPair(clusterPair)
 	require.NoError(t, err, "Error creating Clusterpair")
 	// Make sure it was created correctly
-	clusterPair, err = k8s.Instance().GetClusterPair(name, "test")
+	clusterPair, err = k8s.Instance().GetClusterPair(name, namespace)
 	require.NoError(t, err, "Error getting Clusterpair")
 	require.Equal(t, name, clusterPair.Name, "Clusterpair name mismatch")
-	require.Equal(t, "test", clusterPair.Namespace, "Clusterpair namespace mismatch")
+	require.Equal(t, namespace, clusterPair.Namespace, "Clusterpair namespace mismatch")
 	require.Equal(t, options, clusterPair.Spec.Options, "Clusterpair options mismatch")
 }
 
 func TestGetClusterPairNoPair(t *testing.T) {
-	cmdArgs := []string{"clusterpair"}
+	cmdArgs := []string{"get", "clusterpair"}
 
 	expected := "No resources found.\n"
-	testCommon(t, newGetCommand, cmdArgs, nil, expected, false)
+	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 func TestGetClusterPairNotFound(t *testing.T) {
 	defer resetTest()
-	createClusterPairAndVerify(t, "pair2")
-	cmdArgs := []string{"clusterpair", "pair1"}
+	createClusterPairAndVerify(t, "pair2", "test")
+	cmdArgs := []string{"get", "clusterpair", "pair1", "-n", "test"}
 
 	expected := `Error from server (NotFound): clusterpairs.stork.libopenstorage.org "pair1" not found`
-	testCommon(t, newGetCommand, cmdArgs, nil, expected, true)
+	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestGetClusterPair(t *testing.T) {
 	defer resetTest()
 
-	createClusterPairAndVerify(t, "getclusterpairtest")
+	createClusterPairAndVerify(t, "getclusterpairtest", "test")
 
-	cmdArgs := []string{"clusterpair", "getclusterpairtest"}
+	cmdArgs := []string{"get", "clusterpair", "getclusterpairtest", "-n", "test"}
 	expected := "NAME                 STORAGE-STATUS   SCHEDULER-STATUS   CREATED\n" +
 		"getclusterpairtest                                       \n"
-	testCommon(t, newGetCommand, cmdArgs, nil, expected, false)
+	testCommon(t, cmdArgs, nil, expected, false)
 
-	createClusterPairAndVerify(t, "getclusterpairtest2")
-	testCommon(t, newGetCommand, cmdArgs, nil, expected, false)
+	createClusterPairAndVerify(t, "getclusterpairtest2", "test")
+	testCommon(t, cmdArgs, nil, expected, false)
 
-	cmdArgs = []string{"clusterpair", "getclusterpairtest", "getclusterpairtest2"}
+	cmdArgs = []string{"get", "clusterpair", "getclusterpairtest", "getclusterpairtest2", "-n", "test"}
 	expected = "NAME                  STORAGE-STATUS   SCHEDULER-STATUS   CREATED\n" +
 		"getclusterpairtest                                        \n" +
 		"getclusterpairtest2                                       \n"
-	testCommon(t, newGetCommand, cmdArgs, nil, expected, false)
+	testCommon(t, cmdArgs, nil, expected, false)
 
-	cmdArgs = []string{"clusterpair"}
-	testCommon(t, newGetCommand, cmdArgs, nil, expected, false)
+	cmdArgs = []string{"get", "clusterpair", "-n", "test"}
+	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 func TestGetClusterPairsWithStatus(t *testing.T) {
 	defer resetTest()
-	createClusterPairAndVerify(t, "clusterpairstatustest")
-	clusterPair, err := k8s.Instance().GetClusterPair("clusterpairstatustest", "test")
+	createClusterPairAndVerify(t, "clusterpairstatustest", "default")
+	clusterPair, err := k8s.Instance().GetClusterPair("clusterpairstatustest", "default")
 	require.NoError(t, err, "Error getting Clusterpair")
 	clusterPair.CreationTimestamp = metav1.Now()
 	clusterPair.Status.StorageStatus = storkv1.ClusterPairStatusReady
 	clusterPair.Status.SchedulerStatus = storkv1.ClusterPairStatusReady
 	_, err = k8s.Instance().UpdateClusterPair(clusterPair)
 	require.NoError(t, err, "Error updating Clusterpair")
-	cmdArgs := []string{"clusterpair", "clusterpairstatustest"}
+	cmdArgs := []string{"get", "clusterpair", "clusterpairstatustest"}
 	expected := "NAME                    STORAGE-STATUS   SCHEDULER-STATUS   CREATED\n" +
 		"clusterpairstatustest   Ready            Ready              " + toTimeString(clusterPair.CreationTimestamp) + "\n"
-	testCommon(t, newGetCommand, cmdArgs, nil, expected, false)
+	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 /*

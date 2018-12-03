@@ -13,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/initializer"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
+	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/libopenstorage/stork/pkg/version"
 	log "github.com/sirupsen/logrus"
@@ -102,6 +103,10 @@ func main() {
 			Name:  "app-initializer",
 			Usage: "EXPERIMENTAL: Enable application initializer to update scheduler name automatically (default: false)",
 		},
+		cli.StringFlag{
+			Name:  "migration-admin-namespace",
+			Usage: "Namespace to be used by a cluster admin which can migrate all other namespaces (default: none)",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -110,6 +115,7 @@ func main() {
 }
 func run(c *cli.Context) {
 
+	log.Infof("Starting stork version %v", version.Version)
 	driverName := c.String("driver")
 	if len(driverName) == 0 {
 		log.Fatalf("driver option is required")
@@ -214,6 +220,10 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		log.Fatalf("Error initializing controller: %v", err)
 	}
 
+	if err := rule.Init(); err != nil {
+		log.Fatalf("Error initializing rule: %v", err)
+	}
+
 	initializer := &initializer.Initializer{
 		Driver: d,
 	}
@@ -244,11 +254,12 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 	}
 
 	if c.Bool("migration-controller") {
+		migrationAdminNamespace := c.String("migration-admin-namespace")
 		migration := migration.Migration{
 			Driver:   d,
 			Recorder: recorder,
 		}
-		if err := migration.Init(); err != nil {
+		if err := migration.Init(migrationAdminNamespace); err != nil {
 			log.Fatalf("Error initializing migration: %v", err)
 		}
 	}

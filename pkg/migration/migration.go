@@ -17,7 +17,7 @@ type Migration struct {
 }
 
 // Init init
-func (m *Migration) Init() error {
+func (m *Migration) Init(migrationAdminNamespace string) error {
 	m.clusterPairController = &controllers.ClusterPairController{
 		Driver:   m.Driver,
 		Recorder: m.Recorder,
@@ -31,7 +31,7 @@ func (m *Migration) Init() error {
 		Driver:   m.Driver,
 		Recorder: m.Recorder,
 	}
-	err = m.migrationController.Init()
+	err = m.migrationController.Init(migrationAdminNamespace)
 	if err != nil {
 		return fmt.Errorf("error initializing migration controller: %v", err)
 	}
