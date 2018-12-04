@@ -4,7 +4,7 @@ MAINTAINER Portworx Inc. <support@portworx.com>
 LABEL name="openstorage/stork" \
       maintainer="support@portworx.com" \
       vendor="Portworx Inc." \
-      version="1.2.0" \
+      version="1.2.1" \
       release="1" \
       summary="STORK" \
       description="Storage Orchestrator Runtime for Kubernetes" \
