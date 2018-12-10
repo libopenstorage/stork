@@ -2,7 +2,7 @@ apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Migration
 metadata:
   name: mysql-migration
-  namespace: mysql-1-pvc-singlemysql
+  namespace: mysql-1-pvc-integration-test
 spec:
   # This should be the name of the cluster pair created above
   clusterPair: remoteclusterpair
@@ -12,4 +12,4 @@ spec:
   startApplications: true
   # List of namespaces to migrate
   namespaces:
-  - mysql-1-pvc-singlemysql 
+  - mysql-1-pvc-integration-test 

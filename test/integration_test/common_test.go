@@ -37,6 +37,7 @@ const (
 	specDir             = "./specs"
 	pairFileName        = "./specs/cluster-pair/cluster-pair.yaml"
 	remoteFilePath      = "/tmp/kubeconfig"
+	migrationNamespace  = "integration-test"
 
 	nodeScore   = 100
 	rackScore   = 50
@@ -250,7 +251,7 @@ func setRemoteConfig(kubeConfig string) error {
 	return nil
 }
 
-func createClusterPair(pairInfo map[string]string) error {
+func createClusterPair(pairInfo map[string]string, migrNamespace string) error {
 	pairFile, err := os.Create(pairFileName)
 	if err != nil {
 		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
@@ -260,7 +261,7 @@ func createClusterPair(pairInfo map[string]string) error {
 
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
-	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath, "-n", "mysql-1-pvc-singlemysql"})
+	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath, "-n", migrNamespace})
 	if err := cmd.Execute(); err != nil {
 		logrus.Errorf("Execute storkctl failed: %v", err)
 		return err
@@ -309,7 +310,7 @@ func addStorageOptions(pairInfo map[string]string) error {
 	return nil
 }
 
-func scheduleClusterPair() ([]*scheduler.Context, error) {
+func scheduleClusterPair(migrNamespace string) ([]*scheduler.Context, error) {
 	var err error
 	err = dumpRemoteKubeConfig(remoteConfig)
 	if err != nil {
@@ -322,7 +323,7 @@ func scheduleClusterPair() ([]*scheduler.Context, error) {
 		return nil, err
 	}
 
-	err = createClusterPair(info)
+	err = createClusterPair(info, migrNamespace)
 	if err != nil {
 		logrus.Errorf("Error creating cluster Spec: %v", err)
 		return nil, err
