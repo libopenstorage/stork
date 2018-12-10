@@ -111,9 +111,9 @@ const (
 	pxCloudSnapshotCredsIDKey     = pxAnnotationKeyPrefix + "cloud-cred-id"
 )
 
-var pxGroupSnapSelectorRegex = regexp.MustCompile(`portworx\.selector/(.+)`)
-var pre14VersionRegex = regexp.MustCompile(`1\.2\..+|1\.3\..+`)
-var pre2VersionRegex = regexp.MustCompile(`1\.+`)
+var pxGroupSnapSelectorRegex = regexp.MustCompile(`^portworx\.selector/(.+)`)
+var pre14VersionRegex = regexp.MustCompile(`^1\.2\..+|^1\.3\..+`)
+var pre2VersionRegex = regexp.MustCompile(`^1\.+`)
 
 var snapAPICallBackoff = wait.Backoff{
 	Duration: volumeSnapshotInitialDelay,
