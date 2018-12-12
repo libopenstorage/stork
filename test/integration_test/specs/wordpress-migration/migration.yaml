@@ -5,7 +5,7 @@ metadata:
   namespace: wordpress-integration-test
 spec:
   # This should be the name of the cluster pair created above
-  clusterPair: remoteclusterpair
+  clusterPair: remoteclusterpair-wordpress-integration-test
   # If set to false this will migrate only the Portworx volumes. No PVCs, apps, etc will be migrated
   includeResources: true
   # If set to false, the deployments and stateful set replicas will be set to 0 on the destination. There will be an annotation with "stork.openstorage.org/migrationReplicas" to store the replica count from the source
