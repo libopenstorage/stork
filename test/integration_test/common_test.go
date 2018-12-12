@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,8 +35,8 @@ const (
 	schedulerDriverName = "k8s"
 	remotePairName      = "remoteclusterpair"
 	remoteConfig        = "remoteconfigmap"
-	specDir             = "./specs"
-	pairFileName        = "./specs/cluster-pair/cluster-pair.yaml"
+	specDir             = "./specs/"
+	pairFileName        = "/cluster-pair.yaml"
 	remoteFilePath      = "/tmp/kubeconfig"
 	migrationNamespace  = "integration-test"
 
@@ -54,6 +55,8 @@ var volumeDriver volume.Driver
 var storkVolumeDriver storkdriver.Driver
 
 var snapshotScaleCount int
+
+var migrateAppTest = []string{"postgres", "elasticsearch", "wordpress", "mysql-1-pvc"}
 
 // TODO: Start stork scheduler and stork extender
 // TODO: Take driver name from input
@@ -252,7 +255,8 @@ func setRemoteConfig(kubeConfig string) error {
 }
 
 func createClusterPair(pairInfo map[string]string, migrNamespace string) error {
-	pairFile, err := os.Create(pairFileName)
+	specFile := specDir + strings.Split(migrNamespace, "-")[0] + "-cluster-pair" + pairFileName
+	pairFile, err := os.Create(specFile)
 	if err != nil {
 		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
 		return err
@@ -261,13 +265,13 @@ func createClusterPair(pairInfo map[string]string, migrNamespace string) error {
 
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
-	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath, "-n", migrNamespace})
+	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName + "-" + migrNamespace, "--kubeconfig", remoteFilePath, "-n", migrNamespace})
 	if err := cmd.Execute(); err != nil {
 		logrus.Errorf("Execute storkctl failed: %v", err)
 		return err
 	}
 
-	truncCmd := `sed -i "$((` + "`wc -l " + pairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + pairFileName
+	truncCmd := `sed -i "$((` + "`wc -l " + specFile + "|awk '{print $1}'`" + `-4)),$ d" ` + specFile
 	logrus.Infof("trunc cmd: %v", truncCmd)
 	err = exec.Command("sh", "-c", truncCmd).Run()
 	if err != nil {
@@ -282,11 +286,11 @@ func createClusterPair(pairInfo map[string]string, migrNamespace string) error {
 		return err
 	}
 
-	return addStorageOptions(pairInfo)
+	return addStorageOptions(pairInfo, specFile)
 }
 
-func addStorageOptions(pairInfo map[string]string) error {
-	file, err := os.OpenFile(pairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+func addStorageOptions(pairInfo map[string]string, specFile string) error {
+	file, err := os.OpenFile(specFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
 		return err
@@ -336,7 +340,7 @@ func scheduleClusterPair(migrNamespace string) ([]*scheduler.Context, error) {
 	}
 
 	ctxs, err := schedulerDriver.Schedule("clusterpair",
-		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
+		scheduler.ScheduleOptions{AppKeys: []string{strings.Split(migrNamespace, "-")[0] + "-cluster-pair"}})
 	if err != nil {
 		logrus.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
 		return nil, err
