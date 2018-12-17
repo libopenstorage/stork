@@ -56,6 +56,14 @@ if [ $timeout -gt 600 ]; then
   describe_pod_then_exit
 fi
 
+TORPEDO_SSH_KEY_VOLUME=""
+TORPEDO_SSH_KEY_MOUNT=""
+if [ -n "${TORPEDO_SSH_KEY}" ]; then
+    kubectl create secret generic key4torpedo --from-file=${TORPEDO_SSH_KEY}
+    TORPEDO_SSH_KEY_VOLUME="{ \"name\": \"ssh-key-volume\", \"secret\": { \"secretName\": \"key4torpedo\", \"defaultMode\": 256 }}"
+    TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
+fi
+
 echo "Deploying torpedo pod..."
 cat <<EOF | kubectl create -f -
 ---
@@ -131,11 +139,13 @@ spec:
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true
+    volumeMounts: [${TORPEDO_SSH_KEY_MOUNT}]
     env:
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
+  volumes: [${TORPEDO_SSH_KEY_VOLUME}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
 EOF
