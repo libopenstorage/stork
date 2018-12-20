@@ -25,3 +25,5 @@ type GroupVolumeSnapshotExpansion interface{}
 type MigrationExpansion interface{}
 
 type RuleExpansion interface{}
+
+type StorageClusterExpansion interface{}

@@ -32,6 +32,8 @@ type Interface interface {
 	Migrations() MigrationInformer
 	// Rules returns a RuleInformer.
 	Rules() RuleInformer
+	// StorageClusters returns a StorageClusterInformer.
+	StorageClusters() StorageClusterInformer
 }
 
 type version struct {
@@ -63,4 +65,9 @@ func (v *version) Migrations() MigrationInformer {
 // Rules returns a RuleInformer.
 func (v *version) Rules() RuleInformer {
 	return &ruleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// StorageClusters returns a StorageClusterInformer.
+func (v *version) StorageClusters() StorageClusterInformer {
+	return &storageClusterInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

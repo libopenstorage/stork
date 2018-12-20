@@ -8,6 +8,7 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/cluster"
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
@@ -108,12 +109,17 @@ func main() {
 			Name:  "migration-admin-namespace",
 			Usage: "Namespace to be used by a cluster admin which can migrate all other namespaces (default: none)",
 		},
+		cli.BoolFlag{
+			Name:  "storage-cluster-controller",
+			Usage: "Start the storage cluster controller (default: false)",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatalf("Error starting stork: %v", err)
 	}
 }
+
 func run(c *cli.Context) {
 
 	log.Infof("Starting stork version %v", version.Version)
@@ -270,6 +276,15 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		}
 		if err := migration.Init(migrationAdminNamespace); err != nil {
 			log.Fatalf("Error initializing migration: %v", err)
+		}
+	}
+
+	if c.Bool("storage-cluster-controller") {
+		clusterController := cluster.Controller{
+			Recorder: recorder,
+		}
+		if err := clusterController.Init(); err != nil {
+			log.Fatalf("Error initializing cluster controller: %v", err)
 		}
 	}
 
