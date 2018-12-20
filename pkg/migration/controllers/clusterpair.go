@@ -27,13 +27,13 @@ const (
 	validateCRDTimeout  time.Duration = 1 * time.Minute
 )
 
-//ClusterPairController pair
+// ClusterPairController controller to watch over ClusterPair
 type ClusterPairController struct {
 	Driver   volume.Driver
 	Recorder record.EventRecorder
 }
 
-//Init init
+// Init initialize the cluster pair controller
 func (c *ClusterPairController) Init() error {
 	err := c.createCRD()
 	if err != nil {

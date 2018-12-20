@@ -31,6 +31,7 @@ type StorkV1alpha1Interface interface {
 	GroupVolumeSnapshotsGetter
 	MigrationsGetter
 	RulesGetter
+	StorageClustersGetter
 }
 
 // StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.org group.
@@ -52,6 +53,10 @@ func (c *StorkV1alpha1Client) Migrations(namespace string) MigrationInterface {
 
 func (c *StorkV1alpha1Client) Rules(namespace string) RuleInterface {
 	return newRules(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) StorageClusters(namespace string) StorageClusterInterface {
+	return newStorageClusters(c, namespace)
 }
 
 // NewForConfig creates a new StorkV1alpha1Client for the given config.

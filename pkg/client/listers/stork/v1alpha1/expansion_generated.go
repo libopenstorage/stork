@@ -49,3 +49,11 @@ type RuleListerExpansion interface{}
 // RuleNamespaceListerExpansion allows custom methods to be added to
 // RuleNamespaceLister.
 type RuleNamespaceListerExpansion interface{}
+
+// StorageClusterListerExpansion allows custom methods to be added to
+// StorageClusterLister.
+type StorageClusterListerExpansion interface{}
+
+// StorageClusterNamespaceListerExpansion allows custom methods to be added to
+// StorageClusterNamespaceLister.
+type StorageClusterNamespaceListerExpansion interface{}
