@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// ClusterPairs returns a ClusterPairInformer.
 	ClusterPairs() ClusterPairInformer
+	// GroupVolumeSnapshots returns a GroupVolumeSnapshotInformer.
+	GroupVolumeSnapshots() GroupVolumeSnapshotInformer
 	// Migrations returns a MigrationInformer.
 	Migrations() MigrationInformer
 	// Rules returns a RuleInformer.
@@ -46,6 +48,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ClusterPairs returns a ClusterPairInformer.
 func (v *version) ClusterPairs() ClusterPairInformer {
 	return &clusterPairInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// GroupVolumeSnapshots returns a GroupVolumeSnapshotInformer.
+func (v *version) GroupVolumeSnapshots() GroupVolumeSnapshotInformer {
+	return &groupVolumeSnapshotInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Migrations returns a MigrationInformer.

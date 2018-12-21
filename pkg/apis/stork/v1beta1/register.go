@@ -1,4 +1,4 @@
-package v1alpha1
+package v1beta1
 
 import (
 	"github.com/libopenstorage/stork/pkg/apis/stork"
@@ -9,7 +9,7 @@ import (
 )
 
 // SchemeGroupVersion is group version used to register these objects
-var SchemeGroupVersion = schema.GroupVersion{Group: stork.GroupName, Version: "v1alpha1"}
+var SchemeGroupVersion = schema.GroupVersion{Group: stork.GroupName, Version: "v1beta1"}
 
 var (
 	// SchemeBuilder is the scheme builder for the types
@@ -31,12 +31,6 @@ func Resource(resource string) schema.GroupResource {
 // Adds the list of known types to Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&Rule{},
-		&RuleList{},
-		&ClusterPair{},
-		&ClusterPairList{},
-		&Migration{},
-		&MigrationList{},
 		&GroupVolumeSnapshot{},
 		&GroupVolumeSnapshotList{},
 	)
