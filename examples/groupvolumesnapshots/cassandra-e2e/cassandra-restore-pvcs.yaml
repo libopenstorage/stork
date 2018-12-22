@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    snapshot.alpha.kubernetes.io/snapshot: "snapshot-for-cassandra-0"
+  labels:
+    app: cassandra
+  name: cassandra-data-cassandra-0
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: stork-snapshot-sc
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    snapshot.alpha.kubernetes.io/snapshot: "snapshot-for-cassandra-1"
+  labels:
+    app: cassandra
+  name: cassandra-data-cassandra-1
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: stork-snapshot-sc
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    snapshot.alpha.kubernetes.io/snapshot: "snapshot-for-cassandra-2"
+  labels:
+    app: cassandra
+  name: cassandra-data-cassandra-2
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: stork-snapshot-sc
+  resources:
+    requests:
+      storage: 2Gi

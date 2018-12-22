@@ -20,6 +20,10 @@ const (
 	MigrationResourceName = "migration"
 	// MigrationResourcePlural is plural for "migration" resource
 	MigrationResourcePlural = "migrations"
+	// GroupSnapshotResourceName is name for "groupvolumesnapshot" resource
+	GroupSnapshotResourceName = "groupvolumesnapshot"
+	// GroupSnapshotResourcePlural is plural for the "groupvolumesnapshot" resource
+	GroupSnapshotResourcePlural = "groupvolumesnapshots"
 )
 
 // +genclient
@@ -259,7 +263,16 @@ type GroupVolumeSnapshotList struct {
 type GroupVolumeSnapshotStatus struct {
 	Stage           GroupVolumeSnapshotStageType  `json:"stage"`
 	Status          GroupVolumeSnapshotStatusType `json:"status"`
-	VolumeSnapshots []*crdv1.VolumeSnapshot       `json:"volumeSnapshots"`
+	VolumeSnapshots []*VolumeSnapshotStatus       `json:"volumeSnapshots"`
+}
+
+// VolumeSnapshotStatus captures the status of a volume snapshot operation
+type VolumeSnapshotStatus struct {
+	VolumeSnapshotName string
+	TaskID             string
+	ParentVolumeID     string
+	DataSource         *crdv1.VolumeSnapshotDataSource
+	Conditions         []crdv1.VolumeSnapshotCondition
 }
 
 // GroupVolumeSnapshotStatusType is types of statuses of a group snapshot operation
@@ -282,6 +295,10 @@ const (
 type GroupVolumeSnapshotStageType string
 
 const (
+	// GroupSnapshotStageInitial is when the group snapshot is just created
+	GroupSnapshotStageInitial GroupVolumeSnapshotStageType = ""
+	// GroupSnapshotStagePreChecks is when the group snapshot is going through prechecks
+	GroupSnapshotStagePreChecks GroupVolumeSnapshotStageType = "PreChecks"
 	// GroupSnapshotStagePreSnapshot is when the pre-snapshot rule is executing for the group snapshot
 	GroupSnapshotStagePreSnapshot GroupVolumeSnapshotStageType = "PreSnapshot"
 	// GroupSnapshotStageSnapshot is when the snapshots are being taken for the group snapshot

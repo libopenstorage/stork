@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	stork "github.com/libopenstorage/stork/pkg/apis/stork"
-	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/apis/stork"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -43,8 +43,8 @@ func (c *ClusterPairController) Init() error {
 	return controller.Register(
 		&schema.GroupVersionKind{
 			Group:   stork.GroupName,
-			Version: storkv1alpha1.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(storkv1alpha1.ClusterPair{}).Name(),
+			Version: stork_api.SchemeGroupVersion.Version,
+			Kind:    reflect.TypeOf(stork_api.ClusterPair{}).Name(),
 		},
 		"",
 		resyncPeriod,
@@ -54,7 +54,7 @@ func (c *ClusterPairController) Init() error {
 // Handle updates for ClusterPair objects
 func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
-	case *storkv1alpha1.ClusterPair:
+	case *stork_api.ClusterPair:
 
 		clusterPair := o
 		if event.Deleted {
@@ -63,16 +63,16 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 			}
 		}
 
-		if clusterPair.Status.StorageStatus != storkv1alpha1.ClusterPairStatusReady {
+		if clusterPair.Status.StorageStatus != stork_api.ClusterPairStatusReady {
 			remoteID, err := c.Driver.CreatePair(clusterPair)
 			if err != nil {
-				clusterPair.Status.StorageStatus = storkv1alpha1.ClusterPairStatusError
+				clusterPair.Status.StorageStatus = stork_api.ClusterPairStatusError
 				c.Recorder.Event(clusterPair,
 					v1.EventTypeWarning,
 					string(clusterPair.Status.StorageStatus),
 					err.Error())
 			} else {
-				clusterPair.Status.StorageStatus = storkv1alpha1.ClusterPairStatusReady
+				clusterPair.Status.StorageStatus = stork_api.ClusterPairStatusReady
 				c.Recorder.Event(clusterPair,
 					v1.EventTypeNormal,
 					string(clusterPair.Status.StorageStatus),
@@ -84,7 +84,7 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 				return err
 			}
 		}
-		if clusterPair.Status.SchedulerStatus != storkv1alpha1.ClusterPairStatusReady {
+		if clusterPair.Status.SchedulerStatus != stork_api.ClusterPairStatusReady {
 			remoteConfig, err := getClusterPairSchedulerConfig(clusterPair.Name, clusterPair.Namespace)
 			if err != nil {
 				return err
@@ -95,13 +95,13 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 				return err
 			}
 			if _, err = client.ServerVersion(); err != nil {
-				clusterPair.Status.SchedulerStatus = storkv1alpha1.ClusterPairStatusError
+				clusterPair.Status.SchedulerStatus = stork_api.ClusterPairStatusError
 				c.Recorder.Event(clusterPair,
 					v1.EventTypeWarning,
 					string(clusterPair.Status.SchedulerStatus),
 					err.Error())
 			} else {
-				clusterPair.Status.SchedulerStatus = storkv1alpha1.ClusterPairStatusReady
+				clusterPair.Status.SchedulerStatus = stork_api.ClusterPairStatusReady
 				c.Recorder.Event(clusterPair,
 					v1.EventTypeNormal,
 					string(clusterPair.Status.SchedulerStatus),
@@ -129,30 +129,30 @@ func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*r
 	return remoteClientConfig.ClientConfig()
 }
 
-func getClusterPairStorageStatus(clusterPairName string, namespace string) (storkv1alpha1.ClusterPairStatusType, error) {
+func getClusterPairStorageStatus(clusterPairName string, namespace string) (stork_api.ClusterPairStatusType, error) {
 	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
-		return storkv1alpha1.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair: %v", err)
+		return stork_api.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair: %v", err)
 	}
 	return clusterPair.Status.StorageStatus, nil
 }
 
-func getClusterPairSchedulerStatus(clusterPairName string, namespace string) (storkv1alpha1.ClusterPairStatusType, error) {
+func getClusterPairSchedulerStatus(clusterPairName string, namespace string) (stork_api.ClusterPairStatusType, error) {
 	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
-		return storkv1alpha1.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair: %v", err)
+		return stork_api.ClusterPairStatusInitial, fmt.Errorf("error getting clusterpair: %v", err)
 	}
 	return clusterPair.Status.SchedulerStatus, nil
 }
 
 func (c *ClusterPairController) createCRD() error {
 	resource := k8s.CustomResource{
-		Name:    storkv1alpha1.ClusterPairResourceName,
-		Plural:  storkv1alpha1.ClusterPairResourcePlural,
+		Name:    stork_api.ClusterPairResourceName,
+		Plural:  stork_api.ClusterPairResourcePlural,
 		Group:   stork.GroupName,
-		Version: storkv1alpha1.SchemeGroupVersion.Version,
+		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
-		Kind:    reflect.TypeOf(storkv1alpha1.ClusterPair{}).Name(),
+		Kind:    reflect.TypeOf(stork_api.ClusterPair{}).Name(),
 	}
 	err := k8s.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
