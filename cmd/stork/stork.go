@@ -10,6 +10,7 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/libopenstorage/stork/pkg/extender"
+	"github.com/libopenstorage/stork/pkg/groupsnapshot"
 	"github.com/libopenstorage/stork/pkg/initializer"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
@@ -250,6 +251,14 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 	if c.Bool("snapshotter") {
 		if err := snapshotController.Start(); err != nil {
 			log.Fatalf("Error starting snapshot controller: %v", err)
+		}
+
+		groupsnapshotInst := groupsnapshot.GroupSnapshot{
+			Driver:   d,
+			Recorder: recorder,
+		}
+		if err := groupsnapshotInst.Init(); err != nil {
+			log.Fatalf("Error initializing groupsnapshot controller: %v", err)
 		}
 	}
 

@@ -18,7 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1beta2"
 	batch_v1 "k8s.io/api/batch/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	rbac_v1 "k8s.io/api/rbac/v1"
 	storage_api "k8s.io/api/storage/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -371,6 +371,8 @@ type SnapshotOps interface {
 	GetSnapshotData(name string) (*snap_v1.VolumeSnapshotData, error)
 	// CreateSnapshotData creates the given volume snapshot data object
 	CreateSnapshotData(*snap_v1.VolumeSnapshotData) (*snap_v1.VolumeSnapshotData, error)
+	// UpdateSnapshotData updates the given volume snapshot data object
+	UpdateSnapshotData(*snap_v1.VolumeSnapshotData) (*snap_v1.VolumeSnapshotData, error)
 	// DeleteSnapshotData deletes the given snapshot
 	DeleteSnapshotData(name string) error
 	// ValidateSnapshotData validates the given snapshot data object
@@ -2638,6 +2640,22 @@ func (k *k8sOps) CreateSnapshotData(snapData *snap_v1.VolumeSnapshotData) (*snap
 
 	var result snap_v1.VolumeSnapshotData
 	if err := k.snapClient.Post().
+		Name(snapData.Metadata.Name).
+		Resource(snap_v1.VolumeSnapshotDataResourcePlural).
+		Body(snapData).
+		Do().Into(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (k *k8sOps) UpdateSnapshotData(snapData *snap_v1.VolumeSnapshotData) (*snap_v1.VolumeSnapshotData, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	var result snap_v1.VolumeSnapshotData
+	if err := k.snapClient.Put().
 		Name(snapData.Metadata.Name).
 		Resource(snap_v1.VolumeSnapshotDataResourcePlural).
 		Body(snapData).

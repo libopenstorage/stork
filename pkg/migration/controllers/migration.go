@@ -11,14 +11,14 @@ import (
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/heptio/ark/pkg/util/collections"
 	"github.com/libopenstorage/stork/drivers/volume"
-	stork "github.com/libopenstorage/stork/pkg/apis/stork"
-	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/apis/stork"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -84,8 +84,8 @@ func (m *MigrationController) Init(migrationAdminNamespace string) error {
 	return controller.Register(
 		&schema.GroupVersionKind{
 			Group:   stork.GroupName,
-			Version: storkv1alpha1.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(storkv1alpha1.Migration{}).Name(),
+			Version: stork_api.SchemeGroupVersion.Version,
+			Kind:    reflect.TypeOf(stork_api.Migration{}).Name(),
 		},
 		"",
 		resyncPeriod,
@@ -95,7 +95,7 @@ func (m *MigrationController) Init(migrationAdminNamespace string) error {
 // Handle updates for Migration objects
 func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
-	case *storkv1alpha1.Migration:
+	case *stork_api.Migration:
 		migration := o
 		if event.Deleted {
 			return m.Driver.CancelMigration(migration)
@@ -106,15 +106,15 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			log.MigrationLog(migration).Errorf(err.Error())
 			m.Recorder.Event(migration,
 				v1.EventTypeWarning,
-				string(storkv1alpha1.MigrationStatusFailed),
+				string(stork_api.MigrationStatusFailed),
 				err.Error())
 			return err
 		}
 
 		switch migration.Status.Stage {
 
-		case storkv1alpha1.MigrationStageInitial,
-			storkv1alpha1.MigrationStageVolumes:
+		case stork_api.MigrationStageInitial,
+			stork_api.MigrationStageVolumes:
 			// Restrict migration to only the namespace that the object belongs
 			// except for the namespace designated by the admin
 			if migration.Namespace != m.migrationAdminNamespace {
@@ -124,7 +124,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 						log.MigrationLog(migration).Errorf(err.Error())
 						m.Recorder.Event(migration,
 							v1.EventTypeWarning,
-							string(storkv1alpha1.MigrationStatusFailed),
+							string(stork_api.MigrationStatusFailed),
 							err.Error())
 						return nil
 					}
@@ -134,13 +134,13 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			for _, ns := range migration.Spec.Namespaces {
 				_, err := k8s.Instance().GetNamespace(ns)
 				if err != nil {
-					migration.Status.Status = storkv1alpha1.MigrationStatusFailed
-					migration.Status.Stage = storkv1alpha1.MigrationStageFinal
+					migration.Status.Status = stork_api.MigrationStatusFailed
+					migration.Status.Stage = stork_api.MigrationStageFinal
 					err = fmt.Errorf("Error getting namespace %v: %v", ns, err)
 					log.MigrationLog(migration).Errorf(err.Error())
 					m.Recorder.Event(migration,
 						v1.EventTypeWarning,
-						string(storkv1alpha1.MigrationStatusFailed),
+						string(stork_api.MigrationStatusFailed),
 						err.Error())
 					err = sdk.Update(migration)
 					if err != nil {
@@ -157,23 +157,23 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 				log.MigrationLog(migration).Errorf(message)
 				m.Recorder.Event(migration,
 					v1.EventTypeWarning,
-					string(storkv1alpha1.MigrationStatusFailed),
+					string(stork_api.MigrationStatusFailed),
 					message)
 				return err
 			}
-		case storkv1alpha1.MigrationStageApplications:
+		case stork_api.MigrationStageApplications:
 			err := m.migrateResources(migration)
 			if err != nil {
 				message := fmt.Sprintf("Error migrating resources: %v", err)
 				log.MigrationLog(migration).Errorf(message)
 				m.Recorder.Event(migration,
 					v1.EventTypeWarning,
-					string(storkv1alpha1.MigrationStatusFailed),
+					string(stork_api.MigrationStatusFailed),
 					message)
 				return err
 			}
 
-		case storkv1alpha1.MigrationStageFinal:
+		case stork_api.MigrationStageFinal:
 			// Do Nothing
 			return nil
 		default:
@@ -183,17 +183,17 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 	return nil
 }
 
-func (m *MigrationController) migrateVolumes(migration *storkv1alpha1.Migration) error {
+func (m *MigrationController) migrateVolumes(migration *stork_api.Migration) error {
 	storageStatus, err := getClusterPairStorageStatus(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
 	}
 
-	if storageStatus != storkv1alpha1.ClusterPairStatusReady {
+	if storageStatus != stork_api.ClusterPairStatusReady {
 		return fmt.Errorf("Storage Cluster pair is not ready. Status: %v", storageStatus)
 	}
 
-	migration.Status.Stage = storkv1alpha1.MigrationStageVolumes
+	migration.Status.Stage = stork_api.MigrationStageVolumes
 	// Trigger the migration if we don't have any status
 	if migration.Status.Volumes == nil {
 		volumeInfos, err := m.Driver.StartMigration(migration)
@@ -201,10 +201,10 @@ func (m *MigrationController) migrateVolumes(migration *storkv1alpha1.Migration)
 			return err
 		}
 		if volumeInfos == nil {
-			volumeInfos = make([]*storkv1alpha1.VolumeInfo, 0)
+			volumeInfos = make([]*stork_api.VolumeInfo, 0)
 		}
 		migration.Status.Volumes = volumeInfos
-		migration.Status.Status = storkv1alpha1.MigrationStatusInProgress
+		migration.Status.Status = stork_api.MigrationStatusInProgress
 		err = sdk.Update(migration)
 		if err != nil {
 			return err
@@ -220,7 +220,7 @@ func (m *MigrationController) migrateVolumes(migration *storkv1alpha1.Migration)
 			return err
 		}
 		if volumeInfos == nil {
-			volumeInfos = make([]*storkv1alpha1.VolumeInfo, 0)
+			volumeInfos = make([]*stork_api.VolumeInfo, 0)
 		}
 		migration.Status.Volumes = volumeInfos
 		// Store the new status
@@ -232,17 +232,17 @@ func (m *MigrationController) migrateVolumes(migration *storkv1alpha1.Migration)
 		// Now check if there is any failure or success
 		// TODO: On failure of one volume cancel other migrations?
 		for _, vInfo := range volumeInfos {
-			if vInfo.Status == storkv1alpha1.MigrationStatusInProgress {
+			if vInfo.Status == stork_api.MigrationStatusInProgress {
 				log.MigrationLog(migration).Infof("Volume migration still in progress: %v", vInfo.Volume)
 				inProgress = true
-			} else if vInfo.Status == storkv1alpha1.MigrationStatusFailed {
+			} else if vInfo.Status == stork_api.MigrationStatusFailed {
 				m.Recorder.Event(migration,
 					v1.EventTypeWarning,
 					string(vInfo.Status),
 					fmt.Sprintf("Error migrating volume %v: %v", vInfo.Volume, vInfo.Reason))
-				migration.Status.Stage = storkv1alpha1.MigrationStageFinal
-				migration.Status.Status = storkv1alpha1.MigrationStatusFailed
-			} else if vInfo.Status == storkv1alpha1.MigrationStatusSuccessful {
+				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.Status = stork_api.MigrationStatusFailed
+			} else if vInfo.Status == stork_api.MigrationStatusSuccessful {
 				m.Recorder.Event(migration,
 					v1.EventTypeNormal,
 					string(vInfo.Status),
@@ -257,10 +257,10 @@ func (m *MigrationController) migrateVolumes(migration *storkv1alpha1.Migration)
 	}
 
 	// If the migration hasn't failed move on to the next stage.
-	if migration.Status.Status != storkv1alpha1.MigrationStatusFailed {
+	if migration.Status.Status != stork_api.MigrationStatusFailed {
 		if migration.Spec.IncludeResources {
-			migration.Status.Stage = storkv1alpha1.MigrationStageApplications
-			migration.Status.Status = storkv1alpha1.MigrationStatusInProgress
+			migration.Status.Stage = stork_api.MigrationStageApplications
+			migration.Status.Status = stork_api.MigrationStatusInProgress
 			// Update the current state and then move on to migrating
 			// resources
 			err = sdk.Update(migration)
@@ -273,8 +273,8 @@ func (m *MigrationController) migrateVolumes(migration *storkv1alpha1.Migration)
 				return err
 			}
 		} else {
-			migration.Status.Stage = storkv1alpha1.MigrationStageFinal
-			migration.Status.Status = storkv1alpha1.MigrationStatusSuccessful
+			migration.Status.Stage = stork_api.MigrationStageFinal
+			migration.Status.Status = stork_api.MigrationStatusSuccessful
 		}
 	}
 
@@ -285,7 +285,7 @@ func (m *MigrationController) migrateVolumes(migration *storkv1alpha1.Migration)
 	return nil
 }
 
-func resourceToBeMigrated(migration *storkv1alpha1.Migration, resource metav1.APIResource) bool {
+func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIResource) bool {
 	// Deployment is present in "apps" and "extensions" group, so ignore
 	// "extensions"
 	if resource.Group == "extensions" && resource.Kind == "Deployment" {
@@ -399,13 +399,13 @@ func (m *MigrationController) objectToBeMigrated(
 	return true, nil
 }
 
-func (m *MigrationController) migrateResources(migration *storkv1alpha1.Migration) error {
+func (m *MigrationController) migrateResources(migration *stork_api.Migration) error {
 	schedulerStatus, err := getClusterPairSchedulerStatus(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
 	}
 
-	if schedulerStatus != storkv1alpha1.ClusterPairStatusReady {
+	if schedulerStatus != stork_api.ClusterPairStatusReady {
 		return fmt.Errorf("Scheduler Cluster pair is not ready. Status: %v", schedulerStatus)
 	}
 
@@ -419,7 +419,7 @@ func (m *MigrationController) migrateResources(migration *storkv1alpha1.Migratio
 	if err != nil {
 		m.Recorder.Event(migration,
 			v1.EventTypeWarning,
-			string(storkv1alpha1.MigrationStatusFailed),
+			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error preparing resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
@@ -428,17 +428,17 @@ func (m *MigrationController) migrateResources(migration *storkv1alpha1.Migratio
 	if err != nil {
 		m.Recorder.Event(migration,
 			v1.EventTypeWarning,
-			string(storkv1alpha1.MigrationStatusFailed),
+			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error applying resource: %v", err))
 		log.MigrationLog(migration).Errorf("Error applying resources: %v", err)
 		return err
 	}
 
-	migration.Status.Stage = storkv1alpha1.MigrationStageFinal
-	migration.Status.Status = storkv1alpha1.MigrationStatusSuccessful
+	migration.Status.Stage = stork_api.MigrationStageFinal
+	migration.Status.Status = stork_api.MigrationStatusSuccessful
 	for _, resource := range migration.Status.Resources {
-		if resource.Status != storkv1alpha1.MigrationStatusSuccessful {
-			migration.Status.Status = storkv1alpha1.MigrationStatusPartialSuccess
+		if resource.Status != stork_api.MigrationStatusSuccessful {
+			migration.Status.Status = stork_api.MigrationStatusPartialSuccess
 			break
 		}
 	}
@@ -450,14 +450,14 @@ func (m *MigrationController) migrateResources(migration *storkv1alpha1.Migratio
 }
 
 func (m *MigrationController) getResources(
-	migration *storkv1alpha1.Migration,
+	migration *stork_api.Migration,
 ) ([]runtime.Unstructured, error) {
 	err := m.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, err
 	}
 	allObjects := make([]runtime.Unstructured, 0)
-	resourceInfos := make([]*storkv1alpha1.ResourceInfo, 0)
+	resourceInfos := make([]*stork_api.ResourceInfo, 0)
 
 	for _, group := range m.discoveryHelper.Resources() {
 		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
@@ -507,10 +507,10 @@ func (m *MigrationController) getResources(
 					if err != nil {
 						return nil, err
 					}
-					resourceInfo := &storkv1alpha1.ResourceInfo{
+					resourceInfo := &stork_api.ResourceInfo{
 						Name:      metadata.GetName(),
 						Namespace: metadata.GetNamespace(),
-						Status:    storkv1alpha1.MigrationStatusInProgress,
+						Status:    stork_api.MigrationStatusInProgress,
 					}
 					resourceInfo.Kind = resource.Kind
 					resourceInfo.Group = groupVersion.Group
@@ -536,7 +536,7 @@ func (m *MigrationController) getResources(
 }
 
 func (m *MigrationController) prepareResources(
-	migration *storkv1alpha1.Migration,
+	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
 ) error {
 	for _, o := range objects {
@@ -551,7 +551,7 @@ func (m *MigrationController) prepareResources(
 				m.updateResourceStatus(
 					migration,
 					o,
-					storkv1alpha1.MigrationStatusFailed,
+					stork_api.MigrationStatusFailed,
 					fmt.Sprintf("Error preparing PV resource: %v", err))
 				continue
 			}
@@ -562,7 +562,7 @@ func (m *MigrationController) prepareResources(
 				m.updateResourceStatus(
 					migration,
 					o,
-					storkv1alpha1.MigrationStatusFailed,
+					stork_api.MigrationStatusFailed,
 					fmt.Sprintf("Error preparing Application resource: %v", err))
 				continue
 			}
@@ -573,7 +573,7 @@ func (m *MigrationController) prepareResources(
 				m.updateResourceStatus(
 					migration,
 					o,
-					storkv1alpha1.MigrationStatusFailed,
+					stork_api.MigrationStatusFailed,
 					fmt.Sprintf("Error preparing Service resource: %v", err))
 				continue
 			}
@@ -584,7 +584,7 @@ func (m *MigrationController) prepareResources(
 			m.updateResourceStatus(
 				migration,
 				o,
-				storkv1alpha1.MigrationStatusFailed,
+				stork_api.MigrationStatusFailed,
 				fmt.Sprintf("Error getting metadata for resource: %v", err))
 			continue
 		}
@@ -600,9 +600,9 @@ func (m *MigrationController) prepareResources(
 }
 
 func (m *MigrationController) updateResourceStatus(
-	migration *storkv1alpha1.Migration,
+	migration *stork_api.Migration,
 	object runtime.Unstructured,
-	status storkv1alpha1.MigrationStatusType,
+	status stork_api.MigrationStatusType,
 	reason string,
 ) {
 	for _, resource := range migration.Status.Resources {
@@ -619,7 +619,7 @@ func (m *MigrationController) updateResourceStatus(
 			resource.Status = status
 			resource.Reason = reason
 			eventType := v1.EventTypeNormal
-			if status == storkv1alpha1.MigrationStatusFailed {
+			if status == stork_api.MigrationStatusFailed {
 				eventType = v1.EventTypeWarning
 			}
 			eventMessage := fmt.Sprintf("%v %v/%v: %v",
@@ -634,7 +634,7 @@ func (m *MigrationController) updateResourceStatus(
 }
 
 func (m *MigrationController) prepareServiceResource(
-	migration *storkv1alpha1.Migration,
+	migration *stork_api.Migration,
 	object runtime.Unstructured,
 ) (runtime.Unstructured, error) {
 	spec, err := collections.GetMap(object.UnstructuredContent(), "spec")
@@ -647,7 +647,7 @@ func (m *MigrationController) prepareServiceResource(
 }
 
 func (m *MigrationController) preparePVResource(
-	migration *storkv1alpha1.Migration,
+	migration *stork_api.Migration,
 	object runtime.Unstructured,
 ) (runtime.Unstructured, error) {
 	spec, err := collections.GetMap(object.UnstructuredContent(), "spec")
@@ -661,7 +661,7 @@ func (m *MigrationController) preparePVResource(
 }
 
 func (m *MigrationController) prepareApplicationResource(
-	migration *storkv1alpha1.Migration,
+	migration *stork_api.Migration,
 	object runtime.Unstructured,
 ) (runtime.Unstructured, error) {
 	if migration.Spec.StartApplications {
@@ -686,7 +686,7 @@ func (m *MigrationController) prepareApplicationResource(
 }
 
 func (m *MigrationController) applyResources(
-	migration *storkv1alpha1.Migration,
+	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
 ) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
@@ -771,13 +771,13 @@ func (m *MigrationController) applyResources(
 			m.updateResourceStatus(
 				migration,
 				o,
-				storkv1alpha1.MigrationStatusFailed,
+				stork_api.MigrationStatusFailed,
 				fmt.Sprintf("Error applying resource: %v", err))
 		} else {
 			m.updateResourceStatus(
 				migration,
 				o,
-				storkv1alpha1.MigrationStatusSuccessful,
+				stork_api.MigrationStatusSuccessful,
 				"Resource migrated successfully")
 		}
 	}
@@ -786,12 +786,12 @@ func (m *MigrationController) applyResources(
 
 func (m *MigrationController) createCRD() error {
 	resource := k8s.CustomResource{
-		Name:    storkv1alpha1.MigrationResourceName,
-		Plural:  storkv1alpha1.MigrationResourcePlural,
+		Name:    stork_api.MigrationResourceName,
+		Plural:  stork_api.MigrationResourcePlural,
 		Group:   stork.GroupName,
-		Version: storkv1alpha1.SchemeGroupVersion.Version,
+		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
-		Kind:    reflect.TypeOf(storkv1alpha1.Migration{}).Name(),
+		Kind:    reflect.TypeOf(stork_api.Migration{}).Name(),
 	}
 	err := k8s.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
