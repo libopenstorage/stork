@@ -1,7 +1,7 @@
 FROM alpine:latest
 MAINTAINER Portworx Inc. <support@portworx.com>
 
-RUN apk add tar python 
+RUN apk add tar python
 RUN apk add ca-certificates
 RUN apk upgrade
 

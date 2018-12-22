@@ -43,7 +43,8 @@ required = [
   branch = "release-4.0"
 
 [[constraint]]
-  branch = "kubernetes-1.11"
+  #branch = "kubernetes-1.11"
+  branch = "group-snap-1.11"
   name = "github.com/portworx/sched-ops"
 
 [[constraint]]

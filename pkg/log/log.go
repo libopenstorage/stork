@@ -161,3 +161,17 @@ func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
 		"Migration": migration,
 	})
 }
+
+// GroupSnapshotLog formats a log message with groupsnapshot information
+func GroupSnapshotLog(groupsnapshot *storkv1.GroupVolumeSnapshot) *logrus.Entry {
+	if groupsnapshot != nil {
+		return logrus.WithFields(logrus.Fields{
+			"GroupSnapshotName":      groupsnapshot.Name,
+			"GroupSnapshotNamespace": groupsnapshot.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{
+		"GroupSnapshot": groupsnapshot,
+	})
+}
