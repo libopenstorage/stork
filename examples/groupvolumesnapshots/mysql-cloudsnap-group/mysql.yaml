@@ -1,10 +1,27 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
+  name: mysql-data-1
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+  labels:
+    type: db
+    app: mysql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
   name: mysql-data-2
   annotations:
     volume.beta.kubernetes.io/storage-class: px-mysql-sc
   labels:
+    type: db
     app: mysql
 spec:
   accessModes:
@@ -24,7 +41,7 @@ parameters:
 apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
-  name: mysql-2
+  name: mysql
 spec:
   strategy:
     rollingUpdate:
@@ -35,17 +52,17 @@ spec:
   selector:
     matchLabels:
       app: mysql
-      name: "mysql-2"
+      version: "1"
   template:
     metadata:
       labels:
         app: mysql
-        name: "mysql-2"
+        version: "1"
     spec:
       schedulerName: stork
       containers:
       - image: mysql:5.6
-        name: mysql-2
+        name: mysql
         env:
         - name: MYSQL_ROOT_PASSWORD
           value: password
@@ -57,4 +74,4 @@ spec:
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-data-2
+          claimName: mysql-data-1
