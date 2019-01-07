@@ -577,7 +577,7 @@ message SdkAlertsQuery {
 }
 
 // SdkAlertsEnumerateRequest is a request message to enumerate alerts.
-message SdkAlertsEnumerateRequest {
+message SdkAlertsEnumerateWithFiltersRequest {
     // It is a list of queries to find matching alerts.
     // Output of each of these queries is added to a global pool
     // and returned as output of an RPC call.
@@ -587,7 +587,7 @@ message SdkAlertsEnumerateRequest {
 }
 
 // SdkAlertsEnumerateResponse is a list of alerts.
-message SdkAlertsEnumerateResponse {
+message SdkAlertsEnumerateWithFiltersResponse {
     // Response contains a list of alerts.
     repeated Alert alerts = 1;
 }
@@ -604,10 +604,9 @@ message SdkAlertsDeleteResponse {}
 
 // OpenStorageAlerts defines rpc's for alerts.
 service OpenStorageAlerts {
-    // Enumerate allows querying alerts.
+    // Allows querying alerts.
     //
-    // #### Enumerate
-    // Enumerate allows 3 different types of queries as defined below:
+    // EnumerateWithFilters allows 3 different types of queries as defined below:
     //
     // * Query that takes only resource type as input
     // * Query that takes resource type and alert type as input and
@@ -633,13 +632,15 @@ service OpenStorageAlerts {
     // use two queries, first initialized with SdkAlertsResourceTypeQuery
     // and second initialized with SdkAlertsAlertTypeQuery and both
     // eventually packed as list in SdkAlertsEnumerateRequest.
-    rpc Enumerate(SdkAlertsEnumerateRequest)
-    returns (stream SdkAlertsEnumerateResponse) {
+    rpc EnumerateWithFilters(SdkAlertsEnumerateWithFiltersRequest)
+      returns (stream SdkAlertsEnumerateWithFiltersResponse) {
         option(google.api.http) = {
-                get: "/v1/alerts"
-            };
+          post: "/v1/alerts/filters"
+          body: "*"
+        };
     }
-    // Delete allows deleting alerts.
+
+    // Delete alerts
     //
     // #### Delete
     // Delete allows 3 different types of queries as defined below:
@@ -649,13 +650,14 @@ service OpenStorageAlerts {
     // * Query that takes resource id, alert type and resource type as input.
     //
     // #### Input
-    // SdkAlertsEnumerateRequest takes a list of such queries and all alerts
+    // SdkAlertsDeleteRequest takes a list of such queries and all alerts
     // that match at least one of the queries are deleted.
     rpc Delete(SdkAlertsDeleteRequest)
-    returns (SdkAlertsDeleteResponse) {
-      option(google.api.http) = {
-                post: "/v1/alerts"
-            };
+      returns (SdkAlertsDeleteResponse) {
+        option(google.api.http) = {
+          post: "/v1/alerts"
+          body: "*"
+        };
     }
 }
 
@@ -867,6 +869,7 @@ message ActiveRequests {
 message GroupSnapCreateRequest {
   string id = 1;
   map<string, string> Labels = 2;
+  repeated string volume_ids = 3;
 }
 
 // GroupSnapCreateRequest specifies a response that get's returned when creating a group snapshot.
@@ -2591,9 +2594,8 @@ message SdkVersion {
     Major = 0;
     // SDK version minor value of this specification
     Minor = 22;
-
     // SDK version patch value of this specification
-    Patch = 4;
+    Patch = 9;
   }
 
   // The following cannot be set to use the enum Version because the REST
@@ -2763,8 +2765,19 @@ message CloudMigrateInfoList {
     repeated CloudMigrateInfo list = 1;
 }
 
-// Empty Request
+// Request for cloud migration operation status
 message SdkCloudMigrateStatusRequest {
+    // Request contains the task id and cluster id for which status should be
+    // returned
+    CloudMigrateStatusRequest request = 1;
+}
+
+// Request for cloud migration operation status
+message CloudMigrateStatusRequest {
+    // Task id for which to return status
+    string task_id = 1;
+    // ID of the cluster for which to return migration statuses
+    string cluster_id = 2;
 }
 
 // Response with a status of the cloud migration operations
@@ -2834,12 +2847,6 @@ message ClusterPairProcessResponse {
     map<string, string> options = 4;
 }
 
-// Request to to delete a cluster pair
-message ClusterPairDeleteRequest {
-  // ID of the cluster pair to be deleted
-  string cluster_id = 1;
-}
-
 // Defines a delete request for a cluster pair
 message SdkClusterPairDeleteRequest {
   // ID of the cluster pair to be deleted
@@ -2848,12 +2855,6 @@ message SdkClusterPairDeleteRequest {
 
 // Empty response
 message SdkClusterPairDeleteResponse{
-}
-
-// Request to get the token for a cluster
-message ClusterPairTokenGetRequest {
-    // Reset token if already preset
-    bool reset_token = 1;
 }
 
 // Response to get the cluster token
@@ -2899,12 +2900,6 @@ message ClusterPairInfo {
     // Key/value pair of options associated with the cluster
     // Opaque to openstorage and interpreted by the drivers
     map<string, string> options = 7;
-}
-
-// Request to get a cluster pair
-message ClusterPairGetRequest {
-    // ID of the cluster, if empty gets the default pair
-    string id = 1;
 }
 
 // Defines a cluster pair inspect request
