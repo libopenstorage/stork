@@ -283,9 +283,11 @@ type CloudBackupGroupCreateRequest struct {
 	// GroupID indicates backup request for a volumegroup with this group id
 	GroupID string
 	// Labels indicates backup request for a volume group with these labels
-	// If both GroupID and Labels are specified, volumes matching both
-	// criteria are backed up to cloud
 	Labels map[string]string
+	// VolumeIDs are a list of volume IDs to use for the backup request
+	// If multiple of GroupID, Labels or VolumeIDs are specified, volumes matching all of
+	// them are backed up to cloud
+	VolumeIDs []string
 	// CredentialUUID is cloud credential to be used for backup
 	CredentialUUID string
 	// Full indicates if full backup is desired even though incremental is possible
@@ -306,6 +308,11 @@ type CloudBackupRestoreRequest struct {
 	// Name is optional unique id to be used for this restore op
 	// restore creates this by default
 	Name string
+}
+
+type CloudBackupGroupCreateResponse struct {
+	// Names of the tasks performing this group backup
+	Names []string
 }
 
 type CloudBackupRestoreResponse struct {
@@ -505,6 +512,10 @@ type CloudBackupGroupSchedCreateRequest struct {
 	// Labels indicates a volume group for which this group cloudsnap schedule is
 	// being created. If this is provided GroupId is not needed and vice-versa.
 	Labels map[string]string
+	// VolumeIDs are a list of volume IDs to use for the backup request
+	// If multiple of GroupID, Labels or VolumeIDs are specified, volumes matching all of
+	// them are backed up to cloud
+	VolumeIDs []string
 	// CredentialUUID is cloud credential to be used with this schedule
 	CredentialUUID string
 	// Schedule is the frequency of backup

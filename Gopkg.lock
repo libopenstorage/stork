@@ -330,6 +330,14 @@
   version = "v1.5.1"
 
 [[projects]]
+  digest = "1:950caca7dfcf796419232ba996c9c3539d09f26af27ba848c4508e604c13efbb"
+  name = "github.com/hashicorp/go-version"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "d40cf49b3a77bba84a7afdbd7f1dc295d114efb1"
+  version = "v1.1.0"
+
+[[projects]]
   digest = "1:8ec8d88c248041a6df5f6574b87bc00e7e0b493881dad2e7ef47b11dc69093b5"
   name = "github.com/hashicorp/golang-lru"
   packages = [
@@ -415,7 +423,7 @@
 
 [[projects]]
   branch = "release-4.0"
-  digest = "1:bf50085f1da2d0c79f20d9c6f041e6da524518d1abde215f228b64600051f633"
+  digest = "1:2f29c212961f10b7bdab7bf46851a87c6b38b8a2b42b78294e5f496b94069242"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -435,7 +443,7 @@
     "volume",
   ]
   pruneopts = "UT"
-  revision = "573c7a7449ba16cf48b80ed7aaf90a10d05e61de"
+  revision = "7deddcf0ca506ca179f39d3fb1f3ad3be17c5ce8"
 
 [[projects]]
   branch = "master"
@@ -1409,6 +1417,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/hashicorp/go-version",
     "github.com/heptio/ark/pkg/discovery",
     "github.com/heptio/ark/pkg/util/collections",
     "github.com/kubernetes-incubator/external-storage/lib/controller",
