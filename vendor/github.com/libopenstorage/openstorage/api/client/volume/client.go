@@ -505,6 +505,9 @@ func (v *volumeClient) CredsValidate(uuid string) error {
 	req := v.c.Put().Resource(api.OsdCredsPath + "/validate").Instance(uuid)
 	response := req.Do()
 	if response.Error() != nil {
+		if response.StatusCode() == http.StatusUnprocessableEntity {
+			return volume.NewCredentialError(response.Error().Error())
+		}
 		return response.FormatError()
 	}
 	return nil
@@ -535,14 +538,20 @@ func (v *volumeClient) CloudBackupCreate(
 // CloudBackupGroupCreate uploads snapshots of a volume group to cloud
 func (v *volumeClient) CloudBackupGroupCreate(
 	input *api.CloudBackupGroupCreateRequest,
-) error {
+) (*api.CloudBackupGroupCreateResponse, error) {
+
+	createResp := &api.CloudBackupGroupCreateResponse{}
 	req := v.c.Post().Resource(api.OsdBackupPath + "/group").Body(input)
 	response := req.Do()
 	if response.Error() != nil {
-		return response.FormatError()
+		return nil, response.FormatError()
 	}
 
-	return nil
+	if err := response.Unmarshal(&createResp); err != nil {
+		return nil, err
+	}
+
+	return createResp, nil
 }
 
 // CloudBackupRestore downloads a cloud backup to a newly created volume
@@ -734,12 +743,13 @@ func (v *volumeClient) CloudBackupSchedEnumerate() (*api.CloudBackupSchedEnumera
 	return enumerateResponse, nil
 }
 
-func (v *volumeClient) SnapshotGroup(groupID string, labels map[string]string) (*api.GroupSnapCreateResponse, error) {
+func (v *volumeClient) SnapshotGroup(groupID string, labels map[string]string, volumeIDs []string) (*api.GroupSnapCreateResponse, error) {
 
 	response := &api.GroupSnapCreateResponse{}
 	request := &api.GroupSnapCreateRequest{
-		Id:     groupID,
-		Labels: labels,
+		Id:        groupID,
+		Labels:    labels,
+		VolumeIds: volumeIDs,
 	}
 
 	req := v.c.Post().Resource(snapPath + "/snapshotgroup").Body(request)
@@ -782,9 +792,9 @@ func (v *volumeClient) CloudMigrateCancel(request *api.CloudMigrateCancelRequest
 	return nil
 }
 
-func (v *volumeClient) CloudMigrateStatus() (*api.CloudMigrateStatusResponse, error) {
+func (v *volumeClient) CloudMigrateStatus(request *api.CloudMigrateStatusRequest) (*api.CloudMigrateStatusResponse, error) {
 	statusResponse := &api.CloudMigrateStatusResponse{}
-	req := v.c.Get().Resource(api.OsdMigrateStatusPath)
+	req := v.c.Get().Resource(api.OsdMigrateStatusPath).Body(request)
 	response := req.Do()
 	if response.Error() != nil {
 		return nil, response.FormatError()

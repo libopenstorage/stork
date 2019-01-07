@@ -122,6 +122,11 @@ func (m *NullClusterData) UpdateLabels(arg0 map[string]string) error {
 	return ErrNotImplemented
 }
 
+// UpdateSchedulerNodeName
+func (m *NullClusterData) UpdateSchedulerNodeName(arg0 string) error {
+	return ErrNotImplemented
+}
+
 // GetData
 func (m *NullClusterData) GetData() (map[string]*api.Node, error) {
 	return nil, ErrNotImplemented
@@ -208,6 +213,11 @@ func (m *NullClusterPair) RefreshPair(arg0 string) error {
 // EnumeratePairs
 func (m *NullClusterPair) EnumeratePairs() (*api.ClusterPairsEnumerateResponse, error) {
 	return nil, ErrNotImplemented
+}
+
+// ValidatePair
+func (m *NullClusterPair) ValidatePair(arg0 string) error {
+	return ErrNotImplemented
 }
 
 // DeletePair
