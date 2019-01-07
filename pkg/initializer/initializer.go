@@ -10,7 +10,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	appv1beta1 "k8s.io/api/apps/v1beta1"
 	appv1beta2 "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -137,19 +137,19 @@ func (i *Initializer) Stop() error {
 }
 
 func (i *Initializer) initializeObject(obj interface{}, clientset *kubernetes.Clientset) error {
-	switch obj.(type) {
+	switch obj := obj.(type) {
 	case *appv1.StatefulSet:
-		return i.initializeStatefulSetV1(obj.(*appv1.StatefulSet), clientset)
+		return i.initializeStatefulSetV1(obj, clientset)
 	case *appv1beta1.StatefulSet:
-		return i.initializeStatefulSetV1Beta1(obj.(*appv1beta1.StatefulSet), clientset)
+		return i.initializeStatefulSetV1Beta1(obj, clientset)
 	case *appv1beta2.StatefulSet:
-		return i.initializeStatefulSetV1Beta2(obj.(*appv1beta2.StatefulSet), clientset)
+		return i.initializeStatefulSetV1Beta2(obj, clientset)
 	case *appv1.Deployment:
-		return i.initializeDeploymentV1(obj.(*appv1.Deployment), clientset)
+		return i.initializeDeploymentV1(obj, clientset)
 	case *appv1beta1.Deployment:
-		return i.initializeDeploymentV1Beta1(obj.(*appv1beta1.Deployment), clientset)
+		return i.initializeDeploymentV1Beta1(obj, clientset)
 	case *appv1beta2.Deployment:
-		return i.initializeDeploymentV1Beta2(obj.(*appv1beta2.Deployment), clientset)
+		return i.initializeDeploymentV1Beta2(obj, clientset)
 	default:
 		return fmt.Errorf("unsupported app type: %v", obj)
 	}
