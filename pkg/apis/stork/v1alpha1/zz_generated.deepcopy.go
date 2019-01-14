@@ -404,8 +404,8 @@ func (in *Rule) DeepCopyInto(out *Rule) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	if in.Spec != nil {
-		in, out := &in.Spec, &out.Spec
+	if in.Rules != nil {
+		in, out := &in.Rules, &out.Rules
 		*out = make([]RuleItem, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
