@@ -1,5 +1,0 @@
-apiVersion: stork.libopenstorage.org/v1alpha1
-kind: GroupVolumeSnapshot
-metadata:
-  name: mysql-groupsnapshot-fail-empty-spec
-spec:

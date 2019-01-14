@@ -1,11 +1,9 @@
 apiVersion: stork.libopenstorage.org/v1alpha1
 kind: GroupVolumeSnapshot
 metadata:
-  name: mysql-groupsnapshot-invalid-type
+  name: mysql-snapshots
 spec:
+  preSnapshotRule: mysql-presnap-rule
   pvcSelector:
     matchLabels:
       app: mysql
-  options:
-    portworx/snapshot-type: foo
-

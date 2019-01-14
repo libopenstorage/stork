@@ -34,7 +34,7 @@ const (
 type Rule struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
-	Spec            []RuleItem `json:"spec"`
+	Rules           []RuleItem `json:"rules"`
 }
 
 // RuleItem represents one items in a stork rule spec

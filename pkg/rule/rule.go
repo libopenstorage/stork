@@ -116,7 +116,7 @@ func Init() error {
 
 // ValidateRule validates a rule
 func ValidateRule(rule *stork_api.Rule, ruleType Type) error {
-	for _, item := range rule.Spec {
+	for _, item := range rule.Rules {
 		for _, action := range item.Actions {
 			if action.Type == stork_api.RuleActionCommand {
 				if action.Background && ruleType == PostExecRule {
@@ -250,7 +250,7 @@ func ExecuteRule(
 
 		// backgroundActionPresent is used to track if there is atleast one background action
 		backgroundActionPresent := false
-		for _, item := range rule.Spec {
+		for _, item := range rule.Rules {
 			filteredPods := make([]v1.Pod, 0)
 			// filter pods and only uses the ones that match this selector
 			for _, pod := range pods {
@@ -260,7 +260,7 @@ func ExecuteRule(
 			}
 
 			if len(filteredPods) == 0 {
-				log.RuleLog(rule, owner).Warnf("None of the pods matched selectors for rule spec: %v", rule.Spec)
+				log.RuleLog(rule, owner).Warnf("None of the pods matched selectors for rule spec: %v", item)
 				continue
 			}
 
