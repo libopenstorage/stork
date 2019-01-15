@@ -10,6 +10,7 @@ import (
 
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
 )
 
@@ -43,11 +44,13 @@ func getKeyFile(keypath string) (ssh_pkg.Signer, error) {
 	file := keypath
 	buf, err := ioutil.ReadFile(file)
 	if err != nil {
+		logrus.Errorf("failed to read ssh key file. Cause: %s", err.Error())
 		return nil, err
 	}
 
 	pubkey, err := ssh_pkg.ParsePrivateKey(buf)
 	if err != nil {
+		logrus.Errorf("failed to parse private key. Cause: %s", err.Error())
 		return nil, err
 	}
 
