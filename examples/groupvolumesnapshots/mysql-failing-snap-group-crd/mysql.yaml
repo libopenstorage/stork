@@ -3,7 +3,10 @@ apiVersion: v1
 metadata:
   name: mysql-data-1
   annotations:
-    volume.beta.kubernetes.io/storage-class: px-mysql-sc-with-group
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+  labels:
+    type: db
+    app: mysql
 spec:
   accessModes:
     - ReadWriteOnce
@@ -16,7 +19,10 @@ apiVersion: v1
 metadata:
   name: mysql-data-2
   annotations:
-    volume.beta.kubernetes.io/storage-class: px-mysql-sc-with-group
+    volume.beta.kubernetes.io/storage-class: px-mysql-sc
+  labels:
+    type: db
+    app: mysql
 spec:
   accessModes:
     - ReadWriteOnce
@@ -27,11 +33,10 @@ spec:
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: px-mysql-sc-with-group
+  name: px-mysql-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "2"
-  group: "mysql-1"
 ---
 apiVersion: apps/v1beta2
 kind: Deployment

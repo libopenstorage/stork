@@ -13,15 +13,16 @@ import (
 )
 
 const (
-	clusterPath     = "/cluster"
-	secretPath      = "/secrets"
-	SchedPath       = "/schedpolicy"
-	loggingurl      = "/loggingurl"
-	managementurl   = "/managementurl"
-	fluentdhost     = "/fluentdconfig"
-	tunnelconfigurl = "/tunnelconfig"
-	PairPath        = "/pair"
-	PairTokenPath   = "/pairtoken"
+	clusterPath      = "/cluster"
+	secretPath       = "/secrets"
+	SchedPath        = "/schedpolicy"
+	loggingurl       = "/loggingurl"
+	managementurl    = "/managementurl"
+	fluentdhost      = "/fluentdconfig"
+	tunnelconfigurl  = "/tunnelconfig"
+	PairPath         = "/pair"
+	PairValidatePath = "/validate"
+	PairTokenPath    = "/pairtoken"
 )
 
 type clusterClient struct {
@@ -70,6 +71,18 @@ func (c *clusterClient) ProcessPairRequest(
 		return nil, err
 	}
 	return resp, nil
+}
+
+func (c *clusterClient) ValidatePair(
+	id string,
+) error {
+	path := clusterPath + PairPath + PairValidatePath
+	response := c.c.Put().Resource(path).Instance(id).Do()
+
+	if response.Error() != nil {
+		return response.FormatError()
+	}
+	return nil
 }
 
 func (c *clusterClient) DeletePair(
@@ -189,6 +202,10 @@ func (c *clusterClient) UpdateData(nodeData map[string]interface{}) error {
 }
 
 func (c *clusterClient) UpdateLabels(nodeLabels map[string]string) error {
+	return nil
+}
+
+func (c *clusterClient) UpdateSchedulerNodeName(name string) error {
 	return nil
 }
 

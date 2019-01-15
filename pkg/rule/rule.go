@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	stork "github.com/libopenstorage/stork/pkg/apis/stork"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/apis/stork"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
 	"github.com/libopenstorage/stork/pkg/log"
@@ -94,9 +94,9 @@ func Init() error {
 		Name:    "rule",
 		Plural:  "rules",
 		Group:   stork.GroupName,
-		Version: stork.Version,
+		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
-		Kind:    reflect.TypeOf(storkv1.Rule{}).Name(),
+		Kind:    reflect.TypeOf(stork_api.Rule{}).Name(),
 	}
 
 	err := k8s.Instance().CreateCRD(storkRuleResource)
@@ -115,10 +115,10 @@ func Init() error {
 }
 
 // ValidateRule validates a rule
-func ValidateRule(rule *storkv1.Rule, ruleType Type) error {
+func ValidateRule(rule *stork_api.Rule, ruleType Type) error {
 	for _, item := range rule.Spec {
 		for _, action := range item.Actions {
-			if action.Type == storkv1.RuleActionCommand {
+			if action.Type == stork_api.RuleActionCommand {
 				if action.Background && ruleType == PostExecRule {
 					return fmt.Errorf("background actions are not supported for post exec rules")
 				}
@@ -199,7 +199,7 @@ func PerformRuleRecovery(
 // ExecuteRule executes rules for the given owner. PVCs are used to figure out the pods on which the rule actions will be
 // run on
 func ExecuteRule(
-	rule *storkv1.Rule,
+	rule *stork_api.Rule,
 	rType Type,
 	owner runtime.Object,
 	pvcs []v1.PersistentVolumeClaim,
@@ -254,7 +254,7 @@ func ExecuteRule(
 					backgroundActionPresent = true
 				}
 
-				if action.Type == storkv1.RuleActionCommand {
+				if action.Type == stork_api.RuleActionCommand {
 					err := executeCommandAction(filteredPods, rule, owner, action, backgroundPodListChan, rType, taskID)
 					if err != nil {
 						// if any action fails, terminate all background jobs and don't depend on caller
@@ -285,9 +285,9 @@ func ExecuteRule(
 // executeCommandAction executes the command type action on given pods:
 func executeCommandAction(
 	pods []v1.Pod,
-	rule *storkv1.Rule,
+	rule *stork_api.Rule,
 	owner runtime.Object,
-	action storkv1.RuleAction,
+	action stork_api.RuleAction,
 	backgroundPodNotifyChan chan v1.Pod,
 	rType Type, taskID *uuid.UUID) error {
 	if len(pods) == 0 {

@@ -6,7 +6,7 @@ metadata:
     volume.beta.kubernetes.io/storage-class: px-mysql-sc
   labels:
     type: db
-    tier: prod
+    app: mysql
 spec:
   accessModes:
     - ReadWriteOnce
@@ -22,7 +22,7 @@ metadata:
     volume.beta.kubernetes.io/storage-class: px-mysql-sc
   labels:
     type: db
-    tier: prod
+    app: mysql
 spec:
   accessModes:
     - ReadWriteOnce
