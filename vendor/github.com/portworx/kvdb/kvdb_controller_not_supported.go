@@ -12,8 +12,12 @@ func (c *controllerNotSupported) AddMember(nodeIP, nodePeerPort, nodeName string
 	return nil, ErrNotSupported
 }
 
-func (c *controllerNotSupported) RemoveMember(nodeID string) error {
+func (c *controllerNotSupported) RemoveMember(nodeID string, nodeIP string) error {
 	return ErrNotSupported
+}
+
+func (c *controllerNotSupported) UpdateMember(nodeIP, nodePeerPort, nodeName string) (map[string][]string, error) {
+	return nil, ErrNotSupported
 }
 
 func (c *controllerNotSupported) ListMembers() (map[string]*MemberInfo, error) {

@@ -1,3 +1,7 @@
+ifndef PKGS
+PKGS := $(shell go list ./... 2>&1 | grep -v test)
+endif
+
 all: test
 
 deps:
@@ -40,8 +44,15 @@ errcheck: testdeps
 
 pretest: errcheck lint vet
 
-gotest: testdeps
-	go test -v ./...
+gotest:
+	for pkg in $(PKGS); \
+		do \
+			go test --timeout 1h -v -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
+			if [ -f profile.out ]; then \
+				cat profile.out >> coverage.txt; \
+				rm profile.out; \
+			fi; \
+		done
 
 test: pretest gotest
 
@@ -52,7 +63,7 @@ docker-test:
 	docker run \
 		-v $(GOPATH)/src/github.com/portworx/kvdb:/go/src/github.com/portworx/kvdb \
 		portworx/kvdb:test_container \
-			go test -v --timeout 1h ./...
+		make gotest
 
 clean:
 	go clean -i ./...

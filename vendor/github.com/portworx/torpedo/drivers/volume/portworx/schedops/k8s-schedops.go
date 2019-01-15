@@ -168,6 +168,39 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 	return nil
 }
 
+func (k *k8sSchedOps) validatePods(pods []corev1.Pod, pvName string) ([]corev1.Pod, error) {
+	validatedPods := make([]corev1.Pod, 0)
+	t := func() (interface{}, bool, error) {
+		updatedPods := make([]corev1.Pod, 0)
+		pods, err := k8s.Instance().GetPodsUsingPV(pvName)
+		if err != nil {
+			logrus.Errorf("failed to find pods using pv %s", pvName)
+			return nil, true, err
+		}
+		for _, pod := range pods {
+			updatedPod, err := k8s.Instance().GetPodByName(pod.Name, pod.Namespace)
+			if err != nil || !k8s.Instance().IsPodReady(*updatedPod) {
+				logrus.Errorf("failed to update pod %v err: %v", pod, err)
+				return nil, true, err
+			}
+			updatedPods = append(updatedPods, *updatedPod)
+		}
+		if len(updatedPods) == 0 {
+			return nil, true, nil
+		}
+		return updatedPods, false, nil
+	}
+
+	output, err := task.DoRetryWithTimeout(t, podExecTimeout, defaultRetryInterval)
+	if err != nil {
+		return nil, err
+	}
+	if output != nil {
+		validatedPods = output.([]corev1.Pod)
+	}
+	return validatedPods, nil
+}
+
 func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 	pvName := k.GetVolumeName(vol)
 	if len(pvName) == 0 {
@@ -179,12 +212,12 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 		return err
 	}
 
+	pods, err = k.validatePods(pods, pvName)
+	if err != nil {
+		return err
+	}
+
 	for _, p := range pods {
-		if ready := k8s.Instance().IsPodReady(p); !ready {
-			continue
-		}
-		//TODO: Debug why this fails intermittently
-		//Display pod status at this point.
 		logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", p.Namespace, p.Name, p.Status.Phase, p.Status.InitContainerStatuses, p.Status.ContainerStatuses)
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
