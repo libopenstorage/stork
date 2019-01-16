@@ -59,21 +59,21 @@ const (
 	PostExecRule Type = "postExecRule"
 )
 
-// pod is a simple type to encapsulate a pod's uid and namespace
-type pod struct {
-	uid       string
-	namespace string
+// Pod is a simple type to encapsulate a Pod's uid and namespace
+type Pod struct {
+	UID       string `json:"uid"`
+	Namespace string `json:"namespace"`
 }
 
 type podErrorResponse struct {
-	pod v1.Pod
+	Pod v1.Pod
 	err error
 }
 
-// commandTask tracks pods where commands for a taskID might still be running
-type commandTask struct {
-	taskID string
-	pods   []pod
+// CommandTask tracks pods where commands for a taskID might still be running
+type CommandTask struct {
+	TaskID string `json:"task_id"`
+	Pods   []Pod  `json:"pods"`
 }
 
 var execCmdBackoff = wait.Backoff{
@@ -150,46 +150,31 @@ func terminateCommandInPods(owner runtime.Object, pods []v1.Pod, taskID string) 
 func PerformRuleRecovery(
 	owner runtime.Object,
 ) error {
-	metadata, err := meta.Accessor(owner)
+	taskTracker, err := getPodsTrackerForOwner(owner)
 	if err != nil {
 		return err
 	}
 
-	annotations := metadata.GetAnnotations()
-	if annotations != nil {
-		value := annotations[podsWithRunningCommandsKey]
-		if len(value) > 0 {
-			backgroundPodList := make([]v1.Pod, 0)
-			log.RuleLog(nil, owner).Infof("Performing recovery to terminate commands tracker: %v", value)
-			taskTracker := commandTask{}
-
-			err := json.Unmarshal([]byte(value), &taskTracker)
+	if taskTracker != nil && len(taskTracker.Pods) > 0 {
+		backgroundPodList := make([]v1.Pod, 0)
+		log.RuleLog(nil, owner).Infof("Performing recovery to terminate commands tracker: %v", taskTracker)
+		for _, pod := range taskTracker.Pods {
+			p, err := k8s.Instance().GetPodByUID(types.UID(pod.UID), pod.Namespace)
 			if err != nil {
-				return fmt.Errorf("failed to parse annotation to track running commands on pods due to: %v", err)
-			}
-
-			if len(taskTracker.pods) == 0 {
-				return nil
-			}
-
-			for _, pod := range taskTracker.pods {
-				p, err := k8s.Instance().GetPodByUID(types.UID(pod.uid), pod.namespace)
-				if err != nil {
-					if err == k8s.ErrPodsNotFound {
-						continue
-					}
-
-					log.RuleLog(nil, owner).Warnf("Failed to get pod with uid: %s due to: %v", pod.uid, err)
-					continue // best effort
+				if err == k8s.ErrPodsNotFound {
+					continue
 				}
 
-				backgroundPodList = append(backgroundPodList, *p)
+				log.RuleLog(nil, owner).Warnf("Failed to get pod with uid: %s due to: %v", pod.UID, err)
+				continue // best effort
 			}
 
-			err = terminateCommandInPods(owner, backgroundPodList, taskTracker.taskID)
-			if err != nil {
-				return fmt.Errorf("failed to terminate running commands in pods due to: %v", err)
-			}
+			backgroundPodList = append(backgroundPodList, *p)
+		}
+
+		err = terminateCommandInPods(owner, backgroundPodList, taskTracker.TaskID)
+		if err != nil {
+			return fmt.Errorf("failed to terminate running commands in pods due to: %v", err)
 		}
 	}
 
@@ -316,12 +301,48 @@ func executeCommandAction(
 
 		// regardless of the outcome of running the background command, we first update the
 		// owner to track pods which might have a running background command
-		updateErr := updateRunningCommandPodListInOwner(owner, podsForAction, taskID.String())
+		podsForTracker := podsForAction
+
+		// Get pods already existing in tracker so we don't lose them
+		existingTracker, err := getPodsTrackerForOwner(owner)
+		if err != nil {
+			return err
+		}
+
+		if existingTracker != nil && len(existingTracker.Pods) > 0 {
+			for _, existingPod := range existingTracker.Pods {
+				// Check if pod exists in cluster
+				existingPodObject, err := k8s.Instance().GetPodByUID(types.UID(existingPod.UID), existingPod.Namespace)
+				if err != nil {
+					if err == k8s.ErrPodsNotFound {
+						continue
+					}
+
+					return err
+				}
+
+				// Check duplicates
+				skipPod := false
+				for _, pod := range podsForAction {
+					if string(pod.UID) == existingPod.UID {
+						skipPod = true
+						break
+					}
+
+				}
+
+				if !skipPod {
+					podsForTracker = append(podsForTracker, *existingPodObject)
+				}
+			}
+		}
+
+		updateErr := updateRunningCommandPodListInOwner(owner, podsForTracker, taskID.String())
 		if updateErr != nil {
 			log.RuleLog(rule, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 		}
 
-		err := runBackgroundCommandOnPods(podsForAction, action.Value, taskID.String(), cmdExecutorImage)
+		err = runBackgroundCommandOnPods(podsForAction, action.Value, taskID.String(), cmdExecutorImage)
 		if err != nil {
 			return err
 		}
@@ -352,16 +373,16 @@ func updateRunningCommandPodListInOwner(
 	pods []v1.Pod,
 	taskID string,
 ) error {
-	podsWithNs := make([]pod, 0)
+	podsWithNs := make([]Pod, 0)
 	for _, p := range pods {
-		podsWithNs = append(podsWithNs, pod{
-			namespace: p.GetNamespace(),
-			uid:       string(p.GetUID())})
+		podsWithNs = append(podsWithNs, Pod{
+			Namespace: p.GetNamespace(),
+			UID:       string(p.GetUID())})
 	}
 
-	tracker := &commandTask{
-		taskID: taskID,
-		pods:   podsWithNs,
+	tracker := &CommandTask{
+		TaskID: taskID,
+		Pods:   podsWithNs,
 	}
 
 	trackerBytes, err := json.Marshal(tracker)
@@ -388,6 +409,7 @@ func updateRunningCommandPodListInOwner(
 			annotations[podsWithRunningCommandsKey] = string(trackerBytes)
 		}
 
+		metadata.SetAnnotations(annotations)
 		if _, err := k8s.Instance().UpdateObject(ownerCopy); err != nil {
 			log.RuleLog(nil, owner).Warnf("Failed to update owner due to: %v. Will retry.", err)
 			return false, nil
@@ -438,7 +460,7 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 			})
 			if err != nil {
 				errChannel <- podErrorResponse{
-					pod: pod,
+					Pod: pod,
 					err: err,
 				}
 			}
@@ -467,10 +489,10 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 		logrus.Infof("Command: %s finished successfully on all pods", cmd)
 		return nil, nil
 	case errResp := <-errChannel:
-		failed = append(failed, errResp.pod) // TODO also accumulate atleast the last error
+		failed = append(failed, errResp.Pod) // TODO also accumulate atleast the last error
 		if failFast {
 			return failed, fmt.Errorf("command: %s failed in pod: [%s] %s due to: %s",
-				cmd, errResp.pod.GetNamespace(), errResp.pod.GetName(), errResp.err)
+				cmd, errResp.Pod.GetNamespace(), errResp.Pod.GetName(), errResp.err)
 		}
 	}
 
@@ -620,4 +642,27 @@ func hasSubset(set map[string]string, subset map[string]string) bool {
 		}
 	}
 	return true
+}
+
+func getPodsTrackerForOwner(owner runtime.Object) (*CommandTask, error) {
+	metadata, err := meta.Accessor(owner)
+	if err != nil {
+		return nil, err
+	}
+	taskTracker := CommandTask{}
+
+	annotations := metadata.GetAnnotations()
+	if annotations != nil {
+		value := annotations[podsWithRunningCommandsKey]
+		if len(value) > 0 {
+			err := json.Unmarshal([]byte(value), &taskTracker)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse annotation to track running commands on pods due to: %v", err)
+			}
+
+			return &taskTracker, nil
+		}
+	}
+
+	return nil, nil
 }
