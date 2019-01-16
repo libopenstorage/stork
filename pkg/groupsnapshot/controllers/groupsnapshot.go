@@ -166,8 +166,8 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 
 func (m *GroupSnapshotController) createCRD() error {
 	resource := k8s.CustomResource{
-		Name:    stork_api.GroupSnapshotResourceName,
-		Plural:  stork_api.GroupSnapshotResourcePlural,
+		Name:    stork_api.GroupVolumeSnapshotResourceName,
+		Plural:  stork_api.GroupVolumeSnapshotResourcePlural,
 		Group:   stork.GroupName,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
@@ -209,14 +209,14 @@ func (m *GroupSnapshotController) handleInitial(groupSnap *stork_api.GroupVolume
 		groupSnap.Status.Stage = stork_api.GroupSnapshotStagePreChecks
 	} else {
 		// Validate pre and post snap rules
-		preSnapRuleName := groupSnap.Spec.PreSnapshotRule
+		preSnapRuleName := groupSnap.Spec.PreExecRule
 		if len(preSnapRuleName) > 0 {
 			if _, err := k8s.Instance().GetRule(preSnapRuleName, groupSnap.Namespace); err != nil {
 				return !updateCRD, err
 			}
 		}
 
-		postSnapRuleName := groupSnap.Spec.PostSnapshotRule
+		postSnapRuleName := groupSnap.Spec.PostExecRule
 		if len(postSnapRuleName) > 0 {
 			if _, err := k8s.Instance().GetRule(postSnapRuleName, groupSnap.Namespace); err != nil {
 				return !updateCRD, err
@@ -239,7 +239,7 @@ func (m *GroupSnapshotController) handleInitial(groupSnap *stork_api.GroupVolume
 
 func (m *GroupSnapshotController) handlePreSnap(groupSnap *stork_api.GroupVolumeSnapshot) (
 	*stork_api.GroupVolumeSnapshot, bool, error) {
-	ruleName := groupSnap.Spec.PreSnapshotRule
+	ruleName := groupSnap.Spec.PreExecRule
 	if len(ruleName) == 0 {
 		groupSnap.Status.Status = stork_api.GroupSnapshotInProgress
 		// No rule, move to snapshot stage
@@ -502,7 +502,7 @@ func (m *GroupSnapshotController) getPVCNameFromVolumeID(volID string) (string, 
 
 func (m *GroupSnapshotController) handlePostSnap(groupSnap *stork_api.GroupVolumeSnapshot) (
 	*stork_api.GroupVolumeSnapshot, bool, error) {
-	ruleName := groupSnap.Spec.PostSnapshotRule
+	ruleName := groupSnap.Spec.PostExecRule
 	if len(ruleName) == 0 { // No rule, move to final stage
 		groupSnap.Status.Status = stork_api.GroupSnapshotSuccessful
 		groupSnap.Status.Stage = stork_api.GroupSnapshotStageFinal

@@ -3,7 +3,7 @@ kind: GroupVolumeSnapshot
 metadata:
   name: mysql-snapshots
 spec:
-  preSnapshotRule: mysql-presnap-rule
+  preExecRule: mysql-presnap-rule
   pvcSelector:
     matchLabels:
       app: mysql
