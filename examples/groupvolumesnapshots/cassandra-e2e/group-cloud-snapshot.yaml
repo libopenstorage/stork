@@ -3,7 +3,7 @@ kind: GroupVolumeSnapshot
 metadata:
   name: cassandra-group-cloudsnapshot
 spec:
-  preSnapshotRule: cassandra-presnap-rule
+  preExecRule: cassandra-presnap-rule
   pvcSelector:
     matchLabels:
       app: cassandra

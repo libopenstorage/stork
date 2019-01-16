@@ -20,10 +20,10 @@ const (
 	MigrationResourceName = "migration"
 	// MigrationResourcePlural is plural for "migration" resource
 	MigrationResourcePlural = "migrations"
-	// GroupSnapshotResourceName is name for "groupvolumesnapshot" resource
-	GroupSnapshotResourceName = "groupvolumesnapshot"
-	// GroupSnapshotResourcePlural is plural for the "groupvolumesnapshot" resource
-	GroupSnapshotResourcePlural = "groupvolumesnapshots"
+	// GroupVolumeSnapshotResourceName is name for "groupvolumesnapshot" resource
+	GroupVolumeSnapshotResourceName = "groupvolumesnapshot"
+	// GroupVolumeSnapshotResourcePlural is plural for the "groupvolumesnapshot" resource
+	GroupVolumeSnapshotResourcePlural = "groupvolumesnapshots"
 )
 
 // +genclient
@@ -232,12 +232,12 @@ type GroupVolumeSnapshot struct {
 
 // GroupVolumeSnapshotSpec represents the spec for a group snapshot
 type GroupVolumeSnapshotSpec struct {
-	// PreSnapshotRule is the name of rule applied before taking the snapshot. The rule needs to be
+	// PreExecRule is the name of rule applied before taking the snapshot. The rule needs to be
 	// in the same namespace as the group volumesnapshot
-	PreSnapshotRule string `json:"preSnapshotRule"`
-	// PreSnapshotRule is the name of rule applied after taking the snapshot. The rule needs to be
+	PreExecRule string `json:"preExecRule"`
+	// PreExecRule is the name of rule applied after taking the snapshot. The rule needs to be
 	// in the same namespace as the group volumesnapshot
-	PostSnapshotRule string `json:"postSnapshotRule"`
+	PostExecRule string `json:"postExecRule"`
 	// PVCSelector selects the PVCs that are part of the group snapshot
 	PVCSelector PVCSelectorSpec `json:"pvcSelector"`
 	// Options are pass-through parameters that are passed to the driver handling the group snapshot
