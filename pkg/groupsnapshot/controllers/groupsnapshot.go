@@ -197,9 +197,30 @@ func (m *GroupSnapshotController) handleInitial(groupSnap *stork_api.GroupVolume
 		groupSnap.Status.Status = stork_api.GroupSnapshotPending
 		groupSnap.Status.Stage = stork_api.GroupSnapshotStagePreChecks
 	} else {
+		// Validate pre and post snap rules
+		preSnapRuleName := groupSnap.Spec.PreSnapshotRule
+		if len(preSnapRuleName) > 0 {
+			if _, err := k8s.Instance().GetRule(preSnapRuleName, groupSnap.Namespace); err != nil {
+				return !updateCRD, err
+			}
+		}
+
+		postSnapRuleName := groupSnap.Spec.PostSnapshotRule
+		if len(postSnapRuleName) > 0 {
+			if _, err := k8s.Instance().GetRule(postSnapRuleName, groupSnap.Namespace); err != nil {
+				return !updateCRD, err
+			}
+		}
+
 		groupSnap.Status.Status = stork_api.GroupSnapshotInProgress
-		// done with pre-checks, move to pre-snapshot stage
-		groupSnap.Status.Stage = stork_api.GroupSnapshotStagePreSnapshot
+
+		if len(preSnapRuleName) > 0 {
+			// done with pre-checks, move to pre-snapshot stage
+			groupSnap.Status.Stage = stork_api.GroupSnapshotStagePreSnapshot
+		} else {
+			// No pre rule, move to snapshot stage
+			groupSnap.Status.Stage = stork_api.GroupSnapshotStageSnapshot
+		}
 	}
 
 	return updateCRD, err
