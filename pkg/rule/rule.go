@@ -72,7 +72,7 @@ type podErrorResponse struct {
 
 // CommandTask tracks pods where commands for a taskID might still be running
 type CommandTask struct {
-	TaskID string `json:"task_id"`
+	TaskID string `json:"taskID"`
 	Pods   []Pod  `json:"pods"`
 }
 
@@ -165,7 +165,37 @@ func PerformRuleRecovery(
 					continue
 				}
 
-				log.RuleLog(nil, owner).Warnf("Failed to get pod with uid: %s due to: %v", pod.UID, err)
+				metadata, err := meta.Accessor(owner)
+				if err != nil {
+					log.RuleLog(nil, owner).Warnf(err.Error())
+					continue
+				}
+
+				err = fmt.Errorf("Failed to get pod with uid: %s due to: %v", pod.UID, err)
+				log.RuleLog(nil, owner).Warnf(err.Error())
+
+				ev := &v1.Event{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("pod-not-found-%s", string(pod.UID)),
+						Namespace: metadata.GetNamespace(),
+					},
+					InvolvedObject: v1.ObjectReference{
+						Name:       metadata.GetName(),
+						Namespace:  metadata.GetNamespace(),
+						UID:        metadata.GetUID(),
+						Kind:       owner.GetObjectKind().GroupVersionKind().Kind,
+						APIVersion: owner.GetObjectKind().GroupVersionKind().Version,
+					},
+					Reason:  "FailedToGetPod",
+					Message: err.Error(),
+					Source: v1.EventSource{
+						Component: "stork",
+					},
+				}
+				if _, err = k8s.Instance().CreateEvent(ev); err != nil {
+					log.RuleLog(nil, owner).Warnf("failed to create event for missing pod err: %v", err)
+				}
+
 				continue // best effort
 			}
 
@@ -301,7 +331,10 @@ func executeCommandAction(
 
 		// regardless of the outcome of running the background command, we first update the
 		// owner to track pods which might have a running background command
-		podsForTracker := podsForAction
+		podsForTracker := make(map[string]v1.Pod)
+		for _, pod := range podsForAction {
+			podsForTracker[string(pod.UID)] = pod
+		}
 
 		// Get pods already existing in tracker so we don't lose them
 		existingTracker, err := getPodsTrackerForOwner(owner)
@@ -321,23 +354,16 @@ func executeCommandAction(
 					return err
 				}
 
-				// Check duplicates
-				skipPod := false
-				for _, pod := range podsForAction {
-					if string(pod.UID) == existingPod.UID {
-						skipPod = true
-						break
-					}
-
-				}
-
-				if !skipPod {
-					podsForTracker = append(podsForTracker, *existingPodObject)
-				}
+				podsForTracker[existingPod.UID] = *existingPodObject
 			}
 		}
 
-		updateErr := updateRunningCommandPodListInOwner(owner, podsForTracker, taskID.String())
+		podsForTrackerList := make([]v1.Pod, 0)
+		for _, pod := range podsForTracker {
+			podsForTrackerList = append(podsForTrackerList, pod)
+		}
+
+		updateErr := updateRunningCommandPodListInOwner(owner, podsForTrackerList, taskID.String())
 		if updateErr != nil {
 			log.RuleLog(rule, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 		}
@@ -445,7 +471,30 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 						return true, nil
 					}
 
-					logrus.Warnf("Failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()), err)
+					err = fmt.Errorf("Failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()), err)
+
+					ev := &v1.Event{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      fmt.Sprintf("pod-not-found-%s", string(pod.GetUID())),
+							Namespace: pod.GetNamespace(),
+						},
+						InvolvedObject: v1.ObjectReference{
+							Name:       pod.GetName(),
+							Namespace:  pod.GetNamespace(),
+							UID:        pod.GetUID(),
+							Kind:       pod.GetObjectKind().GroupVersionKind().Kind,
+							APIVersion: pod.GetObjectKind().GroupVersionKind().Version,
+						},
+						Reason:  "FailedToGetPod",
+						Message: err.Error(),
+						Source: v1.EventSource{
+							Component: "stork",
+						},
+					}
+					if _, err = k8s.Instance().CreateEvent(ev); err != nil {
+						logrus.Warnf("failed to create event for missing pod err: %v", err)
+					}
+
 					return false, nil
 				}
 
