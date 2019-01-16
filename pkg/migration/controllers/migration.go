@@ -641,7 +641,10 @@ func (m *MigrationController) prepareServiceResource(
 	if err != nil {
 		return nil, err
 	}
-	delete(spec, "clusterIP")
+	// Don't delete clusterIP for headless services
+	if ip, err := collections.GetString(spec, "clusterIP"); err == nil && ip != "None" {
+		delete(spec, "clusterIP")
+	}
 
 	return object, nil
 }
