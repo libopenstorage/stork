@@ -103,7 +103,11 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 			stork_api.GroupSnapshotStagePreChecks:
 			updateCRDForThisEvent, err = m.handleInitial(groupSnapshot)
 		case stork_api.GroupSnapshotStagePreSnapshot:
-			groupSnapshot, updateCRDForThisEvent, err = m.handlePreSnap(groupSnapshot)
+			var updatedGroupSnapshot *stork_api.GroupVolumeSnapshot
+			updatedGroupSnapshot, updateCRDForThisEvent, err = m.handlePreSnap(groupSnapshot)
+			if err == nil {
+				groupSnapshot = updatedGroupSnapshot
+			}
 		case stork_api.GroupSnapshotStageSnapshot:
 			updateCRDForThisEvent, err = m.handleSnap(groupSnapshot)
 
@@ -118,7 +122,11 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 				}
 			}
 		case stork_api.GroupSnapshotStagePostSnapshot:
-			groupSnapshot, updateCRDForThisEvent, err = m.handlePostSnap(groupSnapshot)
+			var updatedGroupSnapshot *stork_api.GroupVolumeSnapshot
+			updatedGroupSnapshot, updateCRDForThisEvent, err = m.handlePostSnap(groupSnapshot)
+			if err == nil {
+				groupSnapshot = updatedGroupSnapshot
+			}
 		case stork_api.GroupSnapshotStageFinal:
 			return m.handleFinal(groupSnapshot)
 		default:
@@ -128,13 +136,10 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 
 	if err != nil {
 		log.GroupSnapshotLog(groupSnapshot).Errorf("Error handling event: %v err: %v", event, err.Error())
-
-		if groupSnapshot != nil {
-			m.Recorder.Event(groupSnapshot,
-				v1.EventTypeWarning,
-				string(stork_api.GroupSnapshotFailed),
-				err.Error())
-		}
+		m.Recorder.Event(groupSnapshot,
+			v1.EventTypeWarning,
+			string(stork_api.GroupSnapshotFailed),
+			err.Error())
 		// Don't return err since that translates to a sync error
 	}
 
@@ -242,12 +247,12 @@ func (m *GroupSnapshotController) handlePreSnap(groupSnap *stork_api.GroupVolume
 	log.GroupSnapshotLog(groupSnap).Infof("Running pre-snapshot rule: %s", ruleName)
 	r, err := k8s.Instance().GetRule(ruleName, groupSnap.Namespace)
 	if err != nil {
-		return groupSnap, !updateCRD, err
+		return nil, !updateCRD, err
 	}
 
 	pvcs, err := k8sutils.GetPVCsForGroupSnapshot(groupSnap.Namespace, groupSnap.Spec.PVCSelector.MatchLabels)
 	if err != nil {
-		return groupSnap, !updateCRD, err
+		return nil, !updateCRD, err
 	}
 
 	backgroundCommandTermChan, err := rule.ExecuteRule(r, rule.PreExecRule, groupSnap, pvcs)
@@ -256,7 +261,7 @@ func (m *GroupSnapshotController) handlePreSnap(groupSnap *stork_api.GroupVolume
 			backgroundCommandTermChan <- true // terminate background commands if running
 		}
 
-		return groupSnap, !updateCRD, err
+		return nil, !updateCRD, err
 	}
 
 	// refresh the latest groupSnap as ExecuteRule might have  updated it
@@ -504,17 +509,17 @@ func (m *GroupSnapshotController) handlePostSnap(groupSnap *stork_api.GroupVolum
 	logrus.Infof("Running post-snapshot rule: %s", ruleName)
 	r, err := k8s.Instance().GetRule(ruleName, groupSnap.Namespace)
 	if err != nil {
-		return groupSnap, !updateCRD, err
+		return nil, !updateCRD, err
 	}
 
 	pvcs, err := k8sutils.GetPVCsForGroupSnapshot(groupSnap.Namespace, groupSnap.Spec.PVCSelector.MatchLabels)
 	if err != nil {
-		return groupSnap, !updateCRD, err
+		return nil, !updateCRD, err
 	}
 
 	_, err = rule.ExecuteRule(r, rule.PostExecRule, groupSnap, pvcs)
 	if err != nil {
-		return groupSnap, !updateCRD, err
+		return nil, !updateCRD, err
 	}
 
 	// refresh the latest groupSnap as ExecuteRule might have  updated it
