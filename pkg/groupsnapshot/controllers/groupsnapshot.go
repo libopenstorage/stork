@@ -50,10 +50,10 @@ var snapDeleteBackoff = wait.Backoff{
 
 // GroupSnapshotController groupSnapshotcontroller
 type GroupSnapshotController struct {
-	Driver             volume.Driver
-	Recorder           record.EventRecorder
-	bgChannelsForRules map[string]chan bool
-	minResourceVersion string
+	Driver              volume.Driver
+	Recorder            record.EventRecorder
+	bgChannelsForRules  map[string]chan bool
+	minResourceVersions map[string]string
 }
 
 // Init Initialize the groupSnapshot controller
@@ -64,6 +64,7 @@ func (m *GroupSnapshotController) Init() error {
 	}
 
 	m.bgChannelsForRules = make(map[string]chan bool)
+	m.minResourceVersions = make(map[string]string)
 
 	return controller.Register(
 		&schema.GroupVersionKind{
@@ -88,9 +89,11 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 	case *stork_api.GroupVolumeSnapshot:
 		groupSnapshot = o
 
-		if groupSnapshot.ResourceVersion < m.minResourceVersion {
-			logrus.Infof("already processed groupSnapshot version higher than: %s. Skipping event.",
-				groupSnapshot.ResourceVersion)
+		minVer, present := m.minResourceVersions[string(groupSnapshot.UID)]
+		if present && groupSnapshot.ResourceVersion < minVer {
+			log.GroupSnapshotLog(groupSnapshot).Infof(
+				"already processed groupSnapshot version (%s) higher than: %s. Skipping event.",
+				minVer, groupSnapshot.ResourceVersion)
 			return nil
 		}
 
@@ -155,7 +158,7 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 		// event is already being processed. In such situation, the operator framework
 		// with provide a groupSnapshot which is the same version as the previous groupSnapshot
 		// If we reprocess an outdated object, this can throw off the status checks in the snapshot stage
-		m.minResourceVersion = groupSnapshot.ResourceVersion
+		m.minResourceVersions[string(groupSnapshot.UID)] = groupSnapshot.ResourceVersion
 	}
 
 	return nil
@@ -540,6 +543,9 @@ func (m *GroupSnapshotController) handleFinal(groupSnap *stork_api.GroupVolumeSn
 }
 
 func (m *GroupSnapshotController) handleDelete(groupSnap *stork_api.GroupVolumeSnapshot) error {
+	// no need to track minResourceVersion for this group snap any longer
+	delete(m.minResourceVersions, string(groupSnap.UID))
+
 	if err := m.Driver.DeleteGroupSnapshot(groupSnap); err != nil {
 		return err
 	}
