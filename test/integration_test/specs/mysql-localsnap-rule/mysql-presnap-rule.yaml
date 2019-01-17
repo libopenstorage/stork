@@ -2,6 +2,8 @@ apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Rule
 metadata:
   name: mysql-presnap-rule
+  annotations:
+    "stork/cmdexecutor-image": "openstorage/cmdexecutor:latest"
 rules:
   - podSelector:
       app: mysql

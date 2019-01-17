@@ -92,7 +92,7 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 		minVer, present := m.minResourceVersions[string(groupSnapshot.UID)]
 		if present && groupSnapshot.ResourceVersion < minVer {
 			log.GroupSnapshotLog(groupSnapshot).Infof(
-				"already processed groupSnapshot version (%s) higher than: %s. Skipping event.",
+				"Already processed groupSnapshot version (%s) higher than: %s. Skipping event.",
 				minVer, groupSnapshot.ResourceVersion)
 			return nil
 		}
@@ -309,12 +309,12 @@ func (m *GroupSnapshotController) handleSnap(groupSnap *stork_api.GroupVolumeSna
 	}
 
 	if isAnySnapshotFailed(response.Snapshots) {
-		log.GroupSnapshotLog(groupSnap).Infof("some snapshots in group have failed")
+		log.GroupSnapshotLog(groupSnap).Infof("Some snapshots in group have failed")
 		response.Snapshots = nil // so that snapshots are retried
 		stage = stork_api.GroupSnapshotStageSnapshot
 		status = stork_api.GroupSnapshotPending
 	} else if areAllSnapshotsDone(response.Snapshots) {
-		log.GroupSnapshotLog(groupSnap).Infof("all snapshots in group are done")
+		log.GroupSnapshotLog(groupSnap).Infof("All snapshots in group are done")
 		// Create volumesnapshot and volumesnapshotdata objects in API
 		response.Snapshots, err = m.createSnapAndDataObjects(groupSnap, response.Snapshots)
 		if err != nil {
@@ -324,7 +324,7 @@ func (m *GroupSnapshotController) handleSnap(groupSnap *stork_api.GroupVolumeSna
 		stage = stork_api.GroupSnapshotStagePostSnapshot
 		status = stork_api.GroupSnapshotInProgress
 	} else {
-		log.GroupSnapshotLog(groupSnap).Infof("some snapshots still in progress")
+		log.GroupSnapshotLog(groupSnap).Infof("Some snapshots still in progress")
 		stage = stork_api.GroupSnapshotStageSnapshot
 		status = stork_api.GroupSnapshotInProgress
 	}
@@ -426,7 +426,7 @@ func (m *GroupSnapshotController) createSnapAndDataObjects(
 			// revert snapdata
 			deleteErr := k8s.Instance().DeleteSnapshotData(snapData.Metadata.Name)
 			if deleteErr != nil {
-				log.GroupSnapshotLog(groupSnap).Errorf("failed to revert volumesnapshotdata due to: %v", deleteErr)
+				log.GroupSnapshotLog(groupSnap).Errorf("Failed to revert volumesnapshotdata due to: %v", deleteErr)
 			}
 
 			revertSnapObjs(createSnapObjects)
@@ -453,7 +453,7 @@ func revertSnapObjs(snapObjs []*crdv1.VolumeSnapshot) {
 		err := wait.ExponentialBackoff(snapDeleteBackoff, func() (bool, error) {
 			deleteErr := k8s.Instance().DeleteSnapshot(snap.Metadata.Name, snap.Metadata.Namespace)
 			if deleteErr != nil {
-				log.SnapshotLog(snap).Infof("failed to delete volumesnapshot due to: %v", deleteErr)
+				log.SnapshotLog(snap).Infof("Failed to delete volumesnapshot due to: %v", deleteErr)
 				return false, nil
 			}
 
@@ -470,18 +470,18 @@ func revertSnapObjs(snapObjs []*crdv1.VolumeSnapshot) {
 			errString = fmt.Sprintf("%s delete of %s failed due to err: %v.\n", errString, failedID, failedErr)
 		}
 
-		logrus.Errorf("failed to revert created volumesnapshots. err: %s", errString)
+		logrus.Errorf("Failed to revert created volumesnapshots. err: %s", errString)
 		return
 	}
 
-	logrus.Infof("successfully reverted volumesnapshots")
+	logrus.Infof("Successfully reverted volumesnapshots")
 }
 
 // this is best effort as can be vol ID if PVC is deleted
 func (m *GroupSnapshotController) getPVCNameFromVolumeID(volID string) (string, error) {
 	volInfo, err := m.Driver.InspectVolume(volID)
 	if err != nil {
-		logrus.Warnf("volume: %s not found due to: %v", volID, err)
+		logrus.Warnf("Volume: %s not found due to: %v", volID, err)
 		return volID, nil
 	}
 

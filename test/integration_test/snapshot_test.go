@@ -22,6 +22,8 @@ func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 	t.Run("snapshotScaleTest", snapshotScaleTest)
+	t.Run("groupSnapshotTest", groupSnapshotTest)
+	t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
 }
 
 func simpleSnapshotTest(t *testing.T) {
@@ -104,6 +106,61 @@ func cloudSnapshotTest(t *testing.T) {
 	fmt.Printf("checking dataVolumesInUse: %v\n", dataVolumesInUse)
 	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 	destroyAndWait(t, ctxs)
+}
+
+func groupSnapshotTest(t *testing.T) {
+	ctxsToDestroy := make([]*scheduler.Context, 0)
+	// Positive tests
+	ctxs := createGroupsnaps(t)
+	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
+
+	// Negative
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-snap-group-fail"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Len(t, ctxs, 1, "Only one task should have started")
+
+	for _, ctx := range ctxs {
+		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for pod to get to running state")
+
+		snaps, err := schedulerDriver.GetSnapshots(ctx)
+		require.Error(t, err, "expected to get error when fetching snapahots")
+		require.Nil(t, snaps, "expected empty snapshots")
+	}
+	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
+
+	destroyAndWait(t, ctxsToDestroy)
+}
+
+func groupSnapshotScaleTest(t *testing.T) {
+	ctxsToDestroy := make([]*scheduler.Context, 0)
+	// Triggers 2 snaps, so use half the count in the loop
+	for i := 0; i < snapshotScaleCount/2; i++ {
+		ctxs := createGroupsnaps(t)
+		ctxsToDestroy = append(ctxsToDestroy, ctxs...)
+	}
+	destroyAndWait(t, ctxsToDestroy)
+}
+
+func createGroupsnaps(t *testing.T) []*scheduler.Context {
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
+		scheduler.ScheduleOptions{AppKeys: []string{
+			"mysql-localsnap-rule",  // tests local group snapshots with a pre exec rule
+			"mysql-cloudsnap-group", // tests cloud group snapshots
+		}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Len(t, ctxs, 2, "Only one task should have started")
+
+	for _, ctx := range ctxs {
+		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for pod to get to running state")
+
+		err = schedulerDriver.InspectVolumes(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error validating storage components")
+	}
+
+	return ctxs
 }
 
 func parseDataVolumes(
