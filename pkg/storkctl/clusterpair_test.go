@@ -28,7 +28,7 @@ func createClusterPairAndVerify(t *testing.T, name string, namespace string) {
 		},
 	}
 
-	err := k8s.Instance().CreateClusterPair(clusterPair)
+	_, err := k8s.Instance().CreateClusterPair(clusterPair)
 	require.NoError(t, err, "Error creating Clusterpair")
 	// Make sure it was created correctly
 	clusterPair, err = k8s.Instance().GetClusterPair(name, namespace)
