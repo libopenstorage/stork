@@ -215,6 +215,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*snap_v1.VolumeSnapshot); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.GroupVolumeSnapshot); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*v1.Secret); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.ConfigMap); ok {
@@ -485,6 +487,24 @@ func (k *k8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		}
 
 		logrus.Infof("[%v] Created Snapshot: %v", app.Key, snap.Metadata.Name)
+		return snap, nil
+	} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
+		obj.Namespace = ns.Name
+		snap, err := k8sOps.CreateGroupSnapshot(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetGroupSnapshot(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing group snapshot: %v", app.Key, snap.Name)
+				return snap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create group snapshot: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Group snapshot: %v", app.Key, snap.Name)
 		return snap, nil
 	}
 
@@ -1093,6 +1113,15 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 			}
 
 			logrus.Infof("[%v] Validated snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+		} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
+			if err := k8sOps.ValidateGroupSnapshot(obj.Name, obj.Namespace, true, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to validate group snapshot: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			logrus.Infof("[%v] Validated group snapshot: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
 			if err != nil {
@@ -1159,6 +1188,17 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+		} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
+			if err := k8sOps.DeleteGroupSnapshot(obj.Name, obj.Namespace); err != nil {
+				if !errors.IsNotFound(err) {
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy group snapshot: %v. Err: %v", obj.Name, err),
+					}
+				}
+			}
+
+			logrus.Infof("[%v] Destroyed group snapshot: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			pvcList, err := k8sOps.GetPVCsForStatefulSet(obj)
 			if err != nil || pvcList == nil {
@@ -1314,6 +1354,20 @@ func (k *k8s) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 				Namespace: obj.Metadata.Namespace,
 			}
 			snaps = append(snaps, snap)
+		} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
+			snapsForGroupsnap, err := k8s_ops.Instance().GetSnapshotsForGroupSnapshot(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, snapForGroupsnap := range snapsForGroupsnap {
+				snap := &volume.Snapshot{
+					ID:        string(snapForGroupsnap.Metadata.UID),
+					Name:      snapForGroupsnap.Metadata.Name,
+					Namespace: snapForGroupsnap.Metadata.Namespace,
+				}
+				snaps = append(snaps, snap)
+			}
 		}
 	}
 
