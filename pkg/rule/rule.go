@@ -429,6 +429,10 @@ func updateRunningCommandPodListInOwner(
 		}
 
 		annotations := metadata.GetAnnotations()
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+
 		if len(podsWithNs) == 0 {
 			delete(annotations, podsWithRunningCommandsKey)
 		} else {
