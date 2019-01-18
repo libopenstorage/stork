@@ -113,12 +113,10 @@ pretest: checkfmt vet lint errcheck
 
 container:
 	sudo docker build --tag $(TALISMAN_IMG) -f Dockerfile.talisman .
-	sudo docker build --tag $(DOCKER_PULLER_IMG) cmd/docker-puller/
 	sudo docker build -t $(PX_NODE_WIPER_IMG) cmd/px-node-wiper/
 
 deploy: container
 	sudo docker push $(TALISMAN_IMG)
-	sudo docker push $(DOCKER_PULLER_IMG)
 	sudo docker push $(PX_NODE_WIPER_IMG)
 
 docker-build:
@@ -135,7 +133,6 @@ clean:
 	@echo Cleaning Workspace...
 	-sudo rm -rf $(BIN)
 	-docker rmi -f $(OPERATOR_IMG)
-	-docker rmi -f $(DOCKER_PULLER_IMG)
 	-docker rmi -f $(PX_NODE_WIPER_IMG)
 	-docker rmi -f $(TALISMAN_IMG)
 	go clean -i $(PKGS)

@@ -45,7 +45,7 @@ if [ "$TRAVIS_OS_NAME" != "osx" ]; then
 fi
 
 # Install golint, cfssl
-go get -u github.com/golang/lint/golint
+go get -u golang.org/x/lint/golint
 export PATH=$PATH:$GOPATH/bin
 go get -u github.com/alecthomas/gometalinter
 gometalinter --install
@@ -114,15 +114,6 @@ elif [ "$TEST_SUITE" = "linux-nfs" ]; then
 	make nfs
 	make test-nfs-all
 elif [ "$TEST_SUITE" = "linux-everything-else" ]; then
-	pushd ./lib
-	go test ./controller
-	go test ./allocator
-	popd
-	# Test building hostpath-provisioner demo
-	pushd ./docs/demo/hostpath-provisioner
-	make image
-	make clean
-	popd
 	make aws/efs
 	make test-aws/efs
 	make ceph/cephfs

@@ -27,8 +27,8 @@ import (
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/common"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/metrics"
 
-	esUtil "github.com/kubernetes-incubator/external-storage/lib/util"
 	"github.com/kubernetes-incubator/external-storage/local-volume/provisioner/pkg/deleter"
+	esUtil "github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/util"
 	"k8s.io/api/core/v1"
 	storagev1listers "k8s.io/client-go/listers/storage/v1"
 	"k8s.io/client-go/tools/cache"
@@ -197,7 +197,7 @@ func (d *Discoverer) discoverVolumesAtPath(class string, config common.MountConf
 		return
 	}
 
-	// Retreive list of mount points to iterate through discovered paths (aka files) below
+	// Retrieve list of mount points to iterate through discovered paths (aka files) below
 	mountPoints, mountPointsErr := d.RuntimeConfig.Mounter.List()
 	if mountPointsErr != nil {
 		glog.Errorf("Error retreiving mountpoints: %v", err)

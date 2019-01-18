@@ -32,11 +32,10 @@ all build:
 		-v $$(pwd)/.go:/go \
 		-v $$(pwd):/go/src/github.com/kubernetes-incubator/external-storage/iscsi/targetd \
 		-v "$${PWD%/*/*}/vendor":/go/src/github.com/kubernetes-incubator/external-storage/vendor \
-		-v "$${PWD%/*/*}/lib":/go/src/github.com/kubernetes-incubator/external-storage/lib \
 		-v $$(pwd):/go/bin \
 		-v $$(pwd)/.go/stdlib:/usr/local/go/pkg/linux_amd64_asdf \
 		-w /go/src/github.com/kubernetes-incubator/external-storage/iscsi/targetd \
-		golang:1.10.3-alpine \
+		golang:1.11.1-alpine \
 		go install -installsuffix "asdf" .
 .PHONY: all build
 

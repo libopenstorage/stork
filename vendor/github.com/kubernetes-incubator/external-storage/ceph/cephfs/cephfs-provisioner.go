@@ -21,13 +21,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/kubernetes-incubator/external-storage/lib/controller"
+	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
+	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/util"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -35,7 +37,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
 const (
@@ -63,6 +64,8 @@ type cephFSProvisioner struct {
 	secretNamespace string
 	// enable PVC quota
 	enableQuota bool
+	// cached IP address of cluster DNS service
+	dnsip string
 }
 
 func newCephFSProvisioner(client kubernetes.Interface, id string, secretNamespace string, enableQuota bool) controller.Provisioner {
@@ -241,7 +244,7 @@ func (p *cephFSProvisioner) Delete(volume *v1.PersistentVolume) error {
 	// delete CephFS
 	// TODO when beta is removed, have to check kube version and pick v1/beta
 	// accordingly: maybe the controller lib should offer a function for that
-	class, err := p.client.StorageV1beta1().StorageClasses().Get(helper.GetPersistentVolumeClass(volume), metav1.GetOptions{})
+	class, err := p.client.StorageV1beta1().StorageClasses().Get(util.GetPersistentVolumeClass(volume), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -303,10 +306,30 @@ func (p *cephFSProvisioner) parseParameters(parameters map[string]string) (strin
 		case "cluster":
 			cluster = v
 		case "monitors":
+			// Try to find DNS info in local cluster DNS so that the kubernetes
+			// host DNS config doesn't have to know about cluster DNS
+			if p.dnsip == "" {
+				p.dnsip = util.FindDNSIP(p.client)
+			}
+			glog.V(4).Infof("dnsip: %q\n", p.dnsip)
 			arr := strings.Split(v, ",")
 			for _, m := range arr {
-				mon = append(mon, m)
+				mhost, mport := util.SplitHostPort(m)
+				if p.dnsip != "" && net.ParseIP(mhost) == nil {
+					var lookup []string
+					if lookup, err = util.LookupHost(mhost, p.dnsip); err == nil {
+						for _, a := range lookup {
+							glog.V(1).Infof("adding %+v from mon lookup\n", a)
+							mon = append(mon, util.JoinHostPort(a, mport))
+						}
+					} else {
+						mon = append(mon, util.JoinHostPort(mhost, mport))
+					}
+				} else {
+					mon = append(mon, util.JoinHostPort(mhost, mport))
+				}
 			}
+			glog.V(4).Infof("final monitors list: %v\n", mon)
 		case "adminid":
 			adminID = v
 		case "adminsecretname":

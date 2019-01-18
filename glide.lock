@@ -1,5 +1,5 @@
 hash: 01d3f3bb7ff678817e85f35bffc99662c16d133c7efe625a26f92c76239ddd64
-updated: 2019-01-22T18:39:41.783192718-08:00
+updated: 2019-01-27T15:18:07.786075644-08:00
 imports:
 - name: github.com/aws/aws-sdk-go
   version: 5e98666858b97db54a61044bb1150d3b81436860
@@ -149,7 +149,7 @@ imports:
 - name: github.com/konsorten/go-windows-terminal-sequences
   version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/kubernetes-incubator/external-storage
-  version: bc02da24cf1ecc8be052434589c1b7f9081c75a1
+  version: 3702b40218ee0c072755a7e65e28376dabb6d210
   repo: https://github.com/libopenstorage/external-storage.git
   subpackages:
   - snapshot/pkg/apis/crd/v1
@@ -245,7 +245,7 @@ imports:
 - name: github.com/pkg/errors
   version: ffb6e22f01932bf7ac35e0bad9be11f01d1c8685
 - name: github.com/portworx/kvdb
-  version: f47a84a70a1ec6709d376b077fe6e16a40d00732
+  version: 1c18ebeaf685dfc584a49545bc590a13fa8b7617
   subpackages:
   - common
   - mem
@@ -255,7 +255,7 @@ imports:
   - k8s
   - task
 - name: github.com/portworx/talisman
-  version: 9470631245f591a03dac7192caa5b2e093272be2
+  version: 84374e26f35de4996653b01cf72186a8d6df3c11
   subpackages:
   - pkg/apis/portworx
   - pkg/apis/portworx/v1beta1

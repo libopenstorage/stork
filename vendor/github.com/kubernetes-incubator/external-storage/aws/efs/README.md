@@ -17,7 +17,7 @@ If you are new to Kubernetes or to PersistentVolumes this quick start will get y
   wget https://raw.githubusercontent.com/kubernetes-incubator/external-storage/master/aws/efs/deploy/manifest.yaml
   ```
 
-- In the configmap section change the `file.system.id:` and `aws.region:` to match the details of the EFS you created.
+- In the configmap section change the `file.system.id:` and `aws.region:` to match the details of the EFS you created. Change `dns.name` if you want to mount by your own DNS name and not by AWS's `*file-system-id*.efs.*aws-region*.amazonaws.com`.
 
 - In the deployment section change the `server:` to the DNS endpoint of the EFS you created.
 
@@ -101,7 +101,7 @@ spec:
         requests:
           storage: 1Mi
 ```
-Note: We do not reference a claim name, instead we give the new claim the name efs and we list the StorageClass we wish to use when creating the claim. I like to use the type of storage, because the name of the pod will be be added to it. This example when ran will create the claim `efs-web-0` and scaling the pod up to 3 will create `efs-web-1` and `efs-web-2`.
+Note: We do not reference a claim name, instead we give the new claim the name efs and we list the StorageClass we wish to use when creating the claim. I like to use the type of storage, because the name of the pod will be added to it. This example when ran will create the claim `efs-web-0` and scaling the pod up to 3 will create `efs-web-1` and `efs-web-2`.
 
 If you wish to learn more about efs-provisioner and how to change additional settings, you can continue on in the deployment section. You might also want to check the FAQ at the bottom.
 
@@ -113,6 +113,7 @@ Create a configmap containing the [**File system ID**](http://docs.aws.amazon.co
 $ kubectl create configmap efs-provisioner \
 --from-literal=file.system.id=fs-47a2c22e \
 --from-literal=aws.region=us-west-2 \
+--from-literal=dns.name="" \ # if you want to mount by your own DNS name and not by AWS's `*file-system-id*.efs.*aws-region*.amazonaws.com`.
 --from-literal=provisioner.name=example.com/aws-efs
 ```
 
@@ -234,7 +235,7 @@ Yes you can but it's not recommended. You lose the reusability of the StorageCla
 
 Your containers will continue to have EFS storage as they are mapped directly to EFS but behind the scenes they were mounted to a folder created by the EFS provisioner. New claims will not be provisioned nor deleted while the efs-provisioner pod is not running. When it comes backup it will catchup on any work it has missed.
 
-- Can I scale the efs-provisioner accross my nodes? 
+- Can I scale the efs-provisioner across my nodes? 
 
 You can but it's not needed. You won't see a performance increase and you wont have a storage outage if the underlying node dies.
 
@@ -253,13 +254,13 @@ It's not needed but it is helpful if you are going to use your EFS for other thi
       volumes:
         - name: pv-volume
           nfs:
-            server: {{ efs_file_system_id }}.efs.{{ aws_region }}.amazonaws.com
+            server: {{ efs_file_system_id }}.efs.{{ aws_region }}.amazonaws.com # or the same value as `dns.name`/DNS_NAME if you want to mount by your own DNS name and not by AWS's `*file-system-id*.efs.*aws-region*.amazonaws.com`.
             path: /
 ```
 
 - I noticed when creating the claim it has request for a really small amount of storage?
 
-The storage section size is a requirment because most other PersistentVolumes need it. Every pod accessing EFS will have unlimited storage. I use 1Mi to remind my self it's unlimited.
+The storage section size is a requirement because most other PersistentVolumes need it. Every pod accessing EFS will have unlimited storage. I use 1Mi to remind my self it's unlimited.
 
 - Can I omit that part of the claim?
 

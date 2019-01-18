@@ -12,13 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM centos:7
+ARG GOVERSION=1.11.1
+FROM golang:$GOVERSION-alpine as builder
+WORKDIR /go/src/github.com/kubernetes-incubator/external-storage
+ADD . .
+RUN cd local-volume/provisioner; \
+	CGO_ENABLED=0 go build -a -ldflags '-extldflags "-static"' -o local-volume-provisioner ./cmd
 
-RUN yum update -y && \
-    yum install -y e2fsprogs && \
-    yum install -y hdparm && \
-    yum clean all
+FROM k8s.gcr.io/debian-base-amd64:0.4.0
 
-ADD local-volume-provisioner /local-provisioner
-ADD scripts /scripts
+RUN clean-install \
+    util-linux \
+    e2fsprogs \
+    bash
+
+COPY --from=builder /go/src/github.com/kubernetes-incubator/external-storage/local-volume/provisioner/local-volume-provisioner /local-provisioner
+ADD local-volume/provisioner/deployment/docker/scripts /scripts
 ENTRYPOINT ["/local-provisioner"]

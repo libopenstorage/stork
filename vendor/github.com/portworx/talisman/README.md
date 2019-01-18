@@ -9,7 +9,7 @@ Talisman orchestrates the upgrade of Portworx in your Kubernetes Cluster.
 ## Documentation
 * [Building](doc/build/README.md)
 * [Talisman usage](cmd/talisman/README.md)
-* [Docker puller usage](cmd/docker-puller/README.md)
+* [Docker puller usage](cmd/docker-puller/README.md)  [<< OBSOLETE]
 
 ## Issues
 

@@ -28,7 +28,7 @@ import (
 	"syscall"
 
 	"github.com/golang/glog"
-	"github.com/kubernetes-incubator/external-storage/lib/controller"
+	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -210,7 +210,8 @@ func (p *nfsProvisioner) Provision(options controller.VolumeOptions) (*v1.Persis
 	if volume.supGroup != 0 {
 		annotations[VolumeGidAnnotationKey] = strconv.FormatUint(volume.supGroup, 10)
 	}
-	if volume.mountOptions != "" {
+	// Only use legacy mount options annotation if StorageClass.MountOptions is empty
+	if volume.mountOptions != "" && options.MountOptions == nil {
 		annotations[MountOptionAnnotation] = volume.mountOptions
 	}
 	annotations[annProvisionerID] = string(p.identity)
@@ -234,6 +235,7 @@ func (p *nfsProvisioner) Provision(options controller.VolumeOptions) (*v1.Persis
 					ReadOnly: false,
 				},
 			},
+			MountOptions: options.MountOptions,
 		},
 	}
 

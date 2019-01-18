@@ -739,11 +739,25 @@ func (kv *etcdKV) Snapshot(prefixes []string) (kvdb.Kvdb, uint64, error) {
 	}
 
 	enumeratePrefix := func(snapDb kvdb.Kvdb, prefix string) error {
+		if prefix == ec.Bootstrap {
+			// No need of enumerating the snapshot bootstrap prefix
+			return nil
+		}
 		kvPairs, err := kv.Enumerate(prefix)
 		if err != nil {
 			return fmt.Errorf("Failed to enumerate %v: err: %v", prefix,
 				err)
 		}
+		if len(kvPairs) == 0 {
+			// This is a key and not a tree
+			kvp, err := kv.Get(prefix)
+			if err != nil && err != kvdb.ErrNotFound {
+				return fmt.Errorf("Failed to get %v: err: %v", prefix, err)
+			} else if err == nil {
+				kvPairs = append(kvPairs, kvp)
+			}
+		}
+
 		for i := 0; i < len(kvPairs); i++ {
 			kvPair := kvPairs[i]
 			if len(kvPair.Value) > 0 {

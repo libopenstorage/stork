@@ -216,7 +216,6 @@ func (ops *pxClusterOps) Upgrade(newSpec *apiv1beta1.Cluster, opts *UpgradeOptio
 	}
 
 	newOCIMonVer := fmt.Sprintf("%s:%s", newSpec.Spec.OCIMonImage, newSpec.Spec.OCIMonTag)
-	newPXVer := fmt.Sprintf("%s:%s", newSpec.Spec.PXImage, newSpec.Spec.PXTag)
 
 	isAppDrainNeeded, err := ops.isUpgradeAppDrainRequired(newSpec, clusterManager)
 	if err != nil {
@@ -245,14 +244,7 @@ func (ops *pxClusterOps) Upgrade(newSpec *apiv1beta1.Cluster, opts *UpgradeOptio
 		return err
 	}
 
-	// 1. Start DaemonSet to download the new PX and OCI-mon image and validate it completes
-	if err := ops.runDockerPuller(newOCIMonVer); err != nil {
-		return err
-	}
-
-	if err := ops.runDockerPuller(newPXVer); err != nil {
-		return err
-	}
+	// NOTE: Skip step 1. with ops.runDockerPuller(newOCIMonVer, newPXVer) as it doesn't handle private registries, air gapped installs and containerd
 
 	// 2. (Optional) Scale down px shared applications to 0 replicas if required based on opts
 	if ops.isScaleDownOfSharedAppsRequired(isAppDrainNeeded, opts) {
@@ -329,142 +321,6 @@ func (ops *pxClusterOps) Delete(c *apiv1beta1.Cluster, opts *DeleteOptions) erro
 				logrus.Warnf("Failed to wipe Portworx KVDB tree. err: %v", err)
 			}
 		}
-	}
-
-	return nil
-}
-
-// runDockerPuller runs the DaemonSet to start pulling the given image on all nodes
-func (ops *pxClusterOps) runDockerPuller(imageToPull string) error {
-	stripSpecialRegex, _ := regexp.Compile("[^a-zA-Z0-9]+")
-	trueVar := true
-
-	pullerName := fmt.Sprintf("docker-puller-%s", stripSpecialRegex.ReplaceAllString(imageToPull, ""))
-	hostVarRunDockerPath := "/var/run/"
-	if ops.platform == platformTypePKS {
-		hostVarRunDockerPath = "/var/vcap/sys/run/docker"
-	}
-
-	labels := map[string]string{
-		"name": pullerName,
-	}
-	args := []string{"-i", imageToPull, "-w"}
-
-	var env []corev1.EnvVar
-	if len(ops.dockerRegistrySecret) != 0 {
-		logrus.Infof("Using user-provided docker registry credentials from secret: %s", ops.dockerRegistrySecret)
-		env = append(env, corev1.EnvVar{
-			Name: "REGISTRY_USER",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: ops.dockerRegistrySecret,
-					},
-					Key: "REGISTRY_USER",
-				},
-			},
-		})
-
-		env = append(env, corev1.EnvVar{
-			Name: "REGISTRY_PASS",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: ops.dockerRegistrySecret,
-					},
-					Key: "REGISTRY_PASS",
-				},
-			},
-		})
-	}
-
-	ds := &apps_api.DaemonSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pullerName,
-			Namespace: pxDefaultNamespace,
-			Labels:    labels,
-		},
-		Spec: apps_api.DaemonSetSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Affinity: &corev1.Affinity{
-						NodeAffinity: &corev1.NodeAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-								NodeSelectorTerms: []corev1.NodeSelectorTerm{
-									{
-										MatchExpressions: []corev1.NodeSelectorRequirement{
-											{
-												Key:      pxEnableLabelKey,
-												Operator: corev1.NodeSelectorOpNotIn,
-												Values:   []string{"false"},
-											},
-											{
-												Key:      "node-role.kubernetes.io/master",
-												Operator: corev1.NodeSelectorOpDoesNotExist,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					Containers: []corev1.Container{
-						{
-							Name:            pullerName,
-							Image:           dockerPullerImage,
-							ImagePullPolicy: corev1.PullAlways,
-							Args:            args,
-							Env:             env,
-							ReadinessProbe: &corev1.Probe{
-								InitialDelaySeconds: 60,
-								Handler: corev1.Handler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"cat", "/tmp/docker-pull-done"},
-									},
-								},
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "varrun",
-									MountPath: "/var/run/",
-								},
-							},
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: &trueVar,
-							},
-						},
-					},
-					RestartPolicy:      "Always",
-					ServiceAccountName: talismanServiceAccount,
-					Volumes: []corev1.Volume{
-						{
-							Name: "varrun",
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: hostVarRunDockerPath,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	daemonsetReadyTimeout, err := ops.getDaemonSetReadyTimeout()
-	if err != nil {
-		return err
-	}
-
-	err = ops.runDaemonSet(ds, daemonsetReadyTimeout)
-	if err != nil {
-		return fmt.Errorf("failed to run docker puller daemonset. err: %v", err)
 	}
 
 	return nil
@@ -594,6 +450,11 @@ func (ops *pxClusterOps) upgradePX(newVersion string) error {
 				APIGroups: []string{""},
 				Resources: []string{"persistentvolumeclaims", "persistentvolumes"},
 				Verbs:     []string{"get", "list"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"configmaps"},
+				Verbs:     []string{"get", "update", "list", "create"},
 			},
 		},
 	}

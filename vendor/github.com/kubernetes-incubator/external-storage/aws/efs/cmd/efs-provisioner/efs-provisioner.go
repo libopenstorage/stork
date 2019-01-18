@@ -29,9 +29,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/efs"
 	"github.com/golang/glog"
-	"github.com/kubernetes-incubator/external-storage/lib/controller"
-	"github.com/kubernetes-incubator/external-storage/lib/gidallocator"
-	"github.com/kubernetes-incubator/external-storage/lib/mount"
+	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
+	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/gidallocator"
+	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/mount"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -43,6 +43,7 @@ const (
 	provisionerNameKey = "PROVISIONER_NAME"
 	fileSystemIDKey    = "FILE_SYSTEM_ID"
 	awsRegionKey       = "AWS_REGION"
+	dnsNameKey         = "DNS_NAME"
 )
 
 type efsProvisioner struct {
@@ -64,7 +65,11 @@ func NewEFSProvisioner(client kubernetes.Interface) controller.Provisioner {
 		glog.Fatalf("environment variable %s is not set! Please set it.", awsRegionKey)
 	}
 
-	dnsName := getDNSName(fileSystemID, awsRegion)
+	dnsName := os.Getenv(dnsNameKey)
+	glog.Errorf("%v", dnsName)
+	if dnsName == "" {
+		dnsName = getDNSName(fileSystemID, awsRegion)
+	}
 
 	mountpoint, source, err := getMount(dnsName)
 	if err != nil {
@@ -154,6 +159,11 @@ func (p *efsProvisioner) Provision(options controller.VolumeOptions) (*v1.Persis
 		return nil, err
 	}
 
+	mountOptions := []string{"vers=4.1"}
+	if options.MountOptions != nil {
+		mountOptions = options.MountOptions
+	}
+
 	pv := &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: options.PVName,
@@ -171,9 +181,10 @@ func (p *efsProvisioner) Provision(options controller.VolumeOptions) (*v1.Persis
 					ReadOnly: false,
 				},
 			},
-			MountOptions: []string{"vers=4.1"},
+			MountOptions: mountOptions,
 		},
 	}
+
 	if gidAllocate {
 		pv.ObjectMeta.Annotations = map[string]string{
 			gidallocator.VolumeGidAnnotationKey: strconv.FormatInt(int64(*gid), 10),

@@ -123,12 +123,12 @@ local-volume/provisioner:
 
 test-local-volume/provisioner:
 	cd local-volume/provisioner; \
-	go test ./...
+	make test
 .PHONY: test-local-volume/provisioner
 
 test-local-volume/helm:
 	cd local-volume/helm; \
-	./test/run.sh
+	./hack/verify-generated.sh
 .PHONY: test-local-volume/helm
 
 clean-local-volume/provisioner:
