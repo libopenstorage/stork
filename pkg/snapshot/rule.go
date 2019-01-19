@@ -72,7 +72,7 @@ func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeCl
 		if err != nil {
 			return nil, err
 		}
-		return rule.ExecuteRule(r, rule.PreExecRule, snap, pvcs)
+		return rule.ExecuteRule(r, rule.PreExecRule, snap, snap.Metadata.Namespace)
 	}
 	return nil, nil
 }
@@ -93,7 +93,7 @@ func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnap
 		if err != nil {
 			return err
 		}
-		_, err = rule.ExecuteRule(r, rule.PostExecRule, snap, pvcs)
+		_, err = rule.ExecuteRule(r, rule.PostExecRule, snap, snap.Metadata.Namespace)
 		return err
 	}
 	return nil

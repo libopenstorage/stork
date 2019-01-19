@@ -135,6 +135,8 @@ type MigrationSpec struct {
 	IncludeResources  bool              `json:"includeResources"`
 	StartApplications bool              `json:"startApplications"`
 	Selectors         map[string]string `json:"selectors"`
+	PreExecRule       string            `json:"preExecRule"`
+	PostExecRule      string            `json:"postExecRule"`
 }
 
 // MigrationStatus is the status of a migration operation
@@ -200,6 +202,10 @@ type MigrationStageType string
 const (
 	// MigrationStageInitial for when migration is created
 	MigrationStageInitial MigrationStageType = ""
+	// MigrationStagePreExecRule for when the PreExecRule is being executed
+	MigrationStagePreExecRule MigrationStageType = "PreExecRule"
+	// MigrationStagePostExecRule for when the PostExecRule is being executed
+	MigrationStagePostExecRule MigrationStageType = "PostExecRule"
 	// MigrationStageVolumes for when volumes are being migrated
 	MigrationStageVolumes MigrationStageType = "Volumes"
 	// MigrationStageApplications for when applications are being migrated
