@@ -253,12 +253,7 @@ func (m *GroupSnapshotController) handlePreSnap(groupSnap *stork_api.GroupVolume
 		return nil, !updateCRD, err
 	}
 
-	pvcs, err := k8sutils.GetPVCsForGroupSnapshot(groupSnap.Namespace, groupSnap.Spec.PVCSelector.MatchLabels)
-	if err != nil {
-		return nil, !updateCRD, err
-	}
-
-	backgroundCommandTermChan, err := rule.ExecuteRule(r, rule.PreExecRule, groupSnap, pvcs)
+	backgroundCommandTermChan, err := rule.ExecuteRule(r, rule.PreExecRule, groupSnap, groupSnap.Namespace)
 	if err != nil {
 		if backgroundCommandTermChan != nil {
 			backgroundCommandTermChan <- true // terminate background commands if running
@@ -515,12 +510,7 @@ func (m *GroupSnapshotController) handlePostSnap(groupSnap *stork_api.GroupVolum
 		return nil, !updateCRD, err
 	}
 
-	pvcs, err := k8sutils.GetPVCsForGroupSnapshot(groupSnap.Namespace, groupSnap.Spec.PVCSelector.MatchLabels)
-	if err != nil {
-		return nil, !updateCRD, err
-	}
-
-	_, err = rule.ExecuteRule(r, rule.PostExecRule, groupSnap, pvcs)
+	_, err = rule.ExecuteRule(r, rule.PostExecRule, groupSnap, groupSnap.Namespace)
 	if err != nil {
 		return nil, !updateCRD, err
 	}

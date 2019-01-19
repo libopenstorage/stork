@@ -217,14 +217,14 @@ func ExecuteRule(
 	rule *stork_api.Rule,
 	rType Type,
 	owner runtime.Object,
-	pvcs []v1.PersistentVolumeClaim,
+	podNamespace string,
 ) (chan bool, error) {
 	// Validate the rule. Don't depend on callers to invoke this
 	if err := ValidateRule(rule, rType); err != nil {
 		return nil, err
 	}
 
-	log.RuleLog(rule, owner).Infof("Running rule")
+	log.RuleLog(rule, owner).Infof("Running %v", rType)
 	taskID, err := uuid.New()
 	if err != nil {
 		err = fmt.Errorf("failed to generate uuid for rule tasks due to: %v", err)
@@ -232,13 +232,13 @@ func ExecuteRule(
 	}
 
 	pods := make([]v1.Pod, 0)
-	for _, pvc := range pvcs {
-		pvcPods, err := k8s.Instance().GetPodsUsingPVC(pvc.GetName(), pvc.GetNamespace())
+	for _, item := range rule.Rules {
+		p, err := k8s.Instance().GetPods(podNamespace, item.PodSelector)
 		if err != nil {
 			return nil, err
 		}
 
-		pods = append(pods, pvcPods...)
+		pods = append(pods, p.Items...)
 	}
 
 	if len(pods) > 0 {
