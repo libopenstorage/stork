@@ -35,7 +35,8 @@ const (
 	remotePairName      = "remoteclusterpair"
 	remoteConfig        = "remoteconfigmap"
 	specDir             = "./specs"
-	pairFileName        = "./specs/cluster-pair/cluster-pair.yaml"
+	pairFilePath        = "./specs/cluster-pair"
+	pairFileName        = pairFilePath + "/cluster-pair.yaml"
 	remoteFilePath      = "/tmp/kubeconfig"
 
 	nodeScore   = 100
@@ -251,6 +252,11 @@ func setRemoteConfig(kubeConfig string) error {
 }
 
 func createClusterPair(pairInfo map[string]string) error {
+	err := os.MkdirAll(pairFilePath, 0777)
+	if err != nil {
+		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", pairFilePath, err)
+		return err
+	}
 	pairFile, err := os.Create(pairFileName)
 	if err != nil {
 		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
@@ -287,7 +293,7 @@ func createClusterPair(pairInfo map[string]string) error {
 func addStorageOptions(pairInfo map[string]string) error {
 	file, err := os.OpenFile(pairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
-		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
+		logrus.Errorf("Unable to open %v: %v", pairFileName, err)
 		return err
 	}
 	defer file.Close()
