@@ -340,7 +340,7 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 		nodeMap[n.Name] = n
 	}
 
-	existingPods, _ := k8s.Instance().GetPods("")
+	existingPods, _ := k8s.Instance().GetPods("", nil)
 
 	orphanPodsMap := make(map[string][]string)
 	dirtyVolPodsMap := make(map[string][]string)
