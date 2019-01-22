@@ -277,58 +277,11 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 
 	var contexts []*scheduler.Context
 	for _, app := range apps {
-		ns, err := k.createNamespace(app, instanceID)
+
+		appNamespace := getAppNamespaceName(app, instanceID)
+		specObjects, err := k.createSpecObjects(app, appNamespace)
 		if err != nil {
 			return nil, err
-		}
-
-		var specObjects []interface{}
-		for _, spec := range app.SpecList {
-			obj, err := k.createCRDObjects(spec, defaultTimeout, defaultRetryInterval)
-			if err != nil {
-				return nil, err
-			}
-			if obj != nil {
-				specObjects = append(specObjects, obj)
-			}
-		}
-
-		for _, spec := range app.SpecList {
-			t := func() (interface{}, bool, error) {
-				obj, err := k.createStorageObject(spec, ns, app)
-				if err != nil {
-					return nil, true, err
-				}
-				return obj, false, nil
-			}
-
-			obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
-			if err != nil {
-				return nil, err
-			}
-
-			if obj != nil {
-				specObjects = append(specObjects, obj)
-			}
-		}
-
-		for _, spec := range app.SpecList {
-			t := func() (interface{}, bool, error) {
-				obj, err := k.createCoreObject(spec, ns, app)
-				if err != nil {
-					return nil, true, err
-				}
-				return obj, false, nil
-			}
-
-			obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
-			if err != nil {
-				return nil, err
-			}
-
-			if obj != nil {
-				specObjects = append(specObjects, obj)
-			}
 		}
 
 		ctx := &scheduler.Context{
@@ -346,19 +299,105 @@ func (k *k8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	return contexts, nil
 }
 
-func (k *k8s) createNamespace(app *spec.AppSpec, instanceID string) (*v1.Namespace, error) {
+func (k *k8s) createSpecObjects(app *spec.AppSpec, namespace string) ([]interface{}, error) {
+	var specObjects []interface{}
+	ns, err := k.createNamespace(app, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, spec := range app.SpecList {
+		obj, err := k.createCRDObjects(spec, ns, defaultTimeout, defaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createStorageObject(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createCoreObject(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, defaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+	return specObjects, nil
+}
+
+// AddTasks adds tasks to an existing context
+func (k *k8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
+	if ctx == nil {
+		return fmt.Errorf("Context to add tasks to cannot be nil")
+	}
+	if len(options.AppKeys) == 0 {
+		return fmt.Errorf("Need to specify list of applications to add to context")
+	}
+
+	appNamespace := getAppNamespaceName(ctx.App, ctx.UID)
+	var apps []*spec.AppSpec
+	specObjects := ctx.App.SpecList
+	for _, key := range options.AppKeys {
+		spec, err := k.specFactory.Get(key)
+		if err != nil {
+			return err
+		}
+		apps = append(apps, spec)
+	}
+	for _, app := range apps {
+		objects, err := k.createSpecObjects(app, appNamespace)
+		if err != nil {
+			return err
+		}
+		specObjects = append(specObjects, objects...)
+	}
+	ctx.App.SpecList = specObjects
+	return nil
+}
+
+func (k *k8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespace, error) {
 	k8sOps := k8s_ops.Instance()
-	appNamespace := getAppNamespaceName(app, instanceID)
 
 	t := func() (interface{}, bool, error) {
-		ns, err := k8sOps.CreateNamespace(appNamespace,
+		ns, err := k8sOps.CreateNamespace(namespace,
 			map[string]string{
 				"creater": "torpedo",
 				"app":     app.Key,
 			})
 
 		if errors.IsAlreadyExists(err) {
-			if ns, err = k8sOps.GetNamespace(appNamespace); err == nil {
+			if ns, err = k8sOps.GetNamespace(namespace); err == nil {
 				return ns, false, nil
 			}
 		}
@@ -366,7 +405,7 @@ func (k *k8s) createNamespace(app *spec.AppSpec, instanceID string) (*v1.Namespa
 		if err != nil {
 			return nil, true, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", appNamespace, err),
+				Cause: fmt.Sprintf("Failed to create namespace: %v. Err: %v", namespace, err),
 			}
 		}
 
@@ -1521,10 +1560,15 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 }
 
 // createCRDObjects and Validate their deployment
-func (k *k8s) createCRDObjects(specObj interface{}, timeout, retryInterval time.Duration) (interface{}, error) {
+func (k *k8s) createCRDObjects(
+	specObj interface{},
+	ns *v1.Namespace, timeout,
+	retryInterval time.Duration,
+) (interface{}, error) {
 	var err error
 	k8sOps := k8s_ops.Instance()
 	if obj, ok := specObj.(*stork_api.ClusterPair); ok {
+		obj.Namespace = ns.Name
 		logrus.Info("Applying clusterpair spec")
 		err = k8sOps.CreateClusterPair(obj)
 		if err != nil {
@@ -1536,6 +1580,7 @@ func (k *k8s) createCRDObjects(specObj interface{}, timeout, retryInterval time.
 		}
 		return obj, nil
 	} else if obj, ok := specObj.(*stork_api.Migration); ok {
+		obj.Namespace = ns.Name
 		logrus.Info("Applying Migration Spec")
 		err = k8sOps.CreateMigration(obj)
 		if err != nil {

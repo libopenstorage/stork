@@ -198,6 +198,52 @@ func (d *dcos) Schedule(instanceID string, options scheduler.ScheduleOptions) ([
 	return contexts, nil
 }
 
+// AddTasks adds tasks to an existing context
+func (d *dcos) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions) error {
+	if ctx == nil {
+		return fmt.Errorf("Context to add tasks to cannot be nil")
+	}
+	if len(options.AppKeys) == 0 {
+		return fmt.Errorf("Need to specify list of applications to add to context")
+	}
+
+	var apps []*spec.AppSpec
+	for _, key := range options.AppKeys {
+		spec, err := d.specFactory.Get(key)
+		if err != nil {
+			return err
+		}
+		apps = append(apps, spec)
+	}
+
+	specObjects := ctx.App.SpecList
+	for _, app := range apps {
+		for _, spec := range app.SpecList {
+			if application, ok := spec.(*marathon.Application); ok {
+				if err := d.randomizeVolumeNames(application); err != nil {
+					return &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: err.Error(),
+					}
+				}
+				obj, err := MarathonClient().CreateApplication(application)
+				if err != nil {
+					return &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: err.Error(),
+					}
+				}
+				specObjects = append(specObjects, obj)
+			} else {
+				return fmt.Errorf("Unsupported object received in app %v while scheduling", app.Key)
+			}
+
+		}
+	}
+	ctx.App.SpecList = specObjects
+	return nil
+}
+
 func (d *dcos) randomizeVolumeNames(application *marathon.Application) error {
 	volDriver, err := volume.Get(d.volDriverName)
 	if err != nil {

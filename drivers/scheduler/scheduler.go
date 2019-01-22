@@ -54,6 +54,9 @@ type Driver interface {
 	// WaitForRunning waits for application to start running.
 	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
 
+	// AddTasks adds tasks to an existing context
+	AddTasks(*Context, ScheduleOptions) error
+
 	// Destroy removes a application. It does not delete the volumes of the task.
 	Destroy(*Context, map[string]bool) error
 
