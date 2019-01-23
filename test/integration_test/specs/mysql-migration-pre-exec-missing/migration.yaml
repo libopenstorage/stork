@@ -2,7 +2,6 @@ apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Migration
 metadata:
   name: mysql-migration
-  namespace: mysql-1-pvc-singlemysql
 spec:
   # This should be the name of the cluster pair created above
   clusterPair: remoteclusterpair
@@ -10,6 +9,7 @@ spec:
   includeResources: true
   # If set to false, the deployments and stateful set replicas will be set to 0 on the destination. There will be an annotation with "stork.openstorage.org/migrationReplicas" to store the replica count from the source
   startApplications: true
+  preExecRule: missing-rule
   # List of namespaces to migrate
   namespaces:
-  - migration-migration
+  - mysql-1-pvc-migration-pre-exec-missing
