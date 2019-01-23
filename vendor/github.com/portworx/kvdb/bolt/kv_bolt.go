@@ -569,7 +569,7 @@ func (kv *boltKV) snapDB() (string, error) {
 	return snapPath, nil
 }
 
-func (kv *boltKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
+func (kv *boltKV) Snapshot(prefix []string) (kvdb.Kvdb, uint64, error) {
 	kv.mutex.Lock()
 	defer kv.mutex.Unlock()
 

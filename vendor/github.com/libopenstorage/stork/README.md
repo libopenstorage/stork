@@ -3,8 +3,8 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/openstorage/stork.svg)](https://hub.docker.com/r/openstorage/stork)
 [![Code Coverage](https://codecov.io/gh/libopenstorage/stork/branch/master/graph/badge.svg)](https://codecov.io/gh/libopenstorage/stork)
 
-# Stork - Storage Orchestration Runtime for Kubernetes
-Stork is a Cloud Native storage orchestration runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage provider, it's capabilities and state.
+# Stork - Storage Operator Runtime for Kubernetes
+Stork is a Cloud Native storage operator runtime scheduler plugin. It translates a scheduler's orchestration decisions into someting that an external cloud native storage solution can act upon. By doing so, it extends Kubernetes with more stateful awareness of the underlying storage provider, it's capabilities and state.
 
 <div style="text-align:center"><img src="images/stork.png" alt="Drawing" style="width: 50px;"/></div>
 
@@ -45,11 +45,11 @@ to add support for snapshots.
 
 Refer to [Snapshots with Stork](doc/snaps.md) for instructions on creating and using snapshots with Stork.
 
-### 3DSnaps
+### Application consistent Snapshots
 
-3DSnaps provides app-consistent cluster wide snapshots. It allows you to specify pre and post rules that are run on the application pods using the volumes. This allows users to quiesce the applications before the snapshot is taken and resume I/O after the snapshot is taken. The commands will be run in pods which are using the PVC being snapshotted.
+This feature allows you to specify pre and post rules that are run on the application pods before and after a snapshot is triggered. This allows users to perform actions like quiescing or flushing data from applications before a snapshot is taken and resume I/O after the snapshot is taken. The commands will be run in pods which are using the PVC being snapshotted.
 
-Read [Configuring 3DSnaps](/doc/snaps-3d.md) for further details on 3DSnaps.
+Read [Configuring application consistent snapshots](/doc/snaps-3d.md) for further details.
 
 
 # Building Stork

@@ -1,0 +1,43 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: docker-puller
+  namespace: kube-system
+spec:
+  template:
+    metadata:
+      labels:
+        name: docker-puller
+    spec:
+      containers:
+        - name: docker-puller
+          image: portworx/docker-puller:latest
+          imagePullPolicy: Always
+          args:
+          - "-i"
+          - "portworx/px-base-enterprise:1.3.0"
+          - "-w"
+          readinessProbe:
+            exec:
+              command:
+              - cat
+              - /tmp/docker-pull-done
+          volumeMounts:
+            - name: varrun
+              mountPath: /var/run/
+          env:
+          - name: REGISTRY_USER
+            valueFrom:
+              secretKeyRef:
+                name: docker-reg-secret
+                key: REGISTRY_USER
+          - name: REGISTRY_PASS
+            valueFrom:
+              secretKeyRef:
+                name: docker-reg-secret
+                key: REGISTRY_PASS
+      restartPolicy: Always
+      volumes:
+        - name: varrun
+          hostPath:
+            path: /var/run/

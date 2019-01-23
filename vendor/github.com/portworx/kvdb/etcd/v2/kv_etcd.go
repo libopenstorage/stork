@@ -71,7 +71,7 @@ func New(
 		Transport: tr,
 		Username:  username,
 		Password:  password,
-		// The time required for a request to fail - 30 sec
+		// The time required for a request to fail - 10 sec
 		HeaderTimeoutPerRequest: time.Duration(10) * time.Second,
 	}
 	c, err := e.New(cfg)
@@ -645,8 +645,13 @@ func (kv *etcdKV) watchStart(
 	}
 }
 
-func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
-
+func (kv *etcdKV) Snapshot(prefixes []string) (kvdb.Kvdb, uint64, error) {
+	if len(prefixes) == 0 {
+		prefixes = []string{""}
+	} else {
+		prefixes = append(prefixes, ec.Bootstrap)
+		prefixes = common.PrunePrefixes(prefixes)
+	}
 	var updates []*kvdb.KVPair
 	done := make(chan error)
 	mutex := &sync.Mutex{}
@@ -688,13 +693,18 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 
 		m.Lock()
 		defer m.Unlock()
-		updates = append(updates, kvp)
-		if highestKvdbIndex > 0 && kvp.ModifiedIndex >= highestKvdbIndex {
-			// Done applying changes.
-			watchClosed = true
-			watchErr = fmt.Errorf("done")
-			sendErr = nil
-			goto errordone
+		for _, configuredPrefix := range prefixes {
+			if strings.HasPrefix(kvp.Key, configuredPrefix) {
+				updates = append(updates, kvp)
+				if highestKvdbIndex > 0 && kvp.ModifiedIndex >= highestKvdbIndex {
+					// Done applying changes.
+					watchClosed = true
+					watchErr = fmt.Errorf("done")
+					sendErr = nil
+					goto errordone
+				}
+				break
+			}
 		}
 
 		return nil
@@ -718,11 +728,6 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 	}
 	lowestKvdbIndex = kvPair.ModifiedIndex
 
-	kvPairs, err := kv.Enumerate(prefix)
-	if err != nil {
-		return nil, 0, fmt.Errorf("Failed to enumerate %v: err: %v", prefix,
-			err)
-	}
 	snapDb, err := mem.New(
 		kv.domain,
 		nil,
@@ -733,44 +738,60 @@ func (kv *etcdKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		return nil, 0, fmt.Errorf("Failed to create in-mem kv store: %v", err)
 	}
 
-	for i := 0; i < len(kvPairs); i++ {
-		kvPair := kvPairs[i]
-		if len(kvPair.Value) > 0 {
-			// Only create a leaf node
-			_, err := snapDb.SnapPut(kvPair)
-			if err != nil {
-				return nil, 0, fmt.Errorf("Failed creating snap: %v", err)
-			}
-		} else {
-			newKvPairs, err := kv.Enumerate(kvPair.Key)
-			if err != nil {
-				return nil, 0, fmt.Errorf("Failed to get child keys: %v", err)
-			}
-			if len(newKvPairs) == 0 {
-				// empty value for this key
+	enumeratePrefix := func(snapDb kvdb.Kvdb, prefix string) error {
+		kvPairs, err := kv.Enumerate(prefix)
+		if err != nil {
+			return fmt.Errorf("Failed to enumerate %v: err: %v", prefix,
+				err)
+		}
+		for i := 0; i < len(kvPairs); i++ {
+			kvPair := kvPairs[i]
+			if len(kvPair.Value) > 0 {
+				// Only create a leaf node
 				_, err := snapDb.SnapPut(kvPair)
 				if err != nil {
-					return nil, 0, fmt.Errorf("Failed creating snap: %v", err)
-				}
-			} else if len(newKvPairs) == 1 {
-				// empty value for this key
-				_, err := snapDb.SnapPut(newKvPairs[0])
-				if err != nil {
-					return nil, 0, fmt.Errorf("Failed creating snap: %v", err)
+					return fmt.Errorf("Failed creating snap: %v", err)
 				}
 			} else {
-				kvPairs = append(kvPairs, newKvPairs...)
+				newKvPairs, err := kv.Enumerate(kvPair.Key)
+				if err != nil {
+					return fmt.Errorf("Failed to get child keys: %v", err)
+				}
+				if len(newKvPairs) == 0 {
+					// empty value for this key
+					_, err := snapDb.SnapPut(kvPair)
+					if err != nil {
+						return fmt.Errorf("Failed creating snap: %v", err)
+					}
+				} else if len(newKvPairs) == 1 {
+					// empty value for this key
+					_, err := snapDb.SnapPut(newKvPairs[0])
+					if err != nil {
+						return fmt.Errorf("Failed creating snap: %v", err)
+					}
+				} else {
+					kvPairs = append(kvPairs, newKvPairs...)
+				}
 			}
+		}
+		return nil
+	}
+
+	for _, prefix := range prefixes {
+		if err := enumeratePrefix(snapDb, prefix); err != nil {
+			return nil, 0, err
 		}
 	}
 
+	// take the lock before we Delete a key so that
+	// the highestKvdbIndex will be set before the watch callback is invoked
+	mutex.Lock()
 	kvPair, err = kv.Delete(bootStrapKey)
 	if err != nil {
 		return nil, 0, fmt.Errorf("Failed to delete snap bootstrap key: %v, "+
 			"err: %v", bootStrapKey, err)
 	}
 
-	mutex.Lock()
 	highestKvdbIndex = kvPair.ModifiedIndex
 	mutex.Unlock()
 

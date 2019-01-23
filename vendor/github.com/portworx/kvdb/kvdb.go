@@ -256,8 +256,8 @@ type Kvdb interface {
 	// WatchTree is the same as WatchKey except that watchCB is triggered
 	// for updates on all keys that share the prefix.
 	WatchTree(prefix string, waitIndex uint64, opaque interface{}, watchCB WatchCB) error
-	// Snapshot returns a kvdb snapshot and its version.
-	Snapshot(prefix string) (Kvdb, uint64, error)
+	// Snapshot returns a kvdb snapshot of the provided list of prefixes and the last updated index. If no prefixes are provided, then the whole kvdb tree is snapshotted and could be potentially an expensive operation
+	Snapshot(prefixes []string) (Kvdb, uint64, error)
 	// SnapPut records the key value pair including the index.
 	SnapPut(kvp *KVPair) (*KVPair, error)
 	// Lock specfied key and associate a lockerID with it, probably to identify
@@ -364,6 +364,10 @@ type Controller interface {
 	// RemoveMember removes a member from an existing kvdb cluster
 	// Returns: error if it fails to remove a member
 	RemoveMember(nodeName, nodeIP string) error
+
+	// UpdateMember updates the IP for the given node in an existing kvdb cluster
+	// Returns: map of nodeID to peerUrls of all members from the existing cluster
+	UpdateMember(nodeIP, nodePeerPort, nodeName string) (map[string][]string, error)
 
 	// ListMembers enumerates the members of the kvdb cluster
 	// Returns: the nodeID  to memberInfo mappings of all the members

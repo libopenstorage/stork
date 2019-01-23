@@ -1,0 +1,11 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: GroupVolumeSnapshot
+metadata:
+  name: cassandra-group-cloudsnapshot
+spec:
+  preExecRule: cassandra-presnap-rule
+  pvcSelector:
+    matchLabels:
+      app: cassandra
+  options:
+    portworx/snapshot-type: cloud

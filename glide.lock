@@ -1,5 +1,5 @@
-hash: 06fd61b981a90894487d7a393039e714d241f1038ed60fdb8465fdfaeac42ac4
-updated: 2018-11-20T20:13:31.096995218-08:00
+hash: 01d3f3bb7ff678817e85f35bffc99662c16d133c7efe625a26f92c76239ddd64
+updated: 2019-01-22T18:39:41.783192718-08:00
 imports:
 - name: github.com/aws/aws-sdk-go
   version: 5e98666858b97db54a61044bb1150d3b81436860
@@ -36,7 +36,7 @@ imports:
   - service/ssm
   - service/sts
 - name: github.com/cenkalti/backoff
-  version: 62661b46c4093e2c1f38d943e663db1a29873e80
+  version: 1e4cf3da559842a91afcb6ea6141451e6c30c618
 - name: github.com/docker/distribution
   version: 749f6afb4572201e3c37325d0ffedb6f32be8950
   subpackages:
@@ -88,7 +88,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
+  version: 6ed8d5f64cd79a498d1f3fab5880cc376ce41bbe
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -149,7 +149,7 @@ imports:
 - name: github.com/konsorten/go-windows-terminal-sequences
   version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/kubernetes-incubator/external-storage
-  version: cd82aca42900f43309fd9ebbc141684d78974446
+  version: bc02da24cf1ecc8be052434589c1b7f9081c75a1
   repo: https://github.com/libopenstorage/external-storage.git
   subpackages:
   - snapshot/pkg/apis/crd/v1
@@ -177,7 +177,7 @@ imports:
   - secrets
   - volume
 - name: github.com/libopenstorage/stork
-  version: 31f62c98eeaa1da38b8faf2645822eee7153cfe1
+  version: 4042abb54093f253b427b94987732a760796385c
   subpackages:
   - pkg/apis/stork
   - pkg/apis/stork/v1alpha1
@@ -189,7 +189,7 @@ imports:
 - name: github.com/mattn/go-isatty
   version: 3fb116b820352b7f0c281308a4d6250c22d94e27
 - name: github.com/Microsoft/go-winio
-  version: 97e4973ce50b2ff5f09635a57e2b88a037aae829
+  version: 75bf6ca3d7cb77506c52495e61472c131a254d56
 - name: github.com/miekg/dns
   version: e7c3f513a170118cc2f407db58de97aa20c07c85
 - name: github.com/modern-go/concurrent
@@ -199,7 +199,7 @@ imports:
 - name: github.com/mohae/deepcopy
   version: c48cc78d482608239f6c4c92a4abd87eb8761c90
 - name: github.com/onsi/ginkgo
-  version: 3774a09d95489ccaa16032e0770d08ea77ba6184
+  version: 2e1be8f7d90e9d3e3e58b0ce470f2f14d075406f
   subpackages:
   - config
   - internal/codelocation
@@ -219,7 +219,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 7615b9433f86a8bdf29709bf288bc4fd0636a369
+  version: 65fb64232476ad9046e57c26cd0bff3d3a8dc6cd
   subpackages:
   - format
   - internal/assertion
@@ -243,21 +243,29 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/pkg/errors
-  version: 059132a15dd08d6704c67711dae0cf35ab991756
+  version: ffb6e22f01932bf7ac35e0bad9be11f01d1c8685
 - name: github.com/portworx/kvdb
-  version: cbc0d300ec8a247e9a03bac5d31f9eb6a872c78c
+  version: f47a84a70a1ec6709d376b077fe6e16a40d00732
   subpackages:
   - common
   - mem
 - name: github.com/portworx/sched-ops
-  version: ba438ebd5262741ebcc54f73a43ecb932e8ec331
+  version: 2a75388cbbfd85e6a1fc63caf5ddace5b51257c1
   subpackages:
   - k8s
   - task
+- name: github.com/portworx/talisman
+  version: 9470631245f591a03dac7192caa5b2e093272be2
+  subpackages:
+  - pkg/apis/portworx
+  - pkg/apis/portworx/v1beta1
+  - pkg/client/clientset/versioned
+  - pkg/client/clientset/versioned/scheme
+  - pkg/client/clientset/versioned/typed/portworx/v1beta1
 - name: github.com/Sirupsen/logrus
-  version: 91da99df23e3bad7f384338a5a8f636d04093d9a
+  version: 7d8d63893b994a654b3bc8d16ffd7fb6b9f884a4
 - name: github.com/sirupsen/logrus
-  version: bcd833dfe83d3cebad139e4a29ed79cb2318bf95
+  version: e1e72e9de974bd926e5c56f83753fba2df402ce5
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto
@@ -378,7 +386,7 @@ imports:
   - storage/v1alpha1
   - storage/v1beta1
 - name: k8s.io/apiextensions-apiserver
-  version: 10b55e130fc1162aba4f16406798909e48397aee
+  version: 3de98c57bc05a81cf463e0ad7a0af4cec8a5b510
   subpackages:
   - pkg/apis/apiextensions
   - pkg/apis/apiextensions/v1beta1

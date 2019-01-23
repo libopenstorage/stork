@@ -63,7 +63,7 @@ func TestIsRetryNeeded(t *testing.T) {
 	// rpctypes.ErrGRPCEmptyKey
 	retry, err = isRetryNeeded(rpctypes.ErrGRPCEmptyKey, fn, key, retryCount)
 	assert.EqualError(t, kvdb.ErrNotFound, err.Error(), "Unexpcted error")
-	assert.False(t, retry, "Expected a retry")
+	assert.False(t, retry, "Expected no retry")
 
 	// etcd v3.2.x uses following grpc error format
 	grpcErr := grpc.Errorf(codes.Unavailable, "desc = some grpc error")
@@ -82,6 +82,15 @@ func TestIsRetryNeeded(t *testing.T) {
 	retry, err = isRetryNeeded(gErr, fn, key, retryCount)
 	assert.EqualError(t, gErr, err.Error(), "Unexpcted error")
 	assert.True(t, retry, "Expected a retry")
+
+	retry, err = isRetryNeeded(kvdb.ErrNotFound, fn, key, retryCount)
+	assert.EqualError(t, kvdb.ErrNotFound, err.Error(), "Unexpcted error")
+	assert.False(t, retry, "Expected no retry")
+
+	retry, err = isRetryNeeded(kvdb.ErrValueMismatch, fn, key, retryCount)
+	assert.EqualError(t, kvdb.ErrValueMismatch, err.Error(), "Unexpcted error")
+	assert.False(t, retry, "Expected no retry")
+
 }
 
 func TestCasWithRestarts(t *testing.T) {

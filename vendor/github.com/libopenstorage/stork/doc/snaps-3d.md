@@ -33,7 +33,7 @@ apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Rule
 metadata:
   name: hello-world-rule
-spec:
+rules:
   - podSelector:
       app: foo
     actions:
@@ -52,7 +52,7 @@ apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Rule
 metadata:
   name: presnap-rule
-spec:
+rules:
   - podSelector:
       app: mysql
     actions:
@@ -91,7 +91,7 @@ apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Rule
 metadata:
   name: mongodb-presnap-rule
-spec:
+rules:
   - podSelector:
       app: mongo-mongodb
     actions:
@@ -107,7 +107,7 @@ apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Rule
 metadata:
   name: mongodb-postsnap-rule
-spec:
+rules:
   - podSelector:
       app: mongo-mongodb
     actions:
@@ -145,7 +145,7 @@ apiVersion: stork.libopenstorage.org/v1alpha1
 kind: Rule
 metadata:
   name: cassandra-rule
-spec:
+rules:
   - podSelector:
       app: cassandra
     actions:

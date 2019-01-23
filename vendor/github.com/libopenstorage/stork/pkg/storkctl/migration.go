@@ -27,18 +27,19 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 		Use:     migrationSubcommand,
 		Aliases: migrationAliases,
 		Short:   "Start a migration",
-		PreRunE: cobra.ExactArgs(1),
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for migration name"))
-			} else {
-				migrationName = args[0]
+				return
 			}
+			migrationName = args[0]
 			if len(clusterPair) == 0 {
 				util.CheckErr(fmt.Errorf("ClusterPair name needs to be provided for migration"))
+				return
 			}
 			if len(namespaceList) == 0 {
 				util.CheckErr(fmt.Errorf("Need to provide atleast one namespace to migrate"))
+				return
 			}
 
 			migration := &storkv1.Migration{
@@ -50,9 +51,11 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 				},
 			}
 			migration.Name = migrationName
+			migration.Namespace = cmdFactory.GetNamespace()
 			err := k8s.Instance().CreateMigration(migration)
 			if err != nil {
 				util.CheckErr(err)
+				return
 			}
 			msg := fmt.Sprintf("Migration %v created successfully", migration.Name)
 			printMsg(msg, ioStreams.Out)
@@ -82,6 +85,7 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 					migration, err := k8s.Instance().GetMigration(migrationName, cmdFactory.GetNamespace())
 					if err != nil {
 						util.CheckErr(err)
+						return
 					}
 					migrations.Items = append(migrations.Items, *migration)
 				}
@@ -89,6 +93,7 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 				migrations, err = k8s.Instance().ListMigrations(cmdFactory.GetNamespace())
 				if err != nil {
 					util.CheckErr(err)
+					return
 				}
 			}
 
@@ -112,10 +117,12 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 			outputFormat, err := cmdFactory.GetOutputFormat()
 			if err != nil {
 				util.CheckErr(err)
+				return
 			}
 
 			if err := printObjects(c, migrations, outputFormat, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
+				return
 			}
 		},
 	}
@@ -136,12 +143,14 @@ func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 			if len(clusterPair) == 0 {
 				if len(args) == 0 {
 					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for migration name"))
+					return
 				}
 				migrations = args
 			} else {
 				migrationList, err := k8s.Instance().ListMigrations(cmdFactory.GetNamespace())
 				if err != nil {
 					util.CheckErr(err)
+					return
 				}
 				for _, migration := range migrationList.Items {
 					if migration.Spec.ClusterPair == clusterPair {
@@ -168,10 +177,10 @@ func deleteMigrations(migrations []string, namespace string, ioStreams genericcl
 		err := k8s.Instance().DeleteMigration(migration, namespace)
 		if err != nil {
 			util.CheckErr(err)
-		} else {
-			msg := fmt.Sprintf("Migration %v deleted successfully", migration)
-			printMsg(msg, ioStreams.Out)
+			return
 		}
+		msg := fmt.Sprintf("Migration %v deleted successfully", migration)
+		printMsg(msg, ioStreams.Out)
 	}
 }
 

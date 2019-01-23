@@ -20,7 +20,7 @@ func PodLog(pod *v1.Pod) *logrus.Entry {
 			"Namespace": pod.Namespace,
 		}
 		for _, owner := range pod.OwnerReferences {
-			if *owner.Controller {
+			if owner.Controller != nil && *owner.Controller {
 				fields["Owner"] = owner.Kind + "/" + owner.Name
 				break
 			}
@@ -159,5 +159,19 @@ func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
 
 	return logrus.WithFields(logrus.Fields{
 		"Migration": migration,
+	})
+}
+
+// GroupSnapshotLog formats a log message with groupsnapshot information
+func GroupSnapshotLog(groupsnapshot *storkv1.GroupVolumeSnapshot) *logrus.Entry {
+	if groupsnapshot != nil {
+		return logrus.WithFields(logrus.Fields{
+			"GroupSnapshotName":      groupsnapshot.Name,
+			"GroupSnapshotNamespace": groupsnapshot.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{
+		"GroupSnapshot": groupsnapshot,
 	})
 }

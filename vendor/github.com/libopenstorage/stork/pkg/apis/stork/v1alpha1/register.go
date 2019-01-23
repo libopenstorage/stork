@@ -37,6 +37,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ClusterPairList{},
 		&Migration{},
 		&MigrationList{},
+		&GroupVolumeSnapshot{},
+		&GroupVolumeSnapshotList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

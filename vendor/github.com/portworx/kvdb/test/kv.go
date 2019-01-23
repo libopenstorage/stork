@@ -527,9 +527,20 @@ func concurrentEnum(kv kvdb.Kvdb, t *testing.T) {
 
 func snapshot(kv kvdb.Kvdb, t *testing.T) {
 	fmt.Println("snapshot")
+
 	prefix := "snapshot/"
 	kv.DeleteTree(prefix)
 	defer kv.DeleteTree(prefix)
+
+	prefix2 := "snapshot2/"
+	kv.DeleteTree(prefix2)
+	defer kv.DeleteTree(prefix2)
+
+	prefix3 := "snapshot2/subtree/"
+
+	ignorePrefix := "ignoreSnapshot/"
+	kv.DeleteTree(ignorePrefix)
+	defer kv.DeleteTree(ignorePrefix)
 
 	preSnapData := make(map[string]string)
 	preSnapDataVersion := make(map[string]uint64)
@@ -548,7 +559,14 @@ func snapshot(kv kvdb.Kvdb, t *testing.T) {
 		versionMap map[string]uint64, isDelete bool) {
 		for i := 0; i < count; i++ {
 			suffix := strconv.Itoa(i)
-			inputKey := prefix + key + suffix
+			var inputKey string
+			if i%3 == 0 {
+				inputKey = prefix + key + suffix
+			} else if i%3 == 1 {
+				inputKey = prefix3 + key + suffix
+			} else {
+				inputKey = prefix2 + key + suffix
+			}
 			inputValue := v
 			if i == 0 {
 				emptyKeyName = inputKey
@@ -568,6 +586,19 @@ func snapshot(kv kvdb.Kvdb, t *testing.T) {
 				assert.NoError(t, err, "Unexpected error on Delete")
 			}
 
+			// update ops on keys which need to be ignore
+			inputKey = ignorePrefix + key + suffix
+			_, err = kv.Put(inputKey, []byte(inputValue), 0)
+			assert.NoError(t, err, "Unexpected error on Put")
+
+			deleteKey = ignorePrefix + keyd + suffix
+			if !isDelete {
+				_, err := kv.Put(deleteKey, []byte(valued), 0)
+				assert.NoError(t, err, "Unexpected error on Put")
+			} else {
+				_, err := kv.Delete(deleteKey)
+				assert.NoError(t, err, "Unexpected error on Delete")
+			}
 		}
 		doneUpdate <- true
 	}
@@ -578,12 +609,19 @@ func snapshot(kv kvdb.Kvdb, t *testing.T) {
 	go updateFn(count, newValue, inputData, inputDataVersion, true)
 	time.Sleep(20 * time.Millisecond)
 
-	snap, snapVersion, err := kv.Snapshot(prefix)
+	snap, snapVersion, err := kv.Snapshot([]string{prefix, prefix2, prefix3})
 	assert.NoError(t, err, "Unexpected error on Snapshot")
 	<-doneUpdate
 
-	kvPairs, err := snap.Enumerate(prefix)
+	// Enumerate on prefix 1
+	kvps, err := snap.Enumerate(prefix)
 	assert.NoError(t, err, "Unexpected error on Enumerate")
+
+	// Enumerate on prefix 2
+	kvps2, err := snap.Enumerate(prefix2)
+	assert.NoError(t, err, "Unexpected error on Enumerate")
+
+	kvPairs := append(kvps, kvps2...)
 
 	processedKeys := 0
 	for i := range kvPairs {
@@ -626,6 +664,9 @@ func snapshot(kv kvdb.Kvdb, t *testing.T) {
 		"Expecting %d keys under %s got: %d, kv: %v",
 		processedKeys, prefix, len(kvPairs), kvPairs)
 
+	// Check there are no keys under the ignored prefix
+	kvPairs, err = snap.Enumerate(ignorePrefix)
+	assert.Equal(t, 0, len(kvPairs), "Expected 0 pairs to be returned under the ignored prefix")
 }
 
 func getLockMethods(kv kvdb.Kvdb) []func(string) (*kvdb.KVPair, error) {

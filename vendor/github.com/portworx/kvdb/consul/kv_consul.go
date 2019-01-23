@@ -616,7 +616,13 @@ func (kv *consulKV) TxNew() (kvdb.Tx, error) {
 	return nil, kvdb.ErrNotSupported
 }
 
-func (kv *consulKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
+func (kv *consulKV) Snapshot(prefixes []string) (kvdb.Kvdb, uint64, error) {
+	if len(prefixes) == 0 {
+		prefixes = []string{""}
+	} else {
+		prefixes = append(prefixes, bootstrap)
+		prefixes = common.PrunePrefixes(prefixes)
+	}
 	// Create a new bootstrap key : lowest index
 	r := rand.New(rand.NewSource(time.Now().UnixNano())).Int63()
 	bootStrapKeyLow := bootstrap + strconv.FormatInt(r, 10) +
@@ -634,15 +640,22 @@ func (kv *consulKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 		RequireConsistent: true,
 	}
 
-	listKey := kv.domain + prefix
-	listKey = stripConsecutiveForwardslash(listKey)
+	var (
+		kvPairs kvdb.KVPairs
+	)
+	for _, prefix := range prefixes {
+		listKey := kv.domain + prefix
+		listKey = stripConsecutiveForwardslash(listKey)
 
-	pairs, _, err := kv.client.List(listKey, options)
-	if err != nil {
-		return nil, 0, err
+		pairs, _, err := kv.client.List(listKey, options)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		kvps := kv.pairToKvs("enumerate", pairs, nil)
+		kvPairs = append(kvPairs, kvps...)
 	}
 
-	kvPairs := kv.pairToKvs("enumerate", pairs, nil)
 	snapDb, err := mem.New(
 		kv.domain,
 		nil,
@@ -689,7 +702,7 @@ func (kv *consulKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 			var watchErr error
 			var sendErr error
 			var m *sync.Mutex
-			ok := false
+			var found, ok bool
 
 			if err != nil {
 				if err == kvdb.ErrWatchStopped && watchClosed {
@@ -712,6 +725,17 @@ func (kv *consulKV) Snapshot(prefix string) (kvdb.Kvdb, uint64, error) {
 				watchErr = fmt.Errorf("Failed to get mutex")
 				sendErr = watchErr
 				goto errordone
+			}
+
+			for _, prefix := range prefixes {
+				if strings.HasPrefix(kvp.Key, prefix) {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				return nil
 			}
 
 			m.Lock()

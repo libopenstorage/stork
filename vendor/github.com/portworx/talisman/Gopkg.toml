@@ -1,0 +1,52 @@
+# Gopkg.toml example
+#
+# Refer to https://github.com/golang/dep/blob/master/docs/Gopkg.toml.md
+# for detailed Gopkg.toml documentation.
+#
+required = ["k8s.io/code-generator/cmd/client-gen"]
+
+[[constraint]]
+  name = "k8s.io/code-generator"
+  branch = "release-1.11"
+
+[[constraint]]
+  name = "k8s.io/api"
+  version = "kubernetes-1.11.0"
+
+[[constraint]]
+  name = "k8s.io/apimachinery"
+  version = "kubernetes-1.11.0"
+
+[[constraint]]
+  name = "k8s.io/apiextensions-apiserver"
+  version = "kubernetes-1.11.0"
+
+[[constraint]]
+  name = "k8s.io/client-go"
+  version = "8.0.0"
+
+[[override]]
+  branch = "master"
+  name = "github.com/libopenstorage/stork"
+
+[[override]]
+  name = "github.com/coreos/bbolt"
+  version = "v1.3.1-coreos.6"
+
+[prune]
+  non-go = true
+  go-tests = true
+  unused-packages = true
+
+# Reference: https://github.com/kubernetes/sample-controller/issues/6
+  [[prune.project]]
+    name = "k8s.io/code-generator"
+    unused-packages = false
+    non-go = false
+    go-tests = false
+
+  [[prune.project]]
+    name = "k8s.io/gengo"
+    unused-packages = false
+    non-go = false
+    go-tests = false

@@ -1,0 +1,9 @@
+apiVersion: portworx.io/v1beta1
+kind: Cluster
+metadata:
+  name: px-demo
+  namespace: kube-system
+spec:
+  kvdb:
+    endpoints:
+    - etcd:sasadsadsa

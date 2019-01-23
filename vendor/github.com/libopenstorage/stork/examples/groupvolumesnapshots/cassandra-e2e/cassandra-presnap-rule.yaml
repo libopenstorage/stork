@@ -1,0 +1,10 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: Rule
+metadata:
+  name: cassandra-presnap-rule
+rules:
+  - podSelector:
+      app: cassandra
+    actions:
+    - type: command
+      value: nodetool flush

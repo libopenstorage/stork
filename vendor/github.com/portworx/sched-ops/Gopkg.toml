@@ -30,6 +30,10 @@
   name = "github.com/kubernetes-incubator/external-storage"
   source = "github.com/libopenstorage/external-storage"
 
+[[override]]
+  branch = "master"
+  name = "github.com/libopenstorage/stork"
+
 [[constraint]]
   version = "kubernetes-1.11.0"
   name = "k8s.io/api"

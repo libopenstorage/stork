@@ -1,0 +1,32 @@
+apiVersion: portworx.io/v1beta1
+type: Cluster
+metadata:
+  name: px-demo
+  namespace: kube-system
+spec:
+  pxVersion: portworx/px-enterprise:1.2.12.0
+  kvdb:
+    endpoints:
+    - etcd://<ETCD_NODE1_IP>:<ETCD_NODE1_PORT>
+    - etcd://<ETCD_NODE2_IP>:<ETCD_NODE2_PORT>
+    - etcd://<ETCD_NODE3_IP>:<ETCD_NODE3_PORT>
+  network:
+    data: eth1
+    mgmt: eth2
+  storage:
+    devices:
+    - /dev/sdb
+    - /dev/sdc
+  placement:
+    # https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#node-affinity-beta-feature
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: node_type
+            operator: In
+            values:
+            - worker
+  env:
+  - name: FOO
+    value: BAR

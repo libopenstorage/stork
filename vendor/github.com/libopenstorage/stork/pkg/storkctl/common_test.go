@@ -10,10 +10,10 @@ import (
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
 	"github.com/portworx/sched-ops/k8s"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	kubernetes "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/kubernetes/pkg/apis/core/v1"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
@@ -21,44 +21,51 @@ import (
 )
 
 var codec runtime.Codec
+var fakeStorkClient *fakeclient.Clientset
+var fakeRestClient *fake.RESTClient
+var testFactory *TestFactory
 
 func init() {
+	resetTest()
+}
+
+func resetTest() {
 	scheme := runtime.NewScheme()
 	snapv1.AddToScheme(scheme)
 	v1alpha1.AddToScheme(scheme)
 	v1.AddToScheme(scheme)
 	codec = serializer.NewCodecFactory(scheme).LegacyCodec(scheme.PrioritizedVersionsAllGroups()...)
-}
+	fakeStorkClient = fakeclient.NewSimpleClientset()
 
-type NewTestCommand func(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command
-
-func testCommon(t *testing.T, newCommand NewTestCommand, cmdArgs []string, obj runtime.Object, expected string, errorExpected bool) {
-	var err error
-
-	f := NewTestFactory()
-	f.setOutputFormat(outputFormatTable)
-	tf := f.TestFactory.WithNamespace("test")
-	f.setNamespace("test")
-	defer tf.Cleanup()
-
-	fakeRestClient := &fake.RESTClient{
-		NegotiatedSerializer: unstructuredSerializer,
-		Resp:                 &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)},
-		Client: fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
-			return &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)}, nil
-		}),
+	if testFactory != nil {
+		testFactory.TestFactory.WithNamespace("test").Cleanup()
 	}
 
+	fakeRestClient = &fake.RESTClient{
+		NegotiatedSerializer: unstructuredSerializer,
+	}
+	testFactory = NewTestFactory()
+	testFactory.setOutputFormat(outputFormatTable)
+	tf := testFactory.TestFactory.WithNamespace("test")
+	testFactory.setNamespace("test")
 	tf.Client = fakeRestClient
-	fakeKubeClient, err := tf.KubernetesClientSet()
-	require.NoError(t, err, "Error getting KubernetesClientSet")
-
-	fakeStorkClient := fakeclient.NewSimpleClientset()
+	fakeKubeClient := kubernetes.NewSimpleClientset()
 
 	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil)
+}
+
+func testCommon(t *testing.T, cmdArgs []string, obj runtime.Object, expected string, errorExpected bool) {
+	var err error
+
+	if obj != nil {
+		fakeRestClient.Resp = &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)}
+		fakeRestClient.Client = fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Header: defaultHeader(), Body: objBody(codec, obj)}, nil
+		})
+	}
 
 	streams, _, buf, _ := genericclioptions.NewTestIOStreams()
-	cmd := newCommand(f, streams)
+	cmd := NewCommand(testFactory, streams.In, streams.Out, streams.ErrOut)
 	cmd.SetOutput(buf)
 	cmd.SetArgs(cmdArgs)
 
