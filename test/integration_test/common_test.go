@@ -55,7 +55,6 @@ var storkVolumeDriver storkdriver.Driver
 
 var snapshotScaleCount int
 
-// TODO: Start stork scheduler and stork extender
 // TODO: Take driver name from input
 // TODO: Parse storageclass specs based on driver name
 func setup(t *testing.T) {
@@ -216,7 +215,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 	require.Equal(t, highScore, scores[appNode.Name], "Scheduled node does not have the highest score")
 }
 
-// write kubbeconfig file to  /tmp/kubeconfig
+// write kubbeconfig file to /tmp/kubeconfig
 func dumpRemoteKubeConfig(configObject string) error {
 	cm, err := k8s_ops.Instance().GetConfigMap(configObject, "kube-system")
 	if err != nil {
@@ -266,7 +265,7 @@ func createClusterPair(pairInfo map[string]string) error {
 
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
-	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath, "-n", "mysql-1-pvc-singlemysql"})
+	cmd.SetArgs([]string{"generate", "clusterpair", remotePairName, "--kubeconfig", remoteFilePath})
 	if err := cmd.Execute(); err != nil {
 		logrus.Errorf("Execute storkctl failed: %v", err)
 		return err
@@ -315,45 +314,45 @@ func addStorageOptions(pairInfo map[string]string) error {
 	return nil
 }
 
-func scheduleClusterPair() ([]*scheduler.Context, error) {
+func scheduleClusterPair(ctx *scheduler.Context) error {
 	var err error
 	err = dumpRemoteKubeConfig(remoteConfig)
 	if err != nil {
 		logrus.Errorf("Unable to write clusterconfig: %v", err)
-		return nil, err
+		return err
 	}
 	info, err := volumeDriver.GetClusterPairingInfo()
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
-		return nil, err
+		return err
 	}
 
 	err = createClusterPair(info)
 	if err != nil {
 		logrus.Errorf("Error creating cluster Spec: %v", err)
-		return nil, err
+		return err
 	}
 
 	err = schedulerDriver.RescanSpecs(specDir)
 	if err != nil {
 		logrus.Errorf("Unable to parse spec dir: %v", err)
-		return nil, err
+		return err
 	}
 
-	ctxs, err := schedulerDriver.Schedule("clusterpair",
+	err = schedulerDriver.AddTasks(ctx,
 		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
 	if err != nil {
 		logrus.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
-		return nil, err
+		return err
 	}
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
 	if err != nil {
 		logrus.Errorf("Error waiting to get cluster pair in ready state: %v", err)
-		return nil, err
+		return err
 	}
 
-	return ctxs, nil
+	return nil
 }
 
 func init() {
