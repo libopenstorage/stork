@@ -36,7 +36,7 @@ required = [
 [[constraint]]
   name = "github.com/kubernetes-incubator/external-storage"
   source = "github.com/libopenstorage/external-storage"
-  version = "v5.1.0-openstorage"
+  version = "=5.1.0-openstorage"
 
 [[constraint]]
   name = "github.com/libopenstorage/openstorage"
@@ -45,6 +45,10 @@ required = [
 [[constraint]]
   branch = "master"
   name = "github.com/portworx/sched-ops"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/portworx/torpedo"
 
 [[constraint]]
   name = "github.com/heptio/ark"
