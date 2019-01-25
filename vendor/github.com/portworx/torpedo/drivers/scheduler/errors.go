@@ -288,8 +288,8 @@ func (e *ErrFailedToStartSchedOnNode) Error() string {
 	return fmt.Sprintf("Failed to start scheduler service %v on node: %v due to err: %v", e.SystemService, e.Node, e.Cause)
 }
 
-// ErrFailedToApplyCustomSpec error type when CRD objects does not applied successfully
-type ErrFailedToApplyCustomSpec struct {
+// ErrFailedToValidateCustomSpec error type when CRD objects does not applied successfully
+type ErrFailedToValidateCustomSpec struct {
 	// Name of CRD object
 	Name string
 	// Cause is the underlying cause of the error
@@ -298,6 +298,6 @@ type ErrFailedToApplyCustomSpec struct {
 	Type interface{}
 }
 
-func (e *ErrFailedToApplyCustomSpec) Error() string {
-	return fmt.Sprintf("Failed to apply custom spec : %v of type %v due to err: %v", e.Name, reflect.TypeOf(e.Type), e.Cause)
+func (e *ErrFailedToValidateCustomSpec) Error() string {
+	return fmt.Sprintf("Failed to validate custom spec : %v of type %v due to err: %v", e.Name, reflect.TypeOf(e.Type), e.Cause)
 }
