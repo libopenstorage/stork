@@ -20,8 +20,22 @@ func TestGetMigrationsNoMigration(t *testing.T) {
 	testCommon(t, cmdArgs, &migrationList, expected, false)
 }
 
-func createMigrationAndVerify(t *testing.T, name string, namespace string, clusterpair string, namespaces []string) {
+func createMigrationAndVerify(
+	t *testing.T,
+	name string,
+	namespace string,
+	clusterpair string,
+	namespaces []string,
+	preExecRule string,
+	postExecRule string,
+) {
 	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", strings.Join(namespaces, ","), name}
+	if preExecRule != "" {
+		cmdArgs = append(cmdArgs, "--preExecRule", preExecRule)
+	}
+	if postExecRule != "" {
+		cmdArgs = append(cmdArgs, "--postExecRule", postExecRule)
+	}
 
 	expected := "Migration " + name + " created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -33,11 +47,13 @@ func createMigrationAndVerify(t *testing.T, name string, namespace string, clust
 	require.Equal(t, namespace, migration.Namespace, "Migration namespace mismatch")
 	require.Equal(t, clusterpair, migration.Spec.ClusterPair, "Migration clusterpair mismatch")
 	require.Equal(t, namespaces, migration.Spec.Namespaces, "Migration namespace mismatch")
+	require.Equal(t, preExecRule, migration.Spec.PreExecRule, "Migration preExecRule mismatch")
+	require.Equal(t, postExecRule, migration.Spec.PostExecRule, "Migration postExecRule mismatch")
 }
 
 func TestGetMigrationsOneMigration(t *testing.T) {
 	defer resetTest()
-	createMigrationAndVerify(t, "getmigrationtest", "test", "clusterpair1", []string{"namespace1"})
+	createMigrationAndVerify(t, "getmigrationtest", "test", "clusterpair1", []string{"namespace1"}, "preExec", "postExec")
 
 	expected := "NAME               CLUSTERPAIR    STAGE     STATUS    VOLUMES   RESOURCES   CREATED\n" +
 		"getmigrationtest   clusterpair1                       0/0       0/0         \n"
@@ -48,8 +64,8 @@ func TestGetMigrationsOneMigration(t *testing.T) {
 
 func TestGetMigrationsMultiple(t *testing.T) {
 	defer resetTest()
-	createMigrationAndVerify(t, "getmigrationtest1", "default", "clusterpair1", []string{"namespace1"})
-	createMigrationAndVerify(t, "getmigrationtest2", "default", "clusterpair2", []string{"namespace1"})
+	createMigrationAndVerify(t, "getmigrationtest1", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationAndVerify(t, "getmigrationtest2", "default", "clusterpair2", []string{"namespace1"}, "", "")
 
 	expected := "NAME                CLUSTERPAIR    STAGE     STATUS    VOLUMES   RESOURCES   CREATED\n" +
 		"getmigrationtest1   clusterpair1                       0/0       0/0         \n" +
@@ -71,8 +87,8 @@ func TestGetMigrationsMultiple(t *testing.T) {
 
 func TestGetMigrationsWithClusterPair(t *testing.T) {
 	defer resetTest()
-	createMigrationAndVerify(t, "getmigrationtest1", "default", "clusterpair1", []string{"namespace1"})
-	createMigrationAndVerify(t, "getmigrationtest2", "default", "clusterpair2", []string{"namespace1"})
+	createMigrationAndVerify(t, "getmigrationtest1", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationAndVerify(t, "getmigrationtest2", "default", "clusterpair2", []string{"namespace1"}, "", "")
 
 	expected := "NAME                CLUSTERPAIR    STAGE     STATUS    VOLUMES   RESOURCES   CREATED\n" +
 		"getmigrationtest1   clusterpair1                       0/0       0/0         \n"
@@ -83,7 +99,7 @@ func TestGetMigrationsWithClusterPair(t *testing.T) {
 
 func TestGetMigrationsWithStatusAndProgress(t *testing.T) {
 	defer resetTest()
-	createMigrationAndVerify(t, "getmigrationstatustest", "default", "clusterpair1", []string{"namespace1"})
+	createMigrationAndVerify(t, "getmigrationstatustest", "default", "clusterpair1", []string{"namespace1"}, "", "")
 	migration, err := k8s.Instance().GetMigration("getmigrationstatustest", "default")
 	require.NoError(t, err, "Error getting migration")
 
@@ -123,12 +139,12 @@ func TestCreateMigrationsNoName(t *testing.T) {
 
 func TestCreateMigrations(t *testing.T) {
 	defer resetTest()
-	createMigrationAndVerify(t, "createmigration", "default", "clusterpair1", []string{"namespace1"})
+	createMigrationAndVerify(t, "createmigration", "default", "clusterpair1", []string{"namespace1"}, "", "")
 }
 
 func TestCreateDuplicateMigrations(t *testing.T) {
 	defer resetTest()
-	createMigrationAndVerify(t, "createmigration", "default", "clusterpair1", []string{"namespace1"})
+	createMigrationAndVerify(t, "createmigration", "default", "clusterpair1", []string{"namespace1"}, "", "")
 	cmdArgs := []string{"create", "migrations", "-c", "clusterpair1", "--namespaces", "namespace1", "createmigration"}
 
 	expected := "Error from server (AlreadyExists): migrations.stork.libopenstorage.org \"createmigration\" already exists"
@@ -152,7 +168,7 @@ func TestDeleteMigrationsNoMigration(t *testing.T) {
 
 func TestDeleteMigrations(t *testing.T) {
 	defer resetTest()
-	createMigrationAndVerify(t, "deletemigration", "default", "clusterpair1", []string{"namespace1"})
+	createMigrationAndVerify(t, "deletemigration", "default", "clusterpair1", []string{"namespace1"}, "", "")
 
 	cmdArgs := []string{"delete", "migrations", "deletemigration"}
 	expected := "Migration deletemigration deleted successfully\n"
@@ -162,16 +178,16 @@ func TestDeleteMigrations(t *testing.T) {
 	expected = "Error from server (NotFound): migrations.stork.libopenstorage.org \"deletemigration\" not found"
 	testCommon(t, cmdArgs, nil, expected, true)
 
-	createMigrationAndVerify(t, "deletemigration1", "default", "clusterpair1", []string{"namespace1"})
-	createMigrationAndVerify(t, "deletemigration2", "default", "clusterpair2", []string{"namespace1"})
+	createMigrationAndVerify(t, "deletemigration1", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationAndVerify(t, "deletemigration2", "default", "clusterpair2", []string{"namespace1"}, "", "")
 
 	cmdArgs = []string{"delete", "migrations", "deletemigration1", "deletemigration2"}
 	expected = "Migration deletemigration1 deleted successfully\n"
 	expected += "Migration deletemigration2 deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	createMigrationAndVerify(t, "deletemigration1", "default", "clusterpair1", []string{"namespace1"})
-	createMigrationAndVerify(t, "deletemigration2", "default", "clusterpair1", []string{"namespace1"})
+	createMigrationAndVerify(t, "deletemigration1", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationAndVerify(t, "deletemigration2", "default", "clusterpair1", []string{"namespace1"}, "", "")
 
 	cmdArgs = []string{"delete", "migrations", "-c", "clusterpair1"}
 	expected = "Migration deletemigration1 deleted successfully\n"
