@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -16,7 +15,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -27,10 +25,12 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -72,14 +72,15 @@ func (m *MigrationController) Init(migrationAdminNamespace string) error {
 	}
 
 	return controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.Migration{}).Name(),
-		},
+		&stork_api.Migration{},
+		m,
 		"",
 		resyncPeriod,
-		m)
+	)
+}
+
+func (m *MigrationController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	return reconcile.Result{}, nil
 }
 
 func setKind(snap *stork_api.Migration) {
@@ -132,6 +133,7 @@ func setDefaults(migration *stork_api.Migration) *stork_api.Migration {
 }
 
 // Handle updates for Migration objects
+/*
 func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
 	case *stork_api.Migration:
@@ -591,6 +593,28 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 
 	return sdk.Update(migration)
 }
+*/
+
+func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIResource) bool {
+	// Deployment is present in "apps" and "extensions" group, so ignore
+	// "extensions"
+	if resource.Group == "extensions" && resource.Kind == "Deployment" {
+		return false
+	}
+
+	switch resource.Kind {
+	case "PersistentVolumeClaim",
+		"PersistentVolume",
+		"Deployment",
+		"StatefulSet",
+		"ConfigMap",
+		"Service",
+		"Secret":
+		return true
+	default:
+		return false
+	}
+}
 
 func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]chan bool, error) {
 	if migration.Spec.PreExecRule == "" {
@@ -660,6 +684,7 @@ func (m *MigrationController) runPostExecRule(migration *stork_api.Migration) er
 	return nil
 }
 
+/*
 func (m *MigrationController) migrateResources(migration *stork_api.Migration) error {
 	schedulerStatus, err := getClusterPairSchedulerStatus(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
@@ -766,6 +791,8 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	}
 	return nil
 }
+
+*/
 
 func (m *MigrationController) prepareResources(
 	migration *stork_api.Migration,

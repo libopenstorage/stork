@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -17,16 +16,15 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/rule"
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -60,28 +58,30 @@ type GroupSnapshotController struct {
 }
 
 // Init Initialize the groupSnapshot controller
-func (m *GroupSnapshotController) Init() error {
-	err := m.createCRD()
+func (g *GroupSnapshotController) Init() error {
+	err := g.createCRD()
 	if err != nil {
 		return err
 	}
 
-	m.bgChannelsForRules = make(map[string]chan bool)
-	m.minResourceVersions = make(map[string]string)
+	g.bgChannelsForRules = make(map[string]chan bool)
+	g.minResourceVersions = make(map[string]string)
 
 	return controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.GroupVolumeSnapshot{}).Name(),
-		},
+		&stork_api.GroupVolumeSnapshot{},
+		g,
 		"",
 		resyncPeriod,
-		m)
+	)
+}
+
+func (g *GroupSnapshotController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	return reconcile.Result{}, nil
 }
 
 // Handle updates for GroupSnapshot objects
-func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) error {
+/*
+func (g *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) error {
 	var (
 		groupSnapshot         *stork_api.GroupVolumeSnapshot
 		updateCRDForThisEvent bool
@@ -92,6 +92,7 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 	case *stork_api.GroupVolumeSnapshot:
 		groupSnapshot = o
 
+<<<<<<< HEAD
 		minVer, present := m.minResourceVersions[string(groupSnapshot.UID)]
 		if present {
 			minVersion, err := version.NewVersion(minVer)
@@ -119,43 +120,51 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 					minVer, groupSnapshot.ResourceVersion)
 				return nil
 			}
+=======
+		minVer, present := g.minResourceVersions[string(groupSnapshot.UID)]
+		if present && groupSnapshot.ResourceVersion < minVer {
+			log.GroupSnapshotLog(groupSnapshot).Infof(
+				"already processed groupSnapshot version (%s) higher than: %s. Skipping event.",
+				minVer, groupSnapshot.ResourceVersion)
+			return nil
+>>>>>>> Update controllers for new controller runtime
 		}
 
 		if event.Deleted {
-			return m.handleDelete(groupSnapshot)
+			return g.handleDelete(groupSnapshot)
 		}
 
 		switch groupSnapshot.Status.Stage {
 		case stork_api.GroupSnapshotStageInitial,
 			stork_api.GroupSnapshotStagePreChecks:
-			updateCRDForThisEvent, err = m.handleInitial(groupSnapshot)
+			updateCRDForThisEvent, err = g.handleInitial(groupSnapshot)
 		case stork_api.GroupSnapshotStagePreSnapshot:
 			var updatedGroupSnapshot *stork_api.GroupVolumeSnapshot
-			updatedGroupSnapshot, updateCRDForThisEvent, err = m.handlePreSnap(groupSnapshot)
+			updatedGroupSnapshot, updateCRDForThisEvent, err = g.handlePreSnap(groupSnapshot)
 			if err == nil {
 				groupSnapshot = updatedGroupSnapshot
 			}
 		case stork_api.GroupSnapshotStageSnapshot:
-			updateCRDForThisEvent, err = m.handleSnap(groupSnapshot)
+			updateCRDForThisEvent, err = g.handleSnap(groupSnapshot)
 
 			// Terminate background commands regardless of failure if the snapshots are
 			// triggered
 			snapUID := string(groupSnapshot.ObjectMeta.UID)
 			if areAllSnapshotsStarted(groupSnapshot.Status.VolumeSnapshots) {
-				backgroundChannel, present := m.bgChannelsForRules[snapUID]
+				backgroundChannel, present := g.bgChannelsForRules[snapUID]
 				if present {
 					backgroundChannel <- true
-					delete(m.bgChannelsForRules, snapUID)
+					delete(g.bgChannelsForRules, snapUID)
 				}
 			}
 		case stork_api.GroupSnapshotStagePostSnapshot:
 			var updatedGroupSnapshot *stork_api.GroupVolumeSnapshot
-			updatedGroupSnapshot, updateCRDForThisEvent, err = m.handlePostSnap(groupSnapshot)
+			updatedGroupSnapshot, updateCRDForThisEvent, err = g.handlePostSnap(groupSnapshot)
 			if err == nil {
 				groupSnapshot = updatedGroupSnapshot
 			}
 		case stork_api.GroupSnapshotStageFinal:
-			return m.handleFinal(groupSnapshot)
+			return g.handleFinal(groupSnapshot)
 		default:
 			err = fmt.Errorf("invalid stage for group snapshot: %v", groupSnapshot.Status.Stage)
 		}
@@ -163,7 +172,7 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 
 	if err != nil {
 		log.GroupSnapshotLog(groupSnapshot).Errorf("Error handling event: %v err: %v", event, err.Error())
-		m.Recorder.Event(groupSnapshot,
+		g.Recorder.Event(groupSnapshot,
 			v1.EventTypeWarning,
 			string(stork_api.GroupSnapshotFailed),
 			err.Error())
@@ -182,11 +191,12 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 		// event is already being processed. In such situation, the operator framework
 		// with provide a groupSnapshot which is the same version as the previous groupSnapshot
 		// If we reprocess an outdated object, this can throw off the status checks in the snapshot stage
-		m.minResourceVersions[string(groupSnapshot.UID)] = groupSnapshot.ResourceVersion
+		g.minResourceVersions[string(groupSnapshot.UID)] = groupSnapshot.ResourceVersion
 	}
 
 	return nil
 }
+*/
 
 func (m *GroupSnapshotController) createCRD() error {
 	resource := k8s.CustomResource{
