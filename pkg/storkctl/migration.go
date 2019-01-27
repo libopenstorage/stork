@@ -52,7 +52,7 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 			}
 			migration.Name = migrationName
 			migration.Namespace = cmdFactory.GetNamespace()
-			err := k8s.Instance().CreateMigration(migration)
+			_, err := k8s.Instance().CreateMigration(migration)
 			if err != nil {
 				util.CheckErr(err)
 				return

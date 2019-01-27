@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -10,16 +9,15 @@ import (
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
-	"k8s.io/api/core/v1"
+	//"k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes"
+	//"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -41,16 +39,18 @@ func (c *ClusterPairController) Init() error {
 	}
 
 	return controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.ClusterPair{}).Name(),
-		},
+		&stork_api.ClusterPair{},
+		c,
 		"",
 		resyncPeriod,
-		c)
+	)
 }
 
+func (c *ClusterPairController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	return reconcile.Result{}, nil
+}
+
+/*
 // Handle updates for ClusterPair objects
 func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
@@ -115,6 +115,7 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 	}
 	return nil
 }
+*/
 
 func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*restclient.Config, error) {
 	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName, namespace)

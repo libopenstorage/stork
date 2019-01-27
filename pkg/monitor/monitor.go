@@ -96,7 +96,7 @@ func (m *Monitor) driverMonitor() {
 				// If not online, look at all the pods on that node
 				// For any Running pod on that node using volume by the driver, kill the pod
 				if node.Status != volume.NodeOnline {
-					pods, err := k8s.Instance().GetPods("")
+					pods, err := k8s.Instance().GetPods("", nil)
 					if err != nil {
 						log.Errorf("Error getting pods: %v", err)
 						continue

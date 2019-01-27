@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -15,7 +14,6 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -27,12 +25,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -82,17 +80,19 @@ func (m *MigrationController) Init(migrationAdminNamespace string) error {
 
 	m.migrationAdminNamespace = migrationAdminNamespace
 	return controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.Migration{}).Name(),
-		},
+		&stork_api.Migration{},
+		m,
 		"",
 		resyncPeriod,
-		m)
+	)
+}
+
+func (m *MigrationController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	return reconcile.Result{}, nil
 }
 
 // Handle updates for Migration objects
+/*
 func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
 	case *stork_api.Migration:
@@ -284,6 +284,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration) err
 	}
 	return nil
 }
+*/
 
 func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIResource) bool {
 	// Deployment is present in "apps" and "extensions" group, so ignore
@@ -399,6 +400,7 @@ func (m *MigrationController) objectToBeMigrated(
 	return true, nil
 }
 
+/*
 func (m *MigrationController) migrateResources(migration *stork_api.Migration) error {
 	schedulerStatus, err := getClusterPairSchedulerStatus(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
@@ -534,6 +536,7 @@ func (m *MigrationController) getResources(
 
 	return allObjects, nil
 }
+*/
 
 func (m *MigrationController) prepareResources(
 	migration *stork_api.Migration,

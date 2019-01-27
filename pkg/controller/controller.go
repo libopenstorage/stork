@@ -1,14 +1,19 @@
 package controller
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	controllersdk "sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 type controllerNotInitError struct {
@@ -20,9 +25,11 @@ func (c *controllerNotInitError) Error() string {
 
 // Controller to track updates for objects
 type controller struct {
+	manager    manager.Manager
+	controller controllersdk.Controller
 	sync.Mutex
-	started  bool
-	handlers map[string][]sdk.Handler
+	started     bool
+	reconcilers map[string][]reconcile.Func
 }
 
 var controllerInst *controller
@@ -32,9 +39,24 @@ func Init() error {
 	if controllerInst != nil {
 		return nil
 	}
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return err
+	}
 	controllerInst = &controller{}
-	controllerInst.handlers = make(map[string][]sdk.Handler)
-	sdk.Handle(controllerInst)
+	controllerInst.manager, err = manager.New(cfg, manager.Options{})
+	if err != nil {
+		return err
+	}
+
+	//controllerInst.controller, err = controllersdk.New("stork-controller", controllerInst.manager, controllersdk.Options{
+	//	Reconciler: controllerInst,
+	//})
+	if err != nil {
+		return err
+	}
+	//controllerInst.handlers = make(map[string][]reconcile.Func)
+	//sdk.Handle(controllerInst)
 	return nil
 }
 
@@ -45,7 +67,10 @@ func Run() error {
 	}
 	controllerInst.Lock()
 	defer controllerInst.Unlock()
-	go sdk.Run(context.TODO())
+	err := controllerInst.controller.Start(signals.SetupSignalHandler())
+	if err != nil {
+		return nil
+	}
 	controllerInst.started = true
 	return nil
 }
@@ -53,11 +78,11 @@ func Run() error {
 // Register to get callbacks for updates to objects
 // All handlers need to be registered before calling Run()
 func Register(
-	gkv *schema.GroupVersionKind,
+	object runtime.Object,
+	reconciler reconcile.Reconciler,
 	namespace string,
 	resyncPeriod time.Duration,
-	handler sdk.Handler) error {
-	logrus.Debugf("Registering controller for %v", gkv)
+) error {
 	if controllerInst == nil {
 		return &controllerNotInitError{}
 	}
@@ -67,25 +92,51 @@ func Register(
 		return fmt.Errorf("Can't register new handlers after starting controller")
 	}
 
-	objectType := gkv.String()
-	// Only add Watch if we aren't already watching for the object already.
-	// resyncPeriod will be ignored for second call if different
-	if controllerInst.handlers[objectType] == nil {
-		controllerInst.handlers[objectType] = make([]sdk.Handler, 0)
-		sdk.Watch(gkv.GroupVersion().String(), gkv.Kind, namespace, resyncPeriod)
+	objectType := object.GetObjectKind().GroupVersionKind().String()
+	logrus.Debugf("Registering controller for %v", objectType)
+	c, err := controllersdk.New(objectType+"-controller", controllerInst.manager, controllersdk.Options{
+		Reconciler: reconciler,
+	})
+	if err != nil {
+		return err
 	}
-	logrus.Debugf("Registered controller for %v", gkv)
-	controllerInst.handlers[objectType] = append(controllerInst.handlers[objectType], handler)
+	err = c.Watch(
+		&source.Kind{
+			Type: object,
+		},
+		&handler.EnqueueRequestForObject{})
+	if err != nil {
+		return err
+	}
+	/*
+		// Only add Watch if we aren't already watching for the object already.
+		// resyncPeriod will be ignored for second call if different
+		if controllerInst.reconcilers[objectType] == nil {
+			err := controllerInst.controller.Watch(
+				&source.Kind{
+					Type: object,
+				},
+				&handler.EnqueueRequestForObject{})
+			if err != nil {
+				return err
+			}
+			controllerInst.reconcilers[objectType] = make([]reconcile.Func, 0)
+		}
+		controllerInst.reconcilers[objectType] = append(controllerInst.reconcilers[objectType], reconciler)
+	*/
+	logrus.Debugf("Registered controller for %v", objectType)
 	return nil
 }
 
+/*
 // Handle handles updates for registered types
-func (c *controller) Handle(ctx context.Context, event sdk.Event) error {
+func (c *controller) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	//func (c *controller) Handle(ctx context.Context, event sdk.Event) error {
 	gkv := event.Object.GetObjectKind().GroupVersionKind().String()
 	var firstErr error
-	if handlers, ok := c.handlers[gkv]; ok {
-		for _, handler := range handlers {
-			err := handler.Handle(ctx, event)
+	if reconcilers, ok := c.reconcilers[gkv]; ok {
+		for _, reconciler := range reconcilers {
+			err := reconciler.Reconcile(request)
 			// Keep track of the first error
 			if err != nil && firstErr == nil {
 				firstErr = err
@@ -94,3 +145,4 @@ func (c *controller) Handle(ctx context.Context, event sdk.Event) error {
 	}
 	return firstErr
 }
+*/
