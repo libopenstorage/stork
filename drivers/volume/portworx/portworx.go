@@ -641,6 +641,7 @@ func (p *portworx) SnapshotRestore(
 
 	snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
 	restoreVolumeName := "pvc-" + string(pvc.UID)
+	var restoreVolumeID string
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
 	case crdv1.PortworxSnapshotTypeLocal:
@@ -667,7 +668,7 @@ func (p *portworx) SnapshotRestore(
 				namespaceLabel: pvc.Namespace,
 			},
 		}
-		_, err = p.volDriver.Snapshot(snapID, false, locator, true)
+		restoreVolumeID, err = p.volDriver.Snapshot(snapID, false, locator, true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -694,7 +695,7 @@ func (p *portworx) SnapshotRestore(
 	}
 
 	// create PV from restored volume
-	vols, err := p.volDriver.Inspect([]string{restoreVolumeName})
+	vols, err := p.volDriver.Inspect([]string{restoreVolumeID})
 	if err != nil {
 		return nil, nil, &ErrFailedToInspectVolume{
 			ID:    restoreVolumeName,
