@@ -583,14 +583,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6ca363d6e0260e1d7edd8c1684d77cfc1611e2b3ea49a5919ebdadbb5c1b6c8a"
+  digest = "1:864f68dedc431cdd58655b63705be20de3b7691213824840b54fad478f2483cd"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "d64ebc777d0c67885c842bc7f03a4c131cf38bfa"
+  revision = "2a75388cbbfd85e6a1fc63caf5ddace5b51257c1"
 
 [[projects]]
   branch = "master"
@@ -608,7 +608,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:f78b5eaa0d58ed12b4f38ff5922d79531eacb004e70c9c48e6f516327045d9d9"
+  digest = "1:912de004e086a1d23b74c4023aa1acd8431a6da01e55ca4bf29067d155a24f67"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -622,7 +622,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "396d62ada6932070115da7cf2e4c8f74417c0111"
+  revision = "71709d107d864974f089fd521872d4cd54dac089"
 
 [[projects]]
   digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"

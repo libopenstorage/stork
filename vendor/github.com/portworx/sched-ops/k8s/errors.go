@@ -128,5 +128,5 @@ type ErrFailedToValidateCustomSpec struct {
 }
 
 func (e *ErrFailedToValidateCustomSpec) Error() string {
-	return fmt.Sprintf("Failed to apply custom spec : %v of type %v due to err: %v", e.Name, reflect.TypeOf(e.Type), e.Cause)
+	return fmt.Sprintf("Failed to validate custom spec : %v of type %v due to err: %v", e.Name, reflect.TypeOf(e.Type), e.Cause)
 }
