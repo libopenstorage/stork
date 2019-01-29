@@ -24,6 +24,17 @@ type Context struct {
 	App *spec.AppSpec
 }
 
+// DeepCopy create a copy of Context
+func (in *Context) DeepCopy() *Context {
+	if in == nil {
+		return nil
+	}
+	out := new(Context)
+	out.UID = in.UID
+	out.App = in.App.DeepCopy()
+	return out
+}
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
@@ -53,6 +64,9 @@ type Driver interface {
 
 	// WaitForRunning waits for application to start running.
 	WaitForRunning(cc *Context, timeout, retryInterval time.Duration) error
+
+	// AddTasks adds tasks to an existing context
+	AddTasks(*Context, ScheduleOptions) error
 
 	// Destroy removes a application. It does not delete the volumes of the task.
 	Destroy(*Context, map[string]bool) error
