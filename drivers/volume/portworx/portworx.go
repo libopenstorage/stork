@@ -692,20 +692,21 @@ func (p *portworx) SnapshotRestore(
 		if err != nil {
 			return nil, nil, err
 		}
+		restoreVolumeID = restoreVolumeName
 	}
 
 	// create PV from restored volume
 	vols, err := p.volDriver.Inspect([]string{restoreVolumeID})
 	if err != nil {
 		return nil, nil, &ErrFailedToInspectVolume{
-			ID:    restoreVolumeName,
+			ID:    restoreVolumeID,
 			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
 		}
 	}
 
 	if len(vols) == 0 {
 		return nil, nil, &errors.ErrNotFound{
-			ID:   restoreVolumeName,
+			ID:   restoreVolumeID,
 			Type: "Volume",
 		}
 	}
