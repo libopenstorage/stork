@@ -99,7 +99,7 @@ spec:
   - metadata:
       name: cassandra-data
       annotations:
-        volume.beta.kubernetes.io/storage-class: px-high-io-non-replicated
+        volume.beta.kubernetes.io/storage-class: px-high-sc
     spec:
       accessModes: [ "ReadWriteOnce" ]
       resources:
