@@ -49,6 +49,12 @@ func triggerMigrationTest(
 		scheduler.ScheduleOptions{AppKeys: []string{migrationAppKey}})
 	require.NoError(t, err, "Error scheduling migration specs")
 
+	// Reset config in case of error
+	defer func() {
+		err = setRemoteConfig("")
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	if migrationSuccessExpected {
 		require.NoError(t, err, "Error waiting for migration to get to Ready state")
@@ -66,7 +72,7 @@ func triggerMigrationTest(
 
 	// destroy mysql app on cluster 1
 	err = setRemoteConfig("")
-	require.NoError(t, err, "Error setting remote config")
+	require.NoError(t, err, "Error resetting remote config")
 	destroyAndWait(t, ctxs)
 }
 
