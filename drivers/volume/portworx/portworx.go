@@ -644,7 +644,7 @@ func (p *portworx) SnapshotRestore(
 	var restoreVolumeID string
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
-	case crdv1.PortworxSnapshotTypeLocal:
+	case "", crdv1.PortworxSnapshotTypeLocal:
 		snapshotNamespace, ok := pvc.Annotations[snapshot.StorkSnapshotSourceNamespaceAnnotation]
 		if !ok {
 			snapshotNamespace = pvc.GetNamespace()
@@ -731,7 +731,7 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 	}
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
-	case crdv1.PortworxSnapshotTypeLocal:
+	case "", crdv1.PortworxSnapshotTypeLocal:
 		r := csv.NewReader(strings.NewReader(snapshotData.Spec.PortworxSnapshot.SnapshotID))
 		snapshotIDs, err := r.Read()
 		if err != nil {
@@ -1422,7 +1422,8 @@ func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *stork_crd.GroupVolume
 
 		dataSource := &crdv1.VolumeSnapshotDataSource{
 			PortworxSnapshot: &crdv1.PortworxVolumeSnapshotSource{
-				SnapshotID: newSnapID,
+				SnapshotType: crdv1.PortworxSnapshotTypeLocal,
+				SnapshotID:   newSnapID,
 			},
 		}
 
