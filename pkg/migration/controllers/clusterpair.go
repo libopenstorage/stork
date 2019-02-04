@@ -63,25 +63,37 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 			}
 		}
 
-		if clusterPair.Status.StorageStatus != stork_api.ClusterPairStatusReady {
-			remoteID, err := c.Driver.CreatePair(clusterPair)
-			if err != nil {
-				clusterPair.Status.StorageStatus = stork_api.ClusterPairStatusError
-				c.Recorder.Event(clusterPair,
-					v1.EventTypeWarning,
-					string(clusterPair.Status.StorageStatus),
-					err.Error())
-			} else {
-				clusterPair.Status.StorageStatus = stork_api.ClusterPairStatusReady
-				c.Recorder.Event(clusterPair,
-					v1.EventTypeNormal,
-					string(clusterPair.Status.StorageStatus),
-					"Storage successfully paired")
-				clusterPair.Status.RemoteStorageID = remoteID
-			}
-			err = sdk.Update(clusterPair)
+		if len(clusterPair.Spec.Options) == 0 {
+			clusterPair.Status.StorageStatus = stork_api.ClusterPairStatusNotProvided
+			c.Recorder.Event(clusterPair,
+				v1.EventTypeNormal,
+				string(clusterPair.Status.StorageStatus),
+				"Skipping storage pairing since no storage options provided")
+			err := sdk.Update(clusterPair)
 			if err != nil {
 				return err
+			}
+		} else {
+			if clusterPair.Status.StorageStatus != stork_api.ClusterPairStatusReady {
+				remoteID, err := c.Driver.CreatePair(clusterPair)
+				if err != nil {
+					clusterPair.Status.StorageStatus = stork_api.ClusterPairStatusError
+					c.Recorder.Event(clusterPair,
+						v1.EventTypeWarning,
+						string(clusterPair.Status.StorageStatus),
+						err.Error())
+				} else {
+					clusterPair.Status.StorageStatus = stork_api.ClusterPairStatusReady
+					c.Recorder.Event(clusterPair,
+						v1.EventTypeNormal,
+						string(clusterPair.Status.StorageStatus),
+						"Storage successfully paired")
+					clusterPair.Status.RemoteStorageID = remoteID
+				}
+				err = sdk.Update(clusterPair)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		if clusterPair.Status.SchedulerStatus != stork_api.ClusterPairStatusReady {

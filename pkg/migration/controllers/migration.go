@@ -229,16 +229,24 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			}
 			fallthrough
 		case stork_api.MigrationStageVolumes:
-
-			err := m.migrateVolumes(migration, terminationChannels)
-			if err != nil {
-				message := fmt.Sprintf("Error migrating volumes: %v", err)
-				log.MigrationLog(migration).Errorf(message)
-				m.Recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					message)
-				return nil
+			if migration.Spec.IncludeVolumes {
+				err := m.migrateVolumes(migration, terminationChannels)
+				if err != nil {
+					message := fmt.Sprintf("Error migrating volumes: %v", err)
+					log.MigrationLog(migration).Errorf(message)
+					m.Recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						message)
+					return nil
+				}
+			} else {
+				migration.Status.Stage = stork_api.MigrationStageApplications
+				migration.Status.Status = stork_api.MigrationStatusInitial
+				err := sdk.Update(migration)
+				if err != nil {
+					return err
+				}
 			}
 		case stork_api.MigrationStageApplications:
 			err := m.migrateResources(migration)
