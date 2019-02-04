@@ -924,8 +924,9 @@ func (m *MigrationController) applyResources(
 
 		_, err = client.CoreV1().Namespaces().Create(&v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   namespace.Name,
-				Labels: namespace.Labels,
+				Name:        namespace.Name,
+				Labels:      namespace.Labels,
+				Annotations: namespace.Annotations,
 			},
 		})
 		if err != nil && !apierrors.IsAlreadyExists(err) {
