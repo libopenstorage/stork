@@ -386,13 +386,6 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		}
 	}
 
-	if err := d.schedOps.ValidateAddLabels(pxNodes, vol); err != nil {
-		return &ErrFailedToInspectVolume{
-			ID:    name,
-			Cause: err.Error(),
-		}
-	}
-
 	// Spec
 	requestedSpec, requestedLocator, _, err := spec.NewSpecHandler().SpecFromOpts(params)
 	if err != nil {
