@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -191,9 +192,38 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					Expect(appNodes).NotTo(BeEmpty())
 				})
 
+				var appVolumes []*volume.Volume
+				Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(appVolumes).NotTo(BeEmpty())
+				})
+
+				// avoid dup
+				nodesThatCantBeDown := make(map[string]bool)
+				nodesToBeDown := make([]node.Node, 0)
+				Step(fmt.Sprintf("choose nodes to be down for %s app", ctx.App.Key), func() {
+					for _, vol := range appVolumes {
+						replicas, err := Inst().V.GetReplicaSetNodes(vol)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(replicas).NotTo(BeEmpty())
+						// at least n-1 nodes with replica need to be up
+						for i := 0; i <= len(replicas)-1; i++ {
+							nodesThatCantBeDown[replicas[i]] = true
+						}
+					}
+
+					for _, node := range node.GetWorkerNodes() {
+						if _, exists := nodesThatCantBeDown[node.Name]; !exists {
+							nodesToBeDown = append(nodesToBeDown, node)
+						}
+					}
+
+				})
+
 				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
-					Inst().V.String(), ctx.App.Key, appNodes), func() {
-					StopVolDriverAndWait(appNodes)
+					Inst().V.String(), ctx.App.Key, nodesToBeDown), func() {
+					StopVolDriverAndWait(nodesToBeDown)
 				})
 
 				Step(fmt.Sprintf("destroy app: %s", ctx.App.Key), func() {
@@ -206,7 +236,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 				})
 
 				Step("restarting volume driver", func() {
-					StartVolDriverAndWait(appNodes)
+					StartVolDriverAndWait(nodesToBeDown)
 				})
 
 				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {

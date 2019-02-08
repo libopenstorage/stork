@@ -1159,6 +1159,43 @@ func (d *portworx) getStorageStatus(n node.Node) string {
 	return status
 }
 
+func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]string, error) {
+	var pxNodes []string
+	volName := d.schedOps.GetVolumeName(torpedovol)
+	vols, err := d.getVolDriver().Inspect([]string{volName})
+	if err != nil {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    torpedovol.Name,
+			Cause: err.Error(),
+		}
+	}
+
+	if len(vols) == 0 {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    torpedovol.ID,
+			Cause: fmt.Sprintf("unable to find volume %s [%s]", torpedovol.Name, volName),
+		}
+	}
+
+	for _, rs := range vols[0].ReplicaSets {
+		for _, n := range rs.Nodes {
+			pxNode, err := d.clusterManager.Inspect(n)
+			if err != nil {
+				return nil, &ErrFailedToInspectVolume{
+					ID:    torpedovol.Name,
+					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
+				}
+			}
+			nodeName := pxNode.SchedulerNodeName
+			if nodeName == "" {
+				nodeName = pxNode.Hostname
+			}
+			pxNodes = append(pxNodes, nodeName)
+		}
+	}
+	return pxNodes, nil
+}
+
 func init() {
 	torpedovolume.Register(DriverName, &portworx{})
 }
