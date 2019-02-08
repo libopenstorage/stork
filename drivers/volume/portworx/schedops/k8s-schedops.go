@@ -49,6 +49,7 @@ const (
 const (
 	podExecTimeout       = 2 * time.Minute
 	defaultRetryInterval = 10 * time.Second
+	defaultTimeout       = 2 * time.Minute
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -201,7 +202,7 @@ func (k *k8sSchedOps) validatePods(pods []corev1.Pod, pvName string) ([]corev1.P
 	return validatedPods, nil
 }
 
-func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
+func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) error {
 	pvName := k.GetVolumeName(vol)
 	if len(pvName) == 0 {
 		return fmt.Errorf("failed to get PV name for : %v", vol)
@@ -212,12 +213,31 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume) error {
 		return err
 	}
 
+	nodes := node.GetNodesByName()
+
 	pods, err = k.validatePods(pods, pvName)
 	if err != nil {
 		return err
 	}
 
 	for _, p := range pods {
+		currentNode, nodeExists := nodes[p.Spec.NodeName]
+		if !nodeExists {
+			return fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
+		}
+
+		// ignore error when a command not exactly fail, like grep when empty return exit 1
+		connOpts := node.ConnectionOpts{
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+			IgnoreError:     true,
+		}
+
+		volMount, _ := d.RunCommand(currentNode,
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
+		if len(volMount) == 0 {
+			return fmt.Errorf("volume %s not mounted om node %s", vol.Name, currentNode.Name)
+		}
 		logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", p.Namespace, p.Name, p.Status.Phase, p.Status.InitContainerStatuses, p.Status.ContainerStatuses)
 		containerPaths := getContainerPVCMountMap(p)
 		for containerName, path := range containerPaths {
