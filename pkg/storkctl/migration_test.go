@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/stretchr/testify/require"
+	appv1 "k8s.io/api/apps/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -205,5 +207,78 @@ func TestDeleteMigrations(t *testing.T) {
 	cmdArgs = []string{"delete", "migrations", "-c", "clusterpair1"}
 	expected = "Migration deletemigration1 deleted successfully\n"
 	expected += "Migration deletemigration2 deleted successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func createMigratedDeployment(t *testing.T) {
+	replicas := int32(0)
+	_, err := k8s.Instance().CreateNamespace("dep", nil)
+	require.NoError(t, err, "Error creating dep namespace")
+
+	deployment := &appv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "migratedDeployment",
+			Namespace: "dep",
+			Annotations: map[string]string{
+				migration.StorkMigrationReplicasAnnotation: "1",
+			},
+		},
+		Spec: appv1.DeploymentSpec{
+			Replicas: &replicas,
+		},
+	}
+	_, err = k8s.Instance().CreateDeployment(deployment)
+	require.NoError(t, err, "Error creating deployment")
+
+}
+func createMigratedStatefulSet(t *testing.T) {
+	replicas := int32(0)
+	_, err := k8s.Instance().CreateNamespace("sts", nil)
+	require.NoError(t, err, "Error creating sts namespace")
+
+	statefulSet := &appv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "migratedStatefulSet",
+			Namespace: "sts",
+			Annotations: map[string]string{
+				migration.StorkMigrationReplicasAnnotation: "3",
+			},
+		},
+		Spec: appv1.StatefulSetSpec{
+			Replicas: &replicas,
+		},
+	}
+	_, err = k8s.Instance().CreateStatefulSet(statefulSet)
+	require.NoError(t, err, "Error creating statefulset")
+
+}
+func TestActivateDeactivateMigrations(t *testing.T) {
+
+	createMigratedDeployment(t)
+	createMigratedStatefulSet(t)
+	cmdArgs := []string{"activate", "migrations", "-n", "dep"}
+	expected := "Updated replicas for deployment dep/migratedDeployment to 1\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"activate", "migrations", "-n", "sts"}
+	expected = "Updated replicas for statefulset sts/migratedStatefulSet to 3\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"deactivate", "migrations", "-n", "dep"}
+	expected = "Updated replicas for deployment dep/migratedDeployment to 0\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"deactivate", "migrations", "-n", "sts"}
+	expected = "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"activate", "migrations", "-a"}
+	expected = "Updated replicas for deployment dep/migratedDeployment to 1\n"
+	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 3\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"deactivate", "migrations", "-a"}
+	expected = "Updated replicas for deployment dep/migratedDeployment to 0\n"
+	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
