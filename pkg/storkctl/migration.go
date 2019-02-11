@@ -3,8 +3,10 @@ package storkctl
 import (
 	"fmt"
 	"io"
+	"strconv"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
@@ -73,6 +75,133 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	createMigrationCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
 
 	return createMigrationCommand
+}
+
+func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	var allNamespaces bool
+
+	activateMigrationCommand := &cobra.Command{
+		Use:     migrationSubcommand,
+		Aliases: migrationAliases,
+		Short:   "Activate apps that were created from a migration",
+		Run: func(c *cobra.Command, args []string) {
+			activationNamespaces := make([]string, 0)
+			if allNamespaces {
+				namespaces, err := k8s.Instance().ListNamespaces()
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				for _, ns := range namespaces.Items {
+					activationNamespaces = append(activationNamespaces, ns.Name)
+				}
+
+			} else {
+				activationNamespaces = append(activationNamespaces, cmdFactory.GetNamespace())
+			}
+
+			for _, ns := range activationNamespaces {
+				updateStatefulSets(ns, true, ioStreams)
+				updateDeployments(ns, true, ioStreams)
+			}
+
+		},
+	}
+	activateMigrationCommand.Flags().BoolVarP(&allNamespaces, "all-namespaces", "a", false, "Activate applications in all namespaces")
+
+	return activateMigrationCommand
+}
+
+func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	var allNamespaces bool
+
+	deactivateMigrationCommand := &cobra.Command{
+		Use:     migrationSubcommand,
+		Aliases: migrationAliases,
+		Short:   "Deactivate apps that were created from a migration",
+		Run: func(c *cobra.Command, args []string) {
+			deactivationNamespaces := make([]string, 0)
+			if allNamespaces {
+				namespaces, err := k8s.Instance().ListNamespaces()
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				for _, ns := range namespaces.Items {
+					deactivationNamespaces = append(deactivationNamespaces, ns.Name)
+				}
+
+			} else {
+				deactivationNamespaces = append(deactivationNamespaces, cmdFactory.GetNamespace())
+			}
+
+			for _, ns := range deactivationNamespaces {
+				updateStatefulSets(ns, false, ioStreams)
+				updateDeployments(ns, false, ioStreams)
+			}
+
+		},
+	}
+	deactivateMigrationCommand.Flags().BoolVarP(&allNamespaces, "all-namespaces", "a", false, "Deactivate applications in all namespaces")
+
+	return deactivateMigrationCommand
+}
+
+func updateStatefulSets(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+	statefulSets, err := k8s.Instance().ListStatefulSets(namespace)
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
+	for _, statefulSet := range statefulSets.Items {
+		if replicas, update := getUpdatedReplicaCount(statefulSet.Annotations, activate, ioStreams); update {
+			statefulSet.Spec.Replicas = &replicas
+			_, err := k8s.Instance().UpdateStatefulSet(&statefulSet)
+			if err != nil {
+				printMsg(fmt.Sprintf("Error updating replicas for statefulset %v/%v : %v", statefulSet.Namespace, statefulSet.Name, err), ioStreams.ErrOut)
+				continue
+			}
+			printMsg(fmt.Sprintf("Updated replicas for statefulset %v/%v to %v", statefulSet.Namespace, statefulSet.Name, replicas), ioStreams.Out)
+		}
+
+	}
+}
+
+func updateDeployments(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+	deployments, err := k8s.Instance().ListDeployments(namespace)
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
+	for _, deployment := range deployments.Items {
+		if replicas, update := getUpdatedReplicaCount(deployment.Annotations, activate, ioStreams); update {
+			deployment.Spec.Replicas = &replicas
+			_, err := k8s.Instance().UpdateDeployment(&deployment)
+			if err != nil {
+				printMsg(fmt.Sprintf("Error updating replicas for deployment %v/%v : %v", deployment.Namespace, deployment.Name, err), ioStreams.ErrOut)
+				continue
+			}
+			printMsg(fmt.Sprintf("Updated replicas for deployment %v/%v to %v", deployment.Namespace, deployment.Name, replicas), ioStreams.Out)
+		}
+	}
+}
+func getUpdatedReplicaCount(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {
+	if replicas, present := annotations[migration.StorkMigrationReplicasAnnotation]; present {
+		var updatedReplicas int32
+		if activate {
+			parsedReplicas, err := strconv.Atoi(replicas)
+			if err != nil {
+				printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
+				return 0, false
+			}
+			updatedReplicas = int32(parsedReplicas)
+		} else {
+			updatedReplicas = 0
+		}
+		return updatedReplicas, true
+	}
+
+	return 0, false
 }
 
 func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {

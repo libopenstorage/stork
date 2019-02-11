@@ -31,6 +31,8 @@ func NewCommand(cmdFactory Factory, in io.Reader, out io.Writer, errOut io.Write
 		newCreateCommand(cmdFactory, ioStreams),
 		newDeleteCommand(cmdFactory, ioStreams),
 		newGetCommand(cmdFactory, ioStreams),
+		newActivateCommand(cmdFactory, ioStreams),
+		newDeactivateCommand(cmdFactory, ioStreams),
 		newGenerateCommand(cmdFactory, ioStreams),
 		newVersionCommand(cmdFactory, ioStreams),
 	)
