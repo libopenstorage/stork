@@ -638,8 +638,8 @@ func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, 
 }
 
 func (d *portworx) RandomizeVolumeName(params string) string {
-	re := regexp.MustCompile("(" + api.Name + "=)([0-9A-Za-z_-]+),?")
-	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New())
+	re := regexp.MustCompile("(" + api.Name + "=)([0-9A-Za-z_-]+)(,)?")
+	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New()+"${3}")
 }
 
 func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
