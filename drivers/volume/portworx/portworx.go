@@ -1073,7 +1073,7 @@ func getPendingSnapshotConditions(msg string) []crdv1.VolumeSnapshotCondition {
 	return []crdv1.VolumeSnapshotCondition{
 		{
 			Type:               crdv1.VolumeSnapshotConditionPending,
-			Status:             v1.ConditionUnknown,
+			Status:             v1.ConditionTrue,
 			Message:            msg,
 			LastTransitionTime: metav1.Now(),
 		},

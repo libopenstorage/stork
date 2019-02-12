@@ -578,22 +578,22 @@ func areAllSnapshotsStarted(snapshots []*stork_api.VolumeSnapshotStatus) bool {
 }
 
 func areAllSnapshotsDone(snapshots []*stork_api.VolumeSnapshotStatus) bool {
-	allDone := true
+	if len(snapshots) == 0 {
+		return false
+	}
 
+	readySnapshots := 0
 	for _, snapshot := range snapshots {
 		conditions := snapshot.Conditions
 		if len(conditions) > 0 {
 			lastCondition := conditions[0]
-			if lastCondition.Status == v1.ConditionTrue && lastCondition.Type != crdv1.VolumeSnapshotConditionReady {
-				allDone = false
-				break
+			if lastCondition.Status == v1.ConditionTrue && lastCondition.Type == crdv1.VolumeSnapshotConditionReady {
+				readySnapshots++
 			}
-		} else { // no conditions. So not done.
-			allDone = false
-			break
 		}
 	}
-	return allDone
+
+	return readySnapshots == len(snapshots)
 }
 
 // SetKind sets the group snapshopt kind
