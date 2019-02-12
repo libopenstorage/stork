@@ -30,8 +30,12 @@ type Interface interface {
 	GroupVolumeSnapshots() GroupVolumeSnapshotInformer
 	// Migrations returns a MigrationInformer.
 	Migrations() MigrationInformer
+	// MigrationSchedules returns a MigrationScheduleInformer.
+	MigrationSchedules() MigrationScheduleInformer
 	// Rules returns a RuleInformer.
 	Rules() RuleInformer
+	// SchedulePolicies returns a SchedulePolicyInformer.
+	SchedulePolicies() SchedulePolicyInformer
 	// StorageClusters returns a StorageClusterInformer.
 	StorageClusters() StorageClusterInformer
 }
@@ -62,9 +66,19 @@ func (v *version) Migrations() MigrationInformer {
 	return &migrationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// MigrationSchedules returns a MigrationScheduleInformer.
+func (v *version) MigrationSchedules() MigrationScheduleInformer {
+	return &migrationScheduleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // Rules returns a RuleInformer.
 func (v *version) Rules() RuleInformer {
 	return &ruleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SchedulePolicies returns a SchedulePolicyInformer.
+func (v *version) SchedulePolicies() SchedulePolicyInformer {
+	return &schedulePolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // StorageClusters returns a StorageClusterInformer.

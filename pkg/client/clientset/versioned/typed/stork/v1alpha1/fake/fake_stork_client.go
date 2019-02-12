@@ -40,8 +40,16 @@ func (c *FakeStorkV1alpha1) Migrations(namespace string) v1alpha1.MigrationInter
 	return &FakeMigrations{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) MigrationSchedules(namespace string) v1alpha1.MigrationScheduleInterface {
+	return &FakeMigrationSchedules{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) Rules(namespace string) v1alpha1.RuleInterface {
 	return &FakeRules{c, namespace}
+}
+
+func (c *FakeStorkV1alpha1) SchedulePolicies() v1alpha1.SchedulePolicyInterface {
+	return &FakeSchedulePolicies{c}
 }
 
 func (c *FakeStorkV1alpha1) StorageClusters(namespace string) v1alpha1.StorageClusterInterface {

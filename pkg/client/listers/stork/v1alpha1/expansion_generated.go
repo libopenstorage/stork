@@ -42,6 +42,14 @@ type MigrationListerExpansion interface{}
 // MigrationNamespaceLister.
 type MigrationNamespaceListerExpansion interface{}
 
+// MigrationScheduleListerExpansion allows custom methods to be added to
+// MigrationScheduleLister.
+type MigrationScheduleListerExpansion interface{}
+
+// MigrationScheduleNamespaceListerExpansion allows custom methods to be added to
+// MigrationScheduleNamespaceLister.
+type MigrationScheduleNamespaceListerExpansion interface{}
+
 // RuleListerExpansion allows custom methods to be added to
 // RuleLister.
 type RuleListerExpansion interface{}
@@ -49,6 +57,10 @@ type RuleListerExpansion interface{}
 // RuleNamespaceListerExpansion allows custom methods to be added to
 // RuleNamespaceLister.
 type RuleNamespaceListerExpansion interface{}
+
+// SchedulePolicyListerExpansion allows custom methods to be added to
+// SchedulePolicyLister.
+type SchedulePolicyListerExpansion interface{}
 
 // StorageClusterListerExpansion allows custom methods to be added to
 // StorageClusterLister.
