@@ -10,10 +10,11 @@ import (
 
 // Migration migration
 type Migration struct {
-	Driver                volume.Driver
-	Recorder              record.EventRecorder
-	clusterPairController *controllers.ClusterPairController
-	migrationController   *controllers.MigrationController
+	Driver                      volume.Driver
+	Recorder                    record.EventRecorder
+	clusterPairController       *controllers.ClusterPairController
+	migrationController         *controllers.MigrationController
+	migrationScheduleController *controllers.MigrationScheduleController
 }
 
 // Init init
@@ -34,6 +35,13 @@ func (m *Migration) Init(migrationAdminNamespace string) error {
 	err = m.migrationController.Init(migrationAdminNamespace)
 	if err != nil {
 		return fmt.Errorf("error initializing migration controller: %v", err)
+	}
+	m.migrationScheduleController = &controllers.MigrationScheduleController{
+		Recorder: m.Recorder,
+	}
+	err = m.migrationScheduleController.Init()
+	if err != nil {
+		return fmt.Errorf("error initializing migration schedule controller: %v", err)
 	}
 	return nil
 }

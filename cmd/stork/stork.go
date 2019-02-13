@@ -16,6 +16,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/libopenstorage/stork/pkg/version"
 	log "github.com/sirupsen/logrus"
@@ -249,6 +250,10 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		if err := monitor.Start(); err != nil {
 			log.Fatalf("Error starting storage monitor: %v", err)
 		}
+	}
+
+	if err := schedule.Init(); err != nil {
+		log.Fatalf("Error initializing schedule: %v", err)
 	}
 
 	snapshotController := &snapshot.Controller{
