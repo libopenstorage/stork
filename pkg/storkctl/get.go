@@ -25,8 +25,17 @@ func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *c
 	return getCommands
 }
 
-func printTable(cmd *cobra.Command, object runtime.Object, columns []string, printerFunc interface{}, out io.Writer) error {
-	printer := printers.NewHumanReadablePrinter(nil, printers.PrintOptions{})
+func printTable(
+	cmd *cobra.Command,
+	object runtime.Object,
+	columns []string,
+	withNamespace bool,
+	printerFunc interface{},
+	out io.Writer,
+) error {
+	printer := printers.NewHumanReadablePrinter(nil, printers.PrintOptions{
+		WithNamespace: withNamespace,
+	})
 	if err := printer.Handler(columns, nil, printerFunc); err != nil {
 		return err
 	}
@@ -47,9 +56,13 @@ func printEncoded(cmd *cobra.Command, object runtime.Object, outputFormat string
 	return printer.PrintObj(object, out)
 }
 
-func printObjects(cmd *cobra.Command, object runtime.Object, outputFormat string, columns []string, printerFunc interface{}, out io.Writer) error {
+func printObjects(cmd *cobra.Command, object runtime.Object, cmdFactory Factory, columns []string, printerFunc interface{}, out io.Writer) error {
+	outputFormat, err := cmdFactory.GetOutputFormat()
+	if err != nil {
+		return err
+	}
 	if outputFormat == outputFormatTable {
-		return printTable(cmd, object, columns, printerFunc, out)
+		return printTable(cmd, object, columns, cmdFactory.AllNamespaces(), printerFunc, out)
 	}
 	return printEncoded(cmd, object, outputFormat, out)
 }

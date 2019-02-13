@@ -73,24 +73,34 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 			var snapshots *snapv1.VolumeSnapshotList
 			var err error
 
-			namespace := cmdFactory.GetNamespace()
-
+			namespaces, err := cmdFactory.GetAllNamespaces()
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
 			if len(args) > 0 {
 				snapshots = new(snapv1.VolumeSnapshotList)
 				for _, snapName := range args {
-					snapshot, err := k8s.Instance().GetSnapshot(snapName, namespace)
+					for _, ns := range namespaces {
+						snapshot, err := k8s.Instance().GetSnapshot(snapName, ns)
+						if err != nil {
+							util.CheckErr(err)
+							return
+						}
+						snapshots.Items = append(snapshots.Items, *snapshot)
+					}
+				}
+			} else {
+				var tempSnapshots snapv1.VolumeSnapshotList
+				for _, ns := range namespaces {
+					snapshots, err = k8s.Instance().ListSnapshots(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
 					}
-					snapshots.Items = append(snapshots.Items, *snapshot)
+					tempSnapshots.Items = append(tempSnapshots.Items, snapshots.Items...)
 				}
-			} else {
-				snapshots, err = k8s.Instance().ListSnapshots(namespace)
-				if err != nil {
-					util.CheckErr(err)
-					return
-				}
+				snapshots = &tempSnapshots
 			}
 
 			if len(pvcName) != 0 {
@@ -110,19 +120,14 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 				return
 			}
 
-			outputFormat, err := cmdFactory.GetOutputFormat()
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-
-			if err := printObjects(c, snapshots, outputFormat, snapshotColumns, snapshotPrinter, ioStreams.Out); err != nil {
+			if err := printObjects(c, snapshots, cmdFactory, snapshotColumns, snapshotPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
 			}
 		},
 	}
 	getSnapshotCommand.Flags().StringVarP(&pvcName, "pvc", "p", "", "Name of the PVC for which to list snapshots")
+	cmdFactory.BindGetFlags(getSnapshotCommand.Flags())
 
 	return getSnapshotCommand
 }

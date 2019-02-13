@@ -46,8 +46,7 @@ func resetTest() {
 	}
 	testFactory = NewTestFactory()
 	testFactory.setOutputFormat(outputFormatTable)
-	tf := testFactory.TestFactory.WithNamespace("test")
-	testFactory.setNamespace("test")
+	tf := testFactory.TestFactory
 	tf.Client = fakeRestClient
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 

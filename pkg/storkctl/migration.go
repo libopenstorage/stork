@@ -85,22 +85,34 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 			var migrations *storkv1.MigrationList
 			var err error
 
+			namespaces, err := cmdFactory.GetAllNamespaces()
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
 			if len(args) > 0 {
 				migrations = new(storkv1.MigrationList)
 				for _, migrationName := range args {
-					migration, err := k8s.Instance().GetMigration(migrationName, cmdFactory.GetNamespace())
+					for _, ns := range namespaces {
+						migration, err := k8s.Instance().GetMigration(migrationName, ns)
+						if err != nil {
+							util.CheckErr(err)
+							return
+						}
+						migrations.Items = append(migrations.Items, *migration)
+					}
+				}
+			} else {
+				var tempMigrations storkv1.MigrationList
+				for _, ns := range namespaces {
+					migrations, err = k8s.Instance().ListMigrations(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
 					}
-					migrations.Items = append(migrations.Items, *migration)
+					tempMigrations.Items = append(tempMigrations.Items, migrations.Items...)
 				}
-			} else {
-				migrations, err = k8s.Instance().ListMigrations(cmdFactory.GetNamespace())
-				if err != nil {
-					util.CheckErr(err)
-					return
-				}
+				migrations = &tempMigrations
 			}
 
 			if len(clusterPair) != 0 {
@@ -120,19 +132,14 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 				return
 			}
 
-			outputFormat, err := cmdFactory.GetOutputFormat()
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-
-			if err := printObjects(c, migrations, outputFormat, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
+			if err := printObjects(c, migrations, cmdFactory, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
 			}
 		},
 	}
 	getMigrationCommand.Flags().StringVarP(&clusterPair, "clusterpair", "c", "", "Name of the cluster pair for which to list migrations")
+	cmdFactory.BindGetFlags(getMigrationCommand.Flags())
 
 	return getMigrationCommand
 }

@@ -28,30 +28,42 @@ const (
 var clusterPairColumns = []string{"NAME", "STORAGE-STATUS", "SCHEDULER-STATUS", "CREATED"}
 
 func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
-	var err error
 	getClusterPairCommand := &cobra.Command{
 		Use:     clusterPairSubcommand,
 		Aliases: []string{"cp"},
 		Short:   "Get cluster pair resources",
 		Run: func(c *cobra.Command, args []string) {
 			var clusterPairs *storkv1.ClusterPairList
+
+			namespaces, err := cmdFactory.GetAllNamespaces()
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
 			if len(args) > 0 {
 				clusterPairs = new(storkv1.ClusterPairList)
 				for _, pairName := range args {
-					pair, err := k8s.Instance().GetClusterPair(pairName, cmdFactory.GetNamespace())
-					if err == nil {
+					for _, ns := range namespaces {
+						pair, err := k8s.Instance().GetClusterPair(pairName, ns)
+						if err != nil {
+							util.CheckErr(err)
+							return
+						}
 						clusterPairs.Items = append(clusterPairs.Items, *pair)
-					} else {
-						util.CheckErr(err)
-						return
 					}
 				}
 			} else {
-				clusterPairs, err = k8s.Instance().ListClusterPairs(cmdFactory.GetNamespace())
-				if err != nil {
-					util.CheckErr(err)
-					return
+				var tempClusterPairs storkv1.ClusterPairList
+				for _, ns := range namespaces {
+					clusterPairs, err = k8s.Instance().ListClusterPairs(ns)
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+					tempClusterPairs.Items = append(tempClusterPairs.Items, clusterPairs.Items...)
 				}
+				clusterPairs = &tempClusterPairs
 			}
 
 			if len(clusterPairs.Items) == 0 {
@@ -59,18 +71,14 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 				return
 			}
 
-			outputFormat, err := cmdFactory.GetOutputFormat()
-			if err != nil {
-				util.CheckErr(err)
-				return
-			}
-
-			if err := printObjects(c, clusterPairs, outputFormat, clusterPairColumns, clusterPairPrinter, ioStreams.Out); err != nil {
+			if err := printObjects(c, clusterPairs, cmdFactory, clusterPairColumns, clusterPairPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
 			}
 		},
 	}
+
+	cmdFactory.BindGetFlags(getClusterPairCommand.Flags())
 
 	return getClusterPairCommand
 }
@@ -80,6 +88,11 @@ func clusterPairPrinter(clusterPairList *storkv1.ClusterPairList, writer io.Writ
 		return nil
 	}
 	for _, clusterPair := range clusterPairList.Items {
+		if options.WithNamespace {
+			if _, err := fmt.Fprintf(writer, "%v\t", clusterPair.Namespace); err != nil {
+				return err
+			}
+		}
 		name := printers.FormatResourceName(options.Kind, clusterPair.Name, options.WithKind)
 
 		creationTime := toTimeString(clusterPair.CreationTimestamp)

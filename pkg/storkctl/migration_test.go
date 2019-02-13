@@ -64,6 +64,9 @@ func TestGetMigrationsOneMigration(t *testing.T) {
 
 func TestGetMigrationsMultiple(t *testing.T) {
 	defer resetTest()
+	_, err := k8s.Instance().CreateNamespace("default", nil)
+	require.NoError(t, err, "Error creating default namespace")
+
 	createMigrationAndVerify(t, "getmigrationtest1", "default", "clusterpair1", []string{"namespace1"}, "", "")
 	createMigrationAndVerify(t, "getmigrationtest2", "default", "clusterpair2", []string{"namespace1"}, "", "")
 
@@ -82,6 +85,16 @@ func TestGetMigrationsMultiple(t *testing.T) {
 		"getmigrationtest1   clusterpair1                       0/0       0/0         \n"
 	// Should get only one migration if name given
 	cmdArgs = []string{"get", "migrations", "getmigrationtest1"}
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	_, err = k8s.Instance().CreateNamespace("ns1", nil)
+	require.NoError(t, err, "Error creating ns1 namespace")
+	createMigrationAndVerify(t, "getmigrationtest21", "ns1", "clusterpair2", []string{"namespace1"}, "", "")
+	cmdArgs = []string{"get", "migrations", "--all-namespaces"}
+	expected = "NAMESPACE   NAME                 CLUSTERPAIR    STAGE     STATUS    VOLUMES   RESOURCES   CREATED\n" +
+		"default     getmigrationtest1    clusterpair1                       0/0       0/0         \n" +
+		"default     getmigrationtest2    clusterpair2                       0/0       0/0         \n" +
+		"ns1         getmigrationtest21   clusterpair2                       0/0       0/0         \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
