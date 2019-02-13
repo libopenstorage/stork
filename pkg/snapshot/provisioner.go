@@ -23,7 +23,9 @@ import (
 // so can't vendor it in here.
 
 const (
-	storkSnapshotRestoreNamespacesAnnotation = "stork/snapshot-restore-namespaces"
+	// StorkSnapshotRestoreNamespacesAnnotation is annotation used to specify the
+	// command separated list of namespaces to which the snapshot can be restored
+	StorkSnapshotRestoreNamespacesAnnotation = "stork/snapshot-restore-namespaces"
 	// StorkSnapshotSourceNamespaceAnnotation Annotation used to specify the
 	// source of the snapshot when creating a PVC
 	StorkSnapshotSourceNamespaceAnnotation = "stork/snapshot-source-namespace"
@@ -88,7 +90,7 @@ func (p *snapshotProvisioner) isSnapshotAllowed(
 	snapshot crdv1.VolumeSnapshot,
 	namespace string,
 ) bool {
-	allowedNamespaces, ok := snapshot.Metadata.Annotations[storkSnapshotRestoreNamespacesAnnotation]
+	allowedNamespaces, ok := snapshot.Metadata.Annotations[StorkSnapshotRestoreNamespacesAnnotation]
 	if !ok {
 		return false
 	}
