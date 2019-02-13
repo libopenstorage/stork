@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -14,6 +15,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
@@ -343,7 +345,16 @@ func (m *GroupSnapshotController) createSnapAndDataObjects(
 	}
 	parentUUID := groupSnap.GetUID()
 	snapLabels := groupSnap.GetLabels()
+	snapAnnotations := groupSnap.GetAnnotations()
 	createSnapObjects := make([]*crdv1.VolumeSnapshot, 0)
+
+	if len(groupSnap.Spec.RestoreNamespaces) > 0 {
+		if len(snapAnnotations) == 0 {
+			snapAnnotations = make(map[string]string)
+		}
+
+		snapAnnotations[snapshot.StorkSnapshotRestoreNamespacesAnnotation] = strings.Join(groupSnap.Spec.RestoreNamespaces, ",")
+	}
 
 	for _, snapshot := range snapshots {
 		parentPVCOrVolID, err := m.getPVCNameFromVolumeID(snapshot.ParentVolumeID)
@@ -366,8 +377,9 @@ func (m *GroupSnapshotController) createSnapAndDataObjects(
 
 		snapData := &crdv1.VolumeSnapshotData{
 			Metadata: metav1.ObjectMeta{
-				Name:   volumeSnapshotName,
-				Labels: snapLabels,
+				Name:        volumeSnapshotName,
+				Labels:      snapLabels,
+				Annotations: snapAnnotations,
 			},
 			Spec: crdv1.VolumeSnapshotDataSpec{
 				VolumeSnapshotRef: &v1.ObjectReference{
@@ -395,9 +407,10 @@ func (m *GroupSnapshotController) createSnapAndDataObjects(
 
 		snap := &crdv1.VolumeSnapshot{
 			Metadata: metav1.ObjectMeta{
-				Name:      volumeSnapshotName,
-				Namespace: parentNamespace,
-				Labels:    snapLabels,
+				Name:        volumeSnapshotName,
+				Namespace:   parentNamespace,
+				Labels:      snapLabels,
+				Annotations: snapAnnotations,
 				OwnerReferences: []metav1.OwnerReference{
 					metav1.OwnerReference{
 						Name:       parentName,
