@@ -191,6 +191,11 @@ func (in *GroupVolumeSnapshotList) DeepCopyObject() runtime.Object {
 func (in *GroupVolumeSnapshotSpec) DeepCopyInto(out *GroupVolumeSnapshotSpec) {
 	*out = *in
 	in.PVCSelector.DeepCopyInto(&out.PVCSelector)
+	if in.RestoreNamespaces != nil {
+		in, out := &in.RestoreNamespaces, &out.RestoreNamespaces
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Options != nil {
 		in, out := &in.Options, &out.Options
 		*out = make(map[string]string, len(*in))
