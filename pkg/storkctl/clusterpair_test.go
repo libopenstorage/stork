@@ -107,7 +107,7 @@ func TestGetClusterPairsWithStatus(t *testing.T) {
 	require.NoError(t, err, "Error updating Clusterpair")
 	cmdArgs := []string{"get", "clusterpair", "clusterpairstatustest"}
 	expected := "NAME                    STORAGE-STATUS   SCHEDULER-STATUS   CREATED\n" +
-		"clusterpairstatustest   Ready            Ready              " + toTimeString(clusterPair.CreationTimestamp) + "\n"
+		"clusterpairstatustest   Ready            Ready              " + toTimeString(clusterPair.CreationTimestamp.Time) + "\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 

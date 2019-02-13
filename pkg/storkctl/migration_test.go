@@ -124,7 +124,7 @@ func TestGetMigrationsWithStatusAndProgress(t *testing.T) {
 	migration, err = k8s.Instance().UpdateMigration(migration)
 
 	expected := "NAME                     CLUSTERPAIR    STAGE     STATUS       VOLUMES   RESOURCES   CREATED\n" +
-		"getmigrationstatustest   clusterpair1   Final     Successful   0/0       0/0         " + toTimeString(migration.CreationTimestamp) + "\n"
+		"getmigrationstatustest   clusterpair1   Final     Successful   0/0       0/0         " + toTimeString(migration.CreationTimestamp.Time) + "\n"
 	cmdArgs := []string{"get", "migrations", "getmigrationstatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }

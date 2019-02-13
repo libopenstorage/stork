@@ -95,7 +95,7 @@ func clusterPairPrinter(clusterPairList *storkv1.ClusterPairList, writer io.Writ
 		}
 		name := printers.FormatResourceName(options.Kind, clusterPair.Name, options.WithKind)
 
-		creationTime := toTimeString(clusterPair.CreationTimestamp)
+		creationTime := toTimeString(clusterPair.CreationTimestamp.Time)
 		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\n",
 			name,
 			clusterPair.Status.StorageStatus,
