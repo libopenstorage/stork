@@ -103,6 +103,8 @@ type EventOps interface {
 
 // NamespaceOps is an interface to perform namespace operations
 type NamespaceOps interface {
+	// ListNamespaces returns all the namespaces
+	ListNamespaces() (*v1.NamespaceList, error)
 	// GetNamespace returns a namespace object for given name
 	GetNamespace(name string) (*v1.Namespace, error)
 	// CreateNamespace creates a namespace with given name and metadata
@@ -158,6 +160,8 @@ type ServiceOps interface {
 
 // StatefulSetOps is an interface to perform k8s stateful set operations
 type StatefulSetOps interface {
+	// ListStatefulSets lists all the statefulsets for a given namespace
+	ListStatefulSets(namespace string) (*apps_api.StatefulSetList, error)
 	// GetStatefulSet returns a statefulset for given name and namespace
 	GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error)
 	// CreateStatefulSet creates the given statefulset
@@ -184,6 +188,8 @@ type StatefulSetOps interface {
 
 // DeploymentOps is an interface to perform k8s deployment operations
 type DeploymentOps interface {
+	// ListDeployments lists all deployments for the given namespace
+	ListDeployments(namespace string) (*apps_api.DeploymentList, error)
 	// GetDeployment returns a deployment for the give name and namespace
 	GetDeployment(name, namespace string) (*apps_api.Deployment, error)
 	// CreateDeployment creates the given deployment
@@ -613,6 +619,14 @@ func (k *k8sOps) GetVersion() (*version.Info, error) {
 }
 
 // Namespace APIs - BEGIN
+
+func (k *k8sOps) ListNamespaces() (*v1.NamespaceList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().Namespaces().List(meta_v1.ListOptions{})
+}
 
 func (k *k8sOps) GetNamespace(name string) (*v1.Namespace, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -1060,7 +1074,7 @@ func (k *k8sOps) RunCommandInPod(cmds []string, podName, containerName, namespac
 	})
 
 	if err != nil {
-		return execErr.String(), fmt.Errorf("could not execute: %v", err)
+		return execErr.String(), fmt.Errorf("could not execute: %v: %v %v", err, execErr.String(), execOut.String())
 	}
 
 	if execErr.Len() > 0 {
@@ -1138,6 +1152,14 @@ func (k *k8sOps) ValidateDeletedService(svcName string, svcNS string) error {
 // Service APIs - END
 
 // Deployment APIs - BEGIN
+
+func (k *k8sOps) ListDeployments(namespace string) (*apps_api.DeploymentList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.appsClient().Deployments(namespace).List(meta_v1.ListOptions{})
+}
 
 func (k *k8sOps) GetDeployment(name, namespace string) (*apps_api.Deployment, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -1597,6 +1619,14 @@ func (k *k8sOps) ValidateJob(name, namespace string, timeout time.Duration) erro
 // Job APIs - END
 
 // StatefulSet APIs - BEGIN
+
+func (k *k8sOps) ListStatefulSets(namespace string) (*apps_api.StatefulSetList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.appsClient().StatefulSets(namespace).List(meta_v1.ListOptions{})
+}
 
 func (k *k8sOps) GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error) {
 	if err := k.initK8sClient(); err != nil {
