@@ -57,6 +57,11 @@ func TestGetClusterPairNotFound(t *testing.T) {
 func TestGetClusterPair(t *testing.T) {
 	defer resetTest()
 
+	_, err := k8s.Instance().CreateNamespace("test", nil)
+	require.NoError(t, err, "Error creating test namespace")
+	_, err = k8s.Instance().CreateNamespace("test1", nil)
+	require.NoError(t, err, "Error creating test1 namespace")
+
 	createClusterPairAndVerify(t, "getclusterpairtest", "test")
 
 	cmdArgs := []string{"get", "clusterpair", "getclusterpairtest", "-n", "test"}
@@ -74,6 +79,19 @@ func TestGetClusterPair(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"get", "clusterpair", "-n", "test"}
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	createClusterPairAndVerify(t, "getclusterpairtest", "test1")
+	cmdArgs = []string{"get", "clusterpair", "-n", "test1"}
+	expected = "NAME                 STORAGE-STATUS   SCHEDULER-STATUS   CREATED\n" +
+		"getclusterpairtest                                       \n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"get", "clusterpair", "--all-namespaces"}
+	expected = "NAMESPACE   NAME                  STORAGE-STATUS   SCHEDULER-STATUS   CREATED\n" +
+		"test        getclusterpairtest                                        \n" +
+		"test        getclusterpairtest2                                       \n" +
+		"test1       getclusterpairtest                                        \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 

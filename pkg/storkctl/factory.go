@@ -17,19 +17,26 @@ const (
 )
 
 type factory struct {
-	namespace    string
-	kubeconfig   string
-	context      string
-	outputFormat string
+	allNamespaces bool
+	namespace     string
+	kubeconfig    string
+	context       string
+	outputFormat  string
 }
 
 // Factory to be used for command line
 type Factory interface {
 	// BindFlags Binds command flags to the command
 	BindFlags(flags *pflag.FlagSet)
+	// BindGetFlags Binds command flags for the get subcommand
+	BindGetFlags(flags *pflag.FlagSet)
 
+	// AllNamespaces Retruns true if the all-namespaces flag was used
+	AllNamespaces() bool
 	// GetNamespace Gets the namespace used for the command
 	GetNamespace() string
+	// GetAllNamespaces Get all the namespaces that should be used for a command
+	GetAllNamespaces() ([]string, error)
 	// GetConfig Get the merged config for the server
 	GetConfig() (*rest.Config, error)
 	// RawConfig Gets the raw merged config for the server
@@ -56,8 +63,33 @@ func (f *factory) BindFlags(flags *pflag.FlagSet) {
 	flags.StringVarP(&f.outputFormat, "output", "o", outputFormatTable, "Output format. One of: table|json|yaml")
 }
 
+func (f *factory) BindGetFlags(flags *pflag.FlagSet) {
+	flags.BoolVarP(&f.allNamespaces, "all-namespaces", "", false, "If present, list the requested object(s) across all namespaces.\n"+
+		"Namespace in current context is ignored even if specified with --namespace.")
+}
+
+func (f *factory) AllNamespaces() bool {
+	return f.allNamespaces
+}
+
 func (f *factory) GetNamespace() string {
 	return f.namespace
+}
+
+func (f *factory) GetAllNamespaces() ([]string, error) {
+	allNamespaces := make([]string, 0)
+	if f.allNamespaces {
+		namespaces, err := k8s.Instance().ListNamespaces()
+		if err != nil {
+			return nil, err
+		}
+		for _, ns := range namespaces.Items {
+			allNamespaces = append(allNamespaces, ns.Name)
+		}
+	} else {
+		allNamespaces = append(allNamespaces, f.GetNamespace())
+	}
+	return allNamespaces, nil
 }
 
 func (f *factory) getKubeconfig() clientcmd.ClientConfig {
