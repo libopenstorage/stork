@@ -15,4 +15,6 @@ RUN rm -rf google-cloud-sdk-224.0.0-linux-x86_64.tar.gz
 WORKDIR /
 
 COPY ./bin/stork /
-COPY ./bin/linux/storkctl /
+COPY ./bin/linux/storkctl /storkctl/linux/
+COPY ./bin/darwin/storkctl /storkctl/darwin/
+COPY ./bin/windows/storkctl.exe /storkctl/windows/
