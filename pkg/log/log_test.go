@@ -20,6 +20,7 @@ func TestLog(t *testing.T) {
 	t.Run("statefulsetLogTest", statefulsetLogTest)
 	t.Run("snapshotLogTest", snapshotLogTest)
 	t.Run("migrationLogTest", migrationLogTest)
+	t.Run("migrationScheduleLogTest", migrationScheduleLogTest)
 	t.Run("ruleLogTest", ruleLogTest)
 }
 
@@ -113,6 +114,18 @@ func migrationLogTest(t *testing.T) {
 	}
 	MigrationLog(migration).Infof("migration log")
 	MigrationLog(nil).Infof("migration nil log")
+}
+
+func migrationScheduleLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testmigrationschedule",
+		Namespace: "testnamespace",
+	}
+	migrationSchedule := &storkv1.MigrationSchedule{
+		ObjectMeta: metadata,
+	}
+	MigrationScheduleLog(migrationSchedule).Infof("migrationschedule log")
+	MigrationScheduleLog(nil).Infof("migrationschedule nil log")
 }
 
 func ruleLogTest(t *testing.T) {

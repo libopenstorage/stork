@@ -41,7 +41,7 @@ const (
 	storkMigrationReplicasAnnotation = "stork.openstorage.org/migrationReplicas"
 )
 
-// MigrationController migrationcontroller
+// MigrationController reconciles migration objects
 type MigrationController struct {
 	Driver                  volume.Driver
 	Recorder                record.EventRecorder

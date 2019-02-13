@@ -27,9 +27,7 @@ func PodLog(pod *v1.Pod) *logrus.Entry {
 		}
 		return logrus.WithFields(fields)
 	}
-	return logrus.WithFields(logrus.Fields{
-		"Pod": pod,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // DeploymentV1Log Format a log message with deployment information
@@ -40,9 +38,7 @@ func DeploymentV1Log(deployment *appv1.Deployment) *logrus.Entry {
 			"Namespace":      deployment.Namespace,
 		})
 	}
-	return logrus.WithFields(logrus.Fields{
-		"Deployment": deployment,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // DeploymentV1Beta1Log Format a log message with deployment information
@@ -53,9 +49,7 @@ func DeploymentV1Beta1Log(deployment *appv1beta1.Deployment) *logrus.Entry {
 			"Namespace":      deployment.Namespace,
 		})
 	}
-	return logrus.WithFields(logrus.Fields{
-		"Deployment": deployment,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // DeploymentV1Beta2Log Format a log message with deployment information
@@ -66,9 +60,7 @@ func DeploymentV1Beta2Log(deployment *appv1beta2.Deployment) *logrus.Entry {
 			"Namespace":      deployment.Namespace,
 		})
 	}
-	return logrus.WithFields(logrus.Fields{
-		"Deployment": deployment,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // StatefulSetV1Log Format a log message with statefulset information
@@ -79,9 +71,7 @@ func StatefulSetV1Log(ss *appv1.StatefulSet) *logrus.Entry {
 			"Namespace":       ss.Namespace,
 		})
 	}
-	return logrus.WithFields(logrus.Fields{
-		"StatefulSet": ss,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // StatefulSetV1Beta1Log Format a log message with statefulset information
@@ -92,9 +82,7 @@ func StatefulSetV1Beta1Log(ss *appv1beta1.StatefulSet) *logrus.Entry {
 			"Namespace":       ss.Namespace,
 		})
 	}
-	return logrus.WithFields(logrus.Fields{
-		"StatefulSet": ss,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // StatefulSetV1Beta2Log Format a log message with statefulset information
@@ -105,9 +93,7 @@ func StatefulSetV1Beta2Log(ss *appv1beta2.StatefulSet) *logrus.Entry {
 			"Namespace":       ss.Namespace,
 		})
 	}
-	return logrus.WithFields(logrus.Fields{
-		"StatefulSet": ss,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // SnapshotLog formats a log message with snapshot information
@@ -119,9 +105,7 @@ func SnapshotLog(snap *crdv1.VolumeSnapshot) *logrus.Entry {
 		})
 	}
 
-	return logrus.WithFields(logrus.Fields{
-		"Snapshot": snap,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // RuleLog formats a log message with Rule information
@@ -153,13 +137,24 @@ func RuleLog(
 func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
 	if migration != nil {
 		return logrus.WithFields(logrus.Fields{
-			"MigrationName": migration.Name,
+			"MigrationName":      migration.Name,
+			"MigrationNamespace": migration.Namespace,
 		})
 	}
 
-	return logrus.WithFields(logrus.Fields{
-		"Migration": migration,
-	})
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// MigrationScheduleLog formats a log message with migrationschedule information
+func MigrationScheduleLog(migrationSchedule *storkv1.MigrationSchedule) *logrus.Entry {
+	if migrationSchedule != nil {
+		return logrus.WithFields(logrus.Fields{
+			"MigrationScheduleName":      migrationSchedule.Name,
+			"MigrationScheduleNamespace": migrationSchedule.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
 }
 
 // GroupSnapshotLog formats a log message with groupsnapshot information
@@ -171,7 +166,5 @@ func GroupSnapshotLog(groupsnapshot *storkv1.GroupVolumeSnapshot) *logrus.Entry 
 		})
 	}
 
-	return logrus.WithFields(logrus.Fields{
-		"GroupSnapshot": groupsnapshot,
-	})
+	return logrus.WithFields(logrus.Fields{})
 }
