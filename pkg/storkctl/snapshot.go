@@ -201,7 +201,7 @@ func snapshotPrinter(snapList *snapv1.VolumeSnapshotList, writer io.Writer, opti
 
 		status, completedTime := getSnapshotStatusAndTime(&snap)
 		snapType := volume.GetSnapshotType(&snap)
-		creationTime := toTimeString(snap.Metadata.CreationTimestamp)
+		creationTime := toTimeString(snap.Metadata.CreationTimestamp.Time)
 		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\n", name, snap.Spec.PersistentVolumeClaimName, status, creationTime, completedTime, snapType); err != nil {
 			return err
 		}
@@ -213,10 +213,10 @@ func getSnapshotStatusAndTime(snap *snapv1.VolumeSnapshot) (string, string) {
 	for _, condition := range snap.Status.Conditions {
 		if condition.Type == snapv1.VolumeSnapshotConditionReady {
 			if condition.Status == v1.ConditionTrue {
-				return string(snapv1.VolumeSnapshotConditionReady), toTimeString(condition.LastTransitionTime)
+				return string(snapv1.VolumeSnapshotConditionReady), toTimeString(condition.LastTransitionTime.Time)
 			}
-			return string(snapv1.VolumeSnapshotConditionPending), toTimeString(metav1.NewTime(time.Time{}))
+			return string(snapv1.VolumeSnapshotConditionPending), toTimeString(time.Time{})
 		}
 	}
-	return string(snapv1.VolumeSnapshotConditionPending), toTimeString(metav1.NewTime(time.Time{}))
+	return string(snapv1.VolumeSnapshotConditionPending), toTimeString(time.Time{})
 }

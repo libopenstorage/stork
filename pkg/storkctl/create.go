@@ -14,6 +14,7 @@ func newCreateCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams)
 	createCommands.AddCommand(
 		newCreateSnapshotCommand(cmdFactory, ioStreams),
 		newCreateMigrationCommand(cmdFactory, ioStreams),
+		newCreateMigrationScheduleCommand(cmdFactory, ioStreams),
 		newCreatePVCCommand(cmdFactory, ioStreams),
 	)
 

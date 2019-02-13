@@ -224,7 +224,7 @@ func migrationPrinter(migrationList *storkv1.MigrationList, writer io.Writer, op
 			}
 		}
 
-		creationTime := toTimeString(migration.CreationTimestamp)
+		creationTime := toTimeString(migration.CreationTimestamp.Time)
 		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v/%v\t%v/%v\t%v\n",
 			name,
 			migration.Spec.ClusterPair,

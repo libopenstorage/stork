@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"io"
 	"time"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func toTimeString(t metav1.Time) string {
+func toTimeString(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
