@@ -13,8 +13,14 @@ const (
 
 // MigrationScheduleSpec is the spec used to schedule migrations
 type MigrationScheduleSpec struct {
-	MigrationSpec      `json:",inline"`
-	SchedulePolicyName string `json:"schedulePolicyName"`
+	Template           MigrationTemplateSpec `json:"template"`
+	SchedulePolicyName string                `json:"schedulePolicyName"`
+}
+
+// MigrationTemplateSpec describes the data a Migration should have when created
+// from a template
+type MigrationTemplateSpec struct {
+	Spec MigrationSpec `json:"spec"`
 }
 
 // MigrationScheduleStatus is the status of a migration schedule
