@@ -31,7 +31,7 @@ func asyncPodCommandTest(t *testing.T) {
 
 	noWaitPlaceholderCmd := `uname -a;` // WAIT_CMD missing
 	failCommands := []string{
-		`no-such-command && ${WAIT_CMD};`,                                                                 // run a non-existing command
+		`no-such-command && ${WAIT_CMD};`, // run a non-existing command
 		`mysql --user=root --password=badpassword -Bse 'flush tables with read lock;system ${WAIT_CMD};'`, // give incorrect mysql password
 	}
 
