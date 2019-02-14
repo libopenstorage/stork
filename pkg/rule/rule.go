@@ -578,7 +578,7 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
-				v1.Container{
+				{
 					Name:            "cmdexecutor",
 					Image:           cmdExecutorImage,
 					ImagePullPolicy: v1.PullAlways,

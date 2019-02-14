@@ -412,7 +412,7 @@ func (m *GroupSnapshotController) createSnapAndDataObjects(
 				Labels:      snapLabels,
 				Annotations: snapAnnotations,
 				OwnerReferences: []metav1.OwnerReference{
-					metav1.OwnerReference{
+					{
 						Name:       parentName,
 						UID:        parentUUID,
 						Kind:       groupSnap.GetObjectKind().GroupVersionKind().Kind,

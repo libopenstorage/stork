@@ -6,6 +6,13 @@ ifndef PKGS
 PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork')
 endif
 
+GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
+                                   grep -v '\.pb\.go' | \
+                                   grep -v '\.pb\.gw\.go' | \
+                                   grep -v 'externalversions' | \
+                                   grep -v 'versioned' | \
+                                   grep -v 'generated')
+
 ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
@@ -33,12 +40,7 @@ vendor:
 
 lint:
 	go get -v golang.org/x/lint/golint
-	for file in $$(find . -name '*.go' | grep -v vendor | \
-                                       grep -v '\.pb\.go' | \
-                                       grep -v '\.pb\.gw\.go' | \
-                                       grep -v 'externalversions' | \
-                                       grep -v 'versioned' | \
-                                       grep -v 'generated'); do \
+	for file in $(GO_FILES); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
 			exit 1; \
@@ -58,7 +60,10 @@ errcheck:
 	go get -v github.com/kisielk/errcheck
 	errcheck -verbose -blank $(PKGS)
 
-pretest: lint vet errcheck simple
+fmt:
+	bash -c "diff -u <(echo -n) <(gofmt -l -d -s -e $(GO_FILES))"
+
+pretest: fmt lint vet errcheck simple
 
 test:
 	echo "" > coverage.txt
