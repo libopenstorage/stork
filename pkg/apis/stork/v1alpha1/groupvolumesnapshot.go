@@ -34,6 +34,8 @@ type GroupVolumeSnapshotSpec struct {
 	PostExecRule string `json:"postExecRule"`
 	// PVCSelector selects the PVCs that are part of the group snapshot
 	PVCSelector PVCSelectorSpec `json:"pvcSelector"`
+	// RestoreNamespaces is a list of namespaces to which the snapshots can be restored to
+	RestoreNamespaces []string `json:"restoreNamespaces"`
 	// Options are pass-through parameters that are passed to the driver handling the group snapshot
 	Options map[string]string `json:"options"`
 }
