@@ -761,7 +761,7 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 		}
 
 		csStatus := p.getCloudSnapStatus(api.CloudBackupOp, pv.Spec.PortworxVolume.VolumeID)
-		if csStatus.status == api.CloudBackupStatusFailed {
+		if isCloudsnapStatusFailed(csStatus.status) {
 			err = fmt.Errorf(csStatus.msg)
 			return getErrorSnapshotConditions(err), false, err
 		}
@@ -830,7 +830,7 @@ func (p *portworx) waitForCloudSnapCompletion(
 			logrus.Infof(csStatus.msg)
 		}
 
-		if csStatus.status == api.CloudBackupStatusFailed {
+		if isCloudsnapStatusFailed(csStatus.status) {
 			err := fmt.Errorf(csStatus.msg)
 			logrus.Errorf(err.Error())
 			return csStatus.terminal, err
@@ -873,13 +873,13 @@ func (p *portworx) getCloudSnapStatus(op api.CloudBackupOpType, taskID string) c
 
 	statusStr := getCloudSnapStatusString(&csStatus)
 
-	if csStatus.Status == api.CloudBackupStatusFailed {
+	if isCloudsnapStatusFailed(csStatus.Status) {
 		return cloudSnapStatus{
 			sourceVolumeID: csStatus.SrcVolumeID,
 			terminal:       true,
-			status:         api.CloudBackupStatusFailed,
+			status:         csStatus.Status,
 			cloudSnapID:    csStatus.ID,
-			msg: fmt.Sprintf("cloudsnap %s id: %s for %s failed.",
+			msg: fmt.Sprintf("cloudsnap %s id: %s for %s did not succeed.",
 				op, csStatus.ID, taskID),
 		}
 	}
@@ -1464,7 +1464,7 @@ func (p *portworx) createGroupCloudSnapFromVolumes(
 		return nil, fmt.Errorf("group cloudsnapshot request returned 0 tasks")
 	}
 
-	return p.generateStatusReponseFromTaskIDs(resp.Names, credID)
+	return p.generateStatusReponseFromTaskIDs(groupSnap, resp.Names, credID)
 }
 
 // getGroupCloudSnapStatus fetches the current group cloudsnapshot status by using the task ID in the given
@@ -1482,10 +1482,12 @@ func (p *portworx) getGroupCloudSnapStatus(snap *stork_crd.GroupVolumeSnapshot) 
 	for _, snapshotStatus := range snap.Status.VolumeSnapshots {
 		taskIDs = append(taskIDs, snapshotStatus.TaskID)
 	}
-	return p.generateStatusReponseFromTaskIDs(taskIDs, credID)
+	return p.generateStatusReponseFromTaskIDs(snap, taskIDs, credID)
 }
 
-func (p *portworx) generateStatusReponseFromTaskIDs(taskIDs []string, credID string) (*storkvolume.GroupSnapshotCreateResponse, error) {
+func (p *portworx) generateStatusReponseFromTaskIDs(
+	groupSnap *stork_crd.GroupVolumeSnapshot, taskIDs []string, credID string) (
+	*storkvolume.GroupSnapshotCreateResponse, error) {
 	response := &storkvolume.GroupSnapshotCreateResponse{
 		Snapshots: make([]*stork_crd.VolumeSnapshotStatus, 0),
 	}
@@ -1497,16 +1499,6 @@ func (p *portworx) generateStatusReponseFromTaskIDs(taskIDs []string, credID str
 	activeSnapIDs := make([]string, 0)
 	for _, taskID := range taskIDs {
 		csStatus := p.getCloudSnapStatus(api.CloudBackupOp, taskID)
-		if csStatus.status == api.CloudBackupStatusFailed {
-			logrus.Errorf(csStatus.msg)
-			failedTasks = append(failedTasks, taskID)
-
-			p.revertPXCloudSnaps(doneSnapIDs, credID)
-			p.revertPXCloudSnaps(activeSnapIDs, credID)
-			doneSnapIDs = make([]string, 0)
-			activeSnapIDs = make([]string, 0)
-			continue
-		}
 
 		dataSource := &crdv1.VolumeSnapshotDataSource{
 			PortworxSnapshot: &crdv1.PortworxVolumeSnapshotSource{
@@ -1518,7 +1510,17 @@ func (p *portworx) generateStatusReponseFromTaskIDs(taskIDs []string, credID str
 
 		var conditions []crdv1.VolumeSnapshotCondition
 
-		if csStatus.status == api.CloudBackupStatusDone {
+		if isCloudsnapStatusFailed(csStatus.status) {
+			log.GroupSnapshotLog(groupSnap).Errorf(csStatus.msg)
+			failedTasks = append(failedTasks, taskID)
+
+			p.revertPXCloudSnaps(doneSnapIDs, credID)
+			p.revertPXCloudSnaps(activeSnapIDs, credID)
+			doneSnapIDs = make([]string, 0)
+			activeSnapIDs = make([]string, 0)
+
+			conditions = *getErrorSnapshotConditions(fmt.Errorf(csStatus.msg))
+		} else if csStatus.status == api.CloudBackupStatusDone {
 			conditions = getReadySnapshotConditions()
 			doneTasks = append(doneTasks, taskID)
 			doneSnapIDs = append(doneSnapIDs, csStatus.cloudSnapID)
@@ -1539,7 +1541,7 @@ func (p *portworx) generateStatusReponseFromTaskIDs(taskIDs []string, credID str
 	}
 
 	if len(failedTasks) > 0 {
-		return nil, fmt.Errorf("all snapshots in the group did not succeed. failed: %v done: %v active: %v",
+		log.GroupSnapshotLog(groupSnap).Errorf("all snapshots in the group did not succeed. failed: %v done: %v active: %v",
 			failedTasks, doneTasks, activeTasks)
 	}
 
@@ -1608,6 +1610,12 @@ func (p *portworx) ensureNodesHaveMinVersion(minVersionStr string) (bool, string
 	}
 
 	return true, "all nodes have expected version", nil
+}
+
+func isCloudsnapStatusFailed(st api.CloudBackupStatusType) bool {
+	return st == api.CloudBackupStatusFailed ||
+		st == api.CloudBackupStatusStopped ||
+		st == api.CloudBackupStatusAborted
 }
 
 func init() {
