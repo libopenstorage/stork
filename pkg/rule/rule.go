@@ -468,7 +468,7 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 			defer wg.Done()
 			err := wait.ExponentialBackoff(backOff, func() (bool, error) {
 				ns, name := pod.GetNamespace(), pod.GetName()
-				pod, err := k8s.Instance().GetPodByUID(pod.GetUID(), ns)
+				_, err := k8s.Instance().GetPodByUID(pod.GetUID(), ns)
 				if err != nil {
 					if err == k8s.ErrPodsNotFound {
 						logrus.Infof("Pod with uuid: %s in namespace: %s is no longer present", string(pod.GetUID()), ns)
