@@ -114,6 +114,10 @@ func groupSnapshotTest(t *testing.T) {
 	ctxs := createGroupsnaps(t)
 	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
 
+	for _, ctx := range ctxs {
+		verifyGroupSnapshot(t, ctx, defaultWaitTimeout)
+	}
+
 	// Negative
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-snap-group-fail"}})
@@ -134,13 +138,24 @@ func groupSnapshotTest(t *testing.T) {
 }
 
 func groupSnapshotScaleTest(t *testing.T) {
-	ctxsToDestroy := make([]*scheduler.Context, 0)
+	allContexts := make([]*scheduler.Context, 0)
 	// Triggers 2 snaps, so use half the count in the loop
 	for i := 0; i < snapshotScaleCount/2; i++ {
 		ctxs := createGroupsnaps(t)
-		ctxsToDestroy = append(ctxsToDestroy, ctxs...)
+		allContexts = append(allContexts, ctxs...)
 	}
-	destroyAndWait(t, ctxsToDestroy)
+
+	timeout := defaultWaitTimeout
+	// Increase the timeout if scale is more than or equal 10
+	if snapshotScaleCount >= 10 {
+		timeout *= time.Duration((snapshotScaleCount / 10) + 1)
+	}
+
+	for _, ctx := range allContexts {
+		verifyGroupSnapshot(t, ctx, timeout)
+	}
+
+	destroyAndWait(t, allContexts)
 }
 
 func createGroupsnaps(t *testing.T) []*scheduler.Context {
@@ -152,15 +167,15 @@ func createGroupsnaps(t *testing.T) []*scheduler.Context {
 	require.NoError(t, err, "Error scheduling task")
 	require.Len(t, ctxs, 2, "Only one task should have started")
 
-	for _, ctx := range ctxs {
-		err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for pod to get to running state")
-
-		err = schedulerDriver.InspectVolumes(ctx, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error validating storage components")
-	}
-
 	return ctxs
+}
+
+func verifyGroupSnapshot(t *testing.T, ctx *scheduler.Context, waitTimeout time.Duration) {
+	err := schedulerDriver.WaitForRunning(ctx, waitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	err = schedulerDriver.InspectVolumes(ctx, waitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error validating storage components")
 }
 
 func parseDataVolumes(
