@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	version "github.com/hashicorp/go-version"
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
@@ -92,11 +93,32 @@ func (m *GroupSnapshotController) Handle(ctx context.Context, event sdk.Event) e
 		groupSnapshot = o
 
 		minVer, present := m.minResourceVersions[string(groupSnapshot.UID)]
-		if present && groupSnapshot.ResourceVersion < minVer {
-			log.GroupSnapshotLog(groupSnapshot).Infof(
-				"Already processed groupSnapshot version (%s) higher than: %s. Skipping event.",
-				minVer, groupSnapshot.ResourceVersion)
-			return nil
+		if present {
+			minVersion, err := version.NewVersion(minVer)
+			if err != nil {
+				log.GroupSnapshotLog(groupSnapshot).Errorf("Error handling event: %v err: %v", event, err.Error())
+				m.Recorder.Event(groupSnapshot,
+					v1.EventTypeWarning,
+					string(stork_api.GroupSnapshotFailed),
+					err.Error())
+				return err
+			}
+
+			snapVersion, err := version.NewVersion(groupSnapshot.ResourceVersion)
+			if err != nil {
+				log.GroupSnapshotLog(groupSnapshot).Errorf("Error handling event: %v err: %v", event, err.Error())
+				m.Recorder.Event(groupSnapshot,
+					v1.EventTypeWarning,
+					string(stork_api.GroupSnapshotFailed),
+					err.Error())
+			}
+
+			if snapVersion.LessThan(minVersion) {
+				log.GroupSnapshotLog(groupSnapshot).Infof(
+					"Already processed groupSnapshot version (%s) higher than: %s. Skipping event.",
+					minVer, groupSnapshot.ResourceVersion)
+				return nil
+			}
 		}
 
 		if event.Deleted {
