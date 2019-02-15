@@ -84,6 +84,7 @@ type Ops interface {
 	ClusterPairOps
 	MigrationOps
 	ObjectOps
+	SchedulePolicyOps
 	VolumePlacementStrategyOps
 	GetVersion() (*version.Info, error)
 	SetConfig(config *rest.Config)
@@ -477,7 +478,7 @@ type MigrationOps interface {
 	CreateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// GetMigration gets the Migration
 	GetMigration(string, string) (*v1alpha1.Migration, error)
-	// ListMigrations lists all the Migration
+	// ListMigrations lists all the Migrations
 	ListMigrations(string) (*v1alpha1.MigrationList, error)
 	// UpdateMigration updates the Migration
 	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
@@ -485,6 +486,16 @@ type MigrationOps interface {
 	DeleteMigration(string, string) error
 	// ValidateMigration validate the Migration status
 	ValidateMigration(string, string, time.Duration, time.Duration) error
+	// GetMigrationSchedule gets the MigrationSchedule
+	GetMigrationSchedule(string, string) (*v1alpha1.MigrationSchedule, error)
+	// CreateMigrationSchedule creates a MigrationSchedule
+	CreateMigrationSchedule(*v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error)
+	// UpdateMigrationSchedule updates the MigrationSchedule
+	UpdateMigrationSchedule(*v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error)
+	// ListMigrationSchedules lists all the MigrationSchedules
+	ListMigrationSchedules(string) (*v1alpha1.MigrationScheduleList, error)
+	// DeleteMigrationSchedule deletes the MigrationSchedule
+	DeleteMigrationSchedule(string, string) error
 }
 
 // ObjectOps is an interface to perform generic Object operations
@@ -493,6 +504,20 @@ type ObjectOps interface {
 	GetObject(object runtime.Object) (runtime.Object, error)
 	// UpdateObject updates a generic Object
 	UpdateObject(object runtime.Object) (runtime.Object, error)
+}
+
+// SchedulePolicyOps is an interface to manage SchedulePolicy Object
+type SchedulePolicyOps interface {
+	// CreateSchedulePolicy creates a SchedulePolicy
+	CreateSchedulePolicy(*v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error)
+	// GetSchedulePolicy gets the SchedulePolicy
+	GetSchedulePolicy(string) (*v1alpha1.SchedulePolicy, error)
+	// ListSchedulePolicies lists all the SchedulePolicies
+	ListSchedulePolicies() (*v1alpha1.SchedulePolicyList, error)
+	// UpdateSchedulePolicy updates the SchedulePolicy
+	UpdateSchedulePolicy(*v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error)
+	// DeleteSchedulePolicy deletes the SchedulePolicy
+	DeleteSchedulePolicy(string) error
 }
 
 // VolumePlacementStrategyOps is an interface to perform CRUD volume placememt strategy ops
@@ -3147,7 +3172,7 @@ func (k *k8sOps) ValidateMigration(name string, namespace string, timeout, retry
 		if resp.Status.Status == v1alpha1.MigrationStatusSuccessful {
 			return "", false, nil
 		} else if resp.Status.Status == v1alpha1.MigrationStatusFailed {
-			return "", true, &ErrFailedToValidateCustomSpec{
+			return "", false, &ErrFailedToValidateCustomSpec{
 				Name:  name,
 				Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
 				Type:  resp,
@@ -3168,7 +3193,93 @@ func (k *k8sOps) ValidateMigration(name string, namespace string, timeout, retry
 	return nil
 }
 
+func (k *k8sOps) GetMigrationSchedule(name string, namespace string) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListMigrationSchedules(namespace string) (*v1alpha1.MigrationScheduleList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateMigrationSchedule(migrationSchedule *v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(migrationSchedule.Namespace).Create(migrationSchedule)
+}
+
+func (k *k8sOps) UpdateMigrationSchedule(migrationSchedule *v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(migrationSchedule.Namespace).Update(migrationSchedule)
+}
+func (k *k8sOps) DeleteMigrationSchedule(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
 // Migration APIs - END
+
+// SchedulePolicy APIs - BEGIN
+func (k *k8sOps) GetSchedulePolicy(name string) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListSchedulePolicies() (*v1alpha1.SchedulePolicyList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateSchedulePolicy(schedulePolicy *v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Create(schedulePolicy)
+}
+
+func (k *k8sOps) DeleteSchedulePolicy(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) UpdateSchedulePolicy(schedulePolicy *v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Update(schedulePolicy)
+}
+
+// SchedulePolicy APIs - END
 
 // Event APIs - BEGIN
 // CreateEvent puts an event into k8s etcd

@@ -256,7 +256,6 @@
   ]
   pruneopts = "UT"
   revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
-  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
@@ -587,14 +586,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:c1c69e0085ee4709c898e7e353ddc95082cb27aa633f98ae520fdd4d4ae403e1"
+  digest = "1:b13b21b698826bfca38bf489b14ee0571b440498bfd15d90f2a947f867e75141"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "dac4f50bb24180309624833547ffbb03b466dd29"
+  revision = "76210daaf3f669121d3adc29b6936aef152bc0d4"
 
 [[projects]]
   branch = "master"
