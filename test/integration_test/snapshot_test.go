@@ -115,7 +115,7 @@ func groupSnapshotTest(t *testing.T) {
 	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
 
 	for _, ctx := range ctxs {
-		verifyGroupSnapshot(t, ctx, defaultWaitTimeout)
+		verifyGroupSnapshot(t, ctx, groupSnapshotWaitTimeout)
 	}
 
 	// Negative
@@ -145,7 +145,7 @@ func groupSnapshotScaleTest(t *testing.T) {
 		allContexts = append(allContexts, ctxs...)
 	}
 
-	timeout := defaultWaitTimeout
+	timeout := groupSnapshotWaitTimeout
 	// Increase the timeout if scale is more than or equal 10
 	if snapshotScaleCount >= 10 {
 		timeout *= time.Duration((snapshotScaleCount / 10) + 1)
@@ -163,9 +163,10 @@ func createGroupsnaps(t *testing.T) []*scheduler.Context {
 		scheduler.ScheduleOptions{AppKeys: []string{
 			"mysql-localsnap-rule",  // tests local group snapshots with a pre exec rule
 			"mysql-cloudsnap-group", // tests cloud group snapshots
+			"group-cloud-snap-load", // volume is loaded while cloudsnap is being done
 		}})
 	require.NoError(t, err, "Error scheduling task")
-	require.Len(t, ctxs, 2, "Only one task should have started")
+	require.Len(t, ctxs, 3, "Only one task should have started")
 
 	return ctxs
 }
