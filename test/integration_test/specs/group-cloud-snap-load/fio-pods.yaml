@@ -1,0 +1,62 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: loadvolumes1
+spec:
+  schedulerName: stork
+  restartPolicy: Never
+  containers:
+  - image: ankitgd/fio_drv
+    imagePullPolicy: Always
+    args:
+      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=4G","--nrfiles=5"]
+    name: load1
+    volumeMounts:
+      - name: px-data
+        mountPath: /test
+  volumes:
+  - name: px-data
+    persistentVolumeClaim:
+      claimName: vol1
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: loadvolumes2
+spec:
+  schedulerName: stork
+  restartPolicy: Never
+  containers:
+  - image: ankitgd/fio_drv
+    imagePullPolicy: Always
+    args:
+      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=4G","--nrfiles=5"]
+    name: load2
+    volumeMounts:
+      - name: px-data
+        mountPath: /test
+  volumes:
+  - name: px-data
+    persistentVolumeClaim:
+      claimName: vol2
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: loadvolumes3
+spec:
+  schedulerName: stork
+  restartPolicy: Never
+  containers:
+  - image: ankitgd/fio_drv
+    imagePullPolicy: Always
+    args:
+      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=4G","--nrfiles=5"]
+    name: load3
+    volumeMounts:
+      - name: px-data
+        mountPath: /test
+  volumes:
+  - name: px-data
+    persistentVolumeClaim:
+      claimName: vol3
