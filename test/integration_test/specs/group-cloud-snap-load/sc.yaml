@@ -1,0 +1,8 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: portworx-repl2
+parameters:
+  repl: "2"
+provisioner: kubernetes.io/portworx-volume
+reclaimPolicy: Delete

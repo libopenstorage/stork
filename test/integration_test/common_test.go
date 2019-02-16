@@ -44,8 +44,9 @@ const (
 	zoneScore   = 25
 	regionScore = 10
 
-	defaultWaitTimeout  time.Duration = 5 * time.Minute
-	defaultWaitInterval time.Duration = 10 * time.Second
+	defaultWaitTimeout       time.Duration = 5 * time.Minute
+	groupSnapshotWaitTimeout time.Duration = 8 * time.Minute
+	defaultWaitInterval      time.Duration = 10 * time.Second
 )
 
 var nodeDriver node.Driver
