@@ -2236,6 +2236,12 @@ func (k *k8sOps) IsPodReady(pod v1.Pod) bool {
 	}
 
 	for _, c := range pod.Status.ContainerStatuses {
+		if c.State.Terminated != nil &&
+			c.State.Terminated.ExitCode == 0 &&
+			c.State.Terminated.Reason == "Completed" {
+			continue // container has exited successfully
+		}
+
 		if c.State.Running == nil {
 			return false
 		}
@@ -2834,6 +2840,30 @@ func (k *k8sOps) ValidateGroupSnapshot(name, namespace string, retry bool, timeo
 
 		if snap.Status.Stage == v1alpha1.GroupSnapshotStageFinal {
 			if snap.Status.Status == v1alpha1.GroupSnapshotSuccessful {
+				// Perform extra check that all child snapshots are also ready
+				notDoneChildSnaps := make([]string, 0)
+				for _, childSnap := range snap.Status.VolumeSnapshots {
+					conditions := childSnap.Conditions
+					if len(conditions) == 0 {
+						notDoneChildSnaps = append(notDoneChildSnaps, childSnap.VolumeSnapshotName)
+						continue
+					}
+
+					lastCondition := conditions[0]
+					if lastCondition.Status != v1.ConditionTrue || lastCondition.Type != snap_v1.VolumeSnapshotConditionReady {
+						notDoneChildSnaps = append(notDoneChildSnaps, childSnap.VolumeSnapshotName)
+						continue
+					}
+				}
+
+				if len(notDoneChildSnaps) > 0 {
+					return "", false, &ErrSnapshotFailed{
+						ID: name,
+						Cause: fmt.Sprintf("group snapshot is marked as successfull "+
+							" but following child volumesnapshots are in pending or error state: %s", notDoneChildSnaps),
+					}
+				}
+
 				return "", false, nil
 			}
 
