@@ -111,7 +111,12 @@ func cloudSnapshotTest(t *testing.T) {
 func groupSnapshotTest(t *testing.T) {
 	ctxsToDestroy := make([]*scheduler.Context, 0)
 	// Positive tests
-	ctxs := createGroupsnaps(t)
+	ctxs := createGroupsnaps(t, []string{
+		"mysql-localsnap-rule",  // tests local group snapshots with a pre exec rule
+		"mysql-cloudsnap-group", // tests cloud group snapshots
+		"group-cloud-snap-load", // volume is loaded while cloudsnap is being done
+	})
+
 	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
 
 	for _, ctx := range ctxs {
@@ -141,7 +146,10 @@ func groupSnapshotScaleTest(t *testing.T) {
 	allContexts := make([]*scheduler.Context, 0)
 	// Triggers 2 snaps, so use half the count in the loop
 	for i := 0; i < snapshotScaleCount/2; i++ {
-		ctxs := createGroupsnaps(t)
+		ctxs := createGroupsnaps(t, []string{
+			"mysql-localsnap-rule",  // tests local group snapshots with a pre exec rule
+			"mysql-cloudsnap-group", // tests cloud group snapshots
+		})
 		allContexts = append(allContexts, ctxs...)
 	}
 
@@ -158,25 +166,21 @@ func groupSnapshotScaleTest(t *testing.T) {
 	destroyAndWait(t, allContexts)
 }
 
-func createGroupsnaps(t *testing.T) []*scheduler.Context {
+func createGroupsnaps(t *testing.T, apps []string) []*scheduler.Context {
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
-		scheduler.ScheduleOptions{AppKeys: []string{
-			"mysql-localsnap-rule",  // tests local group snapshots with a pre exec rule
-			"mysql-cloudsnap-group", // tests cloud group snapshots
-			"group-cloud-snap-load", // volume is loaded while cloudsnap is being done
-		}})
+		scheduler.ScheduleOptions{AppKeys: apps})
 	require.NoError(t, err, "Error scheduling task")
-	require.Len(t, ctxs, 3, "Only one task should have started")
+	require.Len(t, ctxs, len(apps), "Only one task should have started")
 
 	return ctxs
 }
 
 func verifyGroupSnapshot(t *testing.T, ctx *scheduler.Context, waitTimeout time.Duration) {
 	err := schedulerDriver.WaitForRunning(ctx, waitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for pod to get to running state")
+	require.NoError(t, err, fmt.Sprintf("Error waiting for app to get to running state in context: %s-%s", ctx.App.Key, ctx.UID))
 
 	err = schedulerDriver.InspectVolumes(ctx, waitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error validating storage components")
+	require.NoError(t, err, fmt.Sprintf("Error validating storage components in context: %s-%s", ctx.App.Key, ctx.UID))
 }
 
 func parseDataVolumes(
@@ -216,14 +220,14 @@ func createSnapshot(t *testing.T, appKeys []string) []*scheduler.Context {
 
 func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest string, waitTimeout time.Duration) {
 	err := schedulerDriver.WaitForRunning(ctxs[0], waitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for pod to get to running state")
+	require.NoError(t, err, fmt.Sprintf("Error waiting for app to get to running state in context: %s-%s", ctxs[0].App.Key, ctxs[0].UID))
 
 	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
 	require.NoError(t, err, "Error getting node for app")
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
 	err = schedulerDriver.InspectVolumes(ctxs[0], waitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for volumes")
+	require.NoError(t, err, fmt.Sprintf("Error waiting for volumes in context: %s-%s", ctxs[0].App.Key, ctxs[0].UID))
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
 
