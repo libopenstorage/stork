@@ -328,16 +328,34 @@ func (m *GroupSnapshotController) handleSnap(groupSnap *stork_api.GroupVolumeSna
 	}
 
 	if isFailed, failedTasks := isAnySnapshotFailed(response.Snapshots); isFailed {
-		err = fmt.Errorf("Some snapshots in group have failed: %s."+
-			" Resetting group snapshot to retry.", failedTasks)
+		errMsgPrefix := fmt.Sprintf("Some snapshots in group have failed: %s", failedTasks)
+
+		if groupSnap.Status.NumRetries < groupSnap.Spec.MaxRetries {
+			groupSnap.Status.NumRetries++
+
+			err = fmt.Errorf("%s. Resetting group snapshot for retry: %d",
+				errMsgPrefix, groupSnap.Status.NumRetries)
+			response.Snapshots = nil // so that snapshots are retried
+			stage = stork_api.GroupSnapshotStageSnapshot
+			status = stork_api.GroupSnapshotPending
+		} else {
+			if groupSnap.Spec.MaxRetries == 0 {
+				err = fmt.Errorf("%s. Failing the groupsnapshot as retries are not enabled", errMsgPrefix)
+			} else {
+				err = fmt.Errorf("%s. Failing the groupsnapshot as all %d retries are exhausted",
+					errMsgPrefix, groupSnap.Spec.MaxRetries)
+			}
+
+			// even though failed, we still need to run post rules
+			stage = stork_api.GroupSnapshotStagePostSnapshot
+			status = stork_api.GroupSnapshotFailed
+		}
+
 		log.GroupSnapshotLog(groupSnap).Errorf(err.Error())
 		m.Recorder.Event(groupSnap,
 			v1.EventTypeWarning,
 			string(stork_api.GroupSnapshotFailed),
 			err.Error())
-		response.Snapshots = nil // so that snapshots are retried
-		stage = stork_api.GroupSnapshotStageSnapshot
-		status = stork_api.GroupSnapshotPending
 	} else if areAllSnapshotsDone(response.Snapshots) {
 		log.GroupSnapshotLog(groupSnap).Infof("All snapshots in group are done")
 		// Create volumesnapshot and volumesnapshotdata objects in API
@@ -540,7 +558,9 @@ func (m *GroupSnapshotController) handlePostSnap(groupSnap *stork_api.GroupVolum
 	*stork_api.GroupVolumeSnapshot, bool, error) {
 	ruleName := groupSnap.Spec.PostExecRule
 	if len(ruleName) == 0 { // No rule, move to final stage
-		groupSnap.Status.Status = stork_api.GroupSnapshotSuccessful
+		if groupSnap.Status.Status != stork_api.GroupSnapshotFailed {
+			groupSnap.Status.Status = stork_api.GroupSnapshotSuccessful
+		}
 		groupSnap.Status.Stage = stork_api.GroupSnapshotStageFinal
 		return groupSnap, updateCRD, nil
 	}
@@ -563,7 +583,9 @@ func (m *GroupSnapshotController) handlePostSnap(groupSnap *stork_api.GroupVolum
 	}
 
 	// done with post-snapshot, move to final stage
-	groupSnap.Status.Status = stork_api.GroupSnapshotSuccessful
+	if groupSnap.Status.Status != stork_api.GroupSnapshotFailed {
+		groupSnap.Status.Status = stork_api.GroupSnapshotSuccessful
+	}
 	groupSnap.Status.Stage = stork_api.GroupSnapshotStageFinal
 	return groupSnap, updateCRD, nil
 }
