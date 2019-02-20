@@ -36,6 +36,8 @@ type GroupVolumeSnapshotSpec struct {
 	PVCSelector PVCSelectorSpec `json:"pvcSelector"`
 	// RestoreNamespaces is a list of namespaces to which the snapshots can be restored to
 	RestoreNamespaces []string `json:"restoreNamespaces"`
+	// MaxRetries is the number of times to retry the groupvolumesnapshot on failure. default: 0
+	MaxRetries int `json:"maxRetries"`
 	// Options are pass-through parameters that are passed to the driver handling the group snapshot
 	Options map[string]string `json:"options"`
 }
@@ -59,6 +61,7 @@ type GroupVolumeSnapshotList struct {
 type GroupVolumeSnapshotStatus struct {
 	Stage           GroupVolumeSnapshotStageType  `json:"stage"`
 	Status          GroupVolumeSnapshotStatusType `json:"status"`
+	NumRetries      int                           `json:"numRetries"`
 	VolumeSnapshots []*VolumeSnapshotStatus       `json:"volumeSnapshots"`
 }
 
