@@ -591,7 +591,48 @@ func (m *GroupSnapshotController) handlePostSnap(groupSnap *stork_api.GroupVolum
 }
 
 func (m *GroupSnapshotController) handleFinal(groupSnap *stork_api.GroupVolumeSnapshot) error {
-	// currently nothing to do
+	// Check if user has updated restore namespace
+	childSnapshots := groupSnap.Status.VolumeSnapshots
+	if len(childSnapshots) > 0 {
+		currentRestoreNamespaces := ""
+		latestRestoreNamespacesInCSV := strings.Join(groupSnap.Spec.RestoreNamespaces, ",")
+
+		vsObject, err := k8s.Instance().GetSnapshot(childSnapshots[0].VolumeSnapshotName, groupSnap.GetNamespace())
+		if err != nil {
+			return err
+		}
+
+		childSnapAnnotations := vsObject.Metadata.Annotations
+		if childSnapAnnotations != nil {
+			currentRestoreNamespaces = childSnapAnnotations[snapshot.StorkSnapshotRestoreNamespacesAnnotation]
+		}
+
+		if latestRestoreNamespacesInCSV != currentRestoreNamespaces {
+			log.GroupSnapshotLog(groupSnap).Infof("Updating restore namespaces for groupsnapshot to: %s",
+				latestRestoreNamespacesInCSV)
+			for _, childSnap := range childSnapshots {
+				vs, err := k8s.Instance().GetSnapshot(childSnap.VolumeSnapshotName, groupSnap.GetNamespace())
+				if err != nil {
+					if errors.IsNotFound(err) {
+						continue
+					}
+
+					return err
+				}
+
+				if vs.Metadata.Annotations == nil {
+					vs.Metadata.Annotations = make(map[string]string)
+				}
+
+				vs.Metadata.Annotations[snapshot.StorkSnapshotRestoreNamespacesAnnotation] = latestRestoreNamespacesInCSV
+				_, err = k8s.Instance().UpdateSnapshot(vs)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
