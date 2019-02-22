@@ -89,7 +89,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["configmaps"]
-    verbs: ["get", "create", "update"]
+    verbs: ["get", "create", "update", "watch"]
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["get"]
@@ -171,7 +171,7 @@ spec:
         # automatically update schedulerName
         #- --app-initializer=true
         imagePullPolicy: Always
-        image: openstorage/stork:1.1.2
+        image: openstorage/stork:2.1.0
         resources:
           requests:
             cpu: '0.1'

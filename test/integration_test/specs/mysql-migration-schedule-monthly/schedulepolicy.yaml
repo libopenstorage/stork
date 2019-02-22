@@ -1,0 +1,8 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: SchedulePolicy
+metadata:
+  name: migrate-every-monthly
+policy:
+  monthly:
+    date: 11
+    time: "12:04PM"

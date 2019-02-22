@@ -1,0 +1,7 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: SchedulePolicy
+metadata:
+  name: migrate-every-5m
+policy:
+  interval:
+    intervalMinutes: 5
