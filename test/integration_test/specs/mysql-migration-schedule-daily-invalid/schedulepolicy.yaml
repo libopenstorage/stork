@@ -1,0 +1,8 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: SchedulePolicy
+metadata:
+  name: migrate-schedule-daily-invalid
+policy:
+  daily:
+    # below doesn't confirm to time.Kitchen format
+    time: "12:04"

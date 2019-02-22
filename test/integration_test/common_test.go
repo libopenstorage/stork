@@ -14,7 +14,9 @@ import (
 
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/portworx/sched-ops/k8s"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
@@ -25,19 +27,23 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"github.com/stretchr/testify/require"
+	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
-	nodeDriverName      = "ssh"
-	volumeDriverName    = "pxd"
-	schedulerDriverName = "k8s"
-	remotePairName      = "remoteclusterpair"
-	remoteConfig        = "remoteconfigmap"
-	specDir             = "./specs"
-	pairFilePath        = "./specs/cluster-pair"
-	pairFileName        = pairFilePath + "/cluster-pair.yaml"
-	remoteFilePath      = "/tmp/kubeconfig"
+	nodeDriverName        = "ssh"
+	volumeDriverName      = "pxd"
+	schedulerDriverName   = "k8s"
+	remotePairName        = "remoteclusterpair"
+	remoteConfig          = "remoteconfigmap"
+	specDir               = "./specs"
+	pairFilePath          = "./specs/cluster-pair"
+	pairFileName          = pairFilePath + "/cluster-pair.yaml"
+	remoteFilePath        = "/tmp/kubeconfig"
+	configMapSyncWaitTime = 3 * time.Second
 
 	nodeScore   = 100
 	rackScore   = 50
@@ -353,6 +359,50 @@ func scheduleClusterPair(ctx *scheduler.Context) error {
 		return err
 	}
 
+	return nil
+}
+
+func setMockTime(t *time.Time) error {
+	timeString := ""
+	if t != nil {
+		timeString = t.Format(time.RFC1123)
+	}
+
+	cm, err := k8s.Instance().GetConfigMap(schedule.MockTimeConfigMapName, schedule.MockTimeConfigMapNamespace)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		// create new config map
+		data := map[string]string{
+			schedule.MockTimeConfigMapKey: timeString,
+		}
+
+		cm := &v1.ConfigMap{
+			ObjectMeta: meta_v1.ObjectMeta{
+				Name:      schedule.MockTimeConfigMapName,
+				Namespace: schedule.MockTimeConfigMapNamespace,
+			},
+			Data: data,
+		}
+		_, err = k8s.Instance().CreateConfigMap(cm)
+		return err
+	}
+
+	// update existing config map
+	cmCopy := cm.DeepCopy()
+	if cmCopy.Data == nil {
+		cmCopy.Data = make(map[string]string)
+	}
+
+	cmCopy.Data[schedule.MockTimeConfigMapKey] = timeString
+	_, err = k8s.Instance().UpdateConfigMap(cmCopy)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(configMapSyncWaitTime)
 	return nil
 }
 

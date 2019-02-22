@@ -139,7 +139,7 @@ func (m *MigrationScheduleController) updateMigrationStatus(migrationSchedule *s
 				// Check again and update the status if it is completed
 				migration.Status = updatedStatus
 				if m.isMigrationComplete(migration.Status) {
-					migration.FinishTimestamp = meta.Now()
+					migration.FinishTimestamp = meta.NewTime(schedule.GetCurrentTime())
 					if updatedStatus == stork_api.MigrationStatusSuccessful {
 						m.Recorder.Event(migrationSchedule,
 							v1.EventTypeNormal,
@@ -240,7 +240,7 @@ func (m *MigrationScheduleController) startMigration(
 	migrationSchedule.Status.Items[policyType] = append(migrationSchedule.Status.Items[policyType],
 		&stork_api.ScheduledMigrationStatus{
 			Name:              migrationName,
-			CreationTimestamp: meta.Now(),
+			CreationTimestamp: meta.NewTime(schedule.GetCurrentTime()),
 			Status:            stork_api.MigrationStatusPending,
 		})
 	err := sdk.Update(migrationSchedule)
