@@ -611,7 +611,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:912de004e086a1d23b74c4023aa1acd8431a6da01e55ca4bf29067d155a24f67"
+  digest = "1:09473787a8b22532233dc977b5e77b632e1427f3a057894870d323e633d7d500"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -625,7 +625,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "71709d107d864974f089fd521872d4cd54dac089"
+  revision = "d86db0287ece3fd18fcc33f6e3c46b2f34b21d87"
 
 [[projects]]
   digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"
@@ -1467,6 +1467,7 @@
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
     "github.com/portworx/sched-ops/k8s",
+    "github.com/portworx/sched-ops/task",
     "github.com/portworx/torpedo/drivers/node",
     "github.com/portworx/torpedo/drivers/node/ssh",
     "github.com/portworx/torpedo/drivers/scheduler",
