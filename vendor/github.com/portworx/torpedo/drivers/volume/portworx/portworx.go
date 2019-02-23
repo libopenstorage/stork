@@ -386,13 +386,6 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 		}
 	}
 
-	if err := d.schedOps.ValidateAddLabels(pxNodes, vol); err != nil {
-		return &ErrFailedToInspectVolume{
-			ID:    name,
-			Cause: err.Error(),
-		}
-	}
-
 	// Spec
 	requestedSpec, requestedLocator, _, err := spec.NewSpecHandler().SpecFromOpts(params)
 	if err != nil {
@@ -557,7 +550,7 @@ func (d *portworx) ValidateVolumeCleanup() error {
 }
 
 func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
-	return d.schedOps.ValidateVolumeSetup(vol)
+	return d.schedOps.ValidateVolumeSetup(vol, d.nodeDriver)
 }
 
 func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
@@ -645,8 +638,8 @@ func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, 
 }
 
 func (d *portworx) RandomizeVolumeName(params string) string {
-	re := regexp.MustCompile("(" + api.Name + "=)([0-9A-Za-z_-]+),?")
-	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New())
+	re := regexp.MustCompile("(" + api.Name + "=)([0-9A-Za-z_-]+)(,)?")
+	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New()+"${3}")
 }
 
 func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
@@ -1164,6 +1157,43 @@ func (d *portworx) getStorageStatus(n node.Node) string {
 	}
 	status := statusInfo.(string)
 	return status
+}
+
+func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]string, error) {
+	var pxNodes []string
+	volName := d.schedOps.GetVolumeName(torpedovol)
+	vols, err := d.getVolDriver().Inspect([]string{volName})
+	if err != nil {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    torpedovol.Name,
+			Cause: err.Error(),
+		}
+	}
+
+	if len(vols) == 0 {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    torpedovol.ID,
+			Cause: fmt.Sprintf("unable to find volume %s [%s]", torpedovol.Name, volName),
+		}
+	}
+
+	for _, rs := range vols[0].ReplicaSets {
+		for _, n := range rs.Nodes {
+			pxNode, err := d.clusterManager.Inspect(n)
+			if err != nil {
+				return nil, &ErrFailedToInspectVolume{
+					ID:    torpedovol.Name,
+					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
+				}
+			}
+			nodeName := pxNode.SchedulerNodeName
+			if nodeName == "" {
+				nodeName = pxNode.Hostname
+			}
+			pxNodes = append(pxNodes, nodeName)
+		}
+	}
+	return pxNodes, nil
 }
 
 func init() {
