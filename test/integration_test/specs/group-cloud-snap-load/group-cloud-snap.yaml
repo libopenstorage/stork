@@ -3,10 +3,10 @@ kind: GroupVolumeSnapshot
 metadata:
   annotations:
   name: load-snapshot-cloud
-  namespace: load-harsh
 spec:
   options:
     portworx/snapshot-type: cloud
+  maxRetries: 2
   postExecRule: ""
   preExecRule: ""
   pvcSelector:
