@@ -9,7 +9,7 @@ spec:
   - image: ankitgd/fio_drv
     imagePullPolicy: Always
     args:
-      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=4G","--nrfiles=5"]
+      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=2G","--nrfiles=5"]
     name: load1
     volumeMounts:
       - name: px-data
@@ -30,7 +30,7 @@ spec:
   - image: ankitgd/fio_drv
     imagePullPolicy: Always
     args:
-      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=4G","--nrfiles=5"]
+      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=2G","--nrfiles=5"]
     name: load2
     volumeMounts:
       - name: px-data
@@ -51,7 +51,7 @@ spec:
   - image: ankitgd/fio_drv
     imagePullPolicy: Always
     args:
-      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=4G","--nrfiles=5"]
+      ["--name=random-writers", "--directory=/test","--ioengine=libaio", "--iodepth=4", "--rw=write","--bs=64k", "--direct=0","--size=2G","--nrfiles=5"]
     name: load3
     volumeMounts:
       - name: px-data

@@ -117,10 +117,20 @@ func groupSnapshotTest(t *testing.T) {
 		"group-cloud-snap-load", // volume is loaded while cloudsnap is being done
 	})
 
+	timeouts := map[string]time.Duration{
+		"mysql-localsnap-rule":  groupSnapshotWaitTimeout,
+		"mysql-cloudsnap-group": groupSnapshotWaitTimeout,
+		// below test runs fio load. Hence takes lot more time
+		"group-cloud-snap-load": 3 * groupSnapshotWaitTimeout,
+	}
+
 	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
 
 	for _, ctx := range ctxs {
-		verifyGroupSnapshot(t, ctx, groupSnapshotWaitTimeout)
+		timeout, present := timeouts[ctx.App.Key]
+		require.True(t, present, "failed to get timeout for group snapshot app")
+
+		verifyGroupSnapshot(t, ctx, timeout)
 	}
 
 	// Negative
