@@ -1154,10 +1154,6 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 		return nil, err
 	}
 
-	if len(migration.Spec.Selectors) != 0 {
-		return nil, fmt.Errorf("selectors are not supported yet")
-	}
-
 	if len(migration.Spec.Namespaces) == 0 {
 		return nil, fmt.Errorf("namespaces for migration cannot be empty")
 	}
@@ -1247,9 +1243,9 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 					vInfo.Reason = fmt.Sprintf("Migration successful for volume")
 				} else if mInfo.Status == api.CloudMigrate_InProgress {
 					vInfo.Reason = fmt.Sprintf("Volume migration has started. %v in progress. BytesDone: %v BytesTotal: %v ETA: %v seconds",
+						mInfo.CurrentStage.String(),
 						mInfo.BytesDone,
 						mInfo.BytesTotal,
-						mInfo.CurrentStage.String(),
 						mInfo.EtaSeconds)
 				}
 				break
