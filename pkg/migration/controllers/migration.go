@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -513,6 +514,7 @@ func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIRes
 }
 
 func (m *MigrationController) objectToBeMigrated(
+	migration *stork_api.Migration,
 	resourceMap map[types.UID]bool,
 	object runtime.Unstructured,
 	namespace string,
@@ -589,6 +591,15 @@ func (m *MigrationController) objectToBeMigrated(
 			return false, err
 		}
 		if !m.Driver.OwnsPVC(pvc) {
+			return false, nil
+		}
+
+		if len(pvc.Labels) == 0 && len(migration.Spec.Selectors) > 0 {
+			return false, nil
+		}
+
+		if !labels.AreLabelsInWhiteList(labels.Set(migration.Spec.Selectors),
+			labels.Set(pvc.Labels)) {
 			return false, nil
 		}
 		return true, nil
@@ -688,7 +699,15 @@ func (m *MigrationController) getResources(
 					dynamicClient = m.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
 				}
 
-				objectsList, err := dynamicClient.List(metav1.ListOptions{})
+				var selectors string
+				// PVs don't get the labels from their PVCs, so don't use
+				// the label selector
+				if resource.Kind != "PersistentVolume" {
+					selectors = labels.Set(migration.Spec.Selectors).String()
+				}
+				objectsList, err := dynamicClient.List(metav1.ListOptions{
+					LabelSelector: selectors,
+				})
 				if err != nil {
 					return nil, err
 				}
@@ -702,7 +721,7 @@ func (m *MigrationController) getResources(
 						return nil, fmt.Errorf("Error casting object: %v", o)
 					}
 
-					migrate, err := m.objectToBeMigrated(resourceMap, runtimeObject, ns)
+					migrate, err := m.objectToBeMigrated(migration, resourceMap, runtimeObject, ns)
 					if err != nil {
 						return nil, fmt.Errorf("Error processing object %v: %v", runtimeObject, err)
 					}
