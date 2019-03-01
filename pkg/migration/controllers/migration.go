@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
 )
 
 const (
@@ -960,7 +961,7 @@ func (m *MigrationController) applyResources(
 			return fmt.Errorf("Unable to cast object to unstructured: %v", o)
 		}
 		_, err = dynamicClient.Create(unstructured)
-		if err != nil && apierrors.IsAlreadyExists(err) {
+		if err != nil && (apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
 			switch objectType.GetKind() {
 			// Don't want to delete the Volume resources
 			case "PersistentVolumeClaim", "PersistentVolume":
