@@ -1274,7 +1274,7 @@
   revision = "ced9eb3070a5f1c548ef46e8dfe2a97c208d9f03"
 
 [[projects]]
-  digest = "1:12a13d641a3564d82f36273a2bb8150dc00d9ba0349a053655d9e67518c53bd8"
+  digest = "1:a979d09283bc1ad4a99cee68eee2aba987fa4f4499c57136e638154b12521750"
   name = "k8s.io/kubernetes"
   packages = [
     "pkg/api/events",
@@ -1400,6 +1400,8 @@
     "pkg/master/ports",
     "pkg/printers",
     "pkg/printers/internalversion",
+    "pkg/registry/core/service/allocator",
+    "pkg/registry/core/service/portallocator",
     "pkg/registry/rbac/validation",
     "pkg/scheduler/algorithm",
     "pkg/scheduler/algorithm/priorities/util",
@@ -1531,6 +1533,7 @@
     "k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource",
     "k8s.io/kubernetes/pkg/kubelet/apis",
     "k8s.io/kubernetes/pkg/printers",
+    "k8s.io/kubernetes/pkg/registry/core/service/portallocator",
     "k8s.io/kubernetes/pkg/scheduler/api",
   ]
   solver-name = "gps-cdcl"
