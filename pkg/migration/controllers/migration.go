@@ -130,6 +130,22 @@ func (m *MigrationController) performRuleRecovery() error {
 	return lastError
 }
 
+func setDefaults(migration *stork_api.Migration) *stork_api.Migration {
+	if migration.Spec.IncludeVolumes == nil {
+		defaultBool := true
+		migration.Spec.IncludeVolumes = &defaultBool
+	}
+	if migration.Spec.IncludeResources == nil {
+		defaultBool := true
+		migration.Spec.IncludeResources = &defaultBool
+	}
+	if migration.Spec.StartApplications == nil {
+		defaultBool := false
+		migration.Spec.StartApplications = &defaultBool
+	}
+	return migration
+}
+
 // Handle updates for Migration objects
 func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
@@ -138,6 +154,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 		if event.Deleted {
 			return m.Driver.CancelMigration(migration)
 		}
+		migration = setDefaults(migration)
 
 		if migration.Spec.ClusterPair == "" {
 			err := fmt.Errorf("clusterPair to migrate to cannot be empty")
@@ -231,7 +248,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			}
 			fallthrough
 		case stork_api.MigrationStageVolumes:
-			if migration.Spec.IncludeVolumes {
+			if *migration.Spec.IncludeVolumes {
 				err := m.migrateVolumes(migration, terminationChannels)
 				if err != nil {
 					message := fmt.Sprintf("Error migrating volumes: %v", err)
@@ -407,7 +424,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 
 	// If the migration hasn't failed move on to the next stage.
 	if migration.Status.Status != stork_api.MigrationStatusFailed {
-		if migration.Spec.IncludeResources {
+		if *migration.Spec.IncludeResources {
 			migration.Status.Stage = stork_api.MigrationStageApplications
 			migration.Status.Status = stork_api.MigrationStatusInProgress
 			// Update the current state and then move on to migrating
@@ -884,7 +901,7 @@ func (m *MigrationController) prepareApplicationResource(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
 ) (runtime.Unstructured, error) {
-	if migration.Spec.StartApplications {
+	if *migration.Spec.StartApplications {
 		return object, nil
 	}
 

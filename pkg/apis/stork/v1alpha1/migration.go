@@ -15,9 +15,9 @@ const (
 type MigrationSpec struct {
 	ClusterPair       string            `json:"clusterPair"`
 	Namespaces        []string          `json:"namespaces"`
-	IncludeResources  bool              `json:"includeResources"`
-	IncludeVolumes    bool              `json:"includeVolumes"`
-	StartApplications bool              `json:"startApplications"`
+	IncludeResources  *bool             `json:"includeResources"`
+	IncludeVolumes    *bool             `json:"includeVolumes"`
+	StartApplications *bool             `json:"startApplications"`
 	Selectors         map[string]string `json:"selectors"`
 	PreExecRule       string            `json:"preExecRule"`
 	PostExecRule      string            `json:"postExecRule"`
