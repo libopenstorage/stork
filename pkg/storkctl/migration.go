@@ -26,6 +26,7 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	var startApplications bool
 	var preExecRule string
 	var postExecRule string
+	var includeVolumes bool
 
 	createMigrationCommand := &cobra.Command{
 		Use:     migrationSubcommand,
@@ -50,8 +51,9 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 				Spec: storkv1.MigrationSpec{
 					ClusterPair:       clusterPair,
 					Namespaces:        namespaceList,
-					IncludeResources:  includeResources,
-					StartApplications: startApplications,
+					IncludeResources:  &includeResources,
+					IncludeVolumes:    &includeVolumes,
+					StartApplications: &startApplications,
 					PreExecRule:       preExecRule,
 					PostExecRule:      postExecRule,
 				},
@@ -70,6 +72,7 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	createMigrationCommand.Flags().StringSliceVarP(&namespaceList, "namespaces", "", nil, "Comma separated list of namespaces to migrate")
 	createMigrationCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "ClusterPair name for migration")
 	createMigrationCommand.Flags().BoolVarP(&includeResources, "includeResources", "r", true, "Include resources in the migration")
+	createMigrationCommand.Flags().BoolVarP(&includeVolumes, "includeVolumes", "", true, "Include volumees in the migration")
 	createMigrationCommand.Flags().BoolVarP(&startApplications, "startApplications", "a", true, "Start applications on the destination cluster after migration")
 	createMigrationCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing migration")
 	createMigrationCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")

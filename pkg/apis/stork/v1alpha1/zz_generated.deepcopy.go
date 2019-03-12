@@ -573,6 +573,21 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.IncludeResources != nil {
+		in, out := &in.IncludeResources, &out.IncludeResources
+		*out = new(bool)
+		**out = **in
+	}
+	if in.IncludeVolumes != nil {
+		in, out := &in.IncludeVolumes, &out.IncludeVolumes
+		*out = new(bool)
+		**out = **in
+	}
+	if in.StartApplications != nil {
+		in, out := &in.StartApplications, &out.StartApplications
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Selectors != nil {
 		in, out := &in.Selectors, &out.Selectors
 		*out = make(map[string]string, len(*in))
