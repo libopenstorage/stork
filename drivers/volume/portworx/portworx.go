@@ -402,7 +402,10 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 		if volumeName != "" {
 			volumeInfo, err := p.InspectVolume(volumeName)
 			if err != nil {
-				return nil, err
+				// If the ispect volume fails return with atleast some info
+				volumeInfo = &storkvolume.Info{
+					VolumeName: volumeName,
+				}
 			}
 			volumes = append(volumes, volumeInfo)
 		}

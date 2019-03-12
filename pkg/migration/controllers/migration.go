@@ -35,11 +35,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
 )
 
 const (
-	resyncPeriod                     = 30 * time.Second
-	storkMigrationReplicasAnnotation = "stork.openstorage.org/migrationReplicas"
+	resyncPeriod = 30 * time.Second
+	// StorkMigrationReplicasAnnotation is the annotation used to keep track of
+	// the number of replicas for an application when it was migrated
+	StorkMigrationReplicasAnnotation = "stork.libopenstorage.org/migrationReplicas"
 )
 
 // MigrationController reconciles migration objects
@@ -128,6 +131,22 @@ func (m *MigrationController) performRuleRecovery() error {
 	return lastError
 }
 
+func setDefaults(migration *stork_api.Migration) *stork_api.Migration {
+	if migration.Spec.IncludeVolumes == nil {
+		defaultBool := true
+		migration.Spec.IncludeVolumes = &defaultBool
+	}
+	if migration.Spec.IncludeResources == nil {
+		defaultBool := true
+		migration.Spec.IncludeResources = &defaultBool
+	}
+	if migration.Spec.StartApplications == nil {
+		defaultBool := false
+		migration.Spec.StartApplications = &defaultBool
+	}
+	return migration
+}
+
 // Handle updates for Migration objects
 func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
@@ -136,6 +155,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 		if event.Deleted {
 			return m.Driver.CancelMigration(migration)
 		}
+		migration = setDefaults(migration)
 
 		if migration.Spec.ClusterPair == "" {
 			err := fmt.Errorf("clusterPair to migrate to cannot be empty")
@@ -229,16 +249,24 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			}
 			fallthrough
 		case stork_api.MigrationStageVolumes:
-
-			err := m.migrateVolumes(migration, terminationChannels)
-			if err != nil {
-				message := fmt.Sprintf("Error migrating volumes: %v", err)
-				log.MigrationLog(migration).Errorf(message)
-				m.Recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					message)
-				return nil
+			if *migration.Spec.IncludeVolumes {
+				err := m.migrateVolumes(migration, terminationChannels)
+				if err != nil {
+					message := fmt.Sprintf("Error migrating volumes: %v", err)
+					log.MigrationLog(migration).Errorf(message)
+					m.Recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						message)
+					return nil
+				}
+			} else {
+				migration.Status.Stage = stork_api.MigrationStageApplications
+				migration.Status.Status = stork_api.MigrationStatusInitial
+				err := sdk.Update(migration)
+				if err != nil {
+					return err
+				}
 			}
 		case stork_api.MigrationStageApplications:
 			err := m.migrateResources(migration)
@@ -397,7 +425,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 
 	// If the migration hasn't failed move on to the next stage.
 	if migration.Status.Status != stork_api.MigrationStatusFailed {
-		if migration.Spec.IncludeResources {
+		if *migration.Spec.IncludeResources {
 			migration.Status.Stage = stork_api.MigrationStageApplications
 			migration.Status.Status = stork_api.MigrationStatusInProgress
 			// Update the current state and then move on to migrating
@@ -892,7 +920,7 @@ func (m *MigrationController) prepareApplicationResource(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
 ) (runtime.Unstructured, error) {
-	if migration.Spec.StartApplications {
+	if *migration.Spec.StartApplications {
 		return object, nil
 	}
 
@@ -908,7 +936,7 @@ func (m *MigrationController) prepareApplicationResource(
 		return nil, err
 	}
 
-	annotations[storkMigrationReplicasAnnotation] = strconv.FormatInt(replicas, 10)
+	annotations[StorkMigrationReplicasAnnotation] = strconv.FormatInt(replicas, 10)
 	spec["replicas"] = 0
 	return object, nil
 }
@@ -979,7 +1007,7 @@ func (m *MigrationController) applyResources(
 			return fmt.Errorf("Unable to cast object to unstructured: %v", o)
 		}
 		_, err = dynamicClient.Create(unstructured)
-		if err != nil && apierrors.IsAlreadyExists(err) {
+		if err != nil && (apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
 			switch objectType.GetKind() {
 			// Don't want to delete the Volume resources
 			case "PersistentVolumeClaim", "PersistentVolume":
