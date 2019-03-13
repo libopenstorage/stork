@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
-	"github.com/libopenstorage/stork/pkg/snapshot"
+	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
 	"k8s.io/api/core/v1"
@@ -69,7 +69,7 @@ func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStrea
 				},
 			}
 			if len(sourceNamespace) != 0 {
-				pvc.Annotations[snapshot.StorkSnapshotSourceNamespaceAnnotation] = sourceNamespace
+				pvc.Annotations[snapshotcontrollers.StorkSnapshotSourceNamespaceAnnotation] = sourceNamespace
 			}
 			_, err = k8s.Instance().CreatePersistentVolumeClaim(pvc)
 			if err != nil {

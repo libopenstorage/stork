@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"fmt"
 	"reflect"
 	"time"
 
@@ -154,6 +155,49 @@ func ValidateSchedulePolicy(policy *stork_api.SchedulePolicy) error {
 		}
 	}
 	return nil
+}
+
+// GetRetain Returns the retain value for the specified policy. Returns the
+// default for the policy if none is specified
+func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stork_api.Retain, error) {
+	schedulePolicy, err := k8s.Instance().GetSchedulePolicy(policyName)
+	if err != nil {
+		return 0, err
+	}
+	switch policyType {
+	case stork_api.SchedulePolicyTypeInterval:
+		if schedulePolicy.Policy.Interval != nil {
+			if schedulePolicy.Policy.Interval.Retain == 0 {
+				return stork_api.DefaultIntervalPolicyRetain, nil
+			}
+			return schedulePolicy.Policy.Interval.Retain, nil
+		}
+	case stork_api.SchedulePolicyTypeDaily:
+		if schedulePolicy.Policy.Daily != nil {
+			if schedulePolicy.Policy.Daily.Retain == 0 {
+				return stork_api.DefaultDailyPolicyRetain, nil
+			}
+			return schedulePolicy.Policy.Daily.Retain, nil
+		}
+	case stork_api.SchedulePolicyTypeWeekly:
+		if schedulePolicy.Policy.Weekly != nil {
+			if schedulePolicy.Policy.Weekly.Retain == 0 {
+				return stork_api.DefaultWeeklyPolicyRetain, nil
+			}
+			return schedulePolicy.Policy.Weekly.Retain, nil
+		}
+	case stork_api.SchedulePolicyTypeMonthly:
+		if schedulePolicy.Policy.Monthly != nil {
+			if schedulePolicy.Policy.Monthly.Retain == 0 {
+				return stork_api.DefaultMonthlyPolicyRetain, nil
+			}
+			return schedulePolicy.Policy.Monthly.Retain, nil
+		}
+	default:
+		return 0, fmt.Errorf("Invalid policy type: %v", policyType)
+	}
+
+	return 1, nil
 }
 
 // Init initializes the schedule module

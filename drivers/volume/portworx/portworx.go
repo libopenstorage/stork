@@ -27,6 +27,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/snapshot"
+	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -667,7 +668,7 @@ func (p *portworx) SnapshotRestore(
 
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
 	case "", crdv1.PortworxSnapshotTypeLocal:
-		snapshotNamespace, ok := pvc.Annotations[snapshot.StorkSnapshotSourceNamespaceAnnotation]
+		snapshotNamespace, ok := pvc.Annotations[snapshotcontrollers.StorkSnapshotSourceNamespaceAnnotation]
 		if !ok {
 			snapshotNamespace = pvc.GetNamespace()
 		}
