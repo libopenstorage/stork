@@ -100,8 +100,20 @@ func StatefulSetV1Beta2Log(ss *appv1beta2.StatefulSet) *logrus.Entry {
 func SnapshotLog(snap *crdv1.VolumeSnapshot) *logrus.Entry {
 	if snap != nil {
 		return logrus.WithFields(logrus.Fields{
-			"SnapshotName": snap.Metadata.Name,
-			"Namespace":    snap.Metadata.Namespace,
+			"VolumeSnapshotName": snap.Metadata.Name,
+			"Namespace":          snap.Metadata.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// VolumeSnapshotScheduleLog formats a log message with snapshotschedule information
+func VolumeSnapshotScheduleLog(snapshotSchedule *storkv1.VolumeSnapshotSchedule) *logrus.Entry {
+	if snapshotSchedule != nil {
+		return logrus.WithFields(logrus.Fields{
+			"VolumeSnapshotScheduleName": snapshotSchedule.Name,
+			"Namespace":                  snapshotSchedule.Namespace,
 		})
 	}
 

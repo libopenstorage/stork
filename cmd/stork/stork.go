@@ -256,11 +256,12 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		log.Fatalf("Error initializing schedule: %v", err)
 	}
 
-	snapshotController := &snapshot.Controller{
-		Driver: d,
+	snapshot := &snapshot.Snapshot{
+		Driver:   d,
+		Recorder: recorder,
 	}
 	if c.Bool("snapshotter") {
-		if err := snapshotController.Start(); err != nil {
+		if err := snapshot.Start(); err != nil {
 			log.Fatalf("Error starting snapshot controller: %v", err)
 		}
 
@@ -315,8 +316,8 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 			}
 		}
 		if c.Bool("snapshotter") {
-			if err := snapshotController.Stop(); err != nil {
-				log.Warnf("Error stopping snapshot controller: %v", err)
+			if err := snapshot.Stop(); err != nil {
+				log.Warnf("Error stopping snapshot controllers: %v", err)
 			}
 		}
 		if c.Bool("app-initializer") {

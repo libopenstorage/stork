@@ -16,7 +16,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/rule"
-	"github.com/libopenstorage/stork/pkg/snapshot"
+	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
@@ -399,7 +399,7 @@ func (m *GroupSnapshotController) createSnapAndDataObjects(
 			snapAnnotations = make(map[string]string)
 		}
 
-		snapAnnotations[snapshot.StorkSnapshotRestoreNamespacesAnnotation] = strings.Join(groupSnap.Spec.RestoreNamespaces, ",")
+		snapAnnotations[snapshotcontrollers.StorkSnapshotRestoreNamespacesAnnotation] = strings.Join(groupSnap.Spec.RestoreNamespaces, ",")
 	}
 
 	for _, snapshot := range snapshots {
@@ -604,7 +604,7 @@ func (m *GroupSnapshotController) handleFinal(groupSnap *stork_api.GroupVolumeSn
 
 		childSnapAnnotations := vsObject.Metadata.Annotations
 		if childSnapAnnotations != nil {
-			currentRestoreNamespaces = childSnapAnnotations[snapshot.StorkSnapshotRestoreNamespacesAnnotation]
+			currentRestoreNamespaces = childSnapAnnotations[snapshotcontrollers.StorkSnapshotRestoreNamespacesAnnotation]
 		}
 
 		if latestRestoreNamespacesInCSV != currentRestoreNamespaces {
@@ -624,7 +624,7 @@ func (m *GroupSnapshotController) handleFinal(groupSnap *stork_api.GroupVolumeSn
 					vs.Metadata.Annotations = make(map[string]string)
 				}
 
-				vs.Metadata.Annotations[snapshot.StorkSnapshotRestoreNamespacesAnnotation] = latestRestoreNamespacesInCSV
+				vs.Metadata.Annotations[snapshotcontrollers.StorkSnapshotRestoreNamespacesAnnotation] = latestRestoreNamespacesInCSV
 				_, err = k8s.Instance().UpdateSnapshot(vs)
 				if err != nil {
 					return err
