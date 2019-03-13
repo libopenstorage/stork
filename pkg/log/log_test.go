@@ -23,6 +23,7 @@ func TestLog(t *testing.T) {
 	t.Run("migrationLogTest", migrationLogTest)
 	t.Run("migrationScheduleLogTest", migrationScheduleLogTest)
 	t.Run("ruleLogTest", ruleLogTest)
+	t.Run("pvcLogTest", pvcLogTest)
 }
 
 func podLogTest(t *testing.T) {
@@ -165,4 +166,15 @@ func ruleLogTest(t *testing.T) {
 	RuleLog(rule, snapshot).Infof("rule with snapshot log")
 	RuleLog(rule, migration).Infof("rule with migration log")
 	RuleLog(rule, nil).Infof("rule with nil object log")
+}
+func pvcLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testpvc",
+		Namespace: "testnamespace",
+	}
+	pvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metadata,
+	}
+	PVCLog(pvc).Infof("pvc log")
+	PVCLog(nil).Infof("pvc nil log")
 }

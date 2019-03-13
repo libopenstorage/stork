@@ -180,3 +180,15 @@ func GroupSnapshotLog(groupsnapshot *storkv1.GroupVolumeSnapshot) *logrus.Entry 
 
 	return logrus.WithFields(logrus.Fields{})
 }
+
+// PVCLog formats a log message with pvc information
+func PVCLog(pvc *v1.PersistentVolumeClaim) *logrus.Entry {
+	if pvc != nil {
+		return logrus.WithFields(logrus.Fields{
+			"PVCName":   pvc.Name,
+			"Namespace": pvc.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
