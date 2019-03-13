@@ -83,9 +83,19 @@ type SchedulePolicyItem struct {
 	Monthly *MonthlyPolicy `json:"monthly"`
 }
 
+// Retain Type to specify how many objects should be retained for a policy
+type Retain int
+
+// DefaultIntervalPolicyRetain Default for objects to be retained for the
+// interval policy
+const DefaultIntervalPolicyRetain = Retain(10)
+
 // IntervalPolicy contains the interval at which an action should be triggered
 type IntervalPolicy struct {
 	IntervalMinutes int `json:"intervalMinutes"`
+	// Retain Number of objects to retain for interval policy. Defaults to
+	// @DefaultIntervalPolicyRetain
+	Retain Retain `json:"retain"`
 }
 
 // Validate validates an IntervalPolicy
@@ -96,11 +106,18 @@ func (i *IntervalPolicy) Validate() error {
 	return nil
 }
 
+// DefaultDailyPolicyRetain Default for objects to be retained for the daily
+// policy
+const DefaultDailyPolicyRetain = Retain(30)
+
 // DailyPolicy contains the time in the day where an action should be executed
 type DailyPolicy struct {
 	// Time when the policy should be triggered. Expected format is
 	// time.Kitchen eg 12:04PM or 12:04pm
 	Time string `json:"time"`
+	// Retain Number of objects to retain for daily policy. Defaults to
+	// @DefaultDailyPolicyRetain
+	Retain Retain `json:"retain"`
 }
 
 // GetHourMinute parses and return the hour and minute specified in the policy
@@ -127,6 +144,10 @@ func getHourMinute(policyTime string) (int, int, error) {
 	return parsedTime.Hour(), parsedTime.Minute(), nil
 }
 
+// DefaultWeeklyPolicyRetain Default for objects to be retained for the
+// weekly policy
+const DefaultWeeklyPolicyRetain = Retain(7)
+
 // WeeklyPolicy contains the day and time in a week when an action should be
 // executed
 type WeeklyPolicy struct {
@@ -136,6 +157,9 @@ type WeeklyPolicy struct {
 	// Time when the policy should be triggered. Expected format is
 	// time.Kitchen eg 12:04PM or 12:04pm
 	Time string `json:"time"`
+	// Retain Number of objects to retain for weekly policy. Defaults to
+	// @DefaultWeeklyPolicyRetain
+	Retain Retain `json:"retain"`
 }
 
 // GetHourMinute parses and return the hour and minute specified in the policy
@@ -154,6 +178,10 @@ func (w *WeeklyPolicy) Validate() error {
 	return nil
 }
 
+// DefaultMonthlyPolicyRetain Default for objects to be retained for the
+// monthly policy
+const DefaultMonthlyPolicyRetain = Retain(12)
+
 // MonthlyPolicy contains the date and time in a month when an action should be
 // executed
 type MonthlyPolicy struct {
@@ -165,6 +193,9 @@ type MonthlyPolicy struct {
 	// Time when the policy should be triggered. Expected format is
 	// time.Kitchen eg 12:04PM or 12:04pm
 	Time string `json:"time"`
+	// Retain Number of objects to retain for monthly policy. Defaults to
+	// @DefaultMonthlyPolicyRetain
+	Retain Retain `json:"retain"`
 }
 
 // GetHourMinute parses and return the hour and minute specified in the policy

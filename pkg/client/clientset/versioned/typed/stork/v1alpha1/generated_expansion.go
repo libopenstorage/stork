@@ -31,3 +31,5 @@ type RuleExpansion interface{}
 type SchedulePolicyExpansion interface{}
 
 type StorageClusterExpansion interface{}
+
+type VolumeSnapshotScheduleExpansion interface{}

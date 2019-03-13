@@ -56,6 +56,10 @@ func (c *FakeStorkV1alpha1) StorageClusters(namespace string) v1alpha1.StorageCl
 	return &FakeStorageClusters{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) VolumeSnapshotSchedules(namespace string) v1alpha1.VolumeSnapshotScheduleInterface {
+	return &FakeVolumeSnapshotSchedules{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeStorkV1alpha1) RESTClient() rest.Interface {

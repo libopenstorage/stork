@@ -38,6 +38,8 @@ type Interface interface {
 	SchedulePolicies() SchedulePolicyInformer
 	// StorageClusters returns a StorageClusterInformer.
 	StorageClusters() StorageClusterInformer
+	// VolumeSnapshotSchedules returns a VolumeSnapshotScheduleInformer.
+	VolumeSnapshotSchedules() VolumeSnapshotScheduleInformer
 }
 
 type version struct {
@@ -84,4 +86,9 @@ func (v *version) SchedulePolicies() SchedulePolicyInformer {
 // StorageClusters returns a StorageClusterInformer.
 func (v *version) StorageClusters() StorageClusterInformer {
 	return &storageClusterInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// VolumeSnapshotSchedules returns a VolumeSnapshotScheduleInformer.
+func (v *version) VolumeSnapshotSchedules() VolumeSnapshotScheduleInformer {
+	return &volumeSnapshotScheduleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

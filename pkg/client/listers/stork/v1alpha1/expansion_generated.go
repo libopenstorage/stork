@@ -69,3 +69,11 @@ type StorageClusterListerExpansion interface{}
 // StorageClusterNamespaceListerExpansion allows custom methods to be added to
 // StorageClusterNamespaceLister.
 type StorageClusterNamespaceListerExpansion interface{}
+
+// VolumeSnapshotScheduleListerExpansion allows custom methods to be added to
+// VolumeSnapshotScheduleLister.
+type VolumeSnapshotScheduleListerExpansion interface{}
+
+// VolumeSnapshotScheduleNamespaceListerExpansion allows custom methods to be added to
+// VolumeSnapshotScheduleNamespaceLister.
+type VolumeSnapshotScheduleNamespaceListerExpansion interface{}
