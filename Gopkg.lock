@@ -947,6 +947,7 @@
     "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1",
     "github.com/onsi/ginkgo",
+    "github.com/onsi/ginkgo/reporters",
     "github.com/onsi/gomega",
     "github.com/pborman/uuid",
     "github.com/portworx/sched-ops/k8s",

@@ -30,7 +30,7 @@
   source = "https://github.com/fsnotify/fsnotify/archive/v1.4.7.tar.gz"
   name = "gopkg.in/fsnotify.v1"
 
-[[constraint]]
+[[override]]
   branch = "master"
   name = "github.com/libopenstorage/stork"
 
