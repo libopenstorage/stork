@@ -16,7 +16,10 @@ script:
 after_success:
   - if [ "${TRAVIS_BRANCH}" == "master" ] && [ "${TRAVIS_PULL_REQUEST}" == "false" ]; then
       echo "${DOCKER_PASS}" | docker login -u="${DOCKER_USER}" --password-stdin;
-      make deploy;
+      make container;
+      sudo docker tag "${DOCKER_HUB_REPO}/${DOCKER_HUB_TORPEDO_IMAGE}:${DOCKER_HUB_TAG}" "${DOCKER_HUB_REPO}/${DOCKER_HUB_TORPEDO_IMAGE}:${TRAVIS_BRANCH}";
+      sudo docker push "${DOCKER_HUB_REPO}/${DOCKER_HUB_TORPEDO_IMAGE}:${DOCKER_HUB_TAG}";
+      sudo docker push "${DOCKER_HUB_REPO}/${DOCKER_HUB_TORPEDO_IMAGE}:${TRAVIS_BRANCH}";
     fi
 notifications:
   email:
