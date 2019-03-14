@@ -28,11 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/version"
@@ -84,6 +82,7 @@ type Ops interface {
 	ClusterPairOps
 	MigrationOps
 	ObjectOps
+	SchedulePolicyOps
 	VolumePlacementStrategyOps
 	GetVersion() (*version.Info, error)
 	SetConfig(config *rest.Config)
@@ -103,6 +102,8 @@ type EventOps interface {
 
 // NamespaceOps is an interface to perform namespace operations
 type NamespaceOps interface {
+	// ListNamespaces returns all the namespaces
+	ListNamespaces() (*v1.NamespaceList, error)
 	// GetNamespace returns a namespace object for given name
 	GetNamespace(name string) (*v1.Namespace, error)
 	// CreateNamespace creates a namespace with given name and metadata
@@ -132,7 +133,7 @@ type NodeOps interface {
 	// RemoveLabelOnNode removes the label with key on given node
 	RemoveLabelOnNode(string, string) error
 	// WatchNode sets up a watcher that listens for the changes on Node.
-	WatchNode(node *v1.Node, fn NodeWatchFunc) error
+	WatchNode(node *v1.Node, fn WatchFunc) error
 	// CordonNode cordons the given node
 	CordonNode(nodeName string, timeout, retryInterval time.Duration) error
 	// UnCordonNode uncordons the given node
@@ -158,6 +159,8 @@ type ServiceOps interface {
 
 // StatefulSetOps is an interface to perform k8s stateful set operations
 type StatefulSetOps interface {
+	// ListStatefulSets lists all the statefulsets for a given namespace
+	ListStatefulSets(namespace string) (*apps_api.StatefulSetList, error)
 	// GetStatefulSet returns a statefulset for given name and namespace
 	GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error)
 	// CreateStatefulSet creates the given statefulset
@@ -184,6 +187,8 @@ type StatefulSetOps interface {
 
 // DeploymentOps is an interface to perform k8s deployment operations
 type DeploymentOps interface {
+	// ListDeployments lists all deployments for the given namespace
+	ListDeployments(namespace string) (*apps_api.DeploymentList, error)
 	// GetDeployment returns a deployment for the give name and namespace
 	GetDeployment(name, namespace string) (*apps_api.Deployment, error)
 	// CreateDeployment creates the given deployment
@@ -439,6 +444,8 @@ type ConfigMapOps interface {
 	DeleteConfigMap(name, namespace string) error
 	// UpdateConfigMap updates the given config map object
 	UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
+	// WatchConfigMap sets up a watcher that listens for changes on the config map
+	WatchConfigMap(configMap *v1.ConfigMap, fn WatchFunc) error
 }
 
 // CRDOps is an interface to perfrom k8s Customer Resource operations
@@ -471,7 +478,7 @@ type MigrationOps interface {
 	CreateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
 	// GetMigration gets the Migration
 	GetMigration(string, string) (*v1alpha1.Migration, error)
-	// ListMigrations lists all the Migration
+	// ListMigrations lists all the Migrations
 	ListMigrations(string) (*v1alpha1.MigrationList, error)
 	// UpdateMigration updates the Migration
 	UpdateMigration(*v1alpha1.Migration) (*v1alpha1.Migration, error)
@@ -479,6 +486,22 @@ type MigrationOps interface {
 	DeleteMigration(string, string) error
 	// ValidateMigration validate the Migration status
 	ValidateMigration(string, string, time.Duration, time.Duration) error
+	// GetMigrationSchedule gets the MigrationSchedule
+	GetMigrationSchedule(string, string) (*v1alpha1.MigrationSchedule, error)
+	// CreateMigrationSchedule creates a MigrationSchedule
+	CreateMigrationSchedule(*v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error)
+	// UpdateMigrationSchedule updates the MigrationSchedule
+	UpdateMigrationSchedule(*v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error)
+	// ListMigrationSchedules lists all the MigrationSchedules
+	ListMigrationSchedules(string) (*v1alpha1.MigrationScheduleList, error)
+	// DeleteMigrationSchedule deletes the MigrationSchedule
+	DeleteMigrationSchedule(string, string) error
+	// ValidateMigrationSchedule validates the given MigrationSchedule. It checks the status of each of
+	// the migrations triggered for this schedule and returns a map of successfull migrations. The key of the
+	// map will be the schedule type and value will be list of migrations for that schedule type.
+	// The caller is expected to validate if the returned map has all migrations expected at that point of time
+	ValidateMigrationSchedule(string, string, time.Duration, time.Duration) (
+		map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledMigrationStatus, error)
 }
 
 // ObjectOps is an interface to perform generic Object operations
@@ -487,6 +510,20 @@ type ObjectOps interface {
 	GetObject(object runtime.Object) (runtime.Object, error)
 	// UpdateObject updates a generic Object
 	UpdateObject(object runtime.Object) (runtime.Object, error)
+}
+
+// SchedulePolicyOps is an interface to manage SchedulePolicy Object
+type SchedulePolicyOps interface {
+	// CreateSchedulePolicy creates a SchedulePolicy
+	CreateSchedulePolicy(*v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error)
+	// GetSchedulePolicy gets the SchedulePolicy
+	GetSchedulePolicy(string) (*v1alpha1.SchedulePolicy, error)
+	// ListSchedulePolicies lists all the SchedulePolicies
+	ListSchedulePolicies() (*v1alpha1.SchedulePolicyList, error)
+	// UpdateSchedulePolicy updates the SchedulePolicy
+	UpdateSchedulePolicy(*v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error)
+	// DeleteSchedulePolicy deletes the SchedulePolicy
+	DeleteSchedulePolicy(string) error
 }
 
 // VolumePlacementStrategyOps is an interface to perform CRUD volume placememt strategy ops
@@ -613,6 +650,14 @@ func (k *k8sOps) GetVersion() (*version.Info, error) {
 }
 
 // Namespace APIs - BEGIN
+
+func (k *k8sOps) ListNamespaces() (*v1.NamespaceList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().Namespaces().List(meta_v1.ListOptions{})
+}
 
 func (k *k8sOps) GetNamespace(name string) (*v1.Namespace, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -827,39 +872,46 @@ func (k *k8sOps) RemoveLabelOnNode(name, key string) error {
 	return err
 }
 
-// NodeWatchFunc is a callback provided to the WatchNode function
-// which is invoked when the v1.Node object is changed.
-type NodeWatchFunc func(node *v1.Node) error
+// WatchFunc is a callback provided to the Watch functions
+// which is invoked when the given object is changed.
+type WatchFunc func(object runtime.Object) error
 
-// handleWatch is internal function that handles the Node-watch.  On channel shutdown (ie. stop watch),
+// handleWatch is internal function that handles the watch.  On channel shutdown (ie. stop watch),
 // it'll attempt to reestablish its watch function.
-func (k *k8sOps) handleWatch(watchInterface watch.Interface, node *v1.Node, watchNodeFn NodeWatchFunc) {
+func (k *k8sOps) handleWatch(watchInterface watch.Interface, object runtime.Object, fn WatchFunc) {
 	for {
 		select {
 		case event, more := <-watchInterface.ResultChan():
 			if !more {
-				logrus.Debug("Kubernetes NodeWatch closed (attempting to reestablish)")
+				logrus.Debug("Kubernetes watch closed (attempting to re-establish)")
 
 				t := func() (interface{}, bool, error) {
-					err := k.WatchNode(node, watchNodeFn)
+					var err error
+					if node, ok := object.(*v1.Node); ok {
+						err = k.WatchNode(node, fn)
+					} else if cm, ok := object.(*v1.ConfigMap); ok {
+						err = k.WatchConfigMap(cm, fn)
+					} else {
+						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
+					}
+
 					return "", true, err
 				}
+
 				if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
-					logrus.WithError(err).Error("Could not reestablish the NodeWatch")
+					logrus.WithError(err).Error("Could not re-establish the watch")
 				} else {
-					logrus.Debug("NodeWatch reestablished")
+					logrus.Debug("watch re-established")
 				}
 				return
 			}
-			if k8sNode, ok := event.Object.(*v1.Node); ok {
-				// CHECKME: handle errors?
-				watchNodeFn(k8sNode)
-			}
+
+			fn(event.Object)
 		}
 	}
 }
 
-func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn NodeWatchFunc) error {
+func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn WatchFunc) error {
 	if node == nil {
 		return fmt.Errorf("no node given to watch")
 	}
@@ -868,22 +920,8 @@ func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn NodeWatchFunc) error {
 		return err
 	}
 
-	nodeHostname, has := node.GetLabels()[hostnameKey]
-	if !has || nodeHostname == "" {
-		return fmt.Errorf("no hostname label")
-	}
-
-	requirement, err := labels.NewRequirement(
-		hostnameKey,
-		selection.DoubleEquals,
-		[]string{nodeHostname},
-	)
-	if err != nil {
-		return fmt.Errorf("Could not create Label requirement: %s", err)
-	}
-
 	listOptions := meta_v1.ListOptions{
-		LabelSelector: requirement.String(),
+		FieldSelector: fields.OneTermEqualSelector("metadata.name", node.Name).String(),
 		Watch:         true,
 	}
 
@@ -1060,7 +1098,7 @@ func (k *k8sOps) RunCommandInPod(cmds []string, podName, containerName, namespac
 	})
 
 	if err != nil {
-		return execErr.String(), fmt.Errorf("could not execute: %v", err)
+		return execErr.String(), fmt.Errorf("could not execute: %v: %v %v", err, execErr.String(), execOut.String())
 	}
 
 	if execErr.Len() > 0 {
@@ -1138,6 +1176,14 @@ func (k *k8sOps) ValidateDeletedService(svcName string, svcNS string) error {
 // Service APIs - END
 
 // Deployment APIs - BEGIN
+
+func (k *k8sOps) ListDeployments(namespace string) (*apps_api.DeploymentList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.appsClient().Deployments(namespace).List(meta_v1.ListOptions{})
+}
 
 func (k *k8sOps) GetDeployment(name, namespace string) (*apps_api.Deployment, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -1597,6 +1643,14 @@ func (k *k8sOps) ValidateJob(name, namespace string, timeout time.Duration) erro
 // Job APIs - END
 
 // StatefulSet APIs - BEGIN
+
+func (k *k8sOps) ListStatefulSets(namespace string) (*apps_api.StatefulSetList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.appsClient().StatefulSets(namespace).List(meta_v1.ListOptions{})
+}
 
 func (k *k8sOps) GetStatefulSet(name, namespace string) (*apps_api.StatefulSet, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -2181,6 +2235,12 @@ func (k *k8sOps) IsPodReady(pod v1.Pod) bool {
 	}
 
 	for _, c := range pod.Status.ContainerStatuses {
+		if c.State.Terminated != nil &&
+			c.State.Terminated.ExitCode == 0 &&
+			c.State.Terminated.Reason == "Completed" {
+			continue // container has exited successfully
+		}
+
 		if c.State.Running == nil {
 			return false
 		}
@@ -2779,6 +2839,30 @@ func (k *k8sOps) ValidateGroupSnapshot(name, namespace string, retry bool, timeo
 
 		if snap.Status.Stage == v1alpha1.GroupSnapshotStageFinal {
 			if snap.Status.Status == v1alpha1.GroupSnapshotSuccessful {
+				// Perform extra check that all child snapshots are also ready
+				notDoneChildSnaps := make([]string, 0)
+				for _, childSnap := range snap.Status.VolumeSnapshots {
+					conditions := childSnap.Conditions
+					if len(conditions) == 0 {
+						notDoneChildSnaps = append(notDoneChildSnaps, childSnap.VolumeSnapshotName)
+						continue
+					}
+
+					lastCondition := conditions[0]
+					if lastCondition.Status != v1.ConditionTrue || lastCondition.Type != snap_v1.VolumeSnapshotConditionReady {
+						notDoneChildSnaps = append(notDoneChildSnaps, childSnap.VolumeSnapshotName)
+						continue
+					}
+				}
+
+				if len(notDoneChildSnaps) > 0 {
+					return "", false, &ErrSnapshotFailed{
+						ID: name,
+						Cause: fmt.Sprintf("group snapshot is marked as successfull "+
+							" but following child volumesnapshots are in pending or error state: %s", notDoneChildSnaps),
+					}
+				}
+
 				return "", false, nil
 			}
 
@@ -2978,6 +3062,27 @@ func (k *k8sOps) UpdateConfigMap(configMap *v1.ConfigMap) (*v1.ConfigMap, error)
 	return k.client.CoreV1().ConfigMaps(ns).Update(configMap)
 }
 
+func (k *k8sOps) WatchConfigMap(configMap *v1.ConfigMap, fn WatchFunc) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	listOptions := meta_v1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("metadata.name", configMap.Name).String(),
+		Watch:         true,
+	}
+
+	watchInterface, err := k.client.Core().ConfigMaps(configMap.Namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for config maps")
+		return err
+	}
+
+	// fire off watch function
+	go k.handleWatch(watchInterface, configMap, fn)
+	return nil
+}
+
 // ConfigMap APIs - END
 
 // ClusterPair APIs - BEGIN
@@ -3117,7 +3222,7 @@ func (k *k8sOps) ValidateMigration(name string, namespace string, timeout, retry
 		if resp.Status.Status == v1alpha1.MigrationStatusSuccessful {
 			return "", false, nil
 		} else if resp.Status.Status == v1alpha1.MigrationStatusFailed {
-			return "", true, &ErrFailedToValidateCustomSpec{
+			return "", false, &ErrFailedToValidateCustomSpec{
 				Name:  name,
 				Cause: fmt.Sprintf("Migration Status %v", resp.Status.Status),
 				Type:  resp,
@@ -3138,7 +3243,175 @@ func (k *k8sOps) ValidateMigration(name string, namespace string, timeout, retry
 	return nil
 }
 
+func (k *k8sOps) GetMigrationSchedule(name string, namespace string) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListMigrationSchedules(namespace string) (*v1alpha1.MigrationScheduleList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateMigrationSchedule(migrationSchedule *v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(migrationSchedule.Namespace).Create(migrationSchedule)
+}
+
+func (k *k8sOps) UpdateMigrationSchedule(migrationSchedule *v1alpha1.MigrationSchedule) (*v1alpha1.MigrationSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(migrationSchedule.Namespace).Update(migrationSchedule)
+}
+func (k *k8sOps) DeleteMigrationSchedule(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().MigrationSchedules(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) ValidateMigrationSchedule(name string, namespace string, timeout, retryInterval time.Duration) (
+	map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledMigrationStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetMigrationSchedule(name, namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		if len(resp.Status.Items) == 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("0 migrations have yet run for the migration schedule"),
+				Type:  resp,
+			}
+		}
+
+		failedMigrations := make([]string, 0)
+		pendingMigrations := make([]string, 0)
+		for _, migrationStatuses := range resp.Status.Items {
+			// The check below assumes that the status will not have a failed migration if the last one succeeded
+			// so just get the last status
+			if len(migrationStatuses) > 0 {
+				status := migrationStatuses[len(migrationStatuses)-1]
+				if status == nil {
+					return nil, true, &ErrFailedToValidateCustomSpec{
+						Name:  name,
+						Cause: "MigrationSchedule has an empty migration in it's most recent status",
+						Type:  resp,
+					}
+				}
+
+				if status.Status == v1alpha1.MigrationStatusSuccessful {
+					continue
+				}
+
+				if status.Status == v1alpha1.MigrationStatusFailed {
+					failedMigrations = append(failedMigrations,
+						fmt.Sprintf("migration: %s failed. status: %v", status.Name, status.Status))
+				} else {
+					pendingMigrations = append(pendingMigrations,
+						fmt.Sprintf("migration: %s is not done. status: %v", status.Name, status.Status))
+				}
+			}
+		}
+
+		if len(failedMigrations) > 0 {
+			return nil, false, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("MigrationSchedule failed as one or more migrations have failed. %s",
+					failedMigrations),
+				Type: resp,
+			}
+		}
+
+		if len(pendingMigrations) > 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("MigrationSchedule has certain migrations pending: %s",
+					pendingMigrations),
+				Type: resp,
+			}
+		}
+
+		return resp.Status.Items, false, nil
+	}
+
+	ret, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	migrations, ok := ret.(map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledMigrationStatus)
+	if !ok {
+		return nil, fmt.Errorf("invalid type when checking migration schedules: %v", migrations)
+	}
+
+	return migrations, nil
+}
+
 // Migration APIs - END
+
+// SchedulePolicy APIs - BEGIN
+func (k *k8sOps) GetSchedulePolicy(name string) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListSchedulePolicies() (*v1alpha1.SchedulePolicyList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateSchedulePolicy(schedulePolicy *v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Create(schedulePolicy)
+}
+
+func (k *k8sOps) DeleteSchedulePolicy(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) UpdateSchedulePolicy(schedulePolicy *v1alpha1.SchedulePolicy) (*v1alpha1.SchedulePolicy, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().SchedulePolicies().Update(schedulePolicy)
+}
+
+// SchedulePolicy APIs - END
 
 // Event APIs - BEGIN
 // CreateEvent puts an event into k8s etcd
@@ -3294,7 +3567,7 @@ func (k *k8sOps) GetObject(object runtime.Object) (runtime.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.Get(metadata.GetName(), metav1.GetOptions{}, "")
+	return client.Get(metadata.GetName(), meta_v1.GetOptions{}, "")
 }
 
 // UpdateObject updates a generic Object

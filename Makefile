@@ -17,8 +17,6 @@ BASE_DIR := $(shell git rev-parse --show-toplevel)
 
 BIN :=$(BASE_DIR)/bin
 GOFMT := gofmt
-GLIDEPATH := $(shell command -v glide 2> /dev/null)
-
 .DEFAULT_GOAL=all
 
 all: vet lint build fmt
@@ -50,15 +48,11 @@ build:
 	find . -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
 
-vendor:
-ifndef GLIDEPATH
-	echo "Installing Glide"
-	curl https://glide.sh/get | sh
-endif
+vendor-update:
+	dep ensure -update
 
-	glide update -v
-	# Workaround for https://github.com/sirupsen/logrus/issues/451, https://github.com/sirupsen/logrus/issues/543
-	find . -name '*.go' | grep -e vendor | xargs sed -i 's/Sirupsen/sirupsen/g'
+vendor:
+	dep ensure
 
 install:
 	go install -tags "$(TAGS)" $(PKGS)

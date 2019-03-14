@@ -33,6 +33,6 @@ ginkgo build  tests/basic
 
 #### Vendoring
 
-For vendoring, we use [glide](https://github.com/Masterminds/glide)
+For vendoring, we use [dep](https://golang.github.io/dep/)
 
-To update vendor directory, run `make vendor`
+To update vendor directory, run `make vendor-update`

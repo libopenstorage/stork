@@ -128,6 +128,9 @@ type ClusterListenerPairOps interface {
 
 	// ProcessPairRequest is called when we get a pair request from another cluster
 	ProcessPairRequest(request *api.ClusterPairProcessRequest, response *api.ClusterPairProcessResponse) error
+
+	// ValidatePair is called when we get a validate pair request
+	ValidatePair(pair *api.ClusterPairInfo) error
 }
 
 // ClusterListenerAlertOps is a wrapper over ClusterAlerts interface
@@ -200,6 +203,11 @@ type ClusterData interface {
 
 	// UpdateLabels updates node labels associated with this node
 	UpdateLabels(nodeLabels map[string]string) error
+
+	// UpdateSchedulerNodeName updates the scheduler node name
+	// associated with this node
+	UpdateSchedulerNodeName(name string) error
+
 	// GetData get sdata associated with all nodes.
 	// Key is the node id
 	GetData() (map[string]*api.Node, error)
@@ -267,6 +275,9 @@ type ClusterPair interface {
 
 	// DeletePair Delete a cluster pairing
 	DeletePair(string) error
+
+	// ValidatePair validates a cluster pair
+	ValidatePair(string) error
 
 	// GetPairToken gets the authentication token for this cluster
 	GetPairToken(bool) (*api.ClusterPairTokenGetResponse, error)
@@ -435,6 +446,12 @@ func (nc *NullClusterListener) CreatePair(
 func (nc *NullClusterListener) ProcessPairRequest(
 	request *api.ClusterPairProcessRequest,
 	response *api.ClusterPairProcessResponse,
+) error {
+	return nil
+}
+
+func (nc *NullClusterListener) ValidatePair(
+	pair *api.ClusterPairInfo,
 ) error {
 	return nil
 }

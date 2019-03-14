@@ -50,7 +50,7 @@ func (s *snapshotNotSupported) Restore(volumeID, snapshotID string) error {
 	return ErrNotSupported
 }
 
-func (s *snapshotNotSupported) SnapshotGroup(groupID string, labels map[string]string) (*api.GroupSnapCreateResponse, error) {
+func (s *snapshotNotSupported) SnapshotGroup(groupID string, labels map[string]string, volumeIDs []string) (*api.GroupSnapCreateResponse, error) {
 	return nil, ErrNotSupported
 }
 
@@ -86,6 +86,14 @@ func (s *statsNotSupported) UsedSize(volumeID string) (uint64, error) {
 // GetActiveRequests gets active requests
 func (s *statsNotSupported) GetActiveRequests() (*api.ActiveRequests, error) {
 	return nil, nil
+}
+
+// GetCapacityUsage gets exclusive and shared capacity
+// usage of snap
+func (s *statsNotSupported) CapacityUsage(
+	ID string,
+) (*api.CapacityUsageResponse, error) {
+	return nil, ErrNotSupported
 }
 
 type quiesceNotSupported struct{}
@@ -137,8 +145,8 @@ func (cl *cloudBackupNotSupported) CloudBackupCreate(
 
 func (cl *cloudBackupNotSupported) CloudBackupGroupCreate(
 	input *api.CloudBackupGroupCreateRequest,
-) error {
-	return ErrNotSupported
+) (*api.CloudBackupGroupCreateResponse, error) {
+	return nil, ErrNotSupported
 }
 
 func (cl *cloudBackupNotSupported) CloudBackupRestore(
@@ -220,6 +228,6 @@ func (cl *cloudMigrateNotSupported) CloudMigrateStart(request *api.CloudMigrateS
 func (cl *cloudMigrateNotSupported) CloudMigrateCancel(request *api.CloudMigrateCancelRequest) error {
 	return ErrNotSupported
 }
-func (cl *cloudMigrateNotSupported) CloudMigrateStatus() (*api.CloudMigrateStatusResponse, error) {
+func (cl *cloudMigrateNotSupported) CloudMigrateStatus(request *api.CloudMigrateStatusRequest) (*api.CloudMigrateStatusResponse, error) {
 	return nil, ErrNotSupported
 }

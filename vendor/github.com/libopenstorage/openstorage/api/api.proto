@@ -1,4 +1,4 @@
-// Please use the following editor setup for this file:
+
 // Tab size=2; Tabs as spaces; Clean up trailing whitepsace
 //
 // In vim add: au FileType proto setl sw=2 ts=2 expandtab list
@@ -294,7 +294,7 @@ message VolumeSpec {
   bool shared = 11;
   // ReplicaSet is the desired set of nodes for the volume data.
   ReplicaSet replica_set = 12;
-  // Aggregatiokn level Specifies the number of parts the volume can be aggregated from.
+  // Aggregation level Specifies the number of parts the volume can be aggregated from.
   uint32 aggregation_level = 13;
   // Encrypted is true if this volume will be cryptographically secured.
   bool encrypted = 14;
@@ -330,6 +330,8 @@ message VolumeSpec {
   IoStrategy io_strategy = 30;
   // PlacementStrategy specifies a spec to indicate where to place the volume.
   VolumePlacementStrategy placement_strategy = 31;
+  // StoragePolicy to be enforced while creating volume
+  string storage_policy = 32;
 }
 
 // VolumeSpecUpdate provides a method to set any of the VolumeSpec of an existing volume
@@ -368,6 +370,68 @@ message VolumeSpecUpdate {
   oneof sharedv4_opt { bool sharedv4 = 24; }
   // QueueDepth defines the desired block device queue depth
   oneof queue_depth_opt { uint32 queue_depth = 25; }
+}
+
+// VolumeSpecPolicy provides a method to set volume storage policy
+message VolumeSpecPolicy {
+  // This defines an operator for the policy comparisons
+  enum PolicyOp {
+    // Policy will make sure the value must be equal
+    Equal = 0;
+    // Policy will make sure the requested value must be greater than or equal
+    Minimum = 1;
+    // Policy will make sure the requested value must be less than or equal
+    Maximum = 2;
+  }
+
+  // Size specifies the thin provisioned volume size in bytes.
+  // Use `size_operator` to show if this value is the min, max, or set.
+  oneof size_opt { uint64 size = 1; }
+  // HaLevel specifies the number of copies of data.
+  // Use `ha_level_operator` to show if this value is the min, max, or set.
+  oneof ha_level_opt { int64 ha_level = 2; }
+  // Cos specifies the relative class of service.
+  oneof cos_opt { CosType cos = 3; }
+  // IoProfile provides a hint about application using this volume.
+  oneof io_profile_opt { IoProfile io_profile = 4; }
+  // Dedupe specifies if the volume data is to be de-duplicated.
+  oneof dedupe_opt { bool dedupe = 5; }
+  // SnapshotInterval in minutes, set to 0 to disable snapshots
+  oneof snapshot_interval_opt { uint32 snapshot_interval = 6; }
+  // VolumeLabels configuration labels
+  map<string, string> volume_labels = 7;
+  // Shared is true if this volume can be remotely accessed.
+  oneof shared_opt { bool shared = 8; }
+  // ReplicaSet is the desired set of nodes for the volume data.
+  ReplicaSet replica_set = 9;
+  // Passphrase for an encrypted volume
+  oneof passphrase_opt { string passphrase = 10; }
+  // SnapshotSchedule a well known string that specifies when snapshots should be taken.
+  oneof snapshot_schedule_opt { string snapshot_schedule = 11; }
+  // Scale allows autocreation of volumes.
+  oneof scale_opt { uint32 scale = 12; }
+  // Sticky volumes cannot be deleted until the flag is removed.
+  oneof sticky_opt { bool sticky = 13; }
+  // Group identifies a consistency group
+  oneof group_opt { Group group = 14; }
+  // Journal is true if data for the volume goes into the journal.
+  oneof journal_opt { bool journal = 15; }
+  // Sharedv4 is true if this volume can be accessed via sharedv4.
+  oneof sharedv4_opt { bool sharedv4 = 16; }
+  // QueueDepth defines the desired block device queue depth
+  oneof queue_depth_opt { uint32 queue_depth = 17; }
+  // Encrypted is true if this volume will be cryptographically secured.
+  oneof encrypted_opt { bool encrypted = 18; }
+  // Aggregation level Specifies the number of parts the volume can be aggregated from.
+  oneof aggregation_level_opt { uint32 aggregation_level = 19; }
+  // Operator to check size
+  PolicyOp size_operator = 50;
+  // Operator to check ha_level 
+  PolicyOp ha_level_operator = 51;
+  // Operator to check scale
+  PolicyOp scale_operator = 52;
+  // Operator to check snapshot_interval
+  PolicyOp snapshot_interval_operator = 53;
 }
 
 // ReplicaSet set of machine IDs (nodes) to which part of this volume is erasure
@@ -460,6 +524,31 @@ message Stats {
   uint64 interval_ms = 10;
 }
 
+// Provides details on exclusive and shared storage used by
+// snapshot/volume specifically for copy-on-write(COW) snapshots. Deletion
+// of snapshots and overwirte of volume will affect the exclusive storage
+// used by the other dependent snaps and parent volume.
+message CapacityUsageInfo {
+  // Storage consumed exclusively by this single snapshot. Deletion of this
+  // snapshot may increase the free storage available by this amount.
+  int64 exclusive_bytes = 1;
+  // Storage consumed by this snapshot that is shared with parent and children
+  int64 shared_bytes = 2;
+  // TotalBytes used by this volume
+  int64 total_bytes = 3;
+}
+
+// A SdkStoragePolicy represents minimum set of volume specs to be 
+// follow while creating volumes.
+// If enforce in OpenStoragePolicy service, VolumeSpecPolicy will be 
+// used before creating volume to ensure minimum volume creation rules
+// are enforced.
+message SdkStoragePolicy {
+  // Name of storage policy.
+  string name = 1;
+  // VolumeSpecs to apply while creating volume.
+  VolumeSpecPolicy policy = 2;
+}
 
 // Alert is a structure that represents an alert object
 message Alert {
@@ -564,7 +653,7 @@ message SdkAlertsQuery {
 }
 
 // SdkAlertsEnumerateRequest is a request message to enumerate alerts.
-message SdkAlertsEnumerateRequest {
+message SdkAlertsEnumerateWithFiltersRequest {
     // It is a list of queries to find matching alerts.
     // Output of each of these queries is added to a global pool
     // and returned as output of an RPC call.
@@ -574,7 +663,7 @@ message SdkAlertsEnumerateRequest {
 }
 
 // SdkAlertsEnumerateResponse is a list of alerts.
-message SdkAlertsEnumerateResponse {
+message SdkAlertsEnumerateWithFiltersResponse {
     // Response contains a list of alerts.
     repeated Alert alerts = 1;
 }
@@ -591,10 +680,9 @@ message SdkAlertsDeleteResponse {}
 
 // OpenStorageAlerts defines rpc's for alerts.
 service OpenStorageAlerts {
-    // Enumerate allows querying alerts.
+    // Allows querying alerts.
     //
-    // #### Enumerate
-    // Enumerate allows 3 different types of queries as defined below:
+    // EnumerateWithFilters allows 3 different types of queries as defined below:
     //
     // * Query that takes only resource type as input
     // * Query that takes resource type and alert type as input and
@@ -620,13 +708,15 @@ service OpenStorageAlerts {
     // use two queries, first initialized with SdkAlertsResourceTypeQuery
     // and second initialized with SdkAlertsAlertTypeQuery and both
     // eventually packed as list in SdkAlertsEnumerateRequest.
-    rpc Enumerate(SdkAlertsEnumerateRequest)
-    returns (SdkAlertsEnumerateResponse) {
+    rpc EnumerateWithFilters(SdkAlertsEnumerateWithFiltersRequest)
+      returns (stream SdkAlertsEnumerateWithFiltersResponse) {
         option(google.api.http) = {
-                get: "/v1/alerts"
-            };
+          post: "/v1/alerts/filters"
+          body: "*"
+        };
     }
-    // Delete allows deleting alerts.
+
+    // Delete alerts
     //
     // #### Delete
     // Delete allows 3 different types of queries as defined below:
@@ -636,20 +726,15 @@ service OpenStorageAlerts {
     // * Query that takes resource id, alert type and resource type as input.
     //
     // #### Input
-    // SdkAlertsEnumerateRequest takes a list of such queries and all alerts
+    // SdkAlertsDeleteRequest takes a list of such queries and all alerts
     // that match at least one of the queries are deleted.
     rpc Delete(SdkAlertsDeleteRequest)
-    returns (SdkAlertsDeleteResponse) {
-      option(google.api.http) = {
-                delete: "/v1/alerts"
-            };
+      returns (SdkAlertsDeleteResponse) {
+        option(google.api.http) = {
+          post: "/v1/alerts"
+          body: "*"
+        };
     }
-}
-
-// Define a schedule policy request
-message SdkSchedulePolicyCreateRequest {
-    // Schedule Policy
-    SdkSchedulePolicy schedule_policy = 1;
 }
 
 // Alerts is an array of Alert objects
@@ -854,6 +939,7 @@ message ActiveRequests {
 message GroupSnapCreateRequest {
   string id = 1;
   map<string, string> Labels = 2;
+  repeated string volume_ids = 3;
 }
 
 // GroupSnapCreateRequest specifies a response that get's returned when creating a group snapshot.
@@ -946,7 +1032,72 @@ service OpenStorageCluster {
   rpc InspectCurrent(SdkClusterInspectCurrentRequest)
     returns (SdkClusterInspectCurrentResponse) {
       option(google.api.http) = {
-        get: "/v1/clusters/current"
+        get: "/v1/clusters/inspectcurrent"
+      };
+    }
+}
+
+// OpenStorageClusterPair service provides the methods to manage a cluster pair
+service OpenStorageClusterPair{
+  // Creates Pair with a remote cluster and returns details about the remote cluster
+  //
+  // ##### Example
+  // {% codetabs name="Golang", type="go" -%}
+  // id, err := client.Create(context.Background(), &api.SdkClusterPairCreateRequest {
+  //   Request : &api.ClusterPairCreateRequest {
+  //                  RemoteClusterIp: "127.0.0.1",
+  //                  RemoteClusterPort: 12345,
+  //                  RemoteClusterToken: "<Auth-Token>",
+  //                  SetDefault: true,
+  //              }
+  //        })
+  // {%- endcodetabs %}
+  rpc Create(SdkClusterPairCreateRequest)
+    returns (SdkClusterPairCreateResponse){
+      option(google.api.http) = {
+        post: "/v1/clusterpairs"
+        body: "*"
+      };
+    }
+
+  // Inspect information about a cluster pair
+  rpc Inspect(SdkClusterPairInspectRequest)
+    returns (SdkClusterPairInspectResponse){
+      option(google.api.http) = {
+        get: "/v1/clusterpairs/inspect/{id}"
+      };
+    }
+
+  // Enumerate returns list of cluster pairs
+  rpc Enumerate(SdkClusterPairEnumerateRequest)
+    returns (SdkClusterPairEnumerateResponse){
+      option(google.api.http) = {
+        get: "/v1/clusterpairs"
+      };
+    }
+
+  // GetToken returns a auth token
+  rpc GetToken(SdkClusterPairGetTokenRequest)
+    returns(SdkClusterPairGetTokenResponse){
+      option(google.api.http)={
+        get: "/v1/clusterpairs/token"
+      };
+    }
+
+  // ResetToken returns a auth token
+  rpc ResetToken(SdkClusterPairResetTokenRequest)
+    returns(SdkClusterPairResetTokenResponse){
+      option(google.api.http)={
+        post: "/v1/clusterpairs/token"
+        body: "*"
+      };
+    }
+
+  // Delete a cluster pair
+  rpc Delete(SdkClusterPairDeleteRequest)
+    returns (SdkClusterPairDeleteResponse){
+      option(google.api.http) = {
+        delete: "/v1/clusterpairs/{cluster_id}"
       };
     }
 }
@@ -957,7 +1108,7 @@ service OpenStorageNode {
   rpc Inspect(SdkNodeInspectRequest)
     returns (SdkNodeInspectResponse) {
       option(google.api.http) = {
-        get: "/v1/nodes/node/{node_id}"
+        get: "/v1/nodes/inspect/{node_id}"
       };
     }
 
@@ -966,7 +1117,7 @@ service OpenStorageNode {
   rpc InspectCurrent(SdkNodeInspectCurrentRequest)
     returns (SdkNodeInspectCurrentResponse) {
       option(google.api.http) = {
-        get: "/v1/nodes/current"
+        get: "/v1/nodes/inspectcurrent"
       };
     }
 
@@ -1026,7 +1177,7 @@ service OpenStorageVolume {
   rpc Inspect(SdkVolumeInspectRequest)
     returns (SdkVolumeInspectResponse) {
       option(google.api.http) = {
-        get: "/v1/volumes/{volume_id}"
+        get: "/v1/volumes/inspect/{volume_id}"
       };
     }
 
@@ -1045,6 +1196,20 @@ service OpenStorageVolume {
     returns (SdkVolumeStatsResponse) {
       option(google.api.http) = {
         get: "/v1/volumes/stats/{volume_id}"
+      };
+    }
+
+  // CapacityUsage returns volume/snapshot's capacity usage details
+  //
+  // ##### Error codes:
+  //
+  // * codes.Aborted : Command was aborted and only total_bytes field is valid
+  // * code.Unimmplemented : Command is not suported this kernel.Only total_bytes
+  // field is valid;
+  rpc CapacityUsage(SdkVolumeCapacityUsageRequest)
+    returns (SdkVolumeCapacityUsageResponse) {
+      option(google.api.http) = {
+        get: "/v1/volumes/usage/{volume_id}"
       };
     }
 
@@ -1162,6 +1327,35 @@ service OpenStorageMountAttach {
     }
 }
 
+// OpenStorageMigrate is a service used to manage migration of volumes
+service OpenStorageMigrate {
+  // Start a migration operation
+  rpc Start(SdkCloudMigrateStartRequest)
+    returns (SdkCloudMigrateStartResponse) {
+      option(google.api.http) = {
+        post: "/v1/volumemigrate"
+        body: "*"
+      };
+    }
+
+  // Cancel a migration operation
+  rpc Cancel(SdkCloudMigrateCancelRequest)
+    returns (SdkCloudMigrateCancelResponse) {
+      option(google.api.http) = {
+        post: "/v1/volumemigrate/cancel"
+        body: "*"
+      };
+    }
+
+  // Inspect the status of migration operation
+  rpc Status(SdkCloudMigrateStatusRequest)
+    returns (SdkCloudMigrateStatusResponse) {
+      option(google.api.http) = {
+        get: "/v1/volumemigrate"
+      };
+    }
+}
+
 // OpenStorageObjectstore is a service used to manage object store services on volumes
 service OpenStorageObjectstore {
 
@@ -1169,7 +1363,7 @@ service OpenStorageObjectstore {
   rpc Inspect(SdkObjectstoreInspectRequest)
     returns(SdkObjectstoreInspectResponse){
       option(google.api.http) = {
-        get: "/v1/objectstores/{objectstore_id}"
+        get: "/v1/objectstores/inspect/{objectstore_id}"
       };
     }
 
@@ -1251,7 +1445,7 @@ service OpenStorageCredentials {
   rpc Inspect(SdkCredentialInspectRequest)
     returns (SdkCredentialInspectResponse) {
       option(google.api.http) = {
-        get: "/v1/credentials/{credential_id}"
+        get: "/v1/credentials/inspect/{credential_id}"
       };
     }
 
@@ -1267,7 +1461,7 @@ service OpenStorageCredentials {
   rpc Validate(SdkCredentialValidateRequest)
     returns (SdkCredentialValidateResponse) {
       option(google.api.http) = {
-        get: "/v1/credentials/{credential_id}/validate"
+        get: "/v1/credentials/validate/{credential_id}"
       };
     }
 }
@@ -1307,7 +1501,7 @@ service OpenStorageSchedulePolicy {
   rpc Inspect(SdkSchedulePolicyInspectRequest)
   returns (SdkSchedulePolicyInspectResponse) {
     option(google.api.http) = {
-      get: "/v1/schedulepolicies/{name}"
+      get: "/v1/schedulepolicies/inspect/{name}"
     };
   }
 
@@ -1378,10 +1572,11 @@ service OpenStorageCloudBackup {
     }
 
   // Return a list of backups for the specified volume
-  rpc Enumerate(SdkCloudBackupEnumerateRequest)
-    returns (SdkCloudBackupEnumerateResponse) {
+  rpc EnumerateWithFilters(SdkCloudBackupEnumerateWithFiltersRequest)
+    returns (SdkCloudBackupEnumerateWithFiltersResponse) {
       option(google.api.http) = {
-        get: "/v1/cloudbackups/volume"
+        post: "/v1/cloudbackups/enumerate/filters"
+        body: "*"
       };
     }
 
@@ -1389,7 +1584,8 @@ service OpenStorageCloudBackup {
   rpc Status(SdkCloudBackupStatusRequest)
     returns (SdkCloudBackupStatusResponse) {
       option(google.api.http) = {
-        get: "/v1/cloudbackups/volume/status"
+        post: "/v1/cloudbackups/status"
+        body: "*"
       };
     }
 
@@ -1397,7 +1593,8 @@ service OpenStorageCloudBackup {
   rpc Catalog(SdkCloudBackupCatalogRequest)
     returns (SdkCloudBackupCatalogResponse) {
       option(google.api.http) = {
-        get: "/v1/cloudbackups/backup/catalog"
+        post: "/v1/cloudbackups/catalog"
+        body: "*"
       };
     }
 
@@ -1405,7 +1602,7 @@ service OpenStorageCloudBackup {
   rpc History(SdkCloudBackupHistoryRequest)
     returns (SdkCloudBackupHistoryResponse) {
       option(google.api.http) = {
-        get: "/v1/cloudbackups/volume/history"
+        get: "/v1/cloudbackups/history/{src_volume_id}"
       };
     }
 
@@ -1442,6 +1639,171 @@ service OpenStorageCloudBackup {
         get: "/v1/cloudbackups/schedules"
       };
     }
+}
+
+// OpenStoragePolicy service provides methods to manager storage policies.
+//
+// Policies can be used to enforces a set of volume configurations to be followed
+// while creating volumes.
+service OpenStoragePolicy {
+  
+  // Creates a storage policy
+  rpc Create(SdkOpenStoragePolicyCreateRequest)
+    returns (SdkOpenStoragePolicyCreateResponse) {
+      option(google.api.http) = {
+        post: "/v1/storagepolicies"
+        body: "*"
+      };
+    }
+
+  // Enumerate returns a list of storage policies
+  rpc Enumerate(SdkOpenStoragePolicyEnumerateRequest)
+    returns (SdkOpenStoragePolicyEnumerateResponse) {
+      option(google.api.http) = {
+        get: "/v1/storagepolicies"
+      };
+    }
+
+  // Inspect returns information about a specified storage policy
+  rpc Inspect(SdkOpenStoragePolicyInspectRequest)
+    returns (SdkOpenStoragePolicyInspectResponse) {
+      option(google.api.http) = {
+        get: "/v1/storagepolicies/inspect/{name}"
+      };
+    }
+
+  // Updates specified storage policy
+  rpc Update(SdkOpenStoragePolicyUpdateRequest)
+    returns (SdkOpenStoragePolicyUpdateResponse) {
+      option(google.api.http) = {
+        put: "/v1/storagepolicies"
+        body: "*"
+      };
+    }
+
+  // Deletes specified storage policy
+  rpc Delete(SdkOpenStoragePolicyDeleteRequest)
+    returns (SdkOpenStoragePolicyDeleteResponse) {
+      option(google.api.http) = {
+        delete: "/v1/storagepolicies/{name}"
+      };
+    }
+
+  // Enforces specified storage policy
+  rpc Enforce(SdkOpenStoragePolicyEnforceRequest)
+    returns (SdkOpenStoragePolicyEnforceResponse) {
+      option(google.api.http) = {
+        post: "/v1/storagepolicies/enforce/{name}"
+        body: "*"
+      };
+    }
+
+  // EnforcesInspect return enforced storage policy if any, otherwise
+  // empty response
+  rpc EnforceInspect(SdkOpenStoragePolicyEnforceInspectRequest)
+    returns (SdkOpenStoragePolicyEnforceInspectResponse) {
+      option(google.api.http) = {
+        get: "/v1/storagepolicies/enforce"
+      };
+    }
+
+  // Release specified storage policy constraint for volume
+  // creation
+  rpc Release(SdkOpenStoragePolicyReleaseRequest)
+    returns (SdkOpenStoragePolicyReleaseResponse) {
+      option(google.api.http) = {
+        post: "/v1/storagepolicies/release"
+        body: "*"
+      };
+    }
+}
+
+// Define a request to create storage policy
+message SdkOpenStoragePolicyCreateRequest {
+  // storage policy to create
+  SdkStoragePolicy storage_policy = 1;
+}
+
+// Empty response
+message SdkOpenStoragePolicyCreateResponse {
+}
+
+// Empty request
+message SdkOpenStoragePolicyEnumerateRequest {
+}
+
+// Define a storage policy enumerate response
+message SdkOpenStoragePolicyEnumerateResponse {
+  // List of storage policies 
+  repeated SdkStoragePolicy storage_policies =1;
+}
+
+// Define a request to inspect storage policy
+message SdkOpenStoragePolicyInspectRequest {
+  // name of storage policy to retrive
+  string name =1;
+}
+
+// Define a storage policy inspect response
+message SdkOpenStoragePolicyInspectResponse {
+  // storage policy information requested by name
+  SdkStoragePolicy storage_policy =1;
+}
+
+// Define a request to delete storage policy 
+message SdkOpenStoragePolicyDeleteRequest {
+  // name of storage policy to delete
+  string name = 1;
+}
+
+// Empty Response
+message SdkOpenStoragePolicyDeleteResponse {
+}
+
+// Define a request to update storage policy
+message SdkOpenStoragePolicyUpdateRequest {
+  // storage policy to update
+  SdkStoragePolicy storage_policy =1;
+}
+
+// Empty Response
+message SdkOpenStoragePolicyUpdateResponse {
+}
+
+// Define a request to enforce storage policy
+message SdkOpenStoragePolicyEnforceRequest {
+  // name of policy to set as default enforcement
+  // for volume creation
+  // This policy will be used to enforce volume configuration 
+  string name = 1;
+}
+
+// Empty Response
+message SdkOpenStoragePolicyEnforceResponse {
+}
+
+// Empty Request
+message SdkOpenStoragePolicyReleaseRequest {
+}
+
+// Empty Response
+message SdkOpenStoragePolicyReleaseResponse {
+}
+
+// Empty Request
+message SdkOpenStoragePolicyEnforceInspectRequest {
+}
+
+// Define storage policy enforce response
+message SdkOpenStoragePolicyEnforceInspectResponse {
+  // storage policy information which is enforced
+  SdkStoragePolicy storage_policy = 1;
+}
+
+// Define a schedule policy request
+message SdkSchedulePolicyCreateRequest {
+    // Schedule Policy
+    SdkSchedulePolicy schedule_policy = 1;
 }
 
 // Empty response
@@ -1870,10 +2232,23 @@ message SdkVolumeStatsRequest {
   bool not_cumulative = 2;
 }
 
+
 // Defines a response containing drive statistics
 message SdkVolumeStatsResponse {
   // Statistics for a single volume
   Stats stats = 1;
+}
+
+// Defines request to retrieve volume/snapshot capacity usage details
+message SdkVolumeCapacityUsageRequest {
+  // Id of the snapshot/volume to get capacity usage details
+  string volume_id = 1;
+}
+
+// Defines response containing volume/snapshot capacity usage details
+message SdkVolumeCapacityUsageResponse {
+  // CapacityUsage details
+  CapacityUsageInfo capacity_usage_info = 1;
 }
 
 // Defines a request to list volumes
@@ -2062,15 +2437,18 @@ message SdkCloudBackupCreateRequest {
   string credential_id = 2;
   // Full indicates if full backup is desired even though incremental is possible
   bool full = 3;
-  // Name of the task performing this backup. This value is required and used for
+  // TaskId of the task performing this backup. This value can be used for
   // idempotency.
-  string name = 4;
+  string task_id = 4;
+  // Labels are list of key value pairs to tag the cloud backup. These labels
+  // are stored in the metadata associated with the backup.
+  map<string, string> labels = 5;
 }
 
 // Empty response
 message SdkCloudBackupCreateResponse {
-  // Name of the task performing the backup
-  string name = 1;
+  // TaskId of the task performing the backup
+  string task_id = 1;
 }
 
 // Defines a request to restore a volume from an existing backup stored by
@@ -2086,8 +2464,8 @@ message SdkCloudBackupRestoreRequest {
   // Optional for provisioning restore
   // volume (ResoreVolumeName should not be specified)
   string node_id = 4;
-  // Name of the task performing this restore
-  string name = 5;
+  // TaskId of the task performing this restore
+  string task_id = 5;
 }
 
 // Defines a response when restoring a volume from a backup stored by
@@ -2095,8 +2473,8 @@ message SdkCloudBackupRestoreRequest {
 message SdkCloudBackupRestoreResponse {
   // VolumeID to which the backup is being restored
   string restore_volume_id = 1;
-  // Name of the task performing the restore
-  string name = 2;
+  // TaskId of the task performing the restore
+  string task_id = 2;
 }
 
 // Defines a request to delete a single backup stored by a cloud provider
@@ -2141,7 +2519,7 @@ message SdkCloudBackupDeleteAllResponse {
 // * For all volumes in a specific cluster: Set `cluster_id` to your desired cluster id
 // and do not provide `volume_id` and `all`.
 // * For all volumes in all clusters: Set `all` to true do not provide `volume_id` and `cluster_id`.
-message SdkCloudBackupEnumerateRequest {
+message SdkCloudBackupEnumerateWithFiltersRequest {
   // (optional) Source id of the volume for the request.
   string src_volume_id = 1;
   // (optional) Cluster id specifies the cluster for the request
@@ -2170,7 +2548,7 @@ message SdkCloudBackupInfo {
 }
 
 // Defines a response which lists all the backups stored by a cloud provider
-message SdkCloudBackupEnumerateResponse {
+message SdkCloudBackupEnumerateWithFiltersResponse {
   repeated SdkCloudBackupInfo backups = 1;
 }
 
@@ -2225,21 +2603,27 @@ message SdkCloudBackupStatus {
   string src_volume_id = 8;
   // Info currently indicates the failure cause for failed backup/restore
   repeated string info = 9;
+  // CredentialId is the credential used for cloud with this backup/restore op
+  string credential_id  = 10;
+  // BytesTotal is the total number of bytes being transferred
+  uint64 bytes_total = 11;
+  // ETASeconds is the number of seconds for cloud backup completion
+  int64 eta_seconds = 12;
 }
 
 // Defines a request to retreive the status of a backup or restore for a
 // specified volume
 message SdkCloudBackupStatusRequest {
-  // VolumeId is an optional value which is used to get information on the
-  // status of a backup for the specified volume. If no volume id and name
+  // (optional) VolumeId is a value which is used to get information on the
+  // status of a backup for the specified volume. If no volume id and task_id
   // is provided, then status for all volumes is returned.
   string volume_id = 1;
   // Local indicates if only those backups/restores that are
   // active on current node must be returned
   bool local = 2;
-  // Name of the backup/restore task, if this is specified,
+  // TaskId of the backup/restore task, if this is specified,
   // volume_id is ignored.
-  string name = 3;
+  string task_id = 3;
 }
 
 // Defines a response containing the status of the backups for a specified volume
@@ -2304,9 +2688,9 @@ enum SdkCloudBackupRequestedState {
 // Defines a request to change the state of a backup or restore to or
 // from a cloud provider
 message SdkCloudBackupStateChangeRequest {
-  // Describes the backup/restore Name
+  // Describes the backup/restore task
   // state change is being requested
-  string name = 1;
+  string task_id = 1;
   // The desired state of the operation
   SdkCloudBackupRequestedState requested_state = 2;
 }
@@ -2412,6 +2796,8 @@ message SdkServiceCapability {
       ALERTS = 8;
       // Mount/Attach Support
       MOUNT_ATTACH = 9;
+      // StoragePolicy Service
+      STORAGE_POLICY = 13;
     }
 
     // Type of service supported
@@ -2444,9 +2830,9 @@ message SdkVersion {
     // SDK version major value of this specification
     Major = 0;
     // SDK version minor value of this specification
-    Minor = 18;
+    Minor = 22;
     // SDK version patch value of this specification
-    Patch = 0;
+    Patch = 11;
   }
 
   // The following cannot be set to use the enum Version because the REST
@@ -2499,6 +2885,7 @@ message CloudMigrate {
         InProgress = 3;
         Failed = 4;
         Complete = 5;
+        Canceled = 6;
     }
 }
 
@@ -2515,16 +2902,67 @@ message CloudMigrateStartRequest {
     string task_id = 4;
 }
 
+// Defines a migration request
+message SdkCloudMigrateStartRequest {
+  // Defines a migration request for a volume
+  message MigrateVolume {
+    string volume_id = 1;
+  }
+
+  // Defines a migration request for a volume group
+  message MigrateVolumeGroup {
+    string group_id = 1;
+  }
+
+  // Defines a migration request for all volumes in a cluster
+  message MigrateAllVolumes {
+  }
+
+  // ID of the cluster to which volumes are to be migrated
+  string cluster_id = 1;
+
+  // Unique name assocaiated with this migration.
+  // This is a Optional field for idempotency
+  string task_id = 2;
+
+  oneof opt {
+    // Request to migrate a volume
+    MigrateVolume volume = 200;
+
+    // Request to migrate a volume group
+    MigrateVolumeGroup volume_group = 201;
+
+    // Request to migrate all volumes
+    MigrateAllVolumes all_volumes = 202;
+  }
+}
+
 // Response to start a cloud migration
 message CloudMigrateStartResponse {
     // TaskId assocaiated with the migration that was started
     string task_id = 1;
 }
 
+// Defines a response for the migration that was started
+message SdkCloudMigrateStartResponse {
+    // Result assocaiated with the migration that was started
+    CloudMigrateStartResponse result = 1;
+}
+
 // Request to stop a cloud migration
 message CloudMigrateCancelRequest {
     // The id of the task to cancel
     string task_id = 1;
+}
+
+// Defines a request to stop a cloud migration
+message SdkCloudMigrateCancelRequest {
+    // Request containing the task id to be cancelled
+    CloudMigrateCancelRequest request = 1;
+}
+
+// Empty Response
+message SdkCloudMigrateCancelResponse {
 }
 
 message CloudMigrateInfo {
@@ -2546,10 +2984,37 @@ message CloudMigrateInfo {
     CloudMigrate.Status status = 8;
     // Last time the status was updated
     google.protobuf.Timestamp last_update = 9;
+    // Contains the reason for the migration error
+    string error_reason = 10;
+    // StartTime indicates Op's start time
+    google.protobuf.Timestamp start_time = 11;
+    // CompletedTime indicates Op's completed time
+    google.protobuf.Timestamp completed_time = 12;
+    // BytesTotal is the number of bytes being transferred
+    uint64 bytes_total = 13;
+    // BytesDone is the number of bytes already transferred
+    uint64 bytes_done = 14;
+    // ETASeconds the time duration in seconds for cloud migration completion
+    int64 eta_seconds = 15;
 }
 
 message CloudMigrateInfoList {
     repeated CloudMigrateInfo list = 1;
+}
+
+// Request for cloud migration operation status
+message SdkCloudMigrateStatusRequest {
+    // Request contains the task id and cluster id for which status should be
+    // returned
+    CloudMigrateStatusRequest request = 1;
+}
+
+// Request for cloud migration operation status
+message CloudMigrateStatusRequest {
+    // Task id for which to return status
+    string task_id = 1;
+    // ID of the cluster for which to return migration statuses
+    string cluster_id = 2;
 }
 
 // Response with a status of the cloud migration operations
@@ -2558,30 +3023,44 @@ message CloudMigrateStatusResponse {
     map<string, CloudMigrateInfoList> info = 1;
 }
 
+// Defines a response for the status request
+message SdkCloudMigrateStatusResponse {
+  // Status of all migration requests
+  CloudMigrateStatusResponse result = 1;
+}
+
 // Used to send a request to create a cluster pair
-// swagger:model
 message ClusterPairCreateRequest {
-    // IP of the remote cluster
-    string remote_cluster_ip = 1;
-    // Port for the remote cluster
-    uint32 remote_cluster_port = 2;
-    // Token used to authenticate with the remote cluster
-    string remote_cluster_token = 3;
-    // Set the new pair as the default
-    bool set_default = 4;
+  // IP of the remote cluster
+  string remote_cluster_ip = 1;
+  // Port for the remote cluster
+  uint32 remote_cluster_port = 2;
+  // Token used to authenticate with the remote cluster
+  string remote_cluster_token = 3;
+  // Set the new pair as the default
+  bool set_default = 4;
 }
 
 // Response for a pair request
-// swagger:response
 message ClusterPairCreateResponse {
-    // ID of the remote cluster
-    string remote_cluster_id = 1;
-    // Name of the remote cluster
-    string remote_cluster_name = 2;
+  // ID of the remote cluster
+  string remote_cluster_id = 1;
+  // Name of the remote cluster
+  string remote_cluster_name = 2;
+}
+
+// Defines a request for creating a cluster pair
+message SdkClusterPairCreateRequest {
+  ClusterPairCreateRequest request = 1;
+}
+
+// Defines a result of the cluster pair
+message SdkClusterPairCreateResponse {
+  // Contains the information about cluster pair
+  ClusterPairCreateResponse result = 1;
 }
 
 // Used to process a pair request from a remote cluster
-// swagger:model
 message ClusterPairProcessRequest {
     // ID of the cluster requesting the pairing
     string source_cluster_id = 1;
@@ -2590,94 +3069,111 @@ message ClusterPairProcessRequest {
 }
 
 // Response after a pairing has been processed
-// swagger:response
 message ClusterPairProcessResponse {
     // ID of the cluster which processed the pair request
-    //
-    // in: body
     string remote_cluster_id = 1;
+
     // Name of the cluster which processed the pair request
-    //
-    // in: body
     string remote_cluster_name = 2;
+
     // List of endpoints that can be used to communicate with the cluster
-    //
-    // in: body
     repeated string remote_cluster_endpoints = 3;
-    // Key/value pair of options returned on successful pairing
+
+    // Key/value pair of options returned on successful pairing.
     // Opaque to openstorage and interpreted by the drivers
-    //
-    // in: body
     map<string, string> options = 4;
 }
 
-// Request to to delete a cluster pair
-// swagger:model
-message ClusterPairDeleteRequest {
-    // ID of the cluster pair to be deleted
-    string cluster_id = 1;
+// Defines a delete request for a cluster pair
+message SdkClusterPairDeleteRequest {
+  // ID of the cluster pair to be deleted
+  string cluster_id = 1;
 }
 
-// Request to get the token for a cluster
-// swagger:model
-message ClusterPairTokenGetRequest {
-    // Reset token if already preset
-    bool reset_token = 1;
+// Empty response
+message SdkClusterPairDeleteResponse{
 }
 
 // Response to get the cluster token
-// swagger:model
 message ClusterPairTokenGetResponse {
     // Token used to authenticate clusters
     string token = 1;
 }
 
+// Empty request
+message SdkClusterPairGetTokenRequest {
+}
+
+// Defines a response for the token request
+message SdkClusterPairGetTokenResponse {
+  // Contains authentication token for the cluster
+  ClusterPairTokenGetResponse result = 1;
+}
+
+// Empty request
+message SdkClusterPairResetTokenRequest {
+}
+
+// Defines a response for the token request
+message SdkClusterPairResetTokenResponse {
+  // Contains authentication token for the cluster
+  ClusterPairTokenGetResponse result = 1;
+}
+
 // Information about a cluster pair
-// swagger:model
 message ClusterPairInfo {
     // ID of the cluster
     string id = 1;
     // Name of the cluster
     string name = 2;
-    // Endpoints of the cluster
-    repeated string endpoints = 3;
+    // The endpoint used for creating the pair
+    string endpoint = 3;
+    // Current endpoints of the cluster
+    repeated string current_endpoints = 4;
     // Flag used to determine if communication is over a secure channel
-    bool secure = 4;
+    bool secure = 5;
     // Token associated with cluster
-    string token = 5;
+    string token = 6;
     // Key/value pair of options associated with the cluster
     // Opaque to openstorage and interpreted by the drivers
-    map<string, string> options = 6;
+    map<string, string> options = 7;
 }
 
-// Request to get a cluster pair
-// swagger:model
-message ClusterPairGetRequest {
+// Defines a cluster pair inspect request
+message SdkClusterPairInspectRequest{
     // ID of the cluster, if empty gets the default pair
     string id = 1;
 }
 
 // Reponse to get a cluster pair
-// swagger:response
 message ClusterPairGetResponse {
     // Info about the cluster pair
-    //
-    // in: body
     ClusterPairInfo pair_info = 1;
 }
 
+// Defines a cluster pair inspect response
+message SdkClusterPairInspectResponse {
+  // Information about cluster pair
+  ClusterPairGetResponse result = 1;
+}
+
+// Empty Request
+message SdkClusterPairEnumerateRequest{
+}
+
 // Response to enumerate all the cluster pairs
-// swagger:response
 message ClusterPairsEnumerateResponse {
     // ID of the default cluster pair
-    //
-    // in: body
     string default_id = 1;
+
     // Pairs Info about the cluster pairs
-    //
-    // in: body
-    // required: false
     map<string, ClusterPairInfo> pairs = 2;
+}
+
+// Defines a list of cluster pair
+message SdkClusterPairEnumerateResponse {
+  // List of all the cluster pairs
+  ClusterPairsEnumerateResponse result = 1;
 }
 
 message Catalog {
@@ -2752,17 +3248,20 @@ message VolumePlacementRule {
   // Enforcement specifies the rule enforcement policy. Can take values: required or preferred.
   // (optional)
   EnforcementType enforcement = 3;
-  // Affinity defines the affinity rule for the volume placement
-  AffinityRule affinity = 4;
-  // AntiAffinity defines the anti affinity rule for the volume placement
-  AffinityRule anti_affinity = 5;
 
-}
+  // This specifies the type an affinity rule can take
+  enum AffinityRuleType {
+    // Affinity means the rule specifies an affinity to objects that match the below label selector requirements
+    Affinity = 0;
+    // AntiAffinity means the rule specifies an anti-affinity to objects that match the below label selector requirements
+    AntiAffinity = 1;
+  }
 
-// AffinityRule specifies the label matching rules for an affinity or anti-affinity
-message AffinityRule {
+  // Type is the type of the affinity rule
+  AffinityRuleType type = 4;
+
   // MatchExpressions is a list of label selector requirements. The requirements are ANDed.
-  repeated LabelSelectorRequirement match_expressions = 1;
+  repeated LabelSelectorRequirement match_expressions = 5;
 }
 
 
@@ -2774,14 +3273,18 @@ message LabelSelectorRequirement {
 
   // This defines operator types used in a label matching rule
   enum Operator {
-    // In means the value for 'key' should be in one of the given 'values'
+    // In means the value for 'key' should be in one of the given value(s)
     In = 0;
-    // NotIn means the value for 'key' should NOT be in one of the given 'values'
+    // NotIn means the value for 'key' should NOT be in one of the given value(s)
     NotIn = 1;
     // Exists means the 'key' should just exist regardless of the value
     Exists = 2;
     // DoesNotExist means the 'key' should NOT exist
     DoesNotExist = 3;
+    // Gt means the 'key' should be greater than the value(s)
+    Gt = 4;
+    // Lt means the 'key' should be less than the value(s)
+    Lt = 5;
   }
 
   // Operator represents a key's relationship to a set of values.
