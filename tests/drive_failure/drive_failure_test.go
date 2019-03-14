@@ -6,6 +6,7 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -20,7 +21,11 @@ const (
 
 func TestDriveFailure(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Torpedo: DriveFailure")
+
+	var specReporters []Reporter
+	junitReporter := reporters.NewJUnitReporter("/testresults/junit_DriveFailure.xml")
+	specReporters = append(specReporters, junitReporter)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : DriveFailure", specReporters)
 }
 
 var _ = BeforeSuite(func() {

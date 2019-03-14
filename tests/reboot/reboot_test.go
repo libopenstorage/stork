@@ -6,6 +6,7 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -14,7 +15,11 @@ import (
 
 func TestReboot(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Torpedo : Reboot")
+
+	var specReporters []Reporter
+	junitReporter := reporters.NewJUnitReporter("/testresults/junit_Reboot.xml")
+	specReporters = append(specReporters, junitReporter)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Reboot", specReporters)
 }
 
 var _ = BeforeSuite(func() {

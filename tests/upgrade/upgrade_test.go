@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
@@ -12,7 +13,11 @@ import (
 
 func TestUpgrade(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Torpedo : Upgrade")
+
+	var specReporters []Reporter
+	junitReporter := reporters.NewJUnitReporter("/testresults/junit_Upgrade.xml")
+	specReporters = append(specReporters, junitReporter)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Upgrade", specReporters)
 }
 
 var _ = BeforeSuite(func() {

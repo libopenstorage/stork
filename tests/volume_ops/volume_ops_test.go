@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -16,7 +17,11 @@ import (
 
 func TestVolOps(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Torpedo : VolOps")
+
+	var specReporters []Reporter
+	junitReporter := reporters.NewJUnitReporter("/testresults/junit_VolOps.xml")
+	specReporters = append(specReporters, junitReporter)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : VolOps", specReporters)
 }
 
 var _ = BeforeSuite(func() {

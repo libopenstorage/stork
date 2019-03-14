@@ -6,6 +6,7 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -15,7 +16,11 @@ import (
 
 func TestStopScheduler(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Torpedo: StopScheduler")
+
+	var specReporters []Reporter
+	junitReporter := reporters.NewJUnitReporter("/testresults/junit_StopScheduler.xml")
+	specReporters = append(specReporters, junitReporter)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : StopScheduler", specReporters)
 }
 
 var _ = BeforeSuite(func() {

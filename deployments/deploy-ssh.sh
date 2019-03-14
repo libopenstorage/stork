@@ -64,6 +64,21 @@ if [ -n "${TORPEDO_SSH_KEY}" ]; then
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
 
+TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
+
+VOLUMES="${TESTRESULTS_VOLUME}"
+
+if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
+    VOLUMES="${VOLUMES},${TORPEDO_SSH_KEY_VOLUME}"
+fi
+
+VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
+
+if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
+fi
+
 echo "Deploying torpedo pod..."
 cat <<EOF | kubectl create -f -
 ---
@@ -139,13 +154,13 @@ spec:
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true
-    volumeMounts: [${TORPEDO_SSH_KEY_MOUNT}]
+    volumeMounts: [${VOLUME_MOUNTS}]
     env:
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
-  volumes: [${TORPEDO_SSH_KEY_VOLUME}]
+  volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
 EOF
