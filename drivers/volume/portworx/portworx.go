@@ -64,6 +64,8 @@ const (
 
 	// pvcProvisionerAnnotation is the annotation on PVC which has the provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
+	// pvProvisionedByAnnotation is the annotation on PV which has the provisioner name
+	pvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
 
 	// pvcNameLabel is the key of the label used to store the PVC name
 	pvcNameLabel = "pvc"
@@ -346,11 +348,6 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 }
 
 func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
-	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
-	if storageClassName == "" {
-		logrus.Debugf("Empty StorageClass in PVC %v", pvc.Name)
-		return false
-	}
 
 	provisioner := ""
 	// Check for the provisioner in the PVC annotation. If not populated
@@ -358,12 +355,34 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 	if val, ok := pvc.Annotations[pvcProvisionerAnnotation]; ok {
 		provisioner = val
 	} else {
-		storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
+		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
+		if storageClassName != "" {
+			storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
+			if err == nil {
+				provisioner = storageClass.Provisioner
+			} else {
+				logrus.Warnf("Error getting storageclass %v for pvc %v: %v", storageClassName, pvc.Name, err)
+			}
+		}
+	}
+
+	if provisioner == "" {
+		// Try to get info from the PV since storage class could be deleted
+		pv, err := k8s.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
 		if err != nil {
-			logrus.Errorf("Error getting storageclass for storageclass %v in pvc %v: %v", storageClassName, pvc.Name, err)
+			logrus.Warnf("Error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 			return false
 		}
-		provisioner = storageClass.Provisioner
+		// Check the annotation in the PV for the provisioner
+		if val, ok := pv.Annotations[pvProvisionedByAnnotation]; ok {
+			provisioner = val
+		} else {
+			// Finally check the volume reference in the spec
+			if pv.Spec.PortworxVolume != nil {
+				return true
+			}
+		}
+
 	}
 
 	if provisioner != provisionerName && provisioner != csiProvisionerName && provisioner != snapshot.GetProvisionerName() {
