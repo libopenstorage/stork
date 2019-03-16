@@ -17,6 +17,12 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
+HAS_GOMODULES := $(shell go help mod why 2> /dev/null)
+ifdef HAS_GOMODULES
+export GO111MODULE=on
+MODVENDOR_FLAG = -mod=vendor
+endif
+
 RELEASE_VER := 2.4.0
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
