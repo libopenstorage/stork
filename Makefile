@@ -42,12 +42,14 @@ BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 all: stork storkctl cmdexecutor pretest
 
 vendor-update:
-	dep ensure -update
-	./hack/update-deprecated-apis.sh
+	go mod download
 
 vendor:
-	dep ensure
+	go mod vendor
 	./hack/update-deprecated-apis.sh
+
+vendor-tidy:
+	go mod tidy
 
 lint:
 	go get -u golang.org/x/lint/golint
