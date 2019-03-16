@@ -3,7 +3,8 @@ CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HU
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork')
+# shell does not honor export command above, so we need to explicitly pass GOFLAGS here
+PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork')
 endif
 
 GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
@@ -20,7 +21,9 @@ endif
 HAS_GOMODULES := $(shell go help mod why 2> /dev/null)
 ifdef HAS_GOMODULES
 export GO111MODULE=on
-MODVENDOR_FLAG = -mod=vendor
+export GOFLAGS= -mod=vendor
+else
+$(warn vendor import can only be done on  go 1.11+ which supports go modules)
 endif
 
 RELEASE_VER := 2.4.0
