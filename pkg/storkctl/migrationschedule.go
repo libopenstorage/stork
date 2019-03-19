@@ -13,7 +13,7 @@ import (
 	"k8s.io/kubernetes/pkg/printers"
 )
 
-var migrationScheduleColumns = []string{"NAME", "POLICYNAME", "CLUSTERPAIR", "LAST-SUCCESS-TIME"}
+var migrationScheduleColumns = []string{"NAME", "POLICYNAME", "CLUSTERPAIR", "SUSPEND", "LAST-SUCCESS-TIME"}
 var migrationScheduleSubcommand = "migrationschedules"
 var migrationScheduleAliases = []string{"migrationschedule"}
 
@@ -27,6 +27,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	var preExecRule string
 	var postExecRule string
 	var schedulePolicyName string
+	var suspend bool
 
 	createMigrationScheduleCommand := &cobra.Command{
 		Use:     migrationScheduleSubcommand,
@@ -65,6 +66,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 						},
 					},
 					SchedulePolicyName: schedulePolicyName,
+					Suspend:            &suspend,
 				},
 			}
 			migrationSchedule.Name = migrationScheduleName
@@ -86,6 +88,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	createMigrationScheduleCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing migration")
 	createMigrationScheduleCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
 	createMigrationScheduleCommand.Flags().StringVarP(&schedulePolicyName, "schedulePolicyName", "s", "", "Name of the schedule policy to use")
+	createMigrationScheduleCommand.Flags().BoolVar(&suspend, "suspend", false, "Flag to denote whether schedule should be suspended on creation")
 
 	return createMigrationScheduleCommand
 }
@@ -236,10 +239,18 @@ func migrationSchedulePrinter(migrationScheduleList *storkv1.MigrationScheduleLi
 			}
 		}
 
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\n",
+		var suspend bool
+		if migrationSchedule.Spec.Suspend == nil {
+			suspend = false
+		} else {
+			suspend = *migrationSchedule.Spec.Suspend
+		}
+
+		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\n",
 			name,
 			migrationSchedule.Spec.SchedulePolicyName,
 			migrationSchedule.Spec.Template.Spec.ClusterPair,
+			suspend,
 			toTimeString(lastSuccessTime),
 		); err != nil {
 			return err

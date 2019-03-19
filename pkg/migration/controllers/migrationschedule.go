@@ -70,29 +70,31 @@ func (m *MigrationScheduleController) Handle(ctx context.Context, event sdk.Even
 			return err
 		}
 
-		// Then check if any of the policies require a trigger
-		policyType, start, err := m.shouldStartMigration(migrationSchedule)
-		if err != nil {
-			msg := fmt.Sprintf("Error checking if migration should be triggered: %v", err)
-			m.Recorder.Event(migrationSchedule,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				msg)
-			log.MigrationScheduleLog(migrationSchedule).Error(msg)
-			return err
-		}
-
-		// Start a migration for a policy if required
-		if start {
-			err := m.startMigration(migrationSchedule, policyType)
+		// Then check if any of the policies require a trigger if it is enabled
+		if migrationSchedule.Spec.Suspend == nil || !*migrationSchedule.Spec.Suspend {
+			policyType, start, err := m.shouldStartMigration(migrationSchedule)
 			if err != nil {
-				msg := fmt.Sprintf("Error triggering migration for schedule(%v): %v", policyType, err)
+				msg := fmt.Sprintf("Error checking if migration should be triggered: %v", err)
 				m.Recorder.Event(migrationSchedule,
 					v1.EventTypeWarning,
 					string(stork_api.MigrationStatusFailed),
 					msg)
 				log.MigrationScheduleLog(migrationSchedule).Error(msg)
 				return err
+			}
+
+			// Start a migration for a policy if required
+			if start {
+				err := m.startMigration(migrationSchedule, policyType)
+				if err != nil {
+					msg := fmt.Sprintf("Error triggering migration for schedule(%v): %v", policyType, err)
+					m.Recorder.Event(migrationSchedule,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						msg)
+					log.MigrationScheduleLog(migrationSchedule).Error(msg)
+					return err
+				}
 			}
 		}
 
