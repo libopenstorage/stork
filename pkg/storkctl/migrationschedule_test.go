@@ -3,6 +3,7 @@
 package storkctl
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -28,8 +29,9 @@ func createMigrationScheduleAndVerify(
 	namespaces []string,
 	preExecRule string,
 	postExecRule string,
+	suspend bool,
 ) {
-	cmdArgs := []string{"create", "migrationschedules", "-s", schedulePolicyName, "-n", namespace, "-c", clusterpair, "--namespaces", strings.Join(namespaces, ","), name}
+	cmdArgs := []string{"create", "migrationschedules", "-s", schedulePolicyName, "-n", namespace, "-c", clusterpair, "--namespaces", strings.Join(namespaces, ","), name, "--suspend=" + strconv.FormatBool(suspend)}
 	if preExecRule != "" {
 		cmdArgs = append(cmdArgs, "--preExecRule", preExecRule)
 	}
@@ -53,10 +55,10 @@ func createMigrationScheduleAndVerify(
 
 func TestGetMigrationSchedulesOneMigrationSchedule(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest", "testpolicy", "test", "clusterpair1", []string{"namespace1"}, "preExec", "postExec")
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest", "testpolicy", "test", "clusterpair1", []string{"namespace1"}, "preExec", "postExec", true)
 
-	expected := "NAME                       POLICYNAME   CLUSTERPAIR    LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest   testpolicy   clusterpair1   \n"
+	expected := "NAME                       POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getmigrationscheduletest   testpolicy   clusterpair1   true      \n"
 
 	cmdArgs := []string{"get", "migrationschedules", "-n", "test"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -64,12 +66,12 @@ func TestGetMigrationSchedulesOneMigrationSchedule(t *testing.T) {
 
 func TestGetMigrationSchedulesMultiple(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "")
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "", true)
 
-	expected := "NAME                        POLICYNAME   CLUSTERPAIR    LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest1   testpolicy   clusterpair1   \n" +
-		"getmigrationscheduletest2   testpolicy   clusterpair2   \n"
+	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getmigrationscheduletest1   testpolicy   clusterpair1   true      \n" +
+		"getmigrationscheduletest2   testpolicy   clusterpair2   true      \n"
 
 	cmdArgs := []string{"get", "migrationschedules", "getmigrationscheduletest1", "getmigrationscheduletest2"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -78,8 +80,8 @@ func TestGetMigrationSchedulesMultiple(t *testing.T) {
 	cmdArgs = []string{"get", "migrationschedules"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	expected = "NAME                        POLICYNAME   CLUSTERPAIR    LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest1   testpolicy   clusterpair1   \n"
+	expected = "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getmigrationscheduletest1   testpolicy   clusterpair1   true      \n"
 	// Should get only one migration if name given
 	cmdArgs = []string{"get", "migrationschedules", "getmigrationscheduletest1"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -87,11 +89,11 @@ func TestGetMigrationSchedulesMultiple(t *testing.T) {
 
 func TestGetMigrationSchedulesWithClusterPair(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
-	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "")
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "", true)
 
-	expected := "NAME                        POLICYNAME   CLUSTERPAIR    LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest1   testpolicy   clusterpair1   \n"
+	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getmigrationscheduletest1   testpolicy   clusterpair1   true      \n"
 
 	cmdArgs := []string{"get", "migrationschedules", "-c", "clusterpair1"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -99,7 +101,7 @@ func TestGetMigrationSchedulesWithClusterPair(t *testing.T) {
 
 func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "getmigrationschedulestatustest", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationScheduleAndVerify(t, "getmigrationschedulestatustest", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 	migrationSchedule, err := k8s.Instance().GetMigrationSchedule("getmigrationschedulestatustest", "default")
 	require.NoError(t, err, "Error getting migration")
 
@@ -117,8 +119,8 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	)
 	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
 
-	expected := "NAME                             POLICYNAME   CLUSTERPAIR    LAST-SUCCESS-TIME\n" +
-		"getmigrationschedulestatustest   testpolicy   clusterpair1   " + toTimeString(now.Time) + "\n"
+	expected := "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(now.Time) + "\n"
 	cmdArgs := []string{"get", "migrationschedules", "getmigrationschedulestatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
@@ -133,8 +135,8 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	)
 	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
 
-	expected = "NAME                             POLICYNAME   CLUSTERPAIR    LAST-SUCCESS-TIME\n" +
-		"getmigrationschedulestatustest   testpolicy   clusterpair1   " + toTimeString(now.Time) + "\n"
+	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(now.Time) + "\n"
 	cmdArgs = []string{"get", "migrationschedules", "getmigrationschedulestatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
@@ -149,8 +151,8 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	)
 	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
 
-	expected = "NAME                             POLICYNAME   CLUSTERPAIR    LAST-SUCCESS-TIME\n" +
-		"getmigrationschedulestatustest   testpolicy   clusterpair1   " + toTimeString(now.Time) + "\n"
+	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(now.Time) + "\n"
 	cmdArgs = []string{"get", "migrationschedules", "getmigrationschedulestatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -178,12 +180,12 @@ func TestCreateMigrationSchedulesNoName(t *testing.T) {
 
 func TestCreateMigrationSchedules(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "createmigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationScheduleAndVerify(t, "createmigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 }
 
 func TestCreateDuplicateMigrationSchedules(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "createmigrationschedule", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationScheduleAndVerify(t, "createmigrationschedule", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 	cmdArgs := []string{"create", "migrationschedules", "-s", "testpolicy", "-c", "clusterpair1", "--namespaces", "namespace1", "createmigrationschedule"}
 
 	expected := "Error from server (AlreadyExists): migrationschedules.stork.libopenstorage.org \"createmigrationschedule\" already exists"
@@ -207,7 +209,7 @@ func TestDeleteMigrationSchedulesNoMigration(t *testing.T) {
 
 func TestDeleteMigrationSchedules(t *testing.T) {
 	defer resetTest()
-	createMigrationScheduleAndVerify(t, "deletemigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationScheduleAndVerify(t, "deletemigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", false)
 
 	cmdArgs := []string{"delete", "migrationschedules", "deletemigration"}
 	expected := "MigrationSchedule deletemigration deleted successfully\n"
@@ -217,16 +219,16 @@ func TestDeleteMigrationSchedules(t *testing.T) {
 	expected = "Error from server (NotFound): migrationschedules.stork.libopenstorage.org \"deletemigration\" not found"
 	testCommon(t, cmdArgs, nil, expected, true)
 
-	createMigrationScheduleAndVerify(t, "deletemigration1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
-	createMigrationScheduleAndVerify(t, "deletemigration2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "")
+	createMigrationScheduleAndVerify(t, "deletemigration1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "deletemigration2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "", true)
 
 	cmdArgs = []string{"delete", "migrationschedules", "deletemigration1", "deletemigration2"}
 	expected = "MigrationSchedule deletemigration1 deleted successfully\n"
 	expected += "MigrationSchedule deletemigration2 deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	createMigrationScheduleAndVerify(t, "deletemigration1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
-	createMigrationScheduleAndVerify(t, "deletemigration2", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "")
+	createMigrationScheduleAndVerify(t, "deletemigration1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "deletemigration2", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 
 	cmdArgs = []string{"delete", "migrationschedules", "-c", "clusterpair1"}
 	expected = "MigrationSchedule deletemigration1 deleted successfully\n"
