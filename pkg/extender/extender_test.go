@@ -266,6 +266,7 @@ func TestExtender(t *testing.T) {
 	t.Run("nodeNameTest", nodeNameTest)
 	t.Run("ipTest", ipTest)
 	t.Run("invalidRequestsTest", invalidRequestsTest)
+	t.Run("noReplicasTest", noReplicasTest)
 	t.Run("teardown", teardown)
 }
 
@@ -786,4 +787,32 @@ func invalidRequestsTest(t *testing.T) {
 		"application/json", strings.NewReader("invalidNodes"))
 	require.NoError(t, err, "Expected no error for bad request")
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "Excected HTTP BadRequest for invalid request")
+}
+
+// Create a pod with a PVC using the mock storage class.
+// Place the data on nodes n1. Mark n1 as offline Send requests with node n1,
+// n2, n3
+// The filter response should return an error since no replicas for
+// the volume are online
+func noReplicasTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	requestNodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+
+	if err := driver.CreateCluster(3, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("noReplicasTest", []string{"noReplicasTest"})
+
+	provNodes := []int{0}
+	if err := driver.ProvisionVolume("noReplicasTest", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	if err := driver.UpdateNodeStatus(0, volume.NodeOffline); err != nil {
+		t.Fatalf("Error setting node status to Offline: %v", err)
+	}
+	_, err := sendFilterRequest(pod, requestNodes)
+	require.Error(t, err, "Expected error since no replicas are online")
 }
