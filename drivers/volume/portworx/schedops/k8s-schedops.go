@@ -446,7 +446,7 @@ func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
 	return "", err
 }
 
-func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
+func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
 	inst := k8s.Instance()
 
 	binding := &rbacv1.ClusterRoleBinding{
@@ -479,6 +479,16 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 		return err
 	}
 
+	args := []string{
+		"-operation", "upgrade",
+		"-ocimonimage", ociImage,
+		"-ocimontag", ociTag,
+	}
+
+	if pxImage != "" && pxTag != "" {
+		args = append(args, "-pximage", pxImage, "-pxtag", pxTag)
+	}
+
 	// create a talisman job
 	var valOne int32 = 1
 	job := &batch_v1.Job{
@@ -495,9 +505,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag string) error {
 						{
 							Name:  "talisman",
 							Image: talismanImage,
-							Args: []string{
-								"-operation", "upgrade", "-ocimonimage", ociImage, "-ocimontag", ociTag,
-							},
+							Args:  args,
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,

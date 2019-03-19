@@ -1025,20 +1025,32 @@ func (d *portworx) StartDriver(n node.Node) error {
 }
 
 func (d *portworx) UpgradeDriver(version string) error {
+	customImageRegex := regexp.MustCompile(`oci=(?P<oci>([\w][\w._-]+\/)?[\w][\w._-]*\:[\w][\w.-]*),px=(?P<px>([\w][\w._-]+\/)?[\w][\w._-]*\:[\w][\w.-]*)`)
+	ociImageRegex := regexp.MustCompile(`([\w][\w._-]+\/)?[\w][\w._-]*\:[\w][\w.-]*`)
 	if len(version) == 0 {
 		return fmt.Errorf("no version supplied for upgrading portworx")
 	}
 
-	parts := strings.Split(version, ":")
-	if len(parts) != 2 {
+	partsOci := make([]string, 2)
+	partsPx := make([]string, 2)
+	if customImageRegex.MatchString(version) {
+		matches := getGroupMatches(customImageRegex, version)
+		partsOci = strings.Split(matches["oci"], ":")
+		partsPx = strings.Split(matches["px"], ":")
+
+	} else if ociImageRegex.MatchString(version) {
+		partsOci = strings.Split(version, ":")
+	} else {
 		return fmt.Errorf("invalid version: %s given to upgrade portworx", version)
 	}
 
 	logrus.Infof("upgrading portworx to %s", version)
 
-	image := parts[0]
-	tag := parts[1]
-	if err := d.schedOps.UpgradePortworx(image, tag); err != nil {
+	ociImage := partsOci[0]
+	ociTag := partsOci[1]
+	pxImage := partsPx[0]
+	pxTag := partsPx[1]
+	if err := d.schedOps.UpgradePortworx(ociImage, ociTag, pxImage, pxTag); err != nil {
 		return &ErrFailedToUpgradeVolumeDriver{
 			Version: version,
 			Cause:   err.Error(),
@@ -1046,7 +1058,7 @@ func (d *portworx) UpgradeDriver(version string) error {
 	}
 
 	for _, n := range node.GetStorageDriverNodes() {
-		if err := d.WaitForUpgrade(n, image, tag); err != nil {
+		if err := d.WaitForUpgrade(n, ociImage, ociTag); err != nil {
 			return err
 		}
 	}
@@ -1194,6 +1206,17 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 		}
 	}
 	return pxNodes, nil
+}
+
+func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
+	match := groupRegex.FindStringSubmatch(str)
+	result := make(map[string]string)
+	for i, name := range groupRegex.SubexpNames() {
+		if i != 0 && name != "" {
+			result[name] = match[i]
+		}
+	}
+	return result
 }
 
 func init() {
