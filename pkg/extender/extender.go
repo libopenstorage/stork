@@ -137,6 +137,22 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		if err != nil {
 			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes")
 		} else {
+			for _, volumeInfo := range driverVolumes {
+				onlineNodeFound := false
+				for _, volumeNode := range volumeInfo.DataNodes {
+					for _, driverNode := range driverNodes {
+						if volumeNode == driverNode.ID && driverNode.Status == volume.NodeOnline {
+							onlineNodeFound = true
+						}
+					}
+				}
+				if !onlineNodeFound {
+					storklog.PodLog(pod).Errorf("No nodes in filter request have replica for volume, returning error")
+					http.Error(w, "No node found with volume", http.StatusBadRequest)
+					return
+				}
+			}
+
 			for _, node := range args.Nodes.Items {
 				for _, driverNode := range driverNodes {
 					storklog.PodLog(pod).Debugf("nodeInfo: %v", driverNode)
