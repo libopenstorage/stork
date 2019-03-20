@@ -489,6 +489,8 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 		args = append(args, "-pximage", pxImage, "-pxtag", pxTag)
 	}
 
+	logrus.Infof("args: %v", args)
+
 	// create a talisman job
 	var valOne int32 = 1
 	job := &batch_v1.Job{
