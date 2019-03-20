@@ -515,6 +515,11 @@ func (in *MigrationScheduleList) DeepCopyObject() runtime.Object {
 func (in *MigrationScheduleSpec) DeepCopyInto(out *MigrationScheduleSpec) {
 	*out = *in
 	in.Template.DeepCopyInto(&out.Template)
+	if in.Suspend != nil {
+		in, out := &in.Suspend, &out.Suspend
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 
