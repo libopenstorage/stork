@@ -141,6 +141,7 @@ func newGetSnapshotScheduleCommand(cmdFactory Factory, ioStreams genericclioptio
 		},
 	}
 	getSnapshotScheduleCommand.Flags().StringVarP(&pvc, "pvc", "p", "", "Name of the PVC for which to list snapshot schedules")
+	cmdFactory.BindGetFlags(getSnapshotScheduleCommand.Flags())
 
 	return getSnapshotScheduleCommand
 }

@@ -87,6 +87,30 @@ func TestGetMigrationSchedulesMultiple(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
+func TestGetMigrationSchedulesMultipleNamespaces(t *testing.T) {
+	defer resetTest()
+	_, err := k8s.Instance().CreateNamespace("test1", nil)
+	require.NoError(t, err, "Error creating test1 namespace")
+	_, err = k8s.Instance().CreateNamespace("test2", nil)
+	require.NoError(t, err, "Error creating test2 namespace")
+
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "test1", "clusterpair1", []string{"namespace1"}, "", "", true)
+	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "test2", "clusterpair2", []string{"namespace1"}, "", "", true)
+
+	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getmigrationscheduletest1   testpolicy   clusterpair1   true      \n"
+
+	cmdArgs := []string{"get", "migrationschedules", "-n", "test1"}
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	// Should get all migrationschedules
+	cmdArgs = []string{"get", "migrationschedules", "--all-namespaces"}
+	expected = "NAMESPACE   NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
+		"test1       getmigrationscheduletest1   testpolicy   clusterpair1   true      \n" +
+		"test2       getmigrationscheduletest2   testpolicy   clusterpair2   true      \n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
 func TestGetMigrationSchedulesWithClusterPair(t *testing.T) {
 	defer resetTest()
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
