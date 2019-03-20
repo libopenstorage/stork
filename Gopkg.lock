@@ -73,6 +73,14 @@
   version = "v2.1.1"
 
 [[projects]]
+  digest = "1:f6e5e1bc64c2908167e6aa9a1fe0c084d515132a1c63ad5b6c84036aa06dc0c1"
+  name = "github.com/coreos/go-oidc"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "1180514eaf4d9f38d0d19eef639a1d695e066e72"
+  version = "v2.0.0"
+
+[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -425,8 +433,8 @@
   revision = "b3655d98ea02660f2e543d62f6af728a0c324116"
 
 [[projects]]
-  branch = "release-4.0"
-  digest = "1:afb623450086d6fe6bb5edb844a21e94a9d8390dbafcde02a8cd775db1556754"
+  branch = "release-6.0"
+  digest = "1:244b61b96c77f296dd72760398d3e47f88dae460bee58d515bccbd55fe4d6e59"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -438,6 +446,8 @@
     "cluster",
     "objectstore",
     "osdconfig",
+    "pkg/auth",
+    "pkg/auth/secrets",
     "pkg/dbg",
     "pkg/parser",
     "pkg/units",
@@ -446,7 +456,18 @@
     "volume",
   ]
   pruneopts = "UT"
-  revision = "5e037da13776c509910fd69c1933d27aa670ee39"
+  revision = "870d323750a5e3abb584f002fd2eaf19166419d3"
+
+[[projects]]
+  branch = "master"
+  digest = "1:676084e3399eacb0f118ff6a5275be09d0a689395dcb353c9daa2a5e18ab7b6b"
+  name = "github.com/libopenstorage/secrets"
+  packages = [
+    ".",
+    "k8s",
+  ]
+  pruneopts = "UT"
+  revision = "7a55db693ad633eea673438e1dcc4c91056d3b7a"
 
 [[projects]]
   branch = "master"
@@ -626,6 +647,17 @@
   ]
   pruneopts = "UT"
   revision = "d86db0287ece3fd18fcc33f6e3c46b2f34b21d87"
+
+[[projects]]
+  branch = "master"
+  digest = "1:bd9efe4e0b0f768302a1e2f0c22458149278de533e521206e5ddc71848c269a0"
+  name = "github.com/pquerna/cachecontrol"
+  packages = [
+    ".",
+    "cacheobject",
+  ]
+  pruneopts = "UT"
+  revision = "1555304b9b35fdd2b425bccf1a5613677705e7d0"
 
 [[projects]]
   digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"
@@ -1449,6 +1481,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/dgrijalva/jwt-go",
     "github.com/hashicorp/go-version",
     "github.com/heptio/ark/pkg/discovery",
     "github.com/heptio/ark/pkg/util/collections",
@@ -1459,11 +1492,15 @@
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume",
     "github.com/libopenstorage/openstorage/api",
+    "github.com/libopenstorage/openstorage/api/client",
     "github.com/libopenstorage/openstorage/api/client/cluster",
     "github.com/libopenstorage/openstorage/api/client/volume",
     "github.com/libopenstorage/openstorage/api/errors",
     "github.com/libopenstorage/openstorage/cluster",
+    "github.com/libopenstorage/openstorage/pkg/auth",
+    "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/volume",
+    "github.com/libopenstorage/secrets/k8s",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
     "github.com/portworx/sched-ops/k8s",
