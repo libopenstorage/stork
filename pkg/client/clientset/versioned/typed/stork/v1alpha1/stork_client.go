@@ -27,6 +27,8 @@ import (
 
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ClusterDomainUpdatesGetter
+	ClusterDomainsStatusesGetter
 	ClusterPairsGetter
 	GroupVolumeSnapshotsGetter
 	MigrationsGetter
@@ -40,6 +42,14 @@ type StorkV1alpha1Interface interface {
 // StorkV1alpha1Client is used to interact with features provided by the stork.libopenstorage.org group.
 type StorkV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *StorkV1alpha1Client) ClusterDomainUpdates(namespace string) ClusterDomainUpdateInterface {
+	return newClusterDomainUpdates(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) ClusterDomainsStatuses(namespace string) ClusterDomainsStatusInterface {
+	return newClusterDomainsStatuses(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) ClusterPairs(namespace string) ClusterPairInterface {

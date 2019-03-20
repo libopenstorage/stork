@@ -24,6 +24,10 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterDomainUpdates returns a ClusterDomainUpdateInformer.
+	ClusterDomainUpdates() ClusterDomainUpdateInformer
+	// ClusterDomainsStatuses returns a ClusterDomainsStatusInformer.
+	ClusterDomainsStatuses() ClusterDomainsStatusInformer
 	// ClusterPairs returns a ClusterPairInformer.
 	ClusterPairs() ClusterPairInformer
 	// GroupVolumeSnapshots returns a GroupVolumeSnapshotInformer.
@@ -51,6 +55,16 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ClusterDomainUpdates returns a ClusterDomainUpdateInformer.
+func (v *version) ClusterDomainUpdates() ClusterDomainUpdateInformer {
+	return &clusterDomainUpdateInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ClusterDomainsStatuses returns a ClusterDomainsStatusInformer.
+func (v *version) ClusterDomainsStatuses() ClusterDomainsStatusInformer {
+	return &clusterDomainsStatusInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterPairs returns a ClusterPairInformer.
