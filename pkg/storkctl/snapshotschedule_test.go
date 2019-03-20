@@ -84,6 +84,30 @@ func TestGetSnapshotSchedulesMultiple(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
+func TestGetSnapshotSchedulesMultipleNamespaces(t *testing.T) {
+	defer resetTest()
+	_, err := k8s.Instance().CreateNamespace("test1", nil)
+	require.NoError(t, err, "Error creating test1 namespace")
+	_, err = k8s.Instance().CreateNamespace("test2", nil)
+	require.NoError(t, err, "Error creating test2 namespace")
+
+	createSnapshotScheduleAndVerify(t, "getsnapshotscheduletest1", "pvcname", "testpolicy", "test1", "preExec", "postExec", true)
+	createSnapshotScheduleAndVerify(t, "getsnapshotscheduletest2", "pvcname", "testpolicy", "test2", "preExec", "postExec", true)
+
+	expected := "NAME                       PVC       POLICYNAME   PRE-EXEC-RULE   POST-EXEC-RULE   RECLAIM-POLICY   SUSPEND   LAST-SUCCESS-TIME\n" +
+		"getsnapshotscheduletest1   pvcname   testpolicy   preExec         postExec         Retain           true      \n"
+
+	cmdArgs := []string{"get", "snapshotschedules", "-n", "test1"}
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	expected = "NAMESPACE   NAME                       PVC       POLICYNAME   PRE-EXEC-RULE   POST-EXEC-RULE   RECLAIM-POLICY   SUSPEND   LAST-SUCCESS-TIME\n" +
+		"test1       getsnapshotscheduletest1   pvcname   testpolicy   preExec         postExec         Retain           true      \n" +
+		"test2       getsnapshotscheduletest2   pvcname   testpolicy   preExec         postExec         Retain           true      \n"
+	// Should get all snapshotschedules
+	cmdArgs = []string{"get", "snapshotschedules", "--all-namespaces"}
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
 func TestGetSnapshotSchedulesWithPVC(t *testing.T) {
 	defer resetTest()
 	createSnapshotScheduleAndVerify(t, "getsnapshotscheduletest1", "pvcname1", "testpolicy", "test", "preExec", "postExec", true)

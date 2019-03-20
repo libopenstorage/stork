@@ -157,6 +157,7 @@ func newGetMigrationScheduleCommand(cmdFactory Factory, ioStreams genericcliopti
 		},
 	}
 	getMigrationScheduleCommand.Flags().StringVarP(&clusterPair, "clusterpair", "c", "", "Name of the cluster pair for which to list migration schedules")
+	cmdFactory.BindGetFlags(getMigrationScheduleCommand.Flags())
 
 	return getMigrationScheduleCommand
 }
