@@ -36,7 +36,7 @@ case $i in
         remote_config_path=$2
         shift
         shift
-        ;;    
+        ;;
 esac
 done
 
@@ -56,8 +56,16 @@ KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
 sed -i 's/'stork:.*'/'"$image_name"'/g' /specs/stork-deployment.yaml
 
+# For integration test mock times
+kubectl delete cm stork-mock-time  -n kube-system || true
+kubectl create cm stork-mock-time  -n kube-system —from-literal=time=""
+
 echo "Creating stork deployment"
 kubectl apply -f /specs/stork-deployment.yaml
+
+# Turn on test mode
+kubectl set env deploy/stork -n kube-system TEST_MODE="true"
+
 # Delete the pods to make sure we are waiting for the status from the
 # new pods
 kubectl delete pods -n kube-system -l name=stork
@@ -106,7 +114,7 @@ for i in $(seq 1 100) ; do
     test_status=$(kubectl get pod stork-test -n kube-system -o json | jq ".status.phase" -r)
     if [ "$test_status" == "Running" ] || [ "$test_status" == "Completed" ]; then
         break
-    else 
+    else
         echo "Test hasn't started yet, status: $test_status"
         sleep 5
     fi

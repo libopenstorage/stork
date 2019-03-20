@@ -1,0 +1,8 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: SchedulePolicy
+metadata:
+  name: migrate-schedule-weekly-invalid
+policy:
+  weekly:
+    day: Fooday
+    time: "12:04PM"

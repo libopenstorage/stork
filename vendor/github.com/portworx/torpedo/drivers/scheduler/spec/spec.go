@@ -1,5 +1,7 @@
 package spec
 
+import "fmt"
+
 // Parser provides operations for parsing application specs
 type Parser interface {
 	ParseSpecs(specDir string) ([]interface{}, error)
@@ -13,6 +15,11 @@ type AppSpec struct {
 	SpecList []interface{}
 	// Enabled indicates if the application is enabled in the factory
 	Enabled bool
+}
+
+// GetID returns the unique ID for the app specs
+func (in *AppSpec) GetID(instanceID string) string {
+	return fmt.Sprintf("%s-%s", in.Key, instanceID)
 }
 
 // DeepCopy Creates a copy of the AppSpec
