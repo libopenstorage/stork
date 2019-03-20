@@ -28,6 +28,7 @@ func TestSchedule(t *testing.T) {
 	t.Run("triggerWeeklyRequiredTest", triggerWeeklyRequiredTest)
 	t.Run("triggerMonthlyRequiredTest", triggerMonthlyRequiredTest)
 	t.Run("validateSchedulePolicyTest", validateSchedulePolicyTest)
+	t.Run("policyRetainTest", policyRetainTest)
 }
 
 func resetTest() {
@@ -53,10 +54,16 @@ func triggerIntervalRequiredTest(t *testing.T) {
 	})
 	require.NoError(t, err, "Error creating policy")
 
-	required, err := TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeInterval, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
+	var latestMigrationTimestamp meta.Time
+	required, err := TriggerRequired("intervalpolicy", stork_api.SchedulePolicyTypeInterval, latestMigrationTimestamp)
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, required, "Trigger should have been required")
+
+	required, err = TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeInterval, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.Error(t, err, "Should return error for missing policy")
 
-	setMockTime(time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local))
+	mockNow := time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local)
+	setMockTime(&mockNow)
 	// Last triggered 2 mins ago
 	required, err = TriggerRequired("intervalpolicy", stork_api.SchedulePolicyTypeInterval, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
@@ -88,7 +95,8 @@ func triggerDailyRequiredTest(t *testing.T) {
 	required, err := TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.Error(t, err, "Should return error for missing policy")
 
-	setMockTime(time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local))
+	mockNow := time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local)
+	setMockTime(&mockNow)
 	// Last triggered before schedule
 	required, err = TriggerRequired("dailypolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
@@ -99,6 +107,11 @@ func triggerDailyRequiredTest(t *testing.T) {
 	require.NoError(t, err, "Error checking if trigger required")
 	require.False(t, required, "Trigger should not have been required")
 
+	// Last triggered one day ago at schedule
+	required, err = TriggerRequired("dailypolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 6, 23, 15, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.True(t, required, "Trigger should have been required")
+
 	// Last triggered one day ago before schedule
 	required, err = TriggerRequired("dailypolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 6, 23, 14, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
@@ -108,6 +121,20 @@ func triggerDailyRequiredTest(t *testing.T) {
 	required, err = TriggerRequired("dailypolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 6, 23, 16, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
 	require.True(t, required, "Trigger should have been required")
+
+	// Set time two hours before next day's schedule
+	mockNow = time.Date(2019, time.February, 8, 21, 15, 0, 0, time.Local)
+	setMockTime(&mockNow)
+
+	// Last triggered one day ago at schedule
+	required, err = TriggerRequired("dailypolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 7, 23, 15, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, required, "Trigger should not have been required")
+
+	// Last triggered one day ago after schedule
+	required, err = TriggerRequired("dailypolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local))
+	require.NoError(t, err, "Error checking if trigger required")
+	require.False(t, required, "Trigger should not have been required")
 }
 
 func triggerWeeklyRequiredTest(t *testing.T) {
@@ -128,7 +155,8 @@ func triggerWeeklyRequiredTest(t *testing.T) {
 	required, err := TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeWeekly, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.Error(t, err, "Should return error for missing policy")
 
-	setMockTime(time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local)) // Current day: Thursday
+	newTime := time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local) // Current day: Thursday
+	setMockTime(&newTime)
 	// LastTriggered one week before on Saturday at 11:15pm
 	required, err = TriggerRequired("weeklypolicy", stork_api.SchedulePolicyTypeWeekly, meta.Date(2019, time.February, 2, 23, 16, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
@@ -139,7 +167,8 @@ func triggerWeeklyRequiredTest(t *testing.T) {
 	require.NoError(t, err, "Error checking if trigger required")
 	require.False(t, required, "Trigger should not have been required")
 
-	setMockTime(time.Date(2019, time.February, 10, 23, 16, 0, 0, time.Local)) // Current date: Sunday 11:16pm
+	newTime = time.Date(2019, time.February, 10, 23, 16, 0, 0, time.Local) // Current date: Sunday 11:16pm
+	setMockTime(&newTime)
 	// LastTriggered last Wednesday at 11:16pm
 	required, err = TriggerRequired("weeklypolicy", stork_api.SchedulePolicyTypeWeekly, meta.Date(2019, time.February, 6, 23, 16, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
@@ -163,7 +192,8 @@ func triggerMonthlyRequiredTest(t *testing.T) {
 	required, err := TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeMonthly, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.Error(t, err, "Should return error for missing policy")
 
-	setMockTime(time.Date(2019, time.February, 28, 23, 16, 0, 0, time.Local))
+	newTime := time.Date(2019, time.February, 28, 23, 16, 0, 0, time.Local)
+	setMockTime(&newTime)
 	// Last triggered before schedule
 	required, err = TriggerRequired("monthlypolicy", stork_api.SchedulePolicyTypeMonthly, meta.Date(2019, time.February, 2, 23, 16, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
@@ -265,4 +295,99 @@ func validateSchedulePolicyTest(t *testing.T) {
 	}
 	err = ValidateSchedulePolicy(policy)
 	require.Error(t, err, "Invalid monthly policy should return error")
+}
+
+func policyRetainTest(t *testing.T) {
+	policyName := "policy"
+	policy, err := k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Interval: &stork_api.IntervalPolicy{
+				IntervalMinutes: 60,
+			},
+			Daily: &stork_api.DailyPolicy{
+				Time: "10:40PM",
+			},
+			Weekly: &stork_api.WeeklyPolicy{
+				Time: "10:40PM",
+				Day:  "Thur",
+			},
+			Monthly: &stork_api.MonthlyPolicy{
+				Time: "10:40PM",
+				Date: 25,
+			},
+		},
+	})
+	require.NoError(t, err, "Error creating schedule policy")
+
+	retain, err := GetRetain(policyName, stork_api.SchedulePolicyTypeInterval)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, stork_api.DefaultIntervalPolicyRetain, retain, "Wrong default retain for interval policy")
+	policy.Policy.Interval.Retain = 0
+	_, err = k8s.Instance().UpdateSchedulePolicy(policy)
+	require.NoError(t, err, "Error updating schedule policy")
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeInterval)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, stork_api.DefaultIntervalPolicyRetain, retain, "Wrong default retain for interval policy")
+
+	policy.Policy.Interval.Retain = 5
+	_, err = k8s.Instance().UpdateSchedulePolicy(policy)
+	require.NoError(t, err, "Error updating schedule policy")
+
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeInterval)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, policy.Policy.Interval.Retain, retain, "Wrong retain for interval policy")
+
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeDaily)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, stork_api.DefaultDailyPolicyRetain, retain, "Wrong default retain for daily policy")
+	policy.Policy.Daily.Retain = 0
+	_, err = k8s.Instance().UpdateSchedulePolicy(policy)
+	require.NoError(t, err, "Error updating schedule policy")
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeDaily)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, stork_api.DefaultDailyPolicyRetain, retain, "Wrong default retain for daily policy")
+
+	policy.Policy.Daily.Retain = 10
+	_, err = k8s.Instance().UpdateSchedulePolicy(policy)
+	require.NoError(t, err, "Error updating schedule policy")
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeDaily)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, policy.Policy.Daily.Retain, retain, "Wrong default retain for daily policy")
+
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeWeekly)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, stork_api.DefaultWeeklyPolicyRetain, retain, "Wrong default retain for weekly policy")
+	policy.Policy.Weekly.Retain = 0
+	_, err = k8s.Instance().UpdateSchedulePolicy(policy)
+	require.NoError(t, err, "Error updating schedule policy")
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeWeekly)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, stork_api.DefaultWeeklyPolicyRetain, retain, "Wrong default retain for weekly policy")
+
+	policy.Policy.Weekly.Retain = 20
+	_, err = k8s.Instance().UpdateSchedulePolicy(policy)
+	require.NoError(t, err, "Error updating schedule policy")
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeWeekly)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, policy.Policy.Weekly.Retain, retain, "Wrong default retain for weekly policy")
+
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeMonthly)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, stork_api.DefaultMonthlyPolicyRetain, retain, "Wrong default retain for monthly policy")
+	policy.Policy.Monthly.Retain = 0
+	_, err = k8s.Instance().UpdateSchedulePolicy(policy)
+	require.NoError(t, err, "Error updating schedule policy")
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeMonthly)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, stork_api.DefaultMonthlyPolicyRetain, retain, "Wrong default retain for monthly policy")
+
+	policy.Policy.Monthly.Retain = 30
+	_, err = k8s.Instance().UpdateSchedulePolicy(policy)
+	require.NoError(t, err, "Error updating schedule policy")
+	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeMonthly)
+	require.NoError(t, err, "Error getting retain")
+	require.Equal(t, policy.Policy.Monthly.Retain, retain, "Wrong default retain for monthly policy")
 }

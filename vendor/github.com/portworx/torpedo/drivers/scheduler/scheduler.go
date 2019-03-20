@@ -35,6 +35,12 @@ func (in *Context) DeepCopy() *Context {
 	return out
 }
 
+// GetID returns the unique ID for the context. This encompasses the instance ID
+// provided by users during schedule of the context and the ID of the app specs
+func (in *Context) GetID() string {
+	return in.App.GetID(in.UID)
+}
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)

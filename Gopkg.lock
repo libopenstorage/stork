@@ -586,14 +586,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:4e75f297e0e75ecc4df1917c939d67e0887e129d0229c0512104a8060211efde"
+  digest = "1:48f9d2c6f158547d7f38eae72a654736e189550e454fd88ebf91037945df48f9"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "10d259768eb3b40dd1ce8a557920722cf237ed59"
+  revision = "02be60702f6a1eb7ea5a34fba7140ccd99ce6e2b"
 
 [[projects]]
   branch = "master"
@@ -611,7 +611,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:912de004e086a1d23b74c4023aa1acd8431a6da01e55ca4bf29067d155a24f67"
+  digest = "1:09473787a8b22532233dc977b5e77b632e1427f3a057894870d323e633d7d500"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -625,7 +625,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "71709d107d864974f089fd521872d4cd54dac089"
+  revision = "d86db0287ece3fd18fcc33f6e3c46b2f34b21d87"
 
 [[projects]]
   digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"
@@ -1467,6 +1467,7 @@
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
     "github.com/portworx/sched-ops/k8s",
+    "github.com/portworx/sched-ops/task",
     "github.com/portworx/torpedo/drivers/node",
     "github.com/portworx/torpedo/drivers/node/ssh",
     "github.com/portworx/torpedo/drivers/scheduler",
@@ -1479,6 +1480,7 @@
     "github.com/spf13/pflag",
     "github.com/stretchr/testify/require",
     "github.com/urfave/cli",
+    "gopkg.in/yaml.v2",
     "k8s.io/api/apps/v1",
     "k8s.io/api/apps/v1beta1",
     "k8s.io/api/apps/v1beta2",

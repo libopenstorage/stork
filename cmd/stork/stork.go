@@ -15,6 +15,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/initializer"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
+	"github.com/libopenstorage/stork/pkg/pvcwatcher"
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/snapshot"
@@ -113,6 +114,10 @@ func main() {
 		cli.BoolFlag{
 			Name:  "storage-cluster-controller",
 			Usage: "Start the storage cluster controller (default: false)",
+		},
+		cli.BoolTFlag{
+			Name:  "pvc-watcher",
+			Usage: "Start the controller to monitor PVC creation and deletions (default: true)",
 		},
 	}
 
@@ -256,11 +261,12 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		log.Fatalf("Error initializing schedule: %v", err)
 	}
 
-	snapshotController := &snapshot.Controller{
-		Driver: d,
+	snapshot := &snapshot.Snapshot{
+		Driver:   d,
+		Recorder: recorder,
 	}
 	if c.Bool("snapshotter") {
-		if err := snapshotController.Start(); err != nil {
+		if err := snapshot.Start(); err != nil {
 			log.Fatalf("Error starting snapshot controller: %v", err)
 		}
 
@@ -270,6 +276,15 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		}
 		if err := groupsnapshotInst.Init(); err != nil {
 			log.Fatalf("Error initializing groupsnapshot controller: %v", err)
+		}
+	}
+	pvcWatcher := pvcwatcher.PVCWatcher{
+		Driver:   d,
+		Recorder: recorder,
+	}
+	if c.Bool("pvc-watcher") {
+		if err := pvcWatcher.Start(); err != nil {
+			log.Fatalf("Error starting pvc watcher: %v", err)
 		}
 	}
 
@@ -315,8 +330,8 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 			}
 		}
 		if c.Bool("snapshotter") {
-			if err := snapshotController.Stop(); err != nil {
-				log.Warnf("Error stopping snapshot controller: %v", err)
+			if err := snapshot.Stop(); err != nil {
+				log.Warnf("Error stopping snapshot controllers: %v", err)
 			}
 		}
 		if c.Bool("app-initializer") {

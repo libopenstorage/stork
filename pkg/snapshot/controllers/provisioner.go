@@ -1,4 +1,4 @@
-package snapshot
+package controllers
 
 import (
 	"encoding/csv"
@@ -25,10 +25,14 @@ import (
 const (
 	// StorkSnapshotRestoreNamespacesAnnotation is annotation used to specify the
 	// command separated list of namespaces to which the snapshot can be restored
-	StorkSnapshotRestoreNamespacesAnnotation = "stork/snapshot-restore-namespaces"
+	StorkSnapshotRestoreNamespacesAnnotation = "stork.libopenstorage.org/snapshot-restore-namespaces"
+	// StorkSnapshotRestoreNamespacesAnnotationDeprecated deprecated version of StorkSnapshotRestoreNamespacesAnnotation
+	StorkSnapshotRestoreNamespacesAnnotationDeprecated = "stork/snapshot-restore-namespaces"
 	// StorkSnapshotSourceNamespaceAnnotation Annotation used to specify the
 	// source of the snapshot when creating a PVC
-	StorkSnapshotSourceNamespaceAnnotation = "stork/snapshot-source-namespace"
+	StorkSnapshotSourceNamespaceAnnotation = "stork.libopenstorage.org/snapshot-source-namespace"
+	// StorkSnapshotSourceNamespaceAnnotationDeprecated deprecated version of StorkSnapshotSourceNamespaceAnnotation
+	StorkSnapshotSourceNamespaceAnnotationDeprecated = "stork/snapshot-source-namespace"
 )
 
 type snapshotProvisioner struct {
@@ -43,7 +47,8 @@ type snapshotProvisioner struct {
 	volumePlugins map[string]volume.Plugin
 }
 
-func newSnapshotProvisioner(
+// NewSnapshotProvisioner Creates a new snapshot provisioner controller
+func NewSnapshotProvisioner(
 	client kubernetes.Interface,
 	crdclient *rest.RESTClient,
 	volumePlugins map[string]volume.Plugin,
@@ -92,7 +97,10 @@ func (p *snapshotProvisioner) isSnapshotAllowed(
 ) bool {
 	allowedNamespaces, ok := snapshot.Metadata.Annotations[StorkSnapshotRestoreNamespacesAnnotation]
 	if !ok {
-		return false
+		allowedNamespaces, ok = snapshot.Metadata.Annotations[StorkSnapshotRestoreNamespacesAnnotationDeprecated]
+		if !ok {
+			return false
+		}
 	}
 
 	csvReader := csv.NewReader(strings.NewReader(allowedNamespaces))
@@ -133,7 +141,10 @@ func (p *snapshotProvisioner) Provision(options controller.VolumeOptions) (*v1.P
 	}
 	snapshotNamespace, ok := options.PVC.Annotations[StorkSnapshotSourceNamespaceAnnotation]
 	if !ok {
-		snapshotNamespace = options.PVC.Namespace
+		snapshotNamespace, ok = options.PVC.Annotations[StorkSnapshotSourceNamespaceAnnotationDeprecated]
+		if !ok {
+			snapshotNamespace = options.PVC.Namespace
+		}
 	}
 
 	var snapshot crdv1.VolumeSnapshot

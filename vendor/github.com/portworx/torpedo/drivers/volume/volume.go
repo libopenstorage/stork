@@ -103,6 +103,9 @@ type Driver interface {
 
 	// GetClusterPairingInfo returns cluster pairing information from remote cluster
 	GetClusterPairingInfo() (map[string]string, error)
+
+	// GetReplicaSetNodes returns the replica sets for a given volume
+	GetReplicaSetNodes(vol *Volume) ([]string, error)
 }
 
 var (

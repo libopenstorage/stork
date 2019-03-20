@@ -1,30 +1,44 @@
 package schedule
 
 import (
+	"fmt"
+	"os"
 	"reflect"
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
+	"github.com/sirupsen/logrus"
+	"k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
 	validateCRDInterval time.Duration = 5 * time.Second
 	validateCRDTimeout  time.Duration = 1 * time.Minute
+	// storkTestModeEnvVariable is env variable to enable test mode features in stork
+	storkTestModeEnvVariable = "TEST_MODE"
+	// MockTimeConfigMapName is the name of the config map used to mock times
+	MockTimeConfigMapName = "stork-mock-time"
+	// MockTimeConfigMapNamespace is the namespace of the config map used to mock times
+	MockTimeConfigMapNamespace = "kube-system"
+	// MockTimeConfigMapKey is the key name in the config map data that contains the time
+	MockTimeConfigMapKey = "time"
 )
 
 var mockTime *time.Time
 
-// Used in test to update the time
-func setMockTime(mt time.Time) {
-	mockTime = &mt
+// setMockTime is used in tests to update the time
+func setMockTime(mt *time.Time) {
+	mockTime = mt
 }
 
-func getCurrentTime() time.Time {
+// GetCurrentTime returns the current time as per the scheduler
+func GetCurrentTime() time.Time {
 	if mockTime != nil {
 		return *mockTime
 	}
@@ -46,7 +60,8 @@ func TriggerRequired(
 	if err := ValidateSchedulePolicy(schedulePolicy); err != nil {
 		return false, err
 	}
-	now := getCurrentTime()
+
+	now := GetCurrentTime()
 	switch policyType {
 	case stork_api.SchedulePolicyTypeInterval:
 		if schedulePolicy.Policy.Interval == nil {
@@ -71,11 +86,6 @@ func TriggerRequired(
 		}
 
 		nextTrigger := time.Date(now.Year(), now.Month(), now.Day(), policyHour, policyMinute, 0, 0, time.Local)
-		// Go to next day if the trigger time has already
-		// passed for today
-		if nextTrigger.Before(now) {
-			nextTrigger.Add(24 * time.Hour)
-		}
 
 		return checkTrigger(lastTrigger.Time, nextTrigger, now)
 
@@ -156,12 +166,124 @@ func ValidateSchedulePolicy(policy *stork_api.SchedulePolicy) error {
 	return nil
 }
 
+// GetRetain Returns the retain value for the specified policy. Returns the
+// default for the policy if none is specified
+func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stork_api.Retain, error) {
+	schedulePolicy, err := k8s.Instance().GetSchedulePolicy(policyName)
+	if err != nil {
+		return 0, err
+	}
+	switch policyType {
+	case stork_api.SchedulePolicyTypeInterval:
+		if schedulePolicy.Policy.Interval != nil {
+			if schedulePolicy.Policy.Interval.Retain == 0 {
+				return stork_api.DefaultIntervalPolicyRetain, nil
+			}
+			return schedulePolicy.Policy.Interval.Retain, nil
+		}
+	case stork_api.SchedulePolicyTypeDaily:
+		if schedulePolicy.Policy.Daily != nil {
+			if schedulePolicy.Policy.Daily.Retain == 0 {
+				return stork_api.DefaultDailyPolicyRetain, nil
+			}
+			return schedulePolicy.Policy.Daily.Retain, nil
+		}
+	case stork_api.SchedulePolicyTypeWeekly:
+		if schedulePolicy.Policy.Weekly != nil {
+			if schedulePolicy.Policy.Weekly.Retain == 0 {
+				return stork_api.DefaultWeeklyPolicyRetain, nil
+			}
+			return schedulePolicy.Policy.Weekly.Retain, nil
+		}
+	case stork_api.SchedulePolicyTypeMonthly:
+		if schedulePolicy.Policy.Monthly != nil {
+			if schedulePolicy.Policy.Monthly.Retain == 0 {
+				return stork_api.DefaultMonthlyPolicyRetain, nil
+			}
+			return schedulePolicy.Policy.Monthly.Retain, nil
+		}
+	default:
+		return 0, fmt.Errorf("Invalid policy type: %v", policyType)
+	}
+
+	return 1, nil
+}
+
 // Init initializes the schedule module
 func Init() error {
 	err := createCRD()
 	if err != nil {
 		return err
 	}
+
+	testMode := os.Getenv(storkTestModeEnvVariable)
+	if testMode == "true" {
+
+		fn := func(object runtime.Object) error {
+			cm, ok := object.(*v1.ConfigMap)
+			if !ok {
+				err := fmt.Errorf("invalid object type on configmap watch: %v", object)
+				return err
+			}
+
+			if len(cm.Data) > 0 {
+				timeString := cm.Data[MockTimeConfigMapKey]
+				if len(timeString) > 0 {
+					t, err := time.Parse(time.RFC1123, timeString)
+					if err != nil {
+						err = fmt.Errorf("failed to parse time in mock config map due to: %v", err)
+						logrus.Errorf(err.Error())
+						return err
+					}
+
+					logrus.Infof("Setting mock time to: %v current time: %v", t, GetCurrentTime())
+					setMockTime(&t)
+				} else {
+					logrus.Infof("Time string is empty. Resetting mock time")
+					setMockTime(nil)
+				}
+			}
+
+			return nil
+		}
+
+		logrus.Infof("Stork test mode enabled. Watching for config map: %s for mock times", MockTimeConfigMapName)
+		cm, err := k8s.Instance().GetConfigMap(MockTimeConfigMapName, MockTimeConfigMapNamespace)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				logrus.Infof("Stork in test mode, however no config map present to mock time. Creating it.")
+				// create new config map
+				data := map[string]string{
+					MockTimeConfigMapKey: "",
+				}
+
+				cm := &v1.ConfigMap{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      MockTimeConfigMapName,
+						Namespace: MockTimeConfigMapNamespace,
+					},
+					Data: data,
+				}
+
+				cm, err = k8s.Instance().CreateConfigMap(cm)
+				if err != nil {
+					return err
+				}
+			} else {
+				logrus.Errorf("Failed to get config map: %s due to: %v", MockTimeConfigMapName, err)
+				return err
+			}
+		}
+
+		cm = cm.DeepCopy()
+
+		err = k8s.Instance().WatchConfigMap(cm, fn)
+		if err != nil {
+			logrus.Errorf("Failed to watch on config map: %s due to: %v", MockTimeConfigMapName, err)
+			return err
+		}
+	}
+
 	return nil
 }
 
