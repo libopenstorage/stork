@@ -611,7 +611,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:09473787a8b22532233dc977b5e77b632e1427f3a057894870d323e633d7d500"
+  digest = "1:b1bfeaa12db4715595a8bc6cdaa13f87725e4198e5e7ca0c96c66b4226dc96d9"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -625,7 +625,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "d86db0287ece3fd18fcc33f6e3c46b2f34b21d87"
+  revision = "9a5870e0d1a5d2cb7d62acfe0e2ef4ae0d326d4e"
 
 [[projects]]
   digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"
@@ -1485,6 +1485,7 @@
     "k8s.io/api/apps/v1beta1",
     "k8s.io/api/apps/v1beta2",
     "k8s.io/api/core/v1",
+    "k8s.io/api/storage/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
     "k8s.io/apimachinery/pkg/api/errors",
