@@ -18,6 +18,10 @@ limitations under the License.
 
 package v1alpha1
 
+type ClusterDomainUpdateExpansion interface{}
+
+type ClusterDomainsStatusExpansion interface{}
+
 type ClusterPairExpansion interface{}
 
 type GroupVolumeSnapshotExpansion interface{}

@@ -18,6 +18,22 @@ limitations under the License.
 
 package v1alpha1
 
+// ClusterDomainUpdateListerExpansion allows custom methods to be added to
+// ClusterDomainUpdateLister.
+type ClusterDomainUpdateListerExpansion interface{}
+
+// ClusterDomainUpdateNamespaceListerExpansion allows custom methods to be added to
+// ClusterDomainUpdateNamespaceLister.
+type ClusterDomainUpdateNamespaceListerExpansion interface{}
+
+// ClusterDomainsStatusListerExpansion allows custom methods to be added to
+// ClusterDomainsStatusLister.
+type ClusterDomainsStatusListerExpansion interface{}
+
+// ClusterDomainsStatusNamespaceListerExpansion allows custom methods to be added to
+// ClusterDomainsStatusNamespaceLister.
+type ClusterDomainsStatusNamespaceListerExpansion interface{}
+
 // ClusterPairListerExpansion allows custom methods to be added to
 // ClusterPairLister.
 type ClusterPairListerExpansion interface{}
