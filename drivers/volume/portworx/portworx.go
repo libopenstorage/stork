@@ -568,6 +568,10 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 				return err
 			}
 		} else {
+			err = d.schedOps.StopPxOnNode(n)
+			if err != nil {
+				return err
+			}
 			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 				Action: "stop",
 				ConnectionOpts: node.ConnectionOpts{
@@ -1016,6 +1020,10 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
+	err := d.schedOps.StartPxOnNode(n)
+	if err != nil {
+		return err
+	}
 	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "start",
 		ConnectionOpts: node.ConnectionOpts{
