@@ -105,6 +105,9 @@ const (
 
 	validateSnapshotTimeout       = 5 * time.Minute
 	validateSnapshotRetryInterval = 10 * time.Second
+
+	pxEnableTLS    = "PX_ENABLE_TLS"
+	pxSharedSecret = "PX_SHARED_SECRET"
 )
 
 var endpointPort string
@@ -167,7 +170,7 @@ func (p *portworx) Init(_ interface{}) error {
 	}
 
 	logrus.Infof("Using %v as endpoint for portworx volume driver", endpoint)
-	tls := os.Getenv("stork-encryption-enabled")
+	tls := os.Getenv(pxEnableTLS)
 	if len(tls) != 0 {
 		scheme = "https"
 	} else {
@@ -182,6 +185,9 @@ func (p *portworx) Init(_ interface{}) error {
 
 	p.stopChannel = make(chan struct{})
 	err = p.startNodeCache()
+	if err != nil {
+		return err
+	}
 
 	ostsecrets, err := osecrets.New(nil)
 	if err != nil {
@@ -231,7 +237,6 @@ func (p *portworx) startNodeCache() error {
 }
 
 func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
-	var err error
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		return nil, err
@@ -473,10 +478,8 @@ func (p *portworx) getSnapshotName(tags *map[string]string) string {
 }
 
 func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.VolumeDriver, error) {
-	var err error
-	var token string
 	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
-		token, err = p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
+		token, err := p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
 		if err != nil {
 			return nil, err
 		}
@@ -496,12 +499,11 @@ func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.Volum
 }
 
 func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
-	secret := os.Getenv("stork-shared-secret")
+	secret := os.Getenv(pxSharedSecret)
 	if len(secret) != 0 {
 		claims := &auth.Claims{
 			Issuer: "stork.openstorage.io",
 			Name:   "Stork",
-			Email:  "stork@openstorage.io",
 			Roles:  []string{"system.stork"},
 		}
 
@@ -535,21 +537,11 @@ func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
 
 func getClient(endpointPort string, token string) (*apiclient.Client, error) {
 	if len(token) != 0 {
-		clnt, err := volumeclient.NewAuthDriverClient(endpointPort, "pxd", "", token, "", "stork")
-		if err != nil {
-			return nil, err
-		}
-		return clnt, nil
+		return volumeclient.NewAuthDriverClient(endpointPort, "pxd", "", token, "", "stork")
 	}
-	clnt, err := volumeclient.NewDriverClient(endpointPort, "pxd", "", "stork")
-	if err != nil {
-		return nil, err
-	}
-	return clnt, nil
-
+	return volumeclient.NewDriverClient(endpointPort, "pxd", "", "stork")
 }
 
-// User Context
 func (p *portworx) SnapshotCreate(
 	snap *crdv1.VolumeSnapshot,
 	pv *v1.PersistentVolume,
@@ -1732,6 +1724,7 @@ func (p *portworx) revertPXCloudSnaps(cloudSnapIDs []string, credID string) {
 	var err error
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
+		logrus.Errorf("Failed to get a volumeDriver: %v", err)
 		return
 	}
 
