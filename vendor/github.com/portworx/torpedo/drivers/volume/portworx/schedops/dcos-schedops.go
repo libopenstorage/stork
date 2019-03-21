@@ -9,6 +9,14 @@ import (
 
 type dcosSchedOps struct{}
 
+func (d *dcosSchedOps) StartPxOnNode(n node.Node) error {
+	return nil
+}
+
+func (d *dcosSchedOps) StopPxOnNode(n node.Node) error {
+	return nil
+}
+
 func (d *dcosSchedOps) ValidateOnNode(n node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
