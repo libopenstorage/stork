@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"gopkg.in/yaml.v2"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
@@ -98,7 +99,11 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *v1.PersistentVolumeClaim
 		return nil
 	}
 	storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
+	// Ignore if storageclass cannot be found
 	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 
