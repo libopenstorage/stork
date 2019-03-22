@@ -213,5 +213,11 @@ func pvcOwnershipTest(t *testing.T) {
 	}
 	require.Equal(t, true, errUnscheduledPod, "Pod should not have been schedule.")
 
+	err = volumeDriver.StartDriver(scheduledNodes[0])
+	require.NoError(t, err, "Error starting driver on scheduled Node %+v", scheduledNodes[0])
+
+	err = volumeDriver.WaitDriverUpOnNode(scheduledNodes[0])
+	require.NoError(t, err, "Volume driver is not up on Node %+v", scheduledNodes[0])
+
 	destroyAndWait(t, ctxs)
 }
