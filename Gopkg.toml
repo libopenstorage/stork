@@ -43,8 +43,12 @@ required = [
   branch = "release-4.0"
 
 [[constraint]]
-  branch = "master"
+  branch = "stork-2.1"
   name = "github.com/portworx/sched-ops"
+
+[[constraint]]
+  branch = "stork-2.1"
+  name = "github.com/portworx/torpedo"
 
 [[constraint]]
   name = "github.com/heptio/ark"

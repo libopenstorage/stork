@@ -582,15 +582,15 @@
   revision = "cccaa09abfc969969eff7b4716c42d820b63c4ec"
 
 [[projects]]
-  branch = "master"
-  digest = "1:4e75f297e0e75ecc4df1917c939d67e0887e129d0229c0512104a8060211efde"
+  branch = "stork-2.1"
+  digest = "1:438d7d1f07a16960cc95e55670722d9dad28747dee516cc4fd953ff382a6aec3"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "10d259768eb3b40dd1ce8a557920722cf237ed59"
+  revision = "180f72f76d5d3435267fdf8a5cf0f64e7e69e36f"
 
 [[projects]]
   branch = "master"
@@ -607,8 +607,8 @@
   revision = "9470631245f591a03dac7192caa5b2e093272be2"
 
 [[projects]]
-  branch = "master"
-  digest = "1:912de004e086a1d23b74c4023aa1acd8431a6da01e55ca4bf29067d155a24f67"
+  branch = "stork-2.1"
+  digest = "1:589898080534e766d440bf23185191464a07702eff5986d5807ff6c0acbe9b4a"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -622,7 +622,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "71709d107d864974f089fd521872d4cd54dac089"
+  revision = "44fa34837f932cbe6d878fc7fb80d5aa845c5677"
 
 [[projects]]
   digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"
@@ -1477,6 +1477,7 @@
     "k8s.io/api/apps/v1beta1",
     "k8s.io/api/apps/v1beta2",
     "k8s.io/api/core/v1",
+    "k8s.io/api/storage/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
     "k8s.io/apimachinery/pkg/api/errors",
