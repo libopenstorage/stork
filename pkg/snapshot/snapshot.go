@@ -48,18 +48,18 @@ func (s *Snapshot) Start() error {
 	}
 	s.stopChannel = make(chan struct{})
 
-	if err := performRuleRecovery(); err != nil {
-		log.Errorf("Failed to perform recovery for snapshot rules due to: %v", err)
-		return err
-	}
-
-	// Start the snapshot controller
+	// Start the snapshot controller first so that the CRD gets registered
 	s.snapshotController = &controllers.Snapshotter{
 		Driver: s.Driver,
 	}
 	err := s.snapshotController.Start(s.stopChannel)
 	if err != nil {
 		return fmt.Errorf("error starting snapshot controller: %v", err)
+	}
+
+	if err := performRuleRecovery(); err != nil {
+		log.Errorf("Failed to perform recovery for snapshot rules due to: %v", err)
+		return err
 	}
 
 	config, err := rest.InClusterConfig()

@@ -6,11 +6,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
+	apps_api "k8s.io/api/apps/v1beta2"
+	"k8s.io/api/core/v1"
+	storage_api "k8s.io/api/storage/v1"
+)
+
+const (
+	annotationStorageProvisioner = "volume.beta.kubernetes.io/storage-provisioner"
 )
 
 func testExtender(t *testing.T) {
+	t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("singlePVCTest", singlePVCTest)
 	t.Run("statefulsetTest", statefulsetTest)
@@ -143,6 +152,72 @@ func driverNodeErrorTest(t *testing.T) {
 
 	err = volumeDriver.WaitDriverUpOnNode(stoppedNode)
 	require.NoError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
+
+	destroyAndWait(t, ctxs)
+}
+
+func pvcOwnershipTest(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "ownershiptest"),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-repl-1"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+
+	for _, spec := range ctxs[0].App.SpecList {
+		if obj, ok := spec.(*storage_api.StorageClass); ok {
+			err := k8s.Instance().DeleteStorageClass(obj.Name)
+			require.NoError(t, err, "Error deleting storage class for mysql.")
+		}
+		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			updatePVC, err := k8s.Instance().GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			require.NoError(t, err, "Error getting persistent volume claim.")
+			if _, hasKey := updatePVC.Annotations[annotationStorageProvisioner]; hasKey {
+				delete(updatePVC.Annotations, "storage-provisioner")
+			}
+			_, err = k8s.Instance().UpdatePersistentVolumeClaim(updatePVC)
+			require.NoError(t, err, "Error updating annotations in PVC.")
+		}
+	}
+
+	err = volumeDriver.StopDriver(scheduledNodes, false)
+	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
+
+	time.Sleep(3 * time.Minute)
+
+	var errUnscheduledPod bool
+	for _, spec := range ctxs[0].App.SpecList {
+		if obj, ok := spec.(*apps_api.Deployment); ok {
+			if obj.Name == "mysql" {
+				depPods, err := k8s.Instance().GetDeploymentPods(obj)
+				require.NoError(t, err, "Error getting pods for deployment ,mysql.")
+				for _, pod := range depPods {
+					for _, cond := range pod.Status.Conditions {
+						if cond.Type == v1.PodScheduled && cond.Status == v1.ConditionFalse {
+							errUnscheduledPod = true
+						}
+					}
+				}
+			}
+		}
+	}
+	require.Equal(t, true, errUnscheduledPod, "Pod should not have been schedule.")
+
+	err = volumeDriver.StartDriver(scheduledNodes[0])
+	require.NoError(t, err, "Error starting driver on scheduled Node %+v", scheduledNodes[0])
+
+	err = volumeDriver.WaitDriverUpOnNode(scheduledNodes[0])
+	require.NoError(t, err, "Volume driver is not up on Node %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)
 }
