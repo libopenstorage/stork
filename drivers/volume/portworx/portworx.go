@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"math"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ import (
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,14 +51,17 @@ const (
 	// driverName is the name of the portworx driver implementation
 	driverName = "pxd"
 
-	// serviceName is the name of the portworx service
-	serviceName = "portworx-service"
+	// defaultServiceName is the default name of the portworx service
+	defaultServiceName = "portworx-service"
 
-	// namespace is the kubernetes namespace in which portworx daemon set runs
-	namespace = "kube-system"
+	// defaultNamespace is the kubernetes namespace in which portworx daemon set runs
+	defaultNamespace = "kube-system"
 
 	// default API port
-	apiPort = 9001
+	defaultAPIPort = 9001
+
+	// default SDK port
+	defaultSDKPort = 9020
 
 	// provisioner names for portworx volumes
 	provisionerName    = "kubernetes.io/portworx-volume"
@@ -99,6 +103,14 @@ const (
 
 	validateSnapshotTimeout       = 5 * time.Minute
 	validateSnapshotRetryInterval = 10 * time.Second
+
+	clusterDomainsTimeout = 1 * time.Minute
+
+	pxNamespace   = "PX_NAMESPACE"
+	pxServiceName = "PX_SERVICE_NAME"
+
+	pxRestPort = "px-api"
+	pxSdkPort  = "px-sdk"
 )
 
 type cloudSnapStatus struct {
@@ -138,6 +150,8 @@ type portworx struct {
 	volDriver      volume.VolumeDriver
 	store          cache.Store
 	stopChannel    chan struct{}
+	restPort       int
+	sdkPort        int
 }
 
 func (p *portworx) String() string {
@@ -145,7 +159,34 @@ func (p *portworx) String() string {
 }
 
 func (p *portworx) Init(_ interface{}) error {
+
+	if err := p.initPortworxClients(); err != nil {
+		return err
+	}
+
+	p.stopChannel = make(chan struct{})
+	return p.startNodeCache()
+}
+
+func (p *portworx) Stop() error {
+	close(p.stopChannel)
+	return nil
+}
+
+func (p *portworx) initPortworxClients() error {
 	var endpoint string
+
+	// Check if service name and namespace is provided
+	// as environment variables
+	serviceName := os.Getenv(pxServiceName)
+	if len(serviceName) == 0 {
+		serviceName = defaultServiceName
+	}
+	namespace := os.Getenv(pxNamespace)
+	if len(namespace) == 0 {
+		namespace = defaultNamespace
+	}
+
 	svc, err := k8s.Instance().GetService(serviceName, namespace)
 	if err == nil {
 		endpoint = svc.Spec.ClusterIP
@@ -157,8 +198,25 @@ func (p *portworx) Init(_ interface{}) error {
 		return fmt.Errorf("Failed to get endpoint for portworx volume driver")
 	}
 
-	logrus.Infof("Using %v as endpoint for portworx volume driver", endpoint)
-	endpointPort := fmt.Sprintf("http://%v:%v", endpoint, apiPort)
+	p.restPort = defaultAPIPort
+	p.sdkPort = defaultSDKPort
+
+	// Get the ports from service
+	for _, svcPort := range svc.Spec.Ports {
+		if svcPort.Name == pxSdkPort &&
+			svcPort.Port != 0 {
+			p.sdkPort = int(svcPort.Port)
+		} else if svcPort.Name == pxRestPort &&
+			svcPort.Port != 0 {
+			p.restPort = int(svcPort.Port)
+		}
+	}
+
+	logrus.Infof("Using %v:%v as endpoint for portworx REST endpoint", endpoint, p.restPort)
+
+	// Setup REST clients
+
+	endpointPort := fmt.Sprintf("http://%v:%v", endpoint, p.restPort)
 	clnt, err := clusterclient.NewClusterClient(endpointPort, "v1")
 	if err != nil {
 		return err
@@ -171,14 +229,6 @@ func (p *portworx) Init(_ interface{}) error {
 	}
 
 	p.volDriver = volumeclient.VolumeDriver(clnt)
-
-	p.stopChannel = make(chan struct{})
-	err = p.startNodeCache()
-	return err
-}
-
-func (p *portworx) Stop() error {
-	close(p.stopChannel)
 	return nil
 }
 
@@ -1138,7 +1188,7 @@ func (p *portworx) CreatePair(pair *stork_crd.ClusterPair) (string, error) {
 		return "", err
 	}
 
-	port := uint64(apiPort)
+	port := uint64(defaultAPIPort)
 	if p, ok := pair.Spec.Options["port"]; ok {
 		port, err = strconv.ParseUint(p, 10, 32)
 		if err != nil {
