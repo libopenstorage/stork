@@ -148,6 +148,12 @@ func ValidateSchedulePolicy(policy *stork_api.SchedulePolicy) error {
 	if policy == nil {
 		return nil
 	}
+
+	if policy.Policy.Interval != nil {
+		if err := policy.Policy.Interval.Validate(); err != nil {
+			return err
+		}
+	}
 	if policy.Policy.Daily != nil {
 		if err := policy.Policy.Daily.Validate(); err != nil {
 			return err
