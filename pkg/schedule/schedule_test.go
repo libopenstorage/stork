@@ -229,6 +229,17 @@ func validateSchedulePolicyTest(t *testing.T) {
 
 	policy = &stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
+			Name: "invalidintervalpolicy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Interval: &stork_api.IntervalPolicy{},
+		},
+	}
+	err = ValidateSchedulePolicy(policy)
+	require.Error(t, err, "Invalid interval policy should return error")
+
+	policy = &stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
 			Name: "invaliddailypolicy",
 		},
 		Policy: stork_api.SchedulePolicyItem{
