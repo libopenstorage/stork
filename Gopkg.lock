@@ -1537,7 +1537,9 @@
     "k8s.io/kubernetes/pkg/kubelet/apis",
     "k8s.io/kubernetes/pkg/printers",
     "k8s.io/kubernetes/pkg/registry/core/service/portallocator",
+    "k8s.io/kubernetes/pkg/scheduler/algorithm",
     "k8s.io/kubernetes/pkg/scheduler/api",
+    "k8s.io/kubernetes/pkg/util/node",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
