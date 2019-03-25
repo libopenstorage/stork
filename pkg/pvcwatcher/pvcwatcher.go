@@ -25,6 +25,7 @@ import (
 const (
 	annotationPrefix                       = "stork.libopenstorage.org/"
 	snapshotSchedulePolicyAnnotationPrefix = "snapshotschedule." + annotationPrefix
+	scheduleCreatedAnnotation              = annotationPrefix + "snapshot-schedule-created"
 )
 
 // PVCWatcher watches for changes in PVCs
@@ -94,6 +95,12 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *v1.PersistentVolumeClaim
 	if !p.Driver.OwnsPVC(pvc) || pvc.Status.Phase != v1.ClaimBound {
 		return nil
 	}
+
+	// Also skip if we've already configured the snapshot schedule for this PVC
+	if configured, ok := pvc.Annotations[scheduleCreatedAnnotation]; ok && configured == "yes" {
+		return nil
+	}
+
 	storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 	if storageClassName == "" {
 		return nil
@@ -155,6 +162,16 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *v1.PersistentVolumeClaim
 			v1.EventTypeNormal,
 			"Success",
 			fmt.Sprintf("Created volume snapshot schedule (%v) for PVC", snapshotScheduleName))
+	}
+	if len(policiesMap) > 0 {
+		if pvc.Annotations == nil {
+			pvc.Annotations = make(map[string]string)
+		}
+		pvc.Annotations[scheduleCreatedAnnotation] = "yes"
+		_, err = k8s.Instance().UpdatePersistentVolumeClaim(pvc)
+		if err != nil {
+			return err
+		}
 	}
 
 	return err
