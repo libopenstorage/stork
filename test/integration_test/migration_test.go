@@ -316,6 +316,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 	)
 
 	namespace := preMigrationCtx.GetID()
+	time.Sleep(90 * time.Second)
 
 	// **** TEST ensure 0 migrations since the schedule is invalid. Also check events for invalid specs
 	for _, migrationScheduleName := range migrationSchedules {
@@ -382,7 +383,17 @@ func migrationScheduleTest(
 		require.True(t, found, fmt.Sprintf("failed to find date from given schedule day: %s", scheduleDay))
 	}
 
-	nextTrigger := time.Date(time.Now().Year(), time.Now().Month(), date, 12, 4, 0, 0, time.Local)
+	month := time.Now().Month()
+	// Increment the month if we went to the next
+	if date < time.Now().Day() {
+		month++
+	}
+	// Increment the year if we went to the next
+	year := time.Now().Year()
+	if month < time.Now().Month() {
+		year++
+	}
+	nextTrigger := time.Date(year, month, date, 12, 4, 0, 0, time.Local)
 	// Set time 2 hours before the scheduled time so no migrations run
 	mockNow := nextTrigger.Add(-2 * time.Hour)
 
