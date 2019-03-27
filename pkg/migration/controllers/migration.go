@@ -534,7 +534,11 @@ func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIRes
 		"StatefulSet",
 		"ConfigMap",
 		"Service",
-		"Secret":
+		"Secret",
+		"DaemonSet",
+		"ServiceAccount",
+		"ClusterRole",
+		"ClusterRoleBinding":
 		return true
 	default:
 		return false
@@ -631,12 +635,39 @@ func (m *MigrationController) objectToBeMigrated(
 			return false, nil
 		}
 		return true, nil
-	case "Secret":
-		secretType, err := collections.GetString(object.UnstructuredContent(), "type")
+	case "ClusterRoleBinding":
+		name := metadata.GetName()
+		crb, err := k8s.Instance().GetClusterRoleBinding(name)
 		if err != nil {
 			return false, err
 		}
-		if secretType == string(v1.SecretTypeServiceAccountToken) {
+		for _, subject := range crb.Subjects {
+			if subject.Namespace == namespace {
+				return true, nil
+			}
+		}
+		return false, nil
+	case "ClusterRole":
+		name := metadata.GetName()
+		crbs, err := k8s.Instance().ListClusterRoleBindings()
+		if err != nil {
+			return false, err
+		}
+		for _, crb := range crbs.Items {
+			if crb.RoleRef.Name == name {
+				for _, subject := range crb.Subjects {
+					if subject.Namespace == namespace {
+						return true, nil
+					}
+				}
+			}
+		}
+		return false, nil
+
+	case "ServiceAccount":
+		// Don't migrate the default service account
+		name := metadata.GetName()
+		if name == "default" {
 			return false, nil
 		}
 	}
