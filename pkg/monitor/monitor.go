@@ -10,6 +10,10 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	"k8s.io/kubernetes/pkg/util/node"
 )
 
 const (
@@ -44,6 +48,10 @@ func (m *Monitor) Start() error {
 
 	m.stopChannel = make(chan int)
 	m.done = make(chan int)
+
+	if err := m.podMonitor(); err != nil {
+		return err
+	}
 
 	go m.driverMonitor()
 
@@ -80,8 +88,68 @@ func (m *Monitor) isSameNode(k8sNodeName string, driverNode *volume.NodeInfo) bo
 	return volume.IsNodeMatch(node, driverNode)
 }
 
+func (m *Monitor) podMonitor() error {
+	fn := func(object runtime.Object) error {
+		pod, ok := object.(*v1.Pod)
+		if !ok {
+			err := fmt.Errorf("invalid object type on pod watch: %v", object)
+			return err
+		}
+
+		podUnknownState := false
+
+		if pod.Status.Reason == node.NodeUnreachablePodReason {
+			podUnknownState = true
+		} else if pod.ObjectMeta.DeletionTimestamp != nil {
+			n, err := k8s.Instance().GetNodeByName(pod.Spec.NodeName)
+			if err != nil {
+				return err
+			}
+
+			// Check if node has eviction taint
+			for _, taint := range n.Spec.Taints {
+				if taint.Key == algorithm.TaintNodeUnreachable &&
+					taint.Effect == v1.TaintEffectNoExecute {
+					podUnknownState = true
+					break
+				}
+			}
+		}
+
+		if podUnknownState {
+			owns, err := m.doesDriverOwnPodVolumes(pod)
+			if err != nil || !owns {
+				return nil
+			}
+
+			storklog.PodLog(pod).Infof("Force deleting pod as it's in unknown state.")
+
+			// force delete the pod
+			err = k8s.Instance().DeletePods([]v1.Pod{*pod}, true)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					return nil
+				}
+
+				storklog.PodLog(pod).Errorf("Error deleting pod: %v", err)
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	if err := k8s.Instance().WatchPods("", fn); err != nil {
+		log.Errorf("failed to watch pods due to: %v", err)
+		return err
+	}
+
+	return nil
+}
+
 func (m *Monitor) driverMonitor() {
 	defer close(m.done)
+
 	for {
 		select {
 		default:
@@ -102,15 +170,8 @@ func (m *Monitor) driverMonitor() {
 						continue
 					}
 					for _, pod := range pods.Items {
-
-						volumes, err := m.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
-						if err != nil {
-							storklog.PodLog(&pod).Errorf("Error getting volumes for pod: %v", err)
-							continue
-						}
-
-						if len(volumes) == 0 {
-							storklog.PodLog(&pod).Debugf("Pod doesn't have any volumes by driver, skipping")
+						owns, err := m.doesDriverOwnPodVolumes(&pod)
+						if err != nil || !owns {
 							continue
 						}
 
@@ -131,4 +192,19 @@ func (m *Monitor) driverMonitor() {
 			return
 		}
 	}
+}
+
+func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
+	volumes, err := m.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
+	if err != nil {
+		storklog.PodLog(pod).Errorf("Error getting volumes for pod: %v", err)
+		return false, err
+	}
+
+	if len(volumes) == 0 {
+		storklog.PodLog(pod).Debugf("Pod doesn't have any volumes by driver")
+		return false, nil
+	}
+
+	return true, nil
 }

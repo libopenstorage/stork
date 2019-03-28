@@ -60,10 +60,13 @@ errcheck:
 	go get -v github.com/kisielk/errcheck
 	errcheck -verbose -blank $(PKGS)
 
-fmt:
+check-fmt:
 	bash -c "diff -u <(echo -n) <(gofmt -l -d -s -e $(GO_FILES))"
 
-pretest: fmt lint vet errcheck simple
+do-fmt:
+	 gofmt -s -w $(GO_FILES)
+
+pretest: check-fmt lint vet errcheck simple
 
 test:
 	echo "" > coverage.txt
