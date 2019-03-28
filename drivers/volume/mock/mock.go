@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	driverName       = "MockDriver"
+	driverName = "MockDriver"
+	// storageClassName is the storage class for mock driver PVCs
 	storageClassName = "mockDriverStorageClass"
 	provisionerName  = "kubernetes.io/mock-volume"
 	// RackLabel Label used for the mock driver to set rack information
