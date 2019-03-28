@@ -13,7 +13,7 @@ import (
 	"k8s.io/kubernetes/pkg/printers"
 )
 
-var migrationScheduleColumns = []string{"NAME", "POLICYNAME", "CLUSTERPAIR", "SUSPEND", "LAST-SUCCESS-TIME"}
+var migrationScheduleColumns = []string{"NAME", "POLICYNAME", "CLUSTERPAIR", "SUSPEND", "LAST-SUCCESS-TIME", "LAST-SUCCESS-DURATION"}
 var migrationScheduleSubcommand = "migrationschedules"
 var migrationScheduleAliases = []string{"migrationschedule"}
 
@@ -229,6 +229,7 @@ func migrationSchedulePrinter(migrationScheduleList *storkv1.MigrationScheduleLi
 		}
 
 		lastSuccessTime := time.Time{}
+		lastSuccessDuration := ""
 		for _, policyType := range storkv1.GetValidSchedulePolicyTypes() {
 			if len(migrationSchedule.Status.Items[policyType]) == 0 {
 				continue
@@ -236,6 +237,7 @@ func migrationSchedulePrinter(migrationScheduleList *storkv1.MigrationScheduleLi
 			for _, migrationStatus := range migrationSchedule.Status.Items[policyType] {
 				if migrationStatus.Status == storkv1.MigrationStatusSuccessful && migrationStatus.FinishTimestamp.Time.After(lastSuccessTime) {
 					lastSuccessTime = migrationStatus.FinishTimestamp.Time
+					lastSuccessDuration = migrationStatus.FinishTimestamp.Time.Sub(migrationStatus.CreationTimestamp.Time).String()
 				}
 			}
 		}
@@ -247,12 +249,13 @@ func migrationSchedulePrinter(migrationScheduleList *storkv1.MigrationScheduleLi
 			suspend = *migrationSchedule.Spec.Suspend
 		}
 
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\n",
+		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\n",
 			name,
 			migrationSchedule.Spec.SchedulePolicyName,
 			migrationSchedule.Spec.Template.Spec.ClusterPair,
 			suspend,
 			toTimeString(lastSuccessTime),
+			lastSuccessDuration,
 		); err != nil {
 			return err
 		}

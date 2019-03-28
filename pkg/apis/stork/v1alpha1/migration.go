@@ -25,10 +25,11 @@ type MigrationSpec struct {
 
 // MigrationStatus is the status of a migration operation
 type MigrationStatus struct {
-	Stage     MigrationStageType  `json:"stage"`
-	Status    MigrationStatusType `json:"status"`
-	Resources []*ResourceInfo     `json:"resources"`
-	Volumes   []*VolumeInfo       `json:"volumes"`
+	Stage           MigrationStageType  `json:"stage"`
+	Status          MigrationStatusType `json:"status"`
+	Resources       []*ResourceInfo     `json:"resources"`
+	Volumes         []*VolumeInfo       `json:"volumes"`
+	FinishTimestamp meta.Time           `json:"finishTimestamp"`
 }
 
 // ResourceInfo is the info for the migration of a resource
