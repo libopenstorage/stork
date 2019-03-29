@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
@@ -57,8 +58,8 @@ func TestGetMigrationSchedulesOneMigrationSchedule(t *testing.T) {
 	defer resetTest()
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest", "testpolicy", "test", "clusterpair1", []string{"namespace1"}, "preExec", "postExec", true)
 
-	expected := "NAME                       POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest   testpolicy   clusterpair1   true      \n"
+	expected := "NAME                       POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
+		"getmigrationscheduletest   testpolicy   clusterpair1   true                          \n"
 
 	cmdArgs := []string{"get", "migrationschedules", "-n", "test"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -69,9 +70,9 @@ func TestGetMigrationSchedulesMultiple(t *testing.T) {
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "", true)
 
-	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest1   testpolicy   clusterpair1   true      \n" +
-		"getmigrationscheduletest2   testpolicy   clusterpair2   true      \n"
+	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
+		"getmigrationscheduletest1   testpolicy   clusterpair1   true                          \n" +
+		"getmigrationscheduletest2   testpolicy   clusterpair2   true                          \n"
 
 	cmdArgs := []string{"get", "migrationschedules", "getmigrationscheduletest1", "getmigrationscheduletest2"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -80,8 +81,8 @@ func TestGetMigrationSchedulesMultiple(t *testing.T) {
 	cmdArgs = []string{"get", "migrationschedules"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	expected = "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest1   testpolicy   clusterpair1   true      \n"
+	expected = "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
+		"getmigrationscheduletest1   testpolicy   clusterpair1   true                          \n"
 	// Should get only one migration if name given
 	cmdArgs = []string{"get", "migrationschedules", "getmigrationscheduletest1"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -97,17 +98,17 @@ func TestGetMigrationSchedulesMultipleNamespaces(t *testing.T) {
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "test1", "clusterpair1", []string{"namespace1"}, "", "", true)
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "test2", "clusterpair2", []string{"namespace1"}, "", "", true)
 
-	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest1   testpolicy   clusterpair1   true      \n"
+	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
+		"getmigrationscheduletest1   testpolicy   clusterpair1   true                          \n"
 
 	cmdArgs := []string{"get", "migrationschedules", "-n", "test1"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Should get all migrationschedules
 	cmdArgs = []string{"get", "migrationschedules", "--all-namespaces"}
-	expected = "NAMESPACE   NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"test1       getmigrationscheduletest1   testpolicy   clusterpair1   true      \n" +
-		"test2       getmigrationscheduletest2   testpolicy   clusterpair2   true      \n"
+	expected = "NAMESPACE   NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
+		"test1       getmigrationscheduletest1   testpolicy   clusterpair1   true                          \n" +
+		"test2       getmigrationscheduletest2   testpolicy   clusterpair2   true                          \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -116,8 +117,8 @@ func TestGetMigrationSchedulesWithClusterPair(t *testing.T) {
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest2", "testpolicy", "default", "clusterpair2", []string{"namespace1"}, "", "", true)
 
-	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"getmigrationscheduletest1   testpolicy   clusterpair1   true      \n"
+	expected := "NAME                        POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME   LAST-SUCCESS-DURATION\n" +
+		"getmigrationscheduletest1   testpolicy   clusterpair1   true                          \n"
 
 	cmdArgs := []string{"get", "migrationschedules", "-c", "clusterpair1"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -133,50 +134,53 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	migrationSchedule.Status.Items = make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledMigrationStatus)
 	migrationSchedule.Status.Items[storkv1.SchedulePolicyTypeDaily] = make([]*storkv1.ScheduledMigrationStatus, 0)
 	now := metav1.Now()
+	finishTimestamp := metav1.NewTime(now.Add(5 * time.Minute))
 	migrationSchedule.Status.Items[storkv1.SchedulePolicyTypeDaily] = append(migrationSchedule.Status.Items[storkv1.SchedulePolicyTypeDaily],
 		&storkv1.ScheduledMigrationStatus{
 			Name:              "dailymigration",
 			CreationTimestamp: now,
-			FinishTimestamp:   now,
+			FinishTimestamp:   finishTimestamp,
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
 	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
 
-	expected := "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(now.Time) + "\n"
+	expected := "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
+		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
 	cmdArgs := []string{"get", "migrationschedules", "getmigrationschedulestatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	now = metav1.Now()
+	finishTimestamp = metav1.NewTime(now.Add(5 * time.Minute))
 	migrationSchedule.Status.Items[storkv1.SchedulePolicyTypeWeekly] = append(migrationSchedule.Status.Items[storkv1.SchedulePolicyTypeWeekly],
 		&storkv1.ScheduledMigrationStatus{
 			Name:              "weeklymigration",
 			CreationTimestamp: now,
-			FinishTimestamp:   now,
+			FinishTimestamp:   finishTimestamp,
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
 	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
 
-	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(now.Time) + "\n"
+	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
+		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
 	cmdArgs = []string{"get", "migrationschedules", "getmigrationschedulestatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	now = metav1.Now()
+	finishTimestamp = metav1.NewTime(now.Add(5 * time.Minute))
 	migrationSchedule.Status.Items[storkv1.SchedulePolicyTypeMonthly] = append(migrationSchedule.Status.Items[storkv1.SchedulePolicyTypeMonthly],
 		&storkv1.ScheduledMigrationStatus{
 			Name:              "monthlymigration",
 			CreationTimestamp: now,
-			FinishTimestamp:   now,
+			FinishTimestamp:   finishTimestamp,
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
 	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
 
-	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME\n" +
-		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(now.Time) + "\n"
+	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
+		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
 	cmdArgs = []string{"get", "migrationschedules", "getmigrationschedulestatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }

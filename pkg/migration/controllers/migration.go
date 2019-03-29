@@ -191,6 +191,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 				if err != nil {
 					migration.Status.Status = stork_api.MigrationStatusFailed
 					migration.Status.Stage = stork_api.MigrationStageFinal
+					migration.Status.FinishTimestamp = metav1.Now()
 					err = fmt.Errorf("Error getting namespace %v: %v", ns, err)
 					log.MigrationLog(migration).Errorf(err.Error())
 					m.Recorder.Event(migration,
@@ -368,6 +369,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 					log.MigrationLog(migration).Errorf("Error cancelling migration: %v", err)
 				}
 				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.FinishTimestamp = metav1.Now()
 				migration.Status.Status = stork_api.MigrationStatusFailed
 				err = sdk.Update(migration)
 				if err != nil {
@@ -408,6 +410,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 					string(vInfo.Status),
 					fmt.Sprintf("Error migrating volume %v: %v", vInfo.Volume, vInfo.Reason))
 				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.FinishTimestamp = metav1.Now()
 				migration.Status.Status = stork_api.MigrationStatusFailed
 			} else if vInfo.Status == stork_api.MigrationStatusSuccessful {
 				m.Recorder.Event(migration,
@@ -441,6 +444,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			}
 		} else {
 			migration.Status.Stage = stork_api.MigrationStageFinal
+			migration.Status.FinishTimestamp = metav1.Now()
 			migration.Status.Status = stork_api.MigrationStatusSuccessful
 		}
 	}
@@ -711,6 +715,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	}
 
 	migration.Status.Stage = stork_api.MigrationStageFinal
+	migration.Status.FinishTimestamp = metav1.Now()
 	migration.Status.Status = stork_api.MigrationStatusSuccessful
 	for _, resource := range migration.Status.Resources {
 		if resource.Status != stork_api.MigrationStatusSuccessful {

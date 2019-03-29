@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
@@ -14,7 +15,7 @@ import (
 	"k8s.io/kubernetes/pkg/printers"
 )
 
-var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED"}
+var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED"}
 var migrationSubcommand = "migrations"
 var migrationAliases = []string{"migration"}
 
@@ -356,8 +357,19 @@ func migrationPrinter(migrationList *storkv1.MigrationList, writer io.Writer, op
 			}
 		}
 
+		elapsed := ""
+		if !migration.CreationTimestamp.IsZero() {
+			if migration.Status.Stage == storkv1.MigrationStageFinal {
+				if !migration.Status.FinishTimestamp.IsZero() {
+					elapsed = migration.Status.FinishTimestamp.Sub(migration.CreationTimestamp.Time).String()
+				}
+			} else {
+				elapsed = time.Since(migration.CreationTimestamp.Time).String()
+			}
+		}
+
 		creationTime := toTimeString(migration.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v/%v\t%v/%v\t%v\n",
+		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v/%v\t%v/%v\t%v\t%v\n",
 			name,
 			migration.Spec.ClusterPair,
 			migration.Status.Stage,
@@ -366,7 +378,8 @@ func migrationPrinter(migrationList *storkv1.MigrationList, writer io.Writer, op
 			totalVolumes,
 			doneResources,
 			totalResources,
-			creationTime); err != nil {
+			creationTime,
+			elapsed); err != nil {
 			return err
 		}
 	}

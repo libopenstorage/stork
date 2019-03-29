@@ -18,6 +18,7 @@ type ClusterDomainUpdateSpec struct {
 }
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterDomainUpdate indicates the update need to be done on a ClusterDomain
