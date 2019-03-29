@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
+	"github.com/libopenstorage/openstorage/pkg/auth"
 
 	"github.com/mohae/deepcopy"
 )
@@ -15,6 +17,8 @@ import (
 // Strings for VolumeSpec
 const (
 	Name                     = "name"
+	Token                    = "token"
+	TokenSecret              = "token_secret"
 	SpecNodes                = "nodes"
 	SpecParent               = "parent"
 	SpecEphemeral            = "ephemeral"
@@ -108,6 +112,8 @@ const (
 	// OptOptCredAzureAccountKey is the accountkey for
 	// azure as the cloud provider
 	OptCredAzureAccountKey = "CredAccountKey"
+	// Credential ownership key in params
+	OptCredOwnership = "CredOwnership"
 	// OptCloudBackupID is the backID in the cloud
 	OptCloudBackupID = "CloudBackID"
 	// OptSrcVolID is the source volume ID of the backup
@@ -184,6 +190,8 @@ type Node struct {
 	NodeData map[string]interface{}
 	// User defined labels for node. Key Value pairs
 	NodeLabels map[string]string
+	// GossipPort is the port used by the gossip protocol
+	GossipPort string
 }
 
 // FluentDConfig describes ip and port of a fluentdhost.
@@ -749,12 +757,6 @@ func (m *Volume) Contains(mid string) bool {
 // Copy makes a deep copy of VolumeSpec
 func (s *VolumeSpec) Copy() *VolumeSpec {
 	spec := *s
-	if s.VolumeLabels != nil {
-		spec.VolumeLabels = make(map[string]string)
-		for k, v := range s.VolumeLabels {
-			spec.VolumeLabels[k] = v
-		}
-	}
 	if s.ReplicaSet != nil {
 		spec.ReplicaSet = &ReplicaSet{Nodes: make([]string, len(s.ReplicaSet.Nodes))}
 		copy(spec.ReplicaSet.Nodes, s.ReplicaSet.Nodes)
@@ -855,6 +857,29 @@ func CloudBackupStatusTypeToSdkCloudBackupStatusType(
 	}
 }
 
+func SdkCloudBackupStatusTypeToCloudBackupStatusString(
+	t SdkCloudBackupStatusType,
+) string {
+	switch t {
+	case SdkCloudBackupStatusType_SdkCloudBackupStatusTypeNotStarted:
+		return string(CloudBackupStatusNotStarted)
+	case SdkCloudBackupStatusType_SdkCloudBackupStatusTypeDone:
+		return string(CloudBackupStatusDone)
+	case SdkCloudBackupStatusType_SdkCloudBackupStatusTypeAborted:
+		return string(CloudBackupStatusAborted)
+	case SdkCloudBackupStatusType_SdkCloudBackupStatusTypePaused:
+		return string(CloudBackupStatusPaused)
+	case SdkCloudBackupStatusType_SdkCloudBackupStatusTypeStopped:
+		return string(CloudBackupStatusStopped)
+	case SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive:
+		return string(CloudBackupStatusActive)
+	case SdkCloudBackupStatusType_SdkCloudBackupStatusTypeFailed:
+		return string(CloudBackupStatusFailed)
+	default:
+		return string(CloudBackupStatusFailed)
+	}
+}
+
 func StringToSdkCloudBackupStatusType(s string) SdkCloudBackupStatusType {
 	return CloudBackupStatusTypeToSdkCloudBackupStatusType(CloudBackupStatusType(s))
 }
@@ -952,4 +977,89 @@ func (r *CloudBackupHistoryResponse) ToSdkCloudBackupHistoryResponse() *SdkCloud
 	}
 
 	return resp
+}
+
+func (l *VolumeLocator) MergeVolumeSpecLabels(s *VolumeSpec) *VolumeLocator {
+	for k, v := range s.GetVolumeLabels() {
+		l.VolumeLabels[k] = v
+	}
+
+	return l
+}
+
+func (v *Volume) IsPermitted(ctx context.Context, accessType Ownership_AccessType) bool {
+	return v.GetSpec().IsPermitted(ctx, accessType)
+}
+
+func (v *VolumeSpec) IsPermitted(ctx context.Context, accessType Ownership_AccessType) bool {
+	return v.GetOwnership().IsPermittedByContext(ctx, accessType)
+}
+
+func (v *VolumeSpec) IsPermittedFromUserInfo(user *auth.UserInfo, accessType Ownership_AccessType) bool {
+	if v.IsPublic() {
+		return true
+	}
+
+	if v.GetOwnership() != nil {
+		return v.GetOwnership().IsPermitted(user, accessType)
+	}
+	return true
+}
+
+func (v *VolumeSpec) IsPublic() bool {
+	return v.GetOwnership() == nil || v.GetOwnership().IsPublic()
+}
+
+// GetCloneCreatorOwnership returns the appropriate ownership for the
+// new snapshot and if an update is required
+func (v *VolumeSpec) GetCloneCreatorOwnership(ctx context.Context) (*Ownership, bool) {
+	o := v.GetOwnership()
+
+	// If there is user information, then auth is enabled
+	if userinfo, ok := auth.NewUserInfoFromContext(ctx); ok {
+
+		// Check if the owner is the one who cloned it
+		if o != nil && o.IsOwner(userinfo) {
+			return o, false
+		}
+
+		// Not the same owner, we now need new ownership.
+		// This works for public volumes also.
+		return OwnershipSetUsernameFromContext(ctx, nil), true
+	}
+
+	return o, false
+}
+
+// Check access permission of SdkStoragePolicy Objects
+
+func (s *SdkStoragePolicy) IsPermitted(ctx context.Context, accessType Ownership_AccessType) bool {
+	if s.IsPublic() {
+		return true
+	}
+
+	// Storage Policy is not public, check permission
+	if userinfo, ok := auth.NewUserInfoFromContext(ctx); ok {
+		// Check Access
+		return s.IsPermittedFromUserInfo(userinfo, accessType)
+	} else {
+		// There is no user information in the context so
+		// authorization is not running
+		return true
+	}
+}
+
+func (s *SdkStoragePolicy) IsPermittedFromUserInfo(user *auth.UserInfo, accessType Ownership_AccessType) bool {
+	if s.IsPublic() {
+		return true
+	}
+
+	if s.GetOwnership() != nil {
+		return s.GetOwnership().IsPermitted(user, accessType)
+	}
+	return true
+}
+
+func (s *SdkStoragePolicy) IsPublic() bool {
+	return s.GetOwnership() == nil || s.GetOwnership().IsPublic()
 }

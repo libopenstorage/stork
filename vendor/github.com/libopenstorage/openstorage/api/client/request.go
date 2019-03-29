@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/libopenstorage/openstorage/pkg/auth"
 )
 
 const (
@@ -256,7 +258,11 @@ func (r *Request) Do() *Response {
 	req.Header.Set("Date", time.Now().String())
 
 	if len(r.authstring) > 0 {
-		req.Header.Set("Authorization", "Basic "+r.authstring)
+		if auth.IsJwtToken(r.authstring) {
+			req.Header.Set("Authorization", "bearer "+r.authstring)
+		} else {
+			req.Header.Set("Authorization", "Basic "+r.authstring)
+		}
 	}
 
 	if len(r.accesstoken) > 0 {
