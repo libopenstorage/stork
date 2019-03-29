@@ -30,7 +30,7 @@ import (
 // ClusterDomainUpdatesGetter has a method to return a ClusterDomainUpdateInterface.
 // A group's client should implement this interface.
 type ClusterDomainUpdatesGetter interface {
-	ClusterDomainUpdates(namespace string) ClusterDomainUpdateInterface
+	ClusterDomainUpdates() ClusterDomainUpdateInterface
 }
 
 // ClusterDomainUpdateInterface has methods to work with ClusterDomainUpdate resources.
@@ -50,14 +50,12 @@ type ClusterDomainUpdateInterface interface {
 // clusterDomainUpdates implements ClusterDomainUpdateInterface
 type clusterDomainUpdates struct {
 	client rest.Interface
-	ns     string
 }
 
 // newClusterDomainUpdates returns a ClusterDomainUpdates
-func newClusterDomainUpdates(c *StorkV1alpha1Client, namespace string) *clusterDomainUpdates {
+func newClusterDomainUpdates(c *StorkV1alpha1Client) *clusterDomainUpdates {
 	return &clusterDomainUpdates{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -65,7 +63,6 @@ func newClusterDomainUpdates(c *StorkV1alpha1Client, namespace string) *clusterD
 func (c *clusterDomainUpdates) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	result = &v1alpha1.ClusterDomainUpdate{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -78,7 +75,6 @@ func (c *clusterDomainUpdates) Get(name string, options v1.GetOptions) (result *
 func (c *clusterDomainUpdates) List(opts v1.ListOptions) (result *v1alpha1.ClusterDomainUpdateList, err error) {
 	result = &v1alpha1.ClusterDomainUpdateList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Do().
@@ -90,7 +86,6 @@ func (c *clusterDomainUpdates) List(opts v1.ListOptions) (result *v1alpha1.Clust
 func (c *clusterDomainUpdates) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Watch()
@@ -100,7 +95,6 @@ func (c *clusterDomainUpdates) Watch(opts v1.ListOptions) (watch.Interface, erro
 func (c *clusterDomainUpdates) Create(clusterDomainUpdate *v1alpha1.ClusterDomainUpdate) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	result = &v1alpha1.ClusterDomainUpdate{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		Body(clusterDomainUpdate).
 		Do().
@@ -112,7 +106,6 @@ func (c *clusterDomainUpdates) Create(clusterDomainUpdate *v1alpha1.ClusterDomai
 func (c *clusterDomainUpdates) Update(clusterDomainUpdate *v1alpha1.ClusterDomainUpdate) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	result = &v1alpha1.ClusterDomainUpdate{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		Name(clusterDomainUpdate.Name).
 		Body(clusterDomainUpdate).
@@ -127,7 +120,6 @@ func (c *clusterDomainUpdates) Update(clusterDomainUpdate *v1alpha1.ClusterDomai
 func (c *clusterDomainUpdates) UpdateStatus(clusterDomainUpdate *v1alpha1.ClusterDomainUpdate) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	result = &v1alpha1.ClusterDomainUpdate{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		Name(clusterDomainUpdate.Name).
 		SubResource("status").
@@ -140,7 +132,6 @@ func (c *clusterDomainUpdates) UpdateStatus(clusterDomainUpdate *v1alpha1.Cluste
 // Delete takes name of the clusterDomainUpdate and deletes it. Returns an error if one occurs.
 func (c *clusterDomainUpdates) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		Name(name).
 		Body(options).
@@ -151,7 +142,6 @@ func (c *clusterDomainUpdates) Delete(name string, options *v1.DeleteOptions) er
 // DeleteCollection deletes a collection of objects.
 func (c *clusterDomainUpdates) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Body(options).
@@ -163,7 +153,6 @@ func (c *clusterDomainUpdates) DeleteCollection(options *v1.DeleteOptions, listO
 func (c *clusterDomainUpdates) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	result = &v1alpha1.ClusterDomainUpdate{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("clusterdomainupdates").
 		SubResource(subresources...).
 		Name(name).

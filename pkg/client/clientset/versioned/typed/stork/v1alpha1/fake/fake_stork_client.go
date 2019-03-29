@@ -28,12 +28,12 @@ type FakeStorkV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeStorkV1alpha1) ClusterDomainUpdates(namespace string) v1alpha1.ClusterDomainUpdateInterface {
-	return &FakeClusterDomainUpdates{c, namespace}
+func (c *FakeStorkV1alpha1) ClusterDomainUpdates() v1alpha1.ClusterDomainUpdateInterface {
+	return &FakeClusterDomainUpdates{c}
 }
 
-func (c *FakeStorkV1alpha1) ClusterDomainsStatuses(namespace string) v1alpha1.ClusterDomainsStatusInterface {
-	return &FakeClusterDomainsStatuses{c, namespace}
+func (c *FakeStorkV1alpha1) ClusterDomainsStatuses() v1alpha1.ClusterDomainsStatusInterface {
+	return &FakeClusterDomainsStatuses{c}
 }
 
 func (c *FakeStorkV1alpha1) ClusterPairs(namespace string) v1alpha1.ClusterPairInterface {

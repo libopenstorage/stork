@@ -29,8 +29,8 @@ import (
 type ClusterDomainUpdateLister interface {
 	// List lists all ClusterDomainUpdates in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterDomainUpdate, err error)
-	// ClusterDomainUpdates returns an object that can list and get ClusterDomainUpdates.
-	ClusterDomainUpdates(namespace string) ClusterDomainUpdateNamespaceLister
+	// Get retrieves the ClusterDomainUpdate from the index for a given name.
+	Get(name string) (*v1alpha1.ClusterDomainUpdate, error)
 	ClusterDomainUpdateListerExpansion
 }
 
@@ -52,38 +52,9 @@ func (s *clusterDomainUpdateLister) List(selector labels.Selector) (ret []*v1alp
 	return ret, err
 }
 
-// ClusterDomainUpdates returns an object that can list and get ClusterDomainUpdates.
-func (s *clusterDomainUpdateLister) ClusterDomainUpdates(namespace string) ClusterDomainUpdateNamespaceLister {
-	return clusterDomainUpdateNamespaceLister{indexer: s.indexer, namespace: namespace}
-}
-
-// ClusterDomainUpdateNamespaceLister helps list and get ClusterDomainUpdates.
-type ClusterDomainUpdateNamespaceLister interface {
-	// List lists all ClusterDomainUpdates in the indexer for a given namespace.
-	List(selector labels.Selector) (ret []*v1alpha1.ClusterDomainUpdate, err error)
-	// Get retrieves the ClusterDomainUpdate from the indexer for a given namespace and name.
-	Get(name string) (*v1alpha1.ClusterDomainUpdate, error)
-	ClusterDomainUpdateNamespaceListerExpansion
-}
-
-// clusterDomainUpdateNamespaceLister implements the ClusterDomainUpdateNamespaceLister
-// interface.
-type clusterDomainUpdateNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ClusterDomainUpdates in the indexer for a given namespace.
-func (s clusterDomainUpdateNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.ClusterDomainUpdate, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ClusterDomainUpdate))
-	})
-	return ret, err
-}
-
-// Get retrieves the ClusterDomainUpdate from the indexer for a given namespace and name.
-func (s clusterDomainUpdateNamespaceLister) Get(name string) (*v1alpha1.ClusterDomainUpdate, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+// Get retrieves the ClusterDomainUpdate from the index for a given name.
+func (s *clusterDomainUpdateLister) Get(name string) (*v1alpha1.ClusterDomainUpdate, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}

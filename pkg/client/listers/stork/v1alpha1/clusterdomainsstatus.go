@@ -29,8 +29,8 @@ import (
 type ClusterDomainsStatusLister interface {
 	// List lists all ClusterDomainsStatuses in the indexer.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterDomainsStatus, err error)
-	// ClusterDomainsStatuses returns an object that can list and get ClusterDomainsStatuses.
-	ClusterDomainsStatuses(namespace string) ClusterDomainsStatusNamespaceLister
+	// Get retrieves the ClusterDomainsStatus from the index for a given name.
+	Get(name string) (*v1alpha1.ClusterDomainsStatus, error)
 	ClusterDomainsStatusListerExpansion
 }
 
@@ -52,38 +52,9 @@ func (s *clusterDomainsStatusLister) List(selector labels.Selector) (ret []*v1al
 	return ret, err
 }
 
-// ClusterDomainsStatuses returns an object that can list and get ClusterDomainsStatuses.
-func (s *clusterDomainsStatusLister) ClusterDomainsStatuses(namespace string) ClusterDomainsStatusNamespaceLister {
-	return clusterDomainsStatusNamespaceLister{indexer: s.indexer, namespace: namespace}
-}
-
-// ClusterDomainsStatusNamespaceLister helps list and get ClusterDomainsStatuses.
-type ClusterDomainsStatusNamespaceLister interface {
-	// List lists all ClusterDomainsStatuses in the indexer for a given namespace.
-	List(selector labels.Selector) (ret []*v1alpha1.ClusterDomainsStatus, err error)
-	// Get retrieves the ClusterDomainsStatus from the indexer for a given namespace and name.
-	Get(name string) (*v1alpha1.ClusterDomainsStatus, error)
-	ClusterDomainsStatusNamespaceListerExpansion
-}
-
-// clusterDomainsStatusNamespaceLister implements the ClusterDomainsStatusNamespaceLister
-// interface.
-type clusterDomainsStatusNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ClusterDomainsStatuses in the indexer for a given namespace.
-func (s clusterDomainsStatusNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.ClusterDomainsStatus, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ClusterDomainsStatus))
-	})
-	return ret, err
-}
-
-// Get retrieves the ClusterDomainsStatus from the indexer for a given namespace and name.
-func (s clusterDomainsStatusNamespaceLister) Get(name string) (*v1alpha1.ClusterDomainsStatus, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+// Get retrieves the ClusterDomainsStatus from the index for a given name.
+func (s *clusterDomainsStatusLister) Get(name string) (*v1alpha1.ClusterDomainsStatus, error) {
+	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}
