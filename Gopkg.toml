@@ -38,7 +38,7 @@ required = [
   source = "github.com/libopenstorage/external-storage"
   version = "=5.1.0-openstorage"
 
-[[constraint]]
+[[override]]
   name = "github.com/libopenstorage/openstorage"
   branch = "release-6.0"
 
