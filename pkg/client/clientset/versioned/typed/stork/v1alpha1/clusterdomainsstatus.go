@@ -30,7 +30,7 @@ import (
 // ClusterDomainsStatusesGetter has a method to return a ClusterDomainsStatusInterface.
 // A group's client should implement this interface.
 type ClusterDomainsStatusesGetter interface {
-	ClusterDomainsStatuses(namespace string) ClusterDomainsStatusInterface
+	ClusterDomainsStatuses() ClusterDomainsStatusInterface
 }
 
 // ClusterDomainsStatusInterface has methods to work with ClusterDomainsStatus resources.
@@ -50,14 +50,12 @@ type ClusterDomainsStatusInterface interface {
 // clusterDomainsStatuses implements ClusterDomainsStatusInterface
 type clusterDomainsStatuses struct {
 	client rest.Interface
-	ns     string
 }
 
 // newClusterDomainsStatuses returns a ClusterDomainsStatuses
-func newClusterDomainsStatuses(c *StorkV1alpha1Client, namespace string) *clusterDomainsStatuses {
+func newClusterDomainsStatuses(c *StorkV1alpha1Client) *clusterDomainsStatuses {
 	return &clusterDomainsStatuses{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -65,7 +63,6 @@ func newClusterDomainsStatuses(c *StorkV1alpha1Client, namespace string) *cluste
 func (c *clusterDomainsStatuses) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -78,7 +75,6 @@ func (c *clusterDomainsStatuses) Get(name string, options v1.GetOptions) (result
 func (c *clusterDomainsStatuses) List(opts v1.ListOptions) (result *v1alpha1.ClusterDomainsStatusList, err error) {
 	result = &v1alpha1.ClusterDomainsStatusList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Do().
@@ -90,7 +86,6 @@ func (c *clusterDomainsStatuses) List(opts v1.ListOptions) (result *v1alpha1.Clu
 func (c *clusterDomainsStatuses) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Watch()
@@ -100,7 +95,6 @@ func (c *clusterDomainsStatuses) Watch(opts v1.ListOptions) (watch.Interface, er
 func (c *clusterDomainsStatuses) Create(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		Body(clusterDomainsStatus).
 		Do().
@@ -112,7 +106,6 @@ func (c *clusterDomainsStatuses) Create(clusterDomainsStatus *v1alpha1.ClusterDo
 func (c *clusterDomainsStatuses) Update(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		Name(clusterDomainsStatus.Name).
 		Body(clusterDomainsStatus).
@@ -127,7 +120,6 @@ func (c *clusterDomainsStatuses) Update(clusterDomainsStatus *v1alpha1.ClusterDo
 func (c *clusterDomainsStatuses) UpdateStatus(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		Name(clusterDomainsStatus.Name).
 		SubResource("status").
@@ -140,7 +132,6 @@ func (c *clusterDomainsStatuses) UpdateStatus(clusterDomainsStatus *v1alpha1.Clu
 // Delete takes name of the clusterDomainsStatus and deletes it. Returns an error if one occurs.
 func (c *clusterDomainsStatuses) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		Name(name).
 		Body(options).
@@ -151,7 +142,6 @@ func (c *clusterDomainsStatuses) Delete(name string, options *v1.DeleteOptions) 
 // DeleteCollection deletes a collection of objects.
 func (c *clusterDomainsStatuses) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Body(options).
@@ -163,7 +153,6 @@ func (c *clusterDomainsStatuses) DeleteCollection(options *v1.DeleteOptions, lis
 func (c *clusterDomainsStatuses) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("clusterdomainsstatuses").
 		SubResource(subresources...).
 		Name(name).
