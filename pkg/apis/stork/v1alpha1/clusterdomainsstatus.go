@@ -9,6 +9,8 @@ const (
 	ClusterDomainsStatusResourceName = "clusterdomainsstatus"
 	// ClusterDomainsStatusPlural is plural for "clusterdomainsstatus" resource
 	ClusterDomainsStatusPlural = "clusterdomainsstatuses"
+	// ClusterDomainsStatusShortName is the shortname for "clusterdomainsstatus" resource
+	ClusterDomainsStatusShortName = "cds"
 )
 
 // ClusterDomains provides a list of activated cluster domains and a list
