@@ -41,33 +41,32 @@ type ClusterDomainUpdateInformer interface {
 type clusterDomainUpdateInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
-	namespace        string
 }
 
 // NewClusterDomainUpdateInformer constructs a new informer for ClusterDomainUpdate type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewClusterDomainUpdateInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredClusterDomainUpdateInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewClusterDomainUpdateInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredClusterDomainUpdateInformer(client, resyncPeriod, indexers, nil)
 }
 
 // NewFilteredClusterDomainUpdateInformer constructs a new informer for ClusterDomainUpdate type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredClusterDomainUpdateInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredClusterDomainUpdateInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().ClusterDomainUpdates(namespace).List(options)
+				return client.StorkV1alpha1().ClusterDomainUpdates().List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().ClusterDomainUpdates(namespace).Watch(options)
+				return client.StorkV1alpha1().ClusterDomainUpdates().Watch(options)
 			},
 		},
 		&storkv1alpha1.ClusterDomainUpdate{},
@@ -77,7 +76,7 @@ func NewFilteredClusterDomainUpdateInformer(client versioned.Interface, namespac
 }
 
 func (f *clusterDomainUpdateInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredClusterDomainUpdateInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewFilteredClusterDomainUpdateInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
 func (f *clusterDomainUpdateInformer) Informer() cache.SharedIndexInformer {

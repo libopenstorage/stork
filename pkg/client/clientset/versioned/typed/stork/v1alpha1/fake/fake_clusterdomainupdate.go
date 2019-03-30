@@ -31,7 +31,6 @@ import (
 // FakeClusterDomainUpdates implements ClusterDomainUpdateInterface
 type FakeClusterDomainUpdates struct {
 	Fake *FakeStorkV1alpha1
-	ns   string
 }
 
 var clusterdomainupdatesResource = schema.GroupVersionResource{Group: "stork.libopenstorage.org", Version: "v1alpha1", Resource: "clusterdomainupdates"}
@@ -41,8 +40,7 @@ var clusterdomainupdatesKind = schema.GroupVersionKind{Group: "stork.libopenstor
 // Get takes name of the clusterDomainUpdate, and returns the corresponding clusterDomainUpdate object, and an error if there is any.
 func (c *FakeClusterDomainUpdates) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(clusterdomainupdatesResource, c.ns, name), &v1alpha1.ClusterDomainUpdate{})
-
+		Invokes(testing.NewRootGetAction(clusterdomainupdatesResource, name), &v1alpha1.ClusterDomainUpdate{})
 	if obj == nil {
 		return nil, err
 	}
@@ -52,8 +50,7 @@ func (c *FakeClusterDomainUpdates) Get(name string, options v1.GetOptions) (resu
 // List takes label and field selectors, and returns the list of ClusterDomainUpdates that match those selectors.
 func (c *FakeClusterDomainUpdates) List(opts v1.ListOptions) (result *v1alpha1.ClusterDomainUpdateList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(clusterdomainupdatesResource, clusterdomainupdatesKind, c.ns, opts), &v1alpha1.ClusterDomainUpdateList{})
-
+		Invokes(testing.NewRootListAction(clusterdomainupdatesResource, clusterdomainupdatesKind, opts), &v1alpha1.ClusterDomainUpdateList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -74,15 +71,13 @@ func (c *FakeClusterDomainUpdates) List(opts v1.ListOptions) (result *v1alpha1.C
 // Watch returns a watch.Interface that watches the requested clusterDomainUpdates.
 func (c *FakeClusterDomainUpdates) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(clusterdomainupdatesResource, c.ns, opts))
-
+		InvokesWatch(testing.NewRootWatchAction(clusterdomainupdatesResource, opts))
 }
 
 // Create takes the representation of a clusterDomainUpdate and creates it.  Returns the server's representation of the clusterDomainUpdate, and an error, if there is any.
 func (c *FakeClusterDomainUpdates) Create(clusterDomainUpdate *v1alpha1.ClusterDomainUpdate) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(clusterdomainupdatesResource, c.ns, clusterDomainUpdate), &v1alpha1.ClusterDomainUpdate{})
-
+		Invokes(testing.NewRootCreateAction(clusterdomainupdatesResource, clusterDomainUpdate), &v1alpha1.ClusterDomainUpdate{})
 	if obj == nil {
 		return nil, err
 	}
@@ -92,8 +87,7 @@ func (c *FakeClusterDomainUpdates) Create(clusterDomainUpdate *v1alpha1.ClusterD
 // Update takes the representation of a clusterDomainUpdate and updates it. Returns the server's representation of the clusterDomainUpdate, and an error, if there is any.
 func (c *FakeClusterDomainUpdates) Update(clusterDomainUpdate *v1alpha1.ClusterDomainUpdate) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(clusterdomainupdatesResource, c.ns, clusterDomainUpdate), &v1alpha1.ClusterDomainUpdate{})
-
+		Invokes(testing.NewRootUpdateAction(clusterdomainupdatesResource, clusterDomainUpdate), &v1alpha1.ClusterDomainUpdate{})
 	if obj == nil {
 		return nil, err
 	}
@@ -104,8 +98,7 @@ func (c *FakeClusterDomainUpdates) Update(clusterDomainUpdate *v1alpha1.ClusterD
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
 func (c *FakeClusterDomainUpdates) UpdateStatus(clusterDomainUpdate *v1alpha1.ClusterDomainUpdate) (*v1alpha1.ClusterDomainUpdate, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(clusterdomainupdatesResource, "status", c.ns, clusterDomainUpdate), &v1alpha1.ClusterDomainUpdate{})
-
+		Invokes(testing.NewRootUpdateSubresourceAction(clusterdomainupdatesResource, "status", clusterDomainUpdate), &v1alpha1.ClusterDomainUpdate{})
 	if obj == nil {
 		return nil, err
 	}
@@ -115,14 +108,13 @@ func (c *FakeClusterDomainUpdates) UpdateStatus(clusterDomainUpdate *v1alpha1.Cl
 // Delete takes name of the clusterDomainUpdate and deletes it. Returns an error if one occurs.
 func (c *FakeClusterDomainUpdates) Delete(name string, options *v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(clusterdomainupdatesResource, c.ns, name), &v1alpha1.ClusterDomainUpdate{})
-
+		Invokes(testing.NewRootDeleteAction(clusterdomainupdatesResource, name), &v1alpha1.ClusterDomainUpdate{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeClusterDomainUpdates) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(clusterdomainupdatesResource, c.ns, listOptions)
+	action := testing.NewRootDeleteCollectionAction(clusterdomainupdatesResource, listOptions)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ClusterDomainUpdateList{})
 	return err
@@ -131,8 +123,7 @@ func (c *FakeClusterDomainUpdates) DeleteCollection(options *v1.DeleteOptions, l
 // Patch applies the patch and returns the patched clusterDomainUpdate.
 func (c *FakeClusterDomainUpdates) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterDomainUpdate, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(clusterdomainupdatesResource, c.ns, name, data, subresources...), &v1alpha1.ClusterDomainUpdate{})
-
+		Invokes(testing.NewRootPatchSubresourceAction(clusterdomainupdatesResource, name, data, subresources...), &v1alpha1.ClusterDomainUpdate{})
 	if obj == nil {
 		return nil, err
 	}

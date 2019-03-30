@@ -81,6 +81,7 @@ type Ops interface {
 	CRDOps
 	ClusterPairOps
 	MigrationOps
+	ClusterDomainsOps
 	ObjectOps
 	SchedulePolicyOps
 	VolumePlacementStrategyOps
@@ -114,6 +115,10 @@ type NamespaceOps interface {
 
 // NodeOps is an interface to perform k8s node operations
 type NodeOps interface {
+	// CreateNode creates the given node
+	CreateNode(n *v1.Node) (*v1.Node, error)
+	// UpdateNode updates the given node
+	UpdateNode(n *v1.Node) (*v1.Node, error)
 	// GetNodes talks to the k8s api server and gets the nodes in the cluster
 	GetNodes() (*v1.NodeList, error)
 	// GetNodeByName returns the k8s node given it's name
@@ -248,12 +253,18 @@ type RBACOps interface {
 	UpdateRole(role *rbac_v1.Role) (*rbac_v1.Role, error)
 	// CreateClusterRole creates the given cluster role
 	CreateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterRole, error)
+	// GetClusterRole gets the given cluster role
+	GetClusterRole(name string) (*rbac_v1.ClusterRole, error)
 	// UpdateClusterRole updates the given cluster role
 	UpdateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterRole, error)
 	// CreateRoleBinding creates the given role binding
 	CreateRoleBinding(role *rbac_v1.RoleBinding) (*rbac_v1.RoleBinding, error)
 	// UpdateRoleBinding updates the given role binding
 	UpdateRoleBinding(role *rbac_v1.RoleBinding) (*rbac_v1.RoleBinding, error)
+	// GetClusterRoleBinding gets the given cluster role binding
+	GetClusterRoleBinding(name string) (*rbac_v1.ClusterRoleBinding, error)
+	// ListClusterRoleBindings lists the cluster role bindings
+	ListClusterRoleBindings() (*rbac_v1.ClusterRoleBindingList, error)
 	// CreateClusterRoleBinding creates the given cluster role binding
 	CreateClusterRoleBinding(role *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error)
 	// CreateServiceAccount creates the given service account
@@ -272,8 +283,10 @@ type RBACOps interface {
 
 // PodOps is an interface to perform k8s pod operations
 type PodOps interface {
-	// CreatePod creates the given pod
+	// CreatePod creates the given pod.
 	CreatePod(pod *v1.Pod) (*v1.Pod, error)
+	// UpdatePod updates the given pod
+	UpdatePod(pod *v1.Pod) (*v1.Pod, error)
 	// GetPods returns pods for the given namespace
 	GetPods(string, map[string]string) (*v1.PodList, error)
 	// GetPodsByNode returns all pods in given namespace and given k8s node name.
@@ -313,6 +326,8 @@ type PodOps interface {
 	RunCommandInPod(cmds []string, podName, containerName, namespace string) (string, error)
 	// ValidatePod validates the given pod if it's ready
 	ValidatePod(pod *v1.Pod, timeout, retryInterval time.Duration) error
+	// WatchPods sets up a watcher that listens for the changes to pods in given namespace
+	WatchPods(namespace string, fn WatchFunc) error
 }
 
 // StorageClassOps is an interface to perform k8s storage class operations
@@ -480,6 +495,33 @@ type ClusterPairOps interface {
 	DeleteClusterPair(string, string) error
 	// ValidateClusterPair validates clusterpair status
 	ValidateClusterPair(string, string, time.Duration, time.Duration) error
+}
+
+// ClusterDomainsOps is an interface to perform k8s ClusterDomains operations
+type ClusterDomainsOps interface {
+	// CreateClusterDomainsStatus creates the ClusterDomainStatus
+	CreateClusterDomainsStatus(*v1alpha1.ClusterDomainsStatus) (*v1alpha1.ClusterDomainsStatus, error)
+	// GetClusterDomainsStatus gets the ClusterDomainsStatus
+	GetClusterDomainsStatus(string) (*v1alpha1.ClusterDomainsStatus, error)
+	// UpdateClusterDomainsStatus updates the ClusterDomainsStatus
+	UpdateClusterDomainsStatus(*v1alpha1.ClusterDomainsStatus) (*v1alpha1.ClusterDomainsStatus, error)
+	// DeleteClusterDomainsStatus deletes the ClusterDomainsStatus
+	DeleteClusterDomainsStatus(string) error
+	// ListClusterDomainStatuses lists ClusterDomainsStatus
+	ListClusterDomainStatuses() (*v1alpha1.ClusterDomainsStatusList, error)
+
+	// CreateClusterDomainUpdate creates the ClusterDomainUpdate
+	CreateClusterDomainUpdate(*v1alpha1.ClusterDomainUpdate) (*v1alpha1.ClusterDomainUpdate, error)
+	// GetClusterDomainUpdate gets the ClusterDomainUpdate
+	GetClusterDomainUpdate(string) (*v1alpha1.ClusterDomainUpdate, error)
+	// UpdateClusterDomainUpdate updates the ClusterDomainUpdate
+	UpdateClusterDomainUpdate(*v1alpha1.ClusterDomainUpdate) (*v1alpha1.ClusterDomainUpdate, error)
+	// DeleteClusterDomainUpdate deletes the ClusterDomainUpdate
+	DeleteClusterDomainUpdate(string) error
+	// ValidateClusterDomainUpdate validates ClusterDomainUpdate
+	ValidateClusterDomainUpdate(string, time.Duration, time.Duration) error
+	// ListClusterDomainUpdates lists ClusterDomainUpdates
+	ListClusterDomainUpdates() (*v1alpha1.ClusterDomainUpdateList, error)
 }
 
 // MigrationOps is an interface to perfrom k8s Migration operations
@@ -699,6 +741,21 @@ func (k *k8sOps) DeleteNamespace(name string) error {
 }
 
 // Namespace APIs - END
+func (k *k8sOps) CreateNode(n *v1.Node) (*v1.Node, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().Nodes().Create(n)
+}
+
+func (k *k8sOps) UpdateNode(n *v1.Node) (*v1.Node, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().Nodes().Update(n)
+}
 
 func (k *k8sOps) GetNodes() (*v1.NodeList, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -888,7 +945,11 @@ type WatchFunc func(object runtime.Object) error
 
 // handleWatch is internal function that handles the watch.  On channel shutdown (ie. stop watch),
 // it'll attempt to reestablish its watch function.
-func (k *k8sOps) handleWatch(watchInterface watch.Interface, object runtime.Object, fn WatchFunc) {
+func (k *k8sOps) handleWatch(
+	watchInterface watch.Interface,
+	object runtime.Object,
+	namespace string,
+	fn WatchFunc) {
 	for {
 		select {
 		case event, more := <-watchInterface.ResultChan():
@@ -901,6 +962,8 @@ func (k *k8sOps) handleWatch(watchInterface watch.Interface, object runtime.Obje
 						err = k.WatchNode(node, fn)
 					} else if cm, ok := object.(*v1.ConfigMap); ok {
 						err = k.WatchConfigMap(cm, fn)
+					} else if _, ok := object.(*v1.Pod); ok {
+						err = k.WatchPods(namespace, fn)
 					} else {
 						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
 					}
@@ -941,7 +1004,7 @@ func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn WatchFunc) error {
 	}
 
 	// fire off watch function
-	go k.handleWatch(watchInterface, node, watchNodeFn)
+	go k.handleWatch(watchInterface, node, "", watchNodeFn)
 	return nil
 }
 
@@ -1920,6 +1983,14 @@ func (k *k8sOps) CreateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterR
 	return k.client.Rbac().ClusterRoles().Create(role)
 }
 
+func (k *k8sOps) GetClusterRole(name string) (*rbac_v1.ClusterRole, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Rbac().ClusterRoles().Get(name, meta_v1.GetOptions{})
+}
+
 func (k *k8sOps) UpdateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterRole, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -1950,6 +2021,22 @@ func (k *k8sOps) CreateClusterRoleBinding(binding *rbac_v1.ClusterRoleBinding) (
 	}
 
 	return k.client.Rbac().ClusterRoleBindings().Create(binding)
+}
+
+func (k *k8sOps) GetClusterRoleBinding(name string) (*rbac_v1.ClusterRoleBinding, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Rbac().ClusterRoleBindings().Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListClusterRoleBindings() (*rbac_v1.ClusterRoleBindingList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Rbac().ClusterRoleBindings().List(meta_v1.ListOptions{})
 }
 
 func (k *k8sOps) CreateServiceAccount(account *v1.ServiceAccount) (*v1.ServiceAccount, error) {
@@ -2044,6 +2131,14 @@ func (k *k8sOps) CreatePod(pod *v1.Pod) (*v1.Pod, error) {
 	}
 
 	return k.client.Core().Pods(pod.Namespace).Create(pod)
+}
+
+func (k *k8sOps) UpdatePod(pod *v1.Pod) (*v1.Pod, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Core().Pods(pod.Namespace).Update(pod)
 }
 
 func (k *k8sOps) GetPods(namespace string, labelSelector map[string]string) (*v1.PodList, error) {
@@ -2300,6 +2395,31 @@ func (k *k8sOps) ValidatePod(pod *v1.Pod, timeout, retryInterval time.Duration) 
 	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (k *k8sOps) WatchPods(namespace string, fn WatchFunc) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	listOptions := meta_v1.ListOptions{
+		Watch: true,
+	}
+
+	watchInterface, err := k.client.Core().Pods(namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for pods")
+		return err
+	}
+
+	// fire off watch function
+	go k.handleWatch(
+		watchInterface,
+		&v1.Pod{},
+		namespace,
+		fn)
+
 	return nil
 }
 
@@ -3130,7 +3250,7 @@ func (k *k8sOps) WatchConfigMap(configMap *v1.ConfigMap, fn WatchFunc) error {
 	}
 
 	// fire off watch function
-	go k.handleWatch(watchInterface, configMap, fn)
+	go k.handleWatch(watchInterface, configMap, "", fn)
 	return nil
 }
 
@@ -3584,6 +3704,128 @@ func (k *k8sOps) GetVolumePlacementStrategy(name string) (*talisman_v1beta1.Volu
 }
 
 // CRD APIs - END
+
+// ClusterDomain CRD - BEGIN
+
+// CreateClusterDomainsStatus creates the ClusterDomainStatus
+func (k *k8sOps) CreateClusterDomainsStatus(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (*v1alpha1.ClusterDomainsStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().ClusterDomainsStatuses().Create(clusterDomainsStatus)
+}
+
+// GetClusterDomainsStatus gets the ClusterDomainsStatus
+func (k *k8sOps) GetClusterDomainsStatus(name string) (*v1alpha1.ClusterDomainsStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().ClusterDomainsStatuses().Get(name, meta_v1.GetOptions{})
+}
+
+// UpdateClusterDomainsStatus updates the ClusterDomainsStatus
+func (k *k8sOps) UpdateClusterDomainsStatus(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (*v1alpha1.ClusterDomainsStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().ClusterDomainsStatuses().Update(clusterDomainsStatus)
+}
+
+// DeleteClusterDomainsStatus deletes the ClusterDomainsStatus
+func (k *k8sOps) DeleteClusterDomainsStatus(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	return k.storkClient.Stork().ClusterDomainsStatuses().Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+// ListClusterDomainStatuses lists ClusterDomainsStatus
+func (k *k8sOps) ListClusterDomainStatuses() (*v1alpha1.ClusterDomainsStatusList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().ClusterDomainsStatuses().List(meta_v1.ListOptions{})
+}
+
+// CreateClusterDomainUpdate creates the ClusterDomainUpdate
+func (k *k8sOps) CreateClusterDomainUpdate(clusterDomainUpdate *v1alpha1.ClusterDomainUpdate) (*v1alpha1.ClusterDomainUpdate, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().ClusterDomainUpdates().Create(clusterDomainUpdate)
+}
+
+// GetClusterDomainUpdate gets the ClusterDomainUpdate
+func (k *k8sOps) GetClusterDomainUpdate(name string) (*v1alpha1.ClusterDomainUpdate, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().ClusterDomainUpdates().Get(name, meta_v1.GetOptions{})
+}
+
+// UpdateClusterDomainUpdate updates the ClusterDomainUpdate
+func (k *k8sOps) UpdateClusterDomainUpdate(clusterDomainUpdate *v1alpha1.ClusterDomainUpdate) (*v1alpha1.ClusterDomainUpdate, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().ClusterDomainUpdates().Update(clusterDomainUpdate)
+}
+
+// DeleteClusterDomainUpdate deletes the ClusterDomainUpdate
+func (k *k8sOps) DeleteClusterDomainUpdate(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	return k.storkClient.Stork().ClusterDomainUpdates().Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+// ValidateClusterDomainUpdate validates ClusterDomainUpdate
+func (k *k8sOps) ValidateClusterDomainUpdate(name string, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetClusterDomainUpdate(name)
+		if err != nil {
+			return "", true, err
+		}
+
+		if resp.Status.Status == v1alpha1.ClusterDomainUpdateStatusSuccessful {
+			return "", false, nil
+		} else if resp.Status.Status == v1alpha1.ClusterDomainUpdateStatusFailed {
+			return "", false, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("ClusterDomainUpdate Status %v", resp.Status.Status),
+				Type:  resp,
+			}
+		}
+
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  name,
+			Cause: fmt.Sprintf("ClusterDomainUpdate Status %v", resp.Status.Status),
+			Type:  resp,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ListClusterDomainUpdates lists ClusterDomainUpdates
+func (k *k8sOps) ListClusterDomainUpdates() (*v1alpha1.ClusterDomainUpdateList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().ClusterDomainUpdates().List(meta_v1.ListOptions{})
+}
+
+// ClusterDomain CRD - END
 
 // Object APIs - BEGIN
 

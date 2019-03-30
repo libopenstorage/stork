@@ -316,6 +316,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 	)
 
 	namespace := preMigrationCtx.GetID()
+	time.Sleep(90 * time.Second)
 
 	// **** TEST ensure 0 migrations since the schedule is invalid. Also check events for invalid specs
 	for _, migrationScheduleName := range migrationSchedules {
@@ -382,7 +383,17 @@ func migrationScheduleTest(
 		require.True(t, found, fmt.Sprintf("failed to find date from given schedule day: %s", scheduleDay))
 	}
 
-	nextTrigger := time.Date(time.Now().Year(), time.Now().Month(), date, 12, 4, 0, 0, time.Local)
+	month := time.Now().Month()
+	// Increment the month if we went to the next
+	if date < time.Now().Day() {
+		month++
+	}
+	// Increment the year if we went to the next
+	year := time.Now().Year()
+	if month < time.Now().Month() {
+		year++
+	}
+	nextTrigger := time.Date(year, month, date, 12, 4, 0, 0, time.Local)
 	// Set time 2 hours before the scheduled time so no migrations run
 	mockNow := nextTrigger.Add(-2 * time.Hour)
 
@@ -446,20 +457,18 @@ func migrationScheduleTest(
 	require.Equal(t, firstMigrationCreationTime, migrations[0].CreationTimestamp,
 		"timestamps of first and most recent migrations don't match")
 
-	// **** TEST 4 bump time by 1 day + 5 minutes. Should cause one new migration
-	oneDay := 24 * time.Hour
-	var bumpPeriod time.Duration
+	// **** TEST 4 bump time by (1 day / 1 week / 1 month) + 5 minutes. Should cause one new migration
 	switch scheduleType {
 	case v1alpha1.SchedulePolicyTypeDaily:
-		bumpPeriod = oneDay
+		mockNow = nextTrigger.AddDate(0, 0, 1)
 	case v1alpha1.SchedulePolicyTypeWeekly:
-		bumpPeriod = 7 * oneDay
+		mockNow = nextTrigger.AddDate(0, 0, 7)
 	case v1alpha1.SchedulePolicyTypeMonthly:
-		bumpPeriod = 31 * oneDay
+		mockNow = nextTrigger.AddDate(0, 1, 0)
 	default:
 		t.Fatalf("this testcase only supports daily, weekly and monthly intervals")
 	}
-	mockNow = nextTrigger.Add(bumpPeriod + 5*time.Minute)
+	mockNow = mockNow.Add(5 * time.Minute)
 	setMockTime(&mockNow)
 
 	// Give time for new migration to trigger

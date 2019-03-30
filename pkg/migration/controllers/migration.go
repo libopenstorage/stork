@@ -191,6 +191,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 				if err != nil {
 					migration.Status.Status = stork_api.MigrationStatusFailed
 					migration.Status.Stage = stork_api.MigrationStageFinal
+					migration.Status.FinishTimestamp = metav1.Now()
 					err = fmt.Errorf("Error getting namespace %v: %v", ns, err)
 					log.MigrationLog(migration).Errorf(err.Error())
 					m.Recorder.Event(migration,
@@ -368,6 +369,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 					log.MigrationLog(migration).Errorf("Error cancelling migration: %v", err)
 				}
 				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.FinishTimestamp = metav1.Now()
 				migration.Status.Status = stork_api.MigrationStatusFailed
 				err = sdk.Update(migration)
 				if err != nil {
@@ -408,6 +410,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 					string(vInfo.Status),
 					fmt.Sprintf("Error migrating volume %v: %v", vInfo.Volume, vInfo.Reason))
 				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.FinishTimestamp = metav1.Now()
 				migration.Status.Status = stork_api.MigrationStatusFailed
 			} else if vInfo.Status == stork_api.MigrationStatusSuccessful {
 				m.Recorder.Event(migration,
@@ -441,6 +444,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			}
 		} else {
 			migration.Status.Stage = stork_api.MigrationStageFinal
+			migration.Status.FinishTimestamp = metav1.Now()
 			migration.Status.Status = stork_api.MigrationStatusSuccessful
 		}
 	}
@@ -534,7 +538,11 @@ func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIRes
 		"StatefulSet",
 		"ConfigMap",
 		"Service",
-		"Secret":
+		"Secret",
+		"DaemonSet",
+		"ServiceAccount",
+		"ClusterRole",
+		"ClusterRoleBinding":
 		return true
 	default:
 		return false
@@ -631,12 +639,39 @@ func (m *MigrationController) objectToBeMigrated(
 			return false, nil
 		}
 		return true, nil
-	case "Secret":
-		secretType, err := collections.GetString(object.UnstructuredContent(), "type")
+	case "ClusterRoleBinding":
+		name := metadata.GetName()
+		crb, err := k8s.Instance().GetClusterRoleBinding(name)
 		if err != nil {
 			return false, err
 		}
-		if secretType == string(v1.SecretTypeServiceAccountToken) {
+		for _, subject := range crb.Subjects {
+			if subject.Namespace == namespace {
+				return true, nil
+			}
+		}
+		return false, nil
+	case "ClusterRole":
+		name := metadata.GetName()
+		crbs, err := k8s.Instance().ListClusterRoleBindings()
+		if err != nil {
+			return false, err
+		}
+		for _, crb := range crbs.Items {
+			if crb.RoleRef.Name == name {
+				for _, subject := range crb.Subjects {
+					if subject.Namespace == namespace {
+						return true, nil
+					}
+				}
+			}
+		}
+		return false, nil
+
+	case "ServiceAccount":
+		// Don't migrate the default service account
+		name := metadata.GetName()
+		if name == "default" {
 			return false, nil
 		}
 	}
@@ -680,6 +715,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	}
 
 	migration.Status.Stage = stork_api.MigrationStageFinal
+	migration.Status.FinishTimestamp = metav1.Now()
 	migration.Status.Status = stork_api.MigrationStatusSuccessful
 	for _, resource := range migration.Status.Resources {
 		if resource.Status != stork_api.MigrationStatusSuccessful {
