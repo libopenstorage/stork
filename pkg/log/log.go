@@ -7,7 +7,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	appv1beta1 "k8s.io/api/apps/v1beta1"
 	appv1beta2 "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -175,6 +175,18 @@ func GroupSnapshotLog(groupsnapshot *storkv1.GroupVolumeSnapshot) *logrus.Entry 
 		return logrus.WithFields(logrus.Fields{
 			"GroupSnapshotName":      groupsnapshot.Name,
 			"GroupSnapshotNamespace": groupsnapshot.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// ClusterDomainUpdateLog formats a log message with clusterdomainupdate information
+func ClusterDomainUpdateLog(clusterDomainUpdate *storkv1.ClusterDomainUpdate) *logrus.Entry {
+	if clusterDomainUpdate != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ClusterDomainName": clusterDomainUpdate.Spec.ClusterDomain,
+			"Active":            clusterDomainUpdate.Spec.Active,
 		})
 	}
 

@@ -9,6 +9,8 @@ const (
 	ClusterDomainUpdateResourceName = "clusterdomainupdate"
 	// ClusterDomainUpdatePlural is plural for "clusterdomainupdate" resource
 	ClusterDomainUpdatePlural = "clusterdomainupdates"
+	// ClusterDomainUpdateShortName is the short name for clusterdomainupdate
+	ClusterDomainUpdateShortName = "cdu"
 )
 
 // ClusterDomainUpdateSpec is the spec used to update a cluster domain
