@@ -51,7 +51,7 @@ const (
 	regionScore = 10
 
 	defaultWaitTimeout       time.Duration = 5 * time.Minute
-	groupSnapshotWaitTimeout time.Duration = 8 * time.Minute
+	groupSnapshotWaitTimeout time.Duration = 15 * time.Minute
 	defaultWaitInterval      time.Duration = 10 * time.Second
 )
 

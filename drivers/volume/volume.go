@@ -9,7 +9,7 @@ import (
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -55,12 +55,17 @@ type Driver interface {
 	// Stop the driver
 	Stop() error
 
+	// GetClusterID returns the clusterID for the driver
+	GetClusterID() (string, error)
+
 	// GroupSnapshotPluginInterface Interface for group snapshots
 	GroupSnapshotPluginInterface
 	// ClusterPairPluginInterface Interface to pair clusters
 	ClusterPairPluginInterface
 	// MigratePluginInterface Interface to migrate data between clusters
 	MigratePluginInterface
+	// ClusterDomainsPluginInterface Interface to manage cluster domains
+	ClusterDomainsPluginInterface
 }
 
 // GroupSnapshotCreateResponse is the response for the group snapshot operation
@@ -99,6 +104,16 @@ type MigratePluginInterface interface {
 	// Update the PVC spec to point to the migrated volume on the destination
 	// cluster
 	UpdateMigratedPersistentVolumeSpec(object runtime.Unstructured) (runtime.Unstructured, error)
+}
+
+// ClusterDomainsPluginInterface Interface to manage cluster domains
+type ClusterDomainsPluginInterface interface {
+	// GetClusterDomains returns all the cluster domains and their status
+	GetClusterDomains() (*stork_crd.ClusterDomains, error)
+	// ActivateClusterDomain activates a cluster domain
+	ActivateClusterDomain(name string) error
+	// DeactivateClusterDomain deactivates a cluster domain
+	DeactivateClusterDomain(name string) error
 }
 
 // Info Information about a volume
@@ -227,6 +242,24 @@ func (g *GroupSnapshotNotSupported) GetGroupSnapshotStatus(*stork_crd.GroupVolum
 
 // DeleteGroupSnapshot returns ErrNotSupported
 func (g *GroupSnapshotNotSupported) DeleteGroupSnapshot(*stork_crd.GroupVolumeSnapshot) error {
+	return &errors.ErrNotSupported{}
+}
+
+// ClusterDomainsNotSupported to be used by drivers that don't support cluster domains
+type ClusterDomainsNotSupported struct{}
+
+// GetClusterDomains returns all the cluster domains and their status
+func (c *ClusterDomainsNotSupported) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// ActivateClusterDomain activates a cluster domain
+func (c *ClusterDomainsNotSupported) ActivateClusterDomain(name string) error {
+	return &errors.ErrNotSupported{}
+}
+
+// DeactivateClusterDomain deactivates a cluster domain
+func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(name string) error {
 	return &errors.ErrNotSupported{}
 }
 

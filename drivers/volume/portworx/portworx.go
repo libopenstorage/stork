@@ -1,6 +1,7 @@
 package portworx
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"math"
@@ -21,6 +22,7 @@ import (
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
 	ost_errors "github.com/libopenstorage/openstorage/api/errors"
 	"github.com/libopenstorage/openstorage/cluster"
+	"github.com/libopenstorage/openstorage/pkg/grpcserver"
 	"github.com/libopenstorage/openstorage/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -31,6 +33,7 @@ import (
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -152,6 +155,13 @@ type portworx struct {
 	stopChannel    chan struct{}
 	restPort       int
 	sdkPort        int
+	sdkConn        *portworxGrpcConnection
+}
+
+type portworxGrpcConnection struct {
+	conn        *grpc.ClientConn
+	dialOptions []grpc.DialOption
+	endpoint    string
 }
 
 func (p *portworx) String() string {
@@ -171,6 +181,26 @@ func (p *portworx) Init(_ interface{}) error {
 func (p *portworx) Stop() error {
 	close(p.stopChannel)
 	return nil
+}
+
+func (pg *portworxGrpcConnection) getGrpcConn() (*grpc.ClientConn, error) {
+	var err error
+
+	if pg.conn == nil {
+		pg.conn, err = grpcserver.Connect(pg.endpoint, pg.dialOptions)
+		if err != nil {
+			return nil, fmt.Errorf("Error connecting to GRPC server[%s]: %v", pg.endpoint, err)
+		}
+	}
+	return pg.conn, nil
+}
+
+func (p *portworx) getClusterDomainClient() (api.OpenStorageClusterDomainsClient, error) {
+	conn, err := p.sdkConn.getGrpcConn()
+	if err != nil {
+		return nil, err
+	}
+	return api.NewOpenStorageClusterDomainsClient(conn), nil
 }
 
 func (p *portworx) initPortworxClients() error {
@@ -213,6 +243,7 @@ func (p *portworx) initPortworxClients() error {
 	}
 
 	logrus.Infof("Using %v:%v as endpoint for portworx REST endpoint", endpoint, p.restPort)
+	logrus.Infof("Using %v:%v as endpoint for portworx gRPC endpoint", endpoint, p.sdkPort)
 
 	// Setup REST clients
 
@@ -229,6 +260,13 @@ func (p *portworx) initPortworxClients() error {
 	}
 
 	p.volDriver = volumeclient.VolumeDriver(clnt)
+
+	// Setup gRPC clients
+	p.sdkConn = &portworxGrpcConnection{
+		endpoint:    fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
+		dialOptions: []grpc.DialOption{grpc.WithInsecure()},
+	}
+
 	return nil
 }
 
@@ -396,6 +434,16 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 		nodes = append(nodes, nodeInfo)
 	}
 	return nodes, nil
+}
+
+func (p *portworx) GetClusterID() (string, error) {
+	clusterID := p.clusterManager.Uuid()
+	if len(clusterID) > 0 {
+		return "", &ErrFailedToGetClusterID{
+			Cause: "Portworx driver returned empty cluster UUID",
+		}
+	}
+	return clusterID, nil
 }
 
 func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
@@ -925,7 +973,7 @@ func (p *portworx) waitForCloudSnapCompletion(
 // getCloudSnapStatus fetches the cloudsnapshot status for given op and cloudsnap task ID
 func (p *portworx) getCloudSnapStatus(op api.CloudBackupOpType, taskID string) cloudSnapStatus {
 	response, err := p.volDriver.CloudBackupStatus(&api.CloudBackupStatusRequest{
-		Name: taskID,
+		ID: taskID,
 	})
 	if err != nil {
 		return cloudSnapStatus{
@@ -1189,6 +1237,7 @@ func (p *portworx) CreatePair(pair *stork_crd.ClusterPair) (string, error) {
 	}
 
 	port := uint64(defaultAPIPort)
+
 	if p, ok := pair.Spec.Options["port"]; ok {
 		port, err = strconv.ParseUint(p, 10, 32)
 		if err != nil {
@@ -1438,6 +1487,71 @@ func (p *portworx) DeleteGroupSnapshot(snap *stork_crd.GroupVolumeSnapshot) erro
 	}
 
 	return lastError
+}
+
+func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
+
+	clusterDomainClient, err := p.getClusterDomainClient()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
+	defer cancel()
+
+	enumerateResp, err := clusterDomainClient.Enumerate(ctx, &api.SdkClusterDomainsEnumerateRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	clusterDomainsInfo := &stork_crd.ClusterDomains{}
+	for _, domainName := range enumerateResp.ClusterDomainNames {
+		insCtx, insCancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
+		defer insCancel()
+
+		inspectResp, err := clusterDomainClient.Inspect(insCtx, &api.SdkClusterDomainInspectRequest{
+			ClusterDomainName: domainName,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if inspectResp.IsActive {
+			clusterDomainsInfo.Active = append(clusterDomainsInfo.Active, domainName)
+		} else {
+			clusterDomainsInfo.Inactive = append(clusterDomainsInfo.Inactive, domainName)
+		}
+	}
+	return clusterDomainsInfo, nil
+}
+
+func (p *portworx) ActivateClusterDomain(clusterDomainName string) error {
+	clusterDomainClient, err := p.getClusterDomainClient()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
+	defer cancel()
+
+	_, err = clusterDomainClient.Activate(ctx, &api.SdkClusterDomainActivateRequest{
+		ClusterDomainName: clusterDomainName,
+	})
+	return err
+}
+
+func (p *portworx) DeactivateClusterDomain(clusterDomainName string) error {
+	clusterDomainClient, err := p.getClusterDomainClient()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
+	defer cancel()
+
+	_, err = clusterDomainClient.Deactivate(ctx, &api.SdkClusterDomainDeactivateRequest{
+		ClusterDomainName: clusterDomainName,
+	})
+	return err
 }
 
 func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *stork_crd.GroupVolumeSnapshot, volNames []string, options map[string]string) (

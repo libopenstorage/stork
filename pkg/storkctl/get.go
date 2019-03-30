@@ -24,6 +24,8 @@ func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *c
 		newGetMigrationScheduleCommand(cmdFactory, ioStreams),
 		newGetSnapshotScheduleCommand(cmdFactory, ioStreams),
 		newGetGroupVolumeSnapshotCommand(cmdFactory, ioStreams),
+		newGetClusterDomainsStatusCommand(cmdFactory, ioStreams),
+		newGetClusterDomainUpdateCommand(cmdFactory, ioStreams),
 	)
 
 	return getCommands

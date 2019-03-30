@@ -9,14 +9,24 @@ import (
 	"time"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	client "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var snapRuleFailRegex = regexp.MustCompile("^snapshot failed due to err.+(failed to validate snap rule|failed to run (pre|post)-snap rule).+")
+var storkStorageClass = "stork-snapshot-sc"
+
+const (
+	waitPvcBound         = 120 * time.Second
+	waitPvcRetryInterval = 5 * time.Second
+)
 
 func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
@@ -111,15 +121,21 @@ func cloudSnapshotTest(t *testing.T) {
 func groupSnapshotTest(t *testing.T) {
 	ctxsToDestroy := make([]*scheduler.Context, 0)
 	// Positive tests
-	ctxs := createGroupsnaps(t, []string{
+	ctxsPass := createGroupsnaps(t, []string{
 		"mysql-localsnap-rule",  // tests local group snapshots with a pre exec rule
 		"mysql-cloudsnap-group", // tests cloud group snapshots
 		"group-cloud-snap-load", // volume is loaded while cloudsnap is being done
 	})
 
-	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
+	ctxsToDestroy = append(ctxsToDestroy, ctxsPass...)
 
-	for _, ctx := range ctxs {
+	snapMap := map[string]int{
+		"mysql-localsnap-rule":  2,
+		"mysql-cloudsnap-group": 2,
+		"group-cloud-snap-load": 3,
+	}
+
+	for _, ctx := range ctxsPass {
 		verifyGroupSnapshot(t, ctx, groupSnapshotWaitTimeout)
 	}
 
@@ -134,8 +150,27 @@ func groupSnapshotTest(t *testing.T) {
 		require.NoError(t, err, "Error waiting for pod to get to running state")
 
 		snaps, err := schedulerDriver.GetSnapshots(ctx)
-		require.Error(t, err, "expected to get error when fetching snapahots")
+		require.Error(t, err, "expected to get error when fetching snapshots")
 		require.Nil(t, snaps, "expected empty snapshots")
+	}
+
+	for _, ctx := range ctxsPass {
+		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for pod to get to running state")
+
+		snaps, err := schedulerDriver.GetSnapshots(ctx)
+		require.NoError(t, err, fmt.Sprintf("Failed to get snapshots for %s.", ctx.App.Key))
+		require.Equal(t, snapMap[ctx.App.Key], len(snaps), fmt.Sprintf("Only %d snapshots created for %s expected %d.", len(snaps), ctx.App.Key, snapMap[ctx.App.Key]))
+		for _, snap := range snaps {
+			restoredPvc, err := createRestorePvcForSnap(snap.Name, snap.Namespace)
+			require.NoError(t, err, fmt.Sprintf("Failed to create pvc for restoring snapshot %s.", snap.Name))
+
+			err = k8s.Instance().ValidatePersistentVolumeClaim(restoredPvc, waitPvcBound, waitPvcRetryInterval)
+			require.NoError(t, err, fmt.Sprintf("PVC for restored snapshot %s not bound.", snap.Name))
+
+			err = k8s.Instance().DeletePersistentVolumeClaim(restoredPvc.Name, restoredPvc.Namespace)
+			require.NoError(t, err, fmt.Sprintf("Failed to delete PVC %s.", restoredPvc.Name))
+		}
 	}
 	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
 
@@ -164,6 +199,33 @@ func groupSnapshotScaleTest(t *testing.T) {
 	}
 
 	destroyAndWait(t, allContexts)
+}
+
+func getSnapAnnotation(snapName string) map[string]string {
+	snapAnnotation := make(map[string]string)
+	snapAnnotation[client.SnapshotPVCAnnotation] = snapName
+	return snapAnnotation
+}
+
+func createRestorePvcForSnap(snapName, snapNamespace string) (*v1.PersistentVolumeClaim, error) {
+	restorePvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "restore-pvc-" + snapName,
+			Namespace:    snapNamespace,
+			Annotations:  getSnapAnnotation(snapName),
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceName(v1.ResourceStorage): resource.MustParse("2Gi"),
+				},
+			},
+			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			StorageClassName: &storkStorageClass,
+		},
+	}
+	pvc, err := k8s.Instance().CreatePersistentVolumeClaim(restorePvc)
+	return pvc, err
 }
 
 func createGroupsnaps(t *testing.T, apps []string) []*scheduler.Context {

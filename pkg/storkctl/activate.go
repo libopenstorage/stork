@@ -13,6 +13,7 @@ func newActivateCommand(cmdFactory Factory, ioStreams genericclioptions.IOStream
 
 	activateCommands.AddCommand(
 		newActivateMigrationsCommand(cmdFactory, ioStreams),
+		newActivateClusterDomainCommand(cmdFactory, ioStreams),
 	)
 
 	return activateCommands
