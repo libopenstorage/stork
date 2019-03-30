@@ -41,12 +41,7 @@
 
 [[constraint]]
   name = "github.com/libopenstorage/openstorage"
-  branch = "release-6.0"
-
-[[constraint]]
-  name = "github.com/libopenstorage/gossip"
-  branch = "master"
-
+  branch = "release-4.0"
 
 [[constraint]]
   branch = "master"

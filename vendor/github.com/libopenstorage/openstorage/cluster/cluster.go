@@ -9,8 +9,6 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/objectstore"
 	"github.com/libopenstorage/openstorage/osdconfig"
-	"github.com/libopenstorage/openstorage/pkg/auth"
-	"github.com/libopenstorage/openstorage/pkg/clusterdomain"
 	sched "github.com/libopenstorage/openstorage/schedpolicy"
 	"github.com/libopenstorage/openstorage/secrets"
 	"github.com/portworx/kvdb"
@@ -43,10 +41,6 @@ type ClusterServerConfiguration struct {
 	ConfigSchedManager sched.SchedulePolicyProvider
 	// holds implementation to ObjectStore interface
 	ConfigObjectStoreManager objectstore.ObjectStore
-	// holds implementation to auth.TokenGenerator system tokens
-	ConfigSystemTokenManager auth.TokenGenerator
-	// holds implementation to ClusterDomains interface
-	ConfigClusterDomainProvider clusterdomain.ClusterDomainProvider
 }
 
 // NodeEntry is used to discover other nodes in the cluster
@@ -63,8 +57,6 @@ type NodeEntry struct {
 	Status            api.Status
 	NodeLabels        map[string]string
 	NonQuorumMember   bool
-	GossipPort        string
-	ClusterDomain     string
 }
 
 // ClusterInfo is the basic info about the cluster and its nodes
@@ -109,7 +101,7 @@ type ClusterListener interface {
 	Init(self *api.Node, state *ClusterInfo) (FinalizeInitCb, error)
 
 	// Join is called when this node is joining an existing cluster.
-	Join(self *api.Node, state *ClusterInitState) error
+	Join(self *api.Node, state *ClusterInitState, clusterNotify ClusterNotify) error
 
 	// JoinComplete is called when this node has successfully joined a cluster
 	JoinComplete(self *api.Node) error
@@ -197,20 +189,6 @@ type ClusterListenerNodeOps interface {
 
 	// Leave is called when this node leaves the cluster.
 	Leave(node *api.Node) error
-}
-
-// ClusterListenerCallbacks defines APIs that a listener can invoke
-// on the cluster manager
-type ClusterListenerCallbacks interface {
-	ClusterRemove
-	// ClusterNotifyNodeDown is a callback function that listeners can use to notify
-	// cluster manager of a node down event. The listener provides the node it thinks
-	// that it needs to go down. The return value is the node that ClusterManager thinks
-	// that should go down. The return value could be the self nodeID
-	ClusterNotifyNodeDown(downNodeID string) (string, error)
-	// ClusterNotifyClusterDomainsUpdate is a callback function that listeners can use to notify
-	// cluster manager of an update on cluster domains
-	ClusterNotifyClusterDomainsUpdate(types.ClusterDomainsActiveMap) error
 }
 
 // ClusterState is the gossip state of all nodes in the cluster
@@ -327,43 +305,29 @@ type Cluster interface {
 	// nodeInitialized indicates if the caller of this method expects the node
 	// to have been in an already-initialized state.
 	// All managers will default returning NotSupported.
-	Start(clusterSize int, nodeInitialized bool, gossipPort string, selfClusterDomain string) error
+	Start(clusterSize int, nodeInitialized bool, gossipPort string) error
 
 	// Like Start, but have the ability to pass in managers to the cluster object
-	StartWithConfiguration(
-		clusterMaxSize int,
-		nodeInitialized bool,
-		gossipPort string,
-		snapshotPrefixes []string,
-		selfClusterDomain string,
-		config *ClusterServerConfiguration,
-	) error
+	StartWithConfiguration(clusterMaxSize int, nodeInitialized bool, gossipPort string, config *ClusterServerConfiguration) error
 
 	// Get a unique identifier for this cluster. Depending on the implementation, this could
 	// be different than the _id_ from ClusterInfo. This id _must_ be unique across
 	// any cluster.
 	Uuid() string
 
-	// ClusterNotifyNodeDown is a callback function that listeners can use to notify
-	// cluster manager of a node down event. The listener provides the node it thinks
-	// that it needs to go down. The return value is the node that ClusterManager thinks
-	// that should go down. The return value could be the self nodeID
-	ClusterNotifyNodeDown(downNodeID string) (string, error)
-	// ClusterNotifyClusterDomainsUpdate is a callback function that listeners can use to notify
-	// cluster manager of an update on cluster domains
-	ClusterNotifyClusterDomainsUpdate(types.ClusterDomainsActiveMap) error
-
-	ClusterRemove
 	ClusterData
+	ClusterRemove
 	ClusterStatus
 	ClusterAlerts
 	ClusterPair
-	clusterdomain.ClusterDomainProvider
 	osdconfig.ConfigCaller
 	secrets.Secrets
 	sched.SchedulePolicyProvider
 	objectstore.ObjectStore
 }
+
+// ClusterNotify is the callback function listeners can use to notify cluster manager
+type ClusterNotify func(string, api.ClusterNotify) (string, error)
 
 // NullClusterListener is a NULL implementation of ClusterListener functions
 // ClusterListeners should use this as the base override functions they
@@ -402,6 +366,7 @@ func (nc *NullClusterListener) Halt(
 func (nc *NullClusterListener) Join(
 	self *api.Node,
 	state *ClusterInitState,
+	clusterNotify ClusterNotify,
 ) error {
 	return nil
 }
