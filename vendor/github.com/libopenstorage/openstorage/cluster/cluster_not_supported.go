@@ -3,11 +3,9 @@ package cluster
 import (
 	time "time"
 
-	"github.com/libopenstorage/gossip/types"
 	api "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/objectstore"
 	"github.com/libopenstorage/openstorage/osdconfig"
-	"github.com/libopenstorage/openstorage/pkg/clusterdomain"
 	schedpolicy "github.com/libopenstorage/openstorage/schedpolicy"
 	"github.com/libopenstorage/openstorage/secrets"
 )
@@ -25,7 +23,6 @@ type NullClusterManager struct {
 	secrets.NullSecrets
 	schedpolicy.NullSchedMgr
 	objectstore.NullObjectStoreMgr
-	clusterdomain.NullClusterDomainManager
 }
 
 func NewDefaultClusterManager() Cluster {
@@ -100,25 +97,17 @@ func (m *NullClusterManager) Shutdown() error {
 }
 
 // Start
-func (m *NullClusterManager) Start(arg0 int, arg1 bool, arg2 string, arg3 string) error {
+func (m *NullClusterManager) Start(arg0 int, arg1 bool, arg2 string) error {
 	return ErrNotImplemented
 }
 
 // StartWithConfiguration
-func (m *NullClusterManager) StartWithConfiguration(arg0 int, arg1 bool, arg2 string, arg3 []string, arg4 string, arg5 *ClusterServerConfiguration) error {
+func (m *NullClusterManager) StartWithConfiguration(arg0 int, arg1 bool, arg2 string, arg3 *ClusterServerConfiguration) error {
 	return ErrNotImplemented
 }
 
 func (n *NullClusterManager) Uuid() string {
 	return ""
-}
-
-func (n *NullClusterManager) ClusterNotifyNodeDown(culpritNodeId string) (string, error) {
-	return "", ErrNotImplemented
-}
-
-func (n *NullClusterManager) ClusterNotifyClusterDomainsUpdate(types.ClusterDomainsActiveMap) error {
-	return ErrNotImplemented
 }
 
 // NullClusterData implementations
