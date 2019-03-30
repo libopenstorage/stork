@@ -73,6 +73,14 @@
   version = "v2.1.1"
 
 [[projects]]
+  digest = "1:f6e5e1bc64c2908167e6aa9a1fe0c084d515132a1c63ad5b6c84036aa06dc0c1"
+  name = "github.com/coreos/go-oidc"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "1180514eaf4d9f38d0d19eef639a1d695e066e72"
+  version = "v2.0.0"
+
+[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -321,6 +329,14 @@
   revision = "c63ab54fda8f77302f8d414e19933f2b6026a089"
 
 [[projects]]
+  digest = "1:950942c08fb75a83a0dc9127bcfe53bd46972ddadcfcf4bd6eedd4081ed8dce5"
+  name = "github.com/grpc-ecosystem/go-grpc-middleware"
+  packages = ["util/metautils"]
+  pruneopts = "UT"
+  revision = "c250d6563d4d4c20252cd865923440e829844f4e"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:ec9b294ee624e9b87e31a8fa39a2a7724f90ce7af2055a9248100883d9956922"
   name = "github.com/grpc-ecosystem/grpc-gateway"
   packages = [
@@ -418,15 +434,15 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:99cd39df3fc3d9b27fd5a150935e36141fbcb7045d59ff1ca0e2027c44aa599d"
+  digest = "1:6842b4a6a6ec28ed353323ea6cd10c16ed04ac8e8d3d2049069e60448c156412"
   name = "github.com/libopenstorage/gossip"
   packages = ["types"]
   pruneopts = "UT"
-  revision = "b3655d98ea02660f2e543d62f6af728a0c324116"
+  revision = "1da75834394cb5e1c30e005a7b183dd866dc62d4"
 
 [[projects]]
-  branch = "release-4.0"
-  digest = "1:afb623450086d6fe6bb5edb844a21e94a9d8390dbafcde02a8cd775db1556754"
+  branch = "release-6.0"
+  digest = "1:4bb845aacf9f9061605ba28c56f57e6fa263b2860ed314aac739d9aa4d6a1a76"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -438,15 +454,19 @@
     "cluster",
     "objectstore",
     "osdconfig",
+    "pkg/auth",
+    "pkg/clusterdomain",
     "pkg/dbg",
+    "pkg/grpcserver",
     "pkg/parser",
     "pkg/units",
+    "pkg/util",
     "schedpolicy",
     "secrets",
     "volume",
   ]
   pruneopts = "UT"
-  revision = "5e037da13776c509910fd69c1933d27aa670ee39"
+  revision = "4510496f03d63637ffce633f53419c39d0794933"
 
 [[projects]]
   branch = "master"
@@ -586,14 +606,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:b91b3b3b508e2d6c1c8fe8b837716d287a961f9e4a7dd5f8c6d5cf4ffbb0bae9"
+  digest = "1:89ae8dc630831877ba0b4853994961db4d137d7fb6509255569318d8dca90ffd"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "99400175e49aefb6951e7ad8ba41c1d0006ac94a"
+  revision = "00b51e5caa92c01bf96741067903c8b47eefb846"
 
 [[projects]]
   branch = "master"
@@ -626,6 +646,17 @@
   ]
   pruneopts = "UT"
   revision = "9a5870e0d1a5d2cb7d62acfe0e2ef4ae0d326d4e"
+
+[[projects]]
+  branch = "master"
+  digest = "1:bd9efe4e0b0f768302a1e2f0c22458149278de533e521206e5ddc71848c269a0"
+  name = "github.com/pquerna/cachecontrol"
+  packages = [
+    ".",
+    "cacheobject",
+  ]
+  pruneopts = "UT"
+  revision = "1555304b9b35fdd2b425bccf1a5613677705e7d0"
 
 [[projects]]
   digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"
@@ -888,7 +919,7 @@
   revision = "383e8b2c3b9e36c4076b235b32537292176bae20"
 
 [[projects]]
-  digest = "1:9ab5a33d8cb5c120602a34d2e985ce17956a4e8c2edce7e6961568f95e40c09a"
+  digest = "1:468bc9b39a60a4ac6726976d60d32cb0fbcaf749fea4139be8cec53fdfbd82d5"
   name = "google.golang.org/grpc"
   packages = [
     ".",
@@ -916,6 +947,8 @@
     "metadata",
     "naming",
     "peer",
+    "reflection",
+    "reflection/grpc_reflection_v1alpha",
     "resolver",
     "resolver/dns",
     "resolver/passthrough",
@@ -1463,9 +1496,11 @@
     "github.com/libopenstorage/openstorage/api/client/volume",
     "github.com/libopenstorage/openstorage/api/errors",
     "github.com/libopenstorage/openstorage/cluster",
+    "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
+    "github.com/pborman/uuid",
     "github.com/portworx/sched-ops/k8s",
     "github.com/portworx/sched-ops/task",
     "github.com/portworx/torpedo/drivers/node",
@@ -1480,6 +1515,7 @@
     "github.com/spf13/pflag",
     "github.com/stretchr/testify/require",
     "github.com/urfave/cli",
+    "google.golang.org/grpc",
     "gopkg.in/yaml.v2",
     "k8s.io/api/apps/v1",
     "k8s.io/api/apps/v1beta1",
