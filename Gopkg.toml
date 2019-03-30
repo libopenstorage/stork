@@ -40,11 +40,11 @@ required = [
 
 [[constraint]]
   name = "github.com/libopenstorage/openstorage"
-  branch = "release-4.0"
+  branch = "release-6.0"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/portworx/sched-ops"
+  branch = "master"
 
 [[constraint]]
   branch = "master"
@@ -110,3 +110,7 @@ required = [
   name = "k8s.io/code-generator"
   unused-packages = false
   go-tests = false
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/libopenstorage/gossip"
