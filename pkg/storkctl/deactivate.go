@@ -13,6 +13,7 @@ func newDeactivateCommand(cmdFactory Factory, ioStreams genericclioptions.IOStre
 
 	deactivateCommands.AddCommand(
 		newDeactivateMigrationsCommand(cmdFactory, ioStreams),
+		newDeactivateClusterDomainCommand(cmdFactory, ioStreams),
 	)
 
 	return deactivateCommands
