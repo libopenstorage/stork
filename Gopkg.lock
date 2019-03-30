@@ -630,8 +630,8 @@
   revision = "84374e26f35de4996653b01cf72186a8d6df3c11"
 
 [[projects]]
-  branch = "master"
-  digest = "1:b1bfeaa12db4715595a8bc6cdaa13f87725e4198e5e7ca0c96c66b4226dc96d9"
+  branch = "stork-2.2"
+  digest = "1:a93e30ffe11b9f5e98db3169153d6255dee03f40cfe876f9f7ef949bbf037424"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -645,7 +645,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "9a5870e0d1a5d2cb7d62acfe0e2ef4ae0d326d4e"
+  revision = "aba5d93d9cdf13ee43127f57fe28b7d251002540"
 
 [[projects]]
   branch = "master"
