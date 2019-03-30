@@ -9,8 +9,9 @@ import (
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
@@ -19,6 +20,7 @@ const (
 	// storageClassName is the storage class for mock driver PVCs
 	storageClassName = "mockDriverStorageClass"
 	provisionerName  = "kubernetes.io/mock-volume"
+	clusterID        = "MockClusterID"
 	// RackLabel Label used for the mock driver to set rack information
 	RackLabel = "mock/rack"
 	// ZoneLabel Label used for the mock driver to set zone information
@@ -32,10 +34,12 @@ type Driver struct {
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
 	storkvolume.GroupSnapshotNotSupported
+	storkvolume.ClusterDomainsNotSupported
 	nodes          []*storkvolume.NodeInfo
 	volumes        map[string]*storkvolume.Info
 	pvcs           map[string]*v1.PersistentVolumeClaim
 	interfaceError error
+	clusterID      string
 }
 
 // String Returns the name for the driver
@@ -94,12 +98,18 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 	m.volumes = make(map[string]*storkvolume.Info)
 	m.pvcs = make(map[string]*v1.PersistentVolumeClaim)
 	m.interfaceError = nil
+	m.clusterID = "stork-test-" + uuid.New()
 	return nil
 }
 
 // GetStorageClassName Returns the storageclass name to be used by tests
 func (m *Driver) GetStorageClassName() string {
 	return storageClassName
+}
+
+// GetClusterID returns the clusterID for the driver
+func (m *Driver) GetClusterID() (string, error) {
+	return m.clusterID, nil
 }
 
 // NewPVC Create a new PVC reference

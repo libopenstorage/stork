@@ -26,3 +26,13 @@ type ErrFailedToGetNodes struct {
 func (e *ErrFailedToGetNodes) Error() string {
 	return fmt.Sprintf("Failed to get nodes for the driver: %v", e.Cause)
 }
+
+// ErrFailedToGetClusterID error type for failing to get the clusterID for a driver
+type ErrFailedToGetClusterID struct {
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetClusterID) Error() string {
+	return fmt.Sprintf("Failed to get clusterID for the driver: %v", e.Cause)
+}
