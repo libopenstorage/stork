@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/csv"
 	"fmt"
 	"math"
@@ -38,6 +39,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -173,6 +175,16 @@ type portworxGrpcConnection struct {
 	endpoint    string
 }
 
+func isTlsEnabled() bool {
+	tls := strings.ToLower(os.Getenv(pxEnableTLS))
+	if len(tls) != 0 ||
+		tls == "true" || tls == "yes" ||
+		tls == "1" || tls == "y" {
+		return true
+	}
+	return false
+}
+
 func (p *portworx) String() string {
 	return driverName
 }
@@ -185,6 +197,23 @@ func (p *portworx) Init(_ interface{}) error {
 
 	p.stopChannel = make(chan struct{})
 	return p.startNodeCache()
+}
+
+func (p *portworxGrpcConnection) setDialOptions(tls bool) error {
+	if tls {
+		// Setup a connection
+		capool, err := x509.SystemCertPool()
+		if err != nil {
+			return fmt.Errorf("Failed to load CA system certs: %v\n")
+		}
+		p.dialOptions = []grpc.DialOption{grpc.WithTransportCredentials(
+			credentials.NewClientTLSFromCert(capool, ""),
+		)}
+	} else {
+		p.dialOptions = []grpc.DialOption{grpc.WithInsecure()}
+	}
+
+	return nil
 }
 
 func (pg *portworxGrpcConnection) getGrpcConn() (*grpc.ClientConn, error) {
@@ -251,9 +280,7 @@ func (p *portworx) initPortworxClients() error {
 	logrus.Infof("Using %v:%v as endpoint for portworx gRPC endpoint", endpoint, p.sdkPort)
 
 	// Setup REST clients
-	logrus.Infof("Using %v:%v as endpoint for portworx volume driver", endpoint, p.restPort)
-	tls := os.Getenv(pxEnableTLS)
-	if len(tls) != 0 {
+	if isTlsEnabled() {
 		scheme = "https"
 	} else {
 		scheme = "http"
@@ -279,9 +306,9 @@ func (p *portworx) initPortworxClients() error {
 
 	// Setup gRPC clients
 	p.sdkConn = &portworxGrpcConnection{
-		endpoint:    fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
-		dialOptions: []grpc.DialOption{grpc.WithInsecure()},
+		endpoint: fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
 	}
+	p.sdkConn.setDialOptions(isTlsEnabled())
 
 	// Save the token if any was given
 	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
@@ -1671,6 +1698,7 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 		return nil, err
 	}
 
+	// XXX SET CONTEXT XXX
 	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
 	defer cancel()
 
@@ -1705,6 +1733,7 @@ func (p *portworx) ActivateClusterDomain(clusterDomainName string) error {
 		return err
 	}
 
+	// XXX SET CONTEXT XXX
 	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
 	defer cancel()
 
