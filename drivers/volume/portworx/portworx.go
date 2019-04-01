@@ -175,12 +175,9 @@ type portworxGrpcConnection struct {
 	endpoint    string
 }
 
-func isTlsEnabled() bool {
-	tls := strings.ToLower(os.Getenv(pxEnableTLS))
-	if len(tls) != 0 ||
-		tls == "true" || tls == "yes" ||
-		tls == "1" || tls == "y" {
-		return true
+func isTLSEnabled() bool {
+	if v, err := strconv.ParseBool(os.Getenv(pxEnableTLS)); err == nil {
+		return v
 	}
 	return false
 }
@@ -199,27 +196,32 @@ func (p *portworx) Init(_ interface{}) error {
 	return p.startNodeCache()
 }
 
-func (p *portworxGrpcConnection) setDialOptions(tls bool) error {
+func (p *portworx) Stop() error {
+	close(p.stopChannel)
+	return nil
+}
+
+func (pg *portworxGrpcConnection) setDialOptions(tls bool) error {
 	if tls {
 		// Setup a connection
 		capool, err := x509.SystemCertPool()
 		if err != nil {
-			return fmt.Errorf("Failed to load CA system certs: %v\n")
+			return fmt.Errorf("Failed to load CA system certs: %v", err)
 		}
-		p.dialOptions = []grpc.DialOption{grpc.WithTransportCredentials(
+		pg.dialOptions = []grpc.DialOption{grpc.WithTransportCredentials(
 			credentials.NewClientTLSFromCert(capool, ""),
 		)}
 	} else {
-		p.dialOptions = []grpc.DialOption{grpc.WithInsecure()}
+		pg.dialOptions = []grpc.DialOption{grpc.WithInsecure()}
 	}
 
 	return nil
 }
 
 func (pg *portworxGrpcConnection) getGrpcConn() (*grpc.ClientConn, error) {
-	var err error
 
 	if pg.conn == nil {
+		var err error
 		pg.conn, err = grpcserver.Connect(pg.endpoint, pg.dialOptions)
 		if err != nil {
 			return nil, fmt.Errorf("Error connecting to GRPC server[%s]: %v", pg.endpoint, err)
@@ -280,7 +282,7 @@ func (p *portworx) initPortworxClients() error {
 	logrus.Infof("Using %v:%v as endpoint for portworx gRPC endpoint", endpoint, p.sdkPort)
 
 	// Setup REST clients
-	if isTlsEnabled() {
+	if isTLSEnabled() {
 		scheme = "https"
 	} else {
 		scheme = "http"
@@ -293,12 +295,6 @@ func (p *portworx) initPortworxClients() error {
 	}
 	p.clusterManager = clusterclient.ClusterManager(clnt)
 
-	p.stopChannel = make(chan struct{})
-	err = p.startNodeCache()
-	if err != nil {
-		return err
-	}
-
 	ostsecrets, err := osecrets.New(nil)
 	if err != nil {
 		return err
@@ -308,7 +304,10 @@ func (p *portworx) initPortworxClients() error {
 	p.sdkConn = &portworxGrpcConnection{
 		endpoint: fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
 	}
-	p.sdkConn.setDialOptions(isTlsEnabled())
+	err = p.sdkConn.setDialOptions(isTLSEnabled())
+	if err != nil {
+		return err
+	}
 
 	// Save the token if any was given
 	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
@@ -321,11 +320,6 @@ func (p *portworx) initPortworxClients() error {
 
 	p.authSecrets, err = auth_secrets.NewAuth(auth_secrets.TypeK8s, ostsecrets)
 	return err
-}
-
-func (p *portworx) Stop() error {
-	close(p.stopChannel)
-	return nil
 }
 
 func (p *portworx) startNodeCache() error {
@@ -589,7 +583,6 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 
 		if volumeName != "" {
 			volumeInfo, err := p.InspectVolume(volumeName)
-			logrus.Debugf("GetPodVolumes: p.InspectVolume(%s) Error: %v", volumeName, err)
 			if err != nil {
 				// If the ispect volume fails return with atleast some info
 				volumeInfo = &storkvolume.Info{
@@ -713,7 +706,6 @@ func (p *portworx) SnapshotCreate(
 	pv *v1.PersistentVolume,
 	tags *map[string]string,
 ) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
-	var err error
 	volDriver, err := p.getUserVolDriver(snap.Metadata.Annotations)
 	if err != nil {
 		return nil, nil, err
@@ -840,9 +832,7 @@ func (p *portworx) SnapshotCreate(
 	}, &snapStatusConditions, nil
 }
 
-// Admin Context (for now)
 func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _ *v1.PersistentVolume) error {
-	var err error
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		return err
@@ -904,15 +894,17 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 	}
 }
 
-// User context
 func (p *portworx) SnapshotRestore(
 	snapshotData *crdv1.VolumeSnapshotData,
 	pvc *v1.PersistentVolumeClaim,
 	_ string,
 	parameters map[string]string,
 ) (*v1.PersistentVolumeSource, map[string]string, error) {
-	var err error
 	volDriver, err := p.getUserVolDriver(pvc.ObjectMeta.Annotations)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
 		return nil, nil, fmt.Errorf("Invalid Snapshot spec")
 	}
@@ -1094,7 +1086,6 @@ func (p *portworx) GetSnapshotType(snap *crdv1.VolumeSnapshot) (string, error) {
 }
 
 func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
-	var err error
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		return err
@@ -1228,7 +1219,6 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 
 // revertPXSnaps deletes all given snapIDs
 func (p *portworx) revertPXSnaps(snapIDs []string) {
-	var err error
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		return
@@ -1298,7 +1288,6 @@ func (p *portworx) validatePVForGroupSnap(pvName, groupID string, groupLabels ma
 }
 
 func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.PersistentVolumeClaim, error) {
-	var err error
 	snapType, err := getSnapshotType(snap.Metadata.Annotations)
 	if err != nil {
 		return nil, err
@@ -1458,7 +1447,6 @@ func (p *portworx) DeletePair(pair *stork_crd.ClusterPair) error {
 }
 
 func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
-	var err error
 	volDriver, err := p.getUserVolDriver(migration.Annotations)
 	if err != nil {
 		return nil, err
@@ -1535,7 +1523,6 @@ func (p *portworx) getMigrationTaskID(migration *stork_crd.Migration, volumeInfo
 }
 
 func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
-	var err error
 	volDriver, err := p.getUserVolDriver(migration.Annotations)
 	if err != nil {
 		return nil, err
@@ -1590,7 +1577,6 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 }
 
 func (p *portworx) CancelMigration(migration *stork_crd.Migration) error {
-	var err error
 	volDriver, err := p.getUserVolDriver(migration.Annotations)
 	if err != nil {
 		return err
@@ -1737,7 +1723,7 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 	return clusterDomainsInfo, nil
 }
 
-func (p *portworx) ActivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate, clusterDomainName string) error {
+func (p *portworx) ActivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate) error {
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return err
@@ -1753,12 +1739,12 @@ func (p *portworx) ActivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate, clu
 	}
 
 	_, err = clusterDomainClient.Activate(ctx, &api.SdkClusterDomainActivateRequest{
-		ClusterDomainName: clusterDomainName,
+		ClusterDomainName: cdu.Spec.ClusterDomain,
 	})
 	return err
 }
 
-func (p *portworx) DeactivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate, clusterDomainName string) error {
+func (p *portworx) DeactivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate) error {
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return err
@@ -1774,14 +1760,13 @@ func (p *portworx) DeactivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate, c
 	}
 
 	_, err = clusterDomainClient.Deactivate(ctx, &api.SdkClusterDomainDeactivateRequest{
-		ClusterDomainName: clusterDomainName,
+		ClusterDomainName: cdu.Spec.ClusterDomain,
 	})
 	return err
 }
 
 func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *stork_crd.GroupVolumeSnapshot, volNames []string, options map[string]string) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
-	var err error
 	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
 	if err != nil {
 		return nil, err
@@ -1862,7 +1847,6 @@ func (p *portworx) createGroupCloudSnapFromVolumes(
 	volNames []string,
 	options map[string]string) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
-	var err error
 	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
 	if err != nil {
 		return nil, err
@@ -1973,7 +1957,6 @@ func (p *portworx) generateStatusReponseFromTaskIDs(
 
 // revertPXCloudSnaps deletes all cloudsnaps with given IDs
 func (p *portworx) revertPXCloudSnaps(cloudSnapIDs []string, credID string) {
-	var err error
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		logrus.Errorf("Failed to get a volumeDriver: %v", err)

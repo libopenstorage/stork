@@ -111,9 +111,9 @@ type ClusterDomainsPluginInterface interface {
 	// GetClusterDomains returns all the cluster domains and their status
 	GetClusterDomains() (*stork_crd.ClusterDomains, error)
 	// ActivateClusterDomain activates a cluster domain
-	ActivateClusterDomain(*stork_crd.ClusterDomainUpdate, string) error
+	ActivateClusterDomain(*stork_crd.ClusterDomainUpdate) error
 	// DeactivateClusterDomain deactivates a cluster domain
-	DeactivateClusterDomain(*stork_crd.ClusterDomainUpdate, string) error
+	DeactivateClusterDomain(*stork_crd.ClusterDomainUpdate) error
 }
 
 // Info Information about a volume
@@ -254,12 +254,12 @@ func (c *ClusterDomainsNotSupported) GetClusterDomains() (*stork_crd.ClusterDoma
 }
 
 // ActivateClusterDomain activates a cluster domain
-func (c *ClusterDomainsNotSupported) ActivateClusterDomain(name string) error {
+func (c *ClusterDomainsNotSupported) ActivateClusterDomain(*stork_crd.ClusterDomainUpdate) error {
 	return &errors.ErrNotSupported{}
 }
 
 // DeactivateClusterDomain deactivates a cluster domain
-func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(name string) error {
+func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(*stork_crd.ClusterDomainUpdate) error {
 	return &errors.ErrNotSupported{}
 }
 
