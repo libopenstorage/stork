@@ -119,7 +119,6 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverCrash}", func() {
 	It("has to schedule apps and crash volume driver on app nodes", func() {
-		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("voldrivercrash-%d", i))...)
@@ -127,13 +126,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 
 		Step("get nodes for all apps in test and crash volume driver", func() {
 			for _, ctx := range contexts {
-				var appNodes []node.Node
-				Step(fmt.Sprintf("get nodes for %s app", ctx.App.Key), func() {
-					appNodes, err = Inst().S.GetNodesForApp(ctx)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(appNodes).NotTo(BeEmpty())
-				})
-
+				appNodes := getNodesThatCanBeDown(ctx)
 				Step(
 					fmt.Sprintf("crash volume driver %s on app %s's nodes: %v",
 						Inst().V.String(), ctx.App.Key, appNodes),
