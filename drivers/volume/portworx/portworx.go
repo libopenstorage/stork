@@ -175,7 +175,7 @@ type portworxGrpcConnection struct {
 	endpoint    string
 }
 
-func isTlsEnabled() bool {
+func isTLSEnabled() bool {
 	tls := strings.ToLower(os.Getenv(pxEnableTLS))
 	if len(tls) != 0 ||
 		tls == "true" || tls == "yes" ||
@@ -199,18 +199,18 @@ func (p *portworx) Init(_ interface{}) error {
 	return p.startNodeCache()
 }
 
-func (p *portworxGrpcConnection) setDialOptions(tls bool) error {
+func (pg *portworxGrpcConnection) setDialOptions(tls bool) error {
 	if tls {
 		// Setup a connection
 		capool, err := x509.SystemCertPool()
 		if err != nil {
-			return fmt.Errorf("Failed to load CA system certs: %v\n")
+			return fmt.Errorf("Failed to load CA system certs: %v", err)
 		}
-		p.dialOptions = []grpc.DialOption{grpc.WithTransportCredentials(
+		pg.dialOptions = []grpc.DialOption{grpc.WithTransportCredentials(
 			credentials.NewClientTLSFromCert(capool, ""),
 		)}
 	} else {
-		p.dialOptions = []grpc.DialOption{grpc.WithInsecure()}
+		pg.dialOptions = []grpc.DialOption{grpc.WithInsecure()}
 	}
 
 	return nil
@@ -280,7 +280,7 @@ func (p *portworx) initPortworxClients() error {
 	logrus.Infof("Using %v:%v as endpoint for portworx gRPC endpoint", endpoint, p.sdkPort)
 
 	// Setup REST clients
-	if isTlsEnabled() {
+	if isTLSEnabled() {
 		scheme = "https"
 	} else {
 		scheme = "http"
@@ -308,7 +308,10 @@ func (p *portworx) initPortworxClients() error {
 	p.sdkConn = &portworxGrpcConnection{
 		endpoint: fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
 	}
-	p.sdkConn.setDialOptions(isTlsEnabled())
+	err = p.sdkConn.setDialOptions(isTLSEnabled())
+	if err != nil {
+		return err
+	}
 
 	// Save the token if any was given
 	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
@@ -589,7 +592,6 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 
 		if volumeName != "" {
 			volumeInfo, err := p.InspectVolume(volumeName)
-			logrus.Debugf("GetPodVolumes: p.InspectVolume(%s) Error: %v", volumeName, err)
 			if err != nil {
 				// If the ispect volume fails return with atleast some info
 				volumeInfo = &storkvolume.Info{
@@ -840,7 +842,6 @@ func (p *portworx) SnapshotCreate(
 	}, &snapStatusConditions, nil
 }
 
-// Admin Context (for now)
 func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _ *v1.PersistentVolume) error {
 	var err error
 	volDriver, err := p.getAdminVolDriver()
@@ -904,15 +905,17 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 	}
 }
 
-// User context
 func (p *portworx) SnapshotRestore(
 	snapshotData *crdv1.VolumeSnapshotData,
 	pvc *v1.PersistentVolumeClaim,
 	_ string,
 	parameters map[string]string,
 ) (*v1.PersistentVolumeSource, map[string]string, error) {
-	var err error
 	volDriver, err := p.getUserVolDriver(pvc.ObjectMeta.Annotations)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
 		return nil, nil, fmt.Errorf("Invalid Snapshot spec")
 	}

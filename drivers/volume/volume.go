@@ -254,12 +254,12 @@ func (c *ClusterDomainsNotSupported) GetClusterDomains() (*stork_crd.ClusterDoma
 }
 
 // ActivateClusterDomain activates a cluster domain
-func (c *ClusterDomainsNotSupported) ActivateClusterDomain(name string) error {
+func (c *ClusterDomainsNotSupported) ActivateClusterDomain(*stork_crd.ClusterDomainUpdate, string) error {
 	return &errors.ErrNotSupported{}
 }
 
 // DeactivateClusterDomain deactivates a cluster domain
-func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(name string) error {
+func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(*stork_crd.ClusterDomainUpdate, string) error {
 	return &errors.ErrNotSupported{}
 }
 
