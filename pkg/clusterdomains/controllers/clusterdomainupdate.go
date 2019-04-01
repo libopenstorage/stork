@@ -60,10 +60,10 @@ func (c *ClusterDomainUpdateController) Handle(ctx context.Context, event sdk.Ev
 			)
 			if clusterDomainUpdate.Spec.Active {
 				action = "activate"
-				err = c.Driver.ActivateClusterDomain(clusterDomainUpdate.Spec.ClusterDomain)
+				err = c.Driver.ActivateClusterDomain(clusterDomainUpdate, clusterDomainUpdate.Spec.ClusterDomain)
 			} else {
 				action = "deactivate"
-				err = c.Driver.DeactivateClusterDomain(clusterDomainUpdate.Spec.ClusterDomain)
+				err = c.Driver.DeactivateClusterDomain(clusterDomainUpdate, clusterDomainUpdate.Spec.ClusterDomain)
 			}
 			if err != nil {
 				err = fmt.Errorf("Unable to %v cluster domain: %v", action, err)

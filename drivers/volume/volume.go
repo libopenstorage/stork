@@ -111,9 +111,9 @@ type ClusterDomainsPluginInterface interface {
 	// GetClusterDomains returns all the cluster domains and their status
 	GetClusterDomains() (*stork_crd.ClusterDomains, error)
 	// ActivateClusterDomain activates a cluster domain
-	ActivateClusterDomain(name string) error
+	ActivateClusterDomain(*stork_crd.ClusterDomainUpdate, string) error
 	// DeactivateClusterDomain deactivates a cluster domain
-	DeactivateClusterDomain(name string) error
+	DeactivateClusterDomain(*stork_crd.ClusterDomainUpdate, string) error
 }
 
 // Info Information about a volume
