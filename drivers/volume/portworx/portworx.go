@@ -621,6 +621,17 @@ func (p *portworx) getSnapshotName(tags *map[string]string) string {
 	return "snapshot-" + (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotUIDTag]
 }
 
+func (p *portworx) getUserContext(ctx context.Context, annotations map[string]string) (context.Context, error) {
+	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
+		token, err := p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
+		if err != nil {
+			return nil, err
+		}
+		return grpcserver.AddMetadataToContext(ctx, "authorization", "bearer "+token), nil
+	}
+	return ctx, nil
+}
+
 func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.VolumeDriver, error) {
 	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
 		token, err := p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
@@ -1698,7 +1709,6 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 		return nil, err
 	}
 
-	// XXX SET CONTEXT XXX
 	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
 	defer cancel()
 
@@ -1727,15 +1737,20 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 	return clusterDomainsInfo, nil
 }
 
-func (p *portworx) ActivateClusterDomain(clusterDomainName string) error {
+func (p *portworx) ActivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate, clusterDomainName string) error {
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return err
 	}
 
-	// XXX SET CONTEXT XXX
 	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
 	defer cancel()
+
+	// Get user token from secret if any
+	ctx, err = p.getUserContext(ctx, cdu.Annotations)
+	if err != nil {
+		return err
+	}
 
 	_, err = clusterDomainClient.Activate(ctx, &api.SdkClusterDomainActivateRequest{
 		ClusterDomainName: clusterDomainName,
@@ -1743,7 +1758,7 @@ func (p *portworx) ActivateClusterDomain(clusterDomainName string) error {
 	return err
 }
 
-func (p *portworx) DeactivateClusterDomain(clusterDomainName string) error {
+func (p *portworx) DeactivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate, clusterDomainName string) error {
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return err
@@ -1751,6 +1766,12 @@ func (p *portworx) DeactivateClusterDomain(clusterDomainName string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
 	defer cancel()
+
+	// Get user token from secret if any
+	ctx, err = p.getUserContext(ctx, cdu.Annotations)
+	if err != nil {
+		return err
+	}
 
 	_, err = clusterDomainClient.Deactivate(ctx, &api.SdkClusterDomainDeactivateRequest{
 		ClusterDomainName: clusterDomainName,
