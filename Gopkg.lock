@@ -442,7 +442,7 @@
 
 [[projects]]
   branch = "release-6.0"
-  digest = "1:4bb845aacf9f9061605ba28c56f57e6fa263b2860ed314aac739d9aa4d6a1a76"
+  digest = "1:3cbb58f37cf523797e65fcb2ff6b71c568a9f2048507ecc158db4989c62ed75c"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -455,6 +455,7 @@
     "objectstore",
     "osdconfig",
     "pkg/auth",
+    "pkg/auth/secrets",
     "pkg/clusterdomain",
     "pkg/dbg",
     "pkg/grpcserver",
@@ -466,7 +467,18 @@
     "volume",
   ]
   pruneopts = "UT"
-  revision = "4510496f03d63637ffce633f53419c39d0794933"
+  revision = "bf33919f7800fb848464bc2645da84c6fd737aaa"
+
+[[projects]]
+  branch = "master"
+  digest = "1:676084e3399eacb0f118ff6a5275be09d0a689395dcb353c9daa2a5e18ab7b6b"
+  name = "github.com/libopenstorage/secrets"
+  packages = [
+    ".",
+    "k8s",
+  ]
+  pruneopts = "UT"
+  revision = "7a55db693ad633eea673438e1dcc4c91056d3b7a"
 
 [[projects]]
   branch = "master"
@@ -630,8 +642,8 @@
   revision = "84374e26f35de4996653b01cf72186a8d6df3c11"
 
 [[projects]]
-  branch = "master"
-  digest = "1:b1bfeaa12db4715595a8bc6cdaa13f87725e4198e5e7ca0c96c66b4226dc96d9"
+  branch = "stork-2.2"
+  digest = "1:a93e30ffe11b9f5e98db3169153d6255dee03f40cfe876f9f7ef949bbf037424"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -645,7 +657,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "9a5870e0d1a5d2cb7d62acfe0e2ef4ae0d326d4e"
+  revision = "aba5d93d9cdf13ee43127f57fe28b7d251002540"
 
 [[projects]]
   branch = "master"
@@ -1492,12 +1504,16 @@
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume",
     "github.com/libopenstorage/openstorage/api",
+    "github.com/libopenstorage/openstorage/api/client",
     "github.com/libopenstorage/openstorage/api/client/cluster",
     "github.com/libopenstorage/openstorage/api/client/volume",
     "github.com/libopenstorage/openstorage/api/errors",
     "github.com/libopenstorage/openstorage/cluster",
+    "github.com/libopenstorage/openstorage/pkg/auth",
+    "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
+    "github.com/libopenstorage/secrets/k8s",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
     "github.com/pborman/uuid",
@@ -1513,9 +1529,11 @@
     "github.com/skyrings/skyring-common/tools/uuid",
     "github.com/spf13/cobra",
     "github.com/spf13/pflag",
+    "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/require",
     "github.com/urfave/cli",
     "google.golang.org/grpc",
+    "google.golang.org/grpc/credentials",
     "gopkg.in/yaml.v2",
     "k8s.io/api/apps/v1",
     "k8s.io/api/apps/v1beta1",

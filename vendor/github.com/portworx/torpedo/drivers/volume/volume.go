@@ -13,6 +13,7 @@ type Volume struct {
 	Name      string
 	Namespace string
 	Size      uint64
+	Shared    bool
 }
 
 // Snapshot is a generic struct encapsulating snapshots in the cluster

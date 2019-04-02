@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/csv"
 	"fmt"
 	"math"
@@ -18,12 +19,16 @@ import (
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/openstorage/api"
+	apiclient "github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	volumeclient "github.com/libopenstorage/openstorage/api/client/volume"
 	ost_errors "github.com/libopenstorage/openstorage/api/errors"
 	"github.com/libopenstorage/openstorage/cluster"
+	"github.com/libopenstorage/openstorage/pkg/auth"
+	auth_secrets "github.com/libopenstorage/openstorage/pkg/auth/secrets"
 	"github.com/libopenstorage/openstorage/pkg/grpcserver"
 	"github.com/libopenstorage/openstorage/volume"
+	osecrets "github.com/libopenstorage/secrets/k8s"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
@@ -34,6 +39,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -112,8 +118,10 @@ const (
 	pxNamespace   = "PX_NAMESPACE"
 	pxServiceName = "PX_SERVICE_NAME"
 
-	pxRestPort = "px-api"
-	pxSdkPort  = "px-sdk"
+	pxRestPort     = "px-api"
+	pxSdkPort      = "px-sdk"
+	pxEnableTLS    = "PX_ENABLE_TLS"
+	pxSharedSecret = "PX_SHARED_SECRET"
 )
 
 type cloudSnapStatus struct {
@@ -149,19 +157,29 @@ var cloudsnapBackoff = wait.Backoff{
 }
 
 type portworx struct {
-	clusterManager cluster.Cluster
-	volDriver      volume.VolumeDriver
-	store          cache.Store
-	stopChannel    chan struct{}
-	restPort       int
-	sdkPort        int
-	sdkConn        *portworxGrpcConnection
+	clusterManager  cluster.Cluster
+	store           cache.Store
+	stopChannel     chan struct{}
+	restPort        int
+	sdkPort         int
+	sdkConn         *portworxGrpcConnection
+	id              string
+	endpoint        string
+	jwtSharedSecret string
+	authSecrets     auth_secrets.Auth
 }
 
 type portworxGrpcConnection struct {
 	conn        *grpc.ClientConn
 	dialOptions []grpc.DialOption
 	endpoint    string
+}
+
+func isTLSEnabled() bool {
+	if v, err := strconv.ParseBool(os.Getenv(pxEnableTLS)); err == nil {
+		return v
+	}
+	return false
 }
 
 func (p *portworx) String() string {
@@ -183,10 +201,27 @@ func (p *portworx) Stop() error {
 	return nil
 }
 
+func (pg *portworxGrpcConnection) setDialOptions(tls bool) error {
+	if tls {
+		// Setup a connection
+		capool, err := x509.SystemCertPool()
+		if err != nil {
+			return fmt.Errorf("Failed to load CA system certs: %v", err)
+		}
+		pg.dialOptions = []grpc.DialOption{grpc.WithTransportCredentials(
+			credentials.NewClientTLSFromCert(capool, ""),
+		)}
+	} else {
+		pg.dialOptions = []grpc.DialOption{grpc.WithInsecure()}
+	}
+
+	return nil
+}
+
 func (pg *portworxGrpcConnection) getGrpcConn() (*grpc.ClientConn, error) {
-	var err error
 
 	if pg.conn == nil {
+		var err error
 		pg.conn, err = grpcserver.Connect(pg.endpoint, pg.dialOptions)
 		if err != nil {
 			return nil, fmt.Errorf("Error connecting to GRPC server[%s]: %v", pg.endpoint, err)
@@ -217,6 +252,7 @@ func (p *portworx) initPortworxClients() error {
 		namespace = defaultNamespace
 	}
 
+	var scheme string
 	svc, err := k8s.Instance().GetService(serviceName, namespace)
 	if err == nil {
 		endpoint = svc.Spec.ClusterIP
@@ -246,28 +282,44 @@ func (p *portworx) initPortworxClients() error {
 	logrus.Infof("Using %v:%v as endpoint for portworx gRPC endpoint", endpoint, p.sdkPort)
 
 	// Setup REST clients
-
-	endpointPort := fmt.Sprintf("http://%v:%v", endpoint, p.restPort)
-	clnt, err := clusterclient.NewClusterClient(endpointPort, "v1")
+	if isTLSEnabled() {
+		scheme = "https"
+	} else {
+		scheme = "http"
+	}
+	p.endpoint = fmt.Sprintf("%s://%v:%v", scheme, endpoint, p.restPort)
+	logrus.Infof("Using %s as the endpoint", p.endpoint)
+	clnt, err := clusterclient.NewClusterClient(p.endpoint, "v1")
 	if err != nil {
 		return err
 	}
 	p.clusterManager = clusterclient.ClusterManager(clnt)
 
-	clnt, err = volumeclient.NewDriverClient(endpointPort, "pxd", "", "stork")
+	ostsecrets, err := osecrets.New(nil)
 	if err != nil {
 		return err
 	}
 
-	p.volDriver = volumeclient.VolumeDriver(clnt)
-
 	// Setup gRPC clients
 	p.sdkConn = &portworxGrpcConnection{
-		endpoint:    fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
-		dialOptions: []grpc.DialOption{grpc.WithInsecure()},
+		endpoint: fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
+	}
+	err = p.sdkConn.setDialOptions(isTLSEnabled())
+	if err != nil {
+		return err
 	}
 
-	return nil
+	// Save the token if any was given
+	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
+
+	// Create a unique identifier
+	p.id, err = os.Hostname()
+	if err != nil {
+		return fmt.Errorf("Unable to get hostname: %v", err)
+	}
+
+	p.authSecrets, err = auth_secrets.NewAuth(auth_secrets.TypeK8s, ostsecrets)
+	return err
 }
 
 func (p *portworx) startNodeCache() error {
@@ -304,7 +356,19 @@ func (p *portworx) startNodeCache() error {
 }
 
 func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
-	vols, err := p.volDriver.Inspect([]string{volumeID})
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		return nil, err
+	}
+	return p.inspectVolume(volDriver, volumeID)
+}
+
+func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string) (*storkvolume.Info, error) {
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		return nil, err
+	}
+	vols, err := volDriver.Inspect([]string{volumeID})
 	if err != nil {
 		return nil, &ErrFailedToInspectVolume{
 			ID:    volumeID,
@@ -550,12 +614,103 @@ func (p *portworx) getSnapshotName(tags *map[string]string) string {
 	return "snapshot-" + (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotUIDTag]
 }
 
+func (p *portworx) getUserContext(ctx context.Context, annotations map[string]string) (context.Context, error) {
+	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
+		token, err := p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
+		if err != nil {
+			return nil, err
+		}
+		return grpcserver.AddMetadataToContext(ctx, "authorization", "bearer "+token), nil
+	}
+	return ctx, nil
+}
+
+func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.VolumeDriver, error) {
+	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
+		token, err := p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
+		if err != nil {
+			return nil, err
+		}
+		clnt, err := p.getRestClientWithAuth(token)
+		if err != nil {
+			return nil, err
+		}
+		return volumeclient.VolumeDriver(clnt), nil
+	}
+
+	clnt, err := p.getRestClient()
+	if err != nil {
+		return nil, err
+	}
+	return volumeclient.VolumeDriver(clnt), nil
+
+}
+
+func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
+	if len(p.jwtSharedSecret) != 0 {
+		claims := &auth.Claims{
+			Issuer: "stork.openstorage.io",
+			Name:   "Stork",
+
+			// Unique id for stork
+			// this id must be unique across all accounts accessing the px system
+			Subject: "stork.openstorage.io." + p.id,
+
+			// Only allow certain calls
+			Roles: []string{"system.user"},
+
+			// Be in all groups to have access to all resources
+			Groups: []string{"*"},
+		}
+
+		// This never returns an error, but just in case, check the value
+		signature, err := auth.NewSignatureSharedSecret(p.jwtSharedSecret)
+		if err != nil {
+			return nil, err
+		}
+
+		// Set the token expiration
+		options := &auth.Options{
+			Expiration: time.Now().Add(time.Hour).Unix(),
+		}
+
+		token, err := auth.Token(claims, signature, options)
+		if err != nil {
+			return nil, err
+		}
+
+		clnt, err := p.getRestClientWithAuth(token)
+		if err != nil {
+			return nil, err
+		}
+		return volumeclient.VolumeDriver(clnt), nil
+	}
+
+	clnt, err := p.getRestClient()
+	if err != nil {
+		return nil, err
+	}
+	return volumeclient.VolumeDriver(clnt), nil
+}
+
+func (p *portworx) getRestClientWithAuth(token string) (*apiclient.Client, error) {
+	return volumeclient.NewAuthDriverClient(p.endpoint, driverName, "", token, "", "stork")
+}
+
+func (p *portworx) getRestClient() (*apiclient.Client, error) {
+	return volumeclient.NewDriverClient(p.endpoint, driverName, "", "stork")
+}
+
 func (p *portworx) SnapshotCreate(
 	snap *crdv1.VolumeSnapshot,
 	pv *v1.PersistentVolume,
 	tags *map[string]string,
 ) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
-	var err error
+	volDriver, err := p.getUserVolDriver(snap.Metadata.Annotations)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if pv == nil || pv.Spec.PortworxVolume == nil {
 		err = fmt.Errorf("invalid PV: %v", pv)
 		return nil, getErrorSnapshotConditions(err), err
@@ -618,7 +773,7 @@ func (p *portworx) SnapshotCreate(
 			CredentialUUID: getCredIDFromSnapshot(snap.Metadata.Annotations),
 			Name:           taskID,
 		}
-		_, err = p.volDriver.CloudBackupCreate(request)
+		_, err = volDriver.CloudBackupCreate(request)
 		if err != nil {
 			if _, ok := err.(*ost_errors.ErrExists); !ok {
 				return nil, getErrorSnapshotConditions(err), err
@@ -653,7 +808,7 @@ func (p *portworx) SnapshotCreate(
 				namespaceLabel:     (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNamespaceTag],
 			},
 		}
-		snapshotID, err = p.volDriver.Snapshot(volumeID, true, locator, true)
+		snapshotID, err = volDriver.Snapshot(volumeID, true, locator, true)
 		if err != nil {
 			return nil, getErrorSnapshotConditions(err), err
 		}
@@ -678,6 +833,11 @@ func (p *portworx) SnapshotCreate(
 }
 
 func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _ *v1.PersistentVolume) error {
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		return err
+	}
+
 	if snapDataSrc == nil || snapDataSrc.PortworxSnapshot == nil {
 		return fmt.Errorf("Invalid snapshot source %v", snapDataSrc)
 	}
@@ -688,7 +848,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 			ID:             snapDataSrc.PortworxSnapshot.SnapshotID,
 			CredentialUUID: snapDataSrc.PortworxSnapshot.SnapshotCloudCredID,
 		}
-		return p.volDriver.CloudBackupDelete(input)
+		return volDriver.CloudBackupDelete(input)
 	default:
 		if len(snapDataSrc.PortworxSnapshot.SnapshotData) > 0 {
 			r := csv.NewReader(strings.NewReader(snapDataSrc.PortworxSnapshot.SnapshotData))
@@ -730,7 +890,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 			}
 		}
 
-		return p.volDriver.Delete(snapDataSrc.PortworxSnapshot.SnapshotID)
+		return volDriver.Delete(snapDataSrc.PortworxSnapshot.SnapshotID)
 	}
 }
 
@@ -740,6 +900,11 @@ func (p *portworx) SnapshotRestore(
 	_ string,
 	parameters map[string]string,
 ) (*v1.PersistentVolumeSource, map[string]string, error) {
+	volDriver, err := p.getUserVolDriver(pvc.ObjectMeta.Annotations)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
 		return nil, nil, fmt.Errorf("Invalid Snapshot spec")
 	}
@@ -755,7 +920,7 @@ func (p *portworx) SnapshotRestore(
 	}
 
 	// Let's verify if source snapshotdata is complete
-	err := k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
+	err = k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
 	if err != nil {
 		return nil, nil, fmt.Errorf("snapshot: %s is not complete. %v", snapshotName, err)
 	}
@@ -789,13 +954,13 @@ func (p *portworx) SnapshotRestore(
 				namespaceLabel: pvc.Namespace,
 			},
 		}
-		restoreVolumeID, err = p.volDriver.Snapshot(snapID, false, locator, true)
+		restoreVolumeID, err = volDriver.Snapshot(snapID, false, locator, true)
 		if err != nil {
 			return nil, nil, err
 		}
 	case crdv1.PortworxSnapshotTypeCloud:
 		taskID := string(pvc.UID)
-		_, err := p.volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
+		_, err := volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 			Name:              taskID,
 			ID:                snapID,
 			RestoreVolumeName: restoreVolumeName,
@@ -817,7 +982,7 @@ func (p *portworx) SnapshotRestore(
 	}
 
 	// create PV from restored volume
-	vols, err := p.volDriver.Inspect([]string{restoreVolumeID})
+	vols, err := volDriver.Inspect([]string{restoreVolumeID})
 	if err != nil {
 		return nil, nil, &ErrFailedToInspectVolume{
 			ID:    restoreVolumeID,
@@ -851,6 +1016,12 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 		return getErrorSnapshotConditions(err), false, nil
 	}
 
+	// Get volume client from user context
+	volDriver, err := p.getUserVolDriver(snapshotData.Metadata.Annotations)
+	if err != nil {
+		return getErrorSnapshotConditions(err), false, err
+	}
+
 	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
 	case "", crdv1.PortworxSnapshotTypeLocal:
 		r := csv.NewReader(strings.NewReader(snapshotData.Spec.PortworxSnapshot.SnapshotID))
@@ -860,7 +1031,7 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 		}
 
 		for _, snapshotID := range snapshotIDs {
-			_, err = p.InspectVolume(snapshotID)
+			_, err = p.inspectVolume(volDriver, snapshotID)
 			if err != nil {
 				return getErrorSnapshotConditions(err), false, err
 			}
@@ -881,7 +1052,7 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 			return getErrorSnapshotConditions(err), false, err
 		}
 
-		csStatus := p.getCloudSnapStatus(api.CloudBackupOp, pv.Spec.PortworxVolume.VolumeID)
+		csStatus := p.getCloudSnapStatus(volDriver, api.CloudBackupOp, pv.Spec.PortworxVolume.VolumeID)
 		if isCloudsnapStatusFailed(csStatus.status) {
 			err = fmt.Errorf(csStatus.msg)
 			return getErrorSnapshotConditions(err), false, err
@@ -915,10 +1086,15 @@ func (p *portworx) GetSnapshotType(snap *crdv1.VolumeSnapshot) (string, error) {
 }
 
 func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		return err
+	}
+
 	if pv == nil || pv.Spec.PortworxVolume == nil {
 		return fmt.Errorf("Invalid PV: %v", pv)
 	}
-	return p.volDriver.Delete(pv.Spec.PortworxVolume.VolumeID)
+	return volDriver.Delete(pv.Spec.PortworxVolume.VolumeID)
 }
 
 func (p *portworx) findParentVolID(snapID string) (string, error) {
@@ -946,7 +1122,14 @@ func (p *portworx) waitForCloudSnapCompletion(
 	}
 
 	err := wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
-		csStatus = p.getCloudSnapStatus(op, taskID)
+
+		// Wait for completion using an admin auth context if any
+		volDriver, err := p.getAdminVolDriver()
+		if err != nil {
+			return true, err
+		}
+
+		csStatus = p.getCloudSnapStatus(volDriver, op, taskID)
 		if verbose {
 			logrus.Infof(csStatus.msg)
 		}
@@ -971,8 +1154,8 @@ func (p *portworx) waitForCloudSnapCompletion(
 }
 
 // getCloudSnapStatus fetches the cloudsnapshot status for given op and cloudsnap task ID
-func (p *portworx) getCloudSnapStatus(op api.CloudBackupOpType, taskID string) cloudSnapStatus {
-	response, err := p.volDriver.CloudBackupStatus(&api.CloudBackupStatusRequest{
+func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.CloudBackupOpType, taskID string) cloudSnapStatus {
+	response, err := volDriver.CloudBackupStatus(&api.CloudBackupStatusRequest{
 		ID: taskID,
 	})
 	if err != nil {
@@ -1036,13 +1219,18 @@ func (p *portworx) getCloudSnapStatus(op api.CloudBackupOpType, taskID string) c
 
 // revertPXSnaps deletes all given snapIDs
 func (p *portworx) revertPXSnaps(snapIDs []string) {
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		return
+	}
+
 	if len(snapIDs) == 0 {
 		return
 	}
 
 	failedDeletions := make(map[string]error)
 	for _, id := range snapIDs {
-		err := p.volDriver.Delete(id)
+		err := volDriver.Delete(id)
 		if err != nil {
 			failedDeletions[id] = err
 		}
@@ -1100,7 +1288,6 @@ func (p *portworx) validatePVForGroupSnap(pvName, groupID string, groupLabels ma
 }
 
 func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.PersistentVolumeClaim, error) {
-	var err error
 	snapType, err := getSnapshotType(snap.Metadata.Annotations)
 	if err != nil {
 		return nil, err
@@ -1260,6 +1447,10 @@ func (p *portworx) DeletePair(pair *stork_crd.ClusterPair) error {
 }
 
 func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+	volDriver, err := p.getUserVolDriver(migration.Annotations)
+	if err != nil {
+		return nil, err
+	}
 	ok, msg, err := p.ensureNodesHaveMinVersion("2.0")
 	if err != nil {
 		return nil, err
@@ -1305,7 +1496,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 			}
 			volumeInfo.Volume = volume
 			taskID := p.getMigrationTaskID(migration, volumeInfo)
-			_, err = p.volDriver.CloudMigrateStart(&api.CloudMigrateStartRequest{
+			_, err = volDriver.CloudMigrateStart(&api.CloudMigrateStartRequest{
 				TaskId:    taskID,
 				Operation: api.CloudMigrate_MigrateVolume,
 				ClusterId: clusterPair.Status.RemoteStorageID,
@@ -1332,7 +1523,11 @@ func (p *portworx) getMigrationTaskID(migration *stork_crd.Migration, volumeInfo
 }
 
 func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
-	status, err := p.volDriver.CloudMigrateStatus(nil)
+	volDriver, err := p.getUserVolDriver(migration.Annotations)
+	if err != nil {
+		return nil, err
+	}
+	status, err := volDriver.CloudMigrateStatus(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1382,9 +1577,13 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 }
 
 func (p *portworx) CancelMigration(migration *stork_crd.Migration) error {
+	volDriver, err := p.getUserVolDriver(migration.Annotations)
+	if err != nil {
+		return err
+	}
 	for _, volumeInfo := range migration.Status.Volumes {
 		taskID := p.getMigrationTaskID(migration, volumeInfo)
-		err := p.volDriver.CloudMigrateCancel(&api.CloudMigrateCancelRequest{
+		err := volDriver.CloudMigrateCancel(&api.CloudMigrateCancelRequest{
 			TaskId: taskID,
 		})
 		// Cancellation is best-effort, so don't return error
@@ -1524,7 +1723,7 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 	return clusterDomainsInfo, nil
 }
 
-func (p *portworx) ActivateClusterDomain(clusterDomainName string) error {
+func (p *portworx) ActivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate) error {
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return err
@@ -1533,13 +1732,19 @@ func (p *portworx) ActivateClusterDomain(clusterDomainName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
 	defer cancel()
 
+	// Get user token from secret if any
+	ctx, err = p.getUserContext(ctx, cdu.Annotations)
+	if err != nil {
+		return err
+	}
+
 	_, err = clusterDomainClient.Activate(ctx, &api.SdkClusterDomainActivateRequest{
-		ClusterDomainName: clusterDomainName,
+		ClusterDomainName: cdu.Spec.ClusterDomain,
 	})
 	return err
 }
 
-func (p *portworx) DeactivateClusterDomain(clusterDomainName string) error {
+func (p *portworx) DeactivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate) error {
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return err
@@ -1548,16 +1753,25 @@ func (p *portworx) DeactivateClusterDomain(clusterDomainName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
 	defer cancel()
 
+	// Get user token from secret if any
+	ctx, err = p.getUserContext(ctx, cdu.Annotations)
+	if err != nil {
+		return err
+	}
+
 	_, err = clusterDomainClient.Deactivate(ctx, &api.SdkClusterDomainDeactivateRequest{
-		ClusterDomainName: clusterDomainName,
+		ClusterDomainName: cdu.Spec.ClusterDomain,
 	})
 	return err
 }
 
 func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *stork_crd.GroupVolumeSnapshot, volNames []string, options map[string]string) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
-
-	resp, err := p.volDriver.SnapshotGroup("", nil, volNames)
+	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := volDriver.SnapshotGroup("", nil, volNames)
 	if err != nil {
 		return nil, err
 	}
@@ -1633,10 +1847,14 @@ func (p *portworx) createGroupCloudSnapFromVolumes(
 	volNames []string,
 	options map[string]string) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
+	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
+	if err != nil {
+		return nil, err
+	}
 
 	credID := getCredIDFromSnapshot(groupSnap.Spec.Options)
 
-	resp, err := p.volDriver.CloudBackupGroupCreate(&api.CloudBackupGroupCreateRequest{
+	resp, err := volDriver.CloudBackupGroupCreate(&api.CloudBackupGroupCreateRequest{
 		CredentialUUID: credID,
 		VolumeIDs:      volNames})
 	if err != nil {
@@ -1675,13 +1893,19 @@ func (p *portworx) generateStatusReponseFromTaskIDs(
 		Snapshots: make([]*stork_crd.VolumeSnapshotStatus, 0),
 	}
 
+	// Get volume client from user context
+	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
+	if err != nil {
+		return nil, err
+	}
+
 	failedTasks := make([]string, 0)
 	doneTasks := make([]string, 0)
 	activeTasks := make([]string, 0)
 	doneSnapIDs := make([]string, 0)
 	activeSnapIDs := make([]string, 0)
 	for _, taskID := range taskIDs {
-		csStatus := p.getCloudSnapStatus(api.CloudBackupOp, taskID)
+		csStatus := p.getCloudSnapStatus(volDriver, api.CloudBackupOp, taskID)
 
 		dataSource := &crdv1.VolumeSnapshotDataSource{
 			PortworxSnapshot: &crdv1.PortworxVolumeSnapshotSource{
@@ -1733,6 +1957,12 @@ func (p *portworx) generateStatusReponseFromTaskIDs(
 
 // revertPXCloudSnaps deletes all cloudsnaps with given IDs
 func (p *portworx) revertPXCloudSnaps(cloudSnapIDs []string, credID string) {
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		logrus.Errorf("Failed to get a volumeDriver: %v", err)
+		return
+	}
+
 	if len(cloudSnapIDs) == 0 {
 		return
 	}
@@ -1743,7 +1973,7 @@ func (p *portworx) revertPXCloudSnaps(cloudSnapIDs []string, credID string) {
 			ID:             cloudSnapID,
 			CredentialUUID: credID,
 		}
-		err := p.volDriver.CloudBackupDelete(input)
+		err := volDriver.CloudBackupDelete(input)
 		if err != nil {
 			failedDeletions[cloudSnapID] = err
 		}
