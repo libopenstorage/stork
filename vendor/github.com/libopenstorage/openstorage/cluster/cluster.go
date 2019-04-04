@@ -132,7 +132,7 @@ type ClusterListener interface {
 // listen for incoming pairing requests.
 type ClusterListenerPairOps interface {
 	// CreatePair is called when we are pairing with another cluster
-	CreatePair(response *api.ClusterPairProcessResponse) error
+	CreatePair(request *api.ClusterPairCreateRequest, response *api.ClusterPairProcessResponse) error
 
 	// ProcessPairRequest is called when we get a pair request from another cluster
 	ProcessPairRequest(request *api.ClusterPairProcessRequest, response *api.ClusterPairProcessResponse) error
@@ -187,6 +187,11 @@ type ClusterListenerNodeOps interface {
 
 	// CanNodeRemove test to see if we can remove this node
 	CanNodeRemove(node *api.Node) (string, error)
+
+	// MarkNodeForRemoval instructs the listeners that the ClusterManager
+	// is going ahead with the node removal. The API does not expect any
+	// response from the listeners
+	MarkNodeForRemoval(node *api.Node)
 
 	// MarkNodeDown marks the given node's status as down
 	MarkNodeDown(node *api.Node) error
@@ -428,6 +433,10 @@ func (nc *NullClusterListener) MarkNodeDown(node *api.Node) error {
 	return nil
 }
 
+func (nc *NullClusterListener) MarkNodeForRemoval(node *api.Node) {
+	return
+}
+
 func (nc *NullClusterListener) Update(node *api.Node) error {
 	return nil
 }
@@ -473,6 +482,7 @@ func (nc *NullClusterListener) EraseAlert(
 }
 
 func (nc *NullClusterListener) CreatePair(
+	request *api.ClusterPairCreateRequest,
 	response *api.ClusterPairProcessResponse,
 ) error {
 	return nil

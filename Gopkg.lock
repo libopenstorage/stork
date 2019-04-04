@@ -442,7 +442,7 @@
 
 [[projects]]
   branch = "release-6.0"
-  digest = "1:3cbb58f37cf523797e65fcb2ff6b71c568a9f2048507ecc158db4989c62ed75c"
+  digest = "1:647114100bb935fa35b36d8e820d5e9d518e7ecfa6e7b531fe9ca36a6e6f749d"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -467,7 +467,7 @@
     "volume",
   ]
   pruneopts = "UT"
-  revision = "bf33919f7800fb848464bc2645da84c6fd737aaa"
+  revision = "86ed4ebbc30cdf58d79f25d06da0149bd728d593"
 
 [[projects]]
   branch = "master"
@@ -1529,7 +1529,6 @@
     "github.com/skyrings/skyring-common/tools/uuid",
     "github.com/spf13/cobra",
     "github.com/spf13/pflag",
-    "github.com/stretchr/testify/assert",
     "github.com/stretchr/testify/require",
     "github.com/urfave/cli",
     "google.golang.org/grpc",
