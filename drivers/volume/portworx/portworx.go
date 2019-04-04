@@ -1431,10 +1431,18 @@ func (p *portworx) CreatePair(pair *stork_crd.ClusterPair) (string, error) {
 			return "", fmt.Errorf("invalid port (%v) specified for cluster pair: %v", p, err)
 		}
 	}
+	mode := api.ClusterPairMode_Default
+	if val, ok := pair.Spec.Options["mode"]; ok {
+		if _, valid := api.ClusterPairMode_Mode_value[val]; valid {
+			mode = api.ClusterPairMode_Mode(api.ClusterPairMode_Mode_value[val])
+		}
+	}
+
 	resp, err := p.clusterManager.CreatePair(&api.ClusterPairCreateRequest{
 		RemoteClusterIp:    pair.Spec.Options["ip"],
 		RemoteClusterToken: pair.Spec.Options["token"],
 		RemoteClusterPort:  uint32(port),
+		Mode:               mode,
 	})
 	if err != nil {
 		return "", err
