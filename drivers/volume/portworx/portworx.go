@@ -2014,19 +2014,23 @@ func (p *portworx) ensureNodesHaveMinVersion(minVersionStr string) (bool, string
 
 	pxVerRegex := regexp.MustCompile(`^(\d+\.\d+\.\d+).*`)
 	for _, node := range result.Nodes {
-		nodeVersion := node.NodeLabels["PX Version"]
-		matches := pxVerRegex.FindStringSubmatch(nodeVersion)
-		if len(matches) < 2 {
-			return false, "", fmt.Errorf("failed to parse PX version: %s on node", nodeVersion)
+		if p.mapNodeStatus(node.Status) != storkvolume.NodeOnline {
+			continue
 		}
+		if nodeVersion, ok := node.NodeLabels["PX Version"]; ok {
+			matches := pxVerRegex.FindStringSubmatch(nodeVersion)
+			if len(matches) < 2 {
+				return false, "", fmt.Errorf("failed to parse PX version: %s on node", nodeVersion)
+			}
 
-		currentVer, err := version.NewVersion(matches[1])
-		if err != nil {
-			return false, "", err
-		}
+			currentVer, err := version.NewVersion(matches[1])
+			if err != nil {
+				return false, "", err
+			}
 
-		if currentVer.LessThan(minVersion) {
-			return false, fmt.Sprintf("node: %s has version: %s", node.Hostname, nodeVersion), nil
+			if currentVer.LessThan(minVersion) {
+				return false, fmt.Sprintf("node: %s has version: %s", node.Hostname, nodeVersion), nil
+			}
 		}
 	}
 
