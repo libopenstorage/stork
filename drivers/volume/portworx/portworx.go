@@ -502,7 +502,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 
 func (p *portworx) GetClusterID() (string, error) {
 	clusterID := p.clusterManager.Uuid()
-	if len(clusterID) > 0 {
+	if len(clusterID) == 0 {
 		return "", &ErrFailedToGetClusterID{
 			Cause: "Portworx driver returned empty cluster UUID",
 		}
