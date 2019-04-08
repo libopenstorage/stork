@@ -162,7 +162,7 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 				// Check again and update the status if it is completed
 				snapshot.Status = pendingVolumeSnapshotStatus
 				if s.isVolumeSnapshotComplete(snapshot.Status) {
-					snapshot.FinishTimestamp = meta.Now()
+					snapshot.FinishTimestamp = meta.NewTime(schedule.GetCurrentTime())
 					if pendingVolumeSnapshotStatus == snapv1.VolumeSnapshotConditionReady {
 						s.Recorder.Event(snapshotSchedule,
 							v1.EventTypeNormal,
