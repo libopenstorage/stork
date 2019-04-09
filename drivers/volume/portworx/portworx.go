@@ -474,7 +474,6 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 				return errFailedToInspectVolume(name, k, requestedSpec.Size, vol.Spec.Size)
 			}
 		default:
-			logrus.Infof("Warning: Encountered unhandled custom param: %v -> %v", k, v)
 		}
 	}
 
