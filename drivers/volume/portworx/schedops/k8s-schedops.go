@@ -196,7 +196,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		}
 		resp, err := k.validateMountsInPods(vol, pvName, pods, d, validatedPods)
 		if err != nil {
-			logrus.Errorf("failed to validate mount in pods: %v err: %v", pods, err)
+			logrus.Errorf("failed to validate mount in pod. Cause: %v", err)
 			return nil, true, err
 		}
 		validatedPods = append(validatedPods, resp...)
@@ -245,11 +245,6 @@ func (k *k8sSchedOps) validateMountsInPods(
 	nodes := node.GetNodesByName()
 	newPods := excludePods(pods, podsToExclude)
 	for _, p := range newPods {
-		currentNode, nodeExists := nodes[p.Spec.NodeName]
-		if !nodeExists {
-			return validatedMountPods, fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
-		}
-
 		pod, err := k8s.Instance().GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8s.ErrPodsNotFound {
 			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
@@ -273,20 +268,7 @@ func (k *k8sSchedOps) validateMountsInPods(
 		} else if err != nil {
 			return validatedMountPods, err
 		}
-		//logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", pod.Namespace, pod.Name, pod.Status.Phase, pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses)
 
-		// ignore error when a command not exactly fail, like grep when empty return exit 1
-		connOpts := node.ConnectionOpts{
-			TimeBeforeRetry: defaultRetryInterval,
-			Timeout:         defaultTimeout,
-			IgnoreError:     true,
-		}
-
-		volMount, _ := d.RunCommand(currentNode,
-			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
-		if len(volMount) == 0 {
-			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
-		}
 		containerPaths := getContainerPVCMountMap(*pod)
 		for containerName, path := range containerPaths {
 			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s.+", path))
@@ -313,6 +295,26 @@ func (k *k8sSchedOps) validateMountsInPods(
 				return validatedMountPods, fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", pod.Namespace, pod.Name, mounts)
 			}
 		}
+
+		currentNode, nodeExists := nodes[p.Spec.NodeName]
+		if !nodeExists {
+			return validatedMountPods, fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
+		}
+		//logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", pod.Namespace, pod.Name, pod.Status.Phase, pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses)
+
+		// ignore error when a command not exactly fail, like grep when empty return exit 1
+		connOpts := node.ConnectionOpts{
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+			IgnoreError:     true,
+		}
+
+		volMount, _ := d.RunCommand(currentNode,
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
+		if len(volMount) == 0 {
+			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
+		}
+
 		validatedMountPods = append(validatedMountPods, pod.Name)
 	}
 	return validatedMountPods, nil

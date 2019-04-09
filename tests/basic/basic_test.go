@@ -209,19 +209,20 @@ func getNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(replicas).NotTo(BeEmpty())
 			// at least n-1 nodes with replica need to be up
-			for i := 0; i <= len(replicas)-1; i++ {
-				nodesThatCantBeDown[replicas[i]] = true
+			maxNodesToBeDown := getMaxNodesToBeDown(len(replicas))
+			for _, nodeName := range replicas[maxNodesToBeDown:] {
+				nodesThatCantBeDown[nodeName] = true
 			}
 		}
 
-		for _, node := range node.GetWorkerNodes() {
+		for _, node := range appNodes {
 			if _, exists := nodesThatCantBeDown[node.Name]; !exists {
 				nodesToBeDown = append(nodesToBeDown, node)
 			}
 		}
 
 	})
-	return appNodes
+	return nodesToBeDown
 }
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
@@ -251,6 +252,16 @@ var _ = Describe("{AppTasksDown}", func() {
 		})
 	})
 })
+
+func getMaxNodesToBeDown(replicas int) int {
+	if replicas == 1 {
+		return 0
+	}
+	if replicas%2 != 0 {
+		return replicas/2 + 1
+	}
+	return replicas / 2
+}
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
 var _ = Describe("{AppScaleUpAndDown}", func() {
