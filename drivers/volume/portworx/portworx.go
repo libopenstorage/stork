@@ -703,13 +703,18 @@ func (p *portworx) getRestClient() (*apiclient.Client, error) {
 	return volumeclient.NewDriverClient(p.endpoint, driverName, "", "stork")
 }
 
-func (p *portworx) addScheduledSnapshotLabels(
+func (p *portworx) addCloudsnapInfo(
 	request *api.CloudBackupCreateRequest,
 	snap *crdv1.VolumeSnapshot,
 ) {
 	if scheduleName, exists := snap.Metadata.Labels[snapshotcontrollers.SnapshotScheduleNameLabel]; exists {
 		if policyType, exists := snap.Metadata.Labels[snapshotcontrollers.SnapshotSchedulePolicyTypeLabel]; exists {
 			request.Labels[cloudBackupExternalManagerLabel] = "Stork-" + scheduleName + "-" + snap.Metadata.Namespace + "-" + policyType
+			// Use full backups for weekly and montly snaps
+			if policyType == string(stork_crd.SchedulePolicyTypeWeekly) ||
+				policyType == string(stork_crd.SchedulePolicyTypeMonthly) {
+				request.Full = true
+			}
 			return
 		}
 	}
@@ -792,7 +797,7 @@ func (p *portworx) SnapshotCreate(
 		}
 		request.Labels = make(map[string]string)
 		request.Labels[cloudBackupOwnerLabel] = "stork"
-		p.addScheduledSnapshotLabels(request, snap)
+		p.addCloudsnapInfo(request, snap)
 
 		_, err = volDriver.CloudBackupCreate(request)
 		if err != nil {
