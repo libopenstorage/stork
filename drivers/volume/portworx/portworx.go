@@ -854,6 +854,7 @@ func (p *portworx) SnapshotCreate(
 			SnapshotData:        snapshotDataName,
 			SnapshotType:        snapType,
 			SnapshotCloudCredID: snapshotCredID,
+			SnapshotTaskID:      taskID,
 		},
 	}, &snapStatusConditions, nil
 }
@@ -1063,22 +1064,17 @@ func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]
 			}
 		}
 	case crdv1.PortworxSnapshotTypeCloud:
-		if snapshotData.Spec.PersistentVolumeRef == nil {
-			err = fmt.Errorf("PersistentVolume reference not set for snapshot: %v", snapshotData)
-			return getErrorSnapshotConditions(err), false, err
+		if snapshotData.Status.Conditions != nil && len(snapshotData.Status.Conditions) != 0 {
+			lastCondition := snapshotData.Status.Conditions[len(snapshotData.Status.Conditions)-1]
+			if lastCondition.Type == crdv1.VolumeSnapshotDataConditionReady && lastCondition.Status == v1.ConditionTrue {
+				conditions := getReadySnapshotConditions()
+				return &conditions, true, nil
+			} else if lastCondition.Type == crdv1.VolumeSnapshotDataConditionError && lastCondition.Status == v1.ConditionTrue {
+				return getErrorSnapshotConditions(fmt.Errorf(lastCondition.Message)), true, nil
+			}
 		}
 
-		pv, err := k8s.Instance().GetPersistentVolume(snapshotData.Spec.PersistentVolumeRef.Name)
-		if err != nil {
-			return getErrorSnapshotConditions(err), false, err
-		}
-
-		if pv.Spec.PortworxVolume == nil {
-			err = fmt.Errorf("Parent PV: %s for snapshot is not a Portworx volume", pv.Name)
-			return getErrorSnapshotConditions(err), false, err
-		}
-
-		csStatus := p.getCloudSnapStatus(volDriver, api.CloudBackupOp, pv.Spec.PortworxVolume.VolumeID)
+		csStatus := p.getCloudSnapStatus(volDriver, api.CloudBackupOp, snapshotData.Spec.PortworxSnapshot.SnapshotTaskID)
 		if isCloudsnapStatusFailed(csStatus.status) {
 			err = fmt.Errorf(csStatus.msg)
 			return getErrorSnapshotConditions(err), false, err
