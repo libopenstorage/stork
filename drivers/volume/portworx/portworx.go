@@ -106,9 +106,11 @@ const (
 
 	// for cloud snaps, we use 5 * maxint32 seconds as timeout since we cannot
 	// accurately predict a correct timeout
-	cloudSnapshotInitialDelay = 5 * time.Second
-	cloudSnapshotFactor       = 1
-	cloudSnapshotSteps        = math.MaxInt32
+	cloudSnapshotInitialDelay       = 5 * time.Second
+	cloudSnapshotFactor             = 1
+	cloudSnapshotSteps              = math.MaxInt32
+	cloudBackupOwnerLabel           = "owner"
+	cloudBackupExternalManagerLabel = "externalManager"
 
 	validateSnapshotTimeout       = 5 * time.Minute
 	validateSnapshotRetryInterval = 10 * time.Second
@@ -701,6 +703,19 @@ func (p *portworx) getRestClient() (*apiclient.Client, error) {
 	return volumeclient.NewDriverClient(p.endpoint, driverName, "", "stork")
 }
 
+func (p *portworx) addScheduledSnapshotLabels(
+	request *api.CloudBackupCreateRequest,
+	snap *crdv1.VolumeSnapshot,
+) {
+	if scheduleName, exists := snap.Metadata.Labels[snapshotcontrollers.SnapshotScheduleNameLabel]; exists {
+		if policyType, exists := snap.Metadata.Labels[snapshotcontrollers.SnapshotSchedulePolicyTypeLabel]; exists {
+			request.Labels[cloudBackupExternalManagerLabel] = "Stork-" + scheduleName + "-" + snap.Metadata.Namespace + "-" + policyType
+			return
+		}
+	}
+	request.Labels[cloudBackupExternalManagerLabel] = "StorkManual"
+}
+
 func (p *portworx) SnapshotCreate(
 	snap *crdv1.VolumeSnapshot,
 	pv *v1.PersistentVolume,
@@ -750,6 +765,7 @@ func (p *portworx) SnapshotCreate(
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
+	var taskID string
 	switch snapType {
 	case crdv1.PortworxSnapshotTypeCloud:
 		log.SnapshotLog(snap).Debugf("Cloud SnapshotCreate for pv: %+v \n tags: %v", pv, tags)
@@ -767,12 +783,17 @@ func (p *portworx) SnapshotCreate(
 			return nil, getErrorSnapshotConditions(err), err
 		}
 
-		taskID := string(snap.Metadata.UID)
+		snapshotCredID = getCredIDFromSnapshot(snap.Metadata.Annotations)
+		taskID = string(snap.Metadata.UID)
 		request := &api.CloudBackupCreateRequest{
 			VolumeID:       volumeID,
-			CredentialUUID: getCredIDFromSnapshot(snap.Metadata.Annotations),
+			CredentialUUID: snapshotCredID,
 			Name:           taskID,
 		}
+		request.Labels = make(map[string]string)
+		request.Labels[cloudBackupOwnerLabel] = "stork"
+		p.addScheduledSnapshotLabels(request, snap)
+
 		_, err = volDriver.CloudBackupCreate(request)
 		if err != nil {
 			if _, ok := err.(*ost_errors.ErrExists); !ok {
