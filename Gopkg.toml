@@ -33,10 +33,10 @@ required = [
   "k8s.io/code-generator/cmd/deepcopy-gen/args"
 ]
 
-[[constraint]]
+[[override]]
   name = "github.com/kubernetes-incubator/external-storage"
   source = "github.com/libopenstorage/external-storage"
-  version = "=5.1.0-openstorage"
+  branch = "openstorage-5.1"
 
 [[constraint]]
   name = "github.com/libopenstorage/openstorage"
