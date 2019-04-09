@@ -79,6 +79,21 @@ if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
 fi
 
+K8S_VENDOR_KEY=""
+if [ -n "${K8S_VENDOR}" ]; then
+    case "$K8S_VENDOR" in
+        kubernetes)
+            K8S_VENDOR_KEY=node-role.kubernetes.io/master
+            ;;
+        rancher)
+            K8S_VENDOR_KEY=node-role.kubernetes.io/controlplane
+            ;;
+    esac
+else
+    K8S_VENDOR_KEY=node-role.kubernetes.io/master
+fi
+
+
 echo "Deploying torpedo pod..."
 cat <<EOF | kubectl create -f -
 ---
@@ -118,17 +133,25 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: torpedo
+  labels:
+    app: torpedo
 spec:
   tolerations:
   - key: node-role.kubernetes.io/master
     operator: Equal
     effect: NoSchedule
+  - key: node-role.kubernetes.io/controlplane
+    operator: Equal
+    value: "true"
+  - key: node-role.kubernetes.io/etcd
+    operator: Equal
+    value: "true"
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
         - matchExpressions:
-          - key: node-role.kubernetes.io/master
+          - key: ${K8S_VENDOR_KEY}
             operator: Exists
   containers:
   - name: torpedo

@@ -23,7 +23,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -802,8 +802,6 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated MigrationSchedule: %v", ctx.App.Key, obj.Name)
-		} else {
-			logrus.Infof("[%v] Skipping validate for %v", ctx.App.Key, reflect.TypeOf(spec))
 		}
 	}
 
@@ -1154,6 +1152,16 @@ func (k *k8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 	return nil
 }
 
+func (k *k8s) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
+	for _, mode := range pvc.Spec.AccessModes {
+		if mode == v1.PersistentVolumeAccessMode(v1.ReadOnlyMany) ||
+			mode == v1.PersistentVolumeAccessMode(v1.ReadWriteMany) {
+			return true
+		}
+	}
+	return false
+}
+
 func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
 	var vols []*volume.Volume
@@ -1174,6 +1182,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				ID:        string(obj.UID),
 				Name:      obj.Name,
 				Namespace: obj.Namespace,
+				Shared:    k.isPVCShared(obj),
 			})
 
 			if err := k8sOps.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
@@ -1222,6 +1231,7 @@ func (k *k8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					ID:        string(pvc.UID),
 					Name:      pvc.Name,
 					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
 				})
 
 				if err := k8sOps.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
@@ -1250,6 +1260,7 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				ID:        string(obj.UID),
 				Name:      obj.Name,
 				Namespace: obj.Namespace,
+				Shared:    k.isPVCShared(obj),
 			}
 			vols = append(vols, vol)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
@@ -1274,6 +1285,7 @@ func (k *k8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					ID:        string(pvc.UID),
 					Name:      pvc.Name,
 					Namespace: pvc.Namespace,
+					Shared:    k.isPVCShared(&pvc),
 				})
 			}
 		}
@@ -1349,6 +1361,7 @@ func (k *k8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *v1.PersistentVolumeCla
 		Name:      pvc.Name,
 		Namespace: pvc.Namespace,
 		Size:      uint64(sizeInt64),
+		Shared:    k.isPVCShared(pvc),
 	}
 	return vol, nil
 }
@@ -1550,8 +1563,8 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 func (k *k8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
-		logrus.Infof("Scale all Deployments")
 		if obj, ok := spec.(*apps_api.Deployment); ok {
+			logrus.Infof("Scale all Deployments")
 			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
 			if err != nil {
 				return err
