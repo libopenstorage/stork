@@ -127,7 +127,7 @@ func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 				Name: clusterID,
 			},
 		}
-		if _, err := k8s.Instance().CreateClusterDomainsStatus(clusterDomainStatus); err != nil {
+		if _, err := k8s.Instance().CreateClusterDomainsStatus(clusterDomainStatus); err != nil && !errors.IsAlreadyExists(err) {
 			return nil, true, fmt.Errorf("Failed to create cluster domain"+
 				" status object for driver %v: %v", c.Driver.String(), err)
 		}

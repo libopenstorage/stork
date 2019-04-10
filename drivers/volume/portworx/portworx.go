@@ -503,13 +503,18 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 }
 
 func (p *portworx) GetClusterID() (string, error) {
-	clusterID := p.clusterManager.Uuid()
-	if len(clusterID) == 0 {
+	cluster, err := p.clusterManager.Enumerate()
+	if err != nil {
+		return "", &ErrFailedToGetClusterID{
+			Cause: err.Error(),
+		}
+	}
+	if len(cluster.Id) == 0 {
 		return "", &ErrFailedToGetClusterID{
 			Cause: "Portworx driver returned empty cluster UUID",
 		}
 	}
-	return clusterID, nil
+	return cluster.Id, nil
 }
 
 func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
