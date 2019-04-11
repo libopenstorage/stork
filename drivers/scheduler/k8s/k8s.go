@@ -1563,6 +1563,9 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 func (k *k8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
+		if !k.IsScalable(spec) {
+			continue
+		}
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			logrus.Infof("Scale all Deployments")
 			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
@@ -1657,6 +1660,32 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 		}
 	}
 	return nil
+}
+
+func (k *k8s) IsScalable(spec interface{}) bool {
+	if obj, ok := spec.(*apps_api.Deployment); ok {
+		dep, err := k8s_ops.Instance().GetDeployment(obj.Name, obj.Namespace)
+		if err != nil {
+			logrus.Errorf("Failed to retrieve deployment [%s] %s. Cause: %v", obj.Namespace, obj.Name, err)
+			return false
+		}
+		for _, vol := range dep.Spec.Template.Spec.Volumes {
+			pvcName := vol.PersistentVolumeClaim.ClaimName
+			pvc, err := k8s_ops.Instance().GetPersistentVolumeClaim(pvcName, dep.Namespace)
+			if err != nil {
+				logrus.Errorf("Failed to retrieve PVC [%s] %s. Cause: %v", obj.Namespace, pvcName, err)
+				return false
+			}
+			for _, ac := range pvc.Spec.AccessModes {
+				if ac == v1.ReadWriteOnce {
+					return false
+				}
+			}
+		}
+	} else if _, ok := spec.(*apps_api.StatefulSet); ok {
+		return true
+	}
+	return false
 }
 
 func (k *k8s) createMigrationObjects(
