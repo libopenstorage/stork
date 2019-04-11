@@ -475,6 +475,11 @@ func (d *dcos) RescanSpecs(specDir string) error {
 	return nil
 }
 
+func (d *dcos) IsScalable(spec interface{}) bool {
+	// TODO implement this method
+	return false
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)
