@@ -68,6 +68,7 @@ func (s *SnapshotScheduleController) Handle(ctx context.Context, event sdk.Event
 			return nil
 		}
 
+		s.setDefaults(snapshotSchedule)
 		// First update the status of any pending snapshots
 		err := s.updateVolumeSnapshotStatus(snapshotSchedule)
 		if err != nil {
@@ -122,6 +123,12 @@ func (s *SnapshotScheduleController) Handle(ctx context.Context, event sdk.Event
 		}
 	}
 	return nil
+}
+
+func (s *SnapshotScheduleController) setDefaults(snapshotSchedule *stork_api.VolumeSnapshotSchedule) {
+	if snapshotSchedule.Spec.ReclaimPolicy == "" {
+		snapshotSchedule.Spec.ReclaimPolicy = stork_api.ReclaimPolicyDelete
+	}
 }
 
 func getVolumeSnapshotStatus(name string, namespace string) (snapv1.VolumeSnapshotConditionType, error) {
@@ -245,7 +252,7 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 	snapshotSchedule.Status.Items[policyType] = append(snapshotSchedule.Status.Items[policyType],
 		&stork_api.ScheduledVolumeSnapshotStatus{
 			Name:              snapshotName,
-			CreationTimestamp: meta.Now(),
+			CreationTimestamp: meta.NewTime(schedule.GetCurrentTime()),
 			Status:            snapv1.VolumeSnapshotConditionPending,
 		})
 	err := sdk.Update(snapshotSchedule)
