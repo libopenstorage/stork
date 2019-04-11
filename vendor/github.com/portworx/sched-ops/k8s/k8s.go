@@ -414,6 +414,12 @@ type SnapshotOps interface {
 	ListSnapshotSchedules(string) (*v1alpha1.VolumeSnapshotScheduleList, error)
 	// DeleteSnapshotSchedule deletes the SnapshotSchedule
 	DeleteSnapshotSchedule(string, string) error
+	// ValidateSnapshotSchedule validates the given SnapshotSchedule. It checks the status of each of
+	// the snapshots triggered for this schedule and returns a map of successfull snapshots. The key of the
+	// map will be the schedule type and value will be list of snapshots for that schedule type.
+	// The caller is expected to validate if the returned map has all snapshots expected at that point of time
+	ValidateSnapshotSchedule(string, string, time.Duration, time.Duration) (
+		map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledVolumeSnapshotStatus, error)
 }
 
 // GroupSnapshotOps is an interface to perform k8s GroupVolumeSnapshot operations
@@ -2946,6 +2952,86 @@ func (k *k8sOps) DeleteSnapshotSchedule(name string, namespace string) error {
 	return k.storkClient.Stork().VolumeSnapshotSchedules(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+func (k *k8sOps) ValidateSnapshotSchedule(name string, namespace string, timeout, retryInterval time.Duration) (
+	map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledVolumeSnapshotStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetSnapshotSchedule(name, namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		if len(resp.Status.Items) == 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("0 snapshots have yet run for the snapshot schedule"),
+				Type:  resp,
+			}
+		}
+
+		failedSnapshots := make([]string, 0)
+		pendingSnapshots := make([]string, 0)
+		for _, snapshotStatuses := range resp.Status.Items {
+			if len(snapshotStatuses) > 0 {
+				status := snapshotStatuses[len(snapshotStatuses)-1]
+				if status == nil {
+					return nil, true, &ErrFailedToValidateCustomSpec{
+						Name:  name,
+						Cause: "SnapshotSchedule has an empty migration in it's most recent status",
+						Type:  resp,
+					}
+				}
+
+				if status.Status == snap_v1.VolumeSnapshotConditionReady {
+					continue
+				}
+
+				if status.Status == snap_v1.VolumeSnapshotConditionError {
+					failedSnapshots = append(failedSnapshots,
+						fmt.Sprintf("snapshot: %s failed. status: %v", status.Name, status.Status))
+				} else {
+					pendingSnapshots = append(pendingSnapshots,
+						fmt.Sprintf("snapshot: %s is not done. status: %v", status.Name, status.Status))
+				}
+			}
+		}
+
+		if len(failedSnapshots) > 0 {
+			return nil, false, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("SnapshotSchedule failed as one or more snapshots have failed. %s",
+					failedSnapshots),
+				Type: resp,
+			}
+		}
+
+		if len(pendingSnapshots) > 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("SnapshotSchedule has certain snapshots pending: %s",
+					pendingSnapshots),
+				Type: resp,
+			}
+		}
+
+		return resp.Status.Items, false, nil
+	}
+
+	ret, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshots, ok := ret.(map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledVolumeSnapshotStatus)
+	if !ok {
+		return nil, fmt.Errorf("invalid type when checking snapshot schedules: %v", snapshots)
+	}
+
+	return snapshots, nil
 }
 
 // Snapshot APIs - END
