@@ -1072,7 +1072,13 @@ func (d *portworx) UpgradeDriver(version string) error {
 	}
 
 	for _, n := range node.GetStorageDriverNodes() {
-		if err := d.WaitForUpgrade(n, ociImage, ociTag); err != nil {
+		image := ociImage
+		tag := ociTag
+		if len(pxImage) > 0 && len(pxTag) > 0 {
+			image = pxImage
+			tag = pxTag
+		}
+		if err := d.WaitForUpgrade(n, image, tag); err != nil {
 			return err
 		}
 	}
