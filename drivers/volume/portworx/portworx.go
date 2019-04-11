@@ -678,7 +678,8 @@ func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
 
 		// Set the token expiration
 		options := &auth.Options{
-			Expiration: time.Now().Add(time.Hour).Unix(),
+			Expiration:  time.Now().Add(time.Hour).Unix(),
+			IATSubtract: 1 * time.Minute,
 		}
 
 		token, err := auth.Token(claims, signature, options)
