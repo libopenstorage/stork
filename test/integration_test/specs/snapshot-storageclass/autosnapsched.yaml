@@ -1,0 +1,32 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+    name: autosnap-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+   repl: "2"
+   snapshotschedule.stork.libopenstorage.org/test-schedule: |
+     schedulePolicyName: interval
+     reclaimPolicy: Delete
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data
+   namespace: mysql
+   annotations:
+     volume.beta.kubernetes.io/storage-class: autosnap-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: SchedulePolicy
+metadata:
+  name: interval
+policy:
+  interval:
+    intervalMinutes: 2
