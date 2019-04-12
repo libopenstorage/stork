@@ -1525,10 +1525,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 
 			volume, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 			if err != nil {
-				volumeInfo.Status = stork_crd.MigrationStatusFailed
-				volumeInfo.Reason = fmt.Sprintf("Error getting volume for PVC: %v", err)
-				logrus.Errorf("%v: %v", pvc.Name, volumeInfo.Reason)
-				continue
+				return nil, fmt.Errorf("Error getting volume for PVC: %v", err)
 			}
 			volumeInfo.Volume = volume
 			taskID := p.getMigrationTaskID(migration, volumeInfo)
@@ -1540,10 +1537,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 			})
 			if err != nil {
 				if _, ok := err.(*ost_errors.ErrExists); !ok {
-					volumeInfo.Status = stork_crd.MigrationStatusFailed
-					volumeInfo.Reason = fmt.Sprintf("Error starting migration for volume: %v", err)
-					logrus.Errorf("%v: %v", pvc.Name, volumeInfo.Reason)
-					continue
+					return nil, fmt.Errorf("Error starting migration for volume: %v", err)
 				}
 			}
 			volumeInfo.Status = stork_crd.MigrationStatusInProgress
