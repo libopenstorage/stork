@@ -61,6 +61,7 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 			if clusterPair.Status.RemoteStorageID != "" {
 				return c.Driver.DeletePair(clusterPair)
 			}
+			return nil
 		}
 
 		if len(clusterPair.Spec.Options) == 0 {
