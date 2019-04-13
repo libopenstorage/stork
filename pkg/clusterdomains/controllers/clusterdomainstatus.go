@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
@@ -28,6 +30,10 @@ const (
 	resyncPeriod                         = 1 * time.Minute
 	createCdsTimeout                     = 30 * time.Minute
 	createCdsRetryInterval               = 10 * time.Second
+)
+
+var (
+	clusterIDRegex = regexp.MustCompile("[^a-zA-Z0-9-.]+")
 )
 
 // ClusterDomainsStatusController clusterdomainsstatus controller
@@ -124,7 +130,7 @@ func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 		}
 		clusterDomainStatus := &storkv1.ClusterDomainsStatus{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterID,
+				Name: getNameForClusterDomainsStatus(clusterID),
 			},
 		}
 		if _, err := k8s.Instance().CreateClusterDomainsStatus(clusterDomainStatus); err != nil && !errors.IsAlreadyExists(err) {
@@ -157,4 +163,9 @@ func (c *ClusterDomainsStatusController) createCRD() error {
 	}
 
 	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+func getNameForClusterDomainsStatus(clusterID string) string {
+	clusterDomainsStatusName := strings.ToLower(clusterID)
+	return clusterIDRegex.ReplaceAllString(clusterDomainsStatusName, "-")
 }
