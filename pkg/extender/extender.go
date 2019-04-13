@@ -13,6 +13,7 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/record"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
 
@@ -32,14 +33,17 @@ const (
 	regionPriorityScore = 10
 	// defaultScore Score assigned to a node which doesn't have data for any volume
 	defaultScore = 5
+
+	schedulingFailureEventReason = "FailedScheduling"
 )
 
 // Extender Scheduler extender
 type Extender struct {
-	Driver  volume.Driver
-	server  *http.Server
-	lock    sync.Mutex
-	started bool
+	Recorder record.EventRecorder
+	Driver   volume.Driver
+	server   *http.Server
+	lock     sync.Mutex
+	started  bool
 }
 
 // Start Starts the extender
@@ -127,7 +131,9 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	filteredNodes := []v1.Node{}
 	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
 	if err != nil {
-		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
+		msg := fmt.Sprintf("Error getting volumes for Pod for driver: %v", err)
+		storklog.PodLog(pod).Warnf(msg)
+		e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
 			http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
 			return
@@ -148,7 +154,9 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 				}
 				if !onlineNodeFound {
 					storklog.PodLog(pod).Errorf("No nodes in filter request have replica for volume, returning error")
-					http.Error(w, "No node found with volume", http.StatusBadRequest)
+					msg := "No online node found with volume replica"
+					e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+					http.Error(w, msg, http.StatusBadRequest)
 					return
 				}
 			}
@@ -168,7 +176,9 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 			// non-driver node
 			if len(filteredNodes) == 0 {
 				storklog.PodLog(pod).Errorf("No nodes in filter request have driver, returning error")
-				http.Error(w, "No node found with driver", http.StatusBadRequest)
+				msg := "No node found with storage driver"
+				e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+				http.Error(w, msg, http.StatusBadRequest)
 				return
 			}
 		}
@@ -279,7 +289,9 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 
 	driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
 	if err != nil {
-		storklog.PodLog(pod).Warnf("Error getting volumes for Pod for driver: %v", err)
+		msg := fmt.Sprintf("Error getting volumes for Pod for driver: %v", err)
+		storklog.PodLog(pod).Warnf(msg)
+		e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
 		if _, ok := err.(*volume.ErrPVCPending); ok {
 			http.Error(w, "Waiting for PVC to be bound", http.StatusBadRequest)
 			return
