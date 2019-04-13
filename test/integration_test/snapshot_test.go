@@ -39,6 +39,7 @@ func testSnapshot(t *testing.T) {
 	t.Run("groupSnapshotTest", groupSnapshotTest)
 	t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
 	t.Run("scheduleTests", scheduleTests)
+	t.Run("storageclassTests", storageclassTests)
 }
 
 func simpleSnapshotTest(t *testing.T) {
@@ -692,4 +693,38 @@ func invalidPolicyTest(t *testing.T) {
 		scheduleName, namespace))
 	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
 	destroyAndWait(t, []*scheduler.Context{ctx})
+}
+
+func storageclassTests(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule("autosnaptest",
+		scheduler.ScheduleOptions{AppKeys: []string{"snapshot-storageclass"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for PVC to be created")
+
+	time.Sleep(10 * time.Second)
+	namespace := ctxs[0].GetID()
+	snapshotScheduleName := "mysql-data-test-schedule"
+	_, err = k8s.Instance().GetSnapshotSchedule(snapshotScheduleName, namespace)
+	require.NoError(t, err, "Error getting automatically created snapshot schedule")
+
+	// Make sure snapshots get triggered
+	_, err = k8s.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+		namespace,
+		3*time.Minute,
+		snapshotScheduleRetryInterval)
+	require.NoError(t, err, "Error validating snapshot schedule")
+	// Destroy the PVC
+	destroyAndWait(t, ctxs)
+
+	// Make sure the snapshot schedule and snapshots are also deleted
+	time.Sleep(10 * time.Second)
+	snapshotScheduleList, err := k8s.Instance().ListSnapshotSchedules(namespace)
+	require.NoError(t, err, fmt.Sprintf("Error getting list of snapshots schedules for namespace: %v", namespace))
+	require.Equal(t, 0, len(snapshotScheduleList.Items), fmt.Sprintf("All snapshot schedules should have been deleted in namespace %v", namespace))
+	snapshotList, err := k8s.Instance().ListSnapshots(namespace)
+	require.NoError(t, err, fmt.Sprintf("Error getting list of snapshots for namespace: %v", namespace))
+	require.Equal(t, 0, len(snapshotList.Items), fmt.Sprintf("All snapshots should have been deleted in namespace %v", namespace))
 }
