@@ -701,15 +701,17 @@ func storageclassTests(t *testing.T) {
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for PVC to be created")
-
-	time.Sleep(10 * time.Second)
 	namespace := ctxs[0].GetID()
-	snapshotScheduleName := "mysql-data-test-schedule"
-	_, err = k8s.Instance().GetSnapshotSchedule(snapshotScheduleName, namespace)
-	require.NoError(t, err, "Error getting automatically created snapshot schedule")
+	pvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "autosnap",
+			Namespace: namespace,
+		},
+	}
+	err = k8s.Instance().ValidatePersistentVolumeClaim(pvc, waitPvcBound, waitPvcRetryInterval)
+	require.NoError(t, err, fmt.Sprintf("PVC %v not bound.", pvc.Name))
 
+	snapshotScheduleName := "autosnap-test-schedule"
 	// Make sure snapshots get triggered
 	_, err = k8s.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
 		namespace,

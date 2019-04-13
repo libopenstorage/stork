@@ -12,8 +12,7 @@ parameters:
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-   name: mysql-data
-   namespace: mysql
+   name: autosnap
    annotations:
      volume.beta.kubernetes.io/storage-class: autosnap-sc
 spec:
