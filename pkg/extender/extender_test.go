@@ -16,7 +16,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"k8s.io/api/core/v1"
+	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetes "k8s.io/client-go/kubernetes/fake"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
 
@@ -44,8 +49,14 @@ func setup(t *testing.T) {
 		t.Fatalf("Error initializing mock volume driver: %v", err)
 	}
 
+	fakeKubeClient := kubernetes.NewSimpleClientset()
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.Core().RESTClient()).Events("")})
+	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, apiv1.EventSource{Component: "storktest"})
+
 	extender = &Extender{
-		Driver: storkdriver,
+		Driver:   storkdriver,
+		Recorder: recorder,
 	}
 
 	if err = extender.Start(); err != nil {
