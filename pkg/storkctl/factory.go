@@ -132,7 +132,7 @@ func (f *factory) GetOutputFormat() (string, error) {
 	case outputFormatTable, outputFormatYaml, outputFormatJSON:
 		return f.outputFormat, nil
 	default:
-		return "", fmt.Errorf("Unsupported output type %v", f.outputFormat)
+		return "", fmt.Errorf("unsupported output type %v", f.outputFormat)
 	}
 }
 

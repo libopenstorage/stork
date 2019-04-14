@@ -60,6 +60,9 @@ func setKind(snap *crdv1.VolumeSnapshot) {
 // with the snapshot. It returns a channel which the caller can trigger to delete the termination of background commands
 func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeClaim) (chan bool, error) {
 	setKind(snap)
+	if err := validateSnapRules(snap); err != nil {
+		return nil, err
+	}
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[preSnapRuleAnnotationKey]
 		if !present {
@@ -81,6 +84,9 @@ func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeCl
 // that are associated with the snapshot
 func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnapshot) error {
 	setKind(snap)
+	if err := validateSnapRules(snap); err != nil {
+		return err
+	}
 	if snap.Metadata.Annotations != nil {
 		ruleName, present := snap.Metadata.Annotations[postSnapRuleAnnotationKey]
 		if !present {

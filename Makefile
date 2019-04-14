@@ -30,7 +30,7 @@ BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 .DEFAULT_GOAL=all
 .PHONY: test clean vendor vendor-update
 
-all: stork storkctl cmdexecutor vet lint simple
+all: stork storkctl cmdexecutor pretest
 
 vendor-update:
 	dep ensure -update
@@ -39,7 +39,7 @@ vendor:
 	dep ensure
 
 lint:
-	go get -v golang.org/x/lint/golint
+	go get -u golang.org/x/lint/golint
 	for file in $(GO_FILES); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
@@ -49,16 +49,20 @@ lint:
 
 vet:
 	go vet $(PKGS)
+	go vet -tags unittest $(PKGS)
+	go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
-$(GOPATH)/bin/gosimple:
-	go get -u honnef.co/go/tools/cmd/gosimple
-
-simple: $(GOPATH)/bin/gosimple
-	$(GOPATH)/bin/gosimple $(PKGS)
+staticcheck:
+	go get -u honnef.co/go/tools/cmd/staticcheck
+	staticcheck $(PKGS)
+	staticcheck -tags integrationtest github.com/libopenstorage/stork/test/integration_test
+	staticcheck -tags unittest $(PKGS)
 
 errcheck:
-	go get -v github.com/kisielk/errcheck
+	go get -u github.com/kisielk/errcheck
 	errcheck -verbose -blank $(PKGS)
+	errcheck -verbose -blank -tags unittest $(PKGS)
+	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
 check-fmt:
 	bash -c "diff -u <(echo -n) <(gofmt -l -d -s -e $(GO_FILES))"
@@ -66,12 +70,16 @@ check-fmt:
 do-fmt:
 	 gofmt -s -w $(GO_FILES)
 
-pretest: check-fmt lint vet errcheck simple
+gocyclo:
+	go get -u github.com/fzipp/gocyclo
+	gocyclo -over 15 $(GO_FILES)
+
+pretest: check-fmt lint vet errcheck staticcheck
 
 test:
 	echo "" > coverage.txt
 	for pkg in $(PKGS);	do \
-		go test -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
+		go test -v -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
 		if [ -f profile.out ]; then \
 			cat profile.out >> coverage.txt; \
 			rm profile.out; \

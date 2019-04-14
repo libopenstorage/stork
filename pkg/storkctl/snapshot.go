@@ -29,7 +29,7 @@ func newCreateSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 		Short:   "Create snapshot resources",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one argument needs to be provided for snapshot name"))
+				util.CheckErr(fmt.Errorf("exactly one argument needs to be provided for snapshot name"))
 				return
 			}
 			snapName = args[0]
@@ -144,7 +144,7 @@ func newDeleteSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 
 			if len(pvcName) == 0 {
 				if len(args) == 0 {
-					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for snapshot name"))
+					util.CheckErr(fmt.Errorf("at least one argument needs to be provided for snapshot name"))
 					return
 				}
 				snaps = args

@@ -66,7 +66,7 @@ func (c *ClusterDomainUpdateController) Handle(ctx context.Context, event sdk.Ev
 				err = c.Driver.DeactivateClusterDomain(clusterDomainUpdate)
 			}
 			if err != nil {
-				err = fmt.Errorf("Unable to %v cluster domain: %v", action, err)
+				err = fmt.Errorf("unable to %v cluster domain: %v", action, err)
 				log.ClusterDomainUpdateLog(clusterDomainUpdate).Errorf(err.Error())
 				clusterDomainUpdate.Status.Status = storkv1.ClusterDomainUpdateStatusFailed
 				clusterDomainUpdate.Status.Reason = err.Error()

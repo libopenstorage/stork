@@ -101,7 +101,7 @@ func TestGetVolumeSnapshotsMultipleSnapshots(t *testing.T) {
 func TestCreateSnapshotsNoSnapshotName(t *testing.T) {
 	cmdArgs := []string{"create", "volumesnapshots"}
 
-	expected := "error: Exactly one argument needs to be provided for snapshot name"
+	expected := "error: exactly one argument needs to be provided for snapshot name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -122,7 +122,7 @@ func TestCreateSnapshots(t *testing.T) {
 func TestDeleteSnapshotsNoSnapshotName(t *testing.T) {
 	cmdArgs := []string{"delete", "volumesnapshots"}
 
-	expected := "error: At least one argument needs to be provided for snapshot name"
+	expected := "error: at least one argument needs to be provided for snapshot name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 

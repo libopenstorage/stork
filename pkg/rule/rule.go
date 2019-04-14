@@ -102,13 +102,13 @@ func Init() error {
 	err := k8s.Instance().CreateCRD(storkRuleResource)
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("Failed to create CRD due to: %v", err)
+			return fmt.Errorf("failed to create CRD due to: %v", err)
 		}
 	}
 
 	err = k8s.Instance().ValidateCRD(storkRuleResource, validateCRDTimeout, validateCRDInterval)
 	if err != nil {
-		return fmt.Errorf("Failed to validate stork rules CRD due to: %v", err)
+		return fmt.Errorf("failed to validate stork rules CRD due to: %v", err)
 	}
 
 	return nil
@@ -171,7 +171,7 @@ func PerformRuleRecovery(
 					continue
 				}
 
-				err = fmt.Errorf("Failed to get pod with uid: %s due to: %v", pod.UID, err)
+				err = fmt.Errorf("failed to get pod with uid: %s due to: %v", pod.UID, err)
 				log.RuleLog(nil, owner).Warnf(err.Error())
 
 				ev := &v1.Event{
@@ -475,7 +475,7 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 						return true, nil
 					}
 
-					err = fmt.Errorf("Failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()), err)
+					err = fmt.Errorf("failed to get pod: [%s] %s due to: %v", ns, string(pod.GetUID()), err)
 
 					ev := &v1.Event{
 						ObjectMeta: metav1.ObjectMeta{
@@ -682,7 +682,7 @@ func cmdTerminationWatcher(
 					log.RuleLog(nil, owner).Warnf("failed to terminate background command in pods due to: %v", err)
 				}
 			}
-			break
+			return
 		}
 	}
 }

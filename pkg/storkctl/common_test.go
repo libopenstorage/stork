@@ -3,7 +3,9 @@
 package storkctl
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -31,9 +33,18 @@ func init() {
 
 func resetTest() {
 	scheme := runtime.NewScheme()
-	snapv1.AddToScheme(scheme)
-	v1alpha1.AddToScheme(scheme)
-	v1.AddToScheme(scheme)
+	if err := snapv1.AddToScheme(scheme); err != nil {
+		fmt.Printf("Error updating scheme: %v", err)
+		os.Exit(1)
+	}
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		fmt.Printf("Error updating scheme: %v", err)
+		os.Exit(1)
+	}
+	if err := v1.AddToScheme(scheme); err != nil {
+		fmt.Printf("Error updating scheme: %v", err)
+		os.Exit(1)
+	}
 	codec = serializer.NewCodecFactory(scheme).LegacyCodec(scheme.PrioritizedVersionsAllGroups()...)
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 

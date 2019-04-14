@@ -35,7 +35,7 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 		Short:   "Start a migration",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for migration name"))
+				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for migration name"))
 				return
 			}
 			migrationName = args[0]
@@ -44,7 +44,7 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 				return
 			}
 			if len(namespaceList) == 0 {
-				util.CheckErr(fmt.Errorf("Need to provide atleast one namespace to migrate"))
+				util.CheckErr(fmt.Errorf("need to provide atleast one namespace to migrate"))
 				return
 			}
 
@@ -288,7 +288,7 @@ func newDeleteMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 
 			if len(clusterPair) == 0 {
 				if len(args) == 0 {
-					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for migration name"))
+					util.CheckErr(fmt.Errorf("at least one argument needs to be provided for migration name"))
 					return
 				}
 				migrations = args

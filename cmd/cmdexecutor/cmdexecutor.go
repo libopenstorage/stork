@@ -120,7 +120,7 @@ func main() {
 		ns, name := executor.GetPod()
 		podKey := createPodStringFromNameAndNamespace(ns, name)
 		go func(errChan chan error, doneChan chan bool, execInst cmdexecutor.Executor) {
-			err := execInst.Wait(time.Duration(statusCheckTimeout))
+			err := execInst.Wait(time.Duration(statusCheckTimeout) * time.Second)
 			if err != nil {
 				errChan <- err
 				return

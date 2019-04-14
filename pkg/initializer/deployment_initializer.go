@@ -44,7 +44,7 @@ func (i *Initializer) initializeDeploymentV1(deployment *appv1.Deployment, clien
 			if _, ok := err.(*volume.ErrPVCPending); ok {
 				updatedDeployment.Spec.Template.Spec.SchedulerName = storkSchedulerName
 			} else {
-				storklog.DeploymentV1Log(deployment).Errorf("Error getting volumes for pod: %v", err)
+				storklog.DeploymentV1Log(deployment).Errorf("error getting volumes for pod: %v", err)
 			}
 		} else if len(driverVolumes) != 0 {
 			updatedDeployment.Spec.Template.Spec.SchedulerName = storkSchedulerName
@@ -61,7 +61,7 @@ func (i *Initializer) initializeDeploymentV1(deployment *appv1.Deployment, clien
 		return err
 	}
 
-	_, err = clientset.Extensions().Deployments(deployment.Namespace).Patch(deployment.Name, types.StrategicMergePatchType, patchBytes)
+	_, err = clientset.ExtensionsV1beta1().Deployments(deployment.Namespace).Patch(deployment.Name, types.StrategicMergePatchType, patchBytes)
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (i *Initializer) initializeDeploymentV1Beta1(deployment *appv1beta1.Deploym
 			if _, ok := err.(*volume.ErrPVCPending); ok {
 				updatedDeployment.Spec.Template.Spec.SchedulerName = storkSchedulerName
 			} else {
-				storklog.DeploymentV1Beta1Log(deployment).Errorf("Error getting volumes for pod: %v", err)
+				storklog.DeploymentV1Beta1Log(deployment).Errorf("error getting volumes for pod: %v", err)
 			}
 		} else if len(driverVolumes) != 0 {
 			updatedDeployment.Spec.Template.Spec.SchedulerName = storkSchedulerName
@@ -116,7 +116,7 @@ func (i *Initializer) initializeDeploymentV1Beta1(deployment *appv1beta1.Deploym
 		return err
 	}
 
-	_, err = clientset.Extensions().Deployments(deployment.Namespace).Patch(deployment.Name, types.StrategicMergePatchType, patchBytes)
+	_, err = clientset.ExtensionsV1beta1().Deployments(deployment.Namespace).Patch(deployment.Name, types.StrategicMergePatchType, patchBytes)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (i *Initializer) initializeDeploymentV1Beta2(deployment *appv1beta2.Deploym
 			if _, ok := err.(*volume.ErrPVCPending); ok {
 				updatedDeployment.Spec.Template.Spec.SchedulerName = storkSchedulerName
 			} else {
-				storklog.DeploymentV1Beta2Log(deployment).Errorf("Error getting volumes for pod: %v", err)
+				storklog.DeploymentV1Beta2Log(deployment).Errorf("error getting volumes for pod: %v", err)
 			}
 		} else if len(driverVolumes) != 0 {
 			updatedDeployment.Spec.Template.Spec.SchedulerName = storkSchedulerName
@@ -171,7 +171,7 @@ func (i *Initializer) initializeDeploymentV1Beta2(deployment *appv1beta2.Deploym
 		return err
 	}
 
-	_, err = clientset.Extensions().Deployments(deployment.Namespace).Patch(deployment.Name, types.StrategicMergePatchType, patchBytes)
+	_, err = clientset.ExtensionsV1beta1().Deployments(deployment.Namespace).Patch(deployment.Name, types.StrategicMergePatchType, patchBytes)
 	if err != nil {
 		return err
 	}

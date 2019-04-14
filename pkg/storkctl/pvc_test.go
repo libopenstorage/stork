@@ -9,21 +9,21 @@ import (
 func TestCreatePVCNoName(t *testing.T) {
 	cmdArgs := []string{"create", "pvc"}
 
-	expected := "error: Exactly one argument needs to be provided for pvc name"
+	expected := "error: exactly one argument needs to be provided for pvc name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestCreatePVCNoSnap(t *testing.T) {
 	cmdArgs := []string{"create", "pvc", "pvc1"}
 
-	expected := "error: Snapshot name needs to be given"
+	expected := "error: snapshot name needs to be given"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestCreatePVCNoSize(t *testing.T) {
 	cmdArgs := []string{"create", "pvc", "-s", "snap1", "pvc1"}
 
-	expected := "error: Size needs to be provided"
+	expected := "error: size needs to be provided"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 

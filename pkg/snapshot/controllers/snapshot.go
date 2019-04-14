@@ -36,7 +36,7 @@ func (s *Snapshotter) Start(stopChannel <-chan struct{}) error {
 	defer s.lock.Unlock()
 
 	if s.started {
-		return fmt.Errorf("Extender has already been started")
+		return fmt.Errorf("Snapshotter has already been started")
 	}
 	config, err := rest.InClusterConfig()
 	if err != nil {

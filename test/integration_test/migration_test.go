@@ -21,7 +21,8 @@ import (
 
 func testMigration(t *testing.T) {
 	// reset mock time before running any tests
-	setMockTime(nil)
+	err := setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
 
 	t.Run("deploymentTest", deploymentMigrationTest)
 	t.Run("statefulsetTest", statefulsetMigrationTest)
@@ -289,7 +290,8 @@ func migrationIntervalScheduleTest(t *testing.T) {
 
 	// bump time of the world by 5 minutes
 	mockNow := time.Now().Add(6 * time.Minute)
-	setMockTime(&mockNow)
+	err = setMockTime(&mockNow)
+	require.NoError(t, err, "Error setting mock time")
 
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false)
 }
@@ -405,7 +407,8 @@ func migrationScheduleTest(
 	// Set time 2 hours before the scheduled time so no migrations run
 	mockNow := nextTrigger.Add(-2 * time.Hour)
 
-	setMockTime(&mockNow)
+	err = setMockTime(&mockNow)
+	require.NoError(t, err, "Error setting mock time")
 
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
@@ -428,7 +431,8 @@ func migrationScheduleTest(
 
 	// **** TEST 2: bump time one minute past the scheduled time of daily migration
 	mockNow = nextTrigger.Add(1 * time.Minute)
-	setMockTime(&mockNow)
+	err = setMockTime(&mockNow)
+	require.NoError(t, err, "Error setting mock time")
 
 	//  ensure only one migration has run
 	migrationsMap, err := k8s.Instance().ValidateMigrationSchedule(
@@ -453,7 +457,8 @@ func migrationScheduleTest(
 
 	// **** TEST 3 bump time by 2 more hours. Should not cause any new migrations
 	mockNow = nextTrigger.Add(2 * time.Hour)
-	setMockTime(&mockNow)
+	err = setMockTime(&mockNow)
+	require.NoError(t, err, "Error setting mock time")
 
 	//  ensure no new migrations
 	migrationsMap, err = k8s.Instance().ValidateMigrationSchedule(
@@ -478,7 +483,8 @@ func migrationScheduleTest(
 		t.Fatalf("this testcase only supports daily, weekly and monthly intervals")
 	}
 	mockNow = mockNow.Add(5 * time.Minute)
-	setMockTime(&mockNow)
+	err = setMockTime(&mockNow)
+	require.NoError(t, err, "Error setting mock time")
 
 	// Give time for new migration to trigger
 	time.Sleep(time.Minute)

@@ -43,7 +43,7 @@ func newActivateClusterDomainCommand(cmdFactory Factory, ioStreams genericcliopt
 			} else if len(args) == 1 {
 				activationList = []string{args[0]}
 			} else {
-				util.CheckErr(fmt.Errorf("Exactly one cluster domain name needs to be provided to the activate command"))
+				util.CheckErr(fmt.Errorf("exactly one cluster domain name needs to be provided to the activate command"))
 				return
 			}
 			updateUUID := uuid.New()
@@ -73,7 +73,7 @@ func newActivateClusterDomainCommand(cmdFactory Factory, ioStreams genericcliopt
 				}
 				_, err := k8s.Instance().CreateClusterDomainUpdate(clusterDomainUpdate)
 				if err != nil {
-					util.CheckErr(fmt.Errorf("Failed to activate cluster domain %v: %v", clusterDomainName, err))
+					util.CheckErr(fmt.Errorf("failed to activate cluster domain %v: %v", clusterDomainName, err))
 					return
 				}
 				msg := fmt.Sprintf("Cluster Domain %v activated successfully", clusterDomainName)
@@ -111,13 +111,13 @@ func newDeactivateClusterDomainCommand(cmdFactory Factory, ioStreams genericclio
 				}
 				_, err := k8s.Instance().CreateClusterDomainUpdate(clusterDomainUpdate)
 				if err != nil {
-					util.CheckErr(fmt.Errorf("Failed to deactivate cluster domain %v: %v", clusterDomainName, err))
+					util.CheckErr(fmt.Errorf("failed to deactivate cluster domain %v: %v", clusterDomainName, err))
 					return
 				}
 				msg := fmt.Sprintf("Cluster Domain %v deactivated successfully", clusterDomainName)
 				printMsg(msg, ioStreams.Out)
 			} else {
-				util.CheckErr(fmt.Errorf("Exactly one cluster domain name needs to be provided to the deactivate command"))
+				util.CheckErr(fmt.Errorf("exactly one cluster domain name needs to be provided to the deactivate command"))
 				return
 			}
 		},

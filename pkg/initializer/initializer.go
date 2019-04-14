@@ -45,42 +45,42 @@ func (i *Initializer) Start() error {
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return fmt.Errorf("Error getting cluster config: %v", err)
+		return fmt.Errorf("error getting cluster config: %v", err)
 	}
 
 	k8sClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return fmt.Errorf("Error getting client, %v", err)
+		return fmt.Errorf("error getting client, %v", err)
 	}
 
 	restClient := k8sClient.AppsV1beta1().RESTClient()
 	err = i.startInitializerController(restClient, k8sClient, "deployments", &appv1beta1.Deployment{})
 	if err != nil {
-		return fmt.Errorf("Error creating init controller for deployments: %v", err)
+		return fmt.Errorf("error creating init controller for deployments: %v", err)
 	}
 	err = i.startInitializerController(restClient, k8sClient, "statefulsets", &appv1beta1.StatefulSet{})
 	if err != nil {
-		return fmt.Errorf("Error creating init controller for statefulsets: %v", err)
+		return fmt.Errorf("error creating init controller for statefulsets: %v", err)
 	}
 
 	restClient = k8sClient.AppsV1beta2().RESTClient()
 	err = i.startInitializerController(restClient, k8sClient, "deployments", &appv1beta2.Deployment{})
 	if err != nil {
-		return fmt.Errorf("Error creating init controller for deployments: %v", err)
+		return fmt.Errorf("error creating init controller for deployments: %v", err)
 	}
 	err = i.startInitializerController(restClient, k8sClient, "statefulsets", &appv1beta2.StatefulSet{})
 	if err != nil {
-		return fmt.Errorf("Error creating init controller for statefulsets: %v", err)
+		return fmt.Errorf("error creating init controller for statefulsets: %v", err)
 	}
 
 	restClient = k8sClient.AppsV1().RESTClient()
 	err = i.startInitializerController(restClient, k8sClient, "deployments", &appv1.Deployment{})
 	if err != nil {
-		return fmt.Errorf("Error creating init controller for deployments: %v", err)
+		return fmt.Errorf("error creating init controller for deployments: %v", err)
 	}
 	err = i.startInitializerController(restClient, k8sClient, "statefulsets", &appv1.StatefulSet{})
 	if err != nil {
-		return fmt.Errorf("Error creating init controller for statefulsets: %v", err)
+		return fmt.Errorf("error creating init controller for statefulsets: %v", err)
 	}
 	i.started = true
 	return nil
@@ -112,7 +112,7 @@ func (i *Initializer) startInitializerController(
 			AddFunc: func(obj interface{}) {
 				err := i.initializeObject(obj, k8sClient)
 				if err != nil {
-					logrus.Errorf("Error initializing %v: %v", resource, err)
+					logrus.Errorf("error initializing %v: %v", resource, err)
 				}
 			},
 		},

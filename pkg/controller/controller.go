@@ -64,7 +64,7 @@ func Register(
 	controllerInst.Lock()
 	defer controllerInst.Unlock()
 	if controllerInst.started {
-		return fmt.Errorf("Can't register new handlers after starting controller")
+		return fmt.Errorf("can't register new handlers after starting controller")
 	}
 
 	objectType := gkv.String()

@@ -124,7 +124,7 @@ func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 	defer resetTest()
 	createSnapshotScheduleAndVerify(t, "getsnapshotschedulestatustest", "pvcname1", "testpolicy", "test", "preExec", "postExec", true)
 	snapshotSchedule, err := k8s.Instance().GetSnapshotSchedule("getsnapshotschedulestatustest", "test")
-	require.NoError(t, err, "Error getting snapshot")
+	require.NoError(t, err, "Error getting snapshot schedule")
 
 	// Update the status of the daily snapshot
 	snapshotSchedule.Status.Items = make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledVolumeSnapshotStatus)
@@ -139,6 +139,7 @@ func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 		},
 	)
 	snapshotSchedule, err = k8s.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+	require.NoError(t, err, "Error updating snapshot schedule")
 	expected := "NAME                            PVC        POLICYNAME   PRE-EXEC-RULE   POST-EXEC-RULE   RECLAIM-POLICY   SUSPEND   LAST-SUCCESS-TIME\n" +
 		"getsnapshotschedulestatustest   pvcname1   testpolicy   preExec         postExec         Retain           true      " + toTimeString(now.Time) + "\n"
 
@@ -155,6 +156,7 @@ func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 		},
 	)
 	snapshotSchedule, err = k8s.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+	require.NoError(t, err, "Error updating snapshot schedule")
 
 	expected = "NAME                            PVC        POLICYNAME   PRE-EXEC-RULE   POST-EXEC-RULE   RECLAIM-POLICY   SUSPEND   LAST-SUCCESS-TIME\n" +
 		"getsnapshotschedulestatustest   pvcname1   testpolicy   preExec         postExec         Retain           true      " + toTimeString(now.Time) + "\n"
@@ -170,7 +172,8 @@ func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 			Status:            snapv1.VolumeSnapshotConditionReady,
 		},
 	)
-	snapshotSchedule, err = k8s.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+	_, err = k8s.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+	require.NoError(t, err, "Error updating snapshot schedule")
 
 	expected = "NAME                            PVC        POLICYNAME   PRE-EXEC-RULE   POST-EXEC-RULE   RECLAIM-POLICY   SUSPEND   LAST-SUCCESS-TIME\n" +
 		"getsnapshotschedulestatustest   pvcname1   testpolicy   preExec         postExec         Retain           true      " + toTimeString(now.Time) + "\n"
@@ -181,7 +184,7 @@ func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 func TestCreateSnapshotSchedulesNoName(t *testing.T) {
 	cmdArgs := []string{"create", "snapshotschedules"}
 
-	expected := "error: Exactly one name needs to be provided for volume snapshot schedule name"
+	expected := "error: exactly one name needs to be provided for volume snapshot schedule name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -202,7 +205,7 @@ func TestCreateDuplicateSnapshotSchedules(t *testing.T) {
 func TestDeleteSnapshotSchedulesNoSnapshotName(t *testing.T) {
 	cmdArgs := []string{"delete", "snapshotschedules"}
 
-	expected := "error: At least one argument needs to be provided for snapshot schedule name if pvc isn't provided"
+	expected := "error: at least one argument needs to be provided for snapshot schedule name if pvc isn't provided"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 

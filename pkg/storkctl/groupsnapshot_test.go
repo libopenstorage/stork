@@ -77,7 +77,7 @@ func TestGroupSnapshotWithNoSelector(t *testing.T) {
 }
 
 func TestGroupSnapshotWithNoName(t *testing.T) {
-	expected := "error: Exactly one name needs to be provided for groupsnapshot name"
+	expected := "error: exactly one name needs to be provided for groupsnapshot name"
 	cmdArgs := []string{"create", "groupsnapshots"}
 	testCommon(t, cmdArgs, nil, expected, true)
 }
@@ -168,7 +168,7 @@ func TestDeleteGroupSnapshots(t *testing.T) {
 
 func TestDeleteNoName(t *testing.T) {
 	cmdArgs := []string{"delete", "groupsnapshots"}
-	expected := "error: At least one argument needs to be provided for groupsnapshot name"
+	expected := "error: at least one argument needs to be provided for groupsnapshot name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
