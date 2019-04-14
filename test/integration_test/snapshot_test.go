@@ -9,14 +9,28 @@ import (
 	"time"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	client "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var snapRuleFailRegex = regexp.MustCompile("^snapshot failed due to err.+(failed to validate snap rule|failed to run (pre|post)-snap rule).+")
+var storkStorageClass = "stork-snapshot-sc"
+
+const (
+	waitPvcBound         = 120 * time.Second
+	waitPvcRetryInterval = 5 * time.Second
+
+	snapshotScheduleRetryInterval = 10 * time.Second
+	snapshotScheduleRetryTimeout  = 2 * time.Minute
+)
 
 func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
@@ -24,6 +38,8 @@ func testSnapshot(t *testing.T) {
 	t.Run("snapshotScaleTest", snapshotScaleTest)
 	t.Run("groupSnapshotTest", groupSnapshotTest)
 	t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
+	t.Run("scheduleTests", scheduleTests)
+	t.Run("storageclassTests", storageclassTests)
 }
 
 func simpleSnapshotTest(t *testing.T) {
@@ -111,15 +127,21 @@ func cloudSnapshotTest(t *testing.T) {
 func groupSnapshotTest(t *testing.T) {
 	ctxsToDestroy := make([]*scheduler.Context, 0)
 	// Positive tests
-	ctxs := createGroupsnaps(t, []string{
+	ctxsPass := createGroupsnaps(t, []string{
 		"mysql-localsnap-rule",  // tests local group snapshots with a pre exec rule
 		"mysql-cloudsnap-group", // tests cloud group snapshots
 		"group-cloud-snap-load", // volume is loaded while cloudsnap is being done
 	})
 
-	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
+	ctxsToDestroy = append(ctxsToDestroy, ctxsPass...)
 
-	for _, ctx := range ctxs {
+	snapMap := map[string]int{
+		"mysql-localsnap-rule":  2,
+		"mysql-cloudsnap-group": 2,
+		"group-cloud-snap-load": 3,
+	}
+
+	for _, ctx := range ctxsPass {
 		verifyGroupSnapshot(t, ctx, groupSnapshotWaitTimeout)
 	}
 
@@ -134,8 +156,27 @@ func groupSnapshotTest(t *testing.T) {
 		require.NoError(t, err, "Error waiting for pod to get to running state")
 
 		snaps, err := schedulerDriver.GetSnapshots(ctx)
-		require.Error(t, err, "expected to get error when fetching snapahots")
+		require.Error(t, err, "expected to get error when fetching snapshots")
 		require.Nil(t, snaps, "expected empty snapshots")
+	}
+
+	for _, ctx := range ctxsPass {
+		err := schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for pod to get to running state")
+
+		snaps, err := schedulerDriver.GetSnapshots(ctx)
+		require.NoError(t, err, fmt.Sprintf("Failed to get snapshots for %s.", ctx.App.Key))
+		require.Equal(t, snapMap[ctx.App.Key], len(snaps), fmt.Sprintf("Only %d snapshots created for %s expected %d.", len(snaps), ctx.App.Key, snapMap[ctx.App.Key]))
+		for _, snap := range snaps {
+			restoredPvc, err := createRestorePvcForSnap(snap.Name, snap.Namespace)
+			require.NoError(t, err, fmt.Sprintf("Failed to create pvc for restoring snapshot %s.", snap.Name))
+
+			err = k8s.Instance().ValidatePersistentVolumeClaim(restoredPvc, waitPvcBound, waitPvcRetryInterval)
+			require.NoError(t, err, fmt.Sprintf("PVC for restored snapshot %s not bound.", snap.Name))
+
+			err = k8s.Instance().DeletePersistentVolumeClaim(restoredPvc.Name, restoredPvc.Namespace)
+			require.NoError(t, err, fmt.Sprintf("Failed to delete PVC %s.", restoredPvc.Name))
+		}
 	}
 	ctxsToDestroy = append(ctxsToDestroy, ctxs...)
 
@@ -164,6 +205,33 @@ func groupSnapshotScaleTest(t *testing.T) {
 	}
 
 	destroyAndWait(t, allContexts)
+}
+
+func getSnapAnnotation(snapName string) map[string]string {
+	snapAnnotation := make(map[string]string)
+	snapAnnotation[client.SnapshotPVCAnnotation] = snapName
+	return snapAnnotation
+}
+
+func createRestorePvcForSnap(snapName, snapNamespace string) (*v1.PersistentVolumeClaim, error) {
+	restorePvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "restore-pvc-" + snapName,
+			Namespace:    snapNamespace,
+			Annotations:  getSnapAnnotation(snapName),
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceName(v1.ResourceStorage): resource.MustParse("2Gi"),
+				},
+			},
+			AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
+			StorageClassName: &storkStorageClass,
+		},
+	}
+	pvc, err := k8s.Instance().CreatePersistentVolumeClaim(restorePvc)
+	return pvc, err
 }
 
 func createGroupsnaps(t *testing.T, apps []string) []*scheduler.Context {
@@ -299,4 +367,366 @@ func snapshotScaleTest(t *testing.T) {
 	for i := 0; i < snapshotScaleCount; i++ {
 		destroyAndWait(t, ctxs[i])
 	}
+}
+
+func createApp(t *testing.T) *scheduler.Context {
+
+	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "snapschedtest"),
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should only have one volume")
+
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+	return ctxs[0]
+}
+
+func scheduleTests(t *testing.T) {
+	setMockTime(nil)
+	t.Run("intervalTest", intervalScheduleSnapshotTest)
+	t.Run("dailyTest", dailyScheduleSnapshotTest)
+	t.Run("weeklyTest", weeklyScheduleSnapshotTest)
+	t.Run("monthlyTest", monthlyScheduleSnapshotTest)
+	t.Run("invalidPolicyTest", invalidPolicyTest)
+}
+
+func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName string, snapshotScheduleName string) {
+	err := k8s.Instance().DeleteSchedulePolicy(policyName)
+	require.NoError(t, err, fmt.Sprintf("Error deleting schedule policy %v", policyName))
+
+	err = k8s.Instance().DeleteSnapshotSchedule(snapshotScheduleName, namespace)
+	require.NoError(t, err, fmt.Sprintf("Error deleting snapshot schedule %v from namespace %v",
+		snapshotScheduleName, namespace))
+
+	time.Sleep(10 * time.Second)
+	snapshotList, err := k8s.Instance().ListSnapshots(namespace)
+	require.NoError(t, err, fmt.Sprintf("Error getting list of snapshots for namespace: %v", namespace))
+	require.Equal(t, 0, len(snapshotList.Items), fmt.Sprintf("All snapshots should have been deleted in namespace %v", namespace))
+}
+
+func intervalScheduleSnapshotTest(t *testing.T) {
+	ctx := createApp(t)
+	policyName := "intervalpolicy"
+	retain := 2
+	interval := 2
+	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				Retain:          storkv1.Retain(retain),
+				IntervalMinutes: interval,
+			},
+		}})
+	require.NoError(t, err, "Error creating interval schedule policy")
+	logrus.Infof("Created schedulepolicy %v with %v minute interval and retain at %v", policyName, interval, retain)
+
+	scheduleName := "intervalscheduletest"
+	namespace := ctx.GetID()
+	_, err = k8s.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-data"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	})
+	require.NoError(t, err, "Error creating interval snapshot schedule")
+	sleepTime := time.Duration((retain+1)*interval) * time.Minute
+	logrus.Infof("Created snapshotschedule %v in namespace %v, sleeping for %v for schedule to trigger",
+		scheduleName, namespace, sleepTime)
+	time.Sleep(sleepTime)
+
+	snapStatuses, err := k8s.Instance().ValidateSnapshotSchedule("intervalscheduletest",
+		namespace,
+		snapshotScheduleRetryTimeout,
+		snapshotScheduleRetryInterval)
+	require.NoError(t, err, "Error validating interval snapshot schedule")
+	require.Equal(t, 1, len(snapStatuses), "Should have snapshots for only one policy type")
+	require.Equal(t, retain, len(snapStatuses[storkv1.SchedulePolicyTypeInterval]), fmt.Sprintf("Should have only %v snapshot for interval policy", retain))
+	logrus.Infof("Validated snapshotschedule %v", scheduleName)
+
+	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
+	destroyAndWait(t, []*scheduler.Context{ctx})
+}
+
+func dailyScheduleSnapshotTest(t *testing.T) {
+	ctx := createApp(t)
+	policyName := "dailypolicy"
+	retain := 2
+	// Set first trigger 2 minutes from now
+	scheduledTime := time.Now().Add(2 * time.Minute)
+	nextScheduledTime := scheduledTime.AddDate(0, 0, 1)
+	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Daily: &storkv1.DailyPolicy{
+				Retain: storkv1.Retain(retain),
+				Time:   scheduledTime.Format(time.Kitchen),
+			},
+		}})
+	require.NoError(t, err, "Error creating daily schedule policy")
+	logrus.Infof("Created schedulepolicy %v at time %v and retain at %v",
+		policyName, scheduledTime.Format(time.Kitchen), retain)
+
+	scheduleName := "dailyscheduletest"
+	namespace := ctx.GetID()
+	_, err = k8s.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-data"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	})
+	require.NoError(t, err, "Error creating daily snapshot schedule")
+	logrus.Infof("Created snapshotschedule %v in namespace %v",
+		scheduleName, namespace)
+	commonSnapshotScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeDaily)
+	destroyAndWait(t, []*scheduler.Context{ctx})
+}
+
+func weeklyScheduleSnapshotTest(t *testing.T) {
+	ctx := createApp(t)
+	policyName := "weeklypolicy"
+	retain := 2
+	// Set first trigger 2 minutes from now
+	scheduledTime := time.Now().Add(2 * time.Minute)
+	nextScheduledTime := scheduledTime.AddDate(0, 0, 7)
+	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Weekly: &storkv1.WeeklyPolicy{
+				Retain: storkv1.Retain(retain),
+				Day:    scheduledTime.Weekday().String(),
+				Time:   scheduledTime.Format(time.Kitchen),
+			},
+		}})
+	require.NoError(t, err, "Error creating weekly schedule policy")
+	logrus.Infof("Created schedulepolicy %v at time %v on day %v and retain at %v",
+		policyName, scheduledTime.Format(time.Kitchen), scheduledTime.Weekday().String(), retain)
+
+	scheduleName := "weeklyscheduletest"
+	namespace := ctx.GetID()
+	_, err = k8s.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-data"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	})
+	require.NoError(t, err, "Error creating weekly snapshot schedule")
+	logrus.Infof("Created snapshotschedule %v in namespace %v",
+		scheduleName, namespace)
+	commonSnapshotScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeWeekly)
+	destroyAndWait(t, []*scheduler.Context{ctx})
+}
+
+func monthlyScheduleSnapshotTest(t *testing.T) {
+	ctx := createApp(t)
+	policyName := "monthlypolicy"
+	retain := 2
+	// Set first trigger 2 minutes from now
+	scheduledTime := time.Now().Add(2 * time.Minute)
+	nextScheduledTime := scheduledTime.AddDate(0, 1, 0)
+	// Set the time to zero in case the date doesn't exist in the next month
+	if nextScheduledTime.Day() != scheduledTime.Day() {
+		nextScheduledTime = time.Time{}
+	}
+	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Monthly: &storkv1.MonthlyPolicy{
+				Retain: storkv1.Retain(retain),
+				Date:   scheduledTime.Day(),
+				Time:   scheduledTime.Format(time.Kitchen),
+			},
+		}})
+	require.NoError(t, err, "Error creating monthly schedule policy")
+	logrus.Infof("Created schedulepolicy %v at time %v on date %v and retain at %v",
+		policyName, scheduledTime.Format(time.Kitchen), scheduledTime.Day(), retain)
+
+	scheduleName := "monthlyscheduletest"
+	namespace := ctx.GetID()
+	_, err = k8s.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-data"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	})
+	require.NoError(t, err, "Error creating monthly snapshot schedule")
+	logrus.Infof("Created snapshotschedule %v in namespace %v",
+		scheduleName, namespace)
+	commonSnapshotScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeMonthly)
+	destroyAndWait(t, []*scheduler.Context{ctx})
+}
+
+func commonSnapshotScheduleTests(
+	t *testing.T,
+	scheduleName string,
+	policyName string,
+	namespace string,
+	nextTriggerTime time.Time,
+	policyType storkv1.SchedulePolicyType) {
+	// Make sure no snap gets created in the next minute
+	_, err := k8s.Instance().ValidateSnapshotSchedule(scheduleName,
+		namespace,
+		1*time.Minute,
+		snapshotScheduleRetryInterval)
+	require.Error(t, err, fmt.Sprintf("No snapshots should have been created for %v in namespace %v",
+		scheduleName, namespace))
+	sleepTime := time.Duration(1 * time.Minute)
+	logrus.Infof("Sleeping for %v for schedule to trigger",
+		sleepTime)
+	time.Sleep(sleepTime)
+
+	snapStatuses, err := k8s.Instance().ValidateSnapshotSchedule(scheduleName,
+		namespace,
+		snapshotScheduleRetryTimeout,
+		snapshotScheduleRetryInterval)
+	require.NoError(t, err, "Error validating daily snapshot schedule")
+	require.Equal(t, 1, len(snapStatuses), "Should have snapshots for only one policy type")
+	require.Equal(t, 1, len(snapStatuses[policyType]), fmt.Sprintf("Should have only one snapshot for %v schedule", scheduleName))
+	logrus.Infof("Validated first snapshotschedule %v", scheduleName)
+
+	// Now advance time to the next trigger if the next trigger is not zero
+	if !nextTriggerTime.IsZero() {
+		logrus.Infof("Updating mock time to %v for next schedule", nextTriggerTime)
+		setMockTime(&nextTriggerTime)
+		defer setMockTime(nil)
+		logrus.Infof("Sleeping for 90 seconds for the schedule to get triggered")
+		time.Sleep(90 * time.Second)
+		snapStatuses, err := k8s.Instance().ValidateSnapshotSchedule(scheduleName,
+			namespace,
+			snapshotScheduleRetryTimeout,
+			snapshotScheduleRetryInterval)
+		require.NoError(t, err, "Error validating daily snapshot schedule")
+		require.Equal(t, 1, len(snapStatuses), "Should have snapshots for only one policy type")
+		require.Equal(t, 2, len(snapStatuses[policyType]), fmt.Sprintf("Should have 2 snapshots for %v schedule", scheduleName))
+		logrus.Infof("Validated second snapshotschedule %v", scheduleName)
+	}
+	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
+}
+
+func invalidPolicyTest(t *testing.T) {
+	ctx := createApp(t)
+	policyName := "invalidpolicy"
+	scheduledTime := time.Now()
+	retain := 2
+	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Monthly: &storkv1.MonthlyPolicy{
+				Retain: storkv1.Retain(retain),
+				Date:   scheduledTime.Day(),
+				Time:   "13:50PM",
+			},
+		}})
+	require.NoError(t, err, "Error creating invalid schedule policy")
+	logrus.Infof("Created schedulepolicy %v at time %v on date %v and retain at %v",
+		policyName, scheduledTime.Format(time.Kitchen), scheduledTime.Day(), retain)
+
+	scheduleName := "invalidpolicyschedule"
+	namespace := ctx.GetID()
+	_, err = k8s.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleName,
+			Namespace: namespace,
+		},
+		Spec: storkv1.VolumeSnapshotScheduleSpec{
+			Template: storkv1.VolumeSnapshotTemplateSpec{
+				Spec: crdv1.VolumeSnapshotSpec{
+					PersistentVolumeClaimName: "mysql-data"},
+			},
+			SchedulePolicyName: policyName,
+		},
+	})
+	require.NoError(t, err, "Error creating snapshot schedule with invalid policy")
+	logrus.Infof("Created snapshotschedule %v in namespace %v",
+		scheduleName, namespace)
+	_, err = k8s.Instance().ValidateSnapshotSchedule(scheduleName,
+		namespace,
+		3*time.Minute,
+		snapshotScheduleRetryInterval)
+	require.Error(t, err, fmt.Sprintf("No snapshots should have been created for %v in namespace %v",
+		scheduleName, namespace))
+	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
+	destroyAndWait(t, []*scheduler.Context{ctx})
+}
+
+func storageclassTests(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule("autosnaptest",
+		scheduler.ScheduleOptions{AppKeys: []string{"snapshot-storageclass"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	namespace := ctxs[0].GetID()
+	pvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "autosnap",
+			Namespace: namespace,
+		},
+	}
+	err = k8s.Instance().ValidatePersistentVolumeClaim(pvc, waitPvcBound, waitPvcRetryInterval)
+	require.NoError(t, err, fmt.Sprintf("PVC %v not bound.", pvc.Name))
+
+	snapshotScheduleName := "autosnap-test-schedule"
+	// Make sure snapshots get triggered
+	_, err = k8s.Instance().ValidateSnapshotSchedule(snapshotScheduleName,
+		namespace,
+		3*time.Minute,
+		snapshotScheduleRetryInterval)
+	require.NoError(t, err, "Error validating snapshot schedule")
+	// Destroy the PVC
+	destroyAndWait(t, ctxs)
+
+	// Make sure the snapshot schedule and snapshots are also deleted
+	time.Sleep(10 * time.Second)
+	snapshotScheduleList, err := k8s.Instance().ListSnapshotSchedules(namespace)
+	require.NoError(t, err, fmt.Sprintf("Error getting list of snapshots schedules for namespace: %v", namespace))
+	require.Equal(t, 0, len(snapshotScheduleList.Items), fmt.Sprintf("All snapshot schedules should have been deleted in namespace %v", namespace))
+	snapshotList, err := k8s.Instance().ListSnapshots(namespace)
+	require.NoError(t, err, fmt.Sprintf("Error getting list of snapshots for namespace: %v", namespace))
+	require.Equal(t, 0, len(snapshotList.Items), fmt.Sprintf("All snapshots should have been deleted in namespace %v", namespace))
 }

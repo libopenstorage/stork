@@ -817,6 +817,7 @@ func (in *MigrationStatus) DeepCopyInto(out *MigrationStatus) {
 			}
 		}
 	}
+	in.FinishTimestamp.DeepCopyInto(&out.FinishTimestamp)
 	return
 }
 

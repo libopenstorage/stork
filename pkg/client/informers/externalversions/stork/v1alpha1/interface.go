@@ -59,12 +59,12 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 
 // ClusterDomainUpdates returns a ClusterDomainUpdateInformer.
 func (v *version) ClusterDomainUpdates() ClusterDomainUpdateInformer {
-	return &clusterDomainUpdateInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &clusterDomainUpdateInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterDomainsStatuses returns a ClusterDomainsStatusInformer.
 func (v *version) ClusterDomainsStatuses() ClusterDomainsStatusInformer {
-	return &clusterDomainsStatusInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &clusterDomainsStatusInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterPairs returns a ClusterPairInformer.

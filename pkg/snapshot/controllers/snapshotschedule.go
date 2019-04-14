@@ -27,6 +27,13 @@ const (
 	nameTimeSuffixFormat string        = "2006-01-02-150405"
 	validateCRDInterval  time.Duration = 5 * time.Second
 	validateCRDTimeout   time.Duration = 1 * time.Minute
+
+	// SnapshotScheduleNameLabel Label used to specify the name of schedule that
+	// created the snapshot
+	SnapshotScheduleNameLabel = "stork.libopenstorage.org/snapshotScheduleName"
+	// SnapshotSchedulePolicyTypeLabel Label used to specify the type of the
+	// policy that triggered the snapshot
+	SnapshotSchedulePolicyTypeLabel = "stork.libopenstorage.org/snapshotSchedulePolicyType"
 )
 
 // SnapshotScheduleController reconciles VolumeSnapshotSchedule objects
@@ -61,6 +68,7 @@ func (s *SnapshotScheduleController) Handle(ctx context.Context, event sdk.Event
 			return nil
 		}
 
+		s.setDefaults(snapshotSchedule)
 		// First update the status of any pending snapshots
 		err := s.updateVolumeSnapshotStatus(snapshotSchedule)
 		if err != nil {
@@ -117,6 +125,12 @@ func (s *SnapshotScheduleController) Handle(ctx context.Context, event sdk.Event
 	return nil
 }
 
+func (s *SnapshotScheduleController) setDefaults(snapshotSchedule *stork_api.VolumeSnapshotSchedule) {
+	if snapshotSchedule.Spec.ReclaimPolicy == "" {
+		snapshotSchedule.Spec.ReclaimPolicy = stork_api.ReclaimPolicyDelete
+	}
+}
+
 func getVolumeSnapshotStatus(name string, namespace string) (snapv1.VolumeSnapshotConditionType, error) {
 	snapshot, err := k8s.Instance().GetSnapshot(name, namespace)
 	if err != nil {
@@ -155,7 +169,7 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 				// Check again and update the status if it is completed
 				snapshot.Status = pendingVolumeSnapshotStatus
 				if s.isVolumeSnapshotComplete(snapshot.Status) {
-					snapshot.FinishTimestamp = meta.Now()
+					snapshot.FinishTimestamp = meta.NewTime(schedule.GetCurrentTime())
 					if pendingVolumeSnapshotStatus == snapv1.VolumeSnapshotConditionReady {
 						s.Recorder.Event(snapshotSchedule,
 							v1.EventTypeNormal,
@@ -238,7 +252,7 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 	snapshotSchedule.Status.Items[policyType] = append(snapshotSchedule.Status.Items[policyType],
 		&stork_api.ScheduledVolumeSnapshotStatus{
 			Name:              snapshotName,
-			CreationTimestamp: meta.Now(),
+			CreationTimestamp: meta.NewTime(schedule.GetCurrentTime()),
 			Status:            snapv1.VolumeSnapshotConditionPending,
 		})
 	err := sdk.Update(snapshotSchedule)
@@ -255,6 +269,12 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 		},
 		Spec: snapshotSchedule.Spec.Template.Spec,
 	}
+	if snapshot.Metadata.Labels == nil {
+		snapshot.Metadata.Labels = make(map[string]string)
+	}
+	snapshot.Metadata.Labels[SnapshotScheduleNameLabel] = snapshotSchedule.Name
+	snapshot.Metadata.Labels[SnapshotSchedulePolicyTypeLabel] = string(policyType)
+
 	log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Starting snapshot %v", snapshotName)
 	// If reclaim policy is set to Delete, this will delete the snapshots
 	// created by this snapshotschedule when the schedule object is deleted

@@ -44,12 +44,12 @@ type StorkV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *StorkV1alpha1Client) ClusterDomainUpdates(namespace string) ClusterDomainUpdateInterface {
-	return newClusterDomainUpdates(c, namespace)
+func (c *StorkV1alpha1Client) ClusterDomainUpdates() ClusterDomainUpdateInterface {
+	return newClusterDomainUpdates(c)
 }
 
-func (c *StorkV1alpha1Client) ClusterDomainsStatuses(namespace string) ClusterDomainsStatusInterface {
-	return newClusterDomainsStatuses(c, namespace)
+func (c *StorkV1alpha1Client) ClusterDomainsStatuses() ClusterDomainsStatusInterface {
+	return newClusterDomainsStatuses(c)
 }
 
 func (c *StorkV1alpha1Client) ClusterPairs(namespace string) ClusterPairInterface {

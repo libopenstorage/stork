@@ -44,6 +44,22 @@ type SpecHandler interface {
 		string,
 	)
 
+	// GetTokenFromString parses the token from the name.
+	// If the token is not present in the name, it will
+	// check inside of the docker options passed in.
+	// If the token was parsed, it returns:
+	// 	(token, true)
+	// If the token wasn't parsed, it returns:
+	// 	("", false)
+	GetTokenFromString(str string) (string, bool)
+
+	// GetTokenSecretFromString parses the full token secret path from the name.
+	// If the token was parsed, it returns:
+	// 	(tokenSecret, true)
+	// If the token wasn't parsed, it returns:
+	// 	("", false)
+	GetTokenSecretFromString(str string) (string, bool)
+
 	// SpecFromOpts parses in docker options passed in the the docker run
 	// command of the form --opt name=value
 	// source is populated if --opt parent=<volume_id> is specified.
@@ -77,6 +93,8 @@ type SpecHandler interface {
 
 var (
 	nameRegex                   = regexp.MustCompile(api.Name + "=([0-9A-Za-z_-]+),?")
+	tokenRegex                  = regexp.MustCompile(api.Token + "=([A-Za-z0-9-_=]+\\.[A-Za-z0-9-_=]+\\.?[A-Za-z0-9-_.+/=]+),?")
+	tokenSecretRegex            = regexp.MustCompile(api.TokenSecret + `=/*([0-9A-Za-z_/]+),?`)
 	nodesRegex                  = regexp.MustCompile(api.SpecNodes + "=([A-Za-z0-9-_;]+),?")
 	parentRegex                 = regexp.MustCompile(api.SpecParent + "=([A-Za-z]+),?")
 	sizeRegex                   = regexp.MustCompile(api.SpecSize + "=([0-9A-Za-z]+),?")
@@ -104,6 +122,7 @@ var (
 	earlyAckRegex               = regexp.MustCompile(api.SpecEarlyAck + "=([A-Za-z]+),?")
 	forceUnsupportedFsTypeRegex = regexp.MustCompile(api.SpecForceUnsupportedFsType + "=([A-Za-z]+),?")
 	nodiscardRegex              = regexp.MustCompile(api.SpecNodiscard + "=([A-Za-z]+),?")
+	storagePolicyRegex          = regexp.MustCompile(api.StoragePolicy + "=([0-9A-Za-z_-]+),?")
 )
 
 type specHandler struct {
@@ -144,9 +163,8 @@ func (d *specHandler) getVal(r *regexp.Regexp, str string) (bool, string) {
 
 func (d *specHandler) DefaultSpec() *api.VolumeSpec {
 	return &api.VolumeSpec{
-		VolumeLabels: make(map[string]string),
-		Format:       api.FSType_FS_TYPE_EXT4,
-		HaLevel:      1,
+		Format:  api.FSType_FS_TYPE_EXT4,
+		HaLevel: 1,
 	}
 }
 
@@ -343,10 +361,18 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 			} else {
 				spec.Nodiscard = nodiscard
 			}
+		case api.Token:
+			// skip, if not it would be added to the labels
+		case api.StoragePolicy:
+			spec.StoragePolicy = v
 		default:
-			spec.VolumeLabels[k] = v
+			locator.VolumeLabels[k] = v
 		}
 	}
+
+	// Copy any spec labels to the locator
+	locator = locator.MergeVolumeSpecLabels(spec)
+
 	return spec, locator, source, nil
 }
 
@@ -360,6 +386,22 @@ func (d *specHandler) SpecFromOpts(
 
 	spec := d.DefaultSpec()
 	return d.UpdateSpecFromOpts(opts, spec, locator, source)
+}
+
+func (d *specHandler) GetTokenFromString(str string) (string, bool) {
+	ok, token := d.getVal(tokenRegex, str)
+	return token, ok
+}
+
+func (d *specHandler) GetTokenSecretFromString(str string) (string, bool) {
+	submatches := tokenSecretRegex.FindStringSubmatch(str)
+	if len(submatches) < 2 {
+		return "", false
+	}
+	secret := submatches[1]
+	secret = strings.TrimRight(secret, "/")
+
+	return secret, true
 }
 
 func (d *specHandler) SpecOptsFromString(
@@ -456,6 +498,9 @@ func (d *specHandler) SpecOptsFromString(
 	}
 	if ok, nodiscard := d.getVal(nodiscardRegex, str); ok {
 		opts[api.SpecNodiscard] = nodiscard
+	}
+	if ok, storagepolicy := d.getVal(storagePolicyRegex, str); ok {
+		opts[api.StoragePolicy] = storagepolicy
 	}
 
 	return true, opts, name

@@ -9,6 +9,8 @@ const (
 	ClusterDomainUpdateResourceName = "clusterdomainupdate"
 	// ClusterDomainUpdatePlural is plural for "clusterdomainupdate" resource
 	ClusterDomainUpdatePlural = "clusterdomainupdates"
+	// ClusterDomainUpdateShortName is the short name for clusterdomainupdate
+	ClusterDomainUpdateShortName = "cdu"
 )
 
 // ClusterDomainUpdateSpec is the spec used to update a cluster domain
@@ -18,6 +20,7 @@ type ClusterDomainUpdateSpec struct {
 }
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterDomainUpdate indicates the update need to be done on a ClusterDomain

@@ -9,6 +9,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/cluster"
+	"github.com/libopenstorage/stork/pkg/clusterdomains"
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
@@ -114,6 +115,10 @@ func main() {
 		cli.BoolFlag{
 			Name:  "storage-cluster-controller",
 			Usage: "Start the storage cluster controller (default: false)",
+		},
+		cli.BoolTFlag{
+			Name:  "cluster-domain-controllers",
+			Usage: "Start the cluster domain controllers (default: true)",
 		},
 		cli.BoolTFlag{
 			Name:  "pvc-watcher",
@@ -305,6 +310,16 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		}
 		if err := clusterController.Init(); err != nil {
 			log.Fatalf("Error initializing cluster controller: %v", err)
+		}
+	}
+
+	if c.Bool("cluster-domain-controllers") {
+		clusterDomains := clusterdomains.ClusterDomains{
+			Driver:   d,
+			Recorder: recorder,
+		}
+		if err := clusterDomains.Init(); err != nil {
+			log.Fatalf("Error initializing cluster domain controllers: %v", err)
 		}
 	}
 

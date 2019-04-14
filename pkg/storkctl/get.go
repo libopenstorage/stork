@@ -23,6 +23,9 @@ func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *c
 		newGetSchedulePolicyCommand(cmdFactory, ioStreams),
 		newGetMigrationScheduleCommand(cmdFactory, ioStreams),
 		newGetSnapshotScheduleCommand(cmdFactory, ioStreams),
+		newGetGroupVolumeSnapshotCommand(cmdFactory, ioStreams),
+		newGetClusterDomainsStatusCommand(cmdFactory, ioStreams),
+		newGetClusterDomainUpdateCommand(cmdFactory, ioStreams),
 	)
 
 	return getCommands

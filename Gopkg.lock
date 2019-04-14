@@ -73,6 +73,14 @@
   version = "v2.1.1"
 
 [[projects]]
+  digest = "1:f6e5e1bc64c2908167e6aa9a1fe0c084d515132a1c63ad5b6c84036aa06dc0c1"
+  name = "github.com/coreos/go-oidc"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "1180514eaf4d9f38d0d19eef639a1d695e066e72"
+  version = "v2.0.0"
+
+[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -321,6 +329,14 @@
   revision = "c63ab54fda8f77302f8d414e19933f2b6026a089"
 
 [[projects]]
+  digest = "1:950942c08fb75a83a0dc9127bcfe53bd46972ddadcfcf4bd6eedd4081ed8dce5"
+  name = "github.com/grpc-ecosystem/go-grpc-middleware"
+  packages = ["util/metautils"]
+  pruneopts = "UT"
+  revision = "c250d6563d4d4c20252cd865923440e829844f4e"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:ec9b294ee624e9b87e31a8fa39a2a7724f90ce7af2055a9248100883d9956922"
   name = "github.com/grpc-ecosystem/grpc-gateway"
   packages = [
@@ -396,7 +412,8 @@
   version = "v1.0.1"
 
 [[projects]]
-  digest = "1:7ddc87beae22b3587e7f9414fbc802fa67e8fbbc5ea34b652c15342e96735257"
+  branch = "openstorage-5.1"
+  digest = "1:a2891feba4fd65a5f2e6314f43ab58ea1a1461164af0120c400669f804256ba9"
   name = "github.com/kubernetes-incubator/external-storage"
   packages = [
     "lib/controller",
@@ -412,21 +429,20 @@
     "snapshot/pkg/volume",
   ]
   pruneopts = "UT"
-  revision = "83aa29470096d814a8075556c4d8d2032dbe4fe0"
+  revision = "a384af6c1fac9d40dfc44042bc3ab8f832530cee"
   source = "github.com/libopenstorage/external-storage"
-  version = "v5.1.0-openstorage"
 
 [[projects]]
   branch = "master"
-  digest = "1:99cd39df3fc3d9b27fd5a150935e36141fbcb7045d59ff1ca0e2027c44aa599d"
+  digest = "1:6842b4a6a6ec28ed353323ea6cd10c16ed04ac8e8d3d2049069e60448c156412"
   name = "github.com/libopenstorage/gossip"
   packages = ["types"]
   pruneopts = "UT"
-  revision = "b3655d98ea02660f2e543d62f6af728a0c324116"
+  revision = "1da75834394cb5e1c30e005a7b183dd866dc62d4"
 
 [[projects]]
-  branch = "release-4.0"
-  digest = "1:afb623450086d6fe6bb5edb844a21e94a9d8390dbafcde02a8cd775db1556754"
+  branch = "release-6.0"
+  digest = "1:454eae6f7cfb4f91b3430701d2ce582c3d28ff0de83d47c90b3bd6407714cf78"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -438,15 +454,31 @@
     "cluster",
     "objectstore",
     "osdconfig",
+    "pkg/auth",
+    "pkg/auth/secrets",
+    "pkg/clusterdomain",
     "pkg/dbg",
+    "pkg/grpcserver",
     "pkg/parser",
     "pkg/units",
+    "pkg/util",
     "schedpolicy",
     "secrets",
     "volume",
   ]
   pruneopts = "UT"
-  revision = "5e037da13776c509910fd69c1933d27aa670ee39"
+  revision = "ac5ef1ae94925f60cf644e31c29d0621a7b5ff64"
+
+[[projects]]
+  branch = "master"
+  digest = "1:676084e3399eacb0f118ff6a5275be09d0a689395dcb353c9daa2a5e18ab7b6b"
+  name = "github.com/libopenstorage/secrets"
+  packages = [
+    ".",
+    "k8s",
+  ]
+  pruneopts = "UT"
+  revision = "7a55db693ad633eea673438e1dcc4c91056d3b7a"
 
 [[projects]]
   branch = "master"
@@ -586,14 +618,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:48f9d2c6f158547d7f38eae72a654736e189550e454fd88ebf91037945df48f9"
+  digest = "1:89037667f32144bca9e47fead7903f9b05ed976063fbdb4aab9eac4efa28b6c5"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "02be60702f6a1eb7ea5a34fba7140ccd99ce6e2b"
+  revision = "33a17c53d77a79e4eca8a968432c30a150d48e4d"
 
 [[projects]]
   branch = "master"
@@ -610,8 +642,8 @@
   revision = "84374e26f35de4996653b01cf72186a8d6df3c11"
 
 [[projects]]
-  branch = "master"
-  digest = "1:b1bfeaa12db4715595a8bc6cdaa13f87725e4198e5e7ca0c96c66b4226dc96d9"
+  branch = "stork-2.2"
+  digest = "1:a93e30ffe11b9f5e98db3169153d6255dee03f40cfe876f9f7ef949bbf037424"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -625,7 +657,18 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "9a5870e0d1a5d2cb7d62acfe0e2ef4ae0d326d4e"
+  revision = "aba5d93d9cdf13ee43127f57fe28b7d251002540"
+
+[[projects]]
+  branch = "master"
+  digest = "1:bd9efe4e0b0f768302a1e2f0c22458149278de533e521206e5ddc71848c269a0"
+  name = "github.com/pquerna/cachecontrol"
+  packages = [
+    ".",
+    "cacheobject",
+  ]
+  pruneopts = "UT"
+  revision = "1555304b9b35fdd2b425bccf1a5613677705e7d0"
 
 [[projects]]
   digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"
@@ -888,7 +931,7 @@
   revision = "383e8b2c3b9e36c4076b235b32537292176bae20"
 
 [[projects]]
-  digest = "1:9ab5a33d8cb5c120602a34d2e985ce17956a4e8c2edce7e6961568f95e40c09a"
+  digest = "1:468bc9b39a60a4ac6726976d60d32cb0fbcaf749fea4139be8cec53fdfbd82d5"
   name = "google.golang.org/grpc"
   packages = [
     ".",
@@ -916,6 +959,8 @@
     "metadata",
     "naming",
     "peer",
+    "reflection",
+    "reflection/grpc_reflection_v1alpha",
     "resolver",
     "resolver/dns",
     "resolver/passthrough",
@@ -1459,13 +1504,19 @@
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume",
     "github.com/libopenstorage/openstorage/api",
+    "github.com/libopenstorage/openstorage/api/client",
     "github.com/libopenstorage/openstorage/api/client/cluster",
     "github.com/libopenstorage/openstorage/api/client/volume",
     "github.com/libopenstorage/openstorage/api/errors",
     "github.com/libopenstorage/openstorage/cluster",
+    "github.com/libopenstorage/openstorage/pkg/auth",
+    "github.com/libopenstorage/openstorage/pkg/auth/secrets",
+    "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
+    "github.com/libopenstorage/secrets/k8s",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
+    "github.com/pborman/uuid",
     "github.com/portworx/sched-ops/k8s",
     "github.com/portworx/sched-ops/task",
     "github.com/portworx/torpedo/drivers/node",
@@ -1480,6 +1531,8 @@
     "github.com/spf13/pflag",
     "github.com/stretchr/testify/require",
     "github.com/urfave/cli",
+    "google.golang.org/grpc",
+    "google.golang.org/grpc/credentials",
     "gopkg.in/yaml.v2",
     "k8s.io/api/apps/v1",
     "k8s.io/api/apps/v1beta1",
@@ -1537,7 +1590,9 @@
     "k8s.io/kubernetes/pkg/kubelet/apis",
     "k8s.io/kubernetes/pkg/printers",
     "k8s.io/kubernetes/pkg/registry/core/service/portallocator",
+    "k8s.io/kubernetes/pkg/scheduler/algorithm",
     "k8s.io/kubernetes/pkg/scheduler/api",
+    "k8s.io/kubernetes/pkg/util/node",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

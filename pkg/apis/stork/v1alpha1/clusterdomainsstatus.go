@@ -9,6 +9,8 @@ const (
 	ClusterDomainsStatusResourceName = "clusterdomainsstatus"
 	// ClusterDomainsStatusPlural is plural for "clusterdomainsstatus" resource
 	ClusterDomainsStatusPlural = "clusterdomainsstatuses"
+	// ClusterDomainsStatusShortName is the shortname for "clusterdomainsstatus" resource
+	ClusterDomainsStatusShortName = "cds"
 )
 
 // ClusterDomains provides a list of activated cluster domains and a list
@@ -19,6 +21,7 @@ type ClusterDomains struct {
 }
 
 // +genclient
+// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterDomainsStatus represents the status of all cluster domains
