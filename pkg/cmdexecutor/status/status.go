@@ -45,12 +45,8 @@ func Persist(key, statusToPersist string) error {
 		}
 	}
 
-	cmCopy := cm.DeepCopy()
-	if cmCopy.Data == nil {
-		cmCopy.Data = make(map[string]string)
-	}
-	cmCopy.Data[key] = statusToPersist
-	cm, err = k8s.Instance().UpdateConfigMap(cmCopy)
+	cm.Data[key] = statusToPersist
+	_, err = k8s.Instance().UpdateConfigMap(cm)
 	if err != nil {
 		return err
 	}
@@ -76,9 +72,8 @@ func Get(key string) (string, error) {
 
 	logrus.Errorf("%v cmd executor failed because: %s", key, status)
 
-	cmCopy := cm.DeepCopy()
-	delete(cmCopy.Data, key)
-	cm, cmUpdateErr := k8s.Instance().UpdateConfigMap(cmCopy)
+	delete(cm.Data, key)
+	_, cmUpdateErr := k8s.Instance().UpdateConfigMap(cm)
 	if cmUpdateErr != nil {
 		logrus.Warnf("failed to cleanup command executor status config map due to: %v", cmUpdateErr)
 	}

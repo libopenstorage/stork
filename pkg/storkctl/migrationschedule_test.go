@@ -128,7 +128,7 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	defer resetTest()
 	createMigrationScheduleAndVerify(t, "getmigrationschedulestatustest", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
 	migrationSchedule, err := k8s.Instance().GetMigrationSchedule("getmigrationschedulestatustest", "default")
-	require.NoError(t, err, "Error getting migration")
+	require.NoError(t, err, "Error getting migration schedule")
 
 	// Update the status of the daily migration
 	migrationSchedule.Status.Items = make(map[storkv1.SchedulePolicyType][]*storkv1.ScheduledMigrationStatus)
@@ -144,6 +144,7 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 		},
 	)
 	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	require.NoError(t, err, "Error updating migration schedule")
 
 	expected := "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
 		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
@@ -161,6 +162,7 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 		},
 	)
 	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	require.NoError(t, err, "Error updating migration schedule")
 
 	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
 		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
@@ -177,7 +179,8 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
-	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	_, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	require.NoError(t, err, "Error updating migration schedule")
 
 	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
 		"getmigrationschedulestatustest   testpolicy   clusterpair1   true      " + toTimeString(finishTimestamp.Time) + "   5m0s\n"
@@ -188,7 +191,7 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 func TestCreateMigrationSchedulesNoNamespace(t *testing.T) {
 	cmdArgs := []string{"create", "migrationschedules", "-c", "clusterPair1", "migration1"}
 
-	expected := "error: Need to provide atleast one namespace to migrate"
+	expected := "error: need to provide atleast one namespace to migrate"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -202,7 +205,7 @@ func TestCreateMigrationSchedulesNoClusterPair(t *testing.T) {
 func TestCreateMigrationSchedulesNoName(t *testing.T) {
 	cmdArgs := []string{"create", "migrationschedules"}
 
-	expected := "error: Exactly one name needs to be provided for migration schedule name"
+	expected := "error: exactly one name needs to be provided for migration schedule name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -224,7 +227,7 @@ func TestDeleteMigrationSchedulesNoMigrationName(t *testing.T) {
 	cmdArgs := []string{"delete", "migrationschedules"}
 
 	var migrationList storkv1.MigrationList
-	expected := "error: At least one argument needs to be provided for migration schedule name if cluster pair isn't provided"
+	expected := "error: at least one argument needs to be provided for migration schedule name if cluster pair isn't provided"
 	testCommon(t, cmdArgs, &migrationList, expected, true)
 }
 

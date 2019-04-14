@@ -110,11 +110,11 @@ func clusterPairPrinter(clusterPairList *storkv1.ClusterPairList, writer io.Writ
 func getStringData(fileName string) (string, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
-		return "", fmt.Errorf("Error opening file %v: %v", fileName, err)
+		return "", fmt.Errorf("error opening file %v: %v", fileName, err)
 	}
 	data, err := ioutil.ReadAll(bufio.NewReader(file))
 	if err != nil {
-		return "", fmt.Errorf("Error reading file %v: %v", fileName, err)
+		return "", fmt.Errorf("error reading file %v: %v", fileName, err)
 	}
 
 	return string(data), nil
@@ -134,7 +134,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 		Short: "Generate a spec to be used for cluster pairing from a remote cluster",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for clusterpair name"))
+				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for clusterpair name"))
 				return
 			}
 			config, err := cmdFactory.RawConfig()

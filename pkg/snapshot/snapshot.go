@@ -28,7 +28,7 @@ type Snapshot struct {
 	started                    bool
 	snapshotController         *controllers.Snapshotter
 	snapshotScheduleController *controllers.SnapshotScheduleController
-	provisioner                *controller.Provisioner
+	provisioner                *controller.ProvisionController
 	Driver                     volume.Driver
 	Recorder                   record.EventRecorder
 }
@@ -78,7 +78,7 @@ func (s *Snapshot) Start() error {
 	// Start the provisioner controller
 	serverVersion, err := clientset.Discovery().ServerVersion()
 	if err != nil {
-		return fmt.Errorf("Error getting server version: %v", err)
+		return fmt.Errorf("error getting server version: %v", err)
 	}
 
 	snapshotClient, _, err := client.NewClient(config)
@@ -91,19 +91,19 @@ func (s *Snapshot) Start() error {
 
 	snapProvisioner := controllers.NewSnapshotProvisioner(clientset, snapshotClient, plugins, snapshotProvisionerID)
 
-	provisioner := controller.NewProvisionController(
+	s.provisioner = controller.NewProvisionController(
 		clientset,
 		snapshotProvisionerName,
 		snapProvisioner,
 		serverVersion.GitVersion,
 	)
 	// stork already does leader elction, don't need it for each controller
-	if err := controller.LeaderElection(false)(provisioner); err != nil {
+	if err := controller.LeaderElection(false)(s.provisioner); err != nil {
 		log.Errorf("failed to disable leader election for snapshot controller: %v", err)
 		return err
 	}
 
-	go provisioner.Run(s.stopChannel)
+	go s.provisioner.Run(s.stopChannel)
 
 	// Start the snapshot schedule controller
 	s.snapshotScheduleController = &controllers.SnapshotScheduleController{

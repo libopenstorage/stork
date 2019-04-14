@@ -30,21 +30,21 @@ func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStrea
 		Short:   "Create persistent volume claims (PVCs) from snapshots",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one argument needs to be provided for pvc name"))
+				util.CheckErr(fmt.Errorf("exactly one argument needs to be provided for pvc name"))
 				return
 			}
 			pvcName = args[0]
 			if len(snapName) == 0 {
-				util.CheckErr(fmt.Errorf("Snapshot name needs to be given"))
+				util.CheckErr(fmt.Errorf("snapshot name needs to be given"))
 				return
 			}
 			if len(size) == 0 {
-				util.CheckErr(fmt.Errorf("Size needs to be provided"))
+				util.CheckErr(fmt.Errorf("size needs to be provided"))
 				return
 			}
 			quantity, err := resource.ParseQuantity(size)
 			if err != nil {
-				util.CheckErr(fmt.Errorf("Invalid size: %v", err))
+				util.CheckErr(fmt.Errorf("invalid size: %v", err))
 				return
 			}
 

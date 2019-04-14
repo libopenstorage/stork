@@ -125,7 +125,7 @@ func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 
 		clusterID, err := c.Driver.GetClusterID()
 		if err != nil {
-			return nil, true, fmt.Errorf("Failed to create cluster "+
+			return nil, true, fmt.Errorf("failed to create cluster "+
 				"domains status object for driver %v: %v", c.Driver.String(), err)
 		}
 		clusterDomainStatus := &storkv1.ClusterDomainsStatus{
@@ -134,7 +134,7 @@ func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 			},
 		}
 		if _, err := k8s.Instance().CreateClusterDomainsStatus(clusterDomainStatus); err != nil && !errors.IsAlreadyExists(err) {
-			return nil, true, fmt.Errorf("Failed to create cluster domain"+
+			return nil, true, fmt.Errorf("failed to create cluster domain"+
 				" status object for driver %v: %v", c.Driver.String(), err)
 		}
 		return nil, false, nil

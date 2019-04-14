@@ -131,7 +131,7 @@ func TestActivateClusterDomainNoDomainSpecified(t *testing.T) {
 	defer resetTest()
 	cmdArgs := []string{"activate", "clusterdomain"}
 
-	expected := "error: Exactly one cluster domain name needs to be provided to the activate command"
+	expected := "error: exactly one cluster domain name needs to be provided to the activate command"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -217,6 +217,6 @@ func TestDeactivateClusterDomainNoDomainSpecified(t *testing.T) {
 	defer resetTest()
 	cmdArgs := []string{"deactivate", "clusterdomain"}
 
-	expected := "error: Exactly one cluster domain name needs to be provided to the deactivate command"
+	expected := "error: exactly one cluster domain name needs to be provided to the deactivate command"
 	testCommon(t, cmdArgs, nil, expected, true)
 }

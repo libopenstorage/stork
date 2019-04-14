@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/rest/fake"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/pkg/util/node"
 )
@@ -30,23 +29,9 @@ const (
 
 var (
 	fakeStorkClient *fakeclient.Clientset
-	fakeRestClient  *fake.RESTClient
 	driver          *mock.Driver
 	monitor         *Monitor
 )
-
-func init() {
-	resetTest()
-}
-
-func resetTest() {
-	scheme := runtime.NewScheme()
-	stork_api.AddToScheme(scheme)
-	fakeStorkClient = fakeclient.NewSimpleClientset()
-	fakeKubeClient := kubernetes.NewSimpleClientset()
-
-	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil)
-}
 
 func TestMonitor(t *testing.T) {
 	t.Run("setup", setup)
@@ -58,6 +43,14 @@ func TestMonitor(t *testing.T) {
 
 func setup(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
+	scheme := runtime.NewScheme()
+	err := stork_api.AddToScheme(scheme)
+	require.NoError(t, err, "Error adding stork scheme")
+
+	fakeStorkClient = fakeclient.NewSimpleClientset()
+	fakeKubeClient := kubernetes.NewSimpleClientset()
+
+	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil)
 
 	storkdriver, err := volume.Get(mockDriverName)
 	require.NoError(t, err, "Error getting mock volume driver")
@@ -183,7 +176,7 @@ func testLostPod(
 
 	if driverPod {
 		// pod should be deleted
-		pod, err = k8s.Instance().GetPodByName(pod.Name, "")
+		_, err = k8s.Instance().GetPodByName(pod.Name, "")
 		require.Error(t, err, "expected error from get pod as pod should be deleted")
 	} else {
 		// pod should still be present

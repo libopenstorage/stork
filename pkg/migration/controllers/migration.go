@@ -58,12 +58,12 @@ type MigrationController struct {
 func (m *MigrationController) Init(migrationAdminNamespace string) error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return fmt.Errorf("Error getting cluster config: %v", err)
+		return fmt.Errorf("error getting cluster config: %v", err)
 	}
 
 	aeclient, err := apiextensionsclient.NewForConfig(config)
 	if err != nil {
-		return fmt.Errorf("Error getting apiextention client, %v", err)
+		return fmt.Errorf("error getting apiextention client, %v", err)
 	}
 
 	err = m.createCRD()
@@ -192,7 +192,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 					migration.Status.Status = stork_api.MigrationStatusFailed
 					migration.Status.Stage = stork_api.MigrationStageFinal
 					migration.Status.FinishTimestamp = metav1.Now()
-					err = fmt.Errorf("Error getting namespace %v: %v", ns, err)
+					err = fmt.Errorf("error getting namespace %v: %v", ns, err)
 					log.MigrationLog(migration).Errorf(err.Error())
 					m.Recorder.Event(migration,
 						v1.EventTypeWarning,
@@ -328,7 +328,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 					return err
 				}
 			}
-			return fmt.Errorf("Cluster pair storage status is not ready. Status: %v Err: %v",
+			return fmt.Errorf("cluster pair storage status is not ready. Status: %v Err: %v",
 				storageStatus, err)
 		}
 
@@ -500,7 +500,7 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]
 			for _, channel := range terminationChannels {
 				channel <- true
 			}
-			return nil, fmt.Errorf("Error executing PreExecRule for namespace %v: %v", ns, err)
+			return nil, fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
 		}
 		if ch != nil {
 			terminationChannels = append(terminationChannels, ch)
@@ -518,7 +518,7 @@ func (m *MigrationController) runPostExecRule(migration *stork_api.Migration) er
 
 		_, err = rule.ExecuteRule(r, rule.PostExecRule, migration, ns)
 		if err != nil {
-			return fmt.Errorf("Error executing PreExecRule for namespace %v: %v", ns, err)
+			return fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
 		}
 	}
 	return nil
@@ -686,7 +686,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	}
 
 	if schedulerStatus != stork_api.ClusterPairStatusReady {
-		return fmt.Errorf("Scheduler Cluster pair is not ready. Status: %v", schedulerStatus)
+		return fmt.Errorf("scheduler Cluster pair is not ready. Status: %v", schedulerStatus)
 	}
 
 	allObjects, err := m.getResources(migration)
@@ -782,12 +782,12 @@ func (m *MigrationController) getResources(
 				for _, o := range objects {
 					runtimeObject, ok := o.(runtime.Unstructured)
 					if !ok {
-						return nil, fmt.Errorf("Error casting object: %v", o)
+						return nil, fmt.Errorf("error casting object: %v", o)
 					}
 
 					migrate, err := m.objectToBeMigrated(migration, resourceMap, runtimeObject, ns)
 					if err != nil {
-						return nil, fmt.Errorf("Error processing object %v: %v", runtimeObject, err)
+						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 					}
 					if !migrate {
 						continue
@@ -1040,7 +1040,7 @@ func (m *MigrationController) applyResources(
 		log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 		unstructured, ok := o.(*unstructured.Unstructured)
 		if !ok {
-			return fmt.Errorf("Unable to cast object to unstructured: %v", o)
+			return fmt.Errorf("unable to cast object to unstructured: %v", o)
 		}
 		_, err = dynamicClient.Create(unstructured)
 		if err != nil && (apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {

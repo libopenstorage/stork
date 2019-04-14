@@ -276,7 +276,12 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
 		return err
 	}
-	defer pairFile.Close()
+	defer func() {
+		err := pairFile.Close()
+		if err != nil {
+			logrus.Errorf("Error closing pair file: %v", err)
+		}
+	}()
 
 	factory := storkctl.NewFactory()
 	cmd := storkctl.NewCommand(factory, os.Stdin, pairFile, os.Stderr)
@@ -315,7 +320,12 @@ func addStorageOptions(pairInfo map[string]string) error {
 		logrus.Errorf("Unable to open %v: %v", pairFileName, err)
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			logrus.Errorf("Error closing pair file: %v", err)
+		}
+	}()
 	w := bufio.NewWriter(file)
 	for k, v := range pairInfo {
 		if k == "port" {
@@ -328,7 +338,10 @@ func addStorageOptions(pairInfo map[string]string) error {
 			return err
 		}
 	}
-	w.Flush()
+	err = w.Flush()
+	if err != nil {
+		return err
+	}
 
 	logrus.Info("cluster-pair.yml created")
 	return nil

@@ -209,7 +209,7 @@ func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stor
 			return schedulePolicy.Policy.Monthly.Retain, nil
 		}
 	default:
-		return 0, fmt.Errorf("Invalid policy type: %v", policyType)
+		return 0, fmt.Errorf("invalid policy type: %v", policyType)
 	}
 
 	return 1, nil
@@ -271,7 +271,7 @@ func Init() error {
 					Data: data,
 				}
 
-				cm, err = k8s.Instance().CreateConfigMap(cm)
+				_, err = k8s.Instance().CreateConfigMap(cm)
 				if err != nil {
 					return err
 				}

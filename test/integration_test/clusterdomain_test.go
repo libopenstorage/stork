@@ -31,12 +31,8 @@ func testClusterDomains(t *testing.T) {
 	}
 	cds := cdses.Items[0]
 	cdsName = cds.Name
-	var domains []string
-	for _, domain := range cds.Status.Active {
-		domains = append(domains, domain)
-	}
 
-	if len(domains) == 0 {
+	if len(cds.Status.Active) == 0 {
 		t.Skip("Skipping cluster domain tests: No cluster domains found")
 	}
 
@@ -49,9 +45,10 @@ func triggerClusterDomainUpdate(
 	domain string,
 	active bool,
 ) {
-	setRemoteConfig("")
+	err := setRemoteConfig("")
+	require.NoError(t, err, "Error resetting remote config")
 
-	_, err := k8s.Instance().CreateClusterDomainUpdate(&v1alpha1.ClusterDomainUpdate{
+	_, err = k8s.Instance().CreateClusterDomainUpdate(&v1alpha1.ClusterDomainUpdate{
 		ObjectMeta: meta.ObjectMeta{
 			Name: name,
 		},
@@ -122,7 +119,8 @@ func testClusterDomainsFailover(
 	for k := range scaleFactor {
 		scaleFactor[k] = 0
 	}
-	schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
+	err = schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
+	require.NoError(t, err, "Unexpected error on ScaleApplication")
 
 	// start the app on cluster 2
 	err = setRemoteConfig(remoteFilePath)
@@ -134,7 +132,8 @@ func testClusterDomainsFailover(
 	for k := range scaleFactor {
 		scaleFactor[k] = 1
 	}
-	schedulerDriver.ScaleApplication(preMigrationCtx, scaleFactor)
+	err = schedulerDriver.ScaleApplication(preMigrationCtx, scaleFactor)
+	require.NoError(t, err, "Unexpected error on ScaleApplication")
 
 	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state on remote cluster after migration")
@@ -170,13 +169,16 @@ func testClusterDomainsFailback(
 
 	// start the app on cluster 1
 	err = setRemoteConfig("")
+	require.NoError(t, err, "Error resetting remote config")
+
 	// Reduce the replicas on cluster 1
 	scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
 	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
 	for k := range scaleFactor {
 		scaleFactor[k] = 1
 	}
-	schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
+	err = schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
+	require.NoError(t, err, "Unexpected error on ScaleApplication")
 
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state on source cluster after failback")

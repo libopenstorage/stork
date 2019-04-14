@@ -4,7 +4,6 @@ package integrationtest
 
 import (
 	"fmt"
-	"regexp"
 	"testing"
 	"time"
 
@@ -18,10 +17,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var snapRuleFailRegex = regexp.MustCompile("^snapshot failed due to err.+(failed to validate snap rule|failed to run (pre|post)-snap rule).+")
 var storkStorageClass = "stork-snapshot-sc"
 
 const (
@@ -46,38 +43,6 @@ func simpleSnapshotTest(t *testing.T) {
 	ctx := createSnapshot(t, []string{"mysql-snap-restore"})
 	verifySnapshot(t, ctx, "mysql-data", defaultWaitTimeout)
 	destroyAndWait(t, ctx)
-}
-
-func verifyFailedSnapshot(snapName, snapNamespace string) error {
-	failedSnapCheckBackoff := wait.Backoff{
-		Duration: 5 * time.Second,
-		Factor:   1,
-		Steps:    24, // 2 minutes should be enough for the snap to fail
-	}
-
-	t := func() (bool, error) {
-		snapObj, err := k8s.Instance().GetSnapshot(snapName, snapNamespace)
-		if err != nil {
-			return false, err
-		}
-
-		if snapObj.Status.Conditions == nil {
-			return false, nil // conditions not yet populated
-		}
-
-		for _, cond := range snapObj.Status.Conditions {
-			if cond.Type == crdv1.VolumeSnapshotConditionError {
-				if snapRuleFailRegex.MatchString(cond.Message) {
-					logrus.Infof("verified that snapshot has failed as expected due to: %s", cond.Message)
-					return true, nil
-				}
-			}
-		}
-
-		return false, nil
-	}
-
-	return wait.ExponentialBackoff(failedSnapCheckBackoff, t)
 }
 
 func cloudSnapshotTest(t *testing.T) {
@@ -391,7 +356,8 @@ func createApp(t *testing.T) *scheduler.Context {
 }
 
 func scheduleTests(t *testing.T) {
-	setMockTime(nil)
+	err := setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
 	t.Run("intervalTest", intervalScheduleSnapshotTest)
 	t.Run("dailyTest", dailyScheduleSnapshotTest)
 	t.Run("weeklyTest", weeklyScheduleSnapshotTest)
@@ -631,8 +597,12 @@ func commonSnapshotScheduleTests(
 	// Now advance time to the next trigger if the next trigger is not zero
 	if !nextTriggerTime.IsZero() {
 		logrus.Infof("Updating mock time to %v for next schedule", nextTriggerTime)
-		setMockTime(&nextTriggerTime)
-		defer setMockTime(nil)
+		err := setMockTime(&nextTriggerTime)
+		require.NoError(t, err, "Error setting mock time")
+		defer func() {
+			err := setMockTime(nil)
+			require.NoError(t, err, "Error resetting mock time")
+		}()
 		logrus.Infof("Sleeping for 90 seconds for the schedule to get triggered")
 		time.Sleep(90 * time.Second)
 		snapStatuses, err := k8s.Instance().ValidateSnapshotSchedule(scheduleName,

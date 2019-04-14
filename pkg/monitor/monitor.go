@@ -43,7 +43,7 @@ func (m *Monitor) Start() error {
 	if m.IntervalSec == 0 {
 		m.IntervalSec = defaultIntervalSec
 	} else if m.IntervalSec < minimumIntervalSec {
-		return fmt.Errorf("Minimum interval for health monitor is %v seconds", minimumIntervalSec)
+		return fmt.Errorf("minimum interval for health monitor is %v seconds", minimumIntervalSec)
 	}
 
 	m.stopChannel = make(chan int)

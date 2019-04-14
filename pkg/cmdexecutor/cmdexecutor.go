@@ -31,8 +31,8 @@ type Executor interface {
 	// Start starts the command in the pod asynchronously
 	Start(chan error) error
 	// Wait checks if the command started in pod completed successfully
-	//	timeoutInSecs is number of seconds after which the check should timeout.
-	Wait(timeoutInSecs time.Duration) error
+	//	timeout is the time after which the check should timeout.
+	Wait(timeout time.Duration) error
 	// GetPod returns the pod namespace and name for the executor instance
 	GetPod() (string, string)
 	// GetContainer returns the container inside the pod for the executor instance
@@ -97,13 +97,13 @@ func (c *cmdExecutor) Start(errChan chan error) error {
 	return nil
 }
 
-func (c *cmdExecutor) Wait(timeoutInSecs time.Duration) error {
+func (c *cmdExecutor) Wait(timeout time.Duration) error {
 	if len(c.statusFile) == 0 {
 		return fmt.Errorf("status file for command: %s in pod: [%s] %s is not set",
 			c.command, c.podNamespace, c.podName)
 	}
 
-	cmdStatuCheckSteps := int(timeoutInSecs * time.Second / cmdStatusCheckInitialDelay)
+	cmdStatuCheckSteps := int(timeout / cmdStatusCheckInitialDelay)
 	if cmdStatuCheckSteps == 0 {
 		cmdStatuCheckSteps = 1
 	}

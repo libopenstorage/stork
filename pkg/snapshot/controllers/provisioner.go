@@ -159,7 +159,7 @@ func (p *snapshotProvisioner) Provision(options controller.VolumeOptions) (*v1.P
 
 	if snapshotNamespace != options.PVC.Namespace &&
 		!p.isSnapshotAllowed(snapshot, options.PVC.Namespace) {
-		return nil, fmt.Errorf("Snapshot %v cannot be used in namespace %v", snapshotName, options.PVC.Namespace)
+		return nil, fmt.Errorf("snapshot %v cannot be used in namespace %v", snapshotName, options.PVC.Namespace)
 	}
 
 	// FIXME: should also check if any VolumeSnapshotData points

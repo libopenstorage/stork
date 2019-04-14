@@ -35,7 +35,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 		Short:   "Create a migration schedule",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for migration schedule name"))
+				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for migration schedule name"))
 				return
 			}
 			migrationScheduleName = args[0]
@@ -44,11 +44,11 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				return
 			}
 			if len(namespaceList) == 0 {
-				util.CheckErr(fmt.Errorf("Need to provide atleast one namespace to migrate"))
+				util.CheckErr(fmt.Errorf("need to provide atleast one namespace to migrate"))
 				return
 			}
 			if len(schedulePolicyName) == 0 {
-				util.CheckErr(fmt.Errorf("Need to provide schedulePolicyName"))
+				util.CheckErr(fmt.Errorf("need to provide schedulePolicyName"))
 				return
 			}
 
@@ -173,7 +173,7 @@ func newDeleteMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 
 			if len(clusterPair) == 0 {
 				if len(args) == 0 {
-					util.CheckErr(fmt.Errorf("At least one argument needs to be provided for migration schedule name if cluster pair isn't provided"))
+					util.CheckErr(fmt.Errorf("at least one argument needs to be provided for migration schedule name if cluster pair isn't provided"))
 					return
 				}
 				migrationSchedules = args

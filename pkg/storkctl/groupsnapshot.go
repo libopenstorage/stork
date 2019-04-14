@@ -33,7 +33,7 @@ func newCreateGroupSnapshotCommand(cmdFactory Factory, ioStreams genericclioptio
 		Short:   "Create a group volume snapshot",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
-				util.CheckErr(fmt.Errorf("Exactly one name needs to be provided for groupsnapshot name"))
+				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for groupsnapshot name"))
 				return
 			}
 			groupSnapshotName = args[0]
@@ -173,7 +173,7 @@ func newDeleteGroupVolumeSnapshotCommand(cmdFactory Factory, ioStreams genericcl
 		Short:   "Delete group volume snapshots",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) == 0 {
-				util.CheckErr(fmt.Errorf("At least one argument needs to be provided for groupsnapshot name"))
+				util.CheckErr(fmt.Errorf("at least one argument needs to be provided for groupsnapshot name"))
 				return
 			}
 
@@ -230,7 +230,7 @@ func parseKeyValueList(expressions []string) (map[string]string, error) {
 	for _, e := range expressions {
 		entry := strings.SplitN(e, "=", 2)
 		if len(entry) != 2 {
-			return nil, fmt.Errorf("Invalid key value: %s provided. "+
+			return nil, fmt.Errorf("invalid key value: %s provided. "+
 				"Example format: app=mysql", e)
 		}
 

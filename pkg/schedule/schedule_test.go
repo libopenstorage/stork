@@ -13,16 +13,18 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/rest/fake"
 )
 
 var fakeStorkClient *fakeclient.Clientset
-var fakeRestClient *fake.RESTClient
 
-func init() {
-	resetTest()
-}
 func TestSchedule(t *testing.T) {
+	scheme := runtime.NewScheme()
+	err := stork_api.AddToScheme(scheme)
+	require.NoError(t, err, "Error adding stork scheme")
+	fakeStorkClient = fakeclient.NewSimpleClientset()
+	fakeKubeClient := kubernetes.NewSimpleClientset()
+
+	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil)
 	t.Run("triggerIntervalRequiredTest", triggerIntervalRequiredTest)
 	t.Run("triggerDailyRequiredTest", triggerDailyRequiredTest)
 	t.Run("triggerWeeklyRequiredTest", triggerWeeklyRequiredTest)
@@ -31,17 +33,12 @@ func TestSchedule(t *testing.T) {
 	t.Run("policyRetainTest", policyRetainTest)
 }
 
-func resetTest() {
-	scheme := runtime.NewScheme()
-	stork_api.AddToScheme(scheme)
-	fakeStorkClient = fakeclient.NewSimpleClientset()
-	fakeKubeClient := kubernetes.NewSimpleClientset()
-
-	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil)
-}
-
 func triggerIntervalRequiredTest(t *testing.T) {
-	defer k8s.Instance().DeleteSchedulePolicy("intervalpolicy")
+	defer func() {
+		err := k8s.Instance().DeleteSchedulePolicy("intervalpolicy")
+		require.NoError(t, err, "Error cleaning up schedule policy")
+	}()
+
 	_, err := k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "intervalpolicy",
@@ -59,7 +56,7 @@ func triggerIntervalRequiredTest(t *testing.T) {
 	require.NoError(t, err, "Error checking if trigger required")
 	require.True(t, required, "Trigger should have been required")
 
-	required, err = TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeInterval, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
+	_, err = TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeInterval, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.Error(t, err, "Should return error for missing policy")
 
 	mockNow := time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local)
@@ -79,7 +76,11 @@ func triggerIntervalRequiredTest(t *testing.T) {
 }
 
 func triggerDailyRequiredTest(t *testing.T) {
-	defer k8s.Instance().DeleteSchedulePolicy("dailypolicy")
+	defer func() {
+		err := k8s.Instance().DeleteSchedulePolicy("dailypolicy")
+		require.NoError(t, err, "Error cleaning up schedule policy")
+	}()
+
 	_, err := k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "dailypolicy",
@@ -92,13 +93,13 @@ func triggerDailyRequiredTest(t *testing.T) {
 	})
 	require.NoError(t, err, "Error creating policy")
 
-	required, err := TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
+	_, err = TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.Error(t, err, "Should return error for missing policy")
 
 	mockNow := time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local)
 	setMockTime(&mockNow)
 	// Last triggered before schedule
-	required, err = TriggerRequired("dailypolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
+	required, err := TriggerRequired("dailypolicy", stork_api.SchedulePolicyTypeDaily, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
 	require.True(t, required, "Trigger should have been required")
 
@@ -138,7 +139,11 @@ func triggerDailyRequiredTest(t *testing.T) {
 }
 
 func triggerWeeklyRequiredTest(t *testing.T) {
-	defer k8s.Instance().DeleteSchedulePolicy("weeklypolicy")
+	defer func() {
+		err := k8s.Instance().DeleteSchedulePolicy("weeklypolicy")
+		require.NoError(t, err, "Error cleaning up schedule policy")
+	}()
+
 	_, err := k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "weeklypolicy",
@@ -152,13 +157,13 @@ func triggerWeeklyRequiredTest(t *testing.T) {
 	})
 	require.NoError(t, err, "Error creating policy")
 
-	required, err := TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeWeekly, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
+	_, err = TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeWeekly, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.Error(t, err, "Should return error for missing policy")
 
 	newTime := time.Date(2019, time.February, 7, 23, 16, 0, 0, time.Local) // Current day: Thursday
 	setMockTime(&newTime)
 	// LastTriggered one week before on Saturday at 11:15pm
-	required, err = TriggerRequired("weeklypolicy", stork_api.SchedulePolicyTypeWeekly, meta.Date(2019, time.February, 2, 23, 16, 0, 0, time.Local))
+	required, err := TriggerRequired("weeklypolicy", stork_api.SchedulePolicyTypeWeekly, meta.Date(2019, time.February, 2, 23, 16, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
 	require.False(t, required, "Trigger should not have been required")
 
@@ -189,13 +194,13 @@ func triggerMonthlyRequiredTest(t *testing.T) {
 	})
 	require.NoError(t, err, "Error creating policy")
 
-	required, err := TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeMonthly, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
+	_, err = TriggerRequired("missingpolicy", stork_api.SchedulePolicyTypeMonthly, meta.Date(2019, time.February, 7, 23, 14, 0, 0, time.Local))
 	require.Error(t, err, "Should return error for missing policy")
 
 	newTime := time.Date(2019, time.February, 28, 23, 16, 0, 0, time.Local)
 	setMockTime(&newTime)
 	// Last triggered before schedule
-	required, err = TriggerRequired("monthlypolicy", stork_api.SchedulePolicyTypeMonthly, meta.Date(2019, time.February, 2, 23, 16, 0, 0, time.Local))
+	required, err := TriggerRequired("monthlypolicy", stork_api.SchedulePolicyTypeMonthly, meta.Date(2019, time.February, 2, 23, 16, 0, 0, time.Local))
 	require.NoError(t, err, "Error checking if trigger required")
 	require.True(t, required, "Trigger should have been required")
 

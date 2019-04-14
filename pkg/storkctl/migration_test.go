@@ -125,7 +125,8 @@ func TestGetMigrationsWithStatusAndProgress(t *testing.T) {
 	migration.Status.Stage = storkv1.MigrationStageFinal
 	migration.Status.Status = storkv1.MigrationStatusSuccessful
 	migration.Status.Volumes = []*storkv1.VolumeInfo{}
-	migration, err = k8s.Instance().UpdateMigration(migration)
+	_, err = k8s.Instance().UpdateMigration(migration)
+	require.NoError(t, err, "Error updating migration")
 
 	expected := "NAME                     CLUSTERPAIR    STAGE     STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED\n" +
 		"getmigrationstatustest   clusterpair1   Final     Successful   0/0       0/0         " + toTimeString(migration.CreationTimestamp.Time) + "   5m0s\n"
@@ -136,7 +137,7 @@ func TestGetMigrationsWithStatusAndProgress(t *testing.T) {
 func TestCreateMigrationsNoNamespace(t *testing.T) {
 	cmdArgs := []string{"create", "migrations", "-c", "clusterPair1", "migration1"}
 
-	expected := "error: Need to provide atleast one namespace to migrate"
+	expected := "error: need to provide atleast one namespace to migrate"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -150,7 +151,7 @@ func TestCreateMigrationsNoClusterPair(t *testing.T) {
 func TestCreateMigrationsNoName(t *testing.T) {
 	cmdArgs := []string{"create", "migrations"}
 
-	expected := "error: Exactly one name needs to be provided for migration name"
+	expected := "error: exactly one name needs to be provided for migration name"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
@@ -172,7 +173,7 @@ func TestDeleteMigrationsNoMigrationName(t *testing.T) {
 	cmdArgs := []string{"delete", "migrations"}
 
 	var migrationList storkv1.MigrationList
-	expected := "error: At least one argument needs to be provided for migration name"
+	expected := "error: at least one argument needs to be provided for migration name"
 	testCommon(t, cmdArgs, &migrationList, expected, true)
 }
 
