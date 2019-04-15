@@ -124,7 +124,7 @@ func TestGetMigrationsWithStatusAndProgress(t *testing.T) {
 	migration.CreationTimestamp = metav1.NewTime(migration.Status.FinishTimestamp.Add(-5 * time.Minute))
 	migration.Status.Stage = storkv1.MigrationStageFinal
 	migration.Status.Status = storkv1.MigrationStatusSuccessful
-	migration.Status.Volumes = []*storkv1.VolumeInfo{}
+	migration.Status.Volumes = []*storkv1.MigrationVolumeInfo{}
 	_, err = k8s.Instance().UpdateMigration(migration)
 	require.NoError(t, err, "Error updating migration")
 

@@ -1446,7 +1446,7 @@ func (p *portworx) DeletePair(pair *stork_crd.ClusterPair) error {
 	return p.clusterManager.DeletePair(pair.Status.RemoteStorageID)
 }
 
-func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.MigrationVolumeInfo, error) {
 	volDriver, err := p.getUserVolDriver(migration.Annotations)
 	if err != nil {
 		return nil, err
@@ -1472,7 +1472,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
-	volumeInfos := make([]*stork_crd.VolumeInfo, 0)
+	volumeInfos := make([]*stork_crd.MigrationVolumeInfo, 0)
 	for _, namespace := range migration.Spec.Namespaces {
 		pvcList, err := k8s.Instance().GetPersistentVolumeClaims(namespace, migration.Spec.Selectors)
 		if err != nil {
@@ -1482,7 +1482,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 			if !p.OwnsPVC(&pvc) {
 				continue
 			}
-			volumeInfo := &stork_crd.VolumeInfo{}
+			volumeInfo := &stork_crd.MigrationVolumeInfo{}
 			volumeInfo.PersistentVolumeClaim = pvc.Name
 			volumeInfo.Namespace = pvc.Namespace
 			volumeInfos = append(volumeInfos, volumeInfo)
@@ -1512,11 +1512,11 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 	return volumeInfos, nil
 }
 
-func (p *portworx) getMigrationTaskID(migration *stork_crd.Migration, volumeInfo *stork_crd.VolumeInfo) string {
+func (p *portworx) getMigrationTaskID(migration *stork_crd.Migration, volumeInfo *stork_crd.MigrationVolumeInfo) string {
 	return string(migration.UID) + "-" + volumeInfo.Namespace + "-" + volumeInfo.PersistentVolumeClaim
 }
 
-func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_crd.MigrationVolumeInfo, error) {
 	volDriver, err := p.getUserVolDriver(migration.Annotations)
 	if err != nil {
 		return nil, err

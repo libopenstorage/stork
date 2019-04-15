@@ -27,7 +27,9 @@ import (
 
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ApplicationBackupsGetter
 	ApplicationClonesGetter
+	ApplicationRestoresGetter
 	ClusterDomainUpdatesGetter
 	ClusterDomainsStatusesGetter
 	ClusterPairsGetter
@@ -45,8 +47,16 @@ type StorkV1alpha1Client struct {
 	restClient rest.Interface
 }
 
+func (c *StorkV1alpha1Client) ApplicationBackups(namespace string) ApplicationBackupInterface {
+	return newApplicationBackups(c, namespace)
+}
+
 func (c *StorkV1alpha1Client) ApplicationClones(namespace string) ApplicationCloneInterface {
 	return newApplicationClones(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) ApplicationRestores(namespace string) ApplicationRestoreInterface {
+	return newApplicationRestores(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) ClusterDomainUpdates() ClusterDomainUpdateInterface {
