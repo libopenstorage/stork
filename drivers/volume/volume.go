@@ -95,10 +95,10 @@ type ClusterPairPluginInterface interface {
 type MigratePluginInterface interface {
 	// Start migration of volumes specified by the spec. Should only migrate
 	// volumes, not the specs associated with them
-	StartMigration(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error)
+	StartMigration(*stork_crd.Migration) ([]*stork_crd.MigrationVolumeInfo, error)
 	// Get the status of migration of the volumes specified in the status
 	// for the migration spec
-	GetMigrationStatus(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error)
+	GetMigrationStatus(*stork_crd.Migration) ([]*stork_crd.MigrationVolumeInfo, error)
 	// Cancel the migration of volumes specified in the status
 	CancelMigration(*stork_crd.Migration) error
 	// Update the PVC spec to point to the migrated volume on the destination
@@ -208,12 +208,12 @@ func (c *ClusterPairNotSupported) DeletePair(*stork_crd.ClusterPair) error {
 type MigrationNotSupported struct{}
 
 // StartMigration returns ErrNotSupported
-func (m *MigrationNotSupported) StartMigration(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+func (m *MigrationNotSupported) StartMigration(*stork_crd.Migration) ([]*stork_crd.MigrationVolumeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
 // GetMigrationStatus returns ErrNotSupported
-func (m *MigrationNotSupported) GetMigrationStatus(*stork_crd.Migration) ([]*stork_crd.VolumeInfo, error) {
+func (m *MigrationNotSupported) GetMigrationStatus(*stork_crd.Migration) ([]*stork_crd.MigrationVolumeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 

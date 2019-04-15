@@ -26,15 +26,15 @@ type MigrationSpec struct {
 
 // MigrationStatus is the status of a migration operation
 type MigrationStatus struct {
-	Stage           MigrationStageType  `json:"stage"`
-	Status          MigrationStatusType `json:"status"`
-	Resources       []*ResourceInfo     `json:"resources"`
-	Volumes         []*VolumeInfo       `json:"volumes"`
-	FinishTimestamp meta.Time           `json:"finishTimestamp"`
+	Stage           MigrationStageType       `json:"stage"`
+	Status          MigrationStatusType      `json:"status"`
+	Resources       []*MigrationResourceInfo `json:"resources"`
+	Volumes         []*MigrationVolumeInfo   `json:"volumes"`
+	FinishTimestamp meta.Time                `json:"finishTimestamp"`
 }
 
-// ResourceInfo is the info for the migration of a resource
-type ResourceInfo struct {
+// MigrationResourceInfo is the info for the migration of a resource
+type MigrationResourceInfo struct {
 	Name                  string `json:"name"`
 	Namespace             string `json:"namespace"`
 	meta.GroupVersionKind `json:",inline"`
@@ -42,8 +42,8 @@ type ResourceInfo struct {
 	Reason                string              `json:"reason"`
 }
 
-// VolumeInfo is the info for the migration of a volume
-type VolumeInfo struct {
+// MigrationVolumeInfo is the info for the migration of a volume
+type MigrationVolumeInfo struct {
 	PersistentVolumeClaim string              `json:"persistentVolumeClaim"`
 	Namespace             string              `json:"namespace"`
 	Volume                string              `json:"volume"`

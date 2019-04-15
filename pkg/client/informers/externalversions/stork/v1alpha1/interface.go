@@ -24,8 +24,12 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ApplicationBackups returns a ApplicationBackupInformer.
+	ApplicationBackups() ApplicationBackupInformer
 	// ApplicationClones returns a ApplicationCloneInformer.
 	ApplicationClones() ApplicationCloneInformer
+	// ApplicationRestores returns a ApplicationRestoreInformer.
+	ApplicationRestores() ApplicationRestoreInformer
 	// ClusterDomainUpdates returns a ClusterDomainUpdateInformer.
 	ClusterDomainUpdates() ClusterDomainUpdateInformer
 	// ClusterDomainsStatuses returns a ClusterDomainsStatusInformer.
@@ -59,9 +63,19 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
+// ApplicationBackups returns a ApplicationBackupInformer.
+func (v *version) ApplicationBackups() ApplicationBackupInformer {
+	return &applicationBackupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // ApplicationClones returns a ApplicationCloneInformer.
 func (v *version) ApplicationClones() ApplicationCloneInformer {
 	return &applicationCloneInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ApplicationRestores returns a ApplicationRestoreInformer.
+func (v *version) ApplicationRestores() ApplicationRestoreInformer {
+	return &applicationRestoreInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterDomainUpdates returns a ClusterDomainUpdateInformer.
