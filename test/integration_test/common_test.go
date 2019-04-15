@@ -27,7 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"github.com/stretchr/testify/require"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -97,11 +97,19 @@ func TestMain(t *testing.T) {
 	if passed := t.Run("setup", setup); !passed {
 		t.FailNow()
 	}
-	t.Run("Extender", testExtender)
-	t.Run("HealthMonitor", testHealthMonitor)
-	t.Run("Snapshot", testSnapshot)
-	t.Run("CmdExecutor", asyncPodCommandTest)
-	t.Run("Migration", testMigration)
+	// we can either run cluster domain tests or the other tests
+	// the underlying setup of clusters is different
+	if os.Getenv("ENABLE_CLUSTER_DOMAIN_TESTS") != "" {
+		t.Run("ClusterDomains", testClusterDomains)
+	} else {
+		t.Run("Extender", testExtender)
+		t.Run("HealthMonitor", testHealthMonitor)
+		t.Run("Snapshot", testSnapshot)
+		t.Run("CmdExecutor", asyncPodCommandTest)
+		t.Run("Migration", testMigration)
+		t.Skip("Skipping cluster domain tests")
+	}
+
 }
 
 func generateInstanceID(t *testing.T, testName string) string {
@@ -257,7 +265,7 @@ func setRemoteConfig(kubeConfig string) error {
 	return nil
 }
 
-func createClusterPair(pairInfo map[string]string) error {
+func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 	err := os.MkdirAll(pairFilePath, 0777)
 	if err != nil {
 		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", pairFilePath, err)
@@ -293,6 +301,11 @@ func createClusterPair(pairInfo map[string]string) error {
 		return err
 	}
 
+	if skipStorage {
+		logrus.Info("cluster-pair.yml created")
+		return nil
+	}
+
 	return addStorageOptions(pairInfo)
 }
 
@@ -321,7 +334,7 @@ func addStorageOptions(pairInfo map[string]string) error {
 	return nil
 }
 
-func scheduleClusterPair(ctx *scheduler.Context) error {
+func scheduleClusterPair(ctx *scheduler.Context, skipStorage bool) error {
 	var err error
 	err = dumpRemoteKubeConfig(remoteConfig)
 	if err != nil {
@@ -334,7 +347,7 @@ func scheduleClusterPair(ctx *scheduler.Context) error {
 		return err
 	}
 
-	err = createClusterPair(info)
+	err = createClusterPair(info, skipStorage)
 	if err != nil {
 		logrus.Errorf("Error creating cluster Spec: %v", err)
 		return err
