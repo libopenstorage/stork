@@ -69,6 +69,7 @@ func (c *ClusterDomainUpdateController) Handle(ctx context.Context, event sdk.Ev
 				err = fmt.Errorf("Unable to %v cluster domain: %v", action, err)
 				log.ClusterDomainUpdateLog(clusterDomainUpdate).Errorf(err.Error())
 				clusterDomainUpdate.Status.Status = storkv1.ClusterDomainUpdateStatusFailed
+				clusterDomainUpdate.Status.Reason = err.Error()
 				c.Recorder.Event(
 					clusterDomainUpdate,
 					v1.EventTypeWarning,
