@@ -515,6 +515,8 @@ type ClusterDomainsOps interface {
 	DeleteClusterDomainsStatus(string) error
 	// ListClusterDomainStatuses lists ClusterDomainsStatus
 	ListClusterDomainStatuses() (*v1alpha1.ClusterDomainsStatusList, error)
+	// ValidateClusterDomainsStatus validates the ClusterDomainsStatus
+	ValidateClusterDomainsStatus(string, map[string]bool, time.Duration, time.Duration) error
 
 	// CreateClusterDomainUpdate creates the ClusterDomainUpdate
 	CreateClusterDomainUpdate(*v1alpha1.ClusterDomainUpdate) (*v1alpha1.ClusterDomainUpdate, error)
@@ -3396,7 +3398,8 @@ func (k *k8sOps) ValidateClusterPair(name string, namespace string, timeout, ret
 		}
 
 		if clusterPair.Status.SchedulerStatus == v1alpha1.ClusterPairStatusReady &&
-			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusReady {
+			(clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusReady ||
+				clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusNotProvided) {
 			return "", false, nil
 		} else if clusterPair.Status.SchedulerStatus == v1alpha1.ClusterPairStatusError ||
 			clusterPair.Status.StorageStatus == v1alpha1.ClusterPairStatusError {
@@ -3825,6 +3828,49 @@ func (k *k8sOps) DeleteClusterDomainsStatus(name string) error {
 	return k.storkClient.Stork().ClusterDomainsStatuses().Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+func (k *k8sOps) ValidateClusterDomainsStatus(name string, domainMap map[string]bool, timeout, retryInterval time.Duration) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		cds, err := k.GetClusterDomainsStatus(name)
+		if err != nil {
+			return "", true, err
+		}
+
+		for _, domain := range cds.Status.Active {
+			isActive, _ := domainMap[domain]
+			if !isActive {
+				return "", true, &ErrFailedToValidateCustomSpec{
+					Name: name,
+					Cause: fmt.Sprintf("ClusterDomainsStatus mismatch. For domain %v "+
+						"expected to be inactive found active", domain),
+					Type: cds,
+				}
+			}
+		}
+		for _, domain := range cds.Status.Inactive {
+			isActive, _ := domainMap[domain]
+			if isActive {
+				return "", true, &ErrFailedToValidateCustomSpec{
+					Name: name,
+					Cause: fmt.Sprintf("ClusterDomainsStatus mismatch. For domain %v "+
+						"expected to be active found inactive", domain),
+					Type: cds,
+				}
+			}
+		}
+		return "", false, nil
+
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 // ListClusterDomainStatuses lists ClusterDomainsStatus
