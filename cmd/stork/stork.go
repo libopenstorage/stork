@@ -17,6 +17,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/pvcwatcher"
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/snapshot"
@@ -294,11 +295,19 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		}
 	}
 
+	resourceCollector := resourcecollector.ResourceCollector{
+		Driver: d,
+	}
+	if err := resourceCollector.Init(); err != nil {
+		log.Fatalf("Error initializing ResourceCollector: %v", err)
+	}
+
 	if c.Bool("migration-controller") {
 		migrationAdminNamespace := c.String("migration-admin-namespace")
 		migration := migration.Migration{
-			Driver:   d,
-			Recorder: recorder,
+			Driver:            d,
+			Recorder:          recorder,
+			ResourceCollector: resourceCollector,
 		}
 		if err := migration.Init(migrationAdminNamespace); err != nil {
 			log.Fatalf("Error initializing migration: %v", err)

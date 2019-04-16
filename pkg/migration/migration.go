@@ -5,6 +5,7 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/migration/controllers"
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -12,6 +13,7 @@ import (
 type Migration struct {
 	Driver                      volume.Driver
 	Recorder                    record.EventRecorder
+	ResourceCollector           resourcecollector.ResourceCollector
 	clusterPairController       *controllers.ClusterPairController
 	migrationController         *controllers.MigrationController
 	migrationScheduleController *controllers.MigrationScheduleController
@@ -29,8 +31,9 @@ func (m *Migration) Init(migrationAdminNamespace string) error {
 	}
 
 	m.migrationController = &controllers.MigrationController{
-		Driver:   m.Driver,
-		Recorder: m.Recorder,
+		Driver:            m.Driver,
+		Recorder:          m.Recorder,
+		ResourceCollector: m.ResourceCollector,
 	}
 	err = m.migrationController.Init(migrationAdminNamespace)
 	if err != nil {
