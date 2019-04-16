@@ -42,6 +42,14 @@ type ApplicationRestoreListerExpansion interface{}
 // ApplicationRestoreNamespaceLister.
 type ApplicationRestoreNamespaceListerExpansion interface{}
 
+// BackupLocationListerExpansion allows custom methods to be added to
+// BackupLocationLister.
+type BackupLocationListerExpansion interface{}
+
+// BackupLocationNamespaceListerExpansion allows custom methods to be added to
+// BackupLocationNamespaceLister.
+type BackupLocationNamespaceListerExpansion interface{}
+
 // ClusterDomainUpdateListerExpansion allows custom methods to be added to
 // ClusterDomainUpdateLister.
 type ClusterDomainUpdateListerExpansion interface{}
