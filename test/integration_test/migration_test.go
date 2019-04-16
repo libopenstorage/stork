@@ -55,9 +55,9 @@ func triggerMigrationTest(
 		require.NoError(t, err, "Error resetting remote config")
 	}()
 
-	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected)
+	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false)
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, true, migrateAllAppsExpected)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, true, migrateAllAppsExpected, false)
 }
 
 func triggerMigration(
@@ -67,6 +67,7 @@ func triggerMigration(
 	additionalAppKeys []string,
 	migrationAppKeys []string,
 	migrateAllAppsExpected bool,
+	skipStoragePair bool,
 ) ([]*scheduler.Context, *scheduler.Context) {
 	// schedule the app on cluster 1
 	ctxs, err := schedulerDriver.Schedule(instanceID,
@@ -91,7 +92,7 @@ func triggerMigration(
 		preMigrationCtx = ctxs[0].DeepCopy()
 	}
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxs[0])
+	err = scheduleClusterPair(ctxs[0], skipStoragePair)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
@@ -109,6 +110,7 @@ func validateAndDestroyMigration(
 	migrationSuccessExpected bool,
 	startAppsOnMigration bool,
 	migrateAllAppsExpected bool,
+	skipAppDeletion bool,
 ) {
 	var err error
 
@@ -142,15 +144,19 @@ func validateAndDestroyMigration(
 			require.NoError(t, err, "Error validating storage components on remote cluster after migration")
 		}*/
 		// destroy mysql app on cluster 2
-		destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+		if !skipAppDeletion {
+			destroyAndWait(t, []*scheduler.Context{preMigrationCtx})
+		}
 	} else {
 		require.Error(t, err, "Expected migration to fail")
 	}
 
-	// destroy app on cluster 1
-	err = setRemoteConfig("")
-	require.NoError(t, err, "Error resetting remote config")
-	destroyAndWait(t, ctxs)
+	if !skipAppDeletion {
+		// destroy app on cluster 1
+		err = setRemoteConfig("")
+		require.NoError(t, err, "Error resetting remote config")
+		destroyAndWait(t, ctxs)
+	}
 }
 
 func deploymentMigrationTest(t *testing.T) {
@@ -278,13 +284,14 @@ func migrationIntervalScheduleTest(t *testing.T) {
 		nil,
 		[]string{"mysql-migration-schedule-interval"},
 		true,
+		false,
 	)
 
 	// bump time of the world by 5 minutes
 	mockNow := time.Now().Add(6 * time.Minute)
 	setMockTime(&mockNow)
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false)
 }
 
 func migrationDailyScheduleTest(t *testing.T) {
@@ -313,6 +320,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 		nil,
 		migrationSchedules,
 		true,
+		false,
 	)
 
 	namespace := preMigrationCtx.GetID()
@@ -406,6 +414,7 @@ func migrationScheduleTest(
 		nil,
 		[]string{migrationScheduleName},
 		true,
+		false,
 	)
 
 	namespace := preMigrationCtx.GetID()
@@ -488,7 +497,7 @@ func migrationScheduleTest(
 			firstMigrationCreationTime, migrationStatus.CreationTimestamp))
 
 	// validate and destroy apps on both clusters
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false)
 
 	// explicitly check if all child migrations of the schedule are deleted
 	f := func() (interface{}, bool, error) {
