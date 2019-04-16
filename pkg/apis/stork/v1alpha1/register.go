@@ -53,6 +53,12 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ClusterDomainUpdateList{},
 		&ApplicationClone{},
 		&ApplicationCloneList{},
+		&ApplicationBackup{},
+		&ApplicationBackupList{},
+		&ApplicationRestore{},
+		&ApplicationRestoreList{},
+		&BackupLocation{},
+		&BackupLocationList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

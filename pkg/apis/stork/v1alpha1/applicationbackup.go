@@ -25,12 +25,13 @@ type ApplicationBackup struct {
 
 // ApplicationBackupSpec is the spec used to backup applications
 type ApplicationBackupSpec struct {
-	Namespaces    []string                           `json:"namespaces"`
-	Selectors     map[string]string                  `json:"selectors"`
-	PreExecRule   string                             `json:"preExecRule"`
-	PostExecRule  string                             `json:"postExecRule"`
-	EncryptionKey *corev1.EnvVarSource               `json:"encryptionKey"`
-	ReclaimPolicy ApplicationBackupReclaimPolicyType `json:"recalimPolicy"`
+	Namespaces     []string                           `json:"namespaces"`
+	BackupLocation string                             `json:"backupLocation"`
+	Selectors      map[string]string                  `json:"selectors"`
+	PreExecRule    string                             `json:"preExecRule"`
+	PostExecRule   string                             `json:"postExecRule"`
+	EncryptionKey  *corev1.EnvVarSource               `json:"encryptionKey"`
+	ReclaimPolicy  ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup

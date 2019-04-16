@@ -40,6 +40,10 @@ func (c *FakeStorkV1alpha1) ApplicationRestores(namespace string) v1alpha1.Appli
 	return &FakeApplicationRestores{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) BackupLocations(namespace string) v1alpha1.BackupLocationInterface {
+	return &FakeBackupLocations{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) ClusterDomainUpdates() v1alpha1.ClusterDomainUpdateInterface {
 	return &FakeClusterDomainUpdates{c}
 }
