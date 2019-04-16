@@ -169,7 +169,8 @@ func run(c *cli.Context) {
 
 	if c.Bool("extender") {
 		ext = &extender.Extender{
-			Driver: d,
+			Driver:   d,
+			Recorder: recorder,
 		}
 
 		if err = ext.Start(); err != nil {
