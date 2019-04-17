@@ -24,6 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ApplicationClones returns a ApplicationCloneInformer.
+	ApplicationClones() ApplicationCloneInformer
 	// ClusterDomainUpdates returns a ClusterDomainUpdateInformer.
 	ClusterDomainUpdates() ClusterDomainUpdateInformer
 	// ClusterDomainsStatuses returns a ClusterDomainsStatusInformer.
@@ -55,6 +57,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ApplicationClones returns a ApplicationCloneInformer.
+func (v *version) ApplicationClones() ApplicationCloneInformer {
+	return &applicationCloneInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterDomainUpdates returns a ClusterDomainUpdateInformer.

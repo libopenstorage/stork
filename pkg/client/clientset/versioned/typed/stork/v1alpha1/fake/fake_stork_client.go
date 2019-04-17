@@ -28,6 +28,10 @@ type FakeStorkV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeStorkV1alpha1) ApplicationClones(namespace string) v1alpha1.ApplicationCloneInterface {
+	return &FakeApplicationClones{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) ClusterDomainUpdates() v1alpha1.ClusterDomainUpdateInterface {
 	return &FakeClusterDomainUpdates{c}
 }

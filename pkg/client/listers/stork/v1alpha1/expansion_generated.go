@@ -18,6 +18,14 @@ limitations under the License.
 
 package v1alpha1
 
+// ApplicationCloneListerExpansion allows custom methods to be added to
+// ApplicationCloneLister.
+type ApplicationCloneListerExpansion interface{}
+
+// ApplicationCloneNamespaceListerExpansion allows custom methods to be added to
+// ApplicationCloneNamespaceLister.
+type ApplicationCloneNamespaceListerExpansion interface{}
+
 // ClusterDomainUpdateListerExpansion allows custom methods to be added to
 // ClusterDomainUpdateLister.
 type ClusterDomainUpdateListerExpansion interface{}
