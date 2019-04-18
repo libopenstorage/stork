@@ -1038,26 +1038,26 @@ func (d *portworx) StartDriver(n node.Node) error {
 		}})
 }
 
-func (d *portworx) UpgradeDriver(version string) error {
-	customImageRegex := regexp.MustCompile(`oci=(?P<oci>([\w][\w._-]+\/)?[\w][\w._-]*\:[\w][\w.-]*),px=(?P<px>([\w][\w._-]+\/)?[\w][\w._-]*\:[\w][\w.-]*)`)
-	ociImageRegex := regexp.MustCompile(`([\w][\w._-]+\/)?[\w][\w._-]*\:[\w][\w.-]*`)
-	if len(version) == 0 {
+func (d *portworx) UpgradeDriver(images []torpedovolume.Image) error {
+	if len(images) == 0 {
 		return fmt.Errorf("no version supplied for upgrading portworx")
 	}
 
 	partsOci := make([]string, 2)
 	partsPx := make([]string, 2)
-	if customImageRegex.MatchString(version) {
-		matches := getGroupMatches(customImageRegex, version)
-		partsOci = strings.Split(matches["oci"], ":")
-		partsPx = strings.Split(matches["px"], ":")
 
-	} else if ociImageRegex.MatchString(version) {
-		partsOci = strings.Split(version, ":")
-	} else {
-		return fmt.Errorf("invalid version: %s given to upgrade portworx", version)
+	for _, image := range images {
+		switch image.Type {
+		case "", "oci":
+			partsOci = strings.Split(image.Version, ":")
+		case "px":
+			partsPx = strings.Split(image.Version, ":")
+		}
 	}
-
+	version := partsOci[1]
+	if len(partsPx) > 0 {
+		version = partsPx[1]
+	}
 	logrus.Infof("upgrading portworx to %s", version)
 
 	ociImage := partsOci[0]

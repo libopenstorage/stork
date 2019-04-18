@@ -2,12 +2,14 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -32,7 +34,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		}
 
 		Step("start the upgrade of volume driver", func() {
-			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeVersion)
+			images := getImages(Inst().StorageDriverUpgradeVersion)
+			err := Inst().V.UpgradeDriver(images)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -52,6 +55,20 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	})
 })
 
+func getImages(version string) []volume.Image {
+	images := make([]volume.Image, 0)
+	for _, imagestr := range strings.Split(version, ",") {
+		image := strings.Split(imagestr, "=")
+		if len(image) > 1 {
+			images = append(images, volume.Image{Type: image[0], Version: image[1]})
+		} else {
+			images = append(images, volume.Image{Type: "", Version: image[0]})
+		}
+
+	}
+	return images
+}
+
 var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 	It("upgrade and downgrade volume driver and ensure everything is running fine", func() {
 		var contexts []*scheduler.Context
@@ -60,7 +77,8 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 		}
 
 		Step("start the upgrade of volume driver", func() {
-			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeVersion)
+			images := getImages(Inst().StorageDriverUpgradeVersion)
+			err := Inst().V.UpgradeDriver(images)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -71,7 +89,8 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 		})
 
 		Step("start the downgrade of volume driver", func() {
-			err := Inst().V.UpgradeDriver(Inst().StorageDriverBaseVersion)
+			images := getImages(Inst().StorageDriverBaseVersion)
+			err := Inst().V.UpgradeDriver(images)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
