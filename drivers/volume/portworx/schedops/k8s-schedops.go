@@ -270,6 +270,7 @@ func (k *k8sSchedOps) validateMountsInPods(
 		}
 
 		containerPaths := getContainerPVCMountMap(*pod)
+		skipHostMountCheck := false
 		for containerName, path := range containerPaths {
 			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s.+", path))
 			output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
@@ -287,6 +288,8 @@ func (k *k8sSchedOps) validateMountsInPods(
 				if len(pxMounts) > 0 {
 					logrus.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
 					pxMountFound = true
+					// in case there are two pods running with non shared volume, one of them will be in read-only
+					skipHostMountCheck = isMountReadOnly(line)
 					break
 				}
 			}
@@ -296,11 +299,18 @@ func (k *k8sSchedOps) validateMountsInPods(
 			}
 		}
 
+		// if there is at least one pod with non shared volume already validaded, mark this one as validated and skip host mount check
+		if skipHostMountCheck && ((len(validatedMountPods) > 0 || len(podsToExclude) > 0) && !vol.Shared) {
+			validatedMountPods = append(validatedMountPods, pod.Name)
+			continue
+		} else if skipHostMountCheck {
+			continue
+		}
+
 		currentNode, nodeExists := nodes[p.Spec.NodeName]
 		if !nodeExists {
 			return validatedMountPods, fmt.Errorf("node %s for pod [%s] %s not found", p.Spec.NodeName, p.Namespace, p.Name)
 		}
-		//logrus.Infof("Pod [%s] %s ready for volume setup check.\n Pod phase: %v\n Pod Init Container statuses: %v\n Pod Container Statuses: %v", pod.Namespace, pod.Name, pod.Status.Phase, pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses)
 
 		// ignore error when a command not exactly fail, like grep when empty return exit 1
 		connOpts := node.ConnectionOpts{
@@ -318,6 +328,11 @@ func (k *k8sSchedOps) validateMountsInPods(
 		validatedMountPods = append(validatedMountPods, pod.Name)
 	}
 	return validatedMountPods, nil
+}
+
+func isMountReadOnly(mount string) bool {
+	var re = regexp.MustCompile(`ro,|,ro`)
+	return re.MatchString(mount)
 }
 
 func (k *k8sSchedOps) ValidateSnapshot(params map[string]string, parent *api.Volume) error {
