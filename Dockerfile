@@ -11,6 +11,9 @@ RUN chmod +x /usr/local/bin/aws-iam-authenticator
 RUN wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-224.0.0-linux-x86_64.tar.gz
 RUN tar xf google-cloud-sdk-224.0.0-linux-x86_64.tar.gz
 RUN rm -rf google-cloud-sdk-224.0.0-linux-x86_64.tar.gz
+# Remove the test directories
+RUN rm -rf /google-cloud-sdk/platform/gsutil/third_party/oauth2client/tests
+RUN rm -rf /google-cloud-sdk/platform/gsutil/third_party/rsa/tests
 
 WORKDIR /
 
