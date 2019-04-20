@@ -8,6 +8,7 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/applicationmanager"
 	"github.com/libopenstorage/stork/pkg/cluster"
 	"github.com/libopenstorage/stork/pkg/clusterdomains"
 	"github.com/libopenstorage/stork/pkg/controller"
@@ -107,13 +108,17 @@ func main() {
 			Name:  "migration-controller",
 			Usage: "Start the migration controller (default: true)",
 		},
+		cli.BoolTFlag{
+			Name:  "application-controller",
+			Usage: "Start the controllers for managing applications (default: true)",
+		},
 		cli.BoolFlag{
 			Name:  "app-initializer",
 			Usage: "EXPERIMENTAL: Enable application initializer to update scheduler name automatically (default: false)",
 		},
 		cli.StringFlag{
-			Name:  "migration-admin-namespace",
-			Usage: "Namespace to be used by a cluster admin which can migrate all other namespaces (default: none)",
+			Name:  "admin-namespace",
+			Usage: "Namespace to be used by a cluster admin which can migrate and backup all other namespaces (default: none)",
 		},
 		cli.BoolFlag{
 			Name:  "storage-cluster-controller",
@@ -305,18 +310,28 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		log.Fatalf("Error initializing ResourceCollector: %v", err)
 	}
 
+	adminNamespace := c.String("admin-namespace")
 	if c.Bool("migration-controller") {
-		migrationAdminNamespace := c.String("migration-admin-namespace")
 		migration := migration.Migration{
 			Driver:            d,
 			Recorder:          recorder,
 			ResourceCollector: resourceCollector,
 		}
-		if err := migration.Init(migrationAdminNamespace); err != nil {
+		if err := migration.Init(adminNamespace); err != nil {
 			log.Fatalf("Error initializing migration: %v", err)
 		}
 	}
 
+	if c.Bool("application-controller") {
+		appManager := applicationmanager.ApplicationManager{
+			Driver:            d,
+			Recorder:          recorder,
+			ResourceCollector: resourceCollector,
+		}
+		if err := appManager.Init(adminNamespace); err != nil {
+			log.Fatalf("Error initializing application manager: %v", err)
+		}
+	}
 	if c.Bool("storage-cluster-controller") {
 		clusterController := cluster.Controller{
 			Recorder: recorder,
