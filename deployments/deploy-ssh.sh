@@ -88,6 +88,10 @@ if [ -n "${K8S_VENDOR}" ]; then
         rancher)
             K8S_VENDOR_KEY=node-role.kubernetes.io/controlplane
             ;;
+        gke)
+            # Run torpedo on worker node, where px installation is disabled. 
+            K8S_VENDOR_KEY=px/enabled
+            ;;
     esac
 else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
@@ -183,6 +187,8 @@ spec:
       value: "${TORPEDO_SSH_USER}"
     - name: TORPEDO_SSH_PASSWORD
       value: "${TORPEDO_SSH_PASSWORD}"
+    - name: TORPEDO_SSH_KEY
+      value: "${TORPEDO_SSH_KEY}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
