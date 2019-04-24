@@ -150,6 +150,10 @@ spec:
   - key: node-role.kubernetes.io/etcd
     operator: Equal
     value: "true"
+  - key: apps
+    operator: Equal
+    value: "false"
+    effect: "NoSchedule"
   affinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
