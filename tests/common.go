@@ -362,9 +362,11 @@ func ParseFlags() {
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.StringVar(&volUpgradeVersion, storageDriverUpgradeVersionCliFlag, defaultStorageDriverUpgradeVersion,
-		"Version of storage driver to be upgraded to")
+		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
+			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
 	flag.StringVar(&volBaseVersion, storageDriverBaseVersionCliFlag, defaultStorageDriverBaseVersion,
-		"Version of storage driver to be downgraded to")
+		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
+			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 
 	flag.Parse()
