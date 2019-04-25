@@ -1038,21 +1038,33 @@ func (d *portworx) StartDriver(n node.Node) error {
 		}})
 }
 
-func (d *portworx) UpgradeDriver(version string) error {
-	if len(version) == 0 {
+func (d *portworx) UpgradeDriver(images []torpedovolume.Image) error {
+	if len(images) == 0 {
 		return fmt.Errorf("no version supplied for upgrading portworx")
 	}
 
-	parts := strings.Split(version, ":")
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid version: %s given to upgrade portworx", version)
-	}
+	partsOci := make([]string, 2)
+	partsPx := make([]string, 2)
 
+	for _, image := range images {
+		switch image.Type {
+		case "", "oci":
+			partsOci = strings.Split(image.Version, ":")
+		case "px":
+			partsPx = strings.Split(image.Version, ":")
+		}
+	}
+	version := partsOci[1]
+	if len(partsPx) > 0 {
+		version = partsPx[1]
+	}
 	logrus.Infof("upgrading portworx to %s", version)
 
-	image := parts[0]
-	tag := parts[1]
-	if err := d.schedOps.UpgradePortworx(image, tag); err != nil {
+	ociImage := partsOci[0]
+	ociTag := partsOci[1]
+	pxImage := partsPx[0]
+	pxTag := partsPx[1]
+	if err := d.schedOps.UpgradePortworx(ociImage, ociTag, pxImage, pxTag); err != nil {
 		return &ErrFailedToUpgradeVolumeDriver{
 			Version: version,
 			Cause:   err.Error(),
@@ -1060,6 +1072,12 @@ func (d *portworx) UpgradeDriver(version string) error {
 	}
 
 	for _, n := range node.GetStorageDriverNodes() {
+		image := ociImage
+		tag := ociTag
+		if len(pxImage) > 0 && len(pxTag) > 0 {
+			image = pxImage
+			tag = pxTag
+		}
 		if err := d.WaitForUpgrade(n, image, tag); err != nil {
 			return err
 		}
@@ -1208,6 +1226,17 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 		}
 	}
 	return pxNodes, nil
+}
+
+func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
+	match := groupRegex.FindStringSubmatch(str)
+	result := make(map[string]string)
+	for i, name := range groupRegex.SubexpNames() {
+		if i != 0 && name != "" {
+			result[name] = match[i]
+		}
+	}
+	return result
 }
 
 func init() {
