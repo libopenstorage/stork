@@ -80,21 +80,26 @@ if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
 fi
 
 K8S_VENDOR_KEY=""
+K8S_VENDOR_VALUE=""
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
         kubernetes)
             K8S_VENDOR_KEY=node-role.kubernetes.io/master
+            K8S_VENDOR_VALUE=true
             ;;
         rancher)
             K8S_VENDOR_KEY=node-role.kubernetes.io/controlplane
+            K8S_VENDOR_VALUE=true
             ;;
         gke)
             # Run torpedo on worker node, where px installation is disabled. 
             K8S_VENDOR_KEY=px/enabled
+            K8S_VENDOR_VALUE=false
             ;;
     esac
 else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
+    K8S_VENDOR_VALUE=true
 fi
 
 
@@ -160,7 +165,9 @@ spec:
         nodeSelectorTerms:
         - matchExpressions:
           - key: ${K8S_VENDOR_KEY}
-            operator: Exists
+            operator: In
+            values:
+            - ${K8S_VENDOR_VALUE}
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
