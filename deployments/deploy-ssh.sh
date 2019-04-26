@@ -167,7 +167,7 @@ spec:
           - key: ${K8S_VENDOR_KEY}
             operator: In
             values:
-            - ${K8S_VENDOR_VALUE}
+            - "${K8S_VENDOR_VALUE}"
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
