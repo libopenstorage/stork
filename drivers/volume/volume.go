@@ -66,6 +66,8 @@ type Driver interface {
 	MigratePluginInterface
 	// ClusterDomainsPluginInterface Interface to manage cluster domains
 	ClusterDomainsPluginInterface
+	// BackupRestorePluginInterface Interface to backup and restore volumes
+	BackupRestorePluginInterface
 }
 
 // GroupSnapshotCreateResponse is the response for the group snapshot operation
@@ -114,6 +116,28 @@ type ClusterDomainsPluginInterface interface {
 	ActivateClusterDomain(*stork_crd.ClusterDomainUpdate) error
 	// DeactivateClusterDomain deactivates a cluster domain
 	DeactivateClusterDomain(*stork_crd.ClusterDomainUpdate) error
+}
+
+// BackupRestorePluginInterface Interface to backup and restore volumes
+type BackupRestorePluginInterface interface {
+	// Start backup of volumes specified by the spec. Should only backup
+	// volumes, not the specs associated with them
+	StartBackup(*stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error)
+	// Get the status of backup of the volumes specified in the status
+	// for the backup spec
+	GetBackupStatus(*stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error)
+	// Cancel the backup of volumes specified in the status
+	CancelBackup(*stork_crd.ApplicationBackup) error
+	// Delete the backups specified in the status
+	DeleteBackup(*stork_crd.ApplicationBackup) error
+	// Start restore of volumes specified by the spec. Should only restore
+	// volumes, not the specs associated with them
+	StartRestore(*stork_crd.ApplicationRestore) ([]*stork_crd.ApplicationRestoreVolumeInfo, error)
+	// Get the status of restore of the volumes specified in the status
+	// for the restore spec
+	GetRestoreStatus(*stork_crd.ApplicationRestore) ([]*stork_crd.ApplicationRestoreVolumeInfo, error)
+	// Cancel the restore of volumes specified in the status
+	CancelRestore(*stork_crd.ApplicationRestore) error
 }
 
 // Info Information about a volume
@@ -262,6 +286,44 @@ func (c *ClusterDomainsNotSupported) ActivateClusterDomain(*stork_crd.ClusterDom
 
 // DeactivateClusterDomain deactivates a cluster domain
 func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(*stork_crd.ClusterDomainUpdate) error {
+	return &errors.ErrNotSupported{}
+}
+
+// BackupRestoreNotSupported to be used by drivers that don't support backup
+type BackupRestoreNotSupported struct{}
+
+// StartBackup returns ErrNotSupported
+func (b *BackupRestoreNotSupported) StartBackup(*stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// GetBackupStatus returns ErrNotSupported
+func (b *BackupRestoreNotSupported) GetBackupStatus(*stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// CancelBackup returns ErrNotSupported
+func (b *BackupRestoreNotSupported) CancelBackup(*stork_crd.ApplicationBackup) error {
+	return &errors.ErrNotSupported{}
+}
+
+// DeleteBackup returns ErrNotSupported
+func (b *BackupRestoreNotSupported) DeleteBackup(*stork_crd.ApplicationBackup) error {
+	return &errors.ErrNotSupported{}
+}
+
+// StartRestore returns ErrNotSupported
+func (b *BackupRestoreNotSupported) StartRestore(*stork_crd.ApplicationRestore) ([]*stork_crd.ApplicationRestoreVolumeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// GetRestoreStatus returns ErrNotSupported
+func (b *BackupRestoreNotSupported) GetRestoreStatus(*stork_crd.ApplicationRestore) ([]*stork_crd.ApplicationRestoreVolumeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
+// CancelRestore returns ErrNotSupported
+func (b *BackupRestoreNotSupported) CancelRestore(*stork_crd.ApplicationRestore) error {
 	return &errors.ErrNotSupported{}
 }
 
