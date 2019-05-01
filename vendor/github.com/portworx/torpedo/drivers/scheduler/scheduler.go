@@ -118,6 +118,9 @@ type Driver interface {
 
 	// RescanSpecs specified in specDir
 	RescanSpecs(specDir string) error
+
+	// IsScalable check if a given spec is scalable or not
+	IsScalable(spec interface{}) bool
 }
 
 var (
