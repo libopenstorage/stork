@@ -8,6 +8,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
+	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
@@ -17,10 +18,10 @@ import (
 
 const (
 	driverName = "MockDriver"
-	// mockStorageClassName is the storage class for mock driver PVCs
-	mockStorageClassName = "mockDriverStorageClass"
-	provisionerName      = "kubernetes.io/mock-volume"
-	clusterID            = "MockClusterID"
+	// storageClassName is the storage class for mock driver PVCs
+	storageClassName = "mockDriverStorageClass"
+	provisionerName  = "kubernetes.io/mock-volume"
+	clusterID        = "MockClusterID"
 	// RackLabel Label used for the mock driver to set rack information
 	RackLabel = "mock/rack"
 	// ZoneLabel Label used for the mock driver to set zone information
@@ -104,7 +105,7 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 
 // GetStorageClassName Returns the storageclass name to be used by tests
 func (m *Driver) GetStorageClassName() string {
-	return mockStorageClassName
+	return storageClassName
 }
 
 // GetClusterID returns the clusterID for the driver
@@ -130,7 +131,7 @@ func (m *Driver) ProvisionVolume(
 	size uint64,
 ) error {
 	if _, ok := m.volumes[volumeName]; ok {
-		return fmt.Errorf("volume %v already exists", volumeName)
+		return fmt.Errorf("Volume %v already exists", volumeName)
 	}
 
 	volume := &storkvolume.Info{
@@ -142,7 +143,7 @@ func (m *Driver) ProvisionVolume(
 	for i := 0; i < len(replicaIndexes); i++ {
 		nodeIndex := replicaIndexes[i]
 		if len(m.nodes) <= nodeIndex {
-			return fmt.Errorf("node not found")
+			return fmt.Errorf("Node not found")
 		}
 		volume.DataNodes = append(volume.DataNodes, m.nodes[nodeIndex].StorageID)
 	}
@@ -157,7 +158,7 @@ func (m *Driver) UpdateNodeStatus(
 	nodeStatus storkvolume.NodeStatus,
 ) error {
 	if len(m.nodes) <= nodeIndex {
-		return fmt.Errorf("node %v not found", nodeIndex)
+		return fmt.Errorf("Node not found")
 	}
 	m.nodes[nodeIndex].Status = nodeStatus
 	return nil
@@ -200,6 +201,10 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvo
 	var volumes []*storkvolume.Info
 	for _, volume := range podSpec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
+		}
+	}
+	for _, volume := range podSpec.Volumes {
+		if volume.PersistentVolumeClaim != nil {
 			pvc, ok := m.pvcs[volume.PersistentVolumeClaim.ClaimName]
 			if !ok {
 				logrus.Debugf("PVCs: %+v", m.pvcs)
@@ -215,8 +220,9 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvo
 				continue
 			}
 
-			// Assume all mock volumes have the same storageclass
-			if storageClassName != mockStorageClassName {
+			// Assume all mock volume have the same
+			// storageclass
+			if storageClassName != storageClassName {
 				continue
 			}
 
@@ -250,6 +256,11 @@ func (m *Driver) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 // GetSnapshotType Not implemented for mock driver
 func (m *Driver) GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error) {
 	return "", &errors.ErrNotImplemented{}
+}
+
+// VolumeSnapshotRestore Not implemented
+func (m *Driver) VolumeSnapshotRestore(snap *stork_crd.SnapshotRestore) error {
+	return nil
 }
 
 func init() {

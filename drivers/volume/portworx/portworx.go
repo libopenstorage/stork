@@ -208,7 +208,7 @@ func (pg *portworxGrpcConnection) setDialOptions(tls bool) error {
 		// Setup a connection
 		capool, err := x509.SystemCertPool()
 		if err != nil {
-			return fmt.Errorf("failed to load CA system certs: %v", err)
+			return fmt.Errorf("Failed to load CA system certs: %v", err)
 		}
 		pg.dialOptions = []grpc.DialOption{grpc.WithTransportCredentials(
 			credentials.NewClientTLSFromCert(capool, ""),
@@ -259,11 +259,11 @@ func (p *portworx) initPortworxClients() error {
 	if err == nil {
 		endpoint = svc.Spec.ClusterIP
 	} else {
-		return fmt.Errorf("failed to get k8s service spec: %v", err)
+		return fmt.Errorf("Failed to get k8s service spec: %v", err)
 	}
 
 	if len(endpoint) == 0 {
-		return fmt.Errorf("failed to get endpoint for portworx volume driver")
+		return fmt.Errorf("Failed to get endpoint for portworx volume driver")
 	}
 
 	p.restPort = defaultAPIPort
@@ -317,7 +317,7 @@ func (p *portworx) initPortworxClients() error {
 	// Create a unique identifier
 	p.id, err = os.Hostname()
 	if err != nil {
-		return fmt.Errorf("unable to get hostname: %v", err)
+		return fmt.Errorf("Unable to get hostname: %v", err)
 	}
 
 	p.authSecrets, err = auth_secrets.NewAuth(auth_secrets.TypeK8s, ostsecrets)
@@ -329,15 +329,15 @@ func (p *portworx) startNodeCache() error {
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return fmt.Errorf("error getting cluster config: %v", err)
+		return fmt.Errorf("Error getting cluster config: %v", err)
 	}
 
 	k8sClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return fmt.Errorf("error getting client, %v", err)
+		return fmt.Errorf("Error getting client, %v", err)
 	}
 
-	restClient := k8sClient.CoreV1().RESTClient()
+	restClient := k8sClient.Core().RESTClient()
 
 	watchlist := cache.NewListWatchFromClient(restClient, "nodes", v1.NamespaceAll, fields.Everything())
 	lw := &cache.ListWatch{
@@ -366,6 +366,10 @@ func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
 }
 
 func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string) (*storkvolume.Info, error) {
+	volDriver, err := p.getAdminVolDriver()
+	if err != nil {
+		return nil, err
+	}
 	vols, err := volDriver.Inspect([]string{volumeID})
 	if err != nil {
 		return nil, &ErrFailedToInspectVolume{
@@ -874,7 +878,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 	}
 
 	if snapDataSrc == nil || snapDataSrc.PortworxSnapshot == nil {
-		return fmt.Errorf("invalid snapshot source %v", snapDataSrc)
+		return fmt.Errorf("Invalid snapshot source %v", snapDataSrc)
 	}
 
 	switch snapDataSrc.PortworxSnapshot.SnapshotType {
@@ -929,6 +933,94 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 	}
 }
 
+func (p *portworx) VolumeSnapshotRestore(snapRestore *stork_crd.SnapshotRestore) error {
+
+	snapName := snapRestore.Spec.SourceName
+	snapNameSpace := snapRestore.Spec.SourceNamespace
+	// GetSnapshot Details
+	snapshot, err := k8s.Instance().GetSnapshot(snapName, snapNameSpace)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve VolumeSnapshot %s: %v", snapName, err)
+	}
+	logrus.Infof("Snapshot found %v", snapshot.Metadata.Name)
+	if len(snapshot.Spec.SnapshotDataName) == 0 {
+		return fmt.Errorf("VolumeSnapshot %s is not bound to any VolumeSnapshotData", snapName)
+	}
+
+	snapshotData, err := k8s.Instance().GetSnapshotData(snapshot.Spec.SnapshotDataName)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v", snapshot.Spec.SnapshotDataName, err)
+	}
+
+	// get volumes where snapshot needs to be restored
+	restoreVolumes := []string{}
+	if snapRestore.Spec.DestinationPVC == nil {
+		volID, err := getVolumeIDFromPVC(snapshot.Spec.PersistentVolumeClaimName, snapshot.Metadata.Namespace)
+		if err != nil {
+			return fmt.Errorf("Failed to get volume ID for snapshot %v", err)
+		}
+		restoreVolumes = append(restoreVolumes, volID)
+	}
+	for _, pvcName := range snapRestore.Spec.DestinationPVC {
+		volID, err := getVolumeIDFromPVC(pvcName, snapshot.Metadata.Namespace)
+		if err != nil {
+			return fmt.Errorf("Failed to get volume ID for snapshot %v", err)
+		}
+		restoreVolumes = append(restoreVolumes, volID)
+	}
+	logrus.Infof("Volumes to be restore %v", restoreVolumes)
+	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
+	case "", crdv1.PortworxSnapshotTypeLocal:
+		return p.localSnapshotRestore(restoreVolumes, snapshotData)
+
+	case crdv1.PortworxSnapshotTypeCloud:
+		return p.cloudSnapshotRestore(restoreVolumes, snapshotData)
+	default:
+		return fmt.Errorf("Invalid SourceType for snapshot(local/cloud)")
+	}
+	//return nil
+}
+
+func (p *portworx) localSnapshotRestore(restoreVolumes []string, snapshotData *crdv1.VolumeSnapshotData) error {
+	// Get volume client from user context
+	volDriver, err := p.getUserVolDriver(snapshotData.Metadata.Annotations)
+	if err != nil {
+		return err
+	}
+	snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
+	volumeInfo := []*stork_crd.RestoreVolumeInfo{}
+	for index, volID := range restoreVolumes {
+		logrus.Infof("Restoring volume %v with snapshot %v: %v", volID, snapID, index)
+		err = volDriver.Restore(volID, snapID)
+		if err != nil {
+			logrus.Infof("Error restoring %v", err)
+			return err
+		}
+		logrus.Infof("Completed restoring %v", err)
+		volumeInfo = append(volumeInfo, &stork_crd.RestoreVolumeInfo{Volume: volID, RestoreStatus: stork_crd.SnapshotRestoreStatusReady})
+	}
+
+	logrus.Infof("Restore volume list %v", volumeInfo)
+	return nil
+}
+
+func (p *portworx) cloudSnapshotRestore(restoreVolumes []string, snapshotData *crdv1.VolumeSnapshotData) error {
+	return fmt.Errorf("Not Implemented")
+}
+
+func getVolumeIDFromPVC(pvcName, pvcNamespace string) (string, error) {
+	pvc, err := k8s.Instance().GetPersistentVolumeClaim(pvcName, pvcNamespace)
+	if err != nil {
+		return "", fmt.Errorf("Failed to get pvc details for snapshot %v", err)
+	}
+	logrus.Infof("Pvc Details %v", pvc.Name)
+	volID, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(pvc)
+	if err != nil {
+		return "", err
+	}
+	return volID, nil
+}
+
 func (p *portworx) SnapshotRestore(
 	snapshotData *crdv1.VolumeSnapshotData,
 	pvc *v1.PersistentVolumeClaim,
@@ -941,13 +1033,11 @@ func (p *portworx) SnapshotRestore(
 	}
 
 	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
-		return nil, nil, fmt.Errorf("invalid Snapshot spec")
+		return nil, nil, fmt.Errorf("Invalid Snapshot spec")
 	}
 	if pvc == nil {
-		return nil, nil, fmt.Errorf("invalid PVC spec")
+		return nil, nil, fmt.Errorf("Invalid PVC spec")
 	}
-
-	logrus.Debugf("SnapshotRestore for pvc: %+v", pvc)
 
 	snapshotName, present := pvc.ObjectMeta.Annotations[crdclient.SnapshotPVCAnnotation]
 	if !present || len(snapshotName) == 0 {
@@ -979,7 +1069,7 @@ func (p *portworx) SnapshotRestore(
 
 		if isGroupSnap(snap) {
 			return nil, nil, fmt.Errorf("volumesnapshot: [%s] %s was used to create group snapshots. "+
-				"To restore, use the volumesnapshots that were created by this group snapshot", snapshotNamespace, snapshotName)
+				"To restore, use the volumesnapshots that were created by this group snapshot.", snapshotNamespace, snapshotName)
 		}
 
 		locator := &api.VolumeLocator{
@@ -1047,7 +1137,7 @@ func (p *portworx) SnapshotRestore(
 func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]crdv1.VolumeSnapshotCondition, bool /* isCompleted */, error) {
 	var err error
 	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
-		err = fmt.Errorf("invalid VolumeSnapshotDataSource: %v", snapshotData)
+		err = fmt.Errorf("Invalid VolumeSnapshotDataSource: %v", snapshotData)
 		return getErrorSnapshotConditions(err), false, nil
 	}
 
@@ -1122,7 +1212,7 @@ func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
 	}
 
 	if pv == nil || pv.Spec.PortworxVolume == nil {
-		return fmt.Errorf("invalid PV: %v", pv)
+		return fmt.Errorf("Invalid PV: %v", pv)
 	}
 	return volDriver.Delete(pv.Spec.PortworxVolume.VolumeID)
 }
@@ -1134,7 +1224,7 @@ func (p *portworx) findParentVolID(snapID string) (string, error) {
 	}
 
 	if len(snapInfo.ParentID) == 0 {
-		return "", fmt.Errorf("portworx snapshot: %s does not have parent set", snapID)
+		return "", fmt.Errorf("Portworx snapshot: %s does not have parent set", snapID)
 	}
 
 	return snapInfo.ParentID, nil
@@ -1277,6 +1367,44 @@ func (p *portworx) revertPXSnaps(snapIDs []string) {
 	}
 
 	logrus.Infof("Successfully reverted PX snapshots")
+}
+
+func (p *portworx) validatePVForGroupSnap(pvName, groupID string, groupLabels map[string]string) error {
+	volInfo, err := p.InspectVolume(pvName)
+	if err != nil {
+		return err
+	}
+
+	if volInfo.VolumeSourceRef == nil {
+		return fmt.Errorf("inspect of volume: %s did not set the volume source ref", pvName)
+	}
+
+	pxSource, ok := volInfo.VolumeSourceRef.(*api.Volume)
+	if !ok {
+		return fmt.Errorf("source for volume: %s is not a Portworx volume", pvName)
+	}
+
+	// validate group ID
+	if len(groupID) > 0 {
+		if pxSource.GetGroup() == nil {
+			return fmt.Errorf("group ID for volume: %s is not set. expected: %s", pvName, groupID)
+		}
+
+		if pxSource.GetGroup().GetId() != groupID {
+			return fmt.Errorf("group ID for volume: %s does not match. expected: %s actual: %s",
+				pvName, groupID, pxSource.GetGroup().GetId())
+		}
+	}
+
+	// validate label selectors
+	for k, v := range groupLabels {
+		if value, present := volInfo.Labels[k]; !present || value != v {
+			return fmt.Errorf("label '%s:%s' is not present in volume: %v. Found: %v",
+				k, v, pvName, volInfo.Labels)
+		}
+	}
+
+	return nil
 }
 
 func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.PersistentVolumeClaim, error) {
@@ -1786,7 +1914,7 @@ func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *stork_crd.GroupVolume
 	// any of the snapshots failed
 	for volID, newSnapResp := range resp.Snapshots {
 		if newSnapResp.GetVolumeCreateResponse() == nil {
-			err = fmt.Errorf("portworx API returned empty response on creation of group snapshot")
+			err = fmt.Errorf("Portworx API returned empty response on creation of group snapshot")
 			return nil, err
 		}
 
