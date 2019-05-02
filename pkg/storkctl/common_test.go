@@ -9,6 +9,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
+	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,6 +23,7 @@ import (
 
 var codec runtime.Codec
 var fakeStorkClient *fakeclient.Clientset
+var fakeOCPClient *fakeocpclient.Clientset
 var fakeRestClient *fake.RESTClient
 var testFactory *TestFactory
 
@@ -36,6 +38,7 @@ func resetTest() {
 	v1.AddToScheme(scheme)
 	codec = serializer.NewCodecFactory(scheme).LegacyCodec(scheme.PrioritizedVersionsAllGroups()...)
 	fakeStorkClient = fakeclient.NewSimpleClientset()
+	fakeOCPClient = fakeocpclient.NewSimpleClientset()
 
 	if testFactory != nil {
 		testFactory.TestFactory.WithNamespace("test").Cleanup()
@@ -50,7 +53,7 @@ func resetTest() {
 	tf.Client = fakeRestClient
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
-	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil)
+	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil, fakeOCPClient)
 }
 
 func testCommon(t *testing.T, cmdArgs []string, obj runtime.Object, expected string, errorExpected bool) {
