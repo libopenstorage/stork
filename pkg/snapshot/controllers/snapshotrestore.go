@@ -50,7 +50,7 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 	case *stork_api.SnapshotRestore:
 		snapRestore := o
 		if snapRestore.Spec.SourceName == "" || snapRestore.Spec.SourceType == "" {
-			return fmt.Errorf("Empty Snapshot name/type or namespace")
+			return fmt.Errorf("empty Snapshot name/type or namespace")
 		}
 
 		// Todo: we may want to delete internal volume created
@@ -67,10 +67,9 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 		err := c.Driver.VolumeSnapshotRestore(snapRestore)
 		if err != nil {
 			snapRestore.Status.Status = stork_api.SnapshotRestoreStatusError
-			return fmt.Errorf("Failed to restore pvc details %v", err)
+			return fmt.Errorf("failed to restore pvc details %v", err)
 		}
 
-		log.Infof("restore status %v", err)
 		snapRestore.Status.Status = "Done"
 		c.Recorder.Event(snapRestore,
 			v1.EventTypeNormal,

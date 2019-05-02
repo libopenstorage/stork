@@ -4,13 +4,13 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// SnapshotRestoretatusType is the status of volume in-place restore
+// SnapshotRestoreStatusType is the status of volume in-place restore
 type SnapshotRestoreStatusType string
 
 const (
-	// SnapshotResourceName is name for "snapshotrestore" resource
-	// change to volumesnapshotrestore
-	SnapshotRestoreResourceName   = "volumesnapshotrestore"
+	// SnapshotRestoreResourceName is name for "volumesnapshotrestore" resource
+	SnapshotRestoreResourceName = "volumesnapshotrestore"
+	// SnapshotRestoreResourcePlural is plural for "volumesnapshotrestore" resource
 	SnapshotRestoreResourcePlural = "volumesnapshotrestores"
 	// SnapshotRestoreStatusInitial is the initial state when snapshot restore is initiated
 	SnapshotRestoreStatusInitial SnapshotRestoreStatusType = ""
@@ -22,18 +22,25 @@ const (
 	SnapshotRestoreStatusError SnapshotRestoreStatusType = "Error"
 )
 
+// RestoreSpec for in-place volume restore
 type RestoreSpec struct {
-	// source, type & name
-	SourceName      string   `json:"sourcename"`
-	SourceType      string   `json:"sourcetype"`
-	SourceNamespace string   `json:"sourcenamespace"`
-	GroupSnapshot   bool     `json:"groupsnapshot"`
-	DestinationPVC  []string `json:"pvcs"`
+	// SourceName of snapshot
+	SourceName string `json:"sourcename"`
+	// SourceType of snapshot (local/cloud)
+	SourceType string `json:"sourcetype"`
+	// SourceNameSpace is snapshot namespace
+	SourceNamespace string `json:"sourcenamespace"`
+	// GroupSnapshot true if snapshot volumegroupsnapshot
+	GroupSnapshot bool `json:"groupsnapshot"`
+	// DestinationPVC list to restore snapshot
+	DestinationPVC []string `json:"pvcs"`
 }
 
+// RestoreStatus of volume
 type RestoreStatus struct {
+	// Status of volume restore
 	Status SnapshotRestoreStatusType `json:"status"`
-	// change it specific to restore
+	// Volumes list of restore inforamtion
 	Volumes []*RestoreVolumeInfo `json:"volumes"`
 }
 
@@ -45,8 +52,8 @@ type RestoreVolumeInfo struct {
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// VolumeSnapshotRestore
-// groupvolumerestore status of each  pvc restore
+
+// SnapshotRestore crd spec for in-place restore of volume
 type SnapshotRestore struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
@@ -55,6 +62,7 @@ type SnapshotRestore struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // SnapshotRestoreList is list of snapshot restores
 type SnapshotRestoreList struct {
 	meta.TypeMeta `json:",inline"`
