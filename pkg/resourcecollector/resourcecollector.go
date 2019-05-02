@@ -74,6 +74,7 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 	case "PersistentVolumeClaim",
 		"PersistentVolume",
 		"Deployment",
+		"DeploymentConfig",
 		"StatefulSet",
 		"ConfigMap",
 		"Service",
@@ -81,7 +82,9 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"DaemonSet",
 		"ServiceAccount",
 		"ClusterRole",
-		"ClusterRoleBinding":
+		"ClusterRoleBinding",
+		"ImageStream",
+		"Route":
 		return true
 	default:
 		return false
