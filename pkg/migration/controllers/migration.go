@@ -596,7 +596,7 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
-		case "Deployment", "StatefulSet":
+		case "Deployment", "StatefulSet", "DeploymentConfig":
 			err := m.prepareApplicationResource(migration, o)
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
