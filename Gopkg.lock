@@ -618,14 +618,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:22ac8319516a9b6413cdedc84af6e5790b0fb30e78df26e2397a5d1a6a81b454"
+  digest = "1:0da6b28d5321520c5371c173b91a79a2173139fc6e58343ad5a6f27aeff8f359"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "7dfac52795f4d95ac7bef74e6ab4f3f20d1d1620"
+  revision = "a6c2439fe523728558d12346a2c5a944794631bc"
 
 [[projects]]
   branch = "master"
@@ -1538,6 +1538,7 @@
     "k8s.io/api/apps/v1beta1",
     "k8s.io/api/apps/v1beta2",
     "k8s.io/api/core/v1",
+    "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
@@ -1555,6 +1556,7 @@
     "k8s.io/apimachinery/pkg/util/strategicpatch",
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/apimachinery/pkg/watch",
+    "k8s.io/apiserver/pkg/authentication/serviceaccount",
     "k8s.io/client-go/discovery",
     "k8s.io/client-go/discovery/fake",
     "k8s.io/client-go/dynamic",
