@@ -933,78 +933,123 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 	}
 }
 
+// VolumeSnapshotRestore does in-place restore of snapshot to it's parent volume
 func (p *portworx) VolumeSnapshotRestore(snapRestore *stork_crd.SnapshotRestore) error {
-
+	var err error
+	// restoreVolumes[snapID]volumeID
+	restoreVolumes := make(map[string]string)
+	// should bw used to set security context if needed
+	params := make(map[string]string)
 	snapName := snapRestore.Spec.SourceName
-	snapNameSpace := snapRestore.Spec.SourceNamespace
-	// GetSnapshot Details
-	snapshot, err := k8s.Instance().GetSnapshot(snapName, snapNameSpace)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve VolumeSnapshot %s: %v", snapName, err)
-	}
-	logrus.Infof("Snapshot found %v", snapshot.Metadata.Name)
-	if len(snapshot.Spec.SnapshotDataName) == 0 {
-		return fmt.Errorf("VolumeSnapshot %s is not bound to any VolumeSnapshotData", snapName)
-	}
+	snapNamespace := snapRestore.Spec.SourceNamespace
 
-	snapshotData, err := k8s.Instance().GetSnapshotData(snapshot.Spec.SnapshotDataName)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v", snapshot.Spec.SnapshotDataName, err)
+	// TODO: Restoring snapshot to volume other than parent volume is not supported by PX
+	if snapRestore.Spec.DestinationPVC != nil {
+		return fmt.Errorf("Restore to volume other than parent is not supported")
 	}
+	if snapRestore.Spec.GroupSnapshot {
+		logrus.Infof("GroupVolumeSnapshot In-place restore request for %v", snapName)
+		// restore each snapshot to their own parents
+		restoreVolumes, err = getRestoreVolumeMap(snapName, snapNamespace)
+		if err != nil {
+			return err
+		}
+	} else {
+		logrus.Infof("VolumeSnapshot In-place restore request for %v", snapName)
+		// GetSnapshot Details
+		snapshot, err := k8s.Instance().GetSnapshot(snapName, snapNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve VolumeSnapshot %s: %v",
+				snapName, err)
+		}
+		logrus.Infof("Snapshot found %v", snapshot.Metadata.Name)
+		if len(snapshot.Spec.SnapshotDataName) == 0 {
+			return fmt.Errorf("VolumeSnapshot %s is not bound to any VolumeSnapshotData",
+				snapName)
+		}
 
-	// get volumes where snapshot needs to be restored
-	restoreVolumes := []string{}
-	if snapRestore.Spec.DestinationPVC == nil {
-		volID, err := getVolumeIDFromPVC(snapshot.Spec.PersistentVolumeClaimName, snapshot.Metadata.Namespace)
+		snapshotData, err := k8s.Instance().GetSnapshotData(snapshot.Spec.SnapshotDataName)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
+				snapshot.Spec.SnapshotDataName, err)
+		}
+		// restore to snapshot PVC
+		volID, err := getVolumeIDFromPVC(
+			snapshot.Spec.PersistentVolumeClaimName,
+			snapshot.Metadata.Namespace)
 		if err != nil {
 			return fmt.Errorf("Failed to get volume ID for snapshot %v", err)
 		}
-		restoreVolumes = append(restoreVolumes, volID)
-	}
-	for _, pvcName := range snapRestore.Spec.DestinationPVC {
-		volID, err := getVolumeIDFromPVC(pvcName, snapshot.Metadata.Namespace)
-		if err != nil {
-			return fmt.Errorf("Failed to get volume ID for snapshot %v", err)
-		}
-		restoreVolumes = append(restoreVolumes, volID)
-	}
-	logrus.Infof("Volumes to be restore %v", restoreVolumes)
-	switch snapshotData.Spec.PortworxSnapshot.SnapshotType {
-	case "", crdv1.PortworxSnapshotTypeLocal:
-		return p.localSnapshotRestore(restoreVolumes, snapshotData)
 
-	case crdv1.PortworxSnapshotTypeCloud:
-		return p.cloudSnapshotRestore(restoreVolumes, snapshotData)
+		snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
+		restoreVolumes[snapID] = volID
+	}
+	logrus.Debugf("Restore volume map %v", restoreVolumes)
+
+	switch snapRestore.Spec.SourceType {
+	case "", string(crdv1.PortworxSnapshotTypeLocal):
+		return p.localSnapshotRestore(restoreVolumes, params)
+	case string(crdv1.PortworxSnapshotTypeCloud):
+		return p.cloudSnapshotRestore(restoreVolumes, params)
 	default:
 		return fmt.Errorf("Invalid SourceType for snapshot(local/cloud)")
 	}
-	//return nil
 }
 
-func (p *portworx) localSnapshotRestore(restoreVolumes []string, snapshotData *crdv1.VolumeSnapshotData) error {
+func getRestoreVolumeMap(snapName, snapNamespace string) (map[string]string, error) {
+	volumes := make(map[string]string)
+	groupSnaps, err := k8s.Instance().GetSnapshotsForGroupSnapshot(snapName, snapNamespace)
+	if err != nil {
+		logrus.Errorf("Unable to get group snapshot details %v", err)
+		return volumes, err
+	}
+
+	for _, snapForGroupsnap := range groupSnaps {
+		snapID := string(snapForGroupsnap.Metadata.UID)
+		logrus.Debugf("Getting volume ID for pvc %v", snapForGroupsnap.Spec.PersistentVolumeClaimName)
+		volID, err := getVolumeIDFromPVC(
+			snapForGroupsnap.Spec.PersistentVolumeClaimName,
+			snapForGroupsnap.Metadata.Namespace)
+		if err != nil {
+			return volumes, fmt.Errorf("Failed to get volume ID for snapshot %v", err)
+		}
+		volumes[snapID] = volID
+	}
+	return volumes, nil
+}
+
+func (p *portworx) localSnapshotRestore(
+	restoreVolumes map[string]string,
+	params map[string]string,
+) error {
 	// Get volume client from user context
-	volDriver, err := p.getUserVolDriver(snapshotData.Metadata.Annotations)
+	volDriver, err := p.getUserVolDriver(params)
 	if err != nil {
 		return err
 	}
-	snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
 	volumeInfo := []*stork_crd.RestoreVolumeInfo{}
-	for index, volID := range restoreVolumes {
-		logrus.Infof("Restoring volume %v with snapshot %v: %v", volID, snapID, index)
+	for snapID, volID := range restoreVolumes {
+		logrus.Infof("Restoring volume %v with local snapshot %v", volID, snapID)
 		err = volDriver.Restore(volID, snapID)
 		if err != nil {
-			logrus.Infof("Error restoring %v", err)
+			logrus.Errorf("Unable to restore volume %v with ID %v, err %v",
+				volID, snapID, err)
 			return err
 		}
-		logrus.Infof("Completed restoring %v", err)
-		volumeInfo = append(volumeInfo, &stork_crd.RestoreVolumeInfo{Volume: volID, RestoreStatus: stork_crd.SnapshotRestoreStatusReady})
+		logrus.Infof("Completed restore for volume %v with Snapshotshot %v", volID, snapID)
+		// TODO: should we fail if one snap restore fails or retiries for failed
+		// one
+		volumeInfo = append(volumeInfo,
+			&stork_crd.RestoreVolumeInfo{Volume: volID,
+				RestoreStatus: stork_crd.SnapshotRestoreStatusReady})
 	}
-
-	logrus.Infof("Restore volume list %v", volumeInfo)
 	return nil
 }
 
-func (p *portworx) cloudSnapshotRestore(restoreVolumes []string, snapshotData *crdv1.VolumeSnapshotData) error {
+func (p *portworx) cloudSnapshotRestore(
+	restoreVolumes map[string]string,
+	params map[string]string,
+) error {
 	return fmt.Errorf("Not Implemented")
 }
 
@@ -1013,11 +1058,11 @@ func getVolumeIDFromPVC(pvcName, pvcNamespace string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Failed to get pvc details for snapshot %v", err)
 	}
-	logrus.Infof("Pvc Details %v", pvc.Name)
 	volID, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(pvc)
 	if err != nil {
 		return "", err
 	}
+	logrus.Debugf("PVC %v VolID %v", pvc.Name, volID)
 	return volID, nil
 }
 

@@ -10,8 +10,8 @@ type SnapshotRestoreStatusType string
 const (
 	// SnapshotResourceName is name for "snapshotrestore" resource
 	// change to volumesnapshotrestore
-	SnapshotRestoreResourceName   = "volumesnaprestore"
-	SnapshotRestoreResourcePlural = "volumesnaprestores"
+	SnapshotRestoreResourceName   = "volumesnapshotrestore"
+	SnapshotRestoreResourcePlural = "volumesnapshotrestores"
 	// SnapshotRestoreStatusInitial is the initial state when snapshot restore is initiated
 	SnapshotRestoreStatusInitial SnapshotRestoreStatusType = ""
 	// SnapshotRestoreStatusPending for when restore is in pending state
@@ -27,6 +27,7 @@ type RestoreSpec struct {
 	SourceName      string   `json:"sourcename"`
 	SourceType      string   `json:"sourcetype"`
 	SourceNamespace string   `json:"sourcenamespace"`
+	GroupSnapshot   bool     `json:"groupsnapshot"`
 	DestinationPVC  []string `json:"pvcs"`
 }
 
