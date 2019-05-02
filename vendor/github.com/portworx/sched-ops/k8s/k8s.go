@@ -267,6 +267,8 @@ type RBACOps interface {
 	ListClusterRoleBindings() (*rbac_v1.ClusterRoleBindingList, error)
 	// CreateClusterRoleBinding creates the given cluster role binding
 	CreateClusterRoleBinding(role *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error)
+	// UpdateClusterRoleBinding updates the given cluster role binding
+	UpdateClusterRoleBinding(role *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error)
 	// CreateServiceAccount creates the given service account
 	CreateServiceAccount(account *v1.ServiceAccount) (*v1.ServiceAccount, error)
 	// DeleteRole deletes the given role
@@ -327,7 +329,7 @@ type PodOps interface {
 	// ValidatePod validates the given pod if it's ready
 	ValidatePod(pod *v1.Pod, timeout, retryInterval time.Duration) error
 	// WatchPods sets up a watcher that listens for the changes to pods in given namespace
-	WatchPods(namespace string, fn WatchFunc) error
+	WatchPods(namespace string, fn WatchFunc, listOptions meta_v1.ListOptions) error
 }
 
 // StorageClassOps is an interface to perform k8s storage class operations
@@ -957,7 +959,8 @@ func (k *k8sOps) handleWatch(
 	watchInterface watch.Interface,
 	object runtime.Object,
 	namespace string,
-	fn WatchFunc) {
+	fn WatchFunc,
+	listOptions meta_v1.ListOptions) {
 	for {
 		select {
 		case event, more := <-watchInterface.ResultChan():
@@ -971,7 +974,7 @@ func (k *k8sOps) handleWatch(
 					} else if cm, ok := object.(*v1.ConfigMap); ok {
 						err = k.WatchConfigMap(cm, fn)
 					} else if _, ok := object.(*v1.Pod); ok {
-						err = k.WatchPods(namespace, fn)
+						err = k.WatchPods(namespace, fn, listOptions)
 					} else {
 						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
 					}
@@ -1012,7 +1015,7 @@ func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn WatchFunc) error {
 	}
 
 	// fire off watch function
-	go k.handleWatch(watchInterface, node, "", watchNodeFn)
+	go k.handleWatch(watchInterface, node, "", watchNodeFn, listOptions)
 	return nil
 }
 
@@ -2031,6 +2034,14 @@ func (k *k8sOps) CreateClusterRoleBinding(binding *rbac_v1.ClusterRoleBinding) (
 	return k.client.Rbac().ClusterRoleBindings().Create(binding)
 }
 
+func (k *k8sOps) UpdateClusterRoleBinding(binding *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.Rbac().ClusterRoleBindings().Update(binding)
+}
+
 func (k *k8sOps) GetClusterRoleBinding(name string) (*rbac_v1.ClusterRoleBinding, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -2406,15 +2417,12 @@ func (k *k8sOps) ValidatePod(pod *v1.Pod, timeout, retryInterval time.Duration) 
 	return nil
 }
 
-func (k *k8sOps) WatchPods(namespace string, fn WatchFunc) error {
+func (k *k8sOps) WatchPods(namespace string, fn WatchFunc, listOptions meta_v1.ListOptions) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 
-	listOptions := meta_v1.ListOptions{
-		Watch: true,
-	}
-
+	listOptions.Watch = true
 	watchInterface, err := k.client.Core().Pods(namespace).Watch(listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for pods")
@@ -2426,7 +2434,8 @@ func (k *k8sOps) WatchPods(namespace string, fn WatchFunc) error {
 		watchInterface,
 		&v1.Pod{},
 		namespace,
-		fn)
+		fn,
+		listOptions)
 
 	return nil
 }
@@ -3338,7 +3347,7 @@ func (k *k8sOps) WatchConfigMap(configMap *v1.ConfigMap, fn WatchFunc) error {
 	}
 
 	// fire off watch function
-	go k.handleWatch(watchInterface, configMap, "", fn)
+	go k.handleWatch(watchInterface, configMap, "", fn, listOptions)
 	return nil
 }
 
