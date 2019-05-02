@@ -48,8 +48,6 @@ type Interface interface {
 	Rules() RuleInformer
 	// SchedulePolicies returns a SchedulePolicyInformer.
 	SchedulePolicies() SchedulePolicyInformer
-	// SnapshotRestores returns a SnapshotRestoreInformer.
-	SnapshotRestores() SnapshotRestoreInformer
 	// StorageClusters returns a StorageClusterInformer.
 	StorageClusters() StorageClusterInformer
 	// VolumeSnapshotRestores returns a VolumeSnapshotRestoreInformer.
@@ -127,11 +125,6 @@ func (v *version) Rules() RuleInformer {
 // SchedulePolicies returns a SchedulePolicyInformer.
 func (v *version) SchedulePolicies() SchedulePolicyInformer {
 	return &schedulePolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
-}
-
-// SnapshotRestores returns a SnapshotRestoreInformer.
-func (v *version) SnapshotRestores() SnapshotRestoreInformer {
-	return &snapshotRestoreInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // StorageClusters returns a StorageClusterInformer.

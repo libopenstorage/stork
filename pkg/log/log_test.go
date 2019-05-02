@@ -10,7 +10,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	appv1beta1 "k8s.io/api/apps/v1beta1"
 	appv1beta2 "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,10 +24,14 @@ func TestLog(t *testing.T) {
 	t.Run("migrationScheduleLogTest", migrationScheduleLogTest)
 	t.Run("ruleLogTest", ruleLogTest)
 	t.Run("pvcLogTest", pvcLogTest)
+<<<<<<< HEAD
 	t.Run("clusterDomainUpdateLogTest", clusterDomainUpdateLogTest)
 	t.Run("applicationBackupLogTest", applicationBackupLogTest)
 	t.Run("applicationRestoreLogTest", applicationRestoreLogTest)
 	t.Run("applicationCloneLogTest", applicationCloneLogTest)
+=======
+	t.Run("volumeSnapshotRestoreLogTest", volumeSnapshotRestoreLogTest)
+>>>>>>> Move controller specific login from portworx driver to snapshot restore
 }
 
 func podLogTest(t *testing.T) {
@@ -230,4 +234,16 @@ func applicationCloneLogTest(t *testing.T) {
 	}
 	ApplicationCloneLog(applicationClone).Infof("applicationclone log")
 	ApplicationCloneLog(nil).Infof("applicationclone nil log")
+}
+
+func volumeSnapshotRestoreLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testvolrestore",
+		Namespace: "testvolresorenamespace",
+	}
+	snapRestore := &storkv1.VolumeSnapshotRestore{
+		ObjectMeta: metadata,
+	}
+	VolumeSnapshotRestoreLog(snapRestore).Infof("restore log")
+	VolumeSnapshotRestoreLog(nil).Info("restore nil log")
 }
