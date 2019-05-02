@@ -26,7 +26,7 @@ const (
 	waitPvcRetryInterval = 5 * time.Second
 
 	snapshotScheduleRetryInterval = 10 * time.Second
-	snapshotScheduleRetryTimeout  = 2 * time.Minute
+	snapshotScheduleRetryTimeout  = 3 * time.Minute
 )
 
 func testSnapshot(t *testing.T) {
