@@ -45,7 +45,7 @@ func resetTest() {
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
-	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil)
+	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil, nil)
 }
 
 func TestMonitor(t *testing.T) {

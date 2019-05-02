@@ -142,6 +142,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 			for _, ns := range deactivationNamespaces {
 				updateStatefulSets(ns, false, ioStreams)
 				updateDeployments(ns, false, ioStreams)
+				updateDeploymentConfigs(ns, false, ioStreams)
 			}
 
 		},
@@ -189,6 +190,26 @@ func updateDeployments(namespace string, activate bool, ioStreams genericcliopti
 		}
 	}
 }
+
+func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+	deployments, err := k8s.Instance().ListDeploymentConfigs(namespace)
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
+	for _, deployment := range deployments.Items {
+		if replicas, update := getUpdatedReplicaCount(deployment.Annotations, activate, ioStreams); update {
+			deployment.Spec.Replicas = replicas
+			_, err := k8s.Instance().UpdateDeploymentConfig(&deployment)
+			if err != nil {
+				printMsg(fmt.Sprintf("Error updating replicas for deploymentconfig %v/%v : %v", deployment.Namespace, deployment.Name, err), ioStreams.ErrOut)
+				continue
+			}
+			printMsg(fmt.Sprintf("Updated replicas for deploymentconfig %v/%v to %v", deployment.Namespace, deployment.Name, replicas), ioStreams.Out)
+		}
+	}
+}
+
 func getUpdatedReplicaCount(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {
 	if replicas, present := annotations[migration.StorkMigrationReplicasAnnotation]; present {
 		var updatedReplicas int32

@@ -535,6 +535,7 @@ func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIRes
 	case "PersistentVolumeClaim",
 		"PersistentVolume",
 		"Deployment",
+		"DeploymentConfig",
 		"StatefulSet",
 		"ConfigMap",
 		"Service",
@@ -542,7 +543,9 @@ func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIRes
 		"DaemonSet",
 		"ServiceAccount",
 		"ClusterRole",
-		"ClusterRoleBinding":
+		"ClusterRoleBinding",
+		"ImageStream",
+		"Route":
 		return true
 	default:
 		return false
@@ -845,7 +848,7 @@ func (m *MigrationController) prepareResources(
 				continue
 			}
 			o = updatedObject
-		case "Deployment", "StatefulSet":
+		case "Deployment", "StatefulSet", "DeploymentConfig":
 			updatedObject, err := m.prepareApplicationResource(migration, o)
 			if err != nil {
 				m.updateResourceStatus(
