@@ -552,6 +552,28 @@
   version = "v1.0.1"
 
 [[projects]]
+  branch = "release-3.11"
+  digest = "1:21e11e06ebb4c8dbdfab6198acf6cd68ffe61d67c58c858f2218f048c557bf4f"
+  name = "github.com/openshift/api"
+  packages = ["apps/v1"]
+  pruneopts = "UT"
+  revision = "8741ff068a473be041d7bafb4502c12e4f10aab5"
+
+[[projects]]
+  branch = "release-3.11"
+  digest = "1:fec9abedd6294f03bdc312e2bc1fb4bc7c456ecd13885eeccbb55a119de0ded4"
+  name = "github.com/openshift/client-go"
+  packages = [
+    "apps/clientset/versioned",
+    "apps/clientset/versioned/fake",
+    "apps/clientset/versioned/scheme",
+    "apps/clientset/versioned/typed/apps/v1",
+    "apps/clientset/versioned/typed/apps/v1/fake",
+  ]
+  pruneopts = "UT"
+  revision = "431ec9a26e5021f35fa41ee9a89842db9bfdb370"
+
+[[projects]]
   digest = "1:f6ed3da0e992b046cf30c70addc67ba456e93180c1b674a873dc0998b4fc0395"
   name = "github.com/operator-framework/operator-sdk"
   packages = [
@@ -618,14 +640,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:0da6b28d5321520c5371c173b91a79a2173139fc6e58343ad5a6f27aeff8f359"
+  digest = "1:82c0ab0c2f38fc01d4afc9ba1e154bcda581db5ebf3c8575885cd293a938043c"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "a6c2439fe523728558d12346a2c5a944794631bc"
+  revision = "5cd739ad5470129e979a5fe4e9724decdeda091c"
 
 [[projects]]
   branch = "master"
@@ -1514,6 +1536,7 @@
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/secrets/k8s",
+    "github.com/openshift/client-go/apps/clientset/versioned/fake",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
     "github.com/pborman/uuid",
