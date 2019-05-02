@@ -28,6 +28,7 @@ type Snapshot struct {
 	started                    bool
 	snapshotController         *controllers.Snapshotter
 	snapshotScheduleController *controllers.SnapshotScheduleController
+	snapshotRestoreController  *controllers.SnapshotRestoreController
 	provisioner                *controller.ProvisionController
 	Driver                     volume.Driver
 	Recorder                   record.EventRecorder
@@ -114,6 +115,14 @@ func (s *Snapshot) Start() error {
 		return fmt.Errorf("error initializing snapshot schedule controller: %v", err)
 	}
 
+	s.snapshotRestoreController = &controllers.SnapshotRestoreController{
+		Driver:   s.Driver,
+		Recorder: s.Recorder,
+	}
+	err = s.snapshotRestoreController.Init()
+	if err != nil {
+		return fmt.Errorf("error initializing snapshot restore controller: %v", err)
+	}
 	s.started = true
 	return nil
 }
