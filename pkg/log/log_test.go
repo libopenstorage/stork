@@ -27,6 +27,7 @@ func TestLog(t *testing.T) {
 	t.Run("clusterDomainUpdateLogTest", clusterDomainUpdateLogTest)
 	t.Run("applicationBackupLogTest", applicationBackupLogTest)
 	t.Run("applicationRestoreLogTest", applicationRestoreLogTest)
+	t.Run("applicationCloneLogTest", applicationCloneLogTest)
 }
 
 func podLogTest(t *testing.T) {
@@ -217,4 +218,16 @@ func applicationRestoreLogTest(t *testing.T) {
 	}
 	ApplicationRestoreLog(applicationRestore).Infof("applicationrestore log")
 	ApplicationRestoreLog(nil).Infof("applicationrestore nil log")
+}
+
+func applicationCloneLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testapplicationrestore",
+		Namespace: "testnamespace",
+	}
+	applicationClone := &storkv1.ApplicationClone{
+		ObjectMeta: metadata,
+	}
+	ApplicationCloneLog(applicationClone).Infof("applicationclone log")
+	ApplicationCloneLog(nil).Infof("applicationclone nil log")
 }

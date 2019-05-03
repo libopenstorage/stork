@@ -228,3 +228,15 @@ func ApplicationRestoreLog(restore *storkv1.ApplicationRestore) *logrus.Entry {
 
 	return logrus.WithFields(logrus.Fields{})
 }
+
+// ApplicationCloneLog formats a log message with applicationclone information
+func ApplicationCloneLog(clone *storkv1.ApplicationClone) *logrus.Entry {
+	if clone != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ApplicationCloneName":      clone.Name,
+			"ApplicationCloneNamespace": clone.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}

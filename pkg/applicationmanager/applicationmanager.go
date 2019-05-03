@@ -49,6 +49,15 @@ func (a *ApplicationManager) Init(adminNamespace string) error {
 	if err := restoreController.Init(adminNamespace); err != nil {
 		return err
 	}
+
+	cloneController := &controllers.ApplicationCloneController{
+		Driver:            a.Driver,
+		Recorder:          a.Recorder,
+		ResourceCollector: a.ResourceCollector,
+	}
+	if err := cloneController.Init(adminNamespace); err != nil {
+		return err
+	}
 	return nil
 }
 

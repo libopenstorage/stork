@@ -2,6 +2,7 @@ package resourcecollector
 
 import (
 	"github.com/heptio/ark/pkg/util/collections"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -34,5 +35,26 @@ func (r *ResourceCollector) prepareServiceResourceForCollection(
 	}
 	delete(spec, "loadBalancerIP")
 
+	return nil
+}
+
+func (r *ResourceCollector) updateService(
+	object runtime.Unstructured,
+) error {
+	var service v1.Service
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &service); err != nil {
+		return err
+	}
+
+	if service.Spec.Type == v1.ServiceTypeNodePort {
+		for i := range service.Spec.Ports {
+			service.Spec.Ports[i].NodePort = 0
+		}
+		o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&service)
+		if err != nil {
+			return err
+		}
+		object.SetUnstructuredContent(o)
+	}
 	return nil
 }
