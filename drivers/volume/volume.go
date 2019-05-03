@@ -68,6 +68,8 @@ type Driver interface {
 	ClusterDomainsPluginInterface
 	// BackupRestorePluginInterface Interface to backup and restore volumes
 	BackupRestorePluginInterface
+	// ClonePluginInterface Interface to clone volumes
+	ClonePluginInterface
 }
 
 // GroupSnapshotCreateResponse is the response for the group snapshot operation
@@ -138,6 +140,11 @@ type BackupRestorePluginInterface interface {
 	GetRestoreStatus(*stork_crd.ApplicationRestore) ([]*stork_crd.ApplicationRestoreVolumeInfo, error)
 	// Cancel the restore of volumes specified in the status
 	CancelRestore(*stork_crd.ApplicationRestore) error
+}
+
+// ClonePluginInterface Interface to clone volumes
+type ClonePluginInterface interface {
+	CreateVolumeClones(*stork_crd.ApplicationClone) error
 }
 
 // Info Information about a volume
@@ -324,6 +331,14 @@ func (b *BackupRestoreNotSupported) GetRestoreStatus(*stork_crd.ApplicationResto
 
 // CancelRestore returns ErrNotSupported
 func (b *BackupRestoreNotSupported) CancelRestore(*stork_crd.ApplicationRestore) error {
+	return &errors.ErrNotSupported{}
+}
+
+// CloneNotSupported to be used by drivers that don't support volume clone
+type CloneNotSupported struct{}
+
+// CreateVolumeClones returns ErrNotSupported
+func (v *CloneNotSupported) CreateVolumeClones(*stork_crd.ApplicationClone) error {
 	return &errors.ErrNotSupported{}
 }
 

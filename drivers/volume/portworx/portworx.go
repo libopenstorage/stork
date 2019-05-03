@@ -98,7 +98,7 @@ const (
 
 	snapshotDataNamePrefix = "k8s-volume-snapshot"
 	readySnapshotMsg       = "Snapshot created successfully and it is ready"
-	pvNamePrefix           = "pvc"
+	pvNamePrefix           = "pvc-"
 
 	// volumeSnapshot* is configuration of exponential backoff for
 	// waiting for snapshot operation to complete. Starting with 2
@@ -2049,7 +2049,7 @@ func (p *portworx) stopCloudBackupTask(volDriver volume.VolumeDriver, taskID str
 }
 
 func (p *portworx) generatePVName() string {
-	return pvNamePrefix + "-" + string(uuid.NewUUID())
+	return pvNamePrefix + string(uuid.NewUUID())
 }
 
 func (p *portworx) StartRestore(restore *stork_crd.ApplicationRestore) ([]*stork_crd.ApplicationRestoreVolumeInfo, error) {
@@ -2135,6 +2135,31 @@ func (p *portworx) CancelRestore(restore *stork_crd.ApplicationRestore) error {
 	return nil
 }
 
+func (p *portworx) CreateVolumeClones(clone *stork_crd.ApplicationClone) error {
+	volDriver, err := p.getUserVolDriver(clone.Annotations)
+	if err != nil {
+		return err
+	}
+	for _, vInfo := range clone.Status.Volumes {
+		locator := &api.VolumeLocator{
+			Name: vInfo.CloneVolume,
+			VolumeLabels: map[string]string{
+				pvcNameLabel:   vInfo.PersistentVolumeClaim,
+				namespaceLabel: clone.Spec.DestinationNamespace,
+			},
+		}
+		_, err := volDriver.Snapshot(vInfo.Volume, false, locator, true)
+		if err != nil {
+			vInfo.Status = stork_crd.ApplicationCloneStatusFailed
+			vInfo.Reason = err.Error()
+			return err
+		}
+		vInfo.Status = stork_crd.ApplicationCloneStatusSuccessful
+		vInfo.Reason = "Volume cloned succesfully"
+
+	}
+	return nil
+}
 func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *stork_crd.GroupVolumeSnapshot, volNames []string, options map[string]string) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
 	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
