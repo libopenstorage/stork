@@ -62,7 +62,7 @@ type ApplicationCloneResourceInfo struct {
 type ApplicationCloneVolumeInfo struct {
 	PersistentVolumeClaim string                     `json:"persistentVolumeClaim"`
 	Volume                string                     `json:"volume"`
-	ClonedVolume          string                     `json:"clonedVolume"`
+	CloneVolume           string                     `json:"cloneVolume"`
 	Status                ApplicationCloneStatusType `json:"status"`
 	Reason                string                     `json:"reason"`
 }
@@ -79,8 +79,10 @@ const (
 	ApplicationCloneStatusInProgress ApplicationCloneStatusType = "InProgress"
 	// ApplicationCloneStatusFailed when cloning has failed
 	ApplicationCloneStatusFailed ApplicationCloneStatusType = "Failed"
-	// ApplicationCloneStatusSuccess when cloning was a success
-	ApplicationCloneStatusSuccess ApplicationCloneStatusType = "Success"
+	// ApplicationCloneStatusSuccessful when cloning was a success
+	ApplicationCloneStatusSuccessful ApplicationCloneStatusType = "Successful"
+	// ApplicationCloneStatusRetained for when clone was skipped to retain an already existing resource
+	ApplicationCloneStatusRetained ApplicationCloneStatusType = "Retained"
 	// ApplicationCloneStatusPartialSuccess when cloning was only partially successful
 	ApplicationCloneStatusPartialSuccess ApplicationCloneStatusType = "PartialSuccess"
 )
@@ -95,12 +97,12 @@ const (
 	ApplicationCloneStagePreExecRule ApplicationCloneStageType = "PreExecRule"
 	// ApplicationCloneStagePostExecRule stage when post-exec rules are being executed
 	ApplicationCloneStagePostExecRule ApplicationCloneStageType = "PostExecRule"
-	// ApplicationCloneStageVolumeClone stage where the volumes are being cloned
-	ApplicationCloneStageVolumeClone ApplicationCloneStageType = "VolumeClone"
-	// ApplicationCloneStageApplicationClone stage when applications are being cloned
-	ApplicationCloneStageApplicationClone ApplicationCloneStageType = "ApplicationClone"
-	// ApplicationCloneStageDone stage when the cloning is done
-	ApplicationCloneStageDone ApplicationCloneStageType = "Done"
+	// ApplicationCloneStageVolumes stage where the volumes are being cloned
+	ApplicationCloneStageVolumes ApplicationCloneStageType = "Volumes"
+	// ApplicationCloneStageApplications stage when applications are being cloned
+	ApplicationCloneStageApplications ApplicationCloneStageType = "Applications"
+	// ApplicationCloneStageFinal is the final stage for backup
+	ApplicationCloneStageFinal ApplicationCloneStageType = "Final"
 )
 
 // ApplicationCloneReplacePolicyType defines the policy for objects that might already exist in
