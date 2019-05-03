@@ -23,6 +23,12 @@ type Snapshot struct {
 	Namespace string
 }
 
+// Image is a generic struct for encapsulating driver images/version
+type Image struct {
+	Type    string
+	Version string
+}
+
 // Driver defines an external volume driver interface that must be implemented
 // by any external storage provider that wants to qualify their product with
 // Torpedo.  The functions defined here are meant to be destructive and illustrative
@@ -73,8 +79,8 @@ type Driver interface {
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
 
-	// UpgradeDriver upgrades the volume driver to the given version
-	UpgradeDriver(version string) error
+	// UpgradeDriver upgrades the volume driver to the given images
+	UpgradeDriver(images []Image) error
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string

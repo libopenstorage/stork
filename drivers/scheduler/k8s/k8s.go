@@ -633,6 +633,24 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 		logrus.Infof("[%v] Created Pod: %v", app.Key, pod.Name)
 		return pod, nil
+	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+		obj.Namespace = ns.Name
+		configMap, err := k8sOps.CreateConfigMap(obj)
+		if errors.IsAlreadyExists(err) {
+			if configMap, err := k8sOps.GetConfigMap(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Config Maps: %v", app.Key, configMap.Name)
+				return configMap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Config Map: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Config Map: %v", app.Key, configMap.Name)
+		return configMap, nil
 	}
 
 	return nil, nil
@@ -707,6 +725,22 @@ func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		logrus.Infof("[%v] Destroyed Pod: %v", app.Key, obj.Name)
+	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+			_, err := k8sOps.GetConfigMap(obj.Name, obj.Namespace)
+			if err != nil {
+				logrus.Warnf("[%v] Error getting config maps. Err: %v", app.Key, err)
+			}
+		}
+		err := k8sOps.DeleteConfigMap(obj.Name, obj.Namespace)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy config map: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Destroyed Config Map: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
