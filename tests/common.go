@@ -159,31 +159,44 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
 		var err error
 
+		vols := DeleteVolumes(ctx)
+
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
 			err = Inst().S.Destroy(ctx, opts)
 			expect(err).NotTo(haveOccurred())
 		})
 
-		DeleteVolumesAndWait(ctx)
+		ValidateVolumesDeleted(ctx.App.Key, vols)
+
 	})
 }
 
-// DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context) {
+// DeleteVolumes deletes volumes of a given context
+func DeleteVolumes(ctx *scheduler.Context) []*volume.Volume {
 	var err error
 	var vols []*volume.Volume
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
 		vols, err = Inst().S.DeleteVolumes(ctx)
 		expect(err).NotTo(haveOccurred())
 	})
+	return vols
+}
 
+// ValidateVolumesDeleted checks it given volumes got deleted
+func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 	for _, vol := range vols {
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
-			ctx.App.Key, vol.Name), func() {
-			err = Inst().V.ValidateDeleteVolume(vol)
+			appName, vol.Name), func() {
+			err := Inst().V.ValidateDeleteVolume(vol)
 			expect(err).NotTo(haveOccurred())
 		})
 	}
+}
+
+// DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
+func DeleteVolumesAndWait(ctx *scheduler.Context) {
+	vols := DeleteVolumes(ctx)
+	ValidateVolumesDeleted(ctx.App.Key, vols)
 }
 
 // ScheduleAndValidate schedules and validates applications
