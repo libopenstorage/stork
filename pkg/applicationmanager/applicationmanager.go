@@ -7,6 +7,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/portworx/sched-ops/k8s"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -29,6 +30,23 @@ type ApplicationManager struct {
 // Init Initializes the ApplicationManager and any children controller
 func (a *ApplicationManager) Init(adminNamespace string) error {
 	if err := a.createCRD(); err != nil {
+		return err
+	}
+	backupController := &controllers.ApplicationBackupController{
+		Driver:            a.Driver,
+		Recorder:          a.Recorder,
+		ResourceCollector: a.ResourceCollector,
+	}
+	if err := backupController.Init(adminNamespace); err != nil {
+		return err
+	}
+
+	restoreController := &controllers.ApplicationRestoreController{
+		Driver:            a.Driver,
+		Recorder:          a.Recorder,
+		ResourceCollector: a.ResourceCollector,
+	}
+	if err := restoreController.Init(adminNamespace); err != nil {
 		return err
 	}
 	return nil
