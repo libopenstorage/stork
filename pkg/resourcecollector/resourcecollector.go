@@ -27,7 +27,7 @@ import (
 
 const (
 	// Annotation to use when the resource shouldn't be collected
-	skipResourceAnnotation = "stork.libopenstorage.ord/skipresource"
+	skipResourceAnnotation = "stork.libopenstorage.org/skipresource"
 )
 
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
