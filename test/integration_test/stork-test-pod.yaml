@@ -71,6 +71,10 @@ spec:
       value: enable_cluster_domain 
     - name: STORAGE_PROVISIONER 
       value: storage_provisioner 
+    - name: AUTH_SECRET_CONFIGMAP
+      value: auth_secret_configmap
+    - name: PX_SHARED_SECRET
+      value: px_shared_secret_key
   hostNetwork: false
   hostPID: false
   volumes:

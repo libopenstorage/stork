@@ -56,6 +56,7 @@ const (
 
 	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
 	storageProvisioner       = "STORAGE_PROVISIONER"
+	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
 )
 
 var nodeDriver node.Driver
@@ -65,6 +66,8 @@ var storkVolumeDriver storkdriver.Driver
 
 var snapshotScaleCount int
 var migrationScaleCount int
+var authToken string
+var authTokenConfigMap string
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -97,17 +100,25 @@ func setup() error {
 		return fmt.Errorf("Error getting scheduler driver %v: %v", schedulerDriverName, err)
 	}
 
-	if err = schedulerDriver.Init("specs", volumeDriverName, nodeDriverName); err != nil {
-		return fmt.Errorf("Error initializing scheduler driver %v: %v", schedulerDriverName, err)
-	}
-
 	if volumeDriver, err = volume.Get(volumeDriverName); err != nil {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
 	provisioner := os.Getenv(storageProvisioner)
+	authTokenConfigMap = os.Getenv(authSecretConfigMap)
+	if authTokenConfigMap != "" {
+		if authToken, err = schedulerDriver.GetTokenFromConfigMap(authTokenConfigMap); err != nil {
+			return fmt.Errorf("Failed to get config map for token when running on an auth-enabled cluster %v", err)
+		}
+		logrus.Infof("Auth token used for initializing scheduler/volume driver: %s ", authToken)
+
+	}
 	logrus.Infof("Using provisioner: %s", provisioner)
-	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, "", provisioner); err != nil {
+	if err = schedulerDriver.Init("specs", volumeDriverName, nodeDriverName, authTokenConfigMap); err != nil {
+		return fmt.Errorf("Error initializing scheduler driver %v: %v", schedulerDriverName, err)
+	}
+
+	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, authToken, provisioner); err != nil {
 		return fmt.Errorf("Error initializing volume driver %v: %v", volumeDriverName, err)
 	}
 	return nil
