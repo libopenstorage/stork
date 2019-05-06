@@ -10,6 +10,7 @@ run_cluster_domain_test=false
 environment_variables=""
 storage_provisioner="portworx"
 focus_tests=""
+auth_secret_configmap=""
 for i in "$@"
 do
 case $i in
@@ -69,6 +70,12 @@ case $i in
     --focus_tests)
         echo "Flag for focus tests: $2"
         focus_tests=$2
+        shift
+        shift
+        ;;
+    --auth_secret_configmap)
+        echo "K8s secret name to use for test: $2"
+        auth_secret_configmap=$2
         shift
         shift
         ;;
@@ -155,6 +162,17 @@ if [ "$focus_tests" != "" ] ; then
 	sed -i 's/'FOCUS_TESTS'/- -test.run='"$focus_tests"'/g' /testspecs/stork-test-pod.yaml
 else 
 	sed -i 's/'FOCUS_TESTS'/''/g' /testspecs/stork-test-pod.yaml
+fi
+
+# Configmap with secrets indicates auth-enabled runs are required
+#  * Adding the shared secret to stork, stork-test pod as env variable
+#  * Pass config map to containing px secret stork-test pod so tests can pick up auth-token
+if [ "$auth_secret_configmap" != "" ] ; then
+    sed -i 's/'auth_secret_configmap'/'"$auth_secret_configmap"'/g' /testspecs/stork-test-pod.yaml
+    sed -i 's/'px_shared_secret_key'/'"$AUTH_SHARED_KEY"'/g' /testspecs/stork-test-pod.yaml
+    kubectl set env deploy/stork -n kube-system PX_SHARED_SECRET="${AUTH_SHARED_KEY}"
+else
+	sed -i 's/'auth_secret_configmap'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml
