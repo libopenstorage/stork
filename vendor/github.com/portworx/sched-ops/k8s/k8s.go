@@ -1000,6 +1000,7 @@ func (k *k8sOps) handleWatch(
 	namespace string,
 	fn WatchFunc,
 	listOptions meta_v1.ListOptions) {
+	defer watchInterface.Stop()
 	for {
 		select {
 		case event, more := <-watchInterface.ResultChan():
