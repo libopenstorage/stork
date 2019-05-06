@@ -87,6 +87,12 @@ case $i in
         shift
         shift
         ;;
+    --auth_secret_configmap)
+        echo "K8s secret name to use for test: $2"
+        auth_secret_configmap=$2
+        shift
+        shift
+        ;;
 esac
 done
 
