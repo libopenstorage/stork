@@ -141,7 +141,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 				onlineNodeFound := false
 				for _, volumeNode := range volumeInfo.DataNodes {
 					for _, driverNode := range driverNodes {
-						if volumeNode == driverNode.ID && driverNode.Status == volume.NodeOnline {
+						if volumeNode == driverNode.StorageID && driverNode.Status == volume.NodeOnline {
 							onlineNodeFound = true
 						}
 					}
@@ -307,7 +307,7 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 					break
 				}
 			}
-			idMap[dnode.ID] = dnode
+			idMap[dnode.StorageID] = dnode
 			storklog.PodLog(pod).Debugf("nodeInfo: %v", dnode)
 			// For any node that is offline remove the locality info so that we
 			// don't prioritize nodes close to it
