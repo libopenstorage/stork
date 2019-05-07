@@ -64,14 +64,14 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 	}
 	for i := 0; i < numNodes; i++ {
 		node := &storkvolume.NodeInfo{
-			ID:       "node" + strconv.Itoa(i+1),
-			Hostname: "node" + strconv.Itoa(i+1),
-			Status:   storkvolume.NodeOnline,
+			StorageID: "node" + strconv.Itoa(i+1),
+			Hostname:  "node" + strconv.Itoa(i+1),
+			Status:    storkvolume.NodeOnline,
 		}
 		node.IPs = append(node.IPs, "192.168.0."+strconv.Itoa(i+1))
 		for _, n := range nodes.Items {
 			found := false
-			if node.ID == n.Name {
+			if node.StorageID == n.Name {
 				found = true
 			} else {
 				for _, address := range n.Status.Addresses {
@@ -144,7 +144,7 @@ func (m *Driver) ProvisionVolume(
 		if len(m.nodes) <= nodeIndex {
 			return fmt.Errorf("node not found")
 		}
-		volume.DataNodes = append(volume.DataNodes, m.nodes[nodeIndex].ID)
+		volume.DataNodes = append(volume.DataNodes, m.nodes[nodeIndex].StorageID)
 	}
 
 	m.volumes[volumeName] = volume

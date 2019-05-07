@@ -445,15 +445,20 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 }
 
 func (p *portworx) getNodeLabels(nodeInfo *storkvolume.NodeInfo) (map[string]string, error) {
-	obj, exists, err := p.store.GetByKey(nodeInfo.ID)
+	obj, exists, err := p.store.GetByKey(nodeInfo.SchedulerID)
 	if err != nil {
 		return nil, err
 	} else if !exists {
-		obj, exists, err = p.store.GetByKey(nodeInfo.Hostname)
+		obj, exists, err = p.store.GetByKey(nodeInfo.StorageID)
 		if err != nil {
 			return nil, err
 		} else if !exists {
-			return nil, fmt.Errorf("node %v (%v) not found in cache", nodeInfo.ID, nodeInfo.Hostname)
+			obj, exists, err = p.store.GetByKey(nodeInfo.Hostname)
+			if err != nil {
+				return nil, err
+			} else if !exists {
+				return nil, fmt.Errorf("node %v/%v/%v not found in cache", nodeInfo.StorageID, nodeInfo.SchedulerID, nodeInfo.Hostname)
+			}
 		}
 	}
 	node := obj.(*v1.Node)
@@ -471,9 +476,10 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	var nodes []*storkvolume.NodeInfo
 	for _, n := range cluster.Nodes {
 		nodeInfo := &storkvolume.NodeInfo{
-			ID:       n.Id,
-			Hostname: strings.ToLower(n.Hostname),
-			Status:   p.mapNodeStatus(n.Status),
+			StorageID:   n.Id,
+			SchedulerID: n.SchedulerNodeName,
+			Hostname:    strings.ToLower(n.Hostname),
+			Status:      p.mapNodeStatus(n.Status),
 		}
 		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
 		nodeInfo.IPs = append(nodeInfo.IPs, n.DataIp)
@@ -490,7 +496,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 				nodeInfo.Region = region
 			}
 		} else {
-			logrus.Errorf("Error getting labels for node %v: %v", nodeInfo.Hostname, err)
+			logrus.Warnf("Error getting labels for node %v: %v", nodeInfo.Hostname, err)
 		}
 
 		nodes = append(nodes, nodeInfo)
