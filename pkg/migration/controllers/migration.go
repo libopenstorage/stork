@@ -505,6 +505,16 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		return fmt.Errorf("scheduler Cluster pair is not ready. Status: %v", schedulerStatus)
 	}
 
+	if migration.Spec.AdminClusterPair != "" {
+		schedulerStatus, err = getClusterPairSchedulerStatus(migration.Spec.AdminClusterPair, migration.Namespace)
+		if err != nil {
+			return err
+		}
+		if schedulerStatus != stork_api.ClusterPairStatusReady {
+			return fmt.Errorf("scheduler in Admin Cluster pair is not ready. Status: %v", schedulerStatus)
+		}
+	}
+
 	allObjects, err := m.ResourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors)
 	if err != nil {
 		m.Recorder.Event(migration,
@@ -680,8 +690,16 @@ func (m *MigrationController) applyResources(
 	if err != nil {
 		return err
 	}
+	remoteAdminConfig := remoteConfig
+	// Use the admin cluter pair for cluster scoped resources if it has been configured
+	if migration.Spec.AdminClusterPair != "" {
+		remoteAdminConfig, err = getClusterPairSchedulerConfig(migration.Spec.AdminClusterPair, m.migrationAdminNamespace)
+		if err != nil {
+			return err
+		}
+	}
 
-	client, err := kubernetes.NewForConfig(remoteConfig)
+	adminClient, err := kubernetes.NewForConfig(remoteAdminConfig)
 	if err != nil {
 		return err
 	}
@@ -695,12 +713,12 @@ func (m *MigrationController) applyResources(
 		}
 
 		// Don't create if the namespace already exists on the remote cluster
-		_, err = client.CoreV1().Namespaces().Get(namespace.Name, metav1.GetOptions{})
+		_, err = adminClient.CoreV1().Namespaces().Get(namespace.Name, metav1.GetOptions{})
 		if err == nil {
 			continue
 		}
 
-		_, err = client.CoreV1().Namespaces().Create(&v1.Namespace{
+		_, err = adminClient.CoreV1().Namespaces().Create(&v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        namespace.Name,
 				Labels:      namespace.Labels,
@@ -712,10 +730,18 @@ func (m *MigrationController) applyResources(
 		}
 	}
 
-	remoteDynamicInterface, err := dynamic.NewForConfig(remoteConfig)
+	remoteInterface, err := dynamic.NewForConfig(remoteConfig)
 	if err != nil {
-		return nil
+		return err
 	}
+	remoteAdminInterface := remoteInterface
+	if migration.Spec.AdminClusterPair != "" {
+		remoteAdminInterface, err = dynamic.NewForConfig(remoteAdminConfig)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -729,8 +755,14 @@ func (m *MigrationController) applyResources(
 			Name:       strings.ToLower(objectType.GetKind()) + "s",
 			Namespaced: len(metadata.GetNamespace()) > 0,
 		}
-		dynamicClient := remoteDynamicInterface.Resource(
-			o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+		var dynamicClient dynamic.ResourceInterface
+		if resource.Namespaced {
+			dynamicClient = remoteInterface.Resource(
+				o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(metadata.GetNamespace())
+		} else {
+			dynamicClient = remoteAdminInterface.Resource(
+				o.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name))
+		}
 
 		log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 		unstructured, ok := o.(*unstructured.Unstructured)
