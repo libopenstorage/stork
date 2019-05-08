@@ -1228,6 +1228,17 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 	return pxNodes, nil
 }
 
+func (d *portworx) UpdateNodeID(n node.Node) (node.Node, error) {
+	for _, addr := range n.Addresses {
+		nodeID, _ := d.getClusterManager().GetNodeIdFromIp(addr)
+		if len(nodeID) > 0 {
+			n.VolDriverNodeID = nodeID
+			return n, nil
+		}
+	}
+	return n, fmt.Errorf("node %v not found in cluster", n)
+}
+
 func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 	match := groupRegex.FindStringSubmatch(str)
 	result := make(map[string]string)
