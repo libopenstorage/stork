@@ -14,6 +14,7 @@ const (
 // MigrationSpec is the spec used to migrate apps between clusterpairs
 type MigrationSpec struct {
 	ClusterPair       string            `json:"clusterPair"`
+	AdminClusterPair  string            `json:"adminClusterPair"`
 	Namespaces        []string          `json:"namespaces"`
 	IncludeResources  *bool             `json:"includeResources"`
 	IncludeVolumes    *bool             `json:"includeVolumes"`

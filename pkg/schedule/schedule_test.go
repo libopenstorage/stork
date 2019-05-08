@@ -24,7 +24,7 @@ func TestSchedule(t *testing.T) {
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
-	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil)
+	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil, nil)
 	t.Run("triggerIntervalRequiredTest", triggerIntervalRequiredTest)
 	t.Run("triggerDailyRequiredTest", triggerDailyRequiredTest)
 	t.Run("triggerWeeklyRequiredTest", triggerWeeklyRequiredTest)

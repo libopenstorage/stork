@@ -172,7 +172,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 	regionMap := make(map[string][]string)
 	for _, dNode := range driverNodes {
 		scores[dNode.Hostname] = 0
-		idMap[dNode.ID] = dNode
+		idMap[dNode.StorageID] = dNode
 		if dNode.Status == storkdriver.NodeOnline {
 			if dNode.Rack != "" {
 				rackMap[dNode.Rack] = append(rackMap[dNode.Rack], dNode.Hostname)

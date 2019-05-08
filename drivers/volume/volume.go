@@ -148,8 +148,10 @@ const (
 
 // NodeInfo Information about a node
 type NodeInfo struct {
-	// ID is a unique identifier for the node
-	ID string
+	// StorageID is a unique identifier for the storage node
+	StorageID string
+	// SchedulerID is a unique identifier for the scheduler node
+	SchedulerID string
 	// Hostname of the node. Should be in lower case because Kubernetes
 	// converts it to lower case
 	Hostname string
@@ -271,7 +273,10 @@ func IsNodeMatch(k8sNode *v1.Node, driverNode *NodeInfo) bool {
 		return false
 	}
 
-	if isHostnameMatch(driverNode.ID, k8sNode.Name) {
+	if k8sNode.Name == driverNode.SchedulerID {
+		return true
+	}
+	if isHostnameMatch(driverNode.StorageID, k8sNode.Name) {
 		return true
 	}
 	for _, address := range k8sNode.Status.Addresses {

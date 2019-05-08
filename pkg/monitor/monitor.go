@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/pkg/util/node"
@@ -139,7 +140,7 @@ func (m *Monitor) podMonitor() error {
 		return nil
 	}
 
-	if err := k8s.Instance().WatchPods("", fn); err != nil {
+	if err := k8s.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
 		log.Errorf("failed to watch pods due to: %v", err)
 		return err
 	}

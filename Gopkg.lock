@@ -552,6 +552,28 @@
   version = "v1.0.1"
 
 [[projects]]
+  branch = "release-3.11"
+  digest = "1:21e11e06ebb4c8dbdfab6198acf6cd68ffe61d67c58c858f2218f048c557bf4f"
+  name = "github.com/openshift/api"
+  packages = ["apps/v1"]
+  pruneopts = "UT"
+  revision = "8741ff068a473be041d7bafb4502c12e4f10aab5"
+
+[[projects]]
+  branch = "release-3.11"
+  digest = "1:fec9abedd6294f03bdc312e2bc1fb4bc7c456ecd13885eeccbb55a119de0ded4"
+  name = "github.com/openshift/client-go"
+  packages = [
+    "apps/clientset/versioned",
+    "apps/clientset/versioned/fake",
+    "apps/clientset/versioned/scheme",
+    "apps/clientset/versioned/typed/apps/v1",
+    "apps/clientset/versioned/typed/apps/v1/fake",
+  ]
+  pruneopts = "UT"
+  revision = "431ec9a26e5021f35fa41ee9a89842db9bfdb370"
+
+[[projects]]
   digest = "1:f6ed3da0e992b046cf30c70addc67ba456e93180c1b674a873dc0998b4fc0395"
   name = "github.com/operator-framework/operator-sdk"
   packages = [
@@ -618,14 +640,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:22ac8319516a9b6413cdedc84af6e5790b0fb30e78df26e2397a5d1a6a81b454"
+  digest = "1:6d4f14c3f750992ed26c31e73502721a5f3f2b5e8a665ba4d8d122904c95bcd2"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "7dfac52795f4d95ac7bef74e6ab4f3f20d1d1620"
+  revision = "d67339588ae8c134a2f1da52613d6abd7241b8c7"
 
 [[projects]]
   branch = "master"
@@ -1514,6 +1536,7 @@
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/secrets/k8s",
+    "github.com/openshift/client-go/apps/clientset/versioned/fake",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
     "github.com/pborman/uuid",
@@ -1538,6 +1561,7 @@
     "k8s.io/api/apps/v1beta1",
     "k8s.io/api/apps/v1beta2",
     "k8s.io/api/core/v1",
+    "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
@@ -1555,6 +1579,7 @@
     "k8s.io/apimachinery/pkg/util/strategicpatch",
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/apimachinery/pkg/watch",
+    "k8s.io/apiserver/pkg/authentication/serviceaccount",
     "k8s.io/client-go/discovery",
     "k8s.io/client-go/discovery/fake",
     "k8s.io/client-go/dynamic",
