@@ -18,5 +18,5 @@ func TestVersion(t *testing.T) {
 	cmd.SetArgs([]string{"version"})
 	err := cmd.Execute()
 	require.NoError(t, err, "Error executing command: %v", cmd)
-	require.Equal(t, "Version: "+version.Version+"\n", buf.String())
+	require.Equal(t, "storkctl Version: "+version.Version+"\n", buf.String())
 }
