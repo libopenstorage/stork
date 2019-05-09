@@ -38,15 +38,24 @@ metadata:
   namespace: kube-system
 spec:
   containers:
-  - command: ["/stork.test"]
+  - command: ["gotestsum"]
     args:
+    - --junitfile
+    - /testresults/junit.xml 
+    - --raw-command
+    - go
+    - tool
+    - test2json
+    - /stork.test 
     - -test.v
     - -snapshot-scale-count=10
     imagePullPolicy: Always
     image: openstorage/stork_test:latest
     securityContext:
       privileged: false
-    volumeMounts: []
+    volumeMounts:
+    - mountPath: /testresults/
+      name: testresults
     name: stork
     env:
     - name: TORPEDO_SSH_USER
@@ -55,6 +64,10 @@ spec:
       value: password
   hostNetwork: false
   hostPID: false
-  volumes: []
+  volumes:
+  - hostPath:
+      path: /testresults/
+      type: DirectoryOrCreate
+    name: testresults  
   serviceAccountName: stork-test-account
   restartPolicy: Never
