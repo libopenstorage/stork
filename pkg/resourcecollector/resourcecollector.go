@@ -64,12 +64,6 @@ func (r *ResourceCollector) Init() error {
 }
 
 func resourceToBeCollected(resource metav1.APIResource) bool {
-	// Deployment is present in "apps" and "extensions" group, so ignore
-	// "extensions"
-	if resource.Group == "extensions" && resource.Kind == "Deployment" {
-		return false
-	}
-
 	switch resource.Kind {
 	case "PersistentVolumeClaim",
 		"PersistentVolume",
@@ -81,9 +75,12 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"Secret",
 		"DaemonSet",
 		"ServiceAccount",
+		"Role",
+		"RoleBinding",
 		"ClusterRole",
 		"ClusterRoleBinding",
 		"ImageStream",
+		"Ingress",
 		"Route":
 		return true
 	default:
@@ -99,17 +96,14 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 	}
 	allObjects := make([]runtime.Unstructured, 0)
 
+	// Map to prevent collection of duplicate objects
+	resourceMap := make(map[types.UID]bool)
 	for _, group := range r.discoveryHelper.Resources() {
 		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
 			return nil, err
 		}
-		if groupVersion.Group == "extensions" {
-			continue
-		}
 
-		// Map to prevent collection of duplicate objects
-		resourceMap := make(map[types.UID]bool)
 		for _, resource := range group.APIResources {
 			if !resourceToBeCollected(resource) {
 				continue

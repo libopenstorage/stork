@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	"github.com/heptio/ark/pkg/util/collections"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
@@ -752,7 +753,7 @@ func (m *MigrationController) applyResources(
 			return err
 		}
 		resource := &metav1.APIResource{
-			Name:       strings.ToLower(objectType.GetKind()) + "s",
+			Name:       inflect.Pluralize(strings.ToLower(objectType.GetKind())),
 			Namespaced: len(metadata.GetNamespace()) > 0,
 		}
 		var dynamicClient dynamic.ResourceInterface

@@ -32,6 +32,7 @@ func (r *ResourceCollector) prepareServiceResourceForCollection(
 	if ip, err := collections.GetString(spec, "clusterIP"); err == nil && ip != "None" {
 		delete(spec, "clusterIP")
 	}
+	delete(spec, "loadBalancerIP")
 
 	return nil
 }
