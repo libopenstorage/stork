@@ -187,6 +187,14 @@
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:8c7cb21f096dc9588be1ce357c0bc7a072873ee424933c5d7a4b40cb7d424830"
+  name = "github.com/go-openapi/inflect"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "16a898ed1f4943794fb9b0e7afb7376a7619cf21"
+  version = "v0.19.0"
+
+[[projects]]
   digest = "1:953a2628e4c5c72856b53f5470ed5e071c55eccf943d798d42908102af2a610f"
   name = "github.com/go-openapi/jsonpointer"
   packages = ["."]
@@ -1516,6 +1524,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/go-openapi/inflect",
     "github.com/hashicorp/go-version",
     "github.com/heptio/ark/pkg/discovery",
     "github.com/heptio/ark/pkg/util/collections",
