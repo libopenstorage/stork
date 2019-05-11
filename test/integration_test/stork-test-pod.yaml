@@ -42,6 +42,8 @@ spec:
     args:
     - --junitfile
     - /testresults/junit.xml 
+    - --format
+    - standard-verbose 
     - --raw-command
     - go
     - tool
