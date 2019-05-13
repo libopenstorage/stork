@@ -84,6 +84,7 @@ func (c *ClusterDomainsStatusController) Handle(ctx context.Context, event sdk.E
 				err.Error(),
 				fmt.Sprintf("Failed to update ClusterDomainsStatuses"),
 			)
+			logrus.Errorf("Failed to get cluster domain info: %v", err)
 		} else {
 			if len(clusterDomainsInfo.Active) != len(clusterDomainsStatus.Status.Active) ||
 				len(clusterDomainsInfo.Inactive) != len(clusterDomainsStatus.Status.Inactive) {
