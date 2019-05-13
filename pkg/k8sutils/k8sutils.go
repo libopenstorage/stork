@@ -3,6 +3,7 @@ package k8sutils
 import (
 	"fmt"
 
+	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/portworx/sched-ops/k8s"
 	"k8s.io/api/core/v1"
 )
@@ -48,4 +49,27 @@ func GetVolumeNamesFromLabelSelector(namespace string, labels map[string]string)
 	}
 
 	return volNames, nil
+}
+
+// GetDriverTypeFromPV returns the name of the provisioner driver managing
+// the persistent volume. Supports in-tree and CSI PVs
+func GetDriverTypeFromPV(pv *v1.PersistentVolume) (string, error) {
+	var volumeType string
+
+	// Check for CSI
+	if pv.Spec.CSI != nil {
+		volumeType = pv.Spec.CSI.Driver
+		if len(volumeType) == 0 {
+			return "", fmt.Errorf("CSI Driver not found in PV %#v", *pv)
+		}
+		return volumeType, nil
+	}
+
+	// Fall back to Kubernetes in-tree driver names
+	volumeType = crdv1.GetSupportedVolumeFromPVSpec(&pv.Spec)
+	if len(volumeType) == 0 {
+		return "", fmt.Errorf("unsupported volume type found in PV %#v", *pv)
+	}
+
+	return volumeType, nil
 }

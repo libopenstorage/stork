@@ -72,8 +72,7 @@ const (
 	defaultAPIPort = 9001
 
 	// provisioner names for portworx volumes
-	provisionerName    = "kubernetes.io/portworx-volume"
-	csiProvisionerName = "com.openstorage.pxd"
+	provisionerName = "kubernetes.io/portworx-volume"
 
 	// pvcProvisionerAnnotation is the annotation on PVC which has the provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -565,10 +564,11 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 				return true
 			}
 		}
-
 	}
 
-	if provisioner != provisionerName && provisioner != csiProvisionerName && provisioner != snapshot.GetProvisionerName() {
+	if provisioner != provisionerName &&
+		!isCsiProvisioner(provisioner) &&
+		provisioner != snapshot.GetProvisionerName() {
 		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
@@ -752,8 +752,7 @@ func (p *portworx) SnapshotCreate(
 		return nil, nil, err
 	}
 
-	if pv == nil || pv.Spec.PortworxVolume == nil {
-		err = fmt.Errorf("invalid PV: %v", pv)
+	if err := p.verifyPortworxPv(pv); err != nil {
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
@@ -783,8 +782,10 @@ func (p *portworx) SnapshotCreate(
 
 	snapStatusConditions := []crdv1.VolumeSnapshotCondition{}
 	var snapshotID, snapshotDataName, snapshotCredID string
-	spec := &pv.Spec
-	volumeID := spec.PortworxVolume.VolumeID
+	volumeID, err := p.getVolumeIDFromPV(pv)
+	if err != nil {
+		return nil, getErrorSnapshotConditions(err), err
+	}
 
 	snapType, err := getSnapshotType(snap.Metadata.Annotations)
 	if err != nil {
@@ -885,6 +886,13 @@ func (p *portworx) SnapshotCreate(
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
+	provisioner, err := k8sutils.GetDriverTypeFromPV(pv)
+	if err != nil {
+		err = fmt.Errorf("failed to run post-snap rule due to: %v", err)
+		log.SnapshotLog(snap).Errorf(err.Error())
+		return nil, getErrorSnapshotConditions(err), err
+	}
+
 	return &crdv1.VolumeSnapshotDataSource{
 		PortworxSnapshot: &crdv1.PortworxVolumeSnapshotSource{
 			SnapshotID:          snapshotID,
@@ -892,6 +900,7 @@ func (p *portworx) SnapshotCreate(
 			SnapshotType:        snapType,
 			SnapshotCloudCredID: snapshotCredID,
 			SnapshotTaskID:      taskID,
+			VolumeProvisioner:   provisioner,
 		},
 	}, &snapStatusConditions, nil
 }
@@ -1310,12 +1319,29 @@ func (p *portworx) SnapshotRestore(
 		}
 	}
 
-	pv := &v1.PersistentVolumeSource{
-		PortworxVolume: &v1.PortworxVolumeSource{
-			VolumeID: vols[0].Id,
-			FSType:   vols[0].Format.String(),
-			ReadOnly: vols[0].Readonly,
-		},
+	var pv *v1.PersistentVolumeSource
+	// Get the source provisioner value and default to in-tree
+	switch snapshotData.Spec.PortworxSnapshot.VolumeProvisioner {
+	case crdv1.PortworxCsiDeprecatedProvisionerName:
+		fallthrough
+	case crdv1.PortworxCsiProvisionerName:
+		pv = &v1.PersistentVolumeSource{
+			CSI: &v1.CSIPersistentVolumeSource{
+				Driver:       snapshotData.Spec.PortworxSnapshot.VolumeProvisioner,
+				VolumeHandle: vols[0].Id,
+				FSType:       vols[0].Format.String(),
+				ReadOnly:     vols[0].Readonly,
+				// XXX ADD SECRET INFORMATION HERE XXX
+			},
+		}
+	default:
+		pv = &v1.PersistentVolumeSource{
+			PortworxVolume: &v1.PortworxVolumeSource{
+				VolumeID: vols[0].Id,
+				FSType:   vols[0].Format.String(),
+				ReadOnly: vols[0].Readonly,
+			},
+		}
 	}
 
 	labels := make(map[string]string)
@@ -1399,10 +1425,12 @@ func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
 		return err
 	}
 
-	if pv == nil || pv.Spec.PortworxVolume == nil {
-		return fmt.Errorf("invalid PV: %v", pv)
+	id, err := p.getVolumeIDFromPV(pv)
+	if err != nil {
+		return err
 	}
-	return volDriver.Delete(pv.Spec.PortworxVolume.VolumeID)
+
+	return volDriver.Delete(id)
 }
 
 func (p *portworx) findParentVolID(snapID string) (string, error) {
@@ -1881,17 +1909,36 @@ func (p *portworx) CancelMigration(migration *stork_crd.Migration) error {
 func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 	object runtime.Unstructured,
 ) (runtime.Unstructured, error) {
-	portworxSpec, err := collections.GetMap(object.UnstructuredContent(), "spec.portworxVolume")
-	if err != nil {
-		return nil, err
-	}
 
 	metadata, err := meta.Accessor(object)
 	if err != nil {
 		return nil, err
 	}
 
+	// Get access to the csi section of the PV
+	csiSpec, err := collections.GetMap(object.UnstructuredContent(), "spec.csi")
+
+	// Determine if CSI is used
+	if err == nil {
+		// Check the driver is a Portworx driver
+		switch csiSpec["driver"] {
+		case crdv1.PortworxCsiDeprecatedProvisionerName:
+			fallthrough
+		case crdv1.PortworxCsiProvisionerName:
+			csiSpec["volumeHandle"] = metadata.GetName()
+			return object, nil
+		}
+
+		// Fallback to in-tree driver in case GetMap() returns an empty
+		// csiSpec object.
+	}
+
+	portworxSpec, err := collections.GetMap(object.UnstructuredContent(), "spec.portworxVolume")
+	if err != nil {
+		return nil, err
+	}
 	portworxSpec["volumeID"] = metadata.GetName()
+
 	return object, nil
 }
 
@@ -2694,6 +2741,40 @@ func (p *portworx) ensureNodesHaveMinVersion(minVersionStr string) (bool, string
 	}
 
 	return true, "all nodes have expected version", nil
+}
+
+func (p *portworx) verifyPortworxPv(pv *v1.PersistentVolume) error {
+	_, err := p.getVolumeIDFromPV(pv)
+	return err
+}
+
+func (p *portworx) getVolumeIDFromPV(pv *v1.PersistentVolume) (string, error) {
+	if pv == nil {
+		return "", fmt.Errorf("nil PV passed into GetVolumeHandleFromPV")
+	}
+
+	var id string
+	if pv.Spec.CSI != nil {
+		if !isCsiProvisioner(pv.Spec.CSI.Driver) {
+			return "", fmt.Errorf("PV contains unsupported driver name: %s",
+				pv.Spec.CSI.Driver)
+		}
+		id = pv.Spec.CSI.VolumeHandle
+	} else if pv.Spec.PortworxVolume != nil {
+		id = pv.Spec.PortworxVolume.VolumeID
+	} else {
+		return "", fmt.Errorf("invalid PV: %v", pv)
+	}
+
+	if len(id) == 0 {
+		return "", fmt.Errorf("invalid PV, no volume id found: %v", pv)
+	}
+	return id, nil
+}
+
+func isCsiProvisioner(provisioner string) bool {
+	return provisioner == crdv1.PortworxCsiProvisionerName ||
+		provisioner == crdv1.PortworxCsiDeprecatedProvisionerName
 }
 
 func isCloudsnapStatusFailed(st api.CloudBackupStatusType) bool {
