@@ -11,6 +11,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/cluster"
 	"github.com/libopenstorage/stork/pkg/clusterdomains"
 	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
 	"github.com/libopenstorage/stork/pkg/initializer"
@@ -40,6 +41,7 @@ const (
 	defaultLockObjectName      = "stork"
 	defaultLockObjectNamespace = "kube-system"
 	eventComponentName         = "stork"
+	debugFilePath              = "/var/cores"
 )
 
 var ext *extender.Extender
@@ -133,6 +135,7 @@ func main() {
 }
 
 func run(c *cli.Context) {
+	dbg.Init(c.App.Name, debugFilePath)
 
 	log.Infof("Starting stork version %v", version.Version)
 	driverName := c.String("driver")
