@@ -110,11 +110,15 @@ func (c *ClusterDomainsStatusController) Handle(ctx context.Context, event sdk.E
 
 func (c *ClusterDomainsStatusController) doListsMatch(domainListSDK, domainListCRD []string) bool {
 	for _, sdkDomain := range domainListSDK {
+		found := false
 		for _, crdDomain := range domainListCRD {
 			if crdDomain == sdkDomain {
-				continue
+				found = true
+				break
 			}
-			// could not find a match
+		}
+		// could not find a match
+		if !found {
 			return false
 		}
 	}
