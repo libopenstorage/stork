@@ -11,8 +11,9 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
+	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
@@ -123,6 +124,22 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 
 	pod := args.Pod
+	//	if pod.Spec.Volumes[0].PersistentVolumeClaim.Name, pod.Namss
+	//		return/
+
+	//}
+	//storklog.PodLog(pod).Infof("Entering filter request1 %v", pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName)
+	pvc, err := k8s.Instance().GetPersistentVolumeClaim(pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName, pod.Namespace)
+	if err != nil {
+		msg := "get pvc error"
+		storklog.PodLog(pod).Warnf(msg)
+	}
+	if pvc.Annotations != nil && pvc.Annotations["px-volume-restore"] == "true" {
+		msg := "Volume restore is in progress"
+		storklog.PodLog(pod).Warnf(msg)
+		e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+		return
+	}
 	storklog.PodLog(pod).Debugf("Nodes in filter request:")
 	for _, node := range args.Nodes.Items {
 		storklog.PodLog(pod).Debugf("%v %+v", node.Name, node.Status.Addresses)
@@ -271,6 +288,20 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	}
 
 	pod := args.Pod
+	//storklog.PodLog(pod).Infof("Entering filter request1 %v", pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName)
+	pvc, err := k8s.Instance().GetPersistentVolumeClaim(pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName, pod.Namespace)
+	if err != nil {
+		msg := "prio error pvc"
+		storklog.PodLog(pod).Warnf(msg)
+	}
+	if pvc.Annotations["test"] == "value" {
+		//storklog.PodLog(pod).Info("Entering filter request1")
+		//if pod.Annotations["test"] == "value" {
+		msg := "Volume restore is in progress p"
+		storklog.PodLog(pod).Warnf(msg)
+		e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+		return
+	}
 	storklog.PodLog(pod).Debugf("Nodes in prioritize request:")
 	for _, node := range args.Nodes.Items {
 		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)

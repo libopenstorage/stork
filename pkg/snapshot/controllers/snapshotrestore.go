@@ -51,7 +51,11 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 		if snapRestore.Spec.SourceName == "" || snapRestore.Spec.SourceType == "" {
 			return fmt.Errorf("empty Snapshot name/type or namespace")
 		}
-
+		if snapRestore.Status.Status == "Done" {
+			return nil
+		}
+		// Todo: we may want to delete internal volume created
+		// in case of cloudsnap restore here
 		if event.Deleted {
 			return nil
 		}
