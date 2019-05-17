@@ -1,92 +1,121 @@
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: elasticsearch-data
-  labels:
-    component: elasticsearch
-    role: data
+  name: elasticsearch-cluster
 spec:
   clusterIP: None
   selector:
-    component: elasticsearch
-    role: data
+    app: es-cluster
   ports:
   - name: transport
     port: 9300
-    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-loadbalancer
+spec:
+  selector:
+    app: es-cluster
+  ports:
+  - name: http
+    port: 80
+    targetPort: 9200
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: es-config
+data:
+  elasticsearch.yml: |
+    cluster.name: my-elastic-cluster
+    network.host: "0.0.0.0"
+    bootstrap.memory_lock: false
+    discovery.zen.ping.unicast.hosts: elasticsearch-cluster
+    discovery.zen.minimum_master_nodes: 1
+    xpack.security.enabled: false
+    xpack.monitoring.enabled: false
+  ES_JAVA_OPTS: -Xms512m -Xmx512m
 ---
 apiVersion: apps/v1beta2
 kind: StatefulSet
 metadata:
-  name: elasticsearch-data
-  labels:
-    component: elasticsearch
-    role: data
+  name: esnode
 spec:
-  serviceName: elasticsearch-data
+  serviceName: elasticsearch
   replicas: 3
   selector:
     matchLabels:
-      component: elasticsearch
-      role: data
+      app: es-cluster
+  updateStrategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
-        component: elasticsearch
-        role: data
+        app: es-cluster
     spec:
       schedulerName: stork
+      securityContext:
+        fsGroup: 1000
       initContainers:
       - name: init-sysctl
         image: busybox
         imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
         command: ["sysctl", "-w", "vm.max_map_count=262144"]
-        securityContext:
-          privileged: true
       containers:
-      - name: elasticsearch-data-pod
+      - name: elasticsearch
+        resources:
+          requests:
+            memory: 1Gi
         securityContext:
           privileged: true
+          runAsUser: 1000
           capabilities:
             add:
               - IPC_LOCK
-        image: quay.io/pires/docker-elasticsearch-kubernetes:5.5.0
-        imagePullPolicy: Always
+              - SYS_RESOURCE
+        image: docker.elastic.co/elasticsearch/elasticsearch:6.5.0
         env:
-        - name: NAMESPACE
+        - name: ES_JAVA_OPTS
           valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: "CLUSTER_NAME"
-          value: "escluster"
-        - name: NODE_MASTER
-          value: "false"
-        - name: NODE_INGEST
-          value: "false"
-        - name: HTTP_ENABLE
-          value: "false"
-        - name: "ES_JAVA_OPTS"
-          value: "-Xms256m -Xmx256m"
-        - name: "NETWORK_HOST"
-          value: "_eth0_"
+            configMapKeyRef:
+              name: es-config
+              key: ES_JAVA_OPTS
+        readinessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /_cluster/health?local=true
+            port: 9200
+          initialDelaySeconds: 5
         ports:
+        - containerPort: 9200
+          name: es-http
         - containerPort: 9300
-          name: transport
-          protocol: TCP
+          name: es-transport
         volumeMounts:
-        - name: elasticdata-vol
-          mountPath: /data
+        - name: es-data
+          mountPath: /usr/share/elasticsearch/data
+        - name: elasticsearch-config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          subPath: elasticsearch.yml
+      volumes:
+      - name: elasticsearch-config
+        configMap:
+          name: es-config
+          items:
+          - key: elasticsearch.yml
+            path: elasticsearch.yml
   volumeClaimTemplates:
   - metadata:
-      name: elasticdata-vol
+      name: es-data
       annotations:
         volume.beta.kubernetes.io/storage-class: px-elasticdata-sc
     spec:
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:
-          storage: 2Gi
+          storage: 5Gi
