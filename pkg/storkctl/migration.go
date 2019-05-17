@@ -107,6 +107,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 			for _, ns := range activationNamespaces {
 				updateStatefulSets(ns, true, ioStreams)
 				updateDeployments(ns, true, ioStreams)
+				updateDeploymentConfigs(ns, true, ioStreams)
 			}
 
 		},
