@@ -11,6 +11,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
@@ -275,7 +276,17 @@ func (a *ApplicationRestoreController) downloadObject(
 	}
 
 	objectPath := backup.Status.BackupPath
-	return bucket.ReadAll(context.TODO(), filepath.Join(objectPath, objectName))
+	data, err := bucket.ReadAll(context.TODO(), filepath.Join(objectPath, objectName))
+	if err != nil {
+		return nil, err
+	}
+	if restoreLocation.Location.EncryptionKey != "" {
+		if data, err = crypto.Decrypt(data, restoreLocation.Location.EncryptionKey); err != nil {
+			return nil, err
+		}
+	}
+
+	return data, nil
 }
 
 func (a *ApplicationRestoreController) downloadResources(
