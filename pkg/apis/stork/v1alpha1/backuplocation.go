@@ -33,11 +33,12 @@ type BackupLocation struct {
 type BackupLocationItem struct {
 	Type BackupLocationType `json:"type"`
 	// Path is either the bucket or any other path for the backup location
-	Path         string        `json:"path"`
-	S3Config     *S3Config     `json:"s3Config,omitempty"`
-	AzureConfig  *AzureConfig  `json:"azureConfig,omitempty"`
-	GoogleConfig *GoogleConfig `json:"googleConfig,omitempty"`
-	SecretConfig string        `json:"secretConfig"`
+	Path          string        `json:"path"`
+	EncryptionKey string        `json:"encryptionKey"`
+	S3Config      *S3Config     `json:"s3Config,omitempty"`
+	AzureConfig   *AzureConfig  `json:"azureConfig,omitempty"`
+	GoogleConfig  *GoogleConfig `json:"googleConfig,omitempty"`
+	SecretConfig  string        `json:"secretConfig"`
 }
 
 // BackupLocationType is the type of the backup location
@@ -92,6 +93,15 @@ type BackupLocationList struct {
 func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
 	if bl.Location.SecretConfig == "" {
 		return nil
+	}
+	if bl.Location.SecretConfig != "" {
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(bl.Location.SecretConfig, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
+		}
+		if val, ok := secretConfig.Data["encryptionKey"]; ok && val != nil {
+			bl.Location.EncryptionKey = strings.TrimSuffix(string(val), "\n")
+		}
 	}
 	switch bl.Location.Type {
 	case BackupLocationS3:
