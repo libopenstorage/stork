@@ -204,3 +204,14 @@ func PVCLog(pvc *v1.PersistentVolumeClaim) *logrus.Entry {
 
 	return logrus.WithFields(logrus.Fields{})
 }
+
+// VolumeSnapshotRestoreLog formats a log message with volumesnapshotrestore information
+func VolumeSnapshotRestoreLog(snapRestore *storkv1.VolumeSnapshotRestore) *logrus.Entry {
+	if snapRestore != nil {
+		return logrus.WithFields(logrus.Fields{
+			"VolumeSnapshotRestoreName":      snapRestore.Name,
+			"VolumeSnapshotRestoreNamespace": snapRestore.Namespace,
+		})
+	}
+	return logrus.WithFields(logrus.Fields{})
+}

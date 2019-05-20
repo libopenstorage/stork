@@ -36,6 +36,8 @@ const (
 	defaultScore = 5
 
 	schedulingFailureEventReason = "FailedScheduling"
+	annotationPrefix             = "stork.libopenstorage.org/"
+	volumerestore                = annotationPrefix
 )
 
 // Extender Scheduler extender
@@ -124,22 +126,20 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 
 	pod := args.Pod
-	//	if pod.Spec.Volumes[0].PersistentVolumeClaim.Name, pod.Namss
-	//		return/
+	for _, vol := range pod.Spec.Volumes {
+		// if any of pvc has restore annotation skip scheduling pod
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
+		if err != nil {
+			msg := "Unable to find PVC claim"
+			storklog.PodLog(pod).Warnf(msg)
+		} else if pvc.Annotations != nil && pvc.Annotations[volumerestore] == "true" {
+			msg := "Volume restore is in progress for pvc: " + pvc.Name
+			storklog.PodLog(pod).Warnf(msg)
+			e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+			return
+		}
+	}
 
-	//}
-	//storklog.PodLog(pod).Infof("Entering filter request1 %v", pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName)
-	pvc, err := k8s.Instance().GetPersistentVolumeClaim(pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName, pod.Namespace)
-	if err != nil {
-		msg := "get pvc error"
-		storklog.PodLog(pod).Warnf(msg)
-	}
-	if pvc.Annotations != nil && pvc.Annotations["px-volume-restore"] == "true" {
-		msg := "Volume restore is in progress"
-		storklog.PodLog(pod).Warnf(msg)
-		e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
-		return
-	}
 	storklog.PodLog(pod).Debugf("Nodes in filter request:")
 	for _, node := range args.Nodes.Items {
 		storklog.PodLog(pod).Debugf("%v %+v", node.Name, node.Status.Addresses)
@@ -288,20 +288,6 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 	}
 
 	pod := args.Pod
-	//storklog.PodLog(pod).Infof("Entering filter request1 %v", pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName)
-	pvc, err := k8s.Instance().GetPersistentVolumeClaim(pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName, pod.Namespace)
-	if err != nil {
-		msg := "prio error pvc"
-		storklog.PodLog(pod).Warnf(msg)
-	}
-	if pvc.Annotations["test"] == "value" {
-		//storklog.PodLog(pod).Info("Entering filter request1")
-		//if pod.Annotations["test"] == "value" {
-		msg := "Volume restore is in progress p"
-		storklog.PodLog(pod).Warnf(msg)
-		e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
-		return
-	}
 	storklog.PodLog(pod).Debugf("Nodes in prioritize request:")
 	for _, node := range args.Nodes.Items {
 		storklog.PodLog(pod).Debugf("%+v", node.Status.Addresses)

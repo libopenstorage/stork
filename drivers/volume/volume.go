@@ -53,7 +53,7 @@ type Driver interface {
 	GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error)
 
 	// VolumeSnapshotRestore for given pvc. Returns error if restore failed
-	VolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
+	VolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore, map[string]string) error
 
 	// Stop the driver
 	Stop() error
