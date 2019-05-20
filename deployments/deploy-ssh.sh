@@ -36,6 +36,10 @@ if [ -n "${STORAGE_BASE_VERSION}" ]; then
     UPGRADE_BASE_VERSION_ARG="--storage-driver-base-version=$STORAGE_BASE_VERSION"
 fi
 
+if [ -n "${PROVISIONER}" ]; then
+	PROVISIONER="$PROVISIONER"
+fi
+
 if [ -z "${TORPEDO_IMG}" ]; then
     TORPEDO_IMG="portworx/torpedo:latest"
     echo "Using default torpedo image: ${TORPEDO_IMG}"
@@ -189,6 +193,7 @@ spec:
             "--app-list", "$APP_LIST",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
+            "--provisioner", "$PROVISIONER",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true

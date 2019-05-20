@@ -43,6 +43,7 @@ const (
 	scaleFactorCliFlag                 = "scale-factor"
 	storageDriverUpgradeVersionCliFlag = "storage-driver-upgrade-version"
 	storageDriverBaseVersionCliFlag    = "storage-driver-base-version"
+	provisionerFlag                    = "provisioner"
 )
 
 const (
@@ -207,7 +208,8 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 	Step("schedule applications", func() {
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-			AppKeys: Inst().AppList,
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
@@ -355,12 +357,13 @@ type Torpedo struct {
 	ScaleFactor                 int
 	StorageDriverUpgradeVersion string
 	StorageDriverBaseVersion    string
+	Provisioner                 string
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc, appListCSV string
+	var s, n, v, specDir, logLoc, appListCSV, provisionerName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -381,6 +384,7 @@ func ParseFlags() {
 		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
 			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
+	flag.StringVar(&provisionerName, provisionerFlag, "", "Name of the storage provisioner Portworx or CSI.")
 
 	flag.Parse()
 
@@ -410,6 +414,7 @@ func ParseFlags() {
 				StorageDriverUpgradeVersion: volUpgradeVersion,
 				StorageDriverBaseVersion:    volBaseVersion,
 				AppList:                     appList,
+				Provisioner:                 provisionerName,
 			}
 		})
 	}
