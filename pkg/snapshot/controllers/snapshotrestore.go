@@ -37,7 +37,7 @@ func (c *SnapshotRestoreController) Init() error {
 		&schema.GroupVersionKind{
 			Group:   stork.GroupName,
 			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.SnapshotRestore{}).Name(),
+			Kind:    reflect.TypeOf(stork_api.VolumeSnapshotRestore{}).Name(),
 		},
 		"",
 		1*time.Minute,
@@ -47,7 +47,7 @@ func (c *SnapshotRestoreController) Init() error {
 // Handle updates for SnapshotRestore objects
 func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
-	case *stork_api.SnapshotRestore:
+	case *stork_api.VolumeSnapshotRestore:
 		snapRestore := o
 		if snapRestore.Spec.SourceName == "" || snapRestore.Spec.SourceType == "" {
 			return fmt.Errorf("empty Snapshot name/type or namespace")
@@ -70,7 +70,7 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 			return fmt.Errorf("failed to restore pvc details %v", err)
 		}
 
-		snapRestore.Status.Status = "Done"
+		snapRestore.Status.Status = stork_api.SnapshotRestoreStatusReady
 		c.Recorder.Event(snapRestore,
 			v1.EventTypeNormal,
 			string(snapRestore.Status.Status),
@@ -92,7 +92,7 @@ func (c *SnapshotRestoreController) createCRD() error {
 		Group:   stork.GroupName,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
-		Kind:    reflect.TypeOf(stork_api.SnapshotRestore{}).Name(),
+		Kind:    reflect.TypeOf(stork_api.VolumeSnapshotRestore{}).Name(),
 	}
 	err := k8s.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {

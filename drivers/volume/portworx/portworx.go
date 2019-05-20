@@ -930,12 +930,12 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 }
 
 // VolumeSnapshotRestore does in-place restore of snapshot to it's parent volume
-func (p *portworx) VolumeSnapshotRestore(snapRestore *stork_crd.SnapshotRestore) error {
+func (p *portworx) VolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore) error {
 	var err error
 	// restoreVolumes[snapID]volumeID
 	restoreVolumes := make(map[string]string)
 	// should bw used to set security context if needed
-	params := make(map[string]string)
+	params := snapRestore.Annotations
 	snapName := snapRestore.Spec.SourceName
 	snapNamespace := snapRestore.Spec.SourceNamespace
 
@@ -1033,8 +1033,6 @@ func (p *portworx) localSnapshotRestore(
 			return err
 		}
 		logrus.Infof("Completed restore for volume %v with Snapshotshot %v", volID, snapID)
-		// TODO: should we fail if one snap restore fails or retiries for failed
-		// one
 		volumeInfo = append(volumeInfo,
 			&stork_crd.RestoreVolumeInfo{Volume: volID,
 				RestoreStatus: stork_crd.SnapshotRestoreStatusReady})

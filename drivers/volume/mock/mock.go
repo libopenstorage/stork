@@ -254,8 +254,8 @@ func (m *Driver) GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error) {
 }
 
 // VolumeSnapshotRestore Not implemented
-func (m *Driver) VolumeSnapshotRestore(snap *stork_crd.SnapshotRestore) error {
-	return nil
+func (m *Driver) VolumeSnapshotRestore(snap *stork_crd.VolumeSnapshotRestore) error {
+	return &errors.ErrNotImplemented{}
 }
 
 func init() {
