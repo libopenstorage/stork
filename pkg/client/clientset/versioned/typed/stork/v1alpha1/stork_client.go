@@ -39,7 +39,6 @@ type StorkV1alpha1Interface interface {
 	MigrationSchedulesGetter
 	RulesGetter
 	SchedulePoliciesGetter
-	SnapshotRestoresGetter
 	StorageClustersGetter
 	VolumeSnapshotRestoresGetter
 	VolumeSnapshotSchedulesGetter
@@ -96,10 +95,6 @@ func (c *StorkV1alpha1Client) Rules(namespace string) RuleInterface {
 
 func (c *StorkV1alpha1Client) SchedulePolicies() SchedulePolicyInterface {
 	return newSchedulePolicies(c)
-}
-
-func (c *StorkV1alpha1Client) SnapshotRestores(namespace string) SnapshotRestoreInterface {
-	return newSnapshotRestores(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) StorageClusters(namespace string) StorageClusterInterface {

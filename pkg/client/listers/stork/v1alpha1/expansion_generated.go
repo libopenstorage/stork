@@ -102,14 +102,6 @@ type RuleNamespaceListerExpansion interface{}
 // SchedulePolicyLister.
 type SchedulePolicyListerExpansion interface{}
 
-// SnapshotRestoreListerExpansion allows custom methods to be added to
-// SnapshotRestoreLister.
-type SnapshotRestoreListerExpansion interface{}
-
-// SnapshotRestoreNamespaceListerExpansion allows custom methods to be added to
-// SnapshotRestoreNamespaceLister.
-type SnapshotRestoreNamespaceListerExpansion interface{}
-
 // StorageClusterListerExpansion allows custom methods to be added to
 // StorageClusterLister.
 type StorageClusterListerExpansion interface{}
