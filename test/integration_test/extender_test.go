@@ -158,7 +158,7 @@ func driverNodeErrorTest(t *testing.T) {
 
 func pvcOwnershipTest(t *testing.T) {
 	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "ownershiptest"),
-		scheduler.ScheduleOptions{AppKeys: []string{"mysql-repl-1"}})
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 
