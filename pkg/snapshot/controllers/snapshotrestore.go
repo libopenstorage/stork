@@ -12,7 +12,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -53,17 +52,14 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 			return fmt.Errorf("empty Snapshot name/type or namespace")
 		}
 
-		// Todo: we may want to delete internal volume created
-		// in case of cloudsnap restore here
 		if event.Deleted {
 			return nil
 		}
-		if snapRestore.Spec.DestinationPVC == nil {
-			log.Info("Request for in place restore of volumes")
+
+		if snapRestore.Status.Status == stork_api.SnapshotRestoreStatusReady {
+			return nil
 		}
 
-		// Do k8s get snapshot releated stuff here
-		// Do pvc releated sutff to portworx.go
 		err := c.Driver.VolumeSnapshotRestore(snapRestore)
 		if err != nil {
 			snapRestore.Status.Status = stork_api.SnapshotRestoreStatusError
