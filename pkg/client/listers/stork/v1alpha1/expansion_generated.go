@@ -26,6 +26,14 @@ type ApplicationBackupListerExpansion interface{}
 // ApplicationBackupNamespaceLister.
 type ApplicationBackupNamespaceListerExpansion interface{}
 
+// ApplicationBackupScheduleListerExpansion allows custom methods to be added to
+// ApplicationBackupScheduleLister.
+type ApplicationBackupScheduleListerExpansion interface{}
+
+// ApplicationBackupScheduleNamespaceListerExpansion allows custom methods to be added to
+// ApplicationBackupScheduleNamespaceLister.
+type ApplicationBackupScheduleNamespaceListerExpansion interface{}
+
 // ApplicationCloneListerExpansion allows custom methods to be added to
 // ApplicationCloneLister.
 type ApplicationCloneListerExpansion interface{}

@@ -20,6 +20,8 @@ package v1alpha1
 
 type ApplicationBackupExpansion interface{}
 
+type ApplicationBackupScheduleExpansion interface{}
+
 type ApplicationCloneExpansion interface{}
 
 type ApplicationRestoreExpansion interface{}

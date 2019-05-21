@@ -55,6 +55,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=stork.libopenstorage.org, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("applicationbackups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().ApplicationBackups().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("applicationbackupschedules"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().ApplicationBackupSchedules().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("applicationclones"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().ApplicationClones().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("applicationrestores"):
