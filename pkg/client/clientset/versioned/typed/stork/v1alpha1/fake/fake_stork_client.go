@@ -32,6 +32,10 @@ func (c *FakeStorkV1alpha1) ApplicationBackups(namespace string) v1alpha1.Applic
 	return &FakeApplicationBackups{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) ApplicationBackupSchedules(namespace string) v1alpha1.ApplicationBackupScheduleInterface {
+	return &FakeApplicationBackupSchedules{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) ApplicationClones(namespace string) v1alpha1.ApplicationCloneInterface {
 	return &FakeApplicationClones{c, namespace}
 }
