@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// ApplicationBackups returns a ApplicationBackupInformer.
 	ApplicationBackups() ApplicationBackupInformer
+	// ApplicationBackupSchedules returns a ApplicationBackupScheduleInformer.
+	ApplicationBackupSchedules() ApplicationBackupScheduleInformer
 	// ApplicationClones returns a ApplicationCloneInformer.
 	ApplicationClones() ApplicationCloneInformer
 	// ApplicationRestores returns a ApplicationRestoreInformer.
@@ -68,6 +70,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ApplicationBackups returns a ApplicationBackupInformer.
 func (v *version) ApplicationBackups() ApplicationBackupInformer {
 	return &applicationBackupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ApplicationBackupSchedules returns a ApplicationBackupScheduleInformer.
+func (v *version) ApplicationBackupSchedules() ApplicationBackupScheduleInformer {
+	return &applicationBackupScheduleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ApplicationClones returns a ApplicationCloneInformer.
