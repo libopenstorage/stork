@@ -16,8 +16,9 @@ const (
 // ClusterDomains provides a list of activated cluster domains and a list
 // of inactive cluster domains
 type ClusterDomains struct {
-	Active   []string `json:"active"`
-	Inactive []string `json:"inactive"`
+	LocalDomain string   `json:"localDomain"`
+	Active      []string `json:"active"`
+	Inactive    []string `json:"inactive"`
 }
 
 // +genclient
