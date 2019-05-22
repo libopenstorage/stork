@@ -1723,6 +1723,15 @@ func (p *portworx) DeleteGroupSnapshot(snap *stork_crd.GroupVolumeSnapshot) erro
 
 func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 
+	cluster, err := p.clusterManager.Enumerate()
+	if err != nil {
+		return nil, err
+	}
+	nodeConfig, err := p.clusterManager.GetNodeConf(cluster.NodeId)
+	if err != nil {
+		return nil, err
+	}
+
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return nil, err
@@ -1736,7 +1745,9 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 		return nil, err
 	}
 
-	clusterDomainsInfo := &stork_crd.ClusterDomains{}
+	clusterDomainsInfo := &stork_crd.ClusterDomains{
+		LocalDomain: nodeConfig.ClusterDomain,
+	}
 	for _, domainName := range enumerateResp.ClusterDomainNames {
 		insCtx, insCancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
 		defer insCancel()
