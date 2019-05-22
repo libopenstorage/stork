@@ -135,9 +135,9 @@ func checkTrigger(
 		return false, nil
 	}
 
-	// If we are within one hour after the next trigger time, trigger a new
+	// If we are within one hour after/at the next trigger time, trigger a new
 	// schedule
-	if now.After(nextTrigger) && now.Sub(nextTrigger).Hours() < 1 {
+	if now.Equal(nextTrigger) || (now.After(nextTrigger) && now.Sub(nextTrigger).Hours() < 1) {
 		return true, nil
 	}
 	return false, nil
