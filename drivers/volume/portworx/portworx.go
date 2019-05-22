@@ -499,8 +499,6 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 			if region, ok := labels[kubeletapis.LabelZoneRegion]; ok {
 				nodeInfo.Region = region
 			}
-		} else {
-			logrus.Warnf("Error getting labels for node %v: %v", nodeInfo.Hostname, err)
 		}
 
 		nodes = append(nodes, nodeInfo)
@@ -562,7 +560,6 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 	}
 
 	if provisioner != provisionerName && provisioner != csiProvisionerName && provisioner != snapshot.GetProvisionerName() {
-		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
 	return true
