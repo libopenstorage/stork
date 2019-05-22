@@ -86,7 +86,9 @@ func (c *ClusterDomainsStatusController) Handle(ctx context.Context, event sdk.E
 			)
 			logrus.Errorf("Failed to get cluster domain info: %v", err)
 		} else {
-			if len(clusterDomainsInfo.Active) != len(clusterDomainsStatus.Status.Active) ||
+			if clusterDomainsStatus.Status.LocalDomain != clusterDomainsInfo.LocalDomain {
+				updated = true
+			} else if len(clusterDomainsInfo.Active) != len(clusterDomainsStatus.Status.Active) ||
 				len(clusterDomainsInfo.Inactive) != len(clusterDomainsStatus.Status.Inactive) {
 				updated = true
 			} else {
@@ -98,8 +100,7 @@ func (c *ClusterDomainsStatusController) Handle(ctx context.Context, event sdk.E
 			}
 		}
 		if updated {
-			clusterDomainsStatus.Status.Active = clusterDomainsInfo.Active
-			clusterDomainsStatus.Status.Inactive = clusterDomainsInfo.Inactive
+			clusterDomainsStatus.Status = *clusterDomainsInfo
 			if err := sdk.Update(clusterDomainsStatus); err != nil {
 				return err
 			}

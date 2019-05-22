@@ -12,7 +12,7 @@ import (
 	"k8s.io/kubernetes/pkg/printers"
 )
 
-var clusterDomainsStatusColumns = []string{"NAME", "ACTIVE", "INACTIVE", "CREATED"}
+var clusterDomainsStatusColumns = []string{"NAME", "LOCAL-DOMAIN", "ACTIVE", "INACTIVE", "CREATED"}
 var clusterDomainsStatusSubcommand = "clusterdomainsstatus"
 var clusterDomainsStatusAliases = []string{"cds"}
 
@@ -64,8 +64,9 @@ func clusterDomainsStatusPrinter(cdsList *storkv1.ClusterDomainsStatusList, writ
 		name := printers.FormatResourceName(options.Kind, cds.Name, options.WithKind)
 
 		creationTime := toTimeString(cds.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\n",
+		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\n",
 			name,
+			cds.Status.LocalDomain,
 			cds.Status.Active,
 			cds.Status.Inactive,
 			creationTime); err != nil {

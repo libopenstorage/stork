@@ -19,8 +19,9 @@ func createClusterDomainsStatus(t *testing.T, name string) *storkv1.ClusterDomai
 			Name: name,
 		},
 		Status: storkv1.ClusterDomains{
-			Active:   activeZones,
-			Inactive: inactiveZones,
+			LocalDomain: "zone1",
+			Active:      activeZones,
+			Inactive:    inactiveZones,
 		},
 	}
 	_, err := k8s.Instance().CreateClusterDomainsStatus(cds)
@@ -58,8 +59,8 @@ func TestGetClusterDomainsStatus(t *testing.T) {
 	createClusterDomainsStatus(t, "test1")
 	cmdArgs := []string{"get", "clusterdomainsstatus", "test1"}
 
-	expected := "NAME      ACTIVE          INACTIVE        CREATED\n" +
-		"test1     [zone1 zone2]   [zone3 zone4]   \n"
+	expected := "NAME      LOCAL-DOMAIN   ACTIVE          INACTIVE        CREATED\n" +
+		"test1     zone1          [zone1 zone2]   [zone3 zone4]   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -68,10 +69,11 @@ func TestGetClusterDomainsStatusWithChanges(t *testing.T) {
 	cds := createClusterDomainsStatus(t, "test1")
 	cmdArgs := []string{"get", "clusterdomainsstatus", "test1"}
 
-	expected := "NAME      ACTIVE          INACTIVE        CREATED\n" +
-		"test1     [zone1 zone2]   [zone3 zone4]   \n"
+	expected := "NAME      LOCAL-DOMAIN   ACTIVE          INACTIVE        CREATED\n" +
+		"test1     zone1          [zone1 zone2]   [zone3 zone4]   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
+	cds.Status.LocalDomain = "zone1"
 	cds.Status.Active = []string{"zone1", "zone2", "zone3"}
 	cds.Status.Inactive = []string{"zone4"}
 	_, err := k8s.Instance().UpdateClusterDomainsStatus(cds)
@@ -79,8 +81,8 @@ func TestGetClusterDomainsStatusWithChanges(t *testing.T) {
 
 	cmdArgs = []string{"get", "clusterdomainsstatus", "test1"}
 
-	expected = "NAME      ACTIVE                INACTIVE   CREATED\n" +
-		"test1     [zone1 zone2 zone3]   [zone4]    \n"
+	expected = "NAME      LOCAL-DOMAIN   ACTIVE                INACTIVE   CREATED\n" +
+		"test1     zone1          [zone1 zone2 zone3]   [zone4]    \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 }
