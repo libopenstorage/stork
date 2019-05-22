@@ -8,7 +8,9 @@ import (
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/heptio/ark/pkg/util/collections"
 	"github.com/libopenstorage/stork/drivers/volume"
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -98,6 +100,12 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
+
+	crbs, err := k8s.Instance().ListClusterRoleBindings()
+	if err != nil {
+		return nil, err
+	}
+
 	for _, group := range r.discoveryHelper.Resources() {
 		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
@@ -144,7 +152,7 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 						return nil, fmt.Errorf("error casting object: %v", o)
 					}
 
-					collect, err := r.objectToBeCollected(labelSelectors, resourceMap, runtimeObject, ns)
+					collect, err := r.objectToBeCollected(labelSelectors, resourceMap, runtimeObject, crbs, ns)
 					if err != nil {
 						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 					}
@@ -175,6 +183,7 @@ func (r *ResourceCollector) objectToBeCollected(
 	labelSelectors map[string]string,
 	resourceMap map[types.UID]bool,
 	object runtime.Unstructured,
+	crbs *rbacv1.ClusterRoleBindingList,
 	namespace string,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
@@ -208,7 +217,7 @@ func (r *ResourceCollector) objectToBeCollected(
 	case "ClusterRoleBinding":
 		return r.clusterRoleBindingToBeCollected(labelSelectors, object, namespace)
 	case "ClusterRole":
-		return r.clusterRoleToBeCollected(labelSelectors, object, namespace)
+		return r.clusterRoleToBeCollected(labelSelectors, object, crbs, namespace)
 	case "ServiceAccount":
 		return r.serviceAccountToBeCollected(object)
 	case "Secret":

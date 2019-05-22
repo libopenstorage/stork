@@ -15,5 +15,5 @@ func (r *ResourceCollector) serviceAccountToBeCollected(
 
 	// Don't migrate the default service account
 	name := metadata.GetName()
-	return name != "default", nil
+	return (name != "default" && name != "builder" && name != "deployer"), nil
 }
