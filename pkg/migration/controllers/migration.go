@@ -20,6 +20,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -556,6 +557,7 @@ func (m *MigrationController) objectToBeMigrated(
 	migration *stork_api.Migration,
 	resourceMap map[types.UID]bool,
 	object runtime.Unstructured,
+	crbs *rbacv1.ClusterRoleBindingList,
 	namespace string,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
@@ -643,9 +645,8 @@ func (m *MigrationController) objectToBeMigrated(
 		}
 		return true, nil
 	case "ClusterRoleBinding":
-		name := metadata.GetName()
-		crb, err := k8s.Instance().GetClusterRoleBinding(name)
-		if err != nil {
+		var crb rbacv1.ClusterRoleBinding
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &crb); err != nil {
 			return false, err
 		}
 		for _, subject := range crb.Subjects {
@@ -656,10 +657,6 @@ func (m *MigrationController) objectToBeMigrated(
 		return false, nil
 	case "ClusterRole":
 		name := metadata.GetName()
-		crbs, err := k8s.Instance().ListClusterRoleBindings()
-		if err != nil {
-			return false, err
-		}
 		for _, crb := range crbs.Items {
 			if crb.RoleRef.Name == name {
 				for _, subject := range crb.Subjects {
@@ -674,7 +671,7 @@ func (m *MigrationController) objectToBeMigrated(
 	case "ServiceAccount":
 		// Don't migrate the default service account
 		name := metadata.GetName()
-		if name == "default" {
+		if name == "default" || name == "builder" || name == "deployer" {
 			return false, nil
 		}
 	}
@@ -752,6 +749,10 @@ func (m *MigrationController) getResources(
 			continue
 		}
 
+		crbs, err := k8s.Instance().ListClusterRoleBindings()
+		if err != nil {
+			return nil, err
+		}
 		resourceMap := make(map[types.UID]bool)
 		for _, resource := range group.APIResources {
 			if !resourceToBeMigrated(migration, resource) {
@@ -788,7 +789,7 @@ func (m *MigrationController) getResources(
 						return nil, fmt.Errorf("Error casting object: %v", o)
 					}
 
-					migrate, err := m.objectToBeMigrated(migration, resourceMap, runtimeObject, ns)
+					migrate, err := m.objectToBeMigrated(migration, resourceMap, runtimeObject, crbs, ns)
 					if err != nil {
 						return nil, fmt.Errorf("Error processing object %v: %v", runtimeObject, err)
 					}
