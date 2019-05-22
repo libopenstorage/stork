@@ -37,6 +37,7 @@ func (m *Migration) Init(migrationAdminNamespace string) error {
 		return fmt.Errorf("error initializing migration controller: %v", err)
 	}
 	m.migrationScheduleController = &controllers.MigrationScheduleController{
+		Driver:   m.Driver,
 		Recorder: m.Recorder,
 	}
 	err = m.migrationScheduleController.Init()

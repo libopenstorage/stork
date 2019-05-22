@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
@@ -28,6 +29,7 @@ const (
 
 // MigrationScheduleController reconciles MigrationSchedule objects
 type MigrationScheduleController struct {
+	Driver   volume.Driver
 	Recorder record.EventRecorder
 }
 
@@ -72,6 +74,24 @@ func (m *MigrationScheduleController) Handle(ctx context.Context, event sdk.Even
 
 		// Then check if any of the policies require a trigger if it is enabled
 		if migrationSchedule.Spec.Suspend == nil || !*migrationSchedule.Spec.Suspend {
+			clusterDomainsInfo, err := m.Driver.GetClusterDomains()
+			// Ignore errors
+			if err == nil {
+				for _, domain := range clusterDomainsInfo.Inactive {
+					if domain == clusterDomainsInfo.LocalDomain {
+						suspend := true
+						migrationSchedule.Spec.Suspend = &suspend
+						msg := fmt.Sprintf("Suspending migration schedule since local clusterdomain is inactive")
+						m.Recorder.Event(migrationSchedule,
+							v1.EventTypeWarning,
+							"Suspended",
+							msg)
+						log.MigrationScheduleLog(migrationSchedule).Warn(msg)
+						return sdk.Update(migrationSchedule)
+					}
+				}
+			}
+
 			policyType, start, err := m.shouldStartMigration(migrationSchedule)
 			if err != nil {
 				msg := fmt.Sprintf("Error checking if migration should be triggered: %v", err)
