@@ -60,6 +60,7 @@ func (r *ResourceCollector) clusterRoleBindingToBeCollected(
 func (r *ResourceCollector) clusterRoleToBeCollected(
 	labelSelectors map[string]string,
 	object runtime.Unstructured,
+	crbs *rbacv1.ClusterRoleBindingList,
 	namespace string,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
@@ -67,10 +68,6 @@ func (r *ResourceCollector) clusterRoleToBeCollected(
 		return false, err
 	}
 	name := metadata.GetName()
-	crbs, err := k8s.Instance().ListClusterRoleBindings()
-	if err != nil {
-		return false, err
-	}
 	// Find the corresponding ClusterRoleBinding and see if it belongs to the requested namespace
 	for _, crb := range crbs.Items {
 		if crb.RoleRef.Name == name {
