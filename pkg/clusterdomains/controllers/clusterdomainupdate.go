@@ -86,6 +86,21 @@ func (c *ClusterDomainUpdateController) Handle(ctx context.Context, event sdk.Ev
 				log.ClusterDomainUpdateLog(clusterDomainUpdate).Errorf("Error updating ClusterDomainUpdate: %v", err)
 				return err
 			}
+			// Do a dummy update on the cluster domain status so that it queries
+			// the storage driver and gets updated too
+			if clusterDomainUpdate.Status.Status == storkv1.ClusterDomainUpdateStatusSuccessful {
+				cdsList, err := k8s.Instance().ListClusterDomainStatuses()
+				if err != nil {
+					return err
+				}
+				for _, cds := range cdsList.Items {
+					_, err := k8s.Instance().UpdateClusterDomainsStatus(&cds)
+					if err != nil {
+						return err
+					}
+				}
+
+			}
 			return nil
 		case storkv1.ClusterDomainUpdateStatusFailed, storkv1.ClusterDomainUpdateStatusSuccessful:
 			return nil
