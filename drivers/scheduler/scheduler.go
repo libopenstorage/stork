@@ -47,6 +47,8 @@ type ScheduleOptions struct {
 	AppKeys []string
 	// Nodes restricts the applications to get scheduled only on these nodes (Optional)
 	Nodes []node.Node
+	// StorageProvisioner identifies what storage provider should be used
+	StorageProvisioner string
 }
 
 // Driver must be implemented to provide test support to various schedulers.

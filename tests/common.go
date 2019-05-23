@@ -41,8 +41,11 @@ const (
 	appListCliFlag                     = "app-list"
 	logLocationCliFlag                 = "log-location"
 	scaleFactorCliFlag                 = "scale-factor"
+	minRunTimeMinsFlag                 = "minimun-runtime-mins"
+	chaosLevelFlag                     = "chaos-level"
 	storageDriverUpgradeVersionCliFlag = "storage-driver-upgrade-version"
 	storageDriverBaseVersionCliFlag    = "storage-driver-base-version"
+	provisionerFlag                    = "provisioner"
 )
 
 const (
@@ -51,6 +54,8 @@ const (
 	defaultStorageDriver  = "pxd"
 	defaultLogLocation    = "/mnt/torpedo_support_dir"
 	defaultAppScaleFactor = 1
+	defaultMinRunTimeMins = 0
+	defaultChaosLevel     = 5
 	// TODO: These are Portworx specific versions and will not work with other storage drivers.
 	// Eventually we should remove the defaults and make it mandatory with documentation.
 	defaultStorageDriverUpgradeVersion = "1.2.11.6"
@@ -207,7 +212,8 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 	Step("schedule applications", func() {
 		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-			AppKeys: Inst().AppList,
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
@@ -300,8 +306,12 @@ func CollectSupport() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 
+			// Put it back once PWX-8817 is fixed
+			//journalCmd := fmt.Sprintf(
+			//	"sudo su -c 'echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v'",
+			//	time.Now().Format(time.RFC3339))
 			journalCmd := fmt.Sprintf(
-				"sudo su -c 'echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v'",
+				"sudo su -c 'journalctl -l > ~/all_journal_%v'",
 				time.Now().Format(time.RFC3339))
 			for _, n := range nodes {
 				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
@@ -355,17 +365,22 @@ type Torpedo struct {
 	ScaleFactor                 int
 	StorageDriverUpgradeVersion string
 	StorageDriverBaseVersion    string
+	MinRunTimeMins              int
+	ChaosLevel                  int
+	Provisioner                 string
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc, appListCSV string
+	var s, n, v, specDir, logLoc, appListCSV, provisionerName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
 	var appScaleFactor int
 	var volUpgradeVersion, volBaseVersion string
+	var minRunTimeMins int
+	var chaosLevel int
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -374,6 +389,8 @@ func ParseFlags() {
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
+	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
+	flag.IntVar(&chaosLevel, chaosLevelFlag, defaultChaosLevel, "Application deletion frequency in minutes")
 	flag.StringVar(&volUpgradeVersion, storageDriverUpgradeVersionCliFlag, defaultStorageDriverUpgradeVersion,
 		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
 			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
@@ -381,6 +398,7 @@ func ParseFlags() {
 		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
 			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
+	flag.StringVar(&provisionerName, provisionerFlag, "", "Name of the storage provisioner Portworx or CSI.")
 
 	flag.Parse()
 
@@ -407,9 +425,12 @@ func ParseFlags() {
 				SpecDir:                     specDir,
 				LogLoc:                      logLoc,
 				ScaleFactor:                 appScaleFactor,
+				MinRunTimeMins:              minRunTimeMins,
+				ChaosLevel:                  chaosLevel,
 				StorageDriverUpgradeVersion: volUpgradeVersion,
 				StorageDriverBaseVersion:    volBaseVersion,
 				AppList:                     appList,
+				Provisioner:                 provisionerName,
 			}
 		})
 	}

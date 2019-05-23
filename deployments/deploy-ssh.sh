@@ -8,6 +8,13 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${CHAOS_LEVEL}" ]; then
+    CHAOS_LEVEL="5"
+fi
+if [ -z "${MIN_RUN_TIME}" ]; then
+    MIN_RUN_TIME="0"
+fi
+
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
     FAIL_FAST="--failFast"
 else
@@ -34,6 +41,10 @@ fi
 UPGRADE_BASE_VERSION_ARG=""
 if [ -n "${STORAGE_BASE_VERSION}" ]; then
     UPGRADE_BASE_VERSION_ARG="--storage-driver-base-version=$STORAGE_BASE_VERSION"
+fi
+
+if [ -n "${PROVISIONER}" ]; then
+	PROVISIONER="$PROVISIONER"
 fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
@@ -81,25 +92,26 @@ fi
 
 K8S_VENDOR_KEY=""
 K8S_VENDOR_VALUE=""
+K8S_VENDOR_OPERATOR="Exists"
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
         kubernetes)
             K8S_VENDOR_KEY=node-role.kubernetes.io/master
-            K8S_VENDOR_VALUE=true
             ;;
         rancher)
             K8S_VENDOR_KEY=node-role.kubernetes.io/controlplane
-            K8S_VENDOR_VALUE=true
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE="values: [true]"
             ;;
         gke)
             # Run torpedo on worker node, where px installation is disabled. 
             K8S_VENDOR_KEY=px/enabled
-            K8S_VENDOR_VALUE=false
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE="values: [false]"
             ;;
     esac
 else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
-    K8S_VENDOR_VALUE=true
 fi
 
 
@@ -165,9 +177,8 @@ spec:
         nodeSelectorTerms:
         - matchExpressions:
           - key: ${K8S_VENDOR_KEY}
-            operator: In
-            values:
-            - "${K8S_VENDOR_VALUE}"
+            operator: ${K8S_VENDOR_OPERATOR}
+            ${K8S_VENDOR_VALUE}
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
@@ -189,6 +200,9 @@ spec:
             "--app-list", "$APP_LIST",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
+      			"--minimun-runtime-mins", "$MIN_RUN_TIME",
+		      	"--chaos-level", "$CHAOS_LEVEL",
+            "--provisioner", "$PROVISIONER",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true
