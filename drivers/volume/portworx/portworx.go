@@ -844,7 +844,23 @@ func (p *portworx) SnapshotCreate(
 		}
 		snapshotID, err = volDriver.Snapshot(volumeID, true, locator, true)
 		if err != nil {
-			return nil, getErrorSnapshotConditions(err), err
+			// Check already exists error and return existing snapshot if found
+			if isAlreadyExistsError(err) {
+				snapInfo, err := p.inspectVolume(volDriver, snapName)
+				if err != nil {
+					return nil, getErrorSnapshotConditions(err), err
+				}
+
+				if snapInfo.ParentID != volumeID {
+					err := fmt.Errorf("found existing snapshot with name: %s but parent volume ID doesn't match."+
+						"expected: %s found: %s", snapName, volumeID, snapInfo.ParentID)
+					return nil, getErrorSnapshotConditions(err), err
+				}
+
+				snapshotID = snapInfo.VolumeID
+			} else {
+				return nil, getErrorSnapshotConditions(err), err
+			}
 		}
 		snapStatusConditions = getReadySnapshotConditions()
 	}
@@ -2038,6 +2054,14 @@ func isCloudsnapStatusFailed(st api.CloudBackupStatusType) bool {
 	return st == api.CloudBackupStatusFailed ||
 		st == api.CloudBackupStatusStopped ||
 		st == api.CloudBackupStatusAborted
+}
+
+func isAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return strings.HasSuffix(err.Error(), "already exists")
 }
 
 func init() {
