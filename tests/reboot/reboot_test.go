@@ -83,8 +83,7 @@ var _ = Describe("{RebootOneNode}", func() {
 
 						Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
 							Inst().S.String(), Inst().V.String()), func() {
-							n, err = Inst().V.UpdateNodeID(n)
-							Expect(err).NotTo(HaveOccurred())
+
 							err = Inst().S.IsNodeReady(n)
 							Expect(err).NotTo(HaveOccurred())
 

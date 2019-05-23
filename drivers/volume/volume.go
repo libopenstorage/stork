@@ -113,9 +113,6 @@ type Driver interface {
 
 	// GetReplicaSetNodes returns the replica sets for a given volume
 	GetReplicaSetNodes(vol *Volume) ([]string, error)
-
-	// UpdateNodeID updates the StorageNodeId of a given node
-	UpdateNodeID(n node.Node) (node.Node, error)
 }
 
 var (
