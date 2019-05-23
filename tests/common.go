@@ -306,8 +306,12 @@ func CollectSupport() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 
+			// Put it back once PWX-8817 is fixed
+			//journalCmd := fmt.Sprintf(
+			//	"sudo su -c 'echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v'",
+			//	time.Now().Format(time.RFC3339))
 			journalCmd := fmt.Sprintf(
-				"sudo su -c 'echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v'",
+				"sudo su -c 'journalctl -l > ~/all_journal_%v'",
 				time.Now().Format(time.RFC3339))
 			for _, n := range nodes {
 				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
