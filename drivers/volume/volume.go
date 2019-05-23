@@ -93,7 +93,7 @@ type Driver interface {
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 
-	// GetVolumeReplicationFactor returns the current replication factor of the volume.
+	// GetReplicationFactor returns the current replication factor of the volume.
 	GetReplicationFactor(vol *Volume) (int64, error)
 
 	// SetReplicationFactor sets the volume's replication factor to the passed param rf.
