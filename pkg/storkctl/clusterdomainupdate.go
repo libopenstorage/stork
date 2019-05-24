@@ -3,11 +3,15 @@ package storkctl
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"strconv"
+	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
@@ -21,8 +25,14 @@ var clusterDomainUpdateAliases = []string{"cdu"}
 var clusterDomainSubcommand = "clusterdomain"
 var clusterDomainAliases = []string{"cd"}
 
+const (
+	retryTimeout = 2 * time.Second
+	timeout      = 10 * time.Minute
+)
+
 func newActivateClusterDomainCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var allClusterDomains bool
+	var waitForCompletion bool
 	var nameClusterDomainUpdate string
 	activateClusterDomainCommand := &cobra.Command{
 		Use:     clusterDomainSubcommand,
@@ -76,12 +86,24 @@ func newActivateClusterDomainCommand(cmdFactory Factory, ioStreams genericcliopt
 					util.CheckErr(fmt.Errorf("failed to activate cluster domain %v: %v", clusterDomainName, err))
 					return
 				}
-				msg := fmt.Sprintf("Cluster Domain %v activated successfully", clusterDomainName)
+
+				msg := fmt.Sprintf("Cluster Domain activate operation started successfully for %v", clusterDomainName)
 				printMsg(msg, ioStreams.Out)
+
+				if waitForCompletion {
+					if _, err := fmt.Fprintf(ioStreams.Out, "Activating.."); err != nil {
+						util.CheckErr(err)
+						return
+					}
+					msg := waitForDomainUpdate(name)
+					printMsg(msg, ioStreams.Out)
+				}
 			}
+
 		},
 	}
 	activateClusterDomainCommand.Flags().BoolVarP(&allClusterDomains, "all", "a", false, "Activate all inactive cluster domains")
+	activateClusterDomainCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for clusterdomain update to complete")
 	activateClusterDomainCommand.Flags().StringVar(&nameClusterDomainUpdate, "name", "", "Name for the activate cluster domain action")
 
 	return activateClusterDomainCommand
@@ -89,6 +111,8 @@ func newActivateClusterDomainCommand(cmdFactory Factory, ioStreams genericcliopt
 
 func newDeactivateClusterDomainCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var nameClusterDomainUpdate string
+	var waitForCompletion bool
+
 	deactivateClusterDomainCommand := &cobra.Command{
 		Use:     clusterDomainSubcommand,
 		Aliases: clusterDomainAliases,
@@ -114,8 +138,19 @@ func newDeactivateClusterDomainCommand(cmdFactory Factory, ioStreams genericclio
 					util.CheckErr(fmt.Errorf("failed to deactivate cluster domain %v: %v", clusterDomainName, err))
 					return
 				}
-				msg := fmt.Sprintf("Cluster Domain %v deactivated successfully", clusterDomainName)
+
+				msg := fmt.Sprintf("Cluster Domain deactivate operation started successfully for %v", clusterDomainName)
 				printMsg(msg, ioStreams.Out)
+
+				if waitForCompletion {
+					if _, err := fmt.Fprintf(ioStreams.Out, "Deactivating.."); err != nil {
+						util.CheckErr(err)
+						return
+					}
+					msg := waitForDomainUpdate(name)
+					printMsg(msg, ioStreams.Out)
+				}
+
 			} else {
 				util.CheckErr(fmt.Errorf("exactly one cluster domain name needs to be provided to the deactivate command"))
 				return
@@ -123,6 +158,8 @@ func newDeactivateClusterDomainCommand(cmdFactory Factory, ioStreams genericclio
 		},
 	}
 	deactivateClusterDomainCommand.Flags().StringVar(&nameClusterDomainUpdate, "name", "", "Name for the deactivate cluster domain action")
+	deactivateClusterDomainCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for clusterdomain update to complete")
+
 	return deactivateClusterDomainCommand
 }
 
@@ -194,4 +231,33 @@ func clusterDomainUpdatePrinter(cduList *storkv1.ClusterDomainUpdateList, writer
 		}
 	}
 	return nil
+}
+
+func waitForDomainUpdate(name string) string {
+	var msg string
+
+	log.SetFlags(0)
+	log.SetOutput(ioutil.Discard)
+	t := func() (interface{}, bool, error) {
+		cds, err := k8s.Instance().GetClusterDomainUpdate(name)
+		if err != nil {
+			return fmt.Sprintf("Unable to retrive cluster details %v", err), false, err
+		}
+		fmt.Printf("..%v", cds.Status.Status)
+		if cds.Status.Status == storkv1.ClusterDomainUpdateStatusFailed {
+			msg = fmt.Sprintf("\nFailed to update ClusterDomain, Reason : %v", cds.Status.Reason)
+			return "", false, nil
+		}
+		if cds.Status.Status == storkv1.ClusterDomainUpdateStatusSuccessful {
+			msg = fmt.Sprintf("\nCluster Domain %v updated successfully", cds.Spec.ClusterDomain)
+			return "", false, nil
+		}
+		return nil, true, fmt.Errorf("%v", cds.Status.Status)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryTimeout); err != nil {
+		msg = "Timed out performing task"
+	}
+
+	return msg
 }
