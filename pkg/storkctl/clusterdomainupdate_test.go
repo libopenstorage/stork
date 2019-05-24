@@ -5,6 +5,7 @@ package storkctl
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
@@ -17,10 +18,10 @@ func createClusterDomainUpdate(t *testing.T, name string, clusterDomain string, 
 	var expected string
 	if active {
 		cmdArgs = []string{"activate", "clusterdomain", "--name", name, clusterDomain}
-		expected = fmt.Sprintf("Cluster Domain %v activated successfully\n", clusterDomain)
+		expected = fmt.Sprintf("Cluster Domain activate operation started successfully for %v\n", clusterDomain)
 	} else {
 		cmdArgs = []string{"deactivate", "clusterdomain", "--name", name, clusterDomain}
-		expected = fmt.Sprintf("Cluster Domain %v deactivated successfully\n", clusterDomain)
+		expected = fmt.Sprintf("Cluster Domain deactivate operation started successfully for %v\n", clusterDomain)
 	}
 
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -101,7 +102,7 @@ func TestActivateClusterDomain(t *testing.T) {
 	name := "zone2"
 	cmdArgs := []string{"activate", "clusterdomain", name}
 
-	expected := "Cluster Domain zone2 activated successfully\n"
+	expected := "Cluster Domain activate operation started successfully for zone2\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cdus, err := k8s.Instance().ListClusterDomainUpdates()
@@ -117,7 +118,7 @@ func TestActivateClusterDomainWithName(t *testing.T) {
 	name := "zone2"
 	cmdArgs := []string{"activate", "clusterdomain", name, "--name", "testupdate1"}
 
-	expected := "Cluster Domain zone2 activated successfully\n"
+	expected := "Cluster Domain activate operation started successfully for zone2\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"get", "clusterdomainupdate", "testupdate1"}
@@ -141,7 +142,7 @@ func TestActivateAllClusterDomain(t *testing.T) {
 
 	cmdArgs := []string{"activate", "clusterdomain", "--all"}
 
-	expected := "Cluster Domain zone3 activated successfully\nCluster Domain zone4 activated successfully\n"
+	expected := "Cluster Domain activate operation started successfully for zone3\nCluster Domain activate operation started successfully for zone4\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cdus, err := k8s.Instance().ListClusterDomainUpdates()
@@ -165,7 +166,7 @@ func TestActivateAllClusterDomainWithName(t *testing.T) {
 
 	cmdArgs := []string{"activate", "clusterdomain", "--all", "--name", "testupdate1"}
 
-	expected := "Cluster Domain zone3 activated successfully\nCluster Domain zone4 activated successfully\n"
+	expected := "Cluster Domain activate operation started successfully for zone3\nCluster Domain activate operation started successfully for zone4\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"get", "cdu", "testupdate1-0"}
@@ -187,7 +188,7 @@ func TestDeactivateClusterDomain(t *testing.T) {
 	name := "zone2"
 	cmdArgs := []string{"deactivate", "clusterdomain", name}
 
-	expected := "Cluster Domain zone2 deactivated successfully\n"
+	expected := "Cluster Domain deactivate operation started successfully for zone2\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cdus, err := k8s.Instance().ListClusterDomainUpdates()
@@ -203,7 +204,7 @@ func TestDeactivateClusterDomainWithName(t *testing.T) {
 	name := "zone2"
 	cmdArgs := []string{"deactivate", "clusterdomain", name, "--name", "testupdate1"}
 
-	expected := "Cluster Domain zone2 deactivated successfully\n"
+	expected := "Cluster Domain deactivate operation started successfully for zone2\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"get", "clusterdomainupdate", "testupdate1"}
@@ -219,4 +220,91 @@ func TestDeactivateClusterDomainNoDomainSpecified(t *testing.T) {
 
 	expected := "error: Exactly one cluster domain name needs to be provided to the deactivate command"
 	testCommon(t, cmdArgs, nil, expected, true)
+}
+
+func TestActivateClusterDomainWaitSuccess(t *testing.T) {
+	defer resetTest()
+
+	name := "testzone"
+	domainName := "zone2"
+	cmdArgs := []string{"activate", "clusterdomain", domainName, "--name", name, "-w"}
+
+	expected := "Cluster Domain activate operation started successfully for zone2\nActivating..\n" +
+		"Cluster Domain zone2 updated successfully\n"
+	go setClusterDomainStatus(name, false, t)
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"get", "clusterdomainupdate", name}
+	expected = "NAME       CLUSTER-DOMAIN   ACTION     STATUS       CREATED\ntestzone   zone2            Activate   Successful   \n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+}
+
+func TestActivateClusterDomainWaitFailed(t *testing.T) {
+	defer resetTest()
+
+	name := "testzone"
+	domainName := "zone2"
+	cmdArgs := []string{"activate", "clusterdomain", domainName, "--name", name, "-w"}
+
+	expected := "Cluster Domain activate operation started successfully for zone2\n" +
+		"Activating..\nFailed to update ClusterDomain, Reason : Unavailable\n"
+	go setClusterDomainStatus(name, true, t)
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"get", "clusterdomainupdate", name}
+	expected = "NAME       CLUSTER-DOMAIN   ACTION     STATUS    CREATED\ntestzone   zone2            Activate   Failed    \n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+}
+
+func TestDeactivateClusterDomainWaitSuccess(t *testing.T) {
+	defer resetTest()
+
+	name := "testzone"
+	domainName := "zone2"
+	cmdArgs := []string{"deactivate", "clusterdomain", domainName, "--name", name, "-w"}
+
+	expected := "Cluster Domain deactivate operation started successfully for zone2\n" +
+		"Deactivating..\nCluster Domain zone2 updated successfully\n"
+	go setClusterDomainStatus(name, false, t)
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"get", "clusterdomainupdate", name}
+	expected = "NAME       CLUSTER-DOMAIN   ACTION       STATUS       CREATED\ntestzone   zone2            Deactivate   Successful   \n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+}
+
+func TestDectivateClusterDomainWaitFailed(t *testing.T) {
+	defer resetTest()
+
+	name := "testzone"
+	domainName := "zone2"
+	cmdArgs := []string{"deactivate", "clusterdomain", domainName, "--name", name, "-w"}
+
+	expected := "Cluster Domain deactivate operation started successfully for zone2\n" +
+		"Deactivating..\nFailed to update ClusterDomain, Reason : Unavailable\n"
+	go setClusterDomainStatus(name, true, t)
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"get", "clusterdomainupdate", name}
+	expected = "NAME       CLUSTER-DOMAIN   ACTION       STATUS    CREATED\ntestzone   zone2            Deactivate   Failed    \n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+}
+
+func setClusterDomainStatus(name string, isFail bool, t *testing.T) {
+	time.Sleep(10 * time.Second)
+	cdu, err := k8s.Instance().GetClusterDomainUpdate(name)
+	require.NoError(t, err, "Error getting cluster domain")
+	require.Equal(t, cdu.Status.Status, storkv1.ClusterDomainUpdateStatusInitial)
+	cdu.Status.Status = storkv1.ClusterDomainUpdateStatusSuccessful
+	if isFail {
+		cdu.Status.Status = storkv1.ClusterDomainUpdateStatusFailed
+		cdu.Status.Reason = "Unavailable"
+	}
+
+	_, err = k8s.Instance().UpdateClusterDomainUpdate(cdu)
+	require.NoError(t, err, "Error updating cluster domain")
 }
