@@ -52,6 +52,12 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				return
 			}
 
+			_, err := k8s.Instance().GetSchedulePolicy(schedulePolicyName)
+			if err != nil {
+				util.CheckErr(fmt.Errorf("error getting schedulepolicy %v: %v", schedulePolicyName, err))
+				return
+			}
+
 			migrationSchedule := &storkv1.MigrationSchedule{
 				Spec: storkv1.MigrationScheduleSpec{
 					Template: storkv1.MigrationTemplateSpec{
@@ -71,7 +77,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			}
 			migrationSchedule.Name = migrationScheduleName
 			migrationSchedule.Namespace = cmdFactory.GetNamespace()
-			_, err := k8s.Instance().CreateMigrationSchedule(migrationSchedule)
+			_, err = k8s.Instance().CreateMigrationSchedule(migrationSchedule)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -87,7 +93,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 	createMigrationScheduleCommand.Flags().BoolVarP(&startApplications, "startApplications", "a", false, "Start applications on the destination cluster after migration")
 	createMigrationScheduleCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing migration")
 	createMigrationScheduleCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
-	createMigrationScheduleCommand.Flags().StringVarP(&schedulePolicyName, "schedulePolicyName", "s", "", "Name of the schedule policy to use")
+	createMigrationScheduleCommand.Flags().StringVarP(&schedulePolicyName, "schedulePolicyName", "s", "default-migration-policy", "Name of the schedule policy to use")
 	createMigrationScheduleCommand.Flags().BoolVar(&suspend, "suspend", false, "Flag to denote whether schedule should be suspended on creation")
 
 	return createMigrationScheduleCommand
