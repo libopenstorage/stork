@@ -23,6 +23,7 @@ func init() {
 	resetTest()
 }
 func TestSchedule(t *testing.T) {
+	t.Run("createDefaultPoliciesTest", createDefaultPoliciesTest)
 	t.Run("triggerIntervalRequiredTest", triggerIntervalRequiredTest)
 	t.Run("triggerDailyRequiredTest", triggerDailyRequiredTest)
 	t.Run("triggerWeeklyRequiredTest", triggerWeeklyRequiredTest)
@@ -38,6 +39,11 @@ func resetTest() {
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
 	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil, nil)
+}
+
+func createDefaultPoliciesTest(t *testing.T) {
+	err := createDefaultPolicy()
+	require.NoError(t, err, "Error creating default policies")
 }
 
 func triggerIntervalRequiredTest(t *testing.T) {

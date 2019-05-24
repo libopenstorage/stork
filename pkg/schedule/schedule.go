@@ -290,6 +290,77 @@ func Init() error {
 		}
 	}
 
+	return createDefaultPolicy()
+}
+
+func createDefaultPolicy() error {
+	_, err := k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-migration-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Interval: &stork_api.IntervalPolicy{
+				IntervalMinutes: 1,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	_, err = k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-interval-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Interval: &stork_api.IntervalPolicy{
+				IntervalMinutes: 15,
+				Retain:          10,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	_, err = k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-daily-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Daily: &stork_api.DailyPolicy{
+				Time:   "12:00am",
+				Retain: 7,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	_, err = k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-weekly-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Weekly: &stork_api.WeeklyPolicy{
+				Day:    "Sunday",
+				Time:   "12:00am",
+				Retain: 4,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	_, err = k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "default-monthly-policy",
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Monthly: &stork_api.MonthlyPolicy{
+				Date:   15,
+				Time:   "12:00am",
+				Retain: 12,
+			}},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
 	return nil
 }
 
