@@ -11,6 +11,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,6 +40,17 @@ func createMigrationScheduleAndVerify(
 	if postExecRule != "" {
 		cmdArgs = append(cmdArgs, "--postExecRule", postExecRule)
 	}
+
+	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: schedulePolicyName,
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				IntervalMinutes: 1,
+			}},
+	})
+	require.True(t, err == nil || errors.IsAlreadyExists(err), "Error creating schedulepolicy")
 
 	expected := "MigrationSchedule " + name + " created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -261,5 +273,29 @@ func TestDeleteMigrationSchedules(t *testing.T) {
 	cmdArgs = []string{"delete", "migrationschedules", "-c", "clusterpair1"}
 	expected = "MigrationSchedule deletemigration1 deleted successfully\n"
 	expected += "MigrationSchedule deletemigration2 deleted successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func TestDefaultMigrationSchedulePolicy(t *testing.T) {
+	defer resetTest()
+	createMigrationScheduleAndVerify(t, "deletemigration", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", false)
+
+	// Create schedule without the default policy present
+	cmdArgs := []string{"create", "migrationschedules", "defaultpolicy", "-n", "test", "-c", "clusterpair", "--namespaces", "test"}
+	expected := "error: error getting schedulepolicy default-migration-policy: schedulepolicies.stork.libopenstorage.org \"default-migration-policy\" not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	// Create again adding default policy
+	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default-migration-policy",
+		},
+		Policy: storkv1.SchedulePolicyItem{
+			Interval: &storkv1.IntervalPolicy{
+				IntervalMinutes: 1,
+			}},
+	})
+	require.NoError(t, err, "Error creating schedulepolicy")
+	expected = "MigrationSchedule defaultpolicy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
