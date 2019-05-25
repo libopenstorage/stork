@@ -39,6 +39,7 @@ const (
 	defaultLockObjectName      = "stork"
 	defaultLockObjectNamespace = "kube-system"
 	eventComponentName         = "stork"
+	defaultAdminNamespace      = "kube-system"
 )
 
 var ext *extender.Extender
@@ -110,7 +111,8 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "migration-admin-namespace",
-			Usage: "Namespace to be used by a cluster admin which can migrate all other namespaces (default: none)",
+			Usage: "Namespace to be used by a cluster admin which can migrate all other namespaces",
+			Value: defaultAdminNamespace,
 		},
 		cli.BoolFlag{
 			Name:  "storage-cluster-controller",
