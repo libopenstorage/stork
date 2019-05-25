@@ -364,19 +364,28 @@ func migrationPrinter(migrationList *storkv1.MigrationList, writer io.Writer, op
 				return err
 			}
 		}
-		totalVolumes := len(migration.Status.Volumes)
-		doneVolumes := 0
-		for _, volume := range migration.Status.Volumes {
-			if volume.Status == storkv1.MigrationStatusSuccessful {
-				doneVolumes++
+		volumeStatus := "N/A"
+		if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+			totalVolumes := len(migration.Status.Volumes)
+			doneVolumes := 0
+			for _, volume := range migration.Status.Volumes {
+				if volume.Status == storkv1.MigrationStatusSuccessful {
+					doneVolumes++
+				}
 			}
+			volumeStatus = fmt.Sprintf("%v/%v", doneVolumes, totalVolumes)
 		}
-		totalResources := len(migration.Status.Resources)
-		doneResources := 0
-		for _, resource := range migration.Status.Resources {
-			if resource.Status == storkv1.MigrationStatusSuccessful {
-				doneResources++
+
+		resourceStatus := "N/A"
+		if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
+			totalResources := len(migration.Status.Resources)
+			doneResources := 0
+			for _, resource := range migration.Status.Resources {
+				if resource.Status == storkv1.MigrationStatusSuccessful {
+					doneResources++
+				}
 			}
+			resourceStatus = fmt.Sprintf("%v/%v", doneResources, totalResources)
 		}
 
 		elapsed := ""
@@ -391,15 +400,13 @@ func migrationPrinter(migrationList *storkv1.MigrationList, writer io.Writer, op
 		}
 
 		creationTime := toTimeString(migration.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v/%v\t%v/%v\t%v\t%v\n",
+		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
 			name,
 			migration.Spec.ClusterPair,
 			migration.Status.Stage,
 			migration.Status.Status,
-			doneVolumes,
-			totalVolumes,
-			doneResources,
-			totalResources,
+			volumeStatus,
+			resourceStatus,
 			creationTime,
 			elapsed); err != nil {
 			return err
