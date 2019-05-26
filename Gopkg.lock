@@ -647,32 +647,34 @@
   revision = "1c18ebeaf685dfc584a49545bc590a13fa8b7617"
 
 [[projects]]
-  branch = "master"
-  digest = "1:6d4f14c3f750992ed26c31e73502721a5f3f2b5e8a665ba4d8d122904c95bcd2"
+  branch = "update_clusterdomain_crds"
+  digest = "1:8dea5f278f7935c01a6cb1757a6b10c2b9dbab5306b14b644c16bb168406b391"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "d67339588ae8c134a2f1da52613d6abd7241b8c7"
+  revision = "2563ba26d4944cfec3f561a2747724670275b763"
 
 [[projects]]
   branch = "master"
-  digest = "1:cfe8d419eb553560ba1e297dc0430a161be3239372a9fd60111e63da3b75fdb8"
+  digest = "1:5b1a5dd8d7969a4476afbc74b4418888185f2f82184cd3a9640b3af044dcbba3"
   name = "github.com/portworx/talisman"
   packages = [
     "pkg/apis/portworx",
     "pkg/apis/portworx/v1beta1",
+    "pkg/apis/portworx/v1beta2",
     "pkg/client/clientset/versioned",
     "pkg/client/clientset/versioned/scheme",
     "pkg/client/clientset/versioned/typed/portworx/v1beta1",
+    "pkg/client/clientset/versioned/typed/portworx/v1beta2",
   ]
   pruneopts = "UT"
-  revision = "84374e26f35de4996653b01cf72186a8d6df3c11"
+  revision = "81f70f63459acc2624772125c3223dc3401ff0d0"
 
 [[projects]]
-  branch = "stork-2.2"
+  branch = "stork-2.2-cluster_domain_sync"
   digest = "1:a93e30ffe11b9f5e98db3169153d6255dee03f40cfe876f9f7ef949bbf037424"
   name = "github.com/portworx/torpedo"
   packages = [
@@ -687,7 +689,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "aba5d93d9cdf13ee43127f57fe28b7d251002540"
+  revision = "afceb5e465767e4cf2b42485c4721e3a6d8683fc"
 
 [[projects]]
   branch = "master"
