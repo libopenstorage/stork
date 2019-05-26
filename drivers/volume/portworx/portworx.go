@@ -1723,48 +1723,81 @@ func (p *portworx) DeleteGroupSnapshot(snap *stork_crd.GroupVolumeSnapshot) erro
 
 func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 
+	// get the cluster details
 	cluster, err := p.clusterManager.Enumerate()
 	if err != nil {
 		return nil, err
 	}
-	nodeConfig, err := p.clusterManager.GetNodeConf(cluster.NodeId)
+
+	// get the node to domain-name map
+	nodeToDomainMap, err := p.getNodesToDomainMap(cluster.Nodes)
 	if err != nil {
+		logrus.Errorf("Failed to get node to domain mapping: %v", err)
 		return nil, err
 	}
 
-	clusterDomainClient, err := p.getClusterDomainClient()
+	// get the domain to state (active/inactive) map
+	domainStateMap, err := p.getDomainStateMap()
 	if err != nil {
+		logrus.Errorf("Failed to get domain name to state map: %v", err)
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
-	defer cancel()
+	// get the default domain to sync status map
+	// the default sync status is decided based on the active state of the domain
+	// after inspecting the volumes and their replicas a cluster domain's sync
+	// status might change
+	domainSyncStatusMap := p.getDefaultDomainSyncStatusMap(domainStateMap)
 
-	enumerateResp, err := clusterDomainClient.Enumerate(ctx, &api.SdkClusterDomainsEnumerateRequest{})
+	clusterDomains := &stork_crd.ClusterDomains{
+		LocalDomain: nodeToDomainMap[cluster.NodeId],
+	}
+
+	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
+		logrus.Errorf("Failed to get a volumeDriver: %v", err)
 		return nil, err
 	}
 
-	clusterDomainsInfo := &stork_crd.ClusterDomains{
-		LocalDomain: nodeConfig.ClusterDomain,
+	// get all the volumes in this cluster
+	vols, err := volDriver.Enumerate(&api.VolumeLocator{}, nil)
+	if err != nil {
+		logrus.Errorf("Failed to enumerate volumes: %v", err)
+		return nil, err
 	}
-	for _, domainName := range enumerateResp.ClusterDomainNames {
-		insCtx, insCancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
-		defer insCancel()
 
-		inspectResp, err := clusterDomainClient.Inspect(insCtx, &api.SdkClusterDomainInspectRequest{
-			ClusterDomainName: domainName,
-		})
-		if err != nil {
-			return nil, err
+	for _, vol := range vols {
+		// get the node (replicas) which are not in the current set
+		// but exist in the create set. These are the replica nodes
+		// which need to resync their data
+		replicasNotInCurrent := p.getReplicasNotInCurrent(vol)
+		for _, replicaNotInCurrent := range replicasNotInCurrent {
+			// get the domain of the node which is not in the current set
+			if domain, ok := nodeToDomainMap[replicaNotInCurrent]; ok {
+				// only update the sync status of the domain to sync in progress
+				// if it is currently active
+				if isActive := domainStateMap[domain]; isActive {
+					domainSyncStatusMap[domain] = stork_crd.ClusterDomainSyncStatusInProgress
+				} // else the domain is inactive which means that sync is not in progress
+			}
 		}
-		if inspectResp.IsActive {
-			clusterDomainsInfo.Active = append(clusterDomainsInfo.Active, domainName)
-		} else {
-			clusterDomainsInfo.Inactive = append(clusterDomainsInfo.Inactive, domainName)
-		}
 	}
-	return clusterDomainsInfo, nil
+
+	// Build the cluster domain infos object
+	for domain, isActive := range domainStateMap {
+		syncStatus := domainSyncStatusMap[domain]
+		clusterDomainState := stork_crd.ClusterDomainInactive
+		if isActive {
+			clusterDomainState = stork_crd.ClusterDomainActive
+		}
+		clusterDomainInfo := stork_crd.ClusterDomainInfo{
+			Name:       domain,
+			State:      clusterDomainState,
+			SyncStatus: syncStatus,
+		}
+		clusterDomains.ClusterDomainInfos = append(clusterDomains.ClusterDomainInfos, clusterDomainInfo)
+	}
+	return clusterDomains, nil
 }
 
 func (p *portworx) ActivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate) error {
@@ -1807,6 +1840,105 @@ func (p *portworx) DeactivateClusterDomain(cdu *stork_crd.ClusterDomainUpdate) e
 		ClusterDomainName: cdu.Spec.ClusterDomain,
 	})
 	return err
+}
+
+func (p *portworx) getNodesToDomainMap(nodes []api.Node) (map[string]string, error) {
+	nodeToDomainMap := make(map[string]string)
+	for _, node := range nodes {
+		nodeConfig, err := p.clusterManager.GetNodeConf(node.Id)
+		if err != nil {
+			return nil, err
+		}
+		nodeToDomainMap[node.Id] = nodeConfig.ClusterDomain
+	}
+	return nodeToDomainMap, nil
+}
+
+func (p *portworx) getDomainStateMap() (map[string]bool, error) {
+	domainMap := make(map[string]bool)
+	clusterDomainClient, err := p.getClusterDomainClient()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
+	defer cancel()
+
+	enumerateResp, err := clusterDomainClient.Enumerate(ctx, &api.SdkClusterDomainsEnumerateRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, domainName := range enumerateResp.ClusterDomainNames {
+		insCtx, insCancel := context.WithTimeout(context.Background(), clusterDomainsTimeout)
+		defer insCancel()
+
+		inspectResp, err := clusterDomainClient.Inspect(insCtx, &api.SdkClusterDomainInspectRequest{
+			ClusterDomainName: domainName,
+		})
+		if err != nil {
+			return nil, err
+		}
+		domainMap[domainName] = inspectResp.IsActive
+	}
+	return domainMap, nil
+}
+
+func (p *portworx) getDefaultDomainSyncStatusMap(domainStateMap map[string]bool) map[string]stork_crd.ClusterDomainSyncStatus {
+	domainSyncStatusMap := make(map[string]stork_crd.ClusterDomainSyncStatus)
+	for domain, isActive := range domainStateMap {
+		if isActive {
+			// default state is in sync
+			domainSyncStatusMap[domain] = stork_crd.ClusterDomainSyncStatusInSync
+		} else {
+			// default status is not in sync
+			domainSyncStatusMap[domain] = stork_crd.ClusterDomainSyncStatusNotInSync
+		}
+	}
+	return domainSyncStatusMap
+}
+
+func (p *portworx) belongsToCurrentSet(nodeReplica string, currentSet []string) bool {
+	for _, v := range currentSet {
+		if v == nodeReplica {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *portworx) getReplicasNotInCurrent(v *api.Volume) []string {
+	var replicasNotInCurrent []string
+
+	if v == nil {
+		// safeguarding against a nil panic
+		return nil
+	}
+
+	for _, runtimeState := range v.RuntimeState {
+		var (
+			currentNodes, createNodes []string
+		)
+		if runtimeState == nil {
+			// safeguarding against a nil panic
+			continue
+		}
+		if currMidStr, ok := runtimeState.RuntimeState["ReplicaSetCurrMid"]; ok {
+			currentNodes = strings.Split(currMidStr, ",")
+		}
+		if createMidStr, ok := runtimeState.RuntimeState["ReplicaSetCreateMid"]; ok {
+			createNodes = strings.Split(createMidStr, ",")
+		}
+		if len(currentNodes) == len(createNodes) {
+			continue
+		}
+		for _, nodeReplica := range createNodes {
+			if !p.belongsToCurrentSet(nodeReplica, currentNodes) {
+				replicasNotInCurrent = append(replicasNotInCurrent, nodeReplica)
+			}
+		}
+	}
+	return replicasNotInCurrent
 }
 
 func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *stork_crd.GroupVolumeSnapshot, volNames []string, options map[string]string) (
