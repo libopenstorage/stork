@@ -2,7 +2,7 @@ package v1beta1
 
 import (
 	"github.com/libopenstorage/openstorage/api"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -193,5 +193,44 @@ type VolumePlacementRule struct {
 	// Type is the type of the affinity rule
 	Type AffinityRuleType `json:"type,omitempty"`
 	// MatchExpressions is a list of label selector requirements. The requirements are ANDed.
-	MatchExpressions []*meta.LabelSelectorRequirement `json:"matchExpressions,omitempty"`
+	MatchExpressions []*LabelSelectorRequirement `json:"matchExpressions,omitempty"`
+}
+
+// LabelSelectorOperator is the set of operators that can be used in a selector requirement.
+type LabelSelectorOperator string
+
+const (
+	// LabelSelectorOpIn is operator where the key must have one of the values
+	LabelSelectorOpIn LabelSelectorOperator = "In"
+	// LabelSelectorOpNotIn is operator where the key must not have any of the values
+	LabelSelectorOpNotIn LabelSelectorOperator = "NotIn"
+	// LabelSelectorOpExists is operator where the key must exist
+	LabelSelectorOpExists LabelSelectorOperator = "Exists"
+	// LabelSelectorOpDoesNotExist is operator where the key must not exist
+	LabelSelectorOpDoesNotExist LabelSelectorOperator = "DoesNotExist"
+	// LabelSelectorOpGt is operator where the key must be greater than the values
+	LabelSelectorOpGt LabelSelectorOperator = "Gt"
+	// LabelSelectorOpLt is operator where the key must be less than the values
+	LabelSelectorOpLt LabelSelectorOperator = "Lt"
+)
+
+// LabelSelectorRequirement is a selector that contains values, a key, and an operator that
+// relates the key and values.
+type LabelSelectorRequirement struct {
+	// key is the label key that the selector applies to.
+	// +patchMergeKey=key
+	// +patchStrategy=merge
+	Key string `json:"key"`
+	// operator represents a key's relationship to a set of values.
+	// Valid operators are In, NotIn, Exists, DoesNotExist, Lt and Gt.
+	Operator LabelSelectorOperator `json:"operator"`
+	// values is an array of string values. If the operator is In or NotIn,
+	// the values array must be non-empty. If the operator is Exists or DoesNotExist,
+	// the values array must be empty. For Gt and Lt, the key must be greater than
+	// and less than all values respectively
+	//
+	// This array is replaced during a strategic
+	// merge patch.
+	// +optional
+	Values []string `json:"values"`
 }
