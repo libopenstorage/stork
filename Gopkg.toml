@@ -42,13 +42,13 @@ required = [
   name = "github.com/libopenstorage/openstorage"
   branch = "release-6.0"
 
-[[constraint]]
+[[override]]
   name = "github.com/portworx/sched-ops"
-  branch = "master"
+  branch = "update_clusterdomain_crds"
 
 [[override]]
-  branch = "stork-2.2"
   name = "github.com/portworx/torpedo"
+  branch = "stork-2.2-cluster_domain_sync"
 
 [[constraint]]
   name = "github.com/heptio/ark"

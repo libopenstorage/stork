@@ -20,6 +20,7 @@ package versioned
 
 import (
 	portworxv1beta1 "github.com/portworx/talisman/pkg/client/clientset/versioned/typed/portworx/v1beta1"
+	portworxv1beta2 "github.com/portworx/talisman/pkg/client/clientset/versioned/typed/portworx/v1beta2"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -28,8 +29,9 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	PortworxV1beta1() portworxv1beta1.PortworxV1beta1Interface
+	PortworxV1beta2() portworxv1beta2.PortworxV1beta2Interface
 	// Deprecated: please explicitly pick a version if possible.
-	Portworx() portworxv1beta1.PortworxV1beta1Interface
+	Portworx() portworxv1beta2.PortworxV1beta2Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -37,6 +39,7 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	portworxV1beta1 *portworxv1beta1.PortworxV1beta1Client
+	portworxV1beta2 *portworxv1beta2.PortworxV1beta2Client
 }
 
 // PortworxV1beta1 retrieves the PortworxV1beta1Client
@@ -44,10 +47,15 @@ func (c *Clientset) PortworxV1beta1() portworxv1beta1.PortworxV1beta1Interface {
 	return c.portworxV1beta1
 }
 
+// PortworxV1beta2 retrieves the PortworxV1beta2Client
+func (c *Clientset) PortworxV1beta2() portworxv1beta2.PortworxV1beta2Interface {
+	return c.portworxV1beta2
+}
+
 // Deprecated: Portworx retrieves the default version of PortworxClient.
 // Please explicitly pick a version.
-func (c *Clientset) Portworx() portworxv1beta1.PortworxV1beta1Interface {
-	return c.portworxV1beta1
+func (c *Clientset) Portworx() portworxv1beta2.PortworxV1beta2Interface {
+	return c.portworxV1beta2
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -70,6 +78,10 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	if err != nil {
 		return nil, err
 	}
+	cs.portworxV1beta2, err = portworxv1beta2.NewForConfig(&configShallowCopy)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfig(&configShallowCopy)
 	if err != nil {
@@ -83,6 +95,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
 	cs.portworxV1beta1 = portworxv1beta1.NewForConfigOrDie(c)
+	cs.portworxV1beta2 = portworxv1beta2.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -92,6 +105,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.portworxV1beta1 = portworxv1beta1.New(c)
+	cs.portworxV1beta2 = portworxv1beta2.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
