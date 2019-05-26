@@ -71,42 +71,63 @@ func (c *ClusterDomainsStatusController) Init() error {
 func (c *ClusterDomainsStatusController) Handle(ctx context.Context, event sdk.Event) error {
 	switch obj := event.Object.(type) {
 	case *storkv1.ClusterDomainsStatus:
-		clusterDomainsStatus := obj
+		apiClusterDomainsStatus := obj
 		if event.Deleted {
 			go func() { c.createClusterDomainsStatusObject() }()
 		}
-		clusterDomainsInfo, err := c.Driver.GetClusterDomains()
+		currentClusterDomains, err := c.Driver.GetClusterDomains()
 		updated := false
 		if err != nil {
 			c.Recorder.Event(
-				clusterDomainsStatus,
+				apiClusterDomainsStatus,
 				v1.EventTypeWarning,
 				err.Error(),
 				fmt.Sprintf("Failed to update ClusterDomainsStatuses"),
 			)
 			logrus.Errorf("Failed to get cluster domain info: %v", err)
 		} else {
-			if clusterDomainsStatus.Status.LocalDomain != clusterDomainsInfo.LocalDomain {
+
+			if currentClusterDomains.LocalDomain != apiClusterDomainsStatus.Status.LocalDomain {
 				updated = true
-			} else if len(clusterDomainsInfo.Active) != len(clusterDomainsStatus.Status.Active) ||
-				len(clusterDomainsInfo.Inactive) != len(clusterDomainsStatus.Status.Inactive) {
+			} else if len(currentClusterDomains.ClusterDomainInfos) != len(apiClusterDomainsStatus.Status.ClusterDomainInfos) {
 				updated = true
 			} else {
-				// Check active list
-				if !c.doListsMatch(clusterDomainsInfo.Active, clusterDomainsStatus.Status.Active) ||
-					!c.doListsMatch(clusterDomainsInfo.Inactive, clusterDomainsStatus.Status.Inactive) {
-					updated = true
+				// check if the domain infos match
+				for _, apiDomainInfo := range apiClusterDomainsStatus.Status.ClusterDomainInfos {
+					if !c.doesClusterDomainInfoMatch(apiDomainInfo, currentClusterDomains.ClusterDomainInfos) {
+						updated = true
+						break
+					}
 				}
 			}
 		}
 		if updated {
-			clusterDomainsStatus.Status = *clusterDomainsInfo
-			if err := sdk.Update(clusterDomainsStatus); err != nil {
+			apiClusterDomainsStatus.Status = *currentClusterDomains
+			if err := sdk.Update(apiClusterDomainsStatus); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func (c *ClusterDomainsStatusController) doesClusterDomainInfoMatch(
+	clusterDomainInfo storkv1.ClusterDomainInfo,
+	currentClusterDomainInfos []storkv1.ClusterDomainInfo,
+) bool {
+	var (
+		isMatch bool
+	)
+	for _, currentClusterDomainInfo := range currentClusterDomainInfos {
+		if currentClusterDomainInfo.Name == clusterDomainInfo.Name {
+			if clusterDomainInfo.State == currentClusterDomainInfo.State &&
+				clusterDomainInfo.SyncStatus == currentClusterDomainInfo.SyncStatus {
+				isMatch = true
+			}
+			break
+		}
+	}
+	return isMatch
 }
 
 func (c *ClusterDomainsStatusController) doListsMatch(domainListSDK, domainListCRD []string) bool {
