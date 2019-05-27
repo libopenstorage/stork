@@ -359,3 +359,44 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
+
+func TestCreateMigrationWaitSuccess(t *testing.T) {
+	defer resetTest()
+
+	namespace := "dummy-namespace"
+	name := "dummy-name"
+	clusterpair := "dummy-clusterpair"
+	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "-w"}
+
+	expected := "STAGE\t\tSTATUS              \n\t\t                    \nVolumes\t\tSuccessful          \nMigration dummy-name completed successfully\n"
+	go setMigrationStatus(name, namespace, false, t)
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+func TestCreateMigrationWaitFailed(t *testing.T) {
+	defer resetTest()
+
+	namespace := "dummy-namespace"
+	name := "dummy-name"
+	clusterpair := "dummy-clusterpair"
+	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "-w"}
+
+	expected := "STAGE\t\tSTATUS              \n\t\t                    \nVolumes\t\tFailed              \nMigration dummy-name failed\n"
+	go setMigrationStatus(name, namespace, true, t)
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func setMigrationStatus(name, namespace string, isFail bool, t *testing.T) {
+	time.Sleep(10 * time.Second)
+	migrResp, err := k8s.Instance().GetMigration(name, namespace)
+	require.NoError(t, err, "Error getting Migration details")
+	require.Equal(t, migrResp.Status.Status, storkv1.MigrationStatusInitial)
+	require.Equal(t, migrResp.Status.Stage, storkv1.MigrationStageInitial)
+	migrResp.Status.Status = storkv1.MigrationStatusSuccessful
+	migrResp.Status.Stage = storkv1.MigrationStageVolumes
+	if isFail {
+		migrResp.Status.Status = storkv1.MigrationStatusFailed
+	}
+
+	_, err = k8s.Instance().UpdateMigration(migrResp)
+	require.NoError(t, err, "Error updating Migrations")
+}
