@@ -3,17 +3,27 @@ package storkctl
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"strconv"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/printers"
+)
+
+const (
+	migrRetryTimeout = 30 * time.Second
+	migrTimeout      = 6 * time.Hour
+	stage            = "STAGE"
+	status           = "STATUS"
 )
 
 var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED"}
@@ -29,6 +39,7 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	var preExecRule string
 	var postExecRule string
 	var includeVolumes bool
+	var waitForCompletion bool
 
 	createMigrationCommand := &cobra.Command{
 		Use:     migrationSubcommand,
@@ -48,7 +59,6 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 				util.CheckErr(fmt.Errorf("need to provide atleast one namespace to migrate"))
 				return
 			}
-
 			migration := &storkv1.Migration{
 				Spec: storkv1.MigrationSpec{
 					ClusterPair:       clusterPair,
@@ -67,14 +77,25 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 				util.CheckErr(err)
 				return
 			}
-			msg := fmt.Sprintf("Migration %v created successfully", migration.Name)
-			printMsg(msg, ioStreams.Out)
+
+			if waitForCompletion {
+				msg, err := waitForMigration(migration.Name, migration.Namespace, ioStreams)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				printMsg(msg, ioStreams.Out)
+			} else {
+				msg := "Migration " + migrationName + " created successfully"
+				printMsg(msg, ioStreams.Out)
+			}
 		},
 	}
 	createMigrationCommand.Flags().StringSliceVarP(&namespaceList, "namespaces", "", nil, "Comma separated list of namespaces to migrate")
 	createMigrationCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "ClusterPair name for migration")
 	createMigrationCommand.Flags().BoolVarP(&includeResources, "includeResources", "r", true, "Include resources in the migration")
 	createMigrationCommand.Flags().BoolVarP(&includeVolumes, "includeVolumes", "", true, "Include volumees in the migration")
+	createMigrationCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for migration to complete")
 	createMigrationCommand.Flags().BoolVarP(&startApplications, "startApplications", "a", true, "Start applications on the destination cluster after migration")
 	createMigrationCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing migration")
 	createMigrationCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
@@ -365,19 +386,28 @@ func migrationPrinter(migrationList *storkv1.MigrationList, writer io.Writer, op
 				return err
 			}
 		}
-		totalVolumes := len(migration.Status.Volumes)
-		doneVolumes := 0
-		for _, volume := range migration.Status.Volumes {
-			if volume.Status == storkv1.MigrationStatusSuccessful {
-				doneVolumes++
+		volumeStatus := "N/A"
+		if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+			totalVolumes := len(migration.Status.Volumes)
+			doneVolumes := 0
+			for _, volume := range migration.Status.Volumes {
+				if volume.Status == storkv1.MigrationStatusSuccessful {
+					doneVolumes++
+				}
 			}
+			volumeStatus = fmt.Sprintf("%v/%v", doneVolumes, totalVolumes)
 		}
-		totalResources := len(migration.Status.Resources)
-		doneResources := 0
-		for _, resource := range migration.Status.Resources {
-			if resource.Status == storkv1.MigrationStatusSuccessful {
-				doneResources++
+
+		resourceStatus := "N/A"
+		if migration.Spec.IncludeResources == nil || *migration.Spec.IncludeResources {
+			totalResources := len(migration.Status.Resources)
+			doneResources := 0
+			for _, resource := range migration.Status.Resources {
+				if resource.Status == storkv1.MigrationStatusSuccessful {
+					doneResources++
+				}
 			}
+			resourceStatus = fmt.Sprintf("%v/%v", doneResources, totalResources)
 		}
 
 		elapsed := ""
@@ -392,19 +422,54 @@ func migrationPrinter(migrationList *storkv1.MigrationList, writer io.Writer, op
 		}
 
 		creationTime := toTimeString(migration.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v/%v\t%v/%v\t%v\t%v\n",
+		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
 			name,
 			migration.Spec.ClusterPair,
 			migration.Status.Stage,
 			migration.Status.Status,
-			doneVolumes,
-			totalVolumes,
-			doneResources,
-			totalResources,
+			volumeStatus,
+			resourceStatus,
 			creationTime,
 			elapsed); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func waitForMigration(name, namespace string, ioStreams genericclioptions.IOStreams) (string, error) {
+	var msg string
+	var err error
+
+	log.SetFlags(0)
+	log.SetOutput(ioutil.Discard)
+	heading := fmt.Sprintf("%s\t\t%-20s", stage, status)
+	printMsg(heading, ioStreams.Out)
+	t := func() (interface{}, bool, error) {
+		migrResp, err := k8s.Instance().GetMigration(name, namespace)
+		if err != nil {
+			util.CheckErr(err)
+			return "", false, err
+		}
+		stat := fmt.Sprintf("%s\t\t%-20s", migrResp.Status.Stage, migrResp.Status.Status)
+		printMsg(stat, ioStreams.Out)
+		if migrResp.Status.Status == storkv1.MigrationStatusSuccessful ||
+			migrResp.Status.Status == storkv1.MigrationStatusPartialSuccess {
+			msg = fmt.Sprintf("Migration %v completed successfully", name)
+			return "", false, nil
+		}
+		if migrResp.Status.Status == storkv1.MigrationStatusFailed {
+			msg = fmt.Sprintf("Migration %v failed", name)
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("%v", migrResp.Status.Status)
+	}
+	// sleep just so that instead of blank initial stage/status,
+	// we have something at start
+	time.Sleep(5 * time.Second)
+	if _, err = task.DoRetryWithTimeout(t, migrTimeout, migrRetryTimeout); err != nil {
+		msg = "Timed out performing task"
+	}
+
+	return msg, err
 }

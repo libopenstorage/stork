@@ -9,6 +9,7 @@ import (
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
+	ocpv1 "github.com/openshift/api/apps/v1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1beta2"
@@ -213,6 +214,46 @@ func TestDeleteMigrations(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
+func TestExclueVolumesForMigrations(t *testing.T) {
+	defer resetTest()
+	name := "excludevolumestest"
+	namespace := "test"
+	createMigrationAndVerify(t, name, namespace, "clusterpair1", []string{"namespace1"}, "", "")
+	migration, err := k8s.Instance().GetMigration(name, namespace)
+	require.NoError(t, err, "Error getting migration")
+
+	include := false
+	migration.Spec.IncludeVolumes = &include
+	_, err = k8s.Instance().UpdateMigration(migration)
+	require.NoError(t, err, "Error updating migration")
+
+	expected := "NAME                 CLUSTERPAIR    STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
+		name + "   clusterpair1                       N/A       0/0                   \n"
+
+	cmdArgs := []string{"get", "migrations", "-n", namespace}
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func TestExclueResourcesForMigrations(t *testing.T) {
+	defer resetTest()
+	name := "excluderesourcstest"
+	namespace := "test"
+	createMigrationAndVerify(t, name, namespace, "clusterpair1", []string{"namespace1"}, "", "")
+	migration, err := k8s.Instance().GetMigration(name, namespace)
+	require.NoError(t, err, "Error getting migration")
+
+	include := false
+	migration.Spec.IncludeResources = &include
+	_, err = k8s.Instance().UpdateMigration(migration)
+	require.NoError(t, err, "Error updating migration")
+
+	expected := "NAME                  CLUSTERPAIR    STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
+		name + "   clusterpair1                       0/0       N/A                   \n"
+
+	cmdArgs := []string{"get", "migrations", "-n", namespace}
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
 func createMigratedDeployment(t *testing.T) {
 	replicas := int32(0)
 	_, err := k8s.Instance().CreateNamespace("dep", nil)
@@ -232,8 +273,8 @@ func createMigratedDeployment(t *testing.T) {
 	}
 	_, err = k8s.Instance().CreateDeployment(deployment)
 	require.NoError(t, err, "Error creating deployment")
-
 }
+
 func createMigratedStatefulSet(t *testing.T) {
 	replicas := int32(0)
 	_, err := k8s.Instance().CreateNamespace("sts", nil)
@@ -255,12 +296,39 @@ func createMigratedStatefulSet(t *testing.T) {
 	require.NoError(t, err, "Error creating statefulset")
 
 }
-func TestActivateDeactivateMigrations(t *testing.T) {
 
+func createMigratedDeploymentConfig(t *testing.T) {
+	replicas := int32(0)
+	_, err := k8s.Instance().CreateNamespace("depconf", nil)
+	require.NoError(t, err, "Error creating dep namespace")
+
+	deploymentConfig := &ocpv1.DeploymentConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "migratedDeploymentConfig",
+			Namespace: "depconf",
+			Annotations: map[string]string{
+				migration.StorkMigrationReplicasAnnotation: "1",
+			},
+		},
+		Spec: ocpv1.DeploymentConfigSpec{
+			Replicas: replicas,
+		},
+	}
+	_, err = k8s.Instance().CreateDeploymentConfig(deploymentConfig)
+	require.NoError(t, err, "Error creating deploymentconfig")
+}
+
+func TestActivateDeactivateMigrations(t *testing.T) {
 	createMigratedDeployment(t)
 	createMigratedStatefulSet(t)
+	createMigratedDeploymentConfig(t)
+
 	cmdArgs := []string{"activate", "migrations", "-n", "dep"}
 	expected := "Updated replicas for deployment dep/migratedDeployment to 1\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"activate", "migrations", "-n", "depconf"}
+	expected = "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 1\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"activate", "migrations", "-n", "sts"}
@@ -271,6 +339,10 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 	expected = "Updated replicas for deployment dep/migratedDeployment to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
+	cmdArgs = []string{"deactivate", "migrations", "-n", "depconf"}
+	expected = "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 0\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
 	cmdArgs = []string{"deactivate", "migrations", "-n", "sts"}
 	expected = "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -278,10 +350,53 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 	cmdArgs = []string{"activate", "migrations", "-a"}
 	expected = "Updated replicas for deployment dep/migratedDeployment to 1\n"
 	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 3\n"
+	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 1\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"deactivate", "migrations", "-a"}
 	expected = "Updated replicas for deployment dep/migratedDeployment to 0\n"
 	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
+	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func TestCreateMigrationWaitSuccess(t *testing.T) {
+	defer resetTest()
+
+	namespace := "dummy-namespace"
+	name := "dummy-name"
+	clusterpair := "dummy-clusterpair"
+	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "-w"}
+
+	expected := "STAGE\t\tSTATUS              \n\t\t                    \nVolumes\t\tSuccessful          \nMigration dummy-name completed successfully\n"
+	go setMigrationStatus(name, namespace, false, t)
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+func TestCreateMigrationWaitFailed(t *testing.T) {
+	defer resetTest()
+
+	namespace := "dummy-namespace"
+	name := "dummy-name"
+	clusterpair := "dummy-clusterpair"
+	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "-w"}
+
+	expected := "STAGE\t\tSTATUS              \n\t\t                    \nVolumes\t\tFailed              \nMigration dummy-name failed\n"
+	go setMigrationStatus(name, namespace, true, t)
+	testCommon(t, cmdArgs, nil, expected, false)
+}
+
+func setMigrationStatus(name, namespace string, isFail bool, t *testing.T) {
+	time.Sleep(10 * time.Second)
+	migrResp, err := k8s.Instance().GetMigration(name, namespace)
+	require.NoError(t, err, "Error getting Migration details")
+	require.Equal(t, migrResp.Status.Status, storkv1.MigrationStatusInitial)
+	require.Equal(t, migrResp.Status.Stage, storkv1.MigrationStageInitial)
+	migrResp.Status.Status = storkv1.MigrationStatusSuccessful
+	migrResp.Status.Stage = storkv1.MigrationStageVolumes
+	if isFail {
+		migrResp.Status.Status = storkv1.MigrationStatusFailed
+	}
+
+	_, err = k8s.Instance().UpdateMigration(migrResp)
+	require.NoError(t, err, "Error updating Migrations")
 }
