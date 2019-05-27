@@ -32,7 +32,7 @@ func testClusterDomains(t *testing.T) {
 	cds := cdses.Items[0]
 	cdsName = cds.Name
 
-	if len(cds.Status.Active) == 0 {
+	if len(cds.Status.ClusterDomainInfos) == 0 {
 		t.Skip("Skipping cluster domain tests: No cluster domains found")
 	}
 

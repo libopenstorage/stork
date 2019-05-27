@@ -63,13 +63,36 @@ func clusterDomainsStatusPrinter(cdsList *storkv1.ClusterDomainsStatusList, writ
 	for _, cds := range cdsList.Items {
 		name := printers.FormatResourceName(options.Kind, cds.Name, options.WithKind)
 
+		// build a list of active and inactive domains
+		var (
+			active, inactive       string
+			numActive, numInactive int
+		)
+
+		for _, cdsInfo := range cds.Status.ClusterDomainInfos {
+			if cdsInfo.State == storkv1.ClusterDomainActive {
+				if numActive > 0 {
+					active = active + ", "
+				}
+				active = active + cdsInfo.Name + " (" + string(cdsInfo.SyncStatus) + ")"
+				numActive++
+			} else {
+				if numInactive > 0 {
+					inactive = inactive + ", "
+				}
+				inactive = inactive + cdsInfo.Name + " (" + string(cdsInfo.SyncStatus) + ")"
+				numInactive++
+			}
+		}
+
 		creationTime := toTimeString(cds.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\n",
+		if _, err := fmt.Fprintf(writer, "%v\t%v\t[%v]\t[%v]\t%v\n",
 			name,
 			cds.Status.LocalDomain,
-			cds.Status.Active,
-			cds.Status.Inactive,
-			creationTime); err != nil {
+			active,
+			inactive,
+			creationTime,
+		); err != nil {
 			return err
 		}
 	}

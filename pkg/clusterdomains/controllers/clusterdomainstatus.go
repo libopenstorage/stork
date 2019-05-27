@@ -130,23 +130,6 @@ func (c *ClusterDomainsStatusController) doesClusterDomainInfoMatch(
 	return isMatch
 }
 
-func (c *ClusterDomainsStatusController) doListsMatch(domainListSDK, domainListCRD []string) bool {
-	for _, sdkDomain := range domainListSDK {
-		found := false
-		for _, crdDomain := range domainListCRD {
-			if crdDomain == sdkDomain {
-				found = true
-				break
-			}
-		}
-		// could not find a match
-		if !found {
-			return false
-		}
-	}
-	return true
-}
-
 func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 	t := func() (interface{}, bool, error) {
 
