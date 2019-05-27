@@ -31,12 +31,8 @@ func testClusterDomains(t *testing.T) {
 	}
 	cds := cdses.Items[0]
 	cdsName = cds.Name
-	var domains []string
-	for _, domain := range cds.Status.Active {
-		domains = append(domains, domain)
-	}
 
-	if len(domains) == 0 {
+	if len(cds.Status.ClusterDomainInfos) == 0 {
 		t.Skip("Skipping cluster domain tests: No cluster domains found")
 	}
 
