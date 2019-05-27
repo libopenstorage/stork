@@ -38,7 +38,11 @@ func newActivateClusterDomainCommand(cmdFactory Factory, ioStreams genericcliopt
 				}
 
 				for _, cds := range cdsList.Items {
-					activationList = append(activationList, cds.Status.Inactive...)
+					for _, cdInfo := range cds.Status.ClusterDomainInfos {
+						if cdInfo.State == storkv1.ClusterDomainInactive {
+							activationList = append(activationList, cdInfo.Name)
+						}
+					}
 				}
 			} else if len(args) == 1 {
 				activationList = []string{args[0]}
