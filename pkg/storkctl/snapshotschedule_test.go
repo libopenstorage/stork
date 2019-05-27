@@ -244,3 +244,33 @@ func TestDeleteSnapshotSchedules(t *testing.T) {
 	expected += "VolumeSnapshotSchedule deletesnapshotschedule2 deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
+
+func TestSuspendResumeSnapshotSchedule(t *testing.T) {
+	name := "testsnapshotschedule"
+	namespace := "default"
+	defer resetTest()
+	createSnapshotScheduleAndVerify(t, name, "pvcname1", "testpolicy", namespace, "preExec", "postExec", false)
+
+	cmdArgs := []string{"suspend", "volumesnapshotschedule", name}
+	expected := "VolumeSnapshotSchedule " + name + " suspended successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	snapshotSchedule, err := k8s.Instance().GetSnapshotSchedule(name, namespace)
+	require.NoError(t, err, "Error getting snapshotschedule")
+	require.True(t, *snapshotSchedule.Spec.Suspend, "snapshot schedule not suspended")
+
+	cmdArgs = []string{"resume", "snapshotschedules", name}
+	expected = "VolumeSnapshotSchedule " + name + " resumed successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	snapshotSchedule, err = k8s.Instance().GetSnapshotSchedule(name, namespace)
+	require.NoError(t, err, "Error getting snapshotschedule")
+	require.False(t, *snapshotSchedule.Spec.Suspend, "snapshot schedule suspended")
+
+	cmdArgs = []string{"suspend", "volumesnapshotschedule", "invalidschedule"}
+	expected = "Error from server (NotFound): volumesnapshotschedules.stork.libopenstorage.org \"invalidschedule\" not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	cmdArgs = []string{"resume", "volumesnapshotschedule", "invalidschedule"}
+	testCommon(t, cmdArgs, nil, expected, true)
+}
