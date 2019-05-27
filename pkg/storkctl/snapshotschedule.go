@@ -199,6 +199,84 @@ func deleteSnapshotSchedules(snapshotSchedules []string, namespace string, ioStr
 	}
 }
 
+func getSnapshotSchedules(args []string, namespace string) ([]*storkv1.VolumeSnapshotSchedule, error) {
+	var snapshotSchedules []*storkv1.VolumeSnapshotSchedule
+	if len(args) == 0 {
+		return nil, fmt.Errorf("at least one argument needs to be provided for volumesnapshot schedule name")
+	}
+	snapshotSchedule, err := k8s.Instance().GetSnapshotSchedule(args[0], namespace)
+	if err != nil {
+		return nil, err
+	}
+	snapshotSchedules = append(snapshotSchedules, snapshotSchedule)
+	return snapshotSchedules, nil
+}
+
+func newSuspendSnapshotSchedulesCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	suspendSnapshotScheduleCommand := &cobra.Command{
+		Use:     snapshotScheduleSubcommand,
+		Aliases: snapshotScheduleAliases,
+		Short:   "Suspend snapshot schedules",
+		Run: func(c *cobra.Command, args []string) {
+			snapshotSchedules, err := getSnapshotSchedules(args, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			if len(snapshotSchedules) == 0 {
+				handleEmptyList(ioStreams.Out)
+				return
+			}
+			updateSnapshotSchedules(snapshotSchedules, cmdFactory.GetNamespace(), ioStreams, true)
+		},
+	}
+
+	return suspendSnapshotScheduleCommand
+}
+
+func newResumeSnapshotSchedulesCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	resumeSnapshotScheduleCommand := &cobra.Command{
+		Use:     snapshotScheduleSubcommand,
+		Aliases: snapshotScheduleAliases,
+		Short:   "Resume snapshot schedules",
+		Run: func(c *cobra.Command, args []string) {
+			snapshotSchedules, err := getSnapshotSchedules(args, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			if len(snapshotSchedules) == 0 {
+				handleEmptyList(ioStreams.Out)
+				return
+			}
+			updateSnapshotSchedules(snapshotSchedules, cmdFactory.GetNamespace(), ioStreams, false)
+		},
+	}
+
+	return resumeSnapshotScheduleCommand
+}
+
+func updateSnapshotSchedules(snapshotSchedules []*storkv1.VolumeSnapshotSchedule, namespace string, ioStreams genericclioptions.IOStreams, suspend bool) {
+	var action string
+	if suspend {
+		action = "suspended"
+	} else {
+		action = "resumed"
+	}
+	for _, snapshotSchedule := range snapshotSchedules {
+		snapshotSchedule.Spec.Suspend = &suspend
+		_, err := k8s.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+		if err != nil {
+			util.CheckErr(err)
+			return
+		}
+		msg := fmt.Sprintf("VolumeSnapshotSchedule %v %v successfully", snapshotSchedule.Name, action)
+		printMsg(msg, ioStreams.Out)
+	}
+}
+
 func snapshotSchedulePrinter(snapshotScheduleList *storkv1.VolumeSnapshotScheduleList, writer io.Writer, options printers.PrintOptions) error {
 	if snapshotScheduleList == nil {
 		return nil
