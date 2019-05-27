@@ -302,3 +302,50 @@ func TestDefaultMigrationSchedulePolicy(t *testing.T) {
 	expected = "MigrationSchedule defaultpolicy created successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
+
+func TestSuspendResumeMigrationSchedule(t *testing.T) {
+	name := "testmigrationschedule"
+	namespace := "default"
+	defer resetTest()
+	createMigrationScheduleAndVerify(t, name, "testpolicy", namespace, "clusterpair1", []string{"namespace1"}, "", "", false)
+
+	cmdArgs := []string{"suspend", "migrationschedules", name}
+	expected := "MigrationSchedule " + name + " suspended successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	migrationSchedule, err := k8s.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migrationschedule")
+	require.True(t, *migrationSchedule.Spec.Suspend, "migration schedule not suspended")
+
+	cmdArgs = []string{"resume", "migrationschedules", name}
+	expected = "MigrationSchedule " + name + " resumed successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	migrationSchedule, err = k8s.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migrationschedule")
+	require.False(t, *migrationSchedule.Spec.Suspend, "migration schedule suspended")
+
+	cmdArgs = []string{"suspend", "migrationschedules", "-c", "clusterpair1"}
+	expected = "MigrationSchedule " + name + " suspended successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	migrationSchedule, err = k8s.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migrationschedule")
+	require.True(t, *migrationSchedule.Spec.Suspend, "migration schedule not suspended")
+
+	cmdArgs = []string{"resume", "migrationschedules", "-c", "clusterpair1"}
+	expected = "MigrationSchedule " + name + " resumed successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	migrationSchedule, err = k8s.Instance().GetMigrationSchedule(name, namespace)
+	require.NoError(t, err, "Error getting migrationschedule")
+	require.False(t, *migrationSchedule.Spec.Suspend, "migration schedule suspended")
+
+	cmdArgs = []string{"suspend", "migrationschedules", "invalidschedule"}
+	expected = "Error from server (NotFound): migrationschedules.stork.libopenstorage.org \"invalidschedule\" not found"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	cmdArgs = []string{"resume", "migrationschedules", "invalidschedule"}
+	testCommon(t, cmdArgs, nil, expected, true)
+
+}
