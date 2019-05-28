@@ -44,11 +44,11 @@ required = [
 
 [[override]]
   name = "github.com/portworx/sched-ops"
-  branch = "update_clusterdomain_crds"
+  branch = "master"
 
 [[override]]
   name = "github.com/portworx/torpedo"
-  branch = "stork-2.2-cluster_domain_sync"
+  branch = "stork-2.2"
 
 [[constraint]]
   name = "github.com/heptio/ark"
