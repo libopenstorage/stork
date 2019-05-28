@@ -15,7 +15,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,11 +74,12 @@ func (m *MigrationScheduleController) Handle(ctx context.Context, event sdk.Even
 
 		// Then check if any of the policies require a trigger if it is enabled
 		if migrationSchedule.Spec.Suspend == nil || !*migrationSchedule.Spec.Suspend {
-			clusterDomainsInfo, err := m.Driver.GetClusterDomains()
+			clusterDomains, err := m.Driver.GetClusterDomains()
 			// Ignore errors
 			if err == nil {
-				for _, domain := range clusterDomainsInfo.Inactive {
-					if domain == clusterDomainsInfo.LocalDomain {
+				for _, domainInfo := range clusterDomains.ClusterDomainInfos {
+					if domainInfo.Name == clusterDomains.LocalDomain &&
+						domainInfo.State == stork_api.ClusterDomainInactive {
 						suspend := true
 						migrationSchedule.Spec.Suspend = &suspend
 						msg := fmt.Sprintf("Suspending migration schedule since local clusterdomain is inactive")
