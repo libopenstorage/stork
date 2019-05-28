@@ -221,6 +221,100 @@ func deleteMigrationSchedules(migrationSchedules []string, namespace string, ioS
 	}
 }
 
+func getMigrationSchedules(clusterPair string, args []string, namespace string) ([]*storkv1.MigrationSchedule, error) {
+	var migrationSchedules []*storkv1.MigrationSchedule
+	if len(clusterPair) == 0 {
+		if len(args) == 0 {
+			return nil, fmt.Errorf("at least one argument needs to be provided for migration schedule name if cluster pair isn't provided")
+		}
+		migrationSchedule, err := k8s.Instance().GetMigrationSchedule(args[0], namespace)
+		if err != nil {
+			return nil, err
+		}
+		migrationSchedules = append(migrationSchedules, migrationSchedule)
+	} else {
+		migrationScheduleList, err := k8s.Instance().ListMigrationSchedules(namespace)
+		if err != nil {
+			return nil, err
+		}
+		for _, migrationSchedule := range migrationScheduleList.Items {
+			if migrationSchedule.Spec.Template.Spec.ClusterPair == clusterPair {
+				migrationSchedules = append(migrationSchedules, &migrationSchedule)
+			}
+		}
+	}
+	return migrationSchedules, nil
+}
+
+func newSuspendMigrationSchedulesCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	var clusterPair string
+	suspendMigrationScheduleCommand := &cobra.Command{
+		Use:     migrationScheduleSubcommand,
+		Aliases: migrationScheduleAliases,
+		Short:   "Suspend migration schedules",
+		Run: func(c *cobra.Command, args []string) {
+			migrationSchedules, err := getMigrationSchedules(clusterPair, args, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			if len(migrationSchedules) == 0 {
+				handleEmptyList(ioStreams.Out)
+				return
+			}
+			updateMigrationSchedules(migrationSchedules, cmdFactory.GetNamespace(), ioStreams, true)
+		},
+	}
+	suspendMigrationScheduleCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "Name of the ClusterPair for which to suspend ALL migration schedules")
+
+	return suspendMigrationScheduleCommand
+}
+
+func newResumeMigrationSchedulesCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	var clusterPair string
+	resumeMigrationScheduleCommand := &cobra.Command{
+		Use:     migrationScheduleSubcommand,
+		Aliases: migrationScheduleAliases,
+		Short:   "Resume migration schedules",
+		Run: func(c *cobra.Command, args []string) {
+			migrationSchedules, err := getMigrationSchedules(clusterPair, args, cmdFactory.GetNamespace())
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			if len(migrationSchedules) == 0 {
+				handleEmptyList(ioStreams.Out)
+				return
+			}
+			updateMigrationSchedules(migrationSchedules, cmdFactory.GetNamespace(), ioStreams, false)
+		},
+	}
+	resumeMigrationScheduleCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "Name of the ClusterPair for which to resume ALL migration schedules")
+
+	return resumeMigrationScheduleCommand
+}
+
+func updateMigrationSchedules(migrationSchedules []*storkv1.MigrationSchedule, namespace string, ioStreams genericclioptions.IOStreams, suspend bool) {
+	var action string
+	if suspend {
+		action = "suspended"
+	} else {
+		action = "resumed"
+	}
+	for _, migrationSchedule := range migrationSchedules {
+		migrationSchedule.Spec.Suspend = &suspend
+		_, err := k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+		if err != nil {
+			util.CheckErr(err)
+			return
+		}
+		msg := fmt.Sprintf("MigrationSchedule %v %v successfully", migrationSchedule.Name, action)
+		printMsg(msg, ioStreams.Out)
+	}
+}
+
 func migrationSchedulePrinter(migrationScheduleList *storkv1.MigrationScheduleList, writer io.Writer, options printers.PrintOptions) error {
 	if migrationScheduleList == nil {
 		return nil
