@@ -647,7 +647,7 @@
   revision = "1c18ebeaf685dfc584a49545bc590a13fa8b7617"
 
 [[projects]]
-  branch = "update_clusterdomain_crds"
+  branch = "master"
   digest = "1:8dea5f278f7935c01a6cb1757a6b10c2b9dbab5306b14b644c16bb168406b391"
   name = "github.com/portworx/sched-ops"
   packages = [
@@ -655,7 +655,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "2563ba26d4944cfec3f561a2747724670275b763"
+  revision = "5ad42621478d99aa5b313ab00c7d706c0407313b"
 
 [[projects]]
   branch = "master"
@@ -674,7 +674,7 @@
   revision = "81f70f63459acc2624772125c3223dc3401ff0d0"
 
 [[projects]]
-  branch = "stork-2.2-cluster_domain_sync"
+  branch = "stork-2.2"
   digest = "1:a93e30ffe11b9f5e98db3169153d6255dee03f40cfe876f9f7ef949bbf037424"
   name = "github.com/portworx/torpedo"
   packages = [
@@ -689,7 +689,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "afceb5e465767e4cf2b42485c4721e3a6d8683fc"
+  revision = "54095d1f2b0513b9541052f988c675f7f2866f31"
 
 [[projects]]
   branch = "master"
@@ -1547,6 +1547,7 @@
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/secrets/k8s",
+    "github.com/openshift/api/apps/v1",
     "github.com/openshift/client-go/apps/clientset/versioned/fake",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",
