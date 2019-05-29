@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
@@ -45,12 +46,20 @@ func triggerClusterDomainUpdate(
 	domain string,
 	active bool,
 ) {
-	err := setRemoteConfig("")
+	// run the command on the remote cluster as currently
+	// we do not stop/deactivate the remote cluster
+	err := setRemoteConfig(remoteFilePath)
 	require.NoError(t, err, "Error resetting remote config")
 
+	defer func() {
+		err = setRemoteConfig("")
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+
+	updateName := name + uuid.New()
 	_, err = k8s.Instance().CreateClusterDomainUpdate(&v1alpha1.ClusterDomainUpdate{
 		ObjectMeta: meta.ObjectMeta{
-			Name: name,
+			Name: updateName,
 		},
 		Spec: v1alpha1.ClusterDomainUpdateSpec{
 			ClusterDomain: domain,
@@ -59,7 +68,7 @@ func triggerClusterDomainUpdate(
 	})
 	require.NoError(t, err, "Unexpected error on cluster domain update: %v", err)
 
-	err = k8s.Instance().ValidateClusterDomainUpdate(name, defaultWaitTimeout, defaultWaitInterval)
+	err = k8s.Instance().ValidateClusterDomainUpdate(updateName, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Failed to validate cluster domain update")
 }
 
