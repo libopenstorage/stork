@@ -38,17 +38,21 @@ required = [
   source = "github.com/libopenstorage/external-storage"
   branch = "openstorage-5.1"
 
-[[constraint]]
+[[override]]
   name = "github.com/libopenstorage/openstorage"
   branch = "release-6.0"
 
-[[override]]
+[[constraint]]
   name = "github.com/portworx/sched-ops"
   branch = "master"
 
-[[override]]
+[[constraint]]
+  branch = "master"
   name = "github.com/portworx/torpedo"
-  branch = "stork-2.2"
+
+#[[override]]
+#  revision = "107eedd85b09203cee676d121526ef011a2e6e73"
+#  name = "github.com/portworx/talisman"
 
 [[constraint]]
   name = "github.com/heptio/ark"
@@ -112,5 +116,5 @@ required = [
   go-tests = false
 
 [[constraint]]
-  branch = "master"
-  name = "github.com/libopenstorage/gossip"
+  name = "gocloud.dev"
+  version = "0.13.0"

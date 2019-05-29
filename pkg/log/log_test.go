@@ -24,6 +24,10 @@ func TestLog(t *testing.T) {
 	t.Run("migrationScheduleLogTest", migrationScheduleLogTest)
 	t.Run("ruleLogTest", ruleLogTest)
 	t.Run("pvcLogTest", pvcLogTest)
+	t.Run("clusterDomainUpdateLogTest", clusterDomainUpdateLogTest)
+	t.Run("applicationBackupLogTest", applicationBackupLogTest)
+	t.Run("applicationRestoreLogTest", applicationRestoreLogTest)
+	t.Run("applicationCloneLogTest", applicationCloneLogTest)
 }
 
 func podLogTest(t *testing.T) {
@@ -167,6 +171,7 @@ func ruleLogTest(t *testing.T) {
 	RuleLog(rule, migration).Infof("rule with migration log")
 	RuleLog(rule, nil).Infof("rule with nil object log")
 }
+
 func pvcLogTest(t *testing.T) {
 	metadata := metav1.ObjectMeta{
 		Name:      "testpvc",
@@ -177,4 +182,52 @@ func pvcLogTest(t *testing.T) {
 	}
 	PVCLog(pvc).Infof("pvc log")
 	PVCLog(nil).Infof("pvc nil log")
+}
+
+func clusterDomainUpdateLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name: "testclusterdomainupdate",
+	}
+	clusterDomainUpdate := &storkv1.ClusterDomainUpdate{
+		ObjectMeta: metadata,
+	}
+
+	ClusterDomainUpdateLog(clusterDomainUpdate).Infof("clusterdomainupdate log")
+	ClusterDomainUpdateLog(nil).Infof("clusterdomainupdate nil log")
+}
+
+func applicationBackupLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testapplicationbackup",
+		Namespace: "testnamespace",
+	}
+	applicationBackup := &storkv1.ApplicationBackup{
+		ObjectMeta: metadata,
+	}
+	ApplicationBackupLog(applicationBackup).Infof("applicationbackup log")
+	ApplicationBackupLog(nil).Infof("applicationbackup nil log")
+}
+
+func applicationRestoreLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testapplicationrestore",
+		Namespace: "testnamespace",
+	}
+	applicationRestore := &storkv1.ApplicationRestore{
+		ObjectMeta: metadata,
+	}
+	ApplicationRestoreLog(applicationRestore).Infof("applicationrestore log")
+	ApplicationRestoreLog(nil).Infof("applicationrestore nil log")
+}
+
+func applicationCloneLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testapplicationrestore",
+		Namespace: "testnamespace",
+	}
+	applicationClone := &storkv1.ApplicationClone{
+		ObjectMeta: metadata,
+	}
+	ApplicationCloneLog(applicationClone).Infof("applicationclone log")
+	ApplicationCloneLog(nil).Infof("applicationclone nil log")
 }

@@ -27,7 +27,7 @@ import (
 
 const (
 	// Annotation to use when the resource shouldn't be collected
-	skipResourceAnnotation = "stork.libopenstorage.ord/skipresource"
+	skipResourceAnnotation = "stork.libopenstorage.org/skipresource"
 )
 
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
@@ -309,10 +309,14 @@ func (r *ResourceCollector) prepareResourceForApply(
 }
 
 func (r *ResourceCollector) mergeSupportedForResource(
-	resourceName string,
+	object runtime.Unstructured,
 ) bool {
-	switch resourceName {
-	case "ClusterRoleBindings":
+	objectType, err := meta.TypeAccessor(object)
+	if err != nil {
+		return false
+	}
+	switch objectType.GetKind() {
+	case "ClusterRoleBinding":
 		return true
 	}
 	return false
@@ -336,7 +340,7 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 // ApplyResource applies a given resource using the provided client interface
 func (r *ResourceCollector) ApplyResource(
 	dynamicInterface dynamic.Interface,
-	object *unstructured.Unstructured,
+	object runtime.Unstructured,
 	pvNameMappings map[string]string,
 	namespaceMappings map[string]string,
 	deleteIfPresent bool,
@@ -366,22 +370,33 @@ func (r *ResourceCollector) ApplyResource(
 		return err
 	}
 
-	_, err = dynamicClient.Create(object)
-	if err != nil && (apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
-		if r.mergeSupportedForResource(resource.Name) {
-			err := r.mergeAndUpdateResource(object)
-			if err != nil {
-				return err
-			}
-		} else if deleteIfPresent {
-			// Delete the resource if it already exists on the destination
-			// cluster and try creating again
-			err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
-			if err == nil {
-				_, err = dynamicClient.Create(object)
+	_, err = dynamicClient.Create(object.(*unstructured.Unstructured))
+	if err != nil {
+		if apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
+			if r.mergeSupportedForResource(object) {
+				return r.mergeAndUpdateResource(object)
+			} else if strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
+				err = r.updateService(object)
+				if err != nil {
+					return err
+				}
+			} else if deleteIfPresent {
+				// Delete the resource if it already exists on the destination
+				// cluster and try creating again
+				switch objectType.GetKind() {
+				case "PersistentVolumeClaim", "PersistentVolume":
+					err = nil
+				default:
+					err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
+					if err != nil && apierrors.IsNotFound(err) {
+						return err
+					}
+				}
 			} else {
 				return err
 			}
+			_, err = dynamicClient.Create(object.(*unstructured.Unstructured))
+			return err
 		}
 	}
 

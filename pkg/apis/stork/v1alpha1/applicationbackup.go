@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,7 +29,6 @@ type ApplicationBackupSpec struct {
 	Selectors      map[string]string                  `json:"selectors"`
 	PreExecRule    string                             `json:"preExecRule"`
 	PostExecRule   string                             `json:"postExecRule"`
-	EncryptionKey  *corev1.EnvVarSource               `json:"encryptionKey"`
 	ReclaimPolicy  ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
 }
 

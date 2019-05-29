@@ -23,7 +23,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -633,6 +633,24 @@ func (k *k8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 		logrus.Infof("[%v] Created Pod: %v", app.Key, pod.Name)
 		return pod, nil
+	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+		obj.Namespace = ns.Name
+		configMap, err := k8sOps.CreateConfigMap(obj)
+		if errors.IsAlreadyExists(err) {
+			if configMap, err := k8sOps.GetConfigMap(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Config Maps: %v", app.Key, configMap.Name)
+				return configMap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Config Map: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Config Map: %v", app.Key, configMap.Name)
+		return configMap, nil
 	}
 
 	return nil, nil
@@ -707,6 +725,22 @@ func (k *k8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		logrus.Infof("[%v] Destroyed Pod: %v", app.Key, obj.Name)
+	} else if obj, ok := spec.(*v1.ConfigMap); ok {
+		if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
+			_, err := k8sOps.GetConfigMap(obj.Name, obj.Namespace)
+			if err != nil {
+				logrus.Warnf("[%v] Error getting config maps. Err: %v", app.Key, err)
+			}
+		}
+		err := k8sOps.DeleteConfigMap(obj.Name, obj.Namespace)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy config map: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Destroyed Config Map: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
@@ -802,8 +836,6 @@ func (k *k8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated MigrationSchedule: %v", ctx.App.Key, obj.Name)
-		} else {
-			logrus.Infof("[%v] Skipping validate for %v", ctx.App.Key, reflect.TypeOf(spec))
 		}
 	}
 
@@ -1565,8 +1597,11 @@ func (k *k8s) Describe(ctx *scheduler.Context) (string, error) {
 func (k *k8s) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
-		logrus.Infof("Scale all Deployments")
+		if !k.IsScalable(spec) {
+			continue
+		}
 		if obj, ok := spec.(*apps_api.Deployment); ok {
+			logrus.Infof("Scale all Deployments")
 			dep, err := k8sOps.GetDeployment(obj.Name, obj.Namespace)
 			if err != nil {
 				return err
@@ -1659,6 +1694,32 @@ func (k *k8s) StartSchedOnNode(n node.Node) error {
 		}
 	}
 	return nil
+}
+
+func (k *k8s) IsScalable(spec interface{}) bool {
+	if obj, ok := spec.(*apps_api.Deployment); ok {
+		dep, err := k8s_ops.Instance().GetDeployment(obj.Name, obj.Namespace)
+		if err != nil {
+			logrus.Errorf("Failed to retrieve deployment [%s] %s. Cause: %v", obj.Namespace, obj.Name, err)
+			return false
+		}
+		for _, vol := range dep.Spec.Template.Spec.Volumes {
+			pvcName := vol.PersistentVolumeClaim.ClaimName
+			pvc, err := k8s_ops.Instance().GetPersistentVolumeClaim(pvcName, dep.Namespace)
+			if err != nil {
+				logrus.Errorf("Failed to retrieve PVC [%s] %s. Cause: %v", obj.Namespace, pvcName, err)
+				return false
+			}
+			for _, ac := range pvc.Spec.AccessModes {
+				if ac == v1.ReadWriteOnce {
+					return false
+				}
+			}
+		}
+	} else if _, ok := spec.(*apps_api.StatefulSet); ok {
+		return true
+	}
+	return false
 }
 
 func (k *k8s) createMigrationObjects(
