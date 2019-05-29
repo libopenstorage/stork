@@ -120,11 +120,6 @@ func (in *ApplicationBackupSpec) DeepCopyInto(out *ApplicationBackupSpec) {
 			(*out)[key] = val
 		}
 	}
-	if in.EncryptionKey != nil {
-		in, out := &in.EncryptionKey, &out.EncryptionKey
-		*out = new(v1.EnvVarSource)
-		(*in).DeepCopyInto(*out)
-	}
 	return
 }
 

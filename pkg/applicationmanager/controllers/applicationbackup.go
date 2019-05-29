@@ -12,6 +12,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
@@ -487,6 +488,12 @@ func (a *ApplicationBackupController) uploadObject(
 	bucket, err := objectstore.GetBucket(backupLocation)
 	if err != nil {
 		return err
+	}
+
+	if backupLocation.Location.EncryptionKey != "" {
+		if data, err = crypto.Encrypt(data, backupLocation.Location.EncryptionKey); err != nil {
+			return err
+		}
 	}
 
 	objectPath := a.getObjectPath(backup)
