@@ -98,6 +98,7 @@ fi
 K8S_VENDOR_KEY=""
 K8S_VENDOR_VALUE=""
 K8S_VENDOR_OPERATOR="Exists"
+NODE_DRIVER="ssh"
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
         kubernetes)
@@ -113,6 +114,7 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["false"]'
+            NODE_DRIVER="gke"
             ;;
     esac
 else
@@ -195,6 +197,7 @@ spec:
             "$VERBOSE",
             "$FOCUS_ARG",
             "$SKIP_ARG",
+            "bin/asg.test",
             "bin/basic.test",
             "bin/reboot.test",
             "bin/upgrade.test",
@@ -205,7 +208,7 @@ spec:
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
-            "--node-driver", "ssh",
+            "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
             "--chaos-level", "$CHAOS_LEVEL",

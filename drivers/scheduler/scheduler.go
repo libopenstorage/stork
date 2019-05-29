@@ -118,6 +118,9 @@ type Driver interface {
 	// StartSchedOnNode starts scheduler service on the given node
 	StartSchedOnNode(n node.Node) error
 
+	// RefreshNodeRegistry refreshes node registry
+	RefreshNodeRegistry() error
+
 	// RescanSpecs specified in specDir
 	RescanSpecs(specDir string) error
 

@@ -91,6 +91,9 @@ type Driver interface {
 	// failure.
 	RecoverDriver(n node.Node) error
 
+	// RefreshDriverEndpoints refreshes volume driver endpoint
+	RefreshDriverEndpoints() error
+
 	// GetStorageDevices returns the list of storage devices used by the given node.
 	GetStorageDevices(n node.Node) ([]string, error)
 

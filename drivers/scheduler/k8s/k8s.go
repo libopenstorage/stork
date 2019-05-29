@@ -130,6 +130,27 @@ func (k *k8s) Init(specDir, volDriverName, nodeDriverName string) error {
 	return nil
 }
 
+func (k *k8s) RefreshNodeRegistry() error {
+
+	nodes, err := k8s_ops.Instance().GetNodes()
+	if err != nil {
+		return err
+	}
+
+	node.CleanupRegistry()
+
+	for _, n := range nodes.Items {
+		newNode := k.parseK8SNode(n)
+		if err := k.IsNodeReady(newNode); err != nil {
+			return err
+		}
+		if err := node.AddNode(newNode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (k *k8s) RescanSpecs(specDir string) error {
 	var err error
 	logrus.Infof("Rescanning specs for %v", specDir)
