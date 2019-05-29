@@ -125,6 +125,23 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	return nil
 }
 
+func (d *portworx) RefreshDriverEndpoints() error {
+	cluster, err := d.getClusterOnStart()
+	if err != nil {
+		return err
+	}
+
+	if len(cluster.Nodes) == 0 {
+		return fmt.Errorf("cluster inspect returned empty nodes")
+	}
+
+	err = d.updateNodes(cluster.Nodes)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (d *portworx) updateNodes(pxNodes []api.Node) error {
 	for _, n := range node.GetWorkerNodes() {
 		if err := d.updateNode(n, pxNodes); err != nil {
@@ -140,10 +157,12 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 	if err != nil {
 		return err
 	}
+
 	// No need to check in pxNodes if px is not installed
 	if !isPX {
 		return nil
 	}
+
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {

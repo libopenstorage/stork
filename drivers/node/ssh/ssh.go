@@ -17,7 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
 	"k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -42,7 +42,8 @@ const (
 	defaultRetryInterval = 10 * time.Second
 )
 
-type ssh struct {
+// SSH ssh node driver
+type SSH struct {
 	node.Driver
 	username  string
 	password  string
@@ -51,7 +52,7 @@ type ssh struct {
 	// TODO keyPath-based ssh
 }
 
-func (s *ssh) String() string {
+func (s *SSH) String() string {
 	return DriverName
 }
 
@@ -78,7 +79,8 @@ func useSSH() bool {
 	return len(os.Getenv("TORPEDO_SSH_KEY")) > 0 || len(os.Getenv("TORPEDO_SSH_PASSWORD")) > 0
 }
 
-func (s *ssh) Init() error {
+// Init initializes SSH node driver
+func (s *SSH) Init() error {
 
 	nodes := node.GetWorkerNodes()
 	var err error
@@ -107,7 +109,7 @@ func (s *ssh) Init() error {
 	return nil
 }
 
-func (s *ssh) initExecPod() error {
+func (s *SSH) initExecPod() error {
 	var ds *v1beta2.DaemonSet
 	var err error
 	k8sops := k8s.Instance()
@@ -133,7 +135,7 @@ func (s *ssh) initExecPod() error {
 	return nil
 }
 
-func (s *ssh) initSSH() error {
+func (s *SSH) initSSH() error {
 	keyPath := os.Getenv("TORPEDO_SSH_KEY")
 	if len(keyPath) == 0 {
 		s.keyPath = DefaultSSHKey
@@ -182,7 +184,8 @@ func (s *ssh) initSSH() error {
 	return nil
 }
 
-func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
+// TestConnection tests the connection to the given node
+func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	var cmd string
 
@@ -202,7 +205,8 @@ func (s *ssh) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	return nil
 }
 
-func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
+// RebootNode reboots given node
+func (s *SSH) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	rebootCmd := "sudo reboot"
 	if options.Force {
 		rebootCmd = rebootCmd + " -f"
@@ -223,7 +227,8 @@ func (s *ssh) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	return nil
 }
 
-func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
+// ShutdownNode shuts down given node
+func (s *SSH) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	shutdownCmd := "sudo shutdown"
 	if options.Force {
 		shutdownCmd = "halt"
@@ -244,7 +249,8 @@ func (s *ssh) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
-func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.ConnectionOpts) (string, error) {
+// YankDrive yanks given drive on given node
+func (s *SSH) YankDrive(n node.Node, driveNameToFail string, options node.ConnectionOpts) (string, error) {
 	// Currently only works for iSCSI drives
 	// TODO: Make it generic (Add support dev mapper devices)
 
@@ -273,7 +279,8 @@ func (s *ssh) YankDrive(n node.Node, driveNameToFail string, options node.Connec
 	return bus, nil
 }
 
-func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRecover string, options node.ConnectionOpts) error {
+// RecoverDrive recovers given drive on given node
+func (s *SSH) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRecover string, options node.ConnectionOpts) error {
 	// Enable the drive by rescaning
 	recoverCmd := "echo \" - - -\" > /sys/class/scsi_host/host" + driveUUIDToRecover + "\"/\"scan"
 	if _, err := s.doCmd(n, options, recoverCmd, false); err != nil {
@@ -285,7 +292,8 @@ func (s *ssh) RecoverDrive(n node.Node, driveNameToRecover string, driveUUIDToRe
 	return nil
 }
 
-func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpts) (string, error) {
+// RunCommand runs given command on given node
+func (s *SSH) RunCommand(n node.Node, command string, options node.ConnectionOpts) (string, error) {
 	t := func() (interface{}, bool, error) {
 		output, err := s.doCmd(n, options, command, options.IgnoreError)
 		if err != nil {
@@ -305,7 +313,8 @@ func (s *ssh) RunCommand(n node.Node, command string, options node.ConnectionOpt
 	return output.(string), nil
 }
 
-func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
+// FindFiles finds files from give path on given node
+func (s *SSH) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
 	findCmd := "sudo find " + path
 	if options.Name != "" {
 		findCmd += " -name " + options.Name
@@ -341,7 +350,8 @@ func (s *ssh) FindFiles(path string, n node.Node, options node.FindOpts) (string
 	return out.(string), nil
 }
 
-func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
+// Systemctl allows to run systemctl commands on a give node
+func (s *SSH) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
 	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
@@ -359,7 +369,7 @@ func (s *ssh) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 	return nil
 }
 
-func (s *ssh) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
+func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 
 	if useSSH() {
 		return s.doCmdSSH(n, options, cmd, ignoreErr)
@@ -367,7 +377,7 @@ func (s *ssh) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 	return s.doCmdUsingPod(n, options, cmd, ignoreErr)
 }
 
-func (s *ssh) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
+func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 
 	allPodsForNode, err := k8s.Instance().GetPodsByNode(n.Name, execPodDefaultNamespace)
@@ -408,7 +418,7 @@ func (s *ssh) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 	return output.(string), nil
 }
 
-func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
+func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	var out string
 	var sterr string
 	connection, err := s.getConnection(n, options)
@@ -464,7 +474,7 @@ func (s *ssh) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	return out, nil
 }
 
-func (s *ssh) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
+func (s *SSH) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
 	if n.Addresses == nil || len(n.Addresses) == 0 {
 		return nil, fmt.Errorf("no address available to connect")
 	}
@@ -473,7 +483,7 @@ func (s *ssh) getConnection(n node.Node, options node.ConnectionOpts) (*ssh_pkg.
 	return addr, err
 }
 
-func (s *ssh) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
+func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts) (*ssh_pkg.Client, error) {
 	for _, addr := range n.Addresses {
 		t := func() (interface{}, bool, error) {
 			// check if address is responding on port 22
@@ -489,7 +499,8 @@ func (s *ssh) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts
 		"Ensure you have setup the nodes for ssh access as per the README", n.Addresses)
 }
 
-func (s *ssh) SystemCheck(n node.Node, options node.ConnectionOpts) (string, error) {
+// SystemCheck check if any cores are generated on given node
+func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, error) {
 	findOpts := node.FindOpts{
 		ConnectionOpts: options,
 		Name:           "core-px*",
@@ -506,7 +517,7 @@ func (s *ssh) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 }
 
 func init() {
-	s := &ssh{
+	s := &SSH{
 		Driver:   node.NotSupportedDriver,
 		username: DefaultUsername,
 		keyPath:  DefaultSSHKey,

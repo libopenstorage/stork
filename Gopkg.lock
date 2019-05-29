@@ -2,6 +2,14 @@
 
 
 [[projects]]
+  digest = "1:4d6f036ea3fe636bcb2e89850bcdc62a771354e157cd51b8b22a2de8562bf663"
+  name = "cloud.google.com/go"
+  packages = ["compute/metadata"]
+  pruneopts = "UT"
+  revision = "fcb9a2d5f791d07be64506ab54434de65989d370"
+  version = "v0.37.4"
+
+[[projects]]
   digest = "1:f9ae348e1f793dcf9ed930ed47136a67343dbd6809c5c91391322267f4476892"
   name = "github.com/Microsoft/go-winio"
   packages = ["."]
@@ -279,6 +287,14 @@
   version = "v1.9.0"
 
 [[projects]]
+  digest = "1:67474f760e9ac3799f740db2c489e6423a4cde45520673ec123ac831ad849cb8"
+  name = "github.com/hashicorp/golang-lru"
+  packages = ["simplelru"]
+  pruneopts = "UT"
+  revision = "7087cb70de9f7a8bc0a10c375cb0d2280a8edf9c"
+  version = "v0.5.1"
+
+[[projects]]
   digest = "1:a1038ef593beb4771c8f0f9c26e8b00410acd800af5c6864651d9bf160ea1813"
   name = "github.com/hpcloud/tail"
   packages = [
@@ -338,6 +354,26 @@
 [[projects]]
   branch = "master"
   digest = "1:6842b4a6a6ec28ed353323ea6cd10c16ed04ac8e8d3d2049069e60448c156412"
+  name = "github.com/libopenstorage/gossip"
+  packages = ["types"]
+  pruneopts = "UT"
+  revision = "c26073a01952b2ed00aba97a7768645c19a06011"
+
+  
+[[projects]]
+  branch = "master"
+  digest = "1:fd50c39a5dfbb559f94d260f2c46034e2a23ffad8fad1f1aff0dcf770aeea3b9"
+  name = "github.com/libopenstorage/cloudops"
+  packages = [
+    ".",
+    "backoff",
+    "gce",
+    "unsupported",
+  ]
+
+[[projects]]
+  branch = "master"
+  digest = "1:99cd39df3fc3d9b27fd5a150935e36141fbcb7045d59ff1ca0e2027c44aa599d"
   name = "github.com/libopenstorage/gossip"
   packages = ["types"]
   pruneopts = "UT"
@@ -604,6 +640,31 @@
   version = "v1.0.3"
 
 [[projects]]
+  digest = "1:6a0fd720abef071f9c9821249e2a7ee87a2e90fe7e45cef8fe413e6b5287363a"
+  name = "go.opencensus.io"
+  packages = [
+    ".",
+    "internal",
+    "internal/tagencoding",
+    "metric/metricdata",
+    "metric/metricproducer",
+    "plugin/ochttp",
+    "plugin/ochttp/propagation/b3",
+    "resource",
+    "stats",
+    "stats/internal",
+    "stats/view",
+    "tag",
+    "trace",
+    "trace/internal",
+    "trace/propagation",
+    "trace/tracestate",
+  ]
+  pruneopts = "UT"
+  revision = "df6e2001952312404b06f5f6f03fcb4aec1648e5"
+  version = "v0.21.0"
+
+[[projects]]
   branch = "master"
   digest = "1:90d51692e0c17ce68b8d2e4dbb36a21d7e7ff72230af4dad8a4eb0ad7a0eb8e5"
   name = "golang.org/x/crypto"
@@ -644,7 +705,21 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:8ea0513faaf49c2491a6aa1c4962261295ed140478e3e84b5c699f42af0a3936"
+  digest = "1:7cba983d19f4aa6a154d73268dcc67a66bcc24bd7ee1c1b09d448a721dea0d9f"
+  name = "golang.org/x/oauth2"
+  packages = [
+    ".",
+    "google",
+    "internal",
+    "jws",
+    "jwt",
+  ]
+  pruneopts = "UT"
+  revision = "aaccbc9213b0974828f81aaac109d194880e3014"
+
+[[projects]]
+  branch = "master"
+  digest = "1:426092407910bee4a539be5d377abbaf629bae216c8eb2f80409c8cbe2647508"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -652,7 +727,7 @@
     "windows",
   ]
   pruneopts = "UT"
-  revision = "93c9922d18aeb82498a065f07aec7ad7fa60dfb7"
+  revision = "fead79001313d15903fb4605b4a1b781532cd93e"
 
 [[projects]]
   digest = "1:28deae5fe892797ff37a317b5bcda96d11d1c90dadd89f1337651df3bc4c586e"
@@ -698,6 +773,44 @@
   packages = ["rate"]
   pruneopts = "UT"
   revision = "9d24e82272b4f38b78bc8cff74fa936d31ccd8ef"
+
+[[projects]]
+  digest = "1:caafaa2fb022eef93d5a2ef4f4ce2049484e7d1aa81ba994238d92ca53dc5266"
+  name = "google.golang.org/api"
+  packages = [
+    "compute/v1",
+    "container/v1",
+    "gensupport",
+    "googleapi",
+    "googleapi/internal/uritemplates",
+    "googleapi/transport",
+    "internal",
+    "option",
+    "transport/http",
+    "transport/http/internal/propagation",
+  ]
+  pruneopts = "UT"
+  revision = "067bed655e9cbc26f4dbac8f8897b30756d90990"
+  version = "v0.4.0"
+
+[[projects]]
+  digest = "1:ae8b6cd1af38908c84050254b3fe998dcf6926c6e85d8e504a7402ab32da4569"
+  name = "google.golang.org/appengine"
+  packages = [
+    ".",
+    "internal",
+    "internal/app_identity",
+    "internal/base",
+    "internal/datastore",
+    "internal/log",
+    "internal/modules",
+    "internal/remote_api",
+    "internal/urlfetch",
+    "urlfetch",
+  ]
+  pruneopts = "UT"
+  revision = "4c25cacc810c02874000e4f7071286a8e96b2515"
+  version = "v1.6.0"
 
 [[projects]]
   branch = "master"
@@ -887,7 +1000,7 @@
   version = "kubernetes-1.11.0"
 
 [[projects]]
-  digest = "1:3eb141cf0f58aec292606af50842bb823762f6a12151f5c8e51237f5d3996f17"
+  digest = "1:2e417ccce7217470ddf3097cf6bab67992ea842e64cb5dda699f9a490a438010"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -928,8 +1041,10 @@
     "pkg/apis/clientauthentication/v1beta1",
     "pkg/version",
     "plugin/pkg/client/auth/exec",
+    "plugin/pkg/client/auth/gcp",
     "rest",
     "rest/watch",
+    "third_party/forked/golang/template",
     "tools/auth",
     "tools/clientcmd",
     "tools/clientcmd/api",
@@ -946,6 +1061,7 @@
     "util/flowcontrol",
     "util/homedir",
     "util/integer",
+    "util/jsonpath",
   ]
   pruneopts = "UT"
   revision = "7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65"
@@ -964,6 +1080,8 @@
     "github.com/fatih/color",
     "github.com/gambol99/go-marathon",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
+    "github.com/libopenstorage/cloudops",
+    "github.com/libopenstorage/cloudops/gce",
     "github.com/libopenstorage/openstorage/api",
     "github.com/libopenstorage/openstorage/api/client",
     "github.com/libopenstorage/openstorage/api/client/cluster",
@@ -996,6 +1114,7 @@
     "k8s.io/apimachinery/pkg/types",
     "k8s.io/apimachinery/pkg/util/yaml",
     "k8s.io/client-go/kubernetes/scheme",
+    "k8s.io/client-go/plugin/pkg/client/auth/gcp",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

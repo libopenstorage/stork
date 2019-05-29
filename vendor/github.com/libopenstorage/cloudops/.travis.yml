@@ -1,0 +1,14 @@
+sudo: required
+dist: trusty
+language: go
+go:
+  - 1.10.4
+before_install:
+  - sudo apt-get update -yq
+script:
+  - |
+    make 
+notifications:
+  email:
+    on_success: always
+    on_failure: always

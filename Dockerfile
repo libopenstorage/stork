@@ -31,6 +31,8 @@ RUN mkdir bin && \
 # Build a fresh container with just the binaries
 FROM alpine
 
+RUN apk add ca-certificates 
+
 # Copy scripts into container
 WORKDIR /torpedo
 COPY deployments deployments
