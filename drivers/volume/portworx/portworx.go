@@ -1739,6 +1739,9 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 	// get the domain to state (active/inactive) map
 	domainStateMap, err := p.getDomainStateMap()
 	if err != nil {
+		if strings.HasSuffix(err.Error(), "node is not initialized with cluster domains") {
+			return &stork_crd.ClusterDomains{}, nil
+		}
 		logrus.Errorf("Failed to get domain name to state map: %v", err)
 		return nil, err
 	}
