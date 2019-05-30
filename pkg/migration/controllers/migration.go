@@ -980,6 +980,11 @@ func (m *MigrationController) preparePVResource(
 	delete(spec, "claimRef")
 	delete(spec, "storageClassName")
 
+	// Set the reclaim policy to retain if the volumes are not being migrated
+	if migration.Spec.IncludeVolumes != nil && !*migration.Spec.IncludeVolumes {
+		spec["persistentVolumeReclaimPolicy"] = v1.PersistentVolumeReclaimRetain
+	}
+
 	return m.Driver.UpdateMigratedPersistentVolumeSpec(object)
 }
 
@@ -1077,8 +1082,14 @@ func (m *MigrationController) applyResources(
 		if err != nil && (apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
 			switch objectType.GetKind() {
 			// Don't want to delete the Volume resources
-			case "PersistentVolumeClaim", "PersistentVolume":
+			case "PersistentVolumeClaim":
 				err = nil
+			case "PersistentVolume":
+				if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+					err = nil
+				} else {
+					_, err = dynamicClient.Update(unstructured)
+				}
 			default:
 				// Delete the resource if it already exists on the destination
 				// cluster and try creating again
