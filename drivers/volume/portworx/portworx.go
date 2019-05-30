@@ -1753,19 +1753,25 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 		LocalDomain: nodeToDomainMap[cluster.NodeId],
 	}
 
+	var (
+		vols []*api.Volume
+	)
+
+	syncStatusUnknown := true
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		logrus.Errorf("Failed to get a volumeDriver: %v", err)
-		return nil, err
+		goto cluster_domain_info
 	}
 
 	// get all the volumes in this cluster
-	vols, err := volDriver.Enumerate(&api.VolumeLocator{}, nil)
+	vols, err = volDriver.Enumerate(&api.VolumeLocator{}, nil)
 	if err != nil {
 		logrus.Errorf("Failed to enumerate volumes: %v", err)
-		return nil, err
+		goto cluster_domain_info
 	}
 
+	syncStatusUnknown = false
 	for _, vol := range vols {
 		// get the node (replicas) which are not in the current set
 		// but exist in the create set. These are the replica nodes
@@ -1783,9 +1789,14 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 		}
 	}
 
+cluster_domain_info:
+
 	// Build the cluster domain infos object
 	for domain, isActive := range domainStateMap {
-		syncStatus := domainSyncStatusMap[domain]
+		syncStatus := stork_crd.ClusterDomainSyncStatusUnknown
+		if !syncStatusUnknown {
+			syncStatus = domainSyncStatusMap[domain]
+		}
 		clusterDomainState := stork_crd.ClusterDomainInactive
 		if isActive {
 			clusterDomainState = stork_crd.ClusterDomainActive

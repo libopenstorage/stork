@@ -34,6 +34,8 @@ const (
 	ClusterDomainSyncStatusInProgress ClusterDomainSyncStatus = "SyncInProgress"
 	// ClusterDomainSyncStatusNotInSync indicates the cluster domain is not in sync
 	ClusterDomainSyncStatusNotInSync ClusterDomainSyncStatus = "NotInSync"
+	// ClusterDomainSyncStatusUnknown indicates the cluster domain sync status is currently not known
+	ClusterDomainSyncStatusUnknown ClusterDomainSyncStatus = "SyncStatusUnknown"
 )
 
 // ClusterDomains provides a list of activated cluster domains and a list
