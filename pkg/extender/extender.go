@@ -11,6 +11,7 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
+	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -36,8 +37,6 @@ const (
 	defaultScore = 5
 
 	schedulingFailureEventReason = "FailedScheduling"
-	annotationPrefix             = "stork.libopenstorage.org/"
-	volumerestore                = annotationPrefix
 )
 
 // Extender Scheduler extender
@@ -130,12 +129,13 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		// if any of pvc has restore annotation skip scheduling pod
 		pvc, err := k8s.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
 		if err != nil {
-			msg := "Unable to find PVC claim"
+			msg := "Unable to find PVC %s" + vol.Name
 			storklog.PodLog(pod).Warnf(msg)
-		} else if pvc.Annotations != nil && pvc.Annotations[volumerestore] == "true" {
+		} else if pvc.Annotations != nil && pvc.Annotations[restore.RestoreAnnotation] == "true" {
 			msg := "Volume restore is in progress for pvc: " + pvc.Name
 			storklog.PodLog(pod).Warnf(msg)
 			e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
 	}

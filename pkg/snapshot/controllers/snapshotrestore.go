@@ -24,7 +24,8 @@ import (
 
 const (
 	annotationPrefix = "stork.libopenstorage.org/"
-	volumerestore    = annotationPrefix + "px-volume-restore"
+	// RestoreAnnotation for pvc which has in-place resotre in progress
+	RestoreAnnotation = annotationPrefix + "restore-in-progress"
 )
 
 // SnapshotRestoreController controller to watch over In-Place snap restore CRD's
@@ -61,8 +62,12 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 	switch o := event.Object.(type) {
 	case *stork_api.VolumeSnapshotRestore:
 		snapRestore = o
-		if snapRestore.Spec.SourceName == "" || snapRestore.Spec.SourceNamespace == "" {
-			return fmt.Errorf("empty Snapshot name or namespace")
+		if snapRestore.Spec.SourceName == "" {
+			c.Recorder.Event(snapRestore,
+				v1.EventTypeWarning,
+				string(snapRestore.Spec.SourceName),
+				"Empty Snapshot Name")
+			return fmt.Errorf("empty snapshot name")
 		}
 
 		if snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusReady {
@@ -106,7 +111,6 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 }
 
 func (c *SnapshotRestoreController) handleInitial(snapRestore *stork_api.VolumeSnapshotRestore) error {
-	log.VolumeSnapshotRestoreLog(snapRestore).Infof("handled initial")
 	snapRestore.Status.Stage = stork_api.VolumeSnapshotRestoreStageRestore
 	return nil
 }
@@ -119,10 +123,10 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 	snapName := snapRestore.Spec.SourceName
 	snapNamespace := snapRestore.Spec.SourceNamespace
 	if snapRestore.Spec.GroupSnapshot {
-		logrus.Infof("GroupVolumeSnapshot In-place restore request for %v", snapName)
+		log.VolumeSnapshotRestoreLog(snapRestore).Infof("GroupVolumeSnapshot In-place restore request for %v", snapName)
 		snapshotList, err = k8s.Instance().GetSnapshotsForGroupSnapshot(snapName, snapNamespace)
 		if err != nil {
-			logrus.Errorf("unable to get group snapshot details %v", err)
+			log.VolumeSnapshotRestoreLog(snapRestore).Errorf("unable to get group snapshot details %v", err)
 			return err
 		}
 	} else {
@@ -152,6 +156,10 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 	err = c.Driver.VolumeSnapshotRestore(snapRestore, restoreVolumes)
 	if err != nil {
 		snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusError
+		err = unmarkPVCForRestore(pvcList)
+		if err != nil {
+			return err
+		}
 		return fmt.Errorf("failed to restore pvc details %v", err)
 	}
 
@@ -171,7 +179,7 @@ func markPVCForRestore(pvcList []*v1.PersistentVolumeClaim) error {
 		if pvc.Annotations == nil {
 			pvc.Annotations = make(map[string]string)
 		}
-		pvc.Annotations[volumerestore] = "true"
+		pvc.Annotations[RestoreAnnotation] = "true"
 		_, err := k8s.Instance().UpdatePersistentVolumeClaim(pvc)
 		if err != nil {
 			return err
@@ -206,11 +214,11 @@ func unmarkPVCForRestore(pvcList []*v1.PersistentVolumeClaim) error {
 			logrus.Warnf("No annotation found for %v", pvc.Name)
 			continue
 		}
-		if _, ok := pvc.Annotations[volumerestore]; !ok {
+		if _, ok := pvc.Annotations[RestoreAnnotation]; !ok {
 			logrus.Warnf("Restore annotation not found for %v", pvc.Name)
 			continue
 		}
-		delete(pvc.Annotations, volumerestore)
+		delete(pvc.Annotations, RestoreAnnotation)
 		_, err := k8s.Instance().UpdatePersistentVolumeClaim(pvc)
 		if err != nil {
 			return err
