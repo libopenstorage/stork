@@ -24,14 +24,11 @@ func TestLog(t *testing.T) {
 	t.Run("migrationScheduleLogTest", migrationScheduleLogTest)
 	t.Run("ruleLogTest", ruleLogTest)
 	t.Run("pvcLogTest", pvcLogTest)
-<<<<<<< HEAD
 	t.Run("clusterDomainUpdateLogTest", clusterDomainUpdateLogTest)
 	t.Run("applicationBackupLogTest", applicationBackupLogTest)
 	t.Run("applicationRestoreLogTest", applicationRestoreLogTest)
 	t.Run("applicationCloneLogTest", applicationCloneLogTest)
-=======
 	t.Run("volumeSnapshotRestoreLogTest", volumeSnapshotRestoreLogTest)
->>>>>>> Move controller specific login from portworx driver to snapshot restore
 }
 
 func podLogTest(t *testing.T) {

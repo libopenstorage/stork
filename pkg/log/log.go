@@ -205,7 +205,6 @@ func PVCLog(pvc *v1.PersistentVolumeClaim) *logrus.Entry {
 	return logrus.WithFields(logrus.Fields{})
 }
 
-<<<<<<< HEAD
 // ApplicationBackupLog formats a log message with applicationbackup information
 func ApplicationBackupLog(backup *storkv1.ApplicationBackup) *logrus.Entry {
 	if backup != nil {
@@ -238,8 +237,9 @@ func ApplicationCloneLog(clone *storkv1.ApplicationClone) *logrus.Entry {
 			"ApplicationCloneNamespace": clone.Namespace,
 		})
 	}
+	return logrus.WithFields(logrus.Fields{})
+}
 
-=======
 // VolumeSnapshotRestoreLog formats a log message with volumesnapshotrestore information
 func VolumeSnapshotRestoreLog(snapRestore *storkv1.VolumeSnapshotRestore) *logrus.Entry {
 	if snapRestore != nil {
@@ -248,6 +248,5 @@ func VolumeSnapshotRestoreLog(snapRestore *storkv1.VolumeSnapshotRestore) *logru
 			"VolumeSnapshotRestoreNamespace": snapRestore.Namespace,
 		})
 	}
->>>>>>> Move controller specific login from portworx driver to snapshot restore
 	return logrus.WithFields(logrus.Fields{})
 }

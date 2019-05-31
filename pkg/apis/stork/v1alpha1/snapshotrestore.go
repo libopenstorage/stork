@@ -31,30 +31,18 @@ const (
 	VolumeSnapshotRestoreStatusInitial SnapshotRestoreStatusType = ""
 	// VolumeSnapshotRestoreStatusPending for when restore is in pending state
 	VolumeSnapshotRestoreStatusPending SnapshotRestoreStatusType = "Pending"
-	// VolumeSnapshotRestoreStatusReady for when restore is done
-	VolumeSnapshotRestoreStatusReady SnapshotRestoreStatusType = "Ready"
-	// VolumeSnapshotRestoreStatusError for when restore failed
-	VolumeSnapshotRestoreStatusError SnapshotRestoreStatusType = "Error"
-)
-
-// VolumeSnapshotRestoreStageType is stage of volume in-place restore
-type VolumeSnapshotRestoreStageType string
-
-const (
-	// VolumeSnapshotRestoreStageInitial is the initial stage when snapshot restore is initiated
-	VolumeSnapshotRestoreStageInitial VolumeSnapshotRestoreStageType = ""
-	// VolumeSnapshotRestoreStageRestore for when restore is in restore stage
-	VolumeSnapshotRestoreStageRestore VolumeSnapshotRestoreStageType = "Restore"
-	// VolumeSnapshotRestoreStageReady for when restore is completed
-	VolumeSnapshotRestoreStageReady VolumeSnapshotRestoreStageType = "Ready"
-	// VolumeSnapshotRestoreStageError for when restore failed
-	VolumeSnapshotRestoreStageError VolumeSnapshotRestoreStageType = "Error"
+	// VolumeSnapshotRestoreStatusRestore for when restore is in restore state
+	VolumeSnapshotRestoreStatusRestore SnapshotRestoreStatusType = "Restore"
+	// VolumeSnapshotRestoreStatusSuccessful for when restore is completed
+	VolumeSnapshotRestoreStatusSuccessful SnapshotRestoreStatusType = "Successful"
+	// VolumeSnapshotRestoreStatusInProgress for when restore is in progress
+	VolumeSnapshotRestoreStatusInProgress SnapshotRestoreStatusType = "InProgress"
+	// VolumeSnapshotRestoreStatusFailed for when restore failed
+	VolumeSnapshotRestoreStatusFailed SnapshotRestoreStatusType = "Failed"
 )
 
 // RestoreStatus of volume
 type RestoreStatus struct {
-	// Stage of volume snapshot restore
-	Stage VolumeSnapshotRestoreStageType `json:"stage"`
 	// Status of volume restore
 	Status SnapshotRestoreStatusType `json:"status"`
 	// Volumes list of restore inforamtion
@@ -64,8 +52,9 @@ type RestoreStatus struct {
 // RestoreVolumeInfo is the info for the restore of a volume
 type RestoreVolumeInfo struct {
 	Volume        string                    `json:"volume"`
-	PVC           string                    `json:"pvc`
+	PVC           string                    `json:"pvc"`
 	RestoreStatus SnapshotRestoreStatusType `json:"status"`
+	Reason        string                    `json:"reason"`
 }
 
 // +genclient
