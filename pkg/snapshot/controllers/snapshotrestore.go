@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	annotationPrefix = "stork.libopenstorage.org/"
+	annotationPrefix   = "stork.libopenstorage.org/"
+	storkSchedulerName = "stork"
 	// RestoreAnnotation for pvc which has in-place resotre in progress
 	RestoreAnnotation = annotationPrefix + "restore-in-progress"
 )
@@ -70,7 +71,7 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 			return fmt.Errorf("empty snapshot name")
 		}
 
-		if snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusReady {
+		if snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusSuccessful {
 			return nil
 		}
 
@@ -78,19 +79,21 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 			return c.handleDelete(snapRestore)
 		}
 
-		switch snapRestore.Status.Stage {
-		case stork_api.VolumeSnapshotRestoreStageInitial:
+		switch snapRestore.Status.Status {
+		case stork_api.VolumeSnapshotRestoreStatusInitial:
 			err = c.handleInitial(snapRestore)
-		case stork_api.VolumeSnapshotRestoreStageRestore:
+		case stork_api.VolumeSnapshotRestoreStatusRestore:
 			err = c.handleFinal(snapRestore)
-			c.Recorder.Event(snapRestore,
-				v1.EventTypeNormal,
-				string(snapRestore.Status.Status),
-				"Snapshot in-Place  Restore completed")
-		case stork_api.VolumeSnapshotRestoreStageReady:
+			if err == nil {
+				c.Recorder.Event(snapRestore,
+					v1.EventTypeNormal,
+					string(snapRestore.Status.Status),
+					"Snapshot in-Place  Restore completed")
+			}
+		case stork_api.VolumeSnapshotRestoreStatusSuccessful:
 			return nil
 		default:
-			err = fmt.Errorf("invalid stage for volume snapshot restore: %v", snapRestore.Status.Stage)
+			err = fmt.Errorf("invalid stage for volume snapshot restore: %v", snapRestore.Status.Status)
 		}
 	}
 
@@ -98,7 +101,7 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Error handling event: %v err: %v", event, err.Error())
 		c.Recorder.Event(snapRestore,
 			v1.EventTypeWarning,
-			string(stork_api.VolumeSnapshotRestoreStatusError),
+			string(stork_api.VolumeSnapshotRestoreStatusFailed),
 			err.Error())
 	}
 
@@ -111,7 +114,7 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 }
 
 func (c *SnapshotRestoreController) handleInitial(snapRestore *stork_api.VolumeSnapshotRestore) error {
-	snapRestore.Status.Stage = stork_api.VolumeSnapshotRestoreStageRestore
+	snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusRestore
 	return nil
 }
 
@@ -155,7 +158,6 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 	// Do driver volume snapshot restore here
 	err = c.Driver.VolumeSnapshotRestore(snapRestore, restoreVolumes)
 	if err != nil {
-		snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusError
 		err = unmarkPVCForRestore(pvcList)
 		if err != nil {
 			return err
@@ -168,9 +170,7 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 		return err
 	}
 
-	snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusReady
-	snapRestore.Status.Stage = stork_api.VolumeSnapshotRestoreStageReady
-
+	snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusSuccessful
 	return nil
 }
 
@@ -189,6 +189,9 @@ func markPVCForRestore(pvcList []*v1.PersistentVolumeClaim) error {
 			return err
 		}
 		for _, pod := range pods {
+			if pod.Spec.SchedulerName != storkSchedulerName {
+				return fmt.Errorf("application not scheduled by stork scheduler")
+			}
 			logrus.Infof("Deleting pod %v", pod.Name)
 			if err := k8s.Instance().DeletePod(pod.Name, pod.Namespace, true); err != nil {
 				logrus.Errorf("Error deleting pod %v: %v", pod.Name, err)
