@@ -192,14 +192,14 @@ func markPVCForRestore(pvcList []*v1.PersistentVolumeClaim) error {
 			if pod.Spec.SchedulerName != storkSchedulerName {
 				return fmt.Errorf("application not scheduled by stork scheduler")
 			}
-			logrus.Infof("Deleting pod %v", pod.Name)
+			log.PodLog(&pod).Infof("Deleting pod %v", pod.Name)
 			if err := k8s.Instance().DeletePod(pod.Name, pod.Namespace, true); err != nil {
-				logrus.Errorf("Error deleting pod %v: %v", pod.Name, err)
+				log.PodLog(&pod).Errorf("Error deleting pod %v: %v", pod.Name, err)
 				return err
 			}
 
 			if err := k8s.Instance().WaitForPodDeletion(pod.UID, pod.Namespace, 120*time.Second); err != nil {
-				logrus.Errorf("Pod is not deleted %v:%v", pod.Name, err)
+				log.PodLog(&pod).Errorf("Pod is not deleted %v:%v", pod.Name, err)
 				return err
 			}
 		}
@@ -214,11 +214,11 @@ func unmarkPVCForRestore(pvcList []*v1.PersistentVolumeClaim) error {
 		if pvc.Annotations == nil {
 			// somehow annotation got deleted but since restore is done,
 			// we shouldn't care
-			logrus.Warnf("No annotation found for %v", pvc.Name)
+			log.PVCLog(pvc).Warnf("No annotation found for %v", pvc.Name)
 			continue
 		}
 		if _, ok := pvc.Annotations[RestoreAnnotation]; !ok {
-			logrus.Warnf("Restore annotation not found for %v", pvc.Name)
+			log.PVCLog(pvc).Warnf("Restore annotation not found for %v", pvc.Name)
 			continue
 		}
 		delete(pvc.Annotations, RestoreAnnotation)
@@ -259,8 +259,8 @@ func getVolumeIDFromPVC(pvcName, pvcNamespace string) (string, *v1.PersistentVol
 	if err != nil {
 		return "", nil, err
 	}
-	logrus.Debugf("PVC %v \t VolID %v", pvc.Name, volID)
 
+	log.PVCLog(pvc).Debugf("PVC %v \t VolID %v", pvc.Name, volID)
 	return volID, pvc, nil
 }
 

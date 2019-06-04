@@ -14,11 +14,11 @@ const (
 // VolumeSnapshotRestoreSpec for in-place volume restore
 type VolumeSnapshotRestoreSpec struct {
 	// SourceName of snapshot
-	SourceName string `json:"sourcename"`
+	SourceName string `json:"sourceName"`
 	// SourceNameSpace is snapshot namespace
-	SourceNamespace string `json:"sourcenamespace"`
+	SourceNamespace string `json:"sourceNamespace"`
 	// GroupSnapshot true if snapshot volumegroupsnapshot
-	GroupSnapshot bool `json:"groupsnapshot"`
+	GroupSnapshot bool `json:"groupSnapshot"`
 	// DestinationPVC list to restore snapshot
 	DestinationPVC map[string]string `json:"pvcs,omitempty"`
 }
