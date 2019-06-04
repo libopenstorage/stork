@@ -1002,7 +1002,6 @@ func (p *portworx) localSnapshotRestore(
 	if err != nil {
 		return err
 	}
-	volumeInfo := []*stork_crd.RestoreVolumeInfo{}
 	for volID, snapID := range restoreVolumes {
 		logrus.Infof("Restoring volume %v with local snapshot %v", volID, snapID)
 
@@ -1013,11 +1012,7 @@ func (p *portworx) localSnapshotRestore(
 			return err
 		}
 		logrus.Infof("Completed restore for volume %v with Snapshotshot %v", volID, snapID)
-		volumeInfo = append(volumeInfo,
-			&stork_crd.RestoreVolumeInfo{Volume: volID,
-				RestoreStatus: stork_crd.VolumeSnapshotRestoreStatusSuccessful})
 	}
-	logrus.Debugf("volume status info %v", volumeInfo)
 	return nil
 }
 

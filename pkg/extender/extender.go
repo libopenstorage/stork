@@ -132,8 +132,11 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 		}
 		pvc, err := k8s.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
 		if err != nil {
-			msg := "Unable to find PVC %s" + vol.Name
+			msg := fmt.Sprintf("Unable to find PVC %s, err: %v", vol.Name, err)
 			storklog.PodLog(pod).Warnf(msg)
+			e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
 		} else if pvc.Annotations != nil && pvc.Annotations[restore.RestoreAnnotation] == "true" {
 			msg := "Volume restore is in progress for pvc: " + pvc.Name
 			storklog.PodLog(pod).Warnf(msg)
