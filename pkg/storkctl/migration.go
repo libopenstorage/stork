@@ -20,10 +20,13 @@ import (
 )
 
 const (
+	migrTimeout = 6 * time.Hour
+	stage       = "STAGE"
+	status      = "STATUS"
+)
+
+var (
 	migrRetryTimeout = 30 * time.Second
-	migrTimeout      = 6 * time.Hour
-	stage            = "STAGE"
-	status           = "STATUS"
 )
 
 var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED"}
