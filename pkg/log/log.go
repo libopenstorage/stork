@@ -149,8 +149,8 @@ func RuleLog(
 func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
 	if migration != nil {
 		return logrus.WithFields(logrus.Fields{
-			"MigrationName":      migration.Name,
-			"MigrationNamespace": migration.Namespace,
+			"MigrationName": migration.Name,
+			"Namespace":     migration.Namespace,
 		})
 	}
 
@@ -161,8 +161,8 @@ func MigrationLog(migration *storkv1.Migration) *logrus.Entry {
 func MigrationScheduleLog(migrationSchedule *storkv1.MigrationSchedule) *logrus.Entry {
 	if migrationSchedule != nil {
 		return logrus.WithFields(logrus.Fields{
-			"MigrationScheduleName":      migrationSchedule.Name,
-			"MigrationScheduleNamespace": migrationSchedule.Namespace,
+			"MigrationScheduleName": migrationSchedule.Name,
+			"Namespace":             migrationSchedule.Namespace,
 		})
 	}
 
@@ -173,8 +173,8 @@ func MigrationScheduleLog(migrationSchedule *storkv1.MigrationSchedule) *logrus.
 func GroupSnapshotLog(groupsnapshot *storkv1.GroupVolumeSnapshot) *logrus.Entry {
 	if groupsnapshot != nil {
 		return logrus.WithFields(logrus.Fields{
-			"GroupSnapshotName":      groupsnapshot.Name,
-			"GroupSnapshotNamespace": groupsnapshot.Namespace,
+			"GroupSnapshotName": groupsnapshot.Name,
+			"Namespace":         groupsnapshot.Namespace,
 		})
 	}
 
@@ -209,8 +209,8 @@ func PVCLog(pvc *v1.PersistentVolumeClaim) *logrus.Entry {
 func ApplicationBackupLog(backup *storkv1.ApplicationBackup) *logrus.Entry {
 	if backup != nil {
 		return logrus.WithFields(logrus.Fields{
-			"ApplicationBackupName":      backup.Name,
-			"ApplicationBackupNamespace": backup.Namespace,
+			"ApplicationBackupName": backup.Name,
+			"Namespace":             backup.Namespace,
 		})
 	}
 
@@ -221,8 +221,8 @@ func ApplicationBackupLog(backup *storkv1.ApplicationBackup) *logrus.Entry {
 func ApplicationRestoreLog(restore *storkv1.ApplicationRestore) *logrus.Entry {
 	if restore != nil {
 		return logrus.WithFields(logrus.Fields{
-			"ApplicationRestoreName":      restore.Name,
-			"ApplicationRestoreNamespace": restore.Namespace,
+			"ApplicationRestoreName": restore.Name,
+			"Namespace":              restore.Namespace,
 		})
 	}
 
@@ -233,8 +233,8 @@ func ApplicationRestoreLog(restore *storkv1.ApplicationRestore) *logrus.Entry {
 func ApplicationCloneLog(clone *storkv1.ApplicationClone) *logrus.Entry {
 	if clone != nil {
 		return logrus.WithFields(logrus.Fields{
-			"ApplicationCloneName":      clone.Name,
-			"ApplicationCloneNamespace": clone.Namespace,
+			"ApplicationCloneName": clone.Name,
+			"Namespace":            clone.Namespace,
 		})
 	}
 	return logrus.WithFields(logrus.Fields{})
@@ -244,8 +244,8 @@ func ApplicationCloneLog(clone *storkv1.ApplicationClone) *logrus.Entry {
 func VolumeSnapshotRestoreLog(snapRestore *storkv1.VolumeSnapshotRestore) *logrus.Entry {
 	if snapRestore != nil {
 		return logrus.WithFields(logrus.Fields{
-			"VolumeSnapshotRestoreName":      snapRestore.Name,
-			"VolumeSnapshotRestoreNamespace": snapRestore.Namespace,
+			"VolumeSnapshotRestoreName": snapRestore.Name,
+			"Namespace":                 snapRestore.Namespace,
 		})
 	}
 	return logrus.WithFields(logrus.Fields{})
@@ -255,8 +255,20 @@ func VolumeSnapshotRestoreLog(snapRestore *storkv1.VolumeSnapshotRestore) *logru
 func ApplicationBackupScheduleLog(backupSchedule *storkv1.ApplicationBackupSchedule) *logrus.Entry {
 	if backupSchedule != nil {
 		return logrus.WithFields(logrus.Fields{
-			"ApplicationBackupScheduleName":      backupSchedule.Name,
-			"ApplicationBackupScheduleNamespace": backupSchedule.Namespace,
+			"ApplicationBackupScheduleName": backupSchedule.Name,
+			"Namespace":                     backupSchedule.Namespace,
+		})
+	}
+	return logrus.WithFields(logrus.Fields{})
+}
+
+// BackupLocationLog formats a log message with backuplocation information
+func BackupLocationLog(location *storkv1.BackupLocation) *logrus.Entry {
+	if location != nil {
+		return logrus.WithFields(logrus.Fields{
+			"BackupLocationName": location.Name,
+			"Namespace":          location.Namespace,
+			"Type":               location.Location.Type,
 		})
 	}
 
