@@ -29,6 +29,7 @@ func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *c
 		newGetVolumeSnapshotRestoreCommand(cmdFactory, ioStreams),
 		newGetApplicationBackupCommand(cmdFactory, ioStreams),
 		newGetApplicationRestoreCommand(cmdFactory, ioStreams),
+		newGetApplicationCloneCommand(cmdFactory, ioStreams),
 	)
 
 	return getCommands
