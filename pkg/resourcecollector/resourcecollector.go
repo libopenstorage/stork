@@ -300,7 +300,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return err
 	}
 	if metadata.GetNamespace() != "" {
-		// Update the namepsace of the object, will be no-op for clustered resources
+		// Update the namespace of the object, will be no-op for clustered resources
 		metadata.SetNamespace(namespaceMappings[metadata.GetNamespace()])
 	}
 

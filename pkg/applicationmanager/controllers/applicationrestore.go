@@ -73,6 +73,9 @@ func (a *ApplicationRestoreController) setDefaults(restore *stork_api.Applicatio
 	if restore.Spec.ReplacePolicy == "" {
 		restore.Spec.ReplacePolicy = stork_api.ApplicationRestoreReplacePolicyRetain
 	}
+	if len(restore.Spec.NamespaceMapping) == 0 {
+		restore.Spec.NamespaceMapping[restore.Namespace] = restore.Namespace
+	}
 }
 
 // Handle updates for ApplicationRestore objects
@@ -168,7 +171,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *stork_api.Applica
 	}()
 
 	restore.Status.Stage = stork_api.ApplicationRestoreStageVolumes
-	if restore.Status.Volumes == nil {
+	if restore.Status.Volumes == nil || len(restore.Status.Volumes) == 0 {
 		volumeInfos, err := a.Driver.StartRestore(restore)
 		if err != nil {
 			message := fmt.Sprintf("Error starting Application Restore for volumes: %v", err)
