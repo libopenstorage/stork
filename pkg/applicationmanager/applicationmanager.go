@@ -1,6 +1,7 @@
 package applicationmanager
 
 import (
+	"os"
 	"reflect"
 	"time"
 
@@ -28,7 +29,7 @@ type ApplicationManager struct {
 }
 
 // Init Initializes the ApplicationManager and any children controller
-func (a *ApplicationManager) Init(adminNamespace string) error {
+func (a *ApplicationManager) Init(adminNamespace string, stopChannel chan os.Signal) error {
 	if err := a.createCRD(); err != nil {
 		return err
 	}
@@ -62,7 +63,18 @@ func (a *ApplicationManager) Init(adminNamespace string) error {
 	scheduleController := &controllers.ApplicationBackupScheduleController{
 		Recorder: a.Recorder,
 	}
-	return scheduleController.Init()
+	if err := scheduleController.Init(); err != nil {
+		return err
+	}
+
+	syncController := &controllers.BackupSyncController{
+		Recorder:     a.Recorder,
+		SyncInterval: 1 * time.Minute,
+	}
+	if err := syncController.Init(stopChannel); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *ApplicationManager) createCRD() error {

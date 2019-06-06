@@ -242,6 +242,8 @@ func run(c *cli.Context) {
 }
 
 func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	if err := controller.Init(); err != nil {
 		log.Fatalf("Error initializing controller: %v", err)
 	}
@@ -326,7 +328,7 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 			Recorder:          recorder,
 			ResourceCollector: resourceCollector,
 		}
-		if err := appManager.Init(adminNamespace); err != nil {
+		if err := appManager.Init(adminNamespace, signalChan); err != nil {
 			log.Fatalf("Error initializing application manager: %v", err)
 		}
 	}
@@ -347,8 +349,6 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		log.Fatalf("Error starting controller: %v", err)
 	}
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	for {
 		<-signalChan
 		log.Printf("Shutdown signal received, exiting...")
