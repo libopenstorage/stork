@@ -1,0 +1,60 @@
+apiVersion: apps/v1beta2
+kind: DaemonSet
+metadata:
+  name: debug
+  namespace: kube-system
+spec:
+  minReadySeconds: 0
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      name: debug
+  template:
+    metadata:
+      labels:
+        name: debug
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: DoesNotExist
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - name: debug
+        image: ubuntu:latest
+        imagePullPolicy: Always
+        command: [ "sleep" ]
+        args: [ "infinity" ]
+        env:
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: etcpwx
+          mountPath: /etc/pwx
+        - name: optpwx
+          mountPath: /opt/pwx
+        - name: dev
+          mountPath: /dev
+        - name: hostproc
+          mountPath: /hostproc
+      restartPolicy: Always
+      volumes:
+      - name: etcpwx
+        hostPath:
+          path: /etc/pwx
+      - name: optpwx
+        hostPath:
+          path: /opt/pwx
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: hostproc
+        hostPath:
+          path: /proc

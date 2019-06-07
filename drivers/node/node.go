@@ -43,6 +43,7 @@ type ConnectionOpts struct {
 	Timeout         time.Duration
 	TimeBeforeRetry time.Duration
 	IgnoreError     bool
+	Sudo            bool
 }
 
 // RebootNodeOpts provide additional options for reboot operation

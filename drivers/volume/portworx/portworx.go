@@ -554,7 +554,7 @@ func (d *portworx) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 			return nil, true, err
 		}
 		// TODO remove shared validation when PWX-6894 and PWX-8790 are fixed
-		if len(vols) > 0 && !vol.Shared{
+		if len(vols) > 0 && !vol.Shared {
 			return nil, true, fmt.Errorf("Volume %v is not yet removed from the system", name)
 		}
 		return nil, false, nil

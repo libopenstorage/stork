@@ -307,12 +307,14 @@ func CollectSupport() {
 			expect(nodes).NotTo(beEmpty())
 
 			journalCmd := fmt.Sprintf(
-				"sudo su -c 'echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v'",
+				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
 				time.Now().Format(time.RFC3339))
 			for _, n := range nodes {
+				logrus.Infof("saving journal output on %s", n.Name)
 				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
+					Sudo:            true,
 				})
 				if err != nil {
 					logrus.Warnf("failed to run cmd: %s. err: %v", journalCmd, err)
