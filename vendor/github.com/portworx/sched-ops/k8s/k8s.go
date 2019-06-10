@@ -482,16 +482,16 @@ type GroupSnapshotOps interface {
 	GetSnapshotsForGroupSnapshot(name, namespace string) ([]*snap_v1.VolumeSnapshot, error)
 }
 
-// VolumeSnapshotRestoreOps is interface to perform snapshot restore using CRD
+// VolumeSnapshotRestoreOps is interface to perform isnapshot restore using CRD
 type VolumeSnapshotRestoreOps interface {
 	// CreateVolumeSnapshotRestore restore snapshot to pvc specifed in CRD, if no pvcs defined we restore to
 	// parent volumes
 	CreateVolumeSnapshotRestore(snap *v1alpha1.VolumeSnapshotRestore) (*v1alpha1.VolumeSnapshotRestore, error)
 	// GetVolumeSnapshotRestore returns details of given restore crd status
 	GetVolumeSnapshotRestore(name, namespace string) (*v1alpha1.VolumeSnapshotRestore, error)
-	// ListVolumeSnapshotRestore return list of snapshot in given namespaces
+	// ListVolumeSnapshotRestore return list of volumesnapshotrestores in given namespaces
 	ListVolumeSnapshotRestore(namespace string) (*v1alpha1.VolumeSnapshotRestoreList, error)
-	// DeleteVolumeSnapshotRestore delete CRD for restore
+	// DeleteVolumeSnapshotRestore delete given volumesnapshotrestore CRD
 	DeleteVolumeSnapshotRestore(name, namespace string) error
 }
 
