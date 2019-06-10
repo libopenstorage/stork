@@ -217,6 +217,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*apps_api.StatefulSet); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*apps_api.DaemonSet); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*v1.Service); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
