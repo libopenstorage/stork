@@ -4437,7 +4437,17 @@ func (k *k8sOps) ListBackupLocations(namespace string) (*v1alpha1.BackupLocation
 		return nil, err
 	}
 
-	return k.storkClient.Stork().BackupLocations(namespace).List(meta_v1.ListOptions{})
+	backupLocations, err := k.storkClient.Stork().BackupLocations(namespace).List(meta_v1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for i := range backupLocations.Items {
+		err = backupLocations.Items[i].UpdateFromSecret(k.client)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return backupLocations, nil
 }
 
 func (k *k8sOps) CreateBackupLocation(backupLocation *v1alpha1.BackupLocation) (*v1alpha1.BackupLocation, error) {
