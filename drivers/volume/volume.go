@@ -52,8 +52,14 @@ type Driver interface {
 	// doesn't belong to driver
 	GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error)
 
+	// StartVolumeSnapshotRestore will prepare volume for restore
+	StartVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore, map[string]string) error
+
 	// VolumeSnapshotRestore for given pvc. Returns error if restore failed
 	VolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore, map[string]string) error
+
+	// GetVolumeSnapshotRestore returns snapshot restore status
+	GetVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
 
 	// Stop the driver
 	Stop() error
