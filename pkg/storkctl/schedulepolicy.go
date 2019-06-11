@@ -28,10 +28,10 @@ func newGetSchedulePolicyCommand(cmdFactory Factory, ioStreams genericclioptions
 			var schedulePolicies *storkv1.SchedulePolicyList
 			if len(args) > 0 {
 				schedulePolicies = new(storkv1.SchedulePolicyList)
-				for _, pairName := range args {
-					pair, err := k8s.Instance().GetSchedulePolicy(pairName)
+				for _, policyName := range args {
+					policy, err := k8s.Instance().GetSchedulePolicy(policyName)
 					if err == nil {
-						schedulePolicies.Items = append(schedulePolicies.Items, *pair)
+						schedulePolicies.Items = append(schedulePolicies.Items, *policy)
 					} else {
 						util.CheckErr(err)
 						return

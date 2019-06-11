@@ -91,9 +91,6 @@ type BackupLocationList struct {
 
 // UpdateFromSecret updated the config information from the secret if not provided inline
 func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
-	if bl.Location.SecretConfig == "" {
-		return nil
-	}
 	if bl.Location.SecretConfig != "" {
 		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(bl.Location.SecretConfig, metav1.GetOptions{})
 		if err != nil {
@@ -145,7 +142,6 @@ func (bl *BackupLocation) getMergedS3Config(client kubernetes.Interface) error {
 				return fmt.Errorf("error parding disableSSL from Secret: %v", err)
 			}
 		}
-		fmt.Printf("Merged config: %+v", bl.Location.S3Config)
 	}
 	return nil
 }
