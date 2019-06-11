@@ -115,6 +115,7 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 
 func (c *SnapshotRestoreController) handleInitial(snapRestore *stork_api.VolumeSnapshotRestore) error {
 	snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusRestore
+
 	return nil
 }
 
@@ -149,12 +150,18 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 	}
 
 	// annotate and delete pods using pvcs
-	// TODO: Need to mark deployment/daemonset as stork scheduler
 	err = markPVCForRestore(pvcList)
 	if err != nil {
 		return err
 	}
 
+	inProgress, err := c.waitForRestoreToReady(snapRestore, restoreVolumes)
+	if err != nil {
+		return err
+	}
+	if inProgress {
+		return fmt.Errorf("restore objects are not ready")
+	}
 	// Do driver volume snapshot restore here
 	err = c.Driver.VolumeSnapshotRestore(snapRestore, restoreVolumes)
 	if err != nil {
@@ -283,4 +290,60 @@ func (c *SnapshotRestoreController) createCRD() error {
 
 func (c *SnapshotRestoreController) handleDelete(snapRestore *stork_api.VolumeSnapshotRestore) error {
 	return nil
+}
+
+func (c *SnapshotRestoreController) waitForRestoreToReady(
+	snapRestore *stork_api.VolumeSnapshotRestore,
+	restoreVolumes map[string]string,
+) (bool, error) {
+	if snapRestore.Status.Volumes == nil {
+		err := c.Driver.StartVolumeSnapshotRestore(snapRestore, restoreVolumes)
+		if err != nil {
+			message := fmt.Sprintf("Error starting snapshot restore for volumes: %v", err)
+			log.VolumeSnapshotRestoreLog(snapRestore).Errorf(message)
+			c.Recorder.Event(snapRestore,
+				v1.EventTypeWarning,
+				string(stork_api.VolumeSnapshotRestoreStatusFailed),
+				message)
+			return false, nil
+		}
+
+		snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusInProgress
+		err = sdk.Update(snapRestore)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	// Volume Snapshot restore is already initiated , check for status
+	inProgress := false
+	// Skip checking status if no volumes are being restored
+	if len(snapRestore.Status.Volumes) != 0 {
+		err := c.Driver.GetVolumeSnapshotRestore(snapRestore)
+		if err != nil {
+			return inProgress, err
+		}
+
+		// Now check if there is any failure or success
+		for _, vInfo := range snapRestore.Status.Volumes {
+			if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusInProgress {
+				log.VolumeSnapshotRestoreLog(snapRestore).Infof("Volume restore still in progress: %v", vInfo.Volume)
+				inProgress = true
+			} else if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusFailed {
+				c.Recorder.Event(snapRestore,
+					v1.EventTypeWarning,
+					string(vInfo.RestoreStatus),
+					fmt.Sprintf("Error restoring volume %v: %v", vInfo.Volume, vInfo.Reason))
+				snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusFailed
+				return false, fmt.Errorf("restore failed for volume: %v", vInfo.Volume)
+			} else if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusSuccessful {
+				c.Recorder.Event(snapRestore,
+					v1.EventTypeNormal,
+					string(vInfo.RestoreStatus),
+					fmt.Sprintf("Volume %v restored successfully", vInfo.Volume))
+			}
+		}
+	}
+
+	return inProgress, nil
 }

@@ -260,6 +260,16 @@ func (m *Driver) VolumeSnapshotRestore(snap *stork_crd.VolumeSnapshotRestore, op
 	return &errors.ErrNotImplemented{}
 }
 
+// StartVolumeSnapshotRestore will prepare volume for restore
+func (m *Driver) StartVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore, map[string]string) error {
+	return &errors.ErrNotImplemented{}
+}
+
+// GetVolumeSnapshotRestore returns snapshot restore status
+func (m *Driver) GetVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error {
+	return &errors.ErrNotImplemented{}
+}
+
 func init() {
 	if err := storkvolume.Register(driverName, &Driver{}); err != nil {
 		logrus.Panicf("Error registering mock volume driver: %v", err)
