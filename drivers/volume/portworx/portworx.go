@@ -727,7 +727,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validateNodeStartTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
