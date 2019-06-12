@@ -107,6 +107,7 @@ func TestMain(t *testing.T) {
 		t.Run("CmdExecutor", asyncPodCommandTest)
 		t.Run("Migration", testMigration)
 		t.Run("ApplicationClone", testApplicationClone)
+		t.Run("Backup", testBackup)
 		t.Skip("Skipping cluster domain tests")
 	}
 
