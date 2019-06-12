@@ -69,13 +69,37 @@ func (a *ApplicationRestoreController) Init(restoreAdminNamespace string) error 
 		a)
 }
 
-func (a *ApplicationRestoreController) setDefaults(restore *stork_api.ApplicationRestore) {
+func (a *ApplicationRestoreController) setDefaults(restore *stork_api.ApplicationRestore) error {
 	if restore.Spec.ReplacePolicy == "" {
 		restore.Spec.ReplacePolicy = stork_api.ApplicationRestoreReplacePolicyRetain
 	}
+	// If no namespaces mappings are provided add mappings for all of them
 	if len(restore.Spec.NamespaceMapping) == 0 {
-		restore.Spec.NamespaceMapping[restore.Namespace] = restore.Namespace
+		backup, err := k8s.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+		if err != nil {
+			return fmt.Errorf("error getting backup: %v", err)
+		}
+		for _, ns := range backup.Spec.Namespaces {
+			restore.Spec.NamespaceMapping[ns] = ns
+		}
 	}
+	return nil
+}
+
+func (a *ApplicationRestoreController) verifyNamespaces(restore *stork_api.ApplicationRestore) error {
+	// Check whether namespace is allowed to be restored to before each stage
+	// Restrict restores to only the namespace that the object belongs
+	// except for the namespace designated by the admin
+	if !a.namespaceRestoreAllowed(restore) {
+		return fmt.Errorf("Spec.Namespaces should only contain the current namespace")
+	}
+
+	for _, ns := range restore.Spec.NamespaceMapping {
+		if _, err := k8s.Instance().GetNamespace(ns); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Handle updates for ApplicationRestore objects
@@ -87,12 +111,18 @@ func (a *ApplicationRestoreController) Handle(ctx context.Context, event sdk.Eve
 			return a.Driver.CancelRestore(restore)
 		}
 
-		a.setDefaults(restore)
-		// Check whether namespace is allowed to be restored to before each stage
-		// Restrict restores to only the namespace that the object belongs
-		// except for the namespace designated by the admin
-		if !a.namespaceRestoreAllowed(restore) {
-			err := fmt.Errorf("Spec.Namespaces should only contain the current namespace")
+		err := a.setDefaults(restore)
+		if err != nil {
+			log.ApplicationRestoreLog(restore).Errorf(err.Error())
+			a.Recorder.Event(restore,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationRestoreStatusFailed),
+				err.Error())
+			return nil
+		}
+
+		err = a.verifyNamespaces(restore)
+		if err != nil {
 			log.ApplicationRestoreLog(restore).Errorf(err.Error())
 			a.Recorder.Event(restore,
 				v1.EventTypeWarning,
@@ -106,16 +136,6 @@ func (a *ApplicationRestoreController) Handle(ctx context.Context, event sdk.Eve
 		switch restore.Status.Stage {
 		case stork_api.ApplicationRestoreStageInitial:
 			// Make sure the namespaces exist
-			for _, ns := range restore.Spec.NamespaceMapping {
-				if _, err := k8s.Instance().GetNamespace(ns); err != nil {
-					log.ApplicationRestoreLog(restore).Errorf(err.Error())
-					a.Recorder.Event(restore,
-						v1.EventTypeWarning,
-						string(stork_api.ApplicationRestoreStatusFailed),
-						err.Error())
-					return nil
-				}
-			}
 			fallthrough
 		case stork_api.ApplicationRestoreStageVolumes:
 			err := a.restoreVolumes(restore, terminationChannels)
