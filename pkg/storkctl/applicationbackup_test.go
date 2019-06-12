@@ -108,6 +108,7 @@ func TestGetApplicationBackupsWithStatusAndProgress(t *testing.T) {
 	// Update the status of the backup
 	backup.Status.FinishTimestamp = metav1.Now()
 	backup.CreationTimestamp = metav1.NewTime(backup.Status.FinishTimestamp.Add(-5 * time.Minute))
+	backup.Status.TriggerTimestamp = metav1.NewTime(backup.Status.FinishTimestamp.Add(-5 * time.Minute))
 	backup.Status.Stage = storkv1.ApplicationBackupStageFinal
 	backup.Status.Status = storkv1.ApplicationBackupStatusSuccessful
 	backup.Status.Volumes = []*storkv1.ApplicationBackupVolumeInfo{}
@@ -115,7 +116,7 @@ func TestGetApplicationBackupsWithStatusAndProgress(t *testing.T) {
 	require.NoError(t, err, "Error updating backup")
 
 	expected := "NAME                  STAGE     STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED\n" +
-		"getbackupstatustest   Final     Successful   0/0       0           " + toTimeString(backup.CreationTimestamp.Time) + "   5m0s\n"
+		"getbackupstatustest   Final     Successful   0/0       0           " + toTimeString(backup.Status.TriggerTimestamp.Time) + "   5m0s\n"
 	cmdArgs := []string{"get", "backups", "getbackupstatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }

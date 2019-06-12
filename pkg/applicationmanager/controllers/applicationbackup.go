@@ -105,6 +105,9 @@ func (a *ApplicationBackupController) setDefaults(backup *stork_api.ApplicationB
 	if backup.Spec.ReclaimPolicy == "" {
 		backup.Spec.ReclaimPolicy = stork_api.ApplicationBackupReclaimPolicyDelete
 	}
+	if backup.Status.TriggerTimestamp.IsZero() {
+		backup.Status.TriggerTimestamp = backup.CreationTimestamp
+	}
 }
 
 // Handle updates for ApplicationBackup objects
