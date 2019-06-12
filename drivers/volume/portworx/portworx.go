@@ -125,6 +125,9 @@ const (
 	pxSdkPort      = "px-sdk"
 	pxEnableTLS    = "PX_ENABLE_TLS"
 	pxSharedSecret = "PX_SHARED_SECRET"
+
+	restoreNamePrefix = "in-place-restore-"
+	restoreTaskPrefix = "restore-"
 )
 
 type cloudSnapStatus struct {
@@ -954,9 +957,9 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 }
 
 // StartVolumeSnapshotRestore will prepare volume for restore
-func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore, restoreVolumes map[string]string) error {
+func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore) error {
 	volumeInfos := make([]*stork_crd.RestoreVolumeInfo, 0)
-	volRestores, snapType, credID, err := processRestoreVolumes(restoreVolumes)
+	volRestores, snapType, credID, err := processRestoreVolumes(snapRestore.Status.RestoreVolumes)
 	if err != nil {
 		logrus.Errorf("Invalid snapshot data %v", err)
 		return err
@@ -972,13 +975,14 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 			return err
 		}
 		for volID, snapID := range volRestores {
-			taskID := "restore-" + volID
-			restoreName := "in-place-restore-" + volID
+			taskID := restoreTaskPrefix + volID
+			restoreName := restoreNamePrefix + volID
 			_, err := volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 				Name:              taskID,
 				ID:                snapID,
 				RestoreVolumeName: restoreName,
 				CredentialUUID:    credID,
+				// Need node id to restore
 			})
 			if err != nil {
 				if _, ok := err.(*ost_errors.ErrExists); !ok {
@@ -1006,7 +1010,7 @@ func (p *portworx) GetVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapsho
 	}
 
 	for _, volInfo := range snapRestore.Status.Volumes {
-		taskID := "restore-" + volInfo.Volume
+		taskID := restoreTaskPrefix + volInfo.Volume
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudRestoreOp, taskID)
 		if isCloudsnapStatusActive(csStatus.status) {
 			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusInProgress
@@ -1015,6 +1019,7 @@ func (p *portworx) GetVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapsho
 			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusFailed
 			volInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
 		} else {
+			// check for ha update and then mark as successful
 			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusSuccessful
 			volInfo.Reason = fmt.Sprintf("Restore successful for volume")
 		}
@@ -1024,13 +1029,13 @@ func (p *portworx) GetVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapsho
 }
 
 // VolumeSnapshotRestore does in-place restore of snapshot to it's parent volume
-func (p *portworx) VolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore, restoreVolumes map[string]string) error {
+func (p *portworx) VolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore) error {
 	// TODO: Restoring snapshot to volume other than parent volume is not supported by PX
 	if snapRestore.Spec.DestinationPVC != nil {
 		return fmt.Errorf("restore to volume other than parent is not supported")
 	}
 	// Detect cloudsnap or local snapshot here
-	volRestores, snapType, _, err := processRestoreVolumes(restoreVolumes)
+	volRestores, snapType, _, err := processRestoreVolumes(snapRestore.Status.RestoreVolumes)
 	if err != nil {
 		logrus.Errorf("Invalid snapshot data %v", err)
 		return err
@@ -1082,7 +1087,7 @@ func (p *portworx) pxSnapshotRestore(
 	for volID, snapID := range restoreVolumes {
 		logrus.Infof("Restoring volume %v with local snapshot %v", volID, snapID)
 		if isCloudSnap {
-			snapID = "in-place-restore-" + volID
+			snapID = restoreNamePrefix + volID
 		}
 		err = volDriver.Restore(volID, snapID)
 		if err != nil {
@@ -1091,6 +1096,7 @@ func (p *portworx) pxSnapshotRestore(
 			return err
 		}
 		logrus.Infof("Completed restore for volume %v with Snapshotshot %v", volID, snapID)
+		// TODO: Delete restore objects
 	}
 	return nil
 }
