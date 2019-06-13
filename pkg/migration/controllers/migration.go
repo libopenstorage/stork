@@ -1006,6 +1006,9 @@ func (m *MigrationController) prepareApplicationResource(
 		return nil, err
 	}
 	replicas := spec["replicas"].(int64)
+	if !collections.Exists(content, "metadata.annotations") {
+		content["metadata.annotations"] = make(map[string]string)
+	}
 	annotations, err := collections.GetMap(content, "metadata.annotations")
 	if err != nil {
 		return nil, err
