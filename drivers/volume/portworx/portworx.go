@@ -949,6 +949,80 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 	}
 }
 
+// VolumeSnapshotRestore does in-place restore of snapshot to it's parent volume
+func (p *portworx) VolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore, restoreVolumes map[string]string) error {
+	// TODO: Restoring snapshot to volume other than parent volume is not supported by PX
+	if snapRestore.Spec.DestinationPVC != nil {
+		return fmt.Errorf("restore to volume other than parent is not supported")
+	}
+	// Detect cloudsnap or local snapshot here
+	volRestores, snapType, err := processRestoreVolumes(restoreVolumes)
+	if err != nil {
+		logrus.Errorf("Invalid snapshot data %v", err)
+		return err
+	}
+	switch snapType {
+	case "", string(crdv1.PortworxSnapshotTypeLocal):
+		return p.localSnapshotRestore(volRestores, snapRestore.Annotations)
+	case string(crdv1.PortworxSnapshotTypeCloud):
+		return p.cloudSnapshotRestore(volRestores, snapRestore.Annotations)
+	default:
+		return fmt.Errorf("invalid SourceType for snapshot(local/cloud)")
+	}
+}
+
+func processRestoreVolumes(restoreVolumes map[string]string) (map[string]string, string, error) {
+	var snapType string
+	volRestore := make(map[string]string)
+	for vol, snapDataName := range restoreVolumes {
+		snapshotData, err := k8s.Instance().GetSnapshotData(snapDataName)
+		if err != nil {
+			return volRestore, "", fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
+				snapDataName, err)
+		}
+		// Let's verify if source snapshotdata is complete
+		err = k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
+		if err != nil {
+			return volRestore, "", fmt.Errorf("snapshot: %s is not complete. %v", snapshotData.Metadata.Name, err)
+		}
+		snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
+		snapType = string(snapshotData.Spec.PortworxSnapshot.SnapshotType)
+		logrus.Debugf("Making Entry of snapID %v \t vol %v into %v", snapID, vol, volRestore)
+		volRestore[vol] = snapID
+	}
+	return volRestore, snapType, nil
+}
+
+func (p *portworx) localSnapshotRestore(
+	restoreVolumes map[string]string,
+	params map[string]string,
+) error {
+	// Get volume client from user context
+	volDriver, err := p.getUserVolDriver(params)
+	if err != nil {
+		return err
+	}
+	for volID, snapID := range restoreVolumes {
+		logrus.Infof("Restoring volume %v with local snapshot %v", volID, snapID)
+
+		err = volDriver.Restore(volID, snapID)
+		if err != nil {
+			logrus.Errorf("Unable to restore volume %v with ID %v, err %v",
+				volID, snapID, err)
+			return err
+		}
+		logrus.Infof("Completed restore for volume %v with Snapshotshot %v", volID, snapID)
+	}
+	return nil
+}
+
+func (p *portworx) cloudSnapshotRestore(
+	restoreVolumes map[string]string,
+	params map[string]string,
+) error {
+	return fmt.Errorf("not Implemented")
+}
+
 func (p *portworx) SnapshotRestore(
 	snapshotData *crdv1.VolumeSnapshotData,
 	pvc *v1.PersistentVolumeClaim,
@@ -1729,6 +1803,9 @@ func (p *portworx) GetClusterDomains() (*stork_crd.ClusterDomains, error) {
 	// get the domain to state (active/inactive) map
 	domainStateMap, err := p.getDomainStateMap()
 	if err != nil {
+		if strings.HasSuffix(err.Error(), "node is not initialized with cluster domains") {
+			return &stork_crd.ClusterDomains{}, nil
+		}
 		logrus.Errorf("Failed to get domain name to state map: %v", err)
 		return nil, err
 	}

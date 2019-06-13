@@ -25,6 +25,8 @@ import (
 
 const (
 	nameTimeSuffixFormat string = "2006-01-02-150405"
+	domainsRetryInterval        = 5 * time.Second
+	domainsMaxRetries           = 5
 )
 
 // MigrationScheduleController reconciles MigrationSchedule objects
@@ -74,7 +76,15 @@ func (m *MigrationScheduleController) Handle(ctx context.Context, event sdk.Even
 
 		// Then check if any of the policies require a trigger if it is enabled
 		if migrationSchedule.Spec.Suspend == nil || !*migrationSchedule.Spec.Suspend {
-			clusterDomains, err := m.Driver.GetClusterDomains()
+			var err error
+			var clusterDomains *stork_api.ClusterDomains
+			for i := 0; i < domainsMaxRetries; i++ {
+				clusterDomains, err = m.Driver.GetClusterDomains()
+				if err == nil {
+					break
+				}
+				time.Sleep(domainsRetryInterval)
+			}
 			// Ignore errors
 			if err == nil {
 				for _, domainInfo := range clusterDomains.ClusterDomainInfos {

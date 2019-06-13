@@ -55,7 +55,7 @@ vet:
 staticcheck:
 	go get -u honnef.co/go/tools/cmd/staticcheck
 	staticcheck $(PKGS)
-	staticcheck -tags integrationtest github.com/libopenstorage/stork/test/integration_test
+	staticcheck -tags integrationtest test/integration_test/*.go
 	staticcheck -tags unittest $(PKGS)
 
 errcheck:

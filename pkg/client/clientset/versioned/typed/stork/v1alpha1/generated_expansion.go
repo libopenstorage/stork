@@ -44,4 +44,6 @@ type SchedulePolicyExpansion interface{}
 
 type StorageClusterExpansion interface{}
 
+type VolumeSnapshotRestoreExpansion interface{}
+
 type VolumeSnapshotScheduleExpansion interface{}

@@ -13,13 +13,18 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/drivers/volume/mock"
+	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
+	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
+	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"k8s.io/api/core/v1"
 	apiv1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
@@ -32,6 +37,9 @@ const (
 
 var driver *mock.Driver
 var extender *Extender
+var fakeStorkClient *fakeclient.Clientset
+var fakeOCPClient *fakeocpclient.Clientset
+var fakeRestClient *fake.RESTClient
 
 func setup(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
@@ -53,6 +61,12 @@ func setup(t *testing.T) {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.Core().RESTClient()).Events("")})
 	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, apiv1.EventSource{Component: "storktest"})
+
+	// setup fake k8s instances
+	fakeStorkClient = fakeclient.NewSimpleClientset()
+	fakeOCPClient = fakeocpclient.NewSimpleClientset()
+	fakeRestClient = &fake.RESTClient{}
+	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil, fakeOCPClient)
 
 	extender = &Extender{
 		Driver:   storkdriver,
@@ -81,6 +95,10 @@ func newPod(podName string, volumes []string) *v1.Pod {
 			ClaimName: pvc.Name,
 		}
 		pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
+		_, err := k8s.Instance().CreatePersistentVolumeClaim(pvc)
+		if err != nil {
+			return nil
+		}
 	}
 	return pod
 }
@@ -278,6 +296,7 @@ func TestExtender(t *testing.T) {
 	t.Run("ipTest", ipTest)
 	t.Run("invalidRequestsTest", invalidRequestsTest)
 	t.Run("noReplicasTest", noReplicasTest)
+	t.Run("restorePVCTest", restorePVCTest)
 	t.Run("teardown", teardown)
 }
 
@@ -320,9 +339,15 @@ func noDriverVolumeTest(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "a", "us-east-1"))
 
 	podVolume := v1.Volume{}
-	podVolume.PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
-		ClaimName: "noDriverPVC",
+	pvcClaim := &v1.PersistentVolumeClaim{}
+	pvcClaim.Name = "noDriverPVC"
+	pvcClaim.Spec.VolumeName = "noDriverVol"
+	pvcSpec := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: pvcClaim.Name,
 	}
+	_, err := k8s.Instance().CreatePersistentVolumeClaim(pvcClaim)
+	require.NoError(t, err)
+	podVolume.PersistentVolumeClaim = pvcSpec
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
 
 	filterResponse, err := sendFilterRequest(pod, nodes)
@@ -526,7 +551,7 @@ func driverErrorTest(t *testing.T) {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
-	pod := newPod("driverErrorPod", []string{"volume1"})
+	pod := newPod("driverErrorPod", []string{"driverErrorTest"})
 	provNodes := []int{0, 1}
 	if err := driver.ProvisionVolume("volume1", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
@@ -571,9 +596,9 @@ func driverNodeErrorStateTest(t *testing.T) {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
-	pod := newPod("driverErrorPod", []string{"volume1"})
+	pod := newPod("driverErrorPod", []string{"driverNodeErrorTest"})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("volume1", provNodes, 1); err != nil {
+	if err := driver.ProvisionVolume("driverNodeErrorTest", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -621,13 +646,13 @@ func zoneTest(t *testing.T) {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
-	pod := newPod("zoneTest", []string{"volume1", "volume2"})
+	pod := newPod("zoneTest", []string{"zoneVolume1", "zoneVolume2"})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("volume1", provNodes, 1); err != nil {
+	if err := driver.ProvisionVolume("zoneVolume1", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("volume2", provNodes, 1); err != nil {
+	if err := driver.ProvisionVolume("zoneVolume2", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -671,13 +696,13 @@ func regionTest(t *testing.T) {
 		t.Fatalf("Error creating cluster: %v", err)
 	}
 
-	pod := newPod("regionTest", []string{"volume1", "volume2"})
+	pod := newPod("regionTest", []string{"regionVolume1", "regionVolume2"})
 	provNodes := []int{0, 1}
-	if err := driver.ProvisionVolume("volume1", provNodes, 1); err != nil {
+	if err := driver.ProvisionVolume("regionVolume1", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 	provNodes = []int{1, 2}
-	if err := driver.ProvisionVolume("volume2", provNodes, 1); err != nil {
+	if err := driver.ProvisionVolume("regionVolume2", provNodes, 1); err != nil {
 		t.Fatalf("Error provisioning volume: %v", err)
 	}
 
@@ -826,4 +851,66 @@ func noReplicasTest(t *testing.T) {
 	}
 	_, err := sendFilterRequest(pod, requestNodes)
 	require.Error(t, err, "Expected error since no replicas are online")
+}
+
+// Verify whether extender is checking restore annotation for pVC
+// Create PVC with restore annotation,
+// verify pod is not scheduled
+func restorePVCTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+
+	restoreAnnotation := make(map[string]string)
+	restoreAnnotation[restore.RestoreAnnotation] = "true"
+	invalidRestorePod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "invalidRestorePod"},
+	}
+	podVolume := v1.Volume{}
+	// Create PVC Claim with annotation
+	pvcClaim := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "restorePVC",
+			Annotations: restoreAnnotation,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			VolumeName: "restoreVol",
+		},
+	}
+	pvc, err := k8s.Instance().CreatePersistentVolumeClaim(pvcClaim)
+	require.NoError(t, err)
+
+	// invalid pvc
+	invalidPVCSpec := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: "dummy-pvc-claim",
+	}
+	podVolume.PersistentVolumeClaim = invalidPVCSpec
+	invalidRestorePod.Spec.Volumes = append(invalidRestorePod.Spec.Volumes, podVolume)
+	_, err = sendFilterRequest(invalidRestorePod, nodes)
+	require.Error(t, err, "Expected error since pvc details invalid")
+	require.Contains(t, err.Error(), "Unable to find PVC")
+
+	// restore annotation
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "restorePod"},
+	}
+	validPVCSpec := &v1.PersistentVolumeClaimVolumeSource{
+		ClaimName: pvc.Name,
+	}
+	podVolume.PersistentVolumeClaim = validPVCSpec
+	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
+	_, err = sendFilterRequest(pod, nodes)
+	require.Error(t, err, "Expected error since pvc has restore annotation")
+	require.Contains(t, err.Error(), "Volume restore is in progress for pvc")
+
+	delete(pvc.Annotations, restore.RestoreAnnotation)
+	_, err = k8s.Instance().UpdatePersistentVolumeClaim(pvc)
+	require.NoError(t, err)
+	_, err = sendFilterRequest(pod, nodes)
+	require.NoError(t, err)
+
+	// check empty volume claim
+	podVolume.PersistentVolumeClaim = nil
+	_, err = sendFilterRequest(pod, nodes)
+	require.NoError(t, err)
 }

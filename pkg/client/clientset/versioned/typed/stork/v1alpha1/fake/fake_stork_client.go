@@ -80,6 +80,10 @@ func (c *FakeStorkV1alpha1) StorageClusters(namespace string) v1alpha1.StorageCl
 	return &FakeStorageClusters{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) VolumeSnapshotRestores(namespace string) v1alpha1.VolumeSnapshotRestoreInterface {
+	return &FakeVolumeSnapshotRestores{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) VolumeSnapshotSchedules(namespace string) v1alpha1.VolumeSnapshotScheduleInterface {
 	return &FakeVolumeSnapshotSchedules{c, namespace}
 }

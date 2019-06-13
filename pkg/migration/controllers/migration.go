@@ -154,6 +154,33 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 
 		var terminationChannels []chan bool
 		var err error
+		var clusterDomains *stork_api.ClusterDomains
+		for i := 0; i < domainsMaxRetries; i++ {
+			clusterDomains, err = m.Driver.GetClusterDomains()
+			if err == nil {
+				break
+			}
+			time.Sleep(domainsRetryInterval)
+		}
+		// Fail the migration if the current domain is inactive
+		// Ignore errors
+		if err == nil {
+			for _, domainInfo := range clusterDomains.ClusterDomainInfos {
+				if domainInfo.Name == clusterDomains.LocalDomain &&
+					domainInfo.State == stork_api.ClusterDomainInactive {
+					migration.Status.Status = stork_api.MigrationStatusFailed
+					migration.Status.Stage = stork_api.MigrationStageFinal
+					migration.Status.FinishTimestamp = metav1.Now()
+					msg := fmt.Sprintf("Failing migration since local clusterdomain is inactive")
+					m.Recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						msg)
+					log.MigrationLog(migration).Warn(msg)
+					return sdk.Update(migration)
+				}
+			}
+		}
 
 		switch migration.Status.Stage {
 		case stork_api.MigrationStageInitial:
@@ -603,7 +630,7 @@ func (m *MigrationController) prepareResources(
 
 		switch o.GetObjectKind().GroupVersionKind().Kind {
 		case "PersistentVolume":
-			err := m.preparePVResource(o)
+			err := m.preparePVResource(migration, o)
 			if err != nil {
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
@@ -652,8 +679,17 @@ func (m *MigrationController) updateResourceStatus(
 }
 
 func (m *MigrationController) preparePVResource(
+	migration *stork_api.Migration,
 	object runtime.Unstructured,
 ) error {
+	// Set the reclaim policy to retain if the volumes are not being migrated
+	if migration.Spec.IncludeVolumes != nil && !*migration.Spec.IncludeVolumes {
+		spec, err := collections.GetMap(object.UnstructuredContent(), "spec")
+		if err != nil {
+			return err
+		}
+		spec["persistentVolumeReclaimPolicy"] = v1.PersistentVolumeReclaimRetain
+	}
 	_, err := m.Driver.UpdateMigratedPersistentVolumeSpec(object)
 	return err
 }
@@ -774,8 +810,14 @@ func (m *MigrationController) applyResources(
 		if err != nil && (apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
 			switch objectType.GetKind() {
 			// Don't want to delete the Volume resources
-			case "PersistentVolumeClaim", "PersistentVolume":
+			case "PersistentVolumeClaim":
 				err = nil
+			case "PersistentVolume":
+				if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+					err = nil
+				} else {
+					_, err = dynamicClient.Update(unstructured)
+				}
 			default:
 				// Delete the resource if it already exists on the destination
 				// cluster and try creating again

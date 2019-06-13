@@ -18,6 +18,10 @@ func newCreateCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams)
 		newCreatePVCCommand(cmdFactory, ioStreams),
 		newCreateSnapshotScheduleCommand(cmdFactory, ioStreams),
 		newCreateGroupSnapshotCommand(cmdFactory, ioStreams),
+		newCreateVolumeSnapshotRestoreCommand(cmdFactory, ioStreams),
+		newCreateApplicationBackupCommand(cmdFactory, ioStreams),
+		newCreateApplicationRestoreCommand(cmdFactory, ioStreams),
+		newCreateApplicationCloneCommand(cmdFactory, ioStreams),
 	)
 
 	return createCommands

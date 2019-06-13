@@ -361,6 +361,7 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 }
 
 func TestCreateMigrationWaitSuccess(t *testing.T) {
+	migrRetryTimeout = 10 * time.Second
 	defer resetTest()
 
 	namespace := "dummy-namespace"
@@ -373,6 +374,7 @@ func TestCreateMigrationWaitSuccess(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 func TestCreateMigrationWaitFailed(t *testing.T) {
+	migrRetryTimeout = 10 * time.Second
 	defer resetTest()
 
 	namespace := "dummy-namespace"
