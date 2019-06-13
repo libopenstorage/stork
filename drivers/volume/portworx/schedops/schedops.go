@@ -27,7 +27,7 @@ type Driver interface {
 	ValidateVolumeSetup(v *volume.Volume, d node.Driver) error
 	// ValidateSnapshot validates the snapshot volume
 	ValidateSnapshot(volumeParams map[string]string, parent *api.Volume) error
-	// GetVolumeName returns the volume name based on the volume object recevied
+	// GetVolumeName returns the volume name based on the volume object received
 	GetVolumeName(v *volume.Volume) string
 	// GetServiceEndpoint returns the hostname of portworx service if it is present
 	GetServiceEndpoint() (string, error)
@@ -38,7 +38,7 @@ type Driver interface {
 	// IsPXEnabled returns true if portworx is enabled on given node
 	IsPXEnabled(n node.Node) (bool, error)
 	// GetRemotePXNodes returns list of PX node found on destination k8s cluster
-	// refereced by kubeconfig
+	// referenced by kubeconfig
 	GetRemotePXNodes(destKubeConfig string) ([]node.Node, error)
 }
 

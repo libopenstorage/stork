@@ -44,7 +44,7 @@ const (
 	DeploymentSuffix = "-dep"
 	// StatefulSetSuffix is the suffix for statefulset names stored as keys in maps
 	StatefulSetSuffix = "-ss"
-	// SystemdSchedServiceName is the name of the system service resposible for scheduling
+	// SystemdSchedServiceName is the name of the system service responsible for scheduling
 	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "kubelet"
 )
@@ -1801,6 +1801,49 @@ func (k *k8s) createMigrationObjects(
 	}
 
 	return nil, nil
+}
+
+func (k *k8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
+	k8sOps := k8s_ops.Instance()
+	podsUsingStorage := make([]v1.Pod, 0)
+	for _, pod := range pods {
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim == nil {
+				continue
+			}
+			pvc, err := k8sOps.GetPersistentVolumeClaim(volume.PersistentVolumeClaim.ClaimName, pod.Namespace)
+			if err != nil {
+				logrus.Errorf("failed to get pvc [%s] %s. Cause: %v", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, err)
+				return podsUsingStorage
+			}
+			if scProvisioner, err := k8sOps.GetStorageProvisionerForPVC(pvc); err == nil && scProvisioner == provisioners[provisioner] {
+				podsUsingStorage = append(podsUsingStorage, pod)
+				break
+			}
+		}
+	}
+	return podsUsingStorage
+}
+
+func (k *k8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
+	k8sOps := k8s_ops.Instance()
+	pods, err := k8sOps.GetPodsByNode(n.Name, "")
+	if err != nil {
+		return &scheduler.ErrFailedToDecommissionNode{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to get pods on the node: %v. Err: %v", n.Name, err),
+		}
+	}
+	podsUsingStorage := k.getPodsUsingStorage(pods.Items, provisioner)
+	// double the timeout every 40 pods
+	timeout := defaultTimeout * time.Duration(len(podsUsingStorage)/40+1)
+	if err = k8sOps.DrainPodsFromNode(n.Name, podsUsingStorage, timeout, defaultRetryInterval); err != nil {
+		return &scheduler.ErrFailedToDecommissionNode{
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to drain pods from node: %v. Err: %v", n.Name, err),
+		}
+	}
+	return nil
 }
 
 func (k *k8s) destroyMigrationObject(

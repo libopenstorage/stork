@@ -17,6 +17,7 @@ import (
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/libopenstorage/openstorage/volume"
 	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
@@ -44,6 +45,7 @@ const (
 )
 
 const (
+	defaultTimeout                   = 2 * time.Minute
 	defaultRetryInterval             = 10 * time.Second
 	maintenanceOpTimeout             = 1 * time.Minute
 	maintenanceWaitTimeout           = 2 * time.Minute
@@ -215,15 +217,14 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 		cManager = d.getClusterManager()
 	}
 	pxNode, err := cManager.Inspect(n.VolDriverNodeID)
-	if err != nil {
-		return api.Node{}, err
-	}
-	if pxNode.Status == api.Status_STATUS_OFFLINE || pxNode.Status == api.Status_STATUS_NONE {
+	if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
 		n, err = d.updateNodeID(n)
 		if err != nil {
 			return api.Node{}, err
 		}
 		return d.getPxNode(n, cManager)
+	} else if err != nil {
+		return api.Node{}, err
 	}
 	return pxNode, nil
 }
@@ -1134,6 +1135,80 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pairInfo[clusterPort] = strconv.Itoa(pxdRestPort)
 
 	return pairInfo, nil
+}
+
+func (d *portworx) DecommissionNode(n node.Node) error {
+
+	if err := k8s.Instance().AddLabelOnNode(n.Name, "px/enabled", "remove"); err != nil {
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+
+	if err := d.StopDriver([]node.Node{n}, false); err != nil {
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),
+		}
+	}
+	clusterManager := d.getClusterManager()
+	pxNode, err := clusterManager.Inspect(n.VolDriverNodeID)
+	if err != nil {
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to inspect node: %v. Err: %v", pxNode, err),
+		}
+	}
+
+	if err = clusterManager.Remove([]api.Node{pxNode}, false); err != nil {
+		return &ErrFailedToDecommissionNode{
+			Node:  n.Name,
+			Cause: err.Error(),
+		}
+	}
+	return nil
+}
+
+func (d *portworx) RejoinNode(n node.Node) error {
+
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+	}
+	_, err := d.nodeDriver.RunCommand(n, "/opt/pwx/bin/pxctl sv node-wipe --all", opts)
+	if err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: err.Error(),
+		}
+	}
+	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/service"); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/enabled"); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+	return nil
+}
+
+func (d *portworx) GetNodeStatus(n node.Node) (*api.Status, error) {
+	clusterManager := d.getClusterManager()
+	pxNode, err := clusterManager.Inspect(n.VolDriverNodeID)
+	if err != nil {
+		return &pxNode.Status, &ErrFailedToGetNodeStatus{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to check node status: %v. Err: %v", pxNode, err),
+		}
+	}
+	return &pxNode.Status, nil
 }
 
 func (d *portworx) getVolDriver() volume.VolumeDriver {

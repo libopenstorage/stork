@@ -60,6 +60,7 @@ const (
 	// Eventually we should remove the defaults and make it mandatory with documentation.
 	defaultStorageDriverUpgradeVersion = "1.2.11.6"
 	defaultStorageDriverBaseVersion    = "1.2.11.5"
+	defaultStorageProvisioner          = "portworx"
 )
 
 const (
@@ -396,7 +397,7 @@ func ParseFlags() {
 		"Version of storage driver to be upgraded to. For pwx driver you can use an oci image or "+
 			"provide both oci and px image: i.e : portworx/oci-monitor:tag or oci=portworx/oci-monitor:tag,px=portworx/px-enterprise:tag")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
-	flag.StringVar(&provisionerName, provisionerFlag, "", "Name of the storage provisioner Portworx or CSI.")
+	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 
 	flag.Parse()
 
