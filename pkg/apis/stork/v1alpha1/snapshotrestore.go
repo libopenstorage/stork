@@ -51,13 +51,13 @@ type RestoreStatus struct {
 	// RestoreVolume map of snapID and volID to restore
 	RestoreVolumes map[string]string `json:"restoreVolumes"`
 	// List of PVC associated with snapshot restore
-	PVCList []*v1.PersistentVolumeClaim
+	PVCs []*v1.PersistentVolumeClaim `json:"pvcs"`
 }
 
 // RestoreVolumeInfo is the info for the restore of a volume
 type RestoreVolumeInfo struct {
 	Volume        string                    `json:"volume"`
-	PVC           string                    `json:"pvc"`
+	Snapshot      string                    `json:"snapshot"`
 	RestoreStatus SnapshotRestoreStatusType `json:"status"`
 	Reason        string                    `json:"reason"`
 }

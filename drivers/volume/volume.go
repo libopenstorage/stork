@@ -52,15 +52,6 @@ type Driver interface {
 	// doesn't belong to driver
 	GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error)
 
-	// StartVolumeSnapshotRestore will prepare volume for restore
-	StartVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
-
-	// VolumeSnapshotRestore for given pvc. Returns error if restore failed
-	VolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
-
-	// GetVolumeSnapshotRestore returns snapshot restore status
-	GetVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
-
 	// Stop the driver
 	Stop() error
 
@@ -79,6 +70,8 @@ type Driver interface {
 	BackupRestorePluginInterface
 	// ClonePluginInterface Interface to clone volumes
 	ClonePluginInterface
+	// SnapshotRestorePluginInterface Interface to do in-place restore of volumes
+	SnapshotRestorePluginInterface
 }
 
 // GroupSnapshotCreateResponse is the response for the group snapshot operation
@@ -149,6 +142,19 @@ type BackupRestorePluginInterface interface {
 	GetRestoreStatus(*stork_crd.ApplicationRestore) ([]*stork_crd.ApplicationRestoreVolumeInfo, error)
 	// Cancel the restore of volumes specified in the status
 	CancelRestore(*stork_crd.ApplicationRestore) error
+}
+
+// SnapshotRestorePluginInterface Interface to perform in place restore of volume
+type SnapshotRestorePluginInterface interface {
+	// StartVolumeSnapshotRestore will prepare volume for restore
+	StartVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
+
+	// CompleteVolumeSnapshotRestore will perform in-place restore for given snapshot and associated pvc
+	//  Returns error if restore failed
+	CompleteVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
+
+	// GetVolumeSnapshotRestore returns snapshot restore status
+	GetVolumeSnapshotRestoreStatus(*stork_crd.VolumeSnapshotRestore) error
 }
 
 // ClonePluginInterface Interface to clone volumes

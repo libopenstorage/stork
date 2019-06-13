@@ -1434,6 +1434,24 @@ func (in *RestoreStatus) DeepCopyInto(out *RestoreStatus) {
 			}
 		}
 	}
+	if in.RestoreVolumes != nil {
+		in, out := &in.RestoreVolumes, &out.RestoreVolumes
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.PVCs != nil {
+		in, out := &in.PVCs, &out.PVCs
+		*out = make([]*v1.PersistentVolumeClaim, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(v1.PersistentVolumeClaim)
+				(*in).DeepCopyInto(*out)
+			}
+		}
+	}
 	return
 }
 
