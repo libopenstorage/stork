@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	k8s_discovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -77,10 +78,7 @@ func (m *MigrationController) Init(migrationAdminNamespace string) error {
 	if err != nil {
 		return err
 	}
-	err = m.discoveryHelper.Refresh()
-	if err != nil {
-		return err
-	}
+
 	m.dynamicInterface, err = dynamic.NewForConfig(config)
 	if err != nil {
 		return err
@@ -762,8 +760,13 @@ func (m *MigrationController) getResources(
 ) ([]runtime.Unstructured, error) {
 	err := m.discoveryHelper.Refresh()
 	if err != nil {
-		return nil, err
+		if err, ok := err.(*k8s_discovery.ErrGroupDiscoveryFailed); ok {
+			logrus.Warnf("Error getting some server APIs: %v", err.Groups)
+		} else {
+			return nil, err
+		}
 	}
+
 	allObjects := make([]runtime.Unstructured, 0)
 	resourceInfos := make([]*stork_api.ResourceInfo, 0)
 
