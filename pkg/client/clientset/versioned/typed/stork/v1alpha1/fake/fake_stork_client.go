@@ -76,10 +76,6 @@ func (c *FakeStorkV1alpha1) SchedulePolicies() v1alpha1.SchedulePolicyInterface 
 	return &FakeSchedulePolicies{c}
 }
 
-func (c *FakeStorkV1alpha1) StorageClusters(namespace string) v1alpha1.StorageClusterInterface {
-	return &FakeStorageClusters{c, namespace}
-}
-
 func (c *FakeStorkV1alpha1) VolumeSnapshotRestores(namespace string) v1alpha1.VolumeSnapshotRestoreInterface {
 	return &FakeVolumeSnapshotRestores{c, namespace}
 }
