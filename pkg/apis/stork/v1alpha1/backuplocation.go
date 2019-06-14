@@ -39,6 +39,7 @@ type BackupLocationItem struct {
 	AzureConfig   *AzureConfig  `json:"azureConfig,omitempty"`
 	GoogleConfig  *GoogleConfig `json:"googleConfig,omitempty"`
 	SecretConfig  string        `json:"secretConfig"`
+	Sync          bool          `json:"sync"`
 }
 
 // BackupLocationType is the type of the backup location
