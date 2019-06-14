@@ -57,6 +57,9 @@ func (b *BackupSyncController) startBackupSync() {
 }
 
 func (b *BackupSyncController) syncBackupsFromLocation(location *storkv1.BackupLocation) error {
+	if !location.Location.Sync {
+		return nil
+	}
 	bucket, err := objectstore.GetBucket(location)
 	if err != nil {
 		return err
