@@ -92,6 +92,7 @@ type Ops interface {
 	BackupLocationOps
 	ApplicationBackupRestoreOps
 	ApplicationCloneOps
+	VolumeSnapshotRestoreOps
 	GetVersion() (*version.Info, error)
 	SetConfig(config *rest.Config)
 	SetClient(
@@ -479,6 +480,19 @@ type GroupSnapshotOps interface {
 	ValidateGroupSnapshot(name, namespace string, retry bool, timeout, retryInterval time.Duration) error
 	// GetSnapshotsForGroupSnapshot returns all child snapshots for the group snapshot
 	GetSnapshotsForGroupSnapshot(name, namespace string) ([]*snap_v1.VolumeSnapshot, error)
+}
+
+// VolumeSnapshotRestoreOps is interface to perform isnapshot restore using CRD
+type VolumeSnapshotRestoreOps interface {
+	// CreateVolumeSnapshotRestore restore snapshot to pvc specifed in CRD, if no pvcs defined we restore to
+	// parent volumes
+	CreateVolumeSnapshotRestore(snap *v1alpha1.VolumeSnapshotRestore) (*v1alpha1.VolumeSnapshotRestore, error)
+	// GetVolumeSnapshotRestore returns details of given restore crd status
+	GetVolumeSnapshotRestore(name, namespace string) (*v1alpha1.VolumeSnapshotRestore, error)
+	// ListVolumeSnapshotRestore return list of volumesnapshotrestores in given namespaces
+	ListVolumeSnapshotRestore(namespace string) (*v1alpha1.VolumeSnapshotRestoreList, error)
+	// DeleteVolumeSnapshotRestore delete given volumesnapshotrestore CRD
+	DeleteVolumeSnapshotRestore(name, namespace string) error
 }
 
 // RuleOps is an interface to perform operations for k8s stork rule
@@ -3533,6 +3547,37 @@ func (k *k8sOps) GetSnapshotsForGroupSnapshot(name, namespace string) ([]*snap_v
 
 // GroupSnapshot APIs - END
 
+// Restore Snapshot APIs - BEGIN
+func (k *k8sOps) CreateVolumeSnapshotRestore(snapRestore *v1alpha1.VolumeSnapshotRestore) (*v1alpha1.VolumeSnapshotRestore, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().VolumeSnapshotRestores(snapRestore.Namespace).Create(snapRestore)
+}
+
+func (k *k8sOps) GetVolumeSnapshotRestore(name, namespace string) (*v1alpha1.VolumeSnapshotRestore, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().VolumeSnapshotRestores(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListVolumeSnapshotRestore(namespace string) (*v1alpha1.VolumeSnapshotRestoreList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().VolumeSnapshotRestores(namespace).List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) DeleteVolumeSnapshotRestore(name, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	return k.storkClient.Stork().VolumeSnapshotRestores(namespace).Delete(name, &meta_v1.DeleteOptions{})
+}
+
+// Restore Snapshot APIs - END
+
 // Rule APIs - BEGIN
 func (k *k8sOps) GetRule(name, namespace string) (*v1alpha1.Rule, error) {
 	if err := k.initK8sClient(); err != nil {
@@ -4392,7 +4437,17 @@ func (k *k8sOps) ListBackupLocations(namespace string) (*v1alpha1.BackupLocation
 		return nil, err
 	}
 
-	return k.storkClient.Stork().BackupLocations(namespace).List(meta_v1.ListOptions{})
+	backupLocations, err := k.storkClient.Stork().BackupLocations(namespace).List(meta_v1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for i := range backupLocations.Items {
+		err = backupLocations.Items[i].UpdateFromSecret(k.client)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return backupLocations, nil
 }
 
 func (k *k8sOps) CreateBackupLocation(backupLocation *v1alpha1.BackupLocation) (*v1alpha1.BackupLocation, error) {

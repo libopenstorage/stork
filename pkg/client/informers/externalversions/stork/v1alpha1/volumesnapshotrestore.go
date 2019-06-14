@@ -31,59 +31,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// StorageClusterInformer provides access to a shared informer and lister for
-// StorageClusters.
-type StorageClusterInformer interface {
+// VolumeSnapshotRestoreInformer provides access to a shared informer and lister for
+// VolumeSnapshotRestores.
+type VolumeSnapshotRestoreInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.StorageClusterLister
+	Lister() v1alpha1.VolumeSnapshotRestoreLister
 }
 
-type storageClusterInformer struct {
+type volumeSnapshotRestoreInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewStorageClusterInformer constructs a new informer for StorageCluster type.
+// NewVolumeSnapshotRestoreInformer constructs a new informer for VolumeSnapshotRestore type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewStorageClusterInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredStorageClusterInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewVolumeSnapshotRestoreInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredVolumeSnapshotRestoreInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredStorageClusterInformer constructs a new informer for StorageCluster type.
+// NewFilteredVolumeSnapshotRestoreInformer constructs a new informer for VolumeSnapshotRestore type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredStorageClusterInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredVolumeSnapshotRestoreInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().StorageClusters(namespace).List(options)
+				return client.StorkV1alpha1().VolumeSnapshotRestores(namespace).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().StorageClusters(namespace).Watch(options)
+				return client.StorkV1alpha1().VolumeSnapshotRestores(namespace).Watch(options)
 			},
 		},
-		&storkv1alpha1.StorageCluster{},
+		&storkv1alpha1.VolumeSnapshotRestore{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *storageClusterInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredStorageClusterInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *volumeSnapshotRestoreInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredVolumeSnapshotRestoreInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *storageClusterInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&storkv1alpha1.StorageCluster{}, f.defaultInformer)
+func (f *volumeSnapshotRestoreInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&storkv1alpha1.VolumeSnapshotRestore{}, f.defaultInformer)
 }
 
-func (f *storageClusterInformer) Lister() v1alpha1.StorageClusterLister {
-	return v1alpha1.NewStorageClusterLister(f.Informer().GetIndexer())
+func (f *volumeSnapshotRestoreInformer) Lister() v1alpha1.VolumeSnapshotRestoreLister {
+	return v1alpha1.NewVolumeSnapshotRestoreLister(f.Informer().GetIndexer())
 }

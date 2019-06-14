@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
@@ -20,10 +21,13 @@ import (
 )
 
 const (
+	migrTimeout = 6 * time.Hour
+	stage       = "STAGE"
+	status      = "STATUS"
+)
+
+var (
 	migrRetryTimeout = 30 * time.Second
-	migrTimeout      = 6 * time.Hour
-	stage            = "STAGE"
-	status           = "STATUS"
 )
 
 var migrationColumns = []string{"NAME", "CLUSTERPAIR", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED"}
@@ -217,7 +221,9 @@ func updateDeployments(namespace string, activate bool, ioStreams genericcliopti
 func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	deployments, err := k8s.Instance().ListDeploymentConfigs(namespace)
 	if err != nil {
-		util.CheckErr(err)
+		if !errors.IsNotFound(err) {
+			util.CheckErr(err)
+		}
 		return
 	}
 	for _, deployment := range deployments.Items {

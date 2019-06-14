@@ -17,6 +17,10 @@ func newDeleteCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams)
 		newDeleteMigrationScheduleCommand(cmdFactory, ioStreams),
 		newDeleteSnapshotScheduleCommand(cmdFactory, ioStreams),
 		newDeleteGroupVolumeSnapshotCommand(cmdFactory, ioStreams),
+		newDeleteVolumeSnapshotRestoreCommand(cmdFactory, ioStreams),
+		newDeleteApplicationBackupCommand(cmdFactory, ioStreams),
+		newDeleteApplicationRestoreCommand(cmdFactory, ioStreams),
+		newDeleteApplicationCloneCommand(cmdFactory, ioStreams),
 	)
 	return deleteCommands
 }

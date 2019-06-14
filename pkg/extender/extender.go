@@ -11,8 +11,10 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
+	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
+	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
@@ -123,6 +125,27 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 
 	pod := args.Pod
+	for _, vol := range pod.Spec.Volumes {
+		// if any of pvc has restore annotation skip scheduling pod
+		if vol.PersistentVolumeClaim == nil {
+			continue
+		}
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
+		if err != nil {
+			msg := fmt.Sprintf("Unable to find PVC %s, err: %v", vol.Name, err)
+			storklog.PodLog(pod).Warnf(msg)
+			e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		} else if pvc.Annotations != nil && pvc.Annotations[restore.RestoreAnnotation] == "true" {
+			msg := "Volume restore is in progress for pvc: " + pvc.Name
+			storklog.PodLog(pod).Warnf(msg)
+			e.Recorder.Event(pod, v1.EventTypeWarning, schedulingFailureEventReason, msg)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+	}
+
 	storklog.PodLog(pod).Debugf("Nodes in filter request:")
 	for _, node := range args.Nodes.Items {
 		storklog.PodLog(pod).Debugf("%v %+v", node.Name, node.Status.Addresses)

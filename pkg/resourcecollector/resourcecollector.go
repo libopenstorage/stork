@@ -81,7 +81,8 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"ClusterRoleBinding",
 		"ImageStream",
 		"Ingress",
-		"Route":
+		"Route",
+		"Template":
 		return true
 	default:
 		return false

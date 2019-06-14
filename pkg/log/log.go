@@ -237,6 +237,16 @@ func ApplicationCloneLog(clone *storkv1.ApplicationClone) *logrus.Entry {
 			"ApplicationCloneNamespace": clone.Namespace,
 		})
 	}
+	return logrus.WithFields(logrus.Fields{})
+}
 
+// VolumeSnapshotRestoreLog formats a log message with volumesnapshotrestore information
+func VolumeSnapshotRestoreLog(snapRestore *storkv1.VolumeSnapshotRestore) *logrus.Entry {
+	if snapRestore != nil {
+		return logrus.WithFields(logrus.Fields{
+			"VolumeSnapshotRestoreName":      snapRestore.Name,
+			"VolumeSnapshotRestoreNamespace": snapRestore.Namespace,
+		})
+	}
 	return logrus.WithFields(logrus.Fields{})
 }
