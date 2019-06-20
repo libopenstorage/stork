@@ -45,6 +45,22 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&StorageClusterList{},
 		&SchedulePolicy{},
 		&SchedulePolicyList{},
+		&VolumeSnapshotSchedule{},
+		&VolumeSnapshotScheduleList{},
+		&ClusterDomainsStatus{},
+		&ClusterDomainsStatusList{},
+		&ClusterDomainUpdate{},
+		&ClusterDomainUpdateList{},
+		&ApplicationClone{},
+		&ApplicationCloneList{},
+		&ApplicationBackup{},
+		&ApplicationBackupList{},
+		&ApplicationRestore{},
+		&ApplicationRestoreList{},
+		&BackupLocation{},
+		&BackupLocationList{},
+		&VolumeSnapshotRestore{},
+		&VolumeSnapshotRestoreList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

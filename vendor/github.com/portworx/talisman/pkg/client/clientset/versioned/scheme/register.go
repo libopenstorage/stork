@@ -20,6 +20,7 @@ package scheme
 
 import (
 	portworxv1beta1 "github.com/portworx/talisman/pkg/apis/portworx/v1beta1"
+	portworxv1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -51,4 +52,5 @@ func init() {
 // correctly.
 func AddToScheme(scheme *runtime.Scheme) {
 	portworxv1beta1.AddToScheme(scheme)
+	portworxv1beta2.AddToScheme(scheme)
 }
