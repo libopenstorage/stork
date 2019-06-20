@@ -387,14 +387,9 @@ func (r *ResourceCollector) ApplyResource(
 			} else if deleteIfPresent {
 				// Delete the resource if it already exists on the destination
 				// cluster and try creating again
-				switch objectType.GetKind() {
-				case "PersistentVolumeClaim", "PersistentVolume":
-					err = nil
-				default:
-					err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
-					if err != nil && apierrors.IsNotFound(err) {
-						return err
-					}
+				err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
+				if err != nil && apierrors.IsNotFound(err) {
+					return err
 				}
 			} else {
 				return err
