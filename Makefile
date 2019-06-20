@@ -30,7 +30,7 @@ BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 .DEFAULT_GOAL=all
 .PHONY: test clean vendor vendor-update
 
-all: stork storkctl cmdexecutor vet lint simple
+all: stork storkctl cmdexecutor vet lint
 
 vendor-update:
 	dep ensure -update
@@ -50,12 +50,6 @@ lint:
 vet:
 	go vet $(PKGS)
 
-$(GOPATH)/bin/gosimple:
-	go get -u honnef.co/go/tools/cmd/gosimple
-
-simple: $(GOPATH)/bin/gosimple
-	$(GOPATH)/bin/gosimple $(PKGS)
-
 errcheck:
 	go get -v github.com/kisielk/errcheck
 	errcheck -verbose -blank $(PKGS)
@@ -66,7 +60,7 @@ check-fmt:
 do-fmt:
 	 gofmt -s -w $(GO_FILES)
 
-pretest: check-fmt lint vet errcheck simple
+pretest: check-fmt lint vet errcheck
 
 test:
 	echo "" > coverage.txt
