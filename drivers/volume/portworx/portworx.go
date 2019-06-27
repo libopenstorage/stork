@@ -71,9 +71,6 @@ const (
 	// default API port
 	defaultAPIPort = 9001
 
-	// default SDK port
-	defaultSDKPort = 9020
-
 	// provisioner names for portworx volumes
 	provisionerName    = "kubernetes.io/portworx-volume"
 	csiProvisionerName = "com.openstorage.pxd"
@@ -273,9 +270,6 @@ func (p *portworx) initPortworxClients() error {
 		return fmt.Errorf("failed to get endpoint for portworx volume driver")
 	}
 
-	p.restPort = defaultAPIPort
-	p.sdkPort = defaultSDKPort
-
 	// Get the ports from service
 	for _, svcPort := range svc.Spec.Ports {
 		if svcPort.Name == pxSdkPort &&
@@ -285,6 +279,16 @@ func (p *portworx) initPortworxClients() error {
 			svcPort.Port != 0 {
 			p.restPort = int(svcPort.Port)
 		}
+	}
+
+	// check if the ports were parsed
+	if p.sdkPort == 0 || p.restPort == 0 {
+		err := fmt.Errorf("%s in %s namespace has been not updated to the latest spec. "+
+			"%s and/or %s ports are missing. Follow "+
+			"https://docs.portworx.com/portworx-install-with-kubernetes/operate-and-maintain-on-kubernetes/upgrade/"+
+			" to upgrade Portworx", serviceName, namespace, pxSdkPort, pxRestPort)
+		logrus.Errorf(err.Error())
+		return err
 	}
 
 	logrus.Infof("Using %v:%v as endpoint for portworx REST endpoint", endpoint, p.restPort)

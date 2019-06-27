@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	k8s_discovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
@@ -54,10 +55,7 @@ func (r *ResourceCollector) Init() error {
 	if err != nil {
 		return err
 	}
-	err = r.discoveryHelper.Refresh()
-	if err != nil {
-		return err
-	}
+
 	r.dynamicInterface, err = dynamic.NewForConfig(config)
 	if err != nil {
 		return err
@@ -83,7 +81,8 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"ClusterRoleBinding",
 		"ImageStream",
 		"Ingress",
-		"Route":
+		"Route",
+		"Template":
 		return true
 	default:
 		return false
@@ -94,8 +93,13 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map[string]string) ([]runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
-		return nil, err
+		if err, ok := err.(*k8s_discovery.ErrGroupDiscoveryFailed); ok {
+			logrus.Warnf("Error getting some server APIs: %v", err.Groups)
+		} else {
+			return nil, err
+		}
 	}
+
 	allObjects := make([]runtime.Unstructured, 0)
 
 	// Map to prevent collection of duplicate objects
@@ -383,14 +387,9 @@ func (r *ResourceCollector) ApplyResource(
 			} else if deleteIfPresent {
 				// Delete the resource if it already exists on the destination
 				// cluster and try creating again
-				switch objectType.GetKind() {
-				case "PersistentVolumeClaim", "PersistentVolume":
-					err = nil
-				default:
-					err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
-					if err != nil && apierrors.IsNotFound(err) {
-						return err
-					}
+				err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
+				if err != nil && apierrors.IsNotFound(err) {
+					return err
 				}
 			} else {
 				return err
