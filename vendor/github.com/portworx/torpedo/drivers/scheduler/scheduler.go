@@ -132,6 +132,10 @@ type Driver interface {
 
 	// IsScalable check if a given spec is scalable or not
 	IsScalable(spec interface{}) bool
+
+	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
+	// parent volumes
+	ValidateVolumeSnapshotRestore(*Context, time.Time) error
 }
 
 var (
