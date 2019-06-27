@@ -1380,6 +1380,42 @@ func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 	return result
 }
 
+// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
+// given volumes
+// TODO: additionally check for restore objects in case of cloudsnap
+func (d *portworx) ValidateVolumeSnapshotRestore(vol, snap string, timeStart time.Time) error {
+	alerts, err := d.clusterManager.EnumerateAlerts(timeStart, time.Now(), api.ResourceType_RESOURCE_TYPE_VOLUME)
+	if err != nil {
+		return err
+	}
+	// get volume and snap info
+	pvcVol, err := d.volDriver.Inspect([]string{vol})
+	if err != nil || len(pvcVol) == 0 {
+		return fmt.Errorf("inspect failed for %v: %v", vol, err)
+	}
+	snapVol, err := d.volDriver.Inspect([]string{snap})
+	if err != nil || len(snapVol) == 0 {
+		return fmt.Errorf("inspect failed for %v: %v", snap, err)
+	}
+
+	// form alert msg for snapshot restore
+	grepMsg := "Volume " + pvcVol[0].GetLocator().GetName() +
+		" (" + pvcVol[0].GetId() + ") restored from snapshot " + snapVol[0].GetLocator().GetName() +
+		" (" + snap + ")"
+	isSuccess := false
+	for _, alert := range alerts.GetAlert() {
+		if alert.GetMessage() == grepMsg {
+			isSuccess = true
+			break
+		}
+		logrus.Debugf("Alert received %v", alert.GetMessage())
+	}
+	if isSuccess {
+		return nil
+	}
+	return fmt.Errorf("restore failed")
+}
+
 func init() {
 	torpedovolume.Register(DriverName, &portworx{})
 }
