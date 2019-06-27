@@ -1105,7 +1105,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID string, params map[string]string)
 		logrus.Warnf("Volume is not ready yet %v", restoreVol.GetLocator().GetName())
 		return false, nil
 	}
-	logrus.Infof("Restore Volume Status %v \t state %v", restoreVol.Status, restoreVol.State)
+	logrus.Infof("Restore Volume: %v \t Status %v \t state %v", restoreVol.Id, restoreVol.Status, restoreVol.State)
 	// find replica nodes
 	var nodes []string
 	rsSets := parentVols[0].GetReplicaSets()
@@ -1113,7 +1113,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID string, params map[string]string)
 		nodes = append(nodes, rs.GetNodes()...)
 	}
 	if restoreVol.GetSpec().GetHaLevel() != parentVols[0].GetSpec().GetHaLevel() {
-		logrus.Infof("Updating HA Level of volume %v", parentVols[1].GetLocator().GetName())
+		logrus.Infof("Updating HA Level of volume %v", restoreVol.GetLocator().GetName())
 		spec := &api.VolumeSpec{
 			HaLevel:    restoreVol.GetSpec().GetHaLevel() + 1,
 			ReplicaSet: &api.ReplicaSet{Nodes: nodes},
