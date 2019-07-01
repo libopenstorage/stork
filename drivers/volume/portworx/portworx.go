@@ -125,6 +125,9 @@ const (
 	pxSdkPort      = "px-sdk"
 	pxEnableTLS    = "PX_ENABLE_TLS"
 	pxSharedSecret = "PX_SHARED_SECRET"
+
+	restoreNamePrefix = "in-place-restore-"
+	restoreTaskPrefix = "restore-"
 )
 
 type cloudSnapStatus struct {
@@ -953,53 +956,227 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 	}
 }
 
-// VolumeSnapshotRestore does in-place restore of snapshot to it's parent volume
-func (p *portworx) VolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore, restoreVolumes map[string]string) error {
-	// TODO: Restoring snapshot to volume other than parent volume is not supported by PX
-	if snapRestore.Spec.DestinationPVC != nil {
-		return fmt.Errorf("restore to volume other than parent is not supported")
-	}
-	// Detect cloudsnap or local snapshot here
-	volRestores, snapType, err := processRestoreVolumes(restoreVolumes)
+// StartVolumeSnapshotRestore will prepare volume for restore
+func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore) error {
+	volumeInfos := make([]*stork_crd.RestoreVolumeInfo, 0)
+	volRestores, snapType, credID, err := processRestoreVolumes(snapRestore.Status.RestoreVolumes)
 	if err != nil {
-		logrus.Errorf("Invalid snapshot data %v", err)
+		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Invalid snapshot data %v", err)
 		return err
 	}
+
 	switch snapType {
-	case "", string(crdv1.PortworxSnapshotTypeLocal):
-		return p.localSnapshotRestore(volRestores, snapRestore.Annotations)
-	case string(crdv1.PortworxSnapshotTypeCloud):
-		return p.cloudSnapshotRestore(volRestores, snapRestore.Annotations)
+	case "", crdv1.PortworxSnapshotTypeLocal:
+		snapRestore.Status.Volumes = volumeInfos
+		return nil
+	case crdv1.PortworxSnapshotTypeCloud:
+		// Get volume client from user context
+		volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
+		if err != nil {
+			return err
+		}
+		for volID, snapID := range volRestores {
+			// Get Volume Info
+			vols, err := volDriver.Inspect([]string{volID, restoreNamePrefix + volID})
+			if err != nil {
+				return &ErrFailedToInspectVolume{
+					ID:    volID,
+					Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+				}
+			} else if len(vols) == 0 {
+				return &ErrFailedToInspectVolume{
+					ID:    volID,
+					Cause: fmt.Sprintf("Volume not found err: %v", err),
+				}
+			}
+			replNodes := vols[0].GetReplicaSets()[0]
+			taskID := restoreTaskPrefix + snapID + "-" + volID
+			restoreName := restoreNamePrefix + volID
+			_, err = volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
+				Name:              taskID,
+				ID:                snapID,
+				RestoreVolumeName: restoreName,
+				CredentialUUID:    credID,
+				NodeID:            replNodes.GetNodes()[0],
+			})
+			if err != nil {
+				if _, ok := err.(*ost_errors.ErrExists); !ok {
+					return err
+				}
+			}
+			volInfo := &stork_crd.RestoreVolumeInfo{}
+			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusInProgress
+			volInfo.Volume = volID
+			volInfo.Snapshot = snapID
+			volInfo.Reason = "Volume restore in progress"
+			volumeInfos = append(volumeInfos, volInfo)
+		}
+		snapRestore.Status.Volumes = volumeInfos
+		return nil
 	default:
 		return fmt.Errorf("invalid SourceType for snapshot(local/cloud)")
 	}
 }
 
-func processRestoreVolumes(restoreVolumes map[string]string) (map[string]string, string, error) {
-	var snapType string
+func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeSnapshotRestore) error {
+	var snapType crdv1.PortworxSnapshotType
+	// Get volume client from user context
+	volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
+	if err != nil {
+		return err
+	}
+
+	for _, snapDataName := range snapRestore.Status.RestoreVolumes {
+		snapshotData, err := k8s.Instance().GetSnapshotData(snapDataName)
+		if err != nil {
+			return fmt.Errorf("failed to retrive snapshot details")
+		}
+		snapType = snapshotData.Spec.PortworxSnapshot.SnapshotType
+	}
+	// Nothing to do for local snapshot
+	if snapType == crdv1.PortworxSnapshotTypeLocal {
+		return nil
+	}
+	for _, volInfo := range snapRestore.Status.Volumes {
+		taskID := restoreTaskPrefix + volInfo.Snapshot + "-" + volInfo.Volume
+		csStatus := p.getCloudSnapStatus(volDriver, api.CloudRestoreOp, taskID)
+		if isCloudsnapStatusActive(csStatus.status) {
+			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusInProgress
+			volInfo.Reason = "Volume restore in progress"
+		} else if isCloudsnapStatusFailed(csStatus.status) {
+			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusFailed
+			volInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
+		} else {
+			// check for ha update and then mark as successful
+			isUpdate, err := p.checkAndUpdateHaLevel(volInfo.Volume, snapRestore.Annotations)
+			if err != nil {
+				volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusFailed
+				volInfo.Reason = fmt.Sprintf("Restore ha-update failed for volume: %v", err.Error())
+				return nil
+			}
+			if !isUpdate {
+				volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusInProgress
+				volInfo.Reason = "Volume is in resync state"
+				return nil
+			}
+			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusSuccessful
+			volInfo.Reason = fmt.Sprintf("Restore successful for volume")
+		}
+	}
+
+	return nil
+}
+
+func (p *portworx) checkAndUpdateHaLevel(volID string, params map[string]string) (bool, error) {
+	// Get volume client from user context
+	volDriver, err := p.getUserVolDriver(params)
+	if err != nil {
+		return false, err
+	}
+	// Get Volume Info
+	parentVols, err := volDriver.Inspect([]string{volID})
+	if err != nil {
+		return false, &ErrFailedToInspectVolume{
+			ID:    volID,
+			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+		}
+	} else if len(parentVols) == 0 {
+		return false, &ErrFailedToInspectVolume{
+			ID:    volID,
+			Cause: fmt.Sprintf("Volume not found err: %v", err),
+		}
+	}
+	restoreVols, err := volDriver.Inspect([]string{restoreNamePrefix + volID})
+	if err != nil {
+		return false, &ErrFailedToInspectVolume{
+			ID:    volID,
+			Cause: fmt.Sprintf("Volume inspect returned err: %v", err),
+		}
+	} else if len(restoreVols) == 0 {
+		return false, &ErrFailedToInspectVolume{
+			ID:    volID,
+			Cause: fmt.Sprintf("Volume not found err: %v", err),
+		}
+	}
+
+	logrus.Debugf("volume info %v \t %v", parentVols[0].GetLocator().GetName(), restoreVols[1].GetLocator().GetName())
+	restoreVol := restoreVols[0]
+	if restoreVol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
+		logrus.Warnf("Volume is not ready yet %v", restoreVol.GetLocator().GetName())
+		return false, nil
+	}
+	logrus.Infof("Restore Volume: %v \t Status %v \t state %v", restoreVol.Id, restoreVol.Status, restoreVol.State)
+	// find replica nodes
+	var nodes []string
+	rsSets := parentVols[0].GetReplicaSets()
+	for _, rs := range rsSets {
+		nodes = append(nodes, rs.GetNodes()...)
+	}
+	if restoreVol.GetSpec().GetHaLevel() != parentVols[0].GetSpec().GetHaLevel() {
+		logrus.Infof("Updating HA Level of volume %v", restoreVol.GetLocator().GetName())
+		spec := &api.VolumeSpec{
+			HaLevel:    restoreVol.GetSpec().GetHaLevel() + 1,
+			ReplicaSet: &api.ReplicaSet{Nodes: nodes},
+		}
+		if err := volDriver.Set(restoreVol.GetId(), restoreVol.GetLocator(), spec); err != nil {
+			return false, fmt.Errorf("failed to perform ha-update: %v", err)
+		}
+		// check for vol is sync
+		return false, nil
+	}
+	return true, nil
+}
+
+// CompleteVolumeSnapshotRestore does in-place restore of snapshot to it's parent volume
+func (p *portworx) CompleteVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore) error {
+	// TODO: Restoring snapshot to volume other than parent volume is not supported by PX
+	if snapRestore.Spec.DestinationPVC != nil {
+		return fmt.Errorf("restore to volume other than parent is not supported")
+	}
+	// Detect cloudsnap or local snapshot here
+	volRestores, snapType, _, err := processRestoreVolumes(snapRestore.Status.RestoreVolumes)
+	if err != nil {
+		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Invalid snapshot data %v", err)
+		return err
+	}
+	switch snapType {
+	case "", crdv1.PortworxSnapshotTypeLocal:
+		return p.pxSnapshotRestore(volRestores, snapRestore.Annotations, false)
+	case crdv1.PortworxSnapshotTypeCloud:
+		return p.pxSnapshotRestore(volRestores, snapRestore.Annotations, true)
+	default:
+		return fmt.Errorf("invalid SourceType for snapshot(local/cloud)")
+	}
+}
+
+func processRestoreVolumes(restoreVolumes map[string]string) (map[string]string, crdv1.PortworxSnapshotType, string, error) {
+	var snapType crdv1.PortworxSnapshotType
+	var credID string
 	volRestore := make(map[string]string)
 	for vol, snapDataName := range restoreVolumes {
 		snapshotData, err := k8s.Instance().GetSnapshotData(snapDataName)
 		if err != nil {
-			return volRestore, "", fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
+			return volRestore, "", "", fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
 				snapDataName, err)
 		}
 		// Let's verify if source snapshotdata is complete
 		err = k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
 		if err != nil {
-			return volRestore, "", fmt.Errorf("snapshot: %s is not complete. %v", snapshotData.Metadata.Name, err)
+			return volRestore, "", "", fmt.Errorf("snapshot: %s is not complete. %v", snapshotData.Metadata.Name, err)
 		}
 		snapID := snapshotData.Spec.PortworxSnapshot.SnapshotID
-		snapType = string(snapshotData.Spec.PortworxSnapshot.SnapshotType)
+		snapType = snapshotData.Spec.PortworxSnapshot.SnapshotType
+		credID = snapshotData.Spec.PortworxSnapshot.SnapshotCloudCredID
 		logrus.Debugf("Making Entry of snapID %v \t vol %v into %v", snapID, vol, volRestore)
 		volRestore[vol] = snapID
 	}
-	return volRestore, snapType, nil
+	return volRestore, snapType, credID, nil
 }
 
-func (p *portworx) localSnapshotRestore(
+func (p *portworx) pxSnapshotRestore(
 	restoreVolumes map[string]string,
 	params map[string]string,
+	isCloudSnap bool,
 ) error {
 	// Get volume client from user context
 	volDriver, err := p.getUserVolDriver(params)
@@ -1008,7 +1185,9 @@ func (p *portworx) localSnapshotRestore(
 	}
 	for volID, snapID := range restoreVolumes {
 		logrus.Infof("Restoring volume %v with local snapshot %v", volID, snapID)
-
+		if isCloudSnap {
+			snapID = restoreNamePrefix + volID
+		}
 		err = volDriver.Restore(volID, snapID)
 		if err != nil {
 			logrus.Errorf("Unable to restore volume %v with ID %v, err %v",
@@ -1016,15 +1195,14 @@ func (p *portworx) localSnapshotRestore(
 			return err
 		}
 		logrus.Infof("Completed restore for volume %v with Snapshotshot %v", volID, snapID)
+		if isCloudSnap {
+			if err := volDriver.Delete(snapID); err != nil {
+				logrus.Errorf("Unable to delete volume  %v, err %v",
+					snapID, err)
+			}
+		}
 	}
 	return nil
-}
-
-func (p *portworx) cloudSnapshotRestore(
-	restoreVolumes map[string]string,
-	params map[string]string,
-) error {
-	return fmt.Errorf("not Implemented")
 }
 
 func (p *portworx) SnapshotRestore(
