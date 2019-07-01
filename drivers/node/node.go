@@ -88,6 +88,9 @@ type Driver interface {
 	// Init initializes the node driver under the given scheduler
 	Init() error
 
+	// DeleteNode deletes the given node
+	DeleteNode(node Node) error
+
 	// String returns the string name of this driver.
 	String() string
 
@@ -238,5 +241,12 @@ func (d *notSupportedDriver) GetASGClusterSize() (int64, error) {
 	return int64(0), &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetASGClusterSize()",
+	}
+}
+
+func (d *notSupportedDriver) DeleteNode(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteNode()",
 	}
 }

@@ -65,6 +65,15 @@ func (g *gke) GetASGClusterSize() (int64, error) {
 	return nodeCount, nil
 }
 
+func (g *gke) DeleteNode(node node.Node) error {
+
+	err := g.ops.DeleteInstance(node.Name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func init() {
 
 	SSHDriver := ssh.SSH{}

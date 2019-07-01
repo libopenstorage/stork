@@ -2,8 +2,7 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"strconv"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -36,6 +35,7 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
+/*
 // This test performs basic test of scaling up and down the asg cluster
 var _ = Describe("{ClusterScaleUpDown}", func() {
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
@@ -53,7 +53,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
 				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i))...)
 			}
-		*/
+
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
 		Expect(err).NotTo(HaveOccurred())
@@ -95,7 +95,55 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			ValidateAndDestroy(contexts, opts)
-		*/
+
+	})
+})
+*/
+
+// This test randomly kills one volume driver node and ensures cluster remains
+// intact by ASG
+var _ = Describe("{chaosTest}", func() {
+	It("keeps killing storage nodes", func() {
+
+		var storageNodes []node.Node
+		Step("Ensure all nodes are storage nodes", func() {
+
+			totalNodeCount, err := Inst().N.GetASGClusterSize()
+			Expect(err).NotTo(HaveOccurred())
+
+			storageNodes, err = getStorageNodes()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(totalNodeCount).Should(Equal(int64(len(storageNodes))))
+
+		})
+		Step("Randomly kill one storage node", func() {
+
+			storageNodes, err := getStorageNodes()
+			Expect(err).NotTo(HaveOccurred())
+
+			rand.Seed(time.Now().Unix())
+			nodeToKill := storageNodes[rand.Intn(len(storageNodes))]
+
+			Step(fmt.Sprintf("Deleting node [%v]", nodeToKill), func() {
+				err = Inst().N.DeleteNode(nodeToKill)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Step("Wait for 5 min. to node get replaced by autoscalling group", func() {
+				time.Sleep(5 * time.Minute)
+			})
+
+			err = Inst().S.RefreshNodeRegistry()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = Inst().V.RefreshDriverEndpoints()
+			Expect(err).NotTo(HaveOccurred())
+
+			Step(fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill), func() {
+				Validate(int64(len(storageNodes)))
+			})
+		})
+
 	})
 })
 
