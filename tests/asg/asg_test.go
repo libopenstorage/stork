@@ -3,6 +3,8 @@ package tests
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -35,7 +37,6 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
-/*
 // This test performs basic test of scaling up and down the asg cluster
 var _ = Describe("{ClusterScaleUpDown}", func() {
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
@@ -53,7 +54,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			for i := 0; i < Inst().ScaleFactor; i++ {
 				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgscaleupdown-%d", i))...)
 			}
-
+		*/
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
 		Expect(err).NotTo(HaveOccurred())
@@ -95,10 +96,9 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			ValidateAndDestroy(contexts, opts)
-
+		*/
 	})
 })
-*/
 
 // This test randomly kills one volume driver node and ensures cluster remains
 // intact by ASG
@@ -116,34 +116,43 @@ var _ = Describe("{chaosTest}", func() {
 			Expect(totalNodeCount).Should(Equal(int64(len(storageNodes))))
 
 		})
+
 		Step("Randomly kill one storage node", func() {
 
-			storageNodes, err := getStorageNodes()
-			Expect(err).NotTo(HaveOccurred())
+			// set frequency mins depending on the chaos level
+			var frequency int
+			switch Inst().ChaosLevel {
+			case 5:
+				frequency = 15
+			case 4:
+				frequency = 30
+			case 3:
+				frequency = 45
+			case 2:
+				frequency = 60
+			case 1:
+				frequency = 90
+			default:
+				frequency = 30
 
-			rand.Seed(time.Now().Unix())
-			nodeToKill := storageNodes[rand.Intn(len(storageNodes))]
-
-			Step(fmt.Sprintf("Deleting node [%v]", nodeToKill), func() {
-				err = Inst().N.DeleteNode(nodeToKill)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			Step("Wait for 5 min. to node get replaced by autoscalling group", func() {
-				time.Sleep(5 * time.Minute)
-			})
-
-			err = Inst().S.RefreshNodeRegistry()
-			Expect(err).NotTo(HaveOccurred())
-
-			err = Inst().V.RefreshDriverEndpoints()
-			Expect(err).NotTo(HaveOccurred())
-
-			Step(fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill), func() {
-				Validate(int64(len(storageNodes)))
-			})
+			}
+			if Inst().MinRunTimeMins == 0 {
+				// Run once
+				KillANodeAndValidate(storageNodes)
+			} else {
+				// Run repeatedly
+				ticker := time.NewTicker(time.Duration(frequency) * time.Minute)
+				go func() {
+					// Catch any assertion failures inside go routine
+					defer GinkgoRecover()
+					for range ticker.C {
+						KillANodeAndValidate(storageNodes)
+					}
+				}()
+				time.Sleep(time.Duration(Inst().MinRunTimeMins) * time.Minute)
+				ticker.Stop()
+			}
 		})
-
 	})
 })
 
@@ -202,4 +211,28 @@ func getStorageNodes() ([]node.Node, error) {
 		}
 	}
 	return storageNodes, nil
+}
+
+func KillANodeAndValidate(storageNodes []node.Node) {
+	rand.Seed(time.Now().Unix())
+	nodeToKill := storageNodes[rand.Intn(len(storageNodes))]
+
+	Step(fmt.Sprintf("Deleting node [%v]", nodeToKill.Name), func() {
+		err := Inst().N.DeleteNode(nodeToKill)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Step("Wait for 10 min. to node get replaced by autoscalling group", func() {
+		time.Sleep(10 * time.Minute)
+	})
+
+	err := Inst().S.RefreshNodeRegistry()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = Inst().V.RefreshDriverEndpoints()
+	Expect(err).NotTo(HaveOccurred())
+
+	Step(fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill.Name), func() {
+		Validate(int64(len(storageNodes)))
+	})
 }
