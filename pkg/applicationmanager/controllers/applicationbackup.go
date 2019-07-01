@@ -501,15 +501,18 @@ func (a *ApplicationBackupController) uploadObject(
 	if err != nil {
 		return err
 	}
-	defer func() {
-		err := writer.Close()
-		if err != nil {
-			log.ApplicationBackupLog(backup).Errorf("Error closing writer for objectstore: %v", err)
-		}
-	}()
 
 	_, err = writer.Write(data)
 	if err != nil {
+		closeErr := writer.Close()
+		if closeErr != nil {
+			log.ApplicationBackupLog(backup).Errorf("Error closing writer for objectstore: %v", closeErr)
+		}
+		return err
+	}
+	err = writer.Close()
+	if err != nil {
+		log.ApplicationBackupLog(backup).Errorf("Error closing writer for objectstore: %v", err)
 		return err
 	}
 	return nil
