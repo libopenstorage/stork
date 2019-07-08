@@ -140,6 +140,23 @@ func (e *exponentialBackoff) GetClusterSizeForInstance(instanceID string) (int64
 
 }
 
+func (e *exponentialBackoff) DeleteInstance(instanceID string) error {
+	var (
+		origErr error
+	)
+	conditionFn := func() (bool, error) {
+		origErr = e.cloudOps.DeleteInstance(instanceID)
+		msg := fmt.Sprintf("Failed to delete instance: %v.", instanceID)
+		return e.handleError(origErr, msg)
+	}
+	expErr := wait.ExponentialBackoff(e.backoff, conditionFn)
+	if expErr == wait.ErrWaitTimeout {
+		return cloudops.NewStorageError(cloudops.ErrExponentialTimeout, origErr.Error(), "")
+	}
+	return origErr
+
+}
+
 // Create volume based on input template volume and also apply given labels.
 func (e *exponentialBackoff) Create(template interface{}, labels map[string]string) (interface{}, error) {
 	var (
