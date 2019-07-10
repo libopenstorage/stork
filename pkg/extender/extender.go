@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,8 @@ const (
 	regionPriorityScore = 10
 	// defaultScore Score assigned to a node which doesn't have data for any volume
 	defaultScore = 5
+	// annotation to check if only local nodes should be used to schedule a pod
+	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
 )
 
 // Extender Scheduler extender
@@ -147,9 +150,29 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 					}
 				}
 				if !onlineNodeFound {
-					storklog.PodLog(pod).Errorf("No nodes in filter request have replica for volume, returning error")
-					http.Error(w, "No node found with volume", http.StatusBadRequest)
+					storklog.PodLog(pod).Errorf("No online storage nodes have replica for volume, returning error")
+					msg := "No online node found with volume replica"
+					http.Error(w, msg, http.StatusBadRequest)
 					return
+				}
+			}
+
+			preferLocalOnly := false
+			if pod.Annotations != nil {
+				if value, ok := pod.Annotations[preferLocalNodeOnlyAnnotation]; ok {
+					if preferLocalOnly, err = strconv.ParseBool(value); err != nil {
+						preferLocalOnly = false
+					}
+				}
+			}
+
+			nodeVolumeCounts := make(map[string]int)
+			if preferLocalOnly {
+				// Get nodes that have replicas for all the volumes
+				for _, volumeInfo := range driverVolumes {
+					for _, volumeNode := range volumeInfo.DataNodes {
+						nodeVolumeCounts[volumeNode]++
+					}
 				}
 			}
 
@@ -158,17 +181,30 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 					storklog.PodLog(pod).Debugf("nodeInfo: %v", driverNode)
 					if driverNode.Status == volume.NodeOnline &&
 						volume.IsNodeMatch(&node, driverNode) {
+						// If only nodes with replicas are to be preferred,
+						// filter out all nodes that don't have a replica
+						// for all the volumes
+						if preferLocalOnly && nodeVolumeCounts[driverNode.StorageID] != len(driverVolumes) {
+							continue
+						}
 						filteredNodes = append(filteredNodes, node)
 						break
 					}
 				}
 			}
+
 			// If we filtered out all the nodes, the driver isn't running on any
 			// of them, so return an error to avoid scheduling a pod on a
 			// non-driver node
 			if len(filteredNodes) == 0 {
-				storklog.PodLog(pod).Errorf("No nodes in filter request have driver, returning error")
-				http.Error(w, "No node found with driver", http.StatusBadRequest)
+				var msg string
+				if preferLocalOnly {
+					msg = "No nodes with volume replica available"
+				} else {
+					msg = "No node found with storage driver"
+				}
+				storklog.PodLog(pod).Error(msg)
+				http.Error(w, msg, http.StatusBadRequest)
 				return
 			}
 		}
