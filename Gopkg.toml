@@ -114,3 +114,7 @@ required = [
 [[constraint]]
   name = "gocloud.dev"
   version = "0.13.0"
+
+[[override]]
+  name = "gopkg.in/fsnotify.v1"
+  source = "https://github.com/fsnotify/fsnotify.git"
