@@ -100,6 +100,7 @@ func newPod(podName string, volumes []string) *v1.Pod {
 			return nil
 		}
 	}
+	pod.Annotations = make(map[string]string)
 	return pod
 }
 
@@ -297,6 +298,7 @@ func TestExtender(t *testing.T) {
 	t.Run("invalidRequestsTest", invalidRequestsTest)
 	t.Run("noReplicasTest", noReplicasTest)
 	t.Run("restorePVCTest", restorePVCTest)
+	t.Run("preferLocalNodeTest", preferLocalNodeTest)
 	t.Run("teardown", teardown)
 }
 
@@ -913,4 +915,36 @@ func restorePVCTest(t *testing.T) {
 	podVolume.PersistentVolumeClaim = nil
 	_, err = sendFilterRequest(pod, nodes)
 	require.NoError(t, err)
+}
+
+// Create a pod with a PVC using the mock storage class. Add an annotation to
+// the pod to prefer a node with the volume replica only.
+// Place the data on nodes n1. Send requests with node n2 and n3
+// The filter response should return an error since no replicas for
+// the volume are online
+func preferLocalNodeTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	requestNodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node2", "node2", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3", "node3", "192.168.0.3", "rack1", "", ""))
+	requestNodes.Items = nodes.Items
+	nodes.Items = append(nodes.Items, *newNode("node1", "node1", "192.168.0.1", "rack1", "", ""))
+
+	if err := driver.CreateCluster(3, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	pod := newPod("preferLocalNodeTest", []string{"preferLocalNodeTest"})
+
+	provNodes := []int{0}
+	if err := driver.ProvisionVolume("preferLocalNodeTest", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+
+	filterResponse, err := sendFilterRequest(pod, requestNodes)
+	require.NoError(t, err, "Expected no error since scheduling on non-local node was enabled")
+	verifyFilterResponse(t, nodes, []int{0, 1}, filterResponse)
+
+	pod.Annotations[preferLocalNodeOnlyAnnotation] = "true"
+	_, err = sendFilterRequest(pod, requestNodes)
+	require.Error(t, err, "Expected error since local node was not sent in filter request")
 }
