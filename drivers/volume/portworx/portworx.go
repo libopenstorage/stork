@@ -656,9 +656,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 			return nil, false, nil
 		}
 
-		err := fmt.Errorf("Volume: %s is not attached on any node", name)
-		logrus.Warnf(err.Error())
-		return nil, true, err
+		return nil, true, fmt.Errorf("Volume: %s is not attached on any node", name)
 	}
 
 	n, err := task.DoRetryWithTimeout(r, validateVolumeAttachedTimeout, validateVolumeAttachedInterval)
