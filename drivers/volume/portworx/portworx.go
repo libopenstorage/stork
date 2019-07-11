@@ -56,9 +56,9 @@ const (
 	validateClusterStartTimeout      = 2 * time.Minute
 	validateNodeStartTimeout         = 3 * time.Minute
 	validatePXStartTimeout           = 5 * time.Minute
-	validateNodeStopTimeout          = 2 * time.Minute
 	validateVolumeAttachedTimeout    = 30 * time.Second
 	validateVolumeAttachedInterval   = 5 * time.Second
+	validateNodeStopTimeout          = 5 * time.Minute
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
 	startDriverTimeout               = 2 * time.Minute
