@@ -726,15 +726,17 @@ func (p *portworx) addCloudsnapInfo(
 	request *api.CloudBackupCreateRequest,
 	snap *crdv1.VolumeSnapshot,
 ) {
-	if scheduleName, exists := snap.Metadata.Labels[snapshotcontrollers.SnapshotScheduleNameLabel]; exists {
-		if policyType, exists := snap.Metadata.Labels[snapshotcontrollers.SnapshotSchedulePolicyTypeLabel]; exists {
-			request.Labels[cloudBackupExternalManagerLabel] = "Stork-" + scheduleName + "-" + snap.Metadata.Namespace + "-" + policyType
-			// Use full backups for weekly and montly snaps
-			if policyType == string(stork_crd.SchedulePolicyTypeWeekly) ||
-				policyType == string(stork_crd.SchedulePolicyTypeMonthly) {
-				request.Full = true
+	if snap.Metadata.Annotations != nil {
+		if scheduleName, exists := snap.Metadata.Annotations[snapshotcontrollers.SnapshotScheduleNameAnnotation]; exists {
+			if policyType, exists := snap.Metadata.Annotations[snapshotcontrollers.SnapshotSchedulePolicyTypeAnnotation]; exists {
+				request.Labels[cloudBackupExternalManagerLabel] = "Stork-" + scheduleName + "-" + snap.Metadata.Namespace + "-" + policyType
+				// Use full backups for weekly and monthly snaps
+				if policyType == string(stork_crd.SchedulePolicyTypeWeekly) ||
+					policyType == string(stork_crd.SchedulePolicyTypeMonthly) {
+					request.Full = true
+				}
+				return
 			}
-			return
 		}
 	}
 	request.Labels[cloudBackupExternalManagerLabel] = "StorkManual"
