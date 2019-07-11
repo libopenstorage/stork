@@ -57,6 +57,8 @@ const (
 	validateNodeStartTimeout         = 3 * time.Minute
 	validatePXStartTimeout           = 5 * time.Minute
 	validateNodeStopTimeout          = 2 * time.Minute
+	validateVolumeAttachedTimeout    = 30 * time.Second
+	validateVolumeAttachedInterval   = 5 * time.Second
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
 	startDriverTimeout               = 2 * time.Minute
@@ -651,19 +653,17 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 
 		// Snapshots may not be attached to a node
 		if pxVol.Source.Parent != "" {
-			logrus.Debugf("Volume with ID: %s is a snapshot", pxVol.Id)
 			return nil, false, nil
 		}
 
-		return nil, true, &ErrFailedToInspectVolume{
-			ID:    name,
-			Cause: "Volume is not attached on any node",
-		}
+		err := fmt.Errorf("Volume: %s is not attached on any node", name)
+		logrus.Warnf(err.Error())
+		return nil, true, err
 	}
 
-	n, err := task.DoRetryWithTimeout(r, defaultTimeout, defaultRetryInterval)
+	n, err := task.DoRetryWithTimeout(r, validateVolumeAttachedTimeout, validateVolumeAttachedInterval)
 	if err != nil {
-		return nil, &ErrFailedToInspectVolume{
+		return nil, &ErrFailedToValidateAttachment{
 			ID:    name,
 			Cause: err.Error(),
 		}
