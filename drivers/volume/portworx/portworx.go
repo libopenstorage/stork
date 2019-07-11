@@ -651,7 +651,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 
 		// Snapshots may not be attached to a node
 		if pxVol.Source.Parent != "" {
-			logrus.Debug("Volume with ID: %s is a snapshot", pxVol.Id)
+			logrus.Debugf("Volume with ID: %s is a snapshot", pxVol.Id)
 			return nil, false, nil
 		}
 
