@@ -28,12 +28,12 @@ const (
 	validateCRDInterval  time.Duration = 5 * time.Second
 	validateCRDTimeout   time.Duration = 1 * time.Minute
 
-	// SnapshotScheduleNameLabel Label used to specify the name of schedule that
+	// SnapshotScheduleNameAnnotation Annotation used to specify the name of schedule that
 	// created the snapshot
-	SnapshotScheduleNameLabel = "stork.libopenstorage.org/snapshotScheduleName"
-	// SnapshotSchedulePolicyTypeLabel Label used to specify the type of the
+	SnapshotScheduleNameAnnotation = "stork.libopenstorage.org/snapshotScheduleName"
+	// SnapshotSchedulePolicyTypeAnnotation Annotation used to specify the type of the
 	// policy that triggered the snapshot
-	SnapshotSchedulePolicyTypeLabel = "stork.libopenstorage.org/snapshotSchedulePolicyType"
+	SnapshotSchedulePolicyTypeAnnotation = "stork.libopenstorage.org/snapshotSchedulePolicyType"
 )
 
 // SnapshotScheduleController reconciles VolumeSnapshotSchedule objects
@@ -269,11 +269,11 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 		},
 		Spec: snapshotSchedule.Spec.Template.Spec,
 	}
-	if snapshot.Metadata.Labels == nil {
-		snapshot.Metadata.Labels = make(map[string]string)
+	if snapshot.Metadata.Annotations == nil {
+		snapshot.Metadata.Annotations = make(map[string]string)
 	}
-	snapshot.Metadata.Labels[SnapshotScheduleNameLabel] = snapshotSchedule.Name
-	snapshot.Metadata.Labels[SnapshotSchedulePolicyTypeLabel] = string(policyType)
+	snapshot.Metadata.Annotations[SnapshotScheduleNameAnnotation] = snapshotSchedule.Name
+	snapshot.Metadata.Annotations[SnapshotSchedulePolicyTypeAnnotation] = string(policyType)
 
 	log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Starting snapshot %v", snapshotName)
 	// If reclaim policy is set to Delete, this will delete the snapshots
