@@ -622,7 +622,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	t := func() (interface{}, bool, error) {
 		vols, err := d.getVolDriver().Inspect([]string{name})
 		if err != nil {
-			logrus.Warnf("failed to inspect volume: %s due to: %v", name, err)
+			logrus.Warnf("Failed to inspect volume: %s due to: %v", name, err)
 			return nil, true, err
 		}
 		if len(vols) != 1 {
@@ -630,7 +630,6 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 			logrus.Warnf(err.Error())
 			return nil, true, err
 		}
-
 		return vols[0], false, nil
 	}
 
@@ -642,22 +641,40 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 		}
 	}
 
-	pxVol := v.(*api.Volume)
-	for _, n := range node.GetStorageDriverNodes() {
-		if n.VolDriverNodeID == pxVol.AttachedOn {
-			return &n, nil
+	r := func() (interface{}, bool, error) {
+		pxVol := v.(*api.Volume)
+		for _, n := range node.GetStorageDriverNodes() {
+			if n.VolDriverNodeID == pxVol.AttachedOn {
+				return &n, false, nil
+			}
+		}
+
+		// Snapshots may not be attached to a node
+		if pxVol.Source.Parent != "" {
+			logrus.Debug("Volume with ID: %s is a snapshot", pxVol.Id)
+			return nil, false, nil
+		}
+
+		return nil, true, &ErrFailedToInspectVolume{
+			ID:    name,
+			Cause: "Volume is not attached on any node",
 		}
 	}
 
-	// Snapshots may not be attached to a node
-	if pxVol.Source.Parent != "" {
-		return nil, nil
+	n, err := task.DoRetryWithTimeout(r, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return nil, &ErrFailedToInspectVolume{
+			ID:    name,
+			Cause: err.Error(),
+		}
 	}
 
-	return nil, &ErrFailedToInspectVolume{
-		ID:    name,
-		Cause: "Volume is not attached on any node",
+	if n != nil {
+		node := n.(*node.Node)
+		return node, nil
 	}
+
+	return nil, nil
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
