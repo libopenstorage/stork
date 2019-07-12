@@ -26,6 +26,18 @@ func errFailedToInspectVolume(ID, key string, expected, actual interface{}) erro
 	}
 }
 
+// ErrFailedToValidateAttachment error type for failing to validate attachment of a volume
+type ErrFailedToValidateAttachment struct {
+	// ID is the ID/name of the volume that failed to validate attachment
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToValidateAttachment) Error() string {
+	return fmt.Sprintf("Failed to validate volume: %v attachment due to err: %v", e.ID, e.Cause)
+}
+
 // ErrFailedToDeleteVolume error type for failing to delete a volume
 type ErrFailedToDeleteVolume struct {
 	// ID is the ID/name of the volume that failed to delete
