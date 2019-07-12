@@ -645,6 +645,19 @@ func (p *portworx) getUserContext(ctx context.Context, annotations map[string]st
 	return ctx, nil
 }
 
+func (p *portworx) secretRefFromAnnotations(annotations map[string]string) *v1.SecretReference {
+	if name, ok := annotations[auth_secrets.SecretNameKey]; ok {
+		if namespace, ok := annotations[auth_secrets.SecretNamespaceKey]; ok {
+			return &v1.SecretReference{
+				Name:      name,
+				Namespace: namespace,
+			}
+		}
+	}
+
+	return nil
+}
+
 func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.VolumeDriver, error) {
 	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
 		token, err := p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
@@ -886,9 +899,8 @@ func (p *portworx) SnapshotCreate(
 		return nil, getErrorSnapshotConditions(err), err
 	}
 
-	provisioner, err := k8sutils.GetDriverTypeFromPV(pv)
+	provisioner, err := getDriverTypeFromPV(pv)
 	if err != nil {
-		err = fmt.Errorf("failed to run post-snap rule due to: %v", err)
 		log.SnapshotLog(snap).Errorf(err.Error())
 		return nil, getErrorSnapshotConditions(err), err
 	}
@@ -1331,8 +1343,12 @@ func (p *portworx) SnapshotRestore(
 				VolumeHandle: vols[0].Id,
 				FSType:       vols[0].Format.String(),
 				ReadOnly:     vols[0].Readonly,
-				// XXX ADD SECRET INFORMATION HERE XXX
 			},
+		}
+		if secretRef := p.secretRefFromAnnotations(pvc.ObjectMeta.Annotations); secretRef != nil {
+			// no need to add secret to NodeStageSecretRef since Portworx does not support it
+			pv.CSI.ControllerPublishSecretRef = secretRef
+			pv.CSI.NodePublishSecretRef = secretRef
 		}
 	default:
 		pv = &v1.PersistentVolumeSource{
@@ -2750,7 +2766,7 @@ func (p *portworx) verifyPortworxPv(pv *v1.PersistentVolume) error {
 
 func (p *portworx) getVolumeIDFromPV(pv *v1.PersistentVolume) (string, error) {
 	if pv == nil {
-		return "", fmt.Errorf("nil PV passed into GetVolumeHandleFromPV")
+		return "", fmt.Errorf("nil PV passed into getVolumeIDFromPV")
 	}
 
 	var id string
@@ -2796,6 +2812,29 @@ func isCloudsnapStatusActive(st api.CloudBackupStatusType) bool {
 		st == api.CloudBackupStatusQueued ||
 		st == api.CloudBackupStatusActive ||
 		st == api.CloudBackupStatusPaused
+}
+
+// getDriverTypeFromPV returns the name of the provisioner driver managing
+// the persistent volume. Supports in-tree and CSI PVs
+func getDriverTypeFromPV(pv *v1.PersistentVolume) (string, error) {
+	var volumeType string
+
+	// Check for CSI
+	if pv.Spec.CSI != nil {
+		volumeType = pv.Spec.CSI.Driver
+		if len(volumeType) == 0 {
+			return "", fmt.Errorf("CSI Driver not found in PV %#v", *pv)
+		}
+		return volumeType, nil
+	}
+
+	// Fall back to Kubernetes in-tree driver names
+	volumeType = crdv1.GetSupportedVolumeFromPVSpec(&pv.Spec)
+	if len(volumeType) == 0 {
+		return "", fmt.Errorf("unsupported volume type found in PV %#v", *pv)
+	}
+
+	return volumeType, nil
 }
 
 func init() {
