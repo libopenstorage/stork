@@ -2070,7 +2070,6 @@ func (k *K8s) createBackupObjects(
 		logrus.Infof("[%v] Created ApplicationRestore: %v", app.Key, applicationRestore.Name)
 		return applicationRestore, nil
 	} else if obj, ok := specObj.(*stork_api.ApplicationClone); ok {
-		obj.Namespace = ns.Name
 		applicationClone, err := k8sOps.CreateApplicationClone(obj)
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{

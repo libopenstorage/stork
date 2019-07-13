@@ -598,14 +598,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:755c2ae060b9d54d72eddd115c8992e0249fb83690ef7edfd91bfb29b78c8546"
+  digest = "1:89f4a1aa41fb90f42bb69458c54661c4c40b7814cec28fedda18337db46214d2"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "1e35a1e8c90673d371bdefe4236ba256a481fb23"
+  revision = "81d22f475cbe83109672b3024dab3d544c807382"
 
 [[projects]]
   branch = "master"
@@ -1107,6 +1107,7 @@
     "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
     "k8s.io/apimachinery/pkg/api/errors",
+    "k8s.io/apimachinery/pkg/api/meta",
     "k8s.io/apimachinery/pkg/api/resource",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",
