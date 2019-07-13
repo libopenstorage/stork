@@ -286,6 +286,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*stork_api.ApplicationRestore); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.ApplicationClone); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
@@ -948,6 +950,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated ApplicationRestore: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.ApplicationClone); ok {
+			if err := k8sOps.ValidateApplicationClone(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate ApplicationClone: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated ApplicationClone: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -2053,11 +2064,22 @@ func (k *K8s) createBackupObjects(
 		if err != nil {
 			return nil, &scheduler.ErrFailedToScheduleApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to create ApplicationBackupRestore: %v. Err: %v", obj.Name, err),
+				Cause: fmt.Sprintf("Failed to create ApplicationRestore: %v. Err: %v", obj.Name, err),
 			}
 		}
-		logrus.Infof("[%v] Created ApplicationBackupRestore: %v", app.Key, applicationRestore.Name)
+		logrus.Infof("[%v] Created ApplicationRestore: %v", app.Key, applicationRestore.Name)
 		return applicationRestore, nil
+	} else if obj, ok := specObj.(*stork_api.ApplicationClone); ok {
+		obj.Namespace = ns.Name
+		applicationClone, err := k8sOps.CreateApplicationClone(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create ApplicationClone: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created ApplicationClone: %v", app.Key, applicationClone.Name)
+		return applicationClone, nil
 	}
 	return nil, nil
 }
@@ -2090,10 +2112,19 @@ func (k *K8s) destroyBackupObjects(
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
 				App:   app,
-				Cause: fmt.Sprintf("Failed to delete ApplicationBackupRestore: %v. Err: %v", obj.Name, err),
+				Cause: fmt.Sprintf("Failed to delete ApplicationRestore: %v. Err: %v", obj.Name, err),
 			}
 		}
-		logrus.Infof("[%v] Destroyed ApplicationBackupRestore: %v", app.Key, obj.Name)
+		logrus.Infof("[%v] Destroyed ApplicationRestore: %v", app.Key, obj.Name)
+	} else if obj, ok := specObj.(*stork_api.ApplicationClone); ok {
+		err := k8sOps.DeleteApplicationClone(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete ApplicationClone: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed ApplicationClone: %v", app.Key, obj.Name)
 	}
 	return nil
 }
