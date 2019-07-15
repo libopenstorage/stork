@@ -2,6 +2,7 @@ package volume
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -126,6 +127,10 @@ type Driver interface {
 
 	// GetReplicaSetNodes returns the replica sets for a given volume
 	GetReplicaSetNodes(vol *Volume) ([]string, error)
+
+	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
+	// given volumes
+	ValidateVolumeSnapshotRestore(vol, snap string, timeStart time.Time) error
 }
 
 var (
