@@ -50,10 +50,6 @@ required = [
   branch = "master"
   name = "github.com/portworx/torpedo"
 
-#[[override]]
-#  revision = "107eedd85b09203cee676d121526ef011a2e6e73"
-#  name = "github.com/portworx/talisman"
-
 [[constraint]]
   name = "github.com/heptio/ark"
   branch = "master"

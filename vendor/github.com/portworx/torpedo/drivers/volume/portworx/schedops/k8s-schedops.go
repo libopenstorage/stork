@@ -244,6 +244,7 @@ func (k *k8sSchedOps) validateMountsInPods(
 	validatedMountPods := make([]string, 0)
 	nodes := node.GetNodesByName()
 	newPods := excludePods(pods, podsToExclude)
+PodLoop:
 	for _, p := range newPods {
 		pod, err := k8s.Instance().GetPodByName(p.Name, p.Namespace)
 		if err != nil && err == k8s.ErrPodsNotFound {
@@ -276,10 +277,10 @@ func (k *k8sSchedOps) validateMountsInPods(
 			output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
 			if err != nil && err != k8s.ErrPodsNotFound {
 				return validatedMountPods, err
-			} else if err == k8s.ErrPodsNotFound {
-				// if pod is not found it is probably rescheduled so delay the check
-				logrus.Warnf("Failed to execute command in pod, %s not found. probably it got rescheduled", pod.Name)
-				continue
+			} else if err != nil && (err == k8s.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
+				// if pod is not found or in completed state so delay the check and move to next pod
+				logrus.Warnf("Failed to execute command in pod. Cause %v", err)
+				continue PodLoop
 			}
 			mounts := strings.Split(output, "\n")
 			pxMountFound := false
