@@ -47,6 +47,8 @@ type ScheduleOptions struct {
 	AppKeys []string
 	// Nodes restricts the applications to get scheduled only on these nodes (Optional)
 	Nodes []node.Node
+	// StorageProvisioner identifies what storage provider should be used
+	StorageProvisioner string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -73,6 +75,9 @@ type Driver interface {
 
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error
+
+	// UpdateTasksID updates task IDs in the given context
+	UpdateTasksID(*Context, string) error
 
 	// Destroy removes a application. It does not delete the volumes of the task.
 	Destroy(*Context, map[string]bool) error
@@ -104,20 +109,26 @@ type Driver interface {
 	// Describe generates a bundle that can be used by support - logs, cores, states, etc
 	Describe(*Context) (string, error)
 
-	// Scale the current applications using the new scales from the GetScaleFactorMap.
+	// ScaleApplication scales the current applications using the new scales from the GetScaleFactorMap.
 	ScaleApplication(*Context, map[string]int32) error
 
-	// Get a map of current applications to their new scales, based on "factor"
+	// GetScaleFactorMap gets a map of current applications to their new scales, based on "factor"
 	GetScaleFactorMap(*Context) (map[string]int32, error)
 
-	// Stop scheduler service on the given node
+	// StopSchedOnNode stops scheduler service on the given node
 	StopSchedOnNode(n node.Node) error
 
-	// Start scheduler service on the given node
+	// StartSchedOnNode starts scheduler service on the given node
 	StartSchedOnNode(n node.Node) error
+
+	// RefreshNodeRegistry refreshes node registry
+	RefreshNodeRegistry() error
 
 	// RescanSpecs specified in specDir
 	RescanSpecs(specDir string) error
+
+	// PrepareNodeToDecommission prepares a given node for decommissioning
+	PrepareNodeToDecommission(n node.Node, provisioner string) error
 
 	// IsScalable check if a given spec is scalable or not
 	IsScalable(spec interface{}) bool
