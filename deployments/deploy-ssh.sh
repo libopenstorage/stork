@@ -52,6 +52,11 @@ if [ -z "${TORPEDO_IMG}" ]; then
     echo "Using default torpedo image: ${TORPEDO_IMG}"
 fi
 
+if [ -n "${TIMEOUT}" ]; then
+    TIMEOUT="720h0m0s"
+    echo "Using default timeout of ${TIMEOUT}"
+fi
+
 kubectl delete pod torpedo
 state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
 timeout=0
@@ -184,6 +189,7 @@ spec:
     image: ${TORPEDO_IMG}
     command: [ "ginkgo" ]
     args: [ "--trace",
+            "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--slowSpecThreshold", "600",
             "$VERBOSE",
@@ -201,8 +207,8 @@ spec:
             "--app-list", "$APP_LIST",
             "--node-driver", "ssh",
             "--scale-factor", "$SCALE_FACTOR",
-      			"--minimun-runtime-mins", "$MIN_RUN_TIME",
-		      	"--chaos-level", "$CHAOS_LEVEL",
+            "--minimun-runtime-mins", "$MIN_RUN_TIME",
+            "--chaos-level", "$CHAOS_LEVEL",
             "--provisioner", "$PROVISIONER",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
