@@ -106,6 +106,7 @@ func TestMain(t *testing.T) {
 		t.Run("Snapshot", testSnapshot)
 		t.Run("CmdExecutor", asyncPodCommandTest)
 		t.Run("Migration", testMigration)
+		t.Run("ApplicationClone", testApplicationClone)
 		t.Skip("Skipping cluster domain tests")
 	}
 
@@ -429,6 +430,27 @@ func setMockTime(t *time.Time) error {
 
 	time.Sleep(configMapSyncWaitTime)
 	return nil
+}
+
+func createApp(t *testing.T, testID string) *scheduler.Context {
+
+	ctxs, err := schedulerDriver.Schedule(testID,
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should only have one volume")
+
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+	return ctxs[0]
 }
 
 func init() {
