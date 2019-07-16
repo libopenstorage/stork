@@ -111,6 +111,20 @@ func (a *ApplicationCloneController) setDefaults(clone *stork_api.ApplicationClo
 	}
 }
 
+// Make sure the source namespaces exists and create the destination
+// namespace if it doesn't exist
+func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.ApplicationClone) error {
+	_, err := k8s.Instance().GetNamespace(clone.Spec.SourceNamespace)
+	if err != nil {
+		return fmt.Errorf("error getting source namespace %v: %v", clone.Spec.SourceNamespace, err)
+	}
+	_, err = k8s.Instance().CreateNamespace(clone.Spec.DestinationNamespace, nil)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("error creating destination namespace %v: %v", clone.Spec.DestinationNamespace, err)
+	}
+	return nil
+}
+
 // Handle updates for ApplicationClone objects
 func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
@@ -139,10 +153,8 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 		a.setDefaults(clone)
 		switch clone.Status.Stage {
 		case stork_api.ApplicationCloneStageInitial:
-			// Make sure the source namespaces exist
-			_, err := k8s.Instance().GetNamespace(clone.Spec.SourceNamespace)
+			err = a.verifyNamespaces(clone)
 			if err != nil {
-				err = fmt.Errorf("error getting namespace %v: %v", clone.Spec.SourceNamespace, err)
 				log.ApplicationCloneLog(clone).Errorf(err.Error())
 				a.Recorder.Event(clone,
 					v1.EventTypeWarning,
