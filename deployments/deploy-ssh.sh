@@ -52,7 +52,7 @@ if [ -z "${TORPEDO_IMG}" ]; then
     echo "Using default torpedo image: ${TORPEDO_IMG}"
 fi
 
-if [ -n "${TIMEOUT}" ]; then
+if [ -z "${TIMEOUT}" ]; then
     TIMEOUT="720h0m0s"
     echo "Using default timeout of ${TIMEOUT}"
 fi
