@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -50,26 +51,26 @@ const (
 )
 
 const (
-	statefulSetValidateTimeout   = 20 * time.Minute
-	k8sNodeReadyTimeout          = 5 * time.Minute
-	volDirCleanupTimeout         = 5 * time.Minute
-	k8sObjectCreateTimeout       = 2 * time.Minute
-	k8sDestroyTimeout            = 2 * time.Minute
+	statefulSetValidateTimeout = 20 * time.Minute
+	k8sNodeReadyTimeout        = 5 * time.Minute
+	volDirCleanupTimeout       = 5 * time.Minute
+	k8sObjectCreateTimeout     = 2 * time.Minute
+	k8sDestroyTimeout          = 2 * time.Minute
 	//FindFilesOnWorkerTimeout timeout for find files on worker
-	FindFilesOnWorkerTimeout     = 1 * time.Minute
-	deleteTasksWaitTimeout       = 3 * time.Minute
+	FindFilesOnWorkerTimeout = 1 * time.Minute
+	deleteTasksWaitTimeout   = 3 * time.Minute
 	//DefaultRetryInterval  Default retry interval
-	DefaultRetryInterval         = 10 * time.Second
+	DefaultRetryInterval = 10 * time.Second
 	//DefaultTimeout default timeout
 	DefaultTimeout               = 2 * time.Minute
 	resizeSupportedAnnotationKey = "torpedo/resize-supported"
 )
 
 const (
-	//PortworxStorage portworx storage name	
+	//PortworxStorage portworx storage name
 	PortworxStorage = "portworx"
 	//CsiStorage csi storage name
-	CsiStorage      = "csi"
+	CsiStorage = "csi"
 )
 
 var provisioners = map[string]string{
@@ -469,6 +470,20 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		specObjects = append(specObjects, objects...)
 	}
 	ctx.App.SpecList = specObjects
+	return nil
+}
+
+// UpdateTasksID updates task IDs in the given context
+func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
+	ctx.UID = id
+
+	for _, spec := range ctx.App.SpecList {
+		metadata, err := meta.Accessor(spec)
+		if err != nil {
+			return err
+		}
+		metadata.SetNamespace(id)
+	}
 	return nil
 }
 
@@ -1939,7 +1954,6 @@ func (k *K8s) createMigrationObjects(
 
 	return nil, nil
 }
-
 
 func (k *K8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	k8sOps := k8s_ops.Instance()

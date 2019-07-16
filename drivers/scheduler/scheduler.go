@@ -76,6 +76,9 @@ type Driver interface {
 	// AddTasks adds tasks to an existing context
 	AddTasks(*Context, ScheduleOptions) error
 
+	// UpdateTasksID updates task IDs in the given context
+	UpdateTasksID(*Context, string) error
+
 	// Destroy removes a application. It does not delete the volumes of the task.
 	Destroy(*Context, map[string]bool) error
 
