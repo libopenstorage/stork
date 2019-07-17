@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -429,22 +428,43 @@ func (a *ApplicationCloneController) runPostExecRule(clone *stork_api.Applicatio
 func (a *ApplicationCloneController) prepareResources(
 	clone *stork_api.ApplicationClone,
 	objects []runtime.Unstructured,
-) error {
+) ([]runtime.Unstructured, error) {
+	tempObjects := make([]runtime.Unstructured, 0)
+	pvNameMappings, err := a.getPVNameMappings(clone)
+	if err != nil {
+		return nil, err
+	}
+
+	namespaceMapping := make(map[string]string)
+	namespaceMapping[clone.Spec.SourceNamespace] = clone.Spec.DestinationNamespace
+
 	for _, o := range objects {
+		if !a.resourceToBeCloned(o) {
+			continue
+		}
+
 		metadata, err := meta.Accessor(o)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		switch o.GetObjectKind().GroupVersionKind().Kind {
 		case "PersistentVolume":
 			err := a.preparePVResource(o)
 			if err != nil {
-				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
+				return nil, fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		}
+		err = a.ResourceCollector.PrepareResourceForApply(
+			o,
+			namespaceMapping,
+			pvNameMappings)
+		if err != nil {
+			return nil, err
+		}
+		tempObjects = append(tempObjects, o)
 	}
-	return nil
+	return tempObjects, nil
 }
 
 func (a *ApplicationCloneController) preparePVResource(
@@ -529,9 +549,17 @@ func (a *ApplicationCloneController) applyResources(
 	clone *stork_api.ApplicationClone,
 	objects []runtime.Unstructured,
 ) error {
-	pvNameMappings, err := a.getPVNameMappings(clone)
-	if err != nil {
-		return err
+	namespaceMapping := make(map[string]string)
+	namespaceMapping[clone.Spec.SourceNamespace] = clone.Spec.DestinationNamespace
+	// First delete the existing objects if they exist and replace policy is set
+	// to Delete
+	if clone.Spec.ReplacePolicy == stork_api.ApplicationCloneReplacePolicyDelete {
+		err := a.ResourceCollector.DeleteResources(
+			a.dynamicInterface,
+			objects)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, o := range objects {
@@ -544,20 +572,12 @@ func (a *ApplicationCloneController) applyResources(
 			return err
 		}
 
-		if !a.resourceToBeCloned(o) {
-			continue
-		}
-
-		namespaceMapping := make(map[string]string)
-		namespaceMapping[clone.Spec.SourceNamespace] = clone.Spec.DestinationNamespace
 		log.ApplicationCloneLog(clone).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 		retained := false
 		err = a.ResourceCollector.ApplyResource(
 			a.dynamicInterface,
-			o.(*unstructured.Unstructured), pvNameMappings,
-			namespaceMapping,
-			clone.Spec.ReplacePolicy == stork_api.ApplicationCloneReplacePolicyDelete && metadata.GetNamespace() != "")
-		if err != nil && (errors.IsAlreadyExists(err)) {
+			o)
+		if err != nil && errors.IsAlreadyExists(err) {
 			switch clone.Spec.ReplacePolicy {
 			case stork_api.ApplicationCloneReplacePolicyDelete:
 				log.ApplicationCloneLog(clone).Errorf("Error deleting %v %v during clone: %v", objectType.GetKind(), metadata.GetName(), err)
@@ -612,7 +632,7 @@ func (a *ApplicationCloneController) cloneResources(
 	}
 
 	// Do any additional preparation for the resources if required
-	if err = a.prepareResources(clone, allObjects); err != nil {
+	if allObjects, err = a.prepareResources(clone, allObjects); err != nil {
 		a.Recorder.Event(clone,
 			v1.EventTypeWarning,
 			string(stork_api.ApplicationCloneStatusFailed),

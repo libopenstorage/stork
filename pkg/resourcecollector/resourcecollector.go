@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/heptio/ark/pkg/util/collections"
@@ -29,6 +30,9 @@ import (
 const (
 	// Annotation to use when the resource shouldn't be collected
 	skipResourceAnnotation = "stork.libopenstorage.org/skipresource"
+
+	deletedMaxRetries    = 12
+	deletedRetryInterval = 10 * time.Second
 )
 
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
@@ -278,7 +282,10 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 	return nil
 }
 
-func (r *ResourceCollector) prepareResourceForApply(
+// PrepareResourceForApply prepares the resource for apply including update
+// namespace and any PV name updates. Should be called before DeleteResources
+// and ApplyResource
+func (r *ResourceCollector) PrepareResourceForApply(
 	object runtime.Unstructured,
 	namespaceMappings map[string]string,
 	pvNameMappings map[string]string,
@@ -345,35 +352,11 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 func (r *ResourceCollector) ApplyResource(
 	dynamicInterface dynamic.Interface,
 	object runtime.Unstructured,
-	pvNameMappings map[string]string,
-	namespaceMappings map[string]string,
-	deleteIfPresent bool,
 ) error {
-	metadata, err := meta.Accessor(object)
+	dynamicClient, err := r.getDynamicClient(dynamicInterface, object)
 	if err != nil {
 		return err
 	}
-	objectType, err := meta.TypeAccessor(object)
-	if err != nil {
-		return err
-	}
-	resource := &metav1.APIResource{
-		Name:       strings.ToLower(objectType.GetKind()) + "s",
-		Namespaced: len(metadata.GetNamespace()) > 0,
-	}
-
-	destNamespace := ""
-	if resource.Namespaced {
-		destNamespace = namespaceMappings[metadata.GetNamespace()]
-	}
-	dynamicClient := dynamicInterface.Resource(
-		object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(destNamespace)
-
-	err = r.prepareResourceForApply(object, namespaceMappings, pvNameMappings)
-	if err != nil {
-		return err
-	}
-
 	_, err = dynamicClient.Create(object.(*unstructured.Unstructured))
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
@@ -382,13 +365,6 @@ func (r *ResourceCollector) ApplyResource(
 			} else if strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
 				err = r.updateService(object)
 				if err != nil {
-					return err
-				}
-			} else if deleteIfPresent {
-				// Delete the resource if it already exists on the destination
-				// cluster and try creating again
-				err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
-				if err != nil && apierrors.IsNotFound(err) {
 					return err
 				}
 			} else {
@@ -400,4 +376,89 @@ func (r *ResourceCollector) ApplyResource(
 	}
 
 	return err
+}
+
+// DeleteResources deletes given resources using the provided client interface
+func (r *ResourceCollector) DeleteResources(
+	dynamicInterface dynamic.Interface,
+	objects []runtime.Unstructured,
+) error {
+	// First delete all the objects
+	for _, object := range objects {
+		// Don't delete objects that support merging
+		if r.mergeSupportedForResource(object) {
+			continue
+		}
+
+		metadata, err := meta.Accessor(object)
+		if err != nil {
+			return err
+		}
+
+		dynamicClient, err := r.getDynamicClient(dynamicInterface, object)
+		if err != nil {
+			return err
+		}
+
+		// Delete the resource if it already exists on the destination
+		// cluster and try creating again
+		err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	// Then wait for them to actually be deleted
+	for _, object := range objects {
+		// Objects that support merging aren't deleted
+		if r.mergeSupportedForResource(object) {
+			continue
+		}
+
+		metadata, err := meta.Accessor(object)
+		if err != nil {
+			return err
+		}
+
+		dynamicClient, err := r.getDynamicClient(dynamicInterface, object)
+		if err != nil {
+			return err
+		}
+
+		// Wait for up to 2 minutes for the object to be deleted
+		for i := 0; i < deletedMaxRetries; i++ {
+			_, err = dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
+			if err != nil && apierrors.IsNotFound(err) {
+				break
+			}
+			logrus.Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
+			time.Sleep(deletedRetryInterval)
+		}
+	}
+	return nil
+}
+
+func (r *ResourceCollector) getDynamicClient(
+	dynamicInterface dynamic.Interface,
+	object runtime.Unstructured,
+) (dynamic.ResourceInterface, error) {
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return nil, err
+	}
+	objectType, err := meta.TypeAccessor(object)
+	if err != nil {
+		return nil, err
+	}
+	resource := &metav1.APIResource{
+		Name:       strings.ToLower(objectType.GetKind()) + "s",
+		Namespaced: len(metadata.GetNamespace()) > 0,
+	}
+
+	destNamespace := ""
+	if resource.Namespaced {
+		destNamespace = metadata.GetNamespace()
+	}
+	return dynamicInterface.Resource(
+		object.GetObjectKind().GroupVersionKind().GroupVersion().WithResource(resource.Name)).Namespace(destNamespace), nil
 }
