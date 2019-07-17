@@ -128,17 +128,22 @@ var _ = Describe("{chaosTest}", func() {
 				// Run once
 				KillANodeAndValidate(storageNodes)
 			} else {
+				// Run once till timer gets triggered
+				KillANodeAndValidate(storageNodes)
+
 				// Run repeatedly
 				ticker := time.NewTicker(time.Duration(frequency) * time.Minute)
-				go func() {
-					// Catch any assertion failures inside go routine
-					defer GinkgoRecover()
-					for range ticker.C {
+				stopChannel := time.After(time.Duration(Inst().MinRunTimeMins) * time.Minute)
+			L:
+				for {
+					select {
+					case <-ticker.C:
 						KillANodeAndValidate(storageNodes)
+					case <-stopChannel:
+						ticker.Stop()
+						break L
 					}
-				}()
-				time.Sleep(time.Duration(Inst().MinRunTimeMins) * time.Minute)
-				ticker.Stop()
+				}
 			}
 		})
 	})
