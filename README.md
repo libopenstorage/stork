@@ -61,8 +61,6 @@ To submit an external storage provider, please submit a PR with the output of th
 
 ## Usage
 
->**Note:**<br/> Torpedo is in alpha stage at this moment and under active development. Currently it only supports Kubernetes as the container orchestrator.
-
 ### Build
 
 See [How to build](HOW_TO_BUILD.md).

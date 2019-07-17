@@ -74,7 +74,6 @@ func IsDevMode() bool {
 
 // NewClient creates a new GCE operations client
 func NewClient() (cloudops.Ops, error) {
-
 	var i = new(instance)
 	var err error
 	if metadata.OnGCE() {

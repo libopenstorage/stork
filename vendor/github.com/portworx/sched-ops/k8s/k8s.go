@@ -927,7 +927,8 @@ func (k *k8sOps) IsNodeReady(name string) error {
 			v1.NodeConditionType(v1.NodeMemoryPressure),
 			v1.NodeConditionType(v1.NodeDiskPressure),
 			v1.NodeConditionType(v1.NodeNetworkUnavailable):
-			if condition.Status != v1.ConditionStatus(v1.ConditionFalse) {
+			// only checks if condition is true, ignoring condition Unknown
+			if condition.Status == v1.ConditionStatus(v1.ConditionTrue) {
 				return fmt.Errorf("node: %v is not ready as condition: %v (%v) is %v. Reason: %v",
 					name, condition.Type, condition.Message, condition.Status, condition.Reason)
 			}

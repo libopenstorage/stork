@@ -56,7 +56,9 @@ const (
 	validateClusterStartTimeout      = 2 * time.Minute
 	validateNodeStartTimeout         = 3 * time.Minute
 	validatePXStartTimeout           = 5 * time.Minute
-	validateNodeStopTimeout          = 2 * time.Minute
+	validateVolumeAttachedTimeout    = 30 * time.Second
+	validateVolumeAttachedInterval   = 5 * time.Second
+	validateNodeStopTimeout          = 5 * time.Minute
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
 	startDriverTimeout               = 2 * time.Minute
@@ -641,7 +643,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	t := func() (interface{}, bool, error) {
 		vols, err := d.getVolDriver().Inspect([]string{name})
 		if err != nil {
-			logrus.Warnf("failed to inspect volume: %s due to: %v", name, err)
+			logrus.Warnf("Failed to inspect volume: %s due to: %v", name, err)
 			return nil, true, err
 		}
 		if len(vols) != 1 {
@@ -649,7 +651,6 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 			logrus.Warnf(err.Error())
 			return nil, true, err
 		}
-
 		return vols[0], false, nil
 	}
 
@@ -661,22 +662,36 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 		}
 	}
 
-	pxVol := v.(*api.Volume)
-	for _, n := range node.GetStorageDriverNodes() {
-		if n.VolDriverNodeID == pxVol.AttachedOn {
-			return &n, nil
+	r := func() (interface{}, bool, error) {
+		pxVol := v.(*api.Volume)
+		for _, n := range node.GetStorageDriverNodes() {
+			if n.VolDriverNodeID == pxVol.AttachedOn {
+				return &n, false, nil
+			}
+		}
+
+		// Snapshots may not be attached to a node
+		if pxVol.Source.Parent != "" {
+			return nil, false, nil
+		}
+
+		return nil, true, fmt.Errorf("Volume: %s is not attached on any node", name)
+	}
+
+	n, err := task.DoRetryWithTimeout(r, validateVolumeAttachedTimeout, validateVolumeAttachedInterval)
+	if err != nil {
+		return nil, &ErrFailedToValidateAttachment{
+			ID:    name,
+			Cause: err.Error(),
 		}
 	}
 
-	// Snapshots may not be attached to a node
-	if pxVol.Source.Parent != "" {
-		return nil, nil
+	if n != nil {
+		node := n.(*node.Node)
+		return node, nil
 	}
 
-	return nil, &ErrFailedToInspectVolume{
-		ID:    name,
-		Cause: "Volume is not attached on any node",
-	}
+	return nil, nil
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
