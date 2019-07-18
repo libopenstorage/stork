@@ -48,6 +48,7 @@ spec:
     - go
     - tool
     - test2json
+    - -t
     - /stork.test 
     - -test.v
     - -snapshot-scale-count=10
