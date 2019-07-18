@@ -109,7 +109,7 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["true"]'
             ;;
-        gke|aks)
+        gke)
             # Run torpedo on worker node, where px installation is disabled. 
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
