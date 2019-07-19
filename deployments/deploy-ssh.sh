@@ -81,7 +81,7 @@ if [ -n "${TORPEDO_SSH_KEY}" ]; then
 fi
 
 TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
-TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/mnt/testresults/\" }"
+TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 VOLUMES="${TESTRESULTS_VOLUME}"
 
