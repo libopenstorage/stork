@@ -80,7 +80,7 @@ if [ -n "${TORPEDO_SSH_KEY}" ]; then
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
 
-TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 VOLUMES="${TESTRESULTS_VOLUME}"
