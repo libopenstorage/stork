@@ -319,6 +319,9 @@ func CollectSupport() {
 				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
 				time.Now().Format(time.RFC3339))
 			for _, n := range nodes {
+				if !n.IsStorageDriverInstalled {
+					continue
+				}
 				logrus.Infof("saving journal output on %s", n.Name)
 				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
@@ -340,6 +343,9 @@ func PerformSystemCheck() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
+				if !n.IsStorageDriverInstalled {
+					continue
+				}
 				logrus.Infof("looking for core files on node %s", n.Name)
 				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
 					Timeout:         2 * time.Minute,
