@@ -26,6 +26,7 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
