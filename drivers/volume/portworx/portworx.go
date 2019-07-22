@@ -31,6 +31,7 @@ import (
 	osecrets "github.com/libopenstorage/secrets/k8s"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	applicationcontrollers "github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
@@ -2266,6 +2267,26 @@ func (p *portworx) getReplicasNotInCurrent(v *api.Volume) []string {
 	return replicasNotInCurrent
 }
 
+func (p *portworx) addApplicationBackupCloudsnapInfo(
+	request *api.CloudBackupCreateRequest,
+	backup *stork_crd.ApplicationBackup,
+) {
+	if backup.Annotations != nil {
+		if scheduleName, exists := backup.Annotations[applicationcontrollers.ApplicationBackupScheduleNameAnnotation]; exists {
+			if policyType, exists := backup.Annotations[applicationcontrollers.ApplicationBackupSchedulePolicyTypeAnnotation]; exists {
+				request.Labels[cloudBackupExternalManagerLabel] = "StorkApplicationBackup-" + scheduleName + "-" + backup.Namespace + "-" + policyType
+				// Use full backups for weekly and monthly snaps
+				if policyType == string(stork_crd.SchedulePolicyTypeWeekly) ||
+					policyType == string(stork_crd.SchedulePolicyTypeMonthly) {
+					request.Full = true
+				}
+				return
+			}
+		}
+	}
+	request.Labels[cloudBackupExternalManagerLabel] = "StorkApplicationBackupManual"
+}
+
 func (p *portworx) StartBackup(backup *stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error) {
 	volDriver, err := p.getUserVolDriver(backup.Annotations)
 	if err != nil {
@@ -2299,7 +2320,8 @@ func (p *portworx) StartBackup(backup *stork_crd.ApplicationBackup) ([]*stork_cr
 				Name:           taskID,
 			}
 			request.Labels = make(map[string]string)
-			//request.Labels[cloudBackupOwnerLabel] = "stork"
+			request.Labels[cloudBackupOwnerLabel] = "stork"
+			p.addApplicationBackupCloudsnapInfo(request, backup)
 
 			_, err = volDriver.CloudBackupCreate(request)
 			if err != nil {
