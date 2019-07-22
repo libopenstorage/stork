@@ -95,6 +95,9 @@ func (s *SSH) Init() error {
 	}
 
 	for _, n := range nodes {
+		if !n.IsStorageDriverInstalled {
+			continue
+		}
 		if err := s.TestConnection(n, node.ConnectionOpts{
 			Timeout:         1 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
