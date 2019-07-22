@@ -94,15 +94,16 @@ var _ = Describe("{chaosTest}", func() {
 	It("keeps killing storage nodes", func() {
 
 		var storageNodes []node.Node
-		Step("Ensure all nodes are storage nodes", func() {
+		var contexts []*scheduler.Context
+		var err error
 
-			totalNodeCount, err := Inst().N.GetASGClusterSize()
-			Expect(err).NotTo(HaveOccurred())
+		storageNodes, err = getStorageNodes()
+		Expect(err).NotTo(HaveOccurred())
 
-			storageNodes, err = getStorageNodes()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(totalNodeCount).Should(Equal(int64(len(storageNodes))))
-
+		Step("Ensure apps are deployed", func() {
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("asgchaos-%d", i))...)
+			}
 		})
 
 		Step("Randomly kill one storage node", func() {
@@ -127,9 +128,20 @@ var _ = Describe("{chaosTest}", func() {
 			if Inst().MinRunTimeMins == 0 {
 				// Run once
 				KillANodeAndValidate(storageNodes)
+
+				// Validate applications and tear down
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				ValidateAndDestroy(contexts, opts)
 			} else {
 				// Run once till timer gets triggered
 				KillANodeAndValidate(storageNodes)
+
+				Step("validate applications", func() {
+					for _, ctx := range contexts {
+						ValidateContext(ctx)
+					}
+				})
 
 				// Run repeatedly
 				ticker := time.NewTicker(time.Duration(frequency) * time.Minute)
@@ -139,8 +151,23 @@ var _ = Describe("{chaosTest}", func() {
 					select {
 					case <-ticker.C:
 						KillANodeAndValidate(storageNodes)
+
+						Step("validate applications", func() {
+							for _, ctx := range contexts {
+								ValidateContext(ctx)
+							}
+						})
 					case <-stopChannel:
 						ticker.Stop()
+						// ticker may expire/time out in between, apps may not be
+						// in correct condition to be validated. Just tear them down.
+						opts := make(map[string]bool)
+						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+						Step("destroy apps", func() {
+							for _, ctx := range contexts {
+								TearDownContext(ctx, opts)
+							}
+						})
 						break L
 					}
 				}
