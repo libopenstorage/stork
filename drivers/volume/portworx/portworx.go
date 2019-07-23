@@ -1391,21 +1391,22 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol, snap string, timeStart tim
 	// get volume and snap info
 	pvcVol, err := d.volDriver.Inspect([]string{vol})
 	if err != nil || len(pvcVol) == 0 {
-		return err
+		return fmt.Errorf("inspect failed for %v: %v", vol, err)
 	}
 	snapVol, err := d.volDriver.Inspect([]string{snap})
 	if err != nil || len(snapVol) == 0 {
-		return err
+		return fmt.Errorf("inspect failed for %v: %v", snap, err)
 	}
 
 	// form alert msg for snapshot restore
 	grepMsg := "Volume " + pvcVol[0].GetLocator().GetName() +
-		" (" + vol + ") restored from snapshot " + snapVol[0].GetLocator().GetName() +
+		" (" + pvcVol[0].GetId() + ") restored from snapshot " + snapVol[0].GetLocator().GetName() +
 		" (" + snap + ")"
 	isSuccess := false
 	for _, alert := range alerts.GetAlert() {
 		if alert.GetMessage() == grepMsg {
 			isSuccess = true
+			break
 		}
 		logrus.Debugf("Alert received %v", alert.GetMessage())
 	}
