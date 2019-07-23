@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/spf13/cobra"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/apis/core/validation"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/printers"
@@ -137,8 +138,20 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for clusterpair name"))
 				return
 			}
+			clusterPairName := args[0]
 			config, err := cmdFactory.RawConfig()
 			if err != nil {
+				util.CheckErr(err)
+				return
+			}
+
+			if errors := validation.NameIsDNSSubdomain(clusterPairName, false); len(errors) != 0 {
+				err := fmt.Errorf("the Name \"%v\" is not valid: %v", clusterPairName, errors)
+				util.CheckErr(err)
+				return
+			}
+			if errors := validation.ValidateNamespaceName(cmdFactory.GetNamespace(), false); len(errors) != 0 {
+				err := fmt.Errorf("the Namespace \"%v\" is not valid: %v", cmdFactory.GetNamespace(), errors)
 				util.CheckErr(err)
 				return
 			}
@@ -220,7 +233,7 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 						APIVersion: storkv1.SchemeGroupVersion.String(),
 					},
 					ObjectMeta: meta.ObjectMeta{
-						Name:      args[0],
+						Name:      clusterPairName,
 						Namespace: cmdFactory.GetNamespace(),
 					},
 
