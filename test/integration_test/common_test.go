@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 	"time"
 
@@ -52,6 +53,8 @@ const (
 	defaultWaitTimeout       time.Duration = 5 * time.Minute
 	groupSnapshotWaitTimeout time.Duration = 15 * time.Minute
 	defaultWaitInterval      time.Duration = 10 * time.Second
+
+	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
 )
 
 var nodeDriver node.Driver
@@ -98,9 +101,12 @@ func TestMain(t *testing.T) {
 	}
 	// we can either run cluster domain tests or the other tests
 	// the underlying setup of clusters is different
-	if os.Getenv("ENABLE_CLUSTER_DOMAIN_TESTS") != "" {
+	enabled, err := strconv.ParseBool(os.Getenv(enableClusterDomainTests))
+	if enabled && err == nil {
+		logrus.Info("Running cluster domain tests")
 		t.Run("ClusterDomains", testClusterDomains)
 	} else {
+		logrus.Info("NOT Running cluster domain tests")
 		t.Run("Extender", testExtender)
 		t.Run("HealthMonitor", testHealthMonitor)
 		t.Run("Snapshot", testSnapshot)

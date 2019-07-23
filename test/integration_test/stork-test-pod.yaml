@@ -65,6 +65,8 @@ spec:
       value: username
     - name: TORPEDO_SSH_PASSWORD
       value: password
+    - name: ENABLE_CLUSTER_DOMAIN_TESTS
+      value: enable_cluster_domain 
   hostNetwork: false
   hostPID: false
   volumes:
