@@ -3,6 +3,8 @@ package portworx
 import (
 	"fmt"
 	"math"
+	"os"
+	"os/exec"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -955,7 +957,7 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	return nil
 }
 
-func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
+func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
 	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getPxNode(n, nil)
 		if err != nil {
@@ -977,7 +979,7 @@ func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 		matches := regexp.MustCompile(`^(\d+\.\d+\.\d+).*`).FindStringSubmatch(tag)
 		if len(matches) != 2 {
 			return nil, false, &ErrFailedToUpgradeVolumeDriver{
-				Version: fmt.Sprintf("%s:%s", image, tag),
+				Version: fmt.Sprintf("%s", tag),
 				Cause:   fmt.Sprintf("failed to parse first 3 octets of version from new version tag: %s", tag),
 			}
 		}
@@ -985,11 +987,14 @@ func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
 		pxVersion := pxNode.NodeLabels[pxVersionLabel]
 		if !strings.HasPrefix(pxVersion, matches[1]) {
 			return nil, true, &ErrFailedToUpgradeVolumeDriver{
-				Version: fmt.Sprintf("%s:%s", image, tag),
+				Version: fmt.Sprintf("%s", tag),
 				Cause: fmt.Sprintf("version on node %s is still %s. It was expected to begin with: %s",
 					n.VolDriverNodeID, pxVersion, matches[1]),
 			}
 		}
+
+		logrus.Infof("version on node %s is %s. Expected version is %s", n.VolDriverNodeID, pxVersion, matches[1])
+
 		return nil, false, nil
 	}
 
@@ -1238,47 +1243,57 @@ func (d *portworx) StartDriver(n node.Node) error {
 		}})
 }
 
-func (d *portworx) UpgradeDriver(images []torpedovolume.Image) error {
-	if len(images) == 0 {
-		return fmt.Errorf("no version supplied for upgrading portworx")
-	}
+func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) error {
+	upgradeFileName := "/upgrade.sh"
 
-	partsOci := make([]string, 2)
-	partsPx := make([]string, 2)
+	if endpointURL == "" {
+		return fmt.Errorf("no link supplied for upgrading portworx")
+	}
+	logrus.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
 
-	for _, image := range images {
-		switch image.Type {
-		case "", "oci":
-			partsOci = strings.Split(image.Version, ":")
-		case "px":
-			partsPx = strings.Split(image.Version, ":")
-		}
+	// Getting upgrade script
+	fullEndpointURL := fmt.Sprintf("%s/%s/upgrade", endpointURL, endpointVersion)
+	cmd := exec.Command("wget", "-O", upgradeFileName, fullEndpointURL)
+	output, err := cmd.Output()
+	logrus.Infof("%s", output)
+	if err != nil {
+		return fmt.Errorf("error on downloading endpoint: %+v", err)
 	}
-	version := partsOci[1]
-	if len(partsPx) > 0 {
-		version = partsPx[1]
+	// Check if downloaded file exists
+	file, err := os.Stat(upgradeFileName)
+	if err != nil {
+		return fmt.Errorf("file %s doesn't exist", upgradeFileName)
 	}
-	logrus.Infof("upgrading portworx to %s", version)
+	logrus.Infof("file %s exists", upgradeFileName)
 
-	ociImage := partsOci[0]
-	ociTag := partsOci[1]
-	pxImage := partsPx[0]
-	pxTag := partsPx[1]
-	if err := d.schedOps.UpgradePortworx(ociImage, ociTag, pxImage, pxTag); err != nil {
-		return &ErrFailedToUpgradeVolumeDriver{
-			Version: version,
-			Cause:   err.Error(),
-		}
+	// Check if downloaded file is not empty
+	fileSize := file.Size()
+	if fileSize == 0 {
+		return fmt.Errorf("file %s is empty", upgradeFileName)
 	}
+	logrus.Infof("file %s is not empty", upgradeFileName)
+
+	// Change permission on file to be able to execute
+	cmd = exec.Command("chmod", "+x", upgradeFileName)
+	if err = cmd.Run(); err != nil {
+		return fmt.Errorf("error on changing permission for %s file", upgradeFileName)
+	}
+	logrus.Infof("permission changed on file %s", upgradeFileName)
+
+	// Run upgrade script
+	logrus.Infof("executing file %s", upgradeFileName)
+	cmd = exec.Command("/bin/sh", upgradeFileName, "-f")
+	output, err = cmd.Output()
+
+	// Print and replace all '\n' with new lines
+	logrus.Infof("%s", strings.Replace(string(output[:]), `\n`, "\n", -1))
+	if err != nil {
+		return fmt.Errorf("error: %+v", err)
+	}
+	logrus.Infof("Portworx cluster upgraded succesfully")
 
 	for _, n := range node.GetStorageDriverNodes() {
-		image := ociImage
-		tag := ociTag
-		if len(pxImage) > 0 && len(pxTag) > 0 {
-			image = pxImage
-			tag = pxTag
-		}
-		if err := d.WaitForUpgrade(n, image, tag); err != nil {
+		if err := d.WaitForUpgrade(n, endpointVersion); err != nil {
 			return err
 		}
 	}
