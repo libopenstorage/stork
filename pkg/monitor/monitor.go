@@ -176,8 +176,7 @@ func (m *Monitor) driverMonitor() {
 							continue
 						}
 
-						if m.isSameNode(pod.Spec.NodeName, node) &&
-							(pod.Status.Phase == v1.PodRunning || pod.Status.Phase == v1.PodFailed) {
+						if m.isSameNode(pod.Spec.NodeName, node) {
 							storklog.PodLog(&pod).Infof("Deleting Pod from Node: %v", pod.Spec.NodeName)
 							err = k8s.Instance().DeletePods([]v1.Pod{pod}, true)
 							if err != nil {
