@@ -528,6 +528,10 @@ func (d *dcos) IsScalable(spec interface{}) bool {
 	return false
 }
 
+func (d *dcos) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
+	return fmt.Errorf("not implemenented")
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

@@ -353,16 +353,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6842b4a6a6ec28ed353323ea6cd10c16ed04ac8e8d3d2049069e60448c156412"
-  name = "github.com/libopenstorage/gossip"
-  packages = ["types"]
-  pruneopts = "UT"
-  revision = "c26073a01952b2ed00aba97a7768645c19a06011"
-
-  
-[[projects]]
-  branch = "master"
-  digest = "1:fd50c39a5dfbb559f94d260f2c46034e2a23ffad8fad1f1aff0dcf770aeea3b9"
+  digest = "1:451d7ffcf4bc223d51ae800795a3f68176418bbe378efc5414270739c0891d79"
   name = "github.com/libopenstorage/cloudops"
   packages = [
     ".",
@@ -370,10 +361,12 @@
     "gce",
     "unsupported",
   ]
+  pruneopts = "UT"
+  revision = "1f7cce4009f2d9c295777ea65a3202b1e6bd39e5"
 
 [[projects]]
   branch = "master"
-  digest = "1:99cd39df3fc3d9b27fd5a150935e36141fbcb7045d59ff1ca0e2027c44aa599d"
+  digest = "1:6842b4a6a6ec28ed353323ea6cd10c16ed04ac8e8d3d2049069e60448c156412"
   name = "github.com/libopenstorage/gossip"
   packages = ["types"]
   pruneopts = "UT"
@@ -405,7 +398,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:3000d4cca0db7c3fafa0f0481be04f39fd5e9468c18dafb468b5d4a337812ab3"
+  digest = "1:9f1cc804d06374774c6da6494dee794c62d5d2ea8ff648d5bcf36714503d22bb"
   name = "github.com/libopenstorage/stork"
   packages = [
     "pkg/apis/stork",
@@ -415,7 +408,7 @@
     "pkg/client/clientset/versioned/typed/stork/v1alpha1",
   ]
   pruneopts = "UT"
-  revision = "603f5f576fb2a6b84f0c9afd1399802c538f6cf4"
+  revision = "00d9152fefbf43ec5fe7988e902a31b38dff103f"
 
 [[projects]]
   digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"

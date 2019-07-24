@@ -41,8 +41,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&MigrationScheduleList{},
 		&GroupVolumeSnapshot{},
 		&GroupVolumeSnapshotList{},
-		&StorageCluster{},
-		&StorageClusterList{},
 		&SchedulePolicy{},
 		&SchedulePolicyList{},
 		&VolumeSnapshotSchedule{},
