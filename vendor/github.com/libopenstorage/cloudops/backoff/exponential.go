@@ -140,12 +140,12 @@ func (e *exponentialBackoff) GetClusterSizeForInstance(instanceID string) (int64
 
 }
 
-func (e *exponentialBackoff) DeleteInstance(instanceID string) error {
+func (e *exponentialBackoff) DeleteInstance(instanceID string, zone string, timeout time.Duration) error {
 	var (
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		origErr = e.cloudOps.DeleteInstance(instanceID)
+		origErr = e.cloudOps.DeleteInstance(instanceID, zone, timeout)
 		msg := fmt.Sprintf("Failed to delete instance: %v.", instanceID)
 		return e.handleError(origErr, msg)
 	}

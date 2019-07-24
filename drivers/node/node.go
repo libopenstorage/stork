@@ -35,6 +35,8 @@ type Node struct {
 	Addresses                []string
 	UsableAddr               string
 	Type                     Type
+	Zone                     string
+	Region                   string
 	IsStorageDriverInstalled bool
 }
 
@@ -89,7 +91,7 @@ type Driver interface {
 	Init() error
 
 	// DeleteNode deletes the given node
-	DeleteNode(node Node) error
+	DeleteNode(node Node, timeout time.Duration) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -244,7 +246,7 @@ func (d *notSupportedDriver) GetASGClusterSize() (int64, error) {
 	}
 }
 
-func (d *notSupportedDriver) DeleteNode(node Node) error {
+func (d *notSupportedDriver) DeleteNode(node Node, timeout time.Duration) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeleteNode()",

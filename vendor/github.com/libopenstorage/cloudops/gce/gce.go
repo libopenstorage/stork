@@ -74,6 +74,7 @@ func IsDevMode() bool {
 
 // NewClient creates a new GCE operations client
 func NewClient() (cloudops.Ops, error) {
+
 	var i = new(instance)
 	var err error
 	if metadata.OnGCE() {
@@ -381,127 +382,38 @@ func (s *gceOps) DeleteFrom(id, _ string) error {
 	return s.Delete(id)
 }
 
-func (s *gceOps) DeleteInstance(instanceID string) error {
+func (s *gceOps) DeleteInstance(instanceID string, zone string, timeout time.Duration) error {
 
-	if s.inst.clusterName == "" || s.inst.clusterLocation == "" {
-		// We delete an instance only if its part of GKE. Not GCE.
-		return fmt.Errorf("running on non-GKE environment. Not deleting instance [%v]", instanceID)
-	}
-
-	// Instance to delete can be in different zone than s.inst
-	// Hence not using s.InspectInstance() API.
-	zone, err := s.getInstanceZone(instanceID)
+	operation, err := s.computeService.Instances.Delete(s.inst.project, zone, instanceID).Do()
 	if err != nil {
-		return fmt.Errorf("Zone of instance:[%v] is [%v]. Error:[%v]", instanceID, zone, err)
+		return fmt.Errorf("Error occured while deleting instance:[%v] in zone [%s]. Error:[%v]", instanceID, zone, err)
 	}
 
-	_, err = s.computeService.Instances.Delete(s.inst.project, zone, instanceID).Do()
-	if err != nil {
-		return fmt.Errorf("Zone of instance:[%v] is [%v]. Error:[%v]", instanceID, zone, err)
-	}
-	return nil
-}
+	f := func() (interface{}, bool, error) {
 
-func (s *gceOps) getAllNodePools() ([]*container.NodePool, error) {
-
-	var nodePoolList []*container.NodePool
-
-	zonalCluster, err := isZonalCluster(s.inst.clusterLocation)
-	if err != nil {
-		return nodePoolList, err
-	}
-
-	var nodePoolListResponse *container.ListNodePoolsResponse
-	if zonalCluster {
-		nodePoolListResponse, err = s.containerService.Projects.Zones.Clusters.NodePools.List(
-			s.inst.project, s.inst.clusterLocation, s.inst.clusterName).Do()
-	} else {
-		nodePoolPath := fmt.Sprintf("projects/%s/locations/%s/clusters/%s",
-			s.inst.project, s.inst.clusterLocation, s.inst.clusterName)
-		nodePoolListResponse, err = s.containerService.Projects.Locations.Clusters.NodePools.List(nodePoolPath).Do()
-	}
-
-	if err != nil {
-		return nodePoolList, fmt.Errorf("Error while getting list of node pools in cluster:[%v]. Error:[%v]", s.inst.clusterName, err)
-	}
-
-	return nodePoolListResponse.NodePools, nil
-}
-
-// Use getInstanceZone() API when want to get zone of instance running in multi-zone environment
-func (s *gceOps) getInstanceZone(instanceID string) (string, error) {
-	if s.inst.clusterName == "" || s.inst.clusterLocation == "" {
-		// We delete an instance only if its part of GKE. Not GCE.
-		return "", fmt.Errorf("instance [%v] running on non-GKE environment. Not deleting it", instanceID)
-	}
-
-	zonalCluster, err := isZonalCluster(s.inst.clusterLocation)
-	if err != nil {
-		return "", err
-	}
-
-	nodePoolList, err := s.getAllNodePools()
-	if err != nil {
-		return "", err
-	}
-
-	// Search node in each node pool
-	for _, nodePool := range nodePoolList {
-
-		var nodePoolInfo *container.NodePool
-		if zonalCluster {
-			nodePoolInfo, err = s.containerService.Projects.Zones.Clusters.NodePools.Get(
-				s.inst.project, s.inst.clusterLocation, s.inst.clusterName, nodePool.Name).Do()
-		} else {
-			nodePoolPath := fmt.Sprintf("projects/%s/locations/%s/clusters/%s/nodePools/%s",
-				s.inst.project, s.inst.clusterLocation, s.inst.clusterName, nodePool.Name)
-			nodePoolInfo, err = s.containerService.Projects.Locations.Clusters.NodePools.Get(nodePoolPath).Do()
-		}
-
+		operation, err := s.computeService.ZoneOperations.Get(s.inst.project, zone, operation.Name).Do()
 		if err != nil {
-			return "", fmt.Errorf("failed to get node pool details for pool: [%v]. Error:[%v]", nodePool.Name, err)
+			// Error occured, just retry
+			return nil, true, err
 		}
 
-		// Search node in each instance group within a specific node pool
-		for _, instanceGroupURL := range nodePoolInfo.InstanceGroupUrls {
-			var zoneInfo, zone string
-			nodeGrpName := strings.TrimSpace(filepath.Base(instanceGroupURL))
-
-			temp := strings.SplitAfter(instanceGroupURL, "zones")
-			if len(temp) > 1 {
-				zoneInfo = temp[1]
-			} else {
-				return "", fmt.Errorf("no zone information found from instance group url")
-			}
-
-			temp = strings.Split(zoneInfo, "/")
-			if len(temp) > 1 {
-				zone = temp[1]
-			} else {
-				return "", fmt.Errorf("no zone information found from instance group url")
-			}
-
-			listInstanceRequest := &compute.InstanceGroupsListInstancesRequest{
-				InstanceState: "ALL",
-			}
-
-			instanceList, err := s.computeService.InstanceGroups.ListInstances(s.inst.project,
-				zone,
-				nodeGrpName,
-				listInstanceRequest).Do()
-			if err != nil {
-				return "", fmt.Errorf("failed to get list of instances in instance group [%v] in zone [%v]. Error:[%v]", nodeGrpName, zone, err)
-			}
-
-			for _, instance := range instanceList.Items {
-				instanceName := filepath.Base(instance.Instance)
-				if instanceName == instanceID {
-					return zone, nil
-				}
-			}
+		// The operation is done, either cancelled or completed.
+		if operation.Status == "DONE" {
+			return nil, false, nil
 		}
+
+		return nil,
+			true,
+			fmt.Errorf("instance [%s] delete operation [%v] is still in [%s] state. Waiting to become [DONE]",
+				instanceID, operation.Name, operation.Status)
 	}
-	return "", fmt.Errorf("instance [%v] not found", instanceID)
+
+	_, err = task.DoRetryWithTimeout(f, timeout, retrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *gceOps) Delete(id string) error {
@@ -759,8 +671,9 @@ func (s *gceOps) SetInstanceGroupSize(instanceGroupID string,
 	}
 
 	var cluster *container.Cluster
+	var operation *container.Operation
 	if zonalCluster {
-		_, err = s.containerService.Projects.Zones.Clusters.NodePools.SetSize(
+		operation, err = s.containerService.Projects.Zones.Clusters.NodePools.SetSize(
 			s.inst.project,
 			s.inst.clusterLocation,
 			s.inst.clusterName,
@@ -768,13 +681,53 @@ func (s *gceOps) SetInstanceGroupSize(instanceGroupID string,
 			setSizeRequest).Do()
 
 	} else {
-		_, err = s.containerService.Projects.Locations.Clusters.NodePools.SetSize(
+		operation, err = s.containerService.Projects.Locations.Clusters.NodePools.SetSize(
 			nodePoolPath,
 			setSizeRequest).Do()
+
 	}
 
 	if err != nil {
 		return err
+	}
+
+	operationPath := fmt.Sprintf("projects/%s/locations/%s/operations/%s",
+		s.inst.project, s.inst.clusterLocation, operation.Name)
+
+	if timeout > time.Nanosecond {
+		f := func() (interface{}, bool, error) {
+
+			if zonalCluster {
+				operation, err = s.containerService.Projects.Zones.Operations.Get(
+					s.inst.project,
+					s.inst.clusterLocation,
+					operation.Name).Do()
+
+			} else {
+				operation, err = s.containerService.Projects.Locations.Operations.Get(
+					operationPath).Do()
+			}
+
+			if err != nil {
+				// Error occured, just retry
+				return nil, true, err
+			}
+
+			// The operation is done, either cancelled or completed.
+			if operation.Status == "DONE" {
+				return nil, false, nil
+			}
+
+			return nil,
+				true,
+				fmt.Errorf("cluster operation [%v] is in [%s] state. Waiting to become DONE",
+					operation.Name, operation.Status)
+		}
+
+		_, err = task.DoRetryWithTimeout(f, timeout, retrySeconds*time.Second)
+		if err != nil {
+			return err
+		}
 	}
 
 	if timeout > time.Nanosecond {
