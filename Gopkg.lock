@@ -366,7 +366,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:99cd39df3fc3d9b27fd5a150935e36141fbcb7045d59ff1ca0e2027c44aa599d"
+  digest = "1:6842b4a6a6ec28ed353323ea6cd10c16ed04ac8e8d3d2049069e60448c156412"
   name = "github.com/libopenstorage/gossip"
   packages = ["types"]
   pruneopts = "UT"
