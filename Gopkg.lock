@@ -780,7 +780,11 @@
 
 [[projects]]
   branch = "master"
+<<<<<<< HEAD
   digest = "1:138988a4c61660b719b91e588841e2d146073ba8fd6a839100bbe79137d13f79"
+=======
+  digest = "1:7d8ceef22edbbc0f4e4d8b80a331ac05965a197e0de527d79139e193114b39bd"
+>>>>>>> Add integration test for snapshot restore
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -794,7 +798,11 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
+<<<<<<< HEAD
   revision = "2bc4578080a4c194c8ce5ab530108ab9bf39842c"
+=======
+  revision = "592dc22c8b7bb43fab0208cd6f7a0a76b95cee12"
+>>>>>>> Add integration test for snapshot restore
 
 [[projects]]
   branch = "master"
