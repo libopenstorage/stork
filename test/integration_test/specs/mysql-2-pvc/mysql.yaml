@@ -4,6 +4,9 @@ metadata:
    name: mysql-data
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc
+   labels:
+     type: db
+     app: mysql
 spec:
    accessModes:
      - ReadWriteOnce
@@ -17,6 +20,9 @@ metadata:
    name: mysql-temp
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc
+   labels:
+     type: db
+     app: mysql
 spec:
    accessModes:
      - ReadWriteOnce

@@ -5,4 +5,4 @@ metadata:
   namespace: default
 spec:
   sourceName: mysql-snapshot
-  sourceNamespace: mysql-snap-restore-test
+  sourceNamespace: mysql-snap-restore-splocal

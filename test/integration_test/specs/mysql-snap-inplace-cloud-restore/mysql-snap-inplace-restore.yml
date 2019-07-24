@@ -1,0 +1,8 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: VolumeSnapshotRestore
+metadata:
+  name: mysql-snap-cloud-inrestore
+  namespace: default
+spec:
+  sourceName: mysql-cloud-snapshot
+  sourceNamespace: mysql-cloudsnap-restore-cslocal

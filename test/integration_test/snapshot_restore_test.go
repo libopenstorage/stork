@@ -12,12 +12,13 @@ import (
 
 func testSnapshotRestore(t *testing.T) {
 	t.Run("simpleSnapshotRestoreTest", simpleSnapshotRestoreTest)
-	/*t.Run("groupSnapshotRestoreTest", groupSnapshotRestoreTest)
+	t.Run("groupSnapshotRestoreTest", groupSnapshotRestoreTest)
 	t.Run("cloudSnapshotRestoreTest", cloudSnapshotRestoreTest)
-	t.Run("groupCloudSnapshotRestoreTest", groupCloudSnapshotRestoreTest)*/
+	t.Run("groupCloudSnapshotRestoreTest", groupCloudSnapshotRestoreTest)
 }
-func createInPlaceRestore(t *testing.T, appKeys []string) []*scheduler.Context {
-	ctxs, err := schedulerDriver.Schedule("test",
+
+func createInPlaceRestore(t *testing.T, namespace string, appKeys []string) []*scheduler.Context {
+	ctxs, err := schedulerDriver.Schedule(namespace,
 		scheduler.ScheduleOptions{AppKeys: appKeys})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
@@ -26,9 +27,6 @@ func createInPlaceRestore(t *testing.T, appKeys []string) []*scheduler.Context {
 
 func verifyInPlaceSnapshotRestore(t *testing.T, ctx []*scheduler.Context, startTime time.Time, timeout time.Duration) {
 	err := schedulerDriver.WaitForRunning(ctx[0], timeout, defaultWaitInterval)
-	// we shouldn't valid px specific things here just pass to torpedo validate inplacenspahostrestore
-	// in torpedo inplace snapshot restore for localsnapshot check alerts with volume id may be bit hard low prio
-	// in cloudsnaps check whether restore volume created and its ha level + alerts
 	require.NoError(t, err, "Error waiting for task")
 	err = schedulerDriver.ValidateVolumeSnapshotRestore(ctx[0], startTime)
 	require.NoError(t, err, "Error validating volumesnapshotRestore")
@@ -36,38 +34,58 @@ func verifyInPlaceSnapshotRestore(t *testing.T, ctx []*scheduler.Context, startT
 
 func simpleSnapshotRestoreTest(t *testing.T) {
 	// foldername + name as namespaces
-	snapCtx, err := schedulerDriver.Schedule("test",
+	snapCtx, err := schedulerDriver.Schedule("splocal",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-snap-restore"}})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(snapCtx), "Only one task should have started")
 	verifySnapshot(t, snapCtx, "mysql-data", defaultWaitTimeout)
 	startTime := time.Now()
-	restoreCtx := createInPlaceRestore(t, []string{"mysql-snap-inplace-restore"})
+	restoreCtx := createInPlaceRestore(t, "splocal", []string{"mysql-snap-inplace-restore"})
 	verifyInPlaceSnapshotRestore(t, restoreCtx, startTime, defaultWaitTimeout)
+
+	// cleanup test
+	destroyAndWait(t, snapCtx)
+	destroyAndWait(t, restoreCtx)
 }
 
 func groupSnapshotRestoreTest(t *testing.T) {
-	snapCtx := createGroupsnaps(t, []string{"mysql-group-snapshot-restore"})
-	for _, ctx := range snapCtx {
-		verifyGroupSnapshot(t, ctx, defaultWaitTimeout)
-	}
+	snapCtx, err := schedulerDriver.Schedule("spgroup",
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-2-pvc"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Len(t, snapCtx, 1, "Only one task should have started")
+	verifyGroupSnapshot(t, snapCtx[0], defaultWaitTimeout)
+
+	ctx, err := schedulerDriver.Schedule("spgroup",
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-localsnap-group"}})
+	require.NoError(t, err, "Error scheduling task")
+	snapCtx = append(snapCtx, ctx...)
+
+	// restore local groupsnapshot
 	startTime := time.Now()
-	restoreCtx := createInPlaceRestore(t, []string{"mysql-in-place-restore"})
+	restoreCtx := createInPlaceRestore(t, "spgroup", []string{"mysql-snap-inplace-group-restore"})
 	verifyInPlaceSnapshotRestore(t, restoreCtx, startTime, defaultWaitTimeout)
+
+	// cleanup test
+	destroyAndWait(t, snapCtx)
+	destroyAndWait(t, restoreCtx)
 }
 
 func cloudSnapshotRestoreTest(t *testing.T) {
-	ctxs, err := schedulerDriver.Schedule("mysql-cloudsnap-restore",
+	snapCtx, err := schedulerDriver.Schedule("cslocal",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-restore"}})
 	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+	require.Equal(t, 1, len(snapCtx), "Only one task should have started")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	err = schedulerDriver.WaitForRunning(snapCtx[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
 
-	restoreCtx := createInPlaceRestore(t, []string{"mysql-snap-inplace-restore"})
+	restoreCtx := createInPlaceRestore(t, "cslocal", []string{"mysql-snap-inplace-cloud-restore"})
 	startTime := time.Now()
 	verifyInPlaceSnapshotRestore(t, restoreCtx, startTime, defaultWaitTimeout)
+
+	// cleanup test
+	destroyAndWait(t, snapCtx)
+	destroyAndWait(t, restoreCtx)
 }
 
 func groupCloudSnapshotRestoreTest(t *testing.T) {
