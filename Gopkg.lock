@@ -353,16 +353,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6842b4a6a6ec28ed353323ea6cd10c16ed04ac8e8d3d2049069e60448c156412"
-  name = "github.com/libopenstorage/gossip"
-  packages = ["types"]
-  pruneopts = "UT"
-  revision = "c26073a01952b2ed00aba97a7768645c19a06011"
-
-  
-[[projects]]
-  branch = "master"
-  digest = "1:fd50c39a5dfbb559f94d260f2c46034e2a23ffad8fad1f1aff0dcf770aeea3b9"
+  digest = "1:451d7ffcf4bc223d51ae800795a3f68176418bbe378efc5414270739c0891d79"
   name = "github.com/libopenstorage/cloudops"
   packages = [
     ".",
@@ -370,6 +361,8 @@
     "gce",
     "unsupported",
   ]
+  pruneopts = "UT"
+  revision = "1f7cce4009f2d9c295777ea65a3202b1e6bd39e5"
 
 [[projects]]
   branch = "master"
