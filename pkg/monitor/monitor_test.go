@@ -39,6 +39,8 @@ func TestMonitor(t *testing.T) {
 	t.Run("testUnknownOtherDriverPod", testUnknownOtherDriverPod)
 	t.Run("testEvictedDriverPod", testEvictedDriverPod)
 	t.Run("testEvictedOtherDriverPod", testEvictedOtherDriverPod)
+	t.Run("testOfflineStorageNode", testOfflineStorageNode)
+	t.Run("teardown", teardown)
 }
 
 func setup(t *testing.T) {
@@ -62,13 +64,6 @@ func setup(t *testing.T) {
 	err = storkdriver.Init(nil)
 	require.NoError(t, err, "Error initializing mock volume driver")
 
-	monitor = &Monitor{
-		Driver: storkdriver,
-	}
-
-	err = monitor.Start()
-	require.NoError(t, err, "failed to start monitor")
-
 	nodes := &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode(nodeForPod, nodeForPod, "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2.domain", "node2.domain", "192.168.0.2", "rack2", "", ""))
@@ -88,6 +83,19 @@ func setup(t *testing.T) {
 
 	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1)
 	require.NoError(t, err, "Error provisioning volume")
+
+	monitor = &Monitor{
+		Driver:      storkdriver,
+		IntervalSec: 30,
+	}
+
+	err = monitor.Start()
+	require.NoError(t, err, "failed to start monitor")
+}
+
+func teardown(t *testing.T) {
+	err := monitor.Stop()
+	require.NoError(t, err, "Error stopping monitor")
 }
 
 func testUnknownDriverPod(t *testing.T) {
@@ -228,4 +236,24 @@ func newNode(name, hostname, ip, rack, zone, region string) *v1.Node {
 	node.Status.Addresses = append(node.Status.Addresses, IPAddress)
 
 	return &node
+}
+
+func testOfflineStorageNode(t *testing.T) {
+	pod := newPod("driverPod", []string{driverVolumeName})
+	_, err := k8s.Instance().CreatePod(pod)
+	require.NoError(t, err, "failed to create pod")
+
+	noStoragePod := newPod("noStoragePod", nil)
+	_, err = k8s.Instance().CreatePod(noStoragePod)
+	require.NoError(t, err, "failed to create pod")
+
+	if err := driver.UpdateNodeStatus(0, volume.NodeOffline); err != nil {
+		require.NoError(t, err, "Error setting node status to Offline: %v", err)
+	}
+
+	time.Sleep(35 * time.Second)
+	_, err = k8s.Instance().GetPodByName(pod.Name, "")
+	require.Error(t, err, "expected error from get pod as pod should be deleted")
+	_, err = k8s.Instance().GetPodByName(noStoragePod.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
