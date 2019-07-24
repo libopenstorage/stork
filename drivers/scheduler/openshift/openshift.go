@@ -13,10 +13,6 @@ const (
 	SystemdSchedServiceName = "atomic-openshift-node"
 )
 
-
-
-
-
 type openshift struct {
 	kube.K8s
 }

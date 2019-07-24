@@ -495,6 +495,8 @@ type VolumeSnapshotRestoreOps interface {
 	ListVolumeSnapshotRestore(namespace string) (*v1alpha1.VolumeSnapshotRestoreList, error)
 	// DeleteVolumeSnapshotRestore delete given volumesnapshotrestore CRD
 	DeleteVolumeSnapshotRestore(name, namespace string) error
+	// ValidateVolumeSnapshotRestore validates given volumesnapshotrestore CRD
+	ValidateVolumeSnapshotRestore(name, namespace string, timeout, retry time.Duration) error
 }
 
 // RuleOps is an interface to perform operations for k8s stork rule
@@ -3594,6 +3596,34 @@ func (k *k8sOps) DeleteVolumeSnapshotRestore(name, namespace string) error {
 		return err
 	}
 	return k.storkClient.Stork().VolumeSnapshotRestores(namespace).Delete(name, &meta_v1.DeleteOptions{})
+}
+
+func (k *k8sOps) ValidateVolumeSnapshotRestore(name, namespace string, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		snapRestore, err := k.storkClient.Stork().VolumeSnapshotRestores(namespace).Get(name, meta_v1.GetOptions{})
+		if err != nil {
+			return "", true, err
+		}
+
+		if snapRestore.Status.Status == v1alpha1.VolumeSnapshotRestoreStatusSuccessful {
+			return "", false, nil
+		}
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name: snapRestore.Name,
+			Cause: fmt.Sprintf("VolumeSnapshotRestore failed . Error: %v .Expected status: %v Actual status: %v",
+				err, v1alpha1.VolumeSnapshotRestoreStatusSuccessful, snapRestore.Status.Status),
+			Type: snapRestore,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Restore Snapshot APIs - END
