@@ -113,6 +113,12 @@ const (
 	cloudBackupOwnerLabel           = "owner"
 	cloudBackupExternalManagerLabel = "externalManager"
 
+	// volumesnapshotRestore, since volume detach can take time even though pod is deleted
+	// we retry restore for 3 times with 1*second delay
+	volumeRestoreInitialDelay = 5 * time.Second
+	volumeRestoreFactor       = 1
+	volumeRestoreSteps        = 3
+
 	validateSnapshotTimeout       = 5 * time.Minute
 	validateSnapshotRetryInterval = 10 * time.Second
 
@@ -160,6 +166,12 @@ var cloudsnapBackoff = wait.Backoff{
 	Duration: cloudSnapshotInitialDelay,
 	Factor:   cloudSnapshotFactor,
 	Steps:    cloudSnapshotSteps,
+}
+
+var restoreAPICallBackoff = wait.Backoff{
+	Duration: volumeRestoreInitialDelay,
+	Factor:   volumeRestoreFactor,
+	Steps:    volumeRestoreSteps,
 }
 
 type portworx struct {
@@ -1123,7 +1135,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID string, params map[string]string)
 		}
 	}
 
-	logrus.Debugf("volume info %v \t %v", parentVols[0].GetLocator().GetName(), restoreVols[1].GetLocator().GetName())
+	logrus.Debugf("volume info %v \t %v", parentVols[0].GetLocator().GetName(), restoreVols[0].GetLocator().GetName())
 	restoreVol := restoreVols[0]
 	if restoreVol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
 		logrus.Warnf("Volume is not ready yet %v", restoreVol.GetLocator().GetName())
@@ -1131,11 +1143,35 @@ func (p *portworx) checkAndUpdateHaLevel(volID string, params map[string]string)
 	}
 	logrus.Infof("Restore Volume: %v \t Status %v \t state %v", restoreVol.Id, restoreVol.Status, restoreVol.State)
 	// find replica nodes
+	var pNodes []string
+	var rNodes []string
 	var nodes []string
-	rsSets := parentVols[0].GetReplicaSets()
-	for _, rs := range rsSets {
-		nodes = append(nodes, rs.GetNodes()...)
+	// get all parent volume replica nodes
+	for _, rs := range parentVols[0].GetReplicaSets() {
+		pNodes = append(pNodes, rs.GetNodes()...)
 	}
+	// get all restore volume replica nodes
+	for _, rs := range restoreVol.GetReplicaSets() {
+		rNodes = append(rNodes, rs.GetNodes()...)
+	}
+
+	// parentvolume replica nodes - restorevolume replica nodes
+	for _, pnode := range pNodes {
+		isPart := false
+		for _, rnode := range rNodes {
+			// since restore volumes rs will always be 1
+			if pnode == rnode {
+				logrus.Debugf("skipping node %v", rnode)
+				isPart = true
+				break
+			}
+		}
+		logrus.Debugf("adding node %v", pnode)
+		if !isPart {
+			nodes = append(nodes, pnode)
+		}
+	}
+
 	if restoreVol.GetSpec().GetHaLevel() != parentVols[0].GetSpec().GetHaLevel() {
 		logrus.Infof("Updating HA Level of volume %v", restoreVol.GetLocator().GetName())
 		spec := &api.VolumeSpec{
@@ -1212,7 +1248,17 @@ func (p *portworx) pxSnapshotRestore(
 		if isCloudSnap {
 			snapID = restoreNamePrefix + volID
 		}
-		err = volDriver.Restore(volID, snapID)
+
+		err = wait.ExponentialBackoff(restoreAPICallBackoff, func() (bool, error) {
+			err = volDriver.Restore(volID, snapID)
+			if err != nil {
+				logrus.Warnf("In-place restore failed for %v: %v", volID, err)
+				return false, nil
+			}
+
+			return true, nil
+		})
+
 		if err != nil {
 			logrus.Errorf("Unable to restore volume %v with ID %v, err %v",
 				volID, snapID, err)
