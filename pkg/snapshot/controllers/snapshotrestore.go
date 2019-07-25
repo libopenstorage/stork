@@ -71,7 +71,8 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 			return fmt.Errorf("empty snapshot name")
 		}
 
-		if snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusSuccessful {
+		if snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusSuccessful ||
+			snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusFailed {
 			return nil
 		}
 
@@ -182,11 +183,11 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 	// Do driver volume snapshot restore here
 	err = c.Driver.CompleteVolumeSnapshotRestore(snapRestore)
 	if err != nil {
-		err = unmarkPVCForRestore(updatedPvc)
-		if err != nil {
+		if err := unmarkPVCForRestore(updatedPvc); err != nil {
 			log.VolumeSnapshotRestoreLog(snapRestore).Errorf("unable to umark pvc for restore %v", err)
 			return err
 		}
+		snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusFailed
 		return fmt.Errorf("failed to restore pvc %v", err)
 	}
 
@@ -202,7 +203,11 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 
 func markPVCForRestore(pvcList []*v1.PersistentVolumeClaim) ([]*v1.PersistentVolumeClaim, error) {
 	updatedPvc := []*v1.PersistentVolumeClaim{}
-	for _, pvc := range pvcList {
+	for _, oldPvc := range pvcList {
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(oldPvc.Name, oldPvc.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pvc details %v", err)
+		}
 		if pvc.Annotations == nil {
 			pvc.Annotations = make(map[string]string)
 		}
@@ -211,7 +216,8 @@ func markPVCForRestore(pvcList []*v1.PersistentVolumeClaim) ([]*v1.PersistentVol
 		if err != nil {
 			return nil, err
 		}
-		pods, err := k8s.Instance().GetPodsUsingPVC(pvc.Name, pvc.Namespace)
+		log.PVCLog(newPvc).Infof("Updated pvc annotation %v", newPvc.Annotations)
+		pods, err := k8s.Instance().GetPodsUsingPVC(newPvc.Name, newPvc.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -224,11 +230,12 @@ func markPVCForRestore(pvcList []*v1.PersistentVolumeClaim) ([]*v1.PersistentVol
 				log.PodLog(&pod).Errorf("Error deleting pod %v: %v", pod.Name, err)
 				return updatedPvc, err
 			}
-
+			log.PodLog(&pod).Infof("Deleted before wait pod %v", pod.Name)
 			if err := k8s.Instance().WaitForPodDeletion(pod.UID, pod.Namespace, 120*time.Second); err != nil {
 				log.PodLog(&pod).Errorf("Pod is not deleted %v:%v", pod.Name, err)
 				return updatedPvc, err
 			}
+			log.PodLog(&pod).Infof("Deleted pod %v", pod.Name)
 		}
 		updatedPvc = append(updatedPvc, newPvc)
 	}
