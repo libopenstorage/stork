@@ -1393,22 +1393,26 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol, snap string, timeStart tim
 	if err != nil || len(pvcVol) == 0 {
 		return fmt.Errorf("inspect failed for %v: %v", vol, err)
 	}
-	snapVol, err := d.volDriver.Inspect([]string{snap})
-	if err != nil || len(snapVol) == 0 {
-		return fmt.Errorf("inspect failed for %v: %v", snap, err)
-	}
-
 	// form alert msg for snapshot restore
 	grepMsg := "Volume " + pvcVol[0].GetLocator().GetName() +
-		" (" + pvcVol[0].GetId() + ") restored from snapshot " + snapVol[0].GetLocator().GetName() +
-		" (" + snap + ")"
+		" (" + pvcVol[0].GetId() + ") restored from snapshot "
+	snapVol, err := d.volDriver.Inspect([]string{snap})
+	if err != nil || len(snapVol) == 0 {
+		// Restore object get deleted in case of cloudsnap
+		logrus.Warnf("Snapshot volume %v not found: %v", snap, err)
+		grepMsg = grepMsg + snap
+	} else {
+		grepMsg = grepMsg + snapVol[0].GetLocator().GetName() +
+			" (" + snap + ")"
+	}
+
 	isSuccess := false
 	for _, alert := range alerts.GetAlert() {
-		if alert.GetMessage() == grepMsg {
+		if strings.Contains(alert.GetMessage(), grepMsg) {
 			isSuccess = true
 			break
 		}
-		logrus.Debugf("Alert received %v", alert.GetMessage())
+		logrus.Infof("Alert received %v", alert.GetMessage())
 	}
 	if isSuccess {
 		return nil
