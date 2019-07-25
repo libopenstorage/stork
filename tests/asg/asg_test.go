@@ -91,8 +91,8 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 
 // This test randomly kills one volume driver node and ensures cluster remains
 // intact by ASG
-var _ = Describe("{chaosTest}", func() {
-	It("keeps killing storage nodes", func() {
+var _ = Describe("{ASGKillRandomNodes}", func() {
+	It("keeps killing worker nodes", func() {
 
 		var storageNodes []node.Node
 		var contexts []*scheduler.Context
