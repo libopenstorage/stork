@@ -2,6 +2,7 @@ package volume
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -69,7 +70,7 @@ type Driver interface {
 	StartDriver(n node.Node) error
 
 	// WaitDriverUpOnNode must wait till the volume driver becomes usable on a given node
-	WaitDriverUpOnNode(n node.Node) error
+	WaitDriverUpOnNode(n node.Node, timeout time.Duration) error
 
 	// WaitDriverDownOnNode must wait till the volume driver becomes unusable on a given node
 	WaitDriverDownOnNode(n node.Node) error
@@ -126,6 +127,10 @@ type Driver interface {
 
 	// GetReplicaSetNodes returns the replica sets for a given volume
 	GetReplicaSetNodes(vol *Volume) ([]string, error)
+
+	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
+	// given volumes
+	ValidateVolumeSnapshotRestore(vol, snap string, timeStart time.Time) error
 }
 
 var (

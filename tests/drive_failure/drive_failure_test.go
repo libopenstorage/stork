@@ -99,7 +99,7 @@ var _ = Describe("{DriveFailure}", func() {
 				})
 
 				Step(fmt.Sprintf("check if volume driver is up"), func() {
-					err = Inst().V.WaitDriverUpOnNode(nodeWithDrive)
+					err = Inst().V.WaitDriverUpOnNode(nodeWithDrive, Inst().DriverStartTimeout)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			}

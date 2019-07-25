@@ -26,6 +26,7 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
@@ -245,7 +246,7 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.WaitDriverUpOnNode(n)
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -285,7 +286,7 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
-				err := Inst().V.WaitDriverUpOnNode(n)
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -382,6 +383,7 @@ type Torpedo struct {
 	ChaosLevel                  int
 	Provisioner                 string
 	MaxStorageNodesPerAZ        int
+	DriverStartTimeout          time.Duration
 }
 
 // ParseFlags parses command line flags
@@ -396,6 +398,7 @@ func ParseFlags() {
 	var minRunTimeMins int
 	var chaosLevel int
 	var storageNodesPerAZ int
+	var driverStartTimeout time.Duration
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -415,6 +418,7 @@ func ParseFlags() {
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
+	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 
 	flag.Parse()
 
@@ -448,6 +452,7 @@ func ParseFlags() {
 				AppList:                     appList,
 				Provisioner:                 provisionerName,
 				MaxStorageNodesPerAZ:        storageNodesPerAZ,
+				DriverStartTimeout:          driverStartTimeout,
 			}
 		})
 	}

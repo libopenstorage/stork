@@ -109,7 +109,7 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	}
 
 	for _, n := range node.GetStorageDriverNodes() {
-		if err := d.WaitDriverUpOnNode(n); err != nil {
+		if err := d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
 			return err
 		}
 	}
@@ -730,7 +730,7 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 	return cluster.(*api.Cluster), nil
 }
 
-func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
+func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getPxNode(n, nil)
 		if err != nil {
@@ -762,7 +762,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -771,13 +771,13 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, validatePXStartTimeout),
+				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, timeout),
 			}
 		}
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -1378,6 +1378,42 @@ func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 		}
 	}
 	return result
+}
+
+// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
+// given volumes
+// TODO: additionally check for restore objects in case of cloudsnap
+func (d *portworx) ValidateVolumeSnapshotRestore(vol, snap string, timeStart time.Time) error {
+	alerts, err := d.clusterManager.EnumerateAlerts(timeStart, time.Now(), api.ResourceType_RESOURCE_TYPE_VOLUME)
+	if err != nil {
+		return err
+	}
+	// get volume and snap info
+	pvcVol, err := d.volDriver.Inspect([]string{vol})
+	if err != nil || len(pvcVol) == 0 {
+		return fmt.Errorf("inspect failed for %v: %v", vol, err)
+	}
+	snapVol, err := d.volDriver.Inspect([]string{snap})
+	if err != nil || len(snapVol) == 0 {
+		return fmt.Errorf("inspect failed for %v: %v", snap, err)
+	}
+
+	// form alert msg for snapshot restore
+	grepMsg := "Volume " + pvcVol[0].GetLocator().GetName() +
+		" (" + pvcVol[0].GetId() + ") restored from snapshot " + snapVol[0].GetLocator().GetName() +
+		" (" + snap + ")"
+	isSuccess := false
+	for _, alert := range alerts.GetAlert() {
+		if alert.GetMessage() == grepMsg {
+			isSuccess = true
+			break
+		}
+		logrus.Debugf("Alert received %v", alert.GetMessage())
+	}
+	if isSuccess {
+		return nil
+	}
+	return fmt.Errorf("restore failed")
 }
 
 func init() {

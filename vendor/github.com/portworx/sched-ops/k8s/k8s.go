@@ -495,6 +495,8 @@ type VolumeSnapshotRestoreOps interface {
 	ListVolumeSnapshotRestore(namespace string) (*v1alpha1.VolumeSnapshotRestoreList, error)
 	// DeleteVolumeSnapshotRestore delete given volumesnapshotrestore CRD
 	DeleteVolumeSnapshotRestore(name, namespace string) error
+	// ValidateVolumeSnapshotRestore validates given volumesnapshotrestore CRD
+	ValidateVolumeSnapshotRestore(name, namespace string, timeout, retry time.Duration) error
 }
 
 // RuleOps is an interface to perform operations for k8s stork rule
@@ -697,7 +699,7 @@ type ApplicationBackupRestoreOps interface {
 	UpdateApplicationRestore(*v1alpha1.ApplicationRestore) (*v1alpha1.ApplicationRestore, error)
 	// DeleteApplicationRestore deletes the ApplicationRestore
 	DeleteApplicationRestore(string, string) error
-	// ValidateApplicationRestore validates  the ApplicationRestore
+	// ValidateApplicationRestore validates the ApplicationRestore
 	ValidateApplicationRestore(string, string, time.Duration, time.Duration) error
 }
 
@@ -713,6 +715,8 @@ type ApplicationCloneOps interface {
 	UpdateApplicationClone(*v1alpha1.ApplicationClone) (*v1alpha1.ApplicationClone, error)
 	// DeleteApplicationClone deletes the ApplicationClone
 	DeleteApplicationClone(string, string) error
+	// ValidateApplicationClone validates the ApplicationClone
+	ValidateApplicationClone(string, string, time.Duration, time.Duration) error
 }
 
 type privateMethods interface {
@@ -3594,6 +3598,34 @@ func (k *k8sOps) DeleteVolumeSnapshotRestore(name, namespace string) error {
 	return k.storkClient.Stork().VolumeSnapshotRestores(namespace).Delete(name, &meta_v1.DeleteOptions{})
 }
 
+func (k *k8sOps) ValidateVolumeSnapshotRestore(name, namespace string, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		snapRestore, err := k.storkClient.Stork().VolumeSnapshotRestores(namespace).Get(name, meta_v1.GetOptions{})
+		if err != nil {
+			return "", true, err
+		}
+
+		if snapRestore.Status.Status == v1alpha1.VolumeSnapshotRestoreStatusSuccessful {
+			return "", false, nil
+		}
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name: snapRestore.Name,
+			Cause: fmt.Sprintf("VolumeSnapshotRestore failed . Error: %v .Expected status: %v Actual status: %v",
+				err, v1alpha1.VolumeSnapshotRestoreStatusSuccessful, snapRestore.Status.Status),
+			Type: snapRestore,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Restore Snapshot APIs - END
 
 // Rule APIs - BEGIN
@@ -4704,6 +4736,32 @@ func (k *k8sOps) UpdateApplicationClone(clone *v1alpha1.ApplicationClone) (*v1al
 	}
 
 	return k.storkClient.Stork().ApplicationClones(clone.Namespace).Update(clone)
+}
+
+func (k *k8sOps) ValidateApplicationClone(name, namespace string, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		applicationclone, err := k.storkClient.Stork().ApplicationClones(namespace).Get(name, meta_v1.GetOptions{})
+		if err != nil {
+			return "", true, err
+		}
+
+		if applicationclone.Status.Status == v1alpha1.ApplicationCloneStatusSuccessful {
+			return "", false, nil
+		}
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  applicationclone.Name,
+			Cause: fmt.Sprintf("Application Clone failed . Error: %v .Expected status: %v Actual status: %v", err, v1alpha1.ApplicationCloneStatusSuccessful, applicationclone.Status.Status),
+			Type:  applicationclone,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ApplicationClone APIs - END
