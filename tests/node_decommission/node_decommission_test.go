@@ -82,7 +82,7 @@ var _ = Describe("{DecommissionNode}", func() {
 				Step(fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name), func() {
 					err := Inst().V.RejoinNode(nodeToDecommission)
 					Expect(err).NotTo(HaveOccurred())
-					err = Inst().V.WaitDriverUpOnNode(nodeToDecommission)
+					err = Inst().V.WaitDriverUpOnNode(nodeToDecommission, Inst().DriverStartTimeout)
 					Expect(err).NotTo(HaveOccurred())
 				})
 

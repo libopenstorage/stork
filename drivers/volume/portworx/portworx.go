@@ -109,7 +109,7 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 	}
 
 	for _, n := range node.GetStorageDriverNodes() {
-		if err := d.WaitDriverUpOnNode(n); err != nil {
+		if err := d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
 			return err
 		}
 	}
@@ -730,7 +730,7 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 	return cluster.(*api.Cluster), nil
 }
 
-func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
+func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		pxNode, err := d.getPxNode(n, nil)
 		if err != nil {
@@ -762,7 +762,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
 		return err
 	}
 
@@ -771,13 +771,13 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node) error {
 		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, validatePXStartTimeout),
+				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, timeout),
 			}
 		}
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validatePXStartTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
 		return err
 	}
 

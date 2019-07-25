@@ -87,7 +87,7 @@ var _ = Describe("{RebootOneNode}", func() {
 							err = Inst().S.IsNodeReady(n)
 							Expect(err).NotTo(HaveOccurred())
 
-							err = Inst().V.WaitDriverUpOnNode(n)
+							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 							Expect(err).NotTo(HaveOccurred())
 						})
 					}
@@ -146,7 +146,7 @@ var _ = Describe("{RebootAllNodes}", func() {
 							err = Inst().S.IsNodeReady(n)
 							Expect(err).NotTo(HaveOccurred())
 
-							err = Inst().V.WaitDriverUpOnNode(n)
+							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 							Expect(err).NotTo(HaveOccurred())
 						})
 					}
