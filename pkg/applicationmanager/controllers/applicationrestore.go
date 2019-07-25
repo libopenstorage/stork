@@ -20,7 +20,6 @@ import (
 	"k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -401,7 +400,7 @@ func (a *ApplicationRestoreController) applyResources(
 			o, pvNameMappings,
 			restore.Spec.NamespaceMapping,
 			restore.Spec.ReplacePolicy == stork_api.ApplicationRestoreReplacePolicyDelete)
-		if err != nil && (apierrors.IsAlreadyExists(err)) {
+		if err != nil && (errors.IsAlreadyExists(err)) {
 			switch restore.Spec.ReplacePolicy {
 			case stork_api.ApplicationRestoreReplacePolicyDelete:
 				log.ApplicationRestoreLog(restore).Errorf("Error deleting %v %v during restore: %v", objectType.GetKind(), metadata.GetName(), err)

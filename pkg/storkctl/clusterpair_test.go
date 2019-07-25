@@ -8,7 +8,6 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/stretchr/testify/require"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -18,7 +17,7 @@ func createClusterPairAndVerify(t *testing.T, name string, namespace string) {
 		"option2": "value2",
 	}
 	clusterPair := &storkv1.ClusterPair{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
