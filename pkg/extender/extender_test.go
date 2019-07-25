@@ -19,7 +19,6 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	apiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
@@ -60,7 +59,7 @@ func setup(t *testing.T) {
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.Core().RESTClient()).Events("")})
-	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, apiv1.EventSource{Component: "storktest"})
+	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "storktest"})
 
 	// setup fake k8s instances
 	fakeStorkClient = fakeclient.NewSimpleClientset()
