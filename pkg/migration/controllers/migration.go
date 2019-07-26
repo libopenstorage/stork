@@ -23,7 +23,6 @@ import (
 	"k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -765,7 +764,7 @@ func (m *MigrationController) applyResources(
 				Annotations: namespace.Annotations,
 			},
 		})
-		if err != nil && !apierrors.IsAlreadyExists(err) {
+		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
 	}
@@ -810,7 +809,7 @@ func (m *MigrationController) applyResources(
 			return fmt.Errorf("unable to cast object to unstructured: %v", o)
 		}
 		_, err = dynamicClient.Create(unstructured)
-		if err != nil && (apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
+		if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
 			switch objectType.GetKind() {
 			// Don't want to delete the Volume resources
 			case "PersistentVolumeClaim":

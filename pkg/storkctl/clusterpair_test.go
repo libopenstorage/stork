@@ -8,7 +8,6 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/stretchr/testify/require"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -18,7 +17,7 @@ func createClusterPairAndVerify(t *testing.T, name string, namespace string) {
 		"option2": "value2",
 	}
 	clusterPair := &storkv1.ClusterPair{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
@@ -111,28 +110,16 @@ func TestGetClusterPairsWithStatus(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
-/*
-func TestGenerateClusterPair(t *testing.T) {
-	cmdArgs := []string{"clusterpair", "pair1"}
+func TestGenerateClusterPairInvalidName(t *testing.T) {
+	cmdArgs := []string{"generate", "clusterpair", "pair_test", "-n", "test"}
 
-	var clusterPairs storkv1.ClusterPairList
-	clusterPair := &storkv1.ClusterPair{
-		TypeMeta: meta.TypeMeta{
-			Kind:       reflect.TypeOf(storkv1.ClusterPair{}).Name(),
-			APIVersion: storkv1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: meta.ObjectMeta{
-			Name: "pair1",
-		},
-
-		Spec: storkv1.ClusterPairSpec{
-			Options: map[string]string{},
-		},
-	}
-
-	clusterPairs.Items = append(clusterPairs.Items, *clusterPair)
-
-	expected := ""
-	testCommon(t, newGenerateCommand, cmdArgs, &clusterPairs, expected, false)
+	expected := "error: the Name \"pair_test\" is not valid: [a DNS-1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')]"
+	testCommon(t, cmdArgs, nil, expected, true)
 }
-*/
+
+func TestGenerateClusterPairInvalidNamespace(t *testing.T) {
+	cmdArgs := []string{"generate", "clusterpair", "pair1", "-n", "test_namespace"}
+
+	expected := "error: the Namespace \"test_namespace\" is not valid: [a DNS-1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"
+	testCommon(t, cmdArgs, nil, expected, true)
+}

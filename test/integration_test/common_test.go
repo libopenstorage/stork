@@ -17,7 +17,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/portworx/sched-ops/k8s"
-	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -232,7 +231,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 
 // write kubbeconfig file to /tmp/kubeconfig
 func dumpRemoteKubeConfig(configObject string) error {
-	cm, err := k8s_ops.Instance().GetConfigMap(configObject, "kube-system")
+	cm, err := k8s.Instance().GetConfigMap(configObject, "kube-system")
 	if err != nil {
 		logrus.Errorf("Error reading config map: %v", err)
 		return err
@@ -247,7 +246,7 @@ func dumpRemoteKubeConfig(configObject string) error {
 }
 
 func setRemoteConfig(kubeConfig string) error {
-	k8sOps := k8s_ops.Instance()
+	k8sOps := k8s.Instance()
 	if k8sOps == nil {
 		return fmt.Errorf("Unable to get k8s ops instance")
 	}
@@ -299,7 +298,7 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		return err
 	}
 
-	// stokctl generate command sets k8s_ops to remoteclusterconfig
+	// stokctl generate command sets sched-ops to remoteclusterconfig
 	err = setRemoteConfig("")
 	if err != nil {
 		logrus.Errorf("setting kubeconfig to default failed %v", err)
