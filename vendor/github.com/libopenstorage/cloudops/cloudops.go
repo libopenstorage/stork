@@ -48,6 +48,7 @@ type Compute interface {
 	// InstanceID of instance where command is executed.
 	InstanceID() string
 	// InspectInstance inspects the node with the given instance ID
+	// TODO: Add support for taking zone as input to inspect instance in any zone
 	InspectInstance(instanceID string) (*InstanceInfo, error)
 	// InspectInstanceGroupForInstance inspects the instance group to which the
 	// cloud instance with given ID belongs
