@@ -53,57 +53,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
    name: stork-role
 rules:
-  - apiGroups: [""]
-    resources: ["pods", "pods/exec"]
-    verbs: ["get", "list", "delete", "create"]
-  - apiGroups: [""]
-    resources: ["persistentvolumes"]
-    verbs: ["get", "list", "watch", "create", "delete"]
-  - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["list", "watch", "create", "update", "patch"]
-  - apiGroups: ["stork.libopenstorage.org"]
-    resources: ["rules"]
-    verbs: ["get", "list"]
-  - apiGroups: ["stork.libopenstorage.org"]
-    resources: ["clusterpairs", "migrations", "groupvolumesnapshots", "storageclusters", "schedulepolicies", "migrationschedules"]
-    verbs: ["get", "list", "watch", "update", "patch", "create", "delete"]
-  - apiGroups: ["apiextensions.k8s.io"]
-    resources: ["customresourcedefinitions"]
-    verbs: ["create", "get"]
-  - apiGroups: ["volumesnapshot.external-storage.k8s.io"]
-    resources: ["volumesnapshots"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["volumesnapshot.external-storage.k8s.io"]
-    resources: ["volumesnapshotdatas"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "create", "update"]
-  - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["get"]
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["*"]
-    resources: ["deployments", "deployments/extensions"]
-    verbs: ["list", "get", "watch", "patch", "update", "initialize"]
-  - apiGroups: ["*"]
-    resources: ["statefulsets", "statefulsets/extensions"]
-    verbs: ["list", "get", "watch", "patch", "update", "initialize"]
-  - apiGroups: ["extensions"]
-    resources: [" thirdpartyresources"]
-    verbs: [ "get", "list", "watch","create","delete"]
   - apiGroups: ["*"]
     resources: ["*"]
-    verbs: ["get", "list"]
+    verbs: ["*"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -159,7 +111,7 @@ spec:
         # automatically update schedulerName
         #- --app-initializer=true
         imagePullPolicy: Always
-        image: openstorage/stork:1.1.1
+        image: openstorage/stork:2.2.4
         resources:
           requests:
             cpu: '0.1'
