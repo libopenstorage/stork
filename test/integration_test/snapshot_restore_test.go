@@ -55,10 +55,9 @@ func groupSnapshotRestoreTest(t *testing.T) {
 	require.Len(t, snapCtx, 1, "Only one task should have started")
 	verifyGroupSnapshot(t, snapCtx[0], defaultWaitTimeout)
 
-	ctx, err := schedulerDriver.Schedule("spgroup",
+	err = schedulerDriver.AddTasks(snapCtx[0],
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-localsnap-group"}})
 	require.NoError(t, err, "Error scheduling task")
-	snapCtx = append(snapCtx, ctx...)
 
 	// restore local groupsnapshot
 	startTime := time.Now()
