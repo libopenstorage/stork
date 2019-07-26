@@ -327,7 +327,7 @@ func (k *K8s) parseK8SNode(n v1.Node) node.Node {
 
 	nodeLabels, err := k8s_ops.Instance().GetLabelsOnNode(n.GetName())
 	if err != nil {
-		logrus.Warn("failed to get node label for [%s]", n.GetName())
+		logrus.Warn("failed to get node label for ", n.GetName())
 	}
 
 	for key, value := range nodeLabels {
