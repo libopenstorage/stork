@@ -48,6 +48,10 @@ const (
 	// SystemdSchedServiceName is the name of the system service responsible for scheduling
 	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "kubelet"
+	// ZoneK8SNodeLabel is label describing zone of the k8s node
+	ZoneK8SNodeLabel = "failure-domain.beta.kubernetes.io/zone"
+	// RegionK8SNodeLabel is node label describing region of the k8s node
+	RegionK8SNodeLabel = "failure-domain.beta.kubernetes.io/region"
 )
 
 const (
@@ -314,16 +318,33 @@ func (k *K8s) getAddressesForNode(n v1.Node) []string {
 //
 func (k *K8s) parseK8SNode(n v1.Node) node.Node {
 	var nodeType node.Type
+	var zone, region string
 	if k8s_ops.Instance().IsNodeMaster(n) {
 		nodeType = node.TypeMaster
 	} else {
 		nodeType = node.TypeWorker
 	}
 
+	nodeLabels, err := k8s_ops.Instance().GetLabelsOnNode(n.GetName())
+	if err != nil {
+		logrus.Warn("failed to get node label for ", n.GetName())
+	}
+
+	for key, value := range nodeLabels {
+		switch key {
+		case ZoneK8SNodeLabel:
+			zone = value
+		case RegionK8SNodeLabel:
+			region = value
+		}
+	}
+
 	return node.Node{
 		Name:      n.Name,
 		Addresses: k.getAddressesForNode(n),
 		Type:      nodeType,
+		Zone:      zone,
+		Region:    region,
 	}
 }
 

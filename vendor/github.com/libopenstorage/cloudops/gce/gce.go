@@ -382,6 +382,40 @@ func (s *gceOps) DeleteFrom(id, _ string) error {
 	return s.Delete(id)
 }
 
+func (s *gceOps) DeleteInstance(instanceID string, zone string, timeout time.Duration) error {
+
+	operation, err := s.computeService.Instances.Delete(s.inst.project, zone, instanceID).Do()
+	if err != nil {
+		return fmt.Errorf("Error occured while deleting instance:[%v] in zone [%s]. Error:[%v]", instanceID, zone, err)
+	}
+
+	f := func() (interface{}, bool, error) {
+
+		operation, err := s.computeService.ZoneOperations.Get(s.inst.project, zone, operation.Name).Do()
+		if err != nil {
+			// Error occured, just retry
+			return nil, true, err
+		}
+
+		// The operation is done, either cancelled or completed.
+		if operation.Status == "DONE" {
+			return nil, false, nil
+		}
+
+		return nil,
+			true,
+			fmt.Errorf("instance [%s] delete operation [%v] is still in [%s] state. Waiting to become [DONE]",
+				instanceID, operation.Name, operation.Status)
+	}
+
+	_, err = task.DoRetryWithTimeout(f, timeout, retrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *gceOps) Delete(id string) error {
 	ctx := context.Background()
 	found := false

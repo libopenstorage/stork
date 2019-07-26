@@ -353,7 +353,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:451d7ffcf4bc223d51ae800795a3f68176418bbe378efc5414270739c0891d79"
+  digest = "1:51b509e0dbef1a6a3ae7f1507a8f9d9e9fee4ae363ed07861b685d13d1c4327c"
   name = "github.com/libopenstorage/cloudops"
   packages = [
     ".",
@@ -362,7 +362,7 @@
     "unsupported",
   ]
   pruneopts = "UT"
-  revision = "1f7cce4009f2d9c295777ea65a3202b1e6bd39e5"
+  revision = "1a40a0354c3ac999476bf8d915f950d9e0d6c179"
 
 [[projects]]
   branch = "master"
