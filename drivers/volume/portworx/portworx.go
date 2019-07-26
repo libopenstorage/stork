@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
@@ -1383,7 +1384,11 @@ func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 // ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 // given volumes
 // TODO: additionally check for restore objects in case of cloudsnap
-func (d *portworx) ValidateVolumeSnapshotRestore(vol, snap string, timeStart time.Time) error {
+func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_v1.VolumeSnapshotData, timeStart time.Time) error {
+	snap := snapshotData.Spec.PortworxSnapshot.SnapshotID
+	if snapshotData.Spec.PortworxSnapshot.SnapshotType == snap_v1.PortworxSnapshotTypeCloud {
+		snap = "in-place-restore-" + vol
+	}
 	alerts, err := d.clusterManager.EnumerateAlerts(timeStart, time.Now(), api.ResourceType_RESOURCE_TYPE_VOLUME)
 	if err != nil {
 		return err
