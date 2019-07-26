@@ -61,6 +61,11 @@ if [ -z "${TIMEOUT}" ]; then
     echo "Using default timeout of ${TIMEOUT}"
 fi
 
+if [ -z "$DRIVER_START_TIMEOUT" ]; then
+    DRIVER_START_TIMEOUT="5m0s"
+    echo "Using default timeout of ${DRIVER_START_TIMEOUT}"
+fi
+
 kubectl delete pod torpedo
 state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
 timeout=0
@@ -222,6 +227,7 @@ spec:
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
+            "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
             "--provisioner", "$PROVISIONER",
             "$UPGRADE_VERSION_ARG",
