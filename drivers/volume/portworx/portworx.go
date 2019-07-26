@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
@@ -1383,7 +1384,11 @@ func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 // ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 // given volumes
 // TODO: additionally check for restore objects in case of cloudsnap
-func (d *portworx) ValidateVolumeSnapshotRestore(vol, snap string, timeStart time.Time) error {
+func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_v1.VolumeSnapshotData, timeStart time.Time) error {
+	snap := snapshotData.Spec.PortworxSnapshot.SnapshotID
+	if snapshotData.Spec.PortworxSnapshot.SnapshotType == snap_v1.PortworxSnapshotTypeCloud {
+		snap = "in-place-restore-" + vol
+	}
 	alerts, err := d.clusterManager.EnumerateAlerts(timeStart, time.Now(), api.ResourceType_RESOURCE_TYPE_VOLUME)
 	if err != nil {
 		return err
@@ -1393,22 +1398,26 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol, snap string, timeStart tim
 	if err != nil || len(pvcVol) == 0 {
 		return fmt.Errorf("inspect failed for %v: %v", vol, err)
 	}
-	snapVol, err := d.volDriver.Inspect([]string{snap})
-	if err != nil || len(snapVol) == 0 {
-		return fmt.Errorf("inspect failed for %v: %v", snap, err)
-	}
-
 	// form alert msg for snapshot restore
 	grepMsg := "Volume " + pvcVol[0].GetLocator().GetName() +
-		" (" + pvcVol[0].GetId() + ") restored from snapshot " + snapVol[0].GetLocator().GetName() +
-		" (" + snap + ")"
+		" (" + pvcVol[0].GetId() + ") restored from snapshot "
+	snapVol, err := d.volDriver.Inspect([]string{snap})
+	if err != nil || len(snapVol) == 0 {
+		// Restore object get deleted in case of cloudsnap
+		logrus.Warnf("Snapshot volume %v not found: %v", snap, err)
+		grepMsg = grepMsg + snap
+	} else {
+		grepMsg = grepMsg + snapVol[0].GetLocator().GetName() +
+			" (" + snap + ")"
+	}
+
 	isSuccess := false
 	for _, alert := range alerts.GetAlert() {
-		if alert.GetMessage() == grepMsg {
+		if strings.Contains(alert.GetMessage(), grepMsg) {
 			isSuccess = true
 			break
 		}
-		logrus.Debugf("Alert received %v", alert.GetMessage())
+		logrus.Infof("Alert received %v", alert.GetMessage())
 	}
 	if isSuccess {
 		return nil
