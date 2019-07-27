@@ -57,6 +57,7 @@ func (e *ErrFailedToRunSystemctlOnNode) Error() string {
 // ErrFailedToRunCommand error type when failing to run command
 type ErrFailedToRunCommand struct {
 	Addr  string
+	Node  Node
 	Cause string
 }
 

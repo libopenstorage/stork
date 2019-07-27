@@ -334,27 +334,6 @@ func snapshotScaleTest(t *testing.T) {
 	}
 }
 
-func createApp(t *testing.T) *scheduler.Context {
-
-	ctxs, err := schedulerDriver.Schedule(generateInstanceID(t, "snapschedtest"),
-		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
-	require.NoError(t, err, "Error scheduling task")
-	require.Equal(t, 1, len(ctxs), "Only one task should have started")
-
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for pod to get to running state")
-
-	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
-	require.NoError(t, err, "Error getting node for app")
-	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
-
-	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 1, len(volumeNames), "Should only have one volume")
-
-	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
-	return ctxs[0]
-}
-
 func scheduleTests(t *testing.T) {
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
@@ -380,7 +359,7 @@ func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName 
 }
 
 func intervalScheduleSnapshotTest(t *testing.T) {
-	ctx := createApp(t)
+	ctx := createApp(t, "interval-snap-sched-test")
 	policyName := "intervalpolicy"
 	retain := 2
 	interval := 2
@@ -432,7 +411,7 @@ func intervalScheduleSnapshotTest(t *testing.T) {
 }
 
 func dailyScheduleSnapshotTest(t *testing.T) {
-	ctx := createApp(t)
+	ctx := createApp(t, "daily-snap-sched-test")
 	policyName := "dailypolicy"
 	retain := 2
 	// Set first trigger 2 minutes from now
@@ -475,7 +454,7 @@ func dailyScheduleSnapshotTest(t *testing.T) {
 }
 
 func weeklyScheduleSnapshotTest(t *testing.T) {
-	ctx := createApp(t)
+	ctx := createApp(t, "weekly-snap-sched-test")
 	policyName := "weeklypolicy"
 	retain := 2
 	// Set first trigger 2 minutes from now
@@ -519,7 +498,7 @@ func weeklyScheduleSnapshotTest(t *testing.T) {
 }
 
 func monthlyScheduleSnapshotTest(t *testing.T) {
-	ctx := createApp(t)
+	ctx := createApp(t, "monthly-snap-sched-test")
 	policyName := "monthlypolicy"
 	retain := 2
 	// Set first trigger 2 minutes from now
@@ -618,7 +597,7 @@ func commonSnapshotScheduleTests(
 }
 
 func invalidPolicyTest(t *testing.T) {
-	ctx := createApp(t)
+	ctx := createApp(t, "invalid-snap-sched-test")
 	policyName := "invalidpolicy"
 	scheduledTime := time.Now()
 	retain := 2
