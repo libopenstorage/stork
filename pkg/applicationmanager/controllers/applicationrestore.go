@@ -292,8 +292,7 @@ func (a *ApplicationRestoreController) downloadResources(
 	backup *stork_api.ApplicationBackup,
 	backupLocation string,
 	namespace string,
-) ([]*unstructured.Unstructured, error) {
-	// TODO: Decrypt if required
+) ([]runtime.Unstructured, error) {
 	data, err := a.downloadObject(backup, backupLocation, namespace, resourceObjectName)
 	if err != nil {
 		return nil, err
@@ -303,7 +302,11 @@ func (a *ApplicationRestoreController) downloadResources(
 	if err = json.Unmarshal(data, &objects); err != nil {
 		return nil, err
 	}
-	return objects, nil
+	runtimeObjects := make([]runtime.Unstructured, 0)
+	for _, o := range objects {
+		runtimeObjects = append(runtimeObjects, o)
+	}
+	return runtimeObjects, nil
 }
 
 func (a *ApplicationRestoreController) updateResourceStatus(
@@ -375,11 +378,32 @@ func (a *ApplicationRestoreController) getPVNameMappings(
 
 func (a *ApplicationRestoreController) applyResources(
 	restore *stork_api.ApplicationRestore,
-	objects []*unstructured.Unstructured,
+	objects []runtime.Unstructured,
 ) error {
 	pvNameMappings, err := a.getPVNameMappings(restore)
 	if err != nil {
 		return err
+	}
+
+	for _, o := range objects {
+		err = a.ResourceCollector.PrepareResourceForApply(
+			o,
+			restore.Spec.NamespaceMapping,
+			pvNameMappings)
+		if err != nil {
+			return err
+		}
+	}
+
+	// First delete the existing objects if they exist and replace policy is set
+	// to Delete
+	if restore.Spec.ReplacePolicy == stork_api.ApplicationRestoreReplacePolicyDelete {
+		err = a.ResourceCollector.DeleteResources(
+			a.dynamicInterface,
+			objects)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, o := range objects {
@@ -397,10 +421,8 @@ func (a *ApplicationRestoreController) applyResources(
 
 		err = a.ResourceCollector.ApplyResource(
 			a.dynamicInterface,
-			o, pvNameMappings,
-			restore.Spec.NamespaceMapping,
-			restore.Spec.ReplacePolicy == stork_api.ApplicationRestoreReplacePolicyDelete)
-		if err != nil && (errors.IsAlreadyExists(err)) {
+			o)
+		if err != nil && errors.IsAlreadyExists(err) {
 			switch restore.Spec.ReplacePolicy {
 			case stork_api.ApplicationRestoreReplacePolicyDelete:
 				log.ApplicationRestoreLog(restore).Errorf("Error deleting %v %v during restore: %v", objectType.GetKind(), metadata.GetName(), err)
