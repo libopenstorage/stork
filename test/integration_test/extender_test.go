@@ -10,7 +10,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1beta2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 )
 
@@ -150,7 +150,7 @@ func driverNodeErrorTest(t *testing.T) {
 	err = volumeDriver.StartDriver(stoppedNode)
 	require.NoError(t, err, "Error starting driver on Node %+v", scheduledNodes[0])
 
-	err = volumeDriver.WaitDriverUpOnNode(stoppedNode)
+	err = volumeDriver.WaitDriverUpOnNode(stoppedNode, defaultWaitTimeout)
 	require.NoError(t, err, "Error waiting for Node to start %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)
@@ -216,7 +216,7 @@ func pvcOwnershipTest(t *testing.T) {
 	err = volumeDriver.StartDriver(scheduledNodes[0])
 	require.NoError(t, err, "Error starting driver on scheduled Node %+v", scheduledNodes[0])
 
-	err = volumeDriver.WaitDriverUpOnNode(scheduledNodes[0])
+	err = volumeDriver.WaitDriverUpOnNode(scheduledNodes[0], defaultWaitTimeout)
 	require.NoError(t, err, "Volume driver is not up on Node %+v", scheduledNodes[0])
 
 	destroyAndWait(t, ctxs)
