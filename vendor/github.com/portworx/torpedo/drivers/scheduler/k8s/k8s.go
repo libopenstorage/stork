@@ -48,6 +48,10 @@ const (
 	// SystemdSchedServiceName is the name of the system service responsible for scheduling
 	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "kubelet"
+	// ZoneK8SNodeLabel is label describing zone of the k8s node
+	ZoneK8SNodeLabel = "failure-domain.beta.kubernetes.io/zone"
+	// RegionK8SNodeLabel is node label describing region of the k8s node
+	RegionK8SNodeLabel = "failure-domain.beta.kubernetes.io/region"
 )
 
 const (
@@ -86,6 +90,7 @@ var (
 type K8s struct {
 	SpecFactory    *spec.Factory
 	NodeDriverName string
+	VolDriverName  string
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -136,6 +141,7 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 	}
 
 	k.NodeDriverName = nodeDriverName
+	k.VolDriverName = volDriverName
 	return nil
 }
 
@@ -289,6 +295,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*stork_api.ApplicationClone); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*stork_api.VolumeSnapshotRestore); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("Unsupported object: %v", reflect.TypeOf(in))
@@ -310,16 +318,33 @@ func (k *K8s) getAddressesForNode(n v1.Node) []string {
 //
 func (k *K8s) parseK8SNode(n v1.Node) node.Node {
 	var nodeType node.Type
+	var zone, region string
 	if k8s_ops.Instance().IsNodeMaster(n) {
 		nodeType = node.TypeMaster
 	} else {
 		nodeType = node.TypeWorker
 	}
 
+	nodeLabels, err := k8s_ops.Instance().GetLabelsOnNode(n.GetName())
+	if err != nil {
+		logrus.Warn("failed to get node label for ", n.GetName())
+	}
+
+	for key, value := range nodeLabels {
+		switch key {
+		case ZoneK8SNodeLabel:
+			zone = value
+		case RegionK8SNodeLabel:
+			region = value
+		}
+	}
+
 	return node.Node{
 		Name:      n.Name,
 		Addresses: k.getAddressesForNode(n),
 		Type:      nodeType,
+		Zone:      zone,
+		Region:    region,
 	}
 }
 
@@ -381,6 +406,25 @@ func (k *K8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 		if err != nil {
 			return nil, err
 		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, spec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createVolumeSnapshotRestore(spec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
 		if obj != nil {
 			specObjects = append(specObjects, obj)
 		}
@@ -616,6 +660,28 @@ func (k *K8s) substituteNamespaceInPVC(pvc *v1.PersistentVolumeClaim, ns string)
 	for k, v := range pvc.Annotations {
 		pvc.Annotations[k] = namespaceRegex.ReplaceAllString(v, ns)
 	}
+}
+
+func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*stork_api.VolumeSnapshotRestore); ok {
+		obj.Namespace = ns.Name
+		snapRestore, err := k8sOps.CreateVolumeSnapshotRestore(obj)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Created VolumeSnapshotRestore: %v", app.Key, snapRestore.Name)
+		return snapRestore, nil
+	}
+
+	return nil, nil
 }
 
 func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
@@ -974,6 +1040,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated ApplicationClone: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*stork_api.VolumeSnapshotRestore); ok {
+			if err := k8sOps.ValidateVolumeSnapshotRestore(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated VolumeSnapshotRestore: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -999,6 +1074,19 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 		}
 	}
 
+	for _, spec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyVolumeSnapshotRestoreObject(spec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		if err != nil {
+			podList = append(podList, pods.(v1.Pod))
+		}
+	}
 	for _, spec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyMigrationObject(spec, ctx.App)
@@ -2041,6 +2129,73 @@ func (k *K8s) destroyMigrationObject(
 		}
 		logrus.Infof("[%v] Destroyed SchedulePolicy: %v", app.Key, obj.Name)
 	}
+	return nil
+}
+
+func (k *K8s) destroyVolumeSnapshotRestoreObject(
+	specObj interface{},
+	app *spec.AppSpec,
+) error {
+	k8sOps := k8s_ops.Instance()
+	if obj, ok := specObj.(*stork_api.VolumeSnapshotRestore); ok {
+		err := k8sOps.DeleteVolumeSnapshotRestore(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to delete VolumeSnapshotRestore: %v. Err: %v", obj.Name, err),
+			}
+		}
+		logrus.Infof("[%v] Destroyed VolumeSnapshotRestore: %v", app.Key, obj.Name)
+	}
+	return nil
+}
+
+// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
+// parent volumes
+func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart time.Time) error {
+	var err error
+	var snapRestore *stork_api.VolumeSnapshotRestore
+	if ctx == nil {
+		return fmt.Errorf("no context provided")
+	}
+	// extract volume name and snapshotname from context
+	// can do it using snapRestore.Status.Volume
+	k8sOps := k8s_ops.Instance()
+	specObjects := ctx.App.SpecList
+	driver, err := volume.Get(k.VolDriverName)
+	if err != nil {
+		return err
+	}
+
+	for _, specObj := range specObjects {
+		if obj, ok := specObj.(*stork_api.VolumeSnapshotRestore); ok {
+			snapRestore, err = k8sOps.GetVolumeSnapshotRestore(obj.Name, obj.Namespace)
+			if err != nil {
+				return fmt.Errorf("unable to restore volumesnapshotrestore details %v", err)
+			}
+
+		}
+	}
+	if snapRestore == nil {
+		return fmt.Errorf("no valid volumesnapshotrestore specs found")
+	}
+
+	for vol, snap := range snapRestore.Status.RestoreVolumes {
+		snapshotData, err := k8sOps.GetSnapshotData(snap)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
+				snap, err)
+		}
+		err = k8sOps.ValidateSnapshotData(snapshotData.Metadata.Name, false, DefaultTimeout, DefaultRetryInterval)
+		if err != nil {
+			return fmt.Errorf("snapshot: %s is not complete. %v", snapshotData.Metadata.Name, err)
+		}
+		// validate each snap restore
+		if err := driver.ValidateVolumeSnapshotRestore(vol, snapshotData, timeStart); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
