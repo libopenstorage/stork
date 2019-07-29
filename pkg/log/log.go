@@ -250,3 +250,15 @@ func VolumeSnapshotRestoreLog(snapRestore *storkv1.VolumeSnapshotRestore) *logru
 	}
 	return logrus.WithFields(logrus.Fields{})
 }
+
+// ApplicationBackupScheduleLog formats a log message with applicationbackupschedule information
+func ApplicationBackupScheduleLog(backupSchedule *storkv1.ApplicationBackupSchedule) *logrus.Entry {
+	if backupSchedule != nil {
+		return logrus.WithFields(logrus.Fields{
+			"ApplicationBackupScheduleName":      backupSchedule.Name,
+			"ApplicationBackupScheduleNamespace": backupSchedule.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}

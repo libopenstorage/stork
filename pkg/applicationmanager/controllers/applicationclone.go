@@ -18,7 +18,6 @@ import (
 	"k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -112,6 +111,20 @@ func (a *ApplicationCloneController) setDefaults(clone *stork_api.ApplicationClo
 	}
 }
 
+// Make sure the source namespaces exists and create the destination
+// namespace if it doesn't exist
+func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.ApplicationClone) error {
+	_, err := k8s.Instance().GetNamespace(clone.Spec.SourceNamespace)
+	if err != nil {
+		return fmt.Errorf("error getting source namespace %v: %v", clone.Spec.SourceNamespace, err)
+	}
+	_, err = k8s.Instance().CreateNamespace(clone.Spec.DestinationNamespace, nil)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("error creating destination namespace %v: %v", clone.Spec.DestinationNamespace, err)
+	}
+	return nil
+}
+
 // Handle updates for ApplicationClone objects
 func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event) error {
 	switch o := event.Object.(type) {
@@ -140,10 +153,8 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 		a.setDefaults(clone)
 		switch clone.Status.Stage {
 		case stork_api.ApplicationCloneStageInitial:
-			// Make sure the source namespaces exist
-			_, err := k8s.Instance().GetNamespace(clone.Spec.SourceNamespace)
+			err = a.verifyNamespaces(clone)
 			if err != nil {
-				err = fmt.Errorf("error getting namespace %v: %v", clone.Spec.SourceNamespace, err)
 				log.ApplicationCloneLog(clone).Errorf(err.Error())
 				a.Recorder.Event(clone,
 					v1.EventTypeWarning,
@@ -558,7 +569,7 @@ func (a *ApplicationCloneController) applyResources(
 			o.(*unstructured.Unstructured), pvNameMappings,
 			namespaceMapping,
 			clone.Spec.ReplacePolicy == stork_api.ApplicationCloneReplacePolicyDelete && metadata.GetNamespace() != "")
-		if err != nil && (apierrors.IsAlreadyExists(err)) {
+		if err != nil && (errors.IsAlreadyExists(err)) {
 			switch clone.Spec.ReplacePolicy {
 			case stork_api.ApplicationCloneReplacePolicyDelete:
 				log.ApplicationCloneLog(clone).Errorf("Error deleting %v %v during clone: %v", objectType.GetKind(), metadata.GetName(), err)

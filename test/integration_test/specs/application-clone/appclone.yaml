@@ -1,0 +1,9 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationClone
+metadata:
+  name: clonemysql
+  namespace: kube-system
+spec:
+  sourceNamespace: mysql-1-pvc-app-clone-test
+  destinationNamespace: app-clone-test-clone
+

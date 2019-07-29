@@ -58,7 +58,11 @@ func (a *ApplicationManager) Init(adminNamespace string) error {
 	if err := cloneController.Init(adminNamespace); err != nil {
 		return err
 	}
-	return nil
+
+	scheduleController := &controllers.ApplicationBackupScheduleController{
+		Recorder: a.Recorder,
+	}
+	return scheduleController.Init()
 }
 
 func (a *ApplicationManager) createCRD() error {

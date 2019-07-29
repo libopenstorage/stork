@@ -26,6 +26,18 @@ func errFailedToInspectVolume(ID, key string, expected, actual interface{}) erro
 	}
 }
 
+// ErrFailedToValidateAttachment error type for failing to validate attachment of a volume
+type ErrFailedToValidateAttachment struct {
+	// ID is the ID/name of the volume that failed to validate attachment
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToValidateAttachment) Error() string {
+	return fmt.Sprintf("Failed to validate volume: %v attachment due to err: %v", e.ID, e.Cause)
+}
+
 // ErrFailedToDeleteVolume error type for failing to delete a volume
 type ErrFailedToDeleteVolume struct {
 	// ID is the ID/name of the volume that failed to delete
@@ -108,4 +120,40 @@ type ErrFailedToGetAggregationLevel struct {
 
 func (e *ErrFailedToGetAggregationLevel) Error() string {
 	return fmt.Sprintf("Failed to get aggregation level of the volume: %v due to err: %v", e.ID, e.Cause)
+}
+
+// ErrFailedToDecommissionNode error type for failed to remove from cluster
+type ErrFailedToDecommissionNode struct {
+	// Node is the node on which PX failed to remove from cluster
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDecommissionNode) Error() string {
+	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
+}
+
+// ErrFailedToGetNodeStatus error type when fail to get node status
+type ErrFailedToGetNodeStatus struct {
+	// Node where the service is not starting
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetNodeStatus) Error() string {
+	return fmt.Sprintf("Failed to get status for node: %v due to err: %v", e.Node, e.Cause)
+}
+
+// ErrFailedToRejoinNode error type for failed to remove from cluster
+type ErrFailedToRejoinNode struct {
+	// Node is the node on which PX failed to remove from cluster
+	Node string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToRejoinNode) Error() string {
+	return fmt.Sprintf("Failed to rejoin node: %v due to err: %v", e.Node, e.Cause)
 }

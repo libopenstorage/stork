@@ -175,6 +175,8 @@ type ServiceOps interface {
 	ValidateDeletedService(string, string) error
 	// DescribeService gets the service status
 	DescribeService(string, string) (*v1.ServiceStatus, error)
+	// PatchService patches the current service with the given json path
+	PatchService(name, namespace string, jsonPatch []byte) (*v1.Service, error)
 }
 
 // StatefulSetOps is an interface to perform k8s stateful set operations
@@ -493,6 +495,8 @@ type VolumeSnapshotRestoreOps interface {
 	ListVolumeSnapshotRestore(namespace string) (*v1alpha1.VolumeSnapshotRestoreList, error)
 	// DeleteVolumeSnapshotRestore delete given volumesnapshotrestore CRD
 	DeleteVolumeSnapshotRestore(name, namespace string) error
+	// ValidateVolumeSnapshotRestore validates given volumesnapshotrestore CRD
+	ValidateVolumeSnapshotRestore(name, namespace string, timeout, retry time.Duration) error
 }
 
 // RuleOps is an interface to perform operations for k8s stork rule
@@ -666,6 +670,8 @@ type BackupLocationOps interface {
 	UpdateBackupLocation(*v1alpha1.BackupLocation) (*v1alpha1.BackupLocation, error)
 	// DeleteBackupLocation deletes the BackupLocation
 	DeleteBackupLocation(string, string) error
+	// ValidateBackupLocation validates the BackupLocation
+	ValidateBackupLocation(string, string, time.Duration, time.Duration) error
 }
 
 // ApplicationBackupRestoreOps is an interface to perfrom k8s Application Backup
@@ -681,6 +687,8 @@ type ApplicationBackupRestoreOps interface {
 	UpdateApplicationBackup(*v1alpha1.ApplicationBackup) (*v1alpha1.ApplicationBackup, error)
 	// DeleteApplicationBackup deletes the ApplicationBackup
 	DeleteApplicationBackup(string, string) error
+	// ValidateApplicationBackup validates the ApplicationBackup
+	ValidateApplicationBackup(string, string, time.Duration, time.Duration) error
 	// CreateApplicationRestore creates the ApplicationRestore
 	CreateApplicationRestore(*v1alpha1.ApplicationRestore) (*v1alpha1.ApplicationRestore, error)
 	// GetApplicationRestore gets the ApplicationRestore
@@ -691,6 +699,8 @@ type ApplicationBackupRestoreOps interface {
 	UpdateApplicationRestore(*v1alpha1.ApplicationRestore) (*v1alpha1.ApplicationRestore, error)
 	// DeleteApplicationRestore deletes the ApplicationRestore
 	DeleteApplicationRestore(string, string) error
+	// ValidateApplicationRestore validates the ApplicationRestore
+	ValidateApplicationRestore(string, string, time.Duration, time.Duration) error
 }
 
 // ApplicationCloneOps is an interface to perfrom k8s Application Clone operations
@@ -705,6 +715,8 @@ type ApplicationCloneOps interface {
 	UpdateApplicationClone(*v1alpha1.ApplicationClone) (*v1alpha1.ApplicationClone, error)
 	// DeleteApplicationClone deletes the ApplicationClone
 	DeleteApplicationClone(string, string) error
+	// ValidateApplicationClone validates the ApplicationClone
+	ValidateApplicationClone(string, string, time.Duration, time.Duration) error
 }
 
 type privateMethods interface {
@@ -919,7 +931,8 @@ func (k *k8sOps) IsNodeReady(name string) error {
 			v1.NodeConditionType(v1.NodeMemoryPressure),
 			v1.NodeConditionType(v1.NodeDiskPressure),
 			v1.NodeConditionType(v1.NodeNetworkUnavailable):
-			if condition.Status != v1.ConditionStatus(v1.ConditionFalse) {
+			// only checks if condition is true, ignoring condition Unknown
+			if condition.Status == v1.ConditionStatus(v1.ConditionTrue) {
 				return fmt.Errorf("node: %v is not ready as condition: %v (%v) is %v. Reason: %v",
 					name, condition.Type, condition.Message, condition.Status, condition.Reason)
 			}
@@ -1365,6 +1378,15 @@ func (k *k8sOps) ValidateDeletedService(svcName string, svcNS string) error {
 	}
 
 	return nil
+}
+
+func (k *k8sOps) PatchService(name, namespace string, jsonPatch []byte) (*v1.Service, error) {
+	current, err := k.GetService(name, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().Services(current.Namespace).Patch(current.Name, types.StrategicMergePatchType, jsonPatch)
 }
 
 // Service APIs - END
@@ -3576,6 +3598,34 @@ func (k *k8sOps) DeleteVolumeSnapshotRestore(name, namespace string) error {
 	return k.storkClient.Stork().VolumeSnapshotRestores(namespace).Delete(name, &meta_v1.DeleteOptions{})
 }
 
+func (k *k8sOps) ValidateVolumeSnapshotRestore(name, namespace string, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		snapRestore, err := k.storkClient.Stork().VolumeSnapshotRestores(namespace).Get(name, meta_v1.GetOptions{})
+		if err != nil {
+			return "", true, err
+		}
+
+		if snapRestore.Status.Status == v1alpha1.VolumeSnapshotRestoreStatusSuccessful {
+			return "", false, nil
+		}
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name: snapRestore.Name,
+			Cause: fmt.Sprintf("VolumeSnapshotRestore failed . Error: %v .Expected status: %v Actual status: %v",
+				err, v1alpha1.VolumeSnapshotRestoreStatusSuccessful, snapRestore.Status.Status),
+			Type: snapRestore,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Restore Snapshot APIs - END
 
 // Rule APIs - BEGIN
@@ -4476,6 +4526,29 @@ func (k *k8sOps) UpdateBackupLocation(backupLocation *v1alpha1.BackupLocation) (
 	return k.storkClient.Stork().BackupLocations(backupLocation.Namespace).Update(backupLocation)
 }
 
+func (k *k8sOps) ValidateBackupLocation(name, namespace string, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		resp, err := k.GetBackupLocation(name, namespace)
+		if err != nil {
+			return "", true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("BackupLocation failed . Error: %v", err),
+				Type:  resp,
+			}
+		}
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
 // BackupLocation APIs - END
 
 // ApplicationBackupRestore APIs - BEGIN
@@ -4522,6 +4595,35 @@ func (k *k8sOps) UpdateApplicationBackup(backup *v1alpha1.ApplicationBackup) (*v
 	return k.storkClient.Stork().ApplicationBackups(backup.Namespace).Update(backup)
 }
 
+func (k *k8sOps) ValidateApplicationBackup(name, namespace string, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		applicationbackup, err := k.GetApplicationBackup(name, namespace)
+		if err != nil {
+			return "", true, err
+		}
+
+		if applicationbackup.Status.Status == v1alpha1.ApplicationBackupStatusSuccessful {
+			return "", false, nil
+		}
+
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  applicationbackup.Name,
+			Cause: fmt.Sprintf("Application backup failed . Error: %v .Expected status: %v Actual status: %v", err, v1alpha1.ApplicationBackupStatusSuccessful, applicationbackup.Status.Status),
+			Type:  applicationbackup,
+		}
+
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (k *k8sOps) GetApplicationRestore(name string, namespace string) (*v1alpha1.ApplicationRestore, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -4554,6 +4656,32 @@ func (k *k8sOps) DeleteApplicationRestore(name string, namespace string) error {
 	return k.storkClient.Stork().ApplicationRestores(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+func (k *k8sOps) ValidateApplicationRestore(name, namespace string, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		applicationrestore, err := k.storkClient.Stork().ApplicationRestores(namespace).Get(name, meta_v1.GetOptions{})
+		if err != nil {
+			return "", true, err
+		}
+
+		if applicationrestore.Status.Status == v1alpha1.ApplicationRestoreStatusSuccessful {
+			return "", false, nil
+		}
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  applicationrestore.Name,
+			Cause: fmt.Sprintf("Application restore failed . Error: %v .Expected status: %v Actual status: %v", err, v1alpha1.ApplicationRestoreStatusSuccessful, applicationrestore.Status.Status),
+			Type:  applicationrestore,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (k *k8sOps) UpdateApplicationRestore(restore *v1alpha1.ApplicationRestore) (*v1alpha1.ApplicationRestore, error) {
@@ -4608,6 +4736,32 @@ func (k *k8sOps) UpdateApplicationClone(clone *v1alpha1.ApplicationClone) (*v1al
 	}
 
 	return k.storkClient.Stork().ApplicationClones(clone.Namespace).Update(clone)
+}
+
+func (k *k8sOps) ValidateApplicationClone(name, namespace string, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		applicationclone, err := k.storkClient.Stork().ApplicationClones(namespace).Get(name, meta_v1.GetOptions{})
+		if err != nil {
+			return "", true, err
+		}
+
+		if applicationclone.Status.Status == v1alpha1.ApplicationCloneStatusSuccessful {
+			return "", false, nil
+		}
+		return "", true, &ErrFailedToValidateCustomSpec{
+			Name:  applicationclone.Name,
+			Cause: fmt.Sprintf("Application Clone failed . Error: %v .Expected status: %v Actual status: %v", err, v1alpha1.ApplicationCloneStatusSuccessful, applicationclone.Status.Status),
+			Type:  applicationclone,
+		}
+	}
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ApplicationClone APIs - END

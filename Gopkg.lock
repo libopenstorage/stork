@@ -753,14 +753,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:9a8ca07a2f12c22f75ef413fbf513b50cc41e6d6a40f421a479e3a1d0efc9f1b"
+  digest = "1:89f4a1aa41fb90f42bb69458c54661c4c40b7814cec28fedda18337db46214d2"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "a23d2690e3a8372c5e719f800c3eb782b6a53751"
+  revision = "81d22f475cbe83109672b3024dab3d544c807382"
 
 [[projects]]
   branch = "master"
@@ -780,7 +780,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:e51e5b9df72477effc7e00a734b39c50f813ef1a7cfae0215629848dec7f10cf"
+  digest = "1:936d8a289c09194375e6cf1d8c67e5a04bfaa38d4f3280c6cd5b55816f85aa2f"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -794,7 +794,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "b68d0e899b7780803b10d7659d74154a164c2273"
+  revision = "9367270f458c14bc432c4e4b8ab456a3b5567d10"
 
 [[projects]]
   branch = "master"
@@ -1874,6 +1874,7 @@
     "k8s.io/kubernetes/pkg/apis/core",
     "k8s.io/kubernetes/pkg/apis/core/v1",
     "k8s.io/kubernetes/pkg/apis/core/v1/helper",
+    "k8s.io/kubernetes/pkg/apis/core/validation",
     "k8s.io/kubernetes/pkg/kubectl/cmd/testing",
     "k8s.io/kubernetes/pkg/kubectl/cmd/util",
     "k8s.io/kubernetes/pkg/kubectl/genericclioptions",

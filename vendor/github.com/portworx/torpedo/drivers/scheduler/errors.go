@@ -301,3 +301,15 @@ type ErrFailedToValidateCustomSpec struct {
 func (e *ErrFailedToValidateCustomSpec) Error() string {
 	return fmt.Sprintf("Failed to validate custom spec : %v of type %v due to err: %v", e.Name, reflect.TypeOf(e.Type), e.Cause)
 }
+
+// ErrFailedToDecommissionNode error type when fail to decommission a node
+type ErrFailedToDecommissionNode struct {
+	// Node where the service is not starting
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDecommissionNode) Error() string {
+	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
+}

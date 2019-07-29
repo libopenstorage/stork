@@ -17,7 +17,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/portworx/sched-ops/k8s"
-	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -107,6 +106,9 @@ func TestMain(t *testing.T) {
 		t.Run("Snapshot", testSnapshot)
 		t.Run("CmdExecutor", asyncPodCommandTest)
 		t.Run("Migration", testMigration)
+		t.Run("ApplicationClone", testApplicationClone)
+		t.Run("Backup", testBackup)
+		t.Run("SnapshotRestore", testSnapshotRestore)
 		t.Skip("Skipping cluster domain tests")
 	}
 
@@ -232,7 +234,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 
 // write kubbeconfig file to /tmp/kubeconfig
 func dumpRemoteKubeConfig(configObject string) error {
-	cm, err := k8s_ops.Instance().GetConfigMap(configObject, "kube-system")
+	cm, err := k8s.Instance().GetConfigMap(configObject, "kube-system")
 	if err != nil {
 		logrus.Errorf("Error reading config map: %v", err)
 		return err
@@ -247,7 +249,7 @@ func dumpRemoteKubeConfig(configObject string) error {
 }
 
 func setRemoteConfig(kubeConfig string) error {
-	k8sOps := k8s_ops.Instance()
+	k8sOps := k8s.Instance()
 	if k8sOps == nil {
 		return fmt.Errorf("Unable to get k8s ops instance")
 	}
@@ -299,7 +301,7 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		return err
 	}
 
-	// stokctl generate command sets k8s_ops to remoteclusterconfig
+	// stokctl generate command sets sched-ops to remoteclusterconfig
 	err = setRemoteConfig("")
 	if err != nil {
 		logrus.Errorf("setting kubeconfig to default failed %v", err)
@@ -430,6 +432,27 @@ func setMockTime(t *time.Time) error {
 
 	time.Sleep(configMapSyncWaitTime)
 	return nil
+}
+
+func createApp(t *testing.T, testID string) *scheduler.Context {
+
+	ctxs, err := schedulerDriver.Schedule(testID,
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 1, len(volumeNames), "Should only have one volume")
+
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+	return ctxs[0]
 }
 
 func init() {

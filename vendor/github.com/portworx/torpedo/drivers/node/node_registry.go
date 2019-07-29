@@ -85,3 +85,8 @@ func Contains(nodes []Node, n Node) bool {
 	}
 	return false
 }
+
+// CleanupRegistry removes entry of all nodes from registry
+func CleanupRegistry() {
+	nodeRegistry = make(map[string]Node)
+}
