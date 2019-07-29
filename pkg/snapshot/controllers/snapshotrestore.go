@@ -216,7 +216,7 @@ func markPVCForRestore(pvcList []*v1.PersistentVolumeClaim) ([]*v1.PersistentVol
 		if err != nil {
 			return nil, err
 		}
-		log.PVCLog(newPvc).Infof("Updated pvc annotation %v", newPvc.Annotations)
+		log.PVCLog(newPvc).Debugf("Updated pvc annotation %v", newPvc.Annotations)
 		pods, err := k8s.Instance().GetPodsUsingPVC(newPvc.Name, newPvc.Namespace)
 		if err != nil {
 			return nil, err
@@ -230,12 +230,12 @@ func markPVCForRestore(pvcList []*v1.PersistentVolumeClaim) ([]*v1.PersistentVol
 				log.PodLog(&pod).Errorf("Error deleting pod %v: %v", pod.Name, err)
 				return updatedPvc, err
 			}
-			log.PodLog(&pod).Infof("Deleted before wait pod %v", pod.Name)
+			log.PodLog(&pod).Debugf("Deleted before wait pod %v", pod.Name)
 			if err := k8s.Instance().WaitForPodDeletion(pod.UID, pod.Namespace, 120*time.Second); err != nil {
 				log.PodLog(&pod).Errorf("Pod is not deleted %v:%v", pod.Name, err)
 				return updatedPvc, err
 			}
-			log.PodLog(&pod).Infof("Deleted pod %v", pod.Name)
+			log.PodLog(&pod).Debugf("Deleted pod %v", pod.Name)
 		}
 		updatedPvc = append(updatedPvc, newPvc)
 	}
