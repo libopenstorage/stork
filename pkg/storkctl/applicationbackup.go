@@ -201,15 +201,17 @@ func applicationBackupPrinter(applicationBackupList *storkv1.ApplicationBackupLi
 		elapsed := ""
 		if !applicationBackup.CreationTimestamp.IsZero() {
 			if applicationBackup.Status.Stage == storkv1.ApplicationBackupStageFinal {
-				if !applicationBackup.Status.FinishTimestamp.IsZero() {
-					elapsed = applicationBackup.Status.FinishTimestamp.Sub(applicationBackup.CreationTimestamp.Time).String()
+				if applicationBackup.Status.TriggerTimestamp.Time.IsZero() {
+					elapsed = "N/A"
+				} else if !applicationBackup.Status.FinishTimestamp.IsZero() {
+					elapsed = applicationBackup.Status.FinishTimestamp.Sub(applicationBackup.Status.TriggerTimestamp.Time).String()
 				}
 			} else {
-				elapsed = time.Since(applicationBackup.CreationTimestamp.Time).String()
+				elapsed = time.Since(applicationBackup.Status.TriggerTimestamp.Time).String()
 			}
 		}
 
-		creationTime := toTimeString(applicationBackup.CreationTimestamp.Time)
+		creationTime := toTimeString(applicationBackup.Status.TriggerTimestamp.Time)
 		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
 			name,
 			applicationBackup.Status.Stage,
