@@ -6,6 +6,7 @@ image_name="stork:master"
 test_image_name="stork_test:latest"
 remote_config_path=""
 run_cluster_domain_test=false
+environment_variables=""
 for i in "$@"
 do
 case $i in
@@ -44,6 +45,12 @@ case $i in
         shift
         shift
         ;;
+    --env_vars)
+        echo "Flag for environment variables: $2"
+        environment_variables=$2
+        shift
+        shift
+        ;;
 esac
 done
 
@@ -72,6 +79,17 @@ kubectl apply -f /specs/stork-deployment.yaml
 
 # Turn on test mode
 kubectl set env deploy/stork -n kube-system TEST_MODE="true"
+
+echo "Add environment variables to the stork deployment"
+if [ ! -z  $environment_variables ] ; then
+        for j in $(echo $environment_variables | awk -F, '{for(i=1;i<=NF;i++){print $i}}');
+          do
+                kubectl set env deploy/stork -n kube-system $j;
+          done
+else
+  echo "No environment variables passed."
+fi
+
 
 # Delete the pods to make sure we are waiting for the status from the
 # new pods
