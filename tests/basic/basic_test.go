@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
+	"github.com/sirupsen/logrus"
 )
 
 func TestBasic(t *testing.T) {
@@ -156,25 +157,27 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
 				nodesToBeDown := getNodesThatCanBeDown(ctx)
-
-				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
-					Inst().V.String(), ctx.App.Key, nodesToBeDown), func() {
-					StopVolDriverAndWait(nodesToBeDown)
-				})
-
-				Step(fmt.Sprintf("destroy app: %s", ctx.App.Key), func() {
-					err = Inst().S.Destroy(ctx, nil)
-					Expect(err).NotTo(HaveOccurred())
-
-					Step("wait for few seconds for app destroy to trigger", func() {
-						time.Sleep(10 * time.Second)
+				if len(nodesToBeDown) != 0 {
+					Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
+						Inst().V.String(), ctx.App.Key, nodesToBeDown), func() {
+						StopVolDriverAndWait(nodesToBeDown)
 					})
-				})
 
-				Step("restarting volume driver", func() {
-					StartVolDriverAndWait(nodesToBeDown)
-				})
+					Step(fmt.Sprintf("destroy app: %s", ctx.App.Key), func() {
+						err = Inst().S.Destroy(ctx, nil)
+						Expect(err).NotTo(HaveOccurred())
 
+						Step("wait for few seconds for app destroy to trigger", func() {
+							time.Sleep(10 * time.Second)
+						})
+					})
+
+					Step("restarting volume driver", func() {
+						StartVolDriverAndWait(nodesToBeDown)
+					})
+				} else {
+					logrus.Debugf("Not enough nodes to be down, skipping...")
+				}
 				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
 					err = Inst().S.WaitForDestroy(ctx)
 					Expect(err).NotTo(HaveOccurred())
@@ -209,7 +212,7 @@ func getNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(replicas).NotTo(BeEmpty())
 			// at least n-1 nodes with replica need to be up
-			maxNodesToBeDown := getMaxNodesToBeDown(len(replicas))
+			maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(replicas))
 			for _, nodeName := range replicas[maxNodesToBeDown:] {
 				nodesThatCantBeDown[nodeName] = true
 			}
@@ -291,13 +294,15 @@ var _ = Describe("{AppTasksDown}", func() {
 	})
 })
 
-func getMaxNodesToBeDown(replicas int) int {
+// getMaxNodesToBeDown based on the worker nodes and volume replicas it determines the maximum nodes that can be down
+func getMaxNodesToBeDown(nodes, replicas int) int {
 	if replicas == 1 {
 		return 0
 	}
-	if replicas%2 != 0 {
+	if nodes > 4 && replicas%2 != 0 {
 		return replicas/2 + 1
 	}
+
 	return replicas / 2
 }
 
