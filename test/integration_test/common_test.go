@@ -110,11 +110,11 @@ func TestMain(t *testing.T) {
 		t.Run("Extender", testExtender)
 		t.Run("HealthMonitor", testHealthMonitor)
 		t.Run("Snapshot", testSnapshot)
+		t.Run("SnapshotRestore", testSnapshotRestore)
 		t.Run("CmdExecutor", asyncPodCommandTest)
 		t.Run("Migration", testMigration)
 		t.Run("ApplicationClone", testApplicationClone)
 		t.Run("Backup", testBackup)
-		t.Run("SnapshotRestore", testSnapshotRestore)
 		t.Skip("Skipping cluster domain tests")
 	}
 
