@@ -1073,7 +1073,6 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			podList = append(podList, pods.(v1.Pod))
 		}
 	}
-
 	for _, spec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyVolumeSnapshotRestoreObject(spec, ctx.App)
@@ -1116,14 +1115,14 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	}
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-		if err = k.WaitForDestroy(ctx); err != nil {
+		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
 		}
 		if err = k.waitForCleanup(ctx, podList); err != nil {
 			return err
 		}
 	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err = k.WaitForDestroy(ctx); err != nil {
+		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
 		}
 	}
@@ -1175,11 +1174,11 @@ func (k *K8s) getVolumeDirPath(podUID types.UID) string {
 
 //WaitForDestroy wait for schedule context destroy
 //
-func (k *K8s) WaitForDestroy(ctx *scheduler.Context) error {
+func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) error {
 	k8sOps := k8s_ops.Instance()
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
-			if err := k8sOps.ValidateTerminatedDeployment(obj); err != nil {
+			if err := k8sOps.ValidateTerminatedDeployment(obj, timeout, DefaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of deployment: %v. Err: %v", obj.Name, err),
@@ -1188,7 +1187,7 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context) error {
 
 			logrus.Infof("[%v] Validated destroy of Deployment: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
-			if err := k8sOps.ValidateTerminatedStatefulSet(obj); err != nil {
+			if err := k8sOps.ValidateTerminatedStatefulSet(obj, timeout, DefaultRetryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateAppDestroy{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate destroy of statefulset: %v. Err: %v", obj.Name, err),
@@ -1953,6 +1952,16 @@ func (k *K8s) StartSchedOnNode(n node.Node) error {
 		}
 	}
 	return nil
+}
+
+//EnableSchedulingOnNode enable apps to be scheduled to a given k8s worker node
+func (k *K8s) EnableSchedulingOnNode(n node.Node) error {
+	return k8s_ops.Instance().UnCordonNode(n.Name, DefaultTimeout, DefaultRetryInterval)
+}
+
+//DisableSchedulingOnNode disable apps to be scheduled to a given k8s worker node
+func (k *K8s) DisableSchedulingOnNode(n node.Node) error {
+	return k8s_ops.Instance().CordonNode(n.Name, DefaultTimeout, DefaultRetryInterval)
 }
 
 //IsScalable check whether scalable
