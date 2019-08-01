@@ -94,11 +94,11 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 var _ = Describe("{ASGKillRandomNodes}", func() {
 	It("keeps killing worker nodes", func() {
 
-		var storageNodes []node.Node
 		var contexts []*scheduler.Context
 		var err error
 
-		storageNodes, err = getStorageNodes()
+		// Get list of nodes where storage driver is installed
+		storageDriverNodes := node.GetStorageDriverNodes()
 		Expect(err).NotTo(HaveOccurred())
 
 		Step("Ensure apps are deployed", func() {
@@ -128,7 +128,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 			}
 			if Inst().MinRunTimeMins == 0 {
 				// Run once
-				KillANodeAndValidate(storageNodes)
+				KillANodeAndValidate(storageDriverNodes)
 
 				// Validate applications and tear down
 				opts := make(map[string]bool)
@@ -136,7 +136,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 				ValidateAndDestroy(contexts, opts)
 			} else {
 				// Run once till timer gets triggered
-				KillANodeAndValidate(storageNodes)
+				KillANodeAndValidate(storageDriverNodes)
 
 				Step("validate applications", func() {
 					for _, ctx := range contexts {
@@ -151,7 +151,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 				for {
 					select {
 					case <-ticker.C:
-						KillANodeAndValidate(storageNodes)
+						KillANodeAndValidate(storageDriverNodes)
 
 						Step("validate applications", func() {
 							for _, ctx := range contexts {
@@ -234,9 +234,9 @@ func getStorageNodes() ([]node.Node, error) {
 	return storageNodes, nil
 }
 
-func KillANodeAndValidate(storageNodes []node.Node) {
+func KillANodeAndValidate(storageDriverNodes []node.Node) {
 	rand.Seed(time.Now().Unix())
-	nodeToKill := storageNodes[rand.Intn(len(storageNodes))]
+	nodeToKill := storageDriverNodes[rand.Intn(len(storageDriverNodes))]
 
 	Step(fmt.Sprintf("Deleting node [%v]", nodeToKill.Name), func() {
 		err := Inst().N.DeleteNode(nodeToKill, nodeDeleteTimeoutMins)
@@ -254,6 +254,6 @@ func KillANodeAndValidate(storageNodes []node.Node) {
 	Expect(err).NotTo(HaveOccurred())
 
 	Step(fmt.Sprintf("Validate number of storage nodes after killing node [%v]", nodeToKill.Name), func() {
-		ValidateClusterSize(int64(len(storageNodes)))
+		ValidateClusterSize(int64(len(storageDriverNodes)))
 	})
 }
