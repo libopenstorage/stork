@@ -367,7 +367,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
-		specObjects, err := k.createSpecObjects(app, appNamespace, options.StorageProvisioner)
+		specObjects, err := k.CreateSpecObjects(app, appNamespace, options.StorageProvisioner)
 		if err != nil {
 			return nil, err
 		}
@@ -387,7 +387,8 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	return contexts, nil
 }
 
-func (k *K8s) createSpecObjects(app *spec.AppSpec, namespace, storageprovisioner string) ([]interface{}, error) {
+// CreateSpecObjects Create application
+func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace, storageprovisioner string) ([]interface{}, error) {
 	var specObjects []interface{}
 	ns, err := k.createNamespace(app, namespace)
 	if err != nil {
@@ -507,7 +508,7 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		apps = append(apps, spec)
 	}
 	for _, app := range apps {
-		objects, err := k.createSpecObjects(app, appNamespace, options.StorageProvisioner)
+		objects, err := k.CreateSpecObjects(app, appNamespace, options.StorageProvisioner)
 		if err != nil {
 			return err
 		}
