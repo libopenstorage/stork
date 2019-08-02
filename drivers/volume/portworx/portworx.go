@@ -1417,12 +1417,11 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 			isSuccess = true
 			break
 		}
-		logrus.Infof("Alert received %v", alert.GetMessage())
 	}
 	if isSuccess {
 		return nil
 	}
-	return fmt.Errorf("restore failed")
+	return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
 }
 
 func init() {

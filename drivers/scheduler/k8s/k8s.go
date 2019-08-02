@@ -1050,6 +1050,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated VolumeSnapshotRestore: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Metadata.Name,
+					Cause: fmt.Sprintf("Failed to validate VolumeSnapshotRestore: %v. Err: %v", obj.Metadata.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated VolumeSnapshotRestore: %v", ctx.App.Key, obj.Metadata.Name)
 		}
 	}
 
@@ -2191,6 +2200,7 @@ func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart ti
 	}
 
 	for vol, snap := range snapRestore.Status.RestoreVolumes {
+		logrus.Infof("validating volume %v is restored from %v", vol, snap)
 		snapshotData, err := k8sOps.GetSnapshotData(snap)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
