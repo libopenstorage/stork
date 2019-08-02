@@ -309,34 +309,6 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	})
 }
 
-// CollectSupport creates a support bundle
-func CollectSupport() {
-	context(fmt.Sprintf("generating support bundle..."), func() {
-		Step(fmt.Sprintf("save journal output on each node"), func() {
-			nodes := node.GetWorkerNodes()
-			expect(nodes).NotTo(beEmpty())
-
-			journalCmd := fmt.Sprintf(
-				"echo t > /proc/sysrq-trigger && journalctl -l > ~/all_journal_%v",
-				time.Now().Format(time.RFC3339))
-			for _, n := range nodes {
-				if !n.IsStorageDriverInstalled {
-					continue
-				}
-				logrus.Infof("saving journal output on %s", n.Name)
-				_, err := Inst().N.RunCommand(n, journalCmd, node.ConnectionOpts{
-					Timeout:         2 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
-					Sudo:            true,
-				})
-				if err != nil {
-					logrus.Warnf("failed to run cmd: %s. err: %v", journalCmd, err)
-				}
-			}
-		})
-	})
-}
-
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context(fmt.Sprintf("checking for core files..."), func() {

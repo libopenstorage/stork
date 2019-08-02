@@ -179,7 +179,6 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	CollectSupport()
 	ValidateCleanup()
 })
 
