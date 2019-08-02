@@ -26,7 +26,9 @@ const (
 	annotationPrefix   = "stork.libopenstorage.org/"
 	storkSchedulerName = "stork"
 	// RestoreAnnotation for pvc which has in-place resotre in progress
-	RestoreAnnotation = annotationPrefix + "restore-in-progress"
+	RestoreAnnotation            = annotationPrefix + "restore-in-progress"
+	validateSnapshotTimeout      = 1 * time.Minute
+	validateSnapshotRetryTimeout = 5 * time.Second
 )
 
 // SnapshotRestoreController controller to watch over In-Place snap restore CRD's
@@ -154,6 +156,12 @@ func (c *SnapshotRestoreController) handleInitial(snapRestore *stork_api.VolumeS
 		if err != nil {
 			return fmt.Errorf("unable to get get snapshot  details %s: %v",
 				snapName, err)
+		}
+		if err := k8s.Instance().ValidateSnapshot(snapName,
+			snapNamespace, false,
+			validateSnapshotRetryTimeout,
+			validateSnapshotTimeout); err != nil {
+			return fmt.Errorf("snapshot is not complete %v", err)
 		}
 		snapshotList = append(snapshotList, snapshot)
 	}
