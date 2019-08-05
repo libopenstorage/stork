@@ -150,7 +150,6 @@ var _ = Describe("{VolumeUpdate}", func() {
 
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	CollectSupport()
 	ValidateCleanup()
 })
 

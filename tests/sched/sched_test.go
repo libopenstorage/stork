@@ -72,7 +72,6 @@ var _ = Describe("{StopScheduler}", func() {
 
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	CollectSupport()
 	ValidateCleanup()
 })
 

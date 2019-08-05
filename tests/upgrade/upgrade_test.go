@@ -102,7 +102,6 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
-	CollectSupport()
 	ValidateCleanup()
 })
 
