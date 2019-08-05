@@ -14,6 +14,7 @@ func newSuspendCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams
 	suspendCommands.AddCommand(
 		newSuspendMigrationSchedulesCommand(cmdFactory, ioStreams),
 		newSuspendSnapshotSchedulesCommand(cmdFactory, ioStreams),
+		newSuspendApplicationBackupSchedulesCommand(cmdFactory, ioStreams),
 	)
 
 	return suspendCommands

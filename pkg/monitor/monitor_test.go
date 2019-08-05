@@ -52,7 +52,7 @@ func setup(t *testing.T) {
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
-	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil, nil)
+	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil, nil, nil)
 
 	storkdriver, err := volume.Get(mockDriverName)
 	require.NoError(t, err, "Error getting mock volume driver")
