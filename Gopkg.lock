@@ -666,15 +666,18 @@
 
 [[projects]]
   branch = "release-3.11"
-  digest = "1:21e11e06ebb4c8dbdfab6198acf6cd68ffe61d67c58c858f2218f048c557bf4f"
+  digest = "1:9d9940dc42930d44ab32d69336bb12cf4711b8a0bbb04cb7f3b00c98f37951ba"
   name = "github.com/openshift/api"
-  packages = ["apps/v1"]
+  packages = [
+    "apps/v1",
+    "security/v1",
+  ]
   pruneopts = "UT"
   revision = "8741ff068a473be041d7bafb4502c12e4f10aab5"
 
 [[projects]]
   branch = "release-3.11"
-  digest = "1:fec9abedd6294f03bdc312e2bc1fb4bc7c456ecd13885eeccbb55a119de0ded4"
+  digest = "1:8c7797d9cbadb27fa17a26d62c549208432355039172d5db44961aa80023cba6"
   name = "github.com/openshift/client-go"
   packages = [
     "apps/clientset/versioned",
@@ -682,6 +685,9 @@
     "apps/clientset/versioned/scheme",
     "apps/clientset/versioned/typed/apps/v1",
     "apps/clientset/versioned/typed/apps/v1/fake",
+    "security/clientset/versioned",
+    "security/clientset/versioned/scheme",
+    "security/clientset/versioned/typed/security/v1",
   ]
   pruneopts = "UT"
   revision = "431ec9a26e5021f35fa41ee9a89842db9bfdb370"
@@ -753,14 +759,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:89f4a1aa41fb90f42bb69458c54661c4c40b7814cec28fedda18337db46214d2"
+  digest = "1:001479d51083b90646304b4a84463b0bfe707e61c01c5764bac5440a38822006"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "81d22f475cbe83109672b3024dab3d544c807382"
+  revision = "034094c6a4ee31698ca30d721763b6ee65f6ba55"
 
 [[projects]]
   branch = "master"
@@ -780,7 +786,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:936d8a289c09194375e6cf1d8c67e5a04bfaa38d4f3280c6cd5b55816f85aa2f"
+  digest = "1:8f28443aa0b34c9e56ee30396c81bef48832f58d230e184dcd1ebde66a230cc5"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -794,7 +800,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "9367270f458c14bc432c4e4b8ab456a3b5567d10"
+  revision = "53e5d84c2035ce0bbcbca41520a49ed621765782"
 
 [[projects]]
   branch = "master"
