@@ -64,7 +64,7 @@ func resetTest() {
 	tf.Client = fakeRestClient
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
-	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil, fakeOCPClient)
+	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil, fakeOCPClient, nil)
 }
 
 func testCommon(t *testing.T, cmdArgs []string, obj runtime.Object, expected string, errorExpected bool) {
