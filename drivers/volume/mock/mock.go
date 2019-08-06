@@ -270,6 +270,11 @@ func (m *Driver) GetVolumeSnapshotRestoreStatus(*stork_crd.VolumeSnapshotRestore
 	return &errors.ErrNotImplemented{}
 }
 
+// CleanupSnapshotRestoreObjects deletes restore objects if any
+func (m *Driver) CleanupSnapshotRestoreObjects(*stork_crd.VolumeSnapshotRestore) error {
+	return &errors.ErrNotImplemented{}
+}
+
 func init() {
 	if err := storkvolume.Register(driverName, &Driver{}); err != nil {
 		logrus.Panicf("Error registering mock volume driver: %v", err)
