@@ -992,6 +992,31 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 	}
 }
 
+// CleanupSnapshotRestoreObjects deletes restore objects if any
+func (p *portworx) CleanupSnapshotRestoreObjects(snapRestore *stork_crd.VolumeSnapshotRestore) error {
+	logrus.Infof("Cleaning up in-place restore objects")
+	volRestores, _, _, err := processRestoreVolumes(snapRestore.Status.RestoreVolumes)
+	if err != nil {
+		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Unable to process volume information %v", err)
+		return err
+	}
+	for volID := range volRestores {
+		logrus.Infof("Deleting volume %v", volID)
+		// Get volume client from user context
+		volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
+		if err != nil {
+			return err
+		}
+		// Delete restore volume
+		err = volDriver.Delete(restoreNamePrefix + volID)
+		if err != nil {
+			return fmt.Errorf("failed to delete volume %v: %v", restoreNamePrefix+volID, err)
+		}
+	}
+
+	return nil
+}
+
 // StartVolumeSnapshotRestore will prepare volume for restore
 func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore) error {
 
@@ -1051,7 +1076,7 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 				}
 			}
 			replNodes := vols[0].GetReplicaSets()[0]
-			taskID := restoreTaskPrefix + snapID + "-" + volID
+			taskID := restoreTaskPrefix + snapID + "-" + volID + string(snapRestore.GetUID())
 			restoreName := restoreNamePrefix + volID
 			_, err = volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 				Name:              taskID,
@@ -1099,7 +1124,7 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeS
 		return nil
 	}
 	for _, volInfo := range snapRestore.Status.Volumes {
-		taskID := restoreTaskPrefix + volInfo.Snapshot + "-" + volInfo.Volume
+		taskID := restoreTaskPrefix + volInfo.Snapshot + "-" + volInfo.Volume + string(snapRestore.GetUID())
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudRestoreOp, taskID)
 		if isCloudsnapStatusActive(csStatus.status) {
 			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusInProgress

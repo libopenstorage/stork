@@ -150,11 +150,14 @@ type SnapshotRestorePluginInterface interface {
 	StartVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
 
 	// CompleteVolumeSnapshotRestore will perform in-place restore for given snapshot and associated pvc
-	//  Returns error if restore failed
+	// Returns error if restore failed
 	CompleteVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error
 
 	// GetVolumeSnapshotRestore returns snapshot restore status
 	GetVolumeSnapshotRestoreStatus(*stork_crd.VolumeSnapshotRestore) error
+
+	// CleanupSnapshotRestoreObjects deletes restore objects if any
+	CleanupSnapshotRestoreObjects(*stork_crd.VolumeSnapshotRestore) error
 }
 
 // ClonePluginInterface Interface to clone volumes

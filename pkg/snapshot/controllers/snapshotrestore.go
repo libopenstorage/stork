@@ -73,11 +73,6 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 			return fmt.Errorf("empty snapshot name")
 		}
 
-		if snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusSuccessful ||
-			snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusFailed {
-			return nil
-		}
-
 		if event.Deleted {
 			return c.handleDelete(snapRestore)
 		}
@@ -96,6 +91,8 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 					string(snapRestore.Status.Status),
 					"Snapshot in-Place  Restore completed")
 			}
+		case stork_api.VolumeSnapshotRestoreStatusFailed:
+			err = c.Driver.CleanupSnapshotRestoreObjects(snapRestore)
 		case stork_api.VolumeSnapshotRestoreStatusSuccessful:
 			return nil
 		default:
@@ -326,8 +323,7 @@ func (c *SnapshotRestoreController) createCRD() error {
 }
 
 func (c *SnapshotRestoreController) handleDelete(snapRestore *stork_api.VolumeSnapshotRestore) error {
-	// TODO: Delete restore objects
-	return nil
+	return c.Driver.CleanupSnapshotRestoreObjects(snapRestore)
 }
 
 func (c *SnapshotRestoreController) waitForRestoreToReady(
@@ -371,7 +367,6 @@ func (c *SnapshotRestoreController) waitForRestoreToReady(
 					v1.EventTypeWarning,
 					string(vInfo.RestoreStatus),
 					fmt.Sprintf("Error restoring volume %v: %v", vInfo.Volume, vInfo.Reason))
-				snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusFailed
 				return false, fmt.Errorf("restore failed for volume: %v", vInfo.Volume)
 			} else if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusSuccessful {
 				c.Recorder.Event(snapRestore,
