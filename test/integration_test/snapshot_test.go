@@ -35,7 +35,7 @@ func testSnapshot(t *testing.T) {
 	t.Run("snapshotScaleTest", snapshotScaleTest)
 	t.Run("groupSnapshotTest", groupSnapshotTest)
 	t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
-	t.Run("scheduleTests", scheduleTests)
+	t.Run("scheduleTests", snapshotScheduleTests)
 	t.Run("storageclassTests", storageclassTests)
 }
 
@@ -334,14 +334,14 @@ func snapshotScaleTest(t *testing.T) {
 	}
 }
 
-func scheduleTests(t *testing.T) {
+func snapshotScheduleTests(t *testing.T) {
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
-	t.Run("intervalTest", intervalScheduleSnapshotTest)
-	t.Run("dailyTest", dailyScheduleSnapshotTest)
-	t.Run("weeklyTest", weeklyScheduleSnapshotTest)
-	t.Run("monthlyTest", monthlyScheduleSnapshotTest)
-	t.Run("invalidPolicyTest", invalidPolicyTest)
+	t.Run("intervalTest", intervalSnapshotScheduleTest)
+	t.Run("dailyTest", dailySnapshotScheduleTest)
+	t.Run("weeklyTest", weeklySnapshotScheduleTest)
+	t.Run("monthlyTest", monthlySnapshotScheduleTest)
+	t.Run("invalidPolicyTest", invalidPolicySnapshotScheduleTest)
 }
 
 func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName string, snapshotScheduleName string) {
@@ -358,7 +358,7 @@ func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName 
 	require.Equal(t, 0, len(snapshotList.Items), fmt.Sprintf("All snapshots should have been deleted in namespace %v", namespace))
 }
 
-func intervalScheduleSnapshotTest(t *testing.T) {
+func intervalSnapshotScheduleTest(t *testing.T) {
 	ctx := createApp(t, "interval-snap-sched-test")
 	policyName := "intervalpolicy"
 	retain := 2
@@ -410,7 +410,7 @@ func intervalScheduleSnapshotTest(t *testing.T) {
 	destroyAndWait(t, []*scheduler.Context{ctx})
 }
 
-func dailyScheduleSnapshotTest(t *testing.T) {
+func dailySnapshotScheduleTest(t *testing.T) {
 	ctx := createApp(t, "daily-snap-sched-test")
 	policyName := "dailypolicy"
 	retain := 2
@@ -453,7 +453,7 @@ func dailyScheduleSnapshotTest(t *testing.T) {
 	destroyAndWait(t, []*scheduler.Context{ctx})
 }
 
-func weeklyScheduleSnapshotTest(t *testing.T) {
+func weeklySnapshotScheduleTest(t *testing.T) {
 	ctx := createApp(t, "weekly-snap-sched-test")
 	policyName := "weeklypolicy"
 	retain := 2
@@ -497,7 +497,7 @@ func weeklyScheduleSnapshotTest(t *testing.T) {
 	destroyAndWait(t, []*scheduler.Context{ctx})
 }
 
-func monthlyScheduleSnapshotTest(t *testing.T) {
+func monthlySnapshotScheduleTest(t *testing.T) {
 	ctx := createApp(t, "monthly-snap-sched-test")
 	policyName := "monthlypolicy"
 	retain := 2
@@ -568,7 +568,7 @@ func commonSnapshotScheduleTests(
 		namespace,
 		snapshotScheduleRetryTimeout,
 		snapshotScheduleRetryInterval)
-	require.NoError(t, err, "Error validating daily snapshot schedule")
+	require.NoError(t, err, "Error validating snapshot schedule")
 	require.Equal(t, 1, len(snapStatuses), "Should have snapshots for only one policy type")
 	require.Equal(t, 1, len(snapStatuses[policyType]), fmt.Sprintf("Should have only one snapshot for %v schedule", scheduleName))
 	logrus.Infof("Validated first snapshotschedule %v", scheduleName)
@@ -596,7 +596,7 @@ func commonSnapshotScheduleTests(
 	deletePolicyAndSnapshotSchedule(t, namespace, policyName, scheduleName)
 }
 
-func invalidPolicyTest(t *testing.T) {
+func invalidPolicySnapshotScheduleTest(t *testing.T) {
 	ctx := createApp(t, "invalid-snap-sched-test")
 	policyName := "invalidpolicy"
 	scheduledTime := time.Now()
