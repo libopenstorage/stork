@@ -111,7 +111,7 @@ func (m *MigrationScheduleController) Handle(ctx context.Context, event sdk.Even
 					string(stork_api.MigrationStatusFailed),
 					msg)
 				log.MigrationScheduleLog(migrationSchedule).Error(msg)
-				return err
+				return nil
 			}
 
 			// Start a migration for a policy if required
