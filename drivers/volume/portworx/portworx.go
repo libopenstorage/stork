@@ -1001,20 +1001,41 @@ func (p *portworx) CleanupSnapshotRestoreObjects(snapRestore *stork_crd.VolumeSn
 		return err
 	}
 	for volID := range volRestores {
-		logrus.Infof("Deleting volume %v", volID)
+		volName := restoreNamePrefix + getUidforRestore(volID, string(snapRestore.GetUID()))
+		taskName := restoreTaskPrefix + getUidforRestore(volID, string(snapRestore.GetUID()))
+
+		log.VolumeSnapshotRestoreLog(snapRestore).Infof("Deleting volume %v", volName)
 		// Get volume client from user context
 		volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
 		if err != nil {
 			return err
 		}
-		// Delete restore volume
-		err = volDriver.Delete(restoreNamePrefix + volID)
+
+		// stop cs restore
+		input := &api.CloudBackupStateChangeRequest{
+			Name:           taskName,
+			RequestedState: api.CloudBackupRequestedStateStop,
+		}
+		err = volDriver.CloudBackupStateChange(input)
 		if err != nil {
-			return fmt.Errorf("failed to delete volume %v: %v", restoreNamePrefix+volID, err)
+			if !(strings.Contains(err.Error(), "Failed to change state: No active backup/restore for the volume") ||
+				strings.Contains(err.Error(), "not found")) {
+				return err
+			}
+		}
+		// Delete restore volume
+		err = volDriver.Delete(volName)
+		if err != nil {
+			log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Failed to delete volume %v", err)
+			return fmt.Errorf("failed to delete volume %v: %v", volName, err)
 		}
 	}
 
 	return nil
+}
+
+func getUidforRestore(volID, restoreID string) string {
+	return volID + "-" + restoreID
 }
 
 // StartVolumeSnapshotRestore will prepare volume for restore
@@ -1038,7 +1059,8 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 		}
 		for volID, snapID := range volRestores {
 			// Get Volume Info
-			vols, err := volDriver.Inspect([]string{volID, restoreNamePrefix + volID})
+			uid := getUidforRestore(volID, string(snapRestore.GetUID()))
+			vols, err := volDriver.Inspect([]string{volID, restoreNamePrefix + uid})
 			if err != nil {
 				return &ErrFailedToInspectVolume{
 					ID:    volID,
@@ -1051,8 +1073,8 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 				}
 			}
 			replNodes := vols[0].GetReplicaSets()[0]
-			taskID := restoreTaskPrefix + snapID + "-" + volID + string(snapRestore.GetUID())
-			restoreName := restoreNamePrefix + volID
+			taskID := restoreTaskPrefix + uid
+			restoreName := restoreNamePrefix + uid
 			_, err = volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 				Name:              taskID,
 				ID:                snapID,
@@ -1099,7 +1121,8 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeS
 		return nil
 	}
 	for _, volInfo := range snapRestore.Status.Volumes {
-		taskID := restoreTaskPrefix + volInfo.Snapshot + "-" + volInfo.Volume + string(snapRestore.GetUID())
+		uid := getUidforRestore(volInfo.Volume, string(snapRestore.GetUID()))
+		taskID := restoreTaskPrefix + uid
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudRestoreOp, taskID)
 		if isCloudsnapStatusActive(csStatus.status) {
 			volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusInProgress
@@ -1109,11 +1132,11 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeS
 			volInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
 		} else {
 			// check for ha update and then mark as successful
-			isUpdate, err := p.checkAndUpdateHaLevel(volInfo.Volume, snapRestore.Annotations)
+			isUpdate, err := p.checkAndUpdateHaLevel(volInfo.Volume, uid, snapRestore.Annotations)
 			if err != nil {
 				volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusFailed
 				volInfo.Reason = fmt.Sprintf("Restore ha-update failed for volume: %v", err.Error())
-				return nil
+				return err
 			}
 			if !isUpdate {
 				volInfo.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusInProgress
@@ -1128,7 +1151,7 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeS
 	return nil
 }
 
-func (p *portworx) checkAndUpdateHaLevel(volID string, params map[string]string) (bool, error) {
+func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]string) (bool, error) {
 	// Get volume client from user context
 	volDriver, err := p.getUserVolDriver(params)
 	if err != nil {
@@ -1147,7 +1170,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID string, params map[string]string)
 			Cause: fmt.Sprintf("Volume not found err: %v", err),
 		}
 	}
-	restoreVols, err := volDriver.Inspect([]string{restoreNamePrefix + volID})
+	restoreVols, err := volDriver.Inspect([]string{restoreNamePrefix + uid})
 	if err != nil {
 		return false, &ErrFailedToInspectVolume{
 			ID:    volID,
@@ -1226,9 +1249,9 @@ func (p *portworx) CompleteVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSn
 	}
 	switch snapType {
 	case "", crdv1.PortworxSnapshotTypeLocal:
-		return p.pxSnapshotRestore(volRestores, snapRestore.Annotations, false)
+		return p.pxSnapshotRestore(volRestores, snapRestore.Annotations, false, string(snapRestore.GetUID()))
 	case crdv1.PortworxSnapshotTypeCloud:
-		return p.pxSnapshotRestore(volRestores, snapRestore.Annotations, true)
+		return p.pxSnapshotRestore(volRestores, snapRestore.Annotations, true, string(snapRestore.GetUID()))
 	default:
 		return fmt.Errorf("invalid SourceType for snapshot(local/cloud)")
 	}
@@ -1262,6 +1285,7 @@ func (p *portworx) pxSnapshotRestore(
 	restoreVolumes map[string]string,
 	params map[string]string,
 	isCloudSnap bool,
+	restoreID string,
 ) error {
 	// Get volume client from user context
 	volDriver, err := p.getUserVolDriver(params)
@@ -1271,7 +1295,7 @@ func (p *portworx) pxSnapshotRestore(
 	for volID, snapID := range restoreVolumes {
 		logrus.Infof("Restoring volume %v with local snapshot %v", volID, snapID)
 		if isCloudSnap {
-			snapID = restoreNamePrefix + volID
+			snapID = restoreNamePrefix + getUidforRestore(volID, restoreID)
 		}
 
 		err = wait.ExponentialBackoff(restoreAPICallBackoff, func() (bool, error) {
