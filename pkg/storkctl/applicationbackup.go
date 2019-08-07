@@ -84,7 +84,7 @@ func newCreateApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 	createApplicationBackupCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for applicationbackup to complete")
 	createApplicationBackupCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing applicationbackup")
 	createApplicationBackupCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing applicationbackup")
-	createApplicationBackupCommand.Flags().StringVarP(&backupLocation, "backupLocation", "", "", "BackupLocation to use for the backup")
+	createApplicationBackupCommand.Flags().StringVarP(&backupLocation, "backupLocation", "b", "", "BackupLocation to use for the backup")
 
 	return createApplicationBackupCommand
 }

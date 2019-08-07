@@ -83,7 +83,7 @@ type Driver interface {
 	Destroy(*Context, map[string]bool) error
 
 	// WaitForDestroy waits for application to destroy.
-	WaitForDestroy(*Context) error
+	WaitForDestroy(*Context, time.Duration) error
 
 	// DeleteTasks deletes all tasks of the application (not the applicaton)
 	DeleteTasks(*Context) error
@@ -126,6 +126,12 @@ type Driver interface {
 
 	// RescanSpecs specified in specDir
 	RescanSpecs(specDir string) error
+
+	// EnableSchedulingOnNode enable apps to be scheduled to a given node
+	EnableSchedulingOnNode(n node.Node) error
+
+	// DisableSchedulingOnNode disable apps to be scheduled to a given node
+	DisableSchedulingOnNode(n node.Node) error
 
 	// PrepareNodeToDecommission prepares a given node for decommissioning
 	PrepareNodeToDecommission(n node.Node, provisioner string) error

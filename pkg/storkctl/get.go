@@ -28,6 +28,7 @@ func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *c
 		newGetClusterDomainUpdateCommand(cmdFactory, ioStreams),
 		newGetVolumeSnapshotRestoreCommand(cmdFactory, ioStreams),
 		newGetApplicationBackupCommand(cmdFactory, ioStreams),
+		newGetApplicationBackupScheduleCommand(cmdFactory, ioStreams),
 		newGetApplicationRestoreCommand(cmdFactory, ioStreams),
 		newGetApplicationCloneCommand(cmdFactory, ioStreams),
 		newGetBackupLocationCommand(cmdFactory, ioStreams),

@@ -1040,6 +1040,7 @@ func getUidforRestore(volID, restoreID string) string {
 
 // StartVolumeSnapshotRestore will prepare volume for restore
 func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestore) error {
+
 	volumeInfos := make([]*stork_crd.RestoreVolumeInfo, 0)
 	volRestores, snapType, credID, err := processRestoreVolumes(snapRestore.Status.RestoreVolumes)
 	if err != nil {
@@ -1052,6 +1053,20 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 		snapRestore.Status.Volumes = volumeInfos
 		return nil
 	case crdv1.PortworxSnapshotTypeCloud:
+		ok, msg, err := p.ensureNodesHaveMinVersion("2.2.0")
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			err = &errors.ErrNotSupported{
+				Feature: "VolumeSnapshotRestore for Cloudsnaps",
+				Reason:  "Only supported on PX version 2.2.0 onwards: " + msg,
+			}
+
+			return err
+		}
+
 		// Get volume client from user context
 		volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
 		if err != nil {
@@ -2383,6 +2398,20 @@ func (p *portworx) addApplicationBackupCloudsnapInfo(
 }
 
 func (p *portworx) StartBackup(backup *stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error) {
+	ok, msg, err := p.ensureNodesHaveMinVersion("2.2.0")
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		err = &errors.ErrNotSupported{
+			Feature: "ApplicationBackup",
+			Reason:  "Only supported on PX version 2.2.0 onwards: " + msg,
+		}
+
+		return nil, err
+	}
+
 	volDriver, err := p.getUserVolDriver(backup.Annotations)
 	if err != nil {
 		return nil, err
@@ -2505,6 +2534,20 @@ func (p *portworx) generatePVName() string {
 }
 
 func (p *portworx) StartRestore(restore *stork_crd.ApplicationRestore) ([]*stork_crd.ApplicationRestoreVolumeInfo, error) {
+	ok, msg, err := p.ensureNodesHaveMinVersion("2.2.0")
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		err = &errors.ErrNotSupported{
+			Feature: "ApplicationRestore",
+			Reason:  "Only supported on PX version 2.2.0 onwards: " + msg,
+		}
+
+		return nil, err
+	}
+
 	volDriver, err := p.getUserVolDriver(restore.Annotations)
 	if err != nil {
 		return nil, err
