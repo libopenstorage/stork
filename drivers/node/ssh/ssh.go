@@ -405,9 +405,11 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 
 	t := func() (interface{}, bool, error) {
 		output, err := k8s.Instance().RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
-		if err != nil {
-			logrus.Errorf("failed to run command in pod: %v err: %v", debugPod, err)
-			return nil, true, err
+		if ignoreErr == false && err != nil {
+			return nil, true, &node.ErrFailedToRunCommand{
+				Node:  n,
+				Cause: fmt.Sprintf("failed to run command in pod: %v err: %v", debugPod, err),
+			}
 		}
 
 		return output, false, nil
