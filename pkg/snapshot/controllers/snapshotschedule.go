@@ -91,7 +91,7 @@ func (s *SnapshotScheduleController) Handle(ctx context.Context, event sdk.Event
 					string(snapv1.VolumeSnapshotConditionError),
 					msg)
 				log.VolumeSnapshotScheduleLog(snapshotSchedule).Error(msg)
-				return err
+				return nil
 			}
 
 			// Start a snapshot for a policy if required
