@@ -15,8 +15,11 @@ import (
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	ocp_appsv1_api "github.com/openshift/api/apps/v1"
+	ocp_securityv1_api "github.com/openshift/api/security/v1"
 	ocp_clientset "github.com/openshift/client-go/apps/clientset/versioned"
 	ocp_appsv1_client "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
+	ocp_security_clientset "github.com/openshift/client-go/security/clientset/versioned"
+	ocp_securityv1_client "github.com/openshift/client-go/security/clientset/versioned/typed/security/v1"
 	"github.com/portworx/sched-ops/task"
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	talismanclientset "github.com/portworx/talisman/pkg/client/clientset/versioned"
@@ -102,10 +105,22 @@ type Ops interface {
 		apiExtensionClient apiextensionsclient.Interface,
 		dynamicInterface dynamic.Interface,
 		ocpClient ocp_clientset.Interface,
+		ocpSecurityClient ocp_security_clientset.Interface,
 	)
+	SecurityContextConstraints
 
 	// private methods for unit tests
 	privateMethods
+}
+
+// SecurityContextConstraints is an interface to list, get and update security context constraints
+type SecurityContextConstraints interface {
+	// ListSecurityContextConstraints returns the list of all SecurityContextConstraints, and an error if there is any.
+	ListSecurityContextConstraints() (*ocp_securityv1_api.SecurityContextConstraintsList, error)
+	// GetSecurityContextConstraints takes name of the securityContextConstraints and returns the corresponding securityContextConstraints object, and an error if there is any.
+	GetSecurityContextConstraints(string) (*ocp_securityv1_api.SecurityContextConstraints, error)
+	// UpdateSecurityContextConstraints takes the representation of a securityContextConstraints and updates it. Returns the server's representation of the securityContextConstraints, and an error, if there is any.
+	UpdateSecurityContextConstraints(*ocp_securityv1_api.SecurityContextConstraints) (*ocp_securityv1_api.SecurityContextConstraints, error)
 }
 
 // EventOps is an interface to put and get k8s events
@@ -194,7 +209,7 @@ type StatefulSetOps interface {
 	// ValidateStatefulSet validates the given statefulset if it's running and healthy within the given timeout
 	ValidateStatefulSet(ss *apps_api.StatefulSet, timeout time.Duration) error
 	// ValidateTerminatedStatefulSet validates if given deployment is terminated
-	ValidateTerminatedStatefulSet(ss *apps_api.StatefulSet) error
+	ValidateTerminatedStatefulSet(ss *apps_api.StatefulSet, timeout, retryInterval time.Duration) error
 	// GetStatefulSetPods returns pods for the given statefulset
 	GetStatefulSetPods(ss *apps_api.StatefulSet) ([]v1.Pod, error)
 	// DescribeStatefulSet gets status of the statefulset
@@ -222,7 +237,7 @@ type DeploymentOps interface {
 	// ValidateDeployment validates the given deployment if it's running and healthy
 	ValidateDeployment(deployment *apps_api.Deployment, timeout, retryInterval time.Duration) error
 	// ValidateTerminatedDeployment validates if given deployment is terminated
-	ValidateTerminatedDeployment(*apps_api.Deployment) error
+	ValidateTerminatedDeployment(*apps_api.Deployment, time.Duration, time.Duration) error
 	// GetDeploymentPods returns pods for the given deployment
 	GetDeploymentPods(*apps_api.Deployment) ([]v1.Pod, error)
 	// DescribeDeployment gets the deployment status
@@ -540,7 +555,10 @@ type ConfigMapOps interface {
 // CRDOps is an interface to perfrom k8s Customer Resource operations
 type CRDOps interface {
 	// CreateCRD creates the given custom resource
+	// This API will be deprecated soon. Use RegisterCRD instead
 	CreateCRD(resource CustomResource) error
+	// RegisterCRD creates the given custom resource
+	RegisterCRD(crdDefinition *apiextensionsv1beta1.CustomResourceDefinition) error
 	// ValidateCRD checks if the given CRD is registered
 	ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error
 }
@@ -701,6 +719,22 @@ type ApplicationBackupRestoreOps interface {
 	DeleteApplicationRestore(string, string) error
 	// ValidateApplicationRestore validates the ApplicationRestore
 	ValidateApplicationRestore(string, string, time.Duration, time.Duration) error
+	// GetApplicationBackupSchedule gets the ApplicationBackupSchedule
+	GetApplicationBackupSchedule(string, string) (*v1alpha1.ApplicationBackupSchedule, error)
+	// CreateApplicationBackupSchedule creates an ApplicationBackupSchedule
+	CreateApplicationBackupSchedule(*v1alpha1.ApplicationBackupSchedule) (*v1alpha1.ApplicationBackupSchedule, error)
+	// UpdateApplicationBackupSchedule updates the ApplicationBackupSchedule
+	UpdateApplicationBackupSchedule(*v1alpha1.ApplicationBackupSchedule) (*v1alpha1.ApplicationBackupSchedule, error)
+	// ListApplicationBackupSchedules lists all the ApplicationBackupSchedules
+	ListApplicationBackupSchedules(string) (*v1alpha1.ApplicationBackupScheduleList, error)
+	// DeleteApplicationBackupSchedule deletes the ApplicationBackupSchedule
+	DeleteApplicationBackupSchedule(string, string) error
+	// ValidateApplicationBackupSchedule validates the given ApplicationBackupSchedule. It checks the status of each of
+	// the backups triggered for this schedule and returns a map of successfull backups. The key of the
+	// map will be the schedule type and value will be list of backups for that schedule type.
+	// The caller is expected to validate if the returned map has all backups expected at that point of time
+	ValidateApplicationBackupSchedule(string, string, time.Duration, time.Duration) (
+		map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledApplicationBackupStatus, error)
 }
 
 // ApplicationCloneOps is an interface to perfrom k8s Application Clone operations
@@ -761,6 +795,7 @@ type k8sOps struct {
 	config             *rest.Config
 	dynamicInterface   dynamic.Interface
 	ocpClient          ocp_clientset.Interface
+	ocpSecurityClient  ocp_security_clientset.Interface
 }
 
 // Instance returns a singleton instance of k8sOps type
@@ -796,6 +831,7 @@ func (k *k8sOps) SetClient(
 	apiExtensionClient apiextensionsclient.Interface,
 	dynamicInterface dynamic.Interface,
 	ocpClient ocp_clientset.Interface,
+	ocpSecurityClient ocp_security_clientset.Interface,
 ) {
 
 	k.client = client
@@ -804,6 +840,7 @@ func (k *k8sOps) SetClient(
 	k.apiExtensionClient = apiExtensionClient
 	k.dynamicInterface = dynamicInterface
 	k.ocpClient = ocpClient
+	k.ocpSecurityClient = ocpSecurityClient
 }
 
 // Initialize the k8s client if uninitialized
@@ -831,6 +868,38 @@ func (k *k8sOps) GetVersion() (*version.Info, error) {
 
 	return k.client.Discovery().ServerVersion()
 }
+
+// Security Context Constraints APIs - BEGIN
+
+func (k *k8sOps) getOcpSecurityClient() ocp_securityv1_client.SecurityV1Interface {
+	return k.ocpSecurityClient.SecurityV1()
+}
+
+func (k *k8sOps) ListSecurityContextConstraints() (result *ocp_securityv1_api.SecurityContextConstraintsList, err error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.getOcpSecurityClient().SecurityContextConstraints().List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) GetSecurityContextConstraints(name string) (result *ocp_securityv1_api.SecurityContextConstraints, err error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.getOcpSecurityClient().SecurityContextConstraints().Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) UpdateSecurityContextConstraints(securityContextConstraints *ocp_securityv1_api.SecurityContextConstraints) (result *ocp_securityv1_api.SecurityContextConstraints, err error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.getOcpSecurityClient().SecurityContextConstraints().Update(securityContextConstraints)
+}
+
+// Security Context Constraints APIs - END
 
 // Namespace APIs - BEGIN
 
@@ -1548,7 +1617,7 @@ func (k *k8sOps) ValidateDeployment(deployment *apps_api.Deployment, timeout, re
 	return nil
 }
 
-func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment) error {
+func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment, timeout, timeBeforeRetry time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		dep, err := k.GetDeployment(deployment.Name, deployment.Namespace)
 		if err != nil {
@@ -1580,7 +1649,7 @@ func (k *k8sOps) ValidateTerminatedDeployment(deployment *apps_api.Deployment) e
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, timeBeforeRetry); err != nil {
 		return err
 	}
 	return nil
@@ -2229,7 +2298,7 @@ func (k *k8sOps) GetStatefulSetPods(statefulset *apps_api.StatefulSet) ([]v1.Pod
 	return k.GetPodsByOwner(statefulset.UID, statefulset.Namespace)
 }
 
-func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet) error {
+func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet, timeout, timeBeforeRetry time.Duration) error {
 	t := func() (interface{}, bool, error) {
 		sset, err := k.GetStatefulSet(statefulset.Name, statefulset.Namespace)
 		if err != nil {
@@ -2262,7 +2331,7 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *apps_api.StatefulSet
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, timeout, timeBeforeRetry); err != nil {
 		return err
 	}
 	return nil
@@ -4175,6 +4244,18 @@ func (k *k8sOps) CreateCRD(resource CustomResource) error {
 	return nil
 }
 
+func (k *k8sOps) RegisterCRD(crdDefinition *apiextensionsv1beta1.CustomResourceDefinition) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	_, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crdDefinition)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
@@ -4692,6 +4773,130 @@ func (k *k8sOps) UpdateApplicationRestore(restore *v1alpha1.ApplicationRestore) 
 	return k.storkClient.Stork().ApplicationRestores(restore.Namespace).Update(restore)
 }
 
+func (k *k8sOps) GetApplicationBackupSchedule(name string, namespace string) (*v1alpha1.ApplicationBackupSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListApplicationBackupSchedules(namespace string) (*v1alpha1.ApplicationBackupScheduleList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(namespace).List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateApplicationBackupSchedule(applicationBackupSchedule *v1alpha1.ApplicationBackupSchedule) (*v1alpha1.ApplicationBackupSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(applicationBackupSchedule.Namespace).Create(applicationBackupSchedule)
+}
+
+func (k *k8sOps) UpdateApplicationBackupSchedule(applicationBackupSchedule *v1alpha1.ApplicationBackupSchedule) (*v1alpha1.ApplicationBackupSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(applicationBackupSchedule.Namespace).Update(applicationBackupSchedule)
+}
+
+func (k *k8sOps) DeleteApplicationBackupSchedule(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) ValidateApplicationBackupSchedule(name string, namespace string, timeout, retryInterval time.Duration) (
+	map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledApplicationBackupStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetApplicationBackupSchedule(name, namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		if len(resp.Status.Items) == 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("0 backups have yet run for the backup schedule"),
+				Type:  resp,
+			}
+		}
+
+		failedBackups := make([]string, 0)
+		pendingBackups := make([]string, 0)
+		for _, backupStatuses := range resp.Status.Items {
+			// The check below assumes that the status will not have a failed
+			// backup if the last one succeeded so just get the last status
+			if len(backupStatuses) > 0 {
+				status := backupStatuses[len(backupStatuses)-1]
+				if status == nil {
+					return nil, true, &ErrFailedToValidateCustomSpec{
+						Name:  name,
+						Cause: "ApplicationBackupSchedule has an empty backup in it's most recent status",
+						Type:  resp,
+					}
+				}
+
+				if status.Status == v1alpha1.ApplicationBackupStatusSuccessful {
+					continue
+				}
+
+				if status.Status == v1alpha1.ApplicationBackupStatusFailed {
+					failedBackups = append(failedBackups,
+						fmt.Sprintf("backup: %s failed. status: %v", status.Name, status.Status))
+				} else {
+					pendingBackups = append(pendingBackups,
+						fmt.Sprintf("backup: %s is not done. status: %v", status.Name, status.Status))
+				}
+			}
+		}
+
+		if len(failedBackups) > 0 {
+			return nil, false, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("ApplicationBackupSchedule failed as one or more backups have failed. %s",
+					failedBackups),
+				Type: resp,
+			}
+		}
+
+		if len(pendingBackups) > 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("ApplicationBackupSchedule has certain migrations pending: %s",
+					pendingBackups),
+				Type: resp,
+			}
+		}
+
+		return resp.Status.Items, false, nil
+	}
+
+	ret, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	backups, ok := ret.(map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledApplicationBackupStatus)
+	if !ok {
+		return nil, fmt.Errorf("invalid type when checking backup schedules: %v", backups)
+	}
+
+	return backups, nil
+}
+
 // ApplicationBackupRestore APIs - END
 
 // ApplicationClone APIs - BEGIN
@@ -4857,6 +5062,12 @@ func (k *k8sOps) loadClientFor(config *rest.Config) error {
 	if err != nil {
 		return err
 	}
+
+	k.ocpSecurityClient, err = ocp_security_clientset.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

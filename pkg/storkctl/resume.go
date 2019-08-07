@@ -14,6 +14,7 @@ func newResumeCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams)
 	resumeCommands.AddCommand(
 		newResumeMigrationSchedulesCommand(cmdFactory, ioStreams),
 		newResumeSnapshotSchedulesCommand(cmdFactory, ioStreams),
+		newResumeApplicationBackupSchedulesCommand(cmdFactory, ioStreams),
 	)
 
 	return resumeCommands

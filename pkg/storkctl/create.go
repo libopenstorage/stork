@@ -20,6 +20,7 @@ func newCreateCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams)
 		newCreateGroupSnapshotCommand(cmdFactory, ioStreams),
 		newCreateVolumeSnapshotRestoreCommand(cmdFactory, ioStreams),
 		newCreateApplicationBackupCommand(cmdFactory, ioStreams),
+		newCreateApplicationBackupScheduleCommand(cmdFactory, ioStreams),
 		newCreateApplicationRestoreCommand(cmdFactory, ioStreams),
 		newCreateApplicationCloneCommand(cmdFactory, ioStreams),
 	)

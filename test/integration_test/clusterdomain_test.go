@@ -158,7 +158,7 @@ func testClusterDomainsFailback(
 	// destroy the app on cluster 2
 	err := schedulerDriver.Destroy(preMigrationCtx, nil)
 	require.NoError(t, err, "Error destroying ctx: %+v", preMigrationCtx)
-	err = schedulerDriver.WaitForDestroy(preMigrationCtx)
+	err = schedulerDriver.WaitForDestroy(preMigrationCtx, defaultWaitTimeout)
 	require.NoError(t, err, "Error waiting for destroy of ctx: %+v", preMigrationCtx)
 
 	// Activate cluster domain
