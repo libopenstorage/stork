@@ -666,7 +666,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	r := func() (interface{}, bool, error) {
 		pxVol := v.(*api.Volume)
 		for _, n := range node.GetStorageDriverNodes() {
-			if n.VolDriverNodeID == pxVol.AttachedOn {
+			if isVolumeAttachedOnNode(pxVol, n) {
 				return &n, false, nil
 			}
 		}
@@ -693,6 +693,18 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	}
 
 	return nil, nil
+}
+
+func isVolumeAttachedOnNode(volume *api.Volume, node node.Node) bool {
+	if node.VolDriverNodeID == volume.AttachedOn {
+		return true
+	}
+	for _, ip := range node.Addresses {
+		if ip == volume.AttachedOn {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
