@@ -177,7 +177,7 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 			if clone.Spec.PostExecRule != "" {
 				_, err := k8s.Instance().GetRule(clone.Spec.PostExecRule, clone.Namespace)
 				if err != nil {
-					message := fmt.Sprintf("Error getting PostExecRule %v: %v", clone.Spec.PreExecRule, err)
+					message := fmt.Sprintf("Error getting PostExecRule %v: %v", clone.Spec.PostExecRule, err)
 					log.ApplicationCloneLog(clone).Errorf(message)
 					a.Recorder.Event(clone,
 						v1.EventTypeWarning,

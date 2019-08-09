@@ -1,0 +1,9 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationClone
+metadata:
+  name: clone-mysql
+  namespace: mysql-1-pvc-applicationclone-disallowed-namespace
+spec:
+  sourceNamespace: mysql-1-pvc-applicationclone-disallowed-namespace
+  destinationNamespace: mysql-1-pvc-applicationclone-disallowed-namespace-dest
+
