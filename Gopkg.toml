@@ -47,7 +47,7 @@ required = [
   branch = "master"
 
 [[constraint]]
-  branch = "master"
+  branch = "applicationclone"
   name = "github.com/portworx/torpedo"
 
 [[constraint]]
