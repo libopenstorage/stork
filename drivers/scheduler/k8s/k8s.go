@@ -765,7 +765,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		logrus.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
 	} else if obj, ok := spec.(*stork_api.Rule); ok {
-		obj.Namespace = ns.Name
+		if obj.Namespace == "" {
+			obj.Namespace = ns.Name
+		}
 		rule, err := k8sOps.CreateRule(obj)
 		if errors.IsAlreadyExists(err) {
 			if rule, err = k8sOps.GetRule(obj.Name, obj.Namespace); err == nil {
