@@ -12,7 +12,7 @@ import (
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"github.com/stretchr/testify/require"
-	apps_api "k8s.io/api/apps/v1beta2"
+	apps_api "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 )
 
