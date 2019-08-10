@@ -24,7 +24,7 @@ import (
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	talismanclientset "github.com/portworx/talisman/pkg/client/clientset/versioned"
 	"github.com/sirupsen/logrus"
-	apps_api "k8s.io/api/apps/v1beta2"
+	apps_api "k8s.io/api/apps/v1"
 	batch_v1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	rbac_v1 "k8s.io/api/rbac/v1"
@@ -44,7 +44,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/kubernetes/typed/apps/v1beta2"
+	appsv1_client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
@@ -420,8 +420,12 @@ type PersistentVolumeClaimOps interface {
 	GetPersistentVolumeClaim(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error)
 	// GetPersistentVolumeClaims returns all PVCs in given namespace and that match the optional labelSelector
 	GetPersistentVolumeClaims(namespace string, labelSelector map[string]string) (*v1.PersistentVolumeClaimList, error)
+	// CreatePersistentVolume creates the given PV
+	CreatePersistentVolume(pv *v1.PersistentVolume) (*v1.PersistentVolume, error)
 	// GetPersistentVolume returns the PV for given name
 	GetPersistentVolume(pvName string) (*v1.PersistentVolume, error)
+	// DeletePersistentVolume deletes the PV for given name
+	DeletePersistentVolume(pvName string) error
 	// GetPersistentVolumes returns all PVs in cluster
 	GetPersistentVolumes() (*v1.PersistentVolumeList, error)
 	// GetVolumeForPersistentVolumeClaim returns the volumeID for the given PVC
@@ -3010,6 +3014,14 @@ func (k *k8sOps) ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim, ti
 	return nil
 }
 
+func (k *k8sOps) CreatePersistentVolume(pv *v1.PersistentVolume) (*v1.PersistentVolume, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().PersistentVolumes().Create(pv)
+}
+
 func (k *k8sOps) GetPersistentVolumeClaim(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -3039,6 +3051,16 @@ func (k *k8sOps) GetPersistentVolume(pvName string) (*v1.PersistentVolume, error
 	}
 
 	return k.client.Core().PersistentVolumes().Get(pvName, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) DeletePersistentVolume(pvName string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.client.Core().PersistentVolumes().Delete(pvName, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
 }
 
 func (k *k8sOps) GetPersistentVolumes() (*v1.PersistentVolumeList, error) {
@@ -4971,8 +4993,8 @@ func (k *k8sOps) ValidateApplicationClone(name, namespace string, timeout, retry
 
 // ApplicationClone APIs - END
 
-func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
-	return k.client.AppsV1beta2()
+func (k *k8sOps) appsClient() appsv1_client.AppsV1Interface {
+	return k.client.AppsV1()
 }
 
 func (k *k8sOps) ocpAppsClient() ocp_appsv1_client.AppsV1Interface {

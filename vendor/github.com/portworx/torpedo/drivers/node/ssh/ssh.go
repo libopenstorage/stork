@@ -16,7 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
-	"k8s.io/api/apps/v1beta2"
+	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -113,7 +113,7 @@ func (s *SSH) Init() error {
 }
 
 func (s *SSH) initExecPod() error {
-	var ds *v1beta2.DaemonSet
+	var ds *appsv1_api.DaemonSet
 	var err error
 	k8sops := k8s.Instance()
 	if ds, err = k8sops.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
@@ -126,7 +126,7 @@ func (s *SSH) initExecPod() error {
 		if err != nil {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
-		ds, err = k8sops.CreateDaemonSet(dsSpec.SpecList[0].(*v1beta2.DaemonSet))
+		ds, err = k8sops.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet))
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
 		}
@@ -405,9 +405,11 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 
 	t := func() (interface{}, bool, error) {
 		output, err := k8s.Instance().RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
-		if err != nil {
-			logrus.Errorf("failed to run command in pod: %v err: %v", debugPod, err)
-			return nil, true, err
+		if ignoreErr == false && err != nil {
+			return nil, true, &node.ErrFailedToRunCommand{
+				Node:  n,
+				Cause: fmt.Sprintf("failed to run command in pod: %v err: %v", debugPod, err),
+			}
 		}
 
 		return output, false, nil
