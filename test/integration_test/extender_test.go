@@ -9,7 +9,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
-	apps_api "k8s.io/api/apps/v1beta2"
+	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 )
