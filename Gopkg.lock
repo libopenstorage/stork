@@ -398,7 +398,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:9f1cc804d06374774c6da6494dee794c62d5d2ea8ff648d5bcf36714503d22bb"
+  digest = "1:c55bc14c1fdd921b44f7dc4c6a55314c44c98b1110f902ffb9e56e1b79c0ba5c"
   name = "github.com/libopenstorage/stork"
   packages = [
     "pkg/apis/stork",
@@ -408,7 +408,7 @@
     "pkg/client/clientset/versioned/typed/stork/v1alpha1",
   ]
   pruneopts = "UT"
-  revision = "00d9152fefbf43ec5fe7988e902a31b38dff103f"
+  revision = "cf19c5cf197d58ecae43319fda71c138da802019"
 
 [[projects]]
   digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"
@@ -597,14 +597,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:792b8d3b00a46376287491b52d8a72d108a05766de9fdae4ddce2892ba70c70d"
+  digest = "1:37bc6eca8cd566f771a059f545a7a174f3ec22a79146ee4fc2fc4ee94f0932f9"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "29394a4242bec3e2f7083088ed9302eb8c5ac47a"
+  revision = "82e7a4b545a86bc8a29440cae71a72bfe262d65a"
 
 [[projects]]
   branch = "master"
@@ -1100,7 +1100,7 @@
     "golang.org/x/net/context",
     "google.golang.org/grpc/codes",
     "google.golang.org/grpc/status",
-    "k8s.io/api/apps/v1beta2",
+    "k8s.io/api/apps/v1",
     "k8s.io/api/batch/v1",
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
