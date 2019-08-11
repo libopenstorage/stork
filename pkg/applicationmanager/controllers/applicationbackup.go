@@ -649,6 +649,10 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 
 	backupLocation, err := k8s.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
+		// Can't do anything if the backup location is deleted
+		if errors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 	bucket, err := objectstore.GetBucket(backupLocation)

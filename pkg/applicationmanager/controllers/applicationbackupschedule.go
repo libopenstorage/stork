@@ -89,7 +89,7 @@ func (s *ApplicationBackupScheduleController) Handle(ctx context.Context, event 
 					string(stork_api.ApplicationBackupStatusFailed),
 					msg)
 				log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
-				return err
+				return nil
 			}
 
 			// Start a backup for a policy if required
@@ -125,7 +125,7 @@ func (s *ApplicationBackupScheduleController) Handle(ctx context.Context, event 
 
 func (s *ApplicationBackupScheduleController) setDefaults(backupSchedule *stork_api.ApplicationBackupSchedule) {
 	if backupSchedule.Spec.ReclaimPolicy == "" {
-		backupSchedule.Spec.ReclaimPolicy = stork_api.ReclaimPolicyRetain
+		backupSchedule.Spec.ReclaimPolicy = stork_api.ReclaimPolicyDelete
 	}
 }
 
