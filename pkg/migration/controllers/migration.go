@@ -572,7 +572,10 @@ func resourceToBeMigrated(migration *stork_api.Migration, resource metav1.APIRes
 		"ClusterRoleBinding",
 		"ImageStream",
 		"Route",
-		"Template":
+		"Template",
+		"Role",
+		"RoleBinding",
+		"Ingress":
 		return true
 	default:
 		return false
