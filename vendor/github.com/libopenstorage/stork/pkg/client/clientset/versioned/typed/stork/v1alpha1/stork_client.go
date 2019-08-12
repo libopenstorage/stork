@@ -28,6 +28,7 @@ import (
 type StorkV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ApplicationBackupsGetter
+	ApplicationBackupSchedulesGetter
 	ApplicationClonesGetter
 	ApplicationRestoresGetter
 	BackupLocationsGetter
@@ -50,6 +51,10 @@ type StorkV1alpha1Client struct {
 
 func (c *StorkV1alpha1Client) ApplicationBackups(namespace string) ApplicationBackupInterface {
 	return newApplicationBackups(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) ApplicationBackupSchedules(namespace string) ApplicationBackupScheduleInterface {
+	return newApplicationBackupSchedules(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) ApplicationClones(namespace string) ApplicationCloneInterface {
