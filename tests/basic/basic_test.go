@@ -175,15 +175,16 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					Step("restarting volume driver", func() {
 						StartVolDriverAndWait(nodesToBeDown)
 					})
-				} else {
-					logrus.Debugf("Not enough nodes to be down, skipping...")
-				}
-				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
-					err = Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
-					Expect(err).NotTo(HaveOccurred())
-				})
 
-				DeleteVolumesAndWait(ctx)
+					Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
+						err = Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					DeleteVolumesAndWait(ctx)
+				} else {
+					logrus.Debug("Not enough nodes to be down, skipping...")
+				}
 			}
 		})
 	})
