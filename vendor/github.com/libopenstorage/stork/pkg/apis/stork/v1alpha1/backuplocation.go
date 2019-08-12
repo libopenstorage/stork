@@ -39,6 +39,7 @@ type BackupLocationItem struct {
 	AzureConfig   *AzureConfig  `json:"azureConfig,omitempty"`
 	GoogleConfig  *GoogleConfig `json:"googleConfig,omitempty"`
 	SecretConfig  string        `json:"secretConfig"`
+	Sync          bool          `json:"sync"`
 }
 
 // BackupLocationType is the type of the backup location
@@ -98,6 +99,9 @@ func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
 		}
 		if val, ok := secretConfig.Data["encryptionKey"]; ok && val != nil {
 			bl.Location.EncryptionKey = strings.TrimSuffix(string(val), "\n")
+		}
+		if val, ok := secretConfig.Data["path"]; ok && val != nil {
+			bl.Location.Path = strings.TrimSuffix(string(val), "\n")
 		}
 	}
 	switch bl.Location.Type {

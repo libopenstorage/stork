@@ -24,7 +24,7 @@ import (
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	talismanclientset "github.com/portworx/talisman/pkg/client/clientset/versioned"
 	"github.com/sirupsen/logrus"
-	apps_api "k8s.io/api/apps/v1beta2"
+	apps_api "k8s.io/api/apps/v1"
 	batch_v1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	rbac_v1 "k8s.io/api/rbac/v1"
@@ -44,7 +44,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/kubernetes/typed/apps/v1beta2"
+	appsv1_client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
@@ -420,8 +420,12 @@ type PersistentVolumeClaimOps interface {
 	GetPersistentVolumeClaim(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error)
 	// GetPersistentVolumeClaims returns all PVCs in given namespace and that match the optional labelSelector
 	GetPersistentVolumeClaims(namespace string, labelSelector map[string]string) (*v1.PersistentVolumeClaimList, error)
+	// CreatePersistentVolume creates the given PV
+	CreatePersistentVolume(pv *v1.PersistentVolume) (*v1.PersistentVolume, error)
 	// GetPersistentVolume returns the PV for given name
 	GetPersistentVolume(pvName string) (*v1.PersistentVolume, error)
+	// DeletePersistentVolume deletes the PV for given name
+	DeletePersistentVolume(pvName string) error
 	// GetPersistentVolumes returns all PVs in cluster
 	GetPersistentVolumes() (*v1.PersistentVolumeList, error)
 	// GetVolumeForPersistentVolumeClaim returns the volumeID for the given PVC
@@ -555,7 +559,10 @@ type ConfigMapOps interface {
 // CRDOps is an interface to perfrom k8s Customer Resource operations
 type CRDOps interface {
 	// CreateCRD creates the given custom resource
+	// This API will be deprecated soon. Use RegisterCRD instead
 	CreateCRD(resource CustomResource) error
+	// RegisterCRD creates the given custom resource
+	RegisterCRD(crdDefinition *apiextensionsv1beta1.CustomResourceDefinition) error
 	// ValidateCRD checks if the given CRD is registered
 	ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error
 }
@@ -716,6 +723,22 @@ type ApplicationBackupRestoreOps interface {
 	DeleteApplicationRestore(string, string) error
 	// ValidateApplicationRestore validates the ApplicationRestore
 	ValidateApplicationRestore(string, string, time.Duration, time.Duration) error
+	// GetApplicationBackupSchedule gets the ApplicationBackupSchedule
+	GetApplicationBackupSchedule(string, string) (*v1alpha1.ApplicationBackupSchedule, error)
+	// CreateApplicationBackupSchedule creates an ApplicationBackupSchedule
+	CreateApplicationBackupSchedule(*v1alpha1.ApplicationBackupSchedule) (*v1alpha1.ApplicationBackupSchedule, error)
+	// UpdateApplicationBackupSchedule updates the ApplicationBackupSchedule
+	UpdateApplicationBackupSchedule(*v1alpha1.ApplicationBackupSchedule) (*v1alpha1.ApplicationBackupSchedule, error)
+	// ListApplicationBackupSchedules lists all the ApplicationBackupSchedules
+	ListApplicationBackupSchedules(string) (*v1alpha1.ApplicationBackupScheduleList, error)
+	// DeleteApplicationBackupSchedule deletes the ApplicationBackupSchedule
+	DeleteApplicationBackupSchedule(string, string) error
+	// ValidateApplicationBackupSchedule validates the given ApplicationBackupSchedule. It checks the status of each of
+	// the backups triggered for this schedule and returns a map of successfull backups. The key of the
+	// map will be the schedule type and value will be list of backups for that schedule type.
+	// The caller is expected to validate if the returned map has all backups expected at that point of time
+	ValidateApplicationBackupSchedule(string, string, time.Duration, time.Duration) (
+		map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledApplicationBackupStatus, error)
 }
 
 // ApplicationCloneOps is an interface to perfrom k8s Application Clone operations
@@ -2991,6 +3014,14 @@ func (k *k8sOps) ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim, ti
 	return nil
 }
 
+func (k *k8sOps) CreatePersistentVolume(pv *v1.PersistentVolume) (*v1.PersistentVolume, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().PersistentVolumes().Create(pv)
+}
+
 func (k *k8sOps) GetPersistentVolumeClaim(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -3020,6 +3051,16 @@ func (k *k8sOps) GetPersistentVolume(pvName string) (*v1.PersistentVolume, error
 	}
 
 	return k.client.Core().PersistentVolumes().Get(pvName, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) DeletePersistentVolume(pvName string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.client.Core().PersistentVolumes().Delete(pvName, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
 }
 
 func (k *k8sOps) GetPersistentVolumes() (*v1.PersistentVolumeList, error) {
@@ -4225,6 +4266,18 @@ func (k *k8sOps) CreateCRD(resource CustomResource) error {
 	return nil
 }
 
+func (k *k8sOps) RegisterCRD(crdDefinition *apiextensionsv1beta1.CustomResourceDefinition) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	_, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crdDefinition)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
@@ -4742,6 +4795,130 @@ func (k *k8sOps) UpdateApplicationRestore(restore *v1alpha1.ApplicationRestore) 
 	return k.storkClient.Stork().ApplicationRestores(restore.Namespace).Update(restore)
 }
 
+func (k *k8sOps) GetApplicationBackupSchedule(name string, namespace string) (*v1alpha1.ApplicationBackupSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(namespace).Get(name, meta_v1.GetOptions{})
+}
+
+func (k *k8sOps) ListApplicationBackupSchedules(namespace string) (*v1alpha1.ApplicationBackupScheduleList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(namespace).List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) CreateApplicationBackupSchedule(applicationBackupSchedule *v1alpha1.ApplicationBackupSchedule) (*v1alpha1.ApplicationBackupSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(applicationBackupSchedule.Namespace).Create(applicationBackupSchedule)
+}
+
+func (k *k8sOps) UpdateApplicationBackupSchedule(applicationBackupSchedule *v1alpha1.ApplicationBackupSchedule) (*v1alpha1.ApplicationBackupSchedule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(applicationBackupSchedule.Namespace).Update(applicationBackupSchedule)
+}
+
+func (k *k8sOps) DeleteApplicationBackupSchedule(name string, namespace string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.storkClient.Stork().ApplicationBackupSchedules(namespace).Delete(name, &meta_v1.DeleteOptions{
+		PropagationPolicy: &deleteForegroundPolicy,
+	})
+}
+
+func (k *k8sOps) ValidateApplicationBackupSchedule(name string, namespace string, timeout, retryInterval time.Duration) (
+	map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledApplicationBackupStatus, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	t := func() (interface{}, bool, error) {
+		resp, err := k.GetApplicationBackupSchedule(name, namespace)
+		if err != nil {
+			return nil, true, err
+		}
+
+		if len(resp.Status.Items) == 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name:  name,
+				Cause: fmt.Sprintf("0 backups have yet run for the backup schedule"),
+				Type:  resp,
+			}
+		}
+
+		failedBackups := make([]string, 0)
+		pendingBackups := make([]string, 0)
+		for _, backupStatuses := range resp.Status.Items {
+			// The check below assumes that the status will not have a failed
+			// backup if the last one succeeded so just get the last status
+			if len(backupStatuses) > 0 {
+				status := backupStatuses[len(backupStatuses)-1]
+				if status == nil {
+					return nil, true, &ErrFailedToValidateCustomSpec{
+						Name:  name,
+						Cause: "ApplicationBackupSchedule has an empty backup in it's most recent status",
+						Type:  resp,
+					}
+				}
+
+				if status.Status == v1alpha1.ApplicationBackupStatusSuccessful {
+					continue
+				}
+
+				if status.Status == v1alpha1.ApplicationBackupStatusFailed {
+					failedBackups = append(failedBackups,
+						fmt.Sprintf("backup: %s failed. status: %v", status.Name, status.Status))
+				} else {
+					pendingBackups = append(pendingBackups,
+						fmt.Sprintf("backup: %s is not done. status: %v", status.Name, status.Status))
+				}
+			}
+		}
+
+		if len(failedBackups) > 0 {
+			return nil, false, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("ApplicationBackupSchedule failed as one or more backups have failed. %s",
+					failedBackups),
+				Type: resp,
+			}
+		}
+
+		if len(pendingBackups) > 0 {
+			return nil, true, &ErrFailedToValidateCustomSpec{
+				Name: name,
+				Cause: fmt.Sprintf("ApplicationBackupSchedule has certain migrations pending: %s",
+					pendingBackups),
+				Type: resp,
+			}
+		}
+
+		return resp.Status.Items, false, nil
+	}
+
+	ret, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	backups, ok := ret.(map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledApplicationBackupStatus)
+	if !ok {
+		return nil, fmt.Errorf("invalid type when checking backup schedules: %v", backups)
+	}
+
+	return backups, nil
+}
+
 // ApplicationBackupRestore APIs - END
 
 // ApplicationClone APIs - BEGIN
@@ -4816,8 +4993,8 @@ func (k *k8sOps) ValidateApplicationClone(name, namespace string, timeout, retry
 
 // ApplicationClone APIs - END
 
-func (k *k8sOps) appsClient() v1beta2.AppsV1beta2Interface {
-	return k.client.AppsV1beta2()
+func (k *k8sOps) appsClient() appsv1_client.AppsV1Interface {
+	return k.client.AppsV1()
 }
 
 func (k *k8sOps) ocpAppsClient() ocp_appsv1_client.AppsV1Interface {

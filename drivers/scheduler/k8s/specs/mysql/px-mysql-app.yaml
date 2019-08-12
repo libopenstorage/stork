@@ -10,7 +10,7 @@ spec:
   selector:
     app: mysql
 ---
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
@@ -70,7 +70,7 @@ spec:
         persistentVolumeClaim:
           claimName: mysql-data-seq
 ---
-apiVersion: apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysqlslap
