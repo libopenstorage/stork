@@ -181,9 +181,12 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
 				n.VolDriverNodeID = pxNode.Id
 				n.IsStorageDriverInstalled = isPX
-				n.IsMetadataNode = d.isMetadataNode(n, address)
+				isMetadataNode, err := d.isMetadataNode(n, address)
+				if err != nil {
+					return err
+				}
+				n.IsMetadataNode = isMetadataNode
 				node.UpdateNode(n)
-				logrus.Debugf("Node updated: %v", n)
 				return nil
 			}
 		}
@@ -193,23 +196,23 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 	return fmt.Errorf("failed to find px node for node: %v PX nodes: %v", n, pxNodes)
 }
 
-func (d *portworx) isMetadataNode(node node.Node, address string) bool {
+func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) {
 	members, err := d.getKvdbMembers(node)
-	ipRegex := regexp.MustCompile(`http:\/\/(?P<address>.*)\:\d+`)
 	if err != nil {
-		logrus.Errorf("Failed to get metadata nodes. Cause: %v", err)
-		return false
+		return false, fmt.Errorf("Failed to get metadata nodes. Cause: %v", err)
 	}
+
+	ipRegex := regexp.MustCompile(`http:\/\/(?P<address>.*)\:\d+`)
 	for _, value := range members {
 		for _, url := range value.ClientUrls {
 			result := getGroupMatches(ipRegex, url)
 			if val, ok := result["address"]; ok && address == val {
 				logrus.Debugf("Node %s is a metadata node", node.Name)
-				return true
+				return true, nil
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (d *portworx) CleanupVolume(name string) error {
