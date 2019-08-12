@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,6 +26,10 @@ const (
 
 func testApplicationBackup(t *testing.T) {
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
+	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
+	t.Run("postExecRuleTest", applicationBackupRestorePostExecRuleTest)
+	t.Run("preExecMissingRuleTest", applicationBackupRestorePreExecMissingRuleTest)
+	t.Run("postExecMissingRuleTest", applicationBackupRestorePostExecMissingRuleTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
 }
 
@@ -32,6 +37,8 @@ func triggerBackupRestoreTest(
 	t *testing.T,
 	appBackupKey []string,
 	appRestoreKey []string,
+	createBackupLocationFlag bool,
+	backupSuccessExpected bool,
 ) {
 	var err error
 	var ctxs []*scheduler.Context
@@ -40,33 +47,40 @@ func triggerBackupRestoreTest(
 	logrus.Infof("App created %v. Starting backup.", ctx.GetID())
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	err = createBackupLocation(t, appKey+"-backup-location", ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
-	require.NoError(t, err, "Error creating backuplocation")
+	if createBackupLocationFlag {
+		err = createBackupLocation(t, appKey+"-backup-location", ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+		require.NoError(t, err, "Error creating backuplocation")
+	}
 
 	// Backup application
 	err = schedulerDriver.AddTasks(ctxs[0],
 		scheduler.ScheduleOptions{AppKeys: appBackupKey})
 	require.NoError(t, err, "Error backing-up apps")
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for back-up to complete.")
+	if backupSuccessExpected {
+		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for back-up to complete.")
+		logrus.Infof("Backup completed. Starting Restore.")
 
-	logrus.Infof("Backup completed. Starting Restore.")
+		// Restore application
+		err = schedulerDriver.AddTasks(ctxs[0],
+			scheduler.ScheduleOptions{AppKeys: appRestoreKey})
+		require.NoError(t, err, "Error restoring apps")
 
-	// Restore application
-	err = schedulerDriver.AddTasks(ctxs[0],
-		scheduler.ScheduleOptions{AppKeys: appRestoreKey})
-	require.NoError(t, err, "Error restoring apps")
+		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for restore to complete.")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for restore to complete.")
+		logrus.Infof("Restore completed.")
 
-	logrus.Infof("Restore completed.")
+		// Validate applications after restore
+		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for restore to complete.")
 
-	// Validate applications after restore
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error waiting for restore to complete.")
+		logrus.Infof("App validation after restore completed.")
 
-	logrus.Infof("App validation after restore completed.")
+	} else {
+		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/5, defaultWaitInterval)
+		require.Error(t, err, "Backup expected to fail in test: %s.", t.Name())
+	}
 
 	destroyAndWait(t, ctxs)
 }
@@ -91,7 +105,10 @@ func createBackupLocation(
 	newSecretObj.Namespace = namespace
 	newSecretObj.ResourceVersion = ""
 	newSecret, err := k8s.Instance().CreateSecret(newSecretObj)
-	require.NoError(t, err, "Failed to copy secret %s  to namespace %s", name, namespace)
+	// Ignore if secret already exists
+	if err != nil && !errors.IsAlreadyExists(err) {
+		require.NoError(t, err, "Failed to copy secret %s  to namespace %s", name, namespace)
+	}
 
 	backupLocation := &storkv1.BackupLocation{
 		ObjectMeta: meta.ObjectMeta{
@@ -114,6 +131,48 @@ func applicationBackupRestoreTest(t *testing.T) {
 		t,
 		[]string{testKey + "-backup"},
 		[]string{"mysql-restore"},
+		true,
+		true,
+	)
+}
+
+func applicationBackupRestorePreExecRuleTest(t *testing.T) {
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-pre-exec-rule-backup"},
+		[]string{"mysql-restore"},
+		false,
+		true,
+	)
+}
+
+func applicationBackupRestorePostExecRuleTest(t *testing.T) {
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-post-exec-rule-backup"},
+		[]string{"mysql-restore"},
+		false,
+		true,
+	)
+}
+
+func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-pre-exec-missing-rule-backup"},
+		[]string{"mysql-restore"},
+		false,
+		false,
+	)
+}
+
+func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-post-exec-missing-rule-backup"},
+		[]string{"mysql-restore"},
+		false,
+		false,
 	)
 }
 

@@ -1,0 +1,18 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationBackup
+metadata:
+  name: mysql-backup
+  namespace: mysql-1-pvc-mysql
+spec:
+  backupLocation: mysql-backup-location
+  # namespaces to be backed up
+  namespaces:
+  - mysql-1-pvc-mysql 
+  # What to do with the data in the objectstore when the backup object in k8s is deleted. Valid options are Delete and Retain
+  reclaimPolicy: Delete
+  # List of label selectors to choose specific objects and volumes to backup
+  selectors:
+  # Rule to run before triggering the backup
+  preExecRule: mysql-pre-backup-rule
+  # Rule to run after the backup has been triggered
+  postExecRule: 

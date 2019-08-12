@@ -1,0 +1,19 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: Rule
+metadata:
+  name: mysql-post-backup-rule
+  namespace: mysql-1-pvc-mysql
+  annotations:
+    "stork/cmdexecutor-image": "openstorage/cmdexecutor:latest"
+rules:
+  - podSelector:
+      app: mysql
+    actions:
+    - type: command
+      # dummy action to test non-background command
+      value: echo "hello stork pre-backup"
+      runInSinglePod: true
+    - type: command
+      runInSinglePod: true
+      # this command is just to test multiple background commands
+      value: mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'show databases;'
