@@ -1265,16 +1265,22 @@ func (d *portworx) RejoinNode(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
-	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/service"); err != nil {
+	if err = k8s.Instance().RemoveLabelOnNode(n.Name, "px/service"); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
-	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/enabled"); err != nil {
+	if err = k8s.Instance().RemoveLabelOnNode(n.Name, "px/enabled"); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+	if err = k8s.Instance().UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
 		}
 	}
 	return nil
