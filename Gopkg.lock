@@ -474,16 +474,23 @@
   version = "v0.5.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:9b1e693d6461673d220101af689c3a3acf8be0ef3a896e34daa21172d95b2bc2"
+  digest = "1:048a55ddd98b054d561413a38b301d21998b366f432893244c4ab745723edb9e"
   name = "github.com/heptio/ark"
   packages = [
     "pkg/discovery",
     "pkg/util/collections",
-    "third_party/kubernetes/pkg/kubectl/cmd/util",
   ]
   pruneopts = "UT"
-  revision = "e61d3c6ca0fa8f056ff410cfc36fcbc542f85493"
+  revision = "72f5cadc3a865019ab9dc043d4952c9bfd5f2ecb"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:98a9204968d9c26e16a2f6057c3501af55c3cfa825bdf6bb3d7a06c18751c07a"
+  name = "github.com/heptio/velero"
+  packages = ["third_party/kubernetes/pkg/kubectl/cmd/util"]
+  pruneopts = "UT"
+  revision = "72f5cadc3a865019ab9dc043d4952c9bfd5f2ecb"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:a0cefd27d12712af4b5018dc7046f245e1e3b5760e2e848c30b171b570708f9b"
@@ -766,7 +773,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "82e7a4b545a86bc8a29440cae71a72bfe262d65a"
+  revision = "7d97f8a53bc58af6e7c6ab5d251cce71c1565f83"
 
 [[projects]]
   branch = "master"
@@ -1281,7 +1288,7 @@
   version = "2019.1.1"
 
 [[projects]]
-  digest = "1:77a031d250181307fdb2f61d23a1a37dbf724657550416201cc43da4f4bc8db1"
+  digest = "1:e616363fcb522e8b07ad2011bcfdbce81d7d00ad5d5db3b2adde3ecee1ccbd06"
   name = "k8s.io/api"
   packages = [
     "admission/v1beta1",
@@ -1317,11 +1324,11 @@
     "storage/v1beta1",
   ]
   pruneopts = "UT"
-  revision = "072894a440bdee3a891dea811fe42902311cd2a3"
-  version = "kubernetes-1.11.0"
+  revision = "7544f9db76f64c09e0e280c39b8d17c55958bb2b"
+  version = "kubernetes-1.11.9"
 
 [[projects]]
-  digest = "1:2ec605974e0610f8103b2624b09f810e3ba70676f81736ee2c785d550353104f"
+  digest = "1:415eb156615f37d8fd661ed078d29fa0a86f739b839b9da63b3d39d695e572c0"
   name = "k8s.io/apiextensions-apiserver"
   packages = [
     "pkg/apis/apiextensions",
@@ -1332,11 +1339,11 @@
     "pkg/features",
   ]
   pruneopts = "UT"
-  revision = "3de98c57bc05a81cf463e0ad7a0af4cec8a5b510"
-  version = "kubernetes-1.11.0"
+  revision = "d18a370cab86ace55fa32194fc0f82fffef70cab"
+  version = "kubernetes-1.11.9"
 
 [[projects]]
-  digest = "1:51a09c277d019c6f07be0fc28f0e09c063a831168ae724dba116e490d8692dca"
+  digest = "1:797a2c2e8556f0e45451601778482a228485496a0bd27a2a77f1116c987153f6"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/equality",
@@ -1395,11 +1402,11 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "103fd098999dc9c0c88536f5c9ad2e5da39373ae"
-  version = "kubernetes-1.11.0"
+  revision = "c182ff3b98419e7305cc361fd1811988591656cf"
+  version = "kubernetes-1.11.9"
 
 [[projects]]
-  digest = "1:2f77406173e4708ffb0115ad52fd462440f3c76f018e01907944ac384e7d0022"
+  digest = "1:41151067c0a08f391ac3b9aaf7b24a4e7f5fc29fb829f0d7cec899abbcfe4288"
   name = "k8s.io/apiserver"
   packages = [
     "pkg/apis/audit",
@@ -1411,8 +1418,8 @@
     "pkg/util/feature",
   ]
   pruneopts = "UT"
-  revision = "01459b68eb5fee2dcf5ca0e29df8bcac89ead47b"
-  version = "kubernetes-1.11.0"
+  revision = "7e0c011528eaf3546e4c22dbe7dd7446309f76ae"
+  version = "kubernetes-1.11.9"
 
 [[projects]]
   digest = "1:ee2cdf9fb8ba22fb3affee7d0b616ca599413a1e948109697537cb1f2cbe503f"
@@ -1541,7 +1548,7 @@
   version = "v8.0.0"
 
 [[projects]]
-  digest = "1:43ef9a37919f7a8948b7de4c05d20692f763adc40f15c9d330c544ae05d93947"
+  digest = "1:332f5b5962cb4766ee8db261b948ec6c27a79a0006f1c638b4cbb4a203069aaf"
   name = "k8s.io/code-generator"
   packages = [
     "cmd/client-gen",
@@ -1557,8 +1564,8 @@
     "pkg/util",
   ]
   pruneopts = ""
-  revision = "6702109cc68eb6fe6350b83e14407c8d7309fd1a"
-  version = "kubernetes-1.11.0"
+  revision = "f8cba74510f397bac80157a6c4ccb0ffbc31b9d0"
+  version = "kubernetes-1.11.9"
 
 [[projects]]
   branch = "master"
@@ -1598,7 +1605,7 @@
   revision = "ced9eb3070a5f1c548ef46e8dfe2a97c208d9f03"
 
 [[projects]]
-  digest = "1:a979d09283bc1ad4a99cee68eee2aba987fa4f4499c57136e638154b12521750"
+  digest = "1:95a8f53a19e18bafe471a1709d93cfd24037ecdea802781a78e98dc2d2abdeb7"
   name = "k8s.io/kubernetes"
   packages = [
     "pkg/api/events",
@@ -1750,8 +1757,8 @@
     "pkg/version",
   ]
   pruneopts = "UT"
-  revision = "65ecaf0671341311ce6aea0edab46ee69f65d59e"
-  version = "v1.11.7"
+  revision = "7a578febe155a7366767abce40d8a16795a96371"
+  version = "v1.11.10"
 
 [[projects]]
   branch = "master"

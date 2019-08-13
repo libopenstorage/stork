@@ -1,5 +1,5 @@
 /*
-Copyright 2017 the Heptio Ark contributors.
+Copyright 2017, 2019 the Velero contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,27 +28,31 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/restmapper"
 
-	kcmdutil "github.com/heptio/ark/third_party/kubernetes/pkg/kubectl/cmd/util"
+	kcmdutil "github.com/heptio/velero/third_party/kubernetes/pkg/kubectl/cmd/util"
 )
 
 // Helper exposes functions for interacting with the Kubernetes discovery
 // API.
 type Helper interface {
 	// Resources gets the current set of resources retrieved from discovery
-	// that are backuppable by Ark.
+	// that are backuppable by Velero.
 	Resources() []*metav1.APIResourceList
 
 	// ResourceFor gets a fully-resolved GroupVersionResource and an
 	// APIResource for the provided partially-specified GroupVersionResource.
 	ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, metav1.APIResource, error)
 
-	// Refresh pulls an updated set of Ark-backuppable resources from the
+	// Refresh pulls an updated set of Velero-backuppable resources from the
 	// discovery API.
 	Refresh() error
 
 	// APIGroups gets the current set of supported APIGroups
 	// in the cluster.
 	APIGroups() []metav1.APIGroup
+}
+
+type serverResourcesInterface interface {
+	ServerPreferredResources() ([]*metav1.APIResourceList, error)
 }
 
 type helper struct {
@@ -68,6 +72,7 @@ var _ Helper = &helper{}
 func NewHelper(discoveryClient discovery.DiscoveryInterface, logger logrus.FieldLogger) (Helper, error) {
 	h := &helper{
 		discoveryClient: discoveryClient,
+		logger:          logger,
 	}
 	if err := h.Refresh(); err != nil {
 		return nil, err
@@ -100,14 +105,8 @@ func (h *helper) Refresh() error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
-	shortcutExpander, err := kcmdutil.NewShortcutExpander(mapper, h.discoveryClient, h.logger)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	h.mapper = shortcutExpander
 
-	preferredResources, err := h.discoveryClient.ServerPreferredResources()
+	preferredResources, err := refreshServerPreferredResources(h.discoveryClient, h.logger)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -118,6 +117,12 @@ func (h *helper) Refresh() error {
 	)
 
 	sortResources(h.resources)
+
+	shortcutExpander, err := kcmdutil.NewShortcutExpander(restmapper.NewDiscoveryRESTMapper(groupResources), h.resources, h.logger)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	h.mapper = shortcutExpander
 
 	h.resourcesMap = make(map[schema.GroupVersionResource]metav1.APIResource)
 	for _, resourceGroup := range h.resources {
@@ -139,6 +144,19 @@ func (h *helper) Refresh() error {
 	h.apiGroups = apiGroupList.Groups
 
 	return nil
+}
+
+func refreshServerPreferredResources(discoveryClient serverResourcesInterface, logger logrus.FieldLogger) ([]*metav1.APIResourceList, error) {
+	preferredResources, err := discoveryClient.ServerPreferredResources()
+	if err != nil {
+		if discoveryErr, ok := err.(*discovery.ErrGroupDiscoveryFailed); ok {
+			for groupVersion, err := range discoveryErr.Groups {
+				logger.WithError(err).Warnf("Failed to discover group: %v", groupVersion)
+			}
+			return preferredResources, nil
+		}
+	}
+	return preferredResources, err
 }
 
 func filterByVerbs(groupVersion string, r *metav1.APIResource) bool {
