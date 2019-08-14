@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	k8s_discovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
@@ -96,11 +95,7 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map[string]string) ([]runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
-		if err, ok := err.(*k8s_discovery.ErrGroupDiscoveryFailed); ok {
-			logrus.Warnf("Error getting some server APIs: %v", err.Groups)
-		} else {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	allObjects := make([]runtime.Unstructured, 0)
