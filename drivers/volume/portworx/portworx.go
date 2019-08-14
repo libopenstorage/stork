@@ -1048,6 +1048,16 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 		return err
 	}
 
+	if snapType == crdv1.PortworxSnapshotTypeCloud {
+		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("CloudSnapshot restore not supported")
+		snapRestore.Status.Status = stork_crd.VolumeSnapshotRestoreStatusFailed
+		err = &errors.ErrNotSupported{
+			Feature: "VolumeSnapshotRestore for Cloudsnaps",
+			Reason:  "Feature not supported",
+		}
+		return err
+	}
+
 	switch snapType {
 	case "", crdv1.PortworxSnapshotTypeLocal:
 		snapRestore.Status.Volumes = volumeInfos
