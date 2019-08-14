@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-openapi/inflect"
-	"github.com/heptio/ark/pkg/util/collections"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -683,11 +682,10 @@ func (m *MigrationController) preparePVResource(
 ) error {
 	// Set the reclaim policy to retain if the volumes are not being migrated
 	if migration.Spec.IncludeVolumes != nil && !*migration.Spec.IncludeVolumes {
-		spec, err := collections.GetMap(object.UnstructuredContent(), "spec")
+		err := unstructured.SetNestedField(object.UnstructuredContent(), v1.PersistentVolumeReclaimRetain, "spec", "persistentVolumeReclaimPolicy")
 		if err != nil {
 			return err
 		}
-		spec["persistentVolumeReclaimPolicy"] = v1.PersistentVolumeReclaimRetain
 	}
 	_, err := m.Driver.UpdateMigratedPersistentVolumeSpec(object)
 	return err
@@ -701,24 +699,30 @@ func (m *MigrationController) prepareApplicationResource(
 		return nil
 	}
 
-	// Reset the replicas to 0 and store the current replicas in an annotation
 	content := object.UnstructuredContent()
-	spec, err := collections.GetMap(content, "spec")
+	// Reset the replicas to 0 and store the current replicas in an annotation
+	replicas, found, err := unstructured.NestedInt64(content, "spec", "replicas")
 	if err != nil {
 		return err
 	}
-	replicas := spec["replicas"].(int64)
-	if !collections.Exists(content, "metadata.annotations") {
-		content["metadata.annotations"] = make(map[string]string)
+	if !found {
+		return fmt.Errorf("replica count not found in application")
 	}
-	annotations, err := collections.GetMap(content, "metadata.annotations")
+
+	err = unstructured.SetNestedField(content, int64(0), "spec", "replicas")
 	if err != nil {
 		return err
 	}
 
+	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("annotations not found in application")
+	}
 	annotations[StorkMigrationReplicasAnnotation] = strconv.FormatInt(replicas, 10)
-	spec["replicas"] = 0
-	return nil
+	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
 
 func (m *MigrationController) applyResources(
