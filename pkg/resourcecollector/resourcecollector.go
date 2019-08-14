@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/heptio/ark/pkg/discovery"
-	"github.com/heptio/ark/pkg/util/collections"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
@@ -266,10 +265,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		content := o.UnstructuredContent()
 		// Status shouldn't be retained when collecting resources
 		delete(content, "status")
-		metadataMap, err := collections.GetMap(content, "metadata")
-		if err != nil {
-			return fmt.Errorf("error getting metadata for resource %v: %v", metadata.GetName(), err)
-		}
+		metadataMap := content["metadata"].(map[string]interface{})
 		// Remove all metadata except some well-known ones
 		for key := range metadataMap {
 			switch key {

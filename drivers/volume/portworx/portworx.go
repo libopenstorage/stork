@@ -13,7 +13,6 @@ import (
 	"time"
 
 	version "github.com/hashicorp/go-version"
-	"github.com/heptio/ark/pkg/util/collections"
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	crdclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter"
@@ -45,6 +44,7 @@ import (
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -2053,10 +2053,13 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 	}
 
 	// Get access to the csi section of the PV
-	csiSpec, err := collections.GetMap(object.UnstructuredContent(), "spec.csi")
+	csiSpec, found, err := unstructured.NestedStringMap(object.UnstructuredContent(), "spec", "csi")
+	if err != nil {
+		return nil, err
+	}
 
 	// Determine if CSI is used
-	if err == nil {
+	if found {
 		// Check the driver is a Portworx driver
 		switch csiSpec["driver"] {
 		case crdv1.PortworxCsiDeprecatedProvisionerName:
@@ -2066,16 +2069,13 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 			return object, nil
 		}
 
-		// Fallback to in-tree driver in case GetMap() returns an empty
-		// csiSpec object.
+		// Fallback to in-tree driver in case CSI map isn't found
 	}
 
-	portworxSpec, err := collections.GetMap(object.UnstructuredContent(), "spec.portworxVolume")
+	err = unstructured.SetNestedField(object.UnstructuredContent(), metadata.GetName(), "spec", "portworxVolume", "volumeID")
 	if err != nil {
 		return nil, err
 	}
-	portworxSpec["volumeID"] = metadata.GetName()
-
 	return object, nil
 }
 

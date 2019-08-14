@@ -1,9 +1,11 @@
 package resourcecollector
 
 import (
-	"github.com/heptio/ark/pkg/util/collections"
+	"fmt"
+
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -25,17 +27,20 @@ func (r *ResourceCollector) serviceToBeCollected(
 func (r *ResourceCollector) prepareServiceResourceForCollection(
 	object runtime.Unstructured,
 ) error {
-	spec, err := collections.GetMap(object.UnstructuredContent(), "spec")
-	if err != nil {
-		return err
+	var service v1.Service
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &service); err != nil {
+		return fmt.Errorf("error converting to service: %v", err)
 	}
-	// Don't delete clusterIP for headless services
-	if ip, err := collections.GetString(spec, "clusterIP"); err == nil && ip != "None" {
-		delete(spec, "clusterIP")
+	// Reset the clusterIP if it is set
+	if service.Spec.ClusterIP != "None" {
+		err := unstructured.SetNestedField(object.UnstructuredContent(), "", "spec", "clusterIP")
+		if err != nil {
+			return err
+		}
 	}
-	delete(spec, "loadBalancerIP")
 
-	return nil
+	// Reset the loadBalancerIP
+	return unstructured.SetNestedField(object.UnstructuredContent(), "", "spec", "loadBalancerIP")
 }
 
 func (r *ResourceCollector) updateService(
