@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"path/filepath"
 	"reflect"
 	"time"
@@ -28,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -38,7 +40,17 @@ const (
 
 	resourceObjectName = "resources.json"
 	metadataObjectName = "metadata.json"
+
+	backupCancelBackoffInitialDelay = 5 * time.Second
+	backupCancelBackoffFactor       = 1
+	backupCancelBackoffSteps        = math.MaxInt32
 )
+
+var backupCancelBackoff = wait.Backoff{
+	Duration: backupCancelBackoffInitialDelay,
+	Factor:   backupCancelBackoffFactor,
+	Steps:    backupCancelBackoffSteps,
+}
 
 // ApplicationBackupController reconciles applicationbackup objects
 type ApplicationBackupController struct {
@@ -266,6 +278,35 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationBackupStatusFailed),
 				message)
+
+			// Cancel any backups that might have started and mark the backup as failed
+
+			if err := wait.ExponentialBackoff(backupCancelBackoff, func() (bool, error) {
+				err := a.Driver.CancelBackup(backup)
+				if err != nil {
+					message := fmt.Sprintf("Error cancelling ApplicationBackup for volumes, retrying: %v", err)
+					log.ApplicationBackupLog(backup).Errorf(message)
+					a.Recorder.Event(backup,
+						v1.EventTypeWarning,
+						string(stork_api.ApplicationBackupStatusFailed),
+						message)
+					return true, err
+				}
+				return false, nil
+			}); err != nil {
+				message := fmt.Sprintf("Error cancelling ApplicationBackup for volumes, will not retry further: %v", err)
+				log.ApplicationBackupLog(backup).Errorf(message)
+				a.Recorder.Event(backup,
+					v1.EventTypeWarning,
+					string(stork_api.ApplicationBackupStatusFailed),
+					message)
+			}
+
+			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+			err = sdk.Update(backup)
+			if err != nil {
+				return err
+			}
 			return nil
 		}
 		backup.Status.Volumes = volumeInfos
