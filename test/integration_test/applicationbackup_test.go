@@ -30,6 +30,8 @@ func testApplicationBackup(t *testing.T) {
 	t.Run("postExecRuleTest", applicationBackupRestorePostExecRuleTest)
 	t.Run("preExecMissingRuleTest", applicationBackupRestorePreExecMissingRuleTest)
 	t.Run("postExecMissingRuleTest", applicationBackupRestorePostExecMissingRuleTest)
+	t.Run("preExecFailingRuleTest", applicationBackupRestorePreExecFailingRuleTest)
+	t.Run("postExecFailingRuleTest", applicationBackupRestorePostExecFailingRuleTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
 }
 
@@ -170,6 +172,26 @@ func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-post-exec-missing-rule-backup"},
+		[]string{"mysql-restore"},
+		false,
+		false,
+	)
+}
+
+func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-pre-exec-failing-rule-backup"},
+		[]string{"mysql-restore"},
+		false,
+		false,
+	)
+}
+
+func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-post-exec-failing-rule-backup"},
 		[]string{"mysql-restore"},
 		false,
 		false,
