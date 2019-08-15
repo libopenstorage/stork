@@ -67,6 +67,17 @@ func GetStorageDriverNodes() []Node {
 	return nodeList
 }
 
+// GetMetadataNodes gets all the nodes which serves as internal kvdb metadata node
+func GetMetadataNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if n.IsMetadataNode {
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
 // GetNodesByName returns map of nodes where the node name is the key
 func GetNodesByName() map[string]Node {
 	nodeMap := make(map[string]Node)
