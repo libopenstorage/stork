@@ -1,0 +1,11 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationClone
+metadata:
+  name: clonemysql-missing-post-exec
+  namespace: kube-system
+spec:
+  sourceNamespace: mysql-1-pvc-applicationclone-post-exec-missing
+  destinationNamespace: mysql-1-pvc-applicationclone-post-exec-missing-dest
+  preExecRule: mysql-pre-exec-rule
+  postExecRule: missing-rule
+

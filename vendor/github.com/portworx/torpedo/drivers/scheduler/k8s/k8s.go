@@ -22,7 +22,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
-	apps_api "k8s.io/api/apps/v1beta2"
+	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -765,7 +765,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		logrus.Infof("[%v] Created Secret: %v", app.Key, secret.Name)
 		return secret, nil
 	} else if obj, ok := spec.(*stork_api.Rule); ok {
-		obj.Namespace = ns.Name
+		if obj.Namespace == "" {
+			obj.Namespace = ns.Name
+		}
 		rule, err := k8sOps.CreateRule(obj)
 		if errors.IsAlreadyExists(err) {
 			if rule, err = k8sOps.GetRule(obj.Name, obj.Namespace); err == nil {
@@ -1214,23 +1216,6 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 			}
 
 			logrus.Infof("[%v] Validated destroy of Service: %v", ctx.App.Key, obj.Name)
-		} else if obj, ok := spec.(*stork_api.Rule); ok {
-			_, err := k8sOps.GetRule(obj.Name, obj.Namespace)
-			if err == nil {
-				return &scheduler.ErrFailedToValidateAppDestroy{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("stork rule: %v is still present.", obj.Name),
-				}
-			}
-
-			if errors.IsNotFound(err) {
-				logrus.Infof("[%v] Validated destroy of Rule: %v", ctx.App.Key, obj.Name)
-			} else {
-				return &scheduler.ErrFailedToValidateAppDestroy{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to validate destroy of stork rule: %v due to: %v", obj.Name, err),
-				}
-			}
 		} else if obj, ok := spec.(*v1.Pod); ok {
 			if err := k8sOps.WaitForPodDeletion(obj.UID, obj.Namespace, deleteTasksWaitTimeout); err != nil {
 				return &scheduler.ErrFailedToValidatePodDestroy{
