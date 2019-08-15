@@ -40,6 +40,7 @@ func TestMonitor(t *testing.T) {
 	t.Run("testEvictedDriverPod", testEvictedDriverPod)
 	t.Run("testEvictedOtherDriverPod", testEvictedOtherDriverPod)
 	t.Run("testOfflineStorageNode", testOfflineStorageNode)
+	t.Run("testOfflineStorageNodeDuplicateIP", testOfflineStorageNodeDuplicateIP)
 	t.Run("teardown", teardown)
 }
 
@@ -70,6 +71,7 @@ func setup(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node3.domain", "node3.domain", "192.168.0.3", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node4.domain", "node4.domain", "192.168.0.4", "rack2", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node5.domain", "node5.domain", "192.168.0.5", "rack3", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node6.domain", "node6.domain", "192.168.0.1", "rack1", "", ""))
 
 	for _, n := range nodes.Items {
 		node, err := k8s.Instance().CreateNode(&n)
@@ -78,8 +80,13 @@ func setup(t *testing.T) {
 	}
 
 	provNodes := []int{0, 1}
-	err = driver.CreateCluster(5, nodes)
+	err = driver.CreateCluster(6, nodes)
 	require.NoError(t, err, "Error creating cluster")
+
+	err = driver.UpdateNodeIP(5, "192.168.0.1")
+	require.NoError(t, err, "Error updating node IP")
+	err = driver.UpdateNodeStatus(5, volume.NodeOffline)
+	require.NoError(t, err, "Error setting node status to Offline")
 
 	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1)
 	require.NoError(t, err, "Error provisioning volume")
@@ -247,13 +254,26 @@ func testOfflineStorageNode(t *testing.T) {
 	_, err = k8s.Instance().CreatePod(noStoragePod)
 	require.NoError(t, err, "failed to create pod")
 
-	if err := driver.UpdateNodeStatus(0, volume.NodeOffline); err != nil {
-		require.NoError(t, err, "Error setting node status to Offline: %v", err)
-	}
+	err = driver.UpdateNodeStatus(0, volume.NodeOffline)
+	require.NoError(t, err, "Error setting node status to Offline")
+	defer func() {
+		err = driver.UpdateNodeStatus(0, volume.NodeOnline)
+		require.NoError(t, err, "Error setting node status to Online")
+	}()
 
 	time.Sleep(35 * time.Second)
 	_, err = k8s.Instance().GetPodByName(pod.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
 	_, err = k8s.Instance().GetPodByName(noStoragePod.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
+}
+
+func testOfflineStorageNodeDuplicateIP(t *testing.T) {
+	pod := newPod("driverPodDuplicateIPTest", []string{driverVolumeName})
+	_, err := k8s.Instance().CreatePod(pod)
+	require.NoError(t, err, "failed to create pod")
+
+	time.Sleep(35 * time.Second)
+	_, err = k8s.Instance().GetPodByName(pod.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }

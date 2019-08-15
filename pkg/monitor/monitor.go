@@ -160,6 +160,7 @@ func (m *Monitor) driverMonitor() {
 				log.Errorf("Error getting nodes: %v", err)
 				time.Sleep(2 * time.Second)
 			}
+			nodes = volume.RemoveDuplicateOfflineNodes(nodes)
 			for _, node := range nodes {
 				// Check if nodes are reported online by the storage driver
 				// If not online, look at all the pods on that node
