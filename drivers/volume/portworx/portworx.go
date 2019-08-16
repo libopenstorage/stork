@@ -787,7 +787,9 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			}
 		}
 
-		if pxNode.Status != api.Status_STATUS_OK {
+		switch pxNode.Status {
+		case api.Status_STATUS_DECOMMISSION, api.Status_STATUS_OK: // do nothing
+		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
