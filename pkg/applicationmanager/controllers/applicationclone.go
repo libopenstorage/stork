@@ -279,19 +279,24 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 		}
 	}()
 
-	// Start clone of the volumes if we don't have any status stored
+	// Generate volume names for the clone and persist it
+	// If this hits an error the pre-exec rule will be aborted and retried since
+	// the status hasn't been updated
 	clone.Status.Stage = stork_api.ApplicationCloneStageVolumes
 	if clone.Status.Volumes == nil {
 		if err := a.generateCloneVolumeNames(clone); err != nil {
 			return err
 		}
-
-		if err := a.Driver.CreateVolumeClones(clone); err != nil {
-			return err
-		}
-
 		clone.Status.Status = stork_api.ApplicationCloneStatusInProgress
 		if err := sdk.Update(clone); err != nil {
+			return err
+		}
+	}
+
+	// Start clone of the volumes if it hasn't started yet
+	if clone.Status.Stage == stork_api.ApplicationCloneStageVolumes &&
+		clone.Status.Status == stork_api.ApplicationCloneStatusInProgress {
+		if err := a.Driver.CreateVolumeClones(clone); err != nil {
 			return err
 		}
 
