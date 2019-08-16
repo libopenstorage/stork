@@ -38,6 +38,7 @@ type Node struct {
 	Zone                     string
 	Region                   string
 	IsStorageDriverInstalled bool
+	IsMetadataNode           bool
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options

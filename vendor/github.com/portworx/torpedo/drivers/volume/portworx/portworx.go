@@ -76,6 +76,16 @@ type portworx struct {
 	refreshEndpoint bool
 }
 
+// TODO temporary solution until sdk supports metadataNode response
+type metadataNode struct {
+	PeerUrls   []string `json:"PeerUrls"`
+	ClientUrls []string `json:"ClientUrls"`
+	Leader     bool     `json:"Leader"`
+	DbSize     int      `json:"DbSize"`
+	IsHealthy  bool     `json:"IsHealthy"`
+	ID         string   `json:"ID"`
+}
+
 func (d *portworx) String() string {
 	return DriverName
 }
@@ -171,6 +181,11 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
 				n.VolDriverNodeID = pxNode.Id
 				n.IsStorageDriverInstalled = isPX
+				isMetadataNode, err := d.isMetadataNode(n, address)
+				if err != nil {
+					return err
+				}
+				n.IsMetadataNode = isMetadataNode
 				node.UpdateNode(n)
 				return nil
 			}
@@ -179,6 +194,25 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 
 	// Return error where PX is not explicitly disabled but was not found installed
 	return fmt.Errorf("failed to find px node for node: %v PX nodes: %v", n, pxNodes)
+}
+
+func (d *portworx) isMetadataNode(node node.Node, address string) (bool, error) {
+	members, err := d.getKvdbMembers(node)
+	if err != nil {
+		return false, fmt.Errorf("Failed to get metadata nodes. Cause: %v", err)
+	}
+
+	ipRegex := regexp.MustCompile(`http:\/\/(?P<address>.*)\:\d+`)
+	for _, value := range members {
+		for _, url := range value.ClientUrls {
+			result := getGroupMatches(ipRegex, url)
+			if val, ok := result["address"]; ok && address == val {
+				logrus.Debugf("Node %s is a metadata node", node.Name)
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func (d *portworx) CleanupVolume(name string) error {
@@ -666,7 +700,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	r := func() (interface{}, bool, error) {
 		pxVol := v.(*api.Volume)
 		for _, n := range node.GetStorageDriverNodes() {
-			if n.VolDriverNodeID == pxVol.AttachedOn {
+			if isVolumeAttachedOnNode(pxVol, n) {
 				return &n, false, nil
 			}
 		}
@@ -693,6 +727,18 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 	}
 
 	return nil, nil
+}
+
+func isVolumeAttachedOnNode(volume *api.Volume, node node.Node) bool {
+	if node.VolDriverNodeID == volume.AttachedOn {
+		return true
+	}
+	for _, ip := range node.Addresses {
+		if ip == volume.AttachedOn {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *portworx) ExtractVolumeInfo(params string) (string, map[string]string, error) {
@@ -741,7 +787,9 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			}
 		}
 
-		if pxNode.Status != api.Status_STATUS_OK {
+		switch pxNode.Status {
+		case api.Status_STATUS_DECOMMISSION, api.Status_STATUS_OK: // do nothing
+		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
 				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
@@ -1373,9 +1421,11 @@ func (d *portworx) updateNodeID(n node.Node) (node.Node, error) {
 func getGroupMatches(groupRegex *regexp.Regexp, str string) map[string]string {
 	match := groupRegex.FindStringSubmatch(str)
 	result := make(map[string]string)
-	for i, name := range groupRegex.SubexpNames() {
-		if i != 0 && name != "" {
-			result[name] = match[i]
+	if len(match) > 0 {
+		for i, name := range groupRegex.SubexpNames() {
+			if i != 0 && name != "" {
+				result[name] = match[i]
+			}
 		}
 	}
 	return result
@@ -1422,6 +1472,22 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 		return nil
 	}
 	return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
+}
+
+func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) {
+	kvdbMembers := make(map[string]metadataNode)
+	url := d.constructURL(n.Addresses[0])
+	c, err := client.NewClient(url, "", "")
+	if err != nil {
+		return nil, err
+	}
+	req := c.Get().Resource("kvmembers")
+	resp := req.Do()
+	if resp.Error() != nil {
+		return kvdbMembers, resp.Error()
+	}
+	err = resp.Unmarshal(&kvdbMembers)
+	return kvdbMembers, err
 }
 
 func init() {

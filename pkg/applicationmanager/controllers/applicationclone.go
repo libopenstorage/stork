@@ -146,7 +146,7 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 			return nil
 		}
 
-		var terminationChannels []chan bool
+		var terminationChannel chan bool
 		var err error
 
 		a.setDefaults(clone)
@@ -177,7 +177,7 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 			if clone.Spec.PostExecRule != "" {
 				_, err := k8s.Instance().GetRule(clone.Spec.PostExecRule, clone.Namespace)
 				if err != nil {
-					message := fmt.Sprintf("Error getting PostExecRule %v: %v", clone.Spec.PreExecRule, err)
+					message := fmt.Sprintf("Error getting PostExecRule %v: %v", clone.Spec.PostExecRule, err)
 					log.ApplicationCloneLog(clone).Errorf(message)
 					a.Recorder.Event(clone,
 						v1.EventTypeWarning,
@@ -188,7 +188,7 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 			}
 			fallthrough
 		case stork_api.ApplicationCloneStagePreExecRule:
-			terminationChannels, err = a.runPreExecRule(clone)
+			terminationChannel, err = a.runPreExecRule(clone)
 			if err != nil {
 				message := fmt.Sprintf("Error running PreExecRule: %v", err)
 				log.ApplicationCloneLog(clone).Errorf(message)
@@ -206,7 +206,7 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 			}
 			fallthrough
 		case stork_api.ApplicationCloneStageVolumes:
-			err := a.cloneVolumes(clone, terminationChannels)
+			err := a.cloneVolumes(clone, terminationChannel)
 			if err != nil {
 				message := fmt.Sprintf("Error cloning volumes: %v", err)
 				log.ApplicationCloneLog(clone).Errorf(message)
@@ -272,10 +272,10 @@ func (a *ApplicationCloneController) generateCloneVolumeNames(clone *stork_api.A
 	return sdk.Update(clone)
 }
 
-func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationClone, terminationChannels []chan bool) error {
+func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationClone, terminationChannel chan bool) error {
 	defer func() {
-		for _, channel := range terminationChannels {
-			channel <- true
+		if terminationChannel != nil {
+			terminationChannel <- true
 		}
 	}()
 
@@ -296,10 +296,10 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 		}
 
 		// Terminate any background rules that were started
-		for _, channel := range terminationChannels {
-			channel <- true
+		if terminationChannel != nil {
+			terminationChannel <- true
+			terminationChannel = nil
 		}
-		terminationChannels = nil
 
 		// Run any post exec rules once clone is triggered
 		if clone.Spec.PostExecRule != "" {
@@ -373,7 +373,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 	return nil
 }
 
-func (a *ApplicationCloneController) runPreExecRule(clone *stork_api.ApplicationClone) ([]chan bool, error) {
+func (a *ApplicationCloneController) runPreExecRule(clone *stork_api.ApplicationClone) (chan bool, error) {
 	if clone.Spec.PreExecRule == "" {
 		clone.Status.Stage = stork_api.ApplicationCloneStageVolumes
 		clone.Status.Status = stork_api.ApplicationCloneStatusPending
@@ -402,26 +402,16 @@ func (a *ApplicationCloneController) runPreExecRule(clone *stork_api.Application
 			return nil, nil
 		}
 	}
-	terminationChannels := make([]chan bool, 0)
 	r, err := k8s.Instance().GetRule(clone.Spec.PreExecRule, clone.Namespace)
 	if err != nil {
-		for _, channel := range terminationChannels {
-			channel <- true
-		}
 		return nil, err
 	}
 
-	ch, err := rule.ExecuteRule(r, rule.PreExecRule, clone, clone.Namespace)
+	ch, err := rule.ExecuteRule(r, rule.PreExecRule, clone, clone.Spec.SourceNamespace)
 	if err != nil {
-		for _, channel := range terminationChannels {
-			channel <- true
-		}
-		return nil, fmt.Errorf("error executing PreExecRule for namespace %v: %v", clone.Namespace, err)
+		return nil, fmt.Errorf("error executing PreExecRule for namespace %v: %v", clone.Spec.SourceNamespace, err)
 	}
-	if ch != nil {
-		terminationChannels = append(terminationChannels, ch)
-	}
-	return terminationChannels, nil
+	return ch, nil
 }
 
 func (a *ApplicationCloneController) runPostExecRule(clone *stork_api.ApplicationClone) error {
@@ -430,7 +420,7 @@ func (a *ApplicationCloneController) runPostExecRule(clone *stork_api.Applicatio
 		return err
 	}
 
-	_, err = rule.ExecuteRule(r, rule.PostExecRule, clone, clone.Namespace)
+	_, err = rule.ExecuteRule(r, rule.PostExecRule, clone, clone.Spec.SourceNamespace)
 	if err != nil {
 		return fmt.Errorf("error executing PreExecRule for namespace %v: %v", clone.Namespace, err)
 	}
