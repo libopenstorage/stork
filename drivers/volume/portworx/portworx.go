@@ -1222,7 +1222,7 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 
 func (d *portworx) DecommissionNode(n node.Node) error {
 
-	if err := k8s.Instance().AddLabelOnNode(n.Name, "px/enabled", "remove"); err != nil {
+	if err := k8s.Instance().AddLabelOnNode(n.Name, schedops.PXEnabledLabelKey, "remove"); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
@@ -1267,13 +1267,13 @@ func (d *portworx) RejoinNode(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
-	if err = k8s.Instance().RemoveLabelOnNode(n.Name, "px/service"); err != nil {
+	if err = k8s.Instance().RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
-	if err = k8s.Instance().RemoveLabelOnNode(n.Name, "px/enabled"); err != nil {
+	if err = k8s.Instance().RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
