@@ -2641,6 +2641,7 @@ func (p *portworx) CancelRestore(restore *stork_crd.ApplicationRestore) error {
 }
 
 func (p *portworx) CreateVolumeClones(clone *stork_crd.ApplicationClone) error {
+	createdClones := make([]string, 0)
 	volDriver, err := p.getUserVolDriver(clone.Annotations)
 	if err != nil {
 		return err
@@ -2655,13 +2656,25 @@ func (p *portworx) CreateVolumeClones(clone *stork_crd.ApplicationClone) error {
 		}
 		_, err := volDriver.Snapshot(vInfo.Volume, false, locator, true)
 		if err != nil {
-			vInfo.Status = stork_crd.ApplicationCloneStatusFailed
-			vInfo.Reason = err.Error()
-			return err
+			// Mark this clone for deletion too if it already existed, so that
+			// all clones can be recreated on the next try
+			if isAlreadyExistsError(err) {
+				createdClones = append(createdClones, vInfo.Volume)
+			}
+			// Delete the clones that we already created
+			for _, cloneVolume := range createdClones {
+				if err := volDriver.Delete(cloneVolume); err != nil {
+					log.ApplicationCloneLog(clone).Warnf("error deleting cloned volume %v on failure: %v", cloneVolume, err)
+				}
+			}
+			return fmt.Errorf("error creating clone %v for volume %v: %v", vInfo.CloneVolume, vInfo.Volume, err)
 		}
+		createdClones = append(createdClones, vInfo.CloneVolume)
+	}
+	// Update the status for all the volumes only once we are all done
+	for _, vInfo := range clone.Status.Volumes {
 		vInfo.Status = stork_crd.ApplicationCloneStatusSuccessful
 		vInfo.Reason = "Volume cloned succesfully"
-
 	}
 	return nil
 }
