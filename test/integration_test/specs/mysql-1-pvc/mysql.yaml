@@ -2,6 +2,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: mysql-data
+   labels:
+     app: mysql 
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc
 spec:
@@ -23,6 +25,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
+  labels:
+    app: mysql 
 spec:
   strategy:
     rollingUpdate:

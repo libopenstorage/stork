@@ -10,6 +10,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,21 +33,51 @@ func testApplicationBackup(t *testing.T) {
 	t.Run("postExecMissingRuleTest", applicationBackupRestorePostExecMissingRuleTest)
 	t.Run("preExecFailingRuleTest", applicationBackupRestorePreExecFailingRuleTest)
 	t.Run("postExecFailingRuleTest", applicationBackupRestorePostExecFailingRuleTest)
+	t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
 }
 
 func triggerBackupRestoreTest(
 	t *testing.T,
 	appBackupKey []string,
+	additionalAppKeys []string,
 	appRestoreKey []string,
 	createBackupLocationFlag bool,
 	backupSuccessExpected bool,
+	backupAllAppsExpected bool,
 ) {
 	var err error
 	var ctxs []*scheduler.Context
 	ctx := createApp(t, appKey)
 	ctxs = append(ctxs, ctx)
-	logrus.Infof("App created %v. Starting backup.", ctx.GetID())
+	var restoreCtx = &scheduler.Context{
+		UID: ctx.UID,
+		App: &spec.AppSpec{
+			Key:      ctx.App.Key,
+			SpecList: []interface{}{},
+		}}
+
+	// Track what has been backed up
+	preBackupCtx := ctxs[0].DeepCopy()
+
+	// Track what has to be verified post restore (skips apps that will won't be restored due to label selectors)
+	postRestoreCtx := preBackupCtx
+
+	if len(additionalAppKeys) > 0 {
+		err = schedulerDriver.AddTasks(ctxs[0],
+			scheduler.ScheduleOptions{AppKeys: additionalAppKeys})
+		require.NoError(t, err, "Error scheduling additional apps")
+		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for additional apps to get to running state")
+		if backupAllAppsExpected {
+			preBackupCtx = ctxs[0].DeepCopy()
+		}
+	}
+
+	// Track contexts that will be destroyed before restore
+	preRestoreCtx := ctxs[0].DeepCopy()
+
+	logrus.Infof("All Apps created %v. Starting backup.", ctx.GetID())
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
 	if createBackupLocationFlag {
@@ -55,36 +86,57 @@ func triggerBackupRestoreTest(
 	}
 
 	// Backup application
-	err = schedulerDriver.AddTasks(ctxs[0],
-		scheduler.ScheduleOptions{AppKeys: appBackupKey})
-	require.NoError(t, err, "Error backing-up apps")
 	if backupSuccessExpected {
-		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		if backupAllAppsExpected {
+			err = schedulerDriver.AddTasks(ctxs[0], scheduler.ScheduleOptions{AppKeys: appBackupKey})
+			require.NoError(t, err, "Error creating app backups")
+			err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		} else {
+			err = schedulerDriver.AddTasks(postRestoreCtx, scheduler.ScheduleOptions{AppKeys: appBackupKey})
+			require.NoError(t, err, "Error creating app backups")
+			err = schedulerDriver.WaitForRunning(postRestoreCtx, defaultWaitTimeout, defaultWaitInterval)
+		}
 		require.NoError(t, err, "Error waiting for back-up to complete.")
-		logrus.Infof("Backup completed. Starting Restore.")
+		logrus.Infof("Backup completed.")
 
+		appBackup, err := k8s.Instance().GetApplicationBackup(appKey+"-backup", ctx.GetID())
+		require.NoError(t, err, "Error fetching app backup.")
+		if appBackup.Spec.ReclaimPolicy != storkv1.ApplicationBackupReclaimPolicyDelete {
+			// Destroy apps only if reclaim policy if NOT delete
+			destroyAndWait(t, []*scheduler.Context{preRestoreCtx})
+		}
+
+		logrus.Infof("Starting Restore.")
 		// Restore application
-		err = schedulerDriver.AddTasks(ctxs[0],
+		err = schedulerDriver.AddTasks(restoreCtx,
 			scheduler.ScheduleOptions{AppKeys: appRestoreKey})
 		require.NoError(t, err, "Error restoring apps")
 
-		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		err = schedulerDriver.WaitForRunning(restoreCtx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for restore to complete.")
 
 		logrus.Infof("Restore completed.")
 
-		// Validate applications after restore
-		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+		// Validate that restore results in restoration of correct apps based on whether all apps were expected or not
+		err = schedulerDriver.WaitForRunning(preBackupCtx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for restore to complete.")
 
-		logrus.Infof("App validation after restore completed.")
+		logrus.Infof("App validations after restore completed.")
 
-	} else {
+	} else { // Since backup is expected to fail, reducing the wait time here to catch the error faster
+		err = schedulerDriver.AddTasks(ctxs[0], scheduler.ScheduleOptions{AppKeys: appBackupKey})
+		require.NoError(t, err, "Error backing-up apps")
 		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/5, defaultWaitInterval)
 		require.Error(t, err, "Backup expected to fail in test: %s.", t.Name())
 	}
 
-	destroyAndWait(t, ctxs)
+	ctxs = append(ctxs, restoreCtx)
+	if (backupAllAppsExpected && backupSuccessExpected) || !backupSuccessExpected {
+		destroyAndWait(t, ctxs)
+	} else if !backupAllAppsExpected && backupSuccessExpected {
+		// Some apps might have been already destroyed, destroy the remaining
+		destroyAndWait(t, []*scheduler.Context{postRestoreCtx})
+	}
 }
 
 func createBackupLocation(
@@ -132,7 +184,9 @@ func applicationBackupRestoreTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-backup"},
+		[]string{},
 		[]string{"mysql-restore"},
+		true,
 		true,
 		true,
 	)
@@ -142,8 +196,10 @@ func applicationBackupRestorePreExecRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-pre-exec-rule-backup"},
+		[]string{},
 		[]string{"mysql-restore"},
 		false,
+		true,
 		true,
 	)
 }
@@ -152,8 +208,10 @@ func applicationBackupRestorePostExecRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-post-exec-rule-backup"},
+		[]string{},
 		[]string{"mysql-restore"},
 		false,
+		true,
 		true,
 	)
 }
@@ -162,7 +220,9 @@ func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-pre-exec-missing-rule-backup"},
+		[]string{},
 		[]string{"mysql-restore"},
+		false,
 		false,
 		false,
 	)
@@ -172,7 +232,9 @@ func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-post-exec-missing-rule-backup"},
+		[]string{},
 		[]string{"mysql-restore"},
+		false,
 		false,
 		false,
 	)
@@ -182,7 +244,9 @@ func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-pre-exec-failing-rule-backup"},
+		[]string{},
 		[]string{"mysql-restore"},
+		false,
 		false,
 		false,
 	)
@@ -192,8 +256,22 @@ func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
 		[]string{testKey + "-post-exec-failing-rule-backup"},
+		[]string{},
 		[]string{"mysql-restore"},
 		false,
+		false,
+		false,
+	)
+}
+
+func applicationBackupLabelSelectorTest(t *testing.T) {
+	triggerBackupRestoreTest(
+		t,
+		[]string{testKey + "-label-selector-backup"},
+		[]string{"cassandra"},
+		[]string{"mysql-restore"},
+		false,
+		true,
 		false,
 	)
 }
