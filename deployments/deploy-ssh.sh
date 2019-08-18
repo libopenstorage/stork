@@ -135,6 +135,12 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["false"]'
             ;;
+        eks)
+            # Run torpedo on worker node, where px installation is disabled.
+            K8S_VENDOR_KEY=px/enabled
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE='values: ["false"]'
+            ;;
     esac
 else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
