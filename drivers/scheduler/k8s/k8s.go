@@ -1917,7 +1917,7 @@ func (k *K8s) StopSchedOnNode(n node.Node) error {
 		},
 		Action: "stop",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	_, err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStopSchedOnNode{
 			Node:          n,
@@ -1938,7 +1938,7 @@ func (k *K8s) StartSchedOnNode(n node.Node) error {
 		},
 		Action: "start",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	_, err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,
