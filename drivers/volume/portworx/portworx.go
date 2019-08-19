@@ -778,35 +778,39 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 }
 
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
+	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
+		logrus.Debugf("Getting node info: %s", n.Name)
 		pxNode, err := d.getPxNode(n, nil)
 		if err != nil {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: err.Error(),
+				Cause: fmt.Sprintf("failed to get node info [%s]. Err: %v", n.Name, err),
 			}
 		}
 
+		logrus.Debugf("checking PX status on node: %s", n.Name)
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION, api.Status_STATUS_OK: // do nothing
 		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
-					api.Status_STATUS_OK, pxNode.Status),
+				Cause: fmt.Sprintf("px cluster is usable but node %s status is not ok. Expected: %v Actual: %v",
+					n.Name, api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
 
+		logrus.Debugf("checking PX storage status on node: %s", n.Name)
 		storageStatus := d.getStorageStatus(n)
 		if storageStatus != storageStatusUp {
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("px cluster is usable but storage status is not ok. Expected: %v Actual: %v",
-					storageStatusUp, storageStatus),
+				Cause: fmt.Sprintf("px cluster is usable on node: %s but storage status is not ok. Expected: %v Actual: %v",
+					n.Name, storageStatusUp, storageStatus),
 			}
 		}
 
-		logrus.Infof("px on node %s is now up. status: %v", pxNode.Id, pxNode.Status)
+		logrus.Infof("px on node: %s is now up. status: %v", n.Name, pxNode.Status)
 
 		return "", false, nil
 	}
@@ -816,11 +820,12 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	}
 
 	// Check if PX pod is up
+	logrus.Debugf("checking if PX pod is up on node: %s", n.Name)
 	t = func() (interface{}, bool, error) {
 		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, timeout),
+				Cause: fmt.Sprintf("px pod is not ready on node: %s after %v", n.Name, timeout),
 			}
 		}
 		return "", false, nil
@@ -830,6 +835,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return err
 	}
 
+	logrus.Debugf("px is fully operational on node: %s", n.Name)
 	return nil
 }
 
@@ -1130,6 +1136,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
+	logrus.Infof("Starting volume driver on %s.", n.Name)
 	err := d.schedOps.StartPxOnNode(n)
 	if err != nil {
 		return err
