@@ -77,7 +77,7 @@ type Driver interface {
 	WaitDriverDownOnNode(n node.Node) error
 
 	// GetNodeForVolume returns the node on which the volume is attached
-	GetNodeForVolume(vol *Volume) (*node.Node, error)
+	GetNodeForVolume(vol *Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error)
 
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)

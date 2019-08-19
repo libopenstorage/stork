@@ -673,7 +673,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 	return nil
 }
 
-func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, error) {
+func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	name := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
 		vols, err := d.getVolDriver().Inspect([]string{name})
@@ -713,7 +713,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 		return nil, true, fmt.Errorf("Volume: %s is not attached on any node", name)
 	}
 
-	n, err := task.DoRetryWithTimeout(r, validateVolumeAttachedTimeout, validateVolumeAttachedInterval)
+	n, err := task.DoRetryWithTimeout(r, timeout, retryInterval)
 	if err != nil {
 		return nil, &ErrFailedToValidateAttachment{
 			ID:    name,
