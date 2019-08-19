@@ -562,13 +562,11 @@ EOF`
 		logrus.Infof("flush cache service already installed on node %s", n.Name)
 	}
 
-	out, err = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
+	//in this case we are ignoring error cause is-active can return unknown exited 3 in case service is not found
+	out, _ = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
 		Action:         "is-active",
 		ConnectionOpts: connOpts,
 	})
-	if err != nil {
-		return err
-	}
 	if strings.TrimSpace(out) != "active" {
 		if _, err = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
 			Action:         "start",
@@ -581,13 +579,11 @@ EOF`
 		logrus.Debugf("flush_cache already started on node %s", n.Name)
 	}
 
-	out, err = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
+	//in this case we are ignoring error cause is-enabled can return unknown exited 3 in case service is not found
+	out, _ = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
 		Action:         "is-enabled",
 		ConnectionOpts: connOpts,
 	})
-	if err != nil {
-		return err
-	}
 	if strings.TrimSpace(out) != "enabled" {
 		if _, err = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
 			Action:         "enable",
