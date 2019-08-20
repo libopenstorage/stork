@@ -55,6 +55,7 @@ const (
 	defaultWaitInterval      time.Duration = 10 * time.Second
 
 	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
+	storageProvisioner       = "STORAGE_PROVISIONER"
 )
 
 var nodeDriver node.Driver
@@ -78,7 +79,7 @@ func setup(t *testing.T) {
 	nodeDriver, err = node.Get(nodeDriverName)
 	require.NoError(t, err, "Error getting node driver %v", nodeDriverName)
 
-	err = nodeDriver.Init()
+	err = nodeDriver.Init(false)
 	require.NoError(t, err, "Error initializing node driver %v", nodeDriverName)
 
 	schedulerDriver, err = scheduler.Get(schedulerDriverName)
@@ -90,7 +91,9 @@ func setup(t *testing.T) {
 	volumeDriver, err = volume.Get(volumeDriverName)
 	require.NoError(t, err, "Error getting volume driver %v", volumeDriverName)
 
-	err = volumeDriver.Init(schedulerDriverName, nodeDriverName)
+	provisioner := os.Getenv(storageProvisioner)
+	logrus.Infof("Using provisioner: %s", provisioner)
+	err = volumeDriver.Init(schedulerDriverName, nodeDriverName, provisioner)
 	require.NoError(t, err, "Error initializing volume driver %v", volumeDriverName)
 }
 

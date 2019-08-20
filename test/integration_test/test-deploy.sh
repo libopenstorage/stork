@@ -7,6 +7,7 @@ test_image_name="stork_test:latest"
 remote_config_path=""
 run_cluster_domain_test=false
 environment_variables=""
+storage_provisioner="portworx"
 for i in "$@"
 do
 case $i in
@@ -42,6 +43,12 @@ case $i in
     --cluster_domain_tests)
         echo "Flag for clusterdomain test: $2"
         run_cluster_domain_test=true
+        shift
+        shift
+        ;;
+    --storage_provisioner)
+        echo "Flag for clusterdomain test: $2"
+        storage_provisioner=$2
         shift
         shift
         ;;
@@ -129,6 +136,7 @@ else
 	sed -i 's/'enable_cluster_domain'/'""'/g' /testspecs/stork-test-pod.yaml
 fi
 
+sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml

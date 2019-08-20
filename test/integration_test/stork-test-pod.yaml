@@ -67,6 +67,8 @@ spec:
       value: password
     - name: ENABLE_CLUSTER_DOMAIN_TESTS
       value: enable_cluster_domain 
+    - name: STORAGE_PROVISIONER 
+      value: storage_provisioner 
   hostNetwork: false
   hostPID: false
   volumes:
