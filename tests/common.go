@@ -92,7 +92,7 @@ func InitInstance() {
 	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String())
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init(Inst().InstallFlushCache)

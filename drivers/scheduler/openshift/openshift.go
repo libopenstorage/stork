@@ -83,7 +83,7 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 			return nil, err
 		}
 
-		specObjects, err := k.CreateSpecObjects(app, appNamespace, options.StorageProvisioner)
+		specObjects, err := k.CreateSpecObjects(app, appNamespace)
 		if err != nil {
 			return nil, err
 		}
