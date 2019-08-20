@@ -117,7 +117,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 		Run: func(c *cobra.Command, args []string) {
 			activationNamespaces := make([]string, 0)
 			if allNamespaces {
-				namespaces, err := k8s.Instance().ListNamespaces()
+				namespaces, err := k8s.Instance().ListNamespaces(nil)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -153,7 +153,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 		Run: func(c *cobra.Command, args []string) {
 			deactivationNamespaces := make([]string, 0)
 			if allNamespaces {
-				namespaces, err := k8s.Instance().ListNamespaces()
+				namespaces, err := k8s.Instance().ListNamespaces(nil)
 				if err != nil {
 					util.CheckErr(err)
 					return
