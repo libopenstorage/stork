@@ -493,6 +493,20 @@
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:a1038ef593beb4771c8f0f9c26e8b00410acd800af5c6864651d9bf160ea1813"
+  name = "github.com/hpcloud/tail"
+  packages = [
+    ".",
+    "ratelimiter",
+    "util",
+    "watch",
+    "winfile",
+  ]
+  pruneopts = "UT"
+  revision = "a30252cb686a21eb2d0b98132633053ec2f7f1e5"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:a0cefd27d12712af4b5018dc7046f245e1e3b5760e2e848c30b171b570708f9b"
   name = "github.com/imdario/mergo"
   packages = ["."]
@@ -653,6 +667,33 @@
   revision = "c48cc78d482608239f6c4c92a4abd87eb8761c90"
 
 [[projects]]
+  digest = "1:3e2dd43d579954e11bf866eae02afa8312b2647c10db0746cc647b95fd0d4e6b"
+  name = "github.com/onsi/ginkgo"
+  packages = [
+    ".",
+    "config",
+    "internal/codelocation",
+    "internal/containernode",
+    "internal/failer",
+    "internal/leafnodes",
+    "internal/remote",
+    "internal/spec",
+    "internal/spec_iterator",
+    "internal/specrunner",
+    "internal/suite",
+    "internal/testingtproxy",
+    "internal/writer",
+    "reporters",
+    "reporters/stenographer",
+    "reporters/stenographer/support/go-colorable",
+    "reporters/stenographer/support/go-isatty",
+    "types",
+  ]
+  pruneopts = "UT"
+  revision = "7e8b50db0c6d0a15ac0eb015d4ca64e7e7e2c88c"
+  version = "v1.9.0"
+
+[[projects]]
   digest = "1:ee4d4af67d93cc7644157882329023ce9a7bcfce956a079069a9405521c7cc8d"
   name = "github.com/opencontainers/go-digest"
   packages = ["."]
@@ -766,7 +807,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:37bc6eca8cd566f771a059f545a7a174f3ec22a79146ee4fc2fc4ee94f0932f9"
+  digest = "1:496ca3cbc55d04145bcb9b8831517809c5cf80986b551d81382a7c50c2c9fae0"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
@@ -793,7 +834,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:375f1c9bfa1f68cdf226b8c538bc6c3f51aa6c1c67e09dabc25835c87bfa62fd"
+  digest = "1:77d945e5f05502b341481104a3cdd05f8af30cbc9fd79981a2853ace60863f77"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -807,7 +848,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "681cadf53949f89a7f3fee62fdea18ffeffdb722"
+  revision = "9f1d7040b957cdfa62df513764412fdfdaf5b3ae"
 
 [[projects]]
   branch = "master"
@@ -1229,6 +1270,15 @@
   version = "v1.18.0"
 
 [[projects]]
+  digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
+  name = "gopkg.in/fsnotify.v1"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9"
+  source = "https://github.com/fsnotify/fsnotify.git"
+  version = "v1.4.7"
+
+[[projects]]
   digest = "1:2d1fbdc6777e5408cabeb02bf336305e724b925ff4546ded0fa8715a7267922a"
   name = "gopkg.in/inf.v0"
   packages = ["."]
@@ -1248,6 +1298,14 @@
   pruneopts = "UT"
   revision = "e94fb177d3668d35ab39c61cbb2f311550557e83"
   version = "v2.2.2"
+
+[[projects]]
+  branch = "v1"
+  digest = "1:0caa92e17bc0b65a98c63e5bc76a9e844cd5e56493f8fdbb28fad101a16254d9"
+  name = "gopkg.in/tomb.v1"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "dd632973f1e7218eb1089048e0798ec9ae7dceb8"
 
 [[projects]]
   digest = "1:4d2e5a73dc1500038e504a8d78b986630e3626dc027bc030ba5c75da257cdb96"
@@ -1806,6 +1864,8 @@
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/secrets/k8s",
+    "github.com/onsi/ginkgo",
+    "github.com/onsi/ginkgo/reporters",
     "github.com/openshift/api/apps/v1",
     "github.com/openshift/client-go/apps/clientset/versioned/fake",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
@@ -1817,6 +1877,7 @@
     "github.com/portworx/torpedo/drivers/node/ssh",
     "github.com/portworx/torpedo/drivers/scheduler",
     "github.com/portworx/torpedo/drivers/scheduler/k8s",
+    "github.com/portworx/torpedo/drivers/scheduler/spec",
     "github.com/portworx/torpedo/drivers/volume",
     "github.com/portworx/torpedo/drivers/volume/portworx",
     "github.com/sirupsen/logrus",
