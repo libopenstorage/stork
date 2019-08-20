@@ -29,6 +29,18 @@ import (
 )
 
 const (
+	//PortworxStorage portworx storage name
+	PortworxStorage torpedovolume.StorageProvisionerType = "portworx"
+	//CsiStorage csi storage name
+	CsiStorage torpedovolume.StorageProvisionerType = "csi"
+)
+
+var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+	PortworxStorage: "kubernetes.io/portworx-volume",
+	CsiStorage:      "pxd.portworx.com",
+}
+
+const (
 	// DriverName is the name of the portworx driver implementation
 	DriverName              = "pxd"
 	pxdClientSchedUserAgent = "pxd-sched"
@@ -90,7 +102,7 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
-func (d *portworx) Init(sched string, nodeDriver string) error {
+func (d *portworx) Init(sched string, nodeDriver string, storageProvisioner string) error {
 	logrus.Infof("Using the Portworx volume driver under scheduler: %v", sched)
 	var err error
 	if d.nodeDriver, err = node.Get(nodeDriver); err != nil {
@@ -135,6 +147,13 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		)
 	}
 
+	if storageProvisioner != "" {
+		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
+			torpedovolume.StorageProvisioner = p
+		}
+	} else {
+		torpedovolume.StorageProvisioner = provisioners[PortworxStorage]
+	}
 	return nil
 }
 
