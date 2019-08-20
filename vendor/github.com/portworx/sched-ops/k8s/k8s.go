@@ -134,7 +134,7 @@ type EventOps interface {
 // NamespaceOps is an interface to perform namespace operations
 type NamespaceOps interface {
 	// ListNamespaces returns all the namespaces
-	ListNamespaces() (*v1.NamespaceList, error)
+	ListNamespaces(labelSelector map[string]string) (*v1.NamespaceList, error)
 	// GetNamespace returns a namespace object for given name
 	GetNamespace(name string) (*v1.Namespace, error)
 	// CreateNamespace creates a namespace with given name and metadata
@@ -907,12 +907,14 @@ func (k *k8sOps) UpdateSecurityContextConstraints(securityContextConstraints *oc
 
 // Namespace APIs - BEGIN
 
-func (k *k8sOps) ListNamespaces() (*v1.NamespaceList, error) {
+func (k *k8sOps) ListNamespaces(labelSelector map[string]string) (*v1.NamespaceList, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
 	}
 
-	return k.client.CoreV1().Namespaces().List(meta_v1.ListOptions{})
+	return k.client.CoreV1().Namespaces().List(meta_v1.ListOptions{
+		LabelSelector: mapToCSV(labelSelector),
+	})
 }
 
 func (k *k8sOps) GetNamespace(name string) (*v1.Namespace, error) {

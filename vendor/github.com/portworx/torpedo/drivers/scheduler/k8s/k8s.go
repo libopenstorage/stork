@@ -70,18 +70,6 @@ const (
 	resizeSupportedAnnotationKey = "torpedo/resize-supported"
 )
 
-const (
-	//PortworxStorage portworx storage name
-	PortworxStorage = "portworx"
-	//CsiStorage csi storage name
-	CsiStorage = "csi"
-)
-
-var provisioners = map[string]string{
-	PortworxStorage: "kubernetes.io/portworx-volume",
-	CsiStorage:      "com.openstorage.pxd",
-}
-
 var (
 	namespaceRegex = regexp.MustCompile("{{NAMESPACE}}")
 )
@@ -367,7 +355,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
-		specObjects, err := k.CreateSpecObjects(app, appNamespace, options.StorageProvisioner)
+		specObjects, err := k.CreateSpecObjects(app, appNamespace)
 		if err != nil {
 			return nil, err
 		}
@@ -388,7 +376,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 }
 
 // CreateSpecObjects Create application
-func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace, storageprovisioner string) ([]interface{}, error) {
+func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string) ([]interface{}, error) {
 	var specObjects []interface{}
 	ns, err := k.createNamespace(app, namespace)
 	if err != nil {
@@ -433,7 +421,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace, storageprovisioner
 
 	for _, spec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createStorageObject(spec, ns, app, storageprovisioner)
+			obj, err := k.createStorageObject(spec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -508,7 +496,7 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		apps = append(apps, spec)
 	}
 	for _, app := range apps {
-		objects, err := k.CreateSpecObjects(app, appNamespace, options.StorageProvisioner)
+		objects, err := k.CreateSpecObjects(app, appNamespace)
 		if err != nil {
 			return err
 		}
@@ -566,17 +554,13 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespac
 	return nsObj.(*v1.Namespace), nil
 }
 
-func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec, storageprovisioner string) (interface{}, error) {
+func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 
 	if obj, ok := spec.(*storage_api.StorageClass); ok {
 		obj.Namespace = ns.Name
-		if storageProvisioner, ok := provisioners[storageprovisioner]; ok {
-			logrus.Infof("[%v] Requested provisioner: %s", app.Key, storageprovisioner)
-			obj.Provisioner = storageProvisioner
-		} else {
-			obj.Provisioner = provisioners[PortworxStorage]
-		}
+		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
+		obj.Provisioner = volume.GetStorageProvisioner()
 
 		sc, err := k8sOps.CreateStorageClass(obj)
 		if errors.IsAlreadyExists(err) {
@@ -1917,7 +1901,7 @@ func (k *K8s) StopSchedOnNode(n node.Node) error {
 		},
 		Action: "stop",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	_, err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStopSchedOnNode{
 			Node:          n,
@@ -1938,7 +1922,7 @@ func (k *K8s) StartSchedOnNode(n node.Node) error {
 		},
 		Action: "start",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	_, err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,
@@ -2051,16 +2035,16 @@ func (k *K8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	k8sOps := k8s_ops.Instance()
 	podsUsingStorage := make([]v1.Pod, 0)
 	for _, pod := range pods {
-		for _, volume := range pod.Spec.Volumes {
-			if volume.PersistentVolumeClaim == nil {
+		for _, vol := range pod.Spec.Volumes {
+			if vol.PersistentVolumeClaim == nil {
 				continue
 			}
-			pvc, err := k8sOps.GetPersistentVolumeClaim(volume.PersistentVolumeClaim.ClaimName, pod.Namespace)
+			pvc, err := k8sOps.GetPersistentVolumeClaim(vol.PersistentVolumeClaim.ClaimName, pod.Namespace)
 			if err != nil {
-				logrus.Errorf("failed to get pvc [%s] %s. Cause: %v", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, err)
+				logrus.Errorf("failed to get pvc [%s] %s. Cause: %v", vol.PersistentVolumeClaim.ClaimName, pod.Namespace, err)
 				return podsUsingStorage
 			}
-			if scProvisioner, err := k8sOps.GetStorageProvisionerForPVC(pvc); err == nil && scProvisioner == provisioners[provisioner] {
+			if scProvisioner, err := k8sOps.GetStorageProvisionerForPVC(pvc); err == nil && scProvisioner == volume.GetStorageProvisioner() {
 				podsUsingStorage = append(podsUsingStorage, pod)
 				break
 			}

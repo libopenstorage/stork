@@ -38,7 +38,7 @@ type Image struct {
 // of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string) error
+	Init(sched string, nodeDriver string, storageProvisioner string) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -77,7 +77,7 @@ type Driver interface {
 	WaitDriverDownOnNode(n node.Node) error
 
 	// GetNodeForVolume returns the node on which the volume is attached
-	GetNodeForVolume(vol *Volume) (*node.Node, error)
+	GetNodeForVolume(vol *Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error)
 
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
@@ -134,8 +134,13 @@ type Driver interface {
 	ValidateVolumeSnapshotRestore(vol string, snapData *snap_v1.VolumeSnapshotData, timeStart time.Time) error
 }
 
+// StorageProvisionerType provisioner to be used for torpedo volumes
+type StorageProvisionerType string
+
 var (
 	volDrivers = make(map[string]Driver)
+	// StorageProvisioner to be used to store name of the storage provisioner
+	StorageProvisioner StorageProvisionerType
 )
 
 // Register registers the given volume driver
@@ -160,6 +165,11 @@ func Get(name string) (Driver, error) {
 		ID:   name,
 		Type: "VolumeDriver",
 	}
+}
+
+// GetStorageProvisioner storage provsioner name to be used with Torpedo
+func GetStorageProvisioner() string {
+	return string(StorageProvisioner)
 }
 
 func (v *Volume) String() string {

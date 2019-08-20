@@ -29,6 +29,18 @@ import (
 )
 
 const (
+	//PortworxStorage portworx storage name
+	PortworxStorage torpedovolume.StorageProvisionerType = "portworx"
+	//CsiStorage csi storage name
+	CsiStorage torpedovolume.StorageProvisionerType = "csi"
+)
+
+var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+	PortworxStorage: "kubernetes.io/portworx-volume",
+	CsiStorage:      "pxd.portworx.com",
+}
+
+const (
 	// DriverName is the name of the portworx driver implementation
 	DriverName              = "pxd"
 	pxdClientSchedUserAgent = "pxd-sched"
@@ -90,7 +102,7 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
-func (d *portworx) Init(sched string, nodeDriver string) error {
+func (d *portworx) Init(sched string, nodeDriver string, storageProvisioner string) error {
 	logrus.Infof("Using the Portworx volume driver under scheduler: %v", sched)
 	var err error
 	if d.nodeDriver, err = node.Get(nodeDriver); err != nil {
@@ -135,6 +147,13 @@ func (d *portworx) Init(sched string, nodeDriver string) error {
 		)
 	}
 
+	if storageProvisioner != "" {
+		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
+			torpedovolume.StorageProvisioner = p
+		}
+	} else {
+		torpedovolume.StorageProvisioner = provisioners[PortworxStorage]
+	}
 	return nil
 }
 
@@ -655,7 +674,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 			if err != nil {
 				return err
 			}
-			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+			_, err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 				Action: "stop",
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         stopDriverTimeout,
@@ -673,7 +692,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 	return nil
 }
 
-func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, error) {
+func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	name := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
 		vols, err := d.getVolDriver().Inspect([]string{name})
@@ -713,7 +732,7 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume) (*node.Node, erro
 		return nil, true, fmt.Errorf("Volume: %s is not attached on any node", name)
 	}
 
-	n, err := task.DoRetryWithTimeout(r, validateVolumeAttachedTimeout, validateVolumeAttachedInterval)
+	n, err := task.DoRetryWithTimeout(r, timeout, retryInterval)
 	if err != nil {
 		return nil, &ErrFailedToValidateAttachment{
 			ID:    name,
@@ -778,35 +797,39 @@ func (d *portworx) getClusterOnStart() (*api.Cluster, error) {
 }
 
 func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error {
+	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
+		logrus.Debugf("Getting node info: %s", n.Name)
 		pxNode, err := d.getPxNode(n, nil)
 		if err != nil {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: err.Error(),
+				Cause: fmt.Sprintf("failed to get node info [%s]. Err: %v", n.Name, err),
 			}
 		}
 
+		logrus.Debugf("checking PX status on node: %s", n.Name)
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION, api.Status_STATUS_OK: // do nothing
 		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
-					api.Status_STATUS_OK, pxNode.Status),
+				Cause: fmt.Sprintf("px cluster is usable but node %s status is not ok. Expected: %v Actual: %v",
+					n.Name, api.Status_STATUS_OK, pxNode.Status),
 			}
 		}
 
+		logrus.Debugf("checking PX storage status on node: %s", n.Name)
 		storageStatus := d.getStorageStatus(n)
 		if storageStatus != storageStatusUp {
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
-				Cause: fmt.Sprintf("px cluster is usable but storage status is not ok. Expected: %v Actual: %v",
-					storageStatusUp, storageStatus),
+				Cause: fmt.Sprintf("px cluster is usable on node: %s but storage status is not ok. Expected: %v Actual: %v",
+					n.Name, storageStatusUp, storageStatus),
 			}
 		}
 
-		logrus.Infof("px on node %s is now up. status: %v", pxNode.Id, pxNode.Status)
+		logrus.Infof("px on node: %s is now up. status: %v", n.Name, pxNode.Status)
 
 		return "", false, nil
 	}
@@ -816,11 +839,12 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	}
 
 	// Check if PX pod is up
+	logrus.Debugf("checking if PX pod is up on node: %s", n.Name)
 	t = func() (interface{}, bool, error) {
 		if !d.schedOps.IsPXReadyOnNode(n) {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
-				Cause: fmt.Sprintf("PX is not ready on %s after %v", n.Name, timeout),
+				Cause: fmt.Sprintf("px pod is not ready on node: %s after %v", n.Name, timeout),
 			}
 		}
 		return "", false, nil
@@ -830,6 +854,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return err
 	}
 
+	logrus.Debugf("px is fully operational on node: %s", n.Name)
 	return nil
 }
 
@@ -1130,16 +1155,18 @@ func (d *portworx) testAndSetEndpoint(endpoint string) error {
 }
 
 func (d *portworx) StartDriver(n node.Node) error {
+	logrus.Infof("Starting volume driver on %s.", n.Name)
 	err := d.schedOps.StartPxOnNode(n)
 	if err != nil {
 		return err
 	}
-	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+	_, err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "start",
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         startDriverTimeout,
 			TimeBeforeRetry: defaultRetryInterval,
 		}})
+	return err
 }
 
 func (d *portworx) UpgradeDriver(images []torpedovolume.Image) error {
