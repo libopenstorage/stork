@@ -29,6 +29,10 @@ else
     FAIL_FAST="-keepGoing"
 fi
 
+if [ -z "$INSTALL_FLUSH_CACHE" ]; then
+    INSTALL_FLUSH_CACHE=false
+fi
+
 SKIP_ARG=""
 if [ -n "$SKIP_TESTS" ]; then
     skipRegex=$(echo $SKIP_TESTS | sed -e 's/,/}|{/g')
@@ -248,6 +252,7 @@ spec:
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
             "--provisioner", "$PROVISIONER",
+            "--install-flush-cache", "$INSTALL_FLUSH_CACHE",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true

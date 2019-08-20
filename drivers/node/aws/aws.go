@@ -35,7 +35,7 @@ func (a *aws) String() string {
 	return DriverName
 }
 
-func (a *aws) Init() error {
+func (a *aws) Init(installFlushCache bool) error {
 	var err error
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -172,8 +172,8 @@ func (a *aws) FindFiles(path string, n node.Node, options node.FindOpts) (string
 }
 
 // TODO implement for AWS
-func (a *aws) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
-	return nil
+func (a *aws) Systemctl(n node.Node, service string, options node.SystemctlOpts) (string, error) {
+	return "", nil
 }
 
 func (a *aws) getAllInstances() ([]*ec2.Instance, error) {

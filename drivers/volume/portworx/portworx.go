@@ -674,7 +674,7 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 			if err != nil {
 				return err
 			}
-			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+			_, err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 				Action: "stop",
 				ConnectionOpts: node.ConnectionOpts{
 					Timeout:         stopDriverTimeout,
@@ -1160,12 +1160,13 @@ func (d *portworx) StartDriver(n node.Node) error {
 	if err != nil {
 		return err
 	}
-	return d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+	_, err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
 		Action: "start",
 		ConnectionOpts: node.ConnectionOpts{
 			Timeout:         startDriverTimeout,
 			TimeBeforeRetry: defaultRetryInterval,
 		}})
+	return err
 }
 
 func (d *portworx) UpgradeDriver(images []torpedovolume.Image) error {
