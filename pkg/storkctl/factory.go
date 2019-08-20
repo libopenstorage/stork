@@ -79,7 +79,7 @@ func (f *factory) GetNamespace() string {
 func (f *factory) GetAllNamespaces() ([]string, error) {
 	allNamespaces := make([]string, 0)
 	if f.allNamespaces {
-		namespaces, err := k8s.Instance().ListNamespaces()
+		namespaces, err := k8s.Instance().ListNamespaces(nil)
 		if err != nil {
 			return nil, err
 		}
