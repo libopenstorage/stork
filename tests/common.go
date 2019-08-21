@@ -95,7 +95,7 @@ func InitInstance() {
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().N.Init(Inst().InstallFlushCache)
+	err = Inst().N.Init()
 	expect(err).NotTo(haveOccurred())
 }
 
@@ -360,7 +360,6 @@ type Torpedo struct {
 	MaxStorageNodesPerAZ        int
 	DestroyAppTimeout           time.Duration
 	DriverStartTimeout          time.Duration
-	InstallFlushCache           bool
 }
 
 // ParseFlags parses command line flags
@@ -377,7 +376,6 @@ func ParseFlags() {
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
-	var installFlushCache bool
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -400,7 +398,6 @@ func ParseFlags() {
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
-	flag.BoolVar(&installFlushCache, "install-flush-cache", false, "Install flush cache service. Default false")
 
 	flag.Parse()
 
@@ -437,7 +434,6 @@ func ParseFlags() {
 				MaxStorageNodesPerAZ:        storageNodesPerAZ,
 				DestroyAppTimeout:           destroyAppTimeout,
 				DriverStartTimeout:          driverStartTimeout,
-				InstallFlushCache:           installFlushCache,
 			}
 		})
 	}

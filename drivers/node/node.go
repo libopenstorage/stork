@@ -89,7 +89,7 @@ var (
 // Driver provides the node driver interface
 type Driver interface {
 	// Init initializes the node driver under the given scheduler
-	Init(installFlushCache bool) error
+	Init() error
 
 	// DeleteNode deletes the given node
 	DeleteNode(node Node, timeout time.Duration) error
@@ -110,7 +110,7 @@ type Driver interface {
 	FindFiles(path string, node Node, options FindOpts) (string, error)
 
 	// Systemctl runs a systemctl command for the given service on the node
-	Systemctl(node Node, service string, options SystemctlOpts) (string, error)
+	Systemctl(node Node, service string, options SystemctlOpts) error
 
 	// TestConnection tests connection to given node. returns nil if driver can connect to given node
 	TestConnection(node Node, options ConnectionOpts) error
@@ -159,7 +159,7 @@ type notSupportedDriver struct{}
 // NotSupportedDriver provides the default driver with none of the operations supported
 var NotSupportedDriver = &notSupportedDriver{}
 
-func (d *notSupportedDriver) Init(installFlushCache bool) error {
+func (d *notSupportedDriver) Init() error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Init()",
@@ -198,8 +198,8 @@ func (d *notSupportedDriver) FindFiles(path string, node Node, options FindOpts)
 	}
 }
 
-func (d *notSupportedDriver) Systemctl(node Node, service string, options SystemctlOpts) (string, error) {
-	return "", &errors.ErrNotSupported{
+func (d *notSupportedDriver) Systemctl(node Node, service string, options SystemctlOpts) error {
+	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Systemctl()",
 	}

@@ -28,7 +28,7 @@ func (k *openshift) StopSchedOnNode(n node.Node) error {
 		},
 		Action: "stop",
 	}
-	_, err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStopSchedOnNode{
 			Node:          n,
@@ -48,7 +48,7 @@ func (k *openshift) StartSchedOnNode(n node.Node) error {
 		},
 		Action: "start",
 	}
-	_, err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
+	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
 	if err != nil {
 		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,

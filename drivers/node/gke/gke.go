@@ -27,7 +27,7 @@ func (g *gke) String() string {
 	return DriverName
 }
 
-func (g *gke) Init(installFlushCache bool) error {
+func (g *gke) Init() error {
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
@@ -77,7 +77,7 @@ func (g *gke) DeleteNode(node node.Node, timeout time.Duration) error {
 func init() {
 
 	SSHDriver := ssh.SSH{}
-	SSHDriver.Init(false)
+	SSHDriver.Init()
 	g := &gke{
 		SSH: SSHDriver,
 	}

@@ -80,7 +80,7 @@ func useSSH() bool {
 }
 
 // Init initializes SSH node driver
-func (s *SSH) Init(installFlushCache bool) error {
+func (s *SSH) Init() error {
 
 	nodes := node.GetWorkerNodes()
 	var err error
@@ -98,18 +98,13 @@ func (s *SSH) Init(installFlushCache bool) error {
 		if !n.IsStorageDriverInstalled {
 			continue
 		}
-		if err = s.TestConnection(n, node.ConnectionOpts{
-			Timeout:         defaultTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
+		if err := s.TestConnection(n, node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
 		}); err != nil {
 			return &node.ErrFailedToTestConnection{
 				Node:  n,
 				Cause: err.Error(),
-			}
-		}
-		if installFlushCache {
-			if err = s.installCacheFlushService(n); err != nil {
-				return err
 			}
 		}
 	}
@@ -359,21 +354,22 @@ func (s *SSH) FindFiles(path string, n node.Node, options node.FindOpts) (string
 }
 
 // Systemctl allows to run systemctl commands on a give node
-func (s *SSH) Systemctl(n node.Node, service string, options node.SystemctlOpts) (string, error) {
+func (s *SSH) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
 	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
 		return out, true, err
 	}
 
-	out, err := task.DoRetryWithTimeout(t, options.ConnectionOpts.Timeout, options.ConnectionOpts.TimeBeforeRetry)
-	if err != nil {
-		return "", &node.ErrFailedToRunSystemctlOnNode{
+	if _, err := task.DoRetryWithTimeout(t,
+		options.ConnectionOpts.Timeout,
+		options.ConnectionOpts.TimeBeforeRetry); err != nil {
+		return &node.ErrFailedToRunSystemctlOnNode{
 			Node:  n,
 			Cause: err.Error(),
 		}
 	}
-	return out.(string), nil
+	return nil
 }
 
 func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
@@ -523,79 +519,6 @@ func (s *SSH) SystemCheck(n node.Node, options node.ConnectionOpts) (string, err
 		}
 	}
 	return file, nil
-}
-
-func (s *SSH) installCacheFlushService(n node.Node) error {
-
-	serviceInstallCmd := `cat >/etc/systemd/system/flush_cache.service <<EOF
-[Unit]
-Description=flush_cache
-[Service]
-ExecStart=/bin/sh -c "while [ 1 ]; do echo 3 > /proc/sys/vm/drop_caches; sleep 30; done"
-Restart=always
-RestartSec=10s
-[Install]
-WantedBy=multi-user.target
-EOF`
-
-	connOpts := node.ConnectionOpts{
-		Timeout: 5 * time.Second,
-	}
-
-	out, err := s.FindFiles("/etc/systemd/system/", n, node.FindOpts{
-		ConnectionOpts: connOpts,
-		Name:           "flush_cache.service",
-		Type:           node.File,
-	})
-
-	if err != nil {
-		return err
-	}
-	if len(out) == 0 {
-		logrus.Infof("Installing flush cache service on node %s", n.Name)
-		out, err = s.doCmd(n, connOpts, serviceInstallCmd, false)
-		if err != nil {
-			return err
-		}
-		logrus.Debugf("flush_cache service installed successfully. Command output: %s", out)
-	} else {
-		logrus.Infof("flush cache service already installed on node %s", n.Name)
-	}
-
-	//in this case we are ignoring error cause is-active can return unknown exited 3 in case service is not found
-	out, _ = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
-		Action:         "is-active",
-		ConnectionOpts: connOpts,
-	})
-	if strings.TrimSpace(out) != "active" {
-		if _, err = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
-			Action:         "start",
-			ConnectionOpts: connOpts,
-		}); err != nil {
-			return err
-		}
-		logrus.Debugf("flush_cache started successfully on node %s", n.Name)
-	} else {
-		logrus.Debugf("flush_cache already started on node %s", n.Name)
-	}
-
-	//in this case we are ignoring error cause is-enabled can return unknown exited 3 in case service is not found
-	out, _ = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
-		Action:         "is-enabled",
-		ConnectionOpts: connOpts,
-	})
-	if strings.TrimSpace(out) != "enabled" {
-		if _, err = s.Systemctl(n, "flush_cache.service", node.SystemctlOpts{
-			Action:         "enable",
-			ConnectionOpts: connOpts,
-		}); err != nil {
-			return err
-		}
-		logrus.Debugf("flush_cache service enabled successfully on node %s", n.Name)
-	} else {
-		logrus.Debugf("flush_cache service already enabled on node %s", n.Name)
-	}
-	return nil
 }
 
 func init() {
