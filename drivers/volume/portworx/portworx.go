@@ -72,6 +72,8 @@ const (
 	validateVolumeAttachedTimeout    = 30 * time.Second
 	validateVolumeAttachedInterval   = 5 * time.Second
 	validateNodeStopTimeout          = 5 * time.Minute
+	getNodeTimeout                   = 3 * time.Minute
+	getNodeRetryInterval             = 5 * time.Second
 	stopDriverTimeout                = 5 * time.Minute
 	crashDriverTimeout               = 2 * time.Minute
 	startDriverTimeout               = 2 * time.Minute
@@ -291,17 +293,25 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 	if cManager == nil {
 		cManager = d.getClusterManager()
 	}
-	pxNode, err := cManager.Inspect(n.VolDriverNodeID)
-	if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
-		n, err = d.updateNodeID(n)
-		if err != nil {
-			return api.Node{}, err
+
+	t := func() (interface{}, bool, error) {
+		logrus.Debugf("Inspecting node %s", n.Name)
+		pxNode, err := cManager.Inspect(n.VolDriverNodeID)
+		if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
+			n, err = d.updateNodeID(n)
+			if err != nil {
+				return api.Node{}, true, err
+			}
 		}
-		return d.getPxNode(n, cManager)
-	} else if err != nil {
-		return api.Node{}, err
+		return pxNode, false, nil
 	}
-	return pxNode, nil
+
+	pxnode, err := task.DoRetryWithTimeout(t, getNodeTimeout, getNodeRetryInterval)
+	if err != nil {
+		return api.Node{}, fmt.Errorf("Timeout after %v waiting to get node info", getNodeTimeout)
+	}
+
+	return pxnode.(api.Node), nil
 }
 
 func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
