@@ -219,6 +219,13 @@ func getNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
 			}
 		}
 
+		metadataNodes := node.GetMetadataNodes()
+		// at least 2 metadata nodes need to be up
+		maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(metadataNodes))
+		for _, n := range metadataNodes[maxNodesToBeDown:] {
+			nodesThatCantBeDown[n.Name] = true
+		}
+
 		for _, node := range appNodes {
 			if _, exists := nodesThatCantBeDown[node.Name]; !exists {
 				nodesToBeDown = append(nodesToBeDown, node)
