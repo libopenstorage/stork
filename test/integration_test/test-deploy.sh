@@ -131,9 +131,9 @@ for i in $(seq 1 100) ; do
 done
 
 if [ "$run_cluster_domain_test" == "true" ] ; then
-	sed -i 's/'enable_cluster_domain'/'"true"'/g' /testspecs/stork-test-pod.yaml
+	sed -i 's/'enable_cluster_domain'/'\"true\"'/g' /testspecs/stork-test-pod.yaml
 else 
-	sed -i 's/'enable_cluster_domain'/'""'/g' /testspecs/stork-test-pod.yaml
+	sed -i 's/'enable_cluster_domain'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
 sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml
