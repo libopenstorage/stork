@@ -3,12 +3,15 @@
 package integrationtest
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -25,17 +28,23 @@ var (
 )
 
 func testClusterDomains(t *testing.T) {
-	// Fetch the cluster domains
-	cdses, err := k8s.Instance().ListClusterDomainStatuses()
-	if err != nil || len(cdses.Items) == 0 {
-		t.Skipf("Skipping cluster domain tests: %v", err)
-	}
-	cds := cdses.Items[0]
-	cdsName = cds.Name
+	var cds v1alpha1.ClusterDomainsStatus
+	listCdsTask := func() (interface{}, bool, error) {
+		// Fetch the cluster domains
+		cdses, err := k8s.Instance().ListClusterDomainStatuses()
+		if err != nil || len(cdses.Items) == 0 {
+			logrus.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
+		cds = cdses.Items[0]
+		cdsName = cds.Name
+		return "", false, nil
 
-	if len(cds.Status.ClusterDomainInfos) == 0 {
-		t.Skip("Skipping cluster domain tests: No cluster domains found")
 	}
+	_, err := task.DoRetryWithTimeout(listCdsTask, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "expected list cluster domains status to succeed")
+
+	require.NotEqual(t, 0, len(cds.Status.ClusterDomainInfos), "Found 0 cluster domains in the cluster.")
 
 	t.Run("failoverAndFailbackTest", failoverAndFailbackClusterDomainTest)
 }
