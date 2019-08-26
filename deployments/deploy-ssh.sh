@@ -12,6 +12,10 @@ if [ -z "${SCHEDULER}" ]; then
     SCHEDULER="k8s"
 fi
 
+if [ -z "${LOGLEVEL}" ]; then
+	LOGLEVEL="debug"
+fi
+
 if [ -z "${CHAOS_LEVEL}" ]; then
     CHAOS_LEVEL="5"
 fi
@@ -89,7 +93,7 @@ if [ -n "${TORPEDO_SSH_KEY}" ]; then
     TORPEDO_SSH_KEY_MOUNT="{ \"name\": \"ssh-key-volume\", \"mountPath\": \"/home/torpedo/\" }"
 fi
 
-TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 VOLUMES="${TESTRESULTS_VOLUME}"
@@ -127,6 +131,12 @@ if [ -n "${K8S_VENDOR}" ]; then
             ;;
         aks)
             # Run torpedo on worker node, where px installation is disabled. 
+            K8S_VENDOR_KEY=px/enabled
+            K8S_VENDOR_OPERATOR="In"
+            K8S_VENDOR_VALUE='values: ["false"]'
+            ;;
+        eks)
+            # Run torpedo on worker node, where px installation is disabled.
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["false"]'
@@ -201,6 +211,13 @@ spec:
           - key: ${K8S_VENDOR_KEY}
             operator: ${K8S_VENDOR_OPERATOR}
             ${K8S_VENDOR_VALUE}
+  initContainers:
+  - name: init-sysctl
+    image: busybox
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      privileged: true
+    command: ["sh", "-c", "mkdir -p /mnt/testresults && chmod 777 /mnt/testresults/"]
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
@@ -224,6 +241,7 @@ spec:
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
+            "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
             "--minimun-runtime-mins", "$MIN_RUN_TIME",

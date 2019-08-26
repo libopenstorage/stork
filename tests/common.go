@@ -43,6 +43,7 @@ const (
 	specDirCliFlag                     = "spec-dir"
 	appListCliFlag                     = "app-list"
 	logLocationCliFlag                 = "log-location"
+	logLevelCliFlag                    = "log-level"
 	scaleFactorCliFlag                 = "scale-factor"
 	minRunTimeMinsFlag                 = "minimun-runtime-mins"
 	chaosLevelFlag                     = "chaos-level"
@@ -57,6 +58,7 @@ const (
 	defaultNodeDriver     = "ssh"
 	defaultStorageDriver  = "pxd"
 	defaultLogLocation    = "/mnt/torpedo_support_dir"
+	defaultLogLevel       = "debug"
 	defaultAppScaleFactor = 1
 	defaultMinRunTimeMins = 0
 	defaultChaosLevel     = 5
@@ -91,7 +93,7 @@ func InitInstance() {
 	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String())
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init()
@@ -349,6 +351,7 @@ type Torpedo struct {
 	SpecDir                        string
 	AppList                        []string
 	LogLoc                         string
+	LogLevel                       string
 	ScaleFactor                    int
 	StorageDriverUpgradeVersion    string
 	StorageDriverBaseVersion       string
@@ -364,7 +367,7 @@ type Torpedo struct {
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc, appListCSV, provisionerName string
+	var s, n, v, specDir, logLoc, logLevel, appListCSV, provisionerName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -383,6 +386,7 @@ func ParseFlags() {
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
+	flag.StringVar(&logLevel, logLevelCliFlag, defaultLogLevel, "Log level")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
 	flag.IntVar(&chaosLevel, chaosLevelFlag, defaultChaosLevel, "Application deletion frequency in minutes")
@@ -423,6 +427,7 @@ func ParseFlags() {
 				N:                              nodeDriver,
 				SpecDir:                        specDir,
 				LogLoc:                         logLoc,
+				LogLevel:                       logLevel,
 				ScaleFactor:                    appScaleFactor,
 				MinRunTimeMins:                 minRunTimeMins,
 				ChaosLevel:                     chaosLevel,
@@ -437,6 +442,13 @@ func ParseFlags() {
 			}
 		})
 	}
+
+	// Set log level
+	logLvl, err := logrus.ParseLevel(instance.LogLevel)
+	if err != nil {
+		logrus.Fatalf("Failed to set log level due to Err: %v", err)
+	}
+	logrus.SetLevel(logLvl)
 }
 
 func splitCsv(in string) ([]string, error) {

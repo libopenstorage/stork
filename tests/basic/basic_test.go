@@ -175,15 +175,16 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					Step("restarting volume driver", func() {
 						StartVolDriverAndWait(nodesToBeDown)
 					})
-				} else {
-					logrus.Debugf("Not enough nodes to be down, skipping...")
-				}
-				Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
-					err = Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
-					Expect(err).NotTo(HaveOccurred())
-				})
 
-				DeleteVolumesAndWait(ctx)
+					Step(fmt.Sprintf("wait for destroy of app: %s", ctx.App.Key), func() {
+						err = Inst().S.WaitForDestroy(ctx, Inst().DestroyAppTimeout)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					DeleteVolumesAndWait(ctx)
+				} else {
+					logrus.Debug("Not enough nodes to be down, skipping...")
+				}
 			}
 		})
 	})
@@ -216,6 +217,13 @@ func getNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
 			for _, nodeName := range replicas[maxNodesToBeDown:] {
 				nodesThatCantBeDown[nodeName] = true
 			}
+		}
+
+		metadataNodes := node.GetMetadataNodes()
+		// at least 2 metadata nodes need to be up
+		maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(metadataNodes))
+		for _, n := range metadataNodes[maxNodesToBeDown:] {
+			nodesThatCantBeDown[n.Name] = true
 		}
 
 		for _, node := range appNodes {
