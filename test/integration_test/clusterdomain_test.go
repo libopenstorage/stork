@@ -41,7 +41,7 @@ func testClusterDomains(t *testing.T) {
 		return "", false, nil
 
 	}
-	_, err := task.DoRetryWithTimeout(listCdsTask, defaultWaitTimeout, defaultWaitInterval)
+	_, err := task.DoRetryWithTimeout(listCdsTask, clusterDomainWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "expected list cluster domains status to succeed")
 
 	require.NotEqual(t, 0, len(cds.Status.ClusterDomainInfos), "Found 0 cluster domains in the cluster.")
