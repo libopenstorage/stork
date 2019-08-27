@@ -28,7 +28,6 @@ var (
 )
 
 func testClusterDomains(t *testing.T) {
-	var cds v1alpha1.ClusterDomainsStatus
 	listCdsTask := func() (interface{}, bool, error) {
 		// Fetch the cluster domains
 		cdses, err := k8s.Instance().ListClusterDomainStatuses()
@@ -36,15 +35,18 @@ func testClusterDomains(t *testing.T) {
 			logrus.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
 			return "", true, fmt.Errorf("failed to list cluster domains statuses")
 		}
-		cds = cdses.Items[0]
+
+		cds := cdses.Items[0]
 		cdsName = cds.Name
+		if len(cds.Status.ClusterDomainInfos) == 0 {
+			logrus.Infof("Found 0 cluster domain info objects in cluster domain status.")
+			return "", true, fmt.Errorf("failed to list cluster domains statuses")
+		}
 		return "", false, nil
 
 	}
 	_, err := task.DoRetryWithTimeout(listCdsTask, clusterDomainWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "expected list cluster domains status to succeed")
-
-	require.NotEqual(t, 0, len(cds.Status.ClusterDomainInfos), "Found 0 cluster domains in the cluster.")
 
 	t.Run("failoverAndFailbackTest", failoverAndFailbackClusterDomainTest)
 }
