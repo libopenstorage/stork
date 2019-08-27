@@ -45,6 +45,8 @@ const (
 	DriverName              = "pxd"
 	pxdClientSchedUserAgent = "pxd-sched"
 	pxdRestPort             = 9001
+	pxDiagPort              = 9014
+	pxDiagPath              = "/remotediags"
 	pxVersionLabel          = "PX Version"
 	maintenanceOpRetries    = 3
 	enterMaintenancePath    = "/entermaintenance"
@@ -98,6 +100,37 @@ type metadataNode struct {
 	DbSize     int      `json:"DbSize"`
 	IsHealthy  bool     `json:"IsHealthy"`
 	ID         string   `json:"ID"`
+}
+
+// DiagRequestConfig is a request object which provides all the configuration details
+// to PX for running diagnostics on a node. This object can also be passed over
+// the wire through an API server for remote diag requests.
+type DiagRequestConfig struct {
+	// OutputFile for the diags.tgz
+	OutputFile string
+	// DockerHost config
+	DockerHost string
+	// ContainerName for PX
+	ContainerName string
+	// ExecPath of the program making this request (pxctl)
+	ExecPath string
+	// Profile when set diags command only dumps the go profile
+	Profile bool
+	// Live gets live diagnostics
+	Live bool
+	// Upload uploads the diags.tgz to s3
+	Upload bool
+	// All gets all possible diagnostics from PX
+	All bool
+	// Force overwrite of existing diags file.
+	Force bool
+	// OnHost indicates whether diags is being run on the host
+	// or inside the container
+	OnHost bool
+	// Token for security authentication (if enabled)of the program making this request (pxctl)
+	Token string
+	// Extra indicates whether diags should attempt to collect extra information
+	Extra bool
 }
 
 func (d *portworx) String() string {
@@ -1258,7 +1291,7 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 
 func (d *portworx) DecommissionNode(n node.Node) error {
 
-	if err := k8s.Instance().AddLabelOnNode(n.Name, "px/enabled", "remove"); err != nil {
+	if err := k8s.Instance().AddLabelOnNode(n.Name, schedops.PXEnabledLabelKey, "remove"); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
@@ -1303,16 +1336,22 @@ func (d *portworx) RejoinNode(n node.Node) error {
 			Cause: err.Error(),
 		}
 	}
-	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/service"); err != nil {
+	if err = k8s.Instance().RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
-	if err := k8s.Instance().RemoveLabelOnNode(n.Name, "px/enabled"); err != nil {
+	if err = k8s.Instance().RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
+		}
+	}
+	if err = k8s.Instance().UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
+		return &ErrFailedToRejoinNode{
+			Node:  n.Name,
+			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
 		}
 	}
 	return nil
@@ -1524,6 +1563,62 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 	}
 	err = resp.Unmarshal(&kvdbMembers)
 	return kvdbMembers, err
+}
+
+func (d *portworx) CollectDiags(n node.Node) error {
+	var err error
+
+	pxNode, err := d.getPxNode(n, nil)
+	if err != nil {
+		return err
+	}
+
+	logrus.Debugf("Collecting diags on node %v, because there was an error", pxNode.Hostname)
+
+	if pxNode.Status == api.Status_STATUS_OFFLINE {
+		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
+
+		opts := node.ConnectionOpts{
+			IgnoreError:     false,
+			TimeBeforeRetry: defaultRetryInterval,
+			Timeout:         defaultTimeout,
+		}
+
+		// Only way to collect diags when PX is offline is using pxctl
+		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
+		if err != nil {
+			return fmt.Errorf("Failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+		}
+		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+		return nil
+	}
+
+	url := fmt.Sprintf("http://%s:9014", n.Addresses[0])
+
+	r := &DiagRequestConfig{
+		DockerHost:    "unix:///var/run/docker.sock",
+		OutputFile:    "/var/cores/diags.tar.gz",
+		ContainerName: "",
+		Profile:       false,
+		Live:          true,
+		Upload:        false,
+		All:           true,
+		Force:         true,
+		OnHost:        true,
+		Extra:         false,
+	}
+
+	c, err := client.NewClient(url, "", "")
+	if err != nil {
+		return err
+	}
+	req := c.Post().Resource(pxDiagPath).Body(r)
+	resp := req.Do()
+	if resp.Error() != nil {
+		return fmt.Errorf("Failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
+	}
+	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
+	return nil
 }
 
 func init() {
