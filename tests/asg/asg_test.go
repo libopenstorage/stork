@@ -20,8 +20,7 @@ import (
 )
 
 const (
-	scaleTimeout = 10 * time.Minute
-	//autoNodeRecoveryTimeoutMins = 15 * time.Minute
+	scaleTimeout          = 10 * time.Minute
 	nodeDeleteTimeoutMins = 5 * time.Minute
 )
 
