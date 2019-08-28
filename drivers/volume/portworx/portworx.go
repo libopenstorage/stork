@@ -737,29 +737,28 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	name := d.schedOps.GetVolumeName(vol)
-	t := func() (interface{}, bool, error) {
-		vols, err := d.getVolDriver().Inspect([]string{name})
-		if err != nil {
-			logrus.Warnf("Failed to inspect volume: %s due to: %v", name, err)
-			return nil, true, err
-		}
-		if len(vols) != 1 {
-			err = fmt.Errorf("Incorrect number of volumes (%d) returned for vol: %s", len(vols), name)
-			logrus.Warnf(err.Error())
-			return nil, true, err
-		}
-		return vols[0], false, nil
-	}
-
-	v, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
-	if err != nil {
-		return nil, &ErrFailedToInspectVolume{
-			ID:    name,
-			Cause: err.Error(),
-		}
-	}
-
 	r := func() (interface{}, bool, error) {
+		t := func() (interface{}, bool, error) {
+			vols, err := d.getVolDriver().Inspect([]string{name})
+			if err != nil {
+				logrus.Warnf("Failed to inspect volume: %s due to: %v", name, err)
+				return nil, true, err
+			}
+			if len(vols) != 1 {
+				err = fmt.Errorf("Incorrect number of volumes (%d) returned for vol: %s", len(vols), name)
+				logrus.Warnf(err.Error())
+				return nil, true, err
+			}
+			return vols[0], false, nil
+		}
+
+		v, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+		if err != nil {
+			return nil, false, &ErrFailedToInspectVolume{
+				ID:    name,
+				Cause: err.Error(),
+			}
+		}
 		pxVol := v.(*api.Volume)
 		for _, n := range node.GetStorageDriverNodes() {
 			if isVolumeAttachedOnNode(pxVol, n) {
