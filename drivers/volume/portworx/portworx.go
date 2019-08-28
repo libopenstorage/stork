@@ -1582,6 +1582,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 			IgnoreError:     false,
 			TimeBeforeRetry: defaultRetryInterval,
 			Timeout:         defaultTimeout,
+			Sudo:            true,
 		}
 
 		// Only way to collect diags when PX is offline is using pxctl
