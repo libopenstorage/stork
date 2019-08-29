@@ -682,7 +682,7 @@ func (m *MigrationController) preparePVResource(
 ) error {
 	// Set the reclaim policy to retain if the volumes are not being migrated
 	if migration.Spec.IncludeVolumes != nil && !*migration.Spec.IncludeVolumes {
-		err := unstructured.SetNestedField(object.UnstructuredContent(), v1.PersistentVolumeReclaimRetain, "spec", "persistentVolumeReclaimPolicy")
+		err := unstructured.SetNestedField(object.UnstructuredContent(), string(v1.PersistentVolumeReclaimRetain), "spec", "persistentVolumeReclaimPolicy")
 		if err != nil {
 			return err
 		}
