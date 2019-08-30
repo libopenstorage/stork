@@ -1011,7 +1011,11 @@ func (m *MigrationController) prepareApplicationResource(
 	}
 	replicas := spec["replicas"].(int64)
 	if !collections.Exists(content, "metadata.annotations") {
-		content["metadata.annotations"] = make(map[string]string)
+		metadata, err := collections.GetMap(content, "metadata")
+		if err != nil {
+			return nil, err
+		}
+		metadata["annotations"] = make(map[string]interface{})
 	}
 	annotations, err := collections.GetMap(content, "metadata.annotations")
 	if err != nil {
