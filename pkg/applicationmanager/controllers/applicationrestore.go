@@ -79,6 +79,9 @@ func (a *ApplicationRestoreController) setDefaults(restore *stork_api.Applicatio
 		if err != nil {
 			return fmt.Errorf("error getting backup: %v", err)
 		}
+		if restore.Spec.NamespaceMapping == nil {
+			restore.Spec.NamespaceMapping = make(map[string]string)
+		}
 		for _, ns := range backup.Spec.Namespaces {
 			restore.Spec.NamespaceMapping[ns] = ns
 		}
