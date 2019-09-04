@@ -99,6 +99,12 @@ func (a *ApplicationRestoreController) verifyNamespaces(restore *stork_api.Appli
 
 	for _, ns := range restore.Spec.NamespaceMapping {
 		if _, err := k8s.Instance().GetNamespace(ns); err != nil {
+
+			if errors.IsNotFound(err) {
+				if _, err := k8s.Instance().CreateNamespace(ns, nil); err != nil {
+					return err
+				}
+			}
 			return err
 		}
 	}
