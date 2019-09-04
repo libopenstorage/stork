@@ -137,6 +137,7 @@ func (b *BackupSyncController) syncBackupsFromLocation(location *storkv1.BackupL
 				backupInfo.UID = ""
 				backupInfo.ResourceVersion = ""
 				backupInfo.SelfLink = ""
+				backupInfo.OwnerReferences = nil
 				backupInfo.Spec.ReclaimPolicy = storkv1.ApplicationBackupReclaimPolicyRetain
 				_, err = k8s.Instance().CreateApplicationBackup(&backupInfo)
 				if err != nil {
