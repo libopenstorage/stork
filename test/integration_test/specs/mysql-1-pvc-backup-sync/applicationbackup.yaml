@@ -1,0 +1,11 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationBackup
+metadata:
+  name: mysql-backup-sync
+spec:
+  backupLocation: mysql-backup-location-sync
+  # namespaces to be backed up
+  namespaces:
+  - mysql-1-pvc-mysql 
+  # What to do with the data in the objectstore when the backup object in k8s is deleted. Valid options are Delete and Retain
+  reclaimPolicy: Delete
