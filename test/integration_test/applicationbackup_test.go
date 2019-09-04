@@ -9,6 +9,7 @@ import (
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
@@ -18,11 +19,14 @@ import (
 )
 
 const (
-	testKey = "mysql-1-pvc"
-	appKey  = "mysql"
+	testKey              = "mysql-1-pvc"
+	appKey               = "mysql"
+	restoreName          = "mysql-restore"
+	backupSyncAnnotation = "backupsync"
 
 	applicationBackupScheduleRetryInterval = 10 * time.Second
 	applicationBackupScheduleRetryTimeout  = 3 * time.Minute
+	applicationBackupSyncRetryTimeout      = 10 * time.Minute
 )
 
 func testApplicationBackup(t *testing.T) {
@@ -35,6 +39,7 @@ func testApplicationBackup(t *testing.T) {
 	t.Run("postExecFailingRuleTest", applicationBackupRestorePostExecFailingRuleTest)
 	t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
+	t.Run("backupSyncController", applicationBackupSyncControllerTest)
 }
 
 func triggerBackupRestoreTest(
@@ -81,7 +86,7 @@ func triggerBackupRestoreTest(
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
 	if createBackupLocationFlag {
-		err = createBackupLocation(t, appKey+"-backup-location", ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+		_, err = createBackupLocation(t, appKey+"-backup-location", ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
 		require.NoError(t, err, "Error creating backuplocation")
 	}
 
@@ -145,7 +150,7 @@ func createBackupLocation(
 	namespace string,
 	locationtype storkv1.BackupLocationType,
 	configMapName string,
-) error {
+) (*storkv1.BackupLocation, error) {
 	configMap, err := k8s.Instance().GetConfigMap(configMapName, "default")
 	require.NoError(t, err, "Failed to get config map  %s", configMapName)
 
@@ -176,8 +181,73 @@ func createBackupLocation(
 			SecretConfig: newSecret.Name,
 		},
 	}
-	_, err = k8s.Instance().CreateBackupLocation(backupLocation)
-	return err
+	return k8s.Instance().CreateBackupLocation(backupLocation)
+}
+
+func createApplicationRestore(
+	t *testing.T,
+	name string,
+	namespace string,
+	backup *storkv1.ApplicationBackup,
+	backupLocation *storkv1.BackupLocation,
+) (*storkv1.ApplicationRestore, error) {
+	namespaceMapping := map[string]string{namespace: namespace}
+
+	appRestore := &storkv1.ApplicationRestore{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: storkv1.ApplicationRestoreSpec{
+			BackupName:       backup.Name,
+			BackupLocation:   backupLocation.Name,
+			NamespaceMapping: namespaceMapping,
+		},
+	}
+	return k8s.Instance().CreateApplicationRestore(appRestore)
+}
+
+func createApplicationBackupWithAnnotation(
+	t *testing.T,
+	name string,
+	namespace string,
+	backupLocation *storkv1.BackupLocation,
+) (*storkv1.ApplicationBackup, error) {
+
+	appBackup := &storkv1.ApplicationBackup{
+		ObjectMeta: meta.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: generateTimestampAnnotationMap(backupSyncAnnotation),
+		},
+		Spec: storkv1.ApplicationBackupSpec{
+			Namespaces:     []string{namespace},
+			BackupLocation: backupLocation.Name,
+		},
+	}
+	return k8s.Instance().CreateApplicationBackup(appBackup)
+}
+
+func generateTimestampAnnotationMap(annotationKey string) map[string]string {
+	t := time.Now()
+	val := t.Format(time.RFC1123)
+	annotationMap := map[string]string{annotationKey: val}
+	logrus.Infof("Annotations created to track backup: %v", annotationMap)
+	return annotationMap
+}
+
+func getBackupFromListWithAnnotations(backupList *storkv1.ApplicationBackupList, annotationValue string) *storkv1.ApplicationBackup {
+	for _, backup := range backupList.Items {
+		if backup.Annotations != nil {
+			for k, v := range backup.Annotations {
+				if k == backupSyncAnnotation && v == annotationValue {
+					logrus.Infof("Backup with annotations found: %s", backup.Name)
+					return &backup
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func applicationBackupRestoreTest(t *testing.T) {
@@ -185,7 +255,7 @@ func applicationBackupRestoreTest(t *testing.T) {
 		t,
 		[]string{testKey + "-backup"},
 		[]string{},
-		[]string{"mysql-restore"},
+		[]string{restoreName},
 		true,
 		true,
 		true,
@@ -197,7 +267,7 @@ func applicationBackupRestorePreExecRuleTest(t *testing.T) {
 		t,
 		[]string{testKey + "-pre-exec-rule-backup"},
 		[]string{},
-		[]string{"mysql-restore"},
+		[]string{restoreName},
 		false,
 		true,
 		true,
@@ -209,7 +279,7 @@ func applicationBackupRestorePostExecRuleTest(t *testing.T) {
 		t,
 		[]string{testKey + "-post-exec-rule-backup"},
 		[]string{},
-		[]string{"mysql-restore"},
+		[]string{restoreName},
 		false,
 		true,
 		true,
@@ -221,7 +291,7 @@ func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
 		t,
 		[]string{testKey + "-pre-exec-missing-rule-backup"},
 		[]string{},
-		[]string{"mysql-restore"},
+		[]string{restoreName},
 		false,
 		false,
 		false,
@@ -233,7 +303,7 @@ func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 		t,
 		[]string{testKey + "-post-exec-missing-rule-backup"},
 		[]string{},
-		[]string{"mysql-restore"},
+		[]string{restoreName},
 		false,
 		false,
 		false,
@@ -245,7 +315,7 @@ func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
 		t,
 		[]string{testKey + "-pre-exec-failing-rule-backup"},
 		[]string{},
-		[]string{"mysql-restore"},
+		[]string{restoreName},
 		false,
 		false,
 		false,
@@ -257,7 +327,7 @@ func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
 		t,
 		[]string{testKey + "-post-exec-failing-rule-backup"},
 		[]string{},
-		[]string{"mysql-restore"},
+		[]string{restoreName},
 		false,
 		false,
 		false,
@@ -269,7 +339,7 @@ func applicationBackupLabelSelectorTest(t *testing.T) {
 		t,
 		[]string{testKey + "-label-selector-backup"},
 		[]string{"cassandra"},
-		[]string{"mysql-restore"},
+		[]string{restoreName},
 		false,
 		true,
 		false,
@@ -305,7 +375,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "interval-appbackup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "intervalpolicy-appbackup"
@@ -366,7 +436,7 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "daily-backup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "dailypolicy-appbackup"
@@ -417,7 +487,7 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "weekly-backup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "weeklypolicy-appbackup"
@@ -470,7 +540,7 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "monthly-backup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "monthlypolicy-appbackup"
@@ -527,7 +597,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "invalid-backup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "invalidpolicy-appbackup"
@@ -628,4 +698,166 @@ func commonApplicationBackupScheduleTests(
 		logrus.Infof("Validated second backupschedule %v", scheduleName)
 	}
 	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName)
+}
+
+func applicationBackupSyncControllerTest(t *testing.T) {
+	var err error
+	backupLocationName := appKey + "-backup-location-sync"
+
+	// Create myqsl app deployment
+	appCtx := createApp(t, appKey)
+
+	// Create backup location on first cluster
+	backupLocation, err := createBackupLocation(t, backupLocationName, appCtx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	require.NoError(t, err, "Error creating backuplocation")
+	logrus.Infof("Created backup location:%s sync:%t", backupLocation.Name, backupLocation.Location.Sync)
+	backupLocation.Location.Sync = true
+
+	firstBackup, err := createApplicationBackupWithAnnotation(t, appKey+"-backup-sync", appCtx.GetID(), backupLocation)
+	require.NoError(t, err, "Error creating app backups")
+
+	// Create backup location on second cluster
+	err = dumpRemoteKubeConfig(remoteConfig)
+	require.NoErrorf(t, err, "Unable to write clusterconfig: %v", err)
+
+	err = setRemoteConfig(remoteFilePath)
+	require.NoError(t, err, "Error setting remote config")
+
+	// Create namespace for the backuplocation on second cluster
+	ns, err := k8s.Instance().CreateNamespace(appCtx.GetID(),
+		map[string]string{
+			"creator": "stork-test",
+			"app":     appCtx.App.Key,
+		})
+	require.NoError(t, err, "Failed to create namespace %s", appCtx.GetID())
+
+	backupLocation2, err := createBackupLocation(t, backupLocationName, ns.Name, storkv1.BackupLocationS3, "secret-config")
+	require.NoError(t, err, "Error creating backuplocation on second cluster")
+	logrus.Infof("Created application backup on second cluster %s: sync:%t", backupLocation.Name, backupLocation.Location.Sync)
+
+	// Set sync to true on second cluster so that backup location gets synced
+	backupLocation2.Location.Sync = true
+	_, err = k8s.Instance().UpdateBackupLocation(backupLocation2)
+	require.NoError(t, err, "Failed to set backup-location sync to true")
+	logrus.Infof("Updated application backup on 2nd cluster %s: sync:%t", backupLocation2.Name, backupLocation2.Location.Sync)
+
+	// Check periodically to see if the backup from this test is synced on second cluster
+	var allAppBackups *storkv1.ApplicationBackupList
+	listBackupsTask := func() (interface{}, bool, error) {
+		allAppBackups, err = k8s.Instance().ListApplicationBackups(ns.Name)
+		if err != nil {
+			logrus.Infof("Failed to list app backups on second cluster. Error: %v", err)
+			return "", true, fmt.Errorf("Failed to list app backups on second cluster")
+		} else if allAppBackups != nil && len(allAppBackups.Items) > 0 {
+			// backups sync has started, check if current backup has synced
+			backupToRestore := getBackupFromListWithAnnotations(allAppBackups, firstBackup.Annotations[backupSyncAnnotation])
+			if backupToRestore != nil {
+				return "", false, nil
+			}
+		}
+		return "", true, fmt.Errorf("Failed to list app backups on second cluster")
+	}
+	_, err = task.DoRetryWithTimeout(listBackupsTask, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error listing application backups")
+
+	backupToRestore := getBackupFromListWithAnnotations(allAppBackups, firstBackup.Annotations[backupSyncAnnotation])
+	require.NotNil(t, backupToRestore, "Backup sync failed. Backup not found on the second cluster")
+
+	// Create application restore using the backup selected, on second cluster
+	logrus.Infof("Starting Restore on second cluster.")
+	appRestoreForBackup, err := createApplicationRestore(t, "mysql-restore-backup-sync", ns.Name, backupToRestore, backupLocation2)
+	require.NotNil(t, appRestoreForBackup, "failure to restore on second cluster")
+	require.NoError(t, err, "Error creating application restore on second cluster")
+
+	logrus.Infof("Waiting for apps to come up on the 2nd cluster.")
+	err = schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for restore to complete on second cluster.")
+	logrus.Infof("Restore complete on second cluster.")
+
+	// Delete backup object on second cluster
+	err = k8s.Instance().DeleteApplicationBackup(backupToRestore.Name, backupToRestore.Namespace)
+	require.NoError(t, err, "Failed to delete backup post-restore on second cluster.")
+
+	// Destroy app on first cluster
+	err = setRemoteConfig("")
+	logrus.Infof("Destroy apps  on first cluster: %v.", appCtx.App.Key)
+	require.NoError(t, err, "Error resetting remote config")
+	destroyAndWait(t, []*scheduler.Context{appCtx})
+
+	// Restore application on first cluster
+	logrus.Infof("Starting Restore on first cluster.")
+	restoreCtxFirst := &scheduler.Context{
+		UID: appCtx.UID,
+		App: &spec.AppSpec{
+			Key:      appCtx.App.Key,
+			SpecList: []interface{}{},
+		}}
+
+	err = schedulerDriver.AddTasks(restoreCtxFirst,
+		scheduler.ScheduleOptions{AppKeys: []string{restoreName + "-backup-sync"}})
+	require.NoError(t, err, "Error restoring apps")
+	err = schedulerDriver.WaitForRunning(restoreCtxFirst, defaultWaitTimeout, defaultWaitInterval)
+
+	require.NoError(t, err, "Error waiting for restore to complete on first cluster.")
+	logrus.Infof("Restore completed on first  cluster.")
+
+	// Check if app is created
+	err = schedulerDriver.WaitForRunning(appCtx, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "App is not running on second cluster post-restore.")
+
+	// Cleanup both clusters
+	err = k8s.Instance().DeleteBackupLocation(backupLocationName, ns.Name)
+	require.NoError(t, err, "Failed to delete  backup location %s on first cluster: %v.", ns.Name, err)
+
+	err = deleteAndWaitForBackupDeletion(ns.Name)
+	require.NoError(t, err, "All backups not delete backup: %v.", err)
+
+	destroyAndWait(t, []*scheduler.Context{appCtx})
+
+	err = dumpRemoteKubeConfig(remoteConfig)
+	require.NoErrorf(t, err, "Unable to write clusterconfig: %v", err)
+
+	err = setRemoteConfig(remoteFilePath)
+	require.NoError(t, err, "Error setting remote config")
+
+	err = k8s.Instance().DeleteBackupLocation(backupLocationName, ns.Name)
+	require.NoError(t, err, "Failed to delete  backup location %s on first cluster: %v.", ns.Name, err)
+
+	err = deleteAndWaitForBackupDeletion(ns.Name)
+	require.NoError(t, err, "All backups not delete backup: %v.", err)
+
+	destroyAndWait(t, []*scheduler.Context{appCtx})
+}
+
+func deleteAllBackupsNamespace(namespace string) error {
+	allAppBackups, err := k8s.Instance().ListApplicationBackups(namespace)
+	if err != nil {
+		return fmt.Errorf("Failed to list backups before deleting: %v", err)
+	}
+	for _, bkp := range allAppBackups.Items {
+		err = k8s.Instance().DeleteApplicationBackup(bkp.Name, namespace)
+		if err != nil {
+			return fmt.Errorf("Failed to delete backup %s", bkp.Name)
+		}
+	}
+	return nil
+}
+
+func deleteAndWaitForBackupDeletion(namespace string) error {
+	listBackupsTask := func() (interface{}, bool, error) {
+		err := deleteAllBackupsNamespace(namespace)
+		if err != nil {
+			return "", false, err
+		}
+
+		allAppBackups, err := k8s.Instance().ListApplicationBackups(namespace)
+		if err != nil || len(allAppBackups.Items) != 0 {
+			logrus.Infof("Failed to delete all app backups in %s. Error: %v. Number of backups: %v", namespace, err, len(allAppBackups.Items))
+			return "", true, fmt.Errorf("All backups not deleted yet")
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(listBackupsTask, applicationBackupSyncRetryTimeout, defaultWaitInterval)
+	return err
+
 }
