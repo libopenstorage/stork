@@ -166,6 +166,18 @@ func (m *Driver) UpdateNodeStatus(
 	return nil
 }
 
+// UpdateNodeIP Update IP for a node
+func (m *Driver) UpdateNodeIP(
+	nodeIndex int,
+	ip string,
+) error {
+	if len(m.nodes) <= nodeIndex {
+		return fmt.Errorf("node %v not found", nodeIndex)
+	}
+	m.nodes[nodeIndex].IPs[0] = ip
+	return nil
+}
+
 // SetInterfaceError to the specified error. Used for negative testing
 func (m *Driver) SetInterfaceError(err error) {
 	m.interfaceError = err

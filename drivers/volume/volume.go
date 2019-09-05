@@ -394,6 +394,41 @@ func IsNodeMatch(k8sNode *v1.Node, driverNode *NodeInfo) bool {
 	return false
 }
 
+// RemoveDuplicateOfflineNodes Removes duplicate offline nodes from the list which have
+// the same IP as an online node
+func RemoveDuplicateOfflineNodes(nodes []*NodeInfo) []*NodeInfo {
+	updatedNodes := make([]*NodeInfo, 0)
+	offlineNodes := make([]*NodeInfo, 0)
+	onlineIPs := make([]string, 0)
+	// First add the online nodes to the list
+	for _, node := range nodes {
+		if node.Status == NodeOnline {
+			updatedNodes = append(updatedNodes, node)
+			onlineIPs = append(onlineIPs, node.IPs...)
+		} else {
+			offlineNodes = append(offlineNodes, node)
+		}
+	}
+
+	// Then go through the offline nodes and ignore any which have
+	// the same IP as an online node
+	for _, offlineNode := range offlineNodes {
+		found := false
+		for _, offlineIP := range offlineNode.IPs {
+			for _, onlineIP := range onlineIPs {
+				if offlineIP == onlineIP {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			updatedNodes = append(updatedNodes, offlineNode)
+		}
+	}
+	return updatedNodes
+}
+
 // The driver might not return fully qualified hostnames, so check if the short
 // hostname matches too
 func isHostnameMatch(driverHostname string, k8sHostname string) bool {
