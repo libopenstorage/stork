@@ -1576,6 +1576,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
+		Sudo:            true,
 	}
 	pxPid, err := d.nodeDriver.RunCommand(n, "ps -ef | grep 'px -daemon' | grep -v grep | awk '{print $2}'", opts)
 	if err != nil {
