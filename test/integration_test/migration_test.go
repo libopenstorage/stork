@@ -26,6 +26,7 @@ func testMigration(t *testing.T) {
 
 	t.Run("deploymentTest", deploymentMigrationTest)
 	t.Run("statefulsetTest", statefulsetMigrationTest)
+	t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
 	t.Run("statefulsetRuleTest", statefulsetMigrationRuleTest)
 	t.Run("preExecRuleMissingTest", statefulsetMigrationRulePreExecMissingTest)
 	t.Run("postExecRuleMissingTest", statefulsetMigrationRulePostExecMissingTest)
@@ -48,6 +49,7 @@ func triggerMigrationTest(
 	migrationAppKey string,
 	migrationSuccessExpected bool,
 	migrateAllAppsExpected bool,
+	startAppsOnMigration bool,
 ) {
 	var err error
 	// Reset config in case of error
@@ -56,9 +58,9 @@ func triggerMigrationTest(
 		require.NoError(t, err, "Error resetting remote config")
 	}()
 
-	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false)
+	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration)
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, true, migrateAllAppsExpected, false)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false)
 }
 
 func triggerMigration(
@@ -69,6 +71,7 @@ func triggerMigration(
 	migrationAppKeys []string,
 	migrateAllAppsExpected bool,
 	skipStoragePair bool,
+	startAppsOnMigration bool,
 ) ([]*scheduler.Context, *scheduler.Context) {
 	// schedule the app on cluster 1
 	ctxs, err := schedulerDriver.Schedule(instanceID,
@@ -136,6 +139,9 @@ func validateAndDestroyMigration(
 				err = schedulerDriver.WaitForRunning(allAppsCtx, defaultWaitTimeout/2, defaultWaitInterval)
 				require.Error(t, err, "All apps shouldn't have been migrated")
 			}
+		} else {
+			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/2, defaultWaitInterval)
+			require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
 		}
 
 		/* Failing right now as SC's are not migrated
@@ -169,6 +175,7 @@ func deploymentMigrationTest(t *testing.T) {
 		"mysql-migration",
 		true,
 		true,
+		true,
 	)
 }
 
@@ -181,6 +188,20 @@ func statefulsetMigrationTest(t *testing.T) {
 		"cassandra-migration",
 		true,
 		true,
+		true,
+	)
+}
+
+func statefulsetMigrationStartAppFalseTest(t *testing.T) {
+	triggerMigrationTest(
+		t,
+		"cassandra-migration",
+		"cassandra",
+		nil,
+		"cassandra-migration-startapps-false",
+		true,
+		true,
+		false,
 	)
 }
 
@@ -191,6 +212,7 @@ func statefulsetMigrationRuleTest(t *testing.T) {
 		"cassandra",
 		nil,
 		"cassandra-migration-rule",
+		true,
 		true,
 		true,
 	)
@@ -205,6 +227,7 @@ func statefulsetMigrationRulePreExecMissingTest(t *testing.T) {
 		"mysql-migration-pre-exec-missing",
 		false,
 		true,
+		true,
 	)
 }
 func statefulsetMigrationRulePostExecMissingTest(t *testing.T) {
@@ -215,6 +238,7 @@ func statefulsetMigrationRulePostExecMissingTest(t *testing.T) {
 		nil,
 		"mysql-migration-post-exec-missing",
 		false,
+		true,
 		true,
 	)
 }
@@ -228,6 +252,7 @@ func migrationDisallowedNamespaceTest(t *testing.T) {
 		"mysql-migration-disallowed-ns",
 		false,
 		true,
+		true,
 	)
 }
 
@@ -239,6 +264,7 @@ func migrationFailingPreExecRuleTest(t *testing.T) {
 		nil,
 		"mysql-migration-failing-pre-exec",
 		false,
+		true,
 		true,
 	)
 }
@@ -252,6 +278,7 @@ func migrationFailingPostExecRuleTest(t *testing.T) {
 		"mysql-migration-failing-post-exec",
 		false,
 		true,
+		true,
 	)
 }
 
@@ -264,6 +291,7 @@ func migrationLabelSelectorTest(t *testing.T) {
 		"label-selector-migration",
 		true,
 		false,
+		true,
 	)
 }
 
@@ -285,6 +313,7 @@ func migrationIntervalScheduleTest(t *testing.T) {
 		nil,
 		[]string{"mysql-migration-schedule-interval"},
 		true,
+		false,
 		false,
 	)
 
@@ -322,6 +351,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 		nil,
 		migrationSchedules,
 		true,
+		false,
 		false,
 	)
 
@@ -417,6 +447,7 @@ func migrationScheduleTest(
 		nil,
 		[]string{migrationScheduleName},
 		true,
+		false,
 		false,
 	)
 
