@@ -19,7 +19,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -676,6 +676,66 @@ func (m *MigrationController) updateResourceStatus(
 	}
 }
 
+func (m *MigrationController) getRemoteAdminConfig(migration *stork_api.Migration) (*kubernetes.Clientset, error) {
+	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	remoteAdminConfig := remoteConfig
+	// Use the admin cluter pair for cluster scoped resources if it has been configured
+	if migration.Spec.AdminClusterPair != "" {
+		remoteAdminConfig, err = getClusterPairSchedulerConfig(migration.Spec.AdminClusterPair, m.migrationAdminNamespace)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	adminClient, err := kubernetes.NewForConfig(remoteAdminConfig)
+	if err != nil {
+		return nil, err
+	}
+	return adminClient, nil
+}
+
+func (m *MigrationController) checkAndUpdateDefaultSA(
+	migration *stork_api.Migration,
+	object runtime.Unstructured,
+) error {
+	var sourceSA v1.ServiceAccount
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &sourceSA); err != nil {
+		return fmt.Errorf("error converting to serviceAccount: %v", err)
+	}
+	adminClient, err := m.getRemoteAdminConfig(migration)
+	if err != nil {
+		return err
+	}
+
+	if sourceSA.GetName() != "default" {
+		// delete and recreate service account
+		if err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Delete(sourceSA.GetName(), &metav1.DeleteOptions{}); err != nil {
+			return err
+		}
+		if _, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Create(&sourceSA); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	log.MigrationLog(migration).Infof("Updating default service account with image pull secrets")
+	// merge service account resource for default namespaces
+	destSA, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Get(sourceSA.GetName(), metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	destSA.ImagePullSecrets = append(destSA.ImagePullSecrets, sourceSA.ImagePullSecrets...)
+	_, err = adminClient.CoreV1().ServiceAccounts(destSA.GetNamespace()).Update(destSA)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *MigrationController) preparePVResource(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
@@ -824,6 +884,8 @@ func (m *MigrationController) applyResources(
 				} else {
 					_, err = dynamicClient.Update(unstructured)
 				}
+			case "ServiceAccount":
+				err = m.checkAndUpdateDefaultSA(migration, o)
 			default:
 				// Delete the resource if it already exists on the destination
 				// cluster and try creating again
