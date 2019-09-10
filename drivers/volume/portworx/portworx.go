@@ -1572,17 +1572,29 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		return err
 	}
 
+	opts := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	pxPid, err := d.nodeDriver.RunCommand(n, "ps -ef | grep 'px -daemon' | grep -v grep | awk '{print $2}'", opts)
+	if err != nil {
+		return fmt.Errorf("Failed to get process id of px daemon on %v, Err: %v", pxNode.Hostname, err)
+	}
+	logrus.Debugf("PX daemon is running with pid [%s] on [%v]", pxPid, pxNode.Hostname)
+
+	logrus.Debugf("Sending SIGUSR1 signal to PX process [%s]", pxPid)
+	_, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("kill -SIGUSR1 %s", pxPid), opts)
+	if err != nil {
+		return fmt.Errorf("Failed to send SIGUSR1 signal to px process [%s] on %v, Err: %v", pxPid, pxNode.Hostname, err)
+	}
+	logrus.Debugf("Successfully sent SIGUSR1 signal to px process [%s] on [%v]", pxPid, pxNode.Hostname)
+
 	logrus.Debugf("Collecting diags on node %v, because there was an error", pxNode.Hostname)
 
 	if pxNode.Status == api.Status_STATUS_OFFLINE {
 		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
-
-		opts := node.ConnectionOpts{
-			IgnoreError:     false,
-			TimeBeforeRetry: defaultRetryInterval,
-			Timeout:         defaultTimeout,
-			Sudo:            true,
-		}
 
 		// Only way to collect diags when PX is offline is using pxctl
 		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)
