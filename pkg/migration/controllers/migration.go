@@ -721,14 +721,25 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 		return nil
 	}
 
-	log.MigrationLog(migration).Infof("Updating default service account with image pull secrets")
+	log.MigrationLog(migration).Infof("Updating default service account(namespace : %v) with image pull secrets", sourceSA.GetNamespace())
 	// merge service account resource for default namespaces
 	destSA, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Get(sourceSA.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 
-	destSA.ImagePullSecrets = append(destSA.ImagePullSecrets, sourceSA.ImagePullSecrets...)
+	for _, s := range sourceSA.ImagePullSecrets {
+		found := false
+		for _, d := range destSA.ImagePullSecrets {
+			if d.Name == s.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			destSA.ImagePullSecrets = append(destSA.ImagePullSecrets, s)
+		}
+	}
 	_, err = adminClient.CoreV1().ServiceAccounts(destSA.GetNamespace()).Update(destSA)
 	if err != nil {
 		return err
