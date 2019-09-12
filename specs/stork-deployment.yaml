@@ -12,27 +12,6 @@ data:
     {
       "kind": "Policy",
       "apiVersion": "v1",
-      "predicates": [
-        {"name": "MaxAzureDiskVolumeCount"},
-        {"name": "PodToleratesNodeTaints"},
-        {"name": "CheckNodeMemoryPressure"},
-        {"name": "NoVolumeZoneConflict"},
-        {"name": "MaxEBSVolumeCount"},
-        {"name": "MaxGCEPDVolumeCount"},
-        {"name": "MatchInterPodAffinity"},
-        {"name": "NoDiskConflict"},
-        {"name": "GeneralPredicates"},
-        {"name": "CheckNodeDiskPressure"}
-      ],
-      "priorities": [
-        {"name": "NodeAffinityPriority", "weight": 1},
-        {"name": "TaintTolerationPriority", "weight": 1},
-        {"name": "SelectorSpreadPriority", "weight": 1},
-        {"name": "InterPodAffinityPriority", "weight": 1},
-        {"name": "LeastRequestedPriority", "weight": 1},
-        {"name": "BalancedResourceAllocation", "weight": 1},
-        {"name": "NodePreferAvoidPodsPriority", "weight": 1}
-      ],
       "extenders": [
         {
           "urlPrefix": "http://stork-service.kube-system.svc.cluster.local:8099",
