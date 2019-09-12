@@ -1578,6 +1578,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		Timeout:         defaultTimeout,
 		Sudo:            true,
 	}
+
 	pxPid, err := d.nodeDriver.RunCommand(n, `ps -ef | grep "px -daemon" | grep -v grep | awk "{print $2}"`, opts)
 	if err != nil {
 		return fmt.Errorf("Failed to get process id of px daemon on %v, Err: %v", pxNode.Hostname, err)
@@ -1595,13 +1596,6 @@ func (d *portworx) CollectDiags(n node.Node) error {
 
 	if pxNode.Status == api.Status_STATUS_OFFLINE {
 		logrus.Debugf("Node %v is offline, collecting diags using pxctl", pxNode.Hostname)
-
-		opts := node.ConnectionOpts{
-			IgnoreError:     false,
-			TimeBeforeRetry: defaultRetryInterval,
-			Timeout:         defaultTimeout,
-			Sudo:            true,
-		}
 
 		// Only way to collect diags when PX is offline is using pxctl
 		out, err := d.nodeDriver.RunCommand(n, "pxctl sv diags -a -f", opts)

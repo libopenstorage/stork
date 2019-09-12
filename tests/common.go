@@ -64,10 +64,11 @@ const (
 	defaultChaosLevel     = 5
 	// TODO: These are Portworx specific versions and will not work with other storage drivers.
 	// Eventually we should remove the defaults and make it mandatory with documentation.
-	defaultStorageDriverUpgradeVersion = "1.2.11.6"
-	defaultStorageDriverBaseVersion    = "1.2.11.5"
-	defaultStorageProvisioner          = "portworx"
-	defaultStorageNodesPerAZ           = 2
+	defaultStorageDriverUpgradeVersion    = "1.2.11.6"
+	defaultStorageDriverBaseVersion       = "1.2.11.5"
+	defaultStorageProvisioner             = "portworx"
+	defaultStorageNodesPerAZ              = 2
+	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
 )
 
 const (
@@ -351,23 +352,24 @@ var once sync.Once
 
 // Torpedo is the torpedo testsuite
 type Torpedo struct {
-	InstanceID                  string
-	S                           scheduler.Driver
-	V                           volume.Driver
-	N                           node.Driver
-	SpecDir                     string
-	AppList                     []string
-	LogLoc                      string
-	LogLevel                    string
-	ScaleFactor                 int
-	StorageDriverUpgradeVersion string
-	StorageDriverBaseVersion    string
-	MinRunTimeMins              int
-	ChaosLevel                  int
-	Provisioner                 string
-	MaxStorageNodesPerAZ        int
-	DestroyAppTimeout           time.Duration
-	DriverStartTimeout          time.Duration
+	InstanceID                     string
+	S                              scheduler.Driver
+	V                              volume.Driver
+	N                              node.Driver
+	SpecDir                        string
+	AppList                        []string
+	LogLoc                         string
+	LogLevel                       string
+	ScaleFactor                    int
+	StorageDriverUpgradeVersion    string
+	StorageDriverBaseVersion       string
+	MinRunTimeMins                 int
+	ChaosLevel                     int
+	Provisioner                    string
+	MaxStorageNodesPerAZ           int
+	DestroyAppTimeout              time.Duration
+	DriverStartTimeout             time.Duration
+	AutoStorageNodeRecoveryTimeout time.Duration
 }
 
 // ParseFlags parses command line flags
@@ -384,6 +386,7 @@ func ParseFlags() {
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
+	var autoStorageNodeRecoveryTimeout time.Duration
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -406,6 +409,7 @@ func ParseFlags() {
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
+	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 
 	flag.Parse()
 
@@ -425,23 +429,24 @@ func ParseFlags() {
 	} else {
 		once.Do(func() {
 			instance = &Torpedo{
-				InstanceID:                  time.Now().Format("01-02-15h04m05s"),
-				S:                           schedulerDriver,
-				V:                           volumeDriver,
-				N:                           nodeDriver,
-				SpecDir:                     specDir,
-				LogLoc:                      logLoc,
-				LogLevel:                    logLevel,
-				ScaleFactor:                 appScaleFactor,
-				MinRunTimeMins:              minRunTimeMins,
-				ChaosLevel:                  chaosLevel,
-				StorageDriverUpgradeVersion: volUpgradeVersion,
-				StorageDriverBaseVersion:    volBaseVersion,
-				AppList:                     appList,
-				Provisioner:                 provisionerName,
-				MaxStorageNodesPerAZ:        storageNodesPerAZ,
-				DestroyAppTimeout:           destroyAppTimeout,
-				DriverStartTimeout:          driverStartTimeout,
+				InstanceID:                     time.Now().Format("01-02-15h04m05s"),
+				S:                              schedulerDriver,
+				V:                              volumeDriver,
+				N:                              nodeDriver,
+				SpecDir:                        specDir,
+				LogLoc:                         logLoc,
+				LogLevel:                       logLevel,
+				ScaleFactor:                    appScaleFactor,
+				MinRunTimeMins:                 minRunTimeMins,
+				ChaosLevel:                     chaosLevel,
+				StorageDriverUpgradeVersion:    volUpgradeVersion,
+				StorageDriverBaseVersion:       volBaseVersion,
+				AppList:                        appList,
+				Provisioner:                    provisionerName,
+				MaxStorageNodesPerAZ:           storageNodesPerAZ,
+				DestroyAppTimeout:              destroyAppTimeout,
+				DriverStartTimeout:             driverStartTimeout,
+				AutoStorageNodeRecoveryTimeout: autoStorageNodeRecoveryTimeout,
 			}
 		})
 	}

@@ -20,9 +20,8 @@ import (
 )
 
 const (
-	scaleTimeout                = 10 * time.Minute
-	autoNodeRecoveryTimeoutMins = 15 * time.Minute
-	nodeDeleteTimeoutMins       = 5 * time.Minute
+	scaleTimeout          = 10 * time.Minute
+	nodeDeleteTimeoutMins = 5 * time.Minute
 )
 
 func TestASG(t *testing.T) {
@@ -66,8 +65,8 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 			Scale(intitialNodeCount)
 
 			Step(fmt.Sprintf("wait for %s minutes for auto recovery of storeage nodes",
-				autoNodeRecoveryTimeoutMins.String()), func() {
-				time.Sleep(autoNodeRecoveryTimeoutMins)
+				Inst().AutoStorageNodeRecoveryTimeout.String()), func() {
+				time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
 			})
 
 			// After scale down, get fresh list of nodes
