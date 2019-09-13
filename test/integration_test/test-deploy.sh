@@ -8,6 +8,7 @@ remote_config_path=""
 run_cluster_domain_test=false
 environment_variables=""
 storage_provisioner="portworx"
+focus_tests=""
 for i in "$@"
 do
 case $i in
@@ -55,6 +56,12 @@ case $i in
     --env_vars)
         echo "Flag for environment variables: $2"
         environment_variables=$2
+        shift
+        shift
+        ;;
+    --focus_tests)
+        echo "Flag for focus tests: $2"
+        focus_tests=$2
         shift
         shift
         ;;
@@ -134,6 +141,13 @@ if [ "$run_cluster_domain_test" == "true" ] ; then
 	sed -i 's/'enable_cluster_domain'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
 else 
 	sed -i 's/'enable_cluster_domain'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+if [ "$focus_tests" != "" ] ; then
+     echo "Running focussed test: ${focus_tests}"
+	sed -i 's/'FOCUS_TESTS'/- -test.run='"$focus_tests"'/g' /testspecs/stork-test-pod.yaml
+else 
+	sed -i 's/'FOCUS_TESTS'/''/g' /testspecs/stork-test-pod.yaml
 fi
 
 sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml

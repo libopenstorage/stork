@@ -51,6 +51,7 @@ spec:
     - -t
     - /stork.test 
     - -test.v
+    FOCUS_TESTS
     - -snapshot-scale-count=10
     imagePullPolicy: Always
     image: openstorage/stork_test:latest

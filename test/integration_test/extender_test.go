@@ -18,7 +18,7 @@ const (
 	annotationStorageProvisioner = "volume.beta.kubernetes.io/storage-provisioner"
 )
 
-func testExtender(t *testing.T) {
+func TestExtender(t *testing.T) {
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("singlePVCTest", singlePVCTest)
