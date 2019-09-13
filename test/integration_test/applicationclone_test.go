@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testApplicationClone(t *testing.T) {
+func TestApplicationClone(t *testing.T) {
 	t.Run("deploymentTest", deploymentApplicationCloneTest)
 	t.Run("statefulsetTest", statefulsetApplicationCloneTest)
 	t.Run("statefulsetRuleTest", statefulsetApplicationCloneRuleTest)

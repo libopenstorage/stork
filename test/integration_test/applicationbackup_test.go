@@ -29,7 +29,7 @@ const (
 	applicationBackupSyncRetryTimeout      = 10 * time.Minute
 )
 
-func testApplicationBackup(t *testing.T) {
+func TestApplicationBackup(t *testing.T) {
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
 	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
 	t.Run("postExecRuleTest", applicationBackupRestorePostExecRuleTest)

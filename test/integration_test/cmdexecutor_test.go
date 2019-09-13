@@ -16,7 +16,7 @@ import (
 	"k8s.io/api/core/v1"
 )
 
-func asyncPodCommandTest(t *testing.T) {
+func TestCommandExecutor(t *testing.T) {
 	id, err := uuid.New()
 	require.NoError(t, err, "failed to get uuid")
 

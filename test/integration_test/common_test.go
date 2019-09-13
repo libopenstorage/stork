@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"strconv"
 	"testing"
 	"time"
 
@@ -68,60 +67,43 @@ var snapshotScaleCount int
 
 // TODO: Take driver name from input
 // TODO: Parse storageclass specs based on driver name
-func setup(t *testing.T) {
+func setup() error {
 	var err error
 
-	storkVolumeDriver, err = storkdriver.Get(volumeDriverName)
-	require.NoError(t, err, "Error getting stork driver %v", volumeDriverName)
+	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
+		return fmt.Errorf("Error getting stork driver %v: %v", volumeDriverName, err)
+	}
 
-	err = storkVolumeDriver.Init(nil)
-	require.NoError(t, err, "Error initializing stork driver %v", volumeDriverName)
+	if err = storkVolumeDriver.Init(nil); err != nil {
+		return fmt.Errorf("Error getting stork driver %v: %v", volumeDriverName, err)
+	}
 
-	nodeDriver, err = node.Get(nodeDriverName)
-	require.NoError(t, err, "Error getting node driver %v", nodeDriverName)
+	if nodeDriver, err = node.Get(nodeDriverName); err != nil {
+		return fmt.Errorf("Error getting node driver %v: %v", nodeDriverName, err)
+	}
 
-	err = nodeDriver.Init(false)
-	require.NoError(t, err, "Error initializing node driver %v", nodeDriverName)
+	if err = nodeDriver.Init(false); err != nil {
+		return fmt.Errorf("Error initializing node driver %v: %v", nodeDriverName, err)
+	}
 
-	schedulerDriver, err = scheduler.Get(schedulerDriverName)
-	require.NoError(t, err, "Error getting scheduler driver %v", schedulerDriverName)
+	if schedulerDriver, err = scheduler.Get(schedulerDriverName); err != nil {
+		return fmt.Errorf("Error getting scheduler driver %v: %v", schedulerDriverName, err)
+	}
 
-	err = schedulerDriver.Init("specs", volumeDriverName, nodeDriverName)
-	require.NoError(t, err, "Error initializing scheduler driver %v", schedulerDriverName)
+	if err = schedulerDriver.Init("specs", volumeDriverName, nodeDriverName); err != nil {
+		return fmt.Errorf("Error initializing scheduler driver %v: %v", schedulerDriverName, err)
+	}
 
-	volumeDriver, err = volume.Get(volumeDriverName)
-	require.NoError(t, err, "Error getting volume driver %v", volumeDriverName)
+	if volumeDriver, err = volume.Get(volumeDriverName); err != nil {
+		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
+	}
 
 	provisioner := os.Getenv(storageProvisioner)
 	logrus.Infof("Using provisioner: %s", provisioner)
-	err = volumeDriver.Init(schedulerDriverName, nodeDriverName, provisioner)
-	require.NoError(t, err, "Error initializing volume driver %v", volumeDriverName)
-}
-
-func TestMain(t *testing.T) {
-	// If setup fails stop the test
-	if passed := t.Run("setup", setup); !passed {
-		t.FailNow()
+	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, provisioner); err != nil {
+		return fmt.Errorf("Error initializing volume driver %v: %v", volumeDriverName, err)
 	}
-	// we can either run cluster domain tests or the other tests
-	// the underlying setup of clusters is different
-	enabled, err := strconv.ParseBool(os.Getenv(enableClusterDomainTests))
-	if enabled && err == nil {
-		logrus.Info("Running cluster domain tests")
-		t.Run("ClusterDomains", testClusterDomains)
-	} else {
-		logrus.Info("NOT Running cluster domain tests")
-		t.Run("Extender", testExtender)
-		t.Run("HealthMonitor", testHealthMonitor)
-		t.Run("Snapshot", testSnapshot)
-		t.Run("SnapshotRestore", testSnapshotRestore)
-		t.Run("CmdExecutor", asyncPodCommandTest)
-		t.Run("Migration", testMigration)
-		t.Run("ApplicationClone", testApplicationClone)
-		t.Run("ApplicationBackup", testApplicationBackup)
-		t.Skip("Skipping cluster domain tests")
-	}
-
+	return nil
 }
 
 func generateInstanceID(t *testing.T, testName string) string {
@@ -473,4 +455,8 @@ func init() {
 		10,
 		"Number of volumes to use for scale snapshot test")
 	flag.Parse()
+	if err := setup(); err != nil {
+		logrus.Errorf("Setup failed with error: %v", err)
+		os.Exit(1)
+	}
 }

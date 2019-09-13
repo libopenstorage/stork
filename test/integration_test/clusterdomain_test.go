@@ -4,6 +4,8 @@ package integrationtest
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"testing"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -27,28 +29,36 @@ var (
 	domainList = []string{"dc1", "dc2"}
 )
 
-func testClusterDomains(t *testing.T) {
-	listCdsTask := func() (interface{}, bool, error) {
-		// Fetch the cluster domains
-		cdses, err := k8s.Instance().ListClusterDomainStatuses()
-		if err != nil || len(cdses.Items) == 0 {
-			logrus.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
-			return "", true, fmt.Errorf("failed to list cluster domains statuses")
-		}
+func TestClusterDomains(t *testing.T) {
+	enabled, err := strconv.ParseBool(os.Getenv(enableClusterDomainTests))
+	if enabled && err == nil {
+		logrus.Info("Running cluster domain tests")
+		listCdsTask := func() (interface{}, bool, error) {
+			// Fetch the cluster domains
+			cdses, err := k8s.Instance().ListClusterDomainStatuses()
+			if err != nil || len(cdses.Items) == 0 {
+				logrus.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
+				return "", true, fmt.Errorf("failed to list cluster domains statuses")
+			}
 
-		cds := cdses.Items[0]
-		cdsName = cds.Name
-		if len(cds.Status.ClusterDomainInfos) == 0 {
-			logrus.Infof("Found 0 cluster domain info objects in cluster domain status.")
-			return "", true, fmt.Errorf("failed to list cluster domains statuses")
-		}
-		return "", false, nil
+			cds := cdses.Items[0]
+			cdsName = cds.Name
+			if len(cds.Status.ClusterDomainInfos) == 0 {
+				logrus.Infof("Found 0 cluster domain info objects in cluster domain status.")
+				return "", true, fmt.Errorf("failed to list cluster domains statuses")
+			}
+			return "", false, nil
 
+		}
+		_, err := task.DoRetryWithTimeout(listCdsTask, clusterDomainWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "expected list cluster domains status to succeed")
+
+		t.Run("failoverAndFailbackTest", failoverAndFailbackClusterDomainTest)
+	} else if err != nil {
+		logrus.Errorf("Failed to run cluster domain tests: %v", err)
+	} else if !enabled {
+		logrus.Info("Skipping cluster domain tests")
 	}
-	_, err := task.DoRetryWithTimeout(listCdsTask, clusterDomainWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, "expected list cluster domains status to succeed")
-
-	t.Run("failoverAndFailbackTest", failoverAndFailbackClusterDomainTest)
 }
 
 func triggerClusterDomainUpdate(

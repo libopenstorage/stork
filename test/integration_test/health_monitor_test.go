@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testHealthMonitor(t *testing.T) {
+func TestHealthMonitor(t *testing.T) {
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("stopKubeletTest", stopKubeletTest)
 }

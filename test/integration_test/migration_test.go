@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 )
 
-func testMigration(t *testing.T) {
+func TestMigration(t *testing.T) {
 	// reset mock time before running any tests
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
