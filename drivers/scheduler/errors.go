@@ -313,3 +313,15 @@ type ErrFailedToDecommissionNode struct {
 func (e *ErrFailedToDecommissionNode) Error() string {
 	return fmt.Sprintf("Failed to decommission node: %v due to err: %v", e.Node, e.Cause)
 }
+
+// ErrFailedToGetConfigMap error type for failing to get config map
+type ErrFailedToGetConfigMap struct {
+	// Name of config map
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetConfigMap) Error() string {
+	return fmt.Sprintf("Failed to get config map: %s due to err: %v", e.Name, e.Cause)
+}

@@ -549,6 +549,14 @@ func (d *dcos) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart t
 	return fmt.Errorf("not implemenented")
 }
 
+func (d *dcos) GetTokenFromConfigMap(string) (string, error) {
+	// TODO implement this method
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetTokenFromConfigMap()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

@@ -55,6 +55,11 @@ if [ -n "${PROVISIONER}" ]; then
 	PROVISIONER="$PROVISIONER"
 fi
 
+CONFIGMAP=""
+if [ -n "${CONFIG_MAP}" ]; then
+	CONFIGMAP="${CONFIG_MAP}"
+fi
+
 if [ -z "${TORPEDO_IMG}" ]; then
     TORPEDO_IMG="portworx/torpedo:latest"
     echo "Using default torpedo image: ${TORPEDO_IMG}"
@@ -253,8 +258,9 @@ spec:
             "--minimun-runtime-mins", "$MIN_RUN_TIME",
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
-            "--provisioner", "$PROVISIONER",
             "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
+			 "--provisioner", "$PROVISIONER",
+			 "--config-map", "$CONFIGMAP",
             "$UPGRADE_VERSION_ARG",
             "$UPGRADE_BASE_VERSION_ARG" ]
     tty: true

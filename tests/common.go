@@ -51,6 +51,7 @@ const (
 	storageDriverBaseVersionCliFlag    = "storage-driver-base-version"
 	provisionerFlag                    = "provisioner"
 	storageNodesPerAZFlag              = "max-storage-nodes-per-az"
+	configMapFlag                      = "config-map"
 )
 
 const (
@@ -90,10 +91,15 @@ var (
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
+	var token string
 	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), Inst().Provisioner)
+	logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
+	token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+	expect(err).NotTo(haveOccurred())
+	logrus.Infof("Token used for initializing: %s ", token)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().N.Init()
@@ -160,6 +166,10 @@ func ValidateVolumes(ctx *scheduler.Context) {
 		})
 
 		for vol, params := range vols {
+			if Inst().ConfigMap != "" {
+				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+				expect(err).NotTo(haveOccurred())
+			}
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				expect(err).NotTo(haveOccurred())
@@ -223,6 +233,7 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
+			ConfigMap:          Inst().ConfigMap,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())
@@ -370,12 +381,13 @@ type Torpedo struct {
 	DestroyAppTimeout              time.Duration
 	DriverStartTimeout             time.Duration
 	AutoStorageNodeRecoveryTimeout time.Duration
+	ConfigMap                      string
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc, logLevel, appListCSV, provisionerName string
+	var s, n, v, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
@@ -410,6 +422,7 @@ func ParseFlags() {
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
+	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
 
 	flag.Parse()
 
@@ -447,6 +460,7 @@ func ParseFlags() {
 				DestroyAppTimeout:              destroyAppTimeout,
 				DriverStartTimeout:             driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout: autoStorageNodeRecoveryTimeout,
+				ConfigMap:                      configMapName,
 			}
 		})
 	}
