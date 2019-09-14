@@ -41,7 +41,7 @@
 
 [[constraint]]
   name = "github.com/libopenstorage/openstorage"
-  branch = "release-4.0"
+  branch = "release-6.1"
 
 [[override]]
   branch = "external_storage_dep"

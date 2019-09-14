@@ -70,6 +70,13 @@ const (
 	resizeSupportedAnnotationKey = "torpedo/resize-supported"
 )
 
+const (
+	secretNameKey      = "secret_name"
+	secretNamespaceKey = "secret_namespace"
+	secretName         = "openstorage.io/auth-secret-name"
+	secretNamespace    = "openstorage.io/auth-secret-namespace"
+)
+
 var (
 	namespaceRegex = regexp.MustCompile("{{NAMESPACE}}")
 )
@@ -355,7 +362,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
-		specObjects, err := k.CreateSpecObjects(app, appNamespace)
+		specObjects, err := k.CreateSpecObjects(app, appNamespace, options.ConfigMap)
 		if err != nil {
 			return nil, err
 		}
@@ -376,7 +383,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 }
 
 // CreateSpecObjects Create application
-func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string) ([]interface{}, error) {
+func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, configMapName string) ([]interface{}, error) {
 	var specObjects []interface{}
 	ns, err := k.createNamespace(app, namespace)
 	if err != nil {
@@ -421,7 +428,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string) ([]interfac
 
 	for _, spec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createStorageObject(spec, ns, app)
+			obj, err := k.createStorageObject(spec, ns, app, configMapName)
 			if err != nil {
 				return nil, true, err
 			}
@@ -440,7 +447,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string) ([]interfac
 
 	for _, spec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createCoreObject(spec, ns, app)
+			obj, err := k.createCoreObject(spec, ns, app, configMapName)
 			if err != nil {
 				return nil, true, err
 			}
@@ -496,7 +503,7 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		apps = append(apps, spec)
 	}
 	for _, app := range apps {
-		objects, err := k.CreateSpecObjects(app, appNamespace)
+		objects, err := k.CreateSpecObjects(app, appNamespace, options.ConfigMap)
 		if err != nil {
 			return err
 		}
@@ -554,8 +561,25 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespac
 	return nsObj.(*v1.Namespace), nil
 }
 
-func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
+func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec, configMapName string) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
+
+	// Add security annotations if running with auth-enabled
+	if configMapName != "" {
+		configMap, err := k8sOps.GetConfigMap(configMapName, "default")
+		if err != nil {
+			return nil, &scheduler.ErrFailedToGetConfigMap{
+				Name:  configMapName,
+				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+			}
+		}
+
+		err = k.addSecurityAnnotation(spec, configMap)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to add annotations to storage object: %v", err)
+		}
+
+	}
 
 	if obj, ok := spec.(*storage_api.StorageClass); ok {
 		obj.Namespace = ns.Name
@@ -582,6 +606,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		obj.Namespace = ns.Name
 		k.substituteNamespaceInPVC(obj, ns.Name)
+
 		pvc, err := k8sOps.CreatePersistentVolumeClaim(obj)
 		if errors.IsAlreadyExists(err) {
 			if pvc, err = k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace); err == nil {
@@ -669,7 +694,69 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 	return nil, nil
 }
 
-func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec) (interface{}, error) {
+func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *v1.ConfigMap) error {
+	logrus.Infof("Config Map details:\n %v:", configMap.Data)
+	if _, ok := configMap.Data[secretNameKey]; !ok {
+		return fmt.Errorf("Failed to get secret name from config map")
+	}
+	if _, ok := configMap.Data[secretNamespaceKey]; !ok {
+		return fmt.Errorf("Failed to get secret namespace from config map")
+	}
+	if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
+		if obj.Metadata.Annotations == nil {
+			obj.Metadata.Annotations = make(map[string]string)
+		}
+		obj.Metadata.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Metadata.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+		for _, claim := range obj.Spec.VolumeClaimTemplates {
+			if claim.Annotations == nil {
+				claim.Annotations = make(map[string]string)
+			}
+			claim.Annotations[secretName] = configMap.Data[secretNameKey]
+			claim.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
+	} else if obj, ok := spec.(*stork_api.ApplicationBackup); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*stork_api.ApplicationClone); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*stork_api.ApplicationRestore); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*stork_api.Migration); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*stork_api.VolumeSnapshotRestore); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	}
+	return nil
+}
+
+func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec, configMapName string) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 	if obj, ok := spec.(*apps_api.Deployment); ok {
 		obj.Namespace = ns.Name
@@ -692,6 +779,22 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		return dep, nil
 
 	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
+		// Add security annotations if running with auth-enabled
+		if configMapName != "" {
+			configMap, err := k8sOps.GetConfigMap(configMapName, "default")
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetConfigMap{
+					Name:  configMapName,
+					Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+				}
+			}
+
+			err = k.addSecurityAnnotation(obj, configMap)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to add annotations to core object: %v", err)
+			}
+		}
+
 		obj.Namespace = ns.Name
 		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
 		ss, err := k8sOps.CreateStatefulSet(obj)
@@ -1968,6 +2071,23 @@ func (k *K8s) IsScalable(spec interface{}) bool {
 		return true
 	}
 	return false
+}
+
+// GetTokenFromConfigMap -  Retrieve the config map object and get auth-token
+func (k *K8s) GetTokenFromConfigMap(configMapName string) (string, error) {
+	var token string
+	var err error
+	var configMap *v1.ConfigMap
+	k8sOps := k8s_ops.Instance()
+	if configMap, err = k8sOps.GetConfigMap(configMapName, "default"); err == nil {
+		if secret, err := k8sOps.GetSecret(configMap.Data[secretNameKey], configMap.Data[secretNamespaceKey]); err == nil {
+			if tk, ok := secret.Data["auth-token"]; ok {
+				token = string(tk)
+			}
+		}
+	}
+	logrus.Infof("Token from secret: %s", token)
+	return token, err
 }
 
 func (k *K8s) createMigrationObjects(

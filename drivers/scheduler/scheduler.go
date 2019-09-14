@@ -49,6 +49,8 @@ type ScheduleOptions struct {
 	Nodes []node.Node
 	// StorageProvisioner identifies what storage provider should be used
 	StorageProvisioner string
+	// ConfigMap  identifies what config map should be used to
+	ConfigMap string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -142,6 +144,9 @@ type Driver interface {
 	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 	// parent volumes
 	ValidateVolumeSnapshotRestore(*Context, time.Time) error
+
+	// Get token for a volume
+	GetTokenFromConfigMap(string) (string, error)
 }
 
 var (

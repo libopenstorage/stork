@@ -85,7 +85,7 @@ func (x Status) String() string {
 	return proto.EnumName(Status_name, int32(x))
 }
 func (Status) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{0}
 }
 
 type DriverType int32
@@ -120,7 +120,7 @@ func (x DriverType) String() string {
 	return proto.EnumName(DriverType_name, int32(x))
 }
 func (DriverType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{1}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{1}
 }
 
 type FSType int32
@@ -164,7 +164,7 @@ func (x FSType) String() string {
 	return proto.EnumName(FSType_name, int32(x))
 }
 func (FSType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{2}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{2}
 }
 
 type GraphDriverChangeType int32
@@ -193,7 +193,7 @@ func (x GraphDriverChangeType) String() string {
 	return proto.EnumName(GraphDriverChangeType_name, int32(x))
 }
 func (GraphDriverChangeType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{3}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{3}
 }
 
 type SeverityType int32
@@ -222,7 +222,7 @@ func (x SeverityType) String() string {
 	return proto.EnumName(SeverityType_name, int32(x))
 }
 func (SeverityType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{4}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{4}
 }
 
 type ResourceType int32
@@ -254,7 +254,7 @@ func (x ResourceType) String() string {
 	return proto.EnumName(ResourceType_name, int32(x))
 }
 func (ResourceType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{5}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{5}
 }
 
 type AlertActionType int32
@@ -283,7 +283,7 @@ func (x AlertActionType) String() string {
 	return proto.EnumName(AlertActionType_name, int32(x))
 }
 func (AlertActionType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{6}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{6}
 }
 
 type VolumeActionParam int32
@@ -311,7 +311,7 @@ func (x VolumeActionParam) String() string {
 	return proto.EnumName(VolumeActionParam_name, int32(x))
 }
 func (VolumeActionParam) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{7}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{7}
 }
 
 type CosType int32
@@ -340,17 +340,18 @@ func (x CosType) String() string {
 	return proto.EnumName(CosType_name, int32(x))
 }
 func (CosType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{8}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{8}
 }
 
 type IoProfile int32
 
 const (
-	IoProfile_IO_PROFILE_SEQUENTIAL IoProfile = 0
-	IoProfile_IO_PROFILE_RANDOM     IoProfile = 1
-	IoProfile_IO_PROFILE_DB         IoProfile = 2
-	IoProfile_IO_PROFILE_DB_REMOTE  IoProfile = 3
-	IoProfile_IO_PROFILE_CMS        IoProfile = 4
+	IoProfile_IO_PROFILE_SEQUENTIAL  IoProfile = 0
+	IoProfile_IO_PROFILE_RANDOM      IoProfile = 1
+	IoProfile_IO_PROFILE_DB          IoProfile = 2
+	IoProfile_IO_PROFILE_DB_REMOTE   IoProfile = 3
+	IoProfile_IO_PROFILE_CMS         IoProfile = 4
+	IoProfile_IO_PROFILE_SYNC_SHARED IoProfile = 5
 )
 
 var IoProfile_name = map[int32]string{
@@ -359,20 +360,22 @@ var IoProfile_name = map[int32]string{
 	2: "IO_PROFILE_DB",
 	3: "IO_PROFILE_DB_REMOTE",
 	4: "IO_PROFILE_CMS",
+	5: "IO_PROFILE_SYNC_SHARED",
 }
 var IoProfile_value = map[string]int32{
-	"IO_PROFILE_SEQUENTIAL": 0,
-	"IO_PROFILE_RANDOM":     1,
-	"IO_PROFILE_DB":         2,
-	"IO_PROFILE_DB_REMOTE":  3,
-	"IO_PROFILE_CMS":        4,
+	"IO_PROFILE_SEQUENTIAL":  0,
+	"IO_PROFILE_RANDOM":      1,
+	"IO_PROFILE_DB":          2,
+	"IO_PROFILE_DB_REMOTE":   3,
+	"IO_PROFILE_CMS":         4,
+	"IO_PROFILE_SYNC_SHARED": 5,
 }
 
 func (x IoProfile) String() string {
 	return proto.EnumName(IoProfile_name, int32(x))
 }
 func (IoProfile) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{9}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{9}
 }
 
 // VolumeState represents the state of a volume.
@@ -430,7 +433,7 @@ func (x VolumeState) String() string {
 	return proto.EnumName(VolumeState_name, int32(x))
 }
 func (VolumeState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{10}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{10}
 }
 
 // VolumeStatus represents a health status for a volume.
@@ -468,7 +471,7 @@ func (x VolumeStatus) String() string {
 	return proto.EnumName(VolumeStatus_name, int32(x))
 }
 func (VolumeStatus) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{11}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{11}
 }
 
 type StorageMedium int32
@@ -497,28 +500,7 @@ func (x StorageMedium) String() string {
 	return proto.EnumName(StorageMedium_name, int32(x))
 }
 func (StorageMedium) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{12}
-}
-
-type ClusterNotify int32
-
-const (
-	// Node is down
-	ClusterNotify_CLUSTER_NOTIFY_DOWN ClusterNotify = 0
-)
-
-var ClusterNotify_name = map[int32]string{
-	0: "CLUSTER_NOTIFY_DOWN",
-}
-var ClusterNotify_value = map[string]int32{
-	"CLUSTER_NOTIFY_DOWN": 0,
-}
-
-func (x ClusterNotify) String() string {
-	return proto.EnumName(ClusterNotify_name, int32(x))
-}
-func (ClusterNotify) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{13}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{12}
 }
 
 type AttachState int32
@@ -547,7 +529,7 @@ func (x AttachState) String() string {
 	return proto.EnumName(AttachState_name, int32(x))
 }
 func (AttachState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{14}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{13}
 }
 
 type OperationFlags int32
@@ -574,7 +556,7 @@ func (x OperationFlags) String() string {
 	return proto.EnumName(OperationFlags_name, int32(x))
 }
 func (OperationFlags) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{15}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{14}
 }
 
 // Defines times of day
@@ -620,7 +602,7 @@ func (x SdkTimeWeekday) String() string {
 	return proto.EnumName(SdkTimeWeekday_name, int32(x))
 }
 func (SdkTimeWeekday) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{16}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{15}
 }
 
 // CloudBackup operations types
@@ -650,7 +632,7 @@ func (x SdkCloudBackupOpType) String() string {
 	return proto.EnumName(SdkCloudBackupOpType_name, int32(x))
 }
 func (SdkCloudBackupOpType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{17}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{16}
 }
 
 // CloudBackup status types
@@ -673,6 +655,11 @@ const (
 	SdkCloudBackupStatusType_SdkCloudBackupStatusTypeActive SdkCloudBackupStatusType = 6
 	// Failed
 	SdkCloudBackupStatusType_SdkCloudBackupStatusTypeFailed SdkCloudBackupStatusType = 7
+	// Queued
+	SdkCloudBackupStatusType_SdkCloudBackupStatusTypeQueued SdkCloudBackupStatusType = 8
+	// Invalid, used by enumerate, includes failed,
+	// stopped and aborted
+	SdkCloudBackupStatusType_SdkCloudBackupStatusTypeInvalid SdkCloudBackupStatusType = 9
 )
 
 var SdkCloudBackupStatusType_name = map[int32]string{
@@ -684,6 +671,8 @@ var SdkCloudBackupStatusType_name = map[int32]string{
 	5: "SdkCloudBackupStatusTypeStopped",
 	6: "SdkCloudBackupStatusTypeActive",
 	7: "SdkCloudBackupStatusTypeFailed",
+	8: "SdkCloudBackupStatusTypeQueued",
+	9: "SdkCloudBackupStatusTypeInvalid",
 }
 var SdkCloudBackupStatusType_value = map[string]int32{
 	"SdkCloudBackupStatusTypeUnknown":    0,
@@ -694,13 +683,15 @@ var SdkCloudBackupStatusType_value = map[string]int32{
 	"SdkCloudBackupStatusTypeStopped":    5,
 	"SdkCloudBackupStatusTypeActive":     6,
 	"SdkCloudBackupStatusTypeFailed":     7,
+	"SdkCloudBackupStatusTypeQueued":     8,
+	"SdkCloudBackupStatusTypeInvalid":    9,
 }
 
 func (x SdkCloudBackupStatusType) String() string {
 	return proto.EnumName(SdkCloudBackupStatusType_name, int32(x))
 }
 func (SdkCloudBackupStatusType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{18}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{17}
 }
 
 // SdkCloudBackupRequestedState defines states to set a specified backup or restore
@@ -735,7 +726,33 @@ func (x SdkCloudBackupRequestedState) String() string {
 	return proto.EnumName(SdkCloudBackupRequestedState_name, int32(x))
 }
 func (SdkCloudBackupRequestedState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{19}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{18}
+}
+
+// Defines the types of enforcement on the given rules
+type EnforcementType int32
+
+const (
+	// This specifies that the rule is required and must be strictly enforced
+	EnforcementType_required EnforcementType = 0
+	// This specifies that the rule is preferred and can be best effort
+	EnforcementType_preferred EnforcementType = 1
+)
+
+var EnforcementType_name = map[int32]string{
+	0: "required",
+	1: "preferred",
+}
+var EnforcementType_value = map[string]int32{
+	"required":  0,
+	"preferred": 1,
+}
+
+func (x EnforcementType) String() string {
+	return proto.EnumName(EnforcementType_name, int32(x))
+}
+func (EnforcementType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{19}
 }
 
 // This defines an operator for the policy comparisons
@@ -765,7 +782,43 @@ func (x VolumeSpecPolicy_PolicyOp) String() string {
 	return proto.EnumName(VolumeSpecPolicy_PolicyOp_name, int32(x))
 }
 func (VolumeSpecPolicy_PolicyOp) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{8, 0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{9, 0}
+}
+
+// Access types can be set by owner to have different levels of access to
+// a resource.
+//
+// It is up to the resource to interpret what the types mean and are
+// used for.
+type Ownership_AccessType int32
+
+const (
+	// Read access only and cannot affect the resource.
+	Ownership_Read Ownership_AccessType = 0
+	// Write access and can affect the resource.
+	// This type automatically provides Read access also.
+	Ownership_Write Ownership_AccessType = 1
+	// Administrator access.
+	// This type automatically provides Read and Write access also.
+	Ownership_Admin Ownership_AccessType = 2
+)
+
+var Ownership_AccessType_name = map[int32]string{
+	0: "Read",
+	1: "Write",
+	2: "Admin",
+}
+var Ownership_AccessType_value = map[string]int32{
+	"Read":  0,
+	"Write": 1,
+	"Admin": 2,
+}
+
+func (x Ownership_AccessType) String() string {
+	return proto.EnumName(Ownership_AccessType_name, int32(x))
+}
+func (Ownership_AccessType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{12, 0}
 }
 
 type SdkServiceCapability_OpenStorageService_Type int32
@@ -791,6 +844,12 @@ const (
 	SdkServiceCapability_OpenStorageService_ALERTS SdkServiceCapability_OpenStorageService_Type = 8
 	// Mount/Attach Support
 	SdkServiceCapability_OpenStorageService_MOUNT_ATTACH SdkServiceCapability_OpenStorageService_Type = 9
+	// Role service
+	SdkServiceCapability_OpenStorageService_ROLE SdkServiceCapability_OpenStorageService_Type = 10
+	// Cluster Pair service
+	SdkServiceCapability_OpenStorageService_CLUSTER_PAIR SdkServiceCapability_OpenStorageService_Type = 11
+	// Migrate service
+	SdkServiceCapability_OpenStorageService_MIGRATE SdkServiceCapability_OpenStorageService_Type = 12
 	// StoragePolicy Service
 	SdkServiceCapability_OpenStorageService_STORAGE_POLICY SdkServiceCapability_OpenStorageService_Type = 13
 )
@@ -806,6 +865,9 @@ var SdkServiceCapability_OpenStorageService_Type_name = map[int32]string{
 	7:  "VOLUME",
 	8:  "ALERTS",
 	9:  "MOUNT_ATTACH",
+	10: "ROLE",
+	11: "CLUSTER_PAIR",
+	12: "MIGRATE",
 	13: "STORAGE_POLICY",
 }
 var SdkServiceCapability_OpenStorageService_Type_value = map[string]int32{
@@ -819,6 +881,9 @@ var SdkServiceCapability_OpenStorageService_Type_value = map[string]int32{
 	"VOLUME":          7,
 	"ALERTS":          8,
 	"MOUNT_ATTACH":    9,
+	"ROLE":            10,
+	"CLUSTER_PAIR":    11,
+	"MIGRATE":         12,
 	"STORAGE_POLICY":  13,
 }
 
@@ -826,7 +891,7 @@ func (x SdkServiceCapability_OpenStorageService_Type) String() string {
 	return proto.EnumName(SdkServiceCapability_OpenStorageService_Type_name, int32(x))
 }
 func (SdkServiceCapability_OpenStorageService_Type) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{179, 0, 0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{210, 0, 0}
 }
 
 // These values are constants that can be used by the
@@ -839,29 +904,29 @@ const (
 	// SDK version major value of this specification
 	SdkVersion_Major SdkVersion_Version = 0
 	// SDK version minor value of this specification
-	SdkVersion_Minor SdkVersion_Version = 22
+	SdkVersion_Minor SdkVersion_Version = 42
 	// SDK version patch value of this specification
-	SdkVersion_Patch SdkVersion_Version = 11
+	SdkVersion_Patch SdkVersion_Version = 15
 )
 
 var SdkVersion_Version_name = map[int32]string{
 	0: "MUST_HAVE_ZERO_VALUE",
 	// Duplicate value: 0: "Major",
-	22: "Minor",
-	11: "Patch",
+	42: "Minor",
+	15: "Patch",
 }
 var SdkVersion_Version_value = map[string]int32{
 	"MUST_HAVE_ZERO_VALUE": 0,
 	"Major":                0,
-	"Minor":                22,
-	"Patch":                11,
+	"Minor":                42,
+	"Patch":                15,
 }
 
 func (x SdkVersion_Version) String() string {
 	return proto.EnumName(SdkVersion_Version_name, int32(x))
 }
 func (SdkVersion_Version) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{180, 0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{211, 0}
 }
 
 type CloudMigrate_OperationType int32
@@ -893,7 +958,7 @@ func (x CloudMigrate_OperationType) String() string {
 	return proto.EnumName(CloudMigrate_OperationType_name, int32(x))
 }
 func (CloudMigrate_OperationType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{182, 0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{213, 0}
 }
 
 type CloudMigrate_Stage int32
@@ -925,7 +990,7 @@ func (x CloudMigrate_Stage) String() string {
 	return proto.EnumName(CloudMigrate_Stage_name, int32(x))
 }
 func (CloudMigrate_Stage) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{182, 1}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{213, 1}
 }
 
 type CloudMigrate_Status int32
@@ -963,59 +1028,32 @@ func (x CloudMigrate_Status) String() string {
 	return proto.EnumName(CloudMigrate_Status_name, int32(x))
 }
 func (CloudMigrate_Status) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{182, 2}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{213, 2}
 }
 
-// Defines the types of enforcement on the given rules
-type VolumePlacementRule_EnforcementType int32
-
-const (
-	// This specifies that the rule is required and must be strictly enforced
-	VolumePlacementRule_Required VolumePlacementRule_EnforcementType = 0
-	// This specifies that the rule is preferred and can be best effort
-	VolumePlacementRule_Preferred VolumePlacementRule_EnforcementType = 1
-)
-
-var VolumePlacementRule_EnforcementType_name = map[int32]string{
-	0: "Required",
-	1: "Preferred",
-}
-var VolumePlacementRule_EnforcementType_value = map[string]int32{
-	"Required":  0,
-	"Preferred": 1,
-}
-
-func (x VolumePlacementRule_EnforcementType) String() string {
-	return proto.EnumName(VolumePlacementRule_EnforcementType_name, int32(x))
-}
-func (VolumePlacementRule_EnforcementType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{221, 0}
-}
-
-// This specifies the type an affinity rule can take
-type VolumePlacementRule_AffinityRuleType int32
+type ClusterPairMode_Mode int32
 
 const (
-	// Affinity means the rule specifies an affinity to objects that match the below label selector requirements
-	VolumePlacementRule_Affinity VolumePlacementRule_AffinityRuleType = 0
-	// AntiAffinity means the rule specifies an anti-affinity to objects that match the below label selector requirements
-	VolumePlacementRule_AntiAffinity VolumePlacementRule_AffinityRuleType = 1
+	// Default pairing mode
+	ClusterPairMode_Default ClusterPairMode_Mode = 0
+	// Paired for DisasterRecovery
+	ClusterPairMode_DisasterRecovery ClusterPairMode_Mode = 1
 )
 
-var VolumePlacementRule_AffinityRuleType_name = map[int32]string{
-	0: "Affinity",
-	1: "AntiAffinity",
+var ClusterPairMode_Mode_name = map[int32]string{
+	0: "Default",
+	1: "DisasterRecovery",
 }
-var VolumePlacementRule_AffinityRuleType_value = map[string]int32{
-	"Affinity":     0,
-	"AntiAffinity": 1,
+var ClusterPairMode_Mode_value = map[string]int32{
+	"Default":          0,
+	"DisasterRecovery": 1,
 }
 
-func (x VolumePlacementRule_AffinityRuleType) String() string {
-	return proto.EnumName(VolumePlacementRule_AffinityRuleType_name, int32(x))
+func (x ClusterPairMode_Mode) String() string {
+	return proto.EnumName(ClusterPairMode_Mode_name, int32(x))
 }
-func (VolumePlacementRule_AffinityRuleType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{221, 1}
+func (ClusterPairMode_Mode) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{227, 0}
 }
 
 // This defines operator types used in a label matching rule
@@ -1057,11 +1095,10 @@ func (x LabelSelectorRequirement_Operator) String() string {
 	return proto.EnumName(LabelSelectorRequirement_Operator_name, int32(x))
 }
 func (LabelSelectorRequirement_Operator) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{222, 0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{255, 0}
 }
 
 // StorageResource groups properties of a storage device.
-// swagger:model
 type StorageResource struct {
 	// Id is the LUN identifier.
 	Id string `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
@@ -1088,7 +1125,9 @@ type StorageResource struct {
 	// Timestamp of last time this device was scanned.
 	LastScan *timestamp.Timestamp `protobuf:"bytes,12,opt,name=last_scan,json=lastScan" json:"last_scan,omitempty"`
 	// True if dedicated for metadata.
-	Metadata             bool     `protobuf:"varint,13,opt,name=metadata" json:"metadata,omitempty"`
+	Metadata bool `protobuf:"varint,13,opt,name=metadata" json:"metadata,omitempty"`
+	// True if dedicated as cache
+	Cache                bool     `protobuf:"varint,14,opt,name=cache" json:"cache,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1098,7 +1137,7 @@ func (m *StorageResource) Reset()         { *m = StorageResource{} }
 func (m *StorageResource) String() string { return proto.CompactTextString(m) }
 func (*StorageResource) ProtoMessage()    {}
 func (*StorageResource) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{0}
 }
 func (m *StorageResource) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageResource.Unmarshal(m, b)
@@ -1209,6 +1248,13 @@ func (m *StorageResource) GetMetadata() bool {
 	return false
 }
 
+func (m *StorageResource) GetCache() bool {
+	if m != nil {
+		return m.Cache
+	}
+	return false
+}
+
 // StoragePool groups different storage devices based on their CosType
 type StoragePool struct {
 	// ID pool ID
@@ -1234,7 +1280,7 @@ func (m *StoragePool) Reset()         { *m = StoragePool{} }
 func (m *StoragePool) String() string { return proto.CompactTextString(m) }
 func (*StoragePool) ProtoMessage()    {}
 func (*StoragePool) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{1}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{1}
 }
 func (m *StoragePool) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StoragePool.Unmarshal(m, b)
@@ -1305,22 +1351,27 @@ func (m *StoragePool) GetLabels() map[string]string {
 
 // VolumeLocator is a structure that is attached to a volume
 // and is used to carry opaque metadata.
-// swagger:model
 type VolumeLocator struct {
 	// User friendly identifier
 	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
 	// A set of name-value pairs that acts as search filters
-	VolumeLabels         map[string]string `protobuf:"bytes,2,rep,name=volume_labels,json=volumeLabels" json:"volume_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	VolumeLabels map[string]string `protobuf:"bytes,2,rep,name=volume_labels,json=volumeLabels" json:"volume_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Filter with ownership
+	Ownership *Ownership `protobuf:"bytes,3,opt,name=ownership" json:"ownership,omitempty"`
+	// Filter by group
+	Group *Group `protobuf:"bytes,4,opt,name=group" json:"group,omitempty"`
+	// Volume Ids to match
+	VolumeIds            []string `protobuf:"bytes,5,rep,name=volume_ids,json=volumeIds" json:"volume_ids,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *VolumeLocator) Reset()         { *m = VolumeLocator{} }
 func (m *VolumeLocator) String() string { return proto.CompactTextString(m) }
 func (*VolumeLocator) ProtoMessage()    {}
 func (*VolumeLocator) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{2}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{2}
 }
 func (m *VolumeLocator) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeLocator.Unmarshal(m, b)
@@ -1354,9 +1405,70 @@ func (m *VolumeLocator) GetVolumeLabels() map[string]string {
 	return nil
 }
 
+func (m *VolumeLocator) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
+}
+
+func (m *VolumeLocator) GetGroup() *Group {
+	if m != nil {
+		return m.Group
+	}
+	return nil
+}
+
+func (m *VolumeLocator) GetVolumeIds() []string {
+	if m != nil {
+		return m.VolumeIds
+	}
+	return nil
+}
+
+// Options used for volume inspection
+type VolumeInspectOptions struct {
+	// Deep inspection is used to collect more information about
+	// the volume. Setting this value may delay the request.
+	Deep                 bool     `protobuf:"varint,1,opt,name=deep" json:"deep,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *VolumeInspectOptions) Reset()         { *m = VolumeInspectOptions{} }
+func (m *VolumeInspectOptions) String() string { return proto.CompactTextString(m) }
+func (*VolumeInspectOptions) ProtoMessage()    {}
+func (*VolumeInspectOptions) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{3}
+}
+func (m *VolumeInspectOptions) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_VolumeInspectOptions.Unmarshal(m, b)
+}
+func (m *VolumeInspectOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_VolumeInspectOptions.Marshal(b, m, deterministic)
+}
+func (dst *VolumeInspectOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_VolumeInspectOptions.Merge(dst, src)
+}
+func (m *VolumeInspectOptions) XXX_Size() int {
+	return xxx_messageInfo_VolumeInspectOptions.Size(m)
+}
+func (m *VolumeInspectOptions) XXX_DiscardUnknown() {
+	xxx_messageInfo_VolumeInspectOptions.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_VolumeInspectOptions proto.InternalMessageInfo
+
+func (m *VolumeInspectOptions) GetDeep() bool {
+	if m != nil {
+		return m.Deep
+	}
+	return false
+}
+
 // Source is a structure that can be given to a volume
 // to seed the volume with data.
-// swagger:model
 type Source struct {
 	// A volume id, if specified will create a clone of the parent.
 	Parent string `protobuf:"bytes,1,opt,name=parent" json:"parent,omitempty"`
@@ -1372,7 +1484,7 @@ func (m *Source) Reset()         { *m = Source{} }
 func (m *Source) String() string { return proto.CompactTextString(m) }
 func (*Source) ProtoMessage()    {}
 func (*Source) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{3}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{4}
 }
 func (m *Source) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Source.Unmarshal(m, b)
@@ -1408,7 +1520,6 @@ func (m *Source) GetSeed() string {
 
 // Group represents VolumeGroup / namespace
 // All volumes in the same group share this object.
-// swagger:model
 type Group struct {
 	// Id common identifier across volumes that have the same group.
 	Id                   string   `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
@@ -1421,7 +1532,7 @@ func (m *Group) Reset()         { *m = Group{} }
 func (m *Group) String() string { return proto.CompactTextString(m) }
 func (*Group) ProtoMessage()    {}
 func (*Group) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{4}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{5}
 }
 func (m *Group) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Group.Unmarshal(m, b)
@@ -1463,7 +1574,7 @@ func (m *IoStrategy) Reset()         { *m = IoStrategy{} }
 func (m *IoStrategy) String() string { return proto.CompactTextString(m) }
 func (*IoStrategy) ProtoMessage()    {}
 func (*IoStrategy) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{5}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{6}
 }
 func (m *IoStrategy) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IoStrategy.Unmarshal(m, b)
@@ -1498,7 +1609,6 @@ func (m *IoStrategy) GetEarlyAck() bool {
 }
 
 // VolumeSpec has the properties needed to create a volume.
-// swagger:model
 type VolumeSpec struct {
 	// Ephemeral storage
 	Ephemeral bool `protobuf:"varint,1,opt,name=ephemeral" json:"ephemeral,omitempty"`
@@ -1518,7 +1628,7 @@ type VolumeSpec struct {
 	Dedupe bool `protobuf:"varint,8,opt,name=dedupe" json:"dedupe,omitempty"`
 	// SnapshotInterval in minutes, set to 0 to disable snapshots
 	SnapshotInterval uint32 `protobuf:"varint,9,opt,name=snapshot_interval,json=snapshotInterval" json:"snapshot_interval,omitempty"`
-	// VolumeLabels configuration labels
+	// (deprecated, do not use) VolumeLabels configuration labels
 	VolumeLabels map[string]string `protobuf:"bytes,10,rep,name=volume_labels,json=volumeLabels" json:"volume_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Shared is true if this volume can be concurrently accessed by multiple users.
 	Shared bool `protobuf:"varint,11,opt,name=shared" json:"shared,omitempty"`
@@ -1560,18 +1670,20 @@ type VolumeSpec struct {
 	IoStrategy *IoStrategy `protobuf:"bytes,30,opt,name=io_strategy,json=ioStrategy" json:"io_strategy,omitempty"`
 	// PlacementStrategy specifies a spec to indicate where to place the volume.
 	PlacementStrategy *VolumePlacementStrategy `protobuf:"bytes,31,opt,name=placement_strategy,json=placementStrategy" json:"placement_strategy,omitempty"`
-	// StoragePolicy to be enforced while creating volume
-	StoragePolicy        string   `protobuf:"bytes,32,opt,name=storage_policy,json=storagePolicy" json:"storage_policy,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	// StoragePolicy if applied/specified while creating volume
+	StoragePolicy string `protobuf:"bytes,32,opt,name=storage_policy,json=storagePolicy" json:"storage_policy,omitempty"`
+	// Owner
+	Ownership            *Ownership `protobuf:"bytes,33,opt,name=ownership" json:"ownership,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *VolumeSpec) Reset()         { *m = VolumeSpec{} }
 func (m *VolumeSpec) String() string { return proto.CompactTextString(m) }
 func (*VolumeSpec) ProtoMessage()    {}
 func (*VolumeSpec) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{6}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{7}
 }
 func (m *VolumeSpec) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeSpec.Unmarshal(m, b)
@@ -1801,6 +1913,13 @@ func (m *VolumeSpec) GetStoragePolicy() string {
 	return ""
 }
 
+func (m *VolumeSpec) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
+}
+
 // VolumeSpecUpdate provides a method to set any of the VolumeSpec of an existing volume
 type VolumeSpecUpdate struct {
 	// Size specifies the thin provisioned volume size in bytes
@@ -1833,8 +1952,6 @@ type VolumeSpecUpdate struct {
 	// Types that are valid to be assigned to SnapshotIntervalOpt:
 	//	*VolumeSpecUpdate_SnapshotInterval
 	SnapshotIntervalOpt isVolumeSpecUpdate_SnapshotIntervalOpt `protobuf_oneof:"snapshot_interval_opt"`
-	// VolumeLabels configuration labels
-	VolumeLabels map[string]string `protobuf:"bytes,10,rep,name=volume_labels,json=volumeLabels" json:"volume_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Shared is true if this volume can be remotely accessed.
 	//
 	// Types that are valid to be assigned to SharedOpt:
@@ -1881,17 +1998,29 @@ type VolumeSpecUpdate struct {
 	//
 	// Types that are valid to be assigned to QueueDepthOpt:
 	//	*VolumeSpecUpdate_QueueDepth
-	QueueDepthOpt        isVolumeSpecUpdate_QueueDepthOpt `protobuf_oneof:"queue_depth_opt"`
-	XXX_NoUnkeyedLiteral struct{}                         `json:"-"`
-	XXX_unrecognized     []byte                           `json:"-"`
-	XXX_sizecache        int32                            `json:"-"`
+	QueueDepthOpt isVolumeSpecUpdate_QueueDepthOpt `protobuf_oneof:"queue_depth_opt"`
+	// Ownership volume information to update. If the value of `owner` in the
+	// `ownership` message is an empty string then the value of `owner` in
+	// the `VolumeSpec.Ownership.owner` will not be updated.
+	Ownership *Ownership `protobuf:"bytes,26,opt,name=ownership" json:"ownership,omitempty"`
+	// Nodiscard specifies if the volume will be mounted with discard support disabled.
+	// i.e. FS will not release allocated blocks back to the backing storage pool.
+	//
+	// Types that are valid to be assigned to NodiscardOpt:
+	//	*VolumeSpecUpdate_Nodiscard
+	NodiscardOpt isVolumeSpecUpdate_NodiscardOpt `protobuf_oneof:"nodiscard_opt"`
+	// IoStrategy preferred strategy for I/O.
+	IoStrategy           *IoStrategy `protobuf:"bytes,28,opt,name=io_strategy,json=ioStrategy" json:"io_strategy,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *VolumeSpecUpdate) Reset()         { *m = VolumeSpecUpdate{} }
 func (m *VolumeSpecUpdate) String() string { return proto.CompactTextString(m) }
 func (*VolumeSpecUpdate) ProtoMessage()    {}
 func (*VolumeSpecUpdate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{7}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{8}
 }
 func (m *VolumeSpecUpdate) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeSpecUpdate.Unmarshal(m, b)
@@ -1956,6 +2085,9 @@ type isVolumeSpecUpdate_Sharedv4Opt interface {
 type isVolumeSpecUpdate_QueueDepthOpt interface {
 	isVolumeSpecUpdate_QueueDepthOpt()
 }
+type isVolumeSpecUpdate_NodiscardOpt interface {
+	isVolumeSpecUpdate_NodiscardOpt()
+}
 
 type VolumeSpecUpdate_Size struct {
 	Size uint64 `protobuf:"varint,2,opt,name=size,oneof"`
@@ -2002,6 +2134,9 @@ type VolumeSpecUpdate_Sharedv4 struct {
 type VolumeSpecUpdate_QueueDepth struct {
 	QueueDepth uint32 `protobuf:"varint,25,opt,name=queue_depth,json=queueDepth,oneof"`
 }
+type VolumeSpecUpdate_Nodiscard struct {
+	Nodiscard bool `protobuf:"varint,27,opt,name=nodiscard,oneof"`
+}
 
 func (*VolumeSpecUpdate_Size) isVolumeSpecUpdate_SizeOpt()                         {}
 func (*VolumeSpecUpdate_HaLevel) isVolumeSpecUpdate_HaLevelOpt()                   {}
@@ -2018,6 +2153,7 @@ func (*VolumeSpecUpdate_Group) isVolumeSpecUpdate_GroupOpt()                    
 func (*VolumeSpecUpdate_Journal) isVolumeSpecUpdate_JournalOpt()                   {}
 func (*VolumeSpecUpdate_Sharedv4) isVolumeSpecUpdate_Sharedv4Opt()                 {}
 func (*VolumeSpecUpdate_QueueDepth) isVolumeSpecUpdate_QueueDepthOpt()             {}
+func (*VolumeSpecUpdate_Nodiscard) isVolumeSpecUpdate_NodiscardOpt()               {}
 
 func (m *VolumeSpecUpdate) GetSizeOpt() isVolumeSpecUpdate_SizeOpt {
 	if m != nil {
@@ -2109,6 +2245,12 @@ func (m *VolumeSpecUpdate) GetQueueDepthOpt() isVolumeSpecUpdate_QueueDepthOpt {
 	}
 	return nil
 }
+func (m *VolumeSpecUpdate) GetNodiscardOpt() isVolumeSpecUpdate_NodiscardOpt {
+	if m != nil {
+		return m.NodiscardOpt
+	}
+	return nil
+}
 
 func (m *VolumeSpecUpdate) GetSize() uint64 {
 	if x, ok := m.GetSizeOpt().(*VolumeSpecUpdate_Size); ok {
@@ -2150,13 +2292,6 @@ func (m *VolumeSpecUpdate) GetSnapshotInterval() uint32 {
 		return x.SnapshotInterval
 	}
 	return 0
-}
-
-func (m *VolumeSpecUpdate) GetVolumeLabels() map[string]string {
-	if m != nil {
-		return m.VolumeLabels
-	}
-	return nil
 }
 
 func (m *VolumeSpecUpdate) GetShared() bool {
@@ -2229,6 +2364,27 @@ func (m *VolumeSpecUpdate) GetQueueDepth() uint32 {
 	return 0
 }
 
+func (m *VolumeSpecUpdate) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
+}
+
+func (m *VolumeSpecUpdate) GetNodiscard() bool {
+	if x, ok := m.GetNodiscardOpt().(*VolumeSpecUpdate_Nodiscard); ok {
+		return x.Nodiscard
+	}
+	return false
+}
+
+func (m *VolumeSpecUpdate) GetIoStrategy() *IoStrategy {
+	if m != nil {
+		return m.IoStrategy
+	}
+	return nil
+}
+
 // XXX_OneofFuncs is for the internal use of the proto package.
 func (*VolumeSpecUpdate) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
 	return _VolumeSpecUpdate_OneofMarshaler, _VolumeSpecUpdate_OneofUnmarshaler, _VolumeSpecUpdate_OneofSizer, []interface{}{
@@ -2247,6 +2403,7 @@ func (*VolumeSpecUpdate) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buff
 		(*VolumeSpecUpdate_Journal)(nil),
 		(*VolumeSpecUpdate_Sharedv4)(nil),
 		(*VolumeSpecUpdate_QueueDepth)(nil),
+		(*VolumeSpecUpdate_Nodiscard)(nil),
 	}
 }
 
@@ -2409,6 +2566,19 @@ func _VolumeSpecUpdate_OneofMarshaler(msg proto.Message, b *proto.Buffer) error 
 	default:
 		return fmt.Errorf("VolumeSpecUpdate.QueueDepthOpt has unexpected type %T", x)
 	}
+	// nodiscard_opt
+	switch x := m.NodiscardOpt.(type) {
+	case *VolumeSpecUpdate_Nodiscard:
+		t := uint64(0)
+		if x.Nodiscard {
+			t = 1
+		}
+		b.EncodeVarint(27<<3 | proto.WireVarint)
+		b.EncodeVarint(t)
+	case nil:
+	default:
+		return fmt.Errorf("VolumeSpecUpdate.NodiscardOpt has unexpected type %T", x)
+	}
 	return nil
 }
 
@@ -2520,6 +2690,13 @@ func _VolumeSpecUpdate_OneofUnmarshaler(msg proto.Message, tag, wire int, b *pro
 		}
 		x, err := b.DecodeVarint()
 		m.QueueDepthOpt = &VolumeSpecUpdate_QueueDepth{uint32(x)}
+		return true, err
+	case 27: // nodiscard_opt.nodiscard
+		if wire != proto.WireVarint {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeVarint()
+		m.NodiscardOpt = &VolumeSpecUpdate_Nodiscard{x != 0}
 		return true, err
 	default:
 		return false, nil
@@ -2667,6 +2844,15 @@ func _VolumeSpecUpdate_OneofSizer(msg proto.Message) (n int) {
 	default:
 		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
 	}
+	// nodiscard_opt
+	switch x := m.NodiscardOpt.(type) {
+	case *VolumeSpecUpdate_Nodiscard:
+		n += 2 // tag and wire
+		n += 1
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
 	return n
 }
 
@@ -2771,16 +2957,24 @@ type VolumeSpecPolicy struct {
 	ScaleOperator VolumeSpecPolicy_PolicyOp `protobuf:"varint,52,opt,name=scale_operator,json=scaleOperator,enum=openstorage.api.VolumeSpecPolicy_PolicyOp" json:"scale_operator,omitempty"`
 	// Operator to check snapshot_interval
 	SnapshotIntervalOperator VolumeSpecPolicy_PolicyOp `protobuf:"varint,53,opt,name=snapshot_interval_operator,json=snapshotIntervalOperator,enum=openstorage.api.VolumeSpecPolicy_PolicyOp" json:"snapshot_interval_operator,omitempty"`
-	XXX_NoUnkeyedLiteral     struct{}                  `json:"-"`
-	XXX_unrecognized         []byte                    `json:"-"`
-	XXX_sizecache            int32                     `json:"-"`
+	// Nodiscard specifies if the volume will be mounted with discard support disabled.
+	// i.e. FS will not release allocated blocks back to the backing storage pool.
+	//
+	// Types that are valid to be assigned to NodiscardOpt:
+	//	*VolumeSpecPolicy_Nodiscard
+	NodiscardOpt isVolumeSpecPolicy_NodiscardOpt `protobuf_oneof:"nodiscard_opt"`
+	// IoStrategy preferred strategy for I/O.
+	IoStrategy           *IoStrategy `protobuf:"bytes,55,opt,name=io_strategy,json=ioStrategy" json:"io_strategy,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *VolumeSpecPolicy) Reset()         { *m = VolumeSpecPolicy{} }
 func (m *VolumeSpecPolicy) String() string { return proto.CompactTextString(m) }
 func (*VolumeSpecPolicy) ProtoMessage()    {}
 func (*VolumeSpecPolicy) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{8}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{9}
 }
 func (m *VolumeSpecPolicy) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeSpecPolicy.Unmarshal(m, b)
@@ -2851,6 +3045,9 @@ type isVolumeSpecPolicy_EncryptedOpt interface {
 type isVolumeSpecPolicy_AggregationLevelOpt interface {
 	isVolumeSpecPolicy_AggregationLevelOpt()
 }
+type isVolumeSpecPolicy_NodiscardOpt interface {
+	isVolumeSpecPolicy_NodiscardOpt()
+}
 
 type VolumeSpecPolicy_Size struct {
 	Size uint64 `protobuf:"varint,1,opt,name=size,oneof"`
@@ -2903,6 +3100,9 @@ type VolumeSpecPolicy_Encrypted struct {
 type VolumeSpecPolicy_AggregationLevel struct {
 	AggregationLevel uint32 `protobuf:"varint,19,opt,name=aggregation_level,json=aggregationLevel,oneof"`
 }
+type VolumeSpecPolicy_Nodiscard struct {
+	Nodiscard bool `protobuf:"varint,54,opt,name=nodiscard,oneof"`
+}
 
 func (*VolumeSpecPolicy_Size) isVolumeSpecPolicy_SizeOpt()                         {}
 func (*VolumeSpecPolicy_HaLevel) isVolumeSpecPolicy_HaLevelOpt()                   {}
@@ -2921,6 +3121,7 @@ func (*VolumeSpecPolicy_Sharedv4) isVolumeSpecPolicy_Sharedv4Opt()              
 func (*VolumeSpecPolicy_QueueDepth) isVolumeSpecPolicy_QueueDepthOpt()             {}
 func (*VolumeSpecPolicy_Encrypted) isVolumeSpecPolicy_EncryptedOpt()               {}
 func (*VolumeSpecPolicy_AggregationLevel) isVolumeSpecPolicy_AggregationLevelOpt() {}
+func (*VolumeSpecPolicy_Nodiscard) isVolumeSpecPolicy_NodiscardOpt()               {}
 
 func (m *VolumeSpecPolicy) GetSizeOpt() isVolumeSpecPolicy_SizeOpt {
 	if m != nil {
@@ -3021,6 +3222,12 @@ func (m *VolumeSpecPolicy) GetEncryptedOpt() isVolumeSpecPolicy_EncryptedOpt {
 func (m *VolumeSpecPolicy) GetAggregationLevelOpt() isVolumeSpecPolicy_AggregationLevelOpt {
 	if m != nil {
 		return m.AggregationLevelOpt
+	}
+	return nil
+}
+func (m *VolumeSpecPolicy) GetNodiscardOpt() isVolumeSpecPolicy_NodiscardOpt {
+	if m != nil {
+		return m.NodiscardOpt
 	}
 	return nil
 }
@@ -3186,6 +3393,20 @@ func (m *VolumeSpecPolicy) GetSnapshotIntervalOperator() VolumeSpecPolicy_Policy
 	return VolumeSpecPolicy_Equal
 }
 
+func (m *VolumeSpecPolicy) GetNodiscard() bool {
+	if x, ok := m.GetNodiscardOpt().(*VolumeSpecPolicy_Nodiscard); ok {
+		return x.Nodiscard
+	}
+	return false
+}
+
+func (m *VolumeSpecPolicy) GetIoStrategy() *IoStrategy {
+	if m != nil {
+		return m.IoStrategy
+	}
+	return nil
+}
+
 // XXX_OneofFuncs is for the internal use of the proto package.
 func (*VolumeSpecPolicy) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
 	return _VolumeSpecPolicy_OneofMarshaler, _VolumeSpecPolicy_OneofUnmarshaler, _VolumeSpecPolicy_OneofSizer, []interface{}{
@@ -3206,6 +3427,7 @@ func (*VolumeSpecPolicy) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buff
 		(*VolumeSpecPolicy_QueueDepth)(nil),
 		(*VolumeSpecPolicy_Encrypted)(nil),
 		(*VolumeSpecPolicy_AggregationLevel)(nil),
+		(*VolumeSpecPolicy_Nodiscard)(nil),
 	}
 }
 
@@ -3390,6 +3612,19 @@ func _VolumeSpecPolicy_OneofMarshaler(msg proto.Message, b *proto.Buffer) error 
 	default:
 		return fmt.Errorf("VolumeSpecPolicy.AggregationLevelOpt has unexpected type %T", x)
 	}
+	// nodiscard_opt
+	switch x := m.NodiscardOpt.(type) {
+	case *VolumeSpecPolicy_Nodiscard:
+		t := uint64(0)
+		if x.Nodiscard {
+			t = 1
+		}
+		b.EncodeVarint(54<<3 | proto.WireVarint)
+		b.EncodeVarint(t)
+	case nil:
+	default:
+		return fmt.Errorf("VolumeSpecPolicy.NodiscardOpt has unexpected type %T", x)
+	}
 	return nil
 }
 
@@ -3515,6 +3750,13 @@ func _VolumeSpecPolicy_OneofUnmarshaler(msg proto.Message, tag, wire int, b *pro
 		}
 		x, err := b.DecodeVarint()
 		m.AggregationLevelOpt = &VolumeSpecPolicy_AggregationLevel{uint32(x)}
+		return true, err
+	case 54: // nodiscard_opt.nodiscard
+		if wire != proto.WireVarint {
+			return true, proto.ErrInternalBadWireType
+		}
+		x, err := b.DecodeVarint()
+		m.NodiscardOpt = &VolumeSpecPolicy_Nodiscard{x != 0}
 		return true, err
 	default:
 		return false, nil
@@ -3680,12 +3922,20 @@ func _VolumeSpecPolicy_OneofSizer(msg proto.Message) (n int) {
 	default:
 		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
 	}
+	// nodiscard_opt
+	switch x := m.NodiscardOpt.(type) {
+	case *VolumeSpecPolicy_Nodiscard:
+		n += 2 // tag and wire
+		n += 1
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
 	return n
 }
 
 // ReplicaSet set of machine IDs (nodes) to which part of this volume is erasure
 // coded - for clustered storage arrays
-// swagger:model
 type ReplicaSet struct {
 	Nodes                []string `protobuf:"bytes,1,rep,name=nodes" json:"nodes,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -3697,7 +3947,7 @@ func (m *ReplicaSet) Reset()         { *m = ReplicaSet{} }
 func (m *ReplicaSet) String() string { return proto.CompactTextString(m) }
 func (*ReplicaSet) ProtoMessage()    {}
 func (*ReplicaSet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{9}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{10}
 }
 func (m *ReplicaSet) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ReplicaSet.Unmarshal(m, b)
@@ -3726,7 +3976,6 @@ func (m *ReplicaSet) GetNodes() []string {
 
 // RuntimeStateMap is a list of name value mapping of driver specific runtime
 // information.
-// swagger:model
 type RuntimeStateMap struct {
 	RuntimeState         map[string]string `protobuf:"bytes,1,rep,name=runtime_state,json=runtimeState" json:"runtime_state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
@@ -3738,7 +3987,7 @@ func (m *RuntimeStateMap) Reset()         { *m = RuntimeStateMap{} }
 func (m *RuntimeStateMap) String() string { return proto.CompactTextString(m) }
 func (*RuntimeStateMap) ProtoMessage()    {}
 func (*RuntimeStateMap) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{10}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{11}
 }
 func (m *RuntimeStateMap) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RuntimeStateMap.Unmarshal(m, b)
@@ -3765,8 +4014,125 @@ func (m *RuntimeStateMap) GetRuntimeState() map[string]string {
 	return nil
 }
 
+// Ownership information for resource.
+// Administrators are users who belong to the group `*`, meaning, every group.
+type Ownership struct {
+	// Username of owner.
+	//
+	// The storage system uses the username taken from the security authorization
+	// token and is saved on this field. Only users with system administration
+	// can edit this value.
+	Owner string `protobuf:"bytes,1,opt,name=owner" json:"owner,omitempty"`
+	// Permissions to share resource which can be set by the owner.
+	//
+	// NOTE: To create an "admin" user which has access to any resource set the group value
+	// in the token of the user to `*`.
+	Acls                 *Ownership_AccessControl `protobuf:"bytes,2,opt,name=acls" json:"acls,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
+	XXX_unrecognized     []byte                   `json:"-"`
+	XXX_sizecache        int32                    `json:"-"`
+}
+
+func (m *Ownership) Reset()         { *m = Ownership{} }
+func (m *Ownership) String() string { return proto.CompactTextString(m) }
+func (*Ownership) ProtoMessage()    {}
+func (*Ownership) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{12}
+}
+func (m *Ownership) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Ownership.Unmarshal(m, b)
+}
+func (m *Ownership) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Ownership.Marshal(b, m, deterministic)
+}
+func (dst *Ownership) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Ownership.Merge(dst, src)
+}
+func (m *Ownership) XXX_Size() int {
+	return xxx_messageInfo_Ownership.Size(m)
+}
+func (m *Ownership) XXX_DiscardUnknown() {
+	xxx_messageInfo_Ownership.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Ownership proto.InternalMessageInfo
+
+func (m *Ownership) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
+}
+
+func (m *Ownership) GetAcls() *Ownership_AccessControl {
+	if m != nil {
+		return m.Acls
+	}
+	return nil
+}
+
+type Ownership_AccessControl struct {
+	// Group access to resource which must match the group set in the
+	// authorization token.
+	// Can be set by the owner or the system administrator only.
+	// Possible values are:
+	// 1. no groups: Means no groups are given access.
+	// 2. `["*"]`: All groups are allowed.
+	// 3. `["group1", "group2"]`: Only certain groups are allowed. In this example only
+	// _group1_ and _group2_ are allowed.
+	Groups map[string]Ownership_AccessType `protobuf:"bytes,1,rep,name=groups" json:"groups,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=openstorage.api.Ownership_AccessType"`
+	// Collaborator access to resource gives access to other user.
+	// Must be the username (unique id) set in the authorization token.
+	// The owner or the administrator can set this value. Possible values are:
+	// 1. no collaborators: Means no users are given access.
+	// 2. `["*"]`: All users are allowed.
+	// 3. `["username1", "username2"]`: Only certain usernames are allowed. In this example only
+	// _username1_ and _username2_ are allowed.
+	Collaborators        map[string]Ownership_AccessType `protobuf:"bytes,2,rep,name=collaborators" json:"collaborators,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=openstorage.api.Ownership_AccessType"`
+	XXX_NoUnkeyedLiteral struct{}                        `json:"-"`
+	XXX_unrecognized     []byte                          `json:"-"`
+	XXX_sizecache        int32                           `json:"-"`
+}
+
+func (m *Ownership_AccessControl) Reset()         { *m = Ownership_AccessControl{} }
+func (m *Ownership_AccessControl) String() string { return proto.CompactTextString(m) }
+func (*Ownership_AccessControl) ProtoMessage()    {}
+func (*Ownership_AccessControl) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{12, 0}
+}
+func (m *Ownership_AccessControl) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Ownership_AccessControl.Unmarshal(m, b)
+}
+func (m *Ownership_AccessControl) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Ownership_AccessControl.Marshal(b, m, deterministic)
+}
+func (dst *Ownership_AccessControl) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Ownership_AccessControl.Merge(dst, src)
+}
+func (m *Ownership_AccessControl) XXX_Size() int {
+	return xxx_messageInfo_Ownership_AccessControl.Size(m)
+}
+func (m *Ownership_AccessControl) XXX_DiscardUnknown() {
+	xxx_messageInfo_Ownership_AccessControl.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Ownership_AccessControl proto.InternalMessageInfo
+
+func (m *Ownership_AccessControl) GetGroups() map[string]Ownership_AccessType {
+	if m != nil {
+		return m.Groups
+	}
+	return nil
+}
+
+func (m *Ownership_AccessControl) GetCollaborators() map[string]Ownership_AccessType {
+	if m != nil {
+		return m.Collaborators
+	}
+	return nil
+}
+
 // Volume represents an abstract storage volume.
-// swagger:model
 type Volume struct {
 	// Self referential volume ID.
 	Id string `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
@@ -3824,7 +4190,7 @@ func (m *Volume) Reset()         { *m = Volume{} }
 func (m *Volume) String() string { return proto.CompactTextString(m) }
 func (*Volume) ProtoMessage()    {}
 func (*Volume) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{11}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{13}
 }
 func (m *Volume) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Volume.Unmarshal(m, b)
@@ -4036,7 +4402,7 @@ func (m *Stats) Reset()         { *m = Stats{} }
 func (m *Stats) String() string { return proto.CompactTextString(m) }
 func (*Stats) ProtoMessage()    {}
 func (*Stats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{12}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{14}
 }
 func (m *Stats) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Stats.Unmarshal(m, b)
@@ -4147,7 +4513,7 @@ func (m *CapacityUsageInfo) Reset()         { *m = CapacityUsageInfo{} }
 func (m *CapacityUsageInfo) String() string { return proto.CompactTextString(m) }
 func (*CapacityUsageInfo) ProtoMessage()    {}
 func (*CapacityUsageInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{13}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{15}
 }
 func (m *CapacityUsageInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CapacityUsageInfo.Unmarshal(m, b)
@@ -4190,24 +4556,33 @@ func (m *CapacityUsageInfo) GetTotalBytes() int64 {
 
 // A SdkStoragePolicy represents minimum set of volume specs to be
 // follow while creating volumes.
-// If enforce in OpenStoragePolicy service, VolumeSpecPolicy will be
-// used before creating volume to ensure minimum volume creation rules
-// are enforced.
+// If storage policy is set default in OpenStoragePolicy service, VolumeSpecPolicy will be
+// used before creating volume to validate volume specs or ensure minimum volume creation
+// rules followed
 type SdkStoragePolicy struct {
 	// Name of storage policy.
 	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
 	// VolumeSpecs to apply while creating volume.
-	Policy               *VolumeSpecPolicy `protobuf:"bytes,2,opt,name=policy" json:"policy,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Policy *VolumeSpecPolicy `protobuf:"bytes,2,opt,name=policy" json:"policy,omitempty"`
+	// Force if set to true volume specs will be overwritten, otherwise
+	// volume creation will fail if the volume specifications are not inline with storage policy
+	Force bool `protobuf:"varint,3,opt,name=force" json:"force,omitempty"`
+	// If set a volume can be updated without storage Policy
+	// restriction, otherwise volume update will be followed as per storage policy
+	// specification
+	AllowUpdate bool `protobuf:"varint,4,opt,name=allow_update,json=allowUpdate" json:"allow_update,omitempty"`
+	// Owner info of storage policy
+	Ownership            *Ownership `protobuf:"bytes,5,opt,name=ownership" json:"ownership,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *SdkStoragePolicy) Reset()         { *m = SdkStoragePolicy{} }
 func (m *SdkStoragePolicy) String() string { return proto.CompactTextString(m) }
 func (*SdkStoragePolicy) ProtoMessage()    {}
 func (*SdkStoragePolicy) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{14}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{16}
 }
 func (m *SdkStoragePolicy) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkStoragePolicy.Unmarshal(m, b)
@@ -4237,6 +4612,27 @@ func (m *SdkStoragePolicy) GetName() string {
 func (m *SdkStoragePolicy) GetPolicy() *VolumeSpecPolicy {
 	if m != nil {
 		return m.Policy
+	}
+	return nil
+}
+
+func (m *SdkStoragePolicy) GetForce() bool {
+	if m != nil {
+		return m.Force
+	}
+	return false
+}
+
+func (m *SdkStoragePolicy) GetAllowUpdate() bool {
+	if m != nil {
+		return m.AllowUpdate
+	}
+	return false
+}
+
+func (m *SdkStoragePolicy) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
 	}
 	return nil
 }
@@ -4276,7 +4672,7 @@ func (m *Alert) Reset()         { *m = Alert{} }
 func (m *Alert) String() string { return proto.CompactTextString(m) }
 func (*Alert) ProtoMessage()    {}
 func (*Alert) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{15}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{17}
 }
 func (m *Alert) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Alert.Unmarshal(m, b)
@@ -4395,7 +4791,7 @@ func (m *SdkAlertsTimeSpan) Reset()         { *m = SdkAlertsTimeSpan{} }
 func (m *SdkAlertsTimeSpan) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsTimeSpan) ProtoMessage()    {}
 func (*SdkAlertsTimeSpan) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{16}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{18}
 }
 func (m *SdkAlertsTimeSpan) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsTimeSpan.Unmarshal(m, b)
@@ -4444,7 +4840,7 @@ func (m *SdkAlertsCountSpan) Reset()         { *m = SdkAlertsCountSpan{} }
 func (m *SdkAlertsCountSpan) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsCountSpan) ProtoMessage()    {}
 func (*SdkAlertsCountSpan) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{17}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{19}
 }
 func (m *SdkAlertsCountSpan) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsCountSpan.Unmarshal(m, b)
@@ -4495,7 +4891,7 @@ func (m *SdkAlertsOption) Reset()         { *m = SdkAlertsOption{} }
 func (m *SdkAlertsOption) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsOption) ProtoMessage()    {}
 func (*SdkAlertsOption) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{18}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{20}
 }
 func (m *SdkAlertsOption) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsOption.Unmarshal(m, b)
@@ -4691,7 +5087,7 @@ func (m *SdkAlertsResourceTypeQuery) Reset()         { *m = SdkAlertsResourceTyp
 func (m *SdkAlertsResourceTypeQuery) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsResourceTypeQuery) ProtoMessage()    {}
 func (*SdkAlertsResourceTypeQuery) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{19}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{21}
 }
 func (m *SdkAlertsResourceTypeQuery) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsResourceTypeQuery.Unmarshal(m, b)
@@ -4734,7 +5130,7 @@ func (m *SdkAlertsAlertTypeQuery) Reset()         { *m = SdkAlertsAlertTypeQuery
 func (m *SdkAlertsAlertTypeQuery) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsAlertTypeQuery) ProtoMessage()    {}
 func (*SdkAlertsAlertTypeQuery) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{20}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{22}
 }
 func (m *SdkAlertsAlertTypeQuery) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsAlertTypeQuery.Unmarshal(m, b)
@@ -4787,7 +5183,7 @@ func (m *SdkAlertsResourceIdQuery) Reset()         { *m = SdkAlertsResourceIdQue
 func (m *SdkAlertsResourceIdQuery) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsResourceIdQuery) ProtoMessage()    {}
 func (*SdkAlertsResourceIdQuery) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{21}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{23}
 }
 func (m *SdkAlertsResourceIdQuery) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsResourceIdQuery.Unmarshal(m, b)
@@ -4850,7 +5246,7 @@ func (m *SdkAlertsQuery) Reset()         { *m = SdkAlertsQuery{} }
 func (m *SdkAlertsQuery) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsQuery) ProtoMessage()    {}
 func (*SdkAlertsQuery) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{22}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{24}
 }
 func (m *SdkAlertsQuery) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsQuery.Unmarshal(m, b)
@@ -5033,7 +5429,7 @@ func (m *SdkAlertsEnumerateWithFiltersRequest) Reset()         { *m = SdkAlertsE
 func (m *SdkAlertsEnumerateWithFiltersRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsEnumerateWithFiltersRequest) ProtoMessage()    {}
 func (*SdkAlertsEnumerateWithFiltersRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{23}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{25}
 }
 func (m *SdkAlertsEnumerateWithFiltersRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsEnumerateWithFiltersRequest.Unmarshal(m, b)
@@ -5073,7 +5469,7 @@ func (m *SdkAlertsEnumerateWithFiltersResponse) Reset()         { *m = SdkAlerts
 func (m *SdkAlertsEnumerateWithFiltersResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsEnumerateWithFiltersResponse) ProtoMessage()    {}
 func (*SdkAlertsEnumerateWithFiltersResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{24}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{26}
 }
 func (m *SdkAlertsEnumerateWithFiltersResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsEnumerateWithFiltersResponse.Unmarshal(m, b)
@@ -5114,7 +5510,7 @@ func (m *SdkAlertsDeleteRequest) Reset()         { *m = SdkAlertsDeleteRequest{}
 func (m *SdkAlertsDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsDeleteRequest) ProtoMessage()    {}
 func (*SdkAlertsDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{25}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{27}
 }
 func (m *SdkAlertsDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsDeleteRequest.Unmarshal(m, b)
@@ -5152,7 +5548,7 @@ func (m *SdkAlertsDeleteResponse) Reset()         { *m = SdkAlertsDeleteResponse
 func (m *SdkAlertsDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkAlertsDeleteResponse) ProtoMessage()    {}
 func (*SdkAlertsDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{26}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{28}
 }
 func (m *SdkAlertsDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAlertsDeleteResponse.Unmarshal(m, b)
@@ -5173,7 +5569,6 @@ func (m *SdkAlertsDeleteResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SdkAlertsDeleteResponse proto.InternalMessageInfo
 
 // Alerts is an array of Alert objects
-// swagger:model
 type Alerts struct {
 	Alert                []*Alert `protobuf:"bytes,1,rep,name=alert" json:"alert,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -5185,7 +5580,7 @@ func (m *Alerts) Reset()         { *m = Alerts{} }
 func (m *Alerts) String() string { return proto.CompactTextString(m) }
 func (*Alerts) ProtoMessage()    {}
 func (*Alerts) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{27}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{29}
 }
 func (m *Alerts) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Alerts.Unmarshal(m, b)
@@ -5213,7 +5608,6 @@ func (m *Alerts) GetAlert() []*Alert {
 }
 
 // ObjectstoreInfo is a structure that has current objectstore info
-// swagger:model
 type ObjectstoreInfo struct {
 	// UUID of objectstore
 	Uuid string `protobuf:"bytes,1,opt,name=uuid" json:"uuid,omitempty"`
@@ -5246,7 +5640,7 @@ func (m *ObjectstoreInfo) Reset()         { *m = ObjectstoreInfo{} }
 func (m *ObjectstoreInfo) String() string { return proto.CompactTextString(m) }
 func (*ObjectstoreInfo) ProtoMessage()    {}
 func (*ObjectstoreInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{28}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{30}
 }
 func (m *ObjectstoreInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ObjectstoreInfo.Unmarshal(m, b)
@@ -5345,7 +5739,6 @@ func (m *ObjectstoreInfo) GetRegion() string {
 
 // VolumeCreateRequest is a structure that has the locator, source and spec
 // to create a volume
-// swagger:model
 type VolumeCreateRequest struct {
 	// User specified volume name and labels
 	Locator *VolumeLocator `protobuf:"bytes,1,opt,name=locator" json:"locator,omitempty"`
@@ -5362,7 +5755,7 @@ func (m *VolumeCreateRequest) Reset()         { *m = VolumeCreateRequest{} }
 func (m *VolumeCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*VolumeCreateRequest) ProtoMessage()    {}
 func (*VolumeCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{29}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{31}
 }
 func (m *VolumeCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeCreateRequest.Unmarshal(m, b)
@@ -5404,7 +5797,6 @@ func (m *VolumeCreateRequest) GetSpec() *VolumeSpec {
 }
 
 // VolumeResponse is a structure that wraps an error.
-// swagger:response volumeResponse
 type VolumeResponse struct {
 	// Error message
 	//
@@ -5420,7 +5812,7 @@ func (m *VolumeResponse) Reset()         { *m = VolumeResponse{} }
 func (m *VolumeResponse) String() string { return proto.CompactTextString(m) }
 func (*VolumeResponse) ProtoMessage()    {}
 func (*VolumeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{30}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{32}
 }
 func (m *VolumeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeResponse.Unmarshal(m, b)
@@ -5448,7 +5840,6 @@ func (m *VolumeResponse) GetError() string {
 }
 
 // VolumeCreateResponse
-// swagger:response volumeCreateResponse
 type VolumeCreateResponse struct {
 	// ID of the newly created volume
 	//
@@ -5469,7 +5860,7 @@ func (m *VolumeCreateResponse) Reset()         { *m = VolumeCreateResponse{} }
 func (m *VolumeCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*VolumeCreateResponse) ProtoMessage()    {}
 func (*VolumeCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{31}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{33}
 }
 func (m *VolumeCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeCreateResponse.Unmarshal(m, b)
@@ -5504,7 +5895,6 @@ func (m *VolumeCreateResponse) GetVolumeResponse() *VolumeResponse {
 }
 
 // VolumeStateAction specifies desired actions.
-// swagger:model
 type VolumeStateAction struct {
 	// Attach or Detach volume
 	Attach VolumeActionParam `protobuf:"varint,1,opt,name=attach,enum=openstorage.api.VolumeActionParam" json:"attach,omitempty"`
@@ -5523,7 +5913,7 @@ func (m *VolumeStateAction) Reset()         { *m = VolumeStateAction{} }
 func (m *VolumeStateAction) String() string { return proto.CompactTextString(m) }
 func (*VolumeStateAction) ProtoMessage()    {}
 func (*VolumeStateAction) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{32}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{34}
 }
 func (m *VolumeStateAction) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeStateAction.Unmarshal(m, b)
@@ -5572,7 +5962,6 @@ func (m *VolumeStateAction) GetDevicePath() string {
 }
 
 // VolumeSet specifies a request to update a volume.
-// swagger:model
 type VolumeSetRequest struct {
 	// User specified volume name and labels
 	Locator *VolumeLocator `protobuf:"bytes,1,opt,name=locator" json:"locator,omitempty"`
@@ -5592,7 +5981,7 @@ func (m *VolumeSetRequest) Reset()         { *m = VolumeSetRequest{} }
 func (m *VolumeSetRequest) String() string { return proto.CompactTextString(m) }
 func (*VolumeSetRequest) ProtoMessage()    {}
 func (*VolumeSetRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{33}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{35}
 }
 func (m *VolumeSetRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeSetRequest.Unmarshal(m, b)
@@ -5641,17 +6030,10 @@ func (m *VolumeSetRequest) GetOptions() map[string]string {
 }
 
 // VolumeSetResponse
-// swagger:response volumeSetResponse
 type VolumeSetResponse struct {
 	// Volume
-	//
-	// in: body
-	// Required: true
 	Volume *Volume `protobuf:"bytes,1,opt,name=volume" json:"volume,omitempty"`
 	// VolumeResponse
-	//
-	// in: body
-	// Required: true
 	VolumeResponse       *VolumeResponse `protobuf:"bytes,2,opt,name=volume_response,json=volumeResponse" json:"volume_response,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
@@ -5662,7 +6044,7 @@ func (m *VolumeSetResponse) Reset()         { *m = VolumeSetResponse{} }
 func (m *VolumeSetResponse) String() string { return proto.CompactTextString(m) }
 func (*VolumeSetResponse) ProtoMessage()    {}
 func (*VolumeSetResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{34}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{36}
 }
 func (m *VolumeSetResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeSetResponse.Unmarshal(m, b)
@@ -5697,7 +6079,6 @@ func (m *VolumeSetResponse) GetVolumeResponse() *VolumeResponse {
 }
 
 // SnapCreateRequest specifies a request to create a snapshot of given volume.
-// swagger:parameters snapVolume
 type SnapCreateRequest struct {
 	// volume id
 	Id       string         `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
@@ -5714,7 +6095,7 @@ func (m *SnapCreateRequest) Reset()         { *m = SnapCreateRequest{} }
 func (m *SnapCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SnapCreateRequest) ProtoMessage()    {}
 func (*SnapCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{35}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{37}
 }
 func (m *SnapCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SnapCreateRequest.Unmarshal(m, b)
@@ -5763,7 +6144,6 @@ func (m *SnapCreateRequest) GetNoRetry() bool {
 }
 
 // SnapCreateRequest specifies a response that get's returned when creating a snapshot.
-// swagger:response snapCreateResponse
 type SnapCreateResponse struct {
 	// VolumeCreateResponse
 	//
@@ -5779,7 +6159,7 @@ func (m *SnapCreateResponse) Reset()         { *m = SnapCreateResponse{} }
 func (m *SnapCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SnapCreateResponse) ProtoMessage()    {}
 func (*SnapCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{36}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{38}
 }
 func (m *SnapCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SnapCreateResponse.Unmarshal(m, b)
@@ -5807,7 +6187,6 @@ func (m *SnapCreateResponse) GetVolumeCreateResponse() *VolumeCreateResponse {
 }
 
 // VolumeInfo
-// swagger:model
 type VolumeInfo struct {
 	VolumeId             string      `protobuf:"bytes,1,opt,name=volume_id,json=volumeId" json:"volume_id,omitempty"`
 	Path                 string      `protobuf:"bytes,2,opt,name=path" json:"path,omitempty"`
@@ -5821,7 +6200,7 @@ func (m *VolumeInfo) Reset()         { *m = VolumeInfo{} }
 func (m *VolumeInfo) String() string { return proto.CompactTextString(m) }
 func (*VolumeInfo) ProtoMessage()    {}
 func (*VolumeInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{37}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{39}
 }
 func (m *VolumeInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeInfo.Unmarshal(m, b)
@@ -5865,7 +6244,6 @@ func (m *VolumeInfo) GetStorage() *VolumeSpec {
 // VolumeConsumer identifies a consumer for a Volume. An example of a VolumeConsumer
 // would be a Pod in Kubernetes who has mounted the PersistentVolumeClaim for the
 // Volume
-// swagger: model
 type VolumeConsumer struct {
 	// Name is the name of the volume consumer
 	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
@@ -5893,7 +6271,7 @@ func (m *VolumeConsumer) Reset()         { *m = VolumeConsumer{} }
 func (m *VolumeConsumer) String() string { return proto.CompactTextString(m) }
 func (*VolumeConsumer) ProtoMessage()    {}
 func (*VolumeConsumer) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{38}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{40}
 }
 func (m *VolumeConsumer) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumeConsumer.Unmarshal(m, b)
@@ -5959,7 +6337,6 @@ func (m *VolumeConsumer) GetOwnerType() string {
 // specified by the ID and Parent.  // Parent may be an empty string, in which
 // case there is no parent.
 // Where the Path is the filesystem path within the layered filesystem
-// swagger:model
 type GraphDriverChanges struct {
 	Path                 string                `protobuf:"bytes,1,opt,name=path" json:"path,omitempty"`
 	Kind                 GraphDriverChangeType `protobuf:"varint,2,opt,name=kind,enum=openstorage.api.GraphDriverChangeType" json:"kind,omitempty"`
@@ -5972,7 +6349,7 @@ func (m *GraphDriverChanges) Reset()         { *m = GraphDriverChanges{} }
 func (m *GraphDriverChanges) String() string { return proto.CompactTextString(m) }
 func (*GraphDriverChanges) ProtoMessage()    {}
 func (*GraphDriverChanges) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{39}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{41}
 }
 func (m *GraphDriverChanges) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GraphDriverChanges.Unmarshal(m, b)
@@ -6007,7 +6384,6 @@ func (m *GraphDriverChanges) GetKind() GraphDriverChangeType {
 }
 
 // ClusterResponse specifies a response that gets returned when requesting the cluster
-// swagger:response clusterResponse
 type ClusterResponse struct {
 	// Error code
 	//
@@ -6022,7 +6398,7 @@ func (m *ClusterResponse) Reset()         { *m = ClusterResponse{} }
 func (m *ClusterResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterResponse) ProtoMessage()    {}
 func (*ClusterResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{40}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{42}
 }
 func (m *ClusterResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterResponse.Unmarshal(m, b)
@@ -6050,7 +6426,6 @@ func (m *ClusterResponse) GetError() string {
 }
 
 // Active Request
-// swagger:model
 type ActiveRequest struct {
 	ReqestKV             map[int64]string `protobuf:"bytes,1,rep,name=ReqestKV" json:"ReqestKV,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
@@ -6062,7 +6437,7 @@ func (m *ActiveRequest) Reset()         { *m = ActiveRequest{} }
 func (m *ActiveRequest) String() string { return proto.CompactTextString(m) }
 func (*ActiveRequest) ProtoMessage()    {}
 func (*ActiveRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{41}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{43}
 }
 func (m *ActiveRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ActiveRequest.Unmarshal(m, b)
@@ -6090,7 +6465,6 @@ func (m *ActiveRequest) GetReqestKV() map[int64]string {
 }
 
 // Active Requests
-// swagger:model
 type ActiveRequests struct {
 	RequestCount         int64            `protobuf:"varint,1,opt,name=RequestCount" json:"RequestCount,omitempty"`
 	ActiveRequest        []*ActiveRequest `protobuf:"bytes,2,rep,name=ActiveRequest" json:"ActiveRequest,omitempty"`
@@ -6103,7 +6477,7 @@ func (m *ActiveRequests) Reset()         { *m = ActiveRequests{} }
 func (m *ActiveRequests) String() string { return proto.CompactTextString(m) }
 func (*ActiveRequests) ProtoMessage()    {}
 func (*ActiveRequests) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{42}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{44}
 }
 func (m *ActiveRequests) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ActiveRequests.Unmarshal(m, b)
@@ -6138,7 +6512,6 @@ func (m *ActiveRequests) GetActiveRequest() []*ActiveRequest {
 }
 
 // GroupSnapCreateRequest specifies a request to create a snapshot of given group.
-// swagger:model
 type GroupSnapCreateRequest struct {
 	Id                   string            `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 	Labels               map[string]string `protobuf:"bytes,2,rep,name=Labels" json:"Labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
@@ -6152,7 +6525,7 @@ func (m *GroupSnapCreateRequest) Reset()         { *m = GroupSnapCreateRequest{}
 func (m *GroupSnapCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*GroupSnapCreateRequest) ProtoMessage()    {}
 func (*GroupSnapCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{43}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{45}
 }
 func (m *GroupSnapCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GroupSnapCreateRequest.Unmarshal(m, b)
@@ -6194,7 +6567,6 @@ func (m *GroupSnapCreateRequest) GetVolumeIds() []string {
 }
 
 // GroupSnapCreateRequest specifies a response that get's returned when creating a group snapshot.
-// swagger:response groupSnapCreateResponse
 type GroupSnapCreateResponse struct {
 	// Created snapshots
 	//
@@ -6215,7 +6587,7 @@ func (m *GroupSnapCreateResponse) Reset()         { *m = GroupSnapCreateResponse
 func (m *GroupSnapCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*GroupSnapCreateResponse) ProtoMessage()    {}
 func (*GroupSnapCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{44}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{46}
 }
 func (m *GroupSnapCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GroupSnapCreateResponse.Unmarshal(m, b)
@@ -6289,7 +6661,7 @@ func (m *StorageNode) Reset()         { *m = StorageNode{} }
 func (m *StorageNode) String() string { return proto.CompactTextString(m) }
 func (*StorageNode) ProtoMessage()    {}
 func (*StorageNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{45}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{47}
 }
 func (m *StorageNode) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageNode.Unmarshal(m, b)
@@ -6424,7 +6796,7 @@ func (m *StorageCluster) Reset()         { *m = StorageCluster{} }
 func (m *StorageCluster) String() string { return proto.CompactTextString(m) }
 func (*StorageCluster) ProtoMessage()    {}
 func (*StorageCluster) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{46}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{48}
 }
 func (m *StorageCluster) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageCluster.Unmarshal(m, b)
@@ -6478,7 +6850,7 @@ func (m *SdkOpenStoragePolicyCreateRequest) Reset()         { *m = SdkOpenStorag
 func (m *SdkOpenStoragePolicyCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyCreateRequest) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{47}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{49}
 }
 func (m *SdkOpenStoragePolicyCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyCreateRequest.Unmarshal(m, b)
@@ -6516,7 +6888,7 @@ func (m *SdkOpenStoragePolicyCreateResponse) Reset()         { *m = SdkOpenStora
 func (m *SdkOpenStoragePolicyCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyCreateResponse) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{48}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{50}
 }
 func (m *SdkOpenStoragePolicyCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyCreateResponse.Unmarshal(m, b)
@@ -6547,7 +6919,7 @@ func (m *SdkOpenStoragePolicyEnumerateRequest) Reset()         { *m = SdkOpenSto
 func (m *SdkOpenStoragePolicyEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyEnumerateRequest) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{49}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{51}
 }
 func (m *SdkOpenStoragePolicyEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyEnumerateRequest.Unmarshal(m, b)
@@ -6580,7 +6952,7 @@ func (m *SdkOpenStoragePolicyEnumerateResponse) Reset()         { *m = SdkOpenSt
 func (m *SdkOpenStoragePolicyEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyEnumerateResponse) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{50}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{52}
 }
 func (m *SdkOpenStoragePolicyEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyEnumerateResponse.Unmarshal(m, b)
@@ -6620,7 +6992,7 @@ func (m *SdkOpenStoragePolicyInspectRequest) Reset()         { *m = SdkOpenStora
 func (m *SdkOpenStoragePolicyInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyInspectRequest) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{51}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{53}
 }
 func (m *SdkOpenStoragePolicyInspectRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyInspectRequest.Unmarshal(m, b)
@@ -6660,7 +7032,7 @@ func (m *SdkOpenStoragePolicyInspectResponse) Reset()         { *m = SdkOpenStor
 func (m *SdkOpenStoragePolicyInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyInspectResponse) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{52}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{54}
 }
 func (m *SdkOpenStoragePolicyInspectResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyInspectResponse.Unmarshal(m, b)
@@ -6700,7 +7072,7 @@ func (m *SdkOpenStoragePolicyDeleteRequest) Reset()         { *m = SdkOpenStorag
 func (m *SdkOpenStoragePolicyDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyDeleteRequest) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{53}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{55}
 }
 func (m *SdkOpenStoragePolicyDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyDeleteRequest.Unmarshal(m, b)
@@ -6738,7 +7110,7 @@ func (m *SdkOpenStoragePolicyDeleteResponse) Reset()         { *m = SdkOpenStora
 func (m *SdkOpenStoragePolicyDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyDeleteResponse) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{54}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{56}
 }
 func (m *SdkOpenStoragePolicyDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyDeleteResponse.Unmarshal(m, b)
@@ -6771,7 +7143,7 @@ func (m *SdkOpenStoragePolicyUpdateRequest) Reset()         { *m = SdkOpenStorag
 func (m *SdkOpenStoragePolicyUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyUpdateRequest) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{55}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{57}
 }
 func (m *SdkOpenStoragePolicyUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyUpdateRequest.Unmarshal(m, b)
@@ -6809,7 +7181,7 @@ func (m *SdkOpenStoragePolicyUpdateResponse) Reset()         { *m = SdkOpenStora
 func (m *SdkOpenStoragePolicyUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyUpdateResponse) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{56}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{58}
 }
 func (m *SdkOpenStoragePolicyUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyUpdateResponse.Unmarshal(m, b)
@@ -6829,42 +7201,42 @@ func (m *SdkOpenStoragePolicyUpdateResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SdkOpenStoragePolicyUpdateResponse proto.InternalMessageInfo
 
-// Define a request to enforce storage policy
-type SdkOpenStoragePolicyEnforceRequest struct {
-	// name of policy to set as default enforcement
+// Define a request to set default storage policy
+type SdkOpenStoragePolicySetDefaultRequest struct {
+	// name of policy to set as default storage policy
 	// for volume creation
-	// This policy will be used to enforce volume configuration
+	// This policy will be used to validate/update volume configuration
 	Name                 string   `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SdkOpenStoragePolicyEnforceRequest) Reset()         { *m = SdkOpenStoragePolicyEnforceRequest{} }
-func (m *SdkOpenStoragePolicyEnforceRequest) String() string { return proto.CompactTextString(m) }
-func (*SdkOpenStoragePolicyEnforceRequest) ProtoMessage()    {}
-func (*SdkOpenStoragePolicyEnforceRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{57}
+func (m *SdkOpenStoragePolicySetDefaultRequest) Reset()         { *m = SdkOpenStoragePolicySetDefaultRequest{} }
+func (m *SdkOpenStoragePolicySetDefaultRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkOpenStoragePolicySetDefaultRequest) ProtoMessage()    {}
+func (*SdkOpenStoragePolicySetDefaultRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{59}
 }
-func (m *SdkOpenStoragePolicyEnforceRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceRequest.Unmarshal(m, b)
+func (m *SdkOpenStoragePolicySetDefaultRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkOpenStoragePolicySetDefaultRequest.Unmarshal(m, b)
 }
-func (m *SdkOpenStoragePolicyEnforceRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceRequest.Marshal(b, m, deterministic)
+func (m *SdkOpenStoragePolicySetDefaultRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkOpenStoragePolicySetDefaultRequest.Marshal(b, m, deterministic)
 }
-func (dst *SdkOpenStoragePolicyEnforceRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdkOpenStoragePolicyEnforceRequest.Merge(dst, src)
+func (dst *SdkOpenStoragePolicySetDefaultRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkOpenStoragePolicySetDefaultRequest.Merge(dst, src)
 }
-func (m *SdkOpenStoragePolicyEnforceRequest) XXX_Size() int {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceRequest.Size(m)
+func (m *SdkOpenStoragePolicySetDefaultRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkOpenStoragePolicySetDefaultRequest.Size(m)
 }
-func (m *SdkOpenStoragePolicyEnforceRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_SdkOpenStoragePolicyEnforceRequest.DiscardUnknown(m)
+func (m *SdkOpenStoragePolicySetDefaultRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkOpenStoragePolicySetDefaultRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SdkOpenStoragePolicyEnforceRequest proto.InternalMessageInfo
+var xxx_messageInfo_SdkOpenStoragePolicySetDefaultRequest proto.InternalMessageInfo
 
-func (m *SdkOpenStoragePolicyEnforceRequest) GetName() string {
+func (m *SdkOpenStoragePolicySetDefaultRequest) GetName() string {
 	if m != nil {
 		return m.Name
 	}
@@ -6872,35 +7244,37 @@ func (m *SdkOpenStoragePolicyEnforceRequest) GetName() string {
 }
 
 // Empty Response
-type SdkOpenStoragePolicyEnforceResponse struct {
+type SdkOpenStoragePolicySetDefaultResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SdkOpenStoragePolicyEnforceResponse) Reset()         { *m = SdkOpenStoragePolicyEnforceResponse{} }
-func (m *SdkOpenStoragePolicyEnforceResponse) String() string { return proto.CompactTextString(m) }
-func (*SdkOpenStoragePolicyEnforceResponse) ProtoMessage()    {}
-func (*SdkOpenStoragePolicyEnforceResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{58}
+func (m *SdkOpenStoragePolicySetDefaultResponse) Reset() {
+	*m = SdkOpenStoragePolicySetDefaultResponse{}
 }
-func (m *SdkOpenStoragePolicyEnforceResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceResponse.Unmarshal(m, b)
+func (m *SdkOpenStoragePolicySetDefaultResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkOpenStoragePolicySetDefaultResponse) ProtoMessage()    {}
+func (*SdkOpenStoragePolicySetDefaultResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{60}
 }
-func (m *SdkOpenStoragePolicyEnforceResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceResponse.Marshal(b, m, deterministic)
+func (m *SdkOpenStoragePolicySetDefaultResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkOpenStoragePolicySetDefaultResponse.Unmarshal(m, b)
 }
-func (dst *SdkOpenStoragePolicyEnforceResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdkOpenStoragePolicyEnforceResponse.Merge(dst, src)
+func (m *SdkOpenStoragePolicySetDefaultResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkOpenStoragePolicySetDefaultResponse.Marshal(b, m, deterministic)
 }
-func (m *SdkOpenStoragePolicyEnforceResponse) XXX_Size() int {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceResponse.Size(m)
+func (dst *SdkOpenStoragePolicySetDefaultResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkOpenStoragePolicySetDefaultResponse.Merge(dst, src)
 }
-func (m *SdkOpenStoragePolicyEnforceResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_SdkOpenStoragePolicyEnforceResponse.DiscardUnknown(m)
+func (m *SdkOpenStoragePolicySetDefaultResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkOpenStoragePolicySetDefaultResponse.Size(m)
+}
+func (m *SdkOpenStoragePolicySetDefaultResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkOpenStoragePolicySetDefaultResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SdkOpenStoragePolicyEnforceResponse proto.InternalMessageInfo
+var xxx_messageInfo_SdkOpenStoragePolicySetDefaultResponse proto.InternalMessageInfo
 
 // Empty Request
 type SdkOpenStoragePolicyReleaseRequest struct {
@@ -6913,7 +7287,7 @@ func (m *SdkOpenStoragePolicyReleaseRequest) Reset()         { *m = SdkOpenStora
 func (m *SdkOpenStoragePolicyReleaseRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyReleaseRequest) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyReleaseRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{59}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{61}
 }
 func (m *SdkOpenStoragePolicyReleaseRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyReleaseRequest.Unmarshal(m, b)
@@ -6944,7 +7318,7 @@ func (m *SdkOpenStoragePolicyReleaseResponse) Reset()         { *m = SdkOpenStor
 func (m *SdkOpenStoragePolicyReleaseResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkOpenStoragePolicyReleaseResponse) ProtoMessage()    {}
 func (*SdkOpenStoragePolicyReleaseResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{60}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{62}
 }
 func (m *SdkOpenStoragePolicyReleaseResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkOpenStoragePolicyReleaseResponse.Unmarshal(m, b)
@@ -6965,76 +7339,76 @@ func (m *SdkOpenStoragePolicyReleaseResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SdkOpenStoragePolicyReleaseResponse proto.InternalMessageInfo
 
 // Empty Request
-type SdkOpenStoragePolicyEnforceInspectRequest struct {
+type SdkOpenStoragePolicyDefaultInspectRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SdkOpenStoragePolicyEnforceInspectRequest) Reset() {
-	*m = SdkOpenStoragePolicyEnforceInspectRequest{}
+func (m *SdkOpenStoragePolicyDefaultInspectRequest) Reset() {
+	*m = SdkOpenStoragePolicyDefaultInspectRequest{}
 }
-func (m *SdkOpenStoragePolicyEnforceInspectRequest) String() string { return proto.CompactTextString(m) }
-func (*SdkOpenStoragePolicyEnforceInspectRequest) ProtoMessage()    {}
-func (*SdkOpenStoragePolicyEnforceInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{61}
+func (m *SdkOpenStoragePolicyDefaultInspectRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkOpenStoragePolicyDefaultInspectRequest) ProtoMessage()    {}
+func (*SdkOpenStoragePolicyDefaultInspectRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{63}
 }
-func (m *SdkOpenStoragePolicyEnforceInspectRequest) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectRequest.Unmarshal(m, b)
+func (m *SdkOpenStoragePolicyDefaultInspectRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectRequest.Unmarshal(m, b)
 }
-func (m *SdkOpenStoragePolicyEnforceInspectRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectRequest.Marshal(b, m, deterministic)
+func (m *SdkOpenStoragePolicyDefaultInspectRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectRequest.Marshal(b, m, deterministic)
 }
-func (dst *SdkOpenStoragePolicyEnforceInspectRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectRequest.Merge(dst, src)
+func (dst *SdkOpenStoragePolicyDefaultInspectRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectRequest.Merge(dst, src)
 }
-func (m *SdkOpenStoragePolicyEnforceInspectRequest) XXX_Size() int {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectRequest.Size(m)
+func (m *SdkOpenStoragePolicyDefaultInspectRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectRequest.Size(m)
 }
-func (m *SdkOpenStoragePolicyEnforceInspectRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectRequest.DiscardUnknown(m)
+func (m *SdkOpenStoragePolicyDefaultInspectRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectRequest proto.InternalMessageInfo
+var xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectRequest proto.InternalMessageInfo
 
-// Define storage policy enforce response
-type SdkOpenStoragePolicyEnforceInspectResponse struct {
-	// storage policy information which is enforced
+// Define default storage policy response
+type SdkOpenStoragePolicyDefaultInspectResponse struct {
+	// storage policy information which is set as default
 	StoragePolicy        *SdkStoragePolicy `protobuf:"bytes,1,opt,name=storage_policy,json=storagePolicy" json:"storage_policy,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
 }
 
-func (m *SdkOpenStoragePolicyEnforceInspectResponse) Reset() {
-	*m = SdkOpenStoragePolicyEnforceInspectResponse{}
+func (m *SdkOpenStoragePolicyDefaultInspectResponse) Reset() {
+	*m = SdkOpenStoragePolicyDefaultInspectResponse{}
 }
-func (m *SdkOpenStoragePolicyEnforceInspectResponse) String() string {
+func (m *SdkOpenStoragePolicyDefaultInspectResponse) String() string {
 	return proto.CompactTextString(m)
 }
-func (*SdkOpenStoragePolicyEnforceInspectResponse) ProtoMessage() {}
-func (*SdkOpenStoragePolicyEnforceInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{62}
+func (*SdkOpenStoragePolicyDefaultInspectResponse) ProtoMessage() {}
+func (*SdkOpenStoragePolicyDefaultInspectResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{64}
 }
-func (m *SdkOpenStoragePolicyEnforceInspectResponse) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectResponse.Unmarshal(m, b)
+func (m *SdkOpenStoragePolicyDefaultInspectResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectResponse.Unmarshal(m, b)
 }
-func (m *SdkOpenStoragePolicyEnforceInspectResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectResponse.Marshal(b, m, deterministic)
+func (m *SdkOpenStoragePolicyDefaultInspectResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectResponse.Marshal(b, m, deterministic)
 }
-func (dst *SdkOpenStoragePolicyEnforceInspectResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectResponse.Merge(dst, src)
+func (dst *SdkOpenStoragePolicyDefaultInspectResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectResponse.Merge(dst, src)
 }
-func (m *SdkOpenStoragePolicyEnforceInspectResponse) XXX_Size() int {
-	return xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectResponse.Size(m)
+func (m *SdkOpenStoragePolicyDefaultInspectResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectResponse.Size(m)
 }
-func (m *SdkOpenStoragePolicyEnforceInspectResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectResponse.DiscardUnknown(m)
+func (m *SdkOpenStoragePolicyDefaultInspectResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_SdkOpenStoragePolicyEnforceInspectResponse proto.InternalMessageInfo
+var xxx_messageInfo_SdkOpenStoragePolicyDefaultInspectResponse proto.InternalMessageInfo
 
-func (m *SdkOpenStoragePolicyEnforceInspectResponse) GetStoragePolicy() *SdkStoragePolicy {
+func (m *SdkOpenStoragePolicyDefaultInspectResponse) GetStoragePolicy() *SdkStoragePolicy {
 	if m != nil {
 		return m.StoragePolicy
 	}
@@ -7054,7 +7428,7 @@ func (m *SdkSchedulePolicyCreateRequest) Reset()         { *m = SdkSchedulePolic
 func (m *SdkSchedulePolicyCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyCreateRequest) ProtoMessage()    {}
 func (*SdkSchedulePolicyCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{63}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{65}
 }
 func (m *SdkSchedulePolicyCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyCreateRequest.Unmarshal(m, b)
@@ -7092,7 +7466,7 @@ func (m *SdkSchedulePolicyCreateResponse) Reset()         { *m = SdkSchedulePoli
 func (m *SdkSchedulePolicyCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyCreateResponse) ProtoMessage()    {}
 func (*SdkSchedulePolicyCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{64}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{66}
 }
 func (m *SdkSchedulePolicyCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyCreateResponse.Unmarshal(m, b)
@@ -7125,7 +7499,7 @@ func (m *SdkSchedulePolicyUpdateRequest) Reset()         { *m = SdkSchedulePolic
 func (m *SdkSchedulePolicyUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyUpdateRequest) ProtoMessage()    {}
 func (*SdkSchedulePolicyUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{65}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{67}
 }
 func (m *SdkSchedulePolicyUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyUpdateRequest.Unmarshal(m, b)
@@ -7163,7 +7537,7 @@ func (m *SdkSchedulePolicyUpdateResponse) Reset()         { *m = SdkSchedulePoli
 func (m *SdkSchedulePolicyUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyUpdateResponse) ProtoMessage()    {}
 func (*SdkSchedulePolicyUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{66}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{68}
 }
 func (m *SdkSchedulePolicyUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyUpdateResponse.Unmarshal(m, b)
@@ -7194,7 +7568,7 @@ func (m *SdkSchedulePolicyEnumerateRequest) Reset()         { *m = SdkSchedulePo
 func (m *SdkSchedulePolicyEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyEnumerateRequest) ProtoMessage()    {}
 func (*SdkSchedulePolicyEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{67}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{69}
 }
 func (m *SdkSchedulePolicyEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyEnumerateRequest.Unmarshal(m, b)
@@ -7227,7 +7601,7 @@ func (m *SdkSchedulePolicyEnumerateResponse) Reset()         { *m = SdkScheduleP
 func (m *SdkSchedulePolicyEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyEnumerateResponse) ProtoMessage()    {}
 func (*SdkSchedulePolicyEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{68}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{70}
 }
 func (m *SdkSchedulePolicyEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyEnumerateResponse.Unmarshal(m, b)
@@ -7267,7 +7641,7 @@ func (m *SdkSchedulePolicyInspectRequest) Reset()         { *m = SdkSchedulePoli
 func (m *SdkSchedulePolicyInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyInspectRequest) ProtoMessage()    {}
 func (*SdkSchedulePolicyInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{69}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{71}
 }
 func (m *SdkSchedulePolicyInspectRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyInspectRequest.Unmarshal(m, b)
@@ -7307,7 +7681,7 @@ func (m *SdkSchedulePolicyInspectResponse) Reset()         { *m = SdkSchedulePol
 func (m *SdkSchedulePolicyInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyInspectResponse) ProtoMessage()    {}
 func (*SdkSchedulePolicyInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{70}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{72}
 }
 func (m *SdkSchedulePolicyInspectResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyInspectResponse.Unmarshal(m, b)
@@ -7347,7 +7721,7 @@ func (m *SdkSchedulePolicyDeleteRequest) Reset()         { *m = SdkSchedulePolic
 func (m *SdkSchedulePolicyDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyDeleteRequest) ProtoMessage()    {}
 func (*SdkSchedulePolicyDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{71}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{73}
 }
 func (m *SdkSchedulePolicyDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyDeleteRequest.Unmarshal(m, b)
@@ -7385,7 +7759,7 @@ func (m *SdkSchedulePolicyDeleteResponse) Reset()         { *m = SdkSchedulePoli
 func (m *SdkSchedulePolicyDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyDeleteResponse) ProtoMessage()    {}
 func (*SdkSchedulePolicyDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{72}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{74}
 }
 func (m *SdkSchedulePolicyDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyDeleteResponse.Unmarshal(m, b)
@@ -7420,7 +7794,7 @@ func (m *SdkSchedulePolicyIntervalDaily) Reset()         { *m = SdkSchedulePolic
 func (m *SdkSchedulePolicyIntervalDaily) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyIntervalDaily) ProtoMessage()    {}
 func (*SdkSchedulePolicyIntervalDaily) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{73}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{75}
 }
 func (m *SdkSchedulePolicyIntervalDaily) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyIntervalDaily.Unmarshal(m, b)
@@ -7470,7 +7844,7 @@ func (m *SdkSchedulePolicyIntervalWeekly) Reset()         { *m = SdkSchedulePoli
 func (m *SdkSchedulePolicyIntervalWeekly) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyIntervalWeekly) ProtoMessage()    {}
 func (*SdkSchedulePolicyIntervalWeekly) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{74}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{76}
 }
 func (m *SdkSchedulePolicyIntervalWeekly) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyIntervalWeekly.Unmarshal(m, b)
@@ -7528,7 +7902,7 @@ func (m *SdkSchedulePolicyIntervalMonthly) Reset()         { *m = SdkSchedulePol
 func (m *SdkSchedulePolicyIntervalMonthly) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyIntervalMonthly) ProtoMessage()    {}
 func (*SdkSchedulePolicyIntervalMonthly) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{75}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{77}
 }
 func (m *SdkSchedulePolicyIntervalMonthly) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyIntervalMonthly.Unmarshal(m, b)
@@ -7582,7 +7956,7 @@ func (m *SdkSchedulePolicyIntervalPeriodic) Reset()         { *m = SdkSchedulePo
 func (m *SdkSchedulePolicyIntervalPeriodic) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyIntervalPeriodic) ProtoMessage()    {}
 func (*SdkSchedulePolicyIntervalPeriodic) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{76}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{78}
 }
 func (m *SdkSchedulePolicyIntervalPeriodic) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyIntervalPeriodic.Unmarshal(m, b)
@@ -7630,7 +8004,7 @@ func (m *SdkSchedulePolicyInterval) Reset()         { *m = SdkSchedulePolicyInte
 func (m *SdkSchedulePolicyInterval) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicyInterval) ProtoMessage()    {}
 func (*SdkSchedulePolicyInterval) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{77}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{79}
 }
 func (m *SdkSchedulePolicyInterval) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicyInterval.Unmarshal(m, b)
@@ -7841,7 +8215,7 @@ func (m *SdkSchedulePolicy) Reset()         { *m = SdkSchedulePolicy{} }
 func (m *SdkSchedulePolicy) String() string { return proto.CompactTextString(m) }
 func (*SdkSchedulePolicy) ProtoMessage()    {}
 func (*SdkSchedulePolicy) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{78}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{80}
 }
 func (m *SdkSchedulePolicy) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkSchedulePolicy.Unmarshal(m, b)
@@ -7883,6 +8257,9 @@ type SdkCredentialCreateRequest struct {
 	Bucket string `protobuf:"bytes,2,opt,name=bucket" json:"bucket,omitempty"`
 	// (optional) Key used to encrypt the data
 	EncryptionKey string `protobuf:"bytes,3,opt,name=encryption_key,json=encryptionKey" json:"encryption_key,omitempty"`
+	// Ownership of the credential. Collaborators and groups may be
+	// added here with their appropriate ACLS.
+	Ownership *Ownership `protobuf:"bytes,4,opt,name=ownership" json:"ownership,omitempty"`
 	// Start at field number 200 to allow for expansion
 	//
 	// Types that are valid to be assigned to CredentialType:
@@ -7899,7 +8276,7 @@ func (m *SdkCredentialCreateRequest) Reset()         { *m = SdkCredentialCreateR
 func (m *SdkCredentialCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialCreateRequest) ProtoMessage()    {}
 func (*SdkCredentialCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{79}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{81}
 }
 func (m *SdkCredentialCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialCreateRequest.Unmarshal(m, b)
@@ -7963,6 +8340,13 @@ func (m *SdkCredentialCreateRequest) GetEncryptionKey() string {
 		return m.EncryptionKey
 	}
 	return ""
+}
+
+func (m *SdkCredentialCreateRequest) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
 }
 
 func (m *SdkCredentialCreateRequest) GetAwsCredential() *SdkAwsCredentialRequest {
@@ -8092,7 +8476,7 @@ func (m *SdkCredentialCreateResponse) Reset()         { *m = SdkCredentialCreate
 func (m *SdkCredentialCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialCreateResponse) ProtoMessage()    {}
 func (*SdkCredentialCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{80}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{82}
 }
 func (m *SdkCredentialCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialCreateResponse.Unmarshal(m, b)
@@ -8130,7 +8514,9 @@ type SdkAwsCredentialRequest struct {
 	// Region
 	Region string `protobuf:"bytes,4,opt,name=region" json:"region,omitempty"`
 	// (optional) Disable SSL connection
-	DisableSsl           bool     `protobuf:"varint,5,opt,name=disable_ssl,json=disableSsl" json:"disable_ssl,omitempty"`
+	DisableSsl bool `protobuf:"varint,5,opt,name=disable_ssl,json=disableSsl" json:"disable_ssl,omitempty"`
+	// (optional) Disable path-style access
+	DisablePathStyle     bool     `protobuf:"varint,6,opt,name=disable_path_style,json=disablePathStyle" json:"disable_path_style,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -8140,7 +8526,7 @@ func (m *SdkAwsCredentialRequest) Reset()         { *m = SdkAwsCredentialRequest
 func (m *SdkAwsCredentialRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkAwsCredentialRequest) ProtoMessage()    {}
 func (*SdkAwsCredentialRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{81}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{83}
 }
 func (m *SdkAwsCredentialRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAwsCredentialRequest.Unmarshal(m, b)
@@ -8195,6 +8581,13 @@ func (m *SdkAwsCredentialRequest) GetDisableSsl() bool {
 	return false
 }
 
+func (m *SdkAwsCredentialRequest) GetDisablePathStyle() bool {
+	if m != nil {
+		return m.DisablePathStyle
+	}
+	return false
+}
+
 // Defines credentials for Azure
 type SdkAzureCredentialRequest struct {
 	// Account name
@@ -8210,7 +8603,7 @@ func (m *SdkAzureCredentialRequest) Reset()         { *m = SdkAzureCredentialReq
 func (m *SdkAzureCredentialRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkAzureCredentialRequest) ProtoMessage()    {}
 func (*SdkAzureCredentialRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{82}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{84}
 }
 func (m *SdkAzureCredentialRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAzureCredentialRequest.Unmarshal(m, b)
@@ -8259,7 +8652,7 @@ func (m *SdkGoogleCredentialRequest) Reset()         { *m = SdkGoogleCredentialR
 func (m *SdkGoogleCredentialRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkGoogleCredentialRequest) ProtoMessage()    {}
 func (*SdkGoogleCredentialRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{83}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{85}
 }
 func (m *SdkGoogleCredentialRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkGoogleCredentialRequest.Unmarshal(m, b)
@@ -8302,7 +8695,9 @@ type SdkAwsCredentialResponse struct {
 	// Region
 	Region string `protobuf:"bytes,4,opt,name=region" json:"region,omitempty"`
 	// (optional) Disable SSL connection
-	DisableSsl           bool     `protobuf:"varint,5,opt,name=disable_ssl,json=disableSsl" json:"disable_ssl,omitempty"`
+	DisableSsl bool `protobuf:"varint,5,opt,name=disable_ssl,json=disableSsl" json:"disable_ssl,omitempty"`
+	// (optional) Disable path-style access
+	DisablePathStyle     bool     `protobuf:"varint,6,opt,name=disable_path_style,json=disablePathStyle" json:"disable_path_style,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -8312,7 +8707,7 @@ func (m *SdkAwsCredentialResponse) Reset()         { *m = SdkAwsCredentialRespon
 func (m *SdkAwsCredentialResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkAwsCredentialResponse) ProtoMessage()    {}
 func (*SdkAwsCredentialResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{84}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{86}
 }
 func (m *SdkAwsCredentialResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAwsCredentialResponse.Unmarshal(m, b)
@@ -8360,6 +8755,13 @@ func (m *SdkAwsCredentialResponse) GetDisableSsl() bool {
 	return false
 }
 
+func (m *SdkAwsCredentialResponse) GetDisablePathStyle() bool {
+	if m != nil {
+		return m.DisablePathStyle
+	}
+	return false
+}
+
 // Defines the response for Azure credentials
 type SdkAzureCredentialResponse struct {
 	// Account name
@@ -8373,7 +8775,7 @@ func (m *SdkAzureCredentialResponse) Reset()         { *m = SdkAzureCredentialRe
 func (m *SdkAzureCredentialResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkAzureCredentialResponse) ProtoMessage()    {}
 func (*SdkAzureCredentialResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{85}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{87}
 }
 func (m *SdkAzureCredentialResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkAzureCredentialResponse.Unmarshal(m, b)
@@ -8413,7 +8815,7 @@ func (m *SdkGoogleCredentialResponse) Reset()         { *m = SdkGoogleCredential
 func (m *SdkGoogleCredentialResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkGoogleCredentialResponse) ProtoMessage()    {}
 func (*SdkGoogleCredentialResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{86}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{88}
 }
 func (m *SdkGoogleCredentialResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkGoogleCredentialResponse.Unmarshal(m, b)
@@ -8451,7 +8853,7 @@ func (m *SdkCredentialEnumerateRequest) Reset()         { *m = SdkCredentialEnum
 func (m *SdkCredentialEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialEnumerateRequest) ProtoMessage()    {}
 func (*SdkCredentialEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{87}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{89}
 }
 func (m *SdkCredentialEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialEnumerateRequest.Unmarshal(m, b)
@@ -8484,7 +8886,7 @@ func (m *SdkCredentialEnumerateResponse) Reset()         { *m = SdkCredentialEnu
 func (m *SdkCredentialEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialEnumerateResponse) ProtoMessage()    {}
 func (*SdkCredentialEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{88}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{90}
 }
 func (m *SdkCredentialEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialEnumerateResponse.Unmarshal(m, b)
@@ -8524,7 +8926,7 @@ func (m *SdkCredentialInspectRequest) Reset()         { *m = SdkCredentialInspec
 func (m *SdkCredentialInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialInspectRequest) ProtoMessage()    {}
 func (*SdkCredentialInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{89}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{91}
 }
 func (m *SdkCredentialInspectRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialInspectRequest.Unmarshal(m, b)
@@ -8561,6 +8963,8 @@ type SdkCredentialInspectResponse struct {
 	Name string `protobuf:"bytes,2,opt,name=name" json:"name,omitempty"`
 	// (optional) Name of bucket
 	Bucket string `protobuf:"bytes,3,opt,name=bucket" json:"bucket,omitempty"`
+	// Ownership of the credential
+	Ownership *Ownership `protobuf:"bytes,4,opt,name=ownership" json:"ownership,omitempty"`
 	// Start at field number 200 for expansion support
 	//
 	// Types that are valid to be assigned to CredentialType:
@@ -8577,7 +8981,7 @@ func (m *SdkCredentialInspectResponse) Reset()         { *m = SdkCredentialInspe
 func (m *SdkCredentialInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialInspectResponse) ProtoMessage()    {}
 func (*SdkCredentialInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{90}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{92}
 }
 func (m *SdkCredentialInspectResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialInspectResponse.Unmarshal(m, b)
@@ -8642,6 +9046,13 @@ func (m *SdkCredentialInspectResponse) GetBucket() string {
 		return m.Bucket
 	}
 	return ""
+}
+
+func (m *SdkCredentialInspectResponse) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
 }
 
 func (m *SdkCredentialInspectResponse) GetAwsCredential() *SdkAwsCredentialResponse {
@@ -8771,7 +9182,7 @@ func (m *SdkCredentialDeleteRequest) Reset()         { *m = SdkCredentialDeleteR
 func (m *SdkCredentialDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialDeleteRequest) ProtoMessage()    {}
 func (*SdkCredentialDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{91}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{93}
 }
 func (m *SdkCredentialDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialDeleteRequest.Unmarshal(m, b)
@@ -8809,7 +9220,7 @@ func (m *SdkCredentialDeleteResponse) Reset()         { *m = SdkCredentialDelete
 func (m *SdkCredentialDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialDeleteResponse) ProtoMessage()    {}
 func (*SdkCredentialDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{92}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{94}
 }
 func (m *SdkCredentialDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialDeleteResponse.Unmarshal(m, b)
@@ -8842,7 +9253,7 @@ func (m *SdkCredentialValidateRequest) Reset()         { *m = SdkCredentialValid
 func (m *SdkCredentialValidateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialValidateRequest) ProtoMessage()    {}
 func (*SdkCredentialValidateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{93}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{95}
 }
 func (m *SdkCredentialValidateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialValidateRequest.Unmarshal(m, b)
@@ -8880,7 +9291,7 @@ func (m *SdkCredentialValidateResponse) Reset()         { *m = SdkCredentialVali
 func (m *SdkCredentialValidateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCredentialValidateResponse) ProtoMessage()    {}
 func (*SdkCredentialValidateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{94}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{96}
 }
 func (m *SdkCredentialValidateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCredentialValidateResponse.Unmarshal(m, b)
@@ -8900,22 +9311,89 @@ func (m *SdkCredentialValidateResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SdkCredentialValidateResponse proto.InternalMessageInfo
 
+// Options to attach device
+type SdkVolumeAttachOptions struct {
+	// Indicates the name of the secret stored in a secret store
+	// In case of Hashicorp's Vault, it will be the key from the key-value pair stored in its kv backend.
+	// In case of Kubernetes secret, it is the name of the secret object itself
+	SecretName string `protobuf:"bytes,1,opt,name=secret_name,json=secretName" json:"secret_name,omitempty"`
+	// In case of Kubernetes, this will be the key stored in the Kubernetes secret
+	SecretKey string `protobuf:"bytes,2,opt,name=secret_key,json=secretKey" json:"secret_key,omitempty"`
+	// It indicates the additional context which could be used to retrieve the secret.
+	// In case of Kubernetes, this is the namespace in which the secret is created.
+	SecretContext        string   `protobuf:"bytes,3,opt,name=secret_context,json=secretContext" json:"secret_context,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkVolumeAttachOptions) Reset()         { *m = SdkVolumeAttachOptions{} }
+func (m *SdkVolumeAttachOptions) String() string { return proto.CompactTextString(m) }
+func (*SdkVolumeAttachOptions) ProtoMessage()    {}
+func (*SdkVolumeAttachOptions) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{97}
+}
+func (m *SdkVolumeAttachOptions) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkVolumeAttachOptions.Unmarshal(m, b)
+}
+func (m *SdkVolumeAttachOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkVolumeAttachOptions.Marshal(b, m, deterministic)
+}
+func (dst *SdkVolumeAttachOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkVolumeAttachOptions.Merge(dst, src)
+}
+func (m *SdkVolumeAttachOptions) XXX_Size() int {
+	return xxx_messageInfo_SdkVolumeAttachOptions.Size(m)
+}
+func (m *SdkVolumeAttachOptions) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkVolumeAttachOptions.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkVolumeAttachOptions proto.InternalMessageInfo
+
+func (m *SdkVolumeAttachOptions) GetSecretName() string {
+	if m != nil {
+		return m.SecretName
+	}
+	return ""
+}
+
+func (m *SdkVolumeAttachOptions) GetSecretKey() string {
+	if m != nil {
+		return m.SecretKey
+	}
+	return ""
+}
+
+func (m *SdkVolumeAttachOptions) GetSecretContext() string {
+	if m != nil {
+		return m.SecretContext
+	}
+	return ""
+}
+
 // Defines a request to mount a volume to the node receiving this request
 type SdkVolumeMountRequest struct {
 	// Id of the volume
 	VolumeId string `protobuf:"bytes,1,opt,name=volume_id,json=volumeId" json:"volume_id,omitempty"`
 	// Mount path for mounting the volume.
-	MountPath            string   `protobuf:"bytes,2,opt,name=mount_path,json=mountPath" json:"mount_path,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	MountPath string `protobuf:"bytes,2,opt,name=mount_path,json=mountPath" json:"mount_path,omitempty"`
+	// Options to attach device
+	Options *SdkVolumeAttachOptions `protobuf:"bytes,3,opt,name=options" json:"options,omitempty"`
+	// The following options are private to the driver plugin running the
+	// OpenStorage SDK. Contact your driver developer for any special
+	// values that need to be provided here.
+	DriverOptions        map[string]string `protobuf:"bytes,4,rep,name=driver_options,json=driverOptions" json:"driver_options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
 }
 
 func (m *SdkVolumeMountRequest) Reset()         { *m = SdkVolumeMountRequest{} }
 func (m *SdkVolumeMountRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeMountRequest) ProtoMessage()    {}
 func (*SdkVolumeMountRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{95}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{98}
 }
 func (m *SdkVolumeMountRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeMountRequest.Unmarshal(m, b)
@@ -8949,6 +9427,20 @@ func (m *SdkVolumeMountRequest) GetMountPath() string {
 	return ""
 }
 
+func (m *SdkVolumeMountRequest) GetOptions() *SdkVolumeAttachOptions {
+	if m != nil {
+		return m.Options
+	}
+	return nil
+}
+
+func (m *SdkVolumeMountRequest) GetDriverOptions() map[string]string {
+	if m != nil {
+		return m.DriverOptions
+	}
+	return nil
+}
+
 // Empty response
 type SdkVolumeMountResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -8960,7 +9452,7 @@ func (m *SdkVolumeMountResponse) Reset()         { *m = SdkVolumeMountResponse{}
 func (m *SdkVolumeMountResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeMountResponse) ProtoMessage()    {}
 func (*SdkVolumeMountResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{96}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{99}
 }
 func (m *SdkVolumeMountResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeMountResponse.Unmarshal(m, b)
@@ -8980,6 +9472,59 @@ func (m *SdkVolumeMountResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SdkVolumeMountResponse proto.InternalMessageInfo
 
+// Options to unmount device
+type SdkVolumeUnmountOptions struct {
+	// Delete the mount path on the node after unmounting
+	DeleteMountPath bool `protobuf:"varint,1,opt,name=delete_mount_path,json=deleteMountPath" json:"delete_mount_path,omitempty"`
+	// Do not wait for a delay before deleting path.
+	// Normally a storage driver may delay before deleting the mount path,
+	// which may be necessary to reduce the risk of race conditions. This
+	// choice will remove that delay. This value is only usable when
+	// `delete_mount_path` is set.
+	NoDelayBeforeDeletingMountPath bool     `protobuf:"varint,2,opt,name=no_delay_before_deleting_mount_path,json=noDelayBeforeDeletingMountPath" json:"no_delay_before_deleting_mount_path,omitempty"`
+	XXX_NoUnkeyedLiteral           struct{} `json:"-"`
+	XXX_unrecognized               []byte   `json:"-"`
+	XXX_sizecache                  int32    `json:"-"`
+}
+
+func (m *SdkVolumeUnmountOptions) Reset()         { *m = SdkVolumeUnmountOptions{} }
+func (m *SdkVolumeUnmountOptions) String() string { return proto.CompactTextString(m) }
+func (*SdkVolumeUnmountOptions) ProtoMessage()    {}
+func (*SdkVolumeUnmountOptions) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{100}
+}
+func (m *SdkVolumeUnmountOptions) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkVolumeUnmountOptions.Unmarshal(m, b)
+}
+func (m *SdkVolumeUnmountOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkVolumeUnmountOptions.Marshal(b, m, deterministic)
+}
+func (dst *SdkVolumeUnmountOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkVolumeUnmountOptions.Merge(dst, src)
+}
+func (m *SdkVolumeUnmountOptions) XXX_Size() int {
+	return xxx_messageInfo_SdkVolumeUnmountOptions.Size(m)
+}
+func (m *SdkVolumeUnmountOptions) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkVolumeUnmountOptions.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkVolumeUnmountOptions proto.InternalMessageInfo
+
+func (m *SdkVolumeUnmountOptions) GetDeleteMountPath() bool {
+	if m != nil {
+		return m.DeleteMountPath
+	}
+	return false
+}
+
+func (m *SdkVolumeUnmountOptions) GetNoDelayBeforeDeletingMountPath() bool {
+	if m != nil {
+		return m.NoDelayBeforeDeletingMountPath
+	}
+	return false
+}
+
 // Defines a request to unmount a volume on the node receiving this request
 type SdkVolumeUnmountRequest struct {
 	// Id of volume
@@ -8987,17 +9532,21 @@ type SdkVolumeUnmountRequest struct {
 	// MountPath for device
 	MountPath string `protobuf:"bytes,2,opt,name=mount_path,json=mountPath" json:"mount_path,omitempty"`
 	// Options to unmount device
-	Options              *SdkVolumeUnmountRequest_Options `protobuf:"bytes,3,opt,name=options" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                         `json:"-"`
-	XXX_unrecognized     []byte                           `json:"-"`
-	XXX_sizecache        int32                            `json:"-"`
+	Options *SdkVolumeUnmountOptions `protobuf:"bytes,3,opt,name=options" json:"options,omitempty"`
+	// The following options are private to the driver plugin running the
+	// OpenStorage SDK. Contact your driver developer for any special
+	// values that need to be provided here.
+	DriverOptions        map[string]string `protobuf:"bytes,4,rep,name=driver_options,json=driverOptions" json:"driver_options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
 }
 
 func (m *SdkVolumeUnmountRequest) Reset()         { *m = SdkVolumeUnmountRequest{} }
 func (m *SdkVolumeUnmountRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeUnmountRequest) ProtoMessage()    {}
 func (*SdkVolumeUnmountRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{97}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{101}
 }
 func (m *SdkVolumeUnmountRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeUnmountRequest.Unmarshal(m, b)
@@ -9031,64 +9580,18 @@ func (m *SdkVolumeUnmountRequest) GetMountPath() string {
 	return ""
 }
 
-func (m *SdkVolumeUnmountRequest) GetOptions() *SdkVolumeUnmountRequest_Options {
+func (m *SdkVolumeUnmountRequest) GetOptions() *SdkVolumeUnmountOptions {
 	if m != nil {
 		return m.Options
 	}
 	return nil
 }
 
-// Options to unmount device
-type SdkVolumeUnmountRequest_Options struct {
-	// Delete the mount path on the node after unmounting
-	DeleteMountPath bool `protobuf:"varint,1,opt,name=delete_mount_path,json=deleteMountPath" json:"delete_mount_path,omitempty"`
-	// Do not wait for a delay before deleting path.
-	// Normally a storage driver may delay before deleting the mount path,
-	// which may be necessary to reduce the risk of race conditions. This
-	// choice will remove that delay. This value is only usable when
-	// `delete_mount_path` is set.
-	NoDelayBeforeDeletingMountPath bool     `protobuf:"varint,2,opt,name=no_delay_before_deleting_mount_path,json=noDelayBeforeDeletingMountPath" json:"no_delay_before_deleting_mount_path,omitempty"`
-	XXX_NoUnkeyedLiteral           struct{} `json:"-"`
-	XXX_unrecognized               []byte   `json:"-"`
-	XXX_sizecache                  int32    `json:"-"`
-}
-
-func (m *SdkVolumeUnmountRequest_Options) Reset()         { *m = SdkVolumeUnmountRequest_Options{} }
-func (m *SdkVolumeUnmountRequest_Options) String() string { return proto.CompactTextString(m) }
-func (*SdkVolumeUnmountRequest_Options) ProtoMessage()    {}
-func (*SdkVolumeUnmountRequest_Options) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{97, 0}
-}
-func (m *SdkVolumeUnmountRequest_Options) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SdkVolumeUnmountRequest_Options.Unmarshal(m, b)
-}
-func (m *SdkVolumeUnmountRequest_Options) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SdkVolumeUnmountRequest_Options.Marshal(b, m, deterministic)
-}
-func (dst *SdkVolumeUnmountRequest_Options) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdkVolumeUnmountRequest_Options.Merge(dst, src)
-}
-func (m *SdkVolumeUnmountRequest_Options) XXX_Size() int {
-	return xxx_messageInfo_SdkVolumeUnmountRequest_Options.Size(m)
-}
-func (m *SdkVolumeUnmountRequest_Options) XXX_DiscardUnknown() {
-	xxx_messageInfo_SdkVolumeUnmountRequest_Options.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_SdkVolumeUnmountRequest_Options proto.InternalMessageInfo
-
-func (m *SdkVolumeUnmountRequest_Options) GetDeleteMountPath() bool {
+func (m *SdkVolumeUnmountRequest) GetDriverOptions() map[string]string {
 	if m != nil {
-		return m.DeleteMountPath
+		return m.DriverOptions
 	}
-	return false
-}
-
-func (m *SdkVolumeUnmountRequest_Options) GetNoDelayBeforeDeletingMountPath() bool {
-	if m != nil {
-		return m.NoDelayBeforeDeletingMountPath
-	}
-	return false
+	return nil
 }
 
 // Empty response
@@ -9102,7 +9605,7 @@ func (m *SdkVolumeUnmountResponse) Reset()         { *m = SdkVolumeUnmountRespon
 func (m *SdkVolumeUnmountResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeUnmountResponse) ProtoMessage()    {}
 func (*SdkVolumeUnmountResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{98}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{102}
 }
 func (m *SdkVolumeUnmountResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeUnmountResponse.Unmarshal(m, b)
@@ -9127,17 +9630,21 @@ type SdkVolumeAttachRequest struct {
 	// Id of volume
 	VolumeId string `protobuf:"bytes,1,opt,name=volume_id,json=volumeId" json:"volume_id,omitempty"`
 	// Options to attach device
-	Options              *SdkVolumeAttachRequest_Options `protobuf:"bytes,2,opt,name=options" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                        `json:"-"`
-	XXX_unrecognized     []byte                          `json:"-"`
-	XXX_sizecache        int32                           `json:"-"`
+	Options *SdkVolumeAttachOptions `protobuf:"bytes,2,opt,name=options" json:"options,omitempty"`
+	// The following options are private to the driver plugin running the
+	// OpenStorage SDK. Contact your driver developer for any special
+	// values that need to be provided here.
+	DriverOptions        map[string]string `protobuf:"bytes,3,rep,name=driver_options,json=driverOptions" json:"driver_options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
 }
 
 func (m *SdkVolumeAttachRequest) Reset()         { *m = SdkVolumeAttachRequest{} }
 func (m *SdkVolumeAttachRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeAttachRequest) ProtoMessage()    {}
 func (*SdkVolumeAttachRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{99}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{103}
 }
 func (m *SdkVolumeAttachRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeAttachRequest.Unmarshal(m, b)
@@ -9164,72 +9671,18 @@ func (m *SdkVolumeAttachRequest) GetVolumeId() string {
 	return ""
 }
 
-func (m *SdkVolumeAttachRequest) GetOptions() *SdkVolumeAttachRequest_Options {
+func (m *SdkVolumeAttachRequest) GetOptions() *SdkVolumeAttachOptions {
 	if m != nil {
 		return m.Options
 	}
 	return nil
 }
 
-// Options to attach device
-type SdkVolumeAttachRequest_Options struct {
-	// Indicates the name of the secret stored in a secret store
-	// In case of Hashicorp's Vault, it will be the key from the key-value pair stored in its kv backend.
-	// In case of Kubernetes secret, it is the name of the secret object itself
-	SecretName string `protobuf:"bytes,1,opt,name=secret_name,json=secretName" json:"secret_name,omitempty"`
-	// In case of Kubernetes, this will be the key stored in the Kubernetes secret
-	SecretKey string `protobuf:"bytes,2,opt,name=secret_key,json=secretKey" json:"secret_key,omitempty"`
-	// It indicates the additional context which could be used to retrieve the secret.
-	// In case of Kubernetes, this is the namespace in which the secret is created.
-	SecretContext        string   `protobuf:"bytes,3,opt,name=secret_context,json=secretContext" json:"secret_context,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *SdkVolumeAttachRequest_Options) Reset()         { *m = SdkVolumeAttachRequest_Options{} }
-func (m *SdkVolumeAttachRequest_Options) String() string { return proto.CompactTextString(m) }
-func (*SdkVolumeAttachRequest_Options) ProtoMessage()    {}
-func (*SdkVolumeAttachRequest_Options) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{99, 0}
-}
-func (m *SdkVolumeAttachRequest_Options) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SdkVolumeAttachRequest_Options.Unmarshal(m, b)
-}
-func (m *SdkVolumeAttachRequest_Options) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SdkVolumeAttachRequest_Options.Marshal(b, m, deterministic)
-}
-func (dst *SdkVolumeAttachRequest_Options) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdkVolumeAttachRequest_Options.Merge(dst, src)
-}
-func (m *SdkVolumeAttachRequest_Options) XXX_Size() int {
-	return xxx_messageInfo_SdkVolumeAttachRequest_Options.Size(m)
-}
-func (m *SdkVolumeAttachRequest_Options) XXX_DiscardUnknown() {
-	xxx_messageInfo_SdkVolumeAttachRequest_Options.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_SdkVolumeAttachRequest_Options proto.InternalMessageInfo
-
-func (m *SdkVolumeAttachRequest_Options) GetSecretName() string {
+func (m *SdkVolumeAttachRequest) GetDriverOptions() map[string]string {
 	if m != nil {
-		return m.SecretName
+		return m.DriverOptions
 	}
-	return ""
-}
-
-func (m *SdkVolumeAttachRequest_Options) GetSecretKey() string {
-	if m != nil {
-		return m.SecretKey
-	}
-	return ""
-}
-
-func (m *SdkVolumeAttachRequest_Options) GetSecretContext() string {
-	if m != nil {
-		return m.SecretContext
-	}
-	return ""
+	return nil
 }
 
 // Defines a response from the node which received the request to attach
@@ -9245,7 +9698,7 @@ func (m *SdkVolumeAttachResponse) Reset()         { *m = SdkVolumeAttachResponse
 func (m *SdkVolumeAttachResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeAttachResponse) ProtoMessage()    {}
 func (*SdkVolumeAttachResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{100}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{104}
 }
 func (m *SdkVolumeAttachResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeAttachResponse.Unmarshal(m, b)
@@ -9272,21 +9725,74 @@ func (m *SdkVolumeAttachResponse) GetDevicePath() string {
 	return ""
 }
 
+type SdkVolumeDetachOptions struct {
+	// Forcefully detach device from the kernel
+	Force bool `protobuf:"varint,1,opt,name=force" json:"force,omitempty"`
+	// Unmount the volume before detaching
+	UnmountBeforeDetach  bool     `protobuf:"varint,2,opt,name=unmount_before_detach,json=unmountBeforeDetach" json:"unmount_before_detach,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkVolumeDetachOptions) Reset()         { *m = SdkVolumeDetachOptions{} }
+func (m *SdkVolumeDetachOptions) String() string { return proto.CompactTextString(m) }
+func (*SdkVolumeDetachOptions) ProtoMessage()    {}
+func (*SdkVolumeDetachOptions) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{105}
+}
+func (m *SdkVolumeDetachOptions) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkVolumeDetachOptions.Unmarshal(m, b)
+}
+func (m *SdkVolumeDetachOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkVolumeDetachOptions.Marshal(b, m, deterministic)
+}
+func (dst *SdkVolumeDetachOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkVolumeDetachOptions.Merge(dst, src)
+}
+func (m *SdkVolumeDetachOptions) XXX_Size() int {
+	return xxx_messageInfo_SdkVolumeDetachOptions.Size(m)
+}
+func (m *SdkVolumeDetachOptions) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkVolumeDetachOptions.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkVolumeDetachOptions proto.InternalMessageInfo
+
+func (m *SdkVolumeDetachOptions) GetForce() bool {
+	if m != nil {
+		return m.Force
+	}
+	return false
+}
+
+func (m *SdkVolumeDetachOptions) GetUnmountBeforeDetach() bool {
+	if m != nil {
+		return m.UnmountBeforeDetach
+	}
+	return false
+}
+
 // Defines a request to detach a volume
 type SdkVolumeDetachRequest struct {
 	// Id of the volume
-	VolumeId             string                          `protobuf:"bytes,1,opt,name=volume_id,json=volumeId" json:"volume_id,omitempty"`
-	Options              *SdkVolumeDetachRequest_Options `protobuf:"bytes,2,opt,name=options" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                        `json:"-"`
-	XXX_unrecognized     []byte                          `json:"-"`
-	XXX_sizecache        int32                           `json:"-"`
+	VolumeId string `protobuf:"bytes,1,opt,name=volume_id,json=volumeId" json:"volume_id,omitempty"`
+	// Options to detach device
+	Options *SdkVolumeDetachOptions `protobuf:"bytes,2,opt,name=options" json:"options,omitempty"`
+	// The following options are private to the driver plugin running the
+	// OpenStorage SDK. Contact your driver developer for any special
+	// values that need to be provided here.
+	DriverOptions        map[string]string `protobuf:"bytes,3,rep,name=driver_options,json=driverOptions" json:"driver_options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
 }
 
 func (m *SdkVolumeDetachRequest) Reset()         { *m = SdkVolumeDetachRequest{} }
 func (m *SdkVolumeDetachRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeDetachRequest) ProtoMessage()    {}
 func (*SdkVolumeDetachRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{101}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{106}
 }
 func (m *SdkVolumeDetachRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeDetachRequest.Unmarshal(m, b)
@@ -9313,60 +9819,18 @@ func (m *SdkVolumeDetachRequest) GetVolumeId() string {
 	return ""
 }
 
-func (m *SdkVolumeDetachRequest) GetOptions() *SdkVolumeDetachRequest_Options {
+func (m *SdkVolumeDetachRequest) GetOptions() *SdkVolumeDetachOptions {
 	if m != nil {
 		return m.Options
 	}
 	return nil
 }
 
-// Options to detach device
-type SdkVolumeDetachRequest_Options struct {
-	// Forcefully detach device from the kernel
-	Force bool `protobuf:"varint,1,opt,name=force" json:"force,omitempty"`
-	// Unmount the volume before detaching
-	UnmountBeforeDetach  bool     `protobuf:"varint,2,opt,name=unmount_before_detach,json=unmountBeforeDetach" json:"unmount_before_detach,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *SdkVolumeDetachRequest_Options) Reset()         { *m = SdkVolumeDetachRequest_Options{} }
-func (m *SdkVolumeDetachRequest_Options) String() string { return proto.CompactTextString(m) }
-func (*SdkVolumeDetachRequest_Options) ProtoMessage()    {}
-func (*SdkVolumeDetachRequest_Options) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{101, 0}
-}
-func (m *SdkVolumeDetachRequest_Options) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_SdkVolumeDetachRequest_Options.Unmarshal(m, b)
-}
-func (m *SdkVolumeDetachRequest_Options) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_SdkVolumeDetachRequest_Options.Marshal(b, m, deterministic)
-}
-func (dst *SdkVolumeDetachRequest_Options) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SdkVolumeDetachRequest_Options.Merge(dst, src)
-}
-func (m *SdkVolumeDetachRequest_Options) XXX_Size() int {
-	return xxx_messageInfo_SdkVolumeDetachRequest_Options.Size(m)
-}
-func (m *SdkVolumeDetachRequest_Options) XXX_DiscardUnknown() {
-	xxx_messageInfo_SdkVolumeDetachRequest_Options.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_SdkVolumeDetachRequest_Options proto.InternalMessageInfo
-
-func (m *SdkVolumeDetachRequest_Options) GetForce() bool {
+func (m *SdkVolumeDetachRequest) GetDriverOptions() map[string]string {
 	if m != nil {
-		return m.Force
+		return m.DriverOptions
 	}
-	return false
-}
-
-func (m *SdkVolumeDetachRequest_Options) GetUnmountBeforeDetach() bool {
-	if m != nil {
-		return m.UnmountBeforeDetach
-	}
-	return false
+	return nil
 }
 
 // Empty response
@@ -9380,7 +9844,7 @@ func (m *SdkVolumeDetachResponse) Reset()         { *m = SdkVolumeDetachResponse
 func (m *SdkVolumeDetachResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeDetachResponse) ProtoMessage()    {}
 func (*SdkVolumeDetachResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{102}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{107}
 }
 func (m *SdkVolumeDetachResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeDetachResponse.Unmarshal(m, b)
@@ -9406,17 +9870,19 @@ type SdkVolumeCreateRequest struct {
 	// Unique name of the volume. This will be used for idempotency.
 	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
 	// Volume specification
-	Spec                 *VolumeSpec `protobuf:"bytes,2,opt,name=spec" json:"spec,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Spec *VolumeSpec `protobuf:"bytes,2,opt,name=spec" json:"spec,omitempty"`
+	// Labels to apply to the volume
+	Labels               map[string]string `protobuf:"bytes,3,rep,name=labels" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
 }
 
 func (m *SdkVolumeCreateRequest) Reset()         { *m = SdkVolumeCreateRequest{} }
 func (m *SdkVolumeCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeCreateRequest) ProtoMessage()    {}
 func (*SdkVolumeCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{103}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{108}
 }
 func (m *SdkVolumeCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeCreateRequest.Unmarshal(m, b)
@@ -9450,6 +9916,13 @@ func (m *SdkVolumeCreateRequest) GetSpec() *VolumeSpec {
 	return nil
 }
 
+func (m *SdkVolumeCreateRequest) GetLabels() map[string]string {
+	if m != nil {
+		return m.Labels
+	}
+	return nil
+}
+
 // Defines a response to the creation of a volume
 type SdkVolumeCreateResponse struct {
 	// Id of new volume
@@ -9463,7 +9936,7 @@ func (m *SdkVolumeCreateResponse) Reset()         { *m = SdkVolumeCreateResponse
 func (m *SdkVolumeCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeCreateResponse) ProtoMessage()    {}
 func (*SdkVolumeCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{104}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{109}
 }
 func (m *SdkVolumeCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeCreateResponse.Unmarshal(m, b)
@@ -9505,7 +9978,7 @@ func (m *SdkVolumeCloneRequest) Reset()         { *m = SdkVolumeCloneRequest{} }
 func (m *SdkVolumeCloneRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeCloneRequest) ProtoMessage()    {}
 func (*SdkVolumeCloneRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{105}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{110}
 }
 func (m *SdkVolumeCloneRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeCloneRequest.Unmarshal(m, b)
@@ -9552,7 +10025,7 @@ func (m *SdkVolumeCloneResponse) Reset()         { *m = SdkVolumeCloneResponse{}
 func (m *SdkVolumeCloneResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeCloneResponse) ProtoMessage()    {}
 func (*SdkVolumeCloneResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{106}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{111}
 }
 func (m *SdkVolumeCloneResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeCloneResponse.Unmarshal(m, b)
@@ -9592,7 +10065,7 @@ func (m *SdkVolumeDeleteRequest) Reset()         { *m = SdkVolumeDeleteRequest{}
 func (m *SdkVolumeDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeDeleteRequest) ProtoMessage()    {}
 func (*SdkVolumeDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{107}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{112}
 }
 func (m *SdkVolumeDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeDeleteRequest.Unmarshal(m, b)
@@ -9630,7 +10103,7 @@ func (m *SdkVolumeDeleteResponse) Reset()         { *m = SdkVolumeDeleteResponse
 func (m *SdkVolumeDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeDeleteResponse) ProtoMessage()    {}
 func (*SdkVolumeDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{108}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{113}
 }
 func (m *SdkVolumeDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeDeleteResponse.Unmarshal(m, b)
@@ -9653,17 +10126,19 @@ var xxx_messageInfo_SdkVolumeDeleteResponse proto.InternalMessageInfo
 // Defines the request to inspect a volume
 type SdkVolumeInspectRequest struct {
 	// Id of volume to inspect
-	VolumeId             string   `protobuf:"bytes,1,opt,name=volume_id,json=volumeId" json:"volume_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	VolumeId string `protobuf:"bytes,1,opt,name=volume_id,json=volumeId" json:"volume_id,omitempty"`
+	// Options during inspection
+	Options              *VolumeInspectOptions `protobuf:"bytes,2,opt,name=options" json:"options,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
 }
 
 func (m *SdkVolumeInspectRequest) Reset()         { *m = SdkVolumeInspectRequest{} }
 func (m *SdkVolumeInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeInspectRequest) ProtoMessage()    {}
 func (*SdkVolumeInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{109}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{114}
 }
 func (m *SdkVolumeInspectRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeInspectRequest.Unmarshal(m, b)
@@ -9690,20 +10165,31 @@ func (m *SdkVolumeInspectRequest) GetVolumeId() string {
 	return ""
 }
 
+func (m *SdkVolumeInspectRequest) GetOptions() *VolumeInspectOptions {
+	if m != nil {
+		return m.Options
+	}
+	return nil
+}
+
 // Defines the response when inspecting a volume
 type SdkVolumeInspectResponse struct {
 	// Information about the volume
-	Volume               *Volume  `protobuf:"bytes,1,opt,name=volume" json:"volume,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Volume *Volume `protobuf:"bytes,1,opt,name=volume" json:"volume,omitempty"`
+	// Name of volume
+	Name string `protobuf:"bytes,2,opt,name=name" json:"name,omitempty"`
+	// Volume labels
+	Labels               map[string]string `protobuf:"bytes,3,rep,name=labels" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
 }
 
 func (m *SdkVolumeInspectResponse) Reset()         { *m = SdkVolumeInspectResponse{} }
 func (m *SdkVolumeInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeInspectResponse) ProtoMessage()    {}
 func (*SdkVolumeInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{110}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{115}
 }
 func (m *SdkVolumeInspectResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeInspectResponse.Unmarshal(m, b)
@@ -9730,23 +10216,155 @@ func (m *SdkVolumeInspectResponse) GetVolume() *Volume {
 	return nil
 }
 
+func (m *SdkVolumeInspectResponse) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *SdkVolumeInspectResponse) GetLabels() map[string]string {
+	if m != nil {
+		return m.Labels
+	}
+	return nil
+}
+
+// Defines the request to inspect volumes using a filter
+type SdkVolumeInspectWithFiltersRequest struct {
+	// (optional) Name to search
+	Name string `protobuf:"bytes,2,opt,name=name" json:"name,omitempty"`
+	// (optional) Labels to search
+	Labels map[string]string `protobuf:"bytes,3,rep,name=labels" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// (optional) Ownership to match
+	Ownership *Ownership `protobuf:"bytes,4,opt,name=ownership" json:"ownership,omitempty"`
+	// (optional) Group to match
+	Group *Group `protobuf:"bytes,5,opt,name=group" json:"group,omitempty"`
+	// Options during inspection
+	Options              *VolumeInspectOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
+}
+
+func (m *SdkVolumeInspectWithFiltersRequest) Reset()         { *m = SdkVolumeInspectWithFiltersRequest{} }
+func (m *SdkVolumeInspectWithFiltersRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkVolumeInspectWithFiltersRequest) ProtoMessage()    {}
+func (*SdkVolumeInspectWithFiltersRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{116}
+}
+func (m *SdkVolumeInspectWithFiltersRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkVolumeInspectWithFiltersRequest.Unmarshal(m, b)
+}
+func (m *SdkVolumeInspectWithFiltersRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkVolumeInspectWithFiltersRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkVolumeInspectWithFiltersRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkVolumeInspectWithFiltersRequest.Merge(dst, src)
+}
+func (m *SdkVolumeInspectWithFiltersRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkVolumeInspectWithFiltersRequest.Size(m)
+}
+func (m *SdkVolumeInspectWithFiltersRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkVolumeInspectWithFiltersRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkVolumeInspectWithFiltersRequest proto.InternalMessageInfo
+
+func (m *SdkVolumeInspectWithFiltersRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *SdkVolumeInspectWithFiltersRequest) GetLabels() map[string]string {
+	if m != nil {
+		return m.Labels
+	}
+	return nil
+}
+
+func (m *SdkVolumeInspectWithFiltersRequest) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
+}
+
+func (m *SdkVolumeInspectWithFiltersRequest) GetGroup() *Group {
+	if m != nil {
+		return m.Group
+	}
+	return nil
+}
+
+func (m *SdkVolumeInspectWithFiltersRequest) GetOptions() *VolumeInspectOptions {
+	if m != nil {
+		return m.Options
+	}
+	return nil
+}
+
+// Defines the response when inspecting volumes using a filter
+type SdkVolumeInspectWithFiltersResponse struct {
+	// List of `SdkVolumeInspectResponse` objects describing the volumes
+	Volumes              []*SdkVolumeInspectResponse `protobuf:"bytes,1,rep,name=volumes" json:"volumes,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
+	XXX_unrecognized     []byte                      `json:"-"`
+	XXX_sizecache        int32                       `json:"-"`
+}
+
+func (m *SdkVolumeInspectWithFiltersResponse) Reset()         { *m = SdkVolumeInspectWithFiltersResponse{} }
+func (m *SdkVolumeInspectWithFiltersResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkVolumeInspectWithFiltersResponse) ProtoMessage()    {}
+func (*SdkVolumeInspectWithFiltersResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{117}
+}
+func (m *SdkVolumeInspectWithFiltersResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkVolumeInspectWithFiltersResponse.Unmarshal(m, b)
+}
+func (m *SdkVolumeInspectWithFiltersResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkVolumeInspectWithFiltersResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkVolumeInspectWithFiltersResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkVolumeInspectWithFiltersResponse.Merge(dst, src)
+}
+func (m *SdkVolumeInspectWithFiltersResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkVolumeInspectWithFiltersResponse.Size(m)
+}
+func (m *SdkVolumeInspectWithFiltersResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkVolumeInspectWithFiltersResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkVolumeInspectWithFiltersResponse proto.InternalMessageInfo
+
+func (m *SdkVolumeInspectWithFiltersResponse) GetVolumes() []*SdkVolumeInspectResponse {
+	if m != nil {
+		return m.Volumes
+	}
+	return nil
+}
+
 // This request is used to adjust or set new values in the volume
 type SdkVolumeUpdateRequest struct {
 	// Id of the volume to update
 	VolumeId string `protobuf:"bytes,1,opt,name=volume_id,json=volumeId" json:"volume_id,omitempty"`
-	// Change locator values. Some of these values may not be able to be changed.
+	// Change label values. Some of these values may not be able to be changed.
 	// New labels will be added to the current volume labels. To delete a label, set the
 	// value of the label to an empty string.
-	Locator *VolumeLocator `protobuf:"bytes,2,opt,name=locator" json:"locator,omitempty"`
+	Labels map[string]string `protobuf:"bytes,3,rep,name=labels" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// VolumeSpecUpdate provides a method to request that certain values
 	// in the VolumeSpec are changed. This is necessary as a separate variable
 	// because values like int and bool in the VolumeSpec cannot be determined
 	// if they are being requested to change in gRPC proto3. Some of these
 	// values may not be able to be changed.
-	// Here are a few examples of actions that can be accomplished using the VolumeSpec.
-	// To resize the volume: Set a new value in spec.size.
-	// To change number of replicas: Adjust spec.ha_level.
-	// To change the I/O Profile: Adjust spec.io_profile.
+	//
+	// Here are a few examples of actions that can be accomplished using the VolumeSpec:
+	//
+	// * To resize the volume: Set a new value in spec.size_opt.size.
+	// * To change number of replicas: Adjust spec.ha_level_opt.ha_level.
+	// * To change the I/O Profile: Adjust spec.io_profile_opt.io_profile.
 	Spec                 *VolumeSpecUpdate `protobuf:"bytes,4,opt,name=spec" json:"spec,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
@@ -9757,7 +10375,7 @@ func (m *SdkVolumeUpdateRequest) Reset()         { *m = SdkVolumeUpdateRequest{}
 func (m *SdkVolumeUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeUpdateRequest) ProtoMessage()    {}
 func (*SdkVolumeUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{111}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{118}
 }
 func (m *SdkVolumeUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeUpdateRequest.Unmarshal(m, b)
@@ -9784,9 +10402,9 @@ func (m *SdkVolumeUpdateRequest) GetVolumeId() string {
 	return ""
 }
 
-func (m *SdkVolumeUpdateRequest) GetLocator() *VolumeLocator {
+func (m *SdkVolumeUpdateRequest) GetLabels() map[string]string {
 	if m != nil {
-		return m.Locator
+		return m.Labels
 	}
 	return nil
 }
@@ -9809,7 +10427,7 @@ func (m *SdkVolumeUpdateResponse) Reset()         { *m = SdkVolumeUpdateResponse
 func (m *SdkVolumeUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeUpdateResponse) ProtoMessage()    {}
 func (*SdkVolumeUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{112}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{119}
 }
 func (m *SdkVolumeUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeUpdateResponse.Unmarshal(m, b)
@@ -9845,7 +10463,7 @@ func (m *SdkVolumeStatsRequest) Reset()         { *m = SdkVolumeStatsRequest{} }
 func (m *SdkVolumeStatsRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeStatsRequest) ProtoMessage()    {}
 func (*SdkVolumeStatsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{113}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{120}
 }
 func (m *SdkVolumeStatsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeStatsRequest.Unmarshal(m, b)
@@ -9892,7 +10510,7 @@ func (m *SdkVolumeStatsResponse) Reset()         { *m = SdkVolumeStatsResponse{}
 func (m *SdkVolumeStatsResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeStatsResponse) ProtoMessage()    {}
 func (*SdkVolumeStatsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{114}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{121}
 }
 func (m *SdkVolumeStatsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeStatsResponse.Unmarshal(m, b)
@@ -9932,7 +10550,7 @@ func (m *SdkVolumeCapacityUsageRequest) Reset()         { *m = SdkVolumeCapacity
 func (m *SdkVolumeCapacityUsageRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeCapacityUsageRequest) ProtoMessage()    {}
 func (*SdkVolumeCapacityUsageRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{115}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{122}
 }
 func (m *SdkVolumeCapacityUsageRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeCapacityUsageRequest.Unmarshal(m, b)
@@ -9972,7 +10590,7 @@ func (m *SdkVolumeCapacityUsageResponse) Reset()         { *m = SdkVolumeCapacit
 func (m *SdkVolumeCapacityUsageResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeCapacityUsageResponse) ProtoMessage()    {}
 func (*SdkVolumeCapacityUsageResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{116}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{123}
 }
 func (m *SdkVolumeCapacityUsageResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeCapacityUsageResponse.Unmarshal(m, b)
@@ -10010,7 +10628,7 @@ func (m *SdkVolumeEnumerateRequest) Reset()         { *m = SdkVolumeEnumerateReq
 func (m *SdkVolumeEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeEnumerateRequest) ProtoMessage()    {}
 func (*SdkVolumeEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{117}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{124}
 }
 func (m *SdkVolumeEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeEnumerateRequest.Unmarshal(m, b)
@@ -10043,7 +10661,7 @@ func (m *SdkVolumeEnumerateResponse) Reset()         { *m = SdkVolumeEnumerateRe
 func (m *SdkVolumeEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeEnumerateResponse) ProtoMessage()    {}
 func (*SdkVolumeEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{118}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{125}
 }
 func (m *SdkVolumeEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeEnumerateResponse.Unmarshal(m, b)
@@ -10072,19 +10690,24 @@ func (m *SdkVolumeEnumerateResponse) GetVolumeIds() []string {
 
 // Defines a request to list volumes
 type SdkVolumeEnumerateWithFiltersRequest struct {
-	// Volumes to match to this locator.
-	// If not provided, all volumes will be returned.
-	Locator              *VolumeLocator `protobuf:"bytes,1,opt,name=locator" json:"locator,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	// (optional) Name to search
+	Name string `protobuf:"bytes,2,opt,name=name" json:"name,omitempty"`
+	// (optional) Labels to search
+	Labels map[string]string `protobuf:"bytes,3,rep,name=labels" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// (optional) Ownership to match
+	Ownership *Ownership `protobuf:"bytes,4,opt,name=ownership" json:"ownership,omitempty"`
+	// (optional) Group to match
+	Group                *Group   `protobuf:"bytes,5,opt,name=group" json:"group,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *SdkVolumeEnumerateWithFiltersRequest) Reset()         { *m = SdkVolumeEnumerateWithFiltersRequest{} }
 func (m *SdkVolumeEnumerateWithFiltersRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeEnumerateWithFiltersRequest) ProtoMessage()    {}
 func (*SdkVolumeEnumerateWithFiltersRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{119}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{126}
 }
 func (m *SdkVolumeEnumerateWithFiltersRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeEnumerateWithFiltersRequest.Unmarshal(m, b)
@@ -10104,9 +10727,30 @@ func (m *SdkVolumeEnumerateWithFiltersRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SdkVolumeEnumerateWithFiltersRequest proto.InternalMessageInfo
 
-func (m *SdkVolumeEnumerateWithFiltersRequest) GetLocator() *VolumeLocator {
+func (m *SdkVolumeEnumerateWithFiltersRequest) GetName() string {
 	if m != nil {
-		return m.Locator
+		return m.Name
+	}
+	return ""
+}
+
+func (m *SdkVolumeEnumerateWithFiltersRequest) GetLabels() map[string]string {
+	if m != nil {
+		return m.Labels
+	}
+	return nil
+}
+
+func (m *SdkVolumeEnumerateWithFiltersRequest) GetOwnership() *Ownership {
+	if m != nil {
+		return m.Ownership
+	}
+	return nil
+}
+
+func (m *SdkVolumeEnumerateWithFiltersRequest) GetGroup() *Group {
+	if m != nil {
+		return m.Group
 	}
 	return nil
 }
@@ -10124,7 +10768,7 @@ func (m *SdkVolumeEnumerateWithFiltersResponse) Reset()         { *m = SdkVolume
 func (m *SdkVolumeEnumerateWithFiltersResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeEnumerateWithFiltersResponse) ProtoMessage()    {}
 func (*SdkVolumeEnumerateWithFiltersResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{120}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{127}
 }
 func (m *SdkVolumeEnumerateWithFiltersResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeEnumerateWithFiltersResponse.Unmarshal(m, b)
@@ -10168,7 +10812,7 @@ func (m *SdkVolumeSnapshotCreateRequest) Reset()         { *m = SdkVolumeSnapsho
 func (m *SdkVolumeSnapshotCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeSnapshotCreateRequest) ProtoMessage()    {}
 func (*SdkVolumeSnapshotCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{121}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{128}
 }
 func (m *SdkVolumeSnapshotCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotCreateRequest.Unmarshal(m, b)
@@ -10222,7 +10866,7 @@ func (m *SdkVolumeSnapshotCreateResponse) Reset()         { *m = SdkVolumeSnapsh
 func (m *SdkVolumeSnapshotCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeSnapshotCreateResponse) ProtoMessage()    {}
 func (*SdkVolumeSnapshotCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{122}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{129}
 }
 func (m *SdkVolumeSnapshotCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotCreateResponse.Unmarshal(m, b)
@@ -10264,7 +10908,7 @@ func (m *SdkVolumeSnapshotRestoreRequest) Reset()         { *m = SdkVolumeSnapsh
 func (m *SdkVolumeSnapshotRestoreRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeSnapshotRestoreRequest) ProtoMessage()    {}
 func (*SdkVolumeSnapshotRestoreRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{123}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{130}
 }
 func (m *SdkVolumeSnapshotRestoreRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotRestoreRequest.Unmarshal(m, b)
@@ -10309,7 +10953,7 @@ func (m *SdkVolumeSnapshotRestoreResponse) Reset()         { *m = SdkVolumeSnaps
 func (m *SdkVolumeSnapshotRestoreResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeSnapshotRestoreResponse) ProtoMessage()    {}
 func (*SdkVolumeSnapshotRestoreResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{124}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{131}
 }
 func (m *SdkVolumeSnapshotRestoreResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotRestoreResponse.Unmarshal(m, b)
@@ -10342,7 +10986,7 @@ func (m *SdkVolumeSnapshotEnumerateRequest) Reset()         { *m = SdkVolumeSnap
 func (m *SdkVolumeSnapshotEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeSnapshotEnumerateRequest) ProtoMessage()    {}
 func (*SdkVolumeSnapshotEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{125}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{132}
 }
 func (m *SdkVolumeSnapshotEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotEnumerateRequest.Unmarshal(m, b)
@@ -10382,7 +11026,7 @@ func (m *SdkVolumeSnapshotEnumerateResponse) Reset()         { *m = SdkVolumeSna
 func (m *SdkVolumeSnapshotEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeSnapshotEnumerateResponse) ProtoMessage()    {}
 func (*SdkVolumeSnapshotEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{126}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{133}
 }
 func (m *SdkVolumeSnapshotEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotEnumerateResponse.Unmarshal(m, b)
@@ -10428,7 +11072,7 @@ func (m *SdkVolumeSnapshotEnumerateWithFiltersRequest) String() string {
 }
 func (*SdkVolumeSnapshotEnumerateWithFiltersRequest) ProtoMessage() {}
 func (*SdkVolumeSnapshotEnumerateWithFiltersRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{127}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{134}
 }
 func (m *SdkVolumeSnapshotEnumerateWithFiltersRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotEnumerateWithFiltersRequest.Unmarshal(m, b)
@@ -10479,7 +11123,7 @@ func (m *SdkVolumeSnapshotEnumerateWithFiltersResponse) String() string {
 }
 func (*SdkVolumeSnapshotEnumerateWithFiltersResponse) ProtoMessage() {}
 func (*SdkVolumeSnapshotEnumerateWithFiltersResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{128}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{135}
 }
 func (m *SdkVolumeSnapshotEnumerateWithFiltersResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotEnumerateWithFiltersResponse.Unmarshal(m, b)
@@ -10523,7 +11167,7 @@ func (m *SdkVolumeSnapshotScheduleUpdateRequest) Reset() {
 func (m *SdkVolumeSnapshotScheduleUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeSnapshotScheduleUpdateRequest) ProtoMessage()    {}
 func (*SdkVolumeSnapshotScheduleUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{129}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{136}
 }
 func (m *SdkVolumeSnapshotScheduleUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotScheduleUpdateRequest.Unmarshal(m, b)
@@ -10570,7 +11214,7 @@ func (m *SdkVolumeSnapshotScheduleUpdateResponse) Reset() {
 func (m *SdkVolumeSnapshotScheduleUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkVolumeSnapshotScheduleUpdateResponse) ProtoMessage()    {}
 func (*SdkVolumeSnapshotScheduleUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{130}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{137}
 }
 func (m *SdkVolumeSnapshotScheduleUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVolumeSnapshotScheduleUpdateResponse.Unmarshal(m, b)
@@ -10591,6 +11235,308 @@ func (m *SdkVolumeSnapshotScheduleUpdateResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SdkVolumeSnapshotScheduleUpdateResponse proto.InternalMessageInfo
 
 // Empty request
+type SdkClusterDomainsEnumerateRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkClusterDomainsEnumerateRequest) Reset()         { *m = SdkClusterDomainsEnumerateRequest{} }
+func (m *SdkClusterDomainsEnumerateRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkClusterDomainsEnumerateRequest) ProtoMessage()    {}
+func (*SdkClusterDomainsEnumerateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{138}
+}
+func (m *SdkClusterDomainsEnumerateRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkClusterDomainsEnumerateRequest.Unmarshal(m, b)
+}
+func (m *SdkClusterDomainsEnumerateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkClusterDomainsEnumerateRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkClusterDomainsEnumerateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkClusterDomainsEnumerateRequest.Merge(dst, src)
+}
+func (m *SdkClusterDomainsEnumerateRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkClusterDomainsEnumerateRequest.Size(m)
+}
+func (m *SdkClusterDomainsEnumerateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkClusterDomainsEnumerateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkClusterDomainsEnumerateRequest proto.InternalMessageInfo
+
+// Defines a response when enumerating cluster domains
+type SdkClusterDomainsEnumerateResponse struct {
+	// List of names of all the cluster domains in a cluster
+	ClusterDomainNames   []string `protobuf:"bytes,1,rep,name=cluster_domain_names,json=clusterDomainNames" json:"cluster_domain_names,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkClusterDomainsEnumerateResponse) Reset()         { *m = SdkClusterDomainsEnumerateResponse{} }
+func (m *SdkClusterDomainsEnumerateResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkClusterDomainsEnumerateResponse) ProtoMessage()    {}
+func (*SdkClusterDomainsEnumerateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{139}
+}
+func (m *SdkClusterDomainsEnumerateResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkClusterDomainsEnumerateResponse.Unmarshal(m, b)
+}
+func (m *SdkClusterDomainsEnumerateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkClusterDomainsEnumerateResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkClusterDomainsEnumerateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkClusterDomainsEnumerateResponse.Merge(dst, src)
+}
+func (m *SdkClusterDomainsEnumerateResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkClusterDomainsEnumerateResponse.Size(m)
+}
+func (m *SdkClusterDomainsEnumerateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkClusterDomainsEnumerateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkClusterDomainsEnumerateResponse proto.InternalMessageInfo
+
+func (m *SdkClusterDomainsEnumerateResponse) GetClusterDomainNames() []string {
+	if m != nil {
+		return m.ClusterDomainNames
+	}
+	return nil
+}
+
+// Defines a request to inspect a cluster domain
+type SdkClusterDomainInspectRequest struct {
+	// Name of the cluster domain to inspect
+	ClusterDomainName    string   `protobuf:"bytes,1,opt,name=cluster_domain_name,json=clusterDomainName" json:"cluster_domain_name,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkClusterDomainInspectRequest) Reset()         { *m = SdkClusterDomainInspectRequest{} }
+func (m *SdkClusterDomainInspectRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkClusterDomainInspectRequest) ProtoMessage()    {}
+func (*SdkClusterDomainInspectRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{140}
+}
+func (m *SdkClusterDomainInspectRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkClusterDomainInspectRequest.Unmarshal(m, b)
+}
+func (m *SdkClusterDomainInspectRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkClusterDomainInspectRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkClusterDomainInspectRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkClusterDomainInspectRequest.Merge(dst, src)
+}
+func (m *SdkClusterDomainInspectRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkClusterDomainInspectRequest.Size(m)
+}
+func (m *SdkClusterDomainInspectRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkClusterDomainInspectRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkClusterDomainInspectRequest proto.InternalMessageInfo
+
+func (m *SdkClusterDomainInspectRequest) GetClusterDomainName() string {
+	if m != nil {
+		return m.ClusterDomainName
+	}
+	return ""
+}
+
+// Defines a response to inspecting a cluster domain
+type SdkClusterDomainInspectResponse struct {
+	// Name of the cluster domain
+	ClusterDomainName string `protobuf:"bytes,1,opt,name=cluster_domain_name,json=clusterDomainName" json:"cluster_domain_name,omitempty"`
+	// IsActive indicates whether this cluster domain is active
+	IsActive             bool     `protobuf:"varint,2,opt,name=is_active,json=isActive" json:"is_active,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkClusterDomainInspectResponse) Reset()         { *m = SdkClusterDomainInspectResponse{} }
+func (m *SdkClusterDomainInspectResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkClusterDomainInspectResponse) ProtoMessage()    {}
+func (*SdkClusterDomainInspectResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{141}
+}
+func (m *SdkClusterDomainInspectResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkClusterDomainInspectResponse.Unmarshal(m, b)
+}
+func (m *SdkClusterDomainInspectResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkClusterDomainInspectResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkClusterDomainInspectResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkClusterDomainInspectResponse.Merge(dst, src)
+}
+func (m *SdkClusterDomainInspectResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkClusterDomainInspectResponse.Size(m)
+}
+func (m *SdkClusterDomainInspectResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkClusterDomainInspectResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkClusterDomainInspectResponse proto.InternalMessageInfo
+
+func (m *SdkClusterDomainInspectResponse) GetClusterDomainName() string {
+	if m != nil {
+		return m.ClusterDomainName
+	}
+	return ""
+}
+
+func (m *SdkClusterDomainInspectResponse) GetIsActive() bool {
+	if m != nil {
+		return m.IsActive
+	}
+	return false
+}
+
+// Defines a request to activate a cluster domain
+type SdkClusterDomainActivateRequest struct {
+	// Name of the cluster domain to activate
+	ClusterDomainName    string   `protobuf:"bytes,1,opt,name=cluster_domain_name,json=clusterDomainName" json:"cluster_domain_name,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkClusterDomainActivateRequest) Reset()         { *m = SdkClusterDomainActivateRequest{} }
+func (m *SdkClusterDomainActivateRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkClusterDomainActivateRequest) ProtoMessage()    {}
+func (*SdkClusterDomainActivateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{142}
+}
+func (m *SdkClusterDomainActivateRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkClusterDomainActivateRequest.Unmarshal(m, b)
+}
+func (m *SdkClusterDomainActivateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkClusterDomainActivateRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkClusterDomainActivateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkClusterDomainActivateRequest.Merge(dst, src)
+}
+func (m *SdkClusterDomainActivateRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkClusterDomainActivateRequest.Size(m)
+}
+func (m *SdkClusterDomainActivateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkClusterDomainActivateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkClusterDomainActivateRequest proto.InternalMessageInfo
+
+func (m *SdkClusterDomainActivateRequest) GetClusterDomainName() string {
+	if m != nil {
+		return m.ClusterDomainName
+	}
+	return ""
+}
+
+// Empty response
+type SdkClusterDomainActivateResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkClusterDomainActivateResponse) Reset()         { *m = SdkClusterDomainActivateResponse{} }
+func (m *SdkClusterDomainActivateResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkClusterDomainActivateResponse) ProtoMessage()    {}
+func (*SdkClusterDomainActivateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{143}
+}
+func (m *SdkClusterDomainActivateResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkClusterDomainActivateResponse.Unmarshal(m, b)
+}
+func (m *SdkClusterDomainActivateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkClusterDomainActivateResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkClusterDomainActivateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkClusterDomainActivateResponse.Merge(dst, src)
+}
+func (m *SdkClusterDomainActivateResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkClusterDomainActivateResponse.Size(m)
+}
+func (m *SdkClusterDomainActivateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkClusterDomainActivateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkClusterDomainActivateResponse proto.InternalMessageInfo
+
+// Defines a request to deactivate a cluster domain
+type SdkClusterDomainDeactivateRequest struct {
+	// Name of the cluster domain to deactivate
+	ClusterDomainName    string   `protobuf:"bytes,1,opt,name=cluster_domain_name,json=clusterDomainName" json:"cluster_domain_name,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkClusterDomainDeactivateRequest) Reset()         { *m = SdkClusterDomainDeactivateRequest{} }
+func (m *SdkClusterDomainDeactivateRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkClusterDomainDeactivateRequest) ProtoMessage()    {}
+func (*SdkClusterDomainDeactivateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{144}
+}
+func (m *SdkClusterDomainDeactivateRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkClusterDomainDeactivateRequest.Unmarshal(m, b)
+}
+func (m *SdkClusterDomainDeactivateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkClusterDomainDeactivateRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkClusterDomainDeactivateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkClusterDomainDeactivateRequest.Merge(dst, src)
+}
+func (m *SdkClusterDomainDeactivateRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkClusterDomainDeactivateRequest.Size(m)
+}
+func (m *SdkClusterDomainDeactivateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkClusterDomainDeactivateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkClusterDomainDeactivateRequest proto.InternalMessageInfo
+
+func (m *SdkClusterDomainDeactivateRequest) GetClusterDomainName() string {
+	if m != nil {
+		return m.ClusterDomainName
+	}
+	return ""
+}
+
+// Empty response
+type SdkClusterDomainDeactivateResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkClusterDomainDeactivateResponse) Reset()         { *m = SdkClusterDomainDeactivateResponse{} }
+func (m *SdkClusterDomainDeactivateResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkClusterDomainDeactivateResponse) ProtoMessage()    {}
+func (*SdkClusterDomainDeactivateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{145}
+}
+func (m *SdkClusterDomainDeactivateResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkClusterDomainDeactivateResponse.Unmarshal(m, b)
+}
+func (m *SdkClusterDomainDeactivateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkClusterDomainDeactivateResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkClusterDomainDeactivateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkClusterDomainDeactivateResponse.Merge(dst, src)
+}
+func (m *SdkClusterDomainDeactivateResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkClusterDomainDeactivateResponse.Size(m)
+}
+func (m *SdkClusterDomainDeactivateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkClusterDomainDeactivateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkClusterDomainDeactivateResponse proto.InternalMessageInfo
+
+// Empty request
 type SdkClusterInspectCurrentRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -10601,7 +11547,7 @@ func (m *SdkClusterInspectCurrentRequest) Reset()         { *m = SdkClusterInspe
 func (m *SdkClusterInspectCurrentRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterInspectCurrentRequest) ProtoMessage()    {}
 func (*SdkClusterInspectCurrentRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{131}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{146}
 }
 func (m *SdkClusterInspectCurrentRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterInspectCurrentRequest.Unmarshal(m, b)
@@ -10634,7 +11580,7 @@ func (m *SdkClusterInspectCurrentResponse) Reset()         { *m = SdkClusterInsp
 func (m *SdkClusterInspectCurrentResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterInspectCurrentResponse) ProtoMessage()    {}
 func (*SdkClusterInspectCurrentResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{132}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{147}
 }
 func (m *SdkClusterInspectCurrentResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterInspectCurrentResponse.Unmarshal(m, b)
@@ -10674,7 +11620,7 @@ func (m *SdkNodeInspectRequest) Reset()         { *m = SdkNodeInspectRequest{} }
 func (m *SdkNodeInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkNodeInspectRequest) ProtoMessage()    {}
 func (*SdkNodeInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{133}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{148}
 }
 func (m *SdkNodeInspectRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkNodeInspectRequest.Unmarshal(m, b)
@@ -10714,7 +11660,7 @@ func (m *SdkNodeInspectResponse) Reset()         { *m = SdkNodeInspectResponse{}
 func (m *SdkNodeInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkNodeInspectResponse) ProtoMessage()    {}
 func (*SdkNodeInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{134}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{149}
 }
 func (m *SdkNodeInspectResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkNodeInspectResponse.Unmarshal(m, b)
@@ -10752,7 +11698,7 @@ func (m *SdkNodeInspectCurrentRequest) Reset()         { *m = SdkNodeInspectCurr
 func (m *SdkNodeInspectCurrentRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkNodeInspectCurrentRequest) ProtoMessage()    {}
 func (*SdkNodeInspectCurrentRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{135}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{150}
 }
 func (m *SdkNodeInspectCurrentRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkNodeInspectCurrentRequest.Unmarshal(m, b)
@@ -10785,7 +11731,7 @@ func (m *SdkNodeInspectCurrentResponse) Reset()         { *m = SdkNodeInspectCur
 func (m *SdkNodeInspectCurrentResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkNodeInspectCurrentResponse) ProtoMessage()    {}
 func (*SdkNodeInspectCurrentResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{136}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{151}
 }
 func (m *SdkNodeInspectCurrentResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkNodeInspectCurrentResponse.Unmarshal(m, b)
@@ -10823,7 +11769,7 @@ func (m *SdkNodeEnumerateRequest) Reset()         { *m = SdkNodeEnumerateRequest
 func (m *SdkNodeEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkNodeEnumerateRequest) ProtoMessage()    {}
 func (*SdkNodeEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{137}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{152}
 }
 func (m *SdkNodeEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkNodeEnumerateRequest.Unmarshal(m, b)
@@ -10843,7 +11789,7 @@ func (m *SdkNodeEnumerateRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SdkNodeEnumerateRequest proto.InternalMessageInfo
 
-// Defines a response with a list of nodes
+// Defines a response with a list of node ids
 type SdkNodeEnumerateResponse struct {
 	// List of all the node ids in the cluster
 	NodeIds              []string `protobuf:"bytes,1,rep,name=node_ids,json=nodeIds" json:"node_ids,omitempty"`
@@ -10856,7 +11802,7 @@ func (m *SdkNodeEnumerateResponse) Reset()         { *m = SdkNodeEnumerateRespon
 func (m *SdkNodeEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkNodeEnumerateResponse) ProtoMessage()    {}
 func (*SdkNodeEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{138}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{153}
 }
 func (m *SdkNodeEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkNodeEnumerateResponse.Unmarshal(m, b)
@@ -10883,6 +11829,78 @@ func (m *SdkNodeEnumerateResponse) GetNodeIds() []string {
 	return nil
 }
 
+// Defines a request to list nodes with given filter. Currently there are
+// no filters and all the nodes will be returned.
+type SdkNodeEnumerateWithFiltersRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkNodeEnumerateWithFiltersRequest) Reset()         { *m = SdkNodeEnumerateWithFiltersRequest{} }
+func (m *SdkNodeEnumerateWithFiltersRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkNodeEnumerateWithFiltersRequest) ProtoMessage()    {}
+func (*SdkNodeEnumerateWithFiltersRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{154}
+}
+func (m *SdkNodeEnumerateWithFiltersRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkNodeEnumerateWithFiltersRequest.Unmarshal(m, b)
+}
+func (m *SdkNodeEnumerateWithFiltersRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkNodeEnumerateWithFiltersRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkNodeEnumerateWithFiltersRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkNodeEnumerateWithFiltersRequest.Merge(dst, src)
+}
+func (m *SdkNodeEnumerateWithFiltersRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkNodeEnumerateWithFiltersRequest.Size(m)
+}
+func (m *SdkNodeEnumerateWithFiltersRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkNodeEnumerateWithFiltersRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkNodeEnumerateWithFiltersRequest proto.InternalMessageInfo
+
+// Defines a response with a list of nodes
+type SdkNodeEnumerateWithFiltersResponse struct {
+	// List of all the nodes in the cluster
+	Nodes                []*StorageNode `protobuf:"bytes,1,rep,name=nodes" json:"nodes,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
+	XXX_unrecognized     []byte         `json:"-"`
+	XXX_sizecache        int32          `json:"-"`
+}
+
+func (m *SdkNodeEnumerateWithFiltersResponse) Reset()         { *m = SdkNodeEnumerateWithFiltersResponse{} }
+func (m *SdkNodeEnumerateWithFiltersResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkNodeEnumerateWithFiltersResponse) ProtoMessage()    {}
+func (*SdkNodeEnumerateWithFiltersResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{155}
+}
+func (m *SdkNodeEnumerateWithFiltersResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkNodeEnumerateWithFiltersResponse.Unmarshal(m, b)
+}
+func (m *SdkNodeEnumerateWithFiltersResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkNodeEnumerateWithFiltersResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkNodeEnumerateWithFiltersResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkNodeEnumerateWithFiltersResponse.Merge(dst, src)
+}
+func (m *SdkNodeEnumerateWithFiltersResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkNodeEnumerateWithFiltersResponse.Size(m)
+}
+func (m *SdkNodeEnumerateWithFiltersResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkNodeEnumerateWithFiltersResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkNodeEnumerateWithFiltersResponse proto.InternalMessageInfo
+
+func (m *SdkNodeEnumerateWithFiltersResponse) GetNodes() []*StorageNode {
+	if m != nil {
+		return m.Nodes
+	}
+	return nil
+}
+
 // Defines a request to get information about an object store endpoint
 type SdkObjectstoreInspectRequest struct {
 	// Id of the object store
@@ -10896,7 +11914,7 @@ func (m *SdkObjectstoreInspectRequest) Reset()         { *m = SdkObjectstoreInsp
 func (m *SdkObjectstoreInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkObjectstoreInspectRequest) ProtoMessage()    {}
 func (*SdkObjectstoreInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{139}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{156}
 }
 func (m *SdkObjectstoreInspectRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkObjectstoreInspectRequest.Unmarshal(m, b)
@@ -10936,7 +11954,7 @@ func (m *SdkObjectstoreInspectResponse) Reset()         { *m = SdkObjectstoreIns
 func (m *SdkObjectstoreInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkObjectstoreInspectResponse) ProtoMessage()    {}
 func (*SdkObjectstoreInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{140}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{157}
 }
 func (m *SdkObjectstoreInspectResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkObjectstoreInspectResponse.Unmarshal(m, b)
@@ -10976,7 +11994,7 @@ func (m *SdkObjectstoreCreateRequest) Reset()         { *m = SdkObjectstoreCreat
 func (m *SdkObjectstoreCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkObjectstoreCreateRequest) ProtoMessage()    {}
 func (*SdkObjectstoreCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{141}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{158}
 }
 func (m *SdkObjectstoreCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkObjectstoreCreateRequest.Unmarshal(m, b)
@@ -11017,7 +12035,7 @@ func (m *SdkObjectstoreCreateResponse) Reset()         { *m = SdkObjectstoreCrea
 func (m *SdkObjectstoreCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkObjectstoreCreateResponse) ProtoMessage()    {}
 func (*SdkObjectstoreCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{142}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{159}
 }
 func (m *SdkObjectstoreCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkObjectstoreCreateResponse.Unmarshal(m, b)
@@ -11057,7 +12075,7 @@ func (m *SdkObjectstoreDeleteRequest) Reset()         { *m = SdkObjectstoreDelet
 func (m *SdkObjectstoreDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkObjectstoreDeleteRequest) ProtoMessage()    {}
 func (*SdkObjectstoreDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{143}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{160}
 }
 func (m *SdkObjectstoreDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkObjectstoreDeleteRequest.Unmarshal(m, b)
@@ -11095,7 +12113,7 @@ func (m *SdkObjectstoreDeleteResponse) Reset()         { *m = SdkObjectstoreDele
 func (m *SdkObjectstoreDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkObjectstoreDeleteResponse) ProtoMessage()    {}
 func (*SdkObjectstoreDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{144}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{161}
 }
 func (m *SdkObjectstoreDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkObjectstoreDeleteResponse.Unmarshal(m, b)
@@ -11130,7 +12148,7 @@ func (m *SdkObjectstoreUpdateRequest) Reset()         { *m = SdkObjectstoreUpdat
 func (m *SdkObjectstoreUpdateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkObjectstoreUpdateRequest) ProtoMessage()    {}
 func (*SdkObjectstoreUpdateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{145}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{162}
 }
 func (m *SdkObjectstoreUpdateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkObjectstoreUpdateRequest.Unmarshal(m, b)
@@ -11175,7 +12193,7 @@ func (m *SdkObjectstoreUpdateResponse) Reset()         { *m = SdkObjectstoreUpda
 func (m *SdkObjectstoreUpdateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkObjectstoreUpdateResponse) ProtoMessage()    {}
 func (*SdkObjectstoreUpdateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{146}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{163}
 }
 func (m *SdkObjectstoreUpdateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkObjectstoreUpdateResponse.Unmarshal(m, b)
@@ -11208,17 +12226,22 @@ type SdkCloudBackupCreateRequest struct {
 	TaskId string `protobuf:"bytes,4,opt,name=task_id,json=taskId" json:"task_id,omitempty"`
 	// Labels are list of key value pairs to tag the cloud backup. These labels
 	// are stored in the metadata associated with the backup.
-	Labels               map[string]string `protobuf:"bytes,5,rep,name=labels" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Labels map[string]string `protobuf:"bytes,5,rep,name=labels" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// FullBackupFrequency indicates number of incremental backup after whcih
+	// a fullbackup must be created. This is to override the default value for
+	// manual/user triggerred backups and not applicable for scheduled backups
+	// Value of 0 retains the default behavior.
+	FullBackupFrequency  uint32   `protobuf:"varint,6,opt,name=full_backup_frequency,json=fullBackupFrequency" json:"full_backup_frequency,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *SdkCloudBackupCreateRequest) Reset()         { *m = SdkCloudBackupCreateRequest{} }
 func (m *SdkCloudBackupCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupCreateRequest) ProtoMessage()    {}
 func (*SdkCloudBackupCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{147}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{164}
 }
 func (m *SdkCloudBackupCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupCreateRequest.Unmarshal(m, b)
@@ -11273,6 +12296,13 @@ func (m *SdkCloudBackupCreateRequest) GetLabels() map[string]string {
 	return nil
 }
 
+func (m *SdkCloudBackupCreateRequest) GetFullBackupFrequency() uint32 {
+	if m != nil {
+		return m.FullBackupFrequency
+	}
+	return 0
+}
+
 // Empty response
 type SdkCloudBackupCreateResponse struct {
 	// TaskId of the task performing the backup
@@ -11286,7 +12316,7 @@ func (m *SdkCloudBackupCreateResponse) Reset()         { *m = SdkCloudBackupCrea
 func (m *SdkCloudBackupCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupCreateResponse) ProtoMessage()    {}
 func (*SdkCloudBackupCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{148}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{165}
 }
 func (m *SdkCloudBackupCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupCreateResponse.Unmarshal(m, b)
@@ -11313,6 +12343,134 @@ func (m *SdkCloudBackupCreateResponse) GetTaskId() string {
 	return ""
 }
 
+// Defines a request to create a group backup of a group to the cloud
+type SdkCloudBackupGroupCreateRequest struct {
+	// GroupID of the volume for which cloudbackup is requested
+	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId" json:"group_id,omitempty"`
+	// VolumeIds are a list of volume IDs to use for the backup request.
+	// If multiple of GroupID, Labels or VolumeIDs are specified, volumes matching
+	// all of them are backed uup
+	VolumeIds []string `protobuf:"bytes,2,rep,name=volume_ids,json=volumeIds" json:"volume_ids,omitempty"`
+	// Credential id refers to the cloud credentials needed to backup
+	CredentialId string `protobuf:"bytes,3,opt,name=credential_id,json=credentialId" json:"credential_id,omitempty"`
+	// Full indicates if full backup is desired even though incremental is possible
+	Full bool `protobuf:"varint,4,opt,name=full" json:"full,omitempty"`
+	// Labels are list of key value pairs to tag the cloud backup. These labels
+	// are stored in the metadata associated with the backup.
+	Labels               map[string]string `protobuf:"bytes,5,rep,name=labels" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
+}
+
+func (m *SdkCloudBackupGroupCreateRequest) Reset()         { *m = SdkCloudBackupGroupCreateRequest{} }
+func (m *SdkCloudBackupGroupCreateRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkCloudBackupGroupCreateRequest) ProtoMessage()    {}
+func (*SdkCloudBackupGroupCreateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{166}
+}
+func (m *SdkCloudBackupGroupCreateRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkCloudBackupGroupCreateRequest.Unmarshal(m, b)
+}
+func (m *SdkCloudBackupGroupCreateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkCloudBackupGroupCreateRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkCloudBackupGroupCreateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkCloudBackupGroupCreateRequest.Merge(dst, src)
+}
+func (m *SdkCloudBackupGroupCreateRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkCloudBackupGroupCreateRequest.Size(m)
+}
+func (m *SdkCloudBackupGroupCreateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkCloudBackupGroupCreateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkCloudBackupGroupCreateRequest proto.InternalMessageInfo
+
+func (m *SdkCloudBackupGroupCreateRequest) GetGroupId() string {
+	if m != nil {
+		return m.GroupId
+	}
+	return ""
+}
+
+func (m *SdkCloudBackupGroupCreateRequest) GetVolumeIds() []string {
+	if m != nil {
+		return m.VolumeIds
+	}
+	return nil
+}
+
+func (m *SdkCloudBackupGroupCreateRequest) GetCredentialId() string {
+	if m != nil {
+		return m.CredentialId
+	}
+	return ""
+}
+
+func (m *SdkCloudBackupGroupCreateRequest) GetFull() bool {
+	if m != nil {
+		return m.Full
+	}
+	return false
+}
+
+func (m *SdkCloudBackupGroupCreateRequest) GetLabels() map[string]string {
+	if m != nil {
+		return m.Labels
+	}
+	return nil
+}
+
+// Empty response
+type SdkCloudBackupGroupCreateResponse struct {
+	// ID for this group of backups
+	GroupCloudBackupId string `protobuf:"bytes,1,opt,name=group_cloud_backup_id,json=groupCloudBackupId" json:"group_cloud_backup_id,omitempty"`
+	// TaskIds of the tasks performing the group backup
+	TaskIds              []string `protobuf:"bytes,2,rep,name=task_ids,json=taskIds" json:"task_ids,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkCloudBackupGroupCreateResponse) Reset()         { *m = SdkCloudBackupGroupCreateResponse{} }
+func (m *SdkCloudBackupGroupCreateResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkCloudBackupGroupCreateResponse) ProtoMessage()    {}
+func (*SdkCloudBackupGroupCreateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{167}
+}
+func (m *SdkCloudBackupGroupCreateResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkCloudBackupGroupCreateResponse.Unmarshal(m, b)
+}
+func (m *SdkCloudBackupGroupCreateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkCloudBackupGroupCreateResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkCloudBackupGroupCreateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkCloudBackupGroupCreateResponse.Merge(dst, src)
+}
+func (m *SdkCloudBackupGroupCreateResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkCloudBackupGroupCreateResponse.Size(m)
+}
+func (m *SdkCloudBackupGroupCreateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkCloudBackupGroupCreateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkCloudBackupGroupCreateResponse proto.InternalMessageInfo
+
+func (m *SdkCloudBackupGroupCreateResponse) GetGroupCloudBackupId() string {
+	if m != nil {
+		return m.GroupCloudBackupId
+	}
+	return ""
+}
+
+func (m *SdkCloudBackupGroupCreateResponse) GetTaskIds() []string {
+	if m != nil {
+		return m.TaskIds
+	}
+	return nil
+}
+
 // Defines a request to restore a volume from an existing backup stored by
 // a cloud provider
 type SdkCloudBackupRestoreRequest struct {
@@ -11337,7 +12495,7 @@ func (m *SdkCloudBackupRestoreRequest) Reset()         { *m = SdkCloudBackupRest
 func (m *SdkCloudBackupRestoreRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupRestoreRequest) ProtoMessage()    {}
 func (*SdkCloudBackupRestoreRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{149}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{168}
 }
 func (m *SdkCloudBackupRestoreRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupRestoreRequest.Unmarshal(m, b)
@@ -11408,7 +12566,7 @@ func (m *SdkCloudBackupRestoreResponse) Reset()         { *m = SdkCloudBackupRes
 func (m *SdkCloudBackupRestoreResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupRestoreResponse) ProtoMessage()    {}
 func (*SdkCloudBackupRestoreResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{150}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{169}
 }
 func (m *SdkCloudBackupRestoreResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupRestoreResponse.Unmarshal(m, b)
@@ -11461,7 +12619,7 @@ func (m *SdkCloudBackupDeleteRequest) Reset()         { *m = SdkCloudBackupDelet
 func (m *SdkCloudBackupDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupDeleteRequest) ProtoMessage()    {}
 func (*SdkCloudBackupDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{151}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{170}
 }
 func (m *SdkCloudBackupDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupDeleteRequest.Unmarshal(m, b)
@@ -11513,7 +12671,7 @@ func (m *SdkCloudBackupDeleteResponse) Reset()         { *m = SdkCloudBackupDele
 func (m *SdkCloudBackupDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupDeleteResponse) ProtoMessage()    {}
 func (*SdkCloudBackupDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{152}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{171}
 }
 func (m *SdkCloudBackupDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupDeleteResponse.Unmarshal(m, b)
@@ -11549,7 +12707,7 @@ func (m *SdkCloudBackupDeleteAllRequest) Reset()         { *m = SdkCloudBackupDe
 func (m *SdkCloudBackupDeleteAllRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupDeleteAllRequest) ProtoMessage()    {}
 func (*SdkCloudBackupDeleteAllRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{153}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{172}
 }
 func (m *SdkCloudBackupDeleteAllRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupDeleteAllRequest.Unmarshal(m, b)
@@ -11594,7 +12752,7 @@ func (m *SdkCloudBackupDeleteAllResponse) Reset()         { *m = SdkCloudBackupD
 func (m *SdkCloudBackupDeleteAllResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupDeleteAllResponse) ProtoMessage()    {}
 func (*SdkCloudBackupDeleteAllResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{154}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{173}
 }
 func (m *SdkCloudBackupDeleteAllResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupDeleteAllResponse.Unmarshal(m, b)
@@ -11635,7 +12793,16 @@ type SdkCloudBackupEnumerateWithFiltersRequest struct {
 	// Credential id is the credential for cloud to be used for the request
 	CredentialId string `protobuf:"bytes,3,opt,name=credential_id,json=credentialId" json:"credential_id,omitempty"`
 	// (optional) All indicates if the request should show cloud backups for all clusters or the current cluster.
-	All                  bool     `protobuf:"varint,4,opt,name=all" json:"all,omitempty"`
+	All bool `protobuf:"varint,4,opt,name=all" json:"all,omitempty"`
+	// (optional) enumerates backups that have status specified by this type
+	StatusFilter SdkCloudBackupStatusType `protobuf:"varint,5,opt,name=status_filter,json=statusFilter,enum=openstorage.api.SdkCloudBackupStatusType" json:"status_filter,omitempty"`
+	// (optional) Enumerates backups that have tags of this type
+	MetadataFilter map[string]string `protobuf:"bytes,6,rep,name=metadata_filter,json=metadataFilter" json:"metadata_filter,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// (optional) if caller wished to limit number of backups returned by enumerate
+	MaxBackups uint64 `protobuf:"varint,7,opt,name=max_backups,json=maxBackups" json:"max_backups,omitempty"`
+	// Returned in the enumerate response if not all of the backups could be returned in the
+	// response.
+	ContinuationToken    string   `protobuf:"bytes,8,opt,name=continuation_token,json=continuationToken" json:"continuation_token,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -11647,7 +12814,7 @@ func (m *SdkCloudBackupEnumerateWithFiltersRequest) Reset() {
 func (m *SdkCloudBackupEnumerateWithFiltersRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupEnumerateWithFiltersRequest) ProtoMessage()    {}
 func (*SdkCloudBackupEnumerateWithFiltersRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{155}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{174}
 }
 func (m *SdkCloudBackupEnumerateWithFiltersRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupEnumerateWithFiltersRequest.Unmarshal(m, b)
@@ -11695,6 +12862,34 @@ func (m *SdkCloudBackupEnumerateWithFiltersRequest) GetAll() bool {
 	return false
 }
 
+func (m *SdkCloudBackupEnumerateWithFiltersRequest) GetStatusFilter() SdkCloudBackupStatusType {
+	if m != nil {
+		return m.StatusFilter
+	}
+	return SdkCloudBackupStatusType_SdkCloudBackupStatusTypeUnknown
+}
+
+func (m *SdkCloudBackupEnumerateWithFiltersRequest) GetMetadataFilter() map[string]string {
+	if m != nil {
+		return m.MetadataFilter
+	}
+	return nil
+}
+
+func (m *SdkCloudBackupEnumerateWithFiltersRequest) GetMaxBackups() uint64 {
+	if m != nil {
+		return m.MaxBackups
+	}
+	return 0
+}
+
+func (m *SdkCloudBackupEnumerateWithFiltersRequest) GetContinuationToken() string {
+	if m != nil {
+		return m.ContinuationToken
+	}
+	return ""
+}
+
 // SdkCloudBackupInfo has information about a backup stored by a cloud provider
 type SdkCloudBackupInfo struct {
 	// This is the id as represented by the cloud provider
@@ -11719,7 +12914,7 @@ func (m *SdkCloudBackupInfo) Reset()         { *m = SdkCloudBackupInfo{} }
 func (m *SdkCloudBackupInfo) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupInfo) ProtoMessage()    {}
 func (*SdkCloudBackupInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{156}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{175}
 }
 func (m *SdkCloudBackupInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupInfo.Unmarshal(m, b)
@@ -11783,10 +12978,13 @@ func (m *SdkCloudBackupInfo) GetStatus() SdkCloudBackupStatusType {
 
 // Defines a response which lists all the backups stored by a cloud provider
 type SdkCloudBackupEnumerateWithFiltersResponse struct {
-	Backups              []*SdkCloudBackupInfo `protobuf:"bytes,1,rep,name=backups" json:"backups,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Backups []*SdkCloudBackupInfo `protobuf:"bytes,1,rep,name=backups" json:"backups,omitempty"`
+	// if this is not an empty string, callers must pass this to get next list of
+	// backups
+	ContinuationToken    string   `protobuf:"bytes,2,opt,name=continuation_token,json=continuationToken" json:"continuation_token,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *SdkCloudBackupEnumerateWithFiltersResponse) Reset() {
@@ -11797,7 +12995,7 @@ func (m *SdkCloudBackupEnumerateWithFiltersResponse) String() string {
 }
 func (*SdkCloudBackupEnumerateWithFiltersResponse) ProtoMessage() {}
 func (*SdkCloudBackupEnumerateWithFiltersResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{157}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{176}
 }
 func (m *SdkCloudBackupEnumerateWithFiltersResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupEnumerateWithFiltersResponse.Unmarshal(m, b)
@@ -11822,6 +13020,13 @@ func (m *SdkCloudBackupEnumerateWithFiltersResponse) GetBackups() []*SdkCloudBac
 		return m.Backups
 	}
 	return nil
+}
+
+func (m *SdkCloudBackupEnumerateWithFiltersResponse) GetContinuationToken() string {
+	if m != nil {
+		return m.ContinuationToken
+	}
+	return ""
 }
 
 // SdkCloudBackupStatus defines the status of a backup stored by a cloud provider
@@ -11850,7 +13055,9 @@ type SdkCloudBackupStatus struct {
 	// BytesTotal is the total number of bytes being transferred
 	BytesTotal uint64 `protobuf:"varint,11,opt,name=bytes_total,json=bytesTotal" json:"bytes_total,omitempty"`
 	// ETASeconds is the number of seconds for cloud backup completion
-	EtaSeconds           int64    `protobuf:"varint,12,opt,name=eta_seconds,json=etaSeconds" json:"eta_seconds,omitempty"`
+	EtaSeconds int64 `protobuf:"varint,12,opt,name=eta_seconds,json=etaSeconds" json:"eta_seconds,omitempty"`
+	// string group_id volume's group id if this was group cloud backup
+	GroupId              string   `protobuf:"bytes,13,opt,name=group_id,json=groupId" json:"group_id,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -11860,7 +13067,7 @@ func (m *SdkCloudBackupStatus) Reset()         { *m = SdkCloudBackupStatus{} }
 func (m *SdkCloudBackupStatus) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupStatus) ProtoMessage()    {}
 func (*SdkCloudBackupStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{158}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{177}
 }
 func (m *SdkCloudBackupStatus) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupStatus.Unmarshal(m, b)
@@ -11964,6 +13171,13 @@ func (m *SdkCloudBackupStatus) GetEtaSeconds() int64 {
 	return 0
 }
 
+func (m *SdkCloudBackupStatus) GetGroupId() string {
+	if m != nil {
+		return m.GroupId
+	}
+	return ""
+}
+
 // Defines a request to retreive the status of a backup or restore for a
 // specified volume
 type SdkCloudBackupStatusRequest struct {
@@ -11986,7 +13200,7 @@ func (m *SdkCloudBackupStatusRequest) Reset()         { *m = SdkCloudBackupStatu
 func (m *SdkCloudBackupStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupStatusRequest) ProtoMessage()    {}
 func (*SdkCloudBackupStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{159}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{178}
 }
 func (m *SdkCloudBackupStatusRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupStatusRequest.Unmarshal(m, b)
@@ -12041,7 +13255,7 @@ func (m *SdkCloudBackupStatusResponse) Reset()         { *m = SdkCloudBackupStat
 func (m *SdkCloudBackupStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupStatusResponse) ProtoMessage()    {}
 func (*SdkCloudBackupStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{160}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{179}
 }
 func (m *SdkCloudBackupStatusResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupStatusResponse.Unmarshal(m, b)
@@ -12083,7 +13297,7 @@ func (m *SdkCloudBackupCatalogRequest) Reset()         { *m = SdkCloudBackupCata
 func (m *SdkCloudBackupCatalogRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupCatalogRequest) ProtoMessage()    {}
 func (*SdkCloudBackupCatalogRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{161}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{180}
 }
 func (m *SdkCloudBackupCatalogRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupCatalogRequest.Unmarshal(m, b)
@@ -12130,7 +13344,7 @@ func (m *SdkCloudBackupCatalogResponse) Reset()         { *m = SdkCloudBackupCat
 func (m *SdkCloudBackupCatalogResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupCatalogResponse) ProtoMessage()    {}
 func (*SdkCloudBackupCatalogResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{162}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{181}
 }
 func (m *SdkCloudBackupCatalogResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupCatalogResponse.Unmarshal(m, b)
@@ -12175,7 +13389,7 @@ func (m *SdkCloudBackupHistoryItem) Reset()         { *m = SdkCloudBackupHistory
 func (m *SdkCloudBackupHistoryItem) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupHistoryItem) ProtoMessage()    {}
 func (*SdkCloudBackupHistoryItem) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{163}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{182}
 }
 func (m *SdkCloudBackupHistoryItem) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupHistoryItem.Unmarshal(m, b)
@@ -12231,7 +13445,7 @@ func (m *SdkCloudBackupHistoryRequest) Reset()         { *m = SdkCloudBackupHist
 func (m *SdkCloudBackupHistoryRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupHistoryRequest) ProtoMessage()    {}
 func (*SdkCloudBackupHistoryRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{164}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{183}
 }
 func (m *SdkCloudBackupHistoryRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupHistoryRequest.Unmarshal(m, b)
@@ -12271,7 +13485,7 @@ func (m *SdkCloudBackupHistoryResponse) Reset()         { *m = SdkCloudBackupHis
 func (m *SdkCloudBackupHistoryResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupHistoryResponse) ProtoMessage()    {}
 func (*SdkCloudBackupHistoryResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{165}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{184}
 }
 func (m *SdkCloudBackupHistoryResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupHistoryResponse.Unmarshal(m, b)
@@ -12315,7 +13529,7 @@ func (m *SdkCloudBackupStateChangeRequest) Reset()         { *m = SdkCloudBackup
 func (m *SdkCloudBackupStateChangeRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupStateChangeRequest) ProtoMessage()    {}
 func (*SdkCloudBackupStateChangeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{166}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{185}
 }
 func (m *SdkCloudBackupStateChangeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupStateChangeRequest.Unmarshal(m, b)
@@ -12360,7 +13574,7 @@ func (m *SdkCloudBackupStateChangeResponse) Reset()         { *m = SdkCloudBacku
 func (m *SdkCloudBackupStateChangeResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupStateChangeResponse) ProtoMessage()    {}
 func (*SdkCloudBackupStateChangeResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{167}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{186}
 }
 func (m *SdkCloudBackupStateChangeResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupStateChangeResponse.Unmarshal(m, b)
@@ -12389,11 +13603,15 @@ type SdkCloudBackupScheduleInfo struct {
 	CredentialId string `protobuf:"bytes,2,opt,name=credential_id,json=credentialId" json:"credential_id,omitempty"`
 	// Schedules are the frequencies of the backup
 	Schedules []*SdkSchedulePolicyInterval `protobuf:"bytes,3,rep,name=schedules" json:"schedules,omitempty"`
-	// MaxBackups are the maximum number of backups retained
-	// in cloud.Older backups are deleted
+	// MaxBackups indicates when to force full backup to cloud. If RetentionDays
+	// is not specified or is 0 (older scheme), this is also the maximum number
+	// of scheduled backups retained in the cloud. Older backups are deleted
 	MaxBackups uint64 `protobuf:"varint,4,opt,name=max_backups,json=maxBackups" json:"max_backups,omitempty"`
 	// Full indicates if scheduled backups should always be full and never incremental.
-	Full                 bool     `protobuf:"varint,5,opt,name=full" json:"full,omitempty"`
+	Full bool `protobuf:"varint,5,opt,name=full" json:"full,omitempty"`
+	// Number of days that Scheduled CloudBackups will be kept after which they
+	// are deleted
+	RetentionDays        uint32   `protobuf:"varint,6,opt,name=retention_days,json=retentionDays" json:"retention_days,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -12403,7 +13621,7 @@ func (m *SdkCloudBackupScheduleInfo) Reset()         { *m = SdkCloudBackupSchedu
 func (m *SdkCloudBackupScheduleInfo) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupScheduleInfo) ProtoMessage()    {}
 func (*SdkCloudBackupScheduleInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{168}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{187}
 }
 func (m *SdkCloudBackupScheduleInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupScheduleInfo.Unmarshal(m, b)
@@ -12458,6 +13676,13 @@ func (m *SdkCloudBackupScheduleInfo) GetFull() bool {
 	return false
 }
 
+func (m *SdkCloudBackupScheduleInfo) GetRetentionDays() uint32 {
+	if m != nil {
+		return m.RetentionDays
+	}
+	return 0
+}
+
 // Defines a request to create a schedule for volume backups to a
 // cloud provider
 type SdkCloudBackupSchedCreateRequest struct {
@@ -12472,7 +13697,7 @@ func (m *SdkCloudBackupSchedCreateRequest) Reset()         { *m = SdkCloudBackup
 func (m *SdkCloudBackupSchedCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupSchedCreateRequest) ProtoMessage()    {}
 func (*SdkCloudBackupSchedCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{169}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{188}
 }
 func (m *SdkCloudBackupSchedCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupSchedCreateRequest.Unmarshal(m, b)
@@ -12513,7 +13738,7 @@ func (m *SdkCloudBackupSchedCreateResponse) Reset()         { *m = SdkCloudBacku
 func (m *SdkCloudBackupSchedCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupSchedCreateResponse) ProtoMessage()    {}
 func (*SdkCloudBackupSchedCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{170}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{189}
 }
 func (m *SdkCloudBackupSchedCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupSchedCreateResponse.Unmarshal(m, b)
@@ -12553,7 +13778,7 @@ func (m *SdkCloudBackupSchedDeleteRequest) Reset()         { *m = SdkCloudBackup
 func (m *SdkCloudBackupSchedDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupSchedDeleteRequest) ProtoMessage()    {}
 func (*SdkCloudBackupSchedDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{171}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{190}
 }
 func (m *SdkCloudBackupSchedDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupSchedDeleteRequest.Unmarshal(m, b)
@@ -12591,7 +13816,7 @@ func (m *SdkCloudBackupSchedDeleteResponse) Reset()         { *m = SdkCloudBacku
 func (m *SdkCloudBackupSchedDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupSchedDeleteResponse) ProtoMessage()    {}
 func (*SdkCloudBackupSchedDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{172}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{191}
 }
 func (m *SdkCloudBackupSchedDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupSchedDeleteResponse.Unmarshal(m, b)
@@ -12622,7 +13847,7 @@ func (m *SdkCloudBackupSchedEnumerateRequest) Reset()         { *m = SdkCloudBac
 func (m *SdkCloudBackupSchedEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupSchedEnumerateRequest) ProtoMessage()    {}
 func (*SdkCloudBackupSchedEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{173}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{192}
 }
 func (m *SdkCloudBackupSchedEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupSchedEnumerateRequest.Unmarshal(m, b)
@@ -12656,7 +13881,7 @@ func (m *SdkCloudBackupSchedEnumerateResponse) Reset()         { *m = SdkCloudBa
 func (m *SdkCloudBackupSchedEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudBackupSchedEnumerateResponse) ProtoMessage()    {}
 func (*SdkCloudBackupSchedEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{174}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{193}
 }
 func (m *SdkCloudBackupSchedEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudBackupSchedEnumerateResponse.Unmarshal(m, b)
@@ -12683,6 +13908,520 @@ func (m *SdkCloudBackupSchedEnumerateResponse) GetCloudSchedList() map[string]*S
 	return nil
 }
 
+//
+// SdkRule is the message used to construct custom roles in the OpenStorage SDK.
+//
+// ### Format
+// The following shows the supported format for SdkRule:
+//
+// * Services: Is the gRPC service name in `OpenStorage<service name>` in lowercase
+// * Apis: Is the API name in the service in lowercase
+//
+// Values can also be set to `*`, or start or end with `*` to allow multiple matches in services or apis.
+//
+// ### Examples
+//
+// * Allow any call:
+//
+// ```yaml
+// SdkRule:
+//   - Services: ["*"]
+//     Apis: ["*"]
+// ```
+//
+// * Allow only cluster operations:
+//
+// ```yaml
+// SdkRule:
+//   - services: ["cluster"]
+//     apis: ["*"]
+// ```
+//
+// * Allow inspection of any object and listings of only volumes
+//
+// ```yaml
+// SdkRule:
+//   - Services: ["volumes"]
+//     Apis: ["*enumerate*"]
+//   - Services: ["*"]
+//     Apis: ["inspect*"]
+// ```
+//
+type SdkRule struct {
+	// The gRPC service name in `OpenStorage<service name>` in lowercase
+	Services []string `protobuf:"bytes,1,rep,name=services" json:"services,omitempty"`
+	// The API name in the service in lowercase
+	Apis                 []string `protobuf:"bytes,2,rep,name=apis" json:"apis,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRule) Reset()         { *m = SdkRule{} }
+func (m *SdkRule) String() string { return proto.CompactTextString(m) }
+func (*SdkRule) ProtoMessage()    {}
+func (*SdkRule) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{194}
+}
+func (m *SdkRule) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRule.Unmarshal(m, b)
+}
+func (m *SdkRule) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRule.Marshal(b, m, deterministic)
+}
+func (dst *SdkRule) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRule.Merge(dst, src)
+}
+func (m *SdkRule) XXX_Size() int {
+	return xxx_messageInfo_SdkRule.Size(m)
+}
+func (m *SdkRule) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRule.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRule proto.InternalMessageInfo
+
+func (m *SdkRule) GetServices() []string {
+	if m != nil {
+		return m.Services
+	}
+	return nil
+}
+
+func (m *SdkRule) GetApis() []string {
+	if m != nil {
+		return m.Apis
+	}
+	return nil
+}
+
+type SdkRole struct {
+	Name                 string     `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Rules                []*SdkRule `protobuf:"bytes,2,rep,name=rules" json:"rules,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
+}
+
+func (m *SdkRole) Reset()         { *m = SdkRole{} }
+func (m *SdkRole) String() string { return proto.CompactTextString(m) }
+func (*SdkRole) ProtoMessage()    {}
+func (*SdkRole) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{195}
+}
+func (m *SdkRole) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRole.Unmarshal(m, b)
+}
+func (m *SdkRole) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRole.Marshal(b, m, deterministic)
+}
+func (dst *SdkRole) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRole.Merge(dst, src)
+}
+func (m *SdkRole) XXX_Size() int {
+	return xxx_messageInfo_SdkRole.Size(m)
+}
+func (m *SdkRole) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRole.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRole proto.InternalMessageInfo
+
+func (m *SdkRole) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *SdkRole) GetRules() []*SdkRule {
+	if m != nil {
+		return m.Rules
+	}
+	return nil
+}
+
+// Defines a request for creating a role
+type SdkRoleCreateRequest struct {
+	// Role
+	Role                 *SdkRole `protobuf:"bytes,1,opt,name=role" json:"role,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleCreateRequest) Reset()         { *m = SdkRoleCreateRequest{} }
+func (m *SdkRoleCreateRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleCreateRequest) ProtoMessage()    {}
+func (*SdkRoleCreateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{196}
+}
+func (m *SdkRoleCreateRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleCreateRequest.Unmarshal(m, b)
+}
+func (m *SdkRoleCreateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleCreateRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleCreateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleCreateRequest.Merge(dst, src)
+}
+func (m *SdkRoleCreateRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleCreateRequest.Size(m)
+}
+func (m *SdkRoleCreateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleCreateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleCreateRequest proto.InternalMessageInfo
+
+func (m *SdkRoleCreateRequest) GetRole() *SdkRole {
+	if m != nil {
+		return m.Role
+	}
+	return nil
+}
+
+// Response contains informaiton about the creation of the role
+type SdkRoleCreateResponse struct {
+	// Role created
+	Role                 *SdkRole `protobuf:"bytes,1,opt,name=role" json:"role,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleCreateResponse) Reset()         { *m = SdkRoleCreateResponse{} }
+func (m *SdkRoleCreateResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleCreateResponse) ProtoMessage()    {}
+func (*SdkRoleCreateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{197}
+}
+func (m *SdkRoleCreateResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleCreateResponse.Unmarshal(m, b)
+}
+func (m *SdkRoleCreateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleCreateResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleCreateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleCreateResponse.Merge(dst, src)
+}
+func (m *SdkRoleCreateResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleCreateResponse.Size(m)
+}
+func (m *SdkRoleCreateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleCreateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleCreateResponse proto.InternalMessageInfo
+
+func (m *SdkRoleCreateResponse) GetRole() *SdkRole {
+	if m != nil {
+		return m.Role
+	}
+	return nil
+}
+
+// Empty request
+type SdkRoleEnumerateRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleEnumerateRequest) Reset()         { *m = SdkRoleEnumerateRequest{} }
+func (m *SdkRoleEnumerateRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleEnumerateRequest) ProtoMessage()    {}
+func (*SdkRoleEnumerateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{198}
+}
+func (m *SdkRoleEnumerateRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleEnumerateRequest.Unmarshal(m, b)
+}
+func (m *SdkRoleEnumerateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleEnumerateRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleEnumerateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleEnumerateRequest.Merge(dst, src)
+}
+func (m *SdkRoleEnumerateRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleEnumerateRequest.Size(m)
+}
+func (m *SdkRoleEnumerateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleEnumerateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleEnumerateRequest proto.InternalMessageInfo
+
+// Respose to enumerate all roles
+type SdkRoleEnumerateResponse struct {
+	// List of role names
+	Names                []string `protobuf:"bytes,1,rep,name=names" json:"names,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleEnumerateResponse) Reset()         { *m = SdkRoleEnumerateResponse{} }
+func (m *SdkRoleEnumerateResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleEnumerateResponse) ProtoMessage()    {}
+func (*SdkRoleEnumerateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{199}
+}
+func (m *SdkRoleEnumerateResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleEnumerateResponse.Unmarshal(m, b)
+}
+func (m *SdkRoleEnumerateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleEnumerateResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleEnumerateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleEnumerateResponse.Merge(dst, src)
+}
+func (m *SdkRoleEnumerateResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleEnumerateResponse.Size(m)
+}
+func (m *SdkRoleEnumerateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleEnumerateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleEnumerateResponse proto.InternalMessageInfo
+
+func (m *SdkRoleEnumerateResponse) GetNames() []string {
+	if m != nil {
+		return m.Names
+	}
+	return nil
+}
+
+// Defines a request to inspect a role
+type SdkRoleInspectRequest struct {
+	// Name of role
+	Name                 string   `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleInspectRequest) Reset()         { *m = SdkRoleInspectRequest{} }
+func (m *SdkRoleInspectRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleInspectRequest) ProtoMessage()    {}
+func (*SdkRoleInspectRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{200}
+}
+func (m *SdkRoleInspectRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleInspectRequest.Unmarshal(m, b)
+}
+func (m *SdkRoleInspectRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleInspectRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleInspectRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleInspectRequest.Merge(dst, src)
+}
+func (m *SdkRoleInspectRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleInspectRequest.Size(m)
+}
+func (m *SdkRoleInspectRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleInspectRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleInspectRequest proto.InternalMessageInfo
+
+func (m *SdkRoleInspectRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+// Response to inspection request
+type SdkRoleInspectResponse struct {
+	// Role requested
+	Role                 *SdkRole `protobuf:"bytes,1,opt,name=role" json:"role,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleInspectResponse) Reset()         { *m = SdkRoleInspectResponse{} }
+func (m *SdkRoleInspectResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleInspectResponse) ProtoMessage()    {}
+func (*SdkRoleInspectResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{201}
+}
+func (m *SdkRoleInspectResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleInspectResponse.Unmarshal(m, b)
+}
+func (m *SdkRoleInspectResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleInspectResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleInspectResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleInspectResponse.Merge(dst, src)
+}
+func (m *SdkRoleInspectResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleInspectResponse.Size(m)
+}
+func (m *SdkRoleInspectResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleInspectResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleInspectResponse proto.InternalMessageInfo
+
+func (m *SdkRoleInspectResponse) GetRole() *SdkRole {
+	if m != nil {
+		return m.Role
+	}
+	return nil
+}
+
+// Defines a request to delete a role
+type SdkRoleDeleteRequest struct {
+	Name                 string   `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleDeleteRequest) Reset()         { *m = SdkRoleDeleteRequest{} }
+func (m *SdkRoleDeleteRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleDeleteRequest) ProtoMessage()    {}
+func (*SdkRoleDeleteRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{202}
+}
+func (m *SdkRoleDeleteRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleDeleteRequest.Unmarshal(m, b)
+}
+func (m *SdkRoleDeleteRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleDeleteRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleDeleteRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleDeleteRequest.Merge(dst, src)
+}
+func (m *SdkRoleDeleteRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleDeleteRequest.Size(m)
+}
+func (m *SdkRoleDeleteRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleDeleteRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleDeleteRequest proto.InternalMessageInfo
+
+func (m *SdkRoleDeleteRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+// Empty response
+type SdkRoleDeleteResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleDeleteResponse) Reset()         { *m = SdkRoleDeleteResponse{} }
+func (m *SdkRoleDeleteResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleDeleteResponse) ProtoMessage()    {}
+func (*SdkRoleDeleteResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{203}
+}
+func (m *SdkRoleDeleteResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleDeleteResponse.Unmarshal(m, b)
+}
+func (m *SdkRoleDeleteResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleDeleteResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleDeleteResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleDeleteResponse.Merge(dst, src)
+}
+func (m *SdkRoleDeleteResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleDeleteResponse.Size(m)
+}
+func (m *SdkRoleDeleteResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleDeleteResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleDeleteResponse proto.InternalMessageInfo
+
+// Defines a request to update an existing role
+type SdkRoleUpdateRequest struct {
+	// New role update
+	Role                 *SdkRole `protobuf:"bytes,1,opt,name=role" json:"role,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleUpdateRequest) Reset()         { *m = SdkRoleUpdateRequest{} }
+func (m *SdkRoleUpdateRequest) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleUpdateRequest) ProtoMessage()    {}
+func (*SdkRoleUpdateRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{204}
+}
+func (m *SdkRoleUpdateRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleUpdateRequest.Unmarshal(m, b)
+}
+func (m *SdkRoleUpdateRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleUpdateRequest.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleUpdateRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleUpdateRequest.Merge(dst, src)
+}
+func (m *SdkRoleUpdateRequest) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleUpdateRequest.Size(m)
+}
+func (m *SdkRoleUpdateRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleUpdateRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleUpdateRequest proto.InternalMessageInfo
+
+func (m *SdkRoleUpdateRequest) GetRole() *SdkRole {
+	if m != nil {
+		return m.Role
+	}
+	return nil
+}
+
+// Response contains information about the updated role
+type SdkRoleUpdateResponse struct {
+	// Role updated
+	Role                 *SdkRole `protobuf:"bytes,1,opt,name=role" json:"role,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *SdkRoleUpdateResponse) Reset()         { *m = SdkRoleUpdateResponse{} }
+func (m *SdkRoleUpdateResponse) String() string { return proto.CompactTextString(m) }
+func (*SdkRoleUpdateResponse) ProtoMessage()    {}
+func (*SdkRoleUpdateResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{205}
+}
+func (m *SdkRoleUpdateResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_SdkRoleUpdateResponse.Unmarshal(m, b)
+}
+func (m *SdkRoleUpdateResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_SdkRoleUpdateResponse.Marshal(b, m, deterministic)
+}
+func (dst *SdkRoleUpdateResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SdkRoleUpdateResponse.Merge(dst, src)
+}
+func (m *SdkRoleUpdateResponse) XXX_Size() int {
+	return xxx_messageInfo_SdkRoleUpdateResponse.Size(m)
+}
+func (m *SdkRoleUpdateResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_SdkRoleUpdateResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SdkRoleUpdateResponse proto.InternalMessageInfo
+
+func (m *SdkRoleUpdateResponse) GetRole() *SdkRole {
+	if m != nil {
+		return m.Role
+	}
+	return nil
+}
+
 // Empty request
 type SdkIdentityCapabilitiesRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -12694,7 +14433,7 @@ func (m *SdkIdentityCapabilitiesRequest) Reset()         { *m = SdkIdentityCapab
 func (m *SdkIdentityCapabilitiesRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkIdentityCapabilitiesRequest) ProtoMessage()    {}
 func (*SdkIdentityCapabilitiesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{175}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{206}
 }
 func (m *SdkIdentityCapabilitiesRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkIdentityCapabilitiesRequest.Unmarshal(m, b)
@@ -12727,7 +14466,7 @@ func (m *SdkIdentityCapabilitiesResponse) Reset()         { *m = SdkIdentityCapa
 func (m *SdkIdentityCapabilitiesResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkIdentityCapabilitiesResponse) ProtoMessage()    {}
 func (*SdkIdentityCapabilitiesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{176}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{207}
 }
 func (m *SdkIdentityCapabilitiesResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkIdentityCapabilitiesResponse.Unmarshal(m, b)
@@ -12765,7 +14504,7 @@ func (m *SdkIdentityVersionRequest) Reset()         { *m = SdkIdentityVersionReq
 func (m *SdkIdentityVersionRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkIdentityVersionRequest) ProtoMessage()    {}
 func (*SdkIdentityVersionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{177}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{208}
 }
 func (m *SdkIdentityVersionRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkIdentityVersionRequest.Unmarshal(m, b)
@@ -12800,7 +14539,7 @@ func (m *SdkIdentityVersionResponse) Reset()         { *m = SdkIdentityVersionRe
 func (m *SdkIdentityVersionResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkIdentityVersionResponse) ProtoMessage()    {}
 func (*SdkIdentityVersionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{178}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{209}
 }
 func (m *SdkIdentityVersionResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkIdentityVersionResponse.Unmarshal(m, b)
@@ -12851,7 +14590,7 @@ func (m *SdkServiceCapability) Reset()         { *m = SdkServiceCapability{} }
 func (m *SdkServiceCapability) String() string { return proto.CompactTextString(m) }
 func (*SdkServiceCapability) ProtoMessage()    {}
 func (*SdkServiceCapability) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{179}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{210}
 }
 func (m *SdkServiceCapability) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkServiceCapability.Unmarshal(m, b)
@@ -12964,7 +14703,7 @@ func (m *SdkServiceCapability_OpenStorageService) Reset() {
 func (m *SdkServiceCapability_OpenStorageService) String() string { return proto.CompactTextString(m) }
 func (*SdkServiceCapability_OpenStorageService) ProtoMessage()    {}
 func (*SdkServiceCapability_OpenStorageService) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{179, 0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{210, 0}
 }
 func (m *SdkServiceCapability_OpenStorageService) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkServiceCapability_OpenStorageService.Unmarshal(m, b)
@@ -13013,7 +14752,7 @@ func (m *SdkVersion) Reset()         { *m = SdkVersion{} }
 func (m *SdkVersion) String() string { return proto.CompactTextString(m) }
 func (*SdkVersion) ProtoMessage()    {}
 func (*SdkVersion) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{180}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{211}
 }
 func (m *SdkVersion) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkVersion.Unmarshal(m, b)
@@ -13078,7 +14817,7 @@ func (m *StorageVersion) Reset()         { *m = StorageVersion{} }
 func (m *StorageVersion) String() string { return proto.CompactTextString(m) }
 func (*StorageVersion) ProtoMessage()    {}
 func (*StorageVersion) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{181}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{212}
 }
 func (m *StorageVersion) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageVersion.Unmarshal(m, b)
@@ -13129,7 +14868,7 @@ func (m *CloudMigrate) Reset()         { *m = CloudMigrate{} }
 func (m *CloudMigrate) String() string { return proto.CompactTextString(m) }
 func (*CloudMigrate) ProtoMessage()    {}
 func (*CloudMigrate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{182}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{213}
 }
 func (m *CloudMigrate) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CloudMigrate.Unmarshal(m, b)
@@ -13169,7 +14908,7 @@ func (m *CloudMigrateStartRequest) Reset()         { *m = CloudMigrateStartReque
 func (m *CloudMigrateStartRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudMigrateStartRequest) ProtoMessage()    {}
 func (*CloudMigrateStartRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{183}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{214}
 }
 func (m *CloudMigrateStartRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CloudMigrateStartRequest.Unmarshal(m, b)
@@ -13238,7 +14977,7 @@ func (m *SdkCloudMigrateStartRequest) Reset()         { *m = SdkCloudMigrateStar
 func (m *SdkCloudMigrateStartRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudMigrateStartRequest) ProtoMessage()    {}
 func (*SdkCloudMigrateStartRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{184}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{215}
 }
 func (m *SdkCloudMigrateStartRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateStartRequest.Unmarshal(m, b)
@@ -13425,7 +15164,7 @@ func (m *SdkCloudMigrateStartRequest_MigrateVolume) Reset() {
 func (m *SdkCloudMigrateStartRequest_MigrateVolume) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudMigrateStartRequest_MigrateVolume) ProtoMessage()    {}
 func (*SdkCloudMigrateStartRequest_MigrateVolume) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{184, 0}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{215, 0}
 }
 func (m *SdkCloudMigrateStartRequest_MigrateVolume) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateStartRequest_MigrateVolume.Unmarshal(m, b)
@@ -13468,7 +15207,7 @@ func (m *SdkCloudMigrateStartRequest_MigrateVolumeGroup) String() string {
 }
 func (*SdkCloudMigrateStartRequest_MigrateVolumeGroup) ProtoMessage() {}
 func (*SdkCloudMigrateStartRequest_MigrateVolumeGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{184, 1}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{215, 1}
 }
 func (m *SdkCloudMigrateStartRequest_MigrateVolumeGroup) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateStartRequest_MigrateVolumeGroup.Unmarshal(m, b)
@@ -13510,7 +15249,7 @@ func (m *SdkCloudMigrateStartRequest_MigrateAllVolumes) String() string {
 }
 func (*SdkCloudMigrateStartRequest_MigrateAllVolumes) ProtoMessage() {}
 func (*SdkCloudMigrateStartRequest_MigrateAllVolumes) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{184, 2}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{215, 2}
 }
 func (m *SdkCloudMigrateStartRequest_MigrateAllVolumes) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateStartRequest_MigrateAllVolumes.Unmarshal(m, b)
@@ -13543,7 +15282,7 @@ func (m *CloudMigrateStartResponse) Reset()         { *m = CloudMigrateStartResp
 func (m *CloudMigrateStartResponse) String() string { return proto.CompactTextString(m) }
 func (*CloudMigrateStartResponse) ProtoMessage()    {}
 func (*CloudMigrateStartResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{185}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{216}
 }
 func (m *CloudMigrateStartResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CloudMigrateStartResponse.Unmarshal(m, b)
@@ -13583,7 +15322,7 @@ func (m *SdkCloudMigrateStartResponse) Reset()         { *m = SdkCloudMigrateSta
 func (m *SdkCloudMigrateStartResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudMigrateStartResponse) ProtoMessage()    {}
 func (*SdkCloudMigrateStartResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{186}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{217}
 }
 func (m *SdkCloudMigrateStartResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateStartResponse.Unmarshal(m, b)
@@ -13623,7 +15362,7 @@ func (m *CloudMigrateCancelRequest) Reset()         { *m = CloudMigrateCancelReq
 func (m *CloudMigrateCancelRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudMigrateCancelRequest) ProtoMessage()    {}
 func (*CloudMigrateCancelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{187}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{218}
 }
 func (m *CloudMigrateCancelRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CloudMigrateCancelRequest.Unmarshal(m, b)
@@ -13663,7 +15402,7 @@ func (m *SdkCloudMigrateCancelRequest) Reset()         { *m = SdkCloudMigrateCan
 func (m *SdkCloudMigrateCancelRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudMigrateCancelRequest) ProtoMessage()    {}
 func (*SdkCloudMigrateCancelRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{188}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{219}
 }
 func (m *SdkCloudMigrateCancelRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateCancelRequest.Unmarshal(m, b)
@@ -13701,7 +15440,7 @@ func (m *SdkCloudMigrateCancelResponse) Reset()         { *m = SdkCloudMigrateCa
 func (m *SdkCloudMigrateCancelResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudMigrateCancelResponse) ProtoMessage()    {}
 func (*SdkCloudMigrateCancelResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{189}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{220}
 }
 func (m *SdkCloudMigrateCancelResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateCancelResponse.Unmarshal(m, b)
@@ -13761,7 +15500,7 @@ func (m *CloudMigrateInfo) Reset()         { *m = CloudMigrateInfo{} }
 func (m *CloudMigrateInfo) String() string { return proto.CompactTextString(m) }
 func (*CloudMigrateInfo) ProtoMessage()    {}
 func (*CloudMigrateInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{190}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{221}
 }
 func (m *CloudMigrateInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CloudMigrateInfo.Unmarshal(m, b)
@@ -13897,7 +15636,7 @@ func (m *CloudMigrateInfoList) Reset()         { *m = CloudMigrateInfoList{} }
 func (m *CloudMigrateInfoList) String() string { return proto.CompactTextString(m) }
 func (*CloudMigrateInfoList) ProtoMessage()    {}
 func (*CloudMigrateInfoList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{191}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{222}
 }
 func (m *CloudMigrateInfoList) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CloudMigrateInfoList.Unmarshal(m, b)
@@ -13938,7 +15677,7 @@ func (m *SdkCloudMigrateStatusRequest) Reset()         { *m = SdkCloudMigrateSta
 func (m *SdkCloudMigrateStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudMigrateStatusRequest) ProtoMessage()    {}
 func (*SdkCloudMigrateStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{192}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{223}
 }
 func (m *SdkCloudMigrateStatusRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateStatusRequest.Unmarshal(m, b)
@@ -13980,7 +15719,7 @@ func (m *CloudMigrateStatusRequest) Reset()         { *m = CloudMigrateStatusReq
 func (m *CloudMigrateStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*CloudMigrateStatusRequest) ProtoMessage()    {}
 func (*CloudMigrateStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{193}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{224}
 }
 func (m *CloudMigrateStatusRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CloudMigrateStatusRequest.Unmarshal(m, b)
@@ -14027,7 +15766,7 @@ func (m *CloudMigrateStatusResponse) Reset()         { *m = CloudMigrateStatusRe
 func (m *CloudMigrateStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*CloudMigrateStatusResponse) ProtoMessage()    {}
 func (*CloudMigrateStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{194}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{225}
 }
 func (m *CloudMigrateStatusResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CloudMigrateStatusResponse.Unmarshal(m, b)
@@ -14067,7 +15806,7 @@ func (m *SdkCloudMigrateStatusResponse) Reset()         { *m = SdkCloudMigrateSt
 func (m *SdkCloudMigrateStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkCloudMigrateStatusResponse) ProtoMessage()    {}
 func (*SdkCloudMigrateStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{195}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{226}
 }
 func (m *SdkCloudMigrateStatusResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkCloudMigrateStatusResponse.Unmarshal(m, b)
@@ -14094,6 +15833,36 @@ func (m *SdkCloudMigrateStatusResponse) GetResult() *CloudMigrateStatusResponse 
 	return nil
 }
 
+type ClusterPairMode struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ClusterPairMode) Reset()         { *m = ClusterPairMode{} }
+func (m *ClusterPairMode) String() string { return proto.CompactTextString(m) }
+func (*ClusterPairMode) ProtoMessage()    {}
+func (*ClusterPairMode) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{227}
+}
+func (m *ClusterPairMode) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ClusterPairMode.Unmarshal(m, b)
+}
+func (m *ClusterPairMode) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ClusterPairMode.Marshal(b, m, deterministic)
+}
+func (dst *ClusterPairMode) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterPairMode.Merge(dst, src)
+}
+func (m *ClusterPairMode) XXX_Size() int {
+	return xxx_messageInfo_ClusterPairMode.Size(m)
+}
+func (m *ClusterPairMode) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterPairMode.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ClusterPairMode proto.InternalMessageInfo
+
 // Used to send a request to create a cluster pair
 type ClusterPairCreateRequest struct {
 	// IP of the remote cluster
@@ -14103,17 +15872,19 @@ type ClusterPairCreateRequest struct {
 	// Token used to authenticate with the remote cluster
 	RemoteClusterToken string `protobuf:"bytes,3,opt,name=remote_cluster_token,json=remoteClusterToken" json:"remote_cluster_token,omitempty"`
 	// Set the new pair as the default
-	SetDefault           bool     `protobuf:"varint,4,opt,name=set_default,json=setDefault" json:"set_default,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	SetDefault bool `protobuf:"varint,4,opt,name=set_default,json=setDefault" json:"set_default,omitempty"`
+	// The mode to use for the cluster pair
+	Mode                 ClusterPairMode_Mode `protobuf:"varint,5,opt,name=mode,enum=openstorage.api.ClusterPairMode_Mode" json:"mode,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
+	XXX_unrecognized     []byte               `json:"-"`
+	XXX_sizecache        int32                `json:"-"`
 }
 
 func (m *ClusterPairCreateRequest) Reset()         { *m = ClusterPairCreateRequest{} }
 func (m *ClusterPairCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*ClusterPairCreateRequest) ProtoMessage()    {}
 func (*ClusterPairCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{196}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{228}
 }
 func (m *ClusterPairCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterPairCreateRequest.Unmarshal(m, b)
@@ -14161,6 +15932,13 @@ func (m *ClusterPairCreateRequest) GetSetDefault() bool {
 	return false
 }
 
+func (m *ClusterPairCreateRequest) GetMode() ClusterPairMode_Mode {
+	if m != nil {
+		return m.Mode
+	}
+	return ClusterPairMode_Default
+}
+
 // Response for a pair request
 type ClusterPairCreateResponse struct {
 	// ID of the remote cluster
@@ -14176,7 +15954,7 @@ func (m *ClusterPairCreateResponse) Reset()         { *m = ClusterPairCreateResp
 func (m *ClusterPairCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterPairCreateResponse) ProtoMessage()    {}
 func (*ClusterPairCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{197}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{229}
 }
 func (m *ClusterPairCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterPairCreateResponse.Unmarshal(m, b)
@@ -14222,7 +16000,7 @@ func (m *SdkClusterPairCreateRequest) Reset()         { *m = SdkClusterPairCreat
 func (m *SdkClusterPairCreateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairCreateRequest) ProtoMessage()    {}
 func (*SdkClusterPairCreateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{198}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{230}
 }
 func (m *SdkClusterPairCreateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairCreateRequest.Unmarshal(m, b)
@@ -14262,7 +16040,7 @@ func (m *SdkClusterPairCreateResponse) Reset()         { *m = SdkClusterPairCrea
 func (m *SdkClusterPairCreateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairCreateResponse) ProtoMessage()    {}
 func (*SdkClusterPairCreateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{199}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{231}
 }
 func (m *SdkClusterPairCreateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairCreateResponse.Unmarshal(m, b)
@@ -14294,17 +16072,19 @@ type ClusterPairProcessRequest struct {
 	// ID of the cluster requesting the pairing
 	SourceClusterId string `protobuf:"bytes,1,opt,name=source_cluster_id,json=sourceClusterId" json:"source_cluster_id,omitempty"`
 	// Token used to authenticate with the remote cluster
-	RemoteClusterToken   string   `protobuf:"bytes,2,opt,name=remote_cluster_token,json=remoteClusterToken" json:"remote_cluster_token,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	RemoteClusterToken string `protobuf:"bytes,2,opt,name=remote_cluster_token,json=remoteClusterToken" json:"remote_cluster_token,omitempty"`
+	// The mode to use for the cluster pair
+	Mode                 ClusterPairMode_Mode `protobuf:"varint,3,opt,name=mode,enum=openstorage.api.ClusterPairMode_Mode" json:"mode,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
+	XXX_unrecognized     []byte               `json:"-"`
+	XXX_sizecache        int32                `json:"-"`
 }
 
 func (m *ClusterPairProcessRequest) Reset()         { *m = ClusterPairProcessRequest{} }
 func (m *ClusterPairProcessRequest) String() string { return proto.CompactTextString(m) }
 func (*ClusterPairProcessRequest) ProtoMessage()    {}
 func (*ClusterPairProcessRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{200}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{232}
 }
 func (m *ClusterPairProcessRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterPairProcessRequest.Unmarshal(m, b)
@@ -14338,6 +16118,13 @@ func (m *ClusterPairProcessRequest) GetRemoteClusterToken() string {
 	return ""
 }
 
+func (m *ClusterPairProcessRequest) GetMode() ClusterPairMode_Mode {
+	if m != nil {
+		return m.Mode
+	}
+	return ClusterPairMode_Default
+}
+
 // Response after a pairing has been processed
 type ClusterPairProcessResponse struct {
 	// ID of the cluster which processed the pair request
@@ -14358,7 +16145,7 @@ func (m *ClusterPairProcessResponse) Reset()         { *m = ClusterPairProcessRe
 func (m *ClusterPairProcessResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterPairProcessResponse) ProtoMessage()    {}
 func (*ClusterPairProcessResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{201}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{233}
 }
 func (m *ClusterPairProcessResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterPairProcessResponse.Unmarshal(m, b)
@@ -14419,7 +16206,7 @@ func (m *SdkClusterPairDeleteRequest) Reset()         { *m = SdkClusterPairDelet
 func (m *SdkClusterPairDeleteRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairDeleteRequest) ProtoMessage()    {}
 func (*SdkClusterPairDeleteRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{202}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{234}
 }
 func (m *SdkClusterPairDeleteRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairDeleteRequest.Unmarshal(m, b)
@@ -14457,7 +16244,7 @@ func (m *SdkClusterPairDeleteResponse) Reset()         { *m = SdkClusterPairDele
 func (m *SdkClusterPairDeleteResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairDeleteResponse) ProtoMessage()    {}
 func (*SdkClusterPairDeleteResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{203}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{235}
 }
 func (m *SdkClusterPairDeleteResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairDeleteResponse.Unmarshal(m, b)
@@ -14490,7 +16277,7 @@ func (m *ClusterPairTokenGetResponse) Reset()         { *m = ClusterPairTokenGet
 func (m *ClusterPairTokenGetResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterPairTokenGetResponse) ProtoMessage()    {}
 func (*ClusterPairTokenGetResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{204}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{236}
 }
 func (m *ClusterPairTokenGetResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterPairTokenGetResponse.Unmarshal(m, b)
@@ -14528,7 +16315,7 @@ func (m *SdkClusterPairGetTokenRequest) Reset()         { *m = SdkClusterPairGet
 func (m *SdkClusterPairGetTokenRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairGetTokenRequest) ProtoMessage()    {}
 func (*SdkClusterPairGetTokenRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{205}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{237}
 }
 func (m *SdkClusterPairGetTokenRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairGetTokenRequest.Unmarshal(m, b)
@@ -14561,7 +16348,7 @@ func (m *SdkClusterPairGetTokenResponse) Reset()         { *m = SdkClusterPairGe
 func (m *SdkClusterPairGetTokenResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairGetTokenResponse) ProtoMessage()    {}
 func (*SdkClusterPairGetTokenResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{206}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{238}
 }
 func (m *SdkClusterPairGetTokenResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairGetTokenResponse.Unmarshal(m, b)
@@ -14599,7 +16386,7 @@ func (m *SdkClusterPairResetTokenRequest) Reset()         { *m = SdkClusterPairR
 func (m *SdkClusterPairResetTokenRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairResetTokenRequest) ProtoMessage()    {}
 func (*SdkClusterPairResetTokenRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{207}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{239}
 }
 func (m *SdkClusterPairResetTokenRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairResetTokenRequest.Unmarshal(m, b)
@@ -14632,7 +16419,7 @@ func (m *SdkClusterPairResetTokenResponse) Reset()         { *m = SdkClusterPair
 func (m *SdkClusterPairResetTokenResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairResetTokenResponse) ProtoMessage()    {}
 func (*SdkClusterPairResetTokenResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{208}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{240}
 }
 func (m *SdkClusterPairResetTokenResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairResetTokenResponse.Unmarshal(m, b)
@@ -14675,17 +16462,19 @@ type ClusterPairInfo struct {
 	Token string `protobuf:"bytes,6,opt,name=token" json:"token,omitempty"`
 	// Key/value pair of options associated with the cluster
 	// Opaque to openstorage and interpreted by the drivers
-	Options              map[string]string `protobuf:"bytes,7,rep,name=options" json:"options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Options map[string]string `protobuf:"bytes,7,rep,name=options" json:"options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Mode for the cluster pair
+	Mode                 ClusterPairMode_Mode `protobuf:"varint,8,opt,name=mode,enum=openstorage.api.ClusterPairMode_Mode" json:"mode,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
+	XXX_unrecognized     []byte               `json:"-"`
+	XXX_sizecache        int32                `json:"-"`
 }
 
 func (m *ClusterPairInfo) Reset()         { *m = ClusterPairInfo{} }
 func (m *ClusterPairInfo) String() string { return proto.CompactTextString(m) }
 func (*ClusterPairInfo) ProtoMessage()    {}
 func (*ClusterPairInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{209}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{241}
 }
 func (m *ClusterPairInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterPairInfo.Unmarshal(m, b)
@@ -14754,6 +16543,13 @@ func (m *ClusterPairInfo) GetOptions() map[string]string {
 	return nil
 }
 
+func (m *ClusterPairInfo) GetMode() ClusterPairMode_Mode {
+	if m != nil {
+		return m.Mode
+	}
+	return ClusterPairMode_Default
+}
+
 // Defines a cluster pair inspect request
 type SdkClusterPairInspectRequest struct {
 	// ID of the cluster, if empty gets the default pair
@@ -14767,7 +16563,7 @@ func (m *SdkClusterPairInspectRequest) Reset()         { *m = SdkClusterPairInsp
 func (m *SdkClusterPairInspectRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairInspectRequest) ProtoMessage()    {}
 func (*SdkClusterPairInspectRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{210}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{242}
 }
 func (m *SdkClusterPairInspectRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairInspectRequest.Unmarshal(m, b)
@@ -14807,7 +16603,7 @@ func (m *ClusterPairGetResponse) Reset()         { *m = ClusterPairGetResponse{}
 func (m *ClusterPairGetResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterPairGetResponse) ProtoMessage()    {}
 func (*ClusterPairGetResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{211}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{243}
 }
 func (m *ClusterPairGetResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterPairGetResponse.Unmarshal(m, b)
@@ -14847,7 +16643,7 @@ func (m *SdkClusterPairInspectResponse) Reset()         { *m = SdkClusterPairIns
 func (m *SdkClusterPairInspectResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairInspectResponse) ProtoMessage()    {}
 func (*SdkClusterPairInspectResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{212}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{244}
 }
 func (m *SdkClusterPairInspectResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairInspectResponse.Unmarshal(m, b)
@@ -14885,7 +16681,7 @@ func (m *SdkClusterPairEnumerateRequest) Reset()         { *m = SdkClusterPairEn
 func (m *SdkClusterPairEnumerateRequest) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairEnumerateRequest) ProtoMessage()    {}
 func (*SdkClusterPairEnumerateRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{213}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{245}
 }
 func (m *SdkClusterPairEnumerateRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairEnumerateRequest.Unmarshal(m, b)
@@ -14920,7 +16716,7 @@ func (m *ClusterPairsEnumerateResponse) Reset()         { *m = ClusterPairsEnume
 func (m *ClusterPairsEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*ClusterPairsEnumerateResponse) ProtoMessage()    {}
 func (*ClusterPairsEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{214}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{246}
 }
 func (m *ClusterPairsEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClusterPairsEnumerateResponse.Unmarshal(m, b)
@@ -14967,7 +16763,7 @@ func (m *SdkClusterPairEnumerateResponse) Reset()         { *m = SdkClusterPairE
 func (m *SdkClusterPairEnumerateResponse) String() string { return proto.CompactTextString(m) }
 func (*SdkClusterPairEnumerateResponse) ProtoMessage()    {}
 func (*SdkClusterPairEnumerateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{215}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{247}
 }
 func (m *SdkClusterPairEnumerateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SdkClusterPairEnumerateResponse.Unmarshal(m, b)
@@ -15016,7 +16812,7 @@ func (m *Catalog) Reset()         { *m = Catalog{} }
 func (m *Catalog) String() string { return proto.CompactTextString(m) }
 func (*Catalog) ProtoMessage()    {}
 func (*Catalog) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{216}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{248}
 }
 func (m *Catalog) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Catalog.Unmarshal(m, b)
@@ -15092,7 +16888,7 @@ func (m *Report) Reset()         { *m = Report{} }
 func (m *Report) String() string { return proto.CompactTextString(m) }
 func (*Report) ProtoMessage()    {}
 func (*Report) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{217}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{249}
 }
 func (m *Report) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Report.Unmarshal(m, b)
@@ -15140,7 +16936,7 @@ func (m *CatalogResponse) Reset()         { *m = CatalogResponse{} }
 func (m *CatalogResponse) String() string { return proto.CompactTextString(m) }
 func (*CatalogResponse) ProtoMessage()    {}
 func (*CatalogResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{218}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{250}
 }
 func (m *CatalogResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CatalogResponse.Unmarshal(m, b)
@@ -15192,7 +16988,7 @@ func (m *LocateResponse) Reset()         { *m = LocateResponse{} }
 func (m *LocateResponse) String() string { return proto.CompactTextString(m) }
 func (*LocateResponse) ProtoMessage()    {}
 func (*LocateResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{219}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{251}
 }
 func (m *LocateResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LocateResponse.Unmarshal(m, b)
@@ -15227,12 +17023,18 @@ func (m *LocateResponse) GetDockerids() map[string]string {
 }
 
 // VolumePlacementStrategy defines a strategy for placing volumes in the cluster which will be a series of rules
+// All the rules specified will be applied for volume placement.
+// Rules that have enforcement as "required" are strictly enforced while "preferred" are best effort.
+// In situations, where 2 or more rules conflict, the weight of the rules will dictate which wins.
 type VolumePlacementStrategy struct {
-	// Rules defines a list of rules as part of the placement spec. All the rules specified will
-	// be applied for volume placement.
-	// Rules that have enforcement as "required" are strictly enforced while "preferred" are best effort.
-	// In situations, where 2 or more rules conflict, the weight of the rules will dictate which wins.
-	Rules                []*VolumePlacementRule `protobuf:"bytes,1,rep,name=rules" json:"rules,omitempty"`
+	// ReplicaAffinity defines affinity rules between replicas within a volume
+	ReplicaAffinity []*ReplicaPlacementSpec `protobuf:"bytes,1,rep,name=replica_affinity,json=replicaAffinity" json:"replica_affinity,omitempty"`
+	// ReplicaAntiAffinity defines anti-affinity rules between replicas within a volume
+	ReplicaAntiAffinity []*ReplicaPlacementSpec `protobuf:"bytes,2,rep,name=replica_anti_affinity,json=replicaAntiAffinity" json:"replica_anti_affinity,omitempty"`
+	// VolumeAffinity defines affinity rules between volumes
+	VolumeAffinity []*VolumePlacementSpec `protobuf:"bytes,3,rep,name=volume_affinity,json=volumeAffinity" json:"volume_affinity,omitempty"`
+	// VolumeAntiAffinity defines anti-affinity rules between volumes
+	VolumeAntiAffinity   []*VolumePlacementSpec `protobuf:"bytes,4,rep,name=volume_anti_affinity,json=volumeAntiAffinity" json:"volume_anti_affinity,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
 	XXX_unrecognized     []byte                 `json:"-"`
 	XXX_sizecache        int32                  `json:"-"`
@@ -15242,7 +17044,7 @@ func (m *VolumePlacementStrategy) Reset()         { *m = VolumePlacementStrategy
 func (m *VolumePlacementStrategy) String() string { return proto.CompactTextString(m) }
 func (*VolumePlacementStrategy) ProtoMessage()    {}
 func (*VolumePlacementStrategy) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{220}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{252}
 }
 func (m *VolumePlacementStrategy) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_VolumePlacementStrategy.Unmarshal(m, b)
@@ -15262,28 +17064,50 @@ func (m *VolumePlacementStrategy) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_VolumePlacementStrategy proto.InternalMessageInfo
 
-func (m *VolumePlacementStrategy) GetRules() []*VolumePlacementRule {
+func (m *VolumePlacementStrategy) GetReplicaAffinity() []*ReplicaPlacementSpec {
 	if m != nil {
-		return m.Rules
+		return m.ReplicaAffinity
 	}
 	return nil
 }
 
-// VolumePlacementRule defines a single placement rule
-type VolumePlacementRule struct {
-	// AffectedReplicas defines the number of volume replicas affected by this rule. If not provided,
-	// rule would affect all replicas
-	// (optional)
-	AffectedReplicas int32 `protobuf:"varint,1,opt,name=affected_replicas,json=affectedReplicas" json:"affected_replicas,omitempty"`
+func (m *VolumePlacementStrategy) GetReplicaAntiAffinity() []*ReplicaPlacementSpec {
+	if m != nil {
+		return m.ReplicaAntiAffinity
+	}
+	return nil
+}
+
+func (m *VolumePlacementStrategy) GetVolumeAffinity() []*VolumePlacementSpec {
+	if m != nil {
+		return m.VolumeAffinity
+	}
+	return nil
+}
+
+func (m *VolumePlacementStrategy) GetVolumeAntiAffinity() []*VolumePlacementSpec {
+	if m != nil {
+		return m.VolumeAntiAffinity
+	}
+	return nil
+}
+
+type ReplicaPlacementSpec struct {
 	// Weight defines the weight of the rule which allows to break the tie with other matching rules. A rule with
 	// higher weight wins over a rule with lower weight.
 	// (optional)
-	Weight int64 `protobuf:"varint,2,opt,name=weight" json:"weight,omitempty"`
+	Weight int64 `protobuf:"varint,1,opt,name=weight" json:"weight,omitempty"`
 	// Enforcement specifies the rule enforcement policy. Can take values: required or preferred.
 	// (optional)
-	Enforcement VolumePlacementRule_EnforcementType `protobuf:"varint,3,opt,name=enforcement,enum=openstorage.api.VolumePlacementRule_EnforcementType" json:"enforcement,omitempty"`
-	// Type is the type of the affinity rule
-	Type VolumePlacementRule_AffinityRuleType `protobuf:"varint,4,opt,name=type,enum=openstorage.api.VolumePlacementRule_AffinityRuleType" json:"type,omitempty"`
+	Enforcement EnforcementType `protobuf:"varint,2,opt,name=enforcement,enum=openstorage.api.EnforcementType" json:"enforcement,omitempty"`
+	// AffectedReplicas defines the number of volume replicas affected by this rule. If not provided,
+	// rule would affect all replicas
+	// (optional)
+	AffectedReplicas int32 `protobuf:"varint,3,opt,name=affected_replicas,json=affectedReplicas" json:"affected_replicas,omitempty"`
+	// TopologyKey key for the matching all segments of the cluster topology with the same key
+	// e.g If the key is failure-domain.beta.kubernetes.io/zone, this should match all nodes with
+	// the same value for this key (i.e in the same zone)
+	TopologyKey string `protobuf:"bytes,4,opt,name=topology_key,json=topologyKey" json:"topology_key,omitempty"`
 	// MatchExpressions is a list of label selector requirements. The requirements are ANDed.
 	MatchExpressions     []*LabelSelectorRequirement `protobuf:"bytes,5,rep,name=match_expressions,json=matchExpressions" json:"match_expressions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
@@ -15291,59 +17115,130 @@ type VolumePlacementRule struct {
 	XXX_sizecache        int32                       `json:"-"`
 }
 
-func (m *VolumePlacementRule) Reset()         { *m = VolumePlacementRule{} }
-func (m *VolumePlacementRule) String() string { return proto.CompactTextString(m) }
-func (*VolumePlacementRule) ProtoMessage()    {}
-func (*VolumePlacementRule) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{221}
+func (m *ReplicaPlacementSpec) Reset()         { *m = ReplicaPlacementSpec{} }
+func (m *ReplicaPlacementSpec) String() string { return proto.CompactTextString(m) }
+func (*ReplicaPlacementSpec) ProtoMessage()    {}
+func (*ReplicaPlacementSpec) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{253}
 }
-func (m *VolumePlacementRule) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_VolumePlacementRule.Unmarshal(m, b)
+func (m *ReplicaPlacementSpec) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReplicaPlacementSpec.Unmarshal(m, b)
 }
-func (m *VolumePlacementRule) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_VolumePlacementRule.Marshal(b, m, deterministic)
+func (m *ReplicaPlacementSpec) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReplicaPlacementSpec.Marshal(b, m, deterministic)
 }
-func (dst *VolumePlacementRule) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_VolumePlacementRule.Merge(dst, src)
+func (dst *ReplicaPlacementSpec) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReplicaPlacementSpec.Merge(dst, src)
 }
-func (m *VolumePlacementRule) XXX_Size() int {
-	return xxx_messageInfo_VolumePlacementRule.Size(m)
+func (m *ReplicaPlacementSpec) XXX_Size() int {
+	return xxx_messageInfo_ReplicaPlacementSpec.Size(m)
 }
-func (m *VolumePlacementRule) XXX_DiscardUnknown() {
-	xxx_messageInfo_VolumePlacementRule.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_VolumePlacementRule proto.InternalMessageInfo
-
-func (m *VolumePlacementRule) GetAffectedReplicas() int32 {
-	if m != nil {
-		return m.AffectedReplicas
-	}
-	return 0
+func (m *ReplicaPlacementSpec) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReplicaPlacementSpec.DiscardUnknown(m)
 }
 
-func (m *VolumePlacementRule) GetWeight() int64 {
+var xxx_messageInfo_ReplicaPlacementSpec proto.InternalMessageInfo
+
+func (m *ReplicaPlacementSpec) GetWeight() int64 {
 	if m != nil {
 		return m.Weight
 	}
 	return 0
 }
 
-func (m *VolumePlacementRule) GetEnforcement() VolumePlacementRule_EnforcementType {
+func (m *ReplicaPlacementSpec) GetEnforcement() EnforcementType {
 	if m != nil {
 		return m.Enforcement
 	}
-	return VolumePlacementRule_Required
+	return EnforcementType_required
 }
 
-func (m *VolumePlacementRule) GetType() VolumePlacementRule_AffinityRuleType {
+func (m *ReplicaPlacementSpec) GetAffectedReplicas() int32 {
 	if m != nil {
-		return m.Type
+		return m.AffectedReplicas
 	}
-	return VolumePlacementRule_Affinity
+	return 0
 }
 
-func (m *VolumePlacementRule) GetMatchExpressions() []*LabelSelectorRequirement {
+func (m *ReplicaPlacementSpec) GetTopologyKey() string {
+	if m != nil {
+		return m.TopologyKey
+	}
+	return ""
+}
+
+func (m *ReplicaPlacementSpec) GetMatchExpressions() []*LabelSelectorRequirement {
+	if m != nil {
+		return m.MatchExpressions
+	}
+	return nil
+}
+
+type VolumePlacementSpec struct {
+	// Weight defines the weight of the rule which allows to break the tie with other matching rules. A rule with
+	// higher weight wins over a rule with lower weight.
+	// (optional)
+	Weight int64 `protobuf:"varint,1,opt,name=weight" json:"weight,omitempty"`
+	// Enforcement specifies the rule enforcement policy. Can take values: required or preferred.
+	// (optional)
+	Enforcement EnforcementType `protobuf:"varint,2,opt,name=enforcement,enum=openstorage.api.EnforcementType" json:"enforcement,omitempty"`
+	// TopologyKey key for the matching all segments of the cluster topology with the same key
+	// e.g If the key is failure-domain.beta.kubernetes.io/zone, this should match all nodes with
+	// the same value for this key (i.e in the same zone)
+	TopologyKey string `protobuf:"bytes,3,opt,name=topology_key,json=topologyKey" json:"topology_key,omitempty"`
+	// MatchExpressions is a list of label selector requirements. The requirements are ANDed.
+	MatchExpressions     []*LabelSelectorRequirement `protobuf:"bytes,4,rep,name=match_expressions,json=matchExpressions" json:"match_expressions,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
+	XXX_unrecognized     []byte                      `json:"-"`
+	XXX_sizecache        int32                       `json:"-"`
+}
+
+func (m *VolumePlacementSpec) Reset()         { *m = VolumePlacementSpec{} }
+func (m *VolumePlacementSpec) String() string { return proto.CompactTextString(m) }
+func (*VolumePlacementSpec) ProtoMessage()    {}
+func (*VolumePlacementSpec) Descriptor() ([]byte, []int) {
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{254}
+}
+func (m *VolumePlacementSpec) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_VolumePlacementSpec.Unmarshal(m, b)
+}
+func (m *VolumePlacementSpec) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_VolumePlacementSpec.Marshal(b, m, deterministic)
+}
+func (dst *VolumePlacementSpec) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_VolumePlacementSpec.Merge(dst, src)
+}
+func (m *VolumePlacementSpec) XXX_Size() int {
+	return xxx_messageInfo_VolumePlacementSpec.Size(m)
+}
+func (m *VolumePlacementSpec) XXX_DiscardUnknown() {
+	xxx_messageInfo_VolumePlacementSpec.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_VolumePlacementSpec proto.InternalMessageInfo
+
+func (m *VolumePlacementSpec) GetWeight() int64 {
+	if m != nil {
+		return m.Weight
+	}
+	return 0
+}
+
+func (m *VolumePlacementSpec) GetEnforcement() EnforcementType {
+	if m != nil {
+		return m.Enforcement
+	}
+	return EnforcementType_required
+}
+
+func (m *VolumePlacementSpec) GetTopologyKey() string {
+	if m != nil {
+		return m.TopologyKey
+	}
+	return ""
+}
+
+func (m *VolumePlacementSpec) GetMatchExpressions() []*LabelSelectorRequirement {
 	if m != nil {
 		return m.MatchExpressions
 	}
@@ -15372,7 +17267,7 @@ func (m *LabelSelectorRequirement) Reset()         { *m = LabelSelectorRequireme
 func (m *LabelSelectorRequirement) String() string { return proto.CompactTextString(m) }
 func (*LabelSelectorRequirement) ProtoMessage()    {}
 func (*LabelSelectorRequirement) Descriptor() ([]byte, []int) {
-	return fileDescriptor_api_d409f3db37eda2b9, []int{222}
+	return fileDescriptor_api_ae849f4def4dfbf7, []int{255}
 }
 func (m *LabelSelectorRequirement) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LabelSelectorRequirement.Unmarshal(m, b)
@@ -15419,18 +17314,22 @@ func init() {
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.StoragePool.LabelsEntry")
 	proto.RegisterType((*VolumeLocator)(nil), "openstorage.api.VolumeLocator")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.VolumeLocator.VolumeLabelsEntry")
+	proto.RegisterType((*VolumeInspectOptions)(nil), "openstorage.api.VolumeInspectOptions")
 	proto.RegisterType((*Source)(nil), "openstorage.api.Source")
 	proto.RegisterType((*Group)(nil), "openstorage.api.Group")
 	proto.RegisterType((*IoStrategy)(nil), "openstorage.api.IoStrategy")
 	proto.RegisterType((*VolumeSpec)(nil), "openstorage.api.VolumeSpec")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.VolumeSpec.VolumeLabelsEntry")
 	proto.RegisterType((*VolumeSpecUpdate)(nil), "openstorage.api.VolumeSpecUpdate")
-	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.VolumeSpecUpdate.VolumeLabelsEntry")
 	proto.RegisterType((*VolumeSpecPolicy)(nil), "openstorage.api.VolumeSpecPolicy")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.VolumeSpecPolicy.VolumeLabelsEntry")
 	proto.RegisterType((*ReplicaSet)(nil), "openstorage.api.ReplicaSet")
 	proto.RegisterType((*RuntimeStateMap)(nil), "openstorage.api.RuntimeStateMap")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.RuntimeStateMap.RuntimeStateEntry")
+	proto.RegisterType((*Ownership)(nil), "openstorage.api.Ownership")
+	proto.RegisterType((*Ownership_AccessControl)(nil), "openstorage.api.Ownership.AccessControl")
+	proto.RegisterMapType((map[string]Ownership_AccessType)(nil), "openstorage.api.Ownership.AccessControl.CollaboratorsEntry")
+	proto.RegisterMapType((map[string]Ownership_AccessType)(nil), "openstorage.api.Ownership.AccessControl.GroupsEntry")
 	proto.RegisterType((*Volume)(nil), "openstorage.api.Volume")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.Volume.AttachInfoEntry")
 	proto.RegisterType((*Stats)(nil), "openstorage.api.Stats")
@@ -15484,12 +17383,12 @@ func init() {
 	proto.RegisterType((*SdkOpenStoragePolicyDeleteResponse)(nil), "openstorage.api.SdkOpenStoragePolicyDeleteResponse")
 	proto.RegisterType((*SdkOpenStoragePolicyUpdateRequest)(nil), "openstorage.api.SdkOpenStoragePolicyUpdateRequest")
 	proto.RegisterType((*SdkOpenStoragePolicyUpdateResponse)(nil), "openstorage.api.SdkOpenStoragePolicyUpdateResponse")
-	proto.RegisterType((*SdkOpenStoragePolicyEnforceRequest)(nil), "openstorage.api.SdkOpenStoragePolicyEnforceRequest")
-	proto.RegisterType((*SdkOpenStoragePolicyEnforceResponse)(nil), "openstorage.api.SdkOpenStoragePolicyEnforceResponse")
+	proto.RegisterType((*SdkOpenStoragePolicySetDefaultRequest)(nil), "openstorage.api.SdkOpenStoragePolicySetDefaultRequest")
+	proto.RegisterType((*SdkOpenStoragePolicySetDefaultResponse)(nil), "openstorage.api.SdkOpenStoragePolicySetDefaultResponse")
 	proto.RegisterType((*SdkOpenStoragePolicyReleaseRequest)(nil), "openstorage.api.SdkOpenStoragePolicyReleaseRequest")
 	proto.RegisterType((*SdkOpenStoragePolicyReleaseResponse)(nil), "openstorage.api.SdkOpenStoragePolicyReleaseResponse")
-	proto.RegisterType((*SdkOpenStoragePolicyEnforceInspectRequest)(nil), "openstorage.api.SdkOpenStoragePolicyEnforceInspectRequest")
-	proto.RegisterType((*SdkOpenStoragePolicyEnforceInspectResponse)(nil), "openstorage.api.SdkOpenStoragePolicyEnforceInspectResponse")
+	proto.RegisterType((*SdkOpenStoragePolicyDefaultInspectRequest)(nil), "openstorage.api.SdkOpenStoragePolicyDefaultInspectRequest")
+	proto.RegisterType((*SdkOpenStoragePolicyDefaultInspectResponse)(nil), "openstorage.api.SdkOpenStoragePolicyDefaultInspectResponse")
 	proto.RegisterType((*SdkSchedulePolicyCreateRequest)(nil), "openstorage.api.SdkSchedulePolicyCreateRequest")
 	proto.RegisterType((*SdkSchedulePolicyCreateResponse)(nil), "openstorage.api.SdkSchedulePolicyCreateResponse")
 	proto.RegisterType((*SdkSchedulePolicyUpdateRequest)(nil), "openstorage.api.SdkSchedulePolicyUpdateRequest")
@@ -15522,18 +17421,23 @@ func init() {
 	proto.RegisterType((*SdkCredentialDeleteResponse)(nil), "openstorage.api.SdkCredentialDeleteResponse")
 	proto.RegisterType((*SdkCredentialValidateRequest)(nil), "openstorage.api.SdkCredentialValidateRequest")
 	proto.RegisterType((*SdkCredentialValidateResponse)(nil), "openstorage.api.SdkCredentialValidateResponse")
+	proto.RegisterType((*SdkVolumeAttachOptions)(nil), "openstorage.api.SdkVolumeAttachOptions")
 	proto.RegisterType((*SdkVolumeMountRequest)(nil), "openstorage.api.SdkVolumeMountRequest")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeMountRequest.DriverOptionsEntry")
 	proto.RegisterType((*SdkVolumeMountResponse)(nil), "openstorage.api.SdkVolumeMountResponse")
+	proto.RegisterType((*SdkVolumeUnmountOptions)(nil), "openstorage.api.SdkVolumeUnmountOptions")
 	proto.RegisterType((*SdkVolumeUnmountRequest)(nil), "openstorage.api.SdkVolumeUnmountRequest")
-	proto.RegisterType((*SdkVolumeUnmountRequest_Options)(nil), "openstorage.api.SdkVolumeUnmountRequest.Options")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeUnmountRequest.DriverOptionsEntry")
 	proto.RegisterType((*SdkVolumeUnmountResponse)(nil), "openstorage.api.SdkVolumeUnmountResponse")
 	proto.RegisterType((*SdkVolumeAttachRequest)(nil), "openstorage.api.SdkVolumeAttachRequest")
-	proto.RegisterType((*SdkVolumeAttachRequest_Options)(nil), "openstorage.api.SdkVolumeAttachRequest.Options")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeAttachRequest.DriverOptionsEntry")
 	proto.RegisterType((*SdkVolumeAttachResponse)(nil), "openstorage.api.SdkVolumeAttachResponse")
+	proto.RegisterType((*SdkVolumeDetachOptions)(nil), "openstorage.api.SdkVolumeDetachOptions")
 	proto.RegisterType((*SdkVolumeDetachRequest)(nil), "openstorage.api.SdkVolumeDetachRequest")
-	proto.RegisterType((*SdkVolumeDetachRequest_Options)(nil), "openstorage.api.SdkVolumeDetachRequest.Options")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeDetachRequest.DriverOptionsEntry")
 	proto.RegisterType((*SdkVolumeDetachResponse)(nil), "openstorage.api.SdkVolumeDetachResponse")
 	proto.RegisterType((*SdkVolumeCreateRequest)(nil), "openstorage.api.SdkVolumeCreateRequest")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeCreateRequest.LabelsEntry")
 	proto.RegisterType((*SdkVolumeCreateResponse)(nil), "openstorage.api.SdkVolumeCreateResponse")
 	proto.RegisterType((*SdkVolumeCloneRequest)(nil), "openstorage.api.SdkVolumeCloneRequest")
 	proto.RegisterType((*SdkVolumeCloneResponse)(nil), "openstorage.api.SdkVolumeCloneResponse")
@@ -15541,7 +17445,12 @@ func init() {
 	proto.RegisterType((*SdkVolumeDeleteResponse)(nil), "openstorage.api.SdkVolumeDeleteResponse")
 	proto.RegisterType((*SdkVolumeInspectRequest)(nil), "openstorage.api.SdkVolumeInspectRequest")
 	proto.RegisterType((*SdkVolumeInspectResponse)(nil), "openstorage.api.SdkVolumeInspectResponse")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeInspectResponse.LabelsEntry")
+	proto.RegisterType((*SdkVolumeInspectWithFiltersRequest)(nil), "openstorage.api.SdkVolumeInspectWithFiltersRequest")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeInspectWithFiltersRequest.LabelsEntry")
+	proto.RegisterType((*SdkVolumeInspectWithFiltersResponse)(nil), "openstorage.api.SdkVolumeInspectWithFiltersResponse")
 	proto.RegisterType((*SdkVolumeUpdateRequest)(nil), "openstorage.api.SdkVolumeUpdateRequest")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeUpdateRequest.LabelsEntry")
 	proto.RegisterType((*SdkVolumeUpdateResponse)(nil), "openstorage.api.SdkVolumeUpdateResponse")
 	proto.RegisterType((*SdkVolumeStatsRequest)(nil), "openstorage.api.SdkVolumeStatsRequest")
 	proto.RegisterType((*SdkVolumeStatsResponse)(nil), "openstorage.api.SdkVolumeStatsResponse")
@@ -15550,6 +17459,7 @@ func init() {
 	proto.RegisterType((*SdkVolumeEnumerateRequest)(nil), "openstorage.api.SdkVolumeEnumerateRequest")
 	proto.RegisterType((*SdkVolumeEnumerateResponse)(nil), "openstorage.api.SdkVolumeEnumerateResponse")
 	proto.RegisterType((*SdkVolumeEnumerateWithFiltersRequest)(nil), "openstorage.api.SdkVolumeEnumerateWithFiltersRequest")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeEnumerateWithFiltersRequest.LabelsEntry")
 	proto.RegisterType((*SdkVolumeEnumerateWithFiltersResponse)(nil), "openstorage.api.SdkVolumeEnumerateWithFiltersResponse")
 	proto.RegisterType((*SdkVolumeSnapshotCreateRequest)(nil), "openstorage.api.SdkVolumeSnapshotCreateRequest")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkVolumeSnapshotCreateRequest.LabelsEntry")
@@ -15563,6 +17473,14 @@ func init() {
 	proto.RegisterType((*SdkVolumeSnapshotEnumerateWithFiltersResponse)(nil), "openstorage.api.SdkVolumeSnapshotEnumerateWithFiltersResponse")
 	proto.RegisterType((*SdkVolumeSnapshotScheduleUpdateRequest)(nil), "openstorage.api.SdkVolumeSnapshotScheduleUpdateRequest")
 	proto.RegisterType((*SdkVolumeSnapshotScheduleUpdateResponse)(nil), "openstorage.api.SdkVolumeSnapshotScheduleUpdateResponse")
+	proto.RegisterType((*SdkClusterDomainsEnumerateRequest)(nil), "openstorage.api.SdkClusterDomainsEnumerateRequest")
+	proto.RegisterType((*SdkClusterDomainsEnumerateResponse)(nil), "openstorage.api.SdkClusterDomainsEnumerateResponse")
+	proto.RegisterType((*SdkClusterDomainInspectRequest)(nil), "openstorage.api.SdkClusterDomainInspectRequest")
+	proto.RegisterType((*SdkClusterDomainInspectResponse)(nil), "openstorage.api.SdkClusterDomainInspectResponse")
+	proto.RegisterType((*SdkClusterDomainActivateRequest)(nil), "openstorage.api.SdkClusterDomainActivateRequest")
+	proto.RegisterType((*SdkClusterDomainActivateResponse)(nil), "openstorage.api.SdkClusterDomainActivateResponse")
+	proto.RegisterType((*SdkClusterDomainDeactivateRequest)(nil), "openstorage.api.SdkClusterDomainDeactivateRequest")
+	proto.RegisterType((*SdkClusterDomainDeactivateResponse)(nil), "openstorage.api.SdkClusterDomainDeactivateResponse")
 	proto.RegisterType((*SdkClusterInspectCurrentRequest)(nil), "openstorage.api.SdkClusterInspectCurrentRequest")
 	proto.RegisterType((*SdkClusterInspectCurrentResponse)(nil), "openstorage.api.SdkClusterInspectCurrentResponse")
 	proto.RegisterType((*SdkNodeInspectRequest)(nil), "openstorage.api.SdkNodeInspectRequest")
@@ -15571,6 +17489,8 @@ func init() {
 	proto.RegisterType((*SdkNodeInspectCurrentResponse)(nil), "openstorage.api.SdkNodeInspectCurrentResponse")
 	proto.RegisterType((*SdkNodeEnumerateRequest)(nil), "openstorage.api.SdkNodeEnumerateRequest")
 	proto.RegisterType((*SdkNodeEnumerateResponse)(nil), "openstorage.api.SdkNodeEnumerateResponse")
+	proto.RegisterType((*SdkNodeEnumerateWithFiltersRequest)(nil), "openstorage.api.SdkNodeEnumerateWithFiltersRequest")
+	proto.RegisterType((*SdkNodeEnumerateWithFiltersResponse)(nil), "openstorage.api.SdkNodeEnumerateWithFiltersResponse")
 	proto.RegisterType((*SdkObjectstoreInspectRequest)(nil), "openstorage.api.SdkObjectstoreInspectRequest")
 	proto.RegisterType((*SdkObjectstoreInspectResponse)(nil), "openstorage.api.SdkObjectstoreInspectResponse")
 	proto.RegisterType((*SdkObjectstoreCreateRequest)(nil), "openstorage.api.SdkObjectstoreCreateRequest")
@@ -15582,6 +17502,9 @@ func init() {
 	proto.RegisterType((*SdkCloudBackupCreateRequest)(nil), "openstorage.api.SdkCloudBackupCreateRequest")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkCloudBackupCreateRequest.LabelsEntry")
 	proto.RegisterType((*SdkCloudBackupCreateResponse)(nil), "openstorage.api.SdkCloudBackupCreateResponse")
+	proto.RegisterType((*SdkCloudBackupGroupCreateRequest)(nil), "openstorage.api.SdkCloudBackupGroupCreateRequest")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkCloudBackupGroupCreateRequest.LabelsEntry")
+	proto.RegisterType((*SdkCloudBackupGroupCreateResponse)(nil), "openstorage.api.SdkCloudBackupGroupCreateResponse")
 	proto.RegisterType((*SdkCloudBackupRestoreRequest)(nil), "openstorage.api.SdkCloudBackupRestoreRequest")
 	proto.RegisterType((*SdkCloudBackupRestoreResponse)(nil), "openstorage.api.SdkCloudBackupRestoreResponse")
 	proto.RegisterType((*SdkCloudBackupDeleteRequest)(nil), "openstorage.api.SdkCloudBackupDeleteRequest")
@@ -15589,6 +17512,7 @@ func init() {
 	proto.RegisterType((*SdkCloudBackupDeleteAllRequest)(nil), "openstorage.api.SdkCloudBackupDeleteAllRequest")
 	proto.RegisterType((*SdkCloudBackupDeleteAllResponse)(nil), "openstorage.api.SdkCloudBackupDeleteAllResponse")
 	proto.RegisterType((*SdkCloudBackupEnumerateWithFiltersRequest)(nil), "openstorage.api.SdkCloudBackupEnumerateWithFiltersRequest")
+	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkCloudBackupEnumerateWithFiltersRequest.MetadataFilterEntry")
 	proto.RegisterType((*SdkCloudBackupInfo)(nil), "openstorage.api.SdkCloudBackupInfo")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.SdkCloudBackupInfo.MetadataEntry")
 	proto.RegisterType((*SdkCloudBackupEnumerateWithFiltersResponse)(nil), "openstorage.api.SdkCloudBackupEnumerateWithFiltersResponse")
@@ -15611,6 +17535,18 @@ func init() {
 	proto.RegisterType((*SdkCloudBackupSchedEnumerateRequest)(nil), "openstorage.api.SdkCloudBackupSchedEnumerateRequest")
 	proto.RegisterType((*SdkCloudBackupSchedEnumerateResponse)(nil), "openstorage.api.SdkCloudBackupSchedEnumerateResponse")
 	proto.RegisterMapType((map[string]*SdkCloudBackupScheduleInfo)(nil), "openstorage.api.SdkCloudBackupSchedEnumerateResponse.CloudSchedListEntry")
+	proto.RegisterType((*SdkRule)(nil), "openstorage.api.SdkRule")
+	proto.RegisterType((*SdkRole)(nil), "openstorage.api.SdkRole")
+	proto.RegisterType((*SdkRoleCreateRequest)(nil), "openstorage.api.SdkRoleCreateRequest")
+	proto.RegisterType((*SdkRoleCreateResponse)(nil), "openstorage.api.SdkRoleCreateResponse")
+	proto.RegisterType((*SdkRoleEnumerateRequest)(nil), "openstorage.api.SdkRoleEnumerateRequest")
+	proto.RegisterType((*SdkRoleEnumerateResponse)(nil), "openstorage.api.SdkRoleEnumerateResponse")
+	proto.RegisterType((*SdkRoleInspectRequest)(nil), "openstorage.api.SdkRoleInspectRequest")
+	proto.RegisterType((*SdkRoleInspectResponse)(nil), "openstorage.api.SdkRoleInspectResponse")
+	proto.RegisterType((*SdkRoleDeleteRequest)(nil), "openstorage.api.SdkRoleDeleteRequest")
+	proto.RegisterType((*SdkRoleDeleteResponse)(nil), "openstorage.api.SdkRoleDeleteResponse")
+	proto.RegisterType((*SdkRoleUpdateRequest)(nil), "openstorage.api.SdkRoleUpdateRequest")
+	proto.RegisterType((*SdkRoleUpdateResponse)(nil), "openstorage.api.SdkRoleUpdateResponse")
 	proto.RegisterType((*SdkIdentityCapabilitiesRequest)(nil), "openstorage.api.SdkIdentityCapabilitiesRequest")
 	proto.RegisterType((*SdkIdentityCapabilitiesResponse)(nil), "openstorage.api.SdkIdentityCapabilitiesResponse")
 	proto.RegisterType((*SdkIdentityVersionRequest)(nil), "openstorage.api.SdkIdentityVersionRequest")
@@ -15638,6 +17574,7 @@ func init() {
 	proto.RegisterType((*CloudMigrateStatusResponse)(nil), "openstorage.api.CloudMigrateStatusResponse")
 	proto.RegisterMapType((map[string]*CloudMigrateInfoList)(nil), "openstorage.api.CloudMigrateStatusResponse.InfoEntry")
 	proto.RegisterType((*SdkCloudMigrateStatusResponse)(nil), "openstorage.api.SdkCloudMigrateStatusResponse")
+	proto.RegisterType((*ClusterPairMode)(nil), "openstorage.api.ClusterPairMode")
 	proto.RegisterType((*ClusterPairCreateRequest)(nil), "openstorage.api.ClusterPairCreateRequest")
 	proto.RegisterType((*ClusterPairCreateResponse)(nil), "openstorage.api.ClusterPairCreateResponse")
 	proto.RegisterType((*SdkClusterPairCreateRequest)(nil), "openstorage.api.SdkClusterPairCreateRequest")
@@ -15668,7 +17605,8 @@ func init() {
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.LocateResponse.DockeridsEntry")
 	proto.RegisterMapType((map[string]string)(nil), "openstorage.api.LocateResponse.MountsEntry")
 	proto.RegisterType((*VolumePlacementStrategy)(nil), "openstorage.api.VolumePlacementStrategy")
-	proto.RegisterType((*VolumePlacementRule)(nil), "openstorage.api.VolumePlacementRule")
+	proto.RegisterType((*ReplicaPlacementSpec)(nil), "openstorage.api.ReplicaPlacementSpec")
+	proto.RegisterType((*VolumePlacementSpec)(nil), "openstorage.api.VolumePlacementSpec")
 	proto.RegisterType((*LabelSelectorRequirement)(nil), "openstorage.api.LabelSelectorRequirement")
 	proto.RegisterEnum("openstorage.api.Status", Status_name, Status_value)
 	proto.RegisterEnum("openstorage.api.DriverType", DriverType_name, DriverType_value)
@@ -15683,21 +17621,21 @@ func init() {
 	proto.RegisterEnum("openstorage.api.VolumeState", VolumeState_name, VolumeState_value)
 	proto.RegisterEnum("openstorage.api.VolumeStatus", VolumeStatus_name, VolumeStatus_value)
 	proto.RegisterEnum("openstorage.api.StorageMedium", StorageMedium_name, StorageMedium_value)
-	proto.RegisterEnum("openstorage.api.ClusterNotify", ClusterNotify_name, ClusterNotify_value)
 	proto.RegisterEnum("openstorage.api.AttachState", AttachState_name, AttachState_value)
 	proto.RegisterEnum("openstorage.api.OperationFlags", OperationFlags_name, OperationFlags_value)
 	proto.RegisterEnum("openstorage.api.SdkTimeWeekday", SdkTimeWeekday_name, SdkTimeWeekday_value)
 	proto.RegisterEnum("openstorage.api.SdkCloudBackupOpType", SdkCloudBackupOpType_name, SdkCloudBackupOpType_value)
 	proto.RegisterEnum("openstorage.api.SdkCloudBackupStatusType", SdkCloudBackupStatusType_name, SdkCloudBackupStatusType_value)
 	proto.RegisterEnum("openstorage.api.SdkCloudBackupRequestedState", SdkCloudBackupRequestedState_name, SdkCloudBackupRequestedState_value)
+	proto.RegisterEnum("openstorage.api.EnforcementType", EnforcementType_name, EnforcementType_value)
 	proto.RegisterEnum("openstorage.api.VolumeSpecPolicy_PolicyOp", VolumeSpecPolicy_PolicyOp_name, VolumeSpecPolicy_PolicyOp_value)
+	proto.RegisterEnum("openstorage.api.Ownership_AccessType", Ownership_AccessType_name, Ownership_AccessType_value)
 	proto.RegisterEnum("openstorage.api.SdkServiceCapability_OpenStorageService_Type", SdkServiceCapability_OpenStorageService_Type_name, SdkServiceCapability_OpenStorageService_Type_value)
 	proto.RegisterEnum("openstorage.api.SdkVersion_Version", SdkVersion_Version_name, SdkVersion_Version_value)
 	proto.RegisterEnum("openstorage.api.CloudMigrate_OperationType", CloudMigrate_OperationType_name, CloudMigrate_OperationType_value)
 	proto.RegisterEnum("openstorage.api.CloudMigrate_Stage", CloudMigrate_Stage_name, CloudMigrate_Stage_value)
 	proto.RegisterEnum("openstorage.api.CloudMigrate_Status", CloudMigrate_Status_name, CloudMigrate_Status_value)
-	proto.RegisterEnum("openstorage.api.VolumePlacementRule_EnforcementType", VolumePlacementRule_EnforcementType_name, VolumePlacementRule_EnforcementType_value)
-	proto.RegisterEnum("openstorage.api.VolumePlacementRule_AffinityRuleType", VolumePlacementRule_AffinityRuleType_name, VolumePlacementRule_AffinityRuleType_value)
+	proto.RegisterEnum("openstorage.api.ClusterPairMode_Mode", ClusterPairMode_Mode_name, ClusterPairMode_Mode_value)
 	proto.RegisterEnum("openstorage.api.LabelSelectorRequirement_Operator", LabelSelectorRequirement_Operator_name, LabelSelectorRequirement_Operator_value)
 }
 
@@ -15911,6 +17849,212 @@ var _OpenStorageAlerts_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+	Metadata: "api/api.proto",
+}
+
+// Client API for OpenStorageRole service
+
+type OpenStorageRoleClient interface {
+	// Create a role for users in the system
+	Create(ctx context.Context, in *SdkRoleCreateRequest, opts ...grpc.CallOption) (*SdkRoleCreateResponse, error)
+	// List all roles
+	Enumerate(ctx context.Context, in *SdkRoleEnumerateRequest, opts ...grpc.CallOption) (*SdkRoleEnumerateResponse, error)
+	// Get information about a role
+	Inspect(ctx context.Context, in *SdkRoleInspectRequest, opts ...grpc.CallOption) (*SdkRoleInspectResponse, error)
+	// Delete an existing role
+	Delete(ctx context.Context, in *SdkRoleDeleteRequest, opts ...grpc.CallOption) (*SdkRoleDeleteResponse, error)
+	// Update an existing role
+	Update(ctx context.Context, in *SdkRoleUpdateRequest, opts ...grpc.CallOption) (*SdkRoleUpdateResponse, error)
+}
+
+type openStorageRoleClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewOpenStorageRoleClient(cc *grpc.ClientConn) OpenStorageRoleClient {
+	return &openStorageRoleClient{cc}
+}
+
+func (c *openStorageRoleClient) Create(ctx context.Context, in *SdkRoleCreateRequest, opts ...grpc.CallOption) (*SdkRoleCreateResponse, error) {
+	out := new(SdkRoleCreateResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageRole/Create", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageRoleClient) Enumerate(ctx context.Context, in *SdkRoleEnumerateRequest, opts ...grpc.CallOption) (*SdkRoleEnumerateResponse, error) {
+	out := new(SdkRoleEnumerateResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageRole/Enumerate", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageRoleClient) Inspect(ctx context.Context, in *SdkRoleInspectRequest, opts ...grpc.CallOption) (*SdkRoleInspectResponse, error) {
+	out := new(SdkRoleInspectResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageRole/Inspect", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageRoleClient) Delete(ctx context.Context, in *SdkRoleDeleteRequest, opts ...grpc.CallOption) (*SdkRoleDeleteResponse, error) {
+	out := new(SdkRoleDeleteResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageRole/Delete", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageRoleClient) Update(ctx context.Context, in *SdkRoleUpdateRequest, opts ...grpc.CallOption) (*SdkRoleUpdateResponse, error) {
+	out := new(SdkRoleUpdateResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageRole/Update", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Server API for OpenStorageRole service
+
+type OpenStorageRoleServer interface {
+	// Create a role for users in the system
+	Create(context.Context, *SdkRoleCreateRequest) (*SdkRoleCreateResponse, error)
+	// List all roles
+	Enumerate(context.Context, *SdkRoleEnumerateRequest) (*SdkRoleEnumerateResponse, error)
+	// Get information about a role
+	Inspect(context.Context, *SdkRoleInspectRequest) (*SdkRoleInspectResponse, error)
+	// Delete an existing role
+	Delete(context.Context, *SdkRoleDeleteRequest) (*SdkRoleDeleteResponse, error)
+	// Update an existing role
+	Update(context.Context, *SdkRoleUpdateRequest) (*SdkRoleUpdateResponse, error)
+}
+
+func RegisterOpenStorageRoleServer(s *grpc.Server, srv OpenStorageRoleServer) {
+	s.RegisterService(&_OpenStorageRole_serviceDesc, srv)
+}
+
+func _OpenStorageRole_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkRoleCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageRoleServer).Create(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageRole/Create",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageRoleServer).Create(ctx, req.(*SdkRoleCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageRole_Enumerate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkRoleEnumerateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageRoleServer).Enumerate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageRole/Enumerate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageRoleServer).Enumerate(ctx, req.(*SdkRoleEnumerateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageRole_Inspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkRoleInspectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageRoleServer).Inspect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageRole/Inspect",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageRoleServer).Inspect(ctx, req.(*SdkRoleInspectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageRole_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkRoleDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageRoleServer).Delete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageRole/Delete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageRoleServer).Delete(ctx, req.(*SdkRoleDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageRole_Update_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkRoleUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageRoleServer).Update(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageRole/Update",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageRoleServer).Update(ctx, req.(*SdkRoleUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _OpenStorageRole_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "openstorage.api.OpenStorageRole",
+	HandlerType: (*OpenStorageRoleServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Create",
+			Handler:    _OpenStorageRole_Create_Handler,
+		},
+		{
+			MethodName: "Enumerate",
+			Handler:    _OpenStorageRole_Enumerate_Handler,
+		},
+		{
+			MethodName: "Inspect",
+			Handler:    _OpenStorageRole_Inspect_Handler,
+		},
+		{
+			MethodName: "Delete",
+			Handler:    _OpenStorageRole_Delete_Handler,
+		},
+		{
+			MethodName: "Update",
+			Handler:    _OpenStorageRole_Update_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "api/api.proto",
 }
 
@@ -16354,6 +18498,187 @@ var _OpenStorageClusterPair_serviceDesc = grpc.ServiceDesc{
 	Metadata: "api/api.proto",
 }
 
+// Client API for OpenStorageClusterDomains service
+
+type OpenStorageClusterDomainsClient interface {
+	// Enumerate returns names of all the cluster domains in the cluster
+	Enumerate(ctx context.Context, in *SdkClusterDomainsEnumerateRequest, opts ...grpc.CallOption) (*SdkClusterDomainsEnumerateResponse, error)
+	// Inspect returns information about a cluster domain and a
+	// status indicating whether the cluster domain is active
+	Inspect(ctx context.Context, in *SdkClusterDomainInspectRequest, opts ...grpc.CallOption) (*SdkClusterDomainInspectResponse, error)
+	// Activates a cluster domain in the cluster.
+	// All the nodes which are part of an active cluster domain
+	// will participate in cluster quorum calculation
+	Activate(ctx context.Context, in *SdkClusterDomainActivateRequest, opts ...grpc.CallOption) (*SdkClusterDomainActivateResponse, error)
+	// Deactivates a cluster domain in the cluster.
+	// All the nodes which are part of a deactivated cluster domain.
+	// will not participate in cluster quorum calculation
+	Deactivate(ctx context.Context, in *SdkClusterDomainDeactivateRequest, opts ...grpc.CallOption) (*SdkClusterDomainDeactivateResponse, error)
+}
+
+type openStorageClusterDomainsClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewOpenStorageClusterDomainsClient(cc *grpc.ClientConn) OpenStorageClusterDomainsClient {
+	return &openStorageClusterDomainsClient{cc}
+}
+
+func (c *openStorageClusterDomainsClient) Enumerate(ctx context.Context, in *SdkClusterDomainsEnumerateRequest, opts ...grpc.CallOption) (*SdkClusterDomainsEnumerateResponse, error) {
+	out := new(SdkClusterDomainsEnumerateResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageClusterDomains/Enumerate", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageClusterDomainsClient) Inspect(ctx context.Context, in *SdkClusterDomainInspectRequest, opts ...grpc.CallOption) (*SdkClusterDomainInspectResponse, error) {
+	out := new(SdkClusterDomainInspectResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageClusterDomains/Inspect", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageClusterDomainsClient) Activate(ctx context.Context, in *SdkClusterDomainActivateRequest, opts ...grpc.CallOption) (*SdkClusterDomainActivateResponse, error) {
+	out := new(SdkClusterDomainActivateResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageClusterDomains/Activate", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageClusterDomainsClient) Deactivate(ctx context.Context, in *SdkClusterDomainDeactivateRequest, opts ...grpc.CallOption) (*SdkClusterDomainDeactivateResponse, error) {
+	out := new(SdkClusterDomainDeactivateResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageClusterDomains/Deactivate", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Server API for OpenStorageClusterDomains service
+
+type OpenStorageClusterDomainsServer interface {
+	// Enumerate returns names of all the cluster domains in the cluster
+	Enumerate(context.Context, *SdkClusterDomainsEnumerateRequest) (*SdkClusterDomainsEnumerateResponse, error)
+	// Inspect returns information about a cluster domain and a
+	// status indicating whether the cluster domain is active
+	Inspect(context.Context, *SdkClusterDomainInspectRequest) (*SdkClusterDomainInspectResponse, error)
+	// Activates a cluster domain in the cluster.
+	// All the nodes which are part of an active cluster domain
+	// will participate in cluster quorum calculation
+	Activate(context.Context, *SdkClusterDomainActivateRequest) (*SdkClusterDomainActivateResponse, error)
+	// Deactivates a cluster domain in the cluster.
+	// All the nodes which are part of a deactivated cluster domain.
+	// will not participate in cluster quorum calculation
+	Deactivate(context.Context, *SdkClusterDomainDeactivateRequest) (*SdkClusterDomainDeactivateResponse, error)
+}
+
+func RegisterOpenStorageClusterDomainsServer(s *grpc.Server, srv OpenStorageClusterDomainsServer) {
+	s.RegisterService(&_OpenStorageClusterDomains_serviceDesc, srv)
+}
+
+func _OpenStorageClusterDomains_Enumerate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkClusterDomainsEnumerateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageClusterDomainsServer).Enumerate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageClusterDomains/Enumerate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageClusterDomainsServer).Enumerate(ctx, req.(*SdkClusterDomainsEnumerateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageClusterDomains_Inspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkClusterDomainInspectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageClusterDomainsServer).Inspect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageClusterDomains/Inspect",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageClusterDomainsServer).Inspect(ctx, req.(*SdkClusterDomainInspectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageClusterDomains_Activate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkClusterDomainActivateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageClusterDomainsServer).Activate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageClusterDomains/Activate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageClusterDomainsServer).Activate(ctx, req.(*SdkClusterDomainActivateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageClusterDomains_Deactivate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkClusterDomainDeactivateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageClusterDomainsServer).Deactivate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageClusterDomains/Deactivate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageClusterDomainsServer).Deactivate(ctx, req.(*SdkClusterDomainDeactivateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _OpenStorageClusterDomains_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "openstorage.api.OpenStorageClusterDomains",
+	HandlerType: (*OpenStorageClusterDomainsServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Enumerate",
+			Handler:    _OpenStorageClusterDomains_Enumerate_Handler,
+		},
+		{
+			MethodName: "Inspect",
+			Handler:    _OpenStorageClusterDomains_Inspect_Handler,
+		},
+		{
+			MethodName: "Activate",
+			Handler:    _OpenStorageClusterDomains_Activate_Handler,
+		},
+		{
+			MethodName: "Deactivate",
+			Handler:    _OpenStorageClusterDomains_Deactivate_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "api/api.proto",
+}
+
 // Client API for OpenStorageNode service
 
 type OpenStorageNodeClient interface {
@@ -16364,6 +18689,8 @@ type OpenStorageNodeClient interface {
 	InspectCurrent(ctx context.Context, in *SdkNodeInspectCurrentRequest, opts ...grpc.CallOption) (*SdkNodeInspectCurrentResponse, error)
 	// Enumerate returns the ids of all the nodes in the current cluster
 	Enumerate(ctx context.Context, in *SdkNodeEnumerateRequest, opts ...grpc.CallOption) (*SdkNodeEnumerateResponse, error)
+	// EnumerateWithFilters returns all the nodes in the current cluster
+	EnumerateWithFilters(ctx context.Context, in *SdkNodeEnumerateWithFiltersRequest, opts ...grpc.CallOption) (*SdkNodeEnumerateWithFiltersResponse, error)
 }
 
 type openStorageNodeClient struct {
@@ -16401,6 +18728,15 @@ func (c *openStorageNodeClient) Enumerate(ctx context.Context, in *SdkNodeEnumer
 	return out, nil
 }
 
+func (c *openStorageNodeClient) EnumerateWithFilters(ctx context.Context, in *SdkNodeEnumerateWithFiltersRequest, opts ...grpc.CallOption) (*SdkNodeEnumerateWithFiltersResponse, error) {
+	out := new(SdkNodeEnumerateWithFiltersResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageNode/EnumerateWithFilters", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Server API for OpenStorageNode service
 
 type OpenStorageNodeServer interface {
@@ -16411,6 +18747,8 @@ type OpenStorageNodeServer interface {
 	InspectCurrent(context.Context, *SdkNodeInspectCurrentRequest) (*SdkNodeInspectCurrentResponse, error)
 	// Enumerate returns the ids of all the nodes in the current cluster
 	Enumerate(context.Context, *SdkNodeEnumerateRequest) (*SdkNodeEnumerateResponse, error)
+	// EnumerateWithFilters returns all the nodes in the current cluster
+	EnumerateWithFilters(context.Context, *SdkNodeEnumerateWithFiltersRequest) (*SdkNodeEnumerateWithFiltersResponse, error)
 }
 
 func RegisterOpenStorageNodeServer(s *grpc.Server, srv OpenStorageNodeServer) {
@@ -16471,6 +18809,24 @@ func _OpenStorageNode_Enumerate_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OpenStorageNode_EnumerateWithFilters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkNodeEnumerateWithFiltersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageNodeServer).EnumerateWithFilters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageNode/EnumerateWithFilters",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageNodeServer).EnumerateWithFilters(ctx, req.(*SdkNodeEnumerateWithFiltersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _OpenStorageNode_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "openstorage.api.OpenStorageNode",
 	HandlerType: (*OpenStorageNodeServer)(nil),
@@ -16487,6 +18843,10 @@ var _OpenStorageNode_serviceDesc = grpc.ServiceDesc{
 			MethodName: "Enumerate",
 			Handler:    _OpenStorageNode_Enumerate_Handler,
 		},
+		{
+			MethodName: "EnumerateWithFilters",
+			Handler:    _OpenStorageNode_EnumerateWithFilters_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "api/api.proto",
@@ -16496,6 +18856,8 @@ var _OpenStorageNode_serviceDesc = grpc.ServiceDesc{
 
 type OpenStorageVolumeClient interface {
 	// Create creates a volume according to the specification provided
+	//
+	// Requires access AccessType.Read when cloning from a parent volume.
 	//
 	// ##### Example
 	// {% codetabs name="Golang", type="go" -%}
@@ -16512,17 +18874,38 @@ type OpenStorageVolumeClient interface {
 	// {%- endcodetabs %}
 	Create(ctx context.Context, in *SdkVolumeCreateRequest, opts ...grpc.CallOption) (*SdkVolumeCreateResponse, error)
 	// Clone creates a new writable volume cloned from an existing volume
+	//
+	// Requires access AccessType.Read of volume
 	Clone(ctx context.Context, in *SdkVolumeCloneRequest, opts ...grpc.CallOption) (*SdkVolumeCloneResponse, error)
 	// Delete deletes the provided volume
+	//
+	// Requires access AccessType.Admin of volume
 	Delete(ctx context.Context, in *SdkVolumeDeleteRequest, opts ...grpc.CallOption) (*SdkVolumeDeleteResponse, error)
 	// Inspect returns information about a volume
+	//
+	// Requires access AccessType.Read of volume
 	Inspect(ctx context.Context, in *SdkVolumeInspectRequest, opts ...grpc.CallOption) (*SdkVolumeInspectResponse, error)
+	// Returns information for a list of volumes that match a filter.
+	// This call is a helper function like calling
+	// `OpenStorageVolume.EnumerateWithFilters` then having it
+	// return the contents of each of those volumes
+	// `OpenStorageVolume.Inspect()`. Take care in using this call
+	// when requesting large number of volumes because it will
+	// block until it has all the information requested before
+	// returning.
+	InspectWithFilters(ctx context.Context, in *SdkVolumeInspectWithFiltersRequest, opts ...grpc.CallOption) (*SdkVolumeInspectWithFiltersResponse, error)
 	// Update provides a method for manipulating the specification and attributes of a volume.
 	// Set can be used to resize a volume, update labels, change replica count, and much more.
+	//
+	// Requires access AccessType.Write of volume
 	Update(ctx context.Context, in *SdkVolumeUpdateRequest, opts ...grpc.CallOption) (*SdkVolumeUpdateResponse, error)
 	// Stats returns the statistics for the requested volume
+	//
+	// Requires access AccessType.Read of volume
 	Stats(ctx context.Context, in *SdkVolumeStatsRequest, opts ...grpc.CallOption) (*SdkVolumeStatsResponse, error)
 	// CapacityUsage returns volume/snapshot's capacity usage details
+	//
+	// Requires access AccessType.Read of volume
 	//
 	// ##### Error codes:
 	//
@@ -16537,8 +18920,12 @@ type OpenStorageVolumeClient interface {
 	// SnapshotCreate creates a snapshot of a volume. This creates an immutable (read-only),
 	// point-in-time snapshot of a volume. To create a new writable volume from
 	// a snapshot, please use OpenStorageVolume.Clone().
+	//
+	// Requires access AccessType.Read of volume
 	SnapshotCreate(ctx context.Context, in *SdkVolumeSnapshotCreateRequest, opts ...grpc.CallOption) (*SdkVolumeSnapshotCreateResponse, error)
 	// SnapshotRestore restores a volume to a specified snapshot
+	//
+	// Requires access AccessType.Write of volume
 	SnapshotRestore(ctx context.Context, in *SdkVolumeSnapshotRestoreRequest, opts ...grpc.CallOption) (*SdkVolumeSnapshotRestoreResponse, error)
 	// SnapshotEnumerate returns a list of snapshots for a specific volume
 	SnapshotEnumerate(ctx context.Context, in *SdkVolumeSnapshotEnumerateRequest, opts ...grpc.CallOption) (*SdkVolumeSnapshotEnumerateResponse, error)
@@ -16551,6 +18938,8 @@ type OpenStorageVolumeClient interface {
 	// Sets the snapshot schedules. This information is saved in the VolumeSpec.snapshot_schedule
 	// as `policy=<name>,...`. This function will overwrite any policy values
 	// in the volume. To delete the policies in the volume send no policies.
+	//
+	// Requires access AccessType.Write of volume
 	SnapshotScheduleUpdate(ctx context.Context, in *SdkVolumeSnapshotScheduleUpdateRequest, opts ...grpc.CallOption) (*SdkVolumeSnapshotScheduleUpdateResponse, error)
 }
 
@@ -16592,6 +18981,15 @@ func (c *openStorageVolumeClient) Delete(ctx context.Context, in *SdkVolumeDelet
 func (c *openStorageVolumeClient) Inspect(ctx context.Context, in *SdkVolumeInspectRequest, opts ...grpc.CallOption) (*SdkVolumeInspectResponse, error) {
 	out := new(SdkVolumeInspectResponse)
 	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageVolume/Inspect", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageVolumeClient) InspectWithFilters(ctx context.Context, in *SdkVolumeInspectWithFiltersRequest, opts ...grpc.CallOption) (*SdkVolumeInspectWithFiltersResponse, error) {
+	out := new(SdkVolumeInspectWithFiltersResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageVolume/InspectWithFilters", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -16693,6 +19091,8 @@ func (c *openStorageVolumeClient) SnapshotScheduleUpdate(ctx context.Context, in
 type OpenStorageVolumeServer interface {
 	// Create creates a volume according to the specification provided
 	//
+	// Requires access AccessType.Read when cloning from a parent volume.
+	//
 	// ##### Example
 	// {% codetabs name="Golang", type="go" -%}
 	// id, err := client.Create(context.Background(), &api.SdkVolumeCreateRequest{
@@ -16708,17 +19108,38 @@ type OpenStorageVolumeServer interface {
 	// {%- endcodetabs %}
 	Create(context.Context, *SdkVolumeCreateRequest) (*SdkVolumeCreateResponse, error)
 	// Clone creates a new writable volume cloned from an existing volume
+	//
+	// Requires access AccessType.Read of volume
 	Clone(context.Context, *SdkVolumeCloneRequest) (*SdkVolumeCloneResponse, error)
 	// Delete deletes the provided volume
+	//
+	// Requires access AccessType.Admin of volume
 	Delete(context.Context, *SdkVolumeDeleteRequest) (*SdkVolumeDeleteResponse, error)
 	// Inspect returns information about a volume
+	//
+	// Requires access AccessType.Read of volume
 	Inspect(context.Context, *SdkVolumeInspectRequest) (*SdkVolumeInspectResponse, error)
+	// Returns information for a list of volumes that match a filter.
+	// This call is a helper function like calling
+	// `OpenStorageVolume.EnumerateWithFilters` then having it
+	// return the contents of each of those volumes
+	// `OpenStorageVolume.Inspect()`. Take care in using this call
+	// when requesting large number of volumes because it will
+	// block until it has all the information requested before
+	// returning.
+	InspectWithFilters(context.Context, *SdkVolumeInspectWithFiltersRequest) (*SdkVolumeInspectWithFiltersResponse, error)
 	// Update provides a method for manipulating the specification and attributes of a volume.
 	// Set can be used to resize a volume, update labels, change replica count, and much more.
+	//
+	// Requires access AccessType.Write of volume
 	Update(context.Context, *SdkVolumeUpdateRequest) (*SdkVolumeUpdateResponse, error)
 	// Stats returns the statistics for the requested volume
+	//
+	// Requires access AccessType.Read of volume
 	Stats(context.Context, *SdkVolumeStatsRequest) (*SdkVolumeStatsResponse, error)
 	// CapacityUsage returns volume/snapshot's capacity usage details
+	//
+	// Requires access AccessType.Read of volume
 	//
 	// ##### Error codes:
 	//
@@ -16733,8 +19154,12 @@ type OpenStorageVolumeServer interface {
 	// SnapshotCreate creates a snapshot of a volume. This creates an immutable (read-only),
 	// point-in-time snapshot of a volume. To create a new writable volume from
 	// a snapshot, please use OpenStorageVolume.Clone().
+	//
+	// Requires access AccessType.Read of volume
 	SnapshotCreate(context.Context, *SdkVolumeSnapshotCreateRequest) (*SdkVolumeSnapshotCreateResponse, error)
 	// SnapshotRestore restores a volume to a specified snapshot
+	//
+	// Requires access AccessType.Write of volume
 	SnapshotRestore(context.Context, *SdkVolumeSnapshotRestoreRequest) (*SdkVolumeSnapshotRestoreResponse, error)
 	// SnapshotEnumerate returns a list of snapshots for a specific volume
 	SnapshotEnumerate(context.Context, *SdkVolumeSnapshotEnumerateRequest) (*SdkVolumeSnapshotEnumerateResponse, error)
@@ -16747,6 +19172,8 @@ type OpenStorageVolumeServer interface {
 	// Sets the snapshot schedules. This information is saved in the VolumeSpec.snapshot_schedule
 	// as `policy=<name>,...`. This function will overwrite any policy values
 	// in the volume. To delete the policies in the volume send no policies.
+	//
+	// Requires access AccessType.Write of volume
 	SnapshotScheduleUpdate(context.Context, *SdkVolumeSnapshotScheduleUpdateRequest) (*SdkVolumeSnapshotScheduleUpdateResponse, error)
 }
 
@@ -16822,6 +19249,24 @@ func _OpenStorageVolume_Inspect_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OpenStorageVolumeServer).Inspect(ctx, req.(*SdkVolumeInspectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageVolume_InspectWithFilters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkVolumeInspectWithFiltersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageVolumeServer).InspectWithFilters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageVolume/InspectWithFilters",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageVolumeServer).InspectWithFilters(ctx, req.(*SdkVolumeInspectWithFiltersRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -17027,6 +19472,10 @@ var _OpenStorageVolume_serviceDesc = grpc.ServiceDesc{
 			Handler:    _OpenStorageVolume_Inspect_Handler,
 		},
 		{
+			MethodName: "InspectWithFilters",
+			Handler:    _OpenStorageVolume_InspectWithFilters_Handler,
+		},
+		{
 			MethodName: "Update",
 			Handler:    _OpenStorageVolume_Update_Handler,
 		},
@@ -17075,12 +19524,20 @@ var _OpenStorageVolume_serviceDesc = grpc.ServiceDesc{
 
 type OpenStorageMountAttachClient interface {
 	// Attach attaches device to the host that the client is communicating with.
+	//
+	// Requires access AccessType.Write of volume
 	Attach(ctx context.Context, in *SdkVolumeAttachRequest, opts ...grpc.CallOption) (*SdkVolumeAttachResponse, error)
 	// Detaches a the volume from the host
+	//
+	// Requires access AccessType.Write of volume
 	Detach(ctx context.Context, in *SdkVolumeDetachRequest, opts ...grpc.CallOption) (*SdkVolumeDetachResponse, error)
 	// Mount mounts an attached volume in the host that the client is communicating with
+	//
+	// Requires access AccessType.Write of volume
 	Mount(ctx context.Context, in *SdkVolumeMountRequest, opts ...grpc.CallOption) (*SdkVolumeMountResponse, error)
 	// Unmount unmounts a mounted volume in the host that the client is communicating with
+	//
+	// Requires access AccessType.Write of volume
 	Unmount(ctx context.Context, in *SdkVolumeUnmountRequest, opts ...grpc.CallOption) (*SdkVolumeUnmountResponse, error)
 }
 
@@ -17132,12 +19589,20 @@ func (c *openStorageMountAttachClient) Unmount(ctx context.Context, in *SdkVolum
 
 type OpenStorageMountAttachServer interface {
 	// Attach attaches device to the host that the client is communicating with.
+	//
+	// Requires access AccessType.Write of volume
 	Attach(context.Context, *SdkVolumeAttachRequest) (*SdkVolumeAttachResponse, error)
 	// Detaches a the volume from the host
+	//
+	// Requires access AccessType.Write of volume
 	Detach(context.Context, *SdkVolumeDetachRequest) (*SdkVolumeDetachResponse, error)
 	// Mount mounts an attached volume in the host that the client is communicating with
+	//
+	// Requires access AccessType.Write of volume
 	Mount(context.Context, *SdkVolumeMountRequest) (*SdkVolumeMountResponse, error)
 	// Unmount unmounts a mounted volume in the host that the client is communicating with
+	//
+	// Requires access AccessType.Write of volume
 	Unmount(context.Context, *SdkVolumeUnmountRequest) (*SdkVolumeUnmountResponse, error)
 }
 
@@ -18021,7 +20486,15 @@ type OpenStorageCloudBackupClient interface {
 	// Creates a backup request for a specified volume. Use
 	// OpenStorageCloudBackup.Status() to get the current status of the
 	// backup request.
+	//
+	// Requires access AccessType.Read of volume
 	Create(ctx context.Context, in *SdkCloudBackupCreateRequest, opts ...grpc.CallOption) (*SdkCloudBackupCreateResponse, error)
+	// Creates a group backup request for a specified group. Use
+	// OpenStorageCloudBackup.Status() to get the current status of the
+	// backup request.
+	//
+	// This will only backup volumes which the user has read_access to.
+	GroupCreate(ctx context.Context, in *SdkCloudBackupGroupCreateRequest, opts ...grpc.CallOption) (*SdkCloudBackupGroupCreateResponse, error)
 	// Restore creates a new volume from a backup id. The newly created volume
 	// has an ha_level (number of replicas) of only 1. To increase the number of
 	// replicas, use OpenStorageVolume.Set() to change the ha_level.
@@ -18060,6 +20533,15 @@ func NewOpenStorageCloudBackupClient(cc *grpc.ClientConn) OpenStorageCloudBackup
 func (c *openStorageCloudBackupClient) Create(ctx context.Context, in *SdkCloudBackupCreateRequest, opts ...grpc.CallOption) (*SdkCloudBackupCreateResponse, error) {
 	out := new(SdkCloudBackupCreateResponse)
 	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageCloudBackup/Create", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *openStorageCloudBackupClient) GroupCreate(ctx context.Context, in *SdkCloudBackupGroupCreateRequest, opts ...grpc.CallOption) (*SdkCloudBackupGroupCreateResponse, error) {
+	out := new(SdkCloudBackupGroupCreateResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStorageCloudBackup/GroupCreate", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -18171,7 +20653,15 @@ type OpenStorageCloudBackupServer interface {
 	// Creates a backup request for a specified volume. Use
 	// OpenStorageCloudBackup.Status() to get the current status of the
 	// backup request.
+	//
+	// Requires access AccessType.Read of volume
 	Create(context.Context, *SdkCloudBackupCreateRequest) (*SdkCloudBackupCreateResponse, error)
+	// Creates a group backup request for a specified group. Use
+	// OpenStorageCloudBackup.Status() to get the current status of the
+	// backup request.
+	//
+	// This will only backup volumes which the user has read_access to.
+	GroupCreate(context.Context, *SdkCloudBackupGroupCreateRequest) (*SdkCloudBackupGroupCreateResponse, error)
 	// Restore creates a new volume from a backup id. The newly created volume
 	// has an ha_level (number of replicas) of only 1. To increase the number of
 	// replicas, use OpenStorageVolume.Set() to change the ha_level.
@@ -18217,6 +20707,24 @@ func _OpenStorageCloudBackup_Create_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OpenStorageCloudBackupServer).Create(ctx, req.(*SdkCloudBackupCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OpenStorageCloudBackup_GroupCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkCloudBackupGroupCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OpenStorageCloudBackupServer).GroupCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/openstorage.api.OpenStorageCloudBackup/GroupCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OpenStorageCloudBackupServer).GroupCreate(ctx, req.(*SdkCloudBackupGroupCreateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -18428,6 +20936,10 @@ var _OpenStorageCloudBackup_serviceDesc = grpc.ServiceDesc{
 			Handler:    _OpenStorageCloudBackup_Create_Handler,
 		},
 		{
+			MethodName: "GroupCreate",
+			Handler:    _OpenStorageCloudBackup_GroupCreate_Handler,
+		},
+		{
 			MethodName: "Restore",
 			Handler:    _OpenStorageCloudBackup_Restore_Handler,
 		},
@@ -18489,11 +21001,11 @@ type OpenStoragePolicyClient interface {
 	Update(ctx context.Context, in *SdkOpenStoragePolicyUpdateRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyUpdateResponse, error)
 	// Deletes specified storage policy
 	Delete(ctx context.Context, in *SdkOpenStoragePolicyDeleteRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyDeleteResponse, error)
-	// Enforces specified storage policy
-	Enforce(ctx context.Context, in *SdkOpenStoragePolicyEnforceRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyEnforceResponse, error)
-	// EnforcesInspect return enforced storage policy if any, otherwise
+	// Set specified storage policy as default policy
+	SetDefault(ctx context.Context, in *SdkOpenStoragePolicySetDefaultRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicySetDefaultResponse, error)
+	// DefaultInspect return default storage policy if any, otherwise
 	// empty response
-	EnforceInspect(ctx context.Context, in *SdkOpenStoragePolicyEnforceInspectRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyEnforceInspectResponse, error)
+	DefaultInspect(ctx context.Context, in *SdkOpenStoragePolicyDefaultInspectRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyDefaultInspectResponse, error)
 	// Release specified storage policy constraint for volume
 	// creation
 	Release(ctx context.Context, in *SdkOpenStoragePolicyReleaseRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyReleaseResponse, error)
@@ -18552,18 +21064,18 @@ func (c *openStoragePolicyClient) Delete(ctx context.Context, in *SdkOpenStorage
 	return out, nil
 }
 
-func (c *openStoragePolicyClient) Enforce(ctx context.Context, in *SdkOpenStoragePolicyEnforceRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyEnforceResponse, error) {
-	out := new(SdkOpenStoragePolicyEnforceResponse)
-	err := grpc.Invoke(ctx, "/openstorage.api.OpenStoragePolicy/Enforce", in, out, c.cc, opts...)
+func (c *openStoragePolicyClient) SetDefault(ctx context.Context, in *SdkOpenStoragePolicySetDefaultRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicySetDefaultResponse, error) {
+	out := new(SdkOpenStoragePolicySetDefaultResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStoragePolicy/SetDefault", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *openStoragePolicyClient) EnforceInspect(ctx context.Context, in *SdkOpenStoragePolicyEnforceInspectRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyEnforceInspectResponse, error) {
-	out := new(SdkOpenStoragePolicyEnforceInspectResponse)
-	err := grpc.Invoke(ctx, "/openstorage.api.OpenStoragePolicy/EnforceInspect", in, out, c.cc, opts...)
+func (c *openStoragePolicyClient) DefaultInspect(ctx context.Context, in *SdkOpenStoragePolicyDefaultInspectRequest, opts ...grpc.CallOption) (*SdkOpenStoragePolicyDefaultInspectResponse, error) {
+	out := new(SdkOpenStoragePolicyDefaultInspectResponse)
+	err := grpc.Invoke(ctx, "/openstorage.api.OpenStoragePolicy/DefaultInspect", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -18592,11 +21104,11 @@ type OpenStoragePolicyServer interface {
 	Update(context.Context, *SdkOpenStoragePolicyUpdateRequest) (*SdkOpenStoragePolicyUpdateResponse, error)
 	// Deletes specified storage policy
 	Delete(context.Context, *SdkOpenStoragePolicyDeleteRequest) (*SdkOpenStoragePolicyDeleteResponse, error)
-	// Enforces specified storage policy
-	Enforce(context.Context, *SdkOpenStoragePolicyEnforceRequest) (*SdkOpenStoragePolicyEnforceResponse, error)
-	// EnforcesInspect return enforced storage policy if any, otherwise
+	// Set specified storage policy as default policy
+	SetDefault(context.Context, *SdkOpenStoragePolicySetDefaultRequest) (*SdkOpenStoragePolicySetDefaultResponse, error)
+	// DefaultInspect return default storage policy if any, otherwise
 	// empty response
-	EnforceInspect(context.Context, *SdkOpenStoragePolicyEnforceInspectRequest) (*SdkOpenStoragePolicyEnforceInspectResponse, error)
+	DefaultInspect(context.Context, *SdkOpenStoragePolicyDefaultInspectRequest) (*SdkOpenStoragePolicyDefaultInspectResponse, error)
 	// Release specified storage policy constraint for volume
 	// creation
 	Release(context.Context, *SdkOpenStoragePolicyReleaseRequest) (*SdkOpenStoragePolicyReleaseResponse, error)
@@ -18696,38 +21208,38 @@ func _OpenStoragePolicy_Delete_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-func _OpenStoragePolicy_Enforce_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SdkOpenStoragePolicyEnforceRequest)
+func _OpenStoragePolicy_SetDefault_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkOpenStoragePolicySetDefaultRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(OpenStoragePolicyServer).Enforce(ctx, in)
+		return srv.(OpenStoragePolicyServer).SetDefault(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/openstorage.api.OpenStoragePolicy/Enforce",
+		FullMethod: "/openstorage.api.OpenStoragePolicy/SetDefault",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(OpenStoragePolicyServer).Enforce(ctx, req.(*SdkOpenStoragePolicyEnforceRequest))
+		return srv.(OpenStoragePolicyServer).SetDefault(ctx, req.(*SdkOpenStoragePolicySetDefaultRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _OpenStoragePolicy_EnforceInspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SdkOpenStoragePolicyEnforceInspectRequest)
+func _OpenStoragePolicy_DefaultInspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SdkOpenStoragePolicyDefaultInspectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(OpenStoragePolicyServer).EnforceInspect(ctx, in)
+		return srv.(OpenStoragePolicyServer).DefaultInspect(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/openstorage.api.OpenStoragePolicy/EnforceInspect",
+		FullMethod: "/openstorage.api.OpenStoragePolicy/DefaultInspect",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(OpenStoragePolicyServer).EnforceInspect(ctx, req.(*SdkOpenStoragePolicyEnforceInspectRequest))
+		return srv.(OpenStoragePolicyServer).DefaultInspect(ctx, req.(*SdkOpenStoragePolicyDefaultInspectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -18775,12 +21287,12 @@ var _OpenStoragePolicy_serviceDesc = grpc.ServiceDesc{
 			Handler:    _OpenStoragePolicy_Delete_Handler,
 		},
 		{
-			MethodName: "Enforce",
-			Handler:    _OpenStoragePolicy_Enforce_Handler,
+			MethodName: "SetDefault",
+			Handler:    _OpenStoragePolicy_SetDefault_Handler,
 		},
 		{
-			MethodName: "EnforceInspect",
-			Handler:    _OpenStoragePolicy_EnforceInspect_Handler,
+			MethodName: "DefaultInspect",
+			Handler:    _OpenStoragePolicy_DefaultInspect_Handler,
 		},
 		{
 			MethodName: "Release",
@@ -18791,750 +21303,846 @@ var _OpenStoragePolicy_serviceDesc = grpc.ServiceDesc{
 	Metadata: "api/api.proto",
 }
 
-func init() { proto.RegisterFile("api/api.proto", fileDescriptor_api_d409f3db37eda2b9) }
+func init() { proto.RegisterFile("api/api.proto", fileDescriptor_api_ae849f4def4dfbf7) }
 
-var fileDescriptor_api_d409f3db37eda2b9 = []byte{
-	// 11865 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_api_ae849f4def4dfbf7 = []byte{
+	// 13402 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe4, 0x7d, 0x5b, 0x8c, 0x1c, 0x49,
-	0x72, 0xd8, 0x54, 0xf7, 0x4c, 0x3f, 0x62, 0x5e, 0x35, 0x49, 0xee, 0xb0, 0xd9, 0x24, 0x97, 0x64,
-	0xed, 0x72, 0xc9, 0x9d, 0x25, 0x67, 0xb8, 0xb3, 0xcb, 0xbd, 0x5d, 0xee, 0xee, 0x9d, 0xe6, 0xd1,
-	0xc3, 0xe9, 0xe3, 0xbc, 0xb6, 0x7a, 0x86, 0xdc, 0x3b, 0xe9, 0xd4, 0x57, 0xec, 0x2e, 0x0e, 0xeb,
-	0xd8, 0xdd, 0xd5, 0x5b, 0x55, 0x3d, 0xbb, 0x73, 0xa7, 0x95, 0x84, 0x03, 0x64, 0xd9, 0xd6, 0xf3,
-	0x24, 0x9d, 0x84, 0xd3, 0xc9, 0xb2, 0x0c, 0x43, 0xb2, 0x0d, 0x59, 0x86, 0xcf, 0x36, 0x0c, 0xd8,
-	0x96, 0x2d, 0x40, 0x1f, 0x96, 0x25, 0x1b, 0xd2, 0x87, 0xe0, 0x2f, 0xc3, 0x1f, 0x02, 0x04, 0xc3,
-	0x82, 0x01, 0x19, 0xd0, 0x9f, 0x01, 0x03, 0x32, 0x32, 0x32, 0xab, 0x2a, 0xb3, 0x1e, 0xdd, 0xd5,
-	0x5c, 0x9e, 0x7e, 0xfc, 0x33, 0xd3, 0x99, 0x19, 0x19, 0x19, 0x19, 0x19, 0x11, 0x99, 0x19, 0x19,
-	0x99, 0x05, 0xb3, 0x46, 0xdf, 0x5a, 0x31, 0xfa, 0xd6, 0x72, 0xdf, 0xb1, 0x3d, 0x9b, 0xcc, 0xdb,
-	0x7d, 0xb3, 0xe7, 0x7a, 0xb6, 0x63, 0x1c, 0x9b, 0xcb, 0x46, 0xdf, 0xaa, 0x5e, 0x3e, 0xb6, 0xed,
-	0xe3, 0x8e, 0xb9, 0x82, 0xc5, 0x8f, 0x06, 0x8f, 0x57, 0x3c, 0xab, 0x6b, 0xba, 0x9e, 0xd1, 0xed,
-	0xb3, 0x1a, 0xd5, 0x8b, 0x1c, 0x00, 0xf1, 0xf4, 0x7a, 0xb6, 0x67, 0x78, 0x96, 0xdd, 0x73, 0x59,
-	0xa9, 0xf6, 0x33, 0x79, 0x98, 0x6f, 0x30, 0x74, 0xba, 0xe9, 0xda, 0x03, 0xa7, 0x65, 0x92, 0x39,
-	0xc8, 0x59, 0xed, 0x8a, 0x72, 0x45, 0xb9, 0x51, 0xd6, 0x73, 0x56, 0x9b, 0x10, 0x98, 0xec, 0x1b,
-	0xde, 0x93, 0x4a, 0x0e, 0x73, 0xf0, 0x37, 0x79, 0x0b, 0x0a, 0x5d, 0xb3, 0x6d, 0x0d, 0xba, 0x95,
-	0xfc, 0x15, 0xe5, 0xc6, 0xdc, 0xea, 0x8b, 0xcb, 0x11, 0xc2, 0x96, 0x39, 0xd6, 0x5d, 0x84, 0xd2,
-	0x39, 0x34, 0x59, 0x84, 0x82, 0xdd, 0xeb, 0x58, 0x3d, 0xb3, 0x32, 0x79, 0x45, 0xb9, 0x51, 0xd2,
-	0x79, 0x8a, 0xb6, 0x61, 0xd9, 0x7d, 0xb7, 0x32, 0x75, 0x45, 0xb9, 0x31, 0xa9, 0xe3, 0x6f, 0x72,
-	0x01, 0xca, 0xae, 0xf9, 0x51, 0xf3, 0x63, 0xc7, 0xf2, 0xcc, 0x4a, 0xe1, 0x8a, 0x72, 0x43, 0xd1,
-	0x4b, 0xae, 0xf9, 0xd1, 0x43, 0x9a, 0x26, 0xe7, 0x81, 0xfe, 0x6e, 0x3a, 0xa6, 0xd1, 0xae, 0x14,
-	0xb1, 0xac, 0xe8, 0x9a, 0x1f, 0xe9, 0xa6, 0xd1, 0xa6, 0x6d, 0x38, 0x46, 0xaf, 0xad, 0x3f, 0xac,
-	0x94, 0xb0, 0x80, 0xa7, 0x68, 0x1b, 0xae, 0xf5, 0x75, 0xb3, 0x52, 0x66, 0x6d, 0xd0, 0xdf, 0x34,
-	0x6f, 0xe0, 0x9a, 0xed, 0x0a, 0xb0, 0x3c, 0xfa, 0x9b, 0x5c, 0x83, 0x39, 0x87, 0xb3, 0xa9, 0xe9,
-	0xf6, 0x4d, 0xb3, 0x5d, 0x99, 0xc6, 0x9e, 0xcf, 0xfa, 0xb9, 0x0d, 0x9a, 0x49, 0x3e, 0x07, 0xe5,
-	0x8e, 0xe1, 0x7a, 0x4d, 0xb7, 0x65, 0xf4, 0x2a, 0x33, 0x57, 0x94, 0x1b, 0xd3, 0xab, 0xd5, 0x65,
-	0xc6, 0xec, 0x65, 0x7f, 0x34, 0x96, 0x0f, 0xfd, 0xd1, 0xd0, 0x4b, 0x14, 0xb8, 0xd1, 0x32, 0x7a,
-	0xa4, 0x0a, 0xa5, 0xae, 0xe9, 0x19, 0x6d, 0xc3, 0x33, 0x2a, 0xb3, 0xc8, 0x85, 0x20, 0xad, 0xfd,
-	0x71, 0x0e, 0xa6, 0x39, 0xe7, 0x0e, 0x6c, 0xbb, 0x43, 0xc7, 0xa2, 0xbe, 0x89, 0x63, 0x31, 0xa5,
-	0xe7, 0xea, 0x9b, 0x64, 0x09, 0xf2, 0x1b, 0xb6, 0x8b, 0x43, 0x31, 0xb7, 0x5a, 0x89, 0x31, 0x7d,
-	0xc3, 0x76, 0x0f, 0x4f, 0xfb, 0xa6, 0x4e, 0x81, 0xe8, 0x18, 0xed, 0x8e, 0x35, 0x46, 0xec, 0x3f,
-	0xb9, 0x08, 0x65, 0xdd, 0xb0, 0xda, 0x3b, 0xe6, 0x89, 0xd9, 0xc1, 0x61, 0x2a, 0xeb, 0x61, 0x06,
-	0x2d, 0x3d, 0xb4, 0x3d, 0xa3, 0xd3, 0xa0, 0xac, 0x2c, 0x22, 0xdb, 0xc2, 0x0c, 0xca, 0xcf, 0x23,
-	0xca, 0xcf, 0x12, 0xe3, 0x27, 0xfd, 0x4d, 0x7e, 0x00, 0x0a, 0x1d, 0xe3, 0x91, 0xd9, 0x71, 0x2b,
-	0xe5, 0x2b, 0xf9, 0x1b, 0xd3, 0xab, 0x37, 0xd2, 0xe8, 0xa0, 0x3d, 0x5e, 0xde, 0x41, 0xd0, 0x5a,
-	0xcf, 0x73, 0x4e, 0x75, 0x5e, 0xaf, 0xfa, 0x0e, 0x4c, 0x0b, 0xd9, 0x44, 0x85, 0xfc, 0x53, 0xf3,
-	0x94, 0x4b, 0x28, 0xfd, 0x49, 0xce, 0xc2, 0xd4, 0x89, 0xd1, 0x19, 0x98, 0x5c, 0x46, 0x59, 0xe2,
-	0x6e, 0xee, 0x6d, 0x45, 0xfb, 0x77, 0x0a, 0xcc, 0x3e, 0xb0, 0x3b, 0x83, 0xae, 0xb9, 0x63, 0xb7,
-	0x0c, 0xcf, 0x76, 0x28, 0x89, 0x3d, 0xa3, 0x6b, 0xf2, 0xea, 0xf8, 0x9b, 0x1c, 0xc1, 0xec, 0x09,
-	0x02, 0x35, 0x39, 0xa5, 0x39, 0xa4, 0xf4, 0x76, 0x8c, 0x52, 0x09, 0x95, 0x9f, 0x12, 0x28, 0x9e,
-	0x39, 0x11, 0xb2, 0xaa, 0x5f, 0x80, 0x85, 0x18, 0xc8, 0x58, 0xd4, 0xbf, 0x09, 0x85, 0x06, 0x53,
-	0xca, 0x45, 0x28, 0xf4, 0x0d, 0xc7, 0xec, 0x79, 0xbc, 0x22, 0x4f, 0xa1, 0x50, 0x53, 0x11, 0xe5,
-	0xca, 0x49, 0x7f, 0x6b, 0xe7, 0x60, 0xea, 0x9e, 0x63, 0x0f, 0xfa, 0x51, 0x4d, 0xd6, 0x36, 0x01,
-	0xea, 0x76, 0xc3, 0x73, 0x0c, 0xcf, 0x3c, 0x3e, 0xa5, 0x2a, 0x64, 0xb8, 0xa7, 0xbd, 0x56, 0xd3,
-	0xb2, 0x11, 0xa6, 0xa4, 0x17, 0x31, 0x5d, 0xb7, 0xa9, 0xea, 0x99, 0x86, 0xd3, 0x39, 0x6d, 0x1a,
-	0xad, 0xa7, 0x88, 0xba, 0xa4, 0x97, 0x30, 0x63, 0xad, 0xf5, 0x54, 0xfb, 0x09, 0x00, 0x60, 0xdd,
-	0x6a, 0xf4, 0xcd, 0x16, 0x15, 0x08, 0xb3, 0xff, 0xc4, 0xec, 0x9a, 0x8e, 0xd1, 0xe1, 0x78, 0xc2,
-	0x8c, 0x40, 0xe9, 0x72, 0x82, 0xd2, 0xad, 0x40, 0xe1, 0xb1, 0xed, 0x74, 0x0d, 0x8f, 0x0b, 0xe6,
-	0xb9, 0x18, 0x9b, 0xb7, 0x1a, 0x28, 0xc6, 0x1c, 0x8c, 0x5c, 0x02, 0x78, 0xd4, 0xb1, 0x5b, 0x4f,
-	0x9b, 0x88, 0x8a, 0x8a, 0x64, 0x5e, 0x2f, 0x63, 0x0e, 0x0a, 0xdd, 0x79, 0x28, 0x3d, 0x31, 0x9a,
-	0x1d, 0x94, 0xd7, 0x29, 0x2c, 0x2c, 0x3e, 0x31, 0x98, 0xb4, 0x2e, 0x41, 0xbe, 0x65, 0xbb, 0x68,
-	0x3d, 0x86, 0xea, 0x4b, 0xcb, 0x76, 0xc9, 0x3b, 0x00, 0x96, 0xdd, 0xec, 0x3b, 0xf6, 0x63, 0xab,
-	0xc3, 0x44, 0x7b, 0x6e, 0xb5, 0x1a, 0xab, 0x52, 0xb7, 0x0f, 0x18, 0x84, 0x5e, 0xb6, 0xfc, 0x9f,
-	0x74, 0x74, 0xda, 0x66, 0x7b, 0xd0, 0x37, 0x51, 0xf0, 0x4b, 0x3a, 0x4f, 0x91, 0xd7, 0x60, 0xc1,
-	0xed, 0x19, 0x7d, 0xf7, 0x89, 0xed, 0x35, 0xad, 0x9e, 0x67, 0x3a, 0x27, 0x46, 0x07, 0xed, 0xcf,
-	0xac, 0xae, 0xfa, 0x05, 0x75, 0x9e, 0x4f, 0xf4, 0xa8, 0x10, 0x02, 0x0a, 0xe1, 0xad, 0x14, 0x21,
-	0xa4, 0xcc, 0x1f, 0x25, 0x81, 0x94, 0x30, 0xf7, 0x89, 0xe1, 0x70, 0x1b, 0x56, 0xd2, 0x79, 0x8a,
-	0xbc, 0x07, 0xd3, 0x8e, 0xd9, 0xef, 0x58, 0x2d, 0xa3, 0xe9, 0x9a, 0x1e, 0x37, 0x5f, 0x17, 0x62,
-	0x2d, 0xe9, 0x0c, 0xa6, 0x61, 0x7a, 0x3a, 0x38, 0xc1, 0x6f, 0xda, 0x2d, 0xe3, 0xf8, 0xd8, 0x31,
-	0x8f, 0x99, 0x91, 0x64, 0x9c, 0x9f, 0x65, 0xdd, 0x12, 0x0a, 0x02, 0x83, 0x61, 0xf6, 0x5a, 0xce,
-	0x69, 0xdf, 0x33, 0xdb, 0x95, 0x39, 0x2e, 0x1f, 0x7e, 0x06, 0x79, 0x11, 0xa0, 0x6f, 0xb8, 0x6e,
-	0xff, 0x89, 0x63, 0xb8, 0x66, 0x65, 0x1e, 0x45, 0x55, 0xc8, 0x91, 0x38, 0xe8, 0xb6, 0x9e, 0x98,
-	0xed, 0x41, 0xc7, 0xac, 0xa8, 0x08, 0x16, 0x70, 0xb0, 0xc1, 0xf3, 0xa9, 0x22, 0xb9, 0x2d, 0xa3,
-	0x63, 0x56, 0x16, 0x90, 0x16, 0x96, 0x40, 0x1e, 0x78, 0x56, 0xeb, 0xe9, 0x69, 0x85, 0x70, 0x1e,
-	0x60, 0x8a, 0xdc, 0x84, 0xa9, 0x63, 0xaa, 0x26, 0x95, 0x17, 0xb0, 0xf7, 0x8b, 0xb1, 0xde, 0xa3,
-	0x12, 0xe9, 0x0c, 0x88, 0xce, 0x0a, 0xf8, 0xa3, 0x69, 0xf6, 0x1e, 0xdb, 0x4e, 0xcb, 0x6c, 0x57,
-	0x16, 0x11, 0xdb, 0x2c, 0xe6, 0xd6, 0x78, 0x26, 0xed, 0x4f, 0xcb, 0xee, 0xf6, 0x1d, 0xd3, 0xa5,
-	0x66, 0xf0, 0x1c, 0x82, 0x08, 0x39, 0xd4, 0xf8, 0xb7, 0x0c, 0xb7, 0x65, 0xb4, 0xcd, 0x76, 0xa5,
-	0xc2, 0x14, 0xcb, 0x4f, 0x93, 0x0a, 0x14, 0xbf, 0x66, 0x0f, 0x9c, 0x9e, 0xd1, 0xa9, 0x9c, 0x67,
-	0xfa, 0xc8, 0x93, 0xb4, 0x16, 0x1b, 0xb8, 0x93, 0x37, 0x2b, 0x55, 0x56, 0xcb, 0x4f, 0x93, 0xcb,
-	0x30, 0xfd, 0xd1, 0xc0, 0x1c, 0x98, 0xcd, 0xb6, 0xd9, 0xf7, 0x9e, 0x54, 0x2e, 0x60, 0xd7, 0x01,
-	0xb3, 0x36, 0x69, 0x0e, 0x79, 0x07, 0xce, 0x23, 0x71, 0xcd, 0x41, 0xcf, 0x1d, 0xf4, 0xfb, 0xb6,
-	0xe3, 0x99, 0xed, 0xe6, 0x63, 0xb7, 0xe9, 0x9d, 0xf6, 0xcd, 0xca, 0x45, 0xc4, 0xb6, 0x88, 0x00,
-	0x47, 0x61, 0xf9, 0x16, 0xea, 0x05, 0x1d, 0xbb, 0x9e, 0xdd, 0xb6, 0xdc, 0x96, 0xe1, 0xb4, 0x2b,
-	0x97, 0xd8, 0xd8, 0x05, 0x19, 0x54, 0x88, 0x2c, 0xbb, 0xe9, 0x72, 0x7b, 0x52, 0x79, 0x31, 0x45,
-	0x88, 0x42, 0x93, 0xa3, 0x83, 0x15, 0x9a, 0x9f, 0x87, 0x40, 0xfa, 0x1d, 0xa3, 0x65, 0x76, 0xcd,
-	0x9e, 0x17, 0x22, 0xb9, 0x8c, 0x48, 0x6e, 0xa4, 0xc8, 0xfc, 0x81, 0x5f, 0x21, 0xc0, 0xb8, 0xd0,
-	0x8f, 0x66, 0xd1, 0x91, 0xe2, 0x35, 0x9b, 0x7d, 0xbb, 0x63, 0xb5, 0x4e, 0x2b, 0x57, 0xd8, 0xfc,
-	0xed, 0xfa, 0xd3, 0x0c, 0xcd, 0xfc, 0xec, 0xc6, 0xf9, 0x7f, 0x17, 0x41, 0x0d, 0x55, 0xf1, 0xa8,
-	0xdf, 0x36, 0x3c, 0x2a, 0x82, 0x82, 0xbd, 0xdb, 0x9e, 0xe0, 0x16, 0xef, 0x42, 0xd4, 0x42, 0x6d,
-	0x2b, 0xa1, 0x8d, 0xba, 0x99, 0xc9, 0x46, 0x6d, 0xe7, 0x98, 0x95, 0x7a, 0x77, 0x3c, 0x2b, 0xb5,
-	0x9d, 0x17, 0xed, 0x54, 0x45, 0xb6, 0x53, 0xdb, 0x93, 0x81, 0xa5, 0xba, 0x95, 0x6a, 0xa9, 0xb6,
-	0xa7, 0x12, 0x6c, 0xd5, 0x87, 0xc9, 0xb6, 0xea, 0x8d, 0x21, 0xb6, 0x8a, 0x31, 0x68, 0xa4, 0xc5,
-	0xaa, 0xc8, 0x16, 0x6b, 0xbb, 0xf0, 0x9c, 0x6c, 0xd6, 0x95, 0xb8, 0xa1, 0xd9, 0x2e, 0x4a, 0xa6,
-	0xe6, 0x56, 0xaa, 0xa9, 0xd9, 0x2e, 0x25, 0x18, 0x9b, 0x45, 0xc9, 0xd8, 0x6c, 0x97, 0x7d, 0x73,
-	0x53, 0x91, 0xcd, 0xcd, 0x36, 0x04, 0x06, 0x67, 0xd9, 0x37, 0x38, 0x67, 0x86, 0x19, 0x9c, 0xed,
-	0x69, 0xdf, 0xe4, 0x54, 0x43, 0x7b, 0x80, 0x86, 0x64, 0x7b, 0x26, 0xb4, 0x08, 0x17, 0x05, 0x8b,
-	0x80, 0x76, 0x64, 0x7b, 0x56, 0xb0, 0x09, 0x57, 0x65, 0x9b, 0x70, 0x1e, 0x29, 0x9c, 0x13, 0xad,
-	0xc2, 0x67, 0x16, 0xff, 0x75, 0x80, 0x12, 0x95, 0xed, 0xa6, 0xdd, 0xf7, 0xd6, 0xe7, 0x60, 0xc6,
-	0x97, 0x6f, 0x4c, 0x97, 0xa1, 0xd8, 0xb2, 0x5d, 0xfc, 0xa9, 0xc2, 0x5c, 0x28, 0xaf, 0x98, 0x33,
-	0x03, 0xc0, 0x84, 0x0e, 0x53, 0xe7, 0xe0, 0x85, 0x98, 0xe0, 0xf9, 0x60, 0xac, 0x3f, 0x3e, 0x9a,
-	0x70, 0xa8, 0x62, 0x15, 0xfd, 0xe1, 0xc2, 0x82, 0x69, 0x28, 0xe3, 0x48, 0x04, 0x58, 0x90, 0xfb,
-	0x7e, 0x11, 0x33, 0xe2, 0x34, 0x31, 0x0b, 0xd3, 0x9c, 0x9b, 0x7e, 0x1f, 0x7c, 0xfe, 0x61, 0x7a,
-	0x01, 0xe6, 0x05, 0x1e, 0xd2, 0x2c, 0xed, 0xaf, 0xa7, 0x45, 0x8d, 0x67, 0x76, 0x24, 0xd0, 0x78,
-	0x25, 0x55, 0xe3, 0x73, 0x29, 0x1a, 0x9f, 0x7f, 0x16, 0x8d, 0x9f, 0x7c, 0x56, 0x8d, 0x9f, 0xca,
-	0xa2, 0xf1, 0x85, 0xec, 0x1a, 0x5f, 0x1c, 0xa9, 0xf1, 0x8c, 0x41, 0x63, 0x68, 0x7c, 0x69, 0xb8,
-	0xc6, 0x97, 0x3f, 0x8b, 0xc6, 0x43, 0x56, 0x8d, 0x9f, 0x1e, 0xad, 0xf1, 0x33, 0x69, 0x1a, 0x3f,
-	0x9b, 0xa6, 0xf1, 0x73, 0x63, 0x6b, 0xfc, 0xfc, 0x30, 0x8d, 0x57, 0x47, 0x69, 0xfc, 0x42, 0x5c,
-	0xe3, 0xc9, 0x8b, 0xe2, 0x42, 0x8c, 0xd9, 0xa6, 0x79, 0x71, 0x29, 0x76, 0x2b, 0x69, 0x55, 0x77,
-	0x06, 0x11, 0xa9, 0x09, 0xeb, 0xba, 0x7d, 0x98, 0xe5, 0xfa, 0x6f, 0x3a, 0x74, 0x37, 0x54, 0x59,
-	0x45, 0xc9, 0x5c, 0x1a, 0x2d, 0x10, 0xec, 0xdf, 0x7e, 0x5f, 0x9f, 0xa1, 0x08, 0xf6, 0x79, 0x7d,
-	0xf2, 0x00, 0x16, 0x04, 0x23, 0xc2, 0x91, 0xbe, 0x31, 0x36, 0xd2, 0x79, 0xae, 0x65, 0x01, 0xde,
-	0x0f, 0x60, 0xce, 0xb7, 0x07, 0x1c, 0xe9, 0x9b, 0x63, 0x23, 0x9d, 0x45, 0x0c, 0x01, 0xca, 0x27,
-	0x50, 0x4d, 0x32, 0x5a, 0x1c, 0xfd, 0x9d, 0xb1, 0xd1, 0x57, 0xa2, 0xea, 0xe6, 0xb7, 0xf4, 0xd9,
-	0x57, 0x29, 0x2b, 0x50, 0xf2, 0x9b, 0x21, 0x65, 0x98, 0xaa, 0x7d, 0x34, 0x30, 0x3a, 0xea, 0x04,
-	0x99, 0x86, 0xe2, 0xae, 0xd5, 0xb3, 0xba, 0x83, 0xae, 0xaa, 0x60, 0xc2, 0xf8, 0x04, 0x13, 0xb9,
-	0xff, 0x0f, 0xed, 0xfa, 0xfa, 0x3c, 0xcc, 0x06, 0x6a, 0xe0, 0xd3, 0x10, 0x53, 0x05, 0x9c, 0x01,
-	0x34, 0x80, 0xd0, 0xda, 0x50, 0xae, 0xf7, 0xec, 0xb6, 0xe9, 0x56, 0x94, 0x2b, 0x79, 0xca, 0x75,
-	0x4c, 0x68, 0xbf, 0xad, 0xc0, 0xbc, 0x3e, 0xe8, 0x79, 0x56, 0xd7, 0x6c, 0x78, 0x86, 0x67, 0xee,
-	0x1a, 0x7d, 0xf2, 0x10, 0x66, 0x1d, 0x96, 0xd5, 0x74, 0x69, 0x1e, 0xd6, 0x98, 0x5e, 0x5d, 0x8d,
-	0xdb, 0x32, 0xb9, 0xa2, 0x94, 0xe6, 0xc6, 0xd3, 0x11, 0xb2, 0xa8, 0x7c, 0xc4, 0x40, 0xc6, 0x92,
-	0x8f, 0x6f, 0x95, 0xa1, 0xc0, 0x24, 0x2c, 0xe6, 0xf8, 0x5b, 0x81, 0x02, 0x73, 0x09, 0x62, 0xad,
-	0xe9, 0x84, 0x7d, 0x3a, 0x73, 0x4e, 0xe8, 0x1c, 0x2c, 0xdc, 0x51, 0xe5, 0xb3, 0xec, 0xa8, 0xaa,
-	0x50, 0x72, 0x4c, 0xa3, 0x6d, 0xf7, 0x3a, 0xa7, 0xdc, 0x1b, 0x18, 0xa4, 0xc9, 0xdb, 0x50, 0xec,
-	0x30, 0x27, 0x0b, 0xce, 0x5b, 0xd3, 0x09, 0xce, 0x2b, 0xc9, 0x15, 0xa3, 0xfb, 0xe0, 0xe4, 0x36,
-	0x4c, 0xb5, 0x28, 0x3b, 0x70, 0x2a, 0x1b, 0xee, 0x92, 0x63, 0x80, 0x64, 0x05, 0x26, 0xdd, 0xbe,
-	0xd9, 0xc2, 0xb5, 0x74, 0xd2, 0xf4, 0x12, 0xaa, 0xad, 0x8e, 0x80, 0x94, 0x99, 0x03, 0xd7, 0x38,
-	0x36, 0xb9, 0x97, 0x8b, 0x25, 0x64, 0x7f, 0x60, 0x79, 0x0c, 0x7f, 0x60, 0xe8, 0x0e, 0x81, 0x6c,
-	0xee, 0x90, 0x3b, 0x74, 0xbe, 0x31, 0xbc, 0x81, 0x8b, 0x73, 0xd5, 0xdc, 0xea, 0xa5, 0x34, 0x92,
-	0x11, 0x48, 0xe7, 0xc0, 0x64, 0x15, 0xa6, 0x98, 0xec, 0xcd, 0x60, 0xad, 0x8b, 0x43, 0x6a, 0x99,
-	0x3a, 0x03, 0xa5, 0x9b, 0x4b, 0xc3, 0xf3, 0x0c, 0xaa, 0x86, 0x4d, 0xbb, 0x87, 0xf3, 0x5b, 0x59,
-	0x07, 0x3f, 0x6b, 0xbf, 0x47, 0x36, 0x60, 0x2e, 0x00, 0x60, 0xd8, 0xe7, 0x52, 0xb0, 0xaf, 0x21,
-	0x18, 0xc3, 0x3e, 0xeb, 0xd7, 0x69, 0xf8, 0xad, 0xb4, 0xcd, 0x13, 0xab, 0x65, 0x36, 0xd1, 0xd1,
-	0xcc, 0xbd, 0x00, 0x2c, 0xeb, 0xc0, 0xf0, 0x9e, 0x90, 0x9b, 0x40, 0x5c, 0xb3, 0x35, 0x70, 0xa8,
-	0xd2, 0x86, 0x70, 0xbe, 0x1b, 0x00, 0x4b, 0x36, 0x43, 0xe8, 0x80, 0x68, 0x06, 0xb6, 0x80, 0xca,
-	0xc9, 0x89, 0x46, 0x80, 0xed, 0x00, 0xc0, 0xea, 0x3d, 0xb6, 0x2b, 0x04, 0x75, 0xf1, 0x7a, 0x0a,
-	0x3f, 0x38, 0xe1, 0xf5, 0xde, 0x63, 0x9b, 0x29, 0x20, 0xc7, 0x44, 0x33, 0xc8, 0xe7, 0x61, 0x46,
-	0x58, 0xa1, 0xb8, 0x95, 0x33, 0x88, 0x6a, 0xe8, 0x12, 0x65, 0x3a, 0x5c, 0xa2, 0xb8, 0xa4, 0x16,
-	0xb5, 0x0b, 0x67, 0x11, 0xc1, 0x95, 0x51, 0x76, 0x41, 0xb6, 0x02, 0x54, 0x22, 0x4d, 0xc7, 0xb1,
-	0x1d, 0x74, 0x65, 0x94, 0x75, 0x96, 0x20, 0x5f, 0x04, 0x95, 0x2f, 0xd9, 0x5a, 0x76, 0xcf, 0x1d,
-	0x74, 0x4d, 0xc7, 0xad, 0x2c, 0x22, 0xfe, 0xcb, 0x29, 0x7d, 0xdd, 0xe0, 0x70, 0xfa, 0xfc, 0x89,
-	0x94, 0x76, 0xe9, 0x08, 0x3c, 0x76, 0x9b, 0x8e, 0x89, 0x53, 0x83, 0x63, 0x7e, 0x34, 0xb0, 0x9c,
-	0xc0, 0xbf, 0xa1, 0x3e, 0x76, 0x75, 0x2c, 0xd0, 0x79, 0x7e, 0xf5, 0x7d, 0x98, 0x8f, 0x70, 0x6d,
-	0x2c, 0x9b, 0xf4, 0xf7, 0x73, 0x30, 0x45, 0x3b, 0xe6, 0x52, 0x18, 0x6a, 0x13, 0x5c, 0xb6, 0xba,
-	0xd6, 0x59, 0x82, 0x9c, 0x83, 0x22, 0xfd, 0xd1, 0xec, 0xba, 0xdc, 0xaf, 0x58, 0xa0, 0xc9, 0x5d,
-	0x97, 0x5c, 0x02, 0xc0, 0x82, 0x47, 0xa7, 0x9e, 0xc9, 0xd6, 0xd7, 0x93, 0x7a, 0x99, 0xe6, 0xac,
-	0xd3, 0x0c, 0xb2, 0x08, 0x05, 0x3c, 0x4d, 0x70, 0xd1, 0xde, 0x4c, 0xea, 0x3c, 0x45, 0xce, 0x43,
-	0x09, 0x7f, 0x51, 0x84, 0xec, 0x04, 0xa2, 0x88, 0xe9, 0x5d, 0x97, 0xca, 0x12, 0x2b, 0x62, 0x28,
-	0x0b, 0x58, 0x0a, 0x98, 0xc5, 0x70, 0x5e, 0x46, 0x27, 0x48, 0xdf, 0xb1, 0x8f, 0x1d, 0xd3, 0x75,
-	0xb9, 0x47, 0x1c, 0x70, 0x01, 0x8e, 0x39, 0xe4, 0x0c, 0x4c, 0x59, 0x36, 0xc5, 0x5c, 0xf2, 0xcf,
-	0x36, 0x18, 0xa1, 0x88, 0xb0, 0x89, 0xa7, 0x0f, 0xec, 0x44, 0xa2, 0x8c, 0x39, 0xe8, 0x32, 0xa7,
-	0x48, 0xfd, 0x39, 0xb3, 0xeb, 0xf2, 0xd3, 0x09, 0xf0, 0xb3, 0x76, 0x5d, 0xed, 0xc7, 0x15, 0x58,
-	0xd8, 0x30, 0xfa, 0x46, 0xcb, 0xf2, 0x4e, 0x8f, 0xa8, 0xf9, 0x41, 0x69, 0xbc, 0x0e, 0xf3, 0xe6,
-	0x27, 0xad, 0xce, 0xc0, 0xb5, 0x4e, 0x7c, 0x82, 0x15, 0xf4, 0x87, 0xce, 0x05, 0xd9, 0x8c, 0xe8,
-	0xab, 0xfe, 0x9c, 0xc8, 0xa1, 0x70, 0x87, 0xa2, 0x4f, 0xb3, 0xbc, 0xa0, 0x5f, 0x9e, 0xed, 0x19,
-	0x1d, 0x81, 0x97, 0x79, 0x1d, 0x30, 0x0b, 0x01, 0x34, 0x03, 0xd4, 0x46, 0xfb, 0x69, 0x43, 0xf4,
-	0xa9, 0x24, 0xfa, 0xd6, 0xdf, 0x81, 0x02, 0x77, 0xc3, 0xb0, 0x59, 0xe4, 0xea, 0xc8, 0x75, 0x91,
-	0xce, 0x2b, 0x68, 0xff, 0x3e, 0x0f, 0x53, 0x6b, 0x1d, 0xd3, 0xf1, 0x84, 0xa9, 0x29, 0x8f, 0x53,
-	0xd3, 0x3b, 0x50, 0x72, 0xcd, 0x13, 0xd3, 0xb1, 0xbc, 0x53, 0x7e, 0x18, 0x12, 0x37, 0x82, 0x0d,
-	0x0e, 0x80, 0xb6, 0x33, 0x00, 0xa7, 0xac, 0x37, 0x28, 0x4e, 0xe6, 0xff, 0x62, 0xfd, 0x2a, 0x63,
-	0x0e, 0xba, 0xbc, 0x2a, 0x50, 0xec, 0x9a, 0x2e, 0x9a, 0x77, 0x76, 0xf6, 0xe1, 0x27, 0xc9, 0xdb,
-	0x50, 0x0e, 0x0e, 0xd7, 0xf8, 0xac, 0x34, 0xcc, 0xc0, 0x87, 0xc0, 0x94, 0x97, 0x0e, 0x3f, 0x5d,
-	0x6b, 0x5a, 0x6d, 0x14, 0xa2, 0x32, 0xdd, 0xaa, 0xb0, 0xac, 0x3a, 0x76, 0xc7, 0x4f, 0x71, 0x97,
-	0xce, 0xa5, 0x04, 0x13, 0xc2, 0x00, 0x58, 0x77, 0x7c, 0x70, 0x4a, 0x6f, 0xab, 0x63, 0x86, 0xdb,
-	0x27, 0xdd, 0x4f, 0x52, 0x8d, 0xf3, 0xbc, 0x0e, 0x17, 0x2e, 0xfa, 0x93, 0x76, 0x7d, 0xd0, 0xb3,
-	0x3e, 0x1a, 0x98, 0x4d, 0xcf, 0x38, 0x66, 0x3b, 0x22, 0xbd, 0xcc, 0x72, 0x0e, 0x8d, 0x63, 0xaa,
-	0x6c, 0x2d, 0x7b, 0xd0, 0xf3, 0x70, 0x5a, 0xc9, 0xeb, 0x2c, 0x41, 0xde, 0x01, 0x78, 0x6c, 0x39,
-	0x74, 0x62, 0x33, 0xcd, 0x2c, 0x07, 0x5d, 0x65, 0x84, 0x6e, 0x98, 0x66, 0x4f, 0xfb, 0x09, 0x05,
-	0x16, 0x1a, 0xed, 0xa7, 0x38, 0x84, 0x2e, 0x85, 0x68, 0xf4, 0x8d, 0x1e, 0x45, 0xe8, 0x7a, 0x06,
-	0x1d, 0x00, 0x8b, 0x8b, 0xca, 0x08, 0x84, 0x08, 0x4d, 0xd3, 0xe4, 0x0e, 0x94, 0xcc, 0x5e, 0x9b,
-	0x55, 0xcc, 0x8d, 0xac, 0x58, 0x34, 0x7b, 0x6d, 0x9a, 0xd2, 0xf6, 0x80, 0x04, 0x64, 0x6c, 0xd0,
-	0x4e, 0x21, 0x1d, 0x17, 0xa0, 0xdc, 0xb5, 0x7a, 0x4d, 0xd6, 0x65, 0x26, 0x5a, 0xa5, 0xae, 0xd5,
-	0x43, 0x00, 0x2c, 0x34, 0x3e, 0xe1, 0x85, 0x39, 0x5e, 0x68, 0x7c, 0x82, 0x85, 0xda, 0xcf, 0xe5,
-	0x60, 0x3e, 0x40, 0xb8, 0xdf, 0xa7, 0x6b, 0x44, 0x72, 0x1f, 0x16, 0x28, 0x36, 0x5f, 0xcc, 0x98,
-	0x74, 0x29, 0x19, 0x44, 0x73, 0x7b, 0x42, 0x9f, 0xef, 0x5a, 0x3d, 0x31, 0x8b, 0x5c, 0x06, 0xb0,
-	0xdc, 0xa6, 0x3f, 0xae, 0x78, 0x00, 0xb3, 0x3d, 0xa1, 0x97, 0x2d, 0x77, 0x83, 0x8f, 0xed, 0x1a,
-	0x93, 0xc5, 0xa6, 0xdb, 0x37, 0x7a, 0x7c, 0xb5, 0xa5, 0xc5, 0x5b, 0x89, 0xb2, 0x7e, 0x7b, 0x42,
-	0x2f, 0x79, 0xfe, 0x30, 0x6c, 0x02, 0x60, 0xef, 0x18, 0x8e, 0x49, 0xc4, 0xf1, 0x52, 0x3a, 0x8e,
-	0x80, 0x6f, 0x94, 0x90, 0x96, 0x9f, 0x58, 0x9f, 0x82, 0x3c, 0x5d, 0x17, 0x7f, 0x15, 0xaa, 0x01,
-	0xa4, 0x28, 0xa8, 0x1f, 0x0c, 0x4c, 0xe7, 0x94, 0xac, 0xc3, 0x6c, 0x20, 0xff, 0x43, 0xf9, 0x22,
-	0xc9, 0xf8, 0x8c, 0x23, 0xa4, 0xb4, 0x1f, 0x81, 0x73, 0x41, 0x0b, 0x6b, 0xbe, 0xb6, 0x3e, 0x37,
-	0xf4, 0x11, 0xab, 0x90, 0x8b, 0x58, 0x05, 0xed, 0xd7, 0x15, 0xa8, 0xc4, 0x3a, 0x58, 0x6f, 0xff,
-	0x4d, 0xb5, 0x1f, 0xb5, 0x20, 0xf9, 0xa8, 0x05, 0xd1, 0xfe, 0x7b, 0x0e, 0xe6, 0x02, 0x02, 0x19,
-	0x59, 0x5f, 0x81, 0x33, 0x12, 0x59, 0xcd, 0x8f, 0x68, 0x36, 0x57, 0xb8, 0xd7, 0xd2, 0x47, 0x3a,
-	0x36, 0x7e, 0xdb, 0x13, 0xfa, 0x82, 0x13, 0x1b, 0xd4, 0x43, 0x50, 0x43, 0x8a, 0x39, 0xee, 0x5c,
-	0x8a, 0xf7, 0x3e, 0x65, 0xe4, 0xb6, 0x27, 0xf4, 0x39, 0x43, 0x1e, 0xcb, 0x87, 0xb0, 0x20, 0x74,
-	0x94, 0xa3, 0x65, 0x02, 0xfe, 0xea, 0x68, 0x92, 0xf9, 0x88, 0x50, 0x95, 0x72, 0x22, 0x83, 0xf4,
-	0x26, 0x4c, 0xda, 0x7d, 0x8f, 0xce, 0xfc, 0xc9, 0x0b, 0xac, 0x88, 0x3e, 0xeb, 0x08, 0xbd, 0x5e,
-	0x84, 0x29, 0x24, 0x41, 0x33, 0xe0, 0xe5, 0x00, 0xa2, 0xd6, 0xa3, 0x6b, 0x22, 0xc3, 0x33, 0x1f,
-	0x5a, 0xde, 0x93, 0x2d, 0xab, 0xe3, 0x99, 0x8e, 0x4b, 0x97, 0x3e, 0xa6, 0x4b, 0xad, 0x65, 0x91,
-	0x56, 0xb0, 0xf8, 0xa6, 0x30, 0x69, 0xa9, 0x25, 0x0f, 0x93, 0xee, 0xc3, 0x6b, 0x0f, 0xe1, 0xda,
-	0x88, 0x26, 0xdc, 0xbe, 0xdd, 0x73, 0x4d, 0xb2, 0x0c, 0x05, 0xe4, 0x9a, 0xdf, 0x44, 0x7c, 0x9f,
-	0x85, 0x48, 0x74, 0x0e, 0xa5, 0x35, 0x60, 0x31, 0x40, 0xbc, 0x69, 0x76, 0x4c, 0xcf, 0x7c, 0x0e,
-	0xd4, 0x9e, 0x17, 0xf4, 0xd1, 0x47, 0xca, 0xe8, 0xd3, 0xde, 0x82, 0x02, 0xcb, 0xa7, 0x1b, 0x42,
-	0xa4, 0x61, 0x04, 0xa1, 0x0c, 0x48, 0xfb, 0x2f, 0x39, 0x98, 0xdf, 0x7f, 0xf4, 0x35, 0xb3, 0xe5,
-	0x51, 0x10, 0xb6, 0xa4, 0x21, 0x30, 0x39, 0x18, 0x04, 0xbb, 0x52, 0xfc, 0x4d, 0x6d, 0x33, 0x5f,
-	0xd7, 0x5a, 0xfe, 0xc1, 0x77, 0x89, 0x65, 0xd4, 0xf1, 0x10, 0xcd, 0xec, 0x19, 0x8f, 0x3a, 0x26,
-	0xd3, 0x92, 0x92, 0xee, 0x27, 0xd9, 0x39, 0x20, 0x6e, 0x9b, 0xd8, 0xc4, 0xee, 0xef, 0x8b, 0x16,
-	0xa1, 0x60, 0xb4, 0xe8, 0x98, 0xf3, 0xc3, 0x63, 0x9e, 0x42, 0x95, 0x6c, 0xb5, 0x4c, 0xd7, 0x6d,
-	0xd2, 0x85, 0x2b, 0x9b, 0xb4, 0xcb, 0x2c, 0xe7, 0xbe, 0x89, 0xeb, 0x08, 0xd7, 0x6c, 0x39, 0xa6,
-	0x87, 0xc5, 0x45, 0x56, 0xcc, 0x72, 0x68, 0x31, 0x1e, 0x7b, 0xb6, 0xfb, 0xb6, 0xd5, 0xf3, 0xe8,
-	0xd2, 0x8f, 0x6e, 0x41, 0xc2, 0x0c, 0xf2, 0x2a, 0xa8, 0xad, 0x81, 0xe3, 0x98, 0x3d, 0xaf, 0xe9,
-	0x67, 0xe2, 0x44, 0x5d, 0xd6, 0xe7, 0x79, 0x7e, 0x8d, 0x67, 0xe3, 0x6e, 0x86, 0x91, 0xd1, 0xb7,
-	0x1d, 0xb6, 0x47, 0xcc, 0xeb, 0x9c, 0xb2, 0x03, 0xdb, 0xf1, 0x30, 0xde, 0xc5, 0x3c, 0xa6, 0xf4,
-	0xb3, 0x38, 0x15, 0x9e, 0xd2, 0xbe, 0xa7, 0xc0, 0x19, 0xbe, 0xac, 0x77, 0x4c, 0x23, 0x1c, 0x74,
-	0x61, 0x6f, 0xad, 0x8c, 0xb7, 0xb7, 0x1e, 0xdb, 0x21, 0xe0, 0x6f, 0xad, 0xf3, 0x19, 0xb7, 0xd6,
-	0xda, 0x2b, 0x30, 0xc7, 0xf2, 0x02, 0x61, 0x0f, 0xb6, 0x36, 0x8a, 0xb0, 0xb5, 0xd1, 0xfa, 0x70,
-	0x56, 0xee, 0x1a, 0x87, 0x8e, 0xba, 0x30, 0xb6, 0x81, 0xef, 0x64, 0xe8, 0xd6, 0x05, 0x41, 0x38,
-	0xe9, 0x69, 0x3b, 0x20, 0x1f, 0x93, 0x3e, 0x77, 0x22, 0xa5, 0xb5, 0x3f, 0x54, 0x7c, 0x4f, 0x1c,
-	0x6e, 0xb9, 0xd6, 0x98, 0x8c, 0xdc, 0x85, 0x02, 0xdb, 0x0d, 0x72, 0x9b, 0xaf, 0xa5, 0xa0, 0x65,
-	0xe0, 0x07, 0x86, 0x63, 0x74, 0x75, 0x5e, 0x83, 0xbc, 0x0d, 0x53, 0xdd, 0x60, 0x79, 0x91, 0xad,
-	0x2a, 0xab, 0x40, 0x45, 0x0f, 0x7f, 0xb0, 0xfd, 0x2d, 0x9b, 0x0c, 0xca, 0x98, 0xe3, 0xef, 0x7f,
-	0xc5, 0x6d, 0xf2, 0x64, 0x74, 0x3b, 0xad, 0xfd, 0x5e, 0x2e, 0x38, 0xc7, 0x30, 0xbd, 0xe7, 0x21,
-	0x16, 0x6c, 0x94, 0x73, 0x59, 0x1d, 0x28, 0x77, 0x03, 0x8d, 0x4b, 0x5b, 0xba, 0xc4, 0x38, 0x1d,
-	0x68, 0xe5, 0x36, 0x14, 0x6d, 0xb4, 0xd0, 0xbe, 0x29, 0x5f, 0x4e, 0xab, 0x1c, 0x74, 0x6d, 0x99,
-	0x99, 0x74, 0x7e, 0xf8, 0xe0, 0x57, 0xaf, 0xde, 0x85, 0x19, 0xb1, 0x60, 0xac, 0x1d, 0xea, 0xcf,
-	0x86, 0xd2, 0x40, 0x9b, 0xe1, 0xd2, 0xb7, 0x02, 0x05, 0x26, 0x35, 0x9c, 0x83, 0xe7, 0xd2, 0x84,
-	0x8c, 0x83, 0x3d, 0x47, 0xf1, 0xfc, 0x25, 0xba, 0xd4, 0xee, 0x19, 0x7d, 0x59, 0xd5, 0xa3, 0xea,
-	0x20, 0x8c, 0x71, 0x6e, 0xbc, 0x31, 0x16, 0x9d, 0x75, 0xf9, 0x88, 0xb3, 0xee, 0x3c, 0x94, 0x7a,
-	0x76, 0xd3, 0x31, 0x3d, 0xc7, 0x77, 0xe4, 0x15, 0x7b, 0xb6, 0x4e, 0x93, 0xda, 0x47, 0x40, 0x44,
-	0xaa, 0x38, 0x9f, 0x7e, 0x10, 0x16, 0x7d, 0xc7, 0x04, 0x16, 0x84, 0xbd, 0x67, 0x7c, 0xbb, 0x96,
-	0xe6, 0x9e, 0x90, 0xd0, 0xe8, 0x67, 0x4f, 0x12, 0x72, 0x35, 0xcf, 0x8f, 0x4e, 0xc2, 0xf9, 0x43,
-	0x9a, 0x2b, 0x94, 0xc8, 0x5c, 0x91, 0x14, 0xd9, 0x78, 0x07, 0x8a, 0xbc, 0xe1, 0x2c, 0x56, 0xcb,
-	0x87, 0xd5, 0x7e, 0x47, 0xf1, 0x2d, 0x97, 0xef, 0x33, 0x49, 0xdc, 0x0c, 0x5f, 0x84, 0x32, 0xfd,
-	0xef, 0xf6, 0x8d, 0x96, 0x2f, 0x55, 0x61, 0x06, 0xad, 0x11, 0x6c, 0x4a, 0xcb, 0x3a, 0xfe, 0x26,
-	0xe7, 0xa0, 0xd8, 0xb3, 0xdb, 0x48, 0x3e, 0x9f, 0xb6, 0x68, 0xb2, 0xde, 0xa6, 0x46, 0xc0, 0xfe,
-	0xb8, 0x67, 0x3a, 0x4d, 0x6c, 0x64, 0x8a, 0xe1, 0xc2, 0x9c, 0x3d, 0xda, 0x52, 0x50, 0x8c, 0x18,
-	0x0b, 0x42, 0x31, 0x2e, 0x68, 0xdb, 0x40, 0xee, 0x39, 0x46, 0xff, 0xc9, 0xa6, 0x63, 0x9d, 0x98,
-	0xce, 0xc6, 0x13, 0xa3, 0x77, 0x6c, 0xba, 0x01, 0x43, 0x14, 0x81, 0x21, 0x77, 0x61, 0xf2, 0xa9,
-	0xd5, 0x6b, 0x73, 0x2b, 0xf5, 0x4a, 0x82, 0x4f, 0x37, 0x82, 0x06, 0x57, 0xb7, 0x58, 0x47, 0xbb,
-	0x0e, 0xf3, 0x1b, 0x9d, 0x81, 0xeb, 0x99, 0xce, 0x08, 0x7b, 0xfe, 0xcb, 0x0a, 0xcc, 0x52, 0x45,
-	0x3f, 0x09, 0x44, 0x77, 0x1b, 0x4a, 0xba, 0xf9, 0x91, 0xe9, 0x7a, 0xf7, 0x1f, 0xf0, 0xd5, 0xc3,
-	0xcd, 0xf8, 0xea, 0x41, 0xac, 0xb1, 0xec, 0x83, 0x33, 0x35, 0x0f, 0x6a, 0x57, 0xdf, 0x85, 0x59,
-	0xa9, 0x48, 0x54, 0xf4, 0xfc, 0x28, 0x45, 0xff, 0x3a, 0xcc, 0x49, 0xad, 0xb8, 0x44, 0x83, 0x19,
-	0xfe, 0x7b, 0x43, 0xd8, 0x39, 0x4a, 0x79, 0x64, 0x33, 0xd2, 0x1b, 0x1e, 0x4f, 0xf8, 0xe2, 0xf0,
-	0x1e, 0xe8, 0x72, 0x25, 0xed, 0x4f, 0x14, 0x58, 0x44, 0x8f, 0xf9, 0x68, 0xc5, 0xbe, 0x0f, 0x85,
-	0x1d, 0x31, 0x72, 0xf1, 0x8d, 0x64, 0xd7, 0x7b, 0x0c, 0x91, 0x1c, 0x6e, 0xc9, 0x0f, 0x64, 0x2f,
-	0x01, 0x04, 0x3a, 0xe3, 0x56, 0xf2, 0x6c, 0xed, 0xe2, 0x2b, 0xcd, 0x67, 0x8a, 0xc6, 0xfc, 0x0b,
-	0x05, 0xce, 0xc5, 0x08, 0xe1, 0x82, 0x71, 0x04, 0x65, 0xff, 0xdc, 0xc7, 0x5f, 0x8d, 0x7e, 0x6e,
-	0x74, 0x2f, 0x58, 0xe5, 0xe5, 0x86, 0x5f, 0x93, 0xf5, 0x24, 0xc4, 0x14, 0xca, 0x5b, 0x4e, 0x90,
-	0xb7, 0xaa, 0x01, 0x73, 0x72, 0x95, 0x84, 0x6e, 0xbc, 0x23, 0x76, 0x23, 0x71, 0x6f, 0x1c, 0xa3,
-	0x43, 0xec, 0xeb, 0x3f, 0x99, 0x0a, 0x42, 0x79, 0xf7, 0xec, 0x76, 0x7c, 0x69, 0xa2, 0x42, 0xbe,
-	0xd5, 0x1f, 0x20, 0x72, 0x45, 0xa7, 0x3f, 0xd1, 0xe7, 0x60, 0x76, 0x9b, 0xe8, 0x63, 0xe3, 0xce,
-	0xcb, 0x52, 0xd7, 0xec, 0x62, 0x74, 0x2d, 0x35, 0xb2, 0xb4, 0x10, 0xfd, 0x85, 0xcc, 0x7b, 0x59,
-	0xec, 0x9a, 0x5d, 0xf4, 0x16, 0xf2, 0xa2, 0xc7, 0x8e, 0x69, 0xfa, 0xee, 0xcb, 0xae, 0xd9, 0xdd,
-	0x72, 0x4c, 0x0c, 0x8d, 0x34, 0x4e, 0x8e, 0x9b, 0x1d, 0xdb, 0x60, 0x6e, 0xa7, 0xbc, 0x5e, 0x34,
-	0x4e, 0x8e, 0x77, 0x6c, 0x83, 0x9d, 0xee, 0xb0, 0xe5, 0x70, 0x31, 0xe5, 0xd8, 0x21, 0x72, 0x7e,
-	0xf0, 0x3e, 0x4c, 0xb5, 0x2d, 0xf7, 0xa9, 0x1f, 0xc6, 0x7b, 0x3d, 0x2d, 0x8c, 0x97, 0xf6, 0x76,
-	0x79, 0x93, 0x42, 0xb2, 0xc1, 0x60, 0xb5, 0xc8, 0x2a, 0x4c, 0xf5, 0x6d, 0x3b, 0x08, 0x15, 0xba,
-	0x38, 0x2c, 0x0a, 0x58, 0x67, 0xa0, 0xd4, 0xf8, 0x75, 0x8f, 0xbb, 0x5e, 0xd3, 0xea, 0xfb, 0x6b,
-	0x5b, 0x9a, 0xac, 0xf7, 0x69, 0x41, 0xdb, 0xf0, 0x0c, 0x5a, 0x30, 0xc3, 0x0a, 0x68, 0xb2, 0x8e,
-	0x87, 0x4a, 0x4f, 0x6c, 0xd7, 0x43, 0x9b, 0xc8, 0xce, 0x11, 0x82, 0x34, 0xd9, 0x85, 0x69, 0x34,
-	0xa5, 0x3c, 0x80, 0x41, 0x4d, 0xb1, 0x2a, 0x62, 0x37, 0xe8, 0x1f, 0x51, 0x45, 0xa0, 0x17, 0x64,
-	0x90, 0x65, 0x38, 0xe3, 0x9f, 0x4f, 0x3a, 0x4d, 0x44, 0x8c, 0xad, 0x2e, 0x60, 0xab, 0x0b, 0x41,
-	0x11, 0x45, 0x41, 0x2d, 0x72, 0xf5, 0xcb, 0x00, 0x21, 0x57, 0x12, 0xe4, 0xed, 0x2d, 0x59, 0xde,
-	0xae, 0xa4, 0x11, 0xe6, 0x6f, 0x76, 0x05, 0x61, 0xab, 0xbe, 0x0f, 0xf3, 0x11, 0x52, 0xc7, 0xd2,
-	0x4b, 0x13, 0xe6, 0x38, 0x72, 0x6e, 0xae, 0x05, 0xe9, 0x50, 0xb2, 0x49, 0x07, 0x13, 0xef, 0x9c,
-	0x78, 0x6b, 0x00, 0xd9, 0x91, 0x0f, 0x67, 0x3f, 0xad, 0x0b, 0x57, 0x1b, 0xed, 0xa7, 0xfb, 0x7d,
-	0xb3, 0x27, 0xb9, 0x8d, 0x65, 0xd3, 0xb6, 0x1d, 0x0b, 0xdf, 0x53, 0x52, 0xfc, 0xc6, 0x51, 0xf7,
-	0x73, 0x24, 0xc2, 0x4f, 0x7b, 0x19, 0xb4, 0x61, 0xcd, 0xf1, 0xf5, 0xc2, 0x2b, 0xb8, 0xb3, 0x8f,
-	0x41, 0x05, 0x3b, 0x70, 0xdf, 0x1a, 0x0f, 0x70, 0x7b, 0x3e, 0x0c, 0x8e, 0x1b, 0xb2, 0x1d, 0x50,
-	0xa5, 0x0e, 0x84, 0xbb, 0xeb, 0x0c, 0x5d, 0x98, 0x17, 0xbb, 0x40, 0xf7, 0xd9, 0x6f, 0x27, 0x77,
-	0xa2, 0xde, 0xa3, 0x2b, 0xe9, 0x60, 0xf1, 0x9e, 0xb0, 0xd6, 0xd0, 0x6c, 0x78, 0x69, 0x68, 0x4d,
-	0x4e, 0xee, 0xf3, 0xe3, 0xf7, 0xe7, 0x92, 0x87, 0x57, 0x76, 0x39, 0x24, 0x51, 0x9a, 0x32, 0x50,
-	0x11, 0xb7, 0x42, 0x8a, 0xf4, 0xb0, 0xb8, 0xc2, 0xbf, 0x31, 0xe9, 0xf1, 0x9b, 0xe3, 0x44, 0xa5,
-	0x0c, 0x0f, 0x8f, 0x07, 0x1e, 0xd6, 0xe9, 0x6b, 0xc9, 0xc3, 0x13, 0xd4, 0xe4, 0x0d, 0xa4, 0x90,
-	0xa1, 0x9b, 0x1d, 0xd3, 0x70, 0x03, 0xe1, 0x4c, 0x41, 0x16, 0x40, 0x71, 0x64, 0xaf, 0xc1, 0xab,
-	0x43, 0xda, 0x94, 0x65, 0x4a, 0x3b, 0x81, 0xa5, 0x2c, 0xc0, 0xcf, 0x5d, 0x8c, 0xba, 0xf0, 0x22,
-	0x05, 0xe1, 0xf6, 0x33, 0xc9, 0x44, 0xdc, 0x87, 0xf9, 0x20, 0x32, 0x44, 0x6a, 0x2c, 0xd1, 0x07,
-	0x2e, 0x63, 0xd2, 0xe7, 0x5c, 0x29, 0xad, 0x5d, 0x85, 0xcb, 0xa9, 0xcd, 0x05, 0x92, 0x17, 0xa7,
-	0x48, 0x16, 0xbb, 0xef, 0x3b, 0x45, 0x11, 0xb1, 0x7b, 0x09, 0x75, 0x41, 0x06, 0x89, 0x59, 0xac,
-	0x36, 0x8a, 0x4e, 0x2a, 0x10, 0x1f, 0xb8, 0xcf, 0x43, 0x29, 0x62, 0xa6, 0xb2, 0xd0, 0x1c, 0xd4,
-	0xd1, 0xee, 0x24, 0x50, 0x9b, 0xc1, 0x3a, 0xfd, 0x30, 0x5c, 0x49, 0xaf, 0xc6, 0x49, 0xbb, 0x1b,
-	0x1c, 0x1d, 0x66, 0x67, 0xa6, 0x7f, 0x76, 0xf8, 0x66, 0xc2, 0x98, 0x8d, 0xb6, 0x44, 0x49, 0xac,
-	0x8f, 0x98, 0xa1, 0x9d, 0x04, 0xc4, 0x7e, 0xd8, 0xd6, 0xa6, 0x61, 0x75, 0xf0, 0x14, 0xf4, 0x89,
-	0x3d, 0x70, 0xf8, 0xb5, 0x2d, 0xfc, 0x4d, 0x16, 0xa1, 0xd0, 0xb5, 0x7a, 0x03, 0x8f, 0x4d, 0xbe,
-	0x53, 0x3a, 0x4f, 0x69, 0x3f, 0xae, 0x24, 0xb2, 0x8f, 0xa1, 0x7b, 0x68, 0x9a, 0x4f, 0x3b, 0xa7,
-	0xe4, 0x75, 0xc8, 0xb7, 0x8d, 0x53, 0x3e, 0x11, 0x27, 0x7a, 0x68, 0x0f, 0xad, 0xae, 0x49, 0x81,
-	0xdb, 0xc6, 0xa9, 0x4e, 0x61, 0x03, 0x12, 0x72, 0x89, 0x24, 0xe4, 0x25, 0x12, 0xbe, 0x9a, 0x38,
-	0x12, 0xfc, 0xa8, 0xd9, 0xee, 0x79, 0x4f, 0x3a, 0xb8, 0x98, 0xf0, 0x49, 0x98, 0x1a, 0xbf, 0x85,
-	0xf7, 0x13, 0xa4, 0xd5, 0x6f, 0xe1, 0xc0, 0x74, 0x2c, 0xbb, 0x6d, 0xb5, 0x48, 0x05, 0x8a, 0xae,
-	0xd9, 0xb2, 0x7b, 0x6d, 0xff, 0xd0, 0xda, 0x4f, 0x6a, 0xff, 0x37, 0x07, 0xe7, 0x53, 0xeb, 0x33,
-	0xf7, 0xa7, 0x67, 0x58, 0x3d, 0x5e, 0x8d, 0xa7, 0xc8, 0x36, 0x4c, 0xb5, 0xe9, 0x70, 0x54, 0xfe,
-	0x13, 0x13, 0x9e, 0x95, 0xd1, 0xc2, 0x23, 0x0d, 0xe3, 0xf6, 0x84, 0xce, 0x10, 0xd0, 0xcd, 0xd5,
-	0xc7, 0x38, 0x12, 0x95, 0x3f, 0x64, 0xa8, 0x6e, 0x67, 0x47, 0xc5, 0x86, 0x70, 0x7b, 0x42, 0xe7,
-	0x28, 0xc8, 0x1e, 0x14, 0xbb, 0x8c, 0xa9, 0x95, 0x3f, 0x62, 0xd8, 0x5e, 0xcf, 0x8e, 0x8d, 0x0f,
-	0xc7, 0xf6, 0x84, 0xee, 0x23, 0x21, 0x1f, 0x40, 0xa9, 0xcf, 0x59, 0x58, 0xf9, 0xcf, 0x0c, 0xe1,
-	0x6a, 0x76, 0x84, 0x3e, 0xf7, 0xb7, 0x27, 0xf4, 0x00, 0xcd, 0xfa, 0x2c, 0x4c, 0xb3, 0xdf, 0xe8,
-	0x3b, 0xd0, 0x3e, 0xc2, 0x43, 0x5c, 0xb9, 0x7e, 0xa2, 0x73, 0x63, 0x1b, 0xca, 0xbe, 0x25, 0xf3,
-	0xf7, 0xa1, 0x4b, 0xd9, 0x49, 0xd1, 0xc3, 0xca, 0xda, 0xcf, 0xe4, 0xf1, 0x3c, 0x71, 0xc3, 0x31,
-	0xdb, 0x66, 0xcf, 0xb3, 0x8c, 0x8e, 0x6c, 0xff, 0x93, 0x1a, 0x5f, 0x84, 0xc2, 0xa3, 0x41, 0xeb,
-	0xa9, 0xe9, 0xf1, 0x35, 0x28, 0x4f, 0x91, 0x6b, 0x30, 0xc7, 0x63, 0xfb, 0x2c, 0xbb, 0x87, 0xae,
-	0x7a, 0xb6, 0x22, 0x9d, 0x0d, 0x73, 0xef, 0x9b, 0xa7, 0x44, 0x87, 0x39, 0xe3, 0x63, 0xb7, 0xd9,
-	0x0a, 0x5a, 0xf4, 0xc5, 0x26, 0xf9, 0x30, 0xeb, 0x63, 0x37, 0xa4, 0x8d, 0x53, 0xb5, 0x3d, 0xa1,
-	0xcf, 0x1a, 0x62, 0x3e, 0xf9, 0x10, 0x54, 0xe3, 0xeb, 0x03, 0xc7, 0x14, 0xb1, 0x72, 0x09, 0x4a,
-	0xe4, 0xcb, 0x1a, 0x05, 0x4e, 0xc2, 0x3b, 0x6f, 0xc8, 0x25, 0xe4, 0x07, 0x61, 0x81, 0x1d, 0x7b,
-	0x8b, 0xa8, 0xff, 0x68, 0xc8, 0xc9, 0xde, 0x3d, 0x84, 0x4e, 0xc2, 0xad, 0x1e, 0x47, 0x8a, 0xd6,
-	0x17, 0x60, 0x3e, 0xc4, 0xca, 0x44, 0x60, 0x1d, 0x2e, 0x24, 0x0e, 0x07, 0xb7, 0xd3, 0x2f, 0xc1,
-	0xac, 0x50, 0x23, 0xd8, 0xe5, 0xce, 0x84, 0x99, 0xf5, 0xb6, 0xf6, 0x4f, 0x15, 0x76, 0x62, 0x94,
-	0xc0, 0xba, 0xc8, 0x51, 0x8b, 0x32, 0xfc, 0xa8, 0x25, 0x17, 0x3d, 0x6a, 0xa9, 0x62, 0x54, 0x00,
-	0x3b, 0x44, 0x61, 0x83, 0x1b, 0xa4, 0x85, 0xc3, 0x91, 0x49, 0xf1, 0x70, 0x04, 0x7d, 0xe4, 0x96,
-	0x6b, 0x3c, 0xea, 0x98, 0x4d, 0xd7, 0x65, 0x97, 0x72, 0x4a, 0x3a, 0xf0, 0xac, 0x86, 0xdb, 0xd1,
-	0x9a, 0x68, 0x73, 0x92, 0x87, 0x84, 0x5c, 0x85, 0x19, 0xa3, 0xc5, 0x4e, 0xcf, 0x05, 0x41, 0x9c,
-	0xe6, 0x79, 0xe8, 0x7f, 0x63, 0xc7, 0x36, 0x08, 0x12, 0x12, 0x0d, 0x3c, 0xeb, 0xbe, 0x79, 0xaa,
-	0x3d, 0x40, 0x11, 0x4f, 0x19, 0x18, 0xda, 0xe5, 0xbe, 0x63, 0x7f, 0xcd, 0x6c, 0x79, 0x21, 0x3f,
-	0xcb, 0x3c, 0xa7, 0x8e, 0x5b, 0xfe, 0xaf, 0xb9, 0x5c, 0x9e, 0x19, 0xea, 0x22, 0x4d, 0x53, 0xbc,
-	0x3f, 0xcb, 0x8f, 0xaa, 0x65, 0x3e, 0xf3, 0x91, 0x92, 0x19, 0x9d, 0x8b, 0x32, 0xfa, 0xfb, 0xc2,
-	0xc9, 0x2f, 0xb0, 0xd8, 0x80, 0x28, 0x27, 0x39, 0x45, 0x51, 0x56, 0xe6, 0x62, 0xac, 0xd4, 0xde,
-	0x43, 0xe9, 0x8b, 0x73, 0x2a, 0xec, 0x93, 0xc0, 0xaa, 0x5c, 0x84, 0x55, 0xda, 0x65, 0xb8, 0x24,
-	0xc9, 0x6e, 0x6c, 0x99, 0x74, 0x0f, 0x27, 0xf4, 0x44, 0x00, 0xde, 0xc2, 0x35, 0x98, 0x93, 0xe4,
-	0xdb, 0x0f, 0xf8, 0x9d, 0x15, 0x05, 0xdc, 0x8d, 0x69, 0x49, 0x64, 0x15, 0x94, 0x49, 0x4b, 0x7e,
-	0x3e, 0x0f, 0x17, 0x93, 0x91, 0x8c, 0xa1, 0x6b, 0x81, 0x81, 0xcc, 0x25, 0x1a, 0xc8, 0xbc, 0x64,
-	0x20, 0x1b, 0x69, 0x96, 0xef, 0xd5, 0x0c, 0x96, 0x8f, 0x11, 0x15, 0x37, 0x7d, 0x5f, 0x4a, 0x37,
-	0x7d, 0xaf, 0x65, 0x32, 0x7d, 0x01, 0xe2, 0x98, 0xed, 0xfb, 0xa1, 0x21, 0xb6, 0xef, 0x66, 0x36,
-	0xdb, 0x17, 0x20, 0xcf, 0x64, 0xfc, 0xd6, 0x22, 0x73, 0x91, 0xbc, 0x8a, 0xcc, 0x34, 0xaa, 0x97,
-	0x22, 0x92, 0x11, 0x59, 0x52, 0x6e, 0x44, 0xc6, 0xfc, 0x81, 0xd1, 0xb1, 0xc4, 0xdd, 0x45, 0xa6,
-	0x36, 0xa2, 0x72, 0x1e, 0x22, 0xe1, 0xad, 0x34, 0xe0, 0x85, 0x46, 0xfb, 0x29, 0x3b, 0xa4, 0xd8,
-	0xa5, 0xca, 0xe5, 0xa3, 0x1f, 0x7a, 0x46, 0x22, 0x9f, 0x35, 0xe6, 0x22, 0x67, 0x8d, 0x5a, 0x05,
-	0x63, 0x0b, 0x24, 0xa4, 0xbc, 0xb9, 0xdf, 0xca, 0xa1, 0xbd, 0x67, 0x45, 0x47, 0xbd, 0xee, 0x73,
-	0x6a, 0x91, 0x7c, 0x31, 0x3c, 0x00, 0xcc, 0xa7, 0xaf, 0xc6, 0x92, 0x9a, 0xf5, 0xcf, 0x01, 0xc3,
-	0x23, 0xc0, 0x6f, 0x2a, 0x50, 0xe4, 0x99, 0x64, 0x09, 0x16, 0xda, 0x38, 0x2c, 0x4d, 0xa1, 0x75,
-	0x76, 0x9f, 0x7d, 0x9e, 0x15, 0xec, 0x06, 0x34, 0xdc, 0x87, 0x97, 0x7a, 0x76, 0xb3, 0x6d, 0x76,
-	0x8c, 0xd3, 0xe6, 0x23, 0xf3, 0xb1, 0x8d, 0x81, 0xc9, 0x1d, 0xd3, 0xb3, 0x7a, 0xc7, 0xcd, 0x08,
-	0xed, 0x25, 0xfd, 0xc5, 0x9e, 0xbd, 0x49, 0x21, 0xd7, 0x11, 0x70, 0x93, 0xc3, 0x05, 0xc8, 0xb4,
-	0x2a, 0xda, 0xeb, 0x08, 0xc1, 0x9c, 0x89, 0x7f, 0xa5, 0x08, 0xfc, 0x65, 0x21, 0xb5, 0x99, 0x78,
-	0x58, 0x0f, 0x99, 0x94, 0x4b, 0x5f, 0xfd, 0x26, 0xa0, 0x8d, 0xf3, 0xa8, 0x1f, 0xb2, 0xe8, 0x32,
-	0x4c, 0xf3, 0x79, 0x58, 0x98, 0xf5, 0xf8, 0xd4, 0xec, 0x1f, 0x3a, 0x0d, 0x9b, 0xa8, 0xaf, 0xc1,
-	0x1c, 0x2f, 0x6e, 0xd9, 0x3d, 0xcf, 0xfc, 0xc4, 0x37, 0x45, 0xb3, 0x2c, 0x77, 0x83, 0x65, 0x6a,
-	0x77, 0x05, 0xc1, 0xf1, 0x89, 0xe3, 0xd6, 0x2f, 0x72, 0xb4, 0xad, 0xc4, 0x8e, 0xb6, 0xff, 0xab,
-	0xc8, 0xb0, 0x4d, 0xf3, 0xfb, 0xc2, 0x30, 0x09, 0x6d, 0x9c, 0x61, 0x8d, 0x90, 0x61, 0x67, 0x61,
-	0x0a, 0x9d, 0x25, 0x5c, 0x8e, 0x58, 0x82, 0xac, 0xc2, 0x0b, 0x03, 0x36, 0xce, 0xa1, 0xf0, 0x60,
-	0x0c, 0x01, 0x93, 0x97, 0x33, 0xbc, 0xd0, 0x97, 0x17, 0x5a, 0xc4, 0xc3, 0x6d, 0xe4, 0xf6, 0xb9,
-	0x8c, 0x7c, 0x45, 0xe8, 0xf1, 0xe8, 0x75, 0xf2, 0xb8, 0x87, 0xf5, 0xda, 0x5b, 0x42, 0xcb, 0x91,
-	0x75, 0xdf, 0x30, 0x8e, 0x6a, 0xdb, 0x82, 0xb9, 0xd9, 0xe8, 0xd8, 0xbd, 0xa1, 0x54, 0x5d, 0x80,
-	0x32, 0x7b, 0xd0, 0x42, 0x08, 0xe9, 0x61, 0x19, 0xf5, 0xb6, 0x76, 0x47, 0xec, 0x20, 0xc3, 0x94,
-	0x85, 0x80, 0x3b, 0x92, 0x24, 0x88, 0x36, 0x7b, 0x68, 0x35, 0x99, 0xd3, 0x91, 0xc0, 0xa6, 0xb0,
-	0x28, 0x32, 0xb9, 0x0f, 0x45, 0x79, 0x5f, 0xd0, 0xf0, 0xe8, 0x7c, 0x3e, 0x6e, 0xcc, 0x80, 0xf6,
-	0x5b, 0xa2, 0x84, 0xcb, 0x5e, 0xa8, 0xa1, 0x12, 0xfe, 0xec, 0x67, 0xff, 0x77, 0xb8, 0xc8, 0x4c,
-	0x8e, 0x8c, 0xdf, 0xe6, 0xe4, 0x30, 0xc1, 0x11, 0x19, 0x19, 0x71, 0x5f, 0xfd, 0xa0, 0x20, 0x1b,
-	0x18, 0xe8, 0x9f, 0xa9, 0x07, 0xd7, 0x60, 0xae, 0x67, 0x7b, 0xcd, 0xd6, 0xa0, 0x3b, 0xe8, 0x18,
-	0x9e, 0x75, 0x62, 0x72, 0x85, 0x99, 0xed, 0xd9, 0xde, 0x46, 0x90, 0xa9, 0x6d, 0x09, 0xfc, 0xe1,
-	0xc8, 0x39, 0xaf, 0x6f, 0xb2, 0x1b, 0x30, 0x2e, 0x67, 0xf5, 0x62, 0xe2, 0x99, 0x86, 0xcb, 0xee,
-	0xbe, 0xb8, 0xda, 0x7b, 0x38, 0xa1, 0x72, 0xb1, 0x13, 0x63, 0xed, 0x33, 0x8d, 0xb9, 0x87, 0xab,
-	0xca, 0xc4, 0xda, 0x9c, 0x1a, 0x1d, 0xce, 0xb4, 0x78, 0x41, 0x13, 0xaf, 0x10, 0xb1, 0xdb, 0x28,
-	0x69, 0xae, 0xae, 0x58, 0xb8, 0xbf, 0xbe, 0xd0, 0x8a, 0x66, 0x69, 0x17, 0x70, 0xd7, 0xc2, 0x5a,
-	0x8d, 0x2d, 0x74, 0xdf, 0xc5, 0x85, 0x4c, 0xac, 0x30, 0x5c, 0x46, 0x0b, 0xa7, 0xbe, 0x4a, 0xe4,
-	0xd4, 0x57, 0xfb, 0x2a, 0x1e, 0x93, 0x44, 0x2a, 0x27, 0x04, 0x40, 0x3e, 0x73, 0x18, 0x91, 0xb6,
-	0x85, 0x07, 0x2c, 0xc3, 0x5a, 0xc8, 0x46, 0xe9, 0x9f, 0x29, 0x02, 0xeb, 0xfd, 0x53, 0x5e, 0xd9,
-	0x30, 0x8e, 0x8a, 0x0a, 0x89, 0x2d, 0x9e, 0x1b, 0xc1, 0x1b, 0x46, 0x79, 0xf4, 0x6b, 0xbc, 0x9b,
-	0x3e, 0x3b, 0x24, 0xb6, 0xf8, 0xbc, 0x9f, 0x35, 0x5a, 0x47, 0xaf, 0x61, 0x72, 0x83, 0xe1, 0x54,
-	0x19, 0x5e, 0xc0, 0x6c, 0x07, 0x93, 0xb5, 0x7f, 0xd1, 0xb4, 0xad, 0x35, 0x13, 0x70, 0xe8, 0x26,
-	0x86, 0x5e, 0x66, 0xe2, 0x53, 0xa4, 0x81, 0x5c, 0xac, 0x01, 0x0d, 0x1d, 0x8b, 0x29, 0x0d, 0x70,
-	0x4b, 0xf0, 0x03, 0xe8, 0x1a, 0x94, 0x61, 0xa2, 0x82, 0x3b, 0x5c, 0xd1, 0x0e, 0xd1, 0xcb, 0x9d,
-	0x8a, 0x21, 0x88, 0x99, 0x3d, 0xc3, 0x51, 0x08, 0x34, 0xfb, 0xc2, 0xb3, 0x70, 0x22, 0xd5, 0xa6,
-	0x42, 0xf4, 0x17, 0x0a, 0xdc, 0x4c, 0x47, 0x9b, 0x20, 0xf7, 0x43, 0x59, 0x65, 0x04, 0xe2, 0xc3,
-	0xdc, 0x62, 0xf5, 0xd1, 0xe2, 0x33, 0xa4, 0xad, 0xe7, 0x2d, 0x4c, 0x4d, 0xb8, 0x95, 0xb1, 0xf9,
-	0x67, 0x64, 0xe6, 0xa7, 0xf0, 0x4a, 0xac, 0x01, 0xdf, 0x09, 0x38, 0xc6, 0x0c, 0xf6, 0x16, 0x9c,
-	0x8b, 0xdf, 0x0c, 0xc6, 0xe8, 0x29, 0x64, 0x6b, 0x59, 0x7f, 0x21, 0x7a, 0x65, 0x9f, 0x2e, 0x4a,
-	0x5d, 0xed, 0x55, 0xb8, 0x3e, 0xb2, 0x79, 0x2e, 0x8e, 0xcc, 0xff, 0xcf, 0x0f, 0xc1, 0xf9, 0x54,
-	0xbd, 0xc1, 0x02, 0x72, 0x7d, 0x2b, 0xfa, 0x15, 0x94, 0xea, 0x14, 0x10, 0xce, 0xa0, 0x77, 0xa0,
-	0xd8, 0x62, 0x00, 0xdc, 0x08, 0x5e, 0x4e, 0x3b, 0xcc, 0xf7, 0xc3, 0xa3, 0x7c, 0x78, 0xed, 0x36,
-	0x4e, 0x8d, 0x7b, 0x76, 0x3b, 0xba, 0xc2, 0x10, 0x02, 0xc1, 0x14, 0x31, 0x10, 0x4c, 0xfb, 0x22,
-	0xce, 0x77, 0x52, 0x0d, 0x4e, 0xc6, 0x6d, 0x98, 0xa4, 0x30, 0x9c, 0x86, 0x8b, 0xc3, 0x22, 0x1d,
-	0x74, 0x84, 0xd4, 0x5e, 0xc4, 0x9d, 0xa8, 0x80, 0x2b, 0xd2, 0xf9, 0x0f, 0x70, 0x4e, 0x4c, 0x2a,
-	0x7f, 0xe6, 0x26, 0xd9, 0x32, 0x81, 0x66, 0xc4, 0x26, 0xac, 0x3b, 0xb8, 0x6e, 0x8a, 0x14, 0xf1,
-	0x86, 0x30, 0xe8, 0xb0, 0x2d, 0x4e, 0x01, 0x45, 0xc6, 0x0f, 0x57, 0xab, 0x61, 0x27, 0xa4, 0x48,
-	0x72, 0x89, 0x93, 0xd7, 0x60, 0xce, 0x0e, 0x0b, 0x43, 0x86, 0xce, 0x0a, 0xb9, 0xf5, 0xb6, 0xd6,
-	0xc7, 0xbe, 0x26, 0xa1, 0xe1, 0x24, 0xec, 0x03, 0x11, 0xf1, 0x08, 0xf1, 0x12, 0x49, 0xd1, 0x1b,
-	0x91, 0xc8, 0x76, 0x7d, 0x41, 0xa8, 0xcb, 0x62, 0x29, 0xb4, 0xbb, 0xe8, 0x26, 0x10, 0x00, 0xb3,
-	0xcf, 0x5a, 0x9a, 0x1d, 0xed, 0x74, 0x64, 0x3a, 0x78, 0xee, 0xc4, 0x6e, 0x46, 0x89, 0x95, 0xd7,
-	0xd8, 0x19, 0x99, 0xfc, 0x62, 0x94, 0xec, 0xc8, 0x92, 0xfb, 0x87, 0xa2, 0xad, 0xc8, 0xf6, 0x22,
-	0x5b, 0x2b, 0x64, 0x11, 0x0a, 0xec, 0x16, 0x00, 0x5f, 0x31, 0xf2, 0x54, 0xbc, 0xf5, 0x88, 0x39,
-	0xf8, 0x4e, 0x8e, 0x39, 0x6e, 0x3a, 0xf6, 0xa0, 0xbd, 0x6e, 0xb4, 0x9e, 0x0e, 0xfa, 0x63, 0xac,
-	0x23, 0x62, 0x5e, 0x9b, 0x5c, 0xb2, 0xa7, 0xee, 0xf1, 0xa0, 0xd3, 0xe1, 0x31, 0xb5, 0xf8, 0x9b,
-	0x6a, 0xba, 0x67, 0xb8, 0x4f, 0x85, 0x90, 0x4f, 0x9a, 0xac, 0xb7, 0xc9, 0x41, 0x30, 0x8d, 0x4c,
-	0xe1, 0x34, 0xf2, 0x76, 0xd2, 0x34, 0x92, 0x46, 0xec, 0xf3, 0x9e, 0x35, 0x3e, 0xc7, 0x9c, 0x56,
-	0xf1, 0xd6, 0xb8, 0xc0, 0x09, 0xbd, 0x50, 0xc4, 0x5e, 0x68, 0xbf, 0xaf, 0x44, 0x6b, 0xc6, 0x57,
-	0x1d, 0x8f, 0x30, 0x5f, 0xe0, 0x2a, 0xcb, 0xa8, 0xb7, 0xe9, 0xdc, 0xe3, 0x30, 0xf0, 0x26, 0x67,
-	0xbd, 0xb0, 0x58, 0x5b, 0xe0, 0x45, 0xcc, 0xd6, 0xa3, 0x4b, 0x22, 0x36, 0x0a, 0xf9, 0x84, 0x51,
-	0x48, 0x0d, 0xb2, 0x15, 0x3a, 0x31, 0x25, 0x75, 0xa2, 0xcd, 0xbc, 0x6d, 0x09, 0x7d, 0xe0, 0xdd,
-	0x5f, 0x82, 0x85, 0x08, 0x9d, 0x41, 0x67, 0xe6, 0x25, 0x2a, 0xe5, 0x56, 0x72, 0x52, 0x2b, 0x83,
-	0xa8, 0xf8, 0xc5, 0xf6, 0xb1, 0xe9, 0x8c, 0xca, 0x24, 0x7e, 0x81, 0x83, 0x22, 0x2f, 0x38, 0x28,
-	0xb8, 0x5a, 0x24, 0x34, 0xcb, 0xd5, 0xc2, 0x62, 0x1e, 0xf3, 0x68, 0xf9, 0x5a, 0x27, 0x38, 0xbe,
-	0xd0, 0x60, 0xd6, 0x75, 0x5a, 0xb1, 0x9e, 0x4f, 0xbb, 0x4e, 0xeb, 0xc1, 0x38, 0xfa, 0x11, 0x4c,
-	0xc8, 0x49, 0x4d, 0x71, 0x6a, 0x7e, 0x53, 0xc1, 0xa8, 0x16, 0x01, 0x66, 0xd8, 0x3a, 0x2d, 0x0b,
-	0x65, 0x97, 0x00, 0xf8, 0x74, 0x2c, 0x9c, 0x28, 0xf0, 0x9c, 0x24, 0xc2, 0x93, 0x44, 0x4a, 0x85,
-	0xbc, 0xd1, 0xe9, 0xf0, 0x78, 0x78, 0xfa, 0x53, 0xfb, 0x3f, 0x39, 0xbc, 0x86, 0x2a, 0xd0, 0x89,
-	0x11, 0xea, 0xd1, 0xb8, 0xd0, 0x18, 0x81, 0xb9, 0x38, 0x81, 0xaf, 0xc0, 0xbc, 0x00, 0x23, 0xc4,
-	0xd9, 0xcd, 0x06, 0x50, 0x28, 0xfc, 0xd2, 0x95, 0xe5, 0xc9, 0x71, 0xae, 0x2c, 0xef, 0x0a, 0x8f,
-	0xd4, 0x32, 0x63, 0xf3, 0xfa, 0x08, 0x63, 0x43, 0x3b, 0xb3, 0xbc, 0xcb, 0xeb, 0xf0, 0x18, 0x6c,
-	0x1f, 0x05, 0x59, 0x0b, 0xc2, 0x09, 0xd9, 0x33, 0x77, 0xaf, 0x8e, 0x40, 0xc6, 0xe6, 0x18, 0xf6,
-	0xea, 0x05, 0xab, 0x58, 0x7d, 0x17, 0x66, 0x25, 0xec, 0x63, 0x19, 0xab, 0xa7, 0x18, 0xcb, 0x34,
-	0x52, 0x44, 0xb8, 0xee, 0xbe, 0x0f, 0x45, 0xa6, 0x46, 0x7e, 0x44, 0xcc, 0x4b, 0x19, 0xfa, 0xae,
-	0xfb, 0x75, 0xb4, 0xbf, 0x3b, 0x09, 0x67, 0x93, 0xba, 0x33, 0x5c, 0x5f, 0xdf, 0x87, 0x82, 0xdd,
-	0x0f, 0x6e, 0x7f, 0xce, 0x25, 0x5c, 0x82, 0x90, 0x71, 0xee, 0xf7, 0x19, 0x7b, 0x58, 0x25, 0x81,
-	0xc3, 0xf9, 0x67, 0xe4, 0x70, 0xf8, 0x28, 0x41, 0xdb, 0xe6, 0x0f, 0x34, 0xfb, 0x8f, 0x12, 0x6c,
-	0xda, 0x3d, 0x33, 0x72, 0x6f, 0x7b, 0x6a, 0x9c, 0x7b, 0xdb, 0x6b, 0x30, 0xd7, 0xb2, 0xbb, 0x7d,
-	0xaa, 0xb9, 0xfc, 0xf6, 0xf6, 0xe8, 0xd7, 0x59, 0x66, 0x83, 0x1a, 0x88, 0x42, 0x30, 0xd1, 0x45,
-	0xc9, 0x44, 0xc7, 0xf4, 0xa5, 0x14, 0xd7, 0x17, 0x02, 0x93, 0xe8, 0x5b, 0x29, 0xe3, 0x42, 0x11,
-	0x7f, 0xc7, 0xb5, 0x18, 0x12, 0xb4, 0xf8, 0x32, 0x4c, 0x33, 0x96, 0xb0, 0xa0, 0xec, 0x69, 0xf6,
-	0x10, 0x03, 0x66, 0xb1, 0xb0, 0xec, 0xcb, 0x30, 0x6d, 0x7a, 0x46, 0xd3, 0x8f, 0x5c, 0x99, 0x61,
-	0xb7, 0xf3, 0x4c, 0xcf, 0x68, 0xf0, 0xe0, 0x15, 0x2b, 0x6a, 0xc2, 0x79, 0xdc, 0x6c, 0x96, 0x15,
-	0xc4, 0x59, 0x98, 0xea, 0xd8, 0x2d, 0xa3, 0xc3, 0x57, 0x2d, 0x2c, 0x21, 0xce, 0x16, 0x79, 0x69,
-	0xb6, 0xf8, 0x6f, 0xb1, 0x89, 0xd5, 0x6f, 0x8b, 0xcb, 0xf5, 0x43, 0x28, 0xb1, 0xa1, 0x0e, 0x42,
-	0xbd, 0xde, 0xcd, 0x24, 0x25, 0x61, 0x98, 0x3d, 0xaf, 0xcd, 0xd5, 0xdb, 0x47, 0x56, 0x7d, 0x04,
-	0xb3, 0x52, 0x51, 0x82, 0x6e, 0xbe, 0x2b, 0x47, 0x37, 0x5f, 0xcb, 0xd6, 0xb0, 0xa0, 0xc2, 0x5f,
-	0x8d, 0xad, 0x37, 0x0c, 0xcf, 0xe8, 0xd8, 0xc7, 0xcf, 0x6d, 0x32, 0xd4, 0xde, 0x8d, 0xce, 0xe9,
-	0x41, 0x0b, 0x9c, 0x7f, 0x55, 0x28, 0xe1, 0xc1, 0x45, 0xcf, 0xf3, 0xf7, 0x1c, 0x41, 0x5a, 0xfb,
-	0x5d, 0x05, 0x5d, 0x6f, 0x42, 0xed, 0x6d, 0x8b, 0x76, 0xef, 0xb4, 0xee, 0x99, 0xdd, 0x4c, 0xb3,
-	0x8e, 0x64, 0xac, 0x73, 0xe3, 0x18, 0xeb, 0xcf, 0xae, 0xfb, 0xda, 0x7a, 0x94, 0xbb, 0x9c, 0xfa,
-	0x31, 0xa6, 0x4d, 0xad, 0x17, 0xe5, 0x5f, 0x80, 0x83, 0xf3, 0x6f, 0x17, 0x66, 0x9e, 0xb0, 0xac,
-	0x66, 0xc7, 0x72, 0xfd, 0x5b, 0xc1, 0x4b, 0x23, 0xa8, 0x15, 0xf8, 0xa8, 0x4f, 0xf3, 0xfa, 0x3b,
-	0x96, 0xeb, 0x69, 0xbf, 0xa8, 0xf0, 0xad, 0xb8, 0xd4, 0x31, 0x93, 0xdd, 0x42, 0x12, 0xb6, 0xcd,
-	0x89, 0xcb, 0x50, 0xf2, 0x00, 0xe6, 0x1d, 0x06, 0x13, 0x3c, 0x5d, 0xc4, 0x0c, 0xef, 0xad, 0x11,
-	0xf4, 0xe8, 0x7e, 0x2d, 0xf6, 0x96, 0xd1, 0x9c, 0x23, 0xa5, 0x79, 0x68, 0x66, 0x1a, 0x51, 0x7c,
-	0xcd, 0xf2, 0xe7, 0x0a, 0x3b, 0x54, 0x16, 0xa0, 0xb8, 0x43, 0x02, 0xd7, 0x04, 0xcf, 0x6b, 0xf9,
-	0x24, 0x87, 0x64, 0xe5, 0x3f, 0x43, 0x48, 0x16, 0x35, 0x74, 0x5d, 0xe3, 0x93, 0xa6, 0x3f, 0x2f,
-	0xb2, 0xd9, 0x01, 0xba, 0xc6, 0x27, 0x8c, 0x7c, 0x37, 0xd8, 0xc9, 0x4c, 0x85, 0x3b, 0x19, 0xed,
-	0x34, 0x36, 0x40, 0x14, 0x9f, 0xbc, 0x87, 0x3a, 0x02, 0xb5, 0x45, 0x01, 0x98, 0x4b, 0x47, 0xf4,
-	0x81, 0xbf, 0x36, 0x4a, 0x8c, 0x05, 0x96, 0xe9, 0x73, 0x88, 0x04, 0xb3, 0xd0, 0x13, 0xfe, 0x41,
-	0x6c, 0x18, 0xc4, 0xa6, 0x83, 0x03, 0x01, 0xc2, 0x6d, 0x46, 0xe0, 0x4f, 0x0a, 0x98, 0xad, 0x3e,
-	0x92, 0x1b, 0x69, 0x6b, 0x07, 0x89, 0xbd, 0x91, 0x97, 0xe4, 0xe3, 0x61, 0x7c, 0x29, 0x91, 0xc8,
-	0xc8, 0x6a, 0x9b, 0xc5, 0x76, 0x47, 0x81, 0x62, 0xce, 0x92, 0x9f, 0xca, 0xa1, 0x87, 0x7e, 0x08,
-	0x1c, 0xef, 0xb4, 0x2b, 0x33, 0x5c, 0xd0, 0xc4, 0x7a, 0x16, 0x86, 0xc7, 0x10, 0x2e, 0x6f, 0x04,
-	0x9c, 0xa7, 0x6a, 0xc9, 0xe6, 0x06, 0x61, 0x38, 0x68, 0x66, 0xb5, 0x07, 0x67, 0x12, 0xc0, 0x12,
-	0xe6, 0x89, 0x35, 0x79, 0x9e, 0x18, 0x4b, 0x06, 0x84, 0xd9, 0xe2, 0x0a, 0x6e, 0x51, 0xea, 0xa8,
-	0x09, 0xde, 0xe9, 0x86, 0xd1, 0x37, 0x1e, 0x59, 0x1d, 0xcb, 0xb3, 0x4c, 0x7f, 0xe6, 0xd5, 0x3a,
-	0xb8, 0xb3, 0x48, 0x86, 0xe0, 0x9c, 0xaa, 0xc3, 0x4c, 0x4b, 0xc8, 0xe7, 0x5c, 0x4a, 0x9c, 0xba,
-	0x1a, 0xa6, 0x73, 0x62, 0xb5, 0xcc, 0x00, 0xcd, 0xa9, 0x2e, 0x55, 0xe5, 0x07, 0x33, 0x7e, 0x6b,
-	0x0f, 0x4c, 0xc7, 0xb5, 0xec, 0x9e, 0x4f, 0xca, 0xb7, 0x99, 0x35, 0x88, 0x95, 0x72, 0x32, 0xde,
-	0x83, 0x69, 0xb7, 0xfd, 0xb4, 0x79, 0xc2, 0xb2, 0xb9, 0x72, 0x5c, 0x48, 0x74, 0x21, 0xf3, 0x9a,
-	0xe0, 0x06, 0xbf, 0xc9, 0x3b, 0x50, 0xf4, 0x6b, 0xe6, 0x86, 0xfb, 0x22, 0xfd, 0xda, 0x3e, 0xbc,
-	0xf6, 0xed, 0x3c, 0x2e, 0x64, 0x63, 0x7d, 0x23, 0x87, 0x50, 0x74, 0x59, 0x26, 0xa7, 0xe6, 0xed,
-	0x4c, 0x3c, 0x59, 0x16, 0x2e, 0x13, 0xf0, 0xc2, 0xed, 0x09, 0xdd, 0x47, 0x55, 0xfd, 0xf5, 0x1c,
-	0x90, 0x38, 0x04, 0xf9, 0x80, 0xdf, 0x8a, 0x65, 0xf1, 0xcf, 0xef, 0x3f, 0x6b, 0x4b, 0xcb, 0xec,
-	0x5e, 0x2a, 0x86, 0xf4, 0xfc, 0x2b, 0x05, 0x26, 0xf1, 0x5d, 0x95, 0x69, 0x28, 0x1e, 0xed, 0xdd,
-	0xdf, 0xdb, 0x7f, 0xb8, 0xc7, 0xde, 0xc4, 0xdc, 0xd8, 0x39, 0x6a, 0x1c, 0xd6, 0x74, 0x55, 0x21,
-	0x2a, 0xcc, 0x6c, 0xec, 0xec, 0x1f, 0x6d, 0x36, 0xd7, 0xd7, 0x36, 0xee, 0x1f, 0x1d, 0xa8, 0x39,
-	0x32, 0x0f, 0xd3, 0x1b, 0x7a, 0x6d, 0xb3, 0xb6, 0x77, 0x58, 0x5f, 0xdb, 0x69, 0xa8, 0x79, 0x52,
-	0x82, 0xc9, 0xbd, 0xfd, 0xcd, 0x9a, 0x3a, 0x49, 0x08, 0xcc, 0xed, 0xaf, 0x7f, 0xb1, 0xb6, 0x71,
-	0xd8, 0x6c, 0x1c, 0xee, 0xeb, 0x6b, 0xf7, 0x6a, 0xea, 0x14, 0x39, 0x03, 0xf3, 0x8d, 0x8d, 0xed,
-	0xda, 0xe6, 0xd1, 0x4e, 0xad, 0x79, 0xb0, 0xbf, 0x53, 0xdf, 0xf8, 0x92, 0x5a, 0x20, 0x00, 0x85,
-	0x07, 0xfb, 0x3b, 0x47, 0xbb, 0x35, 0xb5, 0x48, 0x7f, 0xaf, 0xed, 0xd4, 0xf4, 0xc3, 0x86, 0x5a,
-	0xa2, 0xad, 0xed, 0xee, 0x1f, 0xed, 0x1d, 0x36, 0xd7, 0x0e, 0x0f, 0xd7, 0x36, 0xb6, 0xd5, 0x32,
-	0x45, 0xc9, 0x71, 0xf9, 0xb5, 0x67, 0xd7, 0x0b, 0x8c, 0x13, 0xda, 0xbf, 0x50, 0x00, 0xc2, 0xd1,
-	0xa6, 0xcb, 0xc4, 0xae, 0xf1, 0x35, 0xdb, 0x0f, 0x38, 0x67, 0x09, 0xcc, 0xb5, 0x7a, 0xb6, 0x1f,
-	0xa1, 0xcd, 0x12, 0x34, 0xb7, 0x6f, 0x78, 0xad, 0x27, 0x3c, 0x42, 0x9b, 0x25, 0x48, 0x25, 0x94,
-	0x11, 0xfe, 0xe8, 0x95, 0x2f, 0x02, 0xdb, 0x50, 0xf4, 0x9b, 0xa9, 0xc0, 0xd9, 0xdd, 0xa3, 0xc6,
-	0x61, 0x73, 0x7b, 0xed, 0x41, 0xad, 0xf9, 0xe5, 0x9a, 0xbe, 0xdf, 0x7c, 0xb0, 0xb6, 0x73, 0x54,
-	0x53, 0x27, 0x48, 0x19, 0xa6, 0x76, 0x69, 0x9b, 0xfc, 0x27, 0x6d, 0x48, 0x5d, 0xa4, 0x3f, 0x0f,
-	0x28, 0x76, 0x75, 0xba, 0x9a, 0x53, 0x15, 0xed, 0x3f, 0x2a, 0xc1, 0x25, 0x33, 0x1f, 0xe3, 0x22,
-	0x14, 0xda, 0x78, 0x71, 0xd8, 0x9f, 0x9a, 0x59, 0x4a, 0x24, 0x27, 0x27, 0x91, 0x43, 0xb6, 0xa0,
-	0xd8, 0x36, 0x3d, 0xc3, 0x0a, 0x0e, 0xe2, 0x6e, 0x8e, 0x10, 0xe6, 0xe5, 0x4d, 0x06, 0xce, 0xef,
-	0xfe, 0xf3, 0xca, 0xd5, 0xbb, 0x30, 0x23, 0x16, 0x8c, 0xb5, 0x97, 0xfc, 0x5e, 0x0e, 0x66, 0xd0,
-	0x02, 0xed, 0x5a, 0xc7, 0xd4, 0x0e, 0x6a, 0x4d, 0x98, 0x65, 0xef, 0xb5, 0x5a, 0x76, 0x0f, 0xa5,
-	0x6a, 0x1e, 0xa6, 0xeb, 0xbd, 0x13, 0xa3, 0x63, 0xb5, 0x69, 0x52, 0x9d, 0xa0, 0x83, 0xc9, 0x81,
-	0xb9, 0xbf, 0x5f, 0x55, 0xc8, 0x02, 0xcc, 0xf2, 0x3c, 0x36, 0xa5, 0xab, 0x39, 0xb2, 0x08, 0x44,
-	0xca, 0xc2, 0xdb, 0xae, 0x6a, 0x5e, 0xdb, 0xc3, 0xe7, 0xf0, 0x8e, 0x4d, 0x2a, 0x26, 0x1c, 0x31,
-	0xa6, 0xd5, 0x09, 0x2a, 0x44, 0xcc, 0x10, 0xb2, 0x67, 0x5c, 0xb9, 0x17, 0x4a, 0xcd, 0x51, 0x50,
-	0xf1, 0xe8, 0x9d, 0x89, 0x2b, 0xdd, 0xc7, 0xa9, 0x93, 0x5a, 0x1f, 0x0a, 0x7c, 0x47, 0xba, 0x00,
-	0xb3, 0x21, 0x42, 0x6f, 0xe0, 0x32, 0x8c, 0x1f, 0x0c, 0xcc, 0x81, 0xd9, 0x56, 0x15, 0xd6, 0x11,
-	0x8b, 0xae, 0x25, 0xac, 0xaf, 0x9b, 0x6d, 0x35, 0x47, 0xe6, 0x00, 0xea, 0x3d, 0xff, 0x69, 0x3b,
-	0x35, 0x4f, 0x81, 0xb7, 0x0c, 0xab, 0x63, 0xb6, 0xd5, 0x49, 0x32, 0x03, 0xa5, 0x0d, 0xbe, 0x65,
-	0x53, 0xa7, 0x30, 0x65, 0xf4, 0x5a, 0x26, 0x2d, 0x2b, 0x68, 0xff, 0x56, 0x81, 0x8a, 0xc8, 0xb3,
-	0x06, 0xdd, 0x1a, 0xfa, 0x73, 0x66, 0x1d, 0xca, 0xb6, 0xcf, 0x3f, 0xae, 0xe5, 0x71, 0xb3, 0x2f,
-	0xd6, 0x5e, 0x96, 0xd8, 0xad, 0x87, 0xb5, 0x47, 0x79, 0x6e, 0x2e, 0x40, 0xd9, 0x33, 0x9c, 0x63,
-	0xd3, 0x0b, 0x37, 0x4f, 0x25, 0x96, 0x21, 0x7b, 0xe1, 0x24, 0xb7, 0xab, 0xf6, 0x57, 0xf9, 0x70,
-	0x0f, 0x97, 0x44, 0xbf, 0xdc, 0xa8, 0x12, 0x6d, 0x34, 0xcd, 0xbb, 0x47, 0x8e, 0x82, 0xd0, 0x0f,
-	0x1e, 0x71, 0x79, 0x37, 0x75, 0xb2, 0x4b, 0x68, 0x76, 0x59, 0x12, 0x95, 0xed, 0x89, 0xe0, 0x51,
-	0x09, 0x13, 0xf8, 0xfb, 0xda, 0x4d, 0xf6, 0x18, 0x2b, 0x8f, 0xbb, 0xfc, 0xc2, 0xb3, 0x23, 0x67,
-	0xaf, 0x54, 0x4f, 0xe8, 0xd3, 0x27, 0x61, 0x92, 0x3c, 0x82, 0x69, 0xa3, 0xd3, 0xe1, 0x6b, 0x54,
-	0xd7, 0x8f, 0xc0, 0xfc, 0xfc, 0xb3, 0xb4, 0xb2, 0xd6, 0xe9, 0xb0, 0x86, 0xdc, 0xed, 0x09, 0x1d,
-	0x8c, 0x20, 0x55, 0xbd, 0x19, 0xd1, 0x91, 0xa1, 0xdb, 0xe5, 0xea, 0x4a, 0x92, 0xfa, 0x90, 0xf3,
-	0x50, 0x62, 0x6f, 0x03, 0x07, 0x35, 0x8a, 0x98, 0xae, 0xb7, 0xab, 0x67, 0x60, 0x21, 0x46, 0x81,
-	0xff, 0xa2, 0xd9, 0x9b, 0x70, 0x3e, 0x81, 0xec, 0x51, 0xbe, 0xed, 0x47, 0xe1, 0x36, 0x2a, 0xb1,
-	0xe2, 0x3a, 0x14, 0x1c, 0xd3, 0x1d, 0x74, 0xbc, 0x4a, 0xda, 0x3d, 0x80, 0xd4, 0xba, 0x3a, 0xaf,
-	0x19, 0xa5, 0x8c, 0x69, 0xd9, 0xa8, 0xed, 0x8e, 0xd6, 0x8e, 0x51, 0x26, 0x57, 0xdc, 0x84, 0x22,
-	0xdf, 0xc8, 0x64, 0x22, 0x4d, 0xaa, 0xac, 0xfb, 0x55, 0xfd, 0x20, 0xd4, 0x04, 0x40, 0xbe, 0x98,
-	0xfd, 0xd7, 0x53, 0xa0, 0x8a, 0xc5, 0xb8, 0xdd, 0x49, 0xdd, 0xa3, 0x8d, 0x50, 0xe7, 0x57, 0x60,
-	0x1e, 0x5d, 0x22, 0xc2, 0x46, 0x89, 0xbb, 0x41, 0x31, 0x3b, 0xd8, 0x2a, 0x2d, 0xc1, 0x82, 0x04,
-	0x87, 0x0e, 0x53, 0xa6, 0xe3, 0xf3, 0x02, 0x24, 0xba, 0x4c, 0x6f, 0x80, 0xea, 0x98, 0x5d, 0xdb,
-	0x13, 0xdd, 0xf6, 0xcc, 0xf5, 0x3f, 0xc7, 0xf2, 0x1f, 0x08, 0xe1, 0x48, 0xb8, 0xc8, 0x0d, 0xbd,
-	0x0e, 0xec, 0x95, 0x8d, 0x59, 0x21, 0x17, 0xb7, 0x60, 0xb3, 0xfe, 0x53, 0x4f, 0x2e, 0x35, 0xda,
-	0xfc, 0xba, 0xfd, 0x4b, 0xc3, 0x2d, 0x1c, 0xda, 0x77, 0x7d, 0x86, 0xd7, 0x64, 0xd6, 0xff, 0xbd,
-	0x60, 0x9b, 0x5f, 0x42, 0x14, 0x2f, 0x8f, 0x44, 0x21, 0x5e, 0xd0, 0x7e, 0x17, 0xa6, 0xf1, 0x7d,
-	0xe2, 0x01, 0xce, 0x07, 0x19, 0x5e, 0x28, 0x06, 0x0a, 0xce, 0x3f, 0x6b, 0x72, 0x15, 0x66, 0xf0,
-	0xe1, 0x84, 0xa6, 0x63, 0x1a, 0xae, 0xdd, 0xe3, 0xbe, 0xb2, 0x69, 0xcc, 0xd3, 0x31, 0x2b, 0xe2,
-	0x1e, 0x9c, 0xfe, 0x6c, 0xee, 0xc1, 0x99, 0x71, 0xdd, 0x83, 0x11, 0x47, 0xdd, 0x6c, 0xcc, 0x51,
-	0x27, 0x3b, 0x37, 0xe7, 0xa2, 0xce, 0xcd, 0x88, 0x1f, 0x6f, 0x3e, 0xe6, 0xc7, 0xdb, 0x85, 0xb3,
-	0x51, 0xb9, 0xa5, 0xdb, 0x18, 0x72, 0x07, 0x26, 0x85, 0x1d, 0xd4, 0xd5, 0xa1, 0x43, 0x82, 0x9b,
-	0x14, 0x04, 0x4f, 0x50, 0x47, 0xd9, 0x2f, 0x38, 0xa6, 0x3a, 0x4a, 0x95, 0x43, 0x75, 0x6c, 0xc4,
-	0x8c, 0x98, 0xd0, 0xc4, 0x33, 0x6a, 0x9d, 0xf6, 0x07, 0x0a, 0x54, 0x93, 0xb0, 0x06, 0x9b, 0xa6,
-	0x49, 0xbe, 0x87, 0xa7, 0x0c, 0xb9, 0x93, 0x89, 0x6c, 0xbe, 0x91, 0x0c, 0xdf, 0x58, 0x46, 0x14,
-	0xd5, 0x1f, 0x86, 0xf2, 0xb0, 0x07, 0x84, 0x47, 0xba, 0x14, 0x93, 0x06, 0x4c, 0x5c, 0xc9, 0xb5,
-	0x63, 0xd6, 0x2a, 0xd2, 0x97, 0x8d, 0x88, 0xb9, 0x7e, 0x6d, 0x8c, 0xde, 0x04, 0xf6, 0xfa, 0x0f,
-	0x71, 0xed, 0x83, 0xdc, 0x3b, 0x30, 0x2c, 0x47, 0xf6, 0x7e, 0xe0, 0x31, 0x21, 0x9a, 0x9b, 0x80,
-	0xe5, 0xfd, 0xf0, 0x98, 0x90, 0x16, 0xf8, 0x91, 0x26, 0x7d, 0x76, 0xf4, 0x29, 0xc1, 0xe2, 0x8b,
-	0x70, 0x39, 0xfc, 0xe2, 0xd3, 0x82, 0x04, 0x8d, 0x0f, 0xc3, 0xdd, 0x86, 0xb3, 0x11, 0x78, 0xcf,
-	0x7e, 0x6a, 0xf6, 0xb8, 0x8d, 0x24, 0x52, 0x85, 0x43, 0x5a, 0xc2, 0x02, 0xbc, 0xbd, 0x66, 0xdb,
-	0x7c, 0x6c, 0xd0, 0x4e, 0xb3, 0xc3, 0x2b, 0x70, 0x4d, 0x6f, 0x93, 0xe5, 0x68, 0x1f, 0x53, 0x81,
-	0x8a, 0x75, 0x45, 0x3c, 0xf2, 0x94, 0xfb, 0xd2, 0x4e, 0xee, 0x4b, 0x3b, 0xa1, 0x2f, 0xf2, 0x31,
-	0xae, 0x00, 0x8d, 0x77, 0x80, 0x1e, 0xf1, 0x25, 0x58, 0x0a, 0x1b, 0x37, 0xa2, 0xea, 0xf2, 0x6a,
-	0xc2, 0x48, 0x25, 0xd7, 0x0d, 0xb5, 0xc5, 0x9f, 0xbc, 0xd3, 0xfa, 0x97, 0x65, 0xf2, 0x4e, 0xa9,
-	0x1b, 0x08, 0xc3, 0xa9, 0xc4, 0xc0, 0x03, 0xc7, 0x6e, 0x99, 0xae, 0x2b, 0x08, 0x03, 0x7f, 0xfa,
-	0x32, 0xce, 0x40, 0x56, 0x10, 0x32, 0x30, 0x6d, 0x70, 0x73, 0x69, 0x83, 0xab, 0xfd, 0x7e, 0x8e,
-	0xea, 0x6d, 0xbc, 0xed, 0xef, 0xff, 0xe8, 0x91, 0xb7, 0xa1, 0x12, 0x81, 0x0f, 0xdf, 0x46, 0x64,
-	0xef, 0x0b, 0x2d, 0x4a, 0x95, 0x6a, 0xc1, 0x43, 0x89, 0x7a, 0xf4, 0xb9, 0xb7, 0xb7, 0x87, 0x31,
-	0x3d, 0xd2, 0xa7, 0xef, 0xc3, 0xc3, 0x6f, 0xef, 0x45, 0xe5, 0x50, 0x76, 0xff, 0x0d, 0xdf, 0x0a,
-	0x04, 0x07, 0xeb, 0xb1, 0xda, 0x7c, 0x75, 0xf4, 0x06, 0x5c, 0x10, 0x0a, 0x71, 0xd8, 0xee, 0x09,
-	0xef, 0xcb, 0x9d, 0x85, 0x29, 0x36, 0xc8, 0xfc, 0xed, 0x2c, 0x4c, 0x04, 0x6b, 0xae, 0xa0, 0xde,
-	0x3d, 0xd3, 0xc3, 0xaa, 0xbe, 0x7b, 0xe9, 0x31, 0x3f, 0xae, 0x4f, 0x00, 0xe0, 0x88, 0x37, 0x23,
-	0x92, 0x7d, 0x73, 0x18, 0x93, 0xa3, 0x64, 0x05, 0xb2, 0x2d, 0x05, 0xcf, 0x51, 0x48, 0xdd, 0x74,
-	0x23, 0xa4, 0x3c, 0x11, 0x83, 0xe7, 0xa2, 0x20, 0xcf, 0x95, 0x98, 0xef, 0xe5, 0x82, 0xb7, 0xc7,
-	0x28, 0x5c, 0xe2, 0x51, 0x7b, 0x52, 0xa4, 0xef, 0xb0, 0x2b, 0x90, 0xaf, 0xc1, 0x42, 0xf4, 0xd5,
-	0x4e, 0x26, 0x96, 0x65, 0x5d, 0x8d, 0x3c, 0xdb, 0xc9, 0x3e, 0xbd, 0x88, 0x5f, 0x26, 0xe0, 0x1e,
-	0x71, 0x9e, 0x0a, 0x07, 0xb1, 0x20, 0x0c, 0x22, 0xb9, 0x17, 0xca, 0x79, 0x31, 0xe5, 0xb3, 0x8f,
-	0x91, 0xde, 0x7c, 0x1f, 0x84, 0x7b, 0x39, 0x2a, 0x9e, 0x91, 0xc0, 0xb9, 0xe8, 0xf7, 0x44, 0x1f,
-	0xc2, 0xa2, 0x2c, 0x55, 0xc2, 0x09, 0x7a, 0xb9, 0x6f, 0x58, 0x8e, 0xe8, 0xcd, 0xbf, 0x32, 0xaa,
-	0x43, 0x7a, 0xa9, 0xcf, 0x7f, 0x69, 0x5f, 0x8d, 0x8a, 0x74, 0x34, 0xf4, 0xee, 0x0b, 0x11, 0x19,
-	0xb9, 0x3e, 0x0c, 0x79, 0x92, 0x78, 0x5c, 0x89, 0xea, 0x44, 0xcc, 0x9f, 0xfe, 0xbf, 0x14, 0xb8,
-	0x24, 0x94, 0xbb, 0x89, 0x11, 0xf3, 0x7c, 0xa6, 0x14, 0x94, 0x9d, 0xe7, 0xd4, 0xdb, 0x64, 0x1f,
-	0xa6, 0x68, 0x87, 0xfc, 0x98, 0xdf, 0x77, 0x86, 0x91, 0x18, 0xc7, 0xbe, 0xcc, 0xb3, 0xf1, 0x05,
-	0x2d, 0xc4, 0x53, 0xfd, 0x32, 0x40, 0x98, 0xf9, 0x2c, 0x0f, 0x48, 0x45, 0x19, 0x2e, 0x0c, 0xbd,
-	0x15, 0xd5, 0xdd, 0x78, 0x77, 0xb7, 0x22, 0x3c, 0x5f, 0x1e, 0xaf, 0x43, 0x01, 0xeb, 0xff, 0x44,
-	0x81, 0x22, 0x3f, 0x59, 0x4d, 0xbc, 0x0b, 0x94, 0xf4, 0x2a, 0x63, 0xd2, 0xcb, 0x88, 0xfe, 0xa7,
-	0x65, 0x27, 0x85, 0x4f, 0xcb, 0x7e, 0x1e, 0x66, 0x76, 0x0c, 0xd7, 0xdb, 0xb5, 0xdb, 0xd6, 0x63,
-	0xcb, 0x6c, 0x67, 0x88, 0x52, 0x90, 0xe0, 0xc9, 0x9b, 0x50, 0x6a, 0x3d, 0xb1, 0x3a, 0x6d, 0x07,
-	0xf5, 0x93, 0x0e, 0x5b, 0xc2, 0xe7, 0xd9, 0xf8, 0xa9, 0x70, 0x00, 0xa9, 0xfd, 0x00, 0x14, 0x74,
-	0x93, 0xae, 0xc5, 0xc8, 0x15, 0x98, 0x6e, 0x5b, 0x8e, 0xd9, 0xf2, 0x6c, 0x7c, 0x54, 0x99, 0x7f,
-	0x57, 0x41, 0xc8, 0xc2, 0x88, 0x2b, 0xab, 0x13, 0x7c, 0x51, 0x81, 0x25, 0xb4, 0x3e, 0xcc, 0x47,
-	0x0f, 0x9b, 0x6f, 0xc2, 0xa4, 0x63, 0xdb, 0x3e, 0xb3, 0xd3, 0xc9, 0x40, 0x28, 0xb2, 0x42, 0x07,
-	0x27, 0x58, 0x0e, 0x26, 0x5d, 0x23, 0x62, 0x14, 0xea, 0x1c, 0x4c, 0xfb, 0xb5, 0x1c, 0xcc, 0xe1,
-	0x15, 0x0c, 0x53, 0x5c, 0xed, 0xe2, 0xc5, 0x33, 0xff, 0xa0, 0x23, 0xbe, 0xda, 0x95, 0x2b, 0x2c,
-	0xe3, 0x1d, 0x46, 0x3f, 0xa2, 0x90, 0x55, 0x25, 0x3b, 0x50, 0x6e, 0xdb, 0xad, 0xa7, 0xa6, 0x63,
-	0xb5, 0x7d, 0xc9, 0x5f, 0x1e, 0x85, 0x67, 0xd3, 0xaf, 0xc0, 0x5f, 0xef, 0x0b, 0x10, 0x54, 0xdf,
-	0x81, 0x69, 0xa1, 0x91, 0x71, 0x8c, 0x59, 0xf5, 0x3d, 0x98, 0x93, 0xf1, 0x8e, 0x65, 0x0a, 0x8f,
-	0xe0, 0x5c, 0xca, 0x27, 0x47, 0xc9, 0x5d, 0x98, 0x72, 0xf0, 0x3c, 0x95, 0x71, 0xe9, 0xe5, 0x51,
-	0xdf, 0x2a, 0xd5, 0x07, 0x1d, 0x53, 0x67, 0x55, 0xb4, 0x7f, 0x93, 0xf7, 0xdf, 0x64, 0x96, 0x8a,
-	0xf1, 0x8b, 0xba, 0x8f, 0x1f, 0x9b, 0x2d, 0xba, 0x01, 0xe6, 0xdf, 0x87, 0x71, 0xb9, 0x3b, 0x5f,
-	0xf5, 0x0b, 0xf8, 0x37, 0x64, 0xd8, 0x67, 0x4c, 0x4c, 0xeb, 0xf8, 0x89, 0xff, 0x61, 0x02, 0x9e,
-	0x22, 0x0f, 0x60, 0x9a, 0x7f, 0x9c, 0x96, 0xe2, 0xe5, 0xb1, 0x00, 0x6f, 0x66, 0x21, 0x6f, 0xb9,
-	0x16, 0xd6, 0x43, 0x97, 0xaa, 0x88, 0x88, 0xee, 0xe8, 0x50, 0xf9, 0xd8, 0xa7, 0x07, 0xef, 0x64,
-	0x42, 0xb8, 0xf6, 0xf8, 0xb1, 0xd5, 0xb3, 0xbc, 0x53, 0x9a, 0x08, 0x0f, 0x5e, 0xc8, 0x03, 0x58,
-	0xe8, 0x1a, 0x5e, 0xeb, 0x49, 0xd3, 0xfc, 0x04, 0xbf, 0x88, 0x8b, 0x13, 0x1e, 0x8b, 0x2f, 0x8b,
-	0xaf, 0xd8, 0x31, 0x32, 0xb5, 0x61, 0x76, 0x50, 0x77, 0xf8, 0xb7, 0x65, 0xb0, 0x01, 0x15, 0x71,
-	0xd4, 0x42, 0x14, 0xda, 0x32, 0xcc, 0x47, 0xba, 0x40, 0x66, 0xf0, 0x01, 0x51, 0xfc, 0x1e, 0x8d,
-	0x3a, 0x41, 0x66, 0xa1, 0x7c, 0xe0, 0x98, 0x8f, 0x4d, 0x87, 0x26, 0x15, 0x6d, 0x15, 0xd4, 0x28,
-	0x85, 0xb4, 0x82, 0x9f, 0xa7, 0x4e, 0x10, 0x15, 0x66, 0xd6, 0x7a, 0x9e, 0x15, 0xe4, 0x28, 0xda,
-	0x9f, 0x29, 0x50, 0x49, 0x23, 0x29, 0x41, 0xb6, 0xf6, 0xa0, 0x14, 0x7c, 0x11, 0x8e, 0x05, 0x16,
-	0xac, 0x66, 0xee, 0xe1, 0xb2, 0xff, 0xfd, 0x37, 0x3d, 0xc0, 0x41, 0x47, 0x1d, 0xc5, 0xd3, 0x5f,
-	0x31, 0xf3, 0x94, 0x76, 0x1f, 0x4a, 0xc1, 0x77, 0xe9, 0x0a, 0x90, 0xab, 0xf7, 0xd8, 0x29, 0xcc,
-	0x9e, 0xed, 0xd5, 0x7b, 0xaa, 0x42, 0x00, 0x0a, 0xb5, 0x4f, 0x2c, 0xd7, 0x73, 0xd9, 0x99, 0xc0,
-	0xa6, 0x6d, 0xba, 0x7b, 0xb6, 0x87, 0x59, 0x6a, 0x9e, 0x56, 0xb8, 0xe7, 0xa9, 0x93, 0xf4, 0xff,
-	0x8e, 0xa7, 0x4e, 0x2d, 0xfd, 0x65, 0x2e, 0x38, 0x1a, 0x98, 0x87, 0xe9, 0xc6, 0xe1, 0xda, 0xe1,
-	0x51, 0xa3, 0xb9, 0xb7, 0xbf, 0x57, 0x53, 0x27, 0x84, 0x8c, 0xfa, 0x5e, 0xfd, 0x50, 0x55, 0x28,
-	0x4f, 0x79, 0xc6, 0xfe, 0x7d, 0x35, 0xc7, 0x4e, 0xac, 0x58, 0x72, 0x6b, 0x6b, 0xa7, 0xbe, 0x57,
-	0x53, 0xf3, 0xb4, 0x45, 0x9e, 0x57, 0xd3, 0xf5, 0x7d, 0x5d, 0x9d, 0x24, 0x15, 0x38, 0x1b, 0xa0,
-	0x3d, 0x6c, 0xd6, 0xf7, 0x9a, 0x1f, 0x1c, 0xed, 0xeb, 0x47, 0xbb, 0xea, 0x14, 0x39, 0x07, 0x67,
-	0x78, 0xc9, 0x66, 0x6d, 0x63, 0x7f, 0x77, 0xb7, 0xde, 0x68, 0xd4, 0xf7, 0xf7, 0xd4, 0x02, 0x59,
-	0x04, 0xc2, 0x0b, 0x76, 0xd7, 0xea, 0x7b, 0x87, 0xb5, 0xbd, 0xb5, 0xbd, 0x8d, 0x9a, 0x5a, 0x14,
-	0x2a, 0xf8, 0x27, 0x65, 0x9b, 0xfb, 0x0f, 0xf7, 0xd4, 0x12, 0xb9, 0x00, 0xe7, 0xa2, 0x05, 0xb5,
-	0x7b, 0xfa, 0xda, 0x66, 0x6d, 0x53, 0x2d, 0x0b, 0xb5, 0xf6, 0x6a, 0xb5, 0xcd, 0x46, 0x53, 0xaf,
-	0xad, 0xef, 0xef, 0x1f, 0xaa, 0x40, 0x2e, 0x42, 0x25, 0x52, 0x4b, 0xaf, 0xad, 0xaf, 0xed, 0x60,
-	0x63, 0xd3, 0xe4, 0x0a, 0x5c, 0x8c, 0xe2, 0xd4, 0xeb, 0x0f, 0x28, 0xcc, 0xc1, 0xce, 0xda, 0x46,
-	0x4d, 0x9d, 0x21, 0x2f, 0xc1, 0xe5, 0xa4, 0x9e, 0x35, 0xf7, 0xf6, 0x83, 0x53, 0xc1, 0x59, 0x32,
-	0x07, 0x10, 0xf4, 0xe5, 0x43, 0x75, 0x6e, 0xe9, 0x3b, 0x0a, 0x00, 0x7b, 0x3c, 0x17, 0x65, 0xf0,
-	0x2c, 0xa8, 0x88, 0x56, 0x6f, 0x1e, 0x7e, 0xe9, 0xa0, 0xe6, 0x73, 0x3e, 0x92, 0xbb, 0x55, 0xdf,
-	0xa9, 0xa9, 0x0a, 0x79, 0x01, 0x16, 0xc4, 0xdc, 0xf5, 0x9d, 0xfd, 0x8d, 0xfb, 0xec, 0x10, 0x49,
-	0xcc, 0x66, 0xe7, 0x92, 0x6a, 0x9e, 0x9c, 0x87, 0x17, 0xc4, 0x7c, 0x7e, 0xd2, 0x59, 0xdb, 0x54,
-	0x27, 0xa3, 0x98, 0xee, 0xe9, 0x6b, 0x07, 0xdb, 0xea, 0xd4, 0xd2, 0x3f, 0x56, 0xa0, 0xc0, 0x3e,
-	0x3d, 0x46, 0xc7, 0x71, 0xab, 0x21, 0xd1, 0xb4, 0x00, 0xb3, 0x7e, 0xce, 0xfa, 0xa1, 0xbe, 0xd5,
-	0x60, 0x47, 0xa6, 0x7e, 0x56, 0xed, 0xc3, 0xc3, 0x37, 0x99, 0xc0, 0xf9, 0x39, 0x5b, 0x47, 0x0d,
-	0x2a, 0x10, 0xf3, 0x30, 0x1d, 0x20, 0xda, 0x6a, 0xa8, 0x93, 0x62, 0xc6, 0x83, 0xad, 0x86, 0x3a,
-	0x25, 0x66, 0x7c, 0xb8, 0xd5, 0x50, 0x0b, 0x62, 0xc6, 0x97, 0xb7, 0x1a, 0x6a, 0x51, 0x6c, 0xfa,
-	0xc3, 0xad, 0xc6, 0xc9, 0xaa, 0x5a, 0x5a, 0xfa, 0x6d, 0x05, 0x5e, 0x48, 0x7c, 0x88, 0x98, 0x5c,
-	0x85, 0x4b, 0xd8, 0x9f, 0x26, 0xef, 0xe1, 0xc6, 0xf6, 0xda, 0xde, 0xbd, 0x9a, 0xd4, 0x95, 0x6b,
-	0x70, 0x35, 0x15, 0x64, 0x77, 0x7f, 0xb3, 0xbe, 0x55, 0xaf, 0x6d, 0xaa, 0x0a, 0xd1, 0xe0, 0xc5,
-	0x54, 0xb0, 0xb5, 0x4d, 0x2a, 0x5c, 0x39, 0xf2, 0x32, 0x5c, 0x49, 0x85, 0xd9, 0xac, 0xed, 0xd4,
-	0x0e, 0x6b, 0x9b, 0x6a, 0x7e, 0xc9, 0x83, 0x19, 0xe9, 0x73, 0x2f, 0x54, 0xc0, 0x6b, 0x0f, 0x6a,
-	0x7a, 0xfd, 0xf0, 0x4b, 0x12, 0x61, 0x54, 0x54, 0xa5, 0xfc, 0xb5, 0x9d, 0x35, 0x7d, 0x57, 0x55,
-	0xe8, 0x58, 0xca, 0x05, 0x0f, 0xd7, 0xf4, 0xbd, 0xfa, 0xde, 0x3d, 0x35, 0x87, 0xfa, 0x15, 0xc1,
-	0x75, 0x58, 0xdf, 0xfa, 0x92, 0x9a, 0x5f, 0xfa, 0x69, 0x05, 0x66, 0xc4, 0x6f, 0x7b, 0xd0, 0x66,
-	0xf5, 0x5a, 0x63, 0xff, 0x48, 0xdf, 0x90, 0xf9, 0x51, 0x81, 0xb3, 0x72, 0x3e, 0x3f, 0xb2, 0x56,
-	0x92, 0x6a, 0x6c, 0xd6, 0xd4, 0x1c, 0xa5, 0x47, 0xce, 0xf7, 0xcf, 0xd1, 0xf3, 0xb4, 0x0f, 0x72,
-	0x11, 0x72, 0x46, 0x9d, 0x5c, 0xfa, 0x49, 0x05, 0xe6, 0xf1, 0xf3, 0x0f, 0xec, 0x81, 0x77, 0xa4,
-	0xa8, 0x0a, 0x8b, 0x78, 0x24, 0xde, 0x5c, 0xdb, 0x38, 0xac, 0xef, 0xef, 0x49, 0x54, 0x5d, 0x84,
-	0x4a, 0xbc, 0x8c, 0xf1, 0x54, 0x55, 0x92, 0x4b, 0x37, 0xf4, 0xda, 0xda, 0x21, 0xa5, 0x2f, 0xb1,
-	0xf4, 0xe8, 0x60, 0x93, 0x96, 0xe6, 0x97, 0xbe, 0xe6, 0xbf, 0xe5, 0x2e, 0x3c, 0xb5, 0x4f, 0xab,
-	0xb0, 0x6e, 0xfb, 0x75, 0x0e, 0xd6, 0xf4, 0xb5, 0x5d, 0x9f, 0x98, 0x0b, 0x70, 0x2e, 0xa9, 0x74,
-	0x7f, 0x6b, 0x4b, 0x55, 0x68, 0x2f, 0x12, 0x0b, 0xf7, 0xd4, 0xdc, 0xd2, 0x2a, 0x14, 0xf9, 0xe7,
-	0x7d, 0x59, 0xf8, 0x00, 0x62, 0x2b, 0x42, 0x7e, 0x67, 0xff, 0x21, 0x33, 0xd6, 0xbb, 0xb5, 0xcd,
-	0xfa, 0xd1, 0xae, 0x9a, 0xa3, 0xc5, 0xdb, 0xf5, 0x7b, 0xdb, 0x6a, 0x7e, 0xe9, 0x47, 0xa1, 0x1c,
-	0x7c, 0xdd, 0x97, 0xb2, 0xba, 0xbe, 0xdf, 0x3c, 0xd0, 0xf7, 0xa9, 0x15, 0x68, 0x36, 0x6a, 0x1f,
-	0x1c, 0xb1, 0x80, 0x04, 0x75, 0x82, 0xaa, 0xb1, 0x50, 0xa4, 0xaf, 0xed, 0x6d, 0xee, 0xef, 0xb2,
-	0x83, 0x66, 0x21, 0x7b, 0x73, 0x9d, 0x09, 0x89, 0x94, 0xd5, 0xd4, 0x6b, 0xbb, 0xfb, 0x94, 0x17,
-	0xd4, 0x88, 0x0b, 0x25, 0x1b, 0xbb, 0x0d, 0x75, 0x72, 0xe9, 0x3b, 0x39, 0x98, 0x16, 0x1e, 0xe4,
-	0xa7, 0xed, 0xf0, 0xfe, 0x51, 0x53, 0x26, 0x8a, 0x8d, 0x94, 0x7d, 0x50, 0xdb, 0xdb, 0xa4, 0x32,
-	0x29, 0x32, 0x84, 0x95, 0xac, 0x3d, 0x58, 0xab, 0xef, 0xac, 0xad, 0xef, 0x70, 0xd1, 0x91, 0xcb,
-	0x30, 0x00, 0x82, 0xaa, 0x49, 0xac, 0x68, 0xb3, 0xc6, 0x8b, 0x26, 0x05, 0xfe, 0x87, 0x45, 0x87,
-	0x1b, 0xdb, 0xb4, 0xb9, 0x29, 0x2a, 0xa5, 0x52, 0x21, 0x9b, 0x7a, 0x0a, 0x31, 0x02, 0x7d, 0x85,
-	0x2c, 0x92, 0x17, 0xa1, 0x2a, 0x95, 0x1c, 0xea, 0x5f, 0xe2, 0xad, 0x51, 0x8c, 0xa5, 0x58, 0x4d,
-	0xbd, 0x46, 0x2d, 0x7a, 0x4d, 0x2d, 0x2f, 0xfd, 0x9c, 0xe2, 0x9f, 0xb3, 0x37, 0xfc, 0xaf, 0x89,
-	0x88, 0x8d, 0x87, 0xb3, 0xe7, 0x25, 0x38, 0x1f, 0xcd, 0x3f, 0x6c, 0x1e, 0xe8, 0xb5, 0x46, 0x6d,
-	0x8f, 0xce, 0xa5, 0x67, 0x41, 0x95, 0x8b, 0x31, 0xe4, 0x24, 0x86, 0x0c, 0x27, 0xb8, 0x7c, 0x84,
-	0xa1, 0x38, 0x63, 0xf2, 0xf9, 0x6d, 0x72, 0xe9, 0x2b, 0x30, 0xcb, 0x43, 0x20, 0x76, 0xcd, 0xb6,
-	0x35, 0xe8, 0xb2, 0xd9, 0x90, 0x4d, 0x59, 0x4c, 0xb8, 0x9a, 0xbb, 0x6b, 0xf7, 0xf6, 0x6a, 0x87,
-	0xf5, 0x0d, 0x75, 0x82, 0xcd, 0xad, 0x52, 0x61, 0xa3, 0x41, 0x8d, 0x1d, 0xce, 0x92, 0x52, 0xfe,
-	0xde, 0x83, 0xdd, 0x9a, 0x9a, 0x5b, 0xba, 0x01, 0xb3, 0xbe, 0x67, 0xcf, 0xf6, 0xac, 0xc7, 0xa7,
-	0x14, 0x92, 0x6b, 0x3b, 0x37, 0x35, 0x8c, 0xc8, 0x89, 0x25, 0x13, 0xa6, 0x85, 0x6f, 0x3e, 0xd2,
-	0xd1, 0x64, 0x63, 0xeb, 0x8f, 0xca, 0x87, 0x87, 0x35, 0x7d, 0x0f, 0x05, 0x37, 0x5a, 0x44, 0x27,
-	0x79, 0x2c, 0x52, 0xe8, 0xb4, 0x9b, 0x58, 0xd4, 0x6c, 0x3c, 0xac, 0x1f, 0x6e, 0x6c, 0xab, 0xb9,
-	0xa5, 0x43, 0x98, 0x0b, 0xc2, 0x01, 0xb6, 0x3a, 0xc6, 0x31, 0xdd, 0x62, 0xa9, 0xfb, 0x07, 0xcd,
-	0xad, 0x9d, 0xb5, 0x7b, 0x8d, 0x66, 0x18, 0xdd, 0xb3, 0x00, 0xb3, 0x41, 0x2e, 0x8e, 0x09, 0x9a,
-	0xd1, 0x20, 0x8b, 0x0d, 0x77, 0x73, 0x6b, 0x5f, 0xdf, 0xa0, 0xdd, 0xfc, 0x63, 0x05, 0xbf, 0xa7,
-	0x24, 0x3c, 0xac, 0x88, 0x96, 0x55, 0xca, 0x69, 0x0c, 0x7a, 0x6d, 0xe3, 0x94, 0x49, 0xbe, 0x5c,
-	0xb2, 0x6b, 0x63, 0x09, 0x33, 0xd4, 0x52, 0xc9, 0xe1, 0xc0, 0x74, 0x69, 0x51, 0x0e, 0x87, 0x45,
-	0x2a, 0x7a, 0x68, 0xb6, 0x7b, 0xac, 0x10, 0x07, 0x38, 0x52, 0xef, 0xc9, 0xc0, 0xc1, 0xb2, 0xc9,
-	0x78, 0x6b, 0x5b, 0x8e, 0x45, 0x4b, 0xa6, 0xe2, 0xb5, 0x1a, 0x86, 0x37, 0x70, 0x68, 0x59, 0x61,
-	0xe9, 0x47, 0xa2, 0x77, 0x12, 0xd8, 0xfd, 0x01, 0x72, 0x39, 0x1a, 0x9f, 0xce, 0xf2, 0x8f, 0x7a,
-	0x4f, 0x7b, 0xf6, 0xc7, 0x74, 0x2d, 0x79, 0x25, 0x1a, 0x19, 0xcc, 0x00, 0xfc, 0xdf, 0xaa, 0x42,
-	0xa7, 0xd8, 0xc4, 0xab, 0x09, 0x2c, 0x16, 0x65, 0xbf, 0xaf, 0xe6, 0x96, 0x7e, 0x2f, 0x87, 0x57,
-	0x39, 0x13, 0x63, 0x90, 0x71, 0xe1, 0x94, 0x52, 0x16, 0x92, 0xf1, 0x0a, 0x5e, 0xf3, 0x4e, 0x04,
-	0xda, 0xb3, 0x3d, 0x3c, 0x29, 0xc7, 0x90, 0x95, 0x2b, 0xc9, 0x31, 0xf0, 0x14, 0x0e, 0xa3, 0x5f,
-	0x72, 0xc3, 0x9a, 0x5b, 0x7b, 0x64, 0x23, 0x9a, 0x3c, 0x9d, 0xec, 0xd3, 0x80, 0x0e, 0x8c, 0x81,
-	0x8b, 0x01, 0x2f, 0x43, 0x10, 0x35, 0x3c, 0xbb, 0xdf, 0x37, 0xdb, 0xea, 0xd4, 0x30, 0x44, 0xec,
-	0xb5, 0x7f, 0xb5, 0x30, 0x0c, 0x86, 0x47, 0xd7, 0x14, 0x97, 0x7e, 0x37, 0xe1, 0xd6, 0x9c, 0x18,
-	0x77, 0x4c, 0xae, 0x47, 0xc3, 0x44, 0xe5, 0xf2, 0x90, 0x93, 0xd7, 0xa2, 0x41, 0xa7, 0x32, 0x20,
-	0x76, 0x4f, 0x55, 0xe2, 0x0c, 0x8f, 0xc4, 0x3d, 0x9b, 0x2e, 0x0b, 0x5a, 0x7a, 0x39, 0x1a, 0x15,
-	0x2b, 0xc3, 0x51, 0x4e, 0xa8, 0xf9, 0xd5, 0x7f, 0x9e, 0x83, 0x05, 0x21, 0x26, 0x8f, 0x7f, 0x1f,
-	0xea, 0xb7, 0x14, 0x38, 0x9b, 0x74, 0x13, 0x87, 0xdc, 0x49, 0xff, 0x0e, 0xd5, 0x90, 0xcb, 0x5d,
-	0xd5, 0xb7, 0xc6, 0xad, 0xc6, 0xfd, 0xee, 0x97, 0xbe, 0xf9, 0xa7, 0x7f, 0xfe, 0x8b, 0xb9, 0x73,
-	0x1a, 0x59, 0x39, 0x79, 0x7d, 0x85, 0x7d, 0x35, 0x6b, 0xe5, 0x31, 0x83, 0xb9, 0xab, 0x2c, 0xdd,
-	0x56, 0x88, 0x03, 0x05, 0xe6, 0xaa, 0x27, 0xd7, 0xd3, 0x9b, 0x90, 0x8e, 0x02, 0xaa, 0x37, 0x46,
-	0x03, 0xf2, 0xd6, 0x5f, 0xc0, 0xd6, 0xe7, 0x35, 0x08, 0x5b, 0xbf, 0xab, 0x2c, 0xad, 0xfe, 0xcb,
-	0x1c, 0x9c, 0x11, 0x58, 0xe6, 0x47, 0x87, 0x92, 0x5f, 0x56, 0x60, 0x46, 0x0c, 0x57, 0x25, 0x89,
-	0x4f, 0x15, 0x0d, 0x09, 0x7d, 0xad, 0xde, 0xce, 0x5e, 0xc1, 0x7f, 0x6f, 0x18, 0x49, 0xbc, 0x44,
-	0x2e, 0x50, 0x12, 0x2d, 0x06, 0x69, 0x99, 0xee, 0x8a, 0x18, 0xe3, 0x4a, 0xbe, 0xa9, 0x84, 0xc1,
-	0x82, 0x4b, 0xc3, 0x9a, 0x90, 0xc3, 0x5f, 0xab, 0xaf, 0x65, 0x82, 0xe5, 0x94, 0xbc, 0x88, 0x94,
-	0x54, 0xc8, 0x62, 0x84, 0x12, 0x1e, 0x21, 0xb8, 0xfa, 0x3d, 0x45, 0x0a, 0x22, 0xf5, 0xdf, 0xb3,
-	0xff, 0x55, 0x05, 0xe6, 0xe4, 0x2b, 0xeb, 0xe4, 0x76, 0x72, 0xa8, 0x52, 0xfa, 0xd5, 0xff, 0xea,
-	0xeb, 0x63, 0xd4, 0x48, 0x62, 0x1c, 0x3f, 0x08, 0x72, 0x57, 0x2c, 0x06, 0xcc, 0xcf, 0x0c, 0x56,
-	0xff, 0xb2, 0x00, 0x8b, 0x71, 0x9a, 0x0f, 0x0c, 0xcb, 0xa1, 0x3c, 0x2d, 0xb0, 0xa3, 0x44, 0x72,
-	0x73, 0x48, 0xeb, 0xb1, 0x53, 0xcd, 0xea, 0xad, 0x8c, 0xd0, 0x9c, 0xce, 0x0b, 0x48, 0xe7, 0x0b,
-	0x9a, 0x2a, 0xd0, 0x89, 0x5e, 0xe7, 0xbb, 0xca, 0x12, 0xf9, 0x39, 0x05, 0x8a, 0xbc, 0x7f, 0x64,
-	0x14, 0x5e, 0xf9, 0xc8, 0xa0, 0xba, 0x9c, 0x15, 0xdc, 0x0f, 0x76, 0x47, 0x3a, 0x2e, 0x93, 0x4b,
-	0x51, 0x3a, 0x7c, 0x9e, 0xad, 0x7c, 0xc3, 0x6a, 0x7f, 0x4a, 0xfe, 0xb6, 0x02, 0xe5, 0x40, 0xa3,
-	0x93, 0x15, 0x60, 0x88, 0x6f, 0xbf, 0x7a, 0x3b, 0x7b, 0x05, 0x4e, 0x57, 0x05, 0xe9, 0x22, 0x24,
-	0xc6, 0x1f, 0xf2, 0x53, 0x0a, 0x94, 0xfc, 0x03, 0x35, 0x32, 0xaa, 0xbb, 0x91, 0xa3, 0xb9, 0xea,
-	0x4a, 0x66, 0xf8, 0x24, 0xf1, 0x97, 0xf8, 0xc3, 0xce, 0x91, 0x7e, 0x49, 0x01, 0x08, 0xcf, 0xd4,
-	0xc8, 0xa8, 0x8e, 0xc6, 0x4e, 0xe8, 0x86, 0xca, 0x78, 0xf2, 0x81, 0x9d, 0x76, 0x15, 0x69, 0xba,
-	0xa0, 0xa5, 0xd0, 0x44, 0x25, 0xe8, 0xa7, 0x95, 0xc0, 0x80, 0x8e, 0x12, 0x63, 0xd9, 0x8a, 0xde,
-	0xca, 0x08, 0x2d, 0x8b, 0xcf, 0x52, 0x5c, 0x7c, 0xbe, 0x11, 0x9e, 0xcb, 0x7e, 0xba, 0xfa, 0xdd,
-	0x3c, 0xcc, 0x0b, 0x0a, 0x87, 0xdf, 0x67, 0xf9, 0xb1, 0x50, 0xc6, 0x5f, 0x49, 0x6a, 0x34, 0xfe,
-	0x24, 0x47, 0xf5, 0xfa, 0x48, 0xb8, 0x24, 0x2b, 0xd0, 0xb3, 0xdb, 0xa6, 0x20, 0xce, 0xfc, 0x56,
-	0xe3, 0xa7, 0xe4, 0x5b, 0x71, 0x13, 0x75, 0x6b, 0x44, 0x03, 0x11, 0xfb, 0xb4, 0x9c, 0x15, 0x9c,
-	0x93, 0x75, 0x05, 0xc9, 0xaa, 0x92, 0x4a, 0x8c, 0x2c, 0x6e, 0x99, 0x88, 0x2b, 0xaa, 0xd9, 0x8d,
-	0x34, 0xf4, 0x31, 0xfd, 0x7a, 0x35, 0x03, 0x24, 0xa7, 0x61, 0x01, 0x69, 0x98, 0x26, 0xe5, 0x80,
-	0x86, 0xd5, 0x3f, 0x50, 0xa5, 0xb5, 0x02, 0x0f, 0xfd, 0x74, 0x03, 0x43, 0x78, 0x3d, 0xfd, 0xf5,
-	0x1c, 0xd9, 0x06, 0xde, 0x18, 0x0d, 0xc8, 0xa9, 0x58, 0x44, 0x2a, 0x54, 0x6d, 0x9a, 0x52, 0xc1,
-	0x43, 0x5a, 0xa9, 0xdc, 0x9e, 0xc0, 0x14, 0xbe, 0x38, 0x97, 0x2c, 0x12, 0xf1, 0xc7, 0xed, 0xaa,
-	0xd7, 0x47, 0xc2, 0xf1, 0x16, 0x2f, 0x62, 0x8b, 0x8b, 0xda, 0x82, 0xd0, 0xe2, 0x4a, 0x8b, 0x82,
-	0xd0, 0x76, 0x7f, 0x64, 0xf8, 0x7a, 0x23, 0xe1, 0x51, 0xbb, 0x61, 0x9d, 0x8d, 0x28, 0xc9, 0x65,
-	0x6c, 0xfa, 0xfc, 0xd2, 0x39, 0xb1, 0xe9, 0x6f, 0x04, 0xe1, 0x8e, 0x9f, 0x92, 0x9f, 0x14, 0xec,
-	0xfd, 0x10, 0xb4, 0x11, 0x6d, 0x78, 0x35, 0x03, 0x24, 0xa7, 0xe0, 0x3a, 0x52, 0x70, 0x95, 0x5c,
-	0x16, 0x29, 0x08, 0x34, 0x42, 0xa0, 0xe4, 0xc7, 0xa0, 0xc0, 0x23, 0x10, 0x87, 0xf0, 0x41, 0x7a,
-	0x12, 0x64, 0x18, 0x1f, 0x22, 0xaf, 0x7b, 0x68, 0x48, 0xc5, 0xc5, 0x6a, 0x1a, 0x1f, 0xe8, 0x40,
-	0xfc, 0x98, 0xff, 0x25, 0xfa, 0x21, 0x02, 0x20, 0xbe, 0x60, 0x37, 0x4c, 0x00, 0xa4, 0xc7, 0xe8,
-	0xe4, 0x99, 0xce, 0x6f, 0x1d, 0x5f, 0x9e, 0x93, 0x38, 0xf0, 0x2b, 0x0a, 0xcc, 0x4a, 0x4f, 0xbf,
-	0x25, 0xcf, 0x31, 0xe9, 0xcf, 0xd4, 0x55, 0x57, 0x32, 0xc3, 0x0f, 0xa3, 0x0c, 0x5f, 0xa8, 0x93,
-	0x28, 0x3b, 0x15, 0x6d, 0xc3, 0x52, 0x7a, 0x23, 0x31, 0xeb, 0xf0, 0x5a, 0x26, 0x58, 0x4e, 0xcc,
-	0x19, 0x24, 0x66, 0x96, 0x88, 0x9a, 0x49, 0x7e, 0x73, 0xac, 0x7d, 0xc3, 0xc8, 0x47, 0xeb, 0x92,
-	0xf7, 0x0d, 0xa3, 0x5f, 0xa2, 0xf3, 0x67, 0x63, 0xed, 0x8c, 0xc8, 0xa9, 0x70, 0xe3, 0x40, 0xbe,
-	0xad, 0x84, 0xdf, 0x19, 0xe3, 0xc6, 0x6b, 0x65, 0xcc, 0x97, 0xe3, 0xaa, 0xb7, 0xb3, 0x57, 0x90,
-	0xcd, 0xba, 0xf6, 0x82, 0x24, 0x59, 0xfe, 0xe7, 0xce, 0x28, 0x5d, 0xbf, 0xa1, 0xc0, 0x7c, 0xe4,
-	0x45, 0x36, 0x92, 0xa1, 0x1d, 0xf9, 0x9d, 0x96, 0xe4, 0xa5, 0xc2, 0xf0, 0xe7, 0xde, 0x6e, 0x20,
-	0x69, 0x9a, 0x76, 0x29, 0x91, 0xb4, 0x15, 0xfe, 0x30, 0x0a, 0x25, 0xf1, 0x1f, 0xf1, 0x0f, 0x5a,
-	0x4a, 0x8f, 0x91, 0x91, 0xd5, 0x31, 0x1e, 0x4e, 0xf3, 0xc9, 0x7c, 0x63, 0xac, 0x3a, 0x9c, 0xd0,
-	0x57, 0x91, 0xd0, 0x97, 0xc8, 0xd5, 0x64, 0x42, 0x45, 0x3d, 0xf8, 0x53, 0xba, 0x33, 0x1f, 0xf2,
-	0x6c, 0x1a, 0x79, 0xff, 0x33, 0xbd, 0xf6, 0x56, 0xfd, 0xfc, 0xb3, 0x56, 0xe7, 0x5d, 0x79, 0x13,
-	0xbb, 0xb2, 0xac, 0xbd, 0x3a, 0xb2, 0x2b, 0xa2, 0xe8, 0xfe, 0xbe, 0x02, 0x8b, 0xc9, 0x8f, 0xa5,
-	0x91, 0xcf, 0x8d, 0x26, 0x28, 0xf1, 0x75, 0xb7, 0xea, 0xdb, 0xe3, 0x57, 0xe4, 0x7d, 0xb8, 0x83,
-	0x7d, 0x58, 0xd1, 0x96, 0x92, 0xfa, 0xb0, 0x12, 0xdc, 0x52, 0x8e, 0x58, 0xef, 0xd5, 0xef, 0x4c,
-	0x4a, 0x1b, 0x2b, 0x0c, 0x25, 0x60, 0x3e, 0x49, 0xf2, 0xa3, 0x50, 0xe0, 0xbf, 0xae, 0x67, 0x7c,
-	0x1a, 0x79, 0xd8, 0xcc, 0x22, 0x3f, 0x53, 0x2c, 0xaf, 0x88, 0x31, 0x30, 0x82, 0x7d, 0xf3, 0x77,
-	0x85, 0xfd, 0xa3, 0xfc, 0xfd, 0x51, 0x3a, 0xc3, 0x8f, 0x6a, 0x5f, 0x7a, 0x69, 0x78, 0xf8, 0x0c,
-	0x9f, 0xad, 0x7d, 0xf6, 0xd0, 0x30, 0x6d, 0xff, 0xeb, 0x30, 0x85, 0xec, 0x18, 0x36, 0xb1, 0x89,
-	0xaf, 0x84, 0x0f, 0x9b, 0xd8, 0xe4, 0x87, 0xbf, 0x25, 0xf3, 0x23, 0x36, 0x8e, 0xbf, 0x69, 0xdb,
-	0xdf, 0x54, 0xa0, 0xc8, 0x5f, 0xba, 0x1e, 0xb6, 0xbe, 0x90, 0x5f, 0xef, 0x1e, 0xb6, 0xbe, 0x88,
-	0x3e, 0x9b, 0xcd, 0x67, 0x76, 0xed, 0x5c, 0x94, 0x04, 0xfe, 0xb4, 0x32, 0x95, 0x8d, 0xdf, 0xc9,
-	0x4b, 0x8e, 0x02, 0x1e, 0xc3, 0x4d, 0x69, 0x9b, 0x42, 0x6f, 0x62, 0xda, 0x46, 0x25, 0xf9, 0x2a,
-	0x53, 0xf5, 0x56, 0x46, 0xe8, 0xf4, 0xe5, 0x5f, 0x97, 0xc1, 0xf9, 0xdb, 0x25, 0x76, 0x71, 0x86,
-	0x8c, 0xc4, 0x2b, 0xdd, 0xc4, 0x49, 0xdb, 0x6f, 0xa7, 0xde, 0xc7, 0xe1, 0x3b, 0x13, 0xad, 0x12,
-	0xa3, 0x63, 0xa5, 0x85, 0x90, 0x7c, 0xbc, 0xfc, 0xa8, 0x80, 0x2c, 0xdd, 0x0c, 0xef, 0x18, 0x8c,
-	0x26, 0x47, 0x8e, 0x99, 0xd7, 0xce, 0x23, 0x39, 0x67, 0x48, 0x9c, 0x2d, 0xab, 0x7f, 0x2e, 0xeb,
-	0xb2, 0xf0, 0x68, 0x1b, 0xf9, 0xee, 0x28, 0xff, 0x44, 0xea, 0x5b, 0x80, 0xc9, 0x04, 0xa6, 0xbf,
-	0xf9, 0xa7, 0xbd, 0x8e, 0x04, 0xbe, 0x46, 0xd0, 0x98, 0x0a, 0x8f, 0xcc, 0x09, 0xcb, 0x57, 0xf9,
-	0x41, 0xba, 0x4f, 0x47, 0xba, 0x70, 0xd2, 0xde, 0xfb, 0xab, 0xde, 0xca, 0x08, 0x9d, 0xe4, 0xc2,
-	0x11, 0x49, 0xa3, 0x43, 0xf8, 0xf3, 0x23, 0x36, 0xe0, 0x69, 0xef, 0xf8, 0x8d, 0x24, 0x22, 0xb2,
-	0xb7, 0xe0, 0xf3, 0xe6, 0xd2, 0xd5, 0x18, 0x7f, 0x62, 0x7c, 0xf9, 0x45, 0x25, 0x58, 0xdc, 0x8f,
-	0x22, 0x49, 0x9e, 0x46, 0x6e, 0x65, 0x84, 0xe6, 0x24, 0xdd, 0x44, 0x92, 0x5e, 0xa9, 0x8e, 0x26,
-	0x89, 0x9a, 0x85, 0xff, 0x39, 0x25, 0xfb, 0xe2, 0x82, 0xd7, 0x34, 0x5c, 0xba, 0x19, 0xe1, 0xe3,
-	0x98, 0xfc, 0x2a, 0x41, 0xf2, 0xd7, 0x8a, 0xaa, 0x37, 0xb3, 0x01, 0x73, 0x6a, 0xab, 0x48, 0xed,
-	0x59, 0x6d, 0x1e, 0x3d, 0x18, 0x61, 0xeb, 0x74, 0x10, 0x7f, 0x42, 0xf2, 0x7a, 0x2d, 0x0f, 0xc7,
-	0x1b, 0x5b, 0x07, 0xad, 0x64, 0x86, 0xe7, 0xa4, 0x9c, 0x43, 0x52, 0x16, 0x48, 0x94, 0x14, 0xba,
-	0x27, 0x09, 0xf4, 0x6d, 0x44, 0xef, 0x22, 0xea, 0x76, 0x2b, 0x23, 0x34, 0xa7, 0x60, 0x05, 0x29,
-	0x78, 0x95, 0x5c, 0x8f, 0x50, 0x10, 0x2a, 0x9b, 0xf4, 0x04, 0xca, 0xa7, 0xa2, 0x9f, 0x69, 0xc4,
-	0x18, 0xc9, 0x52, 0x7e, 0x33, 0x1b, 0xb0, 0xbc, 0x7d, 0x5d, 0xba, 0x1c, 0x25, 0x2b, 0x4a, 0xce,
-	0x77, 0x15, 0x28, 0xf9, 0xdf, 0xe1, 0x20, 0x23, 0xfa, 0x1e, 0xf9, 0xe8, 0x47, 0x75, 0x39, 0x2b,
-	0x38, 0x27, 0xea, 0x36, 0x12, 0xb5, 0x44, 0x6e, 0x44, 0x89, 0x3a, 0xe1, 0x90, 0x51, 0xea, 0x56,
-	0xff, 0x7a, 0x0a, 0xce, 0x8b, 0xef, 0x24, 0xc8, 0x5f, 0xf8, 0xfa, 0xe9, 0xd0, 0x6c, 0x65, 0xf8,
-	0x74, 0x5a, 0x86, 0x3d, 0xcb, 0xd0, 0x4f, 0x2c, 0x72, 0x9f, 0x84, 0x76, 0x96, 0x52, 0xef, 0xaf,
-	0xe7, 0xfc, 0x6f, 0x0c, 0xfa, 0x53, 0x22, 0xb7, 0x16, 0x19, 0xc8, 0x91, 0x0d, 0xc6, 0xed, 0xec,
-	0x15, 0x64, 0x72, 0xaa, 0xa9, 0xe4, 0xfc, 0x82, 0xa4, 0x8a, 0x19, 0xbe, 0xb8, 0x96, 0x6d, 0x5b,
-	0x32, 0xe2, 0x63, 0x8d, 0xfe, 0xb2, 0x81, 0x24, 0xd2, 0x25, 0xcd, 0x83, 0x99, 0xbe, 0x51, 0x27,
-	0xe9, 0xe6, 0xeb, 0x63, 0xd4, 0xf0, 0xbf, 0x27, 0x8a, 0xe4, 0x5c, 0x23, 0x2f, 0x25, 0x91, 0x23,
-	0xb8, 0x38, 0x8d, 0xae, 0xf9, 0xa9, 0x38, 0x05, 0x65, 0x18, 0x41, 0x59, 0x3f, 0x6f, 0x67, 0xaf,
-	0x20, 0x2f, 0x6c, 0x96, 0x2e, 0x24, 0x92, 0xc6, 0x48, 0x5a, 0xfd, 0x1f, 0x73, 0x91, 0x83, 0x97,
-	0xe0, 0x10, 0x33, 0xc3, 0xc1, 0x4b, 0xf2, 0x33, 0xab, 0xd5, 0x5b, 0x19, 0xa1, 0x93, 0x0f, 0x5e,
-	0x82, 0x9b, 0xc3, 0x28, 0x65, 0x3f, 0xa3, 0x04, 0x4f, 0x3a, 0x90, 0xd1, 0xcf, 0x52, 0x49, 0x9b,
-	0xf3, 0xe5, 0xac, 0xe0, 0x49, 0x0b, 0x41, 0x91, 0x0e, 0x71, 0x53, 0xfe, 0x0b, 0x23, 0xdd, 0xf8,
-	0xc9, 0x2f, 0x95, 0x8e, 0x64, 0x4a, 0x64, 0xf0, 0xb8, 0x5c, 0x2d, 0xbd, 0x14, 0x23, 0x86, 0xfd,
-	0x5f, 0xf9, 0x46, 0x70, 0xe9, 0xfa, 0x53, 0xf2, 0x6d, 0x05, 0xca, 0xc1, 0xab, 0xa0, 0x69, 0x67,
-	0x41, 0xa9, 0x4f, 0x95, 0xa6, 0x9d, 0x05, 0x0d, 0x79, 0x70, 0x94, 0xfb, 0xc7, 0xb4, 0x6a, 0x8c,
-	0x3a, 0xf6, 0x9d, 0x20, 0xa3, 0x83, 0xab, 0xe6, 0xff, 0x90, 0xe6, 0xa4, 0xba, 0x3b, 0xa2, 0xc5,
-	0x61, 0xce, 0x80, 0x77, 0x9f, 0xa9, 0x2e, 0x27, 0xfc, 0x16, 0x12, 0x7e, 0x5d, 0xd3, 0x62, 0x84,
-	0x9b, 0x7e, 0x35, 0xd1, 0x05, 0xf0, 0x77, 0xc2, 0x65, 0xff, 0xcd, 0x8c, 0xef, 0x04, 0x66, 0x1b,
-	0xed, 0xc8, 0xa2, 0x5f, 0xda, 0xad, 0x49, 0x64, 0xb1, 0xab, 0xeb, 0xbe, 0x26, 0xf8, 0x97, 0x46,
-	0x46, 0x6a, 0x98, 0xf4, 0x30, 0xe0, 0x48, 0x4d, 0x88, 0x5c, 0xbc, 0x18, 0xa2, 0x09, 0x2d, 0x06,
-	0x49, 0xe9, 0xf9, 0x55, 0x05, 0x8a, 0xfc, 0x61, 0xba, 0x91, 0xf4, 0xc8, 0x4f, 0xe9, 0x8d, 0xa4,
-	0x27, 0xf2, 0x6a, 0x5e, 0x64, 0x62, 0x17, 0xe9, 0xe1, 0x8f, 0xe1, 0xad, 0x7c, 0x43, 0x7a, 0x2c,
-	0xee, 0x53, 0xf2, 0xf7, 0x14, 0x98, 0x16, 0x5e, 0x9d, 0x23, 0xaf, 0x67, 0x18, 0x0f, 0xf9, 0xd9,
-	0xbc, 0xea, 0xea, 0x38, 0x55, 0xe4, 0x65, 0x91, 0x76, 0x31, 0x71, 0x1c, 0xcd, 0x16, 0x42, 0x53,
-	0xe6, 0x7d, 0x97, 0xd2, 0x17, 0x3e, 0xc7, 0x36, 0x9a, 0xbe, 0xd8, 0xab, 0x71, 0xa3, 0xe9, 0x8b,
-	0xbf, 0xf6, 0x36, 0x44, 0x6f, 0x03, 0x07, 0x12, 0xa5, 0xee, 0x77, 0x7c, 0xea, 0xb8, 0xa5, 0xcb,
-	0x44, 0x9d, 0x6c, 0xee, 0x56, 0xc7, 0xa9, 0xc2, 0xa9, 0xfb, 0x1c, 0x52, 0xf7, 0xfa, 0xd2, 0x4a,
-	0x3a, 0x75, 0x81, 0xd9, 0x13, 0xde, 0x96, 0xfb, 0x94, 0xfc, 0x03, 0x05, 0xe6, 0xe4, 0x97, 0xd9,
-	0xc8, 0x9b, 0x63, 0x3e, 0xe4, 0xc6, 0xa8, 0xbe, 0xf3, 0x4c, 0xcf, 0xbf, 0xf9, 0xea, 0x4b, 0x86,
-	0xb0, 0x75, 0xf5, 0x6f, 0x81, 0x74, 0xa4, 0xc7, 0x97, 0x98, 0xdf, 0x0a, 0xe7, 0xd8, 0x44, 0x8e,
-	0xa5, 0x7e, 0xba, 0x7f, 0xc8, 0x0a, 0x6a, 0xd4, 0xe7, 0xfe, 0x25, 0x97, 0x3d, 0xaf, 0x2b, 0x2e,
-	0xec, 0x7e, 0x45, 0x5a, 0xd8, 0xdd, 0xc9, 0xd4, 0x44, 0x8c, 0x93, 0x6f, 0x8d, 0x5b, 0x4d, 0x5e,
-	0x0c, 0x90, 0x24, 0xe2, 0xc8, 0x6f, 0x08, 0xab, 0xbb, 0x6c, 0x5d, 0x8f, 0x2c, 0xf0, 0xde, 0x1c,
-	0xaf, 0x12, 0xa7, 0x69, 0x09, 0x69, 0x7a, 0x99, 0x68, 0x09, 0x34, 0x45, 0x97, 0x78, 0xdf, 0x0a,
-	0x17, 0xe9, 0xd9, 0x06, 0x54, 0x5e, 0xa7, 0xbf, 0x31, 0x56, 0x1d, 0x79, 0x40, 0xab, 0x69, 0x03,
-	0xfa, 0xed, 0x70, 0xcd, 0x92, 0x8d, 0x26, 0x59, 0x95, 0xdf, 0x18, 0xab, 0x8e, 0xac, 0x12, 0x4b,
-	0xd5, 0x24, 0x9e, 0x71, 0x5e, 0xfd, 0x43, 0x05, 0x8a, 0xfc, 0xce, 0x52, 0xc6, 0xe1, 0xe4, 0xd0,
-	0xe3, 0x0d, 0x67, 0x50, 0x29, 0x69, 0x0d, 0x10, 0x25, 0x8d, 0xdf, 0xfa, 0xe2, 0x24, 0x52, 0xee,
-	0xfd, 0x33, 0x05, 0xe6, 0xe4, 0x2f, 0xfe, 0x27, 0x2f, 0x5f, 0xd2, 0xda, 0x8d, 0x88, 0xe0, 0xbb,
-	0xcf, 0x54, 0x37, 0x29, 0x8a, 0x22, 0x85, 0x74, 0xf2, 0x6b, 0xb8, 0x64, 0xee, 0x98, 0x86, 0x9b,
-	0x95, 0xad, 0x1c, 0x7a, 0x3c, 0xb6, 0x06, 0x95, 0x38, 0x6d, 0xaf, 0x20, 0x6d, 0x57, 0xb4, 0x44,
-	0xda, 0x1c, 0x06, 0x7c, 0x57, 0x59, 0x5a, 0xbf, 0x08, 0x67, 0x5a, 0x76, 0x37, 0xda, 0xc4, 0x81,
-	0xf2, 0xe5, 0xbc, 0xd1, 0xb7, 0x1e, 0x15, 0xf0, 0x82, 0xea, 0x1b, 0xff, 0x2f, 0x00, 0x00, 0xff,
-	0xff, 0x12, 0xf0, 0x8f, 0x87, 0xf6, 0xb5, 0x00, 0x00,
+	0x72, 0x18, 0xab, 0x7b, 0x1e, 0xdd, 0xd1, 0xf3, 0xa8, 0x49, 0x92, 0xc3, 0x66, 0x93, 0x5c, 0x72,
+	0x6b, 0x97, 0x4b, 0xee, 0x2c, 0x39, 0xc3, 0x1d, 0x2e, 0x77, 0x97, 0xdc, 0xdd, 0xbb, 0x1b, 0xce,
+	0xf4, 0x70, 0x5a, 0x9c, 0xd7, 0x56, 0xcf, 0x90, 0xb7, 0xa7, 0x47, 0x5f, 0xb1, 0xbb, 0x38, 0x53,
+	0xcb, 0xee, 0xae, 0xde, 0xaa, 0xea, 0xd9, 0x9d, 0xbb, 0x5b, 0x49, 0x16, 0x2c, 0x48, 0xc6, 0xc9,
+	0x3e, 0x9d, 0xa4, 0x93, 0xa0, 0x93, 0x64, 0xcb, 0x30, 0x24, 0xdb, 0x92, 0x65, 0x58, 0xb2, 0x61,
+	0xd8, 0x82, 0x2c, 0x01, 0xf7, 0x61, 0x59, 0xb2, 0x2d, 0x7d, 0xc8, 0xfe, 0xb1, 0xa1, 0x0f, 0x01,
+	0x32, 0x20, 0xc1, 0xb2, 0x3e, 0x0c, 0xfb, 0xc3, 0x80, 0x0d, 0x1b, 0x19, 0x99, 0x55, 0x95, 0x59,
+	0x8f, 0xee, 0x6a, 0x92, 0x77, 0x36, 0xe0, 0x9f, 0x99, 0xae, 0xcc, 0xc8, 0xc8, 0xc8, 0x88, 0xc8,
+	0xc8, 0xc8, 0xc8, 0x17, 0x4c, 0x1b, 0x3d, 0x6b, 0xc9, 0xe8, 0x59, 0x8b, 0x3d, 0xc7, 0xf6, 0x6c,
+	0x32, 0x6b, 0xf7, 0xcc, 0xae, 0xeb, 0xd9, 0x8e, 0x71, 0x60, 0x2e, 0x1a, 0x3d, 0xab, 0x72, 0xf1,
+	0xc0, 0xb6, 0x0f, 0xda, 0xe6, 0x12, 0x66, 0x3f, 0xea, 0x3f, 0x5e, 0xf2, 0xac, 0x8e, 0xe9, 0x7a,
+	0x46, 0xa7, 0xc7, 0x4a, 0x54, 0xce, 0x73, 0x00, 0xc4, 0xd3, 0xed, 0xda, 0x9e, 0xe1, 0x59, 0x76,
+	0xd7, 0x65, 0xb9, 0xda, 0xdf, 0xc9, 0xc3, 0x6c, 0x9d, 0xa1, 0xd3, 0x4d, 0xd7, 0xee, 0x3b, 0x4d,
+	0x93, 0xcc, 0x40, 0xce, 0x6a, 0x95, 0x95, 0x4b, 0xca, 0xd5, 0xa2, 0x9e, 0xb3, 0x5a, 0x84, 0xc0,
+	0x58, 0xcf, 0xf0, 0x0e, 0xcb, 0x39, 0x4c, 0xc1, 0xdf, 0xe4, 0x4d, 0x98, 0xe8, 0x98, 0x2d, 0xab,
+	0xdf, 0x29, 0xe7, 0x2f, 0x29, 0x57, 0x67, 0x96, 0x5f, 0x58, 0x8c, 0x10, 0xb6, 0xc8, 0xb1, 0x6e,
+	0x21, 0x94, 0xce, 0xa1, 0xc9, 0x3c, 0x4c, 0xd8, 0xdd, 0xb6, 0xd5, 0x35, 0xcb, 0x63, 0x97, 0x94,
+	0xab, 0x05, 0x9d, 0x7f, 0xd1, 0x3a, 0x2c, 0xbb, 0xe7, 0x96, 0xc7, 0x2f, 0x29, 0x57, 0xc7, 0x74,
+	0xfc, 0x4d, 0xce, 0x41, 0xd1, 0x35, 0x3f, 0x6a, 0x7c, 0xec, 0x58, 0x9e, 0x59, 0x9e, 0xb8, 0xa4,
+	0x5c, 0x55, 0xf4, 0x82, 0x6b, 0x7e, 0xf4, 0x90, 0x7e, 0x93, 0xb3, 0x40, 0x7f, 0x37, 0x1c, 0xd3,
+	0x68, 0x95, 0x27, 0x31, 0x6f, 0xd2, 0x35, 0x3f, 0xd2, 0x4d, 0xa3, 0x45, 0xeb, 0x70, 0x8c, 0x6e,
+	0x4b, 0x7f, 0x58, 0x2e, 0x60, 0x06, 0xff, 0xa2, 0x75, 0xb8, 0xd6, 0x97, 0xcc, 0x72, 0x91, 0xd5,
+	0x41, 0x7f, 0xd3, 0xb4, 0xbe, 0x6b, 0xb6, 0xca, 0xc0, 0xd2, 0xe8, 0x6f, 0x72, 0x19, 0x66, 0x1c,
+	0xce, 0xa6, 0x86, 0xdb, 0x33, 0xcd, 0x56, 0xb9, 0x84, 0x2d, 0x9f, 0xf6, 0x53, 0xeb, 0x34, 0x91,
+	0xbc, 0x05, 0xc5, 0xb6, 0xe1, 0x7a, 0x0d, 0xb7, 0x69, 0x74, 0xcb, 0x53, 0x97, 0x94, 0xab, 0xa5,
+	0xe5, 0xca, 0x22, 0x63, 0xf6, 0xa2, 0x2f, 0x8d, 0xc5, 0x3d, 0x5f, 0x1a, 0x7a, 0x81, 0x02, 0xd7,
+	0x9b, 0x46, 0x97, 0x54, 0xa0, 0xd0, 0x31, 0x3d, 0xa3, 0x65, 0x78, 0x46, 0x79, 0x1a, 0xb9, 0x10,
+	0x7c, 0x93, 0x53, 0x30, 0xde, 0x34, 0x9a, 0x87, 0x66, 0x79, 0x06, 0x33, 0xd8, 0x87, 0xf6, 0x07,
+	0x39, 0x28, 0x71, 0x7e, 0xee, 0xda, 0x76, 0x9b, 0x4a, 0xa8, 0xb6, 0x86, 0x12, 0x1a, 0xd7, 0x73,
+	0xb5, 0x35, 0xb2, 0x00, 0xf9, 0x55, 0xdb, 0x45, 0x01, 0xcd, 0x2c, 0x97, 0x63, 0xa2, 0x58, 0xb5,
+	0xdd, 0xbd, 0xe3, 0x9e, 0xa9, 0x53, 0x20, 0x2a, 0xb9, 0xad, 0x91, 0x24, 0xc7, 0xfe, 0x93, 0xf3,
+	0x50, 0xd4, 0x0d, 0xab, 0xb5, 0x69, 0x1e, 0x99, 0x6d, 0x14, 0x5e, 0x51, 0x0f, 0x13, 0x68, 0xee,
+	0x9e, 0xed, 0x19, 0xed, 0x3a, 0x65, 0xf0, 0x24, 0x32, 0x33, 0x4c, 0xa0, 0x5c, 0xde, 0xa7, 0x5c,
+	0x2e, 0x30, 0x2e, 0xd3, 0xdf, 0xe4, 0x73, 0x30, 0xd1, 0x36, 0x1e, 0x99, 0x6d, 0xb7, 0x5c, 0xbc,
+	0x94, 0xbf, 0x5a, 0x5a, 0xbe, 0x9a, 0x46, 0x07, 0x6d, 0xf1, 0xe2, 0x26, 0x82, 0x56, 0xbb, 0x9e,
+	0x73, 0xac, 0xf3, 0x72, 0x95, 0xdb, 0x50, 0x12, 0x92, 0x89, 0x0a, 0xf9, 0x27, 0xe6, 0x31, 0xd7,
+	0x5b, 0xfa, 0x93, 0x32, 0xf3, 0xc8, 0x68, 0xf7, 0x4d, 0xae, 0xb9, 0xec, 0xe3, 0x4e, 0xee, 0x6d,
+	0x45, 0xfb, 0x56, 0x0e, 0xa6, 0x1f, 0xd8, 0xed, 0x7e, 0xc7, 0xdc, 0xb4, 0x9b, 0x86, 0x67, 0x3b,
+	0x94, 0xc4, 0xae, 0xd1, 0x31, 0x79, 0x71, 0xfc, 0x4d, 0xf6, 0x61, 0xfa, 0x08, 0x81, 0x1a, 0x9c,
+	0xd2, 0x1c, 0x52, 0x7a, 0x23, 0x46, 0xa9, 0x84, 0xca, 0xff, 0x12, 0x28, 0x9e, 0x3a, 0x12, 0x92,
+	0xc8, 0xdb, 0x50, 0xb4, 0x3f, 0xee, 0x9a, 0x8e, 0x7b, 0x68, 0xf5, 0x50, 0x08, 0x54, 0x71, 0xa2,
+	0x28, 0x77, 0x7c, 0x08, 0x3d, 0x04, 0x26, 0xd7, 0x60, 0xfc, 0xc0, 0xb1, 0xfb, 0x3d, 0xe4, 0x7f,
+	0x69, 0x79, 0x3e, 0x56, 0xea, 0x1e, 0xcd, 0xd5, 0x19, 0x10, 0xb9, 0x00, 0xc0, 0xc9, 0xb7, 0x5a,
+	0xb4, 0x67, 0xe5, 0xa9, 0xc8, 0x58, 0x4a, 0xad, 0xe5, 0x56, 0x3e, 0x0b, 0x73, 0x31, 0x4a, 0x47,
+	0x62, 0xe2, 0x02, 0x9c, 0x62, 0x08, 0x6a, 0x5d, 0xb7, 0x67, 0x36, 0xbd, 0x9d, 0x1e, 0x5a, 0x16,
+	0xca, 0xca, 0x96, 0x69, 0xf6, 0x10, 0x49, 0x41, 0xc7, 0xdf, 0xda, 0x1b, 0x30, 0x51, 0x67, 0xd6,
+	0x65, 0x1e, 0x26, 0x7a, 0x86, 0x63, 0x76, 0x3d, 0x5e, 0x09, 0xff, 0xc2, 0xde, 0x49, 0xfb, 0x1a,
+	0xb7, 0x32, 0xf4, 0xb7, 0x76, 0x06, 0xc6, 0xb1, 0x45, 0x51, 0x93, 0xa4, 0xad, 0x01, 0xd4, 0xec,
+	0xba, 0xe7, 0x18, 0x9e, 0x79, 0x70, 0x4c, 0x6d, 0x81, 0xe1, 0x1e, 0x77, 0x9b, 0x0d, 0xcb, 0xe6,
+	0x95, 0x4e, 0xe2, 0x77, 0xcd, 0xa6, 0x36, 0xc4, 0x34, 0x9c, 0xf6, 0x71, 0xc3, 0x68, 0x3e, 0x41,
+	0xd4, 0x05, 0xbd, 0x80, 0x09, 0x2b, 0xcd, 0x27, 0xda, 0xef, 0x00, 0x00, 0x6b, 0x41, 0xbd, 0x67,
+	0x36, 0xa9, 0x0e, 0x9b, 0xbd, 0x43, 0xb3, 0x63, 0x3a, 0x46, 0x9b, 0xe3, 0x09, 0x13, 0x02, 0xeb,
+	0x91, 0x13, 0xac, 0xc7, 0x12, 0x4c, 0x3c, 0xb6, 0x9d, 0x8e, 0xe1, 0xf1, 0xbe, 0x74, 0x26, 0x26,
+	0x90, 0xf5, 0x3a, 0xf6, 0x3c, 0x0e, 0x46, 0x45, 0xf2, 0xa8, 0x6d, 0x37, 0x9f, 0x34, 0x10, 0x15,
+	0x95, 0x62, 0x5e, 0x2f, 0x62, 0x0a, 0xf6, 0x93, 0xb3, 0x50, 0x38, 0x34, 0x1a, 0x6d, 0xec, 0x62,
+	0xe3, 0x98, 0x39, 0x79, 0x68, 0xb0, 0x0e, 0xb6, 0x00, 0xf9, 0xa6, 0xed, 0xa2, 0x19, 0x1c, 0xd8,
+	0xc5, 0x9b, 0xb6, 0x4b, 0x6e, 0x03, 0x58, 0x76, 0xa3, 0xe7, 0xd8, 0x8f, 0xad, 0x36, 0xeb, 0x8d,
+	0x33, 0x09, 0x1a, 0x56, 0xb3, 0x77, 0x19, 0x84, 0x5e, 0xb4, 0xfc, 0x9f, 0x54, 0x3a, 0x2d, 0xb3,
+	0xd5, 0xef, 0x99, 0xd8, 0x57, 0x0b, 0x3a, 0xff, 0x22, 0xaf, 0xc1, 0x9c, 0xdb, 0x35, 0x7a, 0xee,
+	0xa1, 0xed, 0x35, 0xac, 0xae, 0x67, 0x3a, 0x47, 0x46, 0x1b, 0x0d, 0xe9, 0xb4, 0xae, 0xfa, 0x19,
+	0x35, 0x9e, 0x4e, 0xf4, 0x68, 0xbf, 0x01, 0xec, 0x37, 0xd7, 0x53, 0xfa, 0x0d, 0x65, 0xfe, 0xd0,
+	0x4e, 0x33, 0x0f, 0x13, 0xee, 0xa1, 0xe1, 0x70, 0x63, 0x5c, 0xd0, 0xf9, 0x17, 0x79, 0x17, 0x4a,
+	0x8e, 0xd9, 0x6b, 0x5b, 0x4d, 0xa3, 0xe1, 0x9a, 0x1e, 0xb7, 0xc3, 0xe7, 0x62, 0x35, 0xe9, 0x0c,
+	0xa6, 0x6e, 0x7a, 0x3a, 0x38, 0xc1, 0x6f, 0xda, 0x2c, 0xe3, 0xe0, 0xc0, 0x31, 0x0f, 0x98, 0xb5,
+	0x67, 0x9c, 0x9f, 0x66, 0xcd, 0x12, 0x32, 0x02, 0x1b, 0x67, 0x76, 0x9b, 0xce, 0x71, 0xcf, 0x33,
+	0x5b, 0xdc, 0x3e, 0x87, 0x09, 0xe4, 0x05, 0x80, 0x9e, 0xe1, 0xba, 0xbd, 0x43, 0xc7, 0x70, 0xcd,
+	0xf2, 0x2c, 0xaa, 0xaa, 0x90, 0x22, 0x71, 0xd0, 0x6d, 0x1e, 0x9a, 0xad, 0x7e, 0xdb, 0x2c, 0xab,
+	0x08, 0x16, 0x70, 0xb0, 0xce, 0xd3, 0x69, 0xa7, 0x73, 0x9b, 0x46, 0xdb, 0x2c, 0xcf, 0x21, 0x2d,
+	0xec, 0x03, 0x79, 0xe0, 0x59, 0xcd, 0x27, 0xc7, 0x65, 0xc2, 0x79, 0x80, 0x5f, 0xa1, 0x59, 0x38,
+	0x9d, 0xc5, 0x2c, 0x5c, 0x86, 0x19, 0xfc, 0xd1, 0x30, 0xbb, 0x8f, 0x6d, 0xa7, 0x69, 0xb6, 0xca,
+	0xf3, 0x88, 0x6d, 0x1a, 0x53, 0xab, 0x3c, 0x91, 0xb6, 0xa7, 0x69, 0x77, 0x7a, 0x8e, 0xe9, 0x52,
+	0xcb, 0x7d, 0x06, 0x41, 0x84, 0x14, 0x3a, 0x8a, 0x35, 0x0d, 0xb7, 0x69, 0xb4, 0xcc, 0x56, 0xb9,
+	0xcc, 0x3a, 0x96, 0xff, 0x4d, 0xca, 0x30, 0xf9, 0xa1, 0xdd, 0x77, 0xba, 0x46, 0xbb, 0x7c, 0x96,
+	0xf5, 0x47, 0xfe, 0x49, 0x4b, 0x31, 0xc1, 0x1d, 0xbd, 0x51, 0xae, 0xb0, 0x52, 0xfe, 0x37, 0xb9,
+	0x08, 0xa5, 0x8f, 0xfa, 0x66, 0xdf, 0x6c, 0xb4, 0xcc, 0x9e, 0x77, 0x58, 0x3e, 0x87, 0x4d, 0x07,
+	0x4c, 0x5a, 0xa3, 0x29, 0xe4, 0x36, 0x9c, 0x45, 0xe2, 0x1a, 0xfd, 0xae, 0xdb, 0xef, 0xf5, 0x6c,
+	0xc7, 0x33, 0x5b, 0x8d, 0xc7, 0x6e, 0xc3, 0x3b, 0xee, 0x99, 0xe5, 0xf3, 0x88, 0x6d, 0x1e, 0x01,
+	0xf6, 0xc3, 0xfc, 0x75, 0xec, 0x17, 0x54, 0x76, 0x5d, 0xbb, 0x65, 0xb9, 0x4d, 0xc3, 0x69, 0x95,
+	0x2f, 0x30, 0xd9, 0x05, 0x09, 0x54, 0x89, 0x2c, 0xbb, 0xe1, 0x72, 0x7b, 0x52, 0x7e, 0x21, 0x45,
+	0x89, 0x42, 0x93, 0xa3, 0x83, 0x15, 0x9a, 0x9f, 0x87, 0x40, 0x7a, 0x6d, 0xa3, 0x69, 0x76, 0xcc,
+	0xae, 0x17, 0x22, 0xb9, 0x88, 0x48, 0xae, 0xa6, 0xe8, 0xfc, 0xae, 0x5f, 0x20, 0xc0, 0x38, 0xd7,
+	0x8b, 0x26, 0x51, 0x49, 0xf1, 0x92, 0x8d, 0x9e, 0xdd, 0xb6, 0x9a, 0xc7, 0xe5, 0x4b, 0xcc, 0x11,
+	0x71, 0xfd, 0x91, 0x91, 0x26, 0xca, 0xe3, 0xc9, 0x8b, 0x23, 0x8c, 0x27, 0xcf, 0x3e, 0x04, 0xfc,
+	0xaf, 0x49, 0x50, 0xc3, 0x4e, 0xbc, 0xdf, 0x6b, 0x19, 0x1e, 0x55, 0x5e, 0xc1, 0x52, 0x6e, 0x9c,
+	0xe0, 0xb6, 0xf2, 0x5c, 0xd4, 0xb6, 0x6d, 0x28, 0xa1, 0x75, 0xbb, 0x96, 0xc9, 0xba, 0x6d, 0xe4,
+	0x98, 0x7d, 0x7b, 0x67, 0x34, 0xfb, 0xb6, 0x91, 0x17, 0x2d, 0x5c, 0x59, 0xb6, 0x70, 0x1b, 0x63,
+	0x81, 0x8d, 0xbb, 0x9e, 0x6a, 0xe3, 0x36, 0xc6, 0x13, 0xac, 0x5c, 0x59, 0xb6, 0x48, 0x1b, 0x13,
+	0xcf, 0xc9, 0x26, 0x5d, 0x8a, 0x1b, 0x92, 0x8d, 0x49, 0xc9, 0x94, 0x5c, 0x4f, 0x35, 0x25, 0x1b,
+	0x85, 0x04, 0x63, 0x32, 0x2f, 0x19, 0x93, 0x8d, 0xa2, 0x6f, 0x4e, 0xca, 0xb2, 0x39, 0xd9, 0x80,
+	0xc0, 0xa0, 0x2c, 0xfa, 0x06, 0xe5, 0xe4, 0x20, 0x83, 0xb2, 0x51, 0xf2, 0x4d, 0x4a, 0x25, 0xec,
+	0xef, 0x68, 0x28, 0x36, 0xa6, 0xc2, 0x1e, 0x7f, 0x5e, 0xe8, 0xf1, 0x68, 0x27, 0x36, 0xa6, 0x85,
+	0x3e, 0xff, 0xa2, 0xdc, 0xe7, 0xcf, 0x22, 0x85, 0x33, 0x52, 0xaf, 0x97, 0xd4, 0xbb, 0x32, 0x8a,
+	0xbb, 0xf4, 0x82, 0xd8, 0xe9, 0xcf, 0x61, 0xdd, 0xb3, 0x03, 0xba, 0xfd, 0xf9, 0x91, 0xba, 0xfd,
+	0x5d, 0x80, 0x02, 0x55, 0xec, 0x86, 0xdd, 0xf3, 0xee, 0xce, 0xc0, 0x94, 0xaf, 0xdc, 0xf8, 0x5d,
+	0x84, 0xc9, 0xa6, 0xed, 0xe2, 0x4f, 0x15, 0x66, 0x42, 0x65, 0xc5, 0x94, 0x29, 0x00, 0xa6, 0x71,
+	0xf8, 0x75, 0x06, 0x4e, 0xc7, 0xb4, 0xce, 0x07, 0x63, 0x6c, 0xf2, 0xd1, 0x84, 0x1a, 0x10, 0x2b,
+	0xe8, 0x6b, 0x01, 0x66, 0x94, 0xa0, 0x88, 0x02, 0x0e, 0xb0, 0xa0, 0x50, 0xfd, 0x2c, 0x66, 0xfb,
+	0xe9, 0xc7, 0x34, 0x94, 0xb8, 0x90, 0xfc, 0x36, 0xf8, 0x62, 0xc1, 0xef, 0x39, 0x98, 0x15, 0x44,
+	0x83, 0x49, 0xb3, 0x30, 0x1d, 0x70, 0x8f, 0x26, 0x68, 0x7f, 0x39, 0x25, 0xf6, 0x7f, 0x6e, 0x8f,
+	0xfc, 0xfe, 0xaf, 0xa4, 0xf6, 0xff, 0x5c, 0x4a, 0xff, 0xcf, 0x3f, 0x4d, 0xff, 0x1f, 0x7b, 0xda,
+	0xfe, 0x3f, 0x9e, 0xa5, 0xff, 0x4f, 0xa4, 0xf6, 0xff, 0xcf, 0x47, 0xbd, 0x9c, 0x49, 0xf4, 0x72,
+	0x6e, 0x0e, 0xf0, 0x72, 0x18, 0x83, 0x86, 0xfa, 0x3a, 0xa1, 0x65, 0x29, 0x0c, 0xb6, 0x2c, 0xc5,
+	0x67, 0xb1, 0x2c, 0x90, 0xd5, 0xb2, 0x94, 0x86, 0x5b, 0x96, 0xa9, 0x34, 0xcb, 0x32, 0x9d, 0x66,
+	0x59, 0x66, 0x46, 0xb6, 0x2c, 0xb3, 0x83, 0x2c, 0x8b, 0x3a, 0xcc, 0xb2, 0xcc, 0x25, 0x58, 0x96,
+	0x17, 0x44, 0x87, 0x8e, 0xf8, 0xf6, 0x21, 0x74, 0xe9, 0xae, 0x27, 0x79, 0x87, 0x27, 0x11, 0x91,
+	0x9a, 0xe0, 0x1f, 0xee, 0xc0, 0x34, 0x37, 0x08, 0xa6, 0x43, 0x27, 0x82, 0xe5, 0x65, 0xd4, 0xcc,
+	0x85, 0xe1, 0x0a, 0xc1, 0xfe, 0xed, 0xf4, 0xf4, 0x29, 0x8a, 0x60, 0x87, 0x97, 0x27, 0x0f, 0x60,
+	0x4e, 0xb0, 0x2a, 0x1c, 0xe9, 0xcd, 0x91, 0x91, 0xce, 0xf2, 0x5e, 0x16, 0xe0, 0x7d, 0x1f, 0x66,
+	0x7c, 0x03, 0xc1, 0x91, 0xbe, 0x31, 0x32, 0xd2, 0x69, 0xc4, 0x10, 0xa0, 0x3c, 0x84, 0x4a, 0x92,
+	0x15, 0xe3, 0xe8, 0x6f, 0x8d, 0x8c, 0xbe, 0x1c, 0xed, 0x6e, 0x41, 0x4d, 0x92, 0x51, 0x7f, 0x13,
+	0x85, 0x36, 0x37, 0xc0, 0xa8, 0xbf, 0x35, 0x92, 0x51, 0x7f, 0x76, 0x8f, 0x68, 0x09, 0x0a, 0x7e,
+	0x23, 0x48, 0x11, 0xc6, 0xab, 0x1f, 0xf5, 0x8d, 0xb6, 0x7a, 0x82, 0x94, 0x60, 0x72, 0xcb, 0xea,
+	0x5a, 0x9d, 0x7e, 0x47, 0x55, 0xf0, 0xc3, 0xf8, 0x04, 0x3f, 0x72, 0xff, 0x9f, 0x0e, 0x23, 0x41,
+	0x27, 0xf3, 0x69, 0x88, 0x75, 0xb4, 0xe4, 0x01, 0x47, 0x03, 0x08, 0x8d, 0x1b, 0x15, 0x43, 0xd7,
+	0x6e, 0x99, 0x6e, 0x59, 0xc1, 0xe0, 0x06, 0xfb, 0xd0, 0x7e, 0x55, 0x81, 0x59, 0xbd, 0xdf, 0xf5,
+	0xac, 0x8e, 0x59, 0xf7, 0x0c, 0xcf, 0xdc, 0x32, 0x7a, 0xe4, 0x21, 0x4c, 0x3b, 0x2c, 0xa9, 0xe1,
+	0xd2, 0x34, 0x2c, 0x51, 0x5a, 0x5e, 0x8e, 0x9b, 0x4e, 0xb9, 0xa0, 0xf4, 0xcd, 0x6d, 0xb5, 0x23,
+	0x24, 0x51, 0x85, 0x89, 0x81, 0x8c, 0xa4, 0x30, 0x3f, 0x37, 0x06, 0xc5, 0xc0, 0x7b, 0xa1, 0x70,
+	0xe8, 0xbf, 0xf0, 0xb2, 0xec, 0x83, 0xbc, 0x0b, 0x63, 0x46, 0xb3, 0xcd, 0x02, 0x7c, 0x49, 0x73,
+	0x8a, 0xa0, 0xfc, 0xe2, 0x4a, 0xb3, 0x69, 0xba, 0xee, 0xaa, 0xdd, 0xf5, 0x1c, 0xbb, 0xad, 0x63,
+	0xa9, 0xca, 0x57, 0xf3, 0x30, 0x2d, 0xa5, 0x93, 0x4d, 0x98, 0x40, 0xf9, 0xb9, 0x9c, 0x0d, 0x6f,
+	0x64, 0xc5, 0xc8, 0xcc, 0xb3, 0x1f, 0x87, 0x63, 0x38, 0x88, 0x01, 0xd3, 0x4d, 0xbb, 0xdd, 0x36,
+	0x1e, 0xd9, 0xd8, 0x43, 0xfd, 0x30, 0xd9, 0x3b, 0x99, 0x91, 0xae, 0x8a, 0xa5, 0x19, 0x6e, 0x19,
+	0x63, 0xe5, 0x8b, 0x50, 0x12, 0x6a, 0x4e, 0xe0, 0xef, 0x3b, 0x22, 0x7f, 0x67, 0x96, 0x2f, 0x0f,
+	0xad, 0x1b, 0xa3, 0x25, 0xa1, 0x18, 0x2a, 0x07, 0x40, 0xe2, 0x64, 0x7c, 0x1b, 0x2a, 0xd2, 0xae,
+	0x01, 0x84, 0x19, 0xa4, 0x00, 0x63, 0xba, 0x69, 0xb4, 0xd4, 0x13, 0xd4, 0x58, 0x60, 0x64, 0x5b,
+	0x55, 0xe8, 0xcf, 0x95, 0x56, 0xc7, 0xea, 0xaa, 0x39, 0xed, 0xeb, 0x45, 0x98, 0x60, 0x06, 0x29,
+	0x16, 0x96, 0x5f, 0x82, 0x09, 0x16, 0xb0, 0xe7, 0x6a, 0x11, 0x0f, 0x3e, 0xb1, 0x88, 0x9b, 0xce,
+	0xc1, 0xc2, 0x30, 0x41, 0x3e, 0x4b, 0x98, 0xa0, 0x02, 0x05, 0xc7, 0x34, 0x5a, 0x76, 0xb7, 0x7d,
+	0xcc, 0x63, 0xf5, 0xc1, 0x37, 0x79, 0x1b, 0x26, 0xdb, 0x2c, 0xd8, 0x89, 0x4e, 0x54, 0x29, 0x21,
+	0x88, 0x2c, 0x85, 0x44, 0x75, 0x1f, 0x9c, 0xdc, 0x80, 0xf1, 0x26, 0xed, 0x2c, 0xe8, 0x57, 0x0d,
+	0x0e, 0x98, 0x33, 0x40, 0xb2, 0x04, 0x63, 0x6e, 0xcf, 0x6c, 0xe2, 0x34, 0x2f, 0xc9, 0x90, 0x87,
+	0x63, 0x88, 0x8e, 0x80, 0xb4, 0x0b, 0xf5, 0x5d, 0xe3, 0xc0, 0xe4, 0xd1, 0x66, 0xf6, 0x21, 0x47,
+	0xeb, 0x8b, 0x23, 0x44, 0xeb, 0xc3, 0x18, 0x1f, 0x64, 0x8b, 0xf1, 0xdd, 0xa2, 0xce, 0x8f, 0xe1,
+	0xf5, 0x5d, 0x74, 0x9c, 0x66, 0x96, 0x2f, 0xa4, 0x91, 0x8c, 0x40, 0x3a, 0x07, 0x26, 0xcb, 0x30,
+	0xce, 0x2c, 0xd3, 0x14, 0x96, 0x3a, 0x3f, 0xa0, 0x94, 0xa9, 0x33, 0x50, 0x72, 0x11, 0x4a, 0x86,
+	0xe7, 0x19, 0xd4, 0x6a, 0x37, 0xec, 0x2e, 0x3a, 0x5b, 0x45, 0x1d, 0xfc, 0xa4, 0x9d, 0x2e, 0x59,
+	0x85, 0x99, 0x00, 0x80, 0x61, 0x9f, 0x49, 0xc1, 0xbe, 0x82, 0x60, 0x0c, 0xfb, 0xb4, 0x5f, 0xa6,
+	0xee, 0xd7, 0xd2, 0x32, 0x8f, 0xac, 0xa6, 0xd9, 0xc0, 0x65, 0x20, 0x1e, 0xda, 0x62, 0x49, 0xbb,
+	0x86, 0x77, 0x48, 0xae, 0x01, 0x71, 0xcd, 0x66, 0xdf, 0xa1, 0x36, 0x3e, 0x84, 0xf3, 0x63, 0x5b,
+	0x98, 0xb3, 0x16, 0x42, 0x07, 0x44, 0x33, 0xb0, 0x39, 0x34, 0xdd, 0x9c, 0x68, 0x04, 0xd8, 0x08,
+	0x00, 0xac, 0xee, 0x63, 0xbb, 0x4c, 0xd0, 0x9a, 0x5c, 0x49, 0xe1, 0x07, 0x27, 0xbc, 0xd6, 0x7d,
+	0x6c, 0x33, 0xcb, 0xc1, 0x31, 0xd1, 0x04, 0xf2, 0x19, 0x98, 0x12, 0xdc, 0x65, 0xb7, 0x7c, 0x12,
+	0x51, 0x0d, 0xf4, 0x97, 0x4b, 0xa1, 0xbf, 0xec, 0x92, 0x6a, 0x74, 0xd4, 0x38, 0x85, 0x08, 0x2e,
+	0x0d, 0x1b, 0x35, 0xe4, 0x31, 0x82, 0x6a, 0xa4, 0xe9, 0x38, 0xb6, 0x83, 0xf1, 0xb9, 0xa2, 0xce,
+	0x3e, 0xc8, 0x77, 0x81, 0xca, 0xe7, 0x0f, 0x4d, 0xbb, 0xeb, 0xf6, 0x3b, 0xa6, 0xe3, 0x96, 0xe7,
+	0x11, 0xff, 0xc5, 0x94, 0xb6, 0xae, 0x72, 0x38, 0x7d, 0xf6, 0x48, 0xfa, 0x76, 0xa9, 0x04, 0x1e,
+	0xbb, 0x0d, 0xc7, 0x44, 0x4f, 0xc2, 0x31, 0x3f, 0xea, 0x5b, 0x4e, 0x10, 0xb4, 0x53, 0x1f, 0xbb,
+	0x3a, 0x66, 0xe8, 0x3c, 0xbd, 0xf2, 0x1e, 0xcc, 0x46, 0xb8, 0x36, 0xd2, 0x88, 0xf5, 0xb7, 0x72,
+	0x30, 0x4e, 0x1b, 0xe6, 0x52, 0x18, 0x6a, 0x13, 0x5c, 0x36, 0xd5, 0xd3, 0xd9, 0x07, 0x39, 0x03,
+	0x93, 0xf4, 0x47, 0xa3, 0xe3, 0xf2, 0x60, 0xf9, 0x04, 0xfd, 0xdc, 0x72, 0xc9, 0x05, 0x00, 0xcc,
+	0x78, 0x74, 0xec, 0x99, 0x6c, 0xb2, 0x37, 0xa6, 0x17, 0x69, 0xca, 0x5d, 0x9a, 0x40, 0xe6, 0x61,
+	0x02, 0xd7, 0xfa, 0x5c, 0xb4, 0x37, 0x63, 0x3a, 0xff, 0x22, 0x67, 0xa1, 0x80, 0xbf, 0x28, 0x42,
+	0xb6, 0x3e, 0x38, 0x89, 0xdf, 0x5b, 0x2e, 0xd5, 0x25, 0x96, 0xc5, 0x50, 0x4e, 0x60, 0x2e, 0x60,
+	0x12, 0xc3, 0x79, 0x11, 0xbd, 0xc1, 0x9e, 0x63, 0x1f, 0x38, 0xa6, 0xeb, 0xf2, 0x95, 0x29, 0xc0,
+	0xd9, 0x20, 0xa6, 0x90, 0x93, 0x30, 0x6e, 0xd9, 0x14, 0x73, 0xc1, 0x5f, 0x79, 0x64, 0x84, 0x22,
+	0xc2, 0x06, 0xae, 0x0d, 0xb2, 0xf5, 0xc2, 0x22, 0xa6, 0xe0, 0xd2, 0x15, 0x45, 0xea, 0xbb, 0x58,
+	0x1d, 0x97, 0xaf, 0x1d, 0x82, 0x9f, 0xb4, 0xe5, 0x6a, 0x3f, 0xa8, 0xc0, 0xdc, 0xaa, 0xd1, 0x33,
+	0x9a, 0x96, 0x77, 0xbc, 0x4f, 0xcd, 0x0f, 0x6a, 0xe3, 0x15, 0x98, 0x35, 0x3f, 0x69, 0xb6, 0xfb,
+	0xae, 0x75, 0xe4, 0x13, 0xac, 0x60, 0x90, 0x7f, 0x26, 0x48, 0x66, 0x44, 0xbf, 0xe8, 0xbb, 0x50,
+	0x1c, 0x0a, 0xa7, 0xcb, 0x7a, 0x89, 0xa5, 0x05, 0xed, 0xf2, 0x6c, 0xcf, 0x68, 0x0b, 0xbc, 0xcc,
+	0xeb, 0x80, 0x49, 0x08, 0xa0, 0xfd, 0x3b, 0x05, 0xd4, 0x7a, 0xeb, 0x49, 0x5d, 0x8a, 0x14, 0x26,
+	0x2d, 0x72, 0xdd, 0x86, 0x09, 0x1e, 0x5c, 0x64, 0xc3, 0xc8, 0x8b, 0x43, 0xbd, 0x74, 0x9d, 0x17,
+	0xa0, 0xe2, 0xc7, 0x70, 0x2b, 0x56, 0x5f, 0xd0, 0xd9, 0x07, 0xa5, 0xde, 0x68, 0xb7, 0xed, 0x8f,
+	0x1b, 0x7d, 0x0c, 0x07, 0xf2, 0xc1, 0xa3, 0x84, 0x69, 0x3c, 0x42, 0x28, 0x85, 0x74, 0xc6, 0x47,
+	0x08, 0xe9, 0x68, 0xff, 0x22, 0x0f, 0xe3, 0x2b, 0x6d, 0xd3, 0xf1, 0x84, 0xe1, 0x30, 0x8f, 0xc3,
+	0xe1, 0x6d, 0x28, 0xb8, 0xe6, 0x91, 0xe9, 0x58, 0xde, 0x31, 0x1f, 0x9b, 0xe3, 0x86, 0xb7, 0xce,
+	0x01, 0xd0, 0x5e, 0x07, 0xe0, 0x54, 0xdc, 0x06, 0xc5, 0xc9, 0x02, 0xc9, 0x8c, 0x97, 0x45, 0x4c,
+	0xc1, 0x31, 0xba, 0x0c, 0x93, 0x1d, 0xd3, 0xc5, 0x21, 0x85, 0xad, 0x7b, 0xfa, 0x9f, 0xb4, 0x1d,
+	0xc1, 0x72, 0x7b, 0xd0, 0x8e, 0xf4, 0x41, 0x25, 0x04, 0xa6, 0xf2, 0x73, 0xf8, 0x7a, 0x7b, 0xc3,
+	0x6a, 0xa1, 0xe2, 0x16, 0xe9, 0x5c, 0x9d, 0x25, 0xd5, 0xb0, 0x39, 0xfe, 0x17, 0x8f, 0x70, 0x5e,
+	0x48, 0x30, 0x5b, 0x0c, 0x80, 0x35, 0xc7, 0x07, 0xa7, 0xf4, 0x36, 0xdb, 0x66, 0x18, 0x3f, 0xd0,
+	0xfd, 0x4f, 0xda, 0xcb, 0x3d, 0xaf, 0xcd, 0x15, 0x9a, 0xfe, 0xa4, 0x4d, 0xef, 0x77, 0xad, 0x8f,
+	0xfa, 0x66, 0xc3, 0x33, 0x0e, 0x58, 0x48, 0x40, 0x2f, 0xb2, 0x94, 0x3d, 0xe3, 0x00, 0x97, 0xa3,
+	0xed, 0x7e, 0xd7, 0xc3, 0xa1, 0x2c, 0xaf, 0xb3, 0x0f, 0x72, 0x1b, 0xe0, 0xb1, 0xe5, 0xd0, 0xc1,
+	0xd4, 0x34, 0xb3, 0x2c, 0x7d, 0x17, 0x11, 0xba, 0x6e, 0x9a, 0x5d, 0xed, 0x87, 0x15, 0x98, 0xab,
+	0xb7, 0x9e, 0xa0, 0x08, 0x5d, 0x0a, 0x51, 0xef, 0x19, 0x5d, 0x8a, 0xd0, 0xf5, 0x0c, 0x2a, 0x00,
+	0x8b, 0x6b, 0xe7, 0x10, 0x84, 0x08, 0x4d, 0xbf, 0xc9, 0x2d, 0x28, 0x98, 0xdd, 0x16, 0x2b, 0x98,
+	0x1b, 0x5a, 0x70, 0xd2, 0xec, 0xb6, 0xe8, 0x97, 0xb6, 0x0d, 0x24, 0x20, 0x63, 0x95, 0x36, 0x0a,
+	0xe9, 0x38, 0x07, 0xc5, 0x8e, 0xd5, 0x6d, 0xb0, 0x26, 0x33, 0xd5, 0x2a, 0x74, 0xac, 0x2e, 0x02,
+	0x60, 0xa6, 0xf1, 0x09, 0xcf, 0xcc, 0xf1, 0x4c, 0xe3, 0x13, 0xcc, 0xd4, 0xbe, 0x96, 0x83, 0xd9,
+	0x00, 0x21, 0x5b, 0x08, 0x25, 0xf7, 0x61, 0x8e, 0x62, 0xf3, 0xd5, 0x8c, 0x69, 0x97, 0x92, 0x41,
+	0x35, 0x37, 0x4e, 0xe8, 0xb3, 0x1d, 0xab, 0x2b, 0x26, 0x91, 0x8b, 0x00, 0x96, 0xdb, 0xf0, 0xe5,
+	0x8a, 0x2b, 0x99, 0x1b, 0x27, 0xf4, 0xa2, 0xe5, 0xae, 0x72, 0xd9, 0xae, 0x30, 0x5d, 0x6c, 0xb8,
+	0x3d, 0xa3, 0xcb, 0x3d, 0x3c, 0x2d, 0x5e, 0x4b, 0x94, 0xf5, 0x1b, 0x27, 0xf4, 0x82, 0xe7, 0x8b,
+	0x61, 0x0d, 0x00, 0x5b, 0xc7, 0x70, 0xb0, 0x35, 0xe6, 0x97, 0xd2, 0x71, 0x04, 0x7c, 0xa3, 0x84,
+	0x34, 0xfd, 0x8f, 0xbb, 0xe3, 0x90, 0xa7, 0x33, 0xb5, 0x2f, 0x42, 0x25, 0x80, 0x14, 0x15, 0xf5,
+	0xfd, 0xbe, 0xe9, 0x1c, 0x93, 0xbb, 0x30, 0x1d, 0xe8, 0xff, 0x40, 0xbe, 0x48, 0x3a, 0x3e, 0xe5,
+	0x08, 0x5f, 0xda, 0x57, 0xe0, 0x4c, 0x50, 0xc3, 0x8a, 0xdf, 0x5b, 0x9f, 0x1b, 0xfa, 0x88, 0x55,
+	0xc8, 0x45, 0xac, 0x82, 0xf6, 0x37, 0x15, 0x28, 0xc7, 0x1a, 0x58, 0x6b, 0x7d, 0xa7, 0xea, 0x8f,
+	0x5a, 0x90, 0x7c, 0xd4, 0x82, 0x68, 0x7f, 0x9c, 0x83, 0x99, 0x80, 0x40, 0x46, 0xd6, 0xf7, 0xc2,
+	0x49, 0x89, 0xac, 0xc6, 0x47, 0x34, 0x99, 0x77, 0xb8, 0xd7, 0xd2, 0x25, 0x1d, 0x93, 0xdf, 0xc6,
+	0x09, 0x7d, 0xce, 0x89, 0x09, 0x75, 0x0f, 0xd4, 0x90, 0x62, 0x8e, 0x3b, 0x6d, 0xca, 0x9a, 0x22,
+	0xb9, 0x8d, 0x13, 0xfa, 0x8c, 0x21, 0xcb, 0xf2, 0x21, 0xcc, 0x09, 0x0d, 0xe5, 0x68, 0x99, 0x82,
+	0xbf, 0x3a, 0x9c, 0x64, 0x2e, 0x11, 0xda, 0xa5, 0x9c, 0x88, 0x90, 0xde, 0x80, 0x31, 0xbb, 0xe7,
+	0x51, 0x6f, 0x23, 0xd9, 0xa9, 0x8b, 0xf4, 0x67, 0x1d, 0xa1, 0xef, 0x4e, 0xc2, 0x38, 0x92, 0xa0,
+	0x19, 0xf0, 0x72, 0x00, 0x51, 0xed, 0x52, 0x3f, 0xcc, 0xf0, 0xcc, 0x87, 0x96, 0x77, 0xb8, 0x6e,
+	0xb5, 0x3d, 0xd3, 0x71, 0xa9, 0xbb, 0x65, 0xba, 0xd4, 0x5a, 0x4e, 0xd2, 0x02, 0x96, 0xe9, 0xcf,
+	0xb6, 0x2f, 0xa6, 0xd7, 0x84, 0x84, 0xe9, 0x3e, 0xbc, 0xf6, 0x10, 0x2e, 0x0f, 0xa9, 0xc2, 0xed,
+	0xd9, 0x5d, 0xd7, 0x24, 0x8b, 0x30, 0x81, 0x5c, 0xf3, 0xab, 0x88, 0xcf, 0xed, 0x10, 0x89, 0xce,
+	0xa1, 0xb4, 0x3a, 0xcc, 0x07, 0x88, 0xd7, 0xcc, 0xb6, 0xe9, 0x99, 0xcf, 0x81, 0xda, 0xb3, 0x42,
+	0x7f, 0xf4, 0x91, 0x32, 0xfa, 0xb4, 0x37, 0x61, 0x82, 0xa5, 0xd3, 0x49, 0x28, 0xd2, 0x30, 0x84,
+	0x50, 0x06, 0xa4, 0xfd, 0x9b, 0x1c, 0xcc, 0xee, 0x3c, 0xfa, 0xd0, 0x6c, 0x7a, 0x14, 0x84, 0xb9,
+	0x51, 0x04, 0xc6, 0xfa, 0xfd, 0x60, 0x26, 0x8c, 0xbf, 0xa9, 0x6d, 0x0e, 0xb6, 0xba, 0x70, 0x87,
+	0xb5, 0xe0, 0xef, 0x74, 0xa1, 0xe3, 0xa1, 0xd9, 0x35, 0x1e, 0xb5, 0xcd, 0x16, 0x77, 0x54, 0xfc,
+	0x4f, 0xb6, 0xa0, 0x8e, 0x53, 0x35, 0x36, 0xb0, 0xfb, 0x73, 0xb1, 0x79, 0x98, 0x30, 0x9a, 0x54,
+	0xe6, 0x7c, 0x17, 0x06, 0xff, 0xc2, 0x2e, 0x89, 0x73, 0xf7, 0x06, 0x75, 0x96, 0xd9, 0xa0, 0x5d,
+	0x64, 0x29, 0xf7, 0x4d, 0xf4, 0x23, 0x5c, 0xb3, 0xe9, 0x98, 0x1e, 0x66, 0x4f, 0xb2, 0x6c, 0x96,
+	0x42, 0xb3, 0x71, 0xff, 0x40, 0xab, 0x67, 0x5b, 0x5d, 0x8f, 0xba, 0x9b, 0xb8, 0x1d, 0x27, 0x48,
+	0x20, 0xaf, 0x82, 0xda, 0xec, 0x3b, 0x8e, 0xd9, 0xf5, 0x1a, 0x7e, 0x22, 0x0e, 0xd4, 0x45, 0x7d,
+	0x96, 0xa7, 0x57, 0x79, 0x32, 0xce, 0xa0, 0x18, 0x19, 0x3d, 0xdb, 0x61, 0xf3, 0xd2, 0xbc, 0xce,
+	0x29, 0xdb, 0xb5, 0x1d, 0x0f, 0x77, 0xc0, 0x99, 0x07, 0x94, 0x7e, 0xb6, 0x73, 0x8d, 0x7f, 0x69,
+	0xbf, 0xae, 0xc0, 0x49, 0x3e, 0x95, 0x70, 0x4c, 0x23, 0x14, 0xba, 0x30, 0x9f, 0x57, 0x46, 0x9b,
+	0xcf, 0x8f, 0x1c, 0x84, 0xf0, 0xa7, 0xf3, 0xf9, 0x8c, 0xd3, 0x79, 0xed, 0x15, 0x98, 0x61, 0x69,
+	0x81, 0xb2, 0x07, 0xd3, 0x29, 0x45, 0x98, 0x4e, 0x69, 0x3d, 0x7f, 0x37, 0x92, 0xdf, 0x34, 0x0e,
+	0x1d, 0x0d, 0x9b, 0x6c, 0x00, 0x9f, 0x3d, 0xd1, 0xe9, 0x12, 0x82, 0x70, 0xd2, 0xd3, 0x66, 0x5d,
+	0x3e, 0x26, 0x7d, 0xe6, 0x48, 0xfa, 0xd6, 0x7e, 0x4f, 0xf1, 0x83, 0xc5, 0x38, 0xcd, 0x5b, 0x61,
+	0x3a, 0x72, 0x07, 0x26, 0xd8, 0x0c, 0x94, 0xdb, 0x7c, 0x2d, 0x05, 0x2d, 0x03, 0xdf, 0x35, 0x1c,
+	0xa3, 0xa3, 0xf3, 0x12, 0xe4, 0x6d, 0x18, 0xef, 0x04, 0xee, 0x45, 0xb6, 0xa2, 0xac, 0x00, 0x55,
+	0x3d, 0xfc, 0xc1, 0xe6, 0xd4, 0x6c, 0x30, 0x28, 0x62, 0x8a, 0x3f, 0xe7, 0x16, 0xa7, 0xe6, 0x63,
+	0xd1, 0x29, 0xbc, 0xf6, 0x3b, 0xb9, 0x60, 0x21, 0xcf, 0xf4, 0x9e, 0x87, 0x5a, 0x30, 0x29, 0xe7,
+	0xb2, 0x06, 0x6d, 0xee, 0x04, 0x3d, 0x2e, 0xcd, 0x75, 0x89, 0x71, 0x3a, 0xe8, 0x95, 0x1b, 0x30,
+	0x69, 0xb3, 0xad, 0x67, 0xdc, 0x94, 0x2f, 0xa6, 0x15, 0x0e, 0x9a, 0xb6, 0xc8, 0xf7, 0xaa, 0xb1,
+	0x90, 0x81, 0x5f, 0xbc, 0x72, 0x07, 0xa6, 0xc4, 0x8c, 0x91, 0x66, 0xc5, 0x7f, 0x23, 0xd4, 0x06,
+	0x5a, 0x0d, 0xd7, 0xbe, 0x25, 0x98, 0x60, 0x5a, 0xc3, 0x39, 0x78, 0x26, 0x4d, 0xc9, 0x38, 0xd8,
+	0x73, 0x54, 0xcf, 0x9f, 0xa2, 0xae, 0x76, 0xd7, 0xe8, 0xc9, 0x5d, 0x3d, 0xda, 0x1d, 0x04, 0x19,
+	0xe7, 0x46, 0x93, 0xb1, 0x18, 0x20, 0xcc, 0x47, 0x02, 0x84, 0x67, 0xa1, 0xd0, 0xb5, 0x1b, 0x8e,
+	0xe9, 0x39, 0x7e, 0xf0, 0x70, 0xb2, 0x6b, 0xeb, 0xf4, 0x53, 0xfb, 0x08, 0x88, 0x48, 0x15, 0xe7,
+	0xd3, 0x77, 0xc3, 0xbc, 0x1f, 0x0c, 0xc1, 0x8c, 0xb0, 0xf5, 0x8c, 0x6f, 0x97, 0xd3, 0x42, 0x22,
+	0x12, 0x1a, 0xfd, 0xd4, 0x51, 0x42, 0xaa, 0xe6, 0xf9, 0xdb, 0xfc, 0x70, 0xfc, 0x90, 0xc6, 0x0a,
+	0x25, 0x32, 0x56, 0x24, 0xed, 0x75, 0xbe, 0x05, 0x93, 0xbc, 0xe2, 0x2c, 0x56, 0xcb, 0x87, 0xd5,
+	0x7e, 0x4d, 0xf1, 0x2d, 0x97, 0x1f, 0xa7, 0x49, 0x9c, 0x7f, 0x9f, 0x87, 0x22, 0xfd, 0xef, 0xf6,
+	0x8c, 0xa6, 0xaf, 0x55, 0x61, 0x02, 0x2d, 0x11, 0x4c, 0x4a, 0x8b, 0x3a, 0xfe, 0x26, 0x67, 0x60,
+	0xb2, 0x6b, 0xb7, 0x90, 0x7c, 0x3e, 0x6c, 0xd1, 0xcf, 0x5a, 0x8b, 0x1a, 0x01, 0x9c, 0x29, 0x37,
+	0xb0, 0x92, 0x71, 0x86, 0x0b, 0x53, 0xb6, 0x69, 0x4d, 0x41, 0x36, 0x62, 0x9c, 0x10, 0xb2, 0xd1,
+	0xa1, 0x6d, 0x01, 0xb9, 0xe7, 0x18, 0xbd, 0xc3, 0x35, 0xc7, 0x3a, 0x32, 0x9d, 0xd5, 0x43, 0xa3,
+	0x7b, 0x60, 0xba, 0x01, 0x43, 0x14, 0x81, 0x21, 0x77, 0x60, 0xec, 0x89, 0xd5, 0x6d, 0x71, 0x2b,
+	0xf5, 0x4a, 0x42, 0x1c, 0x39, 0x82, 0x06, 0xbd, 0x5b, 0x2c, 0xa3, 0x5d, 0x81, 0xd9, 0xd5, 0x76,
+	0xdf, 0xf5, 0x4c, 0x67, 0x88, 0x3d, 0xff, 0x69, 0x05, 0xa6, 0x69, 0x47, 0x3f, 0x0a, 0x54, 0x77,
+	0x03, 0x0a, 0xba, 0xf9, 0x91, 0xe9, 0x7a, 0xf7, 0x1f, 0x70, 0xef, 0xe1, 0x5a, 0xdc, 0x7b, 0x10,
+	0x4b, 0x2c, 0xfa, 0xe0, 0xac, 0x9b, 0x07, 0xa5, 0x2b, 0xef, 0xc0, 0xb4, 0x94, 0x25, 0x76, 0xf4,
+	0xfc, 0xb0, 0x8e, 0xfe, 0x25, 0x98, 0x91, 0x6a, 0x71, 0x89, 0x06, 0x53, 0xfc, 0xf7, 0xaa, 0x30,
+	0x73, 0x94, 0xd2, 0xc8, 0x5a, 0xa4, 0x35, 0x7c, 0x91, 0xe4, 0x85, 0xc1, 0x2d, 0xd0, 0xe5, 0x42,
+	0xda, 0x1f, 0x2a, 0x30, 0x8f, 0x51, 0xfa, 0xe1, 0x1d, 0xfb, 0x3e, 0x4c, 0x6c, 0x8a, 0xbb, 0x96,
+	0x6f, 0x26, 0x87, 0xfb, 0x63, 0x88, 0xe4, 0xad, 0xd6, 0x7c, 0x47, 0x82, 0xbc, 0x95, 0x38, 0x1f,
+	0xdd, 0x4a, 0xfc, 0x0c, 0x3b, 0xb1, 0xff, 0x5c, 0x81, 0x33, 0x31, 0x42, 0xb8, 0x62, 0xec, 0x43,
+	0xd1, 0x5f, 0x9a, 0xf4, 0xbd, 0xd1, 0xb7, 0x86, 0xb7, 0x82, 0x15, 0x5e, 0xac, 0xfb, 0x25, 0x59,
+	0x4b, 0x42, 0x4c, 0xa1, 0xbe, 0xe5, 0x04, 0x7d, 0xab, 0x18, 0x30, 0x23, 0x17, 0x49, 0x68, 0xc6,
+	0x6d, 0xb1, 0x19, 0x89, 0x73, 0xe3, 0x18, 0x1d, 0x62, 0x5b, 0xff, 0xfe, 0x78, 0xb0, 0x8d, 0x7f,
+	0xdb, 0x6e, 0xc5, 0x5d, 0x13, 0x15, 0xf2, 0xcd, 0x5e, 0x1f, 0x91, 0x2b, 0x3a, 0xfd, 0x89, 0x31,
+	0x07, 0xb3, 0xd3, 0xc0, 0xb8, 0x1e, 0x0f, 0x98, 0x16, 0x3a, 0x66, 0x07, 0x77, 0xd6, 0x53, 0x23,
+	0x4b, 0x33, 0x31, 0x46, 0xc9, 0x22, 0xa6, 0x93, 0x1d, 0xb3, 0x83, 0x11, 0x4a, 0x9e, 0xf5, 0xd8,
+	0x31, 0x4d, 0x3f, 0x64, 0xda, 0x31, 0x3b, 0xeb, 0x8e, 0x89, 0x7b, 0x8c, 0x8d, 0xa3, 0x83, 0x46,
+	0xdb, 0x36, 0x58, 0xd8, 0x29, 0xaf, 0x4f, 0x1a, 0x47, 0x07, 0x9b, 0xb6, 0xc1, 0x56, 0x94, 0x98,
+	0x3b, 0x3c, 0x99, 0xb2, 0xd4, 0x11, 0x59, 0xb3, 0x78, 0x0f, 0xc6, 0x5b, 0x96, 0xfb, 0xc4, 0xdf,
+	0xc2, 0x7f, 0x25, 0x6d, 0x0b, 0x3f, 0x6d, 0xed, 0xe2, 0x1a, 0x85, 0x64, 0xc2, 0x60, 0xa5, 0xc8,
+	0x32, 0x8c, 0xf7, 0x6c, 0x3b, 0xd8, 0x1f, 0x7c, 0x7e, 0xd0, 0x09, 0x00, 0x9d, 0x81, 0x52, 0xe3,
+	0xd7, 0x39, 0xe8, 0x78, 0x0d, 0xab, 0xe7, 0xfb, 0xb6, 0xf4, 0xb3, 0xd6, 0xa3, 0x19, 0x2d, 0xc3,
+	0x33, 0x68, 0xc6, 0x14, 0xcb, 0xa0, 0x9f, 0x35, 0x5c, 0xc8, 0x3a, 0xb4, 0x5d, 0x0f, 0x6d, 0x22,
+	0x5b, 0xbb, 0x08, 0xbe, 0xc9, 0x16, 0x94, 0xd0, 0x94, 0xf2, 0x1d, 0x3c, 0x6a, 0x8a, 0x55, 0x11,
+	0x9b, 0x41, 0xff, 0x88, 0x5d, 0x04, 0xba, 0x41, 0x02, 0x59, 0x84, 0x93, 0xfe, 0x12, 0xba, 0xd3,
+	0x40, 0xc4, 0x58, 0xeb, 0x1c, 0xd6, 0x3a, 0x17, 0x64, 0x51, 0x14, 0xd4, 0x22, 0x57, 0xbe, 0x00,
+	0x10, 0x72, 0x25, 0x41, 0xdf, 0xde, 0x94, 0xf5, 0xed, 0x52, 0x1a, 0x61, 0xfe, 0x64, 0x57, 0x5c,
+	0xd0, 0x7c, 0x0f, 0x66, 0x23, 0xa4, 0x8e, 0xd4, 0x2f, 0x4d, 0x98, 0xe1, 0xc8, 0xb9, 0xb9, 0x16,
+	0xb4, 0x43, 0xc9, 0xa6, 0x1d, 0x4c, 0xbd, 0x73, 0xe2, 0x39, 0x22, 0x64, 0x47, 0x3e, 0x1c, 0xfd,
+	0xb4, 0x0e, 0xbc, 0x58, 0x6f, 0x3d, 0xd9, 0xe9, 0x99, 0x5d, 0x29, 0x52, 0x2d, 0x9b, 0xb6, 0x8d,
+	0xd8, 0x3e, 0x58, 0x25, 0x25, 0x54, 0x1d, 0x8d, 0x78, 0x47, 0xb6, 0xca, 0x6a, 0x2f, 0x83, 0x36,
+	0xa8, 0x3a, 0xee, 0x2f, 0xbc, 0x82, 0x33, 0xfb, 0x18, 0x54, 0x30, 0x03, 0xf7, 0xad, 0x71, 0x1f,
+	0xa7, 0xe7, 0x83, 0xe0, 0xb8, 0x21, 0xdb, 0x04, 0x55, 0x6a, 0x40, 0x38, 0xbb, 0xce, 0xd0, 0x84,
+	0x59, 0xb1, 0x09, 0x74, 0x9e, 0xfd, 0x76, 0x72, 0x23, 0xf8, 0x29, 0x0c, 0x9f, 0x69, 0x09, 0xbe,
+	0x86, 0x66, 0xc3, 0x4b, 0x03, 0x4b, 0x72, 0x72, 0x9f, 0x1f, 0xbf, 0xdf, 0x4a, 0x16, 0xaf, 0x1c,
+	0x72, 0x48, 0xa2, 0x34, 0x45, 0x50, 0x91, 0xb0, 0x42, 0x8a, 0xf6, 0xb0, 0x55, 0x86, 0xef, 0x98,
+	0xf6, 0xf8, 0xd5, 0x71, 0xa2, 0xde, 0x49, 0xd6, 0x8a, 0xba, 0xe9, 0xad, 0x99, 0x8f, 0x8d, 0x7e,
+	0x7b, 0xa0, 0x84, 0xae, 0xc2, 0x2b, 0xc3, 0x0a, 0xf3, 0x6a, 0x52, 0x88, 0xd1, 0xcd, 0xb6, 0x69,
+	0xb8, 0x81, 0x8a, 0x5e, 0x4e, 0x96, 0x78, 0x00, 0xc5, 0x91, 0xbd, 0x06, 0xaf, 0x26, 0xb3, 0x1b,
+	0xeb, 0x94, 0x35, 0x4b, 0x3b, 0x82, 0x85, 0x2c, 0xc0, 0xcf, 0x5d, 0x99, 0x3a, 0xf0, 0x02, 0x05,
+	0xe1, 0x56, 0x34, 0xc9, 0x50, 0xdc, 0x87, 0xd9, 0x60, 0x0b, 0x93, 0x54, 0x59, 0x62, 0x24, 0x5c,
+	0xc6, 0xa4, 0xcf, 0xb8, 0xd2, 0xb7, 0xf6, 0x22, 0x5c, 0x4c, 0xad, 0x2e, 0xd0, 0xbf, 0x38, 0x45,
+	0xb2, 0xf2, 0x7d, 0xdb, 0x29, 0x8a, 0x28, 0xdf, 0x4b, 0xd8, 0x23, 0x64, 0x90, 0x98, 0xdd, 0x6a,
+	0xa1, 0xea, 0xa4, 0x02, 0x71, 0xc1, 0x7d, 0x06, 0x0a, 0x11, 0x63, 0x95, 0x85, 0xe6, 0xa0, 0x8c,
+	0x76, 0x2b, 0x81, 0xda, 0x0c, 0x36, 0xea, 0xfb, 0xe0, 0x52, 0x7a, 0x31, 0x4e, 0xda, 0x9d, 0x60,
+	0xcd, 0x32, 0x3b, 0x33, 0x79, 0x09, 0xed, 0x8d, 0x04, 0x99, 0x0d, 0xb7, 0x47, 0x49, 0xac, 0x8f,
+	0x18, 0xa3, 0xcd, 0x04, 0xc4, 0xfe, 0xee, 0xc5, 0x35, 0xc3, 0x6a, 0xe3, 0xf2, 0xeb, 0xa1, 0xdd,
+	0x77, 0xf8, 0xc1, 0x4d, 0xfc, 0x4d, 0xe6, 0x61, 0xa2, 0x63, 0x75, 0xfb, 0x1e, 0x1b, 0x82, 0xc7,
+	0x75, 0xfe, 0xa5, 0xfd, 0xa0, 0x92, 0xc8, 0x3e, 0x86, 0xee, 0xa1, 0x69, 0x3e, 0x69, 0x1f, 0x93,
+	0xd7, 0x21, 0xdf, 0x32, 0x8e, 0xf9, 0x70, 0x9c, 0x18, 0xa7, 0xdd, 0xb3, 0x3a, 0x26, 0x05, 0x6e,
+	0x19, 0xc7, 0x3a, 0x85, 0x0d, 0x48, 0xc8, 0x25, 0x92, 0x90, 0x97, 0x48, 0xf8, 0x62, 0xa2, 0x24,
+	0xf8, 0x22, 0xb7, 0xdd, 0xf5, 0x0e, 0xdb, 0xe8, 0x52, 0xf8, 0x24, 0x8c, 0x8f, 0x5e, 0xc3, 0x7b,
+	0x09, 0xda, 0xea, 0xd7, 0xb0, 0x6b, 0x3a, 0x96, 0xdd, 0xb2, 0x9a, 0xa4, 0x0c, 0x93, 0xae, 0xd9,
+	0xb4, 0xbb, 0x2d, 0x7f, 0xb9, 0xdc, 0xff, 0xd4, 0xfe, 0x67, 0x0e, 0xce, 0xa6, 0x96, 0x67, 0x41,
+	0x50, 0xcf, 0xb0, 0xba, 0xbc, 0x18, 0xff, 0x22, 0x1b, 0x30, 0xde, 0xa2, 0xe2, 0x28, 0xff, 0x2b,
+	0xa6, 0x3c, 0x4b, 0xc3, 0x95, 0x47, 0x12, 0xe3, 0xc6, 0x09, 0x9d, 0x21, 0xa0, 0x53, 0xac, 0x8f,
+	0x51, 0x12, 0xe5, 0xdf, 0x63, 0xa8, 0x6e, 0x64, 0x47, 0xc5, 0x44, 0xb8, 0x71, 0x42, 0xe7, 0x28,
+	0xc8, 0x36, 0x4c, 0x76, 0x18, 0x53, 0xcb, 0xbf, 0xcf, 0xb0, 0xbd, 0x9e, 0x1d, 0x1b, 0x17, 0xc7,
+	0xc6, 0x09, 0xdd, 0x47, 0x42, 0xde, 0x87, 0x42, 0x8f, 0xb3, 0xb0, 0xfc, 0xaf, 0x19, 0xc2, 0xe5,
+	0xec, 0x08, 0x7d, 0xee, 0x6f, 0x9c, 0xd0, 0x03, 0x34, 0x77, 0xa7, 0xa1, 0xc4, 0x7e, 0x63, 0x04,
+	0x41, 0xfb, 0x08, 0x97, 0x72, 0xe5, 0xf2, 0x89, 0x21, 0x8e, 0x0d, 0x28, 0xfa, 0x96, 0xcc, 0x9f,
+	0x8d, 0x2e, 0x64, 0x27, 0x45, 0x0f, 0x0b, 0x6b, 0xbf, 0x9b, 0xc7, 0x55, 0xc5, 0x55, 0xc7, 0x6c,
+	0x99, 0x5d, 0xcf, 0x32, 0xda, 0xb2, 0xfd, 0x4f, 0xaa, 0x7c, 0x1e, 0x26, 0x1e, 0xf5, 0x9b, 0x4f,
+	0x4c, 0x8f, 0x7b, 0xa2, 0xfc, 0x8b, 0x5c, 0x86, 0x19, 0xbe, 0x09, 0xd5, 0xb2, 0xbb, 0x18, 0xb0,
+	0x67, 0x7e, 0xe9, 0x74, 0x98, 0x7a, 0xdf, 0x8c, 0x1c, 0xae, 0x1a, 0x1b, 0xe5, 0xf4, 0x89, 0x0e,
+	0x33, 0xc6, 0xc7, 0x6e, 0xa3, 0x19, 0xd0, 0xea, 0x2b, 0x5c, 0xf2, 0x62, 0xd8, 0xc7, 0x6e, 0xd8,
+	0x2a, 0xde, 0x9e, 0x8d, 0x13, 0xfa, 0xb4, 0x21, 0xa6, 0x93, 0xcf, 0x83, 0x6a, 0x7c, 0xa9, 0xef,
+	0x98, 0x22, 0x56, 0xae, 0x7b, 0x89, 0x1c, 0x5d, 0xa1, 0xc0, 0x49, 0x78, 0x67, 0x0d, 0x39, 0x87,
+	0x7c, 0x37, 0xcc, 0xb1, 0x65, 0x73, 0x11, 0xf5, 0xef, 0x0f, 0x58, 0x19, 0xbc, 0x87, 0xd0, 0x49,
+	0xb8, 0xd5, 0x83, 0x48, 0xd6, 0xdd, 0x39, 0x98, 0x0d, 0xb1, 0x32, 0xe5, 0xb9, 0x0b, 0xe7, 0x12,
+	0x05, 0xc9, 0x2d, 0xfc, 0x4b, 0x30, 0x2d, 0x94, 0x08, 0x66, 0xc9, 0x53, 0x61, 0x62, 0xad, 0xa5,
+	0xfd, 0x07, 0x85, 0xad, 0x38, 0x25, 0xb0, 0x2e, 0xb2, 0x54, 0xa3, 0x0c, 0x5e, 0xaa, 0xc9, 0x45,
+	0x97, 0x6a, 0x2a, 0xb8, 0xab, 0x80, 0x2d, 0xc2, 0x30, 0xb5, 0x08, 0xbe, 0x85, 0xc5, 0x95, 0x31,
+	0x71, 0x71, 0x05, 0x63, 0xec, 0x96, 0x6b, 0x3c, 0x6a, 0x9b, 0x0d, 0xd7, 0x65, 0x67, 0xdc, 0x0a,
+	0x3a, 0xf0, 0xa4, 0xba, 0xdb, 0x26, 0xd7, 0x80, 0xf8, 0x00, 0x3d, 0xc3, 0x3b, 0x6c, 0xb8, 0xde,
+	0x71, 0x9b, 0xc5, 0xe1, 0x0a, 0xba, 0xca, 0x73, 0x76, 0x0d, 0xef, 0xb0, 0x4e, 0xd3, 0xb5, 0x06,
+	0xda, 0xb6, 0x64, 0x01, 0xe2, 0x1e, 0x9b, 0x26, 0x5b, 0xab, 0x17, 0x14, 0xbe, 0xc4, 0xd3, 0x30,
+	0xda, 0xc7, 0x16, 0x89, 0x10, 0x24, 0x6c, 0x22, 0xf0, 0xa4, 0xfb, 0xe6, 0xb1, 0xf6, 0x00, 0xbb,
+	0x52, 0x8a, 0x18, 0x29, 0x83, 0x7a, 0x8e, 0xfd, 0xa1, 0xd9, 0xf4, 0x42, 0xee, 0x17, 0x79, 0x4a,
+	0x0d, 0x03, 0x0c, 0x1f, 0xba, 0xbc, 0xdf, 0x30, 0xd4, 0x93, 0xf4, 0x9b, 0xe2, 0xfd, 0x2d, 0xbe,
+	0x30, 0x2e, 0x4b, 0x85, 0xcb, 0x55, 0x16, 0x4b, 0x2e, 0x2a, 0x96, 0xff, 0x07, 0xf8, 0xfe, 0x59,
+	0xb6, 0x6f, 0x21, 0xca, 0x77, 0x4e, 0x7f, 0x94, 0xf1, 0xb9, 0x18, 0xe3, 0xb5, 0x77, 0x51, 0xb3,
+	0xe3, 0x7c, 0x0d, 0x39, 0x20, 0x30, 0x36, 0x17, 0x61, 0xac, 0x76, 0x11, 0x2e, 0x48, 0xfd, 0x22,
+	0xe6, 0xbc, 0xdd, 0x43, 0x37, 0x23, 0x11, 0x80, 0xd7, 0x70, 0x19, 0x66, 0xa4, 0xbe, 0xe3, 0x6f,
+	0x8f, 0x9f, 0x16, 0x3b, 0x8f, 0x1b, 0xeb, 0x81, 0x11, 0xdf, 0x2c, 0x53, 0x0f, 0xfc, 0xfd, 0x3c,
+	0x9c, 0x4f, 0x46, 0x32, 0x42, 0x3f, 0x0e, 0xcc, 0x76, 0x2e, 0xd1, 0x6c, 0xe7, 0x25, 0xb3, 0xfd,
+	0xf4, 0xf6, 0xb8, 0x9e, 0x66, 0x8f, 0x5f, 0xcd, 0x60, 0x8f, 0x59, 0x73, 0xe2, 0x06, 0xf9, 0x83,
+	0x74, 0x83, 0xfc, 0x5a, 0x26, 0x83, 0x1c, 0x20, 0x8e, 0x59, 0xe4, 0xef, 0x19, 0x60, 0x91, 0xaf,
+	0x65, 0xb3, 0xc8, 0x01, 0xf2, 0x4c, 0x26, 0x79, 0x25, 0x32, 0xb6, 0xca, 0x5e, 0x71, 0x26, 0x7d,
+	0xb8, 0x10, 0xd1, 0xa9, 0x88, 0x8b, 0xbc, 0x1a, 0xd1, 0x96, 0x07, 0x46, 0xdb, 0x12, 0x67, 0x4b,
+	0x99, 0xea, 0x88, 0xf6, 0x90, 0x10, 0x09, 0xaf, 0xe5, 0x07, 0x70, 0x73, 0x03, 0x5f, 0x2a, 0xc5,
+	0x85, 0x55, 0xff, 0x66, 0x8a, 0x8b, 0x50, 0xe2, 0x56, 0x5f, 0xb0, 0x9a, 0x7c, 0x20, 0xf0, 0x97,
+	0x48, 0x06, 0x0d, 0x0b, 0x97, 0x61, 0x86, 0x67, 0x37, 0xed, 0xae, 0x67, 0x7e, 0xe2, 0x2b, 0xe7,
+	0x34, 0x4b, 0x5d, 0x65, 0x89, 0xda, 0x6f, 0xe6, 0xe0, 0x74, 0x40, 0xc1, 0x16, 0x35, 0x0c, 0x7e,
+	0x03, 0x07, 0xae, 0x3d, 0xc9, 0x6b, 0xb8, 0xb9, 0xe8, 0x1a, 0xee, 0x4a, 0xb8, 0xcc, 0xc9, 0x96,
+	0xa1, 0xae, 0x24, 0x29, 0x41, 0x42, 0xb3, 0x83, 0xf5, 0x4d, 0xf2, 0x45, 0x98, 0x69, 0xe1, 0xb2,
+	0x4c, 0x43, 0x5e, 0x30, 0xbd, 0x9d, 0x8e, 0x49, 0x24, 0x7f, 0x91, 0xad, 0xe9, 0x48, 0x6b, 0xa7,
+	0xd3, 0x2d, 0x31, 0xad, 0xf2, 0x39, 0x20, 0x71, 0xa0, 0x91, 0x02, 0x8f, 0x65, 0x41, 0x7a, 0xbc,
+	0x72, 0x2e, 0xd7, 0x9f, 0x60, 0xc3, 0x3d, 0xcb, 0xda, 0xef, 0x22, 0x67, 0x7c, 0xc9, 0x2e, 0xc0,
+	0x5c, 0x0b, 0x75, 0xad, 0x21, 0xb0, 0x90, 0xdd, 0xe1, 0x31, 0xcb, 0x32, 0xb6, 0x02, 0x46, 0xde,
+	0x87, 0x97, 0xba, 0x76, 0xa3, 0x65, 0xb6, 0x8d, 0xe3, 0xc6, 0x23, 0xf3, 0xb1, 0x8d, 0xfb, 0xd6,
+	0xdb, 0xa6, 0x67, 0x75, 0x0f, 0x1a, 0x11, 0x01, 0x14, 0xf4, 0x17, 0xba, 0xf6, 0x1a, 0x85, 0xbc,
+	0x8b, 0x80, 0x6b, 0x1c, 0x2e, 0x40, 0xa6, 0xfd, 0x4e, 0x2e, 0x4e, 0xd4, 0xf3, 0x90, 0xf6, 0xdd,
+	0xa8, 0xb4, 0xaf, 0xa6, 0xcb, 0x48, 0xe6, 0x45, 0x28, 0xee, 0x47, 0x29, 0xe2, 0x7e, 0x67, 0x28,
+	0xaa, 0xef, 0xa4, 0xc0, 0x2b, 0xe8, 0x2e, 0x44, 0xaa, 0xe7, 0x22, 0xff, 0x85, 0x5c, 0xac, 0x2f,
+	0x67, 0x62, 0xae, 0xd0, 0x57, 0x72, 0x4f, 0xd9, 0x57, 0x8c, 0x18, 0xf3, 0xf2, 0xc8, 0xbc, 0x3b,
+	0xc3, 0x30, 0x7d, 0x27, 0x79, 0x77, 0x47, 0x50, 0x3e, 0xbf, 0x76, 0x3e, 0xf2, 0x46, 0xb6, 0x7c,
+	0x28, 0xb1, 0x2d, 0x1f, 0x8f, 0x04, 0xd6, 0xae, 0x99, 0xa2, 0x99, 0x0c, 0xf6, 0x75, 0x2b, 0xe2,
+	0xbe, 0xee, 0x65, 0x38, 0xdd, 0x67, 0xe2, 0x09, 0x7b, 0x0d, 0xee, 0x73, 0x61, 0x1d, 0xe5, 0x24,
+	0xcf, 0xf4, 0x3b, 0x0a, 0xcd, 0x92, 0xe5, 0xc7, 0xd2, 0x9e, 0xbb, 0xfc, 0x24, 0xda, 0x9f, 0x49,
+	0x7e, 0x12, 0x81, 0xdf, 0x11, 0xf9, 0x9d, 0x15, 0xe4, 0xe7, 0xd7, 0xce, 0x55, 0xff, 0x3f, 0x29,
+	0x02, 0xeb, 0x86, 0x4f, 0x73, 0x47, 0xde, 0x71, 0x73, 0x3f, 0xb8, 0x7f, 0x2b, 0x9f, 0xb2, 0x3e,
+	0x9c, 0x5c, 0xfb, 0xf3, 0xbe, 0x8a, 0xeb, 0x4d, 0x81, 0x05, 0x91, 0x49, 0xe0, 0x20, 0x15, 0xd1,
+	0x36, 0x84, 0x31, 0x76, 0xb5, 0x6d, 0x77, 0x07, 0x72, 0xe7, 0x1c, 0x14, 0xd9, 0x35, 0x53, 0xc2,
+	0xfe, 0x40, 0x96, 0x50, 0x6b, 0x69, 0xb7, 0x44, 0x46, 0x33, 0x4c, 0x59, 0x08, 0xb8, 0x25, 0xa9,
+	0xb6, 0xe8, 0x2a, 0x0d, 0x2c, 0x26, 0x8b, 0x5c, 0x72, 0x8f, 0x3e, 0x16, 0xb2, 0x22, 0xde, 0xf8,
+	0xc0, 0xde, 0xf2, 0xd9, 0x68, 0x6f, 0x49, 0xdb, 0x2d, 0x23, 0x5f, 0xd4, 0x15, 0xf4, 0x15, 0xed,
+	0xcf, 0x15, 0xc1, 0x06, 0x47, 0x5d, 0xf8, 0x91, 0xb7, 0x30, 0x25, 0xb9, 0xf3, 0x5b, 0x11, 0x6d,
+	0xbb, 0x95, 0xae, 0x6d, 0x91, 0xfa, 0x9f, 0xb7, 0xbe, 0xfd, 0xf7, 0x1c, 0x46, 0xbf, 0xa5, 0xba,
+	0x12, 0x76, 0xed, 0x26, 0x35, 0xe2, 0x61, 0xa4, 0x11, 0x9f, 0x1d, 0xda, 0x88, 0x38, 0xe2, 0xa4,
+	0xe6, 0x3c, 0xc3, 0xa4, 0x26, 0x38, 0xd3, 0x39, 0x9e, 0xe5, 0x4c, 0xa7, 0xa0, 0x28, 0x13, 0x4f,
+	0xa3, 0x28, 0xcf, 0xc2, 0xf7, 0x0f, 0x71, 0x25, 0x2a, 0x9d, 0x3b, 0x5c, 0xdb, 0x56, 0x61, 0x92,
+	0xa9, 0x91, 0xbf, 0xe8, 0xf0, 0x6a, 0x66, 0x4d, 0xd1, 0xfd, 0x92, 0xda, 0x7f, 0x13, 0x6d, 0xa7,
+	0xbc, 0x20, 0x33, 0xb0, 0x23, 0x8d, 0x60, 0x13, 0x25, 0xac, 0x89, 0x42, 0xbd, 0xc5, 0x2d, 0xf2,
+	0xd8, 0xd0, 0x63, 0x55, 0x1c, 0x17, 0x82, 0x3f, 0x0b, 0x8b, 0x45, 0xd3, 0x12, 0x59, 0x17, 0xfa,
+	0x6e, 0xc1, 0x5a, 0xe2, 0xd9, 0xbd, 0x4c, 0xfc, 0xb8, 0x0c, 0x33, 0x5d, 0xdb, 0x6b, 0x34, 0xfb,
+	0x9d, 0x7e, 0xdb, 0xf0, 0xac, 0x23, 0x93, 0x8f, 0xf5, 0xd3, 0x5d, 0xdb, 0x5b, 0x0d, 0x12, 0xb5,
+	0x75, 0x81, 0xdb, 0x1c, 0x39, 0x97, 0xe6, 0x35, 0x76, 0xa8, 0xd5, 0xe5, 0xa6, 0x63, 0x3e, 0x71,
+	0xcb, 0x80, 0xcb, 0x8e, 0xb3, 0xba, 0xda, 0xbb, 0x38, 0xb3, 0xe3, 0x86, 0x58, 0x3c, 0x3e, 0x97,
+	0xc9, 0xb0, 0x7a, 0x18, 0x18, 0x49, 0x2c, 0xcd, 0xa9, 0xd1, 0xe1, 0x64, 0x93, 0x67, 0x34, 0xf0,
+	0x54, 0x30, 0x3b, 0x60, 0x9a, 0xb6, 0x86, 0x14, 0x3b, 0xc1, 0xa7, 0xcf, 0x35, 0xa3, 0x49, 0xda,
+	0x39, 0x0c, 0xd3, 0xb1, 0x5a, 0x63, 0xb1, 0x9a, 0x77, 0x70, 0x46, 0x1d, 0xcb, 0x0c, 0x23, 0x41,
+	0xc2, 0xa6, 0x2a, 0x25, 0xb2, 0xa9, 0x4a, 0xfb, 0x67, 0x39, 0xdc, 0x86, 0x10, 0x29, 0x9d, 0xd1,
+	0x54, 0x7d, 0x10, 0xd1, 0xe4, 0x95, 0x74, 0x4d, 0x1e, 0x80, 0xfa, 0xff, 0xa6, 0xb1, 0x7a, 0x96,
+	0x8e, 0xb0, 0x8e, 0x4b, 0xf0, 0x83, 0x9a, 0x97, 0x4d, 0x04, 0x7f, 0xa2, 0x08, 0x3a, 0xe5, 0xef,
+	0x0e, 0x93, 0x7d, 0xb1, 0x61, 0xbb, 0x49, 0x63, 0x92, 0xa9, 0x47, 0x24, 0x33, 0x60, 0x32, 0x96,
+	0x58, 0xe3, 0xf3, 0x1e, 0x0f, 0xef, 0xe2, 0x3a, 0x63, 0x72, 0x85, 0xe1, 0x54, 0x22, 0xbc, 0x5b,
+	0xa4, 0x15, 0x84, 0x4d, 0xfc, 0x1b, 0x5a, 0x5a, 0x5a, 0x23, 0x01, 0x87, 0x6e, 0xe2, 0x91, 0x8d,
+	0x4c, 0x7c, 0x8a, 0x54, 0x90, 0x8b, 0x55, 0xa0, 0xe1, 0x52, 0x64, 0x4a, 0x05, 0xdc, 0xc4, 0x7d,
+	0x0e, 0x17, 0x13, 0x65, 0x98, 0x68, 0x8f, 0x1c, 0x6c, 0x41, 0xf6, 0x04, 0xcf, 0x20, 0x01, 0x43,
+	0x70, 0xd6, 0xe6, 0x24, 0x47, 0x21, 0xd0, 0xec, 0x2b, 0xcf, 0xdc, 0x91, 0x54, 0x9a, 0x2a, 0xd1,
+	0x9f, 0x2b, 0x70, 0x2d, 0x1d, 0x6d, 0x42, 0x7f, 0x1e, 0xc8, 0x2a, 0x23, 0x50, 0x1f, 0xb6, 0x90,
+	0x56, 0x1b, 0xae, 0x3e, 0x23, 0x76, 0xf0, 0x67, 0x51, 0xa6, 0x06, 0x5c, 0xcf, 0x58, 0xfd, 0x53,
+	0x32, 0xf3, 0x53, 0xdc, 0x1f, 0x23, 0x57, 0xe0, 0x2f, 0x1b, 0x8e, 0x30, 0xd0, 0xbf, 0x09, 0x67,
+	0xe2, 0x97, 0xde, 0xe0, 0xae, 0x6b, 0x64, 0x6b, 0x51, 0x3f, 0x1d, 0xbd, 0xeb, 0x6a, 0x9b, 0x66,
+	0x6a, 0xaf, 0xc2, 0x95, 0xa1, 0xd5, 0x4b, 0x3b, 0x31, 0xf8, 0xe6, 0xb9, 0x35, 0xbb, 0x63, 0x58,
+	0x5d, 0x37, 0x36, 0x40, 0x3c, 0x40, 0x8d, 0x4b, 0x05, 0xe2, 0x4c, 0xba, 0x01, 0xa7, 0x9a, 0x0c,
+	0xa4, 0xd1, 0x42, 0x18, 0x4e, 0x2a, 0xe3, 0x12, 0x69, 0x8a, 0xc5, 0x19, 0x9d, 0xbb, 0x6c, 0x91,
+	0x40, 0xcc, 0x88, 0x4c, 0x28, 0x16, 0xe1, 0x64, 0x02, 0x4e, 0xce, 0xa8, 0xb9, 0x18, 0x4a, 0xad,
+	0x8b, 0x5d, 0x3c, 0x19, 0x63, 0x28, 0xcb, 0x51, 0x50, 0x52, 0x09, 0x59, 0x6e, 0xc3, 0x68, 0x0a,
+	0x8e, 0x45, 0xc1, 0x72, 0xd9, 0x86, 0x67, 0xed, 0xfd, 0x78, 0x7d, 0x98, 0x23, 0x48, 0x78, 0xd4,
+	0x26, 0x30, 0x23, 0x92, 0x82, 0x92, 0x4b, 0xad, 0x1e, 0x97, 0xda, 0x9a, 0x69, 0x3c, 0x63, 0xc5,
+	0x2f, 0xc7, 0xa5, 0x2c, 0x22, 0xe5, 0x55, 0xbf, 0x28, 0xb6, 0x98, 0xf3, 0x76, 0x95, 0x9d, 0xfc,
+	0xf2, 0xd5, 0xe5, 0x7b, 0xc5, 0x16, 0x44, 0x41, 0xb8, 0x14, 0x6e, 0xc3, 0x24, 0xa7, 0x80, 0x3b,
+	0x36, 0x17, 0xd3, 0x76, 0x8d, 0xfa, 0xfb, 0xf0, 0x7d, 0x78, 0xed, 0x06, 0x3a, 0x89, 0xdb, 0x76,
+	0x2b, 0x3a, 0xfb, 0x14, 0x4e, 0x1c, 0x28, 0xe2, 0x89, 0x03, 0xed, 0xbb, 0xd0, 0xf3, 0x93, 0x4a,
+	0x04, 0x3a, 0x3b, 0x46, 0x61, 0x38, 0x0d, 0xe7, 0x07, 0x6d, 0xa9, 0xd5, 0x11, 0x52, 0x7b, 0x01,
+	0x17, 0x07, 0x04, 0x5c, 0x91, 0xc6, 0xbf, 0x8f, 0xde, 0x61, 0x52, 0xfe, 0x53, 0x57, 0xc9, 0x1c,
+	0x66, 0x9a, 0x10, 0xeb, 0x99, 0xb7, 0x70, 0x46, 0x1c, 0xc9, 0xe2, 0x15, 0xe1, 0xe9, 0x96, 0x96,
+	0xe8, 0x33, 0x4c, 0x32, 0x7e, 0xb8, 0x5c, 0xd4, 0x52, 0xb1, 0xb8, 0xd5, 0xd5, 0x3e, 0xc0, 0xb9,
+	0x50, 0x3a, 0x14, 0xaf, 0x67, 0x59, 0xbc, 0xde, 0x6a, 0x58, 0x8b, 0xf8, 0xe5, 0x57, 0x55, 0xe4,
+	0xa2, 0x74, 0x66, 0x52, 0x12, 0xe5, 0x65, 0x98, 0xb1, 0xc3, 0xcc, 0x50, 0xa2, 0xd3, 0x42, 0x6a,
+	0xad, 0xa5, 0xf5, 0x90, 0xd9, 0x49, 0x68, 0x38, 0x6d, 0x3b, 0x40, 0x44, 0x3c, 0xc2, 0xce, 0xe0,
+	0xa4, 0x7d, 0xca, 0x91, 0x33, 0x9c, 0xfa, 0x9c, 0x50, 0x96, 0xed, 0x1a, 0xd6, 0xee, 0xe0, 0xd2,
+	0x91, 0x00, 0x98, 0xdd, 0xcf, 0xd2, 0xec, 0x68, 0xa3, 0x23, 0x0e, 0xcc, 0x73, 0x27, 0x76, 0x2d,
+	0x4a, 0xac, 0x1c, 0x00, 0xca, 0xc8, 0xe4, 0x17, 0xa2, 0x64, 0x47, 0xe2, 0x41, 0xdf, 0x13, 0xad,
+	0x45, 0x1e, 0xe1, 0xb2, 0xd5, 0x42, 0xe6, 0x61, 0x82, 0x9d, 0x77, 0xe5, 0x36, 0x96, 0x7f, 0xc5,
+	0x6b, 0x8f, 0x0c, 0x60, 0xff, 0x36, 0xc7, 0x16, 0xf3, 0xda, 0x76, 0xbf, 0x75, 0xd7, 0x68, 0x3e,
+	0xe9, 0xf7, 0x46, 0xf0, 0x7c, 0x63, 0x2b, 0x79, 0xb9, 0xe4, 0x75, 0xdf, 0xc7, 0xfd, 0x76, 0x9b,
+	0x9f, 0x1e, 0xc3, 0xdf, 0xd4, 0xd4, 0x78, 0x86, 0xfb, 0x44, 0x38, 0xdc, 0x44, 0x3f, 0x6b, 0x2d,
+	0xb2, 0x1b, 0x38, 0x3e, 0xe3, 0xd8, 0x1b, 0xde, 0x4e, 0x72, 0x7c, 0xd2, 0x88, 0x4d, 0x9c, 0xc8,
+	0x2c, 0xc3, 0x69, 0x5a, 0x65, 0xe3, 0x11, 0xc2, 0x37, 0x1e, 0x3b, 0x14, 0xb6, 0xdb, 0x64, 0x07,
+	0x7b, 0xa7, 0xf5, 0x93, 0x34, 0x93, 0xe1, 0x5a, 0xf7, 0xb3, 0x9e, 0xc5, 0x37, 0x7a, 0x8b, 0x2d,
+	0x7e, 0xc6, 0x29, 0xe4, 0x4a, 0x2a, 0xb4, 0x5c, 0x11, 0x5b, 0xae, 0xfd, 0xdd, 0x1c, 0x37, 0xfb,
+	0x41, 0x49, 0x9c, 0x27, 0xc9, 0xd2, 0x38, 0x0b, 0x05, 0x76, 0x25, 0x5f, 0x50, 0x7c, 0x12, 0xbf,
+	0xd9, 0x4a, 0x93, 0x30, 0xc9, 0xc9, 0x45, 0x26, 0x39, 0x71, 0x51, 0xe5, 0x07, 0x88, 0x6a, 0x4c,
+	0x10, 0xd5, 0x7e, 0x44, 0x22, 0xef, 0x0d, 0x91, 0x48, 0x9c, 0xea, 0xe7, 0xed, 0x7e, 0x7e, 0xc4,
+	0x47, 0xef, 0xe4, 0x2a, 0x39, 0x9f, 0x5f, 0x87, 0xd3, 0x8c, 0x53, 0x4d, 0x0a, 0xe7, 0x4b, 0x3f,
+	0x60, 0x1b, 0xc1, 0x4c, 0x01, 0x07, 0xdb, 0xed, 0xc2, 0x45, 0xe3, 0xf3, 0x6f, 0x92, 0xc9, 0xc6,
+	0xd5, 0xbe, 0xa5, 0x44, 0xc5, 0x1a, 0x9f, 0xf8, 0x44, 0xab, 0x28, 0x3c, 0xf2, 0x11, 0x2f, 0xe2,
+	0x85, 0x0c, 0xd8, 0x7d, 0xb9, 0x88, 0x84, 0xf9, 0xe2, 0x1c, 0xcf, 0x62, 0xee, 0x26, 0xba, 0x4c,
+	0x99, 0x64, 0x95, 0x7a, 0x3e, 0x50, 0xd0, 0xb0, 0x71, 0x49, 0xc3, 0x5a, 0x6c, 0x49, 0x3d, 0xa1,
+	0x0d, 0x9c, 0x67, 0x0b, 0x30, 0x17, 0xa1, 0x33, 0x68, 0xcc, 0xac, 0x44, 0xa5, 0x5c, 0x4b, 0x4e,
+	0xaa, 0xa5, 0x1f, 0xb5, 0x27, 0xb1, 0xa8, 0x79, 0x3a, 0xa3, 0x32, 0xd9, 0x93, 0xc4, 0xfb, 0x88,
+	0xb8, 0x9d, 0x4b, 0xa8, 0x96, 0xdb, 0x39, 0x8b, 0xfb, 0xca, 0x91, 0xfc, 0x95, 0x76, 0xb0, 0x17,
+	0x4a, 0x83, 0x69, 0xd7, 0x69, 0xc6, 0x5a, 0x5e, 0x72, 0x9d, 0xe6, 0x83, 0x51, 0x0c, 0x5e, 0xe0,
+	0xe2, 0x25, 0x55, 0xc5, 0xa9, 0xf9, 0x2b, 0x63, 0xb8, 0x15, 0x5f, 0x80, 0x19, 0x34, 0x55, 0xcc,
+	0x42, 0xd9, 0x05, 0x00, 0xdf, 0x5b, 0x0d, 0x37, 0x1c, 0xf1, 0x94, 0x24, 0xc2, 0x93, 0x54, 0x4a,
+	0x85, 0xbc, 0x11, 0xf4, 0x7e, 0xfa, 0x93, 0x6c, 0xc3, 0x34, 0x1b, 0x46, 0x1b, 0x8f, 0x91, 0x24,
+	0xd4, 0xa8, 0x99, 0xe4, 0x68, 0xad, 0xd0, 0x18, 0x36, 0x7e, 0xb2, 0xdb, 0x4e, 0x58, 0x79, 0xd6,
+	0x22, 0xf2, 0x31, 0xcc, 0xfa, 0x8f, 0xe0, 0xf8, 0x18, 0x27, 0xd0, 0xaa, 0x6c, 0x0f, 0xc1, 0x38,
+	0x68, 0x76, 0xbb, 0xc5, 0x31, 0xb2, 0x64, 0x66, 0x66, 0x66, 0x3a, 0x52, 0x22, 0xb9, 0x08, 0xa5,
+	0x8e, 0xf1, 0x09, 0x37, 0x03, 0xc1, 0x0d, 0x61, 0x1d, 0xe3, 0x13, 0x86, 0xde, 0x25, 0xd7, 0x81,
+	0x34, 0xed, 0xae, 0x67, 0x75, 0xfb, 0xec, 0x76, 0x52, 0xcf, 0x7e, 0x62, 0x76, 0xf1, 0x66, 0x25,
+	0xea, 0xec, 0x0b, 0x39, 0x7b, 0x34, 0xa3, 0xb2, 0x02, 0x27, 0x13, 0xaa, 0x1d, 0xc9, 0x8c, 0xfd,
+	0x8f, 0x1c, 0xde, 0x4e, 0x24, 0xda, 0xa0, 0xee, 0x63, 0x3b, 0x76, 0x5c, 0x30, 0x26, 0xfc, 0x5c,
+	0x5c, 0xf8, 0xaf, 0xc0, 0xac, 0x00, 0x23, 0x1c, 0xbf, 0x9a, 0x0e, 0xa0, 0xd0, 0xb0, 0x48, 0x37,
+	0x59, 0x8d, 0x8d, 0x72, 0x93, 0xd5, 0x96, 0xf0, 0x9a, 0x11, 0x1b, 0x07, 0x5e, 0x1f, 0x22, 0x31,
+	0xda, 0x98, 0x40, 0x34, 0xfc, 0x68, 0x6e, 0xf0, 0x00, 0xd2, 0x4a, 0x70, 0xca, 0x6c, 0x62, 0x54,
+	0x85, 0xe2, 0x05, 0x2b, 0xef, 0xc0, 0xb4, 0x84, 0x7d, 0x24, 0xde, 0x7f, 0x53, 0xc1, 0xd3, 0x2d,
+	0x43, 0x15, 0x8c, 0x1b, 0xc6, 0xf7, 0x60, 0xd2, 0xd7, 0x1c, 0xe6, 0xa4, 0xbf, 0x94, 0xa1, 0xf1,
+	0xba, 0x5f, 0x26, 0x45, 0xb7, 0x72, 0x29, 0xba, 0xa5, 0xfd, 0xd2, 0x18, 0x9c, 0x4a, 0x6a, 0xfe,
+	0x60, 0xdb, 0xf9, 0x1e, 0x4c, 0xd8, 0xbd, 0xe0, 0x12, 0xa1, 0xa4, 0x3b, 0x4b, 0x65, 0x9c, 0x3b,
+	0x3d, 0xc6, 0x4e, 0x56, 0x48, 0x90, 0x48, 0xfe, 0x29, 0x25, 0x12, 0xde, 0xa7, 0xd7, 0xb2, 0xf9,
+	0xcb, 0x5f, 0xfe, 0x7d, 0x7a, 0x6b, 0x76, 0xd7, 0x8c, 0x5c, 0xff, 0x35, 0x3e, 0xca, 0xf5, 0x5f,
+	0x2b, 0x30, 0xd3, 0xb4, 0x3b, 0x3d, 0x6a, 0x45, 0xf9, 0x25, 0x60, 0xc3, 0x2f, 0x16, 0x9d, 0x0e,
+	0x4a, 0x20, 0x0a, 0x61, 0xb8, 0x9c, 0x94, 0x86, 0xcb, 0x58, 0xff, 0x2a, 0xc4, 0xfb, 0x17, 0x81,
+	0x31, 0x5c, 0x43, 0x28, 0xa2, 0x57, 0x80, 0xbf, 0xe3, 0x16, 0x15, 0x12, 0x2c, 0xea, 0x45, 0x28,
+	0x31, 0x96, 0xb0, 0xb3, 0xbd, 0x25, 0x66, 0x76, 0x30, 0x89, 0x9d, 0xee, 0xbd, 0x08, 0x25, 0xd3,
+	0x33, 0x1a, 0xfe, 0xd1, 0x87, 0x29, 0x76, 0xc9, 0x8b, 0xe9, 0x19, 0x75, 0x96, 0x22, 0x79, 0x7c,
+	0xd3, 0x92, 0xc7, 0xa7, 0x59, 0xd1, 0x91, 0x96, 0x9f, 0xcc, 0xcc, 0xe2, 0xb9, 0x9f, 0x82, 0xf1,
+	0xb6, 0xdd, 0x34, 0xda, 0x7c, 0xb6, 0xc0, 0x3e, 0xc4, 0x41, 0x3d, 0x2f, 0x0d, 0xea, 0xff, 0x31,
+	0xe6, 0xff, 0xf8, 0x75, 0xf1, 0x1e, 0xf2, 0x10, 0x0a, 0x4c, 0x0b, 0x82, 0x79, 0xec, 0x3b, 0x99,
+	0x14, 0x28, 0x3c, 0xc8, 0xcd, 0x4b, 0x73, 0x4b, 0xe1, 0x23, 0xab, 0x3c, 0x82, 0x69, 0x29, 0x6b,
+	0xd8, 0x65, 0xbd, 0xa5, 0xa1, 0x8a, 0xcf, 0x2b, 0x16, 0xac, 0xc1, 0x17, 0x63, 0x3e, 0xbb, 0xe1,
+	0x19, 0x6d, 0xfb, 0xe0, 0xb9, 0xf9, 0x2c, 0xda, 0x3b, 0x51, 0xd7, 0x2b, 0xa8, 0x81, 0xf3, 0xaf,
+	0x02, 0x05, 0xdc, 0x6c, 0xd8, 0xf5, 0xfc, 0x60, 0x43, 0xf0, 0xad, 0xfd, 0x96, 0x82, 0xab, 0x4f,
+	0x42, 0xe9, 0x0d, 0x8b, 0x36, 0xef, 0xb8, 0xe6, 0x99, 0x9d, 0x4c, 0xce, 0x81, 0x64, 0xf7, 0x73,
+	0xa3, 0xd8, 0xfd, 0x67, 0x37, 0x0b, 0xda, 0xdd, 0x28, 0x77, 0x39, 0xf5, 0x23, 0x78, 0x37, 0x5a,
+	0x37, 0xca, 0xbf, 0x00, 0x07, 0xe7, 0xdf, 0x16, 0x4c, 0x1d, 0xb2, 0xa4, 0x46, 0xdb, 0x72, 0xfd,
+	0x7b, 0xa7, 0x16, 0x86, 0x50, 0x2b, 0xf0, 0x51, 0x2f, 0xf1, 0xf2, 0x9b, 0x96, 0xeb, 0x69, 0x3f,
+	0xa9, 0x44, 0x27, 0x63, 0x78, 0x25, 0x0d, 0xbb, 0xe7, 0x42, 0x88, 0x97, 0x25, 0x4e, 0xe5, 0xc8,
+	0x03, 0x98, 0x75, 0x18, 0x4c, 0x70, 0x21, 0x2f, 0xb3, 0xc9, 0xd7, 0x87, 0xd0, 0xa3, 0xfb, 0xa5,
+	0xd8, 0x0d, 0xbd, 0x33, 0x8e, 0xf4, 0x1d, 0x04, 0x9b, 0x93, 0x89, 0xe2, 0xae, 0xe5, 0x57, 0x73,
+	0x6c, 0x83, 0xaf, 0x00, 0xc5, 0x43, 0xd7, 0xe8, 0x5e, 0x3c, 0x2f, 0x2f, 0x57, 0x3e, 0xee, 0x93,
+	0x7f, 0x86, 0xe3, 0x3e, 0x51, 0xdf, 0x6c, 0x2c, 0xe6, 0x9b, 0xf9, 0xd3, 0xd2, 0x71, 0x61, 0x5a,
+	0x7a, 0x19, 0x66, 0x1c, 0x93, 0xf6, 0x0f, 0x3a, 0xa0, 0xb6, 0x8c, 0x63, 0x97, 0xcf, 0xe7, 0xa7,
+	0x83, 0xd4, 0x35, 0xe3, 0xd8, 0xd5, 0x8e, 0x63, 0x72, 0xa4, 0xd5, 0xca, 0x93, 0xea, 0x7d, 0x50,
+	0xd9, 0x24, 0x11, 0x49, 0x12, 0x57, 0x8b, 0x5f, 0x1b, 0xa6, 0xed, 0x02, 0x67, 0xf5, 0x19, 0x44,
+	0x82, 0x49, 0xb8, 0x66, 0xfc, 0x7e, 0x4c, 0x5a, 0x62, 0xd5, 0xc1, 0xd2, 0x39, 0xe1, 0xa6, 0x25,
+	0x58, 0xa0, 0x08, 0x64, 0xa2, 0x3e, 0x92, 0x2b, 0x69, 0x69, 0xbb, 0x89, 0xad, 0x91, 0x27, 0x58,
+	0xa3, 0x61, 0x7c, 0x29, 0x91, 0xc8, 0xc8, 0xdc, 0x89, 0x1d, 0x2f, 0x8e, 0x02, 0xc5, 0x82, 0xa9,
+	0x5f, 0x65, 0x4b, 0xd9, 0x03, 0xe0, 0x78, 0xa3, 0x5d, 0x99, 0xe1, 0x42, 0x87, 0xad, 0x65, 0x61,
+	0x78, 0x0c, 0xe1, 0xe2, 0x6a, 0xc0, 0x79, 0xda, 0x7b, 0xf9, 0x0c, 0xa0, 0x29, 0x25, 0x56, 0xba,
+	0x70, 0x32, 0x01, 0x2c, 0x61, 0x38, 0x59, 0x91, 0x87, 0x93, 0x91, 0x74, 0x40, 0x18, 0x54, 0x6e,
+	0xc3, 0x64, 0xbd, 0xf5, 0x44, 0xef, 0xb7, 0xd1, 0xb8, 0xbb, 0xa6, 0x73, 0x64, 0x35, 0x83, 0xd5,
+	0x9c, 0xe0, 0x9b, 0xea, 0xb6, 0xd1, 0xb3, 0xfc, 0x80, 0x03, 0xfe, 0xd6, 0xb6, 0x58, 0x51, 0xbb,
+	0x6d, 0x26, 0x6e, 0x73, 0x5b, 0x84, 0x71, 0x47, 0x38, 0x64, 0x57, 0x4e, 0x22, 0x90, 0xd6, 0xab,
+	0x33, 0x30, 0x6d, 0x0d, 0xdd, 0x49, 0x8a, 0x4e, 0xd6, 0xfb, 0x6b, 0x30, 0xe6, 0xd8, 0x6d, 0x3f,
+	0x92, 0x9e, 0x8c, 0xc6, 0x6e, 0x9b, 0x3a, 0x42, 0x69, 0x55, 0x5c, 0x36, 0x10, 0xb1, 0x04, 0x2a,
+	0x3c, 0x0a, 0x1a, 0x16, 0x8c, 0xa7, 0x09, 0x31, 0xfd, 0xb9, 0x81, 0xc1, 0xf8, 0x48, 0x56, 0x78,
+	0x7b, 0x90, 0xb8, 0x1a, 0xc6, 0x3e, 0xb4, 0xd7, 0x02, 0x9a, 0x32, 0x1c, 0x39, 0x66, 0xfb, 0x57,
+	0x24, 0xe0, 0xa7, 0x6a, 0xc1, 0x42, 0xc0, 0xce, 0xe1, 0x07, 0x8a, 0xcf, 0x04, 0x04, 0x46, 0xba,
+	0x54, 0x28, 0x13, 0x39, 0xda, 0xfb, 0xb4, 0x32, 0x91, 0xa3, 0xba, 0x23, 0xa2, 0xb9, 0x84, 0xb1,
+	0x91, 0x1a, 0xda, 0x76, 0xef, 0x78, 0xd5, 0xe8, 0x19, 0x8f, 0xac, 0xb6, 0xe5, 0x59, 0x66, 0xb0,
+	0x94, 0xd1, 0xc6, 0x90, 0x46, 0x32, 0x04, 0xaf, 0xb2, 0x06, 0x53, 0x4d, 0x21, 0x9d, 0x77, 0xe8,
+	0x44, 0x67, 0xac, 0xce, 0x94, 0x3f, 0x40, 0x73, 0xac, 0x4b, 0x45, 0xf9, 0x6e, 0x1b, 0xbf, 0xb6,
+	0x07, 0xa6, 0xe3, 0x5a, 0x76, 0xd7, 0x27, 0xe5, 0x1b, 0x0a, 0x8e, 0x6f, 0xb1, 0x5c, 0x4e, 0xc6,
+	0xbb, 0x50, 0x72, 0x5b, 0x4f, 0x1a, 0x47, 0x2c, 0x99, 0x33, 0xe0, 0x5c, 0xe2, 0xf2, 0x39, 0x2f,
+	0x09, 0x6e, 0xf0, 0x9b, 0xdc, 0x86, 0x49, 0xbf, 0x64, 0x6e, 0xf0, 0xb2, 0x9a, 0x5f, 0xda, 0x87,
+	0xd7, 0x7e, 0x3b, 0x8f, 0x22, 0x8d, 0xb5, 0x8d, 0xec, 0xc1, 0x24, 0xef, 0xed, 0x9c, 0x9a, 0xb7,
+	0x33, 0xf1, 0x64, 0x51, 0xb8, 0x7a, 0x81, 0x67, 0x6e, 0x9c, 0xd0, 0x7d, 0x54, 0x95, 0xdf, 0xcd,
+	0x01, 0x89, 0x43, 0x90, 0xf7, 0xf9, 0x4d, 0x62, 0xec, 0xb4, 0xf8, 0x7b, 0x4f, 0x5b, 0xd3, 0x22,
+	0xbb, 0xcb, 0x0b, 0x0f, 0x0c, 0xfd, 0xb1, 0x02, 0x63, 0x78, 0x17, 0x6d, 0x09, 0x26, 0xf7, 0xb7,
+	0xef, 0x6f, 0xef, 0x3c, 0xdc, 0x66, 0x4f, 0xdd, 0xac, 0x6e, 0xee, 0xd7, 0xf7, 0xaa, 0xba, 0xaa,
+	0x10, 0x15, 0xa6, 0x56, 0x37, 0x77, 0xf6, 0xd7, 0x1a, 0x77, 0x57, 0x56, 0xef, 0xef, 0xef, 0xaa,
+	0x39, 0x32, 0x0b, 0xa5, 0x55, 0xbd, 0xba, 0x56, 0xdd, 0xde, 0xab, 0xad, 0x6c, 0xd6, 0xd5, 0x3c,
+	0x29, 0xc0, 0xd8, 0xf6, 0xce, 0x5a, 0x55, 0x1d, 0x23, 0x04, 0x66, 0x76, 0xee, 0x7e, 0x57, 0x75,
+	0x75, 0xaf, 0x51, 0xdf, 0xdb, 0xd1, 0x57, 0xee, 0x55, 0xd5, 0x71, 0x72, 0x12, 0x66, 0xeb, 0xab,
+	0x1b, 0xd5, 0xb5, 0xfd, 0xcd, 0x6a, 0x63, 0x77, 0x67, 0xb3, 0xb6, 0xfa, 0x81, 0x3a, 0x41, 0x00,
+	0x26, 0x1e, 0xec, 0x6c, 0xee, 0x6f, 0x55, 0xd5, 0x49, 0xfa, 0x7b, 0x65, 0xb3, 0xaa, 0xef, 0xd5,
+	0xd5, 0x02, 0xad, 0x6d, 0x6b, 0x67, 0x7f, 0x7b, 0xaf, 0xb1, 0xb2, 0xb7, 0xb7, 0xb2, 0xba, 0xa1,
+	0x16, 0xf1, 0x7d, 0x8d, 0x9d, 0xcd, 0xaa, 0x0a, 0x8c, 0x12, 0x24, 0xab, 0xb1, 0xbb, 0x52, 0xd3,
+	0xd5, 0x12, 0x3e, 0xc3, 0x53, 0xbb, 0xa7, 0xaf, 0xec, 0x55, 0xd5, 0x29, 0x5a, 0x37, 0xaf, 0xd4,
+	0xaf, 0x66, 0xfa, 0xee, 0x04, 0x63, 0x99, 0xf6, 0x1b, 0x0a, 0x40, 0xa8, 0x16, 0xd4, 0xe2, 0x74,
+	0x8c, 0x0f, 0x6d, 0xff, 0x1c, 0x3f, 0xfb, 0xc0, 0x54, 0xab, 0x6b, 0xfb, 0x07, 0xdf, 0xd9, 0x07,
+	0x4d, 0xed, 0x19, 0x5e, 0xf3, 0x90, 0x1f, 0x7c, 0x67, 0x1f, 0xa4, 0x1c, 0x2a, 0x13, 0xbf, 0x51,
+	0xdc, 0xd7, 0x95, 0x0d, 0x98, 0xf4, 0xab, 0x29, 0xc3, 0xa9, 0xad, 0xfd, 0xfa, 0x5e, 0x63, 0x63,
+	0xe5, 0x41, 0xb5, 0xf1, 0x85, 0xaa, 0xbe, 0xd3, 0x78, 0xb0, 0xb2, 0xb9, 0x5f, 0x65, 0x4f, 0x85,
+	0x6c, 0xd1, 0x3a, 0xf9, 0x4f, 0x5a, 0x91, 0xba, 0x40, 0x7f, 0xee, 0x52, 0xec, 0xea, 0x6c, 0x25,
+	0xa7, 0x2a, 0xda, 0xbf, 0x54, 0x82, 0x1b, 0x7c, 0x7c, 0x8c, 0xf3, 0x30, 0xc1, 0x36, 0xb0, 0xfb,
+	0x5e, 0x29, 0xfb, 0x12, 0xc9, 0xc9, 0x49, 0xe4, 0x90, 0x75, 0x98, 0x6c, 0x99, 0x9e, 0x61, 0x05,
+	0xbb, 0x95, 0xae, 0x0d, 0xd1, 0xfa, 0xc5, 0x35, 0x06, 0xce, 0x2f, 0x56, 0xe4, 0x85, 0x2b, 0x77,
+	0x60, 0x4a, 0xcc, 0x18, 0x29, 0x22, 0xf3, 0xeb, 0x39, 0x98, 0xc2, 0x51, 0x75, 0xcb, 0x3a, 0xa0,
+	0x96, 0x5f, 0x6b, 0xc0, 0x34, 0x7b, 0x0d, 0xca, 0xb2, 0xbb, 0xa8, 0x7e, 0xb3, 0x50, 0xaa, 0x75,
+	0x8f, 0x8c, 0xb6, 0xd5, 0xa2, 0x9f, 0xea, 0x09, 0x2a, 0x4c, 0x0e, 0xcc, 0xd7, 0xb8, 0x55, 0x85,
+	0xcc, 0xc1, 0x34, 0x4f, 0x63, 0xde, 0xac, 0x9a, 0x23, 0xf3, 0x40, 0xa4, 0x24, 0x5c, 0x2d, 0x50,
+	0xf3, 0xda, 0x36, 0xbe, 0x6f, 0x70, 0x60, 0x52, 0x9d, 0xe1, 0x88, 0xf1, 0x5b, 0x3d, 0x41, 0xb5,
+	0x8d, 0x0d, 0xee, 0xec, 0x19, 0x27, 0x1e, 0x27, 0x57, 0x73, 0x14, 0x54, 0xdc, 0x78, 0xc9, 0xf4,
+	0x7a, 0xcd, 0xee, 0x9a, 0xea, 0x98, 0xd6, 0x83, 0x09, 0x1e, 0xa7, 0x99, 0x83, 0xe9, 0x10, 0xa1,
+	0xd7, 0x77, 0x19, 0xc6, 0xf7, 0xfb, 0x66, 0xdf, 0x6c, 0xa9, 0x0a, 0x6b, 0x88, 0x45, 0xdd, 0x68,
+	0xeb, 0x4b, 0x66, 0x4b, 0xcd, 0x91, 0x19, 0x80, 0x5a, 0xd7, 0x7f, 0xab, 0x40, 0xcd, 0x53, 0xe0,
+	0x75, 0xc3, 0x6a, 0x9b, 0x2d, 0x75, 0x8c, 0x4c, 0x41, 0x61, 0x95, 0x07, 0x32, 0xd4, 0x71, 0xfc,
+	0x32, 0xba, 0x4d, 0x93, 0xe6, 0x4d, 0x68, 0xbf, 0xa9, 0x40, 0x59, 0xe4, 0x59, 0xdd, 0x33, 0x9c,
+	0x60, 0x08, 0xac, 0x41, 0xd1, 0xf6, 0xf9, 0xc7, 0xcd, 0x41, 0xdc, 0x95, 0x11, 0x4b, 0x2f, 0x4a,
+	0xec, 0xd6, 0xc3, 0xd2, 0xc3, 0x62, 0xcb, 0xe7, 0xa0, 0xe8, 0x19, 0xce, 0x81, 0xe9, 0x85, 0x71,
+	0x83, 0x02, 0x4b, 0x90, 0xd7, 0x09, 0xa4, 0x95, 0x3e, 0xed, 0xbf, 0xe6, 0xc3, 0xf0, 0x45, 0x12,
+	0xfd, 0x72, 0xa5, 0x4a, 0xb4, 0xd2, 0xb4, 0xf5, 0x07, 0xb2, 0x1f, 0x6c, 0x64, 0xe7, 0x07, 0x3f,
+	0xef, 0xa4, 0x3a, 0x70, 0x09, 0xd5, 0x2e, 0x4a, 0xaa, 0xb2, 0x71, 0x22, 0xd8, 0xee, 0x6e, 0x02,
+	0x7f, 0xbd, 0xaf, 0xc1, 0x36, 0x37, 0xf2, 0xe3, 0x9f, 0x9f, 0x7d, 0x7a, 0xe4, 0xec, 0x0d, 0xbc,
+	0x13, 0x7a, 0xe9, 0x28, 0xfc, 0x24, 0x8f, 0xa0, 0x64, 0xb4, 0xdb, 0x0d, 0x7f, 0x73, 0x34, 0x3f,
+	0x08, 0xfa, 0x99, 0xa7, 0xa9, 0x65, 0xa5, 0xdd, 0x66, 0x15, 0xb9, 0x1b, 0x27, 0x74, 0x30, 0x82,
+	0xaf, 0xca, 0xb5, 0x48, 0x1f, 0x19, 0x18, 0x29, 0xaa, 0x2c, 0x25, 0x75, 0x9f, 0x01, 0x0b, 0x91,
+	0x95, 0x93, 0x30, 0x17, 0xa3, 0xc0, 0xbf, 0x2e, 0xfe, 0x0d, 0x38, 0x9b, 0x40, 0xf6, 0xb0, 0xa5,
+	0xd1, 0x47, 0x61, 0x04, 0x21, 0xb1, 0xe0, 0x5d, 0x98, 0x70, 0x4c, 0xb7, 0xdf, 0xf6, 0xca, 0x69,
+	0x97, 0x24, 0xa4, 0x96, 0xd5, 0x79, 0xc9, 0x28, 0x65, 0xac, 0x97, 0x0d, 0x9b, 0xe9, 0x6b, 0xad,
+	0x18, 0x65, 0x72, 0xc1, 0x35, 0x98, 0xe4, 0x73, 0xf8, 0x4c, 0xa4, 0x49, 0x85, 0x75, 0xbf, 0xa8,
+	0x7f, 0x16, 0x36, 0x01, 0x90, 0x7b, 0x93, 0xff, 0x74, 0x1c, 0x54, 0x31, 0x1b, 0x67, 0xfa, 0xa9,
+	0xe1, 0x89, 0x21, 0xdd, 0xf9, 0x15, 0x98, 0xc5, 0x68, 0xa0, 0x10, 0x23, 0xe0, 0x8b, 0x09, 0x98,
+	0x1c, 0x44, 0x09, 0x16, 0x60, 0x4e, 0x82, 0x43, 0xe7, 0x97, 0xf5, 0xf1, 0x59, 0x01, 0x12, 0x17,
+	0x1e, 0xae, 0x82, 0xea, 0x98, 0x1d, 0xdb, 0x13, 0x17, 0x16, 0xd9, 0xe2, 0xe4, 0x0c, 0x4b, 0x7f,
+	0x20, 0x6c, 0x46, 0xc7, 0x89, 0x5b, 0x18, 0x70, 0x63, 0x57, 0x98, 0x4e, 0x0b, 0xa9, 0x18, 0x7d,
+	0x98, 0xf6, 0xef, 0xd1, 0x76, 0xa9, 0xd1, 0xe6, 0x77, 0x19, 0xbe, 0x34, 0xd8, 0xc2, 0xa1, 0x7d,
+	0xd7, 0xa7, 0x78, 0x49, 0x66, 0xfd, 0xdf, 0x0d, 0x22, 0x5c, 0x05, 0x44, 0xf1, 0xf2, 0x50, 0x14,
+	0xe2, 0xed, 0x77, 0xef, 0x40, 0x09, 0x1f, 0x9c, 0xe2, 0xaf, 0xa0, 0x0c, 0x7f, 0x72, 0x0a, 0x28,
+	0x38, 0x7f, 0x20, 0xe5, 0x45, 0x98, 0xc2, 0x5b, 0x29, 0x1b, 0x8e, 0x69, 0xb8, 0x76, 0x97, 0x47,
+	0x90, 0x4b, 0x98, 0xa6, 0x63, 0x52, 0x24, 0x68, 0x5e, 0x7a, 0xb6, 0xa0, 0xf9, 0xd4, 0xa8, 0x41,
+	0xf3, 0x48, 0xf8, 0x7a, 0x3a, 0x16, 0xbe, 0x96, 0x43, 0xfe, 0x33, 0xd1, 0x90, 0x7f, 0x24, 0xba,
+	0x3d, 0x1b, 0x8d, 0x6e, 0x6b, 0x5b, 0x70, 0x2a, 0xaa, 0xb7, 0x74, 0x6a, 0x4e, 0x6e, 0xc1, 0x98,
+	0x10, 0x15, 0x78, 0x71, 0xa0, 0x48, 0x70, 0xe2, 0x8d, 0xe0, 0x09, 0xdd, 0x51, 0x0e, 0x89, 0x8f,
+	0xd8, 0x1d, 0xa5, 0xc2, 0x61, 0x77, 0xac, 0xc7, 0x8c, 0x98, 0x50, 0xc5, 0x53, 0xf6, 0x3a, 0xed,
+	0x77, 0x15, 0xa8, 0x24, 0x61, 0x0d, 0x66, 0x57, 0x63, 0x3c, 0x2e, 0x95, 0x7c, 0xae, 0x2a, 0xbd,
+	0xe8, 0x62, 0xf8, 0x68, 0x16, 0xa2, 0xa8, 0x7c, 0x1f, 0x14, 0x07, 0xbd, 0x08, 0x35, 0x34, 0x9a,
+	0x9e, 0x24, 0x30, 0xd1, 0x93, 0x6b, 0xc5, 0xac, 0x55, 0xa4, 0x2d, 0xab, 0x11, 0x73, 0xfd, 0xda,
+	0x08, 0xad, 0x09, 0xec, 0xf5, 0xbb, 0xc1, 0x0d, 0xc3, 0xbb, 0x86, 0xe5, 0x6c, 0xd9, 0x2d, 0x53,
+	0x7b, 0x15, 0xc6, 0xe8, 0x7f, 0xea, 0xb1, 0xf1, 0x5b, 0xea, 0xd4, 0x13, 0xe4, 0x14, 0xa8, 0x6b,
+	0x96, 0x6b, 0xb0, 0xab, 0x88, 0x9b, 0xf6, 0x91, 0xe9, 0x1c, 0xab, 0x8a, 0xf6, 0x57, 0x73, 0xd4,
+	0x73, 0x0a, 0x8a, 0xcb, 0x71, 0x11, 0xdc, 0x06, 0x81, 0xc6, 0x2a, 0x10, 0x58, 0x2f, 0xdc, 0x06,
+	0x41, 0x33, 0xfc, 0xbd, 0x99, 0x3d, 0xb6, 0xb5, 0x43, 0x82, 0xc5, 0xcb, 0xfa, 0x73, 0x18, 0x8b,
+	0x9c, 0x93, 0xa0, 0xf1, 0xce, 0xfe, 0x1b, 0x70, 0x2a, 0x02, 0xcf, 0x16, 0x03, 0x99, 0x85, 0x25,
+	0x52, 0x01, 0x5c, 0x0d, 0x64, 0xb7, 0x19, 0x78, 0x8d, 0x16, 0x6b, 0x11, 0x5f, 0x9c, 0x07, 0x37,
+	0xb8, 0x2a, 0x90, 0xdc, 0x86, 0xb1, 0x8e, 0xdd, 0x32, 0xf9, 0xd2, 0x7c, 0x92, 0xbc, 0x24, 0x36,
+	0x2d, 0x6e, 0xe1, 0xce, 0x48, 0x5a, 0x44, 0xfb, 0x98, 0x6a, 0x72, 0x8c, 0x0b, 0xe2, 0x6e, 0x10,
+	0x99, 0x0d, 0xad, 0x64, 0x36, 0xb4, 0x12, 0xd8, 0x20, 0xef, 0x70, 0x11, 0xa0, 0x71, 0xaf, 0xec,
+	0x23, 0xee, 0xfb, 0xa5, 0x48, 0x60, 0x35, 0xda, 0x4f, 0x5f, 0x1d, 0xd4, 0x2a, 0xa9, 0x6c, 0xd8,
+	0x4d, 0x7d, 0xaf, 0x21, 0xad, 0x7d, 0x59, 0xbc, 0x86, 0x94, 0xb2, 0x81, 0x16, 0xfe, 0x13, 0x45,
+	0xe2, 0xe0, 0xae, 0x63, 0x37, 0x4d, 0xd7, 0x15, 0x14, 0x89, 0xbf, 0x68, 0x12, 0xe7, 0x20, 0xcb,
+	0x08, 0x39, 0x98, 0xa6, 0x18, 0xb9, 0x54, 0xc5, 0xf0, 0xe5, 0x9e, 0x1f, 0x5d, 0xee, 0xdf, 0xca,
+	0x51, 0x63, 0x13, 0x27, 0xfb, 0xdb, 0x2f, 0x79, 0xf2, 0x36, 0x94, 0x23, 0xf0, 0xe1, 0x6b, 0x19,
+	0xec, 0xc6, 0xe9, 0x79, 0xa9, 0x50, 0x35, 0x78, 0x3a, 0x43, 0x8f, 0x3e, 0x00, 0xf0, 0xf6, 0xa0,
+	0x26, 0x47, 0xda, 0xf4, 0x6d, 0x78, 0x0a, 0xe0, 0xdd, 0xa8, 0x0e, 0xcb, 0xe1, 0xc0, 0xc1, 0xf3,
+	0x97, 0x60, 0xbf, 0x52, 0xac, 0x34, 0x77, 0xe9, 0x6e, 0xc2, 0x39, 0x21, 0x13, 0x25, 0x7e, 0x4f,
+	0x78, 0x71, 0xe0, 0x14, 0x8c, 0x33, 0xfd, 0xe0, 0xb7, 0xa9, 0xe3, 0x47, 0xe0, 0x28, 0x06, 0xe5,
+	0xee, 0x99, 0x1e, 0x16, 0xf5, 0x83, 0x67, 0x8f, 0xc5, 0x13, 0x03, 0x32, 0x00, 0x47, 0xbc, 0x16,
+	0xe9, 0x15, 0xd7, 0x06, 0x31, 0x39, 0x4a, 0x56, 0xd0, 0x2f, 0xa4, 0x5d, 0xee, 0x14, 0x52, 0x37,
+	0xdd, 0x08, 0x29, 0x87, 0xe2, 0x2e, 0xf7, 0x28, 0xc8, 0x73, 0x25, 0xe6, 0x2f, 0x72, 0xd2, 0x58,
+	0x91, 0xb8, 0xcb, 0x26, 0xe9, 0x0c, 0xd7, 0xa0, 0x6b, 0xaa, 0x5e, 0x83, 0xb9, 0xe8, 0x3b, 0x2e,
+	0x4c, 0x2d, 0x8b, 0xba, 0x1a, 0x79, 0xc8, 0x05, 0x1f, 0x9a, 0x61, 0xef, 0x63, 0xf2, 0x15, 0x2c,
+	0xfe, 0x15, 0x0a, 0x71, 0x42, 0x10, 0x22, 0xb9, 0x17, 0xea, 0x39, 0x7b, 0x6b, 0xfe, 0xfa, 0xa0,
+	0x56, 0xe3, 0x36, 0x9b, 0x44, 0xe5, 0x0e, 0x0c, 0x44, 0x61, 0x64, 0x03, 0xf1, 0x4c, 0xfd, 0x62,
+	0x31, 0xaa, 0xd9, 0x91, 0xd8, 0x7c, 0x84, 0xf5, 0xda, 0x43, 0x98, 0x97, 0x15, 0x52, 0xd8, 0x76,
+	0x53, 0xec, 0x19, 0x96, 0x23, 0xae, 0xc8, 0x5d, 0x1a, 0xc6, 0x0b, 0xbd, 0xd0, 0xe3, 0xbf, 0xb4,
+	0x2f, 0x46, 0x7b, 0x43, 0x34, 0xee, 0xff, 0xd9, 0x88, 0x7a, 0x5d, 0x19, 0x84, 0x3c, 0x49, 0xb3,
+	0x2e, 0x45, 0xbb, 0x53, 0x6c, 0x4d, 0xe3, 0x3f, 0x2b, 0x70, 0x41, 0xc8, 0x77, 0x13, 0xcf, 0x87,
+	0xf2, 0xb1, 0x5d, 0xb0, 0x13, 0x3c, 0xa5, 0xd6, 0x22, 0x3b, 0x30, 0x4e, 0x1b, 0xe4, 0x2f, 0xf6,
+	0xdc, 0x1e, 0x44, 0x62, 0x1c, 0xfb, 0x22, 0x4f, 0xc6, 0xeb, 0xd8, 0x11, 0x4f, 0xe5, 0x0b, 0x00,
+	0x61, 0xe2, 0xd3, 0xdc, 0x46, 0x1e, 0x65, 0xb8, 0x20, 0x7a, 0x2b, 0xda, 0xed, 0xe3, 0xcd, 0x5d,
+	0x8f, 0xf0, 0x7c, 0x71, 0xb4, 0x06, 0x05, 0xac, 0xff, 0x43, 0x05, 0x26, 0xf9, 0x26, 0x8a, 0xc4,
+	0x45, 0xb2, 0xa4, 0x27, 0x3e, 0x92, 0x9e, 0xd9, 0x20, 0x30, 0xe6, 0x5a, 0x5f, 0xf2, 0xb7, 0x2b,
+	0xe1, 0x6f, 0xf2, 0x19, 0x98, 0xda, 0x34, 0x5c, 0x6f, 0xcb, 0x6e, 0x59, 0x8f, 0x2d, 0xb3, 0x95,
+	0x61, 0xaf, 0x92, 0x04, 0x4f, 0xde, 0x80, 0x42, 0xf3, 0xd0, 0x6a, 0xb7, 0x1c, 0xec, 0xda, 0xc9,
+	0x6b, 0x74, 0xfe, 0x06, 0x90, 0x00, 0x52, 0xfb, 0x1c, 0x4c, 0xe8, 0x26, 0xf5, 0x1e, 0xc9, 0x25,
+	0x28, 0xb5, 0x2c, 0xc7, 0x6c, 0x7a, 0x36, 0xbe, 0xd0, 0xc5, 0x1f, 0x06, 0x15, 0x92, 0x70, 0x0f,
+	0xac, 0xd5, 0x0e, 0x9e, 0x04, 0x65, 0x1f, 0x5a, 0x0f, 0x66, 0xa3, 0xfb, 0x4a, 0x70, 0x21, 0xc8,
+	0xf6, 0x52, 0x17, 0x82, 0x7c, 0x78, 0x84, 0x22, 0x4b, 0x54, 0x38, 0x81, 0x03, 0x9b, 0x74, 0x09,
+	0x04, 0xa3, 0x50, 0xe7, 0x60, 0xda, 0xcf, 0xe7, 0x60, 0x06, 0x9f, 0x8c, 0x31, 0x45, 0xef, 0x1e,
+	0x6f, 0x88, 0xf1, 0x57, 0x80, 0xe2, 0xde, 0xbd, 0x5c, 0x60, 0x11, 0x6f, 0x59, 0xf2, 0x77, 0x87,
+	0xb3, 0xa2, 0x64, 0x13, 0x8a, 0x2d, 0xbb, 0xf9, 0xc4, 0x74, 0xfc, 0xbd, 0xd8, 0x49, 0x8a, 0x12,
+	0xc1, 0xb3, 0xe6, 0x17, 0xe0, 0x4f, 0x41, 0x04, 0x08, 0x2a, 0xb7, 0xa1, 0x24, 0x54, 0x32, 0x8a,
+	0x31, 0xab, 0xbc, 0x0b, 0x33, 0x32, 0xde, 0x91, 0x4c, 0xe1, 0x7f, 0xc9, 0xc1, 0x19, 0x16, 0xd9,
+	0xd8, 0x6d, 0x1b, 0x4d, 0xb3, 0x83, 0x41, 0x07, 0xaa, 0xce, 0x07, 0xc7, 0x64, 0x17, 0x54, 0xff,
+	0xd5, 0x62, 0xe3, 0xf1, 0x63, 0xab, 0x6b, 0x79, 0xc7, 0xa9, 0x6b, 0x66, 0xfc, 0xe5, 0xe2, 0x10,
+	0x49, 0xcf, 0x6c, 0x52, 0x57, 0x0c, 0x53, 0x57, 0x78, 0x69, 0xf2, 0x01, 0x9c, 0x0e, 0x30, 0x76,
+	0x3d, 0x2b, 0x44, 0x9b, 0x1b, 0x05, 0xed, 0x49, 0x1f, 0x6d, 0xd7, 0xb3, 0x02, 0xd4, 0x5b, 0xc1,
+	0x7b, 0x45, 0x01, 0x52, 0xb6, 0x52, 0xf0, 0x72, 0xca, 0x85, 0x07, 0x32, 0x4e, 0xfe, 0x68, 0x51,
+	0x80, 0xee, 0x01, 0x9c, 0xf2, 0xd1, 0x49, 0x84, 0x8e, 0x8d, 0x80, 0x93, 0x70, 0x9c, 0x02, 0x99,
+	0xda, 0x37, 0x73, 0x70, 0x2a, 0xa9, 0x51, 0xf8, 0xe8, 0xb0, 0x69, 0x1d, 0x1c, 0xfa, 0xaf, 0xb6,
+	0xf0, 0x2f, 0x72, 0x17, 0x4a, 0x66, 0x17, 0x37, 0x90, 0x53, 0x50, 0xbe, 0x4b, 0x27, 0x6e, 0xf2,
+	0xaa, 0x21, 0x0c, 0xc6, 0xc6, 0xc5, 0x42, 0xd4, 0x15, 0x30, 0x1e, 0x3f, 0x36, 0x9b, 0x9e, 0xd9,
+	0x6a, 0x70, 0xde, 0xb9, 0x7c, 0x21, 0x48, 0xf5, 0x33, 0x38, 0x51, 0xf8, 0xe8, 0xaf, 0x67, 0xf7,
+	0xec, 0xb6, 0x7d, 0x70, 0x8c, 0x97, 0xcf, 0xb1, 0x78, 0x59, 0xc9, 0x4f, 0xbb, 0x6f, 0x52, 0xe6,
+	0xcc, 0x75, 0x0c, 0xaf, 0x79, 0xd8, 0x30, 0x3f, 0xe9, 0x39, 0xa6, 0xeb, 0xa2, 0x27, 0x30, 0x9e,
+	0x72, 0x4b, 0x06, 0x9e, 0xa1, 0xa8, 0x9b, 0x6d, 0xb4, 0x0c, 0xfc, 0xe9, 0x67, 0x4a, 0x95, 0xae,
+	0x22, 0x8e, 0x6a, 0x88, 0x42, 0xfb, 0x8b, 0xe0, 0x59, 0xb8, 0xef, 0x1c, 0x6f, 0xa2, 0xcd, 0xcd,
+	0x67, 0x6c, 0xee, 0xd8, 0xb3, 0x37, 0xf7, 0x4f, 0x14, 0x28, 0xa7, 0x81, 0x27, 0x74, 0xe2, 0x6d,
+	0x28, 0xb0, 0x05, 0x0f, 0xbe, 0xb6, 0x37, 0x93, 0x70, 0x8f, 0x72, 0x1a, 0x3a, 0xbe, 0x72, 0x62,
+	0x3b, 0x7a, 0x80, 0x83, 0x72, 0x15, 0xed, 0x80, 0x3f, 0xab, 0xe1, 0x5f, 0xda, 0x7d, 0x28, 0xf8,
+	0xd0, 0x64, 0x02, 0x72, 0xb5, 0x2e, 0x5b, 0xde, 0xdb, 0xb6, 0xbd, 0x5a, 0x57, 0x55, 0x08, 0xc0,
+	0x44, 0xf5, 0x13, 0xcb, 0xf5, 0x5c, 0xb6, 0xd8, 0xb4, 0x66, 0x9b, 0xee, 0xb6, 0xed, 0x61, 0x92,
+	0x9a, 0xa7, 0x05, 0xee, 0x79, 0xea, 0x18, 0xfd, 0xbf, 0xe9, 0xa9, 0xe3, 0x0b, 0x7f, 0x99, 0x0b,
+	0xd6, 0x9c, 0x66, 0xa1, 0x54, 0xdf, 0x5b, 0xd9, 0xdb, 0xaf, 0x37, 0xb6, 0x77, 0xb6, 0xab, 0xea,
+	0x09, 0x21, 0xa1, 0xb6, 0x5d, 0xdb, 0x53, 0x15, 0x32, 0x0d, 0x45, 0x9e, 0xb0, 0x73, 0x5f, 0xcd,
+	0xb1, 0xa5, 0x50, 0xf6, 0xb9, 0xbe, 0xbe, 0x59, 0xdb, 0xae, 0xaa, 0x79, 0x5a, 0x23, 0x4f, 0xab,
+	0xea, 0xfa, 0x8e, 0xae, 0x8e, 0x91, 0x32, 0x9c, 0x0a, 0xd0, 0xee, 0x35, 0x6a, 0xdb, 0x8d, 0xf7,
+	0xf7, 0x77, 0xf4, 0xfd, 0x2d, 0x75, 0x9c, 0x9c, 0x81, 0x93, 0x3c, 0x67, 0xad, 0xba, 0xba, 0xb3,
+	0xb5, 0x55, 0xab, 0xd7, 0x6b, 0x3b, 0xdb, 0xea, 0x04, 0x99, 0x07, 0xc2, 0x33, 0xb6, 0x56, 0x6a,
+	0xdb, 0x7b, 0xd5, 0xed, 0x95, 0xed, 0xd5, 0xaa, 0x3a, 0x29, 0x14, 0xf0, 0x97, 0x60, 0xd7, 0x76,
+	0x1e, 0x6e, 0xab, 0x05, 0x72, 0x0e, 0xce, 0x44, 0x33, 0xaa, 0xf7, 0xf4, 0x95, 0xb5, 0xea, 0x9a,
+	0x5a, 0x14, 0x4a, 0x6d, 0x57, 0xab, 0x6b, 0xf5, 0x86, 0x5e, 0xbd, 0xbb, 0xb3, 0xb3, 0xa7, 0x02,
+	0x39, 0x0f, 0xe5, 0x48, 0x29, 0xbd, 0x7a, 0x77, 0x65, 0x13, 0x2b, 0x2b, 0x91, 0x4b, 0x70, 0x3e,
+	0x8a, 0x53, 0xaf, 0x3d, 0xa0, 0x30, 0xbb, 0x9b, 0x2b, 0xab, 0x55, 0x75, 0x8a, 0xbc, 0x04, 0x17,
+	0x93, 0x5a, 0xd6, 0xd8, 0xde, 0x09, 0xd6, 0xa5, 0xa7, 0xc9, 0x0c, 0x40, 0xd0, 0x96, 0xcf, 0xab,
+	0x33, 0x0b, 0x3f, 0xab, 0x00, 0xb0, 0xcb, 0xc0, 0x70, 0x49, 0xf2, 0x14, 0xa8, 0x88, 0x56, 0x6f,
+	0xec, 0x7d, 0xb0, 0x5b, 0xf5, 0x39, 0x1f, 0x49, 0x5d, 0xaf, 0x6d, 0x56, 0x55, 0x85, 0x9c, 0x86,
+	0x39, 0x31, 0xf5, 0xee, 0xe6, 0xce, 0xea, 0x7d, 0xb6, 0x3a, 0x29, 0x26, 0xb3, 0x95, 0x71, 0x35,
+	0x4f, 0xce, 0xc2, 0x69, 0x31, 0x9d, 0x2f, 0x6a, 0x57, 0xd7, 0xd4, 0xb1, 0x28, 0xa6, 0x7b, 0xfa,
+	0xca, 0xee, 0x86, 0x3a, 0xbe, 0xf0, 0xf7, 0x14, 0x98, 0x58, 0xaf, 0x23, 0x5d, 0x2a, 0x4c, 0xad,
+	0xd7, 0x25, 0x9a, 0xe6, 0x60, 0xda, 0x4f, 0xb9, 0xbb, 0xa7, 0xaf, 0xd7, 0xd9, 0xa2, 0xbd, 0x9f,
+	0x54, 0xfd, 0xfc, 0xde, 0x1b, 0x4c, 0xe1, 0xfc, 0x94, 0xf5, 0xfd, 0x3a, 0x55, 0x88, 0x59, 0x28,
+	0x05, 0x88, 0xd6, 0xeb, 0xea, 0x98, 0x98, 0xf0, 0x60, 0xbd, 0xae, 0x8e, 0x8b, 0x09, 0x9f, 0x5f,
+	0xaf, 0xab, 0x13, 0x62, 0xc2, 0x17, 0xd6, 0xeb, 0xea, 0xa4, 0x58, 0xf5, 0xe7, 0xd7, 0xeb, 0x47,
+	0xcb, 0x6a, 0x61, 0xe1, 0x57, 0x15, 0x38, 0x9d, 0xf8, 0x7c, 0x18, 0x79, 0x11, 0x2e, 0x60, 0x7b,
+	0x1a, 0xbc, 0x85, 0xab, 0x1b, 0x2b, 0xdb, 0xf7, 0xaa, 0x52, 0x53, 0x2e, 0xc3, 0x8b, 0xa9, 0x20,
+	0x5b, 0x3b, 0x6b, 0xb5, 0xf5, 0x5a, 0x75, 0x4d, 0x55, 0x88, 0x06, 0x2f, 0xa4, 0x82, 0xad, 0xac,
+	0x51, 0xe5, 0xca, 0x91, 0x97, 0xe1, 0x52, 0x2a, 0xcc, 0x5a, 0x75, 0xb3, 0xba, 0x57, 0x5d, 0x53,
+	0xf3, 0x0b, 0x1e, 0x4c, 0x49, 0x8f, 0x34, 0x53, 0x05, 0xaf, 0x3e, 0xa8, 0xea, 0xb5, 0xbd, 0x0f,
+	0x24, 0xc2, 0xa8, 0xaa, 0x4a, 0xe9, 0x2b, 0x9b, 0x2b, 0xfa, 0x96, 0xaa, 0x50, 0x59, 0xca, 0x19,
+	0x0f, 0x57, 0xf4, 0xed, 0xda, 0xf6, 0x3d, 0x35, 0x87, 0xfd, 0x2b, 0x82, 0x6b, 0xaf, 0xb6, 0xfe,
+	0x81, 0x9a, 0x5f, 0xf8, 0x31, 0x05, 0xa6, 0xc4, 0x17, 0x79, 0x69, 0xb5, 0x7a, 0xb5, 0xbe, 0xb3,
+	0xaf, 0xaf, 0xca, 0xfc, 0x28, 0xc3, 0x29, 0x39, 0x9d, 0x6f, 0x9a, 0x50, 0x92, 0x4a, 0xac, 0x55,
+	0xd5, 0x1c, 0xa5, 0x47, 0x4e, 0xf7, 0x77, 0x72, 0xe4, 0x69, 0x1b, 0xe4, 0x2c, 0xe4, 0x8c, 0x3a,
+	0xb6, 0xf0, 0x23, 0x0a, 0xcc, 0xe2, 0xa3, 0xad, 0xec, 0x59, 0x46, 0xa4, 0xa8, 0x02, 0xf3, 0xb8,
+	0x29, 0xa3, 0xb1, 0xb2, 0xba, 0x57, 0xdb, 0xd9, 0x96, 0xa8, 0x3a, 0x0f, 0xe5, 0x78, 0x1e, 0xe3,
+	0xa9, 0xaa, 0x24, 0xe7, 0xae, 0xea, 0xd5, 0x95, 0x3d, 0x4a, 0x5f, 0x62, 0xee, 0xfe, 0xee, 0x1a,
+	0xcd, 0xcd, 0x2f, 0x7c, 0xe8, 0xbf, 0xc0, 0x28, 0x3c, 0x90, 0x49, 0x8b, 0xb0, 0x66, 0xfb, 0x65,
+	0x76, 0x57, 0xf4, 0x95, 0x2d, 0x9f, 0x98, 0x73, 0x70, 0x26, 0x29, 0x77, 0x67, 0x7d, 0x5d, 0x55,
+	0x68, 0x2b, 0x12, 0x33, 0xb7, 0xd5, 0xdc, 0xc2, 0x32, 0x4c, 0xae, 0xda, 0xb8, 0x9d, 0x99, 0x6d,
+	0x60, 0x41, 0x6c, 0x93, 0x90, 0xdf, 0xdc, 0x79, 0xc8, 0x8c, 0xf5, 0x56, 0x75, 0xad, 0xb6, 0xbf,
+	0xa5, 0xe6, 0x68, 0xf6, 0x46, 0xed, 0xde, 0x86, 0x9a, 0x5f, 0xf8, 0xa6, 0x02, 0xc5, 0x9a, 0xbd,
+	0xeb, 0xd8, 0xd4, 0x29, 0xa7, 0xbc, 0xae, 0xed, 0x34, 0x76, 0xf5, 0x1d, 0x6a, 0x06, 0x1a, 0xf5,
+	0xea, 0xfb, 0xfb, 0x6c, 0x4f, 0x8c, 0x7a, 0x82, 0xf6, 0x63, 0x21, 0x4b, 0x5f, 0xd9, 0x5e, 0xdb,
+	0xd9, 0x62, 0x5b, 0x18, 0x84, 0xe4, 0xb5, 0xbb, 0x4c, 0x4b, 0xa4, 0xa4, 0x86, 0x5e, 0xdd, 0xda,
+	0xa1, 0xcc, 0xa0, 0x56, 0x5c, 0xc8, 0x59, 0xdd, 0xa2, 0x7d, 0xb4, 0x02, 0xf3, 0x62, 0x95, 0x1f,
+	0x6c, 0xaf, 0x36, 0xea, 0x1b, 0x2b, 0xd4, 0x76, 0x8c, 0x2f, 0xfc, 0x6c, 0x0e, 0x4a, 0xc2, 0x1b,
+	0x9b, 0x94, 0x06, 0xde, 0x78, 0x6a, 0xe7, 0x44, 0x9d, 0x92, 0x92, 0x77, 0xab, 0xdb, 0x6b, 0x54,
+	0x61, 0x45, 0x6e, 0xb1, 0x9c, 0x95, 0x07, 0x2b, 0xb5, 0xcd, 0x95, 0xbb, 0x9b, 0x5c, 0xaf, 0xe4,
+	0x3c, 0xdc, 0x9f, 0x43, 0xfb, 0x50, 0x2c, 0x6b, 0xad, 0xca, 0xb3, 0xc6, 0x04, 0xe1, 0x84, 0x59,
+	0x7b, 0xab, 0x1b, 0xb4, 0xba, 0x71, 0xaa, 0xc2, 0x52, 0x26, 0x1b, 0x97, 0x26, 0x62, 0x04, 0xfa,
+	0xbd, 0x75, 0x92, 0xbc, 0x00, 0x15, 0x29, 0x67, 0x4f, 0xff, 0x80, 0xd7, 0x46, 0x31, 0x16, 0x62,
+	0x25, 0xf5, 0x2a, 0x35, 0xf7, 0x55, 0xb5, 0xb8, 0xf0, 0x35, 0xc5, 0xdf, 0xdd, 0x51, 0xf7, 0x1f,
+	0x08, 0x16, 0x2b, 0x0f, 0x87, 0xd6, 0x0b, 0x70, 0x36, 0x9a, 0xbe, 0xd7, 0xd8, 0xd5, 0xab, 0xf5,
+	0xea, 0x36, 0x1d, 0x68, 0x4f, 0x81, 0x2a, 0x67, 0xe3, 0x8e, 0xa8, 0x18, 0x32, 0x1c, 0xfd, 0xf2,
+	0x11, 0x86, 0xe2, 0x70, 0xca, 0x07, 0xbf, 0xb1, 0x85, 0xef, 0x85, 0x69, 0xbe, 0xf1, 0x66, 0xcb,
+	0x6c, 0x59, 0xfd, 0x0e, 0x1b, 0x2a, 0xd9, 0x78, 0xc6, 0x34, 0xaf, 0xb1, 0xb5, 0x72, 0x6f, 0xbb,
+	0xba, 0x57, 0x5b, 0x55, 0x4f, 0xb0, 0x81, 0x57, 0xca, 0xac, 0xd7, 0xa9, 0x25, 0xc4, 0x21, 0x54,
+	0x4a, 0xdf, 0x7e, 0xb0, 0x55, 0x55, 0x73, 0x0b, 0x26, 0x94, 0xd8, 0x75, 0xa2, 0x4c, 0x17, 0xce,
+	0xc2, 0x69, 0x26, 0x31, 0x9f, 0xd7, 0x9f, 0xdf, 0xab, 0xea, 0xdb, 0xa8, 0xaa, 0xd1, 0x2c, 0x3a,
+	0xae, 0x63, 0x96, 0x42, 0x47, 0xda, 0xc4, 0xac, 0x46, 0xfd, 0x61, 0x6d, 0x6f, 0x75, 0x43, 0xcd,
+	0x2d, 0xec, 0xc1, 0x4c, 0xb0, 0xb5, 0x64, 0xbd, 0x6d, 0x1c, 0xd0, 0xe9, 0xab, 0xba, 0xb3, 0xdb,
+	0x58, 0xdf, 0x5c, 0xb9, 0x57, 0x6f, 0x84, 0x5b, 0xca, 0xe6, 0x60, 0x3a, 0x48, 0x45, 0x4e, 0xa3,
+	0xe5, 0x0c, 0x92, 0x98, 0x10, 0x1b, 0xeb, 0x3b, 0xfa, 0x2a, 0x25, 0xfe, 0x0f, 0x14, 0x7c, 0xf8,
+	0x5c, 0x78, 0xfb, 0x04, 0x8d, 0xa9, 0x94, 0x52, 0xef, 0x77, 0x5b, 0xc6, 0x31, 0xd3, 0x67, 0x39,
+	0x67, 0xcb, 0xc6, 0x1c, 0x66, 0x9b, 0xa5, 0x9c, 0xbd, 0xbe, 0xe9, 0xd2, 0xac, 0x1c, 0x32, 0x5b,
+	0xca, 0x7a, 0x68, 0xb6, 0xba, 0x2c, 0x13, 0xc5, 0x16, 0x29, 0x77, 0xd8, 0x77, 0x30, 0x6f, 0x2c,
+	0x5e, 0xdb, 0xba, 0x63, 0xd1, 0x9c, 0xf1, 0x78, 0xa9, 0xba, 0xe1, 0xf5, 0x1d, 0x9a, 0x37, 0xb1,
+	0xf0, 0x95, 0xe8, 0xa9, 0x2f, 0x76, 0x42, 0x8b, 0x5c, 0x8c, 0x1e, 0xf3, 0x61, 0xe9, 0xfb, 0xdd,
+	0x27, 0x5d, 0xfb, 0x63, 0xea, 0x3e, 0x5e, 0x8a, 0x1e, 0xb0, 0x60, 0x00, 0xfe, 0x6f, 0x55, 0xa1,
+	0xa3, 0x6a, 0xe2, 0xe1, 0x2f, 0xb6, 0xaf, 0x69, 0xa7, 0xa7, 0xe6, 0x16, 0x7e, 0x34, 0x8f, 0xbb,
+	0x6f, 0x13, 0x8f, 0x72, 0xa0, 0xaf, 0x94, 0x92, 0x17, 0x92, 0xf1, 0x0a, 0xbf, 0xff, 0x24, 0x01,
+	0x68, 0xdb, 0xf6, 0x70, 0xd7, 0x05, 0x6e, 0x7f, 0xba, 0x94, 0x7c, 0x94, 0x88, 0xc2, 0xe1, 0x4e,
+	0xaa, 0xdc, 0xa0, 0xea, 0x56, 0x1e, 0xd9, 0x88, 0x26, 0x4f, 0xc7, 0xf7, 0x34, 0xa0, 0x5d, 0xa3,
+	0xef, 0xe2, 0xe6, 0xa9, 0x01, 0x88, 0xea, 0x9e, 0xdd, 0xeb, 0x99, 0x2d, 0x75, 0x7c, 0x10, 0x22,
+	0x76, 0x4b, 0x8d, 0x3a, 0x31, 0x08, 0x86, 0xef, 0xd4, 0x9a, 0x1c, 0x04, 0xc3, 0xb7, 0x7e, 0x15,
+	0x06, 0x11, 0xc4, 0x77, 0x8c, 0xa9, 0xc5, 0x85, 0xdf, 0x4a, 0x38, 0x6c, 0x2e, 0x9e, 0x03, 0x21,
+	0x57, 0xa2, 0xfb, 0xf1, 0xe5, 0xfc, 0x50, 0x24, 0x97, 0xa3, 0xbb, 0xfb, 0x65, 0x40, 0xe4, 0x93,
+	0xaa, 0xc4, 0x25, 0x17, 0x39, 0x87, 0x62, 0xba, 0x6c, 0x27, 0xdd, 0xcb, 0xd1, 0xe3, 0x07, 0x32,
+	0x1c, 0x65, 0xa9, 0x9a, 0x5f, 0x58, 0x84, 0xd9, 0xc8, 0x9c, 0x90, 0x4c, 0x41, 0xc1, 0x61, 0xd3,
+	0xa5, 0x96, 0x7a, 0x82, 0x4e, 0x44, 0x7a, 0x8e, 0xf9, 0xd8, 0x74, 0xe8, 0xa7, 0xb2, 0xfc, 0x8f,
+	0x72, 0x30, 0x27, 0xec, 0x40, 0xe5, 0x2f, 0xc8, 0xff, 0xb2, 0x02, 0xa7, 0x92, 0xce, 0x64, 0x92,
+	0x5b, 0xe9, 0x2f, 0xd5, 0x0f, 0x38, 0x24, 0x5c, 0x79, 0x73, 0xd4, 0x62, 0x7c, 0x1d, 0xe6, 0xc2,
+	0x0f, 0xfd, 0xd1, 0x9f, 0xfe, 0x64, 0xee, 0x8c, 0x46, 0x96, 0x8e, 0x5e, 0x5f, 0x62, 0xef, 0xea,
+	0x2f, 0xb1, 0x93, 0xcb, 0xee, 0x1d, 0x65, 0xe1, 0x86, 0x42, 0x1c, 0x98, 0x60, 0x4b, 0x37, 0xe4,
+	0x4a, 0x7a, 0x15, 0xd2, 0xd2, 0x50, 0xe5, 0xea, 0x70, 0x40, 0x5e, 0xfb, 0x69, 0xac, 0x7d, 0x56,
+	0x83, 0xb0, 0xf6, 0x3b, 0xca, 0xc2, 0xf2, 0xbf, 0x1f, 0x83, 0x59, 0x81, 0x65, 0x78, 0x52, 0xa0,
+	0x03, 0x13, 0x6c, 0x91, 0x92, 0x5c, 0x4e, 0xdb, 0xee, 0x2d, 0x2d, 0x94, 0x56, 0x5e, 0x19, 0x06,
+	0xc6, 0x69, 0x38, 0x85, 0x34, 0xcc, 0x68, 0x45, 0x4a, 0x83, 0x63, 0xb7, 0x4d, 0x4a, 0x02, 0x71,
+	0xa1, 0x18, 0xf0, 0x8d, 0x5c, 0x4d, 0x43, 0x15, 0x8d, 0x87, 0x57, 0x5e, 0xcd, 0x00, 0xc9, 0xeb,
+	0x9d, 0xc3, 0x7a, 0x4b, 0x24, 0xac, 0x97, 0x7c, 0x05, 0x26, 0x79, 0x0c, 0x9f, 0xa4, 0x52, 0x2f,
+	0xaf, 0x36, 0x54, 0xae, 0x0c, 0x85, 0xe3, 0xd5, 0x5d, 0xc2, 0xea, 0x2a, 0xa4, 0x1c, 0x54, 0xb7,
+	0x64, 0x31, 0x90, 0xa5, 0x2f, 0x77, 0x8d, 0x8e, 0xf9, 0x29, 0xf9, 0x28, 0x90, 0x74, 0x2a, 0x87,
+	0x65, 0x39, 0xbf, 0x32, 0x0c, 0x8c, 0x57, 0x5d, 0xc6, 0xaa, 0xc9, 0x82, 0x1a, 0x56, 0xcd, 0xab,
+	0xec, 0xc0, 0x04, 0xdf, 0x2b, 0x94, 0x5a, 0xa5, 0x74, 0x7e, 0x20, 0xbd, 0xca, 0xc8, 0xb5, 0x2f,
+	0x5c, 0xa8, 0x15, 0x49, 0xa8, 0xcb, 0xff, 0x38, 0x07, 0x27, 0x05, 0xbd, 0xf2, 0xf7, 0xd8, 0x93,
+	0x9f, 0x56, 0x60, 0x4a, 0xdc, 0xf4, 0x4f, 0x12, 0x5f, 0xd3, 0x1a, 0x70, 0x80, 0xa0, 0x72, 0x23,
+	0x7b, 0x01, 0xff, 0x66, 0x35, 0xa4, 0xf0, 0x02, 0x39, 0x47, 0x29, 0xb4, 0x18, 0xa4, 0x65, 0xba,
+	0x4b, 0xe2, 0x49, 0x01, 0xf2, 0x43, 0x4a, 0xb8, 0x93, 0x7a, 0x61, 0x50, 0x15, 0xf2, 0x21, 0x82,
+	0xca, 0x6b, 0x99, 0x60, 0x39, 0x25, 0x2f, 0x20, 0x25, 0x65, 0x32, 0x1f, 0xa1, 0x84, 0x6f, 0x9f,
+	0x5e, 0xfe, 0x75, 0x45, 0xda, 0x8a, 0xef, 0xbf, 0xa4, 0xfa, 0x4d, 0x05, 0x66, 0xe4, 0x3b, 0xac,
+	0xc8, 0x8d, 0xe4, 0x7d, 0x9c, 0xe9, 0x77, 0x81, 0x55, 0x5e, 0x1f, 0xa1, 0x44, 0x12, 0xe3, 0xf8,
+	0x82, 0x73, 0xa0, 0xcb, 0x7c, 0x6d, 0x72, 0xf9, 0x2f, 0x27, 0x60, 0x3e, 0x4e, 0xf3, 0xae, 0x61,
+	0x39, 0x94, 0xa7, 0xbe, 0x25, 0xb9, 0x36, 0xa0, 0xf6, 0xd8, 0xce, 0x8b, 0xca, 0xf5, 0x8c, 0xd0,
+	0x9c, 0xce, 0x73, 0x48, 0xe7, 0x69, 0x4d, 0x15, 0xe8, 0xc4, 0x25, 0x2a, 0x6a, 0x5e, 0xbe, 0xa6,
+	0x84, 0x5d, 0x7d, 0x18, 0xde, 0x48, 0x8f, 0x5f, 0xcc, 0x0a, 0xee, 0x9f, 0x6e, 0x43, 0x3a, 0x2e,
+	0x92, 0x0b, 0x51, 0x3a, 0xc2, 0xfe, 0x6f, 0xb5, 0x3e, 0x25, 0x3f, 0xaa, 0x88, 0x16, 0x6f, 0x69,
+	0x48, 0x25, 0x31, 0xc3, 0x77, 0x23, 0x7b, 0x01, 0xd9, 0x2a, 0x90, 0x18, 0x7f, 0xc8, 0x57, 0x15,
+	0x28, 0xf8, 0x0b, 0xf7, 0x64, 0x58, 0x73, 0x23, 0x5b, 0x00, 0x2a, 0x4b, 0x99, 0xe1, 0x93, 0xd4,
+	0x5f, 0xe2, 0x0f, 0x5b, 0xaf, 0xfe, 0x29, 0x05, 0x20, 0x5c, 0xbb, 0x27, 0xc3, 0x1a, 0x1a, 0xdb,
+	0x09, 0x30, 0x50, 0xc7, 0x93, 0x37, 0x06, 0x68, 0x2f, 0x22, 0x4d, 0xe7, 0xb4, 0x14, 0x9a, 0xa8,
+	0x06, 0xfd, 0x98, 0x12, 0x98, 0xeb, 0x61, 0x6a, 0x2c, 0x5b, 0xed, 0xeb, 0x19, 0xa1, 0x65, 0xf5,
+	0x59, 0x88, 0xab, 0xcf, 0x97, 0xc3, 0xfd, 0x1f, 0x9f, 0x2e, 0xff, 0xf3, 0x71, 0x38, 0x1b, 0xef,
+	0x70, 0xfc, 0x32, 0x48, 0xf2, 0xe3, 0x92, 0x72, 0x2d, 0x0f, 0xa0, 0x20, 0xe5, 0x8e, 0xc9, 0xca,
+	0xcd, 0x91, 0xca, 0x70, 0xda, 0x2b, 0x48, 0xfb, 0x29, 0x42, 0x04, 0xda, 0x5b, 0x9c, 0xa4, 0x5f,
+	0x16, 0x7a, 0xe0, 0xd2, 0x50, 0xe4, 0x91, 0x3e, 0x78, 0x23, 0x7b, 0x01, 0x4e, 0xca, 0xdb, 0x48,
+	0xca, 0x32, 0xb9, 0x11, 0x27, 0x25, 0xec, 0x87, 0x09, 0xf7, 0x31, 0x7e, 0x4a, 0x7e, 0x45, 0x81,
+	0x82, 0x7f, 0xc3, 0x23, 0x19, 0x5e, 0x71, 0xe4, 0x7e, 0xc9, 0x81, 0xda, 0x97, 0x72, 0x7d, 0xe4,
+	0x6d, 0xa4, 0xf5, 0xa6, 0xf6, 0x7a, 0x02, 0xad, 0xfe, 0x85, 0x8f, 0x29, 0xc4, 0xfe, 0x86, 0x02,
+	0x10, 0xde, 0x0a, 0x99, 0x41, 0xd2, 0xb1, 0x7b, 0x29, 0x33, 0x48, 0x3a, 0xe1, 0xda, 0xc9, 0x77,
+	0x90, 0xe4, 0x5b, 0xda, 0xcd, 0x04, 0x92, 0x5b, 0xe6, 0x60, 0xa2, 0x97, 0x7f, 0x53, 0x76, 0x37,
+	0xf1, 0x55, 0xfb, 0x1f, 0x18, 0xe2, 0x8a, 0xc5, 0xef, 0x97, 0x4c, 0x76, 0xc5, 0x12, 0x6e, 0x95,
+	0x94, 0x47, 0x30, 0xbc, 0xf0, 0x50, 0x70, 0xc5, 0xd8, 0x25, 0x1e, 0x9f, 0x92, 0xaf, 0xc7, 0x87,
+	0xd7, 0xeb, 0x43, 0x2a, 0x88, 0x8c, 0xad, 0x8b, 0x59, 0xc1, 0x93, 0x3c, 0x44, 0x89, 0x2c, 0x3e,
+	0xaa, 0x66, 0x70, 0x8a, 0x93, 0x6e, 0xa1, 0x4c, 0x76, 0x8a, 0x13, 0x2f, 0xa5, 0x94, 0x9d, 0x62,
+	0xa4, 0x81, 0xfc, 0x7c, 0xda, 0x4c, 0xe9, 0xe6, 0x50, 0xb4, 0x09, 0xf3, 0xa4, 0x37, 0x46, 0x2b,
+	0xc4, 0xc9, 0x3a, 0x8b, 0x64, 0x9d, 0x24, 0x73, 0x21, 0x6b, 0xf8, 0x24, 0x69, 0xf9, 0xcf, 0xe6,
+	0xa4, 0xe9, 0x1d, 0x3f, 0x72, 0xe2, 0x06, 0x3e, 0xc6, 0x95, 0x8c, 0x2f, 0x92, 0x54, 0xae, 0x0e,
+	0x07, 0xe4, 0xd4, 0xcc, 0x23, 0x35, 0xaa, 0x56, 0xa2, 0xd4, 0xf0, 0xa3, 0x34, 0x74, 0x48, 0x38,
+	0x82, 0x71, 0x7c, 0xf9, 0x23, 0x59, 0x63, 0xe3, 0x8f, 0x8c, 0x54, 0xae, 0x0c, 0x85, 0xe3, 0x35,
+	0x9e, 0xc7, 0x1a, 0xe7, 0xb5, 0x39, 0xa1, 0xc6, 0xa5, 0x26, 0x05, 0xa1, 0xf5, 0x7e, 0x65, 0xf0,
+	0x14, 0x31, 0xe1, 0x71, 0x91, 0x41, 0x8d, 0x8d, 0x8c, 0x3f, 0x17, 0xb1, 0xea, 0xb3, 0x0b, 0x67,
+	0xc4, 0xaa, 0xbf, 0x1c, 0x1c, 0xb3, 0xf8, 0x94, 0xfc, 0x88, 0x60, 0xc8, 0xaf, 0x66, 0x78, 0x66,
+	0x61, 0x80, 0x4e, 0x26, 0x3e, 0xc8, 0xa0, 0x5d, 0x41, 0x0a, 0x5e, 0x24, 0x17, 0x45, 0x0a, 0x82,
+	0x0e, 0x2b, 0x50, 0xf2, 0x2b, 0x0a, 0x90, 0xf8, 0xa3, 0x10, 0xe4, 0xe6, 0x53, 0x3c, 0xb0, 0x91,
+	0xac, 0xa7, 0xc3, 0xde, 0x9d, 0xd0, 0x5e, 0x45, 0x52, 0x5f, 0xd2, 0x5e, 0x48, 0x20, 0xf5, 0x63,
+	0xcb, 0x3b, 0x0c, 0x67, 0xf6, 0xe4, 0x07, 0x82, 0xa9, 0xd7, 0x95, 0x8c, 0xef, 0x43, 0x0c, 0x12,
+	0x5a, 0x64, 0xfa, 0xa5, 0x21, 0x1d, 0xe7, 0x2b, 0x69, 0x42, 0x63, 0x04, 0x8c, 0xe3, 0xbb, 0x09,
+	0x83, 0xb4, 0x55, 0x7c, 0xe4, 0x61, 0x90, 0xb6, 0x4a, 0xef, 0x35, 0xc8, 0x1e, 0xaf, 0x5f, 0x3b,
+	0x3e, 0xce, 0x20, 0x89, 0xeb, 0x67, 0x14, 0x98, 0x96, 0x5e, 0x47, 0x48, 0xf6, 0x35, 0xd3, 0x5f,
+	0x72, 0x48, 0xf6, 0x35, 0x07, 0xbc, 0xdd, 0x90, 0x4c, 0x19, 0x3e, 0xe2, 0x20, 0x51, 0x76, 0x2c,
+	0xda, 0xd9, 0x85, 0x0c, 0x8f, 0x1e, 0x0c, 0x9c, 0xf7, 0xa5, 0xbc, 0xdc, 0xa0, 0x9d, 0x44, 0x62,
+	0xa6, 0x89, 0x68, 0x46, 0xc8, 0x2f, 0x8d, 0x14, 0x97, 0x1a, 0xfa, 0xf6, 0x42, 0x72, 0x5c, 0x6a,
+	0xf8, 0x9b, 0x06, 0xbe, 0x57, 0xae, 0x9d, 0x14, 0x39, 0x25, 0xa8, 0xef, 0x37, 0x14, 0x98, 0x91,
+	0x2f, 0xfa, 0x27, 0x4b, 0x23, 0xbe, 0x41, 0x90, 0xec, 0xc5, 0x0d, 0x7a, 0x43, 0xc0, 0x1f, 0x22,
+	0xb5, 0xd3, 0x92, 0x66, 0x71, 0x58, 0xa4, 0xeb, 0x17, 0x15, 0x98, 0x8d, 0xdc, 0xed, 0x4f, 0x32,
+	0xd4, 0x23, 0x5f, 0xb7, 0x99, 0xec, 0xb4, 0x0d, 0x7e, 0x38, 0xe0, 0x2a, 0x92, 0xa6, 0x69, 0x17,
+	0x12, 0x49, 0x5b, 0xe2, 0xf7, 0x5b, 0x52, 0x12, 0x7f, 0x4e, 0x81, 0xb9, 0xd8, 0xb5, 0xf6, 0xc9,
+	0xae, 0xda, 0xe0, 0x77, 0x08, 0x2a, 0x37, 0x47, 0x2a, 0x23, 0x47, 0x1c, 0x49, 0x32, 0x0f, 0xc9,
+	0x1f, 0x29, 0x70, 0x7e, 0xd0, 0xa5, 0xfb, 0xe4, 0xbd, 0x67, 0x7a, 0x2b, 0xa0, 0xf2, 0x99, 0xa7,
+	0x2d, 0xce, 0xc9, 0x7f, 0x03, 0xc9, 0x5f, 0xd4, 0x5e, 0x4d, 0xe6, 0xb3, 0xd0, 0x8d, 0x45, 0x75,
+	0xfd, 0x96, 0x02, 0xf3, 0xc9, 0x57, 0xed, 0x93, 0xb7, 0x86, 0x13, 0x94, 0xf8, 0x36, 0x40, 0xe5,
+	0xed, 0xd1, 0x0b, 0xf2, 0x36, 0xdc, 0xc2, 0x36, 0x2c, 0x69, 0x0b, 0x49, 0x6d, 0x58, 0x0a, 0x6e,
+	0x2e, 0x8a, 0x58, 0xec, 0xe5, 0x9f, 0x1d, 0x93, 0x82, 0x2a, 0xb8, 0xe7, 0x90, 0x2d, 0xb0, 0x91,
+	0xef, 0x87, 0x09, 0xfe, 0xeb, 0x4a, 0xc6, 0x97, 0x05, 0x07, 0x8d, 0x26, 0xf2, 0x23, 0x80, 0xf2,
+	0x6c, 0x18, 0x77, 0x50, 0x1a, 0x08, 0xb0, 0xc4, 0xfe, 0x51, 0xfe, 0x7e, 0x3f, 0x75, 0x41, 0x86,
+	0xd5, 0x2f, 0xbd, 0x8c, 0x37, 0xd8, 0x05, 0xc9, 0x56, 0x3f, 0x7b, 0x3a, 0x90, 0xd6, 0xff, 0x25,
+	0x18, 0x47, 0x76, 0x0c, 0x1a, 0xcc, 0xc4, 0x47, 0x48, 0x07, 0x0d, 0x66, 0xf2, 0x7b, 0xa1, 0x92,
+	0xc9, 0x11, 0x2b, 0xc7, 0xdf, 0xb4, 0xee, 0x1f, 0x52, 0x60, 0x92, 0x3f, 0x39, 0x49, 0xae, 0x66,
+	0x7d, 0x14, 0x73, 0x90, 0x03, 0x14, 0x7d, 0xbf, 0x92, 0x8f, 0xe6, 0xda, 0x99, 0x28, 0x09, 0xfc,
+	0xb1, 0x44, 0xaa, 0x1b, 0xbf, 0x96, 0x97, 0x82, 0x84, 0xfc, 0x70, 0x1b, 0xa5, 0x6d, 0x1c, 0x97,
+	0xc6, 0xd2, 0x82, 0x14, 0xc9, 0x67, 0xbc, 0x2b, 0xd7, 0x33, 0x42, 0xa7, 0xfb, 0xa7, 0x1d, 0x06,
+	0xe7, 0x87, 0x4a, 0xd8, 0x89, 0x62, 0x32, 0x14, 0xaf, 0x74, 0x44, 0x39, 0x2d, 0xd6, 0x96, 0x7a,
+	0x50, 0x99, 0xcf, 0xec, 0xb4, 0x72, 0x8c, 0x8e, 0xa5, 0x26, 0x42, 0x72, 0x79, 0xf9, 0xbb, 0xda,
+	0xb2, 0x34, 0x33, 0x3c, 0x7c, 0x39, 0x9c, 0x1c, 0xf9, 0x30, 0xa1, 0x3c, 0x6d, 0x91, 0xc8, 0x59,
+	0xfe, 0x53, 0xb9, 0x2f, 0x0b, 0x17, 0xa8, 0xd3, 0xf1, 0x61, 0x70, 0x6c, 0x32, 0xf5, 0x5e, 0xfe,
+	0x64, 0x02, 0xd3, 0xef, 0xdf, 0xd7, 0x5e, 0x47, 0x02, 0x5f, 0x23, 0x68, 0x4c, 0x85, 0x0b, 0xdf,
+	0x05, 0xff, 0x5a, 0xbe, 0x1c, 0xfe, 0xd3, 0xa1, 0xe1, 0xdb, 0xb4, 0xbb, 0xf7, 0x2b, 0xd7, 0x33,
+	0x42, 0x27, 0x85, 0x6f, 0x45, 0xd2, 0xa8, 0x08, 0x7f, 0x7c, 0x48, 0xf0, 0x2d, 0xed, 0x4e, 0xfd,
+	0xa1, 0x44, 0x44, 0x26, 0x3f, 0xdc, 0x9f, 0x5f, 0x78, 0x31, 0xc6, 0x9f, 0x18, 0x5f, 0x7e, 0x52,
+	0x09, 0x1c, 0xfa, 0x61, 0x24, 0xc9, 0xc3, 0xc8, 0xf5, 0x8c, 0xd0, 0x9c, 0xa4, 0x6b, 0x48, 0xd2,
+	0x2b, 0x95, 0xe1, 0x24, 0x51, 0xb3, 0xf0, 0x67, 0xe3, 0x72, 0x1c, 0x3e, 0xb8, 0x61, 0xcf, 0xa5,
+	0x13, 0x10, 0x2e, 0xc7, 0xe4, 0x2b, 0xc8, 0x02, 0x50, 0x59, 0x8c, 0xd7, 0xb2, 0x01, 0xcb, 0x11,
+	0x40, 0x6d, 0x16, 0xe3, 0x42, 0x61, 0xed, 0x54, 0x88, 0x3f, 0x2c, 0x05, 0x25, 0x17, 0x07, 0xe3,
+	0x8d, 0xf9, 0x3e, 0x4b, 0x99, 0xe1, 0x39, 0x29, 0x67, 0x90, 0x94, 0x39, 0x12, 0x25, 0x85, 0xce,
+	0x43, 0x82, 0xfe, 0x36, 0xa4, 0x75, 0x91, 0xee, 0x76, 0x3d, 0x23, 0x34, 0xa7, 0x60, 0x09, 0x29,
+	0x78, 0x95, 0x5c, 0x89, 0x50, 0x20, 0x04, 0x20, 0xc5, 0x6b, 0x11, 0x3f, 0x15, 0x63, 0xcc, 0x43,
+	0x64, 0x24, 0x6b, 0xf9, 0xb5, 0x6c, 0xc0, 0xf2, 0xfc, 0x7a, 0xe1, 0x62, 0x94, 0xac, 0x28, 0x39,
+	0x3f, 0xa7, 0x40, 0xc1, 0x7f, 0x27, 0x9d, 0x0c, 0x69, 0x7b, 0xe4, 0x51, 0xf6, 0xca, 0x62, 0x56,
+	0x70, 0x4e, 0xd4, 0x0d, 0x24, 0x6a, 0x81, 0x5c, 0x8d, 0x12, 0x75, 0xc4, 0x21, 0xa3, 0xd4, 0x2d,
+	0xff, 0x6f, 0x39, 0x02, 0x2e, 0xdf, 0x0b, 0xc9, 0xc6, 0xa0, 0x01, 0xf3, 0x14, 0x19, 0x3c, 0xc3,
+	0x3c, 0x25, 0xb9, 0x80, 0x1c, 0x34, 0xd1, 0x4e, 0x51, 0xea, 0x7d, 0x7f, 0xae, 0x47, 0x21, 0x2d,
+	0x66, 0xc0, 0x7e, 0x2c, 0xb4, 0x16, 0x19, 0xc8, 0x91, 0x0d, 0xc6, 0x8d, 0xec, 0x05, 0x64, 0x72,
+	0x2a, 0xa9, 0xe4, 0xfc, 0xc4, 0xf0, 0xf5, 0x01, 0xb9, 0x82, 0x6c, 0x53, 0x91, 0xd4, 0x32, 0xb2,
+	0xdb, 0x40, 0x12, 0xe9, 0x92, 0xc6, 0xc1, 0x1b, 0x59, 0xae, 0xfe, 0x94, 0xfa, 0xe6, 0xeb, 0x23,
+	0x94, 0xe0, 0xe4, 0xbc, 0x86, 0xe4, 0x5c, 0x26, 0x2f, 0x25, 0x91, 0x13, 0x5d, 0xad, 0x17, 0x86,
+	0xa0, 0x0c, 0x12, 0x94, 0xfb, 0xe7, 0x8d, 0xec, 0x05, 0x64, 0xc7, 0x66, 0xe1, 0x5c, 0x22, 0x69,
+	0x8c, 0xa4, 0xe5, 0x1f, 0x54, 0x23, 0x8b, 0xae, 0xc1, 0x46, 0x9a, 0x0c, 0x8b, 0xae, 0xc9, 0x4f,
+	0x9e, 0x54, 0xae, 0x67, 0x84, 0x4e, 0x5e, 0x74, 0x0d, 0xae, 0x54, 0x41, 0x2d, 0xfb, 0x19, 0x05,
+	0x4a, 0xc2, 0x5b, 0x1a, 0xe4, 0xf5, 0x91, 0x9f, 0xfa, 0xa8, 0x2c, 0x8f, 0x52, 0x24, 0x79, 0x31,
+	0x2f, 0xa4, 0x69, 0x09, 0xaf, 0x14, 0xa2, 0x94, 0xfd, 0x75, 0x25, 0xb8, 0x85, 0x8b, 0x0c, 0xbf,
+	0x44, 0x57, 0x0a, 0x15, 0x2c, 0x66, 0x05, 0x4f, 0x72, 0x51, 0x25, 0x6a, 0x84, 0x10, 0xc1, 0x4f,
+	0x0c, 0x5d, 0x5c, 0x4c, 0x7e, 0xfe, 0x62, 0xa8, 0xb8, 0x22, 0x6a, 0xc5, 0x35, 0x7e, 0xe1, 0xa5,
+	0x18, 0x31, 0xec, 0xff, 0xd2, 0x97, 0x83, 0x7b, 0x72, 0x3e, 0x25, 0xdf, 0x50, 0xa0, 0x18, 0x3c,
+	0x35, 0x91, 0xb6, 0x66, 0x97, 0xfa, 0xfe, 0x45, 0xda, 0x9a, 0xdd, 0x80, 0x57, 0x2c, 0x78, 0xb4,
+	0x4e, 0xab, 0xc4, 0xa8, 0x6b, 0x21, 0xac, 0xd1, 0x46, 0x7f, 0xfe, 0xb7, 0xd3, 0x42, 0x66, 0x77,
+	0x9e, 0xfe, 0xd1, 0x87, 0xca, 0x3b, 0x4f, 0x55, 0x96, 0x13, 0x7e, 0x1d, 0x09, 0xbf, 0xa2, 0x69,
+	0x31, 0xc2, 0x4d, 0xbf, 0x98, 0x18, 0x9c, 0xf8, 0x6b, 0xe1, 0x84, 0xe4, 0x5a, 0xc6, 0x5b, 0xcd,
+	0xb3, 0x49, 0x3b, 0x32, 0x1d, 0x91, 0xe6, 0x91, 0x12, 0x59, 0xec, 0xb6, 0x21, 0xbf, 0x27, 0xf8,
+	0xe7, 0x5e, 0x87, 0xf6, 0x7d, 0xe9, 0x1a, 0xf3, 0xa1, 0x3d, 0x21, 0x72, 0x76, 0x74, 0x40, 0x4f,
+	0x68, 0x32, 0x48, 0x4a, 0xcf, 0x37, 0x15, 0x98, 0xe4, 0xd7, 0x68, 0x0f, 0xa5, 0x47, 0xbe, 0xf8,
+	0x7b, 0x28, 0x3d, 0x91, 0x3b, 0xbe, 0x23, 0x2e, 0x87, 0x48, 0x0f, 0xbf, 0xba, 0x7b, 0xe9, 0xcb,
+	0xd2, 0xd5, 0xd6, 0x9f, 0x92, 0x5f, 0x50, 0xa0, 0x24, 0xdc, 0x91, 0x3d, 0xd4, 0xa0, 0xc5, 0x2f,
+	0xf9, 0x1e, 0x6a, 0xd0, 0x92, 0xae, 0xe0, 0xe6, 0x0e, 0x9b, 0x76, 0x3e, 0x51, 0x8e, 0x66, 0x13,
+	0xa1, 0x79, 0xa4, 0xb1, 0x24, 0xdc, 0x0a, 0x3d, 0x9c, 0xbe, 0xd8, 0xe5, 0xd5, 0xc3, 0xe9, 0x8b,
+	0x5f, 0x3a, 0x3d, 0xa0, 0xdf, 0x06, 0xa1, 0x2d, 0x4a, 0xdd, 0xaf, 0xf9, 0xd4, 0x71, 0x4b, 0x97,
+	0x89, 0x3a, 0xd9, 0xdc, 0x2d, 0x8f, 0x52, 0x84, 0x53, 0xf7, 0x16, 0x52, 0xf7, 0xfa, 0xc2, 0x52,
+	0x3a, 0x75, 0x81, 0xd9, 0x13, 0xae, 0xb8, 0xfe, 0x94, 0xfc, 0x6d, 0x05, 0x66, 0xe4, 0x0b, 0xa2,
+	0xc9, 0x1b, 0x23, 0xde, 0x27, 0xcd, 0xa8, 0xbe, 0xf5, 0x54, 0xb7, 0x50, 0xfb, 0xdd, 0x97, 0x0c,
+	0x60, 0xeb, 0xf2, 0xd7, 0x40, 0x5a, 0x0d, 0xe5, 0xce, 0xef, 0xd7, 0xc3, 0xd1, 0x3f, 0x91, 0x63,
+	0xb1, 0x12, 0xb2, 0x0e, 0xdc, 0x1c, 0xa9, 0x4c, 0xd2, 0x02, 0x02, 0x2f, 0x2b, 0xba, 0x9c, 0x3f,
+	0x23, 0xb9, 0x9c, 0xb7, 0x32, 0x55, 0x11, 0xe3, 0xe4, 0x9b, 0xa3, 0x16, 0x93, 0xdd, 0x14, 0x92,
+	0x44, 0x1c, 0xf9, 0x45, 0xc1, 0xef, 0xcc, 0xd6, 0xf4, 0x88, 0xeb, 0xf9, 0xc6, 0x68, 0x85, 0x38,
+	0x4d, 0x0b, 0x48, 0xd3, 0xcb, 0x44, 0x4b, 0xa0, 0x29, 0xea, 0x7c, 0x7e, 0x3d, 0x9c, 0x3e, 0x64,
+	0x13, 0xa8, 0x3c, 0x83, 0xb8, 0x39, 0x52, 0x19, 0x59, 0xa0, 0x95, 0x34, 0x81, 0x7e, 0x23, 0xf4,
+	0x59, 0xb2, 0xd1, 0x24, 0x77, 0xe5, 0x9b, 0x23, 0x95, 0x91, 0xbb, 0xc4, 0x42, 0x25, 0x89, 0x67,
+	0x9c, 0x57, 0xff, 0x40, 0x01, 0xa8, 0x87, 0xd7, 0x59, 0x65, 0x53, 0x99, 0xb0, 0x80, 0x4f, 0xdf,
+	0x5b, 0x23, 0x97, 0x4b, 0x72, 0x06, 0xa2, 0x34, 0xf2, 0x8b, 0x38, 0x38, 0xad, 0x94, 0x8d, 0xff,
+	0x50, 0x81, 0x19, 0x8e, 0xc2, 0x57, 0xc2, 0x3b, 0x19, 0x59, 0x23, 0x16, 0x1a, 0xe8, 0xc7, 0x0c,
+	0x2d, 0x9b, 0xb4, 0x51, 0x26, 0x85, 0x74, 0xf2, 0xf3, 0xe8, 0x3b, 0xb7, 0x4d, 0xc3, 0x35, 0x33,
+	0x76, 0x17, 0x0e, 0x3d, 0x5a, 0x77, 0x09, 0x0a, 0x71, 0xda, 0x5e, 0x41, 0xda, 0x2e, 0x69, 0x89,
+	0xb4, 0x39, 0x0c, 0xf8, 0x8e, 0xb2, 0x70, 0xf7, 0x3c, 0x9c, 0x6c, 0xda, 0x9d, 0x68, 0x15, 0xbb,
+	0xca, 0x17, 0xf2, 0x46, 0xcf, 0x7a, 0x34, 0x81, 0x97, 0x6d, 0xdc, 0xfc, 0x3f, 0x01, 0x00, 0x00,
+	0xff, 0xff, 0x7a, 0x86, 0x2f, 0x33, 0x21, 0xd5, 0x00, 0x00,
 }
