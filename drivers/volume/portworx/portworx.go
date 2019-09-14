@@ -1642,7 +1642,8 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		Timeout:         defaultTimeout,
 		Sudo:            true,
 	}
-	pxPid, err := d.nodeDriver.RunCommand(n, "ps -ef | grep 'px -daemon' | grep -v grep | awk '{print $2}'", opts)
+
+	pxPid, err := d.nodeDriver.RunCommand(n, `ps -ef | grep "px -daemon" | grep -v grep | awk "{print $2}"`, opts)
 	if err != nil {
 		return fmt.Errorf("Failed to get process id of px daemon on %v, Err: %v", pxNode.Hostname, err)
 	}
