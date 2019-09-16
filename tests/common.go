@@ -95,10 +95,14 @@ func InitInstance() {
 	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
 	expect(err).NotTo(haveOccurred())
 
-	logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
-	token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-	expect(err).NotTo(haveOccurred())
-	logrus.Infof("Token used for initializing: %s ", token)
+	if Inst().ConfigMap != "" {
+		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		expect(err).NotTo(haveOccurred())
+		logrus.Infof("Token used for initializing: %s ", token)
+	} else {
+		token = ""
+	}
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
