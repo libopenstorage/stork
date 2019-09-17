@@ -163,7 +163,7 @@ func createBackupLocation(
 	newSecretObj := secretObj.DeepCopy()
 	newSecretObj.Namespace = namespace
 	newSecretObj.ResourceVersion = ""
-	newSecret, err := k8s.Instance().CreateSecret(newSecretObj)
+	_, err = k8s.Instance().CreateSecret(newSecretObj)
 	// Ignore if secret already exists
 	if err != nil && !errors.IsAlreadyExists(err) {
 		require.NoError(t, err, "Failed to copy secret %s  to namespace %s", name, namespace)
@@ -178,7 +178,7 @@ func createBackupLocation(
 		Location: storkv1.BackupLocationItem{
 			Type:         locationtype,
 			Path:         "test-restore-path",
-			SecretConfig: newSecret.Name,
+			SecretConfig: secretObj.Name,
 		},
 	}
 	return k8s.Instance().CreateBackupLocation(backupLocation)
