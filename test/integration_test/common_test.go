@@ -344,8 +344,7 @@ func addStorageOptions(pairInfo map[string]string) error {
 }
 
 func scheduleClusterPair(ctx *scheduler.Context, skipStorage bool) error {
-	var err error
-	err = dumpRemoteKubeConfig(remoteConfig)
+	err := dumpRemoteKubeConfig(remoteConfig)
 	if err != nil {
 		logrus.Errorf("Unable to write clusterconfig: %v", err)
 		return err

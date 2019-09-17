@@ -101,10 +101,10 @@ func failoverAndFailbackClusterDomainTest(t *testing.T) {
 	// Migrate the resources
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
-		"mysql-clusterdomain-migration",
-		"mysql-1-pvc",
+		"cassandra-clusterdomain-migration",
+		"cassandra",
 		nil,
-		[]string{"mysql-clusterdomain-migration"},
+		[]string{"cassandra-clusterdomain-migration"},
 		true,
 		true,
 	)
@@ -146,6 +146,13 @@ func testClusterDomainsFailover(
 	// Reduce the replicas on cluster 1
 	scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
 	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
+
+	// Copy the old scale factor map
+	oldScaleFactor := make(map[string]int32)
+	for k := range scaleFactor {
+		oldScaleFactor[k] = scaleFactor[k]
+	}
+
 	for k := range scaleFactor {
 		scaleFactor[k] = 0
 	}
@@ -156,13 +163,8 @@ func testClusterDomainsFailover(
 	err = setRemoteConfig(remoteFilePath)
 	require.NoError(t, err, "Error setting remote config")
 
-	// Increase the replicas on cluster 1
-	scaleFactor, err = schedulerDriver.GetScaleFactorMap(preMigrationCtx)
-	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
-	for k := range scaleFactor {
-		scaleFactor[k] = 1
-	}
-	err = schedulerDriver.ScaleApplication(preMigrationCtx, scaleFactor)
+	// Set scale factor to it's orignal values on cluster 1
+	err = schedulerDriver.ScaleApplication(preMigrationCtx, oldScaleFactor)
 	require.NoError(t, err, "Unexpected error on ScaleApplication")
 
 	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
