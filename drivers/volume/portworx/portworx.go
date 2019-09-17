@@ -1597,7 +1597,6 @@ func (d *portworx) getTokenForVolume(name string, params map[string]string) stri
 func deleteLabelsFromRequestedSpec(expectedLocator *api.VolumeLocator) {
 	for labelKey := range expectedLocator.VolumeLabels {
 		if hasIgnorePrefix(labelKey) {
-			logrus.Infof("RK=> Now deleting key: %v", labelKey)
 			delete(expectedLocator.VolumeLabels, labelKey)
 		}
 	}
