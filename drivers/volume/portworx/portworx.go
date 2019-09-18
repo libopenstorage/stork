@@ -335,7 +335,7 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 	}
 
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("Inspecting node %s", n.Name)
+		logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
 		pxNode, err := cManager.Inspect(n.VolDriverNodeID)
 		if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
 			n, err = d.updateNodeID(n)
