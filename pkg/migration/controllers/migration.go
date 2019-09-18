@@ -790,7 +790,7 @@ func (m *MigrationController) prepareApplicationResource(
 		return err
 	}
 	if !found {
-		return fmt.Errorf("annotations not found in application")
+		annotations = make(map[string]string)
 	}
 	annotations[StorkMigrationReplicasAnnotation] = strconv.FormatInt(replicas, 10)
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")

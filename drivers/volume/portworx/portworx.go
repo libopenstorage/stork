@@ -518,8 +518,6 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 			if region, ok := labels[kubeletapis.LabelZoneRegion]; ok {
 				nodeInfo.Region = region
 			}
-		} else {
-			logrus.Warnf("Error getting labels for node %v: %v", nodeInfo.Hostname, err)
 		}
 
 		nodes = append(nodes, nodeInfo)
