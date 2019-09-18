@@ -121,11 +121,7 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 	}
 
 	for _, n := range nodes.Items {
-		newNode := k.parseK8SNode(n)
-		if err := k.IsNodeReady(newNode); err != nil {
-			return err
-		}
-		if err := node.AddNode(newNode); err != nil {
+		if err = k.addNewNode(n); err != nil {
 			return err
 		}
 	}
@@ -137,6 +133,17 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 
 	k.NodeDriverName = nodeDriverName
 	k.VolDriverName = volDriverName
+	return nil
+}
+
+func (k *K8s) addNewNode(newNode v1.Node) error {
+	n := k.parseK8SNode(newNode)
+	if err := k.IsNodeReady(n); err != nil {
+		return err
+	}
+	if err := node.AddNode(n); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -164,11 +171,7 @@ func (k *K8s) RefreshNodeRegistry() error {
 	node.CleanupRegistry()
 
 	for _, n := range nodes.Items {
-		newNode := k.parseK8SNode(n)
-		if err := k.IsNodeReady(newNode); err != nil {
-			return err
-		}
-		if err := node.AddNode(newNode); err != nil {
+		if err = k.addNewNode(n); err != nil {
 			return err
 		}
 	}
@@ -1779,6 +1782,12 @@ func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 		nodeMap := node.GetNodesByName()
 
 		for _, p := range pods {
+			if strings.TrimSpace(p.Spec.NodeName) == "" {
+				return nil, true, &scheduler.ErrFailedToGetNodesForApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("pod %s is not scheduled to any node yet", p.Name),
+				}
+			}
 			n, ok := nodeMap[p.Spec.NodeName]
 			if !ok {
 				return nil, true, &scheduler.ErrFailedToGetNodesForApp{
