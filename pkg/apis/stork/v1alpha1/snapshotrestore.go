@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -47,11 +46,11 @@ type RestoreStatus struct {
 	// Status of volume restore
 	Status SnapshotRestoreStatusType `json:"status"`
 	// Volumes list of restore inforamtion
-	Volumes []*RestoreVolumeInfo `json:"volumes"`
+	Volumes map[string]*RestoreVolumeInfo `json:"volumes"`
 	// RestoreVolume map of snapID and volID to restore
 	RestoreVolumes map[string]string `json:"restoreVolumes"`
 	// List of PVC associated with snapshot restore
-	PVCs []*v1.PersistentVolumeClaim `json:"pvcs"`
+	PVCs map[string]string `json:"pvcs"`
 }
 
 // RestoreVolumeInfo is the info for the restore of a volume
