@@ -1563,13 +1563,17 @@ func (in *RestoreStatus) DeepCopyInto(out *RestoreStatus) {
 	*out = *in
 	if in.Volumes != nil {
 		in, out := &in.Volumes, &out.Volumes
-		*out = make([]*RestoreVolumeInfo, len(*in))
-		for i := range *in {
-			if (*in)[i] != nil {
-				in, out := &(*in)[i], &(*out)[i]
+		*out = make(map[string]*RestoreVolumeInfo, len(*in))
+		for key, val := range *in {
+			var outVal *RestoreVolumeInfo
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				in, out := &val, &outVal
 				*out = new(RestoreVolumeInfo)
 				**out = **in
 			}
+			(*out)[key] = outVal
 		}
 	}
 	if in.RestoreVolumes != nil {
