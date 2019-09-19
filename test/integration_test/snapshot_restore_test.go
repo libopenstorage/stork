@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSnapshotRestore(t *testing.T) {
+func testSnapshotRestore(t *testing.T) {
 	t.Run("simpleSnapshotRestoreTest", simpleSnapshotRestoreTest)
 	t.Run("groupSnapshotRestoreTest", groupSnapshotRestoreTest)
 	// Disable cloudsnapRestore tests for now
