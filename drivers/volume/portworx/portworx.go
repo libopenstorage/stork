@@ -2051,25 +2051,22 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 	}
 
 	// Get access to the csi section of the PV
-	csiSpec, found, err := unstructured.NestedStringMap(object.UnstructuredContent(), "spec", "csi")
+	csiDriverName, found, err := unstructured.NestedString(object.UnstructuredContent(), "spec", "csi", "driver")
 	if err != nil {
 		return nil, err
 	}
 
 	// Determine if CSI is used
-	if found {
-		// Check the driver is a Portworx driver
-		switch csiSpec["driver"] {
-		case crdv1.PortworxCsiDeprecatedProvisionerName:
-			fallthrough
-		case crdv1.PortworxCsiProvisionerName:
-			csiSpec["volumeHandle"] = metadata.GetName()
-			return object, nil
+	if found &&
+		(csiDriverName == crdv1.PortworxCsiDeprecatedProvisionerName ||
+			csiDriverName == crdv1.PortworxCsiProvisionerName) {
+		if err := unstructured.SetNestedField(object.UnstructuredContent(), metadata.GetName(), "spec", "csi", "volumeHandle"); err != nil {
+			return nil, err
 		}
-
-		// Fallback to in-tree driver in case CSI map isn't found
+		return object, nil
 	}
 
+	// Fallback to in-tree driver in case CSI isn't found
 	err = unstructured.SetNestedField(object.UnstructuredContent(), metadata.GetName(), "spec", "portworxVolume", "volumeID")
 	if err != nil {
 		return nil, err
