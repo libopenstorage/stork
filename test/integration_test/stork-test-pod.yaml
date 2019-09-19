@@ -54,7 +54,7 @@ spec:
     FOCUS_TESTS
     - -snapshot-scale-count=10
     imagePullPolicy: Always
-    image: openstorage/stork_test:latest
+    image: rohit/stork_test:cluster
     securityContext:
       privileged: false
     volumeMounts:

@@ -206,9 +206,9 @@ func testClusterDomainsFailback(
 	// Reduce the replicas on cluster 1
 	scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
 	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
-	for k := range scaleFactor {
-		scaleFactor[k] = 1
-	}
+	//for k := range scaleFactor {
+	//	scaleFactor[k] = 1
+	//}
 	err = schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
 	require.NoError(t, err, "Unexpected error on ScaleApplication")
 

@@ -154,7 +154,7 @@ sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-tes
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
-sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
+#sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
 
 if [ "$remote_config_path" != "" ]; then
     kubectl create configmap remoteconfigmap --from-file=$remote_config_path -n kube-system
