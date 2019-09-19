@@ -65,6 +65,12 @@ var storkVolumeDriver storkdriver.Driver
 
 var snapshotScaleCount int
 
+func TestSnapshotMigration(t *testing.T) {
+	t.Run("testSnapshot", testSnapshot)
+	t.Run("testSnapshotRestore", testSnapshotRestore)
+	t.Run("testMigration", testMigration)
+}
+
 // TODO: Take driver name from input
 // TODO: Parse storageclass specs based on driver name
 func setup() error {

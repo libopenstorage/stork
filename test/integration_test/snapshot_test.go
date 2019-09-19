@@ -29,7 +29,7 @@ const (
 	snapshotScheduleRetryTimeout  = 3 * time.Minute
 )
 
-func TestSnapshot(t *testing.T) {
+func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 	t.Run("snapshotScaleTest", snapshotScaleTest)
