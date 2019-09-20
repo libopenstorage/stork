@@ -474,12 +474,9 @@
   version = "v0.5.0"
 
 [[projects]]
-  digest = "1:048a55ddd98b054d561413a38b301d21998b366f432893244c4ab745723edb9e"
+  digest = "1:d80d74111a58220b8c19d593f08df320405885a8ad949c580a36a5bfce754aa8"
   name = "github.com/heptio/ark"
-  packages = [
-    "pkg/discovery",
-    "pkg/util/collections",
-  ]
+  packages = ["pkg/discovery"]
   pruneopts = "UT"
   revision = "72f5cadc3a865019ab9dc043d4952c9bfd5f2ecb"
   version = "v1.0.0"
@@ -490,20 +487,6 @@
   packages = ["third_party/kubernetes/pkg/kubectl/cmd/util"]
   pruneopts = "UT"
   revision = "72f5cadc3a865019ab9dc043d4952c9bfd5f2ecb"
-  version = "v1.0.0"
-
-[[projects]]
-  digest = "1:a1038ef593beb4771c8f0f9c26e8b00410acd800af5c6864651d9bf160ea1813"
-  name = "github.com/hpcloud/tail"
-  packages = [
-    ".",
-    "ratelimiter",
-    "util",
-    "watch",
-    "winfile",
-  ]
-  pruneopts = "UT"
-  revision = "a30252cb686a21eb2d0b98132633053ec2f7f1e5"
   version = "v1.0.0"
 
 [[projects]]
@@ -565,6 +548,20 @@
   pruneopts = "UT"
   revision = "18c097ccef789822b480acd686afa5d8c859484f"
   source = "github.com/libopenstorage/external-storage"
+
+[[projects]]
+  digest = "1:4b459bbf1199adbbe060fa0f5aee5223c19da8f5881357dc9b3e560d0cedc6e5"
+  name = "github.com/libopenstorage/autopilot"
+  packages = [
+    "pkg/apis/autopilot",
+    "pkg/apis/autopilot/v1alpha1",
+    "pkg/client/clientset/versioned",
+    "pkg/client/clientset/versioned/scheme",
+    "pkg/client/clientset/versioned/typed/autopilot/v1alpha1",
+  ]
+  pruneopts = "UT"
+  revision = "7d0bad3b40e91e70d52456a9d955ff4b8e7b695c"
+  version = "v0.6.0"
 
 [[projects]]
   branch = "master"
@@ -665,33 +662,6 @@
   packages = ["."]
   pruneopts = "UT"
   revision = "c48cc78d482608239f6c4c92a4abd87eb8761c90"
-
-[[projects]]
-  digest = "1:3e2dd43d579954e11bf866eae02afa8312b2647c10db0746cc647b95fd0d4e6b"
-  name = "github.com/onsi/ginkgo"
-  packages = [
-    ".",
-    "config",
-    "internal/codelocation",
-    "internal/containernode",
-    "internal/failer",
-    "internal/leafnodes",
-    "internal/remote",
-    "internal/spec",
-    "internal/spec_iterator",
-    "internal/specrunner",
-    "internal/suite",
-    "internal/testingtproxy",
-    "internal/writer",
-    "reporters",
-    "reporters/stenographer",
-    "reporters/stenographer/support/go-colorable",
-    "reporters/stenographer/support/go-isatty",
-    "types",
-  ]
-  pruneopts = "UT"
-  revision = "7e8b50db0c6d0a15ac0eb015d4ca64e7e7e2c88c"
-  version = "v1.9.0"
 
 [[projects]]
   digest = "1:ee4d4af67d93cc7644157882329023ce9a7bcfce956a079069a9405521c7cc8d"
@@ -807,14 +777,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:496ca3cbc55d04145bcb9b8831517809c5cf80986b551d81382a7c50c2c9fae0"
+  digest = "1:d60592e3ef7b03350f15217c6cee5ed591a23730dc194cdec679c7b35fd8fb5d"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "7d97f8a53bc58af6e7c6ab5d251cce71c1565f83"
+  revision = "c1308b0230c046a81cbafa71ffaacdfd71af1656"
 
 [[projects]]
   branch = "master"
@@ -1270,15 +1240,6 @@
   version = "v1.18.0"
 
 [[projects]]
-  digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
-  name = "gopkg.in/fsnotify.v1"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9"
-  source = "https://github.com/fsnotify/fsnotify.git"
-  version = "v1.4.7"
-
-[[projects]]
   digest = "1:2d1fbdc6777e5408cabeb02bf336305e724b925ff4546ded0fa8715a7267922a"
   name = "gopkg.in/inf.v0"
   packages = ["."]
@@ -1298,14 +1259,6 @@
   pruneopts = "UT"
   revision = "e94fb177d3668d35ab39c61cbb2f311550557e83"
   version = "v2.2.2"
-
-[[projects]]
-  branch = "v1"
-  digest = "1:0caa92e17bc0b65a98c63e5bc76a9e844cd5e56493f8fdbb28fad101a16254d9"
-  name = "gopkg.in/tomb.v1"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "dd632973f1e7218eb1089048e0798ec9ae7dceb8"
 
 [[projects]]
   digest = "1:4d2e5a73dc1500038e504a8d78b986630e3626dc027bc030ba5c75da257cdb96"
@@ -1846,7 +1799,6 @@
     "github.com/go-openapi/inflect",
     "github.com/hashicorp/go-version",
     "github.com/heptio/ark/pkg/discovery",
-    "github.com/heptio/ark/pkg/util/collections",
     "github.com/kubernetes-incubator/external-storage/lib/controller",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client",
@@ -1864,8 +1816,6 @@
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/secrets/k8s",
-    "github.com/onsi/ginkgo",
-    "github.com/onsi/ginkgo/reporters",
     "github.com/openshift/api/apps/v1",
     "github.com/openshift/client-go/apps/clientset/versioned/fake",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
@@ -1902,6 +1852,7 @@
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
+    "k8s.io/api/storage/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
     "k8s.io/apimachinery/pkg/api/errors",

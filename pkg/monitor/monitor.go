@@ -125,6 +125,12 @@ func (m *Monitor) podMonitor() error {
 
 			storklog.PodLog(pod).Infof("Force deleting pod as it's in unknown state.")
 
+			// delete volume attachments if the node is down for this pod
+			err = m.cleanupVolumeAttachmentsByPod(pod)
+			if err != nil {
+				storklog.PodLog(pod).Errorf("Error cleaning up volume attachments: %v", err)
+			}
+
 			// force delete the pod
 			err = k8s.Instance().DeletePods([]v1.Pod{*pod}, true)
 			if err != nil {
@@ -171,6 +177,13 @@ func (m *Monitor) driverMonitor() {
 						log.Errorf("Error getting pods: %v", err)
 						continue
 					}
+
+					// delete volume attachments if the node is down for this pod
+					err = m.cleanupVolumeAttachmentsByNode(node)
+					if err != nil {
+						log.Errorf("Error cleaning up volume attachments: %v", err)
+					}
+
 					for _, pod := range pods.Items {
 						owns, err := m.doesDriverOwnPodVolumes(&pod)
 						if err != nil || !owns {
@@ -208,4 +221,56 @@ func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (m *Monitor) cleanupVolumeAttachmentsByPod(pod *v1.Pod) error {
+	log.Infof("Cleaning up volume attachments for pod %s", pod.Name)
+
+	// Get all vol attachments
+	vaList, err := k8s.Instance().ListVolumeAttachments()
+	if err != nil {
+		return err
+	}
+
+	if len(vaList.Items) > 0 {
+		for _, va := range vaList.Items {
+			// Delete attachments for this pod
+			if pod.Spec.NodeName == va.Spec.NodeName {
+				err := k8s.Instance().DeleteVolumeAttachment(va.Name)
+				if err != nil {
+					return err
+				}
+
+				log.Infof("Deleted volume attachment: %s", va.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
+	log.Infof("Cleaning up volume attachments for node %s", node.StorageID)
+
+	// Get all vol attachments
+	vaList, err := k8s.Instance().ListVolumeAttachments()
+	if err != nil {
+		return err
+	}
+
+	if len(vaList.Items) > 0 {
+		for _, va := range vaList.Items {
+			// Delete attachments for this pod
+			if m.isSameNode(va.Spec.NodeName, node) {
+				err := k8s.Instance().DeleteVolumeAttachment(va.Name)
+				if err != nil {
+					return err
+				}
+
+				log.Infof("Deleted volume attachment: %s", va.Name)
+			}
+		}
+	}
+
+	return nil
 }

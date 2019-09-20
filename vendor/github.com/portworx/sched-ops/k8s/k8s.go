@@ -12,6 +12,8 @@ import (
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snap_client "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
+	aut_v1alpaha1 "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
+	autopilotclientset "github.com/libopenstorage/autopilot/pkg/client/clientset/versioned"
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	ocp_appsv1_api "github.com/openshift/api/apps/v1"
@@ -29,6 +31,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	rbac_v1 "k8s.io/api/rbac/v1"
 	storage_api "k8s.io/api/storage/v1"
+	storagev1beta1 "k8s.io/api/storage/v1beta1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -45,6 +48,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	appsv1_client "k8s.io/client-go/kubernetes/typed/apps/v1"
+	_ "k8s.io/client-go/plugin/pkg/client/auth" // needed to initialize plugins on cloud providers
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
@@ -79,6 +83,7 @@ type Ops interface {
 	PodOps
 	StorageClassOps
 	PersistentVolumeClaimOps
+	VolumeAttachmentOps
 	SnapshotOps
 	GroupSnapshotOps
 	RuleOps
@@ -89,6 +94,7 @@ type Ops interface {
 	ClusterPairOps
 	MigrationOps
 	ClusterDomainsOps
+	AutopilotRuleOps
 	ObjectOps
 	SchedulePolicyOps
 	VolumePlacementStrategyOps
@@ -106,6 +112,7 @@ type Ops interface {
 		dynamicInterface dynamic.Interface,
 		ocpClient ocp_clientset.Interface,
 		ocpSecurityClient ocp_security_clientset.Interface,
+		autopilotClient autopilotclientset.Interface,
 	)
 	SecurityContextConstraints
 
@@ -416,6 +423,8 @@ type PersistentVolumeClaimOps interface {
 	DeletePersistentVolumeClaim(name, namespace string) error
 	// ValidatePersistentVolumeClaim validates the given pvc
 	ValidatePersistentVolumeClaim(vv *v1.PersistentVolumeClaim, timeout, retryInterval time.Duration) error
+	// ValidatePersistentVolumeClaimSize validates the given pvc size
+	ValidatePersistentVolumeClaimSize(vv *v1.PersistentVolumeClaim, expectedPVCSize int64, timeout, retryInterval time.Duration) error
 	// GetPersistentVolumeClaim returns the PVC for given name and namespace
 	GetPersistentVolumeClaim(pvcName string, namespace string) (*v1.PersistentVolumeClaim, error)
 	// GetPersistentVolumeClaims returns all PVCs in given namespace and that match the optional labelSelector
@@ -482,6 +491,20 @@ type SnapshotOps interface {
 	// The caller is expected to validate if the returned map has all snapshots expected at that point of time
 	ValidateSnapshotSchedule(string, string, time.Duration, time.Duration) (
 		map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledVolumeSnapshotStatus, error)
+}
+
+// VolumeAttachmentOps is an interface to perform k8s VolumeAttachmentOps operations
+type VolumeAttachmentOps interface {
+	// ListVolumeAttachments lists all volume attachments
+	ListVolumeAttachments() (*storagev1beta1.VolumeAttachmentList, error)
+	// DeleteVolumeAttachment deletes a given Volume Attachment by name
+	DeleteVolumeAttachment(name string) error
+	// CreateVolumeAttachment creates a volume attachment
+	CreateVolumeAttachment(*storagev1beta1.VolumeAttachment) (*storagev1beta1.VolumeAttachment, error)
+	// UpdateVolumeAttachment updates a volume attachment
+	UpdateVolumeAttachment(*storagev1beta1.VolumeAttachment) (*storagev1beta1.VolumeAttachment, error)
+	// UpdateVolumeAttachmentStatus updates a volume attachment status
+	UpdateVolumeAttachmentStatus(*storagev1beta1.VolumeAttachment) (*storagev1beta1.VolumeAttachment, error)
 }
 
 // GroupSnapshotOps is an interface to perform k8s GroupVolumeSnapshot operations
@@ -562,9 +585,11 @@ type CRDOps interface {
 	// This API will be deprecated soon. Use RegisterCRD instead
 	CreateCRD(resource CustomResource) error
 	// RegisterCRD creates the given custom resource
-	RegisterCRD(crdDefinition *apiextensionsv1beta1.CustomResourceDefinition) error
+	RegisterCRD(crd *apiextensionsv1beta1.CustomResourceDefinition) error
 	// ValidateCRD checks if the given CRD is registered
 	ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error
+	// DeleteCRD deletes the CRD for the given complete name (plural.group)
+	DeleteCRD(fullName string) error
 }
 
 // ClusterPairOps is an interface to perfrom k8s ClusterPair operations
@@ -610,6 +635,20 @@ type ClusterDomainsOps interface {
 	ValidateClusterDomainUpdate(string, time.Duration, time.Duration) error
 	// ListClusterDomainUpdates lists ClusterDomainUpdates
 	ListClusterDomainUpdates() (*v1alpha1.ClusterDomainUpdateList, error)
+}
+
+// AutopilotRuleOps is an interface to perform k8s AutopilotRule operations
+type AutopilotRuleOps interface {
+	// CreateAutopilotRule creates the AutopilotRule object
+	CreateAutopilotRule(*aut_v1alpaha1.AutopilotRule) (*aut_v1alpaha1.AutopilotRule, error)
+	// GetAutopilotRule gets the AutopilotRule for the provided name
+	GetAutopilotRule(string) (*aut_v1alpaha1.AutopilotRule, error)
+	// UpdateAutopilotRule updates the AutopilotRule
+	UpdateAutopilotRule(*aut_v1alpaha1.AutopilotRule) (*aut_v1alpaha1.AutopilotRule, error)
+	// DeleteAutopilotRule deletes the AutopilotRule of the given name
+	DeleteAutopilotRule(string) error
+	// ListAutopilotRules lists AutopilotRules
+	ListAutopilotRules() (*aut_v1alpaha1.AutopilotRuleList, error)
 }
 
 // MigrationOps is an interface to perfrom k8s Migration operations
@@ -795,6 +834,7 @@ type k8sOps struct {
 	snapClient         rest.Interface
 	storkClient        storkclientset.Interface
 	talismanClient     talismanclientset.Interface
+	autopilotClient    autopilotclientset.Interface
 	apiExtensionClient apiextensionsclient.Interface
 	config             *rest.Config
 	dynamicInterface   dynamic.Interface
@@ -836,6 +876,7 @@ func (k *k8sOps) SetClient(
 	dynamicInterface dynamic.Interface,
 	ocpClient ocp_clientset.Interface,
 	ocpSecurityClient ocp_security_clientset.Interface,
+	autopilotClient autopilotclientset.Interface,
 ) {
 
 	k.client = client
@@ -845,6 +886,7 @@ func (k *k8sOps) SetClient(
 	k.dynamicInterface = dynamicInterface
 	k.ocpClient = ocpClient
 	k.ocpSecurityClient = ocpSecurityClient
+	k.autopilotClient = autopilotClient
 }
 
 // Initialize the k8s client if uninitialized
@@ -1207,7 +1249,7 @@ func (k *k8sOps) WatchNode(node *v1.Node, watchNodeFn WatchFunc) error {
 		Watch:         true,
 	}
 
-	watchInterface, err := k.client.Core().Nodes().Watch(listOptions)
+	watchInterface, err := k.client.CoreV1().Nodes().Watch(listOptions)
 	if err != nil {
 		return err
 	}
@@ -1342,7 +1384,7 @@ func (k *k8sOps) RunCommandInPod(cmds []string, podName, containerName, namespac
 		execErr bytes.Buffer
 	)
 
-	pod, err := k.client.Core().Pods(namespace).Get(podName, meta_v1.GetOptions{})
+	pod, err := k.client.CoreV1().Pods(namespace).Get(podName, meta_v1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -1355,7 +1397,7 @@ func (k *k8sOps) RunCommandInPod(cmds []string, podName, containerName, namespac
 		containerName = pod.Spec.Containers[0].Name
 	}
 
-	req := k.client.Core().RESTClient().Post().
+	req := k.client.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
 		Namespace(namespace).
@@ -2132,7 +2174,7 @@ func (k *k8sOps) CreateJob(job *batch_v1.Job) (*batch_v1.Job, error) {
 		return nil, err
 	}
 
-	return k.client.Batch().Jobs(job.Namespace).Create(job)
+	return k.client.BatchV1().Jobs(job.Namespace).Create(job)
 }
 
 func (k *k8sOps) GetJob(name, namespace string) (*batch_v1.Job, error) {
@@ -2140,7 +2182,7 @@ func (k *k8sOps) GetJob(name, namespace string) (*batch_v1.Job, error) {
 		return nil, err
 	}
 
-	return k.client.Batch().Jobs(namespace).Get(name, meta_v1.GetOptions{})
+	return k.client.BatchV1().Jobs(namespace).Get(name, meta_v1.GetOptions{})
 }
 
 func (k *k8sOps) DeleteJob(name, namespace string) error {
@@ -2148,7 +2190,7 @@ func (k *k8sOps) DeleteJob(name, namespace string) error {
 		return err
 	}
 
-	return k.client.Batch().Jobs(namespace).Delete(name, &meta_v1.DeleteOptions{
+	return k.client.BatchV1().Jobs(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -2433,7 +2475,7 @@ func (k *k8sOps) CreateRole(role *rbac_v1.Role) (*rbac_v1.Role, error) {
 		return nil, err
 	}
 
-	return k.client.Rbac().Roles(role.Namespace).Create(role)
+	return k.client.RbacV1().Roles(role.Namespace).Create(role)
 }
 
 func (k *k8sOps) UpdateRole(role *rbac_v1.Role) (*rbac_v1.Role, error) {
@@ -2441,7 +2483,7 @@ func (k *k8sOps) UpdateRole(role *rbac_v1.Role) (*rbac_v1.Role, error) {
 		return nil, err
 	}
 
-	return k.client.Rbac().Roles(role.Namespace).Update(role)
+	return k.client.RbacV1().Roles(role.Namespace).Update(role)
 }
 
 func (k *k8sOps) CreateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterRole, error) {
@@ -2449,7 +2491,7 @@ func (k *k8sOps) CreateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterR
 		return nil, err
 	}
 
-	return k.client.Rbac().ClusterRoles().Create(role)
+	return k.client.RbacV1().ClusterRoles().Create(role)
 }
 
 func (k *k8sOps) GetClusterRole(name string) (*rbac_v1.ClusterRole, error) {
@@ -2457,7 +2499,7 @@ func (k *k8sOps) GetClusterRole(name string) (*rbac_v1.ClusterRole, error) {
 		return nil, err
 	}
 
-	return k.client.Rbac().ClusterRoles().Get(name, meta_v1.GetOptions{})
+	return k.client.RbacV1().ClusterRoles().Get(name, meta_v1.GetOptions{})
 }
 
 func (k *k8sOps) UpdateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterRole, error) {
@@ -2465,7 +2507,7 @@ func (k *k8sOps) UpdateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterR
 		return nil, err
 	}
 
-	return k.client.Rbac().ClusterRoles().Update(role)
+	return k.client.RbacV1().ClusterRoles().Update(role)
 }
 
 func (k *k8sOps) CreateRoleBinding(binding *rbac_v1.RoleBinding) (*rbac_v1.RoleBinding, error) {
@@ -2473,7 +2515,7 @@ func (k *k8sOps) CreateRoleBinding(binding *rbac_v1.RoleBinding) (*rbac_v1.RoleB
 		return nil, err
 	}
 
-	return k.client.Rbac().RoleBindings(binding.Namespace).Create(binding)
+	return k.client.RbacV1().RoleBindings(binding.Namespace).Create(binding)
 }
 
 func (k *k8sOps) UpdateRoleBinding(binding *rbac_v1.RoleBinding) (*rbac_v1.RoleBinding, error) {
@@ -2481,7 +2523,7 @@ func (k *k8sOps) UpdateRoleBinding(binding *rbac_v1.RoleBinding) (*rbac_v1.RoleB
 		return nil, err
 	}
 
-	return k.client.Rbac().RoleBindings(binding.Namespace).Update(binding)
+	return k.client.RbacV1().RoleBindings(binding.Namespace).Update(binding)
 }
 
 func (k *k8sOps) CreateClusterRoleBinding(binding *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error) {
@@ -2489,7 +2531,7 @@ func (k *k8sOps) CreateClusterRoleBinding(binding *rbac_v1.ClusterRoleBinding) (
 		return nil, err
 	}
 
-	return k.client.Rbac().ClusterRoleBindings().Create(binding)
+	return k.client.RbacV1().ClusterRoleBindings().Create(binding)
 }
 
 func (k *k8sOps) UpdateClusterRoleBinding(binding *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error) {
@@ -2497,7 +2539,7 @@ func (k *k8sOps) UpdateClusterRoleBinding(binding *rbac_v1.ClusterRoleBinding) (
 		return nil, err
 	}
 
-	return k.client.Rbac().ClusterRoleBindings().Update(binding)
+	return k.client.RbacV1().ClusterRoleBindings().Update(binding)
 }
 
 func (k *k8sOps) GetClusterRoleBinding(name string) (*rbac_v1.ClusterRoleBinding, error) {
@@ -2505,7 +2547,7 @@ func (k *k8sOps) GetClusterRoleBinding(name string) (*rbac_v1.ClusterRoleBinding
 		return nil, err
 	}
 
-	return k.client.Rbac().ClusterRoleBindings().Get(name, meta_v1.GetOptions{})
+	return k.client.RbacV1().ClusterRoleBindings().Get(name, meta_v1.GetOptions{})
 }
 
 func (k *k8sOps) ListClusterRoleBindings() (*rbac_v1.ClusterRoleBindingList, error) {
@@ -2513,7 +2555,7 @@ func (k *k8sOps) ListClusterRoleBindings() (*rbac_v1.ClusterRoleBindingList, err
 		return nil, err
 	}
 
-	return k.client.Rbac().ClusterRoleBindings().List(meta_v1.ListOptions{})
+	return k.client.RbacV1().ClusterRoleBindings().List(meta_v1.ListOptions{})
 }
 
 func (k *k8sOps) CreateServiceAccount(account *v1.ServiceAccount) (*v1.ServiceAccount, error) {
@@ -2521,7 +2563,7 @@ func (k *k8sOps) CreateServiceAccount(account *v1.ServiceAccount) (*v1.ServiceAc
 		return nil, err
 	}
 
-	return k.client.Core().ServiceAccounts(account.Namespace).Create(account)
+	return k.client.CoreV1().ServiceAccounts(account.Namespace).Create(account)
 }
 
 func (k *k8sOps) DeleteRole(name, namespace string) error {
@@ -2529,7 +2571,7 @@ func (k *k8sOps) DeleteRole(name, namespace string) error {
 		return err
 	}
 
-	return k.client.Rbac().Roles(namespace).Delete(name, &meta_v1.DeleteOptions{
+	return k.client.RbacV1().Roles(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -2539,7 +2581,7 @@ func (k *k8sOps) DeleteClusterRole(roleName string) error {
 		return err
 	}
 
-	return k.client.Rbac().ClusterRoles().Delete(roleName, &meta_v1.DeleteOptions{
+	return k.client.RbacV1().ClusterRoles().Delete(roleName, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -2549,7 +2591,7 @@ func (k *k8sOps) DeleteRoleBinding(name, namespace string) error {
 		return err
 	}
 
-	return k.client.Rbac().RoleBindings(namespace).Delete(name, &meta_v1.DeleteOptions{
+	return k.client.RbacV1().RoleBindings(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -2559,7 +2601,7 @@ func (k *k8sOps) DeleteClusterRoleBinding(bindingName string) error {
 		return err
 	}
 
-	return k.client.Rbac().ClusterRoleBindings().Delete(bindingName, &meta_v1.DeleteOptions{
+	return k.client.RbacV1().ClusterRoleBindings().Delete(bindingName, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -2569,7 +2611,7 @@ func (k *k8sOps) DeleteServiceAccount(accountName, namespace string) error {
 		return err
 	}
 
-	return k.client.Core().ServiceAccounts(namespace).Delete(accountName, &meta_v1.DeleteOptions{
+	return k.client.CoreV1().ServiceAccounts(namespace).Delete(accountName, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -2607,7 +2649,7 @@ func (k *k8sOps) CreatePod(pod *v1.Pod) (*v1.Pod, error) {
 		return nil, err
 	}
 
-	return k.client.Core().Pods(pod.Namespace).Create(pod)
+	return k.client.CoreV1().Pods(pod.Namespace).Create(pod)
 }
 
 func (k *k8sOps) UpdatePod(pod *v1.Pod) (*v1.Pod, error) {
@@ -2615,7 +2657,7 @@ func (k *k8sOps) UpdatePod(pod *v1.Pod) (*v1.Pod, error) {
 		return nil, err
 	}
 
-	return k.client.Core().Pods(pod.Namespace).Update(pod)
+	return k.client.CoreV1().Pods(pod.Namespace).Update(pod)
 }
 
 func (k *k8sOps) GetPods(namespace string, labelSelector map[string]string) (*v1.PodList, error) {
@@ -2881,7 +2923,7 @@ func (k *k8sOps) WatchPods(namespace string, fn WatchFunc, listOptions meta_v1.L
 	}
 
 	listOptions.Watch = true
-	watchInterface, err := k.client.Core().Pods(namespace).Watch(listOptions)
+	watchInterface, err := k.client.CoreV1().Pods(namespace).Watch(listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for pods")
 		return err
@@ -3016,6 +3058,40 @@ func (k *k8sOps) ValidatePersistentVolumeClaim(pvc *v1.PersistentVolumeClaim, ti
 	return nil
 }
 
+func (k *k8sOps) ValidatePersistentVolumeClaimSize(pvc *v1.PersistentVolumeClaim, expectedPVCSize int64, timeout, retryInterval time.Duration) error {
+	t := func() (interface{}, bool, error) {
+		if err := k.initK8sClient(); err != nil {
+			return "", true, err
+		}
+
+		result, err := k.client.CoreV1().
+			PersistentVolumeClaims(pvc.Namespace).
+			Get(pvc.Name, meta_v1.GetOptions{})
+		if err != nil {
+			return "", true, err
+		}
+
+		capacity, ok := result.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
+		if !ok {
+			return "", true, fmt.Errorf("failed to get storage size for pvc: %v", pvc.Name)
+		}
+
+		if capacity.Value() == expectedPVCSize {
+			return "", false, nil
+		}
+
+		return "", true, &ErrValidatePVCSize{
+			ID:    result.Name,
+			Cause: fmt.Sprintf("PVC expected size: %v actual size: %v", expectedPVCSize, capacity.Value()),
+		}
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (k *k8sOps) CreatePersistentVolume(pv *v1.PersistentVolume) (*v1.PersistentVolume, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -3044,7 +3120,7 @@ func (k *k8sOps) getPVCsWithListOptions(namespace string, listOpts meta_v1.ListO
 		return nil, err
 	}
 
-	return k.client.Core().PersistentVolumeClaims(namespace).List(listOpts)
+	return k.client.CoreV1().PersistentVolumeClaims(namespace).List(listOpts)
 }
 
 func (k *k8sOps) GetPersistentVolume(pvName string) (*v1.PersistentVolume, error) {
@@ -3052,7 +3128,7 @@ func (k *k8sOps) GetPersistentVolume(pvName string) (*v1.PersistentVolume, error
 		return nil, err
 	}
 
-	return k.client.Core().PersistentVolumes().Get(pvName, meta_v1.GetOptions{})
+	return k.client.CoreV1().PersistentVolumes().Get(pvName, meta_v1.GetOptions{})
 }
 
 func (k *k8sOps) DeletePersistentVolume(pvName string) error {
@@ -3060,7 +3136,7 @@ func (k *k8sOps) DeletePersistentVolume(pvName string) error {
 		return err
 	}
 
-	return k.client.Core().PersistentVolumes().Delete(pvName, &meta_v1.DeleteOptions{
+	return k.client.CoreV1().PersistentVolumes().Delete(pvName, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -3070,7 +3146,7 @@ func (k *k8sOps) GetPersistentVolumes() (*v1.PersistentVolumeList, error) {
 		return nil, err
 	}
 
-	return k.client.Core().PersistentVolumes().List(meta_v1.ListOptions{})
+	return k.client.CoreV1().PersistentVolumes().List(meta_v1.ListOptions{})
 }
 
 func (k *k8sOps) GetVolumeForPersistentVolumeClaim(pvc *v1.PersistentVolumeClaim) (string, error) {
@@ -3134,7 +3210,7 @@ func (k *k8sOps) GetPVCsUsingStorageClass(scName string) ([]v1.PersistentVolumeC
 	}
 
 	var retList []v1.PersistentVolumeClaim
-	pvcs, err := k.client.Core().PersistentVolumeClaims("").List(meta_v1.ListOptions{})
+	pvcs, err := k.client.CoreV1().PersistentVolumeClaims("").List(meta_v1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -3847,7 +3923,7 @@ func (k *k8sOps) DeleteConfigMap(name, namespace string) error {
 		namespace = v1.NamespaceDefault
 	}
 
-	return k.client.Core().ConfigMaps(namespace).Delete(name, &meta_v1.DeleteOptions{
+	return k.client.CoreV1().ConfigMaps(namespace).Delete(name, &meta_v1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -3875,7 +3951,7 @@ func (k *k8sOps) WatchConfigMap(configMap *v1.ConfigMap, fn WatchFunc) error {
 		Watch:         true,
 	}
 
-	watchInterface, err := k.client.Core().ConfigMaps(configMap.Namespace).Watch(listOptions)
+	watchInterface, err := k.client.CoreV1().ConfigMaps(configMap.Namespace).Watch(listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for config maps")
 		return err
@@ -4268,12 +4344,12 @@ func (k *k8sOps) CreateCRD(resource CustomResource) error {
 	return nil
 }
 
-func (k *k8sOps) RegisterCRD(crdDefinition *apiextensionsv1beta1.CustomResourceDefinition) error {
+func (k *k8sOps) RegisterCRD(crd *apiextensionsv1beta1.CustomResourceDefinition) error {
 	if err := k.initK8sClient(); err != nil {
 		return err
 	}
 
-	_, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crdDefinition)
+	_, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
 	if err != nil {
 		return err
 	}
@@ -4286,7 +4362,7 @@ func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval tim
 	}
 
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
-	return wait.Poll(timeout, retryInterval, func() (bool, error) {
+	return wait.Poll(retryInterval, timeout, func() (bool, error) {
 		crd, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, meta_v1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -4305,6 +4381,16 @@ func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval tim
 		}
 		return false, nil
 	})
+}
+
+func (k *k8sOps) DeleteCRD(fullName string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.apiExtensionClient.ApiextensionsV1beta1().
+		CustomResourceDefinitions().
+		Delete(fullName, &meta_v1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
 }
 
 func (k *k8sOps) CreateVolumePlacementStrategy(spec *talisman_v1beta2.VolumePlacementStrategy) (*talisman_v1beta2.VolumePlacementStrategy, error) {
@@ -4515,6 +4601,50 @@ func (k *k8sOps) ListClusterDomainUpdates() (*v1alpha1.ClusterDomainUpdateList, 
 }
 
 // ClusterDomain CRD - END
+
+// AutopilotRule CRD - BEGIN
+
+// CreateAutopilotRule creates the AutopilotRule object
+func (k *k8sOps) CreateAutopilotRule(rule *aut_v1alpaha1.AutopilotRule) (*aut_v1alpaha1.AutopilotRule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.autopilotClient.AutopilotV1alpha1().AutopilotRules().Create(rule)
+}
+
+// GetAutopilotRule gets the AutopilotRule for the provided name
+func (k *k8sOps) GetAutopilotRule(name string) (*aut_v1alpaha1.AutopilotRule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.autopilotClient.AutopilotV1alpha1().AutopilotRules().Get(name, meta_v1.GetOptions{})
+}
+
+// UpdateAutopilotRule updates the AutopilotRule
+func (k *k8sOps) UpdateAutopilotRule(rule *aut_v1alpaha1.AutopilotRule) (*aut_v1alpaha1.AutopilotRule, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.autopilotClient.AutopilotV1alpha1().AutopilotRules().Update(rule)
+}
+
+// DeleteAutopilotRule deletes the AutopilotRule of the given name
+func (k *k8sOps) DeleteAutopilotRule(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	return k.autopilotClient.AutopilotV1alpha1().AutopilotRules().Delete(name, &meta_v1.DeleteOptions{})
+}
+
+// ListAutopilotRules lists AutopilotRules
+func (k *k8sOps) ListAutopilotRules() (*aut_v1alpaha1.AutopilotRuleList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.autopilotClient.AutopilotV1alpha1().AutopilotRules().List(meta_v1.ListOptions{})
+}
+
+// AutopilotRule CRD - END
 
 // Object APIs - BEGIN
 
@@ -4995,6 +5125,50 @@ func (k *k8sOps) ValidateApplicationClone(name, namespace string, timeout, retry
 
 // ApplicationClone APIs - END
 
+// VolumeAttachment APIs - START
+
+func (k *k8sOps) ListVolumeAttachments() (*storagev1beta1.VolumeAttachmentList, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.StorageV1beta1().VolumeAttachments().List(meta_v1.ListOptions{})
+}
+
+func (k *k8sOps) DeleteVolumeAttachment(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+
+	return k.client.StorageV1beta1().VolumeAttachments().Delete(name, &meta_v1.DeleteOptions{})
+}
+
+func (k *k8sOps) CreateVolumeAttachment(volumeAttachment *storagev1beta1.VolumeAttachment) (*storagev1beta1.VolumeAttachment, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.StorageV1beta1().VolumeAttachments().Create(volumeAttachment)
+}
+
+func (k *k8sOps) UpdateVolumeAttachment(volumeAttachment *storagev1beta1.VolumeAttachment) (*storagev1beta1.VolumeAttachment, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.StorageV1beta1().VolumeAttachments().Update(volumeAttachment)
+}
+
+func (k *k8sOps) UpdateVolumeAttachmentStatus(volumeAttachment *storagev1beta1.VolumeAttachment) (*storagev1beta1.VolumeAttachment, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.StorageV1beta1().VolumeAttachments().UpdateStatus(volumeAttachment)
+}
+
+// VolumeAttachment APIs - END
+
 func (k *k8sOps) appsClient() appsv1_client.AppsV1Interface {
 	return k.client.AppsV1()
 }
@@ -5088,6 +5262,11 @@ func (k *k8sOps) loadClientFor(config *rest.Config) error {
 	}
 
 	k.ocpSecurityClient, err = ocp_security_clientset.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	k.autopilotClient, err = autopilotclientset.NewForConfig(config)
 	if err != nil {
 		return err
 	}

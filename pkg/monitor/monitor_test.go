@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"k8s.io/api/core/v1"
+	storagev1beta1 "k8s.io/api/storage/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
@@ -22,15 +23,18 @@ import (
 )
 
 const (
-	mockDriverName   = "MockDriver"
-	driverVolumeName = "singleVolume"
-	nodeForPod       = "node1.domain"
+	mockDriverName        = "MockDriver"
+	driverVolumeName      = "singleVolume"
+	attachmentVolumeName  = "attachmentVolume"
+	unknownPodsVolumeName = "unknownPodsVolume"
+	nodeForPod            = "node1.domain"
 )
 
 var (
 	fakeStorkClient *fakeclient.Clientset
 	driver          *mock.Driver
 	monitor         *Monitor
+	nodes           *v1.NodeList
 )
 
 func TestMonitor(t *testing.T) {
@@ -41,6 +45,7 @@ func TestMonitor(t *testing.T) {
 	t.Run("testEvictedOtherDriverPod", testEvictedOtherDriverPod)
 	t.Run("testOfflineStorageNode", testOfflineStorageNode)
 	t.Run("testOfflineStorageNodeDuplicateIP", testOfflineStorageNodeDuplicateIP)
+	t.Run("testVolumeAttachmentCleanup", testVolumeAttachmentCleanup)
 	t.Run("teardown", teardown)
 }
 
@@ -53,7 +58,7 @@ func setup(t *testing.T) {
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
-	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil, nil, nil)
+	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil, nil, nil, nil)
 
 	storkdriver, err := volume.Get(mockDriverName)
 	require.NoError(t, err, "Error getting mock volume driver")
@@ -65,7 +70,7 @@ func setup(t *testing.T) {
 	err = storkdriver.Init(nil)
 	require.NoError(t, err, "Error initializing mock volume driver")
 
-	nodes := &v1.NodeList{}
+	nodes = &v1.NodeList{}
 	nodes.Items = append(nodes.Items, *newNode(nodeForPod, nodeForPod, "192.168.0.1", "rack1", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node2.domain", "node2.domain", "192.168.0.2", "rack2", "", ""))
 	nodes.Items = append(nodes.Items, *newNode("node3.domain", "node3.domain", "192.168.0.3", "rack1", "", ""))
@@ -89,6 +94,12 @@ func setup(t *testing.T) {
 	require.NoError(t, err, "Error setting node status to Offline")
 
 	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1)
+	require.NoError(t, err, "Error provisioning volume")
+
+	err = driver.ProvisionVolume(attachmentVolumeName, provNodes, 2)
+	require.NoError(t, err, "Error provisioning volume")
+
+	err = driver.ProvisionVolume(unknownPodsVolumeName, provNodes, 3)
 	require.NoError(t, err, "Error provisioning volume")
 
 	monitor = &Monitor{
@@ -276,4 +287,122 @@ func testOfflineStorageNodeDuplicateIP(t *testing.T) {
 	time.Sleep(35 * time.Second)
 	_, err = k8s.Instance().GetPodByName(pod.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
+}
+
+func testVolumeAttachmentCleanup(t *testing.T) {
+	onlineNodeID := 1
+	offlineNodeID := 2
+	podsUnknownNodeID := 3
+	nodeToKeepOnline := nodes.Items[onlineNodeID].Name
+	nodeToTakeOffline := nodes.Items[offlineNodeID].Name
+	nodeToPutUnknownPodsOn := nodes.Items[podsUnknownNodeID].Name
+
+	// Create multiple pods on different nodes, some with volumeattachments, some without.
+	// Stop the driver on the node with the attachment and make sure only that pod and volumeattachment are deleted.
+
+	// Create two pods on node N1 that will remain healthy. One attached, one not.
+	healthyPodAttached := newPod("testVolumeAttachmentCleanupHealtyAttached", []string{driverVolumeName})
+	healthyPodAttached.Spec.NodeName = nodeToKeepOnline
+	_, err := k8s.Instance().CreatePod(healthyPodAttached)
+	require.NoError(t, err, "failed to create healthy attached pod")
+	_, err = k8s.Instance().CreateVolumeAttachment(&storagev1beta1.VolumeAttachment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "va-healthy",
+		},
+		Spec: storagev1beta1.VolumeAttachmentSpec{
+			NodeName: nodeToKeepOnline,
+		},
+	})
+	require.NoError(t, err, "failed to create healthy pod volume attachment")
+
+	healthyPodDetached := newPod("testVolumeAttachmentCleanHealtyupDetached", []string{driverVolumeName})
+	healthyPodDetached.Spec.NodeName = nodeToKeepOnline
+	_, err = k8s.Instance().CreatePod(healthyPodDetached)
+	require.NoError(t, err, "failed to create healthy detached pod")
+
+	// Create two pods on node N2 that will be taken offline temporarily. One attached, one not.
+	unhealthyPodAttached := newPod("testVolumeAttachmentCleanupUnheathyAttached", []string{attachmentVolumeName})
+	unhealthyPodAttached.Spec.NodeName = nodeToTakeOffline
+	_, err = k8s.Instance().CreatePod(unhealthyPodAttached)
+	require.NoError(t, err, "failed to create pod")
+	_, err = k8s.Instance().CreateVolumeAttachment(&storagev1beta1.VolumeAttachment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "va-unhealthy",
+		},
+		Spec: storagev1beta1.VolumeAttachmentSpec{
+			NodeName: nodeToTakeOffline,
+		},
+	})
+	require.NoError(t, err, "failed to create unhealthy pod volume attachment")
+
+	unhealthyPodDetached := newPod("testVolumeAttachmentCleanupUnheathyDetached", []string{attachmentVolumeName})
+	unhealthyPodDetached.Spec.NodeName = nodeToTakeOffline
+	_, err = k8s.Instance().CreatePod(unhealthyPodDetached)
+	require.NoError(t, err, "failed to create pod")
+
+	// Create two pods on node N3 that will have unknown state. One attached, one not.
+	unknownPodAttached := newPod("testVolumeAttachmentCleanupUnknownPodAttached", []string{unknownPodsVolumeName})
+	unknownPodAttached.Spec.NodeName = nodeToPutUnknownPodsOn
+	unknownPodAttached.Status = v1.PodStatus{
+		Reason: node.NodeUnreachablePodReason,
+	}
+	_, err = k8s.Instance().CreatePod(unknownPodAttached)
+	require.NoError(t, err, "failed to create pod")
+	_, err = k8s.Instance().CreateVolumeAttachment(&storagev1beta1.VolumeAttachment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "va-unknown",
+		},
+		Spec: storagev1beta1.VolumeAttachmentSpec{
+			NodeName: nodeToPutUnknownPodsOn,
+		},
+	})
+	require.NoError(t, err, "failed to create unknown pod volume attachment")
+
+	unknownPodDetached := newPod("testVolumeAttachmentCleanupUnknownPodDetached", []string{unknownPodsVolumeName})
+	unknownPodDetached.Spec.NodeName = nodeToPutUnknownPodsOn
+	unknownPodDetached.Status = v1.PodStatus{
+		Reason: node.NodeUnreachablePodReason,
+	}
+	_, err = k8s.Instance().CreatePod(unknownPodDetached)
+	require.NoError(t, err, "failed to create unknown detached pod")
+
+	// Kill N2
+	err = driver.UpdateNodeStatus(offlineNodeID, volume.NodeOffline)
+	require.NoError(t, err, "Error setting node status to Offline")
+	defer func() {
+		err = driver.UpdateNodeStatus(offlineNodeID, volume.NodeOnline)
+		require.NoError(t, err, "Error setting node status to Online")
+	}()
+
+	// VolumeAttachments (VA) for N2 and N3 should be deleted, but VA for N1 should remain.
+	time.Sleep(35 * time.Second)
+
+	vaList, err := k8s.Instance().ListVolumeAttachments()
+	require.NoError(t, err, "expected no error from list vol attachments")
+
+	// There should be exactly one attachment left - the healthy one.
+	require.Equal(t, 1, len(vaList.Items))
+	require.Equal(t, "va-healthy", vaList.Items[0].Name)
+
+	// Healthy pods should remain
+	_, err = k8s.Instance().GetPodByName(healthyPodAttached.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
+
+	_, err = k8s.Instance().GetPodByName(healthyPodDetached.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
+
+	// Unhealthy pods should be deleted.
+	_, err = k8s.Instance().GetPodByName(unhealthyPodAttached.Name, "")
+	require.Error(t, err, "expected error from get pod as pod should be deleted")
+
+	_, err = k8s.Instance().GetPodByName(unhealthyPodDetached.Name, "")
+	require.Error(t, err, "expected error from get pod as pod should be deleted")
+
+	// Unknown pods should be deleted.
+	_, err = k8s.Instance().GetPodByName(unknownPodAttached.Name, "")
+	require.Error(t, err, "expected error from get pod as pod should be deleted")
+
+	_, err = k8s.Instance().GetPodByName(unknownPodDetached.Name, "")
+	require.Error(t, err, "expected error from get pod as pod should be deleted")
+
 }
