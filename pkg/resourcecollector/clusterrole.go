@@ -47,6 +47,9 @@ func (r *ResourceCollector) clusterRoleBindingToBeCollected(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &crb); err != nil {
 		return false, err
 	}
+	if val, ok := crb.Labels["kubernetes.io/bootstrapping"]; ok && val == "rbac-defaults" {
+		return false, nil
+	}
 	// Check if there is a subject for the namespace which is requested
 	for _, subject := range crb.Subjects {
 		collect, err := r.subjectInNamespace(&subject, namespace)
@@ -67,6 +70,10 @@ func (r *ResourceCollector) clusterRoleToBeCollected(
 	if err != nil {
 		return false, err
 	}
+	if val, ok := metadata.GetLabels()["kubernetes.io/bootstrapping"]; ok && val == "rbac-defaults" {
+		return false, nil
+	}
+
 	name := metadata.GetName()
 	// Find the corresponding ClusterRoleBinding and see if it belongs to the requested namespace
 	for _, crb := range crbs.Items {
