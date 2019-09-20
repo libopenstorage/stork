@@ -674,6 +674,10 @@ func (m *MigrationController) objectToBeMigrated(
 		}
 		return true, nil
 	case "ClusterRoleBinding":
+		labels := metadata.GetLabels()
+		if val, ok := labels["kubernetes.io/bootstrapping"]; ok && val == "rbac-defaults" {
+			return false, nil
+		}
 		var crb rbacv1.ClusterRoleBinding
 		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &crb); err != nil {
 			return false, err
@@ -685,6 +689,10 @@ func (m *MigrationController) objectToBeMigrated(
 		}
 		return false, nil
 	case "ClusterRole":
+		labels := metadata.GetLabels()
+		if val, ok := labels["kubernetes.io/bootstrapping"]; ok && val == "rbac-defaults" {
+			return false, nil
+		}
 		name := metadata.GetName()
 		for _, crb := range crbs.Items {
 			if crb.RoleRef.Name == name {
