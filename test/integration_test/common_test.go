@@ -88,7 +88,7 @@ func setup() error {
 		return fmt.Errorf("Error getting node driver %v: %v", nodeDriverName, err)
 	}
 
-	if err = nodeDriver.Init(false); err != nil {
+	if err = nodeDriver.Init(); err != nil {
 		return fmt.Errorf("Error initializing node driver %v: %v", nodeDriverName, err)
 	}
 
@@ -106,7 +106,7 @@ func setup() error {
 
 	provisioner := os.Getenv(storageProvisioner)
 	logrus.Infof("Using provisioner: %s", provisioner)
-	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, provisioner); err != nil {
+	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, "", provisioner); err != nil {
 		return fmt.Errorf("Error initializing volume driver %v: %v", volumeDriverName, err)
 	}
 	return nil
