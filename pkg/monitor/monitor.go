@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
+	storagev1beta1 "k8s.io/api/storage/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -223,6 +224,22 @@ func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
 	return true, nil
 }
 
+func (m *Monitor) doesDriverOwnVolumeAttachment(va *storagev1beta1.VolumeAttachment) (bool, error) {
+	pv, err := k8s.Instance().GetPersistentVolume(*va.Spec.Source.PersistentVolumeName)
+	if err != nil {
+		log.Errorf("Error getting persistent volume from volume attachment: %v", err)
+		return false, err
+	}
+
+	pvc, err := k8s.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
+	if err != nil {
+		log.Errorf("Error getting persistent volume claim from volume attachment: %v", err)
+		return false, err
+	}
+
+	return m.Driver.OwnsPVC(pvc), nil
+}
+
 func (m *Monitor) cleanupVolumeAttachmentsByPod(pod *v1.Pod) error {
 	log.Infof("Cleaning up volume attachments for pod %s", pod.Name)
 
@@ -260,6 +277,11 @@ func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
 
 	if len(vaList.Items) > 0 {
 		for _, va := range vaList.Items {
+			owns, err := m.doesDriverOwnVolumeAttachment(&va)
+			if err != nil || !owns {
+				continue
+			}
+
 			// Delete attachments for this pod
 			if m.isSameNode(va.Spec.NodeName, node) {
 				err := k8s.Instance().DeleteVolumeAttachment(va.Name)

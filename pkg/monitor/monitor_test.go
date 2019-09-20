@@ -23,14 +23,15 @@ import (
 )
 
 const (
-	mockDriverName        = "MockDriver"
-	driverVolumeName      = "singleVolume"
-	attachmentVolumeName  = "attachmentVolume"
-	unknownPodsVolumeName = "unknownPodsVolume"
-	nodeForPod            = "node1.domain"
+	mockDriverName = "MockDriver"
+	nodeForPod     = "node1.domain"
 )
 
 var (
+	driverVolumeName      = "singleVolume"
+	attachmentVolumeName  = "attachmentVolume"
+	unknownPodsVolumeName = "unknownPodsVolume"
+
 	fakeStorkClient *fakeclient.Clientset
 	driver          *mock.Driver
 	monitor         *Monitor
@@ -297,6 +298,30 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	nodeToTakeOffline := nodes.Items[offlineNodeID].Name
 	nodeToPutUnknownPodsOn := nodes.Items[podsUnknownNodeID].Name
 
+	// Create PVC and PV for all test volumes.
+	for _, volumeName := range []string{driverVolumeName, attachmentVolumeName, unknownPodsVolumeName} {
+		_, err := k8s.Instance().CreatePersistentVolumeClaim(&v1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      volumeName,
+				Namespace: "",
+			},
+		})
+		require.NoError(t, err, "failed to create pv for %s", volumeName)
+		_, err = k8s.Instance().CreatePersistentVolume(&v1.PersistentVolume{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      volumeName,
+				Namespace: "",
+			},
+			Spec: v1.PersistentVolumeSpec{
+				ClaimRef: &v1.ObjectReference{
+					Name:      volumeName,
+					Namespace: "",
+				},
+			},
+		})
+		require.NoError(t, err, "failed to create pvc for %s", volumeName)
+	}
+
 	// Create multiple pods on different nodes, some with volumeattachments, some without.
 	// Stop the driver on the node with the attachment and make sure only that pod and volumeattachment are deleted.
 
@@ -311,6 +336,9 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 		},
 		Spec: storagev1beta1.VolumeAttachmentSpec{
 			NodeName: nodeToKeepOnline,
+			Source: storagev1beta1.VolumeAttachmentSource{
+				PersistentVolumeName: &driverVolumeName,
+			},
 		},
 	})
 	require.NoError(t, err, "failed to create healthy pod volume attachment")
@@ -331,6 +359,9 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 		},
 		Spec: storagev1beta1.VolumeAttachmentSpec{
 			NodeName: nodeToTakeOffline,
+			Source: storagev1beta1.VolumeAttachmentSource{
+				PersistentVolumeName: &attachmentVolumeName,
+			},
 		},
 	})
 	require.NoError(t, err, "failed to create unhealthy pod volume attachment")
@@ -354,6 +385,9 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 		},
 		Spec: storagev1beta1.VolumeAttachmentSpec{
 			NodeName: nodeToPutUnknownPodsOn,
+			Source: storagev1beta1.VolumeAttachmentSource{
+				PersistentVolumeName: &unknownPodsVolumeName,
+			},
 		},
 	})
 	require.NoError(t, err, "failed to create unknown pod volume attachment")
