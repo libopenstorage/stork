@@ -2288,19 +2288,19 @@ func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart ti
 		return fmt.Errorf("no valid volumesnapshotrestore specs found")
 	}
 
-	for vol, snap := range snapRestore.Status.RestoreVolumes {
-		logrus.Infof("validating volume %v is restored from %v", vol, snap)
-		snapshotData, err := k8sOps.GetSnapshotData(snap)
+	for _, vol := range snapRestore.Status.Volumes {
+		logrus.Infof("validating volume %v is restored from %v", vol.Volume, vol.Snapshot)
+		snapshotData, err := k8sOps.GetSnapshotData(vol.Snapshot)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
-				snap, err)
+				vol.Snapshot, err)
 		}
 		err = k8sOps.ValidateSnapshotData(snapshotData.Metadata.Name, false, DefaultTimeout, DefaultRetryInterval)
 		if err != nil {
 			return fmt.Errorf("snapshot: %s is not complete. %v", snapshotData.Metadata.Name, err)
 		}
 		// validate each snap restore
-		if err := driver.ValidateVolumeSnapshotRestore(vol, snapshotData, timeStart); err != nil {
+		if err := driver.ValidateVolumeSnapshotRestore(vol.Volume, snapshotData, timeStart); err != nil {
 			return err
 		}
 	}
