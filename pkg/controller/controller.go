@@ -72,7 +72,7 @@ func Register(
 	// resyncPeriod will be ignored for second call if different
 	if controllerInst.handlers[objectType] == nil {
 		controllerInst.handlers[objectType] = make([]sdk.Handler, 0)
-		sdk.Watch(gkv.GroupVersion().String(), gkv.Kind, namespace, resyncPeriod)
+		sdk.Watch(gkv.GroupVersion().String(), gkv.Kind, namespace, resyncPeriod, sdk.WithNumWorkers(10))
 	}
 	logrus.Debugf("Registered controller for %v", gkv)
 	controllerInst.handlers[objectType] = append(controllerInst.handlers[objectType], handler)

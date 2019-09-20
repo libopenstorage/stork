@@ -446,11 +446,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 		}
 	}
 
-	err := sdk.Update(migration)
-	if err != nil {
-		return err
-	}
-	return nil
+	return sdk.Update(migration)
 }
 
 func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]chan bool, error) {
