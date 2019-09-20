@@ -38,6 +38,8 @@ const (
 	// StorkMigrationReplicasAnnotation is the annotation used to keep track of
 	// the number of replicas for an application when it was migrated
 	StorkMigrationReplicasAnnotation = "stork.libopenstorage.org/migrationReplicas"
+	// Max number of times to retry applying resources on the desination
+	maxApplyRetries = 10
 )
 
 // MigrationController reconciles migration objects
@@ -879,31 +881,40 @@ func (m *MigrationController) applyResources(
 		if !ok {
 			return fmt.Errorf("unable to cast object to unstructured: %v", o)
 		}
-		_, err = dynamicClient.Create(unstructured)
-		if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
-			switch objectType.GetKind() {
-			// Don't want to delete the Volume resources
-			case "PersistentVolumeClaim":
-				err = nil
-			case "PersistentVolume":
-				if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+		retries := 0
+		for {
+			_, err = dynamicClient.Create(unstructured)
+			if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
+				switch objectType.GetKind() {
+				// Don't want to delete the Volume resources
+				case "PersistentVolumeClaim":
 					err = nil
-				} else {
-					_, err = dynamicClient.Update(unstructured)
-				}
-			case "ServiceAccount":
-				err = m.checkAndUpdateDefaultSA(migration, o)
-			default:
-				// Delete the resource if it already exists on the destination
-				// cluster and try creating again
-				err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
-				if err == nil {
-					_, err = dynamicClient.Create(unstructured)
-				} else {
-					log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
-				}
-			}
+				case "PersistentVolume":
+					if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
+						err = nil
+					} else {
+						_, err = dynamicClient.Update(unstructured)
+					}
+				case "ServiceAccount":
+					err = m.checkAndUpdateDefaultSA(migration, o)
+				default:
+					// Delete the resource if it already exists on the destination
+					// cluster and try creating again
+					err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
+					if err == nil {
+						_, err = dynamicClient.Create(unstructured)
+					} else {
+						log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+					}
 
+				}
+				// Retry a few times for Unauthorized errors
+				if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
+					retries++
+					continue
+				}
+				break
+			}
 		}
 		if err != nil {
 			m.updateResourceStatus(
