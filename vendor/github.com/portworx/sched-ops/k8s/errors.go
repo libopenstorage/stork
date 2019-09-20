@@ -69,6 +69,18 @@ func (e *ErrPVCNotReady) Error() string {
 	return fmt.Sprintf("PVC %v is not ready yet. Cause: %v", e.ID, e.Cause)
 }
 
+// ErrValidatePVCSize error type for when a PVC size is not that expected size of PVC
+type ErrValidatePVCSize struct {
+	// ID is the identifier of the app
+	ID string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrValidatePVCSize) Error() string {
+	return fmt.Sprintf("PVC %v size is not as expected. Cause: %v", e.ID, e.Cause)
+}
+
 // ErrSnapshotNotReady error type for when a snapshot is not yet ready/bound
 type ErrSnapshotNotReady struct {
 	// ID is the identifier of the snapshot
