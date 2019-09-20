@@ -702,6 +702,10 @@ func commonApplicationBackupScheduleTests(
 
 func applicationBackupSyncControllerTest(t *testing.T) {
 	var err error
+	defer func() {
+		err = setRemoteConfig("")
+		require.NoError(t, err, "Error resetting remote config")
+	}()
 	backupLocationName := appKey + "-backup-location-sync"
 
 	// Create myqsl app deployment
