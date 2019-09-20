@@ -178,8 +178,12 @@ func testClusterDomainsFailback(
 ) {
 	// Failback the application
 
+	// Get scale factor on cluster 2
+	oldScaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
+	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
+
 	// destroy the app on cluster 2
-	err := schedulerDriver.Destroy(preMigrationCtx, nil)
+	err = schedulerDriver.Destroy(preMigrationCtx, nil)
 	require.NoError(t, err, "Error destroying ctx: %+v", preMigrationCtx)
 	err = schedulerDriver.WaitForDestroy(preMigrationCtx, defaultWaitTimeout)
 	require.NoError(t, err, "Error waiting for destroy of ctx: %+v", preMigrationCtx)
@@ -203,16 +207,10 @@ func testClusterDomainsFailback(
 	err = setRemoteConfig("")
 	require.NoError(t, err, "Error resetting remote config")
 
-	// Reduce the replicas on cluster 1
-	scaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
-	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
-	//for k := range scaleFactor {
-	//	scaleFactor[k] = 1
-	//}
-	err = schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
+	err = schedulerDriver.ScaleApplication(ctxs[0], oldScaleFactor)
 	require.NoError(t, err, "Unexpected error on ScaleApplication")
 
-	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state on source cluster after failback")
 
 }
