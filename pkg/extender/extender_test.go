@@ -65,7 +65,7 @@ func setup(t *testing.T) {
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeOCPClient = fakeocpclient.NewSimpleClientset()
 	fakeRestClient = &fake.RESTClient{}
-	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil, fakeOCPClient, nil)
+	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil, fakeOCPClient, nil, nil)
 
 	extender = &Extender{
 		Driver:   storkdriver,
