@@ -164,13 +164,11 @@ func (c *SnapshotRestoreController) handleInitial(snapRestore *stork_api.VolumeS
 	}
 
 	// get map of snapID and pvcs
-	restoreVolumes, pvcList, err := getRestoreVolumeMap(snapshotList)
+	err = initRestoreVolumesInfo(snapshotList, snapRestore)
 	if err != nil {
 		return err
 	}
 
-	snapRestore.Status.PVCs = pvcList
-	snapRestore.Status.RestoreVolumes = restoreVolumes
 	snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusPending
 	return nil
 }
@@ -179,7 +177,7 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 	var err error
 
 	// annotate and delete pods using pvcs
-	err = markPVCForRestore(snapRestore.Status.PVCs)
+	err = markPVCForRestore(snapRestore.Status.Volumes)
 	if err != nil {
 		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("unable to mark pvc for restore %v", err)
 		return err
@@ -188,7 +186,7 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 	// Do driver volume snapshot restore here
 	err = c.Driver.CompleteVolumeSnapshotRestore(snapRestore)
 	if err != nil {
-		if err := unmarkPVCForRestore(snapRestore.Status.PVCs); err != nil {
+		if err := unmarkPVCForRestore(snapRestore.Status.Volumes); err != nil {
 			log.VolumeSnapshotRestoreLog(snapRestore).Errorf("unable to umark pvc for restore %v", err)
 			return err
 		}
@@ -196,7 +194,7 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 		return fmt.Errorf("failed to restore pvc %v", err)
 	}
 
-	err = unmarkPVCForRestore(snapRestore.Status.PVCs)
+	err = unmarkPVCForRestore(snapRestore.Status.Volumes)
 	if err != nil {
 		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("unable to unmark pvc for restore %v", err)
 		return err
@@ -206,9 +204,9 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 	return nil
 }
 
-func markPVCForRestore(pvcList map[string]string) error {
-	for name, namespace := range pvcList {
-		pvc, err := k8s.Instance().GetPersistentVolumeClaim(name, namespace)
+func markPVCForRestore(volumes []*stork_api.RestoreVolumeInfo) error {
+	for _, vol := range volumes {
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(vol.PVC, vol.Namespace)
 		if err != nil {
 			return fmt.Errorf("failed to get pvc details %v", err)
 		}
@@ -245,10 +243,10 @@ func markPVCForRestore(pvcList map[string]string) error {
 	return nil
 }
 
-func unmarkPVCForRestore(pvcList map[string]string) error {
+func unmarkPVCForRestore(volumes []*stork_api.RestoreVolumeInfo) error {
 	// remove annotation from pvc's
-	for name, namespace := range pvcList {
-		pvc, err := k8s.Instance().GetPersistentVolumeClaim(name, namespace)
+	for _, vol := range volumes {
+		pvc, err := k8s.Instance().GetPersistentVolumeClaim(vol.PVC, vol.Namespace)
 		if err != nil {
 			return fmt.Errorf("failed to get pvc details %v", err)
 		}
@@ -274,22 +272,33 @@ func unmarkPVCForRestore(pvcList map[string]string) error {
 	return nil
 }
 
-func getRestoreVolumeMap(snapshotList []*snap_v1.VolumeSnapshot) (map[string]string, map[string]string, error) {
-	volumes := make(map[string]string)
-	pvcList := make(map[string]string)
-
+func initRestoreVolumesInfo(snapshotList []*snap_v1.VolumeSnapshot, snapRestore *stork_api.VolumeSnapshotRestore) error {
 	for _, snap := range snapshotList {
 		snapData := string(snap.Spec.SnapshotDataName)
 		logrus.Debugf("Getting volume ID for pvc %v", snap.Spec.PersistentVolumeClaimName)
 		pvc, err := k8s.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
 		if err != nil {
-			return pvcList, nil, fmt.Errorf("failed to get pvc details for snapshot %v", err)
+			return fmt.Errorf("failed to get pvc details for snapshot %v", err)
 		}
-		volID := pvc.Spec.VolumeName
-		pvcList[pvc.Name] = pvc.Namespace
-		volumes[volID] = snapData
+
+		volInfo := &stork_api.RestoreVolumeInfo{}
+		// check whether we have volInfo already processed for given
+		// pvc. If so update existing vol info
+		for _, vol := range snapRestore.Status.Volumes {
+			if pvc.Spec.VolumeName == vol.PVC {
+				volInfo = vol
+				break
+			}
+		}
+		volInfo.Volume = pvc.Spec.VolumeName
+		volInfo.PVC = pvc.Name
+		volInfo.Namespace = pvc.Namespace
+		volInfo.Snapshot = snapData
+		volInfo.RestoreStatus = stork_api.VolumeSnapshotRestoreStatusInitial
+		snapRestore.Status.Volumes = append(snapRestore.Status.Volumes, volInfo)
 	}
-	return volumes, pvcList, nil
+
+	return nil
 }
 
 func (c *SnapshotRestoreController) createCRD() error {
@@ -316,7 +325,7 @@ func (c *SnapshotRestoreController) handleDelete(snapRestore *stork_api.VolumeSn
 func (c *SnapshotRestoreController) waitForRestoreToReady(
 	snapRestore *stork_api.VolumeSnapshotRestore,
 ) (bool, error) {
-	if snapRestore.Status.Volumes == nil {
+	if snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusPending {
 		err := c.Driver.StartVolumeSnapshotRestore(snapRestore)
 		if err != nil {
 			message := fmt.Sprintf("Error starting snapshot restore for volumes: %v", err)
@@ -347,19 +356,19 @@ func (c *SnapshotRestoreController) waitForRestoreToReady(
 		// Now check if there is any failure or success
 		for _, vInfo := range snapRestore.Status.Volumes {
 			if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusInProgress {
-				log.VolumeSnapshotRestoreLog(snapRestore).Infof("Volume restore for volume %v is in %v state", vInfo.Volume, vInfo.RestoreStatus)
+				log.VolumeSnapshotRestoreLog(snapRestore).Infof("Volume restore for volume %v is in %v state", vInfo.PVC, vInfo.RestoreStatus)
 				continueProcessing = true
 			} else if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusFailed {
 				c.Recorder.Event(snapRestore,
 					v1.EventTypeWarning,
 					string(vInfo.RestoreStatus),
-					fmt.Sprintf("Error restoring volume %v: %v", vInfo.Volume, vInfo.Reason))
-				return false, fmt.Errorf("restore failed for volume: %v", vInfo.Volume)
+					fmt.Sprintf("Error restoring volume %v: %v", vInfo.PVC, vInfo.Reason))
+				return false, fmt.Errorf("restore failed for volume: %v", vInfo.PVC)
 			} else if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusSuccessful {
 				c.Recorder.Event(snapRestore,
 					v1.EventTypeNormal,
 					string(vInfo.RestoreStatus),
-					fmt.Sprintf("Volume %v restored successfully", vInfo.Volume))
+					fmt.Sprintf("Volume %v restored successfully", vInfo.PVC))
 			}
 		}
 	}
