@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,42 +23,40 @@ type VolumeSnapshotRestoreSpec struct {
 	DestinationPVC map[string]string `json:"pvcs,omitempty"`
 }
 
-// SnapshotRestoreStatusType is the status of volume in-place restore
-type SnapshotRestoreStatusType string
+// VolumeSnapshotRestoreStatusType is the status of volume in-place restore
+type VolumeSnapshotRestoreStatusType string
 
 const (
 	// VolumeSnapshotRestoreStatusInitial is the initial state when snapshot restore is initiated
-	VolumeSnapshotRestoreStatusInitial SnapshotRestoreStatusType = ""
+	VolumeSnapshotRestoreStatusInitial VolumeSnapshotRestoreStatusType = ""
 	// VolumeSnapshotRestoreStatusPending for when restore is in pending state
-	VolumeSnapshotRestoreStatusPending SnapshotRestoreStatusType = "Pending"
+	VolumeSnapshotRestoreStatusPending VolumeSnapshotRestoreStatusType = "Pending"
 	// VolumeSnapshotRestoreStatusRestore for when restore is in restore state
-	VolumeSnapshotRestoreStatusRestore SnapshotRestoreStatusType = "Restore"
+	VolumeSnapshotRestoreStatusRestore VolumeSnapshotRestoreStatusType = "Restore"
 	// VolumeSnapshotRestoreStatusSuccessful for when restore is completed
-	VolumeSnapshotRestoreStatusSuccessful SnapshotRestoreStatusType = "Successful"
+	VolumeSnapshotRestoreStatusSuccessful VolumeSnapshotRestoreStatusType = "Successful"
 	// VolumeSnapshotRestoreStatusInProgress for when restore is in progress
-	VolumeSnapshotRestoreStatusInProgress SnapshotRestoreStatusType = "InProgress"
+	VolumeSnapshotRestoreStatusInProgress VolumeSnapshotRestoreStatusType = "InProgress"
 	// VolumeSnapshotRestoreStatusFailed for when restore failed
-	VolumeSnapshotRestoreStatusFailed SnapshotRestoreStatusType = "Failed"
+	VolumeSnapshotRestoreStatusFailed VolumeSnapshotRestoreStatusType = "Failed"
 )
 
-// RestoreStatus of volume
-type RestoreStatus struct {
+// VolumeSnapshotRestoreStatus of volume
+type VolumeSnapshotRestoreStatus struct {
 	// Status of volume restore
-	Status SnapshotRestoreStatusType `json:"status"`
-	// Volumes list of restore inforamtion
+	Status VolumeSnapshotRestoreStatusType `json:"status"`
+	// Volumes list of volume restore information
 	Volumes []*RestoreVolumeInfo `json:"volumes"`
-	// RestoreVolume map of snapID and volID to restore
-	RestoreVolumes map[string]string `json:"restoreVolumes"`
-	// List of PVC associated with snapshot restore
-	PVCs []*v1.PersistentVolumeClaim `json:"pvcs"`
 }
 
 // RestoreVolumeInfo is the info for the restore of a volume
 type RestoreVolumeInfo struct {
-	Volume        string                    `json:"volume"`
-	Snapshot      string                    `json:"snapshot"`
-	RestoreStatus SnapshotRestoreStatusType `json:"status"`
-	Reason        string                    `json:"reason"`
+	Volume        string                          `json:"volume"`
+	PVC           string                          `json:"pvc"`
+	Namespace     string                          `json:"namespace"`
+	Snapshot      string                          `json:"snapshot"`
+	RestoreStatus VolumeSnapshotRestoreStatusType `json:"status"`
+	Reason        string                          `json:"reason"`
 }
 
 // +genclient
@@ -69,8 +66,8 @@ type RestoreVolumeInfo struct {
 type VolumeSnapshotRestore struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
-	Spec            VolumeSnapshotRestoreSpec `json:"spec"`
-	Status          RestoreStatus             `json:"status"`
+	Spec            VolumeSnapshotRestoreSpec   `json:"spec"`
+	Status          VolumeSnapshotRestoreStatus `json:"status"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

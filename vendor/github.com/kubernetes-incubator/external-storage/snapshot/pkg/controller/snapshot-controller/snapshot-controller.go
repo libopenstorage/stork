@@ -166,6 +166,7 @@ func NewSnapshotController(client *rest.RESTClient,
 func (c *snapshotController) Run(ctx <-chan struct{}) {
 	glog.Infof("Starting snapshot controller")
 
+	c.snapshotter.Run(ctx)
 	go c.snapshotController.Run(ctx)
 
 	if !kcontroller.WaitForCacheSync("snapshot-controller", ctx, c.snapshotController.HasSynced) {

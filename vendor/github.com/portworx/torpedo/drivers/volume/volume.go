@@ -38,7 +38,7 @@ type Image struct {
 // of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string, storageProvisioner string) error
+	Init(sched string, nodeDriver string, token string, storageProvisioner string) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -132,6 +132,9 @@ type Driver interface {
 	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 	// given volumes
 	ValidateVolumeSnapshotRestore(vol string, snapData *snap_v1.VolumeSnapshotData, timeStart time.Time) error
+
+	// Collect live diags on a node
+	CollectDiags(n node.Node) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
