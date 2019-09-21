@@ -530,7 +530,7 @@
 
 [[projects]]
   branch = "openstorage-5.1"
-  digest = "1:282cda63cef0e8450740e6ebf32191450f553923561c9cf52c8541d21b949b78"
+  digest = "1:31f7448f6134ed0b81c5896d8ad946d211346db915ffa120d4e94a96ef886657"
   name = "github.com/kubernetes-incubator/external-storage"
   packages = [
     "lib/controller",
@@ -546,7 +546,7 @@
     "snapshot/pkg/volume",
   ]
   pruneopts = "UT"
-  revision = "18c097ccef789822b480acd686afa5d8c859484f"
+  revision = "9394ee8dd5361cfe8fee25c233721e4060ff0473"
   source = "github.com/libopenstorage/external-storage"
 
 [[projects]]
