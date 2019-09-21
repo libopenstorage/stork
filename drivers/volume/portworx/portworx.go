@@ -995,6 +995,15 @@ func (p *portworx) CleanupSnapshotRestoreObjects(snapRestore *stork_crd.VolumeSn
 	logrus.Infof("Cleaning up in-place restore objects")
 
 	for _, vol := range snapRestore.Status.Volumes {
+		_, snapType, _, err := getSnapshotDetails(vol.Snapshot)
+		if err != nil {
+			log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Invalid snapshot data %v", err)
+			return err
+		}
+		if snapType == crdv1.PortworxSnapshotTypeLocal {
+			continue
+		}
+
 		volName := restoreNamePrefix + getUidforRestore(vol.Volume, string(snapRestore.GetUID()))
 		taskName := restoreTaskPrefix + getUidforRestore(vol.Volume, string(snapRestore.GetUID()))
 
@@ -1305,7 +1314,7 @@ func (p *portworx) pxSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestor
 			return err
 		}
 
-		logrus.Infof("Restoring volume %v with local snapshot %v", vol.Volume, snapID)
+		log.VolumeSnapshotRestoreLog(snapRestore).Infof("Restoring volume %v with local snapshot %v", vol.Volume, snapID)
 		if snapType == crdv1.PortworxSnapshotTypeCloud {
 			snapID = restoreNamePrefix + getUidforRestore(vol.Volume, restoreID)
 		}
@@ -1313,7 +1322,7 @@ func (p *portworx) pxSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestor
 		err = wait.ExponentialBackoff(restoreAPICallBackoff, func() (bool, error) {
 			err = volDriver.Restore(vol.Volume, snapID)
 			if err != nil {
-				logrus.Warnf("In-place restore failed for %v: %v", vol.Volume, err)
+				log.VolumeSnapshotRestoreLog(snapRestore).Warnf("In-place restore failed for %v: %v", vol.Volume, err)
 				return false, nil
 			}
 
@@ -1327,8 +1336,8 @@ func (p *portworx) pxSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestor
 			vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusFailed
 			return err
 		}
-		logrus.Infof("Completed restore for volume %v with Snapshotshot %v", vol.Volume, snapID)
-		vol.Reason = "restore is successful"
+		log.VolumeSnapshotRestoreLog(snapRestore).Infof("Completed restore for volume %v with Snapshotshot %v", vol.Volume, snapID)
+		vol.Reason = "Restore is successful"
 		vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusSuccessful
 		if snapType == crdv1.PortworxSnapshotTypeCloud {
 			if err := volDriver.Delete(snapID); err != nil {
