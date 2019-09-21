@@ -246,9 +246,9 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvo
 	return volumes, nil
 }
 
-// OwnsPVC returns false since mock driver doesn't own any PVCs
+// OwnsPVC returns true because it owns all PVCs created by tests
 func (m *Driver) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
-	return false
+	return true
 }
 
 // GetSnapshotPlugin Returns nil since snapshot is not supported in the mock driver
