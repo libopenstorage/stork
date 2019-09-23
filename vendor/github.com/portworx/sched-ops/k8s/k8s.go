@@ -531,6 +531,8 @@ type VolumeSnapshotRestoreOps interface {
 	// CreateVolumeSnapshotRestore restore snapshot to pvc specifed in CRD, if no pvcs defined we restore to
 	// parent volumes
 	CreateVolumeSnapshotRestore(snap *v1alpha1.VolumeSnapshotRestore) (*v1alpha1.VolumeSnapshotRestore, error)
+	// UpdateVolumeSnapshotRestore updates given volumesnapshorestore CRD
+	UpdateVolumeSnapshotRestore(snap *v1alpha1.VolumeSnapshotRestore) (*v1alpha1.VolumeSnapshotRestore, error)
 	// GetVolumeSnapshotRestore returns details of given restore crd status
 	GetVolumeSnapshotRestore(name, namespace string) (*v1alpha1.VolumeSnapshotRestore, error)
 	// ListVolumeSnapshotRestore return list of volumesnapshotrestores in given namespaces
@@ -3744,6 +3746,13 @@ func (k *k8sOps) CreateVolumeSnapshotRestore(snapRestore *v1alpha1.VolumeSnapsho
 		return nil, err
 	}
 	return k.storkClient.Stork().VolumeSnapshotRestores(snapRestore.Namespace).Create(snapRestore)
+}
+
+func (k *k8sOps) UpdateVolumeSnapshotRestore(snapRestore *v1alpha1.VolumeSnapshotRestore) (*v1alpha1.VolumeSnapshotRestore, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.storkClient.Stork().VolumeSnapshotRestores(snapRestore.Namespace).Update(snapRestore)
 }
 
 func (k *k8sOps) GetVolumeSnapshotRestore(name, namespace string) (*v1alpha1.VolumeSnapshotRestore, error) {

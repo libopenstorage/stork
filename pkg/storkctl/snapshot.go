@@ -280,7 +280,6 @@ func newGetVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericcli
 			}
 
 			if len(args) > 0 {
-				fmt.Println("Restore list")
 				snapRestoreList = new(storkv1.VolumeSnapshotRestoreList)
 				for _, restoreName := range args {
 					for _, ns := range namespaces {
@@ -293,7 +292,6 @@ func newGetVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericcli
 					}
 				}
 			} else {
-				fmt.Println("Restore list else")
 				var tempRestoreList storkv1.VolumeSnapshotRestoreList
 				for _, ns := range namespaces {
 					snapRestoreList, err = k8s.Instance().ListVolumeSnapshotRestore(ns)
