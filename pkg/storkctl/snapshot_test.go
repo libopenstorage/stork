@@ -158,14 +158,13 @@ func TestGetVolumeSnapshotRestoreAllRestores(t *testing.T) {
 	require.NoError(t, err, "Error creating ns1 namespace")
 
 	cmdArgs := []string{"get", "volumesnapshotrestore", "--all-namespaces"}
-	createSnapshotRestoreAndVerify(t, "test1", "asdf", "sourceSnapName1", "default", false)
-	createSnapshotRestoreAndVerify(t, "test2", "default", "sourceSnapName2", "default", false)
-	createSnapshotRestoreAndVerify(t, "test3", "ns", "sourceSnapName3", "ns", false)
+	createSnapshotRestoreAndVerify(t, "test2", "default", "sourceSnapName2", "default", false, 1)
+	createSnapshotRestoreAndVerify(t, "test3", "ns", "sourceSnapName3", "ns", false, 2)
 
 	var snapshots storkv1.VolumeSnapshotRestoreList
 	expected := "NAMESPACE   NAME      SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS    VOLUMES   CREATED\n" +
-		"ns          test3     sourceSnapName3   ns                                    0         \n" +
-		"default     test2     sourceSnapName2   default                               0         \n"
+		"ns          test3     sourceSnapName3   ns                                    2         \n" +
+		"default     test2     sourceSnapName2   default                               1         \n"
 	testCommon(t, cmdArgs, &snapshots, expected, false)
 }
 
@@ -173,9 +172,9 @@ func TestGetVolumeSnapshotsOneRestore(t *testing.T) {
 	crdRestore := "crd-restore-test"
 	cmdArgs := []string{"get", "volumesnapshotrestore", crdRestore}
 	namespace := "default"
-	createSnapshotRestoreAndVerify(t, crdRestore, namespace, "sourceSnapName", "sourceSnapnamespace", false)
+	createSnapshotRestoreAndVerify(t, crdRestore, namespace, "sourceSnapName", "sourceSnapnamespace", false, 1)
 	expected := "NAME               SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS    VOLUMES   CREATED\n" +
-		"crd-restore-test   sourceSnapName    sourceSnapnamespace                   0         \n"
+		"crd-restore-test   sourceSnapName    sourceSnapnamespace                   1         \n"
 
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -185,14 +184,14 @@ func TestGetVolumeSnapshotMultipleRestore(t *testing.T) {
 	crdRestore2 := "crd-restore2"
 	namespace := "default"
 
-	createSnapshotRestoreAndVerify(t, crdRestore1, namespace, "sourceName1", "sourceNamespace1", false)
-	createSnapshotRestoreAndVerify(t, crdRestore2, namespace, "sourceName2", "sourceNamespace2", false)
+	createSnapshotRestoreAndVerify(t, crdRestore1, namespace, "sourceName1", "sourceNamespace1", false, 1)
+	createSnapshotRestoreAndVerify(t, crdRestore2, namespace, "sourceName2", "sourceNamespace2", false, 1)
 
 	expected := "NAME               SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS    VOLUMES   CREATED\n" +
-		"test2              sourceSnapName2   default                               0         \n" +
-		"crd-restore-test   sourceSnapName    sourceSnapnamespace                   0         \n" +
-		"crd-restore1       sourceName1       sourceNamespace1                      0         \n" +
-		"crd-restore2       sourceName2       sourceNamespace2                      0         \n"
+		"test2              sourceSnapName2   default                               1         \n" +
+		"crd-restore-test   sourceSnapName    sourceSnapnamespace                   1         \n" +
+		"crd-restore1       sourceName1       sourceNamespace1                      1         \n" +
+		"crd-restore2       sourceName2       sourceNamespace2                      1         \n"
 
 	cmdArgs := []string{"get", "volumesnapshotrestore"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -202,7 +201,7 @@ func TestDeleteVolumeSnapshotRestore(t *testing.T) {
 	crdRestore := "crd-restore"
 	namespace := "default"
 
-	createSnapshotRestoreAndVerify(t, crdRestore, namespace, "sourceName1", "sourceNamespace1", false)
+	createSnapshotRestoreAndVerify(t, crdRestore, namespace, "sourceName1", "sourceNamespace1", false, 1)
 
 	expected := "Volume snapshot restore " + crdRestore + " deleted successfully\n"
 
@@ -223,6 +222,7 @@ func createSnapshotRestoreAndVerify(
 	sourceName string,
 	sourceNamespace string,
 	isGroup bool,
+	noVols int,
 ) {
 	cmdArgs := []string{"create", "volumesnapshotrestore", "-n", namespace, "--snapname", sourceName, "--sourcenamepace", sourceNamespace, "-g=" + strconv.FormatBool(isGroup), name}
 	expected := "Snapshot restore " + name + " started successfully\n"
@@ -235,4 +235,16 @@ func createSnapshotRestoreAndVerify(
 	require.Equal(t, sourceName, snapRestore.Spec.SourceName, "VolumeSnapshotRestore sourceName mismatch")
 	require.Equal(t, sourceNamespace, snapRestore.Spec.SourceNamespace, "VolumeSnapshotRestore sourceNamespace mismatch")
 	require.Equal(t, isGroup, snapRestore.Spec.GroupSnapshot, "VolumeSnapshotRestore isGroupSnapshot mismatch")
+
+	for i := 1; i <= noVols; i++ {
+		vols := &storkv1.RestoreVolumeInfo{
+			Volume:        "test-vol" + strconv.Itoa(i),
+			PVC:           "test-pvc" + strconv.Itoa(i),
+			Namespace:     namespace,
+			RestoreStatus: storkv1.VolumeSnapshotRestoreStatusSuccessful,
+		}
+		snapRestore.Status.Volumes = append(snapRestore.Status.Volumes, vols)
+	}
+	_, err = k8s.Instance().UpdateVolumeSnapshotRestore(snapRestore)
+	require.NoError(t, err, "Error updating volumesnapshotrestores")
 }
