@@ -107,6 +107,7 @@ func failoverAndFailbackClusterDomainTest(t *testing.T) {
 		[]string{"cassandra-clusterdomain-migration"},
 		true,
 		true,
+		false,
 	)
 
 	// validate the following
