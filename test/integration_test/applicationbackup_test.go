@@ -19,17 +19,31 @@ import (
 )
 
 const (
-	testKey              = "mysql-1-pvc"
-	appKey               = "mysql"
-	restoreName          = "mysql-restore"
-	backupSyncAnnotation = "backupsync"
+	testKey               = "mysql-1-pvc"
+	appKey                = "mysql"
+	restoreName           = "mysql-restore"
+	backupSyncAnnotation  = "backupsync"
+	configMapName         = "secret-config"
+	defaultBackupLocation = storkv1.BackupLocationS3
+	defaultSecretName     = "s3secret"
 
 	applicationBackupScheduleRetryInterval = 10 * time.Second
 	applicationBackupScheduleRetryTimeout  = 3 * time.Minute
 	applicationBackupSyncRetryTimeout      = 10 * time.Minute
 )
 
+var allConfigMap, defaultConfigMap map[string]string
+
 func TestApplicationBackup(t *testing.T) {
+	// Get location types and secret from config maps
+	configMap, err := k8s.Instance().GetConfigMap(configMapName, "default")
+	require.NoError(t, err, "Failed to get config map  %s", configMap.Name)
+
+	allConfigMap = configMap.Data
+
+	// Default backup location
+	defaultConfigMap = getBackupConfigMapForType(allConfigMap, defaultBackupLocation)
+
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
 	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
 	t.Run("postExecRuleTest", applicationBackupRestorePostExecRuleTest)
@@ -47,100 +61,108 @@ func triggerBackupRestoreTest(
 	appBackupKey []string,
 	additionalAppKeys []string,
 	appRestoreKey []string,
+	configMap map[string]string,
 	createBackupLocationFlag bool,
 	backupSuccessExpected bool,
 	backupAllAppsExpected bool,
 ) {
-	var err error
-	var ctxs []*scheduler.Context
-	ctx := createApp(t, appKey)
-	ctxs = append(ctxs, ctx)
-	var restoreCtx = &scheduler.Context{
-		UID: ctx.UID,
-		App: &spec.AppSpec{
-			Key:      ctx.App.Key,
-			SpecList: []interface{}{},
-		}}
+	for location, secret := range configMap {
+		logrus.Infof("Backing up to cloud: %v using secret %v", location, secret)
+		var currBackupLocation *storkv1.BackupLocation
+		var err error
+		var ctxs []*scheduler.Context
+		ctx := createApp(t, appKey)
+		ctxs = append(ctxs, ctx)
+		var restoreCtx = &scheduler.Context{
+			UID: ctx.UID,
+			App: &spec.AppSpec{
+				Key:      ctx.App.Key,
+				SpecList: []interface{}{},
+			}}
 
-	// Track what has been backed up
-	preBackupCtx := ctxs[0].DeepCopy()
+		// Track what has been backed up
+		preBackupCtx := ctxs[0].DeepCopy()
 
-	// Track what has to be verified post restore (skips apps that will won't be restored due to label selectors)
-	postRestoreCtx := preBackupCtx
+		// Track what has to be verified post restore (skips apps that will won't be restored due to label selectors)
+		postRestoreCtx := preBackupCtx
 
-	if len(additionalAppKeys) > 0 {
-		err = schedulerDriver.AddTasks(ctxs[0],
-			scheduler.ScheduleOptions{AppKeys: additionalAppKeys})
-		require.NoError(t, err, "Error scheduling additional apps")
-		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for additional apps to get to running state")
-		if backupAllAppsExpected {
-			preBackupCtx = ctxs[0].DeepCopy()
-		}
-	}
-
-	// Track contexts that will be destroyed before restore
-	preRestoreCtx := ctxs[0].DeepCopy()
-
-	logrus.Infof("All Apps created %v. Starting backup.", ctx.GetID())
-
-	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	if createBackupLocationFlag {
-		_, err = createBackupLocation(t, appKey+"-backup-location", ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
-		require.NoError(t, err, "Error creating backuplocation")
-	}
-
-	// Backup application
-	if backupSuccessExpected {
-		if backupAllAppsExpected {
-			err = schedulerDriver.AddTasks(ctxs[0], scheduler.ScheduleOptions{AppKeys: appBackupKey})
-			require.NoError(t, err, "Error creating app backups")
+		if len(additionalAppKeys) > 0 {
+			err = schedulerDriver.AddTasks(ctxs[0],
+				scheduler.ScheduleOptions{AppKeys: additionalAppKeys})
+			require.NoError(t, err, "Error scheduling additional apps")
 			err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
-		} else {
-			err = schedulerDriver.AddTasks(postRestoreCtx, scheduler.ScheduleOptions{AppKeys: appBackupKey})
-			require.NoError(t, err, "Error creating app backups")
-			err = schedulerDriver.WaitForRunning(postRestoreCtx, defaultWaitTimeout, defaultWaitInterval)
-		}
-		require.NoError(t, err, "Error waiting for back-up to complete.")
-		logrus.Infof("Backup completed.")
-
-		appBackup, err := k8s.Instance().GetApplicationBackup(appKey+"-backup", ctx.GetID())
-		require.NoError(t, err, "Error fetching app backup.")
-		if appBackup.Spec.ReclaimPolicy != storkv1.ApplicationBackupReclaimPolicyDelete {
-			// Destroy apps only if reclaim policy if NOT delete
-			destroyAndWait(t, []*scheduler.Context{preRestoreCtx})
+			require.NoError(t, err, "Error waiting for additional apps to get to running state")
+			if backupAllAppsExpected {
+				preBackupCtx = ctxs[0].DeepCopy()
+			}
 		}
 
-		logrus.Infof("Starting Restore.")
-		// Restore application
-		err = schedulerDriver.AddTasks(restoreCtx,
-			scheduler.ScheduleOptions{AppKeys: appRestoreKey})
-		require.NoError(t, err, "Error restoring apps")
+		// Track contexts that will be destroyed before restore
+		preRestoreCtx := ctxs[0].DeepCopy()
 
-		err = schedulerDriver.WaitForRunning(restoreCtx, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for restore to complete.")
+		logrus.Infof("All Apps created %v. Starting backup.", ctx.GetID())
 
-		logrus.Infof("Restore completed.")
+		// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
+		if createBackupLocationFlag {
+			currBackupLocation, err = createBackupLocation(t, appKey+"-backup-location", ctx.GetID(), storkv1.BackupLocationType(location), secret)
+			require.NoError(t, err, "Error creating backuplocation")
+		}
 
-		// Validate that restore results in restoration of correct apps based on whether all apps were expected or not
-		err = schedulerDriver.WaitForRunning(preBackupCtx, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for restore to complete.")
+		// Backup application
+		if backupSuccessExpected {
+			if backupAllAppsExpected {
+				err = schedulerDriver.AddTasks(ctxs[0], scheduler.ScheduleOptions{AppKeys: appBackupKey})
+				require.NoError(t, err, "Error creating app backups")
+				err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+			} else {
+				err = schedulerDriver.AddTasks(postRestoreCtx, scheduler.ScheduleOptions{AppKeys: appBackupKey})
+				require.NoError(t, err, "Error creating app backups")
+				err = schedulerDriver.WaitForRunning(postRestoreCtx, defaultWaitTimeout, defaultWaitInterval)
+			}
+			require.NoError(t, err, "Error waiting for back-up to complete.")
+			logrus.Infof("Backup completed.")
 
-		logrus.Infof("App validations after restore completed.")
+			appBackup, err := k8s.Instance().GetApplicationBackup(appKey+"-backup", ctx.GetID())
+			require.NoError(t, err, "Error fetching app backup.")
+			if appBackup.Spec.ReclaimPolicy != storkv1.ApplicationBackupReclaimPolicyDelete {
+				// Destroy apps only if reclaim policy if NOT delete
+				destroyAndWait(t, []*scheduler.Context{preRestoreCtx})
+			}
 
-	} else { // Since backup is expected to fail, reducing the wait time here to catch the error faster
-		err = schedulerDriver.AddTasks(ctxs[0], scheduler.ScheduleOptions{AppKeys: appBackupKey})
-		require.NoError(t, err, "Error backing-up apps")
-		err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/5, defaultWaitInterval)
-		require.Error(t, err, "Backup expected to fail in test: %s.", t.Name())
-	}
+			logrus.Infof("Starting Restore.")
+			// Restore application
+			err = schedulerDriver.AddTasks(restoreCtx,
+				scheduler.ScheduleOptions{AppKeys: appRestoreKey})
+			require.NoError(t, err, "Error restoring apps")
 
-	ctxs = append(ctxs, restoreCtx)
-	if (backupAllAppsExpected && backupSuccessExpected) || !backupSuccessExpected {
-		destroyAndWait(t, ctxs)
-	} else if !backupAllAppsExpected && backupSuccessExpected {
-		// Some apps might have been already destroyed, destroy the remaining
-		destroyAndWait(t, []*scheduler.Context{postRestoreCtx})
+			err = schedulerDriver.WaitForRunning(restoreCtx, defaultWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "Error waiting for restore to complete.")
+
+			logrus.Infof("Restore completed.")
+
+			// Validate that restore results in restoration of correct apps based on whether all apps were expected or not
+			err = schedulerDriver.WaitForRunning(preBackupCtx, defaultWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "Error waiting for restore to complete.")
+
+			logrus.Infof("App validations after restore completed.")
+
+		} else { // Since backup is expected to fail, reducing the wait time here to catch the error faster
+			err = schedulerDriver.AddTasks(ctxs[0], scheduler.ScheduleOptions{AppKeys: appBackupKey})
+			require.NoError(t, err, "Error backing-up apps")
+			err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout/5, defaultWaitInterval)
+			require.Error(t, err, "Backup expected to fail in test: %s.", t.Name())
+		}
+
+		ctxs = append(ctxs, restoreCtx)
+		if (backupAllAppsExpected && backupSuccessExpected) || !backupSuccessExpected {
+			destroyAndWait(t, ctxs)
+		} else if !backupAllAppsExpected && backupSuccessExpected {
+			// Some apps might have been already destroyed, destroy the remaining
+			destroyAndWait(t, []*scheduler.Context{postRestoreCtx})
+
+		}
+		err = k8s.Instance().DeleteBackupLocation(currBackupLocation.Name, currBackupLocation.Namespace)
+		require.NoError(t, err, "Failed to delete backuplocation: %s for location %s.", currBackupLocation.Name, string(location), err)
 	}
 }
 
@@ -149,12 +171,8 @@ func createBackupLocation(
 	name string,
 	namespace string,
 	locationtype storkv1.BackupLocationType,
-	configMapName string,
+	secretName string,
 ) (*storkv1.BackupLocation, error) {
-	configMap, err := k8s.Instance().GetConfigMap(configMapName, "default")
-	require.NoError(t, err, "Failed to get config map  %s", configMapName)
-
-	secretName := configMap.Data["secret_name"]
 
 	secretObj, err := k8s.Instance().GetSecret(secretName, "default")
 	require.NoError(t, err, "Failed to get secret %s", secretName)
@@ -169,6 +187,8 @@ func createBackupLocation(
 		require.NoError(t, err, "Failed to copy secret %s  to namespace %s", name, namespace)
 	}
 
+	backupType, err := getBackupLocationType(locationtype)
+	require.NoError(t, err, "Failed to get backuptype for %s:", locationtype, err)
 	backupLocation := &storkv1.BackupLocation{
 		ObjectMeta: meta.ObjectMeta{
 			Name:        name,
@@ -176,7 +196,7 @@ func createBackupLocation(
 			Annotations: map[string]string{"stork.libopenstorage.ord/skipresource": "true"},
 		},
 		Location: storkv1.BackupLocationItem{
-			Type:         locationtype,
+			Type:         backupType,
 			Path:         "test-restore-path",
 			SecretConfig: secretObj.Name,
 		},
@@ -256,6 +276,7 @@ func applicationBackupRestoreTest(t *testing.T) {
 		[]string{testKey + "-backup"},
 		[]string{},
 		[]string{restoreName},
+		allConfigMap,
 		true,
 		true,
 		true,
@@ -268,7 +289,8 @@ func applicationBackupRestorePreExecRuleTest(t *testing.T) {
 		[]string{testKey + "-pre-exec-rule-backup"},
 		[]string{},
 		[]string{restoreName},
-		false,
+		defaultConfigMap,
+		true,
 		true,
 		true,
 	)
@@ -280,7 +302,8 @@ func applicationBackupRestorePostExecRuleTest(t *testing.T) {
 		[]string{testKey + "-post-exec-rule-backup"},
 		[]string{},
 		[]string{restoreName},
-		false,
+		defaultConfigMap,
+		true,
 		true,
 		true,
 	)
@@ -292,7 +315,8 @@ func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
 		[]string{testKey + "-pre-exec-missing-rule-backup"},
 		[]string{},
 		[]string{restoreName},
-		false,
+		defaultConfigMap,
+		true,
 		false,
 		false,
 	)
@@ -304,7 +328,8 @@ func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 		[]string{testKey + "-post-exec-missing-rule-backup"},
 		[]string{},
 		[]string{restoreName},
-		false,
+		defaultConfigMap,
+		true,
 		false,
 		false,
 	)
@@ -316,7 +341,8 @@ func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
 		[]string{testKey + "-pre-exec-failing-rule-backup"},
 		[]string{},
 		[]string{restoreName},
-		false,
+		defaultConfigMap,
+		true,
 		false,
 		false,
 	)
@@ -328,7 +354,8 @@ func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
 		[]string{testKey + "-post-exec-failing-rule-backup"},
 		[]string{},
 		[]string{restoreName},
-		false,
+		defaultConfigMap,
+		true,
 		false,
 		false,
 	)
@@ -340,7 +367,8 @@ func applicationBackupLabelSelectorTest(t *testing.T) {
 		[]string{testKey + "-label-selector-backup"},
 		[]string{"cassandra"},
 		[]string{restoreName},
-		false,
+		defaultConfigMap,
+		true,
 		true,
 		false,
 	)
@@ -355,6 +383,7 @@ func applicationBackupScheduleTests(t *testing.T) {
 	t.Run("monthlyTest", monthlyApplicationBackupScheduleTest)
 	t.Run("invalidPolicyTest", invalidPolicyApplicationBackupScheduleTest)
 }
+
 func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, policyName string, applicationBackupScheduleName string) {
 	err := k8s.Instance().DeleteSchedulePolicy(policyName)
 	require.NoError(t, err, fmt.Sprintf("Error deleting schedule policy %v", policyName))
@@ -375,7 +404,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "interval-appbackup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, defaultSecretName)
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "intervalpolicy-appbackup"
@@ -436,7 +465,7 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "daily-backup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, defaultSecretName)
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "dailypolicy-appbackup"
@@ -482,12 +511,13 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 	commonApplicationBackupScheduleTests(t, scheduleName, policyName, namespace, nextScheduledTime, storkv1.SchedulePolicyTypeDaily)
 	destroyAndWait(t, []*scheduler.Context{ctx})
 }
+
 func weeklyApplicationBackupScheduleTest(t *testing.T) {
 	backupLocation := "backuplocation"
 	ctx := createApp(t, "weekly-backup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, defaultSecretName)
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "weeklypolicy-appbackup"
@@ -540,7 +570,7 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "monthly-backup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, defaultSecretName)
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "monthlypolicy-appbackup"
@@ -597,7 +627,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 	ctx := createApp(t, "invalid-backup-sched-test")
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
-	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), storkv1.BackupLocationS3, defaultSecretName)
 	require.NoError(t, err, "Error creating backuplocation")
 
 	policyName := "invalidpolicy-appbackup"
@@ -712,7 +742,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	appCtx := createApp(t, appKey)
 
 	// Create backup location on first cluster
-	backupLocation, err := createBackupLocation(t, backupLocationName, appCtx.GetID(), storkv1.BackupLocationS3, "secret-config")
+	backupLocation, err := createBackupLocation(t, backupLocationName, appCtx.GetID(), storkv1.BackupLocationS3, defaultSecretName)
 	require.NoError(t, err, "Error creating backuplocation")
 	logrus.Infof("Created backup location:%s sync:%t", backupLocation.Name, backupLocation.Location.Sync)
 	backupLocation.Location.Sync = true
@@ -735,7 +765,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 		})
 	require.NoError(t, err, "Failed to create namespace %s", appCtx.GetID())
 
-	backupLocation2, err := createBackupLocation(t, backupLocationName, ns.Name, storkv1.BackupLocationS3, "secret-config")
+	backupLocation2, err := createBackupLocation(t, backupLocationName, ns.Name, storkv1.BackupLocationS3, defaultSecretName)
 	require.NoError(t, err, "Error creating backuplocation on second cluster")
 	logrus.Infof("Created application backup on second cluster %s: sync:%t", backupLocation.Name, backupLocation.Location.Sync)
 
@@ -864,4 +894,30 @@ func deleteAndWaitForBackupDeletion(namespace string) error {
 	_, err := task.DoRetryWithTimeout(listBackupsTask, applicationBackupSyncRetryTimeout, defaultWaitInterval)
 	return err
 
+}
+
+func getBackupLocationType(locationName storkv1.BackupLocationType) (storkv1.BackupLocationType, error) {
+	switch locationName {
+	case storkv1.BackupLocationS3:
+		return storkv1.BackupLocationS3, nil
+	case storkv1.BackupLocationAzure:
+		return storkv1.BackupLocationAzure, nil
+	case storkv1.BackupLocationGoogle:
+		return storkv1.BackupLocationGoogle, nil
+	default:
+		return storkv1.BackupLocationType(""), fmt.Errorf("Invalid backuplocation type: %s", locationName)
+	}
+}
+
+// Get config map for only the given type
+func getBackupConfigMapForType(allTypes map[string]string, requiredType storkv1.BackupLocationType) map[string]string {
+	reqConfigMap := make(map[string]string)
+	if key, err := getBackupLocationType(requiredType); err == nil {
+		for k, v := range allTypes {
+			if k == string(key) {
+				reqConfigMap[k] = v
+			}
+		}
+	}
+	return reqConfigMap
 }
