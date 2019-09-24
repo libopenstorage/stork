@@ -404,7 +404,7 @@ func ParseFlags() {
 	var driverStartTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
 
-	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to us")
+	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
