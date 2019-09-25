@@ -498,7 +498,8 @@ func migrationScheduleTest(
 	require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
 
 	migrations = migrationsMap[scheduleType]
-	require.Len(t, migrations, 1, fmt.Sprintf("expected exactly one daily migration. Found: %d", len(migrations)))
+	require.Len(t, migrations, 1, fmt.Sprintf("expected exactly one %v migration. Found: %d",
+		scheduleType, len(migrations)))
 	require.Equal(t, firstMigrationCreationTime, migrations[0].CreationTimestamp,
 		"timestamps of first and most recent migrations don't match")
 
@@ -520,13 +521,21 @@ func migrationScheduleTest(
 	// Give time for new migration to trigger
 	time.Sleep(time.Minute)
 
-	migrationsMap, err = k8s.Instance().ValidateMigrationSchedule(
-		migrationScheduleName, namespace, defaultWaitTimeout, defaultWaitInterval)
-	require.NoError(t, err, failureErrString)
-	require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
+	for i := 0; i < 10; i++ {
+		migrationsMap, err = k8s.Instance().ValidateMigrationSchedule(
+			migrationScheduleName, namespace, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, failureErrString)
+		require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
 
-	migrations = migrationsMap[scheduleType]
-	require.Len(t, migrations, 1, fmt.Sprintf("expected exactly one daily migration. Found: %d", len(migrations)))
+		migrations = migrationsMap[scheduleType]
+		// If there are more than 1 migrations, the prune might still be in
+		// progress, so retry after a short sleep
+		if len(migrations) == 1 {
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+	require.Len(t, migrations, 1, fmt.Sprintf("expected exactly one %v migration. Found: %d", scheduleType, len(migrations)))
 
 	migrationStatus = migrations[0]
 	require.True(t, firstMigrationCreationTime.Time.Before(migrationStatus.CreationTimestamp.Time),
