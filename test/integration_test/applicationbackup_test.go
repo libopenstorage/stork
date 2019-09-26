@@ -122,12 +122,8 @@ func triggerBackupRestoreTest(
 			require.NoError(t, err, "Error waiting for back-up to complete.")
 			logrus.Infof("Backup completed.")
 
-			appBackup, err := k8s.Instance().GetApplicationBackup(appKey+"-backup", ctx.GetID())
-			require.NoError(t, err, "Error fetching app backup.")
-			if appBackup.Spec.ReclaimPolicy != storkv1.ApplicationBackupReclaimPolicyDelete {
-				// Destroy apps only if reclaim policy if NOT delete
-				destroyAndWait(t, []*scheduler.Context{preRestoreCtx})
-			}
+			// Delete apps so that they can be restored
+			destroyAndWait(t, []*scheduler.Context{preRestoreCtx})
 
 			logrus.Infof("Starting Restore.")
 			// Restore application
