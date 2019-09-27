@@ -64,7 +64,7 @@ const (
 	defaultRetryInterval             = 10 * time.Second
 	maintenanceOpTimeout             = 1 * time.Minute
 	maintenanceWaitTimeout           = 2 * time.Minute
-	inspectVolumeTimeout             = 10 * time.Second
+	inspectVolumeTimeout             = 30 * time.Second
 	inspectVolumeRetryInterval       = 2 * time.Second
 	validateDeleteVolumeTimeout      = 3 * time.Minute
 	validateReplicationUpdateTimeout = 10 * time.Minute
