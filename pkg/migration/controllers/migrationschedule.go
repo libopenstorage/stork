@@ -300,6 +300,7 @@ func (m *MigrationScheduleController) startMigration(
 }
 
 func (m *MigrationScheduleController) pruneMigrations(migrationSchedule *stork_api.MigrationSchedule) error {
+	updated := false
 	for policyType, policyMigration := range migrationSchedule.Status.Items {
 		// Keep only one successful migration status and all failed migrations
 		// until there is a successful one
@@ -320,9 +321,16 @@ func (m *MigrationScheduleController) pruneMigrations(migrationSchedule *stork_a
 				}
 			}
 			migrationSchedule.Status.Items[policyType] = policyMigration[deleteBefore:]
+			if deleteBefore > 0 {
+				updated = true
+			}
 		}
 	}
-	return sdk.Update(migrationSchedule)
+	if updated {
+		return sdk.Update(migrationSchedule)
+	}
+	return nil
+
 }
 
 func (m *MigrationScheduleController) deleteMigrations(migrationSchedule *stork_api.MigrationSchedule) error {
