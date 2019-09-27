@@ -125,7 +125,10 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 	case *stork_api.Migration:
 		migration := o
 		if event.Deleted {
-			return m.Driver.CancelMigration(migration)
+			if migration.Status.Stage != stork_api.MigrationStageFinal {
+				return m.Driver.CancelMigration(migration)
+			}
+			return nil
 		}
 		migration = setDefaults(migration)
 
