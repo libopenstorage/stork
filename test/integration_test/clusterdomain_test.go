@@ -160,13 +160,22 @@ func testClusterDomainsFailover(
 	err = schedulerDriver.ScaleApplication(ctxs[0], scaleFactor)
 	require.NoError(t, err, "Unexpected error on ScaleApplication")
 
-	// check if the app is scaled down.
-	updatedScaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
-	require.NoError(t, err, "Unexpected error on GetScaleFactorMap")
+	tk := func() (interface{}, bool, error) {
+		// check if the app is scaled down.
+		updatedScaleFactor, err := schedulerDriver.GetScaleFactorMap(ctxs[0])
+		if err != nil {
+			return "", true, err
+		}
 
-	for k := range updatedScaleFactor {
-		require.Equal(t, updatedScaleFactor[k], 0, "Expected scale to be 0")
+		for k := range updatedScaleFactor {
+			if int(updatedScaleFactor[k]) != 0 {
+				return "", true, fmt.Errorf("expected scale to be 0")
+			}
+		}
+		return "", false, nil
 	}
+	_, err = task.DoRetryWithTimeout(tk, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Unexpected error on scaling down application.")
 
 	// start the app on cluster 2
 	err = setRemoteConfig(remoteFilePath)
