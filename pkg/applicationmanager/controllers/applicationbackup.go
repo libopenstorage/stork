@@ -290,9 +290,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						v1.EventTypeWarning,
 						string(stork_api.ApplicationBackupStatusFailed),
 						message)
-					return true, err
+					return false, nil
 				}
-				return false, nil
+				return true, nil
 			}); err != nil {
 				message := fmt.Sprintf("Error cancelling ApplicationBackup for volumes, will not retry further: %v", err)
 				log.ApplicationBackupLog(backup).Errorf(message)
