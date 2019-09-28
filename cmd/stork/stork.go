@@ -122,6 +122,11 @@ func main() {
 			Value: defaultAdminNamespace,
 			Usage: "Namespace to be used by a cluster admin which can migrate and backup all other namespaces",
 		},
+		cli.StringFlag{
+			Name:  "migration-admin-namespace",
+			Value: defaultAdminNamespace,
+			Usage: "Namespace to be used by a cluster admin which can migrate all other namespaces (Deprecated, please use admin-namespace)",
+		},
 		cli.BoolTFlag{
 			Name:  "cluster-domain-controllers",
 			Usage: "Start the cluster domain controllers (default: true)",
@@ -311,6 +316,10 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 	}
 
 	adminNamespace := c.String("admin-namespace")
+	if adminNamespace == "" {
+		adminNamespace = c.String("migration-admin-namespace")
+	}
+
 	if c.Bool("migration-controller") {
 		migration := migration.Migration{
 			Driver:            d,
