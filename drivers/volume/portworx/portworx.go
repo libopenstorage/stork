@@ -2433,6 +2433,10 @@ func (p *portworx) StartBackup(backup *stork_crd.ApplicationBackup) ([]*stork_cr
 			if !p.OwnsPVC(&pvc) {
 				continue
 			}
+			if pvc.DeletionTimestamp != nil {
+				log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
+				continue
+			}
 			volumeInfo := &stork_crd.ApplicationBackupVolumeInfo{}
 			volumeInfo.PersistentVolumeClaim = pvc.Name
 			volumeInfo.Namespace = pvc.Namespace
