@@ -19,6 +19,12 @@ BIN :=$(BASE_DIR)/bin
 GOFMT := gofmt
 .DEFAULT_GOAL=all
 
+SIDECAR_WP_CLI_DOCKER_TAG=1.2.28
+SIDECAR_WP_CLI_IMG=$(DOCKER_HUB_REPO)/wp-cli:$(SIDECAR_WP_CLI_DOCKER_TAG)
+SIDECAR_DIR=drivers/scheduler/sidecars
+SYSBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-sysbench:latest
+PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
+
 all: vet lint build fmt
 
 deps:
@@ -91,19 +97,16 @@ clean:
 	-docker rmi -f $(TORPEDO_IMG)
 	go clean -i $(PKGS)
 
-DOCKER_HUB_SIDECAR_TAG=1.2.28
-SIDECAR_WP_CLI_IMG=$(DOCKER_HUB_REPO)/wp-cli:$(DOCKER_HUB_SIDECAR_TAG)
-SIDECAR_DIR=drivers/scheduler/sidecars
-
 sidecar: sidecar-wp-cli
 
 sidecar-wp-cli:
 	docker build -t $(SIDECAR_WP_CLI_IMG) -f $(SIDECAR_DIR)/wp-cli.dockerfile $(SIDECAR_DIR)
 	docker push $(SIDECAR_WP_CLI_IMG)
 
-SYSBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-sysbench:latest
-SIDECAR_DIR=drivers/scheduler/sidecars
-
 sysbench:
 	docker build -t $(SYSBENCH_IMG) -f $(SIDECAR_DIR)/sysbench.dockerfile $(SIDECAR_DIR)
 	docker push $(SYSBENCH_IMG)
+
+pgbench:
+	docker build -t $(PGBENCH_IMG) -f $(SIDECAR_DIR)/pgbench.dockerfile $(SIDECAR_DIR)
+	docker push $(PGBENCH_IMG)

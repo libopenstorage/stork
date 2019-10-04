@@ -44,7 +44,7 @@
   branch = "release-6.1"
 
 [[override]]
-  branch = "external_storage_dep"
+  branch = "master"
   name = "github.com/portworx/sched-ops"
 
 [[constraint]]

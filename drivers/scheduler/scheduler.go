@@ -20,8 +20,12 @@ const (
 
 // Context holds the execution context of a test task.
 type Context struct {
+	// UID unique object identifier
 	UID string
+	// App defines a k8s application specification
 	App *spec.AppSpec
+	// Options are options that callers to pass to influence the apps that get schduled
+	Options ScheduleOptions
 }
 
 // DeepCopy create a copy of Context
@@ -41,6 +45,44 @@ func (in *Context) GetID() string {
 	return in.App.GetID(in.UID)
 }
 
+// AutopilotRuleParameters are rule parameters for Autopilot
+type AutopilotRuleParameters struct {
+	// ActionsCoolDownPeriod is the duration in seconds for which autopilot will not
+	// re-trigger any actions once they have been executed.
+	ActionsCoolDownPeriod int64
+	// MatchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+	// map is equivalent to an element of matchExpressions, whose key field is "key", the
+	// operator is "In", and the values array contains only "value". The requirements are ANDed.
+	// +optional
+	MatchLabels map[string]string
+	// PVCSize is the size of PVC from application spec
+	PVCSize int64
+	// PVCWorkloadSize is the workload size from application generator spec
+	PVCWorkloadSize int64
+	// PVCPercentageUsage is the percentage of volume usage, after which exceeding,
+	// the autopilot will trigger an action
+	PVCPercentageUsage int64
+	// PVCPercentageScale is the percentage by which the size of volume will be increased
+	PVCPercentageScale int64
+	// PVCMaximumSize is the maximum size of the volume which should not be exceed
+	PVCMaximumSize int64
+}
+
+// AutopilotParameters are parameters that using for Autopilot
+type AutopilotParameters struct {
+	// Enabled indicates if the Autopilot is enabled
+	Enabled bool
+	// The unique Autopilotrule name within a namespace
+	Name string
+	// Namespace is the kubernetes namespace in which Autopilot rule will be created
+	Namespace string
+	// PollInterval defined the interval in seconds at which the conditions for the
+	// rule are queried from the metrics provider
+	PollInterval int64
+	// AutopilotRuleParameters are the parameters that will be used for Autopilot rule
+	AutopilotRuleParameters AutopilotRuleParameters
+}
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
@@ -51,6 +93,8 @@ type ScheduleOptions struct {
 	StorageProvisioner string
 	// ConfigMap  identifies what config map should be used to
 	ConfigMap string
+	// AutopilotParameters identifies options for autopilot (Optional)
+	AutopilotParameters *AutopilotParameters
 }
 
 // Driver must be implemented to provide test support to various schedulers.

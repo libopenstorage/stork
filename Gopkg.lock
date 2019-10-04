@@ -10,6 +10,18 @@
   version = "v0.37.4"
 
 [[projects]]
+  digest = "1:c54c12f9d6716aad8079084272c0c6ac6f21abe203c374e13b512e05d51669fb"
+  name = "github.com/Azure/go-autorest"
+  packages = [
+    "autorest",
+    "autorest/adal",
+    "autorest/azure",
+    "autorest/date"
+  ]
+  pruneopts = "UT"
+  revision = "1ff28809256a84bb6966640ff3d0371af82ccba4"
+
+[[projects]]
   digest = "1:d5e752c67b445baa5b6cb6f8aa706775c2aa8e41aca95a0c651520ff2c80361a"
   name = "github.com/Microsoft/go-winio"
   packages = [
@@ -284,6 +296,22 @@
   version = "v0.3.0"
 
 [[projects]]
+  digest = "1:98996125fe832b116f882df3e55624bc481c88b436728ecbdf477534f3eb639f"
+  name = "github.com/gophercloud/gophercloud"
+  packages = [
+    ".",
+    "openstack",
+    "openstack/identity/v2/tenants",
+    "openstack/identity/v2/tokens",
+    "openstack/identity/v3/tokens",
+    "openstack/utils",
+    "pagination"
+  ]
+  pruneopts = "UT"
+  revision = "a84f8b330d669c6dff53ee9743a7579ac9541b69"
+  version = "v0.4.0"
+
+[[projects]]
   branch = "master"
   digest = "1:5fc0e23b254a1bd7d8d2d42fa093ba33471d08f52fe04afd3713adabb5888dc3"
   name = "github.com/gregjones/httpcache"
@@ -370,6 +398,20 @@
   pruneopts = "UT"
   revision = "18c097ccef789822b480acd686afa5d8c859484f"
   source = "github.com/libopenstorage/external-storage"
+
+[[projects]]
+  digest = "1:4b459bbf1199adbbe060fa0f5aee5223c19da8f5881357dc9b3e560d0cedc6e5"
+  name = "github.com/libopenstorage/autopilot"
+  packages = [
+    "pkg/apis/autopilot",
+    "pkg/apis/autopilot/v1alpha1",
+    "pkg/client/clientset/versioned",
+    "pkg/client/clientset/versioned/scheme",
+    "pkg/client/clientset/versioned/typed/autopilot/v1alpha1"
+  ]
+  pruneopts = "UT"
+  revision = "7d0bad3b40e91e70d52456a9d955ff4b8e7b695c"
+  version = "v0.6.0"
 
 [[projects]]
   branch = "master"
@@ -619,14 +661,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:db1137cd28fe4cd7eec840961abbc3100784bbcd0a411357c53576efe8ac92a1"
+  digest = "1:b1485ffc45798e016223b6a707cf20c5755971bf7239e32ac2c9eba3b6fb1bb2"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "12612e4c3045e7181e6a80af728066746faee9e2"
+  revision = "4773a0468a8f92fcbc3f337bc012bf090637cbf1"
 
 [[projects]]
   branch = "master"
@@ -1046,7 +1088,7 @@
   version = "kubernetes-1.11.0"
 
 [[projects]]
-  digest = "1:2e417ccce7217470ddf3097cf6bab67992ea842e64cb5dda699f9a490a438010"
+  digest = "1:fd1e6d7ac9acac5b246ac82a0e446ee9a90dd8d950d421f027e712409710d071"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -1086,8 +1128,12 @@
     "pkg/apis/clientauthentication/v1alpha1",
     "pkg/apis/clientauthentication/v1beta1",
     "pkg/version",
+    "plugin/pkg/client/auth",
+    "plugin/pkg/client/auth/azure",
     "plugin/pkg/client/auth/exec",
     "plugin/pkg/client/auth/gcp",
+    "plugin/pkg/client/auth/oidc",
+    "plugin/pkg/client/auth/openstack",
     "rest",
     "rest/watch",
     "third_party/forked/golang/template",
@@ -1126,6 +1172,7 @@
     "github.com/fatih/color",
     "github.com/gambol99/go-marathon",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
+    "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1",
     "github.com/libopenstorage/cloudops",
     "github.com/libopenstorage/cloudops/gce",
     "github.com/libopenstorage/openstorage/api",

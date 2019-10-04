@@ -10,7 +10,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 )
@@ -55,7 +54,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
-				appNodes := getNodesThatCanBeDown(ctx)
+				appNodes := GetNodesThatCanBeDown(ctx)
 				Step(
 					fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
 						Inst().V.String(), ctx.App.Key, appNodes),
@@ -95,7 +94,7 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 
 		Step("get nodes for all apps in test and restart volume driver", func() {
 			for _, ctx := range contexts {
-				appNodes := getNodesThatCanBeDown(ctx)
+				appNodes := GetNodesThatCanBeDown(ctx)
 				Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
 					Inst().V.String(), ctx.App.Key, appNodes), func() {
 					StopVolDriverAndWait(appNodes)
@@ -127,7 +126,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 
 		Step("get nodes for all apps in test and crash volume driver", func() {
 			for _, ctx := range contexts {
-				appNodes := getNodesThatCanBeDown(ctx)
+				appNodes := GetNodesThatCanBeDown(ctx)
 				Step(
 					fmt.Sprintf("crash volume driver %s on app %s's nodes: %v",
 						Inst().V.String(), ctx.App.Key, appNodes),
@@ -156,7 +155,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 
 		Step("get nodes for all apps in test and bounce volume driver", func() {
 			for _, ctx := range contexts {
-				nodesToBeDown := getNodesThatCanBeDown(ctx)
+				nodesToBeDown := GetNodesThatCanBeDown(ctx)
 				if len(nodesToBeDown) != 0 {
 					Step(fmt.Sprintf("stop volume driver %s on app %s's nodes: %v",
 						Inst().V.String(), ctx.App.Key, nodesToBeDown), func() {
@@ -189,52 +188,6 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 		})
 	})
 })
-
-func getNodesThatCanBeDown(ctx *scheduler.Context) []node.Node {
-	var appNodes []node.Node
-	var err error
-	Step(fmt.Sprintf("get nodes for %s app", ctx.App.Key), func() {
-		appNodes, err = Inst().S.GetNodesForApp(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(appNodes).NotTo(BeEmpty())
-	})
-	var appVolumes []*volume.Volume
-	Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
-		appVolumes, err = Inst().S.GetVolumes(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(appVolumes).NotTo(BeEmpty())
-	})
-	// avoid dup
-	nodesThatCantBeDown := make(map[string]bool)
-	nodesToBeDown := make([]node.Node, 0)
-	Step(fmt.Sprintf("choose nodes to be down for %s app", ctx.App.Key), func() {
-		for _, vol := range appVolumes {
-			replicas, err := Inst().V.GetReplicaSetNodes(vol)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(replicas).NotTo(BeEmpty())
-			// at least n-1 nodes with replica need to be up
-			maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(replicas))
-			for _, nodeName := range replicas[maxNodesToBeDown:] {
-				nodesThatCantBeDown[nodeName] = true
-			}
-		}
-
-		metadataNodes := node.GetMetadataNodes()
-		// at least 2 metadata nodes need to be up
-		maxNodesToBeDown := getMaxNodesToBeDown(len(node.GetWorkerNodes()), len(metadataNodes))
-		for _, n := range metadataNodes[maxNodesToBeDown:] {
-			nodesThatCantBeDown[n.Name] = true
-		}
-
-		for _, node := range appNodes {
-			if _, exists := nodesThatCantBeDown[node.Name]; !exists {
-				nodesToBeDown = append(nodesToBeDown, node)
-			}
-		}
-
-	})
-	return nodesToBeDown
-}
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
 var _ = Describe("{AppTasksDown}", func() {
@@ -301,18 +254,6 @@ var _ = Describe("{AppTasksDown}", func() {
 		})
 	})
 })
-
-// getMaxNodesToBeDown based on the worker nodes and volume replicas it determines the maximum nodes that can be down
-func getMaxNodesToBeDown(nodes, replicas int) int {
-	if replicas == 1 {
-		return 0
-	}
-	if nodes > 4 && replicas%2 != 0 {
-		return replicas/2 + 1
-	}
-
-	return replicas / 2
-}
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
 var _ = Describe("{AppScaleUpAndDown}", func() {
