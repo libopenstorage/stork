@@ -66,8 +66,8 @@ var storkVolumeDriver storkdriver.Driver
 var snapshotScaleCount int
 
 func TestSnapshotMigration(t *testing.T) {
-	t.Run("testSnapshot", testSnapshot)
-	t.Run("testSnapshotRestore", testSnapshotRestore)
+	//t.Run("testSnapshot", testSnapshot)
+	//t.Run("testSnapshotRestore", testSnapshotRestore)
 	t.Run("testMigration", testMigration)
 }
 

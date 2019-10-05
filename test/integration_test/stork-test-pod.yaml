@@ -41,7 +41,6 @@ spec:
   - command: ["gotestsum"]
     args:
     - --junitfile
-    - /testresults/junit.xml 
     - --format
     - standard-verbose 
     - --raw-command
@@ -54,12 +53,9 @@ spec:
     FOCUS_TESTS
     - -snapshot-scale-count=10
     imagePullPolicy: Always
-    image: openstorage/stork_test:latest
+    image: rohtipx/stork_test:ocp
     securityContext:
       privileged: false
-    volumeMounts:
-    - mountPath: /testresults/
-      name: testresults
     name: stork
     env:
     - name: TORPEDO_SSH_USER

@@ -1309,7 +1309,7 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	logrus.Infof("Response for token: %v", resp.Token)
 
 	// file up cluster pair info
-	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
+	pairInfo[clusterIP] = "aaa002944e64111e9afbc023983f7a4b-763763743.ca-central-1.elb.amazonaws.com"
 	pairInfo[tokenKey] = resp.Token
 	pairInfo[clusterPort] = strconv.Itoa(pxdRestPort)
 
@@ -1413,6 +1413,7 @@ func (d *portworx) getClusterManager(token string) cluster.Cluster {
 
 func (d *portworx) getClusterManagerByAddress(addr string) (cluster.Cluster, error) {
 	pxEndpoint := d.constructURL(addr)
+	pxEndpoint = "aaa002944e64111e9afbc023983f7a4b-763763743.ca-central-1.elb.amazonaws.com"
 	cClient, err := clusterclient.NewClusterClient(pxEndpoint, "v1")
 	if err != nil {
 		return nil, err
