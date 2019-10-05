@@ -224,6 +224,12 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.serviceAccountToBeCollected(object)
 	case "Secret":
 		return r.secretToBeCollected(object)
+	case "Role":
+		return r.roleToBeCollected(object)
+	case "RoleBinding":
+		return r.roleBindingToBeCollected(object)
+	case "Ingress":
+		return r.ingressToBeCollected(object)
 	}
 
 	return true, nil

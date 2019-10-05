@@ -1,6 +1,8 @@
 package resourcecollector
 
 import (
+	"strings"
+
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,9 +16,10 @@ func (r *ResourceCollector) secretToBeCollected(
 		logrus.Errorf("Error converting Secret object %v: %v", object, err)
 		return false, err
 	}
-	// Don't collect secret which store the default service account token
-	if secret.Type == v1.SecretTypeServiceAccountToken {
-		if accountName, ok := secret.Annotations[v1.ServiceAccountNameKey]; ok && accountName == "default" {
+
+	autoCreatedPrefixes := []string{"builder-dockercfg-", "builder-token-", "default-dockercfg-", "default-token-", "deployer-dockercfg-", "deployer-token-"}
+	for _, prefix := range autoCreatedPrefixes {
+		if strings.HasPrefix(secret.Name, prefix) {
 			return false, nil
 		}
 	}
