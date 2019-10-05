@@ -911,13 +911,13 @@ func (m *MigrationController) applyResources(
 					}
 
 				}
-				// Retry a few times for Unauthorized errors
-				if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
-					retries++
-					continue
-				}
-				break
 			}
+			// Retry a few times for Unauthorized errors
+			if err != nil && errors.IsUnauthorized(err) && retries < maxApplyRetries {
+				retries++
+				continue
+			}
+			break
 		}
 		if err != nil {
 			m.updateResourceStatus(
