@@ -27,6 +27,9 @@ metadata:
 spec:
   serviceName: cassandra
   replicas: 3
+  selector:
+    matchLabels:
+      app: cassandra
   template:
     metadata:
       labels:
@@ -68,7 +71,7 @@ spec:
   - metadata:
       name: cassandra-data
       annotations:
-        volume.beta.kubernetes.io/storage-class: px-storageclass
+        volume.beta.kubernetes.io/storage-class: px-high-sc
       labels:
          app: cassandra
     spec:
