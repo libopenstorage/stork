@@ -80,6 +80,21 @@ if [ -z "$STORAGENODE_RECOVERY_TIMEOUT" ]; then
     echo "Using default storage node recovery timeout of ${STORAGENODE_RECOVERY_TIMEOUT}"
 fi
 
+if [ -z "$TEST_SUITE" ]; then
+    TEST_SUITE='"bin/asg.test",
+            "bin/autopilot-capacity.test",
+            "bin/basic.test",
+            "bin/reboot.test",
+            "bin/upgrade.test",
+            "bin/drive_failure.test",
+            "bin/volume_ops.test",
+            "bin/sched.test",
+            "bin/node_decommission.test",'
+else
+  TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
+fi
+echo "Using list of test suite(s): ${TEST_SUITE}"
+
 
 kubectl delete pod torpedo
 state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
@@ -241,15 +256,7 @@ spec:
             "$VERBOSE",
             "$FOCUS_ARG",
             "$SKIP_ARG",
-            "bin/asg.test",
-            "bin/autopilot-capacity.test",
-            "bin/basic.test",
-            "bin/reboot.test",
-            "bin/upgrade.test",
-            "bin/drive_failure.test",
-            "bin/volume_ops.test",
-            "bin/sched.test",
-            "bin/node_decommission.test",
+            $TEST_SUITE
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
