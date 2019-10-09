@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -231,6 +232,94 @@ var _ = Describe(fmt.Sprintf("{%sDoesNotWaitForWorkload}", testNameSuite), func(
 			Step("validating volumes and verifying size of volumes", func() {
 				for _, ctx := range contexts {
 					err = Inst().S.InspectVolumes(ctx, scaleTimeout, retryInterval)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
+
+			Step("destroy apps", func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for _, ctx := range contexts {
+					TearDownContext(ctx, opts)
+				}
+			})
+		}
+	})
+})
+
+// This testsuite is used for performing basic scenarios with Autopilot rules where it
+// schedules apps and wait until workload is completed on the volumes. Restarts volume
+// driver and validates PVC sizes of the volumes
+var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testNameSuite), func() {
+	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
+		var contexts []*scheduler.Context
+		var err error
+		testName := strings.ToLower(fmt.Sprintf("%sVolumeDriverDown", testNameSuite))
+
+		for _, apRule := range autopilotruleBasicTestCases {
+			apParameters := &scheduler.AutopilotParameters{
+				Enabled:                 true,
+				Name:                    testName,
+				AutopilotRuleParameters: apRule,
+			}
+
+			Step("schedule applications", func() {
+				for i := 0; i < Inst().ScaleFactor; i++ {
+					taskName := fmt.Sprintf("%s-%v", fmt.Sprintf("%s-%d", testName, i), Inst().InstanceID)
+					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:             Inst().AppList,
+						StorageProvisioner:  Inst().Provisioner,
+						AutopilotParameters: apParameters,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(context).NotTo(BeEmpty())
+					contexts = append(contexts, context...)
+				}
+			})
+
+			Step("wait until workload completes on volume", func() {
+				for _, ctx := range contexts {
+					err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
+
+			Step("get nodes bounce volume driver", func() {
+				for _, appNode := range node.GetStorageDriverNodes() {
+					Step(
+						fmt.Sprintf("stop volume driver %s on node: %s",
+							Inst().V.String(), appNode.Name),
+						func() {
+							StopVolDriverAndWait([]node.Node{appNode})
+						})
+
+					Step(
+						fmt.Sprintf("starting volume %s driver on node %s",
+							Inst().V.String(), appNode.Name),
+						func() {
+							StartVolDriverAndWait([]node.Node{appNode})
+						})
+
+					Step("Giving few seconds for volume driver to stabilize", func() {
+						time.Sleep(20 * time.Second)
+					})
+				}
+			})
+
+			Step("validating volumes and verifying size of volumes", func() {
+				for _, ctx := range contexts {
+					err = Inst().S.InspectVolumes(ctx, timeout, retryInterval)
+					Expect(err).NotTo(HaveOccurred())
+				}
+			})
+
+			Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
+				time.Sleep(unscheduledResizeTimeout)
+			})
+
+			Step("validating volumes and verifying size of volumes", func() {
+				for _, ctx := range contexts {
+					err = Inst().S.InspectVolumes(ctx, timeout, retryInterval)
 					Expect(err).NotTo(HaveOccurred())
 				}
 			})
