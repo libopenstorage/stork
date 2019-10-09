@@ -263,7 +263,7 @@ func Init() error {
 					MockTimeConfigMapKey: "",
 				}
 
-				cm := &v1.ConfigMap{
+				cm = &v1.ConfigMap{
 					ObjectMeta: meta.ObjectMeta{
 						Name:      MockTimeConfigMapName,
 						Namespace: MockTimeConfigMapNamespace,
