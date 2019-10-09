@@ -58,7 +58,7 @@ sed -i 's/'stork:.*'/'"$image_name"'/g' /specs/stork-deployment.yaml
 
 # For integration test mock times
 kubectl delete cm stork-mock-time  -n kube-system || true
-kubectl create cm stork-mock-time  -n kube-system —from-literal=time=""
+kubectl create cm stork-mock-time  -n kube-system --from-literal=time=""
 
 echo "Creating stork deployment"
 kubectl apply -f /specs/stork-deployment.yaml
