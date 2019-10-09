@@ -263,7 +263,7 @@ func Init() error {
 					MockTimeConfigMapKey: "",
 				}
 
-				cm := &v1.ConfigMap{
+				cm = &v1.ConfigMap{
 					ObjectMeta: meta.ObjectMeta{
 						Name:      MockTimeConfigMapName,
 						Namespace: MockTimeConfigMapNamespace,
@@ -271,7 +271,7 @@ func Init() error {
 					Data: data,
 				}
 
-				_, err = k8s.Instance().CreateConfigMap(cm)
+				cm, err = k8s.Instance().CreateConfigMap(cm)
 				if err != nil {
 					return err
 				}
