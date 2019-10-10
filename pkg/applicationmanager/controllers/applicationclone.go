@@ -32,6 +32,11 @@ const (
 	pvNamePrefix = "pvc-"
 )
 
+var (
+	cloneNameAnnotation = stork.GroupName + "/clone-name"
+	cloneUIDAnnotation  = stork.GroupName + "/clone-uid"
+)
+
 // ApplicationCloneController reconciles applicationclone objects
 type ApplicationCloneController struct {
 	Driver            volume.Driver
@@ -445,6 +450,10 @@ func (a *ApplicationCloneController) prepareResources(
 	namespaceMapping := make(map[string]string)
 	namespaceMapping[clone.Spec.SourceNamespace] = clone.Spec.DestinationNamespace
 
+	annotations := make(map[string]string)
+	annotations[cloneNameAnnotation] = clone.Name
+	annotations[cloneUIDAnnotation] = string(clone.UID)
+
 	for _, o := range objects {
 		if !a.resourceToBeCloned(o) {
 			continue
@@ -465,7 +474,8 @@ func (a *ApplicationCloneController) prepareResources(
 		err = a.ResourceCollector.PrepareResourceForApply(
 			o,
 			namespaceMapping,
-			pvNameMappings)
+			pvNameMappings,
+			annotations)
 		if err != nil {
 			return nil, err
 		}
@@ -558,12 +568,17 @@ func (a *ApplicationCloneController) applyResources(
 ) error {
 	namespaceMapping := make(map[string]string)
 	namespaceMapping[clone.Spec.SourceNamespace] = clone.Spec.DestinationNamespace
+
+	// Skip deletes for objects that we have already created for this clone
+	annotations := make(map[string]string)
+	annotations[cloneUIDAnnotation] = string(clone.UID)
 	// First delete the existing objects if they exist and replace policy is set
 	// to Delete
 	if clone.Spec.ReplacePolicy == stork_api.ApplicationCloneReplacePolicyDelete {
 		err := a.ResourceCollector.DeleteResources(
 			a.dynamicInterface,
-			objects)
+			objects,
+			annotations)
 		if err != nil {
 			return err
 		}
@@ -583,7 +598,8 @@ func (a *ApplicationCloneController) applyResources(
 		retained := false
 		err = a.ResourceCollector.ApplyResource(
 			a.dynamicInterface,
-			o)
+			o,
+			annotations)
 		if err != nil && errors.IsAlreadyExists(err) {
 			switch clone.Spec.ReplacePolicy {
 			case stork_api.ApplicationCloneReplacePolicyDelete:

@@ -30,6 +30,11 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
+var (
+	restoreNameAnnotation = stork.GroupName + "/restore-name"
+	restoreUIDAnnotation  = stork.GroupName + "/restore-uid"
+)
+
 // ApplicationRestoreController reconciles applicationrestore objects
 type ApplicationRestoreController struct {
 	Driver                volume.Driver
@@ -417,22 +422,31 @@ func (a *ApplicationRestoreController) applyResources(
 		return err
 	}
 
+	annotations := make(map[string]string)
+	annotations[restoreNameAnnotation] = restore.Name
+	annotations[restoreUIDAnnotation] = string(restore.UID)
+
 	for _, o := range objects {
 		err = a.ResourceCollector.PrepareResourceForApply(
 			o,
 			restore.Spec.NamespaceMapping,
-			pvNameMappings)
+			pvNameMappings,
+			annotations)
 		if err != nil {
 			return err
 		}
 	}
 
+	// Skip deletes for objects that we have already created for this restore
+	annotations = make(map[string]string)
+	annotations[restoreUIDAnnotation] = string(restore.UID)
 	// First delete the existing objects if they exist and replace policy is set
 	// to Delete
 	if restore.Spec.ReplacePolicy == stork_api.ApplicationRestoreReplacePolicyDelete {
 		err = a.ResourceCollector.DeleteResources(
 			a.dynamicInterface,
-			objects)
+			objects,
+			annotations)
 		if err != nil {
 			return err
 		}
@@ -453,7 +467,8 @@ func (a *ApplicationRestoreController) applyResources(
 
 		err = a.ResourceCollector.ApplyResource(
 			a.dynamicInterface,
-			o)
+			o,
+			annotations)
 		if err != nil && errors.IsAlreadyExists(err) {
 			switch restore.Spec.ReplacePolicy {
 			case stork_api.ApplicationRestoreReplacePolicyDelete:

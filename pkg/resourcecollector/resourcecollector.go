@@ -8,6 +8,7 @@ import (
 
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/libopenstorage/stork/drivers/volume"
+	"github.com/libopenstorage/stork/pkg/apis/stork"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -27,7 +28,7 @@ import (
 
 const (
 	// Annotation to use when the resource shouldn't be collected
-	skipResourceAnnotation = "stork.libopenstorage.org/skipresource"
+	skipResourceAnnotation = stork.GroupName + "/skipresource"
 
 	deletedMaxRetries    = 12
 	deletedRetryInterval = 10 * time.Second
@@ -286,6 +287,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	object runtime.Unstructured,
 	namespaceMappings map[string]string,
 	pvNameMappings map[string]string,
+	annotations map[string]string,
 ) error {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
@@ -313,6 +315,11 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		}
 
 	}
+	objectAnnotations := metadata.GetAnnotations()
+	for key, value := range annotations {
+		objectAnnotations[key] = value
+	}
+	metadata.SetAnnotations(objectAnnotations)
 	return nil
 }
 
@@ -349,7 +356,16 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 func (r *ResourceCollector) ApplyResource(
 	dynamicInterface dynamic.Interface,
 	object runtime.Unstructured,
+	skipWithAnnotations map[string]string,
 ) error {
+	created, err := r.objectAlreadyCreated(dynamicInterface, object, skipWithAnnotations)
+	if err != nil {
+		return err
+	}
+	if created {
+		return nil
+	}
+
 	dynamicClient, err := r.getDynamicClient(dynamicInterface, object)
 	if err != nil {
 		return err
@@ -375,18 +391,71 @@ func (r *ResourceCollector) ApplyResource(
 	return err
 }
 
+// Checks if an object has already been created based on the given annotations
+func (r *ResourceCollector) objectAlreadyCreated(
+	dynamicInterface dynamic.Interface,
+	object runtime.Unstructured,
+	matchAnnotations map[string]string,
+) (bool, error) {
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return false, err
+	}
+
+	dynamicClient, err := r.getDynamicClient(dynamicInterface, object)
+	if err != nil {
+		return false, err
+	}
+
+	o, err := dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
+	if err != nil {
+		// Skip delete for objects that aren't created
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	currentMetadata, err := meta.Accessor(o)
+	if err != nil {
+		return false, err
+	}
+
+	currentAnnotations := currentMetadata.GetAnnotations()
+	for key, value := range matchAnnotations {
+		if currentAnnotations[key] == value {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // DeleteResources deletes given resources using the provided client interface
 func (r *ResourceCollector) DeleteResources(
 	dynamicInterface dynamic.Interface,
 	objects []runtime.Unstructured,
+	skipWithAnnotations map[string]string,
 ) error {
-	// First delete all the objects
+	deletionObjects := make([]runtime.Unstructured, 0)
+
+	// First collect the resources that need to be deleted
 	for _, object := range objects {
 		// Don't delete objects that support merging
 		if r.mergeSupportedForResource(object) {
 			continue
 		}
 
+		created, err := r.objectAlreadyCreated(dynamicInterface, object, skipWithAnnotations)
+		if err != nil {
+			return err
+		}
+		if !created {
+			deletionObjects = append(deletionObjects, object)
+		}
+	}
+
+	// Then delete all the objects marked for deletion
+	for _, object := range deletionObjects {
 		metadata, err := meta.Accessor(object)
 		if err != nil {
 			return err
@@ -398,7 +467,7 @@ func (r *ResourceCollector) DeleteResources(
 		}
 
 		// Delete the resource if it already exists on the destination
-		// cluster and try creating again
+		// cluster/namespace
 		err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return err
@@ -406,12 +475,7 @@ func (r *ResourceCollector) DeleteResources(
 	}
 
 	// Then wait for them to actually be deleted
-	for _, object := range objects {
-		// Objects that support merging aren't deleted
-		if r.mergeSupportedForResource(object) {
-			continue
-		}
-
+	for _, object := range deletionObjects {
 		metadata, err := meta.Accessor(object)
 		if err != nil {
 			return err
