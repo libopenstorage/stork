@@ -783,7 +783,7 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
-		case "Deployment", "StatefulSet", "DeploymentConfig":
+		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer":
 			err := m.prepareApplicationResource(migration, o)
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
@@ -928,7 +928,7 @@ func (m *MigrationController) prepareApplicationResource(
 		return err
 	}
 	if !found {
-		return fmt.Errorf("replica count not found in application")
+		replicas = 1
 	}
 
 	err = unstructured.SetNestedField(content, int64(0), "spec", "replicas")

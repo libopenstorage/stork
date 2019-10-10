@@ -93,7 +93,11 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"ImageStream",
 		"Ingress",
 		"Route",
-		"Template":
+		"Template",
+		"IBPCA",
+		"IBPConsole",
+		"IBPPeer",
+		"IBPOrderer":
 		return true
 	default:
 		return false
@@ -179,6 +183,11 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 		}
 	}
 
+	allObjects, err = r.pruneOwnedResources(allObjects, resourceMap)
+	if err != nil {
+		return nil, err
+	}
+
 	err = r.prepareResourcesForCollection(allObjects, namespaces)
 	if err != nil {
 		return nil, err
@@ -240,6 +249,61 @@ func (r *ResourceCollector) objectToBeCollected(
 	}
 
 	return true, nil
+}
+
+// Prune objects that are owned by a CRD if we are also collecting the CR
+// since they will be recreated by the operator when the CR is created too.
+// For objects that have an ownerRef but we aren't collecting it's owner
+// remove the ownerRef so that the object doesn't get automatically deleted
+// when created
+func (r *ResourceCollector) pruneOwnedResources(
+	objects []runtime.Unstructured,
+	resourceMap map[types.UID]bool,
+) ([]runtime.Unstructured, error) {
+	updatedObjects := make([]runtime.Unstructured, 0)
+	for _, o := range objects {
+		metadata, err := meta.Accessor(o)
+		if err != nil {
+			return nil, err
+		}
+
+		collect := true
+
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return nil, err
+		}
+
+		// Don't check for PVCs, we always want to collect them
+		if objectType.GetKind() != "PersistentVolumeClaim" {
+			owners := metadata.GetOwnerReferences()
+			if len(owners) != 0 {
+				for _, owner := range owners {
+					// We don't collect pods, there might be come leader
+					// election objects that could have pods as the owner, so
+					// don't collect those objects
+					if owner.Kind == "Pod" {
+						collect = false
+						break
+					}
+
+					// Skip object if we are already collecting its owner
+					if _, exists := resourceMap[owner.UID]; exists {
+						collect = false
+						break
+					}
+				}
+				// If the owner isn't being collected delete the owner reference
+				metadata.SetOwnerReferences(nil)
+			}
+		}
+		if collect {
+			updatedObjects = append(updatedObjects, o)
+		}
+	}
+
+	return updatedObjects, nil
+
 }
 
 func (r *ResourceCollector) prepareResourcesForCollection(
