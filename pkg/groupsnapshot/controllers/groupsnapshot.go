@@ -379,6 +379,46 @@ func (m *GroupSnapshotController) handleSnap(groupSnap *stork_api.GroupVolumeSna
 	return updateCRD, nil
 }
 
+func (m *GroupSnapshotController) replaceSnapshotData(
+	snapData *crdv1.VolumeSnapshotData,
+) error {
+	data, err := k8s.Instance().GetSnapshotData(snapData.Metadata.Name)
+	if err != nil {
+		return err
+	}
+
+	// If the existing one isn't the same as the new one delete and re-create it
+	if !reflect.DeepEqual(data.Spec, snapData.Spec) {
+		err := k8s.Instance().DeleteSnapshotData(snapData.Metadata.Name)
+		if err != nil {
+			return err
+		}
+		_, err = k8s.Instance().CreateSnapshotData(snapData)
+		return err
+	}
+	return nil
+}
+
+func (m *GroupSnapshotController) replaceSnapshot(
+	snap *crdv1.VolumeSnapshot,
+) error {
+	s, err := k8s.Instance().GetSnapshotData(snap.Metadata.Name)
+	if err != nil {
+		return err
+	}
+
+	// If the existing one isn't the same as the new one delete and re-create it
+	if !reflect.DeepEqual(s.Spec, snap.Spec) {
+		err := k8s.Instance().DeleteSnapshotData(snap.Metadata.Name)
+		if err != nil {
+			return err
+		}
+		_, err = k8s.Instance().CreateSnapshot(snap)
+		return err
+	}
+	return nil
+}
+
 func (m *GroupSnapshotController) createSnapAndDataObjects(
 	groupSnap *stork_api.GroupVolumeSnapshot, snapshots []*stork_api.VolumeSnapshotStatus) (
 	[]*stork_api.VolumeSnapshotStatus, error) {
@@ -443,12 +483,18 @@ func (m *GroupSnapshotController) createSnapAndDataObjects(
 			},
 		}
 
-		snapData, err = k8s.Instance().CreateSnapshotData(snapData)
+		_, err = k8s.Instance().CreateSnapshotData(snapData)
 		if err != nil {
-			err = fmt.Errorf("error creating the VolumeSnapshotData for snap %s due to err: %v",
-				volumeSnapshotName, err)
-			log.GroupSnapshotLog(groupSnap).Errorf(err.Error())
-			return nil, err
+			// Try to replace the snapshot data if it already exists
+			if errors.IsAlreadyExists(err) {
+				err = m.replaceSnapshotData(snapData)
+			}
+			if err != nil {
+				err = fmt.Errorf("error creating the VolumeSnapshotData for snap %s due to err: %v",
+					volumeSnapshotName, err)
+				log.GroupSnapshotLog(groupSnap).Errorf(err.Error())
+				return nil, err
+			}
 		}
 
 		snap := &crdv1.VolumeSnapshot{
@@ -477,6 +523,11 @@ func (m *GroupSnapshotController) createSnapAndDataObjects(
 
 		snap, err = k8s.Instance().CreateSnapshot(snap)
 		if err != nil {
+			// Try to replace the snapshot if it already exists
+			if errors.IsAlreadyExists(err) {
+				err = m.replaceSnapshot(snap)
+			}
+
 			// revert snapdata
 			deleteErr := k8s.Instance().DeleteSnapshotData(snapData.Metadata.Name)
 			if deleteErr != nil {
