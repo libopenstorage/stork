@@ -163,6 +163,14 @@
   revision = "23def4e6c14b4da8ac2ed8007337bc5eb5007998"
 
 [[projects]]
+  digest = "1:be408f349cae090a7c17a279633d6e62b00068e64af66a582cae0983de8890ea"
+  name = "github.com/golang/mock"
+  packages = ["gomock"]
+  pruneopts = "UT"
+  revision = "9fa652df1129bef0e734c9cf9bf6dbae9ef3b9fa"
+  version = "1.3.1"
+
+[[projects]]
   digest = "1:489a99067cd08971bd9c1ee0055119ba8febc1429f9200ab0bec68d35e8c4833"
   name = "github.com/golang/protobuf"
   packages = [
@@ -275,12 +283,12 @@
   version = "v1.0.0"
 
 [[projects]]
-  branch = "master"
+  branch = "kubernetes-1.13.1"
   digest = "1:eec9820cecf08159a15bf2e9f8d2f6df388558c06b961a0fda541d866863edc3"
   name = "github.com/portworx/sched-ops"
   packages = ["task"]
   pruneopts = "UT"
-  revision = "4fb6753680fea4e9b6c300ce9a4d46bf6ff90577"
+  revision = "93d74efcd2c481f7c5adcfaa6b4aa9e14b762a64"
 
 [[projects]]
   digest = "1:75d51eeab0df85a3cea9e1297ccd3183b20a10cb4b48c753d8ec8d113cc14250"
@@ -570,6 +578,14 @@
   version = "v1.20.1"
 
 [[projects]]
+  digest = "1:4d2e5a73dc1500038e504a8d78b986630e3626dc027bc030ba5c75da257cdb96"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "51d6538a90f86fe93ac480b35f37b2be17fef232"
+  version = "v2.2.2"
+
+[[projects]]
   branch = "master"
   digest = "1:e03a99f0e214e2ddd351ded433f45033ab61bf24c22761c3cb9243f58ced0285"
   name = "k8s.io/apimachinery"
@@ -606,6 +622,7 @@
     "cloud.google.com/go/compute/metadata",
     "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2018-06-01/compute",
     "github.com/Azure/go-autorest/autorest",
+    "github.com/Azure/go-autorest/autorest/azure",
     "github.com/Azure/go-autorest/autorest/azure/auth",
     "github.com/Azure/go-autorest/autorest/to",
     "github.com/aws/aws-sdk-go/aws",
@@ -616,6 +633,7 @@
     "github.com/aws/aws-sdk-go/service/ec2",
     "github.com/aws/aws-sdk-go/service/opsworks",
     "github.com/codeskyblue/go-sh",
+    "github.com/golang/mock/gomock",
     "github.com/libopenstorage/openstorage/pkg/parser",
     "github.com/libopenstorage/secrets/aws/credentials",
     "github.com/pborman/uuid",
@@ -634,6 +652,7 @@
     "google.golang.org/api/container/v1",
     "google.golang.org/api/googleapi",
     "google.golang.org/api/option",
+    "gopkg.in/yaml.v2",
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib",
     "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers",

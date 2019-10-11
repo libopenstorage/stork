@@ -6,8 +6,12 @@ import (
 	"reflect"
 )
 
-// ErrK8SApiAccountNotSet is returned when the account used to talk to k8s api is not setup
-var ErrK8SApiAccountNotSet = errors.New("k8s api account is not setup")
+var (
+	// ErrPodsNotFound error returned when pod or pods could not be found
+	ErrPodsNotFound = errors.New("Pod(s) not found")
+	// ErrK8SApiAccountNotSet is returned when the account used to talk to k8s api is not setup
+	ErrK8SApiAccountNotSet = errors.New("k8s api account is not setup")
+)
 
 // ErrFailedToParseYAML error type for objects not found
 type ErrFailedToParseYAML struct {

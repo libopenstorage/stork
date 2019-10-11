@@ -34,7 +34,7 @@
   branch = "master"
   name = "github.com/libopenstorage/stork"
 
-[[constraint]]
+[[override]]
   name = "github.com/kubernetes-incubator/external-storage"
   source = "github.com/libopenstorage/external-storage"
   branch = "openstorage-5.1"
@@ -47,33 +47,33 @@
   branch = "master"
   name = "github.com/portworx/sched-ops"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.11.0"
+  version = "kubernetes-1.14.7"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.11.0"
+  version = "kubernetes-1.14.7"
 
 [[override]]
-  name = "k8s.io/apiserver"
-  version = "kubernetes-1.11.0"
+  name = "k8s.io/apiextensions-apiserver"
+  version = "kubernetes-1.14.7"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/client-go"
-  version = "8.0.0"
-
-[[override]]
-  name = "github.com/docker/distribution"
-  revision = "edc3ab29cdff8694dd6feb85cfeb4b5f1b38ed9c"
+  version = "11.0.0"
 
 [[override]]
   name = "github.com/docker/docker"
   revision = "4f3616fb1c112e206b88cb7a9922bf49067a7756"
 
-[[override]]
-  name = "github.com/Azure/go-autorest"
-  revision = "1ff28809256a84bb6966640ff3d0371af82ccba4"
+[[constraint]]
+  name = "github.com/openshift/api"
+  branch = "release-3.11"
+
+[[constraint]]
+  name = "github.com/openshift/client-go"
+  branch = "release-3.11"
 
 [[override]]
   name = "github.com/russross/blackfriday"

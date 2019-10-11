@@ -50,8 +50,8 @@
   version = "1.2.0"
 
 [[constraint]]
-  branch = "master"
   name = "github.com/portworx/sched-ops"
+  branch = "kubernetes-1.13.1"
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"

@@ -68,6 +68,9 @@ cloudops:
 	@echo "Building the cloudops binary"
 	@cd cmd/cloudops && CGO_ENABLED=0 go build $(BUILD_OPTIONS) -o $(BIN)/cloudops
 
+generate-mockfiles:
+	go generate $(PKGS)
+
 container:
 	@echo "Building container: docker build --tag $(CLOUDOPS_IMG) -f Dockerfile ."
 	sudo docker build --tag $(CLOUDOPS_IMG) -f Dockerfile .
@@ -92,4 +95,3 @@ docker-build: docker-build-osd-dev
 
 clean:
 	go clean -i $(PKGS)
-
