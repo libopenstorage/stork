@@ -127,7 +127,7 @@ func (s *SnapshotScheduleController) Handle(ctx context.Context, event sdk.Event
 
 func (s *SnapshotScheduleController) setDefaults(snapshotSchedule *stork_api.VolumeSnapshotSchedule) {
 	if snapshotSchedule.Spec.ReclaimPolicy == "" {
-		snapshotSchedule.Spec.ReclaimPolicy = stork_api.ReclaimPolicyDelete
+		snapshotSchedule.Spec.ReclaimPolicy = stork_api.ReclaimPolicyRetain
 	}
 }
 
