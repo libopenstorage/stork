@@ -4,6 +4,7 @@ package integrationtest
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+)
+
+const (
+	migrationRetryInterval = 10 * time.Second
+	migrationRetryTimeout  = 5 * time.Minute
 )
 
 func testMigration(t *testing.T) {
@@ -39,6 +45,7 @@ func testMigration(t *testing.T) {
 	t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
 	t.Run("monthlyScheduleTest", migrationMonthlyScheduleTest)
 	t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
+	t.Run("scaleTest", migrationScaleTest)
 }
 
 func triggerMigrationTest(
@@ -567,4 +574,135 @@ func migrationScheduleTest(
 
 	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "migrations for schedules have not been deleted")
+}
+
+func migrationScaleTest(t *testing.T) {
+	triggerMigrationScaleTest(
+		t,
+		"mysql-migration",
+		"mysql-1-pvc",
+		true,
+		true,
+	)
+}
+
+func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKey string, includeResourcesFlag bool, startApplicationsFlag bool) {
+	var appCtxs []*scheduler.Context
+	var ctxs []*scheduler.Context
+	var allMigrations []*v1alpha1.Migration
+	var err error
+
+	// Reset config in case of error
+	defer func() {
+		err = setRemoteConfig("")
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+
+	for i := 1; i <= migrationScaleCount; i++ {
+		currCtxs, err := schedulerDriver.Schedule(migrationKey+"-"+strconv.Itoa(i),
+			scheduler.ScheduleOptions{AppKeys: []string{migrationAppKey}})
+		require.NoError(t, err, "Error scheduling task")
+		require.Equal(t, 1, len(currCtxs), "Only one task should have started")
+
+		err = schedulerDriver.WaitForRunning(currCtxs[0], defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for app to get to running state")
+
+		// Save context without the clusterpair object
+		preMigrationCtx := currCtxs[0].DeepCopy()
+		appCtxs = append(appCtxs, preMigrationCtx)
+
+		// create, apply and validate cluster pair specs
+		err = scheduleClusterPair(currCtxs[0], false)
+		require.NoError(t, err, "Error scheduling cluster pair")
+		ctxs = append(ctxs, currCtxs...)
+
+		currMigNamespace := migrationAppKey + "-" + migrationKey + "-" + strconv.Itoa(i)
+		currMig, err := createMigration(t, migrationKey, currMigNamespace, "remoteclusterpair", currMigNamespace, &includeResourcesFlag, &startApplicationsFlag)
+		require.NoError(t, err, "failed to create migration: %s in namespace %s", migrationKey, currMigNamespace)
+		allMigrations = append(allMigrations, currMig)
+
+	}
+	err = WaitForMigration(allMigrations)
+	require.NoError(t, err, "Error in scaled migrations")
+
+	// Validate apps on destination
+	if startApplicationsFlag {
+		// wait on cluster 2 for the app to be running
+		err = setRemoteConfig(remoteFilePath)
+		require.NoError(t, err, "Error setting remote config")
+
+		for _, ctx := range appCtxs {
+			err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "Error waiting for app to get to running state on destination cluster")
+		}
+		// Delete all apps on destination cluster
+		destroyAndWait(t, appCtxs)
+	}
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "Error resetting remote config")
+
+	// Delete all apps and cluster pairs on source cluster
+	destroyAndWait(t, ctxs)
+
+	// Delete migrations
+	err = deleteMigrations(allMigrations)
+	require.NoError(t, err, "error in deleting migrations.")
+}
+
+func createMigration(
+	t *testing.T,
+	name string,
+	namespace string,
+	clusterPair string,
+	migrationNamespace string,
+	includeResources *bool,
+	startApplications *bool,
+) (*v1alpha1.Migration, error) {
+
+	migration := &v1alpha1.Migration{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: v1alpha1.MigrationSpec{
+			ClusterPair:       clusterPair,
+			IncludeResources:  includeResources,
+			StartApplications: startApplications,
+			Namespaces:        []string{migrationNamespace},
+		},
+	}
+	return k8s.Instance().CreateMigration(migration)
+}
+
+func deleteMigrations(migrations []*v1alpha1.Migration) error {
+	for _, mig := range migrations {
+		err := k8s.Instance().DeleteMigration(mig.Name, mig.Namespace)
+		if err != nil {
+			return fmt.Errorf("Failed to delete migration %s in namespace %s. Error: %v", mig.Name, mig.Namespace, err)
+		}
+	}
+	return nil
+}
+
+func WaitForMigration(migrationList []*v1alpha1.Migration) error {
+	checkMigrations := func() (interface{}, bool, error) {
+		isComplete := true
+		for _, m := range migrationList {
+			mig, err := k8s.Instance().GetMigration(m.Name, m.Namespace)
+			if err != nil {
+				return "", false, err
+			}
+			if mig.Status.Status != v1alpha1.MigrationStatusSuccessful {
+				logrus.Infof("Migration %s in namespace %s is pending", m.Name, m.Namespace)
+				isComplete = false
+			}
+		}
+		if isComplete {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("some migrations are still pending")
+	}
+	_, err := task.DoRetryWithTimeout(checkMigrations, migrationRetryTimeout, migrationRetryInterval)
+	return err
 }
