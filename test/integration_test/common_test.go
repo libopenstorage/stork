@@ -64,6 +64,7 @@ var volumeDriver volume.Driver
 var storkVolumeDriver storkdriver.Driver
 
 var snapshotScaleCount int
+var migrationScaleCount int
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -459,6 +460,10 @@ func TestMain(m *testing.M) {
 		"snapshot-scale-count",
 		10,
 		"Number of volumes to use for scale snapshot test")
+	flag.IntVar(&migrationScaleCount,
+		"migration-scale-count",
+		10,
+		"Number of migrations to use for migration test")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)

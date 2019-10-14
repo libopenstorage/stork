@@ -2,6 +2,7 @@
 
 initializer="false"
 snapshot_scale=10
+migration_scale=10
 image_name="stork:master"
 test_image_name="stork_test:latest"
 remote_config_path=""
@@ -20,6 +21,12 @@ case $i in
     --snapshot-scale-count)
         echo "Scale for snapshot test (default 10): $2"
         snapshot_scale=$2
+        shift
+        shift
+        ;;
+    --migration-scale-count)
+        echo "Scale for migration scale test (default 10): $2"
+        migration_scale=$2
         shift
         shift
         ;;
@@ -152,6 +159,7 @@ fi
 
 sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/- -migration-scale-count=10/- -migration-scale-count='"$migration_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
