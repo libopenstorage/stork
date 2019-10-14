@@ -54,6 +54,7 @@ spec:
     - -test.short=SHORT_FLAG
     FOCUS_TESTS
     - -snapshot-scale-count=10
+    - -migration-scale-count=10
     imagePullPolicy: Always
     image: openstorage/stork_test:latest
     securityContext:
