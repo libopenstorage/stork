@@ -83,6 +83,7 @@ const (
 	startDriverTimeout               = 2 * time.Minute
 	upgradeTimeout                   = 10 * time.Minute
 	upgradeRetryInterval             = 30 * time.Second
+	upgradePerNodeTimeout            = 15 * time.Minute
 	waitVolDriverToCrash             = 1 * time.Minute
 )
 
@@ -354,6 +355,28 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 	}
 
 	return pxnode.(api.Node), nil
+}
+
+func (d *portworx) getPxVersionOnNode(n node.Node, cManager cluster.Cluster) (string, error) {
+
+	t := func() (interface{}, bool, error) {
+		logrus.Debugf("Getting PX Version on node [%s]", n.Name)
+		pxNode, err := d.getPxNode(n, cManager)
+		if err != nil {
+			return "", false, err
+		}
+		if pxNode.Status != api.Status_STATUS_OK {
+			return "", true, fmt.Errorf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
+				api.Status_STATUS_OK, pxNode.Status)
+		}
+		pxVersion := pxNode.NodeLabels[pxVersionLabel]
+		return pxVersion, false, nil
+	}
+	pxVersion, err := task.DoRetryWithTimeout(t, getNodeTimeout, getNodeRetryInterval)
+	if err != nil {
+		return "", fmt.Errorf("Timeout after %v waiting to get PX Version", getNodeTimeout)
+	}
+	return fmt.Sprintf("%v", pxVersion), nil
 }
 
 func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
@@ -959,21 +982,6 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 
 func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
 	t := func() (interface{}, bool, error) {
-		pxNode, err := d.getPxNode(n, nil)
-		if err != nil {
-			return nil, true, &ErrFailedToWaitForPx{
-				Node:  n,
-				Cause: err.Error(),
-			}
-		}
-
-		if pxNode.Status != api.Status_STATUS_OK {
-			return nil, true, &ErrFailedToWaitForPx{
-				Node: n,
-				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
-					api.Status_STATUS_OK, pxNode.Status),
-			}
-		}
 
 		// filter out first 3 octets from the tag
 		matches := regexp.MustCompile(`^(\d+\.\d+\.\d+).*`).FindStringSubmatch(tag)
@@ -984,7 +992,13 @@ func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
 			}
 		}
 
-		pxVersion := pxNode.NodeLabels[pxVersionLabel]
+		pxVersion, err := d.getPxVersionOnNode(n, nil)
+		if err != nil {
+			return nil, true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: fmt.Sprintf("failed to get PX Version with error: %s", err),
+			}
+		}
 		if !strings.HasPrefix(pxVersion, matches[1]) {
 			return nil, true, &ErrFailedToUpgradeVolumeDriver{
 				Version: fmt.Sprintf("%s", tag),
@@ -1280,9 +1294,23 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) err
 	}
 	logrus.Infof("permission changed on file %s", upgradeFileName)
 
+	nodeList := node.GetStorageDriverNodes()
+	pxNode := nodeList[0]
+	pxVersion, err := d.getPxVersionOnNode(pxNode, nil)
+	if err != nil {
+		return fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
+	}
+	// If PX Version less than 2.x.x.x, then we have to add timeout parameter to avoid test failure
+	// more details in https://portworx.atlassian.net/browse/PWX-10108
+	cmdArgs := []string{upgradeFileName, "-f"}
+	majorPxVersion := pxVersion[:1]
+	if majorPxVersion < "2" {
+		cmdArgs = append(cmdArgs, "-u", strconv.Itoa(int(upgradePerNodeTimeout/time.Second)))
+	}
+
 	// Run upgrade script
-	logrus.Infof("executing file %s", upgradeFileName)
-	cmd = exec.Command("/bin/sh", upgradeFileName, "-f")
+	logrus.Infof("executing /bin/sh with params: %s\n", cmdArgs)
+	cmd = exec.Command("/bin/sh", cmdArgs...)
 	output, err = cmd.Output()
 
 	// Print and replace all '\n' with new lines
