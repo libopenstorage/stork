@@ -19,7 +19,7 @@ limitations under the License.
 package versioned
 
 import (
-	autopilotv1alpha1 "github.com/libopenstorage/autopilot/pkg/client/clientset/versioned/typed/autopilot/v1alpha1"
+	autopilotv1alpha1 "github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
