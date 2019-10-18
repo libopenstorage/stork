@@ -34,7 +34,6 @@ func (a *ApplicationManager) Init(adminNamespace string, stopChannel chan os.Sig
 		return err
 	}
 	backupController := &controllers.ApplicationBackupController{
-		Driver:            a.Driver,
 		Recorder:          a.Recorder,
 		ResourceCollector: a.ResourceCollector,
 	}
@@ -43,7 +42,6 @@ func (a *ApplicationManager) Init(adminNamespace string, stopChannel chan os.Sig
 	}
 
 	restoreController := &controllers.ApplicationRestoreController{
-		Driver:            a.Driver,
 		Recorder:          a.Recorder,
 		ResourceCollector: a.ResourceCollector,
 	}

@@ -3,6 +3,7 @@ package resourcecollector
 import (
 	"fmt"
 
+	"github.com/libopenstorage/stork/drivers/volume"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,6 +12,7 @@ import (
 func (r *ResourceCollector) pvcToBeCollected(
 	object runtime.Unstructured,
 	namespace string,
+	allDrivers bool,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
 	if err != nil {
@@ -27,10 +29,17 @@ func (r *ResourceCollector) pvcToBeCollected(
 		return false, nil
 	}
 
-	// Don't collect PVCs not owned by the driver
-	if !r.Driver.OwnsPVC(pvc) {
+	// Don't collect PVCs not owned by the driver if collecting for a specific
+	// driver. Else collect PVCs for all supported drivers
+	if !allDrivers && !r.Driver.OwnsPVC(pvc) {
 		return false, nil
+	} else {
+		_, err := volume.GetPVCDriver(pvc)
+		if err != nil {
+			return false, nil
+		}
 	}
+
 	return true, nil
 }
 

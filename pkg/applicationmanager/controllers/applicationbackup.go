@@ -54,7 +54,6 @@ var backupCancelBackoff = wait.Backoff{
 
 // ApplicationBackupController reconciles applicationbackup objects
 type ApplicationBackupController struct {
-	Driver               volume.Driver
 	Recorder             record.EventRecorder
 	ResourceCollector    resourcecollector.ResourceCollector
 	backupAdminNamespace string
@@ -260,6 +259,14 @@ func (a *ApplicationBackupController) namespaceBackupAllowed(backup *stork_api.A
 	return true
 }
 
+func (a *ApplicationBackupController) getDriversForBackup(backup *stork_api.ApplicationBackup) map[string]bool {
+	drivers := make(map[string]bool)
+	for _, volumeInfo := range backup.Status.Volumes {
+		drivers[volumeInfo.DriverName] = true
+	}
+	return drivers
+}
+
 func (a *ApplicationBackupController) backupVolumes(backup *stork_api.ApplicationBackup, terminationChannels []chan bool) error {
 	defer func() {
 		for _, channel := range terminationChannels {
@@ -268,50 +275,59 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	}()
 
 	// Start backup of the volumes if we don't have any status stored
-	backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
 	if backup.Status.Volumes == nil {
-		volumeInfos, err := a.Driver.StartBackup(backup)
-		if err != nil {
-			message := fmt.Sprintf("Error starting ApplicationBackup for volumes: %v", err)
-			log.ApplicationBackupLog(backup).Errorf(message)
-			a.Recorder.Event(backup,
-				v1.EventTypeWarning,
-				string(stork_api.ApplicationBackupStatusFailed),
-				message)
+		pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
+		backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
+		backup.Status.Volumes = make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+		for _, namespace := range backup.Spec.Namespaces {
+			pvcList, err := k8s.Instance().GetPersistentVolumeClaims(namespace, backup.Spec.Selectors)
+			if err != nil {
+				return fmt.Errorf("error getting list of volumes to migrate: %v", err)
+			}
 
-			// Cancel any backups that might have started and mark the backup as failed
-
-			if err := wait.ExponentialBackoff(backupCancelBackoff, func() (bool, error) {
-				err := a.Driver.CancelBackup(backup)
+			for _, pvc := range pvcList.Items {
+				driverName, err := volume.GetPVCDriver(&pvc)
 				if err != nil {
-					message := fmt.Sprintf("Error cancelling ApplicationBackup for volumes, retrying: %v", err)
-					log.ApplicationBackupLog(backup).Errorf(message)
-					a.Recorder.Event(backup,
-						v1.EventTypeWarning,
-						string(stork_api.ApplicationBackupStatusFailed),
-						message)
-					return false, nil
+					return err
 				}
-				return true, nil
-			}); err != nil {
-				message := fmt.Sprintf("Error cancelling ApplicationBackup for volumes, will not retry further: %v", err)
+				log.ApplicationBackupLog(backup).Errorf("PVC: %v Driver: %v", pvc.Name, driverName)
+				if driverName != "" {
+					if pvcMappings[driverName] == nil {
+						pvcMappings[driverName] = make([]v1.PersistentVolumeClaim, 0)
+					}
+					pvcMappings[driverName] = append(pvcMappings[driverName], pvc)
+				}
+			}
+		}
+		for driverName, pvcs := range pvcMappings {
+			driver, err := volume.Get(driverName)
+			if err != nil {
+				return err
+			}
+
+			volumeInfos, err := driver.StartBackup(backup, pvcs)
+			if err != nil {
+				// TODO: If starting backup for a drive fails mark the entire backup
+				// as Cancelling, cancel any other started backups and then mark
+				// it as failed
+				message := fmt.Sprintf("Error starting ApplicationBackup for volumes: %v", err)
 				log.ApplicationBackupLog(backup).Errorf(message)
 				a.Recorder.Event(backup,
 					v1.EventTypeWarning,
 					string(stork_api.ApplicationBackupStatusFailed),
 					message)
+				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				err = sdk.Update(backup)
+				if err != nil {
+					return err
+				}
+				return nil
 			}
 
-			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-			err = sdk.Update(backup)
-			if err != nil {
-				return err
-			}
-			return nil
+			backup.Status.Volumes = append(backup.Status.Volumes, volumeInfos...)
 		}
-		backup.Status.Volumes = volumeInfos
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
-		err = sdk.Update(backup)
+		err := sdk.Update(backup)
 		if err != nil {
 			return err
 		}
@@ -333,10 +349,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					string(stork_api.ApplicationBackupStatusFailed),
 					message)
 
-				err := a.Driver.CancelBackup(backup)
-				if err != nil {
-					log.ApplicationBackupLog(backup).Errorf("Error cancelling backups: %v", err)
-				}
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.FinishTimestamp = metav1.Now()
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
@@ -353,12 +365,21 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	// Skip checking status if no volumes are being backed up
 	if len(backup.Status.Volumes) != 0 {
 		var err error
-		volumeInfos, err := a.Driver.GetBackupStatus(backup)
-		if err != nil {
-			return err
-		}
-		if volumeInfos == nil {
-			volumeInfos = make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+		drivers := a.getDriversForBackup(backup)
+
+		volumeInfos := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+		for driverName := range drivers {
+
+			driver, err := volume.Get(driverName)
+			if err != nil {
+				return err
+			}
+
+			status, err := driver.GetBackupStatus(backup)
+			if err != nil {
+				return fmt.Errorf("error getting backup status for driver %v: %v", driverName, err)
+			}
+			volumeInfos = append(volumeInfos, status...)
 		}
 		backup.Status.Volumes = volumeInfos
 		// Store the new status
@@ -590,14 +611,37 @@ func (a *ApplicationBackupController) uploadMetadata(
 func (a *ApplicationBackupController) preparePVResource(
 	object runtime.Unstructured,
 ) error {
-	_, err := a.Driver.UpdateMigratedPersistentVolumeSpec(object)
+	var pv v1.PersistentVolume
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pv); err != nil {
+		return err
+	}
+
+	driverName, err := volume.GetPVDriver(&pv)
+	if err != nil {
+		return err
+	}
+	driver, err := volume.Get(driverName)
+	if err != nil {
+		return err
+	}
+	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv)
+	if err != nil {
+		return err
+	}
+
+	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pv)
+	if err != nil {
+		return err
+	}
+	object.SetUnstructuredContent(o)
+
 	return err
 }
 
 func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
-	allObjects, err := a.ResourceCollector.GetResources(backup.Spec.Namespaces, backup.Spec.Selectors)
+	allObjects, err := a.ResourceCollector.GetResources(backup.Spec.Namespaces, backup.Spec.Selectors, true)
 	if err != nil {
 		log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 		return err
@@ -673,19 +717,30 @@ func (a *ApplicationBackupController) backupResources(
 }
 
 func (a *ApplicationBackupController) deleteBackup(backup *stork_api.ApplicationBackup) error {
-	// Only delete the backup from the backupLocation if the ReclaimPolicy is set to Delete
-	if backup.Spec.ReclaimPolicy != stork_api.ApplicationBackupReclaimPolicyDelete {
+	// Only delete the backup from the backupLocation if the ReclaimPolicy is
+	// set to Delete or if it is not successful
+	if backup.Spec.ReclaimPolicy != stork_api.ApplicationBackupReclaimPolicyDelete &&
+		backup.Status.Status == stork_api.ApplicationBackupStatusSuccessful {
 		return nil
 	}
 
-	// Ignore error when cancelling since completed ones could possibly not be
-	// cancelled
-	if err := a.Driver.CancelBackup(backup); err != nil {
-		log.ApplicationBackupLog(backup).Debugf("Error cancelling backup: %v", err)
-	}
+	drivers := a.getDriversForBackup(backup)
+	for driverName := range drivers {
 
-	if err := a.Driver.DeleteBackup(backup); err != nil {
-		return err
+		driver, err := volume.Get(driverName)
+		if err != nil {
+			return err
+		}
+
+		// Ignore error when cancelling since completed ones could possibly not be
+		// cancelled
+		if err := driver.CancelBackup(backup); err != nil {
+			log.ApplicationBackupLog(backup).Debugf("Error cancelling backup: %v", err)
+		}
+
+		if err := driver.DeleteBackup(backup); err != nil {
+			return err
+		}
 	}
 
 	backupLocation, err := k8s.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)

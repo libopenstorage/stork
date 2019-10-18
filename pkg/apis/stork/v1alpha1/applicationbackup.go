@@ -68,8 +68,10 @@ type ApplicationBackupVolumeInfo struct {
 	Namespace             string                      `json:"namespace"`
 	Volume                string                      `json:"volume"`
 	BackupID              string                      `json:"backupID"`
+	DriverName            string                      `json:"driverName"`
 	Status                ApplicationBackupStatusType `json:"status"`
 	Reason                string                      `json:"reason"`
+	Options               map[string]string           `jons:"options"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup
