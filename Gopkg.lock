@@ -1137,14 +1137,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:d9d3a231c70b17470fc134900032da48d5c146f0f4a2ce12ceb92704dae8d67d"
+  digest = "1:a0e46a43516d3f5ff0ba3636488b8a8df632b2986da49823cd8340c070c1a125"
   name = "golang.org/x/xerrors"
   packages = [
     ".",
     "internal",
   ]
   pruneopts = "UT"
-  revision = "1f06c39b43733b74392b1972507822714ced3242"
+  revision = "1b5146add8981d58be77b16229c0ff0f8bebd8c1"
 
 [[projects]]
   digest = "1:4ed6be820fedca297ec9e1a843d16ce33f888f243359caa6cf1c653f4dad165e"
