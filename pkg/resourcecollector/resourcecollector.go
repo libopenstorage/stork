@@ -105,7 +105,7 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
-func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map[string]string) ([]runtime.Unstructured, error) {
+func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map[string]string, allDrivers bool) ([]runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 						return nil, fmt.Errorf("error casting object: %v", o)
 					}
 
-					collect, err := r.objectToBeCollected(labelSelectors, resourceMap, runtimeObject, crbs, ns)
+					collect, err := r.objectToBeCollected(labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers)
 					if err != nil {
 						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 					}
@@ -203,6 +203,7 @@ func (r *ResourceCollector) objectToBeCollected(
 	object runtime.Unstructured,
 	crbs *rbacv1.ClusterRoleBindingList,
 	namespace string,
+	allDrivers bool,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
 	if err != nil {
@@ -229,9 +230,9 @@ func (r *ResourceCollector) objectToBeCollected(
 	case "Service":
 		return r.serviceToBeCollected(object)
 	case "PersistentVolumeClaim":
-		return r.pvcToBeCollected(object, namespace)
+		return r.pvcToBeCollected(object, namespace, allDrivers)
 	case "PersistentVolume":
-		return r.pvToBeCollected(labelSelectors, object, namespace)
+		return r.pvToBeCollected(labelSelectors, object, namespace, allDrivers)
 	case "ClusterRoleBinding":
 		return r.clusterRoleBindingToBeCollected(labelSelectors, object, namespace)
 	case "ClusterRole":

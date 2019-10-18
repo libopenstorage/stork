@@ -2450,7 +2450,9 @@ func (p *portworx) addApplicationBackupCloudsnapInfo(
 	request.Labels[cloudBackupExternalManagerLabel] = "StorkApplicationBackupManual"
 }
 
-func (p *portworx) StartBackup(backup *stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error) {
+func (p *portworx) StartBackup(backup *stork_crd.ApplicationBackup,
+	pvcs []*v1.PersistentVolumeClaim,
+) ([]*stork_crd.ApplicationBackupVolumeInfo, error) {
 	ok, msg, err := p.ensureNodesHaveMinVersion("2.2.0")
 	if err != nil {
 		return nil, err
@@ -2470,45 +2472,37 @@ func (p *portworx) StartBackup(backup *stork_crd.ApplicationBackup) ([]*stork_cr
 		return nil, err
 	}
 	volumeInfos := make([]*stork_crd.ApplicationBackupVolumeInfo, 0)
-	for _, namespace := range backup.Spec.Namespaces {
-		pvcList, err := k8s.Instance().GetPersistentVolumeClaims(namespace, backup.Spec.Selectors)
-		if err != nil {
-			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)
+	for _, pvc := range pvcs {
+		if pvc.DeletionTimestamp != nil {
+			log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
+			continue
 		}
-		for _, pvc := range pvcList.Items {
-			if !p.OwnsPVC(&pvc) {
-				continue
-			}
-			if pvc.DeletionTimestamp != nil {
-				log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
-				continue
-			}
-			volumeInfo := &stork_crd.ApplicationBackupVolumeInfo{}
-			volumeInfo.PersistentVolumeClaim = pvc.Name
-			volumeInfo.Namespace = pvc.Namespace
-			volumeInfos = append(volumeInfos, volumeInfo)
+		volumeInfo := &stork_crd.ApplicationBackupVolumeInfo{}
+		volumeInfo.PersistentVolumeClaim = pvc.Name
+		volumeInfo.Namespace = pvc.Namespace
+		volumeInfo.DriverName = driverName
+		volumeInfos = append(volumeInfos, volumeInfo)
 
-			volume, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
-			if err != nil {
-				return nil, fmt.Errorf("Error getting volume for PVC: %v", err)
-			}
-			volumeInfo.Volume = volume
-			taskID := p.getBackupRestoreTaskID(backup.UID, volumeInfo.Namespace, volumeInfo.PersistentVolumeClaim)
-			credID := p.getCredID(backup.Spec.BackupLocation, backup.Namespace)
-			request := &api.CloudBackupCreateRequest{
-				VolumeID:       volume,
-				CredentialUUID: credID,
-				Name:           taskID,
-			}
-			request.Labels = make(map[string]string)
-			request.Labels[cloudBackupOwnerLabel] = "stork"
-			p.addApplicationBackupCloudsnapInfo(request, backup)
+		volume, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(pvc)
+		if err != nil {
+			return nil, fmt.Errorf("Error getting volume for PVC: %v", err)
+		}
+		volumeInfo.Volume = volume
+		taskID := p.getBackupRestoreTaskID(backup.UID, volumeInfo.Namespace, volumeInfo.PersistentVolumeClaim)
+		credID := p.getCredID(backup.Spec.BackupLocation, backup.Namespace)
+		request := &api.CloudBackupCreateRequest{
+			VolumeID:       volume,
+			CredentialUUID: credID,
+			Name:           taskID,
+		}
+		request.Labels = make(map[string]string)
+		request.Labels[cloudBackupOwnerLabel] = "stork"
+		p.addApplicationBackupCloudsnapInfo(request, backup)
 
-			_, err = volDriver.CloudBackupCreate(request)
-			if err != nil {
-				if _, ok := err.(*ost_errors.ErrExists); !ok {
-					return nil, err
-				}
+		_, err = volDriver.CloudBackupCreate(request)
+		if err != nil {
+			if _, ok := err.(*ost_errors.ErrExists); !ok {
+				return nil, err
 			}
 		}
 	}

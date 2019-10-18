@@ -126,7 +126,7 @@ type ClusterDomainsPluginInterface interface {
 type BackupRestorePluginInterface interface {
 	// Start backup of volumes specified by the spec. Should only backup
 	// volumes, not the specs associated with them
-	StartBackup(*stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error)
+	StartBackup(*stork_crd.ApplicationBackup, []*v1.PersistentVolumeClaim) ([]*stork_crd.ApplicationBackupVolumeInfo, error)
 	// Get the status of backup of the volumes specified in the status
 	// for the backup spec
 	GetBackupStatus(*stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error)
@@ -240,6 +240,20 @@ func Get(name string) (Driver, error) {
 	}
 }
 
+// GetPVCDriver gets the driver associated with a PVC. Returns ErrNotFound if the PVC is
+// not owned by any available driver
+func GetPVCDriver(pvc *v1.PersistentVolumeClaim) (string, error) {
+	for driverName, d := range volDrivers {
+		if d.OwnsPVC(pvc) {
+			return driverName, nil
+		}
+	}
+	return "", &errors.ErrNotFound{
+		ID:   pvc.Name,
+		Type: "VolumeDriver",
+	}
+}
+
 // ClusterPairNotSupported to be used by drivers that don't support pairing
 type ClusterPairNotSupported struct{}
 
@@ -318,7 +332,10 @@ func (c *ClusterDomainsNotSupported) DeactivateClusterDomain(*stork_crd.ClusterD
 type BackupRestoreNotSupported struct{}
 
 // StartBackup returns ErrNotSupported
-func (b *BackupRestoreNotSupported) StartBackup(*stork_crd.ApplicationBackup) ([]*stork_crd.ApplicationBackupVolumeInfo, error) {
+func (b *BackupRestoreNotSupported) StartBackup(
+	*stork_crd.ApplicationBackup,
+	[]*v1.PersistentVolumeClaim,
+) ([]*stork_crd.ApplicationBackupVolumeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
