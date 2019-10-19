@@ -44,7 +44,7 @@ required = [
 
 [[override]]
   name = "github.com/portworx/sched-ops"
-  branch = "master"
+  branch = "kubernetes-1.11"
 
 [[constraint]]
   branch = "master"
