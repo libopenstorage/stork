@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/applicationmanager"
 	"github.com/libopenstorage/stork/pkg/clusterdomains"

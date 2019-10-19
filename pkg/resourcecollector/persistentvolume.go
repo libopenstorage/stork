@@ -43,14 +43,14 @@ func (r *ResourceCollector) pvToBeCollected(
 		}
 
 		// Don't collect PVCs not owned by the driver if collecting for a specific
-		// driver. Else collect PVCs for all supported drivers
+		// driver
 		if !allDrivers && !r.Driver.OwnsPVC(pvc) {
 			return false, nil
-		} else {
-			_, err := volume.GetPVCDriver(pvc)
-			if err != nil {
-				return false, nil
-			}
+		}
+		// Else collect PVCs for all supported drivers
+		_, err = volume.GetPVCDriver(pvc)
+		if err != nil {
+			return false, nil
 		}
 
 		// Also check the labels on the PVC since the PV doesn't inherit the labels
