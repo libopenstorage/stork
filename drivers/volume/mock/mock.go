@@ -8,11 +8,10 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
-	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
@@ -38,6 +37,7 @@ type Driver struct {
 	storkvolume.ClusterDomainsNotSupported
 	storkvolume.BackupRestoreNotSupported
 	storkvolume.CloneNotSupported
+	storkvolume.SnapshotRestoreNotSupported
 	nodes          []*storkvolume.NodeInfo
 	volumes        map[string]*storkvolume.Info
 	pvcs           map[string]*v1.PersistentVolumeClaim
@@ -251,6 +251,11 @@ func (m *Driver) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 	return true
 }
 
+// OwnsPV returns true because it owns all PVC created by tests
+func (m *Driver) OwnsPV(pv *v1.PersistentVolume) bool {
+	return true
+}
+
 // GetSnapshotPlugin Returns nil since snapshot is not supported in the mock driver
 func (m *Driver) GetSnapshotPlugin() snapshotVolume.Plugin {
 	return nil
@@ -265,26 +270,6 @@ func (m *Driver) GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) (
 // GetSnapshotType Not implemented for mock driver
 func (m *Driver) GetSnapshotType(snap *snapv1.VolumeSnapshot) (string, error) {
 	return "", &errors.ErrNotImplemented{}
-}
-
-// CompleteVolumeSnapshotRestore will perform inplace restore
-func (m *Driver) CompleteVolumeSnapshotRestore(snap *stork_crd.VolumeSnapshotRestore) error {
-	return &errors.ErrNotImplemented{}
-}
-
-// StartVolumeSnapshotRestore will prepare volume for restore
-func (m *Driver) StartVolumeSnapshotRestore(*stork_crd.VolumeSnapshotRestore) error {
-	return &errors.ErrNotImplemented{}
-}
-
-// GetVolumeSnapshotRestoreStatus returns snapshot restore status
-func (m *Driver) GetVolumeSnapshotRestoreStatus(*stork_crd.VolumeSnapshotRestore) error {
-	return &errors.ErrNotImplemented{}
-}
-
-// CleanupSnapshotRestoreObjects deletes restore objects if any
-func (m *Driver) CleanupSnapshotRestoreObjects(*stork_crd.VolumeSnapshotRestore) error {
-	return &errors.ErrNotImplemented{}
 }
 
 func init() {
