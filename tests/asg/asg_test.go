@@ -21,7 +21,7 @@ import (
 
 const (
 	scaleTimeout          = 10 * time.Minute
-	nodeDeleteTimeoutMins = 5 * time.Minute
+	nodeDeleteTimeoutMins = 7 * time.Minute
 )
 
 func TestASG(t *testing.T) {
