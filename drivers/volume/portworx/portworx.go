@@ -1606,17 +1606,19 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 			" (" + snap + ")"
 	}
 
-	isSuccess := false
-	for _, alert := range alerts.GetAlert() {
-		if strings.Contains(alert.GetMessage(), grepMsg) {
-			isSuccess = true
-			break
+	t := func() (interface{}, bool, error) {
+		for _, alert := range alerts.GetAlert() {
+			if strings.Contains(alert.GetMessage(), grepMsg) {
+				return "", false, nil
+			}
 		}
+		return "", true, fmt.Errorf("alert not present, retrying")
 	}
-	if isSuccess {
-		return nil
+	_, err = task.DoRetryWithTimeout(t, getNodeTimeout, getNodeRetryInterval)
+	if err != nil {
+		return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
 	}
-	return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
+	return nil
 }
 
 func (d *portworx) getTokenForVolume(name string, params map[string]string) string {

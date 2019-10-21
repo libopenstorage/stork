@@ -2433,6 +2433,10 @@ func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart ti
 			if err != nil {
 				return fmt.Errorf("unable to restore volumesnapshotrestore details %v", err)
 			}
+			err = k8sOps.ValidateVolumeSnapshotRestore(snapRestore.Name, snapRestore.Namespace, DefaultTimeout, DefaultRetryInterval)
+			if err != nil {
+				return err
+			}
 
 		}
 	}
