@@ -804,7 +804,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:1813e6aa809e50d1ea39aefaaf747cced0b059b48031bd1d567a34c36a1080d6"
+  digest = "1:c82087b1bf4d67370f76270098906a58837f125fbb763a2de8bc042f6cd08d6a"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -818,7 +818,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "f8cbc21655b87983ca01c5fc62e36b8445dd5fc8"
+  revision = "2b46f558fbf63385ce6dc205ec8e9fb3887ba79d"
 
 [[projects]]
   branch = "master"
