@@ -455,7 +455,7 @@ func createApp(t *testing.T, testID string) *scheduler.Context {
 	return ctxs[0]
 }
 
-func init() {
+func TestMain(m *testing.M) {
 	flag.IntVar(&snapshotScaleCount,
 		"snapshot-scale-count",
 		10,
@@ -469,4 +469,5 @@ func init() {
 		logrus.Errorf("Setup failed with error: %v", err)
 		os.Exit(1)
 	}
+	os.Exit(m.Run())
 }
