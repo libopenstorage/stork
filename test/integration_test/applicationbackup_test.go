@@ -746,6 +746,10 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	firstBackup, err := createApplicationBackupWithAnnotation(t, appKey+"-backup-sync", appCtx.GetID(), backupLocation)
 	require.NoError(t, err, "Error creating app backups")
 
+	// Wait for backup completion
+	err = waitForAppBackupCompletion(firstBackup.Name, firstBackup.Namespace)
+	require.NoError(t, err, "Application backup %s failed.", firstBackup)
+
 	// Create backup location on second cluster
 	err = dumpRemoteKubeConfig(remoteConfig)
 	require.NoErrorf(t, err, "Unable to write clusterconfig: %v", err)
@@ -787,7 +791,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 		}
 		return "", true, fmt.Errorf("Failed to list app backups on second cluster")
 	}
-	_, err = task.DoRetryWithTimeout(listBackupsTask, defaultWaitTimeout, defaultWaitInterval)
+	_, err = task.DoRetryWithTimeout(listBackupsTask, applicationBackupSyncRetryTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error listing application backups")
 
 	backupToRestore := getBackupFromListWithAnnotations(allAppBackups, firstBackup.Annotations[backupSyncAnnotation])
@@ -857,6 +861,23 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "All backups not delete backup: %v.", err)
 
 	destroyAndWait(t, []*scheduler.Context{appCtx})
+}
+
+func waitForAppBackupCompletion(name, namespace string) error {
+	getAppBackup := func() (interface{}, bool, error) {
+		appBackup, err := k8s.Instance().GetApplicationBackup(name, namespace)
+		if err != nil {
+			return "", false, err
+		}
+
+		if appBackup.Status.Status != storkv1.ApplicationBackupStatusSuccessful {
+			return "", true, fmt.Errorf("App backups %s in %s not complete yet.Retrying", name, namespace)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(getAppBackup, applicationBackupSyncRetryTimeout, defaultWaitInterval)
+	return err
+
 }
 
 func deleteAllBackupsNamespace(namespace string) error {
