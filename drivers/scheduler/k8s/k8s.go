@@ -648,12 +648,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 			}
 			if pvcAnnotationSupported {
 				apParams.AutopilotRuleParameters.MatchLabels = pvc.Labels
-				capacity, ok := pvc.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)]
-				if !ok {
-					return nil, fmt.Errorf("failed to get storage resource for pvc: %v", pvc.Name)
-				}
-
-				apParams.AutopilotRuleParameters.PVCSize = capacity.Value()
 				apObject, err := k.createAutopilotObject(apParams)
 				if err != nil {
 					return nil, &scheduler.ErrFailedToScheduleApp{
@@ -1066,13 +1060,6 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 func (k *K8s) createAutopilotObject(apParams *scheduler.AutopilotParameters) (*ap_api.AutopilotRule, error) {
 	obj := &ap_api.AutopilotRule{}
 	apRuleParams := apParams.AutopilotRuleParameters
-
-	if apRuleParams.PVCSize == 0 ||
-		apRuleParams.PVCWorkloadSize == 0 ||
-		apRuleParams.PVCPercentageUsage == 0 ||
-		apRuleParams.PVCPercentageScale == 0 {
-		return nil, fmt.Errorf("one of the autopilot rule parameter is 0")
-	}
 	obj.Name = apParams.Name
 	obj.Namespace = apParams.Namespace
 	obj.Labels = map[string]string{"creator": "torpedo"}
@@ -1080,27 +1067,20 @@ func (k *K8s) createAutopilotObject(apParams *scheduler.AutopilotParameters) (*a
 	obj.Spec.ActionsCoolDownPeriod = apRuleParams.ActionsCoolDownPeriod
 	obj.Spec.Selector.LabelSelector.MatchLabels = apRuleParams.MatchLabels //map[string]string{"name": "pgbench-data"}
 	obj.Spec.NamespaceSelector.LabelSelector.MatchLabels = map[string]string{"creator": "torpedo"}
-
-	exprVolumeUsage := &ap_api.LabelSelectorRequirement{
-		Key:      "100 * (px_volume_usage_bytes / px_volume_capacity_bytes)",
-		Operator: "Gt",
-		Values:   []string{strconv.FormatInt(apRuleParams.PVCPercentageUsage, 10)},
-	}
-	obj.Spec.Conditions.Expressions = append(obj.Spec.Conditions.Expressions, exprVolumeUsage)
-
-	actions := &ap_api.RuleAction{
-		Name:   "openstorage.io.action.volume/resize",
-		Params: map[string]string{"scalepercentage": strconv.FormatInt(apRuleParams.PVCPercentageScale, 10)},
-	}
-	obj.Spec.Actions = append(obj.Spec.Actions, actions)
-
-	if apRuleParams.PVCMaximumSize != 0 {
-		exprMaxVolumeSize := &ap_api.LabelSelectorRequirement{
-			Key:      "px_volume_capacity_bytes / 1000000000",
-			Operator: "Lt",
-			Values:   []string{strconv.FormatInt(apRuleParams.PVCMaximumSize, 10)},
+	for _, ruleExpression := range apRuleParams.RuleConditionExpressions {
+		exprVolumeUsage := &ap_api.LabelSelectorRequirement{
+			Key:      ruleExpression.Key,
+			Operator: ap_api.LabelSelectorOperator(ruleExpression.Operator),
+			Values:   ruleExpression.Values,
 		}
-		obj.Spec.Conditions.Expressions = append(obj.Spec.Conditions.Expressions, exprMaxVolumeSize)
+		obj.Spec.Conditions.Expressions = append(obj.Spec.Conditions.Expressions, exprVolumeUsage)
+	}
+	for _, ruleAction := range apRuleParams.RuleActions {
+		actions := &ap_api.RuleAction{
+			Name:   ruleAction.Name,
+			Params: ruleAction.Params,
+		}
+		obj.Spec.Actions = append(obj.Spec.Actions, actions)
 	}
 
 	logrus.Infof("Using Autopilot Object: %+v\n", obj)
@@ -1615,12 +1595,9 @@ func (k *K8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 					pvcAnnotationSupported, _ = strconv.ParseBool(pvcAnnotation)
 				}
 				if pvcAnnotationSupported {
-					expectedPVCSize, err := calculatePVCSize(apParams)
-					if err != nil {
-						return err
-					}
-					logrus.Infof("[%v] expecting PVC size: %+v\n", ctx.App.Key, expectedPVCSize)
+					expectedPVCSize := apParams.AutopilotRuleParameters.ExpectedPVCSize
 
+					logrus.Infof("[%v] expecting PVC size: %+v\n", ctx.App.Key, expectedPVCSize)
 					if err := k8sOps.ValidatePersistentVolumeClaimSize(obj, expectedPVCSize, timeout, retryInterval); err != nil {
 						return &scheduler.ErrFailedToValidateStorage{
 							App:   ctx.App,
@@ -1698,6 +1675,32 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			pvcAnnotationSupported := false
+			apParams := ctx.Options.AutopilotParameters
+
+			pvc, err := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get PVC: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			if apParams != nil && apParams.Enabled {
+				if pvcAnnotation, ok := pvc.Annotations[autopilotResizeAnnotationKey]; ok {
+					pvcAnnotationSupported, _ = strconv.ParseBool(pvcAnnotation)
+				}
+				if pvcAnnotationSupported {
+					if err := k8sOps.DeleteAutopilotRule(apParams.Name); err != nil {
+						if !errors.IsNotFound(err) {
+							return nil, &scheduler.ErrFailedToDestroyAutopilotRule{
+								Name:  apParams.Name,
+								Cause: fmt.Sprintf("Failed to destroy an autopilot rule: %v. Err: %v", obj.Name, err),
+							}
+						}
+					}
+				}
+			}
 			vols = append(vols, &volume.Volume{
 				ID:        string(obj.UID),
 				Name:      obj.Name,
@@ -2572,30 +2575,6 @@ func (k *K8s) destroyBackupObjects(
 		logrus.Infof("[%v] Destroyed ApplicationClone: %v", app.Key, obj.Name)
 	}
 	return nil
-}
-
-func calculatePVCSize(apParam *scheduler.AutopilotParameters) (int64, error) {
-	apRuleParams := apParam.AutopilotRuleParameters
-	if apRuleParams.PVCWorkloadSize == 0 || apRuleParams.PVCPercentageUsage == 0 || apRuleParams.PVCPercentageScale == 0 {
-		return 0, fmt.Errorf("one of the Autopilot parameter is empty")
-	}
-
-	vs := apRuleParams.PVCSize
-	vws := apRuleParams.PVCWorkloadSize
-	vpu := apRuleParams.PVCPercentageUsage
-	vps := apRuleParams.PVCPercentageScale
-	vms := apRuleParams.PVCMaximumSize
-
-	calculatedPVCSize := vs
-	for calculatedPVCSize < vws || vpu < vws*100/calculatedPVCSize {
-		calculatedPVCSize = int64(float64(calculatedPVCSize) * (float64(vps)/100 + 1))
-		if calculatedPVCSize >= vms && vms > 0 {
-			calculatedPVCSize = vms
-			break
-		}
-	}
-	logrus.Infof("calculatedPVCSize: %v\n", calculatedPVCSize)
-	return calculatedPVCSize, nil
 }
 
 func insertLineBreak(note string) string {

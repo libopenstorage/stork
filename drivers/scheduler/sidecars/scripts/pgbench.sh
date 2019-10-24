@@ -5,6 +5,10 @@ if [ -z "${SIZE}" ]; then
     exit 1
 fi
 
+if [ -z "${DELAY}" ]; then
+    DELAY=0
+fi
+
 pgbench_folder=/pgbench
 pgbench_state_file=${pgbench_folder}/pgbench_state.file
 
@@ -28,6 +32,8 @@ do
             if [ $? -ne 0 ]; then exit 1; fi
             pgbench -h ${PG_HOST} -U ${PG_USER} -i -s 10 ${database}
             if [ $? -ne 0 ]; then exit 1; fi
+            echo "Sleeping for ${DELAY} seconds"
+            sleep $DELAY
         else
             touch $pgbench_state_file
         fi
