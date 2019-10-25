@@ -21,6 +21,7 @@ var (
 	labelSelectorOpLt          = "Lt"
 	specActionName             = "openstorage.io.action.volume/resize"
 	ruleActionsScalePercentage = "scalepercentage"
+	ruleActionsMaxSize         = "maxsize"
 )
 
 var (
@@ -74,8 +75,31 @@ var ruleResizeBy50IfPvcCapacityLessThan10 = scheduler.AutopilotRuleParameters{
 	ExpectedPVCSize: 12079595520,
 }
 
+var ruleResizeBy50UntilPvcMaxSize20 = scheduler.AutopilotRuleParameters{
+	// Resize PVC by 50% until volume size is 20Gb
+	ActionsCoolDownPeriod: defaultCoolDownPeriod,
+	RuleConditionExpressions: []scheduler.AutopilotRuleConditionExpressions{
+		{
+			Key:      pxVolumeUsagePercent,
+			Operator: labelSelectorOpGt,
+			Values:   []string{"50"},
+		},
+	},
+	RuleActions: []scheduler.AutopilotRuleActions{
+		{
+			Name: specActionName,
+			Params: map[string]string{
+				ruleActionsScalePercentage: "50",
+				ruleActionsMaxSize:         "20Gi",
+			},
+		},
+	},
+	ExpectedPVCSize: 21474836480,
+}
+
 var autopilotruleBasicTestCases = []scheduler.AutopilotRuleParameters{
 	ruleResizeBy50IfPvcUsageMoreThan50,
+	ruleResizeBy50UntilPvcMaxSize20,
 }
 
 var autopilotruleScaleTestCases = []scheduler.AutopilotRuleParameters{
@@ -157,6 +181,8 @@ var _ = Describe(fmt.Sprintf("{%sWaitForWorkload}", testNameSuite), func() {
 					TearDownContext(ctx, opts)
 				}
 			})
+
+			contexts = nil
 		}
 	})
 })
