@@ -205,6 +205,9 @@ spec:
       maxUnavailable: 1
     type: RollingUpdate
   replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
   template:
     metadata:
       labels:
@@ -212,9 +215,6 @@ spec:
         version: "1"
     spec:
       schedulerName: stork
-      selector:
-        matchLabels:
-          name: stork-scheduler
       containers:
       - image: mysql:5.6
         name: mysql
