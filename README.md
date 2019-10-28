@@ -194,7 +194,7 @@ provisioner: kubernetes.io/portworx-volume
 parameters:
    repl: "2"
 ---
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql

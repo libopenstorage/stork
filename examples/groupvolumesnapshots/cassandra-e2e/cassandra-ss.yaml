@@ -1,6 +1,6 @@
 ##### Portworx storage class
 kind: StorageClass
-apiVersion: storage.k8s.io/v1beta1
+apiVersion: storage.k8s.io/v1
 metadata:
     name: portworx-repl2
 provisioner: kubernetes.io/portworx-volume
@@ -22,7 +22,7 @@ spec:
 
 ---
 
-apiVersion: "apps/v1beta1"
+apiVersion: "apps/v1"
 kind: StatefulSet
 metadata:
   name: cassandra
