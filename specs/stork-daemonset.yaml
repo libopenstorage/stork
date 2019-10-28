@@ -93,6 +93,9 @@ metadata:
   name: stork
   namespace: kube-system
 spec:
+  selector:
+    matchLabels:
+      name: stork
   template:
     metadata:
       annotations:
