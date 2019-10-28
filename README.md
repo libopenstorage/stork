@@ -212,6 +212,9 @@ spec:
         version: "1"
     spec:
       schedulerName: stork
+      selector:
+        matchLabels:
+          name: stork-scheduler
       containers:
       - image: mysql:5.6
         name: mysql
