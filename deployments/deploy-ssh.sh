@@ -13,7 +13,7 @@ if [ -z "${SCHEDULER}" ]; then
 fi
 
 if [ -z "${LOGLEVEL}" ]; then
-	LOGLEVEL="debug"
+    LOGLEVEL="debug"
 fi
 
 if [ -z "${CHAOS_LEVEL}" ]; then
@@ -41,23 +41,23 @@ if [ -n "$FOCUS_TESTS" ]; then
     FOCUS_ARG="--focus={$focusRegex}"
 fi
 
-UPGRADE_VERSION_ARG=""
-if [ -n "${STORAGE_UPGRADE_VERSION}" ]; then
-    UPGRADE_VERSION_ARG="--storage-driver-upgrade-version=$STORAGE_UPGRADE_VERSION"
+UPGRADE_ENDPOINT_URL_ARG=""
+if [ -n "${UPGRADE_ENDPOINT_URL}" ]; then
+    UPGRADE_ENDPOINT_URL_ARG="--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL"
 fi
 
-UPGRADE_BASE_VERSION_ARG=""
-if [ -n "${STORAGE_BASE_VERSION}" ]; then
-    UPGRADE_BASE_VERSION_ARG="--storage-driver-base-version=$STORAGE_BASE_VERSION"
+UPGRADE_ENDPOINT_VERSION_ARG=""
+if [ -n "${UPGRADE_ENDPOINT_VERSION}" ]; then
+    UPGRADE_ENDPOINT_VERSION_ARG="--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION"
 fi
 
 if [ -n "${PROVISIONER}" ]; then
-	PROVISIONER="$PROVISIONER"
+    PROVISIONER="$PROVISIONER"
 fi
 
 CONFIGMAP=""
 if [ -n "${CONFIG_MAP}" ]; then
-	CONFIGMAP="${CONFIG_MAP}"
+    CONFIGMAP="${CONFIG_MAP}"
 fi
 
 if [ -z "${TORPEDO_IMG}" ]; then
@@ -79,6 +79,21 @@ if [ -z "$STORAGENODE_RECOVERY_TIMEOUT" ]; then
     STORAGENODE_RECOVERY_TIMEOUT="35m0s"
     echo "Using default storage node recovery timeout of ${STORAGENODE_RECOVERY_TIMEOUT}"
 fi
+
+if [ -z "$TEST_SUITE" ]; then
+    TEST_SUITE='"bin/asg.test",
+            "bin/autopilot-capacity.test",
+            "bin/basic.test",
+            "bin/reboot.test",
+            "bin/upgrade.test",
+            "bin/drive_failure.test",
+            "bin/volume_ops.test",
+            "bin/sched.test",
+            "bin/node_decommission.test",'
+else
+  TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
+fi
+echo "Using list of test suite(s): ${TEST_SUITE}"
 
 
 kubectl delete pod torpedo
@@ -241,15 +256,7 @@ spec:
             "$VERBOSE",
             "$FOCUS_ARG",
             "$SKIP_ARG",
-            "bin/asg.test",
-            "bin/autopilot-capacity.test",
-            "bin/basic.test",
-            "bin/reboot.test",
-            "bin/upgrade.test",
-            "bin/drive_failure.test",
-            "bin/volume_ops.test",
-            "bin/sched.test",
-            "bin/node_decommission.test",
+            $TEST_SUITE
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
@@ -261,10 +268,10 @@ spec:
             "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
             "--chaos-level", "$CHAOS_LEVEL",
             "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
-			 "--provisioner", "$PROVISIONER",
-			 "--config-map", "$CONFIGMAP",
-            "$UPGRADE_VERSION_ARG",
-            "$UPGRADE_BASE_VERSION_ARG" ]
+            "--provisioner", "$PROVISIONER",
+            "--config-map", "$CONFIGMAP",
+            "$UPGRADE_ENDPOINT_URL_ARG",
+            "$UPGRADE_ENDPOINT_VERSION_ARG" ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:

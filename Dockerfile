@@ -1,11 +1,11 @@
-FROM golang:1.9.2-alpine AS build
+FROM golang:1.12.10-alpine AS build
 LABEL maintainer="harsh@portworx.com"
 
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install setup dependencies
 RUN apk update && \
-    apk add git && \
+    apk add git gcc  musl-dev && \
     apk add make && \
     apk add openssh-client && \
     go get github.com/onsi/ginkgo/ginkgo && \
@@ -32,6 +32,9 @@ RUN mkdir bin && \
 FROM alpine
 
 RUN apk add ca-certificates 
+
+# Install kubectl from Docker Hub.
+COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
 
 # Copy scripts into container
 WORKDIR /torpedo

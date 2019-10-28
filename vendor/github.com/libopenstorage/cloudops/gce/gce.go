@@ -112,7 +112,7 @@ func NewClient() (cloudops.Ops, error) {
 	), nil
 }
 
-func (s *gceOps) Name() string { return "gce" }
+func (s *gceOps) Name() string { return string(cloudops.GCE) }
 
 func (s *gceOps) InstanceID() string { return s.inst.name }
 
