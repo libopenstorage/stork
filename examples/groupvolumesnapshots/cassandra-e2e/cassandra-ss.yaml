@@ -29,6 +29,9 @@ metadata:
 spec:
   serviceName: cassandra
   replicas: 3
+  selector:
+    matchLabels:
+      app: cassandra
   template:
     metadata:
       labels:
