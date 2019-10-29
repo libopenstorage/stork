@@ -90,9 +90,6 @@ var (
 func InitInstance() {
 	var err error
 	var token string
-	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String())
-	expect(err).NotTo(haveOccurred())
-
 	if Inst().ConfigMap != "" {
 		logrus.Infof("Using Config Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
@@ -101,6 +98,10 @@ func InitInstance() {
 	} else {
 		token = ""
 	}
+
+	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String(), Inst().ConfigMap)
+	expect(err).NotTo(haveOccurred())
+
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 
@@ -235,7 +236,6 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
-			ConfigMap:          Inst().ConfigMap,
 		})
 		expect(err).NotTo(haveOccurred())
 		expect(contexts).NotTo(beEmpty())

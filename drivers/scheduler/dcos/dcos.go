@@ -32,7 +32,7 @@ type dcos struct {
 	volDriverName string
 }
 
-func (d *dcos) Init(specDir, volDriver, nodeDriver string) error {
+func (d *dcos) Init(specDir, volDriver, nodeDriver, secretConfigMap string) error {
 	privateAgents, err := MesosClient().GetPrivateAgentNodes()
 	if err != nil {
 		return err
