@@ -83,9 +83,10 @@ var (
 
 //K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory    *spec.Factory
-	NodeDriverName string
-	VolDriverName  string
+	SpecFactory         *spec.Factory
+	NodeDriverName      string
+	VolDriverName       string
+	secretConfigMapName string
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -114,7 +115,7 @@ func (k *K8s) String() string {
 }
 
 //Init Initialize the driver
-func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
+func (k *K8s) Init(specDir, volDriverName, nodeDriverName, secretConfigMap string) error {
 	nodes, err := k8s_ops.Instance().GetNodes()
 	if err != nil {
 		return err
@@ -137,6 +138,8 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 
 	k.NodeDriverName = nodeDriverName
 	k.VolDriverName = volDriverName
+
+	k.secretConfigMapName = secretConfigMap
 	return nil
 }
 
@@ -362,7 +365,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
-		specObjects, err := k.CreateSpecObjects(app, appNamespace, options.ConfigMap)
+		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
 		if err != nil {
 			return nil, err
 		}
@@ -383,7 +386,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 }
 
 // CreateSpecObjects Create application
-func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, configMapName string) ([]interface{}, error) {
+func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) ([]interface{}, error) {
 	var specObjects []interface{}
 	ns, err := k.createNamespace(app, namespace)
 	if err != nil {
@@ -428,7 +431,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, configMapNa
 
 	for _, spec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createStorageObject(spec, ns, app, configMapName)
+			obj, err := k.createStorageObject(spec, ns, app, options)
 			if err != nil {
 				return nil, true, err
 			}
@@ -447,7 +450,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, configMapNa
 
 	for _, spec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createCoreObject(spec, ns, app, configMapName)
+			obj, err := k.createCoreObject(spec, ns, app, options)
 			if err != nil {
 				return nil, true, err
 			}
@@ -503,7 +506,7 @@ func (k *K8s) AddTasks(ctx *scheduler.Context, options scheduler.ScheduleOptions
 		apps = append(apps, spec)
 	}
 	for _, app := range apps {
-		objects, err := k.CreateSpecObjects(app, appNamespace, options.ConfigMap)
+		objects, err := k.CreateSpecObjects(app, appNamespace, options)
 		if err != nil {
 			return err
 		}
@@ -561,10 +564,11 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespac
 	return nsObj.(*v1.Namespace), nil
 }
 
-func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec, configMapName string) (interface{}, error) {
+func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec, options scheduler.ScheduleOptions) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 
 	// Add security annotations if running with auth-enabled
+	configMapName := k.secretConfigMapName
 	if configMapName != "" {
 		configMap, err := k8sOps.GetConfigMap(configMapName, "default")
 		if err != nil {
@@ -756,7 +760,7 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *v1.ConfigMap) e
 	return nil
 }
 
-func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec, configMapName string) (interface{}, error) {
+func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.AppSpec, options scheduler.ScheduleOptions) (interface{}, error) {
 	k8sOps := k8s_ops.Instance()
 	if obj, ok := spec.(*apps_api.Deployment); ok {
 		obj.Namespace = ns.Name
@@ -780,6 +784,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 		// Add security annotations if running with auth-enabled
+		configMapName := k.secretConfigMapName
 		if configMapName != "" {
 			configMap, err := k8sOps.GetConfigMap(configMapName, "default")
 			if err != nil {
