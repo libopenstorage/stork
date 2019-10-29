@@ -85,9 +85,10 @@ var (
 
 //K8s  The kubernetes structure
 type K8s struct {
-	SpecFactory    *spec.Factory
-	NodeDriverName string
-	VolDriverName  string
+	SpecFactory         *spec.Factory
+	NodeDriverName      string
+	VolDriverName       string
+	secretConfigMapName string
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -116,7 +117,7 @@ func (k *K8s) String() string {
 }
 
 //Init Initialize the driver
-func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
+func (k *K8s) Init(specDir, volDriverName, nodeDriverName, secretConfigMap string) error {
 	nodes, err := k8s_ops.Instance().GetNodes()
 	if err != nil {
 		return err
@@ -139,6 +140,8 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName string) error {
 
 	k.NodeDriverName = nodeDriverName
 	k.VolDriverName = volDriverName
+
+	k.secretConfigMapName = secretConfigMap
 	return nil
 }
 
@@ -574,7 +577,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	k8sOps := k8s_ops.Instance()
 
 	// Add security annotations if running with auth-enabled
-	configMapName := options.ConfigMap
+	configMapName := k.secretConfigMapName
 	if configMapName != "" {
 		configMap, err := k8sOps.GetConfigMap(configMapName, "default")
 		if err != nil {
@@ -823,7 +826,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 	} else if obj, ok := spec.(*apps_api.StatefulSet); ok {
 		// Add security annotations if running with auth-enabled
-		configMapName := options.ConfigMap
+		configMapName := k.secretConfigMapName
 		if configMapName != "" {
 			configMap, err := k8sOps.GetConfigMap(configMapName, "default")
 			if err != nil {

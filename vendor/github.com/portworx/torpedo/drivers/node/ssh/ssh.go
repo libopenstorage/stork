@@ -195,7 +195,7 @@ func (s *SSH) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	if useSSH() {
 		cmd = "hostname"
 	} else {
-		cmd = "cat /etc/hostname"
+		cmd = "date"
 	}
 
 	if _, err = s.doCmd(n, options, cmd, false); err != nil {
