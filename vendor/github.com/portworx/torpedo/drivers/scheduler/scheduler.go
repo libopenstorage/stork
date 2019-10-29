@@ -58,7 +58,7 @@ type Driver interface {
 	spec.Parser
 
 	// Init initializes the scheduler driver
-	Init(string, string, string) error
+	Init(string, string, string, string) error
 
 	// String returns the string name of this driver.
 	String() string

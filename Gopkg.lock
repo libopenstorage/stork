@@ -804,7 +804,11 @@
 
 [[projects]]
   branch = "master"
+<<<<<<< HEAD
   digest = "1:1813e6aa809e50d1ea39aefaaf747cced0b059b48031bd1d567a34c36a1080d6"
+=======
+  digest = "1:87072682515a67a49b02de7a626fdd026d3c8ab6d2fa42cc7f8072d1142ff64a"
+>>>>>>> 0edbe2c... Vendor update for torpedo.
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -818,7 +822,11 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
+<<<<<<< HEAD
   revision = "f8cbc21655b87983ca01c5fc62e36b8445dd5fc8"
+=======
+  revision = "cc0f245ffe7c2f472d0b92d1e1f92bb6094e94ed"
+>>>>>>> 0edbe2c... Vendor update for torpedo.
 
 [[projects]]
   branch = "master"
