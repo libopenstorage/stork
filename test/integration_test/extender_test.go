@@ -19,12 +19,12 @@ const (
 )
 
 func TestExtender(t *testing.T) {
-	t.Run("pvcOwnershipTest", pvcOwnershipTest)
+	/*t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("singlePVCTest", singlePVCTest)
 	t.Run("statefulsetTest", statefulsetTest)
 	t.Run("multiplePVCTest", multiplePVCTest)
-	t.Run("driverNodeErrorTest", driverNodeErrorTest)
+	t.Run("driverNodeErrorTest", driverNodeErrorTest)*/
 }
 
 func noPVCTest(t *testing.T) {

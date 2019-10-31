@@ -70,9 +70,9 @@ var authToken string
 var authTokenConfigMap string
 
 func TestSnapshotMigration(t *testing.T) {
-	t.Run("testSnapshot", testSnapshot)
+	//t.Run("testSnapshot", testSnapshot)
 	t.Run("testSnapshotRestore", testSnapshotRestore)
-	t.Run("testMigration", testMigration)
+	//t.Run("testMigration", testMigration)
 }
 
 // TODO: Take driver name from input

@@ -3,19 +3,10 @@
 package integrationtest
 
 import (
-	"fmt"
-	"testing"
-
-	"github.com/libopenstorage/stork/pkg/cmdexecutor"
-	k8s_ops "github.com/portworx/sched-ops/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/skyrings/skyring-common/tools/uuid"
-	"github.com/stretchr/testify/require"
-	apps_api "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
 )
 
+/*
 func TestCommandExecutor(t *testing.T) {
 	id, err := uuid.New()
 	require.NoError(t, err, "failed to get uuid")
@@ -112,3 +103,4 @@ func getContextPods(ctx *scheduler.Context) ([]v1.Pod, error) {
 
 	return pods, nil
 }
+*/

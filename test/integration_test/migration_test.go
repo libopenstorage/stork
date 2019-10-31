@@ -30,7 +30,7 @@ func testMigration(t *testing.T) {
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
 
-	t.Run("deploymentTest", deploymentMigrationTest)
+	/*t.Run("deploymentTest", deploymentMigrationTest)
 	t.Run("statefulsetTest", statefulsetMigrationTest)
 	t.Run("statefulsetStartAppFalseTest", statefulsetMigrationStartAppFalseTest)
 	t.Run("statefulsetRuleTest", statefulsetMigrationRuleTest)
@@ -45,7 +45,7 @@ func testMigration(t *testing.T) {
 	t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
 	t.Run("monthlyScheduleTest", migrationMonthlyScheduleTest)
 	t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
-	t.Run("scaleTest", migrationScaleTest)
+	t.Run("scaleTest", migrationScaleTest)*/
 }
 
 func triggerMigrationTest(

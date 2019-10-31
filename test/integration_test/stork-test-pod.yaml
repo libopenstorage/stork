@@ -55,7 +55,7 @@ spec:
     - -snapshot-scale-count=10
     - -migration-scale-count=10
     imagePullPolicy: Always
-    image: openstorage/stork_test:latest
+    image: ramsuradkar/ramsuradkar:test
     securityContext:
       privileged: false
     volumeMounts:
