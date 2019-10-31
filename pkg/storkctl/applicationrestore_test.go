@@ -26,8 +26,9 @@ func createApplicationRestoreAndVerify(
 	namespace string,
 	namespaces []string,
 	backupLocation string,
+	backupName string,
 ) {
-	cmdArgs := []string{"create", "restores", "-n", namespace, name, "--backupLocation", backupLocation}
+	cmdArgs := []string{"create", "apprestores", "-n", namespace, name, "--backupLocation", backupLocation, "--backupName", backupName}
 
 	expected := "ApplicationRestore " + name + " started successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -38,16 +39,17 @@ func createApplicationRestoreAndVerify(
 	require.Equal(t, name, restore.Name, "ApplicationRestore name mismatch")
 	require.Equal(t, namespace, restore.Namespace, "ApplicationRestore namespace mismatch")
 	require.Equal(t, backupLocation, restore.Spec.BackupLocation, "ApplicationRestore backupLocation mismatch")
+	require.Equal(t, backupName, restore.Spec.BackupName, "ApplicationRestore backupName mismatch")
 }
 
 func TestGetApplicationRestoresOneApplicationRestore(t *testing.T) {
 	defer resetTest()
-	createApplicationRestoreAndVerify(t, "getrestoretest", "test", []string{"namespace1"}, "backuplocation")
+	createApplicationRestoreAndVerify(t, "getrestoretest", "test", []string{"namespace1"}, "backuplocation", "backupname")
 
 	expected := "NAME             STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
 		"getrestoretest                       0/0       0                     \n"
 
-	cmdArgs := []string{"get", "restores", "-n", "test"}
+	cmdArgs := []string{"get", "apprestores", "-n", "test"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -56,30 +58,30 @@ func TestGetApplicationRestoresMultiple(t *testing.T) {
 	_, err := k8s.Instance().CreateNamespace("default", nil)
 	require.NoError(t, err, "Error creating default namespace")
 
-	createApplicationRestoreAndVerify(t, "getrestoretest1", "default", []string{"namespace1"}, "backuplocation")
-	createApplicationRestoreAndVerify(t, "getrestoretest2", "default", []string{"namespace1"}, "backuplocation")
+	createApplicationRestoreAndVerify(t, "getrestoretest1", "default", []string{"namespace1"}, "backuplocation", "backupname")
+	createApplicationRestoreAndVerify(t, "getrestoretest2", "default", []string{"namespace1"}, "backuplocation", "backupname")
 
 	expected := "NAME              STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
 		"getrestoretest1                       0/0       0                     \n" +
 		"getrestoretest2                       0/0       0                     \n"
 
-	cmdArgs := []string{"get", "restores", "getrestoretest1", "getrestoretest2"}
+	cmdArgs := []string{"get", "apprestores", "getrestoretest1", "getrestoretest2"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Should get all restores if no name given
-	cmdArgs = []string{"get", "restores"}
+	cmdArgs = []string{"get", "apprestores"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	expected = "NAME              STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
 		"getrestoretest1                       0/0       0                     \n"
 	// Should get only one restore if name given
-	cmdArgs = []string{"get", "restores", "getrestoretest1"}
+	cmdArgs = []string{"get", "apprestores", "getrestoretest1"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	_, err = k8s.Instance().CreateNamespace("ns1", nil)
 	require.NoError(t, err, "Error creating ns1 namespace")
-	createApplicationRestoreAndVerify(t, "getrestoretest21", "ns1", []string{"namespace1"}, "backuplocation")
-	cmdArgs = []string{"get", "restores", "--all-namespaces"}
+	createApplicationRestoreAndVerify(t, "getrestoretest21", "ns1", []string{"namespace1"}, "backuplocation", "backupname")
+	cmdArgs = []string{"get", "apprestores", "--all-namespaces"}
 	expected = "NAMESPACE   NAME               STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
 		"default     getrestoretest1                        0/0       0                     \n" +
 		"default     getrestoretest2                        0/0       0                     \n" +
@@ -89,7 +91,7 @@ func TestGetApplicationRestoresMultiple(t *testing.T) {
 
 func TestGetApplicationRestoresWithStatusAndProgress(t *testing.T) {
 	defer resetTest()
-	createApplicationRestoreAndVerify(t, "getrestorestatustest", "default", []string{"namespace1"}, "backuplocation")
+	createApplicationRestoreAndVerify(t, "getrestorestatustest", "default", []string{"namespace1"}, "backuplocation", "backupname")
 	restore, err := k8s.Instance().GetApplicationRestore("getrestorestatustest", "default")
 	require.NoError(t, err, "Error getting restore")
 
@@ -104,12 +106,12 @@ func TestGetApplicationRestoresWithStatusAndProgress(t *testing.T) {
 
 	expected := "NAME                   STAGE     STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED\n" +
 		"getrestorestatustest   Final     Successful   0/0       0           " + toTimeString(restore.CreationTimestamp.Time) + "   5m0s\n"
-	cmdArgs := []string{"get", "restores", "getrestorestatustest"}
+	cmdArgs := []string{"get", "apprestores", "getrestorestatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 func TestCreateApplicationRestoresNoName(t *testing.T) {
-	cmdArgs := []string{"create", "restores"}
+	cmdArgs := []string{"create", "apprestores"}
 
 	expected := "error: exactly one name needs to be provided for applicationrestore name"
 	testCommon(t, cmdArgs, nil, expected, true)
@@ -117,20 +119,31 @@ func TestCreateApplicationRestoresNoName(t *testing.T) {
 
 func TestCreateApplicationRestores(t *testing.T) {
 	defer resetTest()
-	createApplicationRestoreAndVerify(t, "createrestore", "default", []string{"namespace1"}, "backuplocation")
+	createApplicationRestoreAndVerify(t, "createrestore", "default", []string{"namespace1"}, "backuplocation", "backupname")
+}
+
+func TestCreateApplicationRestoresMissingParameters(t *testing.T) {
+	defer resetTest()
+	cmdArgs := []string{"create", "apprestores", "createrestore", "--backupName", "backupname"}
+	expected := "error: need to provide BackupLocation to use for restore"
+	testCommon(t, cmdArgs, nil, expected, true)
+
+	cmdArgs = []string{"create", "apprestores", "createrestore", "--backupLocation", "backuplocation"}
+	expected = "error: need to provide BackupName to restore"
+	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestCreateDuplicateApplicationRestores(t *testing.T) {
 	defer resetTest()
-	createApplicationRestoreAndVerify(t, "createrestore", "default", []string{"namespace1"}, "backuplocation")
-	cmdArgs := []string{"create", "restores", "createrestore", "--backupLocation", "backuplocation"}
+	createApplicationRestoreAndVerify(t, "createrestore", "default", []string{"namespace1"}, "backuplocation", "backupname")
+	cmdArgs := []string{"create", "apprestores", "createrestore", "--backupLocation", "backuplocation", "--backupName", "backupname"}
 
 	expected := "Error from server (AlreadyExists): applicationrestores.stork.libopenstorage.org \"createrestore\" already exists"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestDeleteApplicationRestoresNoApplicationRestoreName(t *testing.T) {
-	cmdArgs := []string{"delete", "restores"}
+	cmdArgs := []string{"delete", "apprestores"}
 
 	var restoreList storkv1.ApplicationRestoreList
 	expected := "error: at least one argument needs to be provided for applicationrestore name"
@@ -139,26 +152,26 @@ func TestDeleteApplicationRestoresNoApplicationRestoreName(t *testing.T) {
 
 func TestDeleteApplicationRestores(t *testing.T) {
 	defer resetTest()
-	createApplicationRestoreAndVerify(t, "deleterestore", "default", []string{"namespace1"}, "backuplocation")
+	createApplicationRestoreAndVerify(t, "deleterestore", "default", []string{"namespace1"}, "backuplocation", "backupname")
 
-	cmdArgs := []string{"delete", "restores", "deleterestore"}
+	cmdArgs := []string{"delete", "apprestores", "deleterestore"}
 	expected := "ApplicationRestore deleterestore deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	cmdArgs = []string{"delete", "restores", "deleterestore"}
+	cmdArgs = []string{"delete", "apprestores", "deleterestore"}
 	expected = "Error from server (NotFound): applicationrestores.stork.libopenstorage.org \"deleterestore\" not found"
 	testCommon(t, cmdArgs, nil, expected, true)
 
-	createApplicationRestoreAndVerify(t, "deleterestore1", "default", []string{"namespace1"}, "backuplocation")
-	createApplicationRestoreAndVerify(t, "deleterestore2", "default", []string{"namespace1"}, "backuplocation")
+	createApplicationRestoreAndVerify(t, "deleterestore1", "default", []string{"namespace1"}, "backuplocation", "backupname1")
+	createApplicationRestoreAndVerify(t, "deleterestore2", "default", []string{"namespace1"}, "backuplocation", "backupname2")
 
-	cmdArgs = []string{"delete", "restores", "deleterestore1", "deleterestore2"}
+	cmdArgs = []string{"delete", "apprestores", "deleterestore1", "deleterestore2"}
 	expected = "ApplicationRestore deleterestore1 deleted successfully\n"
 	expected += "ApplicationRestore deleterestore2 deleted successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	createApplicationRestoreAndVerify(t, "deleterestore1", "default", []string{"namespace1"}, "backuplocation")
-	createApplicationRestoreAndVerify(t, "deleterestore2", "default", []string{"namespace1"}, "backuplocation")
+	createApplicationRestoreAndVerify(t, "deleterestore1", "default", []string{"namespace1"}, "backuplocation", "backupname1")
+	createApplicationRestoreAndVerify(t, "deleterestore2", "default", []string{"namespace1"}, "backuplocation", "backupname2")
 }
 
 func TestCreateApplicationRestoreWaitSuccess(t *testing.T) {
@@ -167,7 +180,7 @@ func TestCreateApplicationRestoreWaitSuccess(t *testing.T) {
 
 	namespace := "dummy-namespace"
 	name := "dummy-name"
-	cmdArgs := []string{"create", "restores", "-n", namespace, name, "--backupLocation", "backuplocation", "-w"}
+	cmdArgs := []string{"create", "apprestores", "-n", namespace, name, "--backupLocation", "backuplocation", "--backupName", "backupname", "-w"}
 
 	expected := "ApplicationRestore dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +
@@ -184,7 +197,7 @@ func TestCreateApplicationRestoreWaitFailed(t *testing.T) {
 
 	namespace := "dummy-namespace"
 	name := "dummy-name"
-	cmdArgs := []string{"create", "applicationrestore", "-n", namespace, name, "--backupLocation", "backuplocation", "-w"}
+	cmdArgs := []string{"create", "applicationrestore", "-n", namespace, name, "--backupLocation", "backuplocation", "--backupName", "backupname", "-w"}
 
 	expected := "ApplicationRestore dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +

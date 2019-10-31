@@ -32,6 +32,7 @@ func newCreateApplicationCloneCommand(cmdFactory Factory, ioStreams genericcliop
 	var preExecRule string
 	var postExecRule string
 	var waitForCompletion bool
+	var replacePolicy string
 
 	createApplicationCloneCommand := &cobra.Command{
 		Use:     applicationCloneSubcommand,
@@ -49,6 +50,7 @@ func newCreateApplicationCloneCommand(cmdFactory Factory, ioStreams genericcliop
 					DestinationNamespace: destinationNamespace,
 					PreExecRule:          preExecRule,
 					PostExecRule:         postExecRule,
+					ReplacePolicy:        storkv1.ApplicationCloneReplacePolicyType(replacePolicy),
 				},
 			}
 			applicationClone.Name = applicationCloneName
@@ -77,6 +79,7 @@ func newCreateApplicationCloneCommand(cmdFactory Factory, ioStreams genericcliop
 	createApplicationCloneCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing applicationclone")
 	createApplicationCloneCommand.Flags().StringVarP(&sourceNamespace, "sourceNamespace", "", "", "The namespace from where applications should be cloned")
 	createApplicationCloneCommand.Flags().StringVarP(&destinationNamespace, "destinationNamespace", "", "", "The namespace to where the applications should be cloned")
+	createApplicationCloneCommand.Flags().StringVarP(&replacePolicy, "replacePolicy", "r", "Retain", "Policy to use if resources being cloned already exist in destination namespace (Retain or Delete).")
 
 	return createApplicationCloneCommand
 }
