@@ -27,7 +27,6 @@ import (
 	auth_secrets "github.com/libopenstorage/openstorage/pkg/auth/secrets"
 	"github.com/libopenstorage/openstorage/pkg/grpcserver"
 	"github.com/libopenstorage/openstorage/volume"
-	osecrets "github.com/libopenstorage/secrets/k8s"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	applicationcontrollers "github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
@@ -184,7 +183,6 @@ type portworx struct {
 	id              string
 	endpoint        string
 	jwtSharedSecret string
-	authSecrets     auth_secrets.Auth
 }
 
 type portworxGrpcConnection struct {
@@ -320,11 +318,6 @@ func (p *portworx) initPortworxClients() error {
 	}
 	p.clusterManager = clusterclient.ClusterManager(clnt)
 
-	ostsecrets, err := osecrets.New(nil)
-	if err != nil {
-		return err
-	}
-
 	// Setup gRPC clients
 	p.sdkConn = &portworxGrpcConnection{
 		endpoint: fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
@@ -343,7 +336,6 @@ func (p *portworx) initPortworxClients() error {
 		return fmt.Errorf("unable to get hostname: %v", err)
 	}
 
-	p.authSecrets, err = auth_secrets.NewAuth(auth_secrets.TypeK8s, ostsecrets)
 	return err
 }
 
@@ -647,7 +639,10 @@ func (p *portworx) getSnapshotName(tags *map[string]string) string {
 
 func (p *portworx) getUserContext(ctx context.Context, annotations map[string]string) (context.Context, error) {
 	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
-		token, err := p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
+		token, err := auth_secrets.GetToken(&api.TokenSecretContext{
+			SecretName:      v,
+			SecretNamespace: annotations[auth_secrets.SecretNamespaceKey],
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -671,7 +666,10 @@ func (p *portworx) secretRefFromAnnotations(annotations map[string]string) *v1.S
 
 func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.VolumeDriver, error) {
 	if v, ok := annotations[auth_secrets.SecretNameKey]; ok {
-		token, err := p.authSecrets.GetToken(v, annotations[auth_secrets.SecretNamespaceKey])
+		token, err := auth_secrets.GetToken(&api.TokenSecretContext{
+			SecretName:      v,
+			SecretNamespace: annotations[auth_secrets.SecretNamespaceKey],
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -1055,22 +1053,12 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 		return err
 	}
 
-	if snapType == crdv1.PortworxSnapshotTypeCloud {
-		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("CloudSnapshot restore not supported")
-		snapRestore.Status.Status = stork_crd.VolumeSnapshotRestoreStatusFailed
-		err = &errors.ErrNotSupported{
-			Feature: "VolumeSnapshotRestore for Cloudsnaps",
-			Reason:  "Feature not supported",
-		}
-		return err
-	}
-
 	switch snapType {
 	case "", crdv1.PortworxSnapshotTypeLocal:
 		return nil
 	case crdv1.PortworxSnapshotTypeCloud:
 		// refactor once cloudsnap is supported
-		ok, msg, err := p.ensureNodesHaveMinVersion("2.2.0")
+		ok, msg, err := p.ensureNodesHaveMinVersion("2.3.0")
 		if err != nil {
 			return err
 		}
@@ -1078,12 +1066,11 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 		if !ok {
 			err = &errors.ErrNotSupported{
 				Feature: "VolumeSnapshotRestore for Cloudsnaps",
-				Reason:  "Only supported on PX version 2.2.0 onwards: " + msg,
+				Reason:  "Only supported on PX version 2.3.0 onwards: " + msg,
 			}
 
 			return err
 		}
-
 		// Get volume client from user context
 		volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
 		if err != nil {
@@ -1118,7 +1105,7 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 				ID:                snapID,
 				RestoreVolumeName: restoreName,
 				CredentialUUID:    credID,
-				NodeID:            replNodes.GetNodes()[0],
+				NodeID:            replNodes.GetPoolUuids()[0],
 			})
 			if err != nil {
 				if _, ok := err.(*ost_errors.ErrExists); !ok {
@@ -1226,22 +1213,22 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 	}
 	logrus.Infof("Restore Volume: %v \t Status %v \t state %v", restoreVol.Id, restoreVol.Status, restoreVol.State)
 	// find replica nodes
-	var pNodes []string
-	var rNodes []string
-	var nodes []string
+	var pPools []string
+	var rPools []string
+	var pools []string
 	// get all parent volume replica nodes
 	for _, rs := range parentVols[0].GetReplicaSets() {
-		pNodes = append(pNodes, rs.GetNodes()...)
+		pPools = append(pPools, rs.GetNodes()...)
 	}
 	// get all restore volume replica nodes
 	for _, rs := range restoreVol.GetReplicaSets() {
-		rNodes = append(rNodes, rs.GetNodes()...)
+		rPools = append(rPools, rs.GetNodes()...)
 	}
 
 	// parentvolume replica nodes - restorevolume replica nodes
-	for _, pnode := range pNodes {
+	for _, pnode := range pPools {
 		isPart := false
-		for _, rnode := range rNodes {
+		for _, rnode := range rPools {
 			// since restore volumes rs will always be 1
 			if pnode == rnode {
 				logrus.Debugf("skipping node %v", rnode)
@@ -1251,7 +1238,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 		}
 		logrus.Debugf("adding node %v", pnode)
 		if !isPart {
-			nodes = append(nodes, pnode)
+			pools = append(pools, pnode)
 		}
 	}
 
@@ -1259,7 +1246,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 		logrus.Infof("Updating HA Level of volume %v", restoreVol.GetLocator().GetName())
 		spec := &api.VolumeSpec{
 			HaLevel:    restoreVol.GetSpec().GetHaLevel() + 1,
-			ReplicaSet: &api.ReplicaSet{Nodes: nodes},
+			ReplicaSet: &api.ReplicaSet{PoolUuids: pools},
 		}
 		if err := volDriver.Set(restoreVol.GetId(), restoreVol.GetLocator(), spec); err != nil {
 			return false, fmt.Errorf("failed to perform ha-update: %v", err)
