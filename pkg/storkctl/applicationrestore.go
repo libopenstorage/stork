@@ -23,12 +23,14 @@ var (
 
 var applicationRestoreColumns = []string{"NAME", "STAGE", "STATUS", "VOLUMES", "RESOURCES", "CREATED", "ELAPSED"}
 var applicationRestoreSubcommand = "applicationrestores"
-var applicationRestoreAliases = []string{"applicationrestore", "restore", "restores"}
+var applicationRestoreAliases = []string{"applicationrestore", "apprestore", "apprestores"}
 
 func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	var applicationRestoreName string
 	var backupLocation string
 	var waitForCompletion bool
+	var backupName string
+	var replacePolicy string
 
 	createApplicationRestoreCommand := &cobra.Command{
 		Use:     applicationRestoreSubcommand,
@@ -43,10 +45,17 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 				util.CheckErr(fmt.Errorf("need to provide BackupLocation to use for restore"))
 				return
 			}
+			if backupName == "" {
+				util.CheckErr(fmt.Errorf("need to provide BackupName to restore"))
+				return
+			}
+
 			applicationRestoreName = args[0]
 			applicationRestore := &storkv1.ApplicationRestore{
 				Spec: storkv1.ApplicationRestoreSpec{
 					BackupLocation: backupLocation,
+					BackupName:     backupName,
+					ReplacePolicy:  storkv1.ApplicationRestoreReplacePolicyType(replacePolicy),
 				},
 			}
 			applicationRestore.Name = applicationRestoreName
@@ -71,7 +80,9 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 		},
 	}
 	createApplicationRestoreCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for applicationrestore to complete")
-	createApplicationRestoreCommand.Flags().StringVarP(&backupLocation, "backupLocation", "", "", "BackupLocation to use for the restore")
+	createApplicationRestoreCommand.Flags().StringVarP(&backupLocation, "backupLocation", "l", "", "BackupLocation to use for the restore")
+	createApplicationRestoreCommand.Flags().StringVarP(&backupName, "backupName", "b", "", "Backup to restore from")
+	createApplicationRestoreCommand.Flags().StringVarP(&replacePolicy, "replacePolicy", "r", "Retain", "Policy to use if resources being restored already exist (Retain or Delete).")
 
 	return createApplicationRestoreCommand
 }

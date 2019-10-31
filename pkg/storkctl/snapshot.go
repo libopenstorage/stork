@@ -19,8 +19,10 @@ import (
 
 var snapshotColumns = []string{"NAME", "PVC", "STATUS", "CREATED", "COMPLETED", "TYPE"}
 var snapSubcommand = "volumesnapshots"
-var restoreSubCommand = "volumesnapshotrestore"
 var snapAliases = []string{"volumesnapshot", "snapshots", "snapshot", "snap"}
+
+var snapRestoreSubCommand = "volumesnapshotrestore"
+var snapRestoreAliases = []string{"volumesnapshotrestores", "snapshotrestore", "snapshotrestore", "snaprestore", "snapsrestores"}
 var snapRestoreColumns = []string{"NAME", "SOURCE-SNAPSHOT", "SOURCE-SNAPSHOT-NAMESPACE", "STATUS", "VOLUMES", "CREATED"}
 
 func newCreateSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
@@ -230,8 +232,8 @@ func newCreateVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams generic
 	var snapGroup bool
 
 	restoreSnapshotCommand := &cobra.Command{
-		Use:     restoreSubCommand,
-		Aliases: []string{"restore"},
+		Use:     snapRestoreSubCommand,
+		Aliases: snapRestoreAliases,
 		Short:   "Restore snapshot to source PVC",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) != 1 {
@@ -266,8 +268,8 @@ func newCreateVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams generic
 
 func newGetVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	restoreSnapshotCommand := &cobra.Command{
-		Use:     restoreSubCommand,
-		Aliases: []string{"restore"},
+		Use:     snapRestoreSubCommand,
+		Aliases: snapRestoreAliases,
 		Short:   "Get snapshot restore status",
 		Run: func(c *cobra.Command, args []string) {
 			var snapRestoreList *storkv1.VolumeSnapshotRestoreList
@@ -322,8 +324,8 @@ func newGetVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericcli
 
 func newDeleteVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
 	restoreSnapshotCommand := &cobra.Command{
-		Use:     restoreSubCommand,
-		Aliases: []string{"restore"},
+		Use:     snapRestoreSubCommand,
+		Aliases: snapRestoreAliases,
 		Short:   "Delete Volume snapshot restore",
 		Run: func(c *cobra.Command, args []string) {
 			if len(args) == 0 {
