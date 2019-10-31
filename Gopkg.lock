@@ -572,8 +572,8 @@
   revision = "1da75834394cb5e1c30e005a7b183dd866dc62d4"
 
 [[projects]]
-  branch = "release-6.0"
-  digest = "1:c498a6be2c26d3adf8328ef7d88c955bcb27545bb929fc7a37214eaf9418701e"
+  branch = "release-7.0"
+  digest = "1:d736c1f63e4e6d20667fda3d1bdd6d0fa53d6a5fef33464fdbdc2600bdb81767"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -598,18 +598,18 @@
     "volume",
   ]
   pruneopts = "UT"
-  revision = "db76223f246014dfbef05e8d898cf485bc407989"
+  revision = "90b7250c9f4be8bc33c6e2b5360f31f833e2c669"
 
 [[projects]]
   branch = "master"
-  digest = "1:676084e3399eacb0f118ff6a5275be09d0a689395dcb353c9daa2a5e18ab7b6b"
+  digest = "1:bf4564e01a7454306eb0602ee3c5f771918deb4d8062c0562edc2808aec50e21"
   name = "github.com/libopenstorage/secrets"
   packages = [
     ".",
     "k8s",
   ]
   pruneopts = "UT"
-  revision = "7a55db693ad633eea673438e1dcc4c91056d3b7a"
+  revision = "ba430c4608ce117bddb3afdd47a1e9146f128c1a"
 
 [[projects]]
   branch = "master"
