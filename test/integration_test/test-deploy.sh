@@ -205,7 +205,6 @@ for i in $(seq 1 100) ; do
     if [ "$test_status" == "Running" ]; then
         echo "Test is still running, status: $test_status"
         kubectl logs stork-test  -n kube-system -f
-        sleep 5
     else
         break
     fi
