@@ -53,7 +53,7 @@ var _ = Describe("{VolumeDriverDown}", func() {
 		}
 
 		Step("get nodes bounce volume driver", func() {
-			for _, appNode := range node.GetWorkerNodes() {
+			for _, appNode := range node.GetStorageDriverNodes() {
 				Step(
 					fmt.Sprintf("stop volume driver %s on node: %s",
 						Inst().V.String(), appNode.Name),
@@ -149,7 +149,7 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 		}
 
 		Step("crash volume driver in all nodes", func() {
-			for _, appNode := range node.GetWorkerNodes() {
+			for _, appNode := range node.GetStorageDriverNodes() {
 				Step(
 					fmt.Sprintf("crash volume driver %s on node: %v",
 						Inst().V.String(), appNode.Name),

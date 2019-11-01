@@ -47,14 +47,22 @@ const (
 	// PXEnabledLabelKey is label used to check whethere px installation is enabled/disabled on node
 	PXEnabledLabelKey = "px/enabled"
 	// nodeType is label used to check kubernetes node-type
-	dcosNodeType           = "kubernetes.dcos.io/node-type"
-	talismanServiceAccount = "talisman-account"
-	talismanImage          = "portworx/talisman:latest"
+	dcosNodeType                = "kubernetes.dcos.io/node-type"
+	talismanServiceAccount      = "talisman-account"
+	talismanImage               = "portworx/talisman:latest"
+	rancherControlPlaneLabelKey = "node-role.kubernetes.io/controlplane"
 )
 
 const (
 	defaultRetryInterval = 5 * time.Second
 	defaultTimeout       = 2 * time.Minute
+)
+
+var (
+	pxDisabledConditions = map[string]string{
+		PXEnabledLabelKey:           "false",
+		rancherControlPlaneLabelKey: "true",
+	}
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -716,8 +724,15 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 
 	// get label on node where PX is Enabled
 	for _, node := range nodes.Items {
+		pxEnabled := true
+		for key, value := range pxDisabledConditions {
+			if node.Labels[key] == value {
+				pxEnabled = false
+				break
+			}
+		}
 		// worker node and px is not disabled
-		if !destClient.IsNodeMaster(node) && node.Labels[PXEnabledLabelKey] != "false" {
+		if !destClient.IsNodeMaster(node) && pxEnabled {
 			pxNodes = append(pxNodes, node)
 		}
 	}
