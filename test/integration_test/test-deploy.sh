@@ -204,6 +204,7 @@ for i in $(seq 1 100) ; do
     test_status=$(kubectl get pod stork-test -n kube-system -o json | jq ".status.phase" -r)
     if [ "$test_status" == "Running" ]; then
         echo "Test is still running, status: $test_status"
+        kubectl logs stork-test  -n kube-system -f
         sleep 5
     else
         break
