@@ -71,7 +71,6 @@ func groupSnapshotRestoreTest(t *testing.T) {
 }
 
 func cloudSnapshotRestoreTest(t *testing.T) {
-	t.Skip("Skipping CloudSnapRestore integration tests")
 	snapCtx, err := schedulerDriver.Schedule("cslocal",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-restore"}})
 	require.NoError(t, err, "Error scheduling task")
