@@ -11,6 +11,8 @@ environment_variables=""
 storage_provisioner="portworx"
 focus_tests=""
 short_test=false
+auth_secret_configmap=""
+volume_driver="pxd"
 for i in "$@"
 do
 case $i in
@@ -76,6 +78,12 @@ case $i in
     --short_test)
         echo "Skip tests that are long/not supported: $2"
         short_test=$2
+        shift
+        shift
+        ;;
+    --volume_driver)
+        echo "K8s secret name to use for test: $2"
+        volume_driver=$2
         shift
         shift
         ;;
@@ -164,8 +172,6 @@ else
 	sed -i 's/'FOCUS_TESTS'/''/g' /testspecs/stork-test-pod.yaml
 fi
 
-<<<<<<< HEAD
-=======
 sed -i 's/'SHORT_FLAG'/'"$short_test"'/g' /testspecs/stork-test-pod.yaml
 
 # Configmap with secrets indicates auth-enabled runs are required
@@ -179,13 +185,16 @@ else
 	sed -i 's/'auth_secret_configmap'/'\"\"'/g' /testspecs/stork-test-pod.yaml
 fi
 
->>>>>>> fde1fdca... Add test for group cloudsnap restore, flag to skip tests.
 sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -migration-scale-count=10/- -migration-scale-count='"$migration_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
+
+if [ "$volume_driver" != "" ] ; then
+	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml
+fi
 
 if [ "$remote_config_path" != "" ]; then
     kubectl create configmap remoteconfigmap --from-file=$remote_config_path -n kube-system
@@ -211,6 +220,7 @@ for i in $(seq 1 100) ; do
         echo "Test is still running, status: $test_status"
         sleep 5
     else
+        sleep 5
         break
     fi
 done
