@@ -11,6 +11,7 @@ environment_variables=""
 storage_provisioner="portworx"
 focus_tests=""
 auth_secret_configmap=""
+volume_driver="pxd"
 for i in "$@"
 do
 case $i in
@@ -76,6 +77,12 @@ case $i in
     --auth_secret_configmap)
         echo "K8s secret name to use for test: $2"
         auth_secret_configmap=$2
+        shift
+        shift
+        ;;
+    --volume_driver)
+        echo "K8s secret name to use for test: $2"
+        volume_driver=$2
         shift
         shift
         ;;
@@ -182,6 +189,10 @@ sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
 
+if [ "$volume_driver" != "" ] ; then
+	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml
+fi
+
 if [ "$remote_config_path" != "" ]; then
     kubectl create configmap remoteconfigmap --from-file=$remote_config_path -n kube-system
 fi
@@ -206,6 +217,7 @@ for i in $(seq 1 100) ; do
         echo "Test is still running, status: $test_status"
         kubectl logs stork-test  -n kube-system -f
     else
+        sleep 5
         break
     fi
 done

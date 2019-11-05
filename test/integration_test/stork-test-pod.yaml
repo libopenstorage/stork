@@ -54,6 +54,7 @@ spec:
     FOCUS_TESTS
     - -snapshot-scale-count=10
     - -migration-scale-count=10
+    - -volume-driver=pxd
     imagePullPolicy: Always
     image: openstorage/stork_test:latest
     securityContext:
