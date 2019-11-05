@@ -988,7 +988,9 @@ func (d *portworx) pickAlternateClusterManager(n node.Node) (cluster.Cluster, er
 			}
 			ns, err := cManager.Enumerate()
 			if err != nil {
-				return nil, err
+				// if not responding in this addr, continue and pick another one, log the error
+				logrus.Warnf("failed to check node %s on addr %s. Cause: %v", n.Name, addr, err)
+				continue
 			}
 			if len(ns.Nodes) != 0 {
 				return cManager, nil
