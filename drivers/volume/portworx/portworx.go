@@ -1246,7 +1246,7 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 		logrus.Infof("Updating HA Level of volume %v", restoreVol.GetLocator().GetName())
 		spec := &api.VolumeSpec{
 			HaLevel:    restoreVol.GetSpec().GetHaLevel() + 1,
-			ReplicaSet: &api.ReplicaSet{PoolUuids: pools},
+			ReplicaSet: &api.ReplicaSet{Nodes: pools},
 		}
 		if err := volDriver.Set(restoreVol.GetId(), restoreVol.GetLocator(), spec); err != nil {
 			return false, fmt.Errorf("failed to perform ha-update: %v", err)
