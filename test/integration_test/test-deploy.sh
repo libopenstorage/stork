@@ -9,6 +9,7 @@ run_cluster_domain_test=false
 environment_variables=""
 storage_provisioner="portworx"
 focus_tests=""
+short_test=false
 for i in "$@"
 do
 case $i in
@@ -62,6 +63,12 @@ case $i in
     --focus_tests)
         echo "Flag for focus tests: $2"
         focus_tests=$2
+        shift
+        shift
+        ;;
+    --short_test)
+        echo "Skip tests that are long/not supported: $2"
+        short_test=$2
         shift
         shift
         ;;
@@ -150,6 +157,22 @@ else
 	sed -i 's/'FOCUS_TESTS'/''/g' /testspecs/stork-test-pod.yaml
 fi
 
+<<<<<<< HEAD
+=======
+sed -i 's/'SHORT_FLAG'/'"$short_test"'/g' /testspecs/stork-test-pod.yaml
+
+# Configmap with secrets indicates auth-enabled runs are required
+#  * Adding the shared secret to stork, stork-test pod as env variable
+#  * Pass config map to containing px secret stork-test pod so tests can pick up auth-token
+if [ "$auth_secret_configmap" != "" ] ; then
+    sed -i 's/'auth_secret_configmap'/'"$auth_secret_configmap"'/g' /testspecs/stork-test-pod.yaml
+    sed -i 's/'px_shared_secret_key'/'"$AUTH_SHARED_KEY"'/g' /testspecs/stork-test-pod.yaml
+    kubectl set env deploy/stork -n kube-system PX_SHARED_SECRET="${AUTH_SHARED_KEY}"
+else
+	sed -i 's/'auth_secret_configmap'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
+>>>>>>> fde1fdca... Add test for group cloudsnap restore, flag to skip tests.
 sed -i 's/'storage_provisioner'/'"$storage_provisioner"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/- -snapshot-scale-count=10/- -snapshot-scale-count='"$snapshot_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml

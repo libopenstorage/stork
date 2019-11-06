@@ -13,9 +13,10 @@ import (
 func testSnapshotRestore(t *testing.T) {
 	t.Run("simpleSnapshotRestoreTest", simpleSnapshotRestoreTest)
 	t.Run("groupSnapshotRestoreTest", groupSnapshotRestoreTest)
-	// Disable cloudsnapRestore tests for now
-	t.Run("cloudSnapshotRestoreTest", cloudSnapshotRestoreTest)
-	t.Run("groupCloudSnapshotRestoreTest", groupCloudSnapshotRestoreTest)
+	if !testing.Short() {
+		t.Run("cloudSnapshotRestoreTest", cloudSnapshotRestoreTest)
+		t.Run("groupCloudSnapshotRestoreTest", groupCloudSnapshotRestoreTest)
+	}
 }
 
 func createInPlaceRestore(t *testing.T, namespace string, appKeys []string) []*scheduler.Context {
@@ -89,5 +90,19 @@ func cloudSnapshotRestoreTest(t *testing.T) {
 }
 
 func groupCloudSnapshotRestoreTest(t *testing.T) {
-	//TODO: add groupcloudsnap in place restore tests here
+	snapCtx, err := schedulerDriver.Schedule("csgroup",
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-group-restore"}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(snapCtx), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(snapCtx[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	restoreCtx := createInPlaceRestore(t, "csgroup", []string{"mysql-groupsnap-inplace-cloud-restore"})
+	startTime := time.Now()
+	verifyInPlaceSnapshotRestore(t, restoreCtx, startTime, defaultWaitTimeout)
+
+	// cleanup test
+	destroyAndWait(t, snapCtx)
+	destroyAndWait(t, restoreCtx)
 }
