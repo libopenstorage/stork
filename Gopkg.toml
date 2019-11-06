@@ -40,7 +40,7 @@ required = [
 
 [[override]]
   name = "github.com/libopenstorage/openstorage"
-  branch = "release-6.0"
+  branch = "release-7.0"
 
 [[override]]
   name = "github.com/portworx/sched-ops"

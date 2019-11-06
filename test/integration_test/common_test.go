@@ -34,7 +34,6 @@ import (
 
 const (
 	nodeDriverName        = "ssh"
-	volumeDriverName      = "pxd"
 	schedulerDriverName   = "k8s"
 	remotePairName        = "remoteclusterpair"
 	remoteConfig          = "remoteconfigmap"
@@ -68,6 +67,7 @@ var snapshotScaleCount int
 var migrationScaleCount int
 var authToken string
 var authTokenConfigMap string
+var volumeDriverName string
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -80,8 +80,9 @@ func TestSnapshotMigration(t *testing.T) {
 func setup() error {
 	var err error
 
+	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
-		return fmt.Errorf("Error getting stork driver %v: %v", volumeDriverName, err)
+		return fmt.Errorf("Error getting stork driver %s: %v", volumeDriverName, err)
 	}
 
 	if err = storkVolumeDriver.Init(nil); err != nil {
@@ -475,6 +476,10 @@ func TestMain(m *testing.M) {
 		"migration-scale-count",
 		10,
 		"Number of migrations to use for migration test")
+	flag.StringVar(&volumeDriverName,
+		"volume-driver",
+		"pxd",
+		"Stork volume driver to be used for stork integration tests")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)
