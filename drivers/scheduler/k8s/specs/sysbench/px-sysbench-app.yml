@@ -33,7 +33,7 @@ spec:
           livenessProbe:
             exec:
               command: ["sh", "-c", "mysqladmin -u root -p$MYSQL_ROOT_PASSWORD ping"]
-            initialDelaySeconds: 70
+            initialDelaySeconds: 120
             periodSeconds: 10
             timeoutSeconds: 5
           readinessProbe:
