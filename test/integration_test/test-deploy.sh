@@ -12,6 +12,7 @@ storage_provisioner="portworx"
 focus_tests=""
 auth_secret_configmap=""
 volume_driver="pxd"
+short_test=false
 for i in "$@"
 do
 case $i in
@@ -83,6 +84,12 @@ case $i in
     --volume_driver)
         echo "K8s secret name to use for test: $2"
         volume_driver=$2
+        shift
+        shift
+        ;;
+    --short_test)
+        echo "Skip tests that are long/not supported: $2"
+        short_test=$2
         shift
         shift
         ;;
@@ -170,6 +177,8 @@ if [ "$focus_tests" != "" ] ; then
 else 
 	sed -i 's/'FOCUS_TESTS'/''/g' /testspecs/stork-test-pod.yaml
 fi
+
+sed -i 's/'SHORT_FLAG'/'"$short_test"'/g' /testspecs/stork-test-pod.yaml
 
 # Configmap with secrets indicates auth-enabled runs are required
 #  * Adding the shared secret to stork, stork-test pod as env variable

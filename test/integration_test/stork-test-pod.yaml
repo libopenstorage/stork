@@ -51,6 +51,7 @@ spec:
     - -t
     - /stork.test 
     - -test.v
+    - -test.short=SHORT_FLAG
     FOCUS_TESTS
     - -snapshot-scale-count=10
     - -migration-scale-count=10
