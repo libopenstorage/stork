@@ -1,0 +1,9 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: VolumeSnapshotRestore
+metadata:
+  name: mysql-groupsnap-cloud-inrestore
+  namespace: default
+spec:
+  sourceName: mysql-group-cloudsnapshot
+  sourceNamespace: mysql-cloudsnap-group-restore-csgroup
+  groupSnapshot: true
