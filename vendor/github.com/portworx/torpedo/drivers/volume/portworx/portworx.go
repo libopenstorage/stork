@@ -937,35 +937,28 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 }
 
 func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
+	cManager, err := d.pickAlternateClusterManager(n)
+	if err != nil {
+		return &ErrFailedToWaitForPx{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+
 	t := func() (interface{}, bool, error) {
-		// Check if px is down on all node addresses. We don't want to keep track
-		// which was the actual interface px was listening on before it went down
-		for _, addr := range n.Addresses {
-			cManager, err := d.getClusterManagerByAddress(addr)
-			if err != nil {
-				return "", true, err
+		pxNode, err := cManager.Inspect(n.VolDriverNodeID)
+		if err != nil {
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: err.Error(),
 			}
+		}
 
-			pxNode, err := d.getPxNode(n, cManager)
-			if err != nil {
-				if regexp.MustCompile(`.+timeout|connection refused.*`).MatchString(err.Error()) {
-					logrus.Infof("px on node %s addr %s is down as inspect returned: %v",
-						n.Name, addr, err.Error())
-					continue
-				}
-
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: err.Error(),
-				}
-			}
-
-			if pxNode.Status != api.Status_STATUS_OFFLINE {
-				return "", true, &ErrFailedToWaitForPx{
-					Node: n,
-					Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
-						api.Status_STATUS_OFFLINE, pxNode.Status),
-				}
+		if pxNode.Status != api.Status_STATUS_OFFLINE {
+			return "", true, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
+					api.Status_STATUS_OFFLINE, pxNode.Status),
 			}
 		}
 
@@ -978,6 +971,33 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	}
 
 	return nil
+}
+
+func (d *portworx) pickAlternateClusterManager(n node.Node) (cluster.Cluster, error) {
+	// Check if px is down on all node addresses. We don't want to keep track
+	// which was the actual interface px was listening on before it went down
+	for _, alternateNode := range node.GetWorkerNodes() {
+		if alternateNode.Name == n.Name {
+			continue
+		}
+
+		for _, addr := range alternateNode.Addresses {
+			cManager, err := d.getClusterManagerByAddress(addr)
+			if err != nil {
+				return nil, err
+			}
+			ns, err := cManager.Enumerate()
+			if err != nil {
+				// if not responding in this addr, continue and pick another one, log the error
+				logrus.Warnf("failed to check node %s on addr %s. Cause: %v", n.Name, addr, err)
+				continue
+			}
+			if len(ns.Nodes) != 0 {
+				return cManager, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed to get an alternate cluster manager for %s", n.Name)
 }
 
 func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {

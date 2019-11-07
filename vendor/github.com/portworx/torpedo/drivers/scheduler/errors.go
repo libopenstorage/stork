@@ -56,6 +56,18 @@ func (e *ErrFailedToDestroyStorage) Error() string {
 	return fmt.Sprintf("Failed to destory storage for app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
+// ErrFailedToDestroyAutopilotRule error type for failing to destroy an autopilotrule
+type ErrFailedToDestroyAutopilotRule struct {
+	// Name is the autopilot name that failed to destroy
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToDestroyAutopilotRule) Error() string {
+	return fmt.Sprintf("Failed to destory an autopilot rule: %v due to err: %v", e.Name, e.Cause)
+}
+
 // ErrFailedToValidateStorage error type for failing to validate an app's storage
 type ErrFailedToValidateStorage struct {
 	// App is the app whose storage validation failed
