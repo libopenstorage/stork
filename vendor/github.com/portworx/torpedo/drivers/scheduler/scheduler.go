@@ -45,6 +45,19 @@ func (in *Context) GetID() string {
 	return in.App.GetID(in.UID)
 }
 
+// AutopilotRuleConditionExpressions are the conditions to check on the rule objects
+type AutopilotRuleConditionExpressions struct {
+	Key      string
+	Operator string
+	Values   []string
+}
+
+// AutopilotRuleActions are the actions to run for the rule when the conditions are met
+type AutopilotRuleActions struct {
+	Name   string
+	Params map[string]string
+}
+
 // AutopilotRuleParameters are rule parameters for Autopilot
 type AutopilotRuleParameters struct {
 	// ActionsCoolDownPeriod is the duration in seconds for which autopilot will not
@@ -55,17 +68,12 @@ type AutopilotRuleParameters struct {
 	// operator is "In", and the values array contains only "value". The requirements are ANDed.
 	// +optional
 	MatchLabels map[string]string
-	// PVCSize is the size of PVC from application spec
-	PVCSize int64
-	// PVCWorkloadSize is the workload size from application generator spec
-	PVCWorkloadSize int64
-	// PVCPercentageUsage is the percentage of volume usage, after which exceeding,
-	// the autopilot will trigger an action
-	PVCPercentageUsage int64
-	// PVCPercentageScale is the percentage by which the size of volume will be increased
-	PVCPercentageScale int64
-	// PVCMaximumSize is the maximum size of the volume which should not be exceed
-	PVCMaximumSize int64
+	// RuleAction defines an action for the rule
+	RuleActions []AutopilotRuleActions
+	// RuleConditionExpressions defines the conditions for the rule
+	RuleConditionExpressions []AutopilotRuleConditionExpressions
+	// ExpectedPVCSize is the expected PVC size after resize
+	ExpectedPVCSize int64
 }
 
 // AutopilotParameters are parameters that using for Autopilot
