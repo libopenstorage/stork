@@ -72,6 +72,9 @@ func groupSnapshotRestoreTest(t *testing.T) {
 }
 
 func cloudSnapshotRestoreTest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test: cloudSnapshotRestoreTest.")
+	}
 	snapCtx, err := schedulerDriver.Schedule("cslocal",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-restore"}})
 	require.NoError(t, err, "Error scheduling task")
@@ -90,6 +93,9 @@ func cloudSnapshotRestoreTest(t *testing.T) {
 }
 
 func groupCloudSnapshotRestoreTest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test: groupCloudSnapshotRestoreTest.")
+	}
 	snapCtx, err := schedulerDriver.Schedule("csgroup",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-group-restore"}})
 	require.NoError(t, err, "Error scheduling task")
