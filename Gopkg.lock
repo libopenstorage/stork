@@ -804,7 +804,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:87072682515a67a49b02de7a626fdd026d3c8ab6d2fa42cc7f8072d1142ff64a"
+  digest = "1:7e350a0e769532d724ffe3c3c7a164e68a8ef573b9a05fde8f988fa4355f58c7"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -818,7 +818,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-  revision = "cc0f245ffe7c2f472d0b92d1e1f92bb6094e94ed"
+  revision = "2a66c299778d44cec3d94c3eb9e0930531190e19"
 
 [[projects]]
   branch = "master"
@@ -1815,7 +1815,6 @@
     "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
-    "github.com/libopenstorage/secrets/k8s",
     "github.com/openshift/api/apps/v1",
     "github.com/openshift/client-go/apps/clientset/versioned/fake",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
