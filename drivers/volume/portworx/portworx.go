@@ -1057,7 +1057,6 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 	case "", crdv1.PortworxSnapshotTypeLocal:
 		return nil
 	case crdv1.PortworxSnapshotTypeCloud:
-		// refactor once cloudsnap is supported
 		ok, msg, err := p.ensureNodesHaveMinVersion("2.3.0")
 		if err != nil {
 			return err
@@ -1085,7 +1084,7 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 
 			// Get Volume Info
 			uid := getUidforRestore(volID, string(snapRestore.GetUID()))
-			vols, err := volDriver.Inspect([]string{volID, restoreNamePrefix + uid})
+			vols, err := volDriver.Inspect([]string{volID})
 			if err != nil {
 				return &ErrFailedToInspectVolume{
 					ID:    volID,
@@ -1100,6 +1099,7 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 			replNodes := vols[0].GetReplicaSets()[0]
 			taskID := restoreTaskPrefix + uid
 			restoreName := restoreNamePrefix + uid
+			log.VolumeSnapshotRestoreLog(snapRestore).Infof("Restoring cloudsnapshot to volume %v on pool %v", restoreName, replNodes.GetPoolUuids()[0])
 			_, err = volDriver.CloudBackupRestore(&api.CloudBackupRestoreRequest{
 				Name:              taskID,
 				ID:                snapID,
@@ -1212,41 +1212,42 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 		return false, nil
 	}
 	logrus.Infof("Restore Volume: %v \t Status %v \t state %v", restoreVol.Id, restoreVol.Status, restoreVol.State)
-	// find replica nodes
+	// find replica pools ids
 	var pPools []string
 	var rPools []string
-	var pools []string
-	// get all parent volume replica nodes
+	var replPool string
+	// get all parent volume replica pools
 	for _, rs := range parentVols[0].GetReplicaSets() {
-		pPools = append(pPools, rs.GetNodes()...)
+		pPools = append(pPools, rs.GetPoolUuids()...)
 	}
 	// get all restore volume replica nodes
 	for _, rs := range restoreVol.GetReplicaSets() {
-		rPools = append(rPools, rs.GetNodes()...)
+		rPools = append(rPools, rs.GetPoolUuids()...)
 	}
 
-	// parentvolume replica nodes - restorevolume replica nodes
-	for _, pnode := range pPools {
+	logrus.Debugf("parent volume pools %v", pPools)
+	logrus.Debugf("restore volume pools %v", rPools)
+	// get pool to perform ha update
+	for _, pool := range pPools {
 		isPart := false
-		for _, rnode := range rPools {
+		for _, rpool := range rPools {
 			// since restore volumes rs will always be 1
-			if pnode == rnode {
-				logrus.Debugf("skipping node %v", rnode)
+			if pool == rpool {
 				isPart = true
 				break
 			}
 		}
-		logrus.Debugf("adding node %v", pnode)
 		if !isPart {
-			pools = append(pools, pnode)
+			replPool = pool
+			break
 		}
 	}
 
 	if restoreVol.GetSpec().GetHaLevel() != parentVols[0].GetSpec().GetHaLevel() {
-		logrus.Infof("Updating HA Level of volume %v", restoreVol.GetLocator().GetName())
+		logrus.Infof("Updating HA Level of volume %v to pool %v", restoreVol.GetLocator().GetName(), replPool)
 		spec := &api.VolumeSpec{
 			HaLevel:    restoreVol.GetSpec().GetHaLevel() + 1,
-			ReplicaSet: &api.ReplicaSet{Nodes: pools},
+			ReplicaSet: &api.ReplicaSet{Nodes: []string{replPool}},
 		}
 		if err := volDriver.Set(restoreVol.GetId(), restoreVol.GetLocator(), spec); err != nil {
 			return false, fmt.Errorf("failed to perform ha-update: %v", err)
@@ -1301,15 +1302,15 @@ func (p *portworx) pxSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestor
 			return err
 		}
 
-		log.VolumeSnapshotRestoreLog(snapRestore).Infof("Restoring volume %v with local snapshot %v", vol.Volume, snapID)
+		log.VolumeSnapshotRestoreLog(snapRestore).Infof("Restoring volume %v with snapshot %v", vol.Volume, snapID)
 		if snapType == crdv1.PortworxSnapshotTypeCloud {
 			snapID = restoreNamePrefix + getUidforRestore(vol.Volume, restoreID)
 		}
-
+		var restoreErr error
 		err = wait.ExponentialBackoff(restoreAPICallBackoff, func() (bool, error) {
-			err = volDriver.Restore(vol.Volume, snapID)
-			if err != nil {
-				log.VolumeSnapshotRestoreLog(snapRestore).Warnf("In-place restore failed for %v: %v", vol.Volume, err)
+			restoreErr = volDriver.Restore(vol.Volume, snapID)
+			if restoreErr != nil {
+				log.VolumeSnapshotRestoreLog(snapRestore).Warnf("In-place restore failed for %v: %v", vol.Volume, restoreErr)
 				return false, nil
 			}
 
@@ -1319,7 +1320,7 @@ func (p *portworx) pxSnapshotRestore(snapRestore *stork_crd.VolumeSnapshotRestor
 		if err != nil {
 			logrus.Errorf("Unable to restore volume %v with ID %v, err %v",
 				vol.Volume, snapID, err)
-			vol.Reason = fmt.Sprintf("failed to do in-place restore, %v", err.Error())
+			vol.Reason = fmt.Sprintf("failed to do in-place restore, %v", restoreErr.Error())
 			vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusFailed
 			return err
 		}
