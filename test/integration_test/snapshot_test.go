@@ -253,6 +253,7 @@ func createSnapshot(t *testing.T, appKeys []string) []*scheduler.Context {
 }
 
 func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest string, waitTimeout time.Duration) {
+	logrus.Info("Now verifying volume snapshot")
 	err := schedulerDriver.WaitForRunning(ctxs[0], waitTimeout, defaultWaitInterval)
 	require.NoError(t, err, fmt.Sprintf("Error waiting for app to get to running state in context: %s-%s", ctxs[0].App.Key, ctxs[0].UID))
 
