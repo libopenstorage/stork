@@ -79,7 +79,7 @@ func cloudSnapshotRestoreTest(t *testing.T) {
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-cloudsnap-restore"}})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(snapCtx), "Only one task should have started")
-	verifyGroupSnapshot(t, snapCtx[0], defaultWaitTimeout)
+	verifySnapshot(t, snapCtx, "mysql-data", defaultWaitTimeout)
 
 	err = schedulerDriver.WaitForRunning(snapCtx[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for pod to get to running state")
