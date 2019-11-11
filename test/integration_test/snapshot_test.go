@@ -209,6 +209,7 @@ func createGroupsnaps(t *testing.T, apps []string) []*scheduler.Context {
 }
 
 func verifyGroupSnapshot(t *testing.T, ctx *scheduler.Context, waitTimeout time.Duration) {
+	logrus.Info("Now verifying group volume snapshot")
 	err := schedulerDriver.WaitForRunning(ctx, waitTimeout, defaultWaitInterval)
 	require.NoError(t, err, fmt.Sprintf("Error waiting for app to get to running state in context: %s-%s", ctx.App.Key, ctx.UID))
 
