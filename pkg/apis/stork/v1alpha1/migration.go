@@ -13,15 +13,16 @@ const (
 
 // MigrationSpec is the spec used to migrate apps between clusterpairs
 type MigrationSpec struct {
-	ClusterPair       string            `json:"clusterPair"`
-	AdminClusterPair  string            `json:"adminClusterPair"`
-	Namespaces        []string          `json:"namespaces"`
-	IncludeResources  *bool             `json:"includeResources"`
-	IncludeVolumes    *bool             `json:"includeVolumes"`
-	StartApplications *bool             `json:"startApplications"`
-	Selectors         map[string]string `json:"selectors"`
-	PreExecRule       string            `json:"preExecRule"`
-	PostExecRule      string            `json:"postExecRule"`
+	ClusterPair            string            `json:"clusterPair"`
+	AdminClusterPair       string            `json:"adminClusterPair"`
+	Namespaces             []string          `json:"namespaces"`
+	IncludeResources       *bool             `json:"includeResources"`
+	IncludeVolumes         *bool             `json:"includeVolumes"`
+	StartApplications      *bool             `json:"startApplications"`
+	AllowCleaningResources *bool             `json:"allowCleaningResources"`
+	Selectors              map[string]string `json:"selectors"`
+	PreExecRule            string            `json:"preExecRule"`
+	PostExecRule           string            `json:"postExecRule"`
 }
 
 // MigrationStatus is the status of a migration operation
