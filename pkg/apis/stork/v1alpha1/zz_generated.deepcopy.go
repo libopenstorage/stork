@@ -1433,6 +1433,11 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.AllowCleaningResources != nil {
+		in, out := &in.AllowCleaningResources, &out.AllowCleaningResources
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Selectors != nil {
 		in, out := &in.Selectors, &out.Selectors
 		*out = make(map[string]string, len(*in))
