@@ -38,6 +38,9 @@ const (
 	// StorkMigrationReplicasAnnotation is the annotation used to keep track of
 	// the number of replicas for an application when it was migrated
 	StorkMigrationReplicasAnnotation = "stork.libopenstorage.org/migrationReplicas"
+	// StorkMigrationAnnotation is the annotation used to keep track of resources
+	// migrated by stork
+	StorkMigrationAnnotation = "stork.libopenstorage.org/storkMigration"
 	// Max number of times to retry applying resources on the desination
 	maxApplyRetries = 10
 )
@@ -284,12 +287,20 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			}
 
 		case stork_api.MigrationStageFinal:
-			// Do Nothing
+			// delete resources on destination which are not present on source
+			// TODO: what should be idle location for this
+			if *migration.Spec.AllowCleaningResources {
+				return m.cleanupMigratedResources(migration)
+			}
 			return nil
 		default:
 			log.MigrationLog(migration).Errorf("Invalid stage for migration: %v", migration.Status.Stage)
 		}
 	}
+	return nil
+}
+
+func (m *MigrationController) cleanupMigratedResources(migration *stork_api.Migration) error {
 	return nil
 }
 
@@ -884,6 +895,10 @@ func (m *MigrationController) applyResources(
 		if !ok {
 			return fmt.Errorf("unable to cast object to unstructured: %v", o)
 		}
+
+		unstructured.SetAnnotations(map[string]string{StorkMigrationAnnotation: "true"})
+		log.MigrationLog(migration).Infof("Applied stork migration annotation %v %v", metadata.GetName(), unstructured.GetAnnotations())
+
 		retries := 0
 		for {
 			_, err = dynamicClient.Create(unstructured)
