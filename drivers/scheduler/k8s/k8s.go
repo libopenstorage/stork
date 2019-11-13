@@ -69,9 +69,11 @@ const (
 	//DefaultRetryInterval  Default retry interval
 	DefaultRetryInterval = 10 * time.Second
 	//DefaultTimeout default timeout
-	DefaultTimeout               = 2 * time.Minute
-	resizeSupportedAnnotationKey = "torpedo/resize-supported"
-	autopilotResizeAnnotationKey = "torpedo.io/autopilot-enabled"
+	DefaultTimeout                       = 2 * time.Minute
+	resizeSupportedAnnotationKey         = "torpedo.io/resize-supported"
+	autopilotEnabledAnnotationKey        = "torpedo.io/autopilot-enabled"
+	deploymentAppEnvEnabledAnnotationKey = "torpedo.io/appenv-enabled"
+	specObjAppWorkloadSizeEnvVar         = "SIZE"
 )
 
 const (
@@ -83,7 +85,10 @@ const (
 
 var (
 	// use underscore to avoid conflicts to text/template from golang
-	namespaceRegex = regexp.MustCompile("_NAMESPACE_")
+	namespaceRegex      = regexp.MustCompile("_NAMESPACE_")
+	defaultTorpedoLabel = map[string]string{
+		"creator": "torpedo",
+	}
 )
 
 //K8s  The kubernetes structure
@@ -236,7 +241,6 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 			if err == io.EOF {
 				break
 			}
-
 			if len(bytes.TrimSpace(specContents)) > 0 {
 				obj, err := decodeSpec(specContents)
 				if err != nil {
@@ -416,7 +420,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				SpecList: specObjects,
 				Enabled:  app.Enabled,
 			},
-			Options: options,
+			ScheduleOptions: options,
 		}
 
 		contexts = append(contexts, ctx)
@@ -428,7 +432,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 // CreateSpecObjects Create application
 func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) ([]interface{}, error) {
 	var specObjects []interface{}
-	ns, err := k.createNamespace(app, namespace)
+	ns, err := k.createNamespace(app, namespace, options)
 	if err != nil {
 		return nil, err
 	}
@@ -570,15 +574,18 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 	return nil
 }
 
-func (k *K8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespace, error) {
+func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) (*v1.Namespace, error) {
 	k8sOps := k8sops.Instance()
 
 	t := func() (interface{}, bool, error) {
-		ns, err := k8sOps.CreateNamespace(namespace,
-			map[string]string{
-				"creator": "torpedo",
-				"app":     app.Key,
-			})
+		metadata := defaultTorpedoLabel
+		metadata["app"] = app.Key
+		if len(options.Labels) > 0 {
+			for k, v := range options.Labels {
+				metadata[k] = v
+			}
+		}
+		ns, err := k8sOps.CreateNamespace(namespace, metadata)
 
 		if errors.IsAlreadyExists(err) {
 			if ns, err = k8sOps.GetNamespace(namespace); err == nil {
@@ -651,6 +658,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 		obj.Namespace = ns.Name
 		k.substituteNamespaceInPVC(obj, ns.Name)
+		if len(options.Labels) > 0 {
+			k.addLabelsToPVC(obj, options.Labels)
+		}
 
 		pvc, err := k8sOps.CreatePersistentVolumeClaim(obj)
 		if errors.IsAlreadyExists(err) {
@@ -668,32 +678,21 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 
 		logrus.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
 
-		pvcAnnotationSupported := false
-		apParams := options.AutopilotParameters
-
-		if apParams != nil && apParams.Enabled {
-			if pvcAnnotation, ok := pvc.Annotations[autopilotResizeAnnotationKey]; ok {
-				pvcAnnotationSupported, _ = strconv.ParseBool(pvcAnnotation)
-			}
-			if pvcAnnotationSupported {
-				apParams.AutopilotRuleParameters.MatchLabels = pvc.Labels
-				apObject, err := k.createAutopilotObject(apParams)
+		autopilotEnabled := false
+		if pvcAnnotationValue, ok := pvc.Annotations[autopilotEnabledAnnotationKey]; ok {
+			autopilotEnabled, _ = strconv.ParseBool(pvcAnnotationValue)
+		}
+		if autopilotEnabled {
+			apRule := options.AutopilotRule
+			if apRule.Name != "" {
+				aRule, err := k.createAutopilotRule(apRule, options)
 				if err != nil {
-					return nil, &scheduler.ErrFailedToScheduleApp{
-						App:   app,
-						Cause: fmt.Sprintf("Failed to create Autopilot object: %v. Err: %v", apParams.Name, err),
-					}
+					return nil, err
 				}
-				apRule, err := k.createAutopilotRule(apObject)
-				if err != nil {
-					return nil, &scheduler.ErrFailedToScheduleApp{
-						App:   app,
-						Cause: fmt.Sprintf("Failed to create Autopilot rule: %v. Err: %v", apObject, err),
-					}
-				}
-				logrus.Infof("[%v] Created Autopilot rule: %v", app.Key, apRule.Name)
+				logrus.Infof("[%v] Created Autopilot rule: %v", app.Key, aRule)
 			}
 		}
+
 		return pvc, nil
 
 	} else if obj, ok := spec.(*snapv1.VolumeSnapshot); ok {
@@ -1150,51 +1149,42 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 }
 
-func (k *K8s) createAutopilotObject(apParams *scheduler.AutopilotParameters) (*apapi.AutopilotRule, error) {
-	obj := &apapi.AutopilotRule{}
-	apRuleParams := apParams.AutopilotRuleParameters
-	obj.Name = apParams.Name
-	obj.Namespace = apParams.Namespace
-	obj.Labels = map[string]string{"creator": "torpedo"}
-	obj.Spec.PollInterval = apParams.PollInterval
-	obj.Spec.ActionsCoolDownPeriod = apRuleParams.ActionsCoolDownPeriod
-	obj.Spec.Selector.LabelSelector.MatchLabels = apRuleParams.MatchLabels //map[string]string{"name": "pgbench-data"}
-	obj.Spec.NamespaceSelector.LabelSelector.MatchLabels = map[string]string{"creator": "torpedo"}
-	for _, ruleExpression := range apRuleParams.RuleConditionExpressions {
-		exprVolumeUsage := &apapi.LabelSelectorRequirement{
-			Key:      ruleExpression.Key,
-			Operator: apapi.LabelSelectorOperator(ruleExpression.Operator),
-			Values:   ruleExpression.Values,
-		}
-		obj.Spec.Conditions.Expressions = append(obj.Spec.Conditions.Expressions, exprVolumeUsage)
-	}
-	for _, ruleAction := range apRuleParams.RuleActions {
-		actions := &apapi.RuleAction{
-			Name:   ruleAction.Name,
-			Params: ruleAction.Params,
-		}
-		obj.Spec.Actions = append(obj.Spec.Actions, actions)
-	}
-
-	logrus.Infof("Using Autopilot Object: %+v\n", obj)
-
-	return obj, nil
-}
-
-func (k *K8s) createAutopilotRule(autopilotRule *apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+func (k *K8s) createAutopilotRule(autopilotRule apapi.AutopilotRule, options scheduler.ScheduleOptions) (*apapi.AutopilotRule, error) {
 	k8sOps := k8sops.Instance()
-	apRule, err := k8sOps.CreateAutopilotRule(autopilotRule)
-	if errors.IsAlreadyExists(err) {
-		if apRule, err = k8sOps.GetAutopilotRule(autopilotRule.Name); err == nil {
-			logrus.Infof("Found existing AutopilotRule: %v", autopilotRule.Name)
-			return apRule, nil
+
+	t := func() (interface{}, bool, error) {
+		autopilotRule.Labels = defaultTorpedoLabel
+		autopilotRule.Spec.Selector = apapi.RuleObjectSelector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: options.Labels,
+			},
 		}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to create AutopilotRule: %v. Err: %v", autopilotRule.Name, err)
+		autopilotRule.Spec.NamespaceSelector = apapi.RuleObjectSelector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: options.Labels,
+			},
+		}
+
+		apRule, err := k8sOps.CreateAutopilotRule(&autopilotRule)
+		if errors.IsAlreadyExists(err) {
+			if apRule, err := k8sOps.GetAutopilotRule(autopilotRule.Name); err == nil {
+				logrus.Infof("Using existing AutopilotRule: %v", apRule.Name)
+				return apRule, false, nil
+			}
+		}
+		if err != nil {
+			return nil, true, fmt.Errorf("Failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
+		}
+
+		return apRule, false, nil
 	}
 
-	return apRule, nil
+	apRuleObj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	return apRuleObj.(*apapi.AutopilotRule), nil
 }
 
 func (k *K8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.Volume {
@@ -1362,6 +1352,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 //Destroy destroy
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []v1.Pod
+	k8sOps := k8sops.Instance()
+	apRule := ctx.ScheduleOptions.AutopilotRule
+	if apRule.Name != "" {
+		if err := k8sOps.DeleteAutopilotRule(apRule.ObjectMeta.Name); err != nil {
+			if err != nil {
+				return err
+			}
+		}
+	}
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			currPods, err := k.destroyCoreObject(appSpec, opts, ctx.App)
@@ -1664,6 +1663,7 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 
 //InspectVolumes Insepect the volumes
 func (k *K8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+	var err error
 	k8sOps := k8sops.Instance()
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
@@ -1684,26 +1684,32 @@ func (k *K8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 			}
 			logrus.Infof("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
 
-			apParams := ctx.Options.AutopilotParameters
-			pvcAnnotationSupported := false
-			if apParams != nil && apParams.Enabled {
-				if pvcAnnotation, ok := obj.Annotations[autopilotResizeAnnotationKey]; ok {
-					pvcAnnotationSupported, _ = strconv.ParseBool(pvcAnnotation)
+			autopilotEnabled := false
+			if pvcAnnotationValue, ok := obj.Annotations[autopilotEnabledAnnotationKey]; ok {
+				autopilotEnabled, _ = strconv.ParseBool(pvcAnnotationValue)
+			}
+			if autopilotEnabled {
+				var listApRules *apapi.AutopilotRuleList
+				if listApRules, err = k8sOps.ListAutopilotRules(); err != nil {
+					return err
 				}
-				if pvcAnnotationSupported {
-					expectedPVCSize := apParams.AutopilotRuleParameters.ExpectedPVCSize
-
+				if len(listApRules.Items) != 0 {
+					var wSize, expectedPVCSize uint64
+					if wSize, err = k.getContextWorkloadSize(ctx); err != nil {
+						return err
+					}
+					if expectedPVCSize, err = k.getExpectedAutopilotSizeForPvc(obj, listApRules, wSize); err != nil {
+						return err
+					}
 					logrus.Infof("[%v] expecting PVC size: %+v\n", ctx.App.Key, expectedPVCSize)
-					if err := k8sOps.ValidatePersistentVolumeClaimSize(obj, expectedPVCSize, timeout, retryInterval); err != nil {
+					if err := k8sOps.ValidatePersistentVolumeClaimSize(obj, int64(expectedPVCSize), timeout, retryInterval); err != nil {
 						return &scheduler.ErrFailedToValidateStorage{
-							App: ctx.App,
-							Cause: fmt.Sprintf("Failed to validate PVC %v of size: %v. Err: %v", obj.Name,
-								expectedPVCSize, err),
+							App:   ctx.App,
+							Cause: fmt.Sprintf("Failed to validate size: %v of PVC: %v. Err: %v", expectedPVCSize, obj.Name, err),
 						}
 					}
+					logrus.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 				}
-				logrus.Infof("[%v] Validated PVC: %v size based on Autopilot rule: %v calculation", ctx.App.Key,
-					obj.Name, apParams.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
@@ -1732,7 +1738,6 @@ func (k *K8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 					Cause: fmt.Sprintf("Failed to get StatefulSet: %v. Err: %v", obj.Name, err),
 				}
 			}
-
 			if err := k8sOps.ValidatePVCsForStatefulSet(ss, timeout*time.Duration(*obj.Spec.Replicas), retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
@@ -1743,8 +1748,25 @@ func (k *K8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 			logrus.Infof("[%v] Validated PVCs from StatefulSet: %v", ctx.App.Key, obj.Name)
 		}
 	}
-
 	return nil
+}
+
+func (k *K8s) getContextWorkloadSize(ctx *scheduler.Context) (uint64, error) {
+	var wSize uint64
+	var err error
+	appEnvVar := k.GetSpecAppEnvVar(ctx, specObjAppWorkloadSizeEnvVar)
+	if appEnvVar == "" {
+		return uint64(0), fmt.Errorf("Can't find app SIZE env variable in given context")
+	}
+	wSize, err = strconv.ParseUint(appEnvVar, 10, 64)
+	if err != nil {
+		return uint64(0), fmt.Errorf("Failed to parse app SIZE env variable")
+	}
+	// if size less than 1024 we assume that value is in Gb
+	if wSize < 1024 {
+		wSize *= 1024 * 1024 * 1024
+	}
+	return wSize, nil
 }
 
 func (k *K8s) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
@@ -1774,33 +1796,6 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
-			pvcAnnotationSupported := false
-			apParams := ctx.Options.AutopilotParameters
-
-			pvc, err := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			if err != nil {
-				return nil, &scheduler.ErrFailedToGetVolumeParameters{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("failed to get PVC: %v. Err: %v", obj.Name, err),
-				}
-			}
-
-			if apParams != nil && apParams.Enabled {
-				if pvcAnnotation, ok := pvc.Annotations[autopilotResizeAnnotationKey]; ok {
-					pvcAnnotationSupported, _ = strconv.ParseBool(pvcAnnotation)
-				}
-				if pvcAnnotationSupported {
-					if err := k8sOps.DeleteAutopilotRule(apParams.Name); err != nil {
-						if !errors.IsNotFound(err) {
-							return nil, &scheduler.ErrFailedToDestroyAutopilotRule{
-								Name: apParams.Name,
-								Cause: fmt.Sprintf("Failed to destroy an autopilot rule: %v. Err: %v", obj.Name,
-									err),
-							}
-						}
-					}
-				}
-			}
 			vols = append(vols, &volume.Volume{
 				ID:        string(obj.UID),
 				Name:      obj.Name,
@@ -1881,11 +1876,20 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
+			pvcObj, _ := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			pvcSizeObj := pvcObj.Spec.Resources.Requests[v1.ResourceStorage]
+			pvcSize, _ := pvcSizeObj.AsInt64()
 			vol := &volume.Volume{
-				ID:        string(obj.UID),
-				Name:      obj.Name,
-				Namespace: obj.Namespace,
-				Shared:    k.isPVCShared(obj),
+				ID:          string(obj.UID),
+				Name:        obj.Name,
+				Namespace:   obj.Namespace,
+				Shared:      k.isPVCShared(obj),
+				Annotations: make(map[string]string),
+				Labels:      pvcObj.Labels,
+				Size:        uint64(pvcSize),
+			}
+			for key, val := range obj.Annotations {
+				vol.Annotations[key] = val
 			}
 			vols = append(vols, vol)
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
@@ -1999,11 +2003,11 @@ func (k *K8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *v1.PersistentVolumeCla
 	}
 	sizeInt64, _ := storageSize.AsInt64()
 	vol := &volume.Volume{
-		ID:        string(pvc.UID),
-		Name:      pvc.Name,
-		Namespace: pvc.Namespace,
-		Size:      uint64(sizeInt64),
-		Shared:    k.isPVCShared(pvc),
+		ID:            string(pvc.UID),
+		Name:          pvc.Name,
+		Namespace:     pvc.Namespace,
+		RequestedSize: uint64(sizeInt64),
+		Shared:        k.isPVCShared(pvc),
 	}
 	return vol, nil
 }
@@ -2839,6 +2843,91 @@ func (k *K8s) destroyBackupObjects(
 		logrus.Infof("[%v] Destroyed ApplicationClone: %v", app.Key, obj.Name)
 	}
 	return nil
+}
+
+// getExpectedAutopilotSizeForPvc calculates exected size of PVC based on autopilot rules and workload
+func (k *K8s) getExpectedAutopilotSizeForPvc(pvc *v1.PersistentVolumeClaim, apRules *apapi.AutopilotRuleList, wSize uint64) (uint64, error) {
+	var err error
+	var expectedPVCSize uint64
+
+	driver, err := volume.Get(k.VolDriverName)
+	if err != nil {
+		return 0, err
+	}
+
+	pvcObjSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+	pvcSize, _ := pvcObjSize.AsInt64()
+	expectedPVCSize = uint64(pvcSize)
+
+	for _, apRule := range apRules.Items {
+		if isAutopilotMatchPvcLabels(apRule, pvc) {
+			expectedPVCSize = driver.CalculateAutopilotObjectSize(apRule, uint64(pvcSize), wSize)
+			break
+		}
+	}
+	return expectedPVCSize, nil
+}
+
+func isAutopilotMatchPvcLabels(apRule apapi.AutopilotRule, pvc *v1.PersistentVolumeClaim) bool {
+	apRuleLabels := apRule.Spec.Selector.LabelSelector.MatchLabels
+	for k, v := range apRuleLabels {
+		if pvcLabelValue, ok := pvc.Labels[k]; ok {
+			if pvcLabelValue == v {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// GetSpecAppEnvVar gets app environment variable value by given key name
+func (k *K8s) GetSpecAppEnvVar(ctx *scheduler.Context, key string) string {
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			for _, container := range obj.Spec.Template.Spec.Containers {
+				for _, env := range container.Env {
+					if env.Name == key {
+						return env.Value
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// AddLabelOnNode adds label for a given node
+func (k *K8s) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
+	k8sOps := k8sops.Instance()
+
+	if err := k8sOps.AddLabelOnNode(n.Name, lKey, lValue); err != nil {
+		return &scheduler.ErrFailedToAddLabelOnNode{
+			Key:   lKey,
+			Value: lValue,
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to add label on node. Err: %v", err),
+		}
+	}
+	logrus.Infof("Added label on %s node: %s=%s", n.Name, lKey, lValue)
+	return nil
+}
+
+//IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
+func (k *K8s) IsAutopilotEnabledForVolume(vol *volume.Volume) bool {
+	autopilotEnabled := false
+	if volAnnotationValue, ok := vol.Annotations[autopilotEnabledAnnotationKey]; ok {
+		autopilotEnabled, _ = strconv.ParseBool(volAnnotationValue)
+	}
+	return autopilotEnabled
+}
+
+func (k *K8s) addLabelsToPVC(pvc *v1.PersistentVolumeClaim, labels map[string]string) {
+	if len(pvc.Labels) == 0 {
+		pvc.Labels = map[string]string{}
+	}
+	for k, v := range labels {
+		pvc.Labels[k] = v
+	}
 }
 
 func insertLineBreak(note string) string {

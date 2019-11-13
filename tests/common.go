@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -75,6 +76,7 @@ const (
 	defaultStorageProvisioner             = "portworx"
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
+	specObjAppWorkloadSizeEnvVar          = "SIZE"
 )
 
 const (
@@ -359,6 +361,84 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 			TearDownContext(ctx, opts)
 		}
 	})
+}
+
+// AddLabelsOnNode adds labels on the node
+func AddLabelsOnNode(n node.Node, labels map[string]string) error {
+	for labelKey, labelValue := range labels {
+		if err := Inst().S.AddLabelOnNode(n, labelKey, labelValue); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ValidateStoragePools is the ginkgo spec for validating storage pools
+func ValidateStoragePools(contexts []*scheduler.Context) {
+	var err error
+	strExpansionEnabled, err := Inst().V.IsStorageExpansionEnabled()
+	expect(err).NotTo(haveOccurred())
+
+	if strExpansionEnabled {
+		var wSize uint64
+		var expectedStoragePoolsWorkloadSize = make(map[string]uint64)
+		logrus.Debugf("storage expansion enabled")
+		// for each replica set add the size of app workload to each storage pool where replica resides on
+		for _, ctx := range contexts {
+			Step(fmt.Sprintf("get replica sets %s app volumes", ctx.App.Key), func() {
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				expect(err).NotTo(haveOccurred())
+				expect(appVolumes).NotTo(beEmpty())
+				for _, vol := range appVolumes {
+					if Inst().S.IsAutopilotEnabledForVolume(vol) {
+						replicaSets, err := Inst().V.GetReplicaSets(vol)
+						expect(err).NotTo(haveOccurred())
+						expect(replicaSets).NotTo(beEmpty())
+						for _, poolUUID := range replicaSets[0].PoolUuids {
+							wSize, err = getSpecAppWorkloadSize(ctx)
+							expect(err).NotTo(haveOccurred())
+							expectedStoragePoolsWorkloadSize[poolUUID] += wSize
+						}
+					}
+				}
+			})
+		}
+		logrus.Debugf("storage pools workload sizes map: %v\n", expectedStoragePoolsWorkloadSize)
+
+		// update each storage pool with the app workload sizes
+		nodes := node.GetWorkerNodes()
+		expect(nodes).NotTo(beEmpty())
+		for _, n := range nodes {
+			for idx, sPool := range n.StoragePools {
+				if wkldSize, ok := expectedStoragePoolsWorkloadSize[sPool.Uuid]; ok {
+					tenPercentOfStoragePool := float64(sPool.InitialSize) / 10
+					n.StoragePools[idx].WorkloadSize = wkldSize + uint64(tenPercentOfStoragePool)
+				}
+			}
+			err = node.UpdateNode(n)
+			expect(err).NotTo(haveOccurred())
+		}
+	}
+	err = Inst().V.ValidateStoragePools()
+	expect(err).NotTo(haveOccurred())
+
+}
+
+func getSpecAppWorkloadSize(context *scheduler.Context) (uint64, error) {
+	var err error
+	var wSize uint64
+	appEnvVar := Inst().S.GetSpecAppEnvVar(context, specObjAppWorkloadSizeEnvVar)
+	if appEnvVar != "" {
+		wSize, err = strconv.ParseUint(appEnvVar, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("Can't parse value %v of environment variable. Err: %v", appEnvVar, err)
+		}
+		// if size less than 1024 we assume that value is in Gb
+		if wSize < 1024 {
+			return wSize * 1024 * 1024 * 1024, nil
+		}
+	}
+	return 0, nil
 }
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.

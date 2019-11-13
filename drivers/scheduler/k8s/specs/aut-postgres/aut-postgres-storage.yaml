@@ -1,0 +1,43 @@
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+   name: px-postgres-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  priority_io: "high"
+allowVolumeExpansion: true
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres-data
+  labels:
+    app: postgres
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-postgres-sc
+    torpedo.io/autopilot-enabled: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      {{ if .VolumeSize }}
+      storage: {{ .VolumeSize }}
+      {{ else }}
+      storage: 7Gi{{ end }}
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres-volume
+spec:
+  storageClassName: px-postgres-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

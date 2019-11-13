@@ -5,6 +5,7 @@ import (
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -12,11 +13,14 @@ import (
 
 // Volume is a generic struct encapsulating volumes in the cluster
 type Volume struct {
-	ID        string
-	Name      string
-	Namespace string
-	Size      uint64
-	Shared    bool
+	ID            string
+	Name          string
+	Namespace     string
+	Annotations   map[string]string
+	Labels        map[string]string
+	Size          uint64
+	RequestedSize uint64
+	Shared        bool
 }
 
 // Snapshot is a generic struct encapsulating snapshots in the cluster
@@ -135,6 +139,18 @@ type Driver interface {
 
 	// CollectDiags collects live diags on a node
 	CollectDiags(n node.Node) error
+
+	// ValidateStoragePools validates all the storage pools
+	ValidateStoragePools() error
+
+	// CreateAutopilotRules creates autopilot rules
+	CreateAutopilotRules([]apapi.AutopilotRule) error
+
+	// IsStorageExpansionEnabled returns true if storage expansion enabled
+	IsStorageExpansionEnabled() (bool, error)
+
+	//CalculateAutopilotObjectSize calculates expected size based on autopilot rule, initial and workload sizes
+	CalculateAutopilotObjectSize(apRule apapi.AutopilotRule, initSize uint64, workloadSize uint64) uint64
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

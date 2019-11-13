@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
@@ -17,6 +18,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -738,6 +740,35 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 	}
 
 	return pxNodes, nil
+}
+
+// CreateAutopilotRule creates the AutopilotRule object
+func (k *k8sSchedOps) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+	k8sOps := k8s.Instance()
+	apRule.Labels = map[string]string{
+		"creator": "torpedo",
+	}
+	autopilotRule, err := k8sOps.CreateAutopilotRule(&apRule)
+	if k8s_errors.IsAlreadyExists(err) {
+		if autopilotRule, err := k8sOps.GetAutopilotRule(apRule.Name); err == nil {
+			logrus.Infof("Using existing autopilot rule: %v", apRule.ObjectMeta.Name)
+			return autopilotRule, nil
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
+	}
+	logrus.Infof("Created Autopilot Rule: %v", autopilotRule.ObjectMeta.Name)
+	return autopilotRule, nil
+}
+
+func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
+	k8sOps := k8s.Instance()
+	listAutopilotRules, err := k8sOps.ListAutopilotRules()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get list of autopilotrules. Err: %v", err)
+	}
+	return listAutopilotRules, nil
 }
 
 func init() {

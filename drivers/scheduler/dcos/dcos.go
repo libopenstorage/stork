@@ -557,6 +557,23 @@ func (d *dcos) GetTokenFromConfigMap(string) (string, error) {
 	}
 }
 
+func (d *dcos) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "AddLabelOnNode()",
+	}
+}
+
+func (d *dcos) IsAutopilotEnabledForVolume(*volume.Volume) bool {
+	// TODO implement this method
+	return false
+}
+
+func (d *dcos) GetSpecAppEnvVar(ctx *scheduler.Context, key string) string {
+	// TODO implement this method
+	return ""
+}
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

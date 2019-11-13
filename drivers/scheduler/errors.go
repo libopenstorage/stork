@@ -56,18 +56,6 @@ func (e *ErrFailedToDestroyStorage) Error() string {
 	return fmt.Sprintf("Failed to destory storage for app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
-// ErrFailedToDestroyAutopilotRule error type for failing to destroy an autopilotrule
-type ErrFailedToDestroyAutopilotRule struct {
-	// Name is the autopilot name that failed to destroy
-	Name string
-	// Cause is the underlying cause of the error
-	Cause string
-}
-
-func (e *ErrFailedToDestroyAutopilotRule) Error() string {
-	return fmt.Sprintf("Failed to destory an autopilot rule: %v due to err: %v", e.Name, e.Cause)
-}
-
 // ErrFailedToValidateStorage error type for failing to validate an app's storage
 type ErrFailedToValidateStorage struct {
 	// App is the app whose storage validation failed
@@ -336,6 +324,22 @@ type ErrFailedToGetConfigMap struct {
 
 func (e *ErrFailedToGetConfigMap) Error() string {
 	return fmt.Sprintf("Failed to get config map: %s due to err: %v", e.Name, e.Cause)
+}
+
+// ErrFailedToAddLabelOnNode error type for failing to add label on node
+type ErrFailedToAddLabelOnNode struct {
+	// Key is the label key
+	Key string
+	// Value is the label value
+	Value string
+	// Node is the node where label should be added
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToAddLabelOnNode) Error() string {
+	return fmt.Sprintf("Failed to add label: %s=%s on node %v due to err: %v", e.Key, e.Value, e.Node, e.Cause)
 }
 
 // ErrFailedToGetCustomSpec error type for failing to get config map

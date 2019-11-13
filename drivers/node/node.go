@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -27,6 +28,15 @@ const (
 	Directory FindType = "d"
 )
 
+// StoragePool is the storage pool structure on the node
+type StoragePool struct {
+	*api.StoragePool
+	// InitialSize is the initial size of storage pool in bytes
+	InitialSize uint64
+	// WorkloadSize is the size in bytes of the workload that will be launched by test on this storage pool
+	WorkloadSize uint64
+}
+
 // Node encapsulates a node in the cluster
 type Node struct {
 	uuid                     string
@@ -39,6 +49,7 @@ type Node struct {
 	Region                   string
 	IsStorageDriverInstalled bool
 	IsMetadataNode           bool
+	StoragePools             []StoragePool
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options

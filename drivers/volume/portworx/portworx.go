@@ -14,6 +14,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/api/client"
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
@@ -37,6 +38,28 @@ const (
 	portworxStorage torpedovolume.StorageProvisionerType = "portworx"
 	//CsiStorage csi storage name
 	csiStorage torpedovolume.StorageProvisionerType = "csi"
+	// PxPoolAvailableCapacityMetric is metric for pool available capacity
+	PxPoolAvailableCapacityMetric = "100 * ( px_pool_stats_available_bytes/ px_pool_stats_total_bytes)"
+	// PxPoolTotalCapacityMetric is metric for pool total capacity
+	PxPoolTotalCapacityMetric = "px_pool_stats_total_bytes/(1024*1024*1024)"
+	// PxVolumeUsagePercentMetric is metric for volume usage percentage
+	PxVolumeUsagePercentMetric = "100 * (px_volume_usage_bytes / px_volume_capacity_bytes)"
+	// PxVolumeCapacityPercentMetric is metric for volume capacity percentage
+	PxVolumeCapacityPercentMetric = "px_volume_capacity_bytes / 1000000000"
+	// VolumeSpecAction is name for volume spec action
+	VolumeSpecAction = "openstorage.io.action.volume/resize"
+	// StorageSpecAction is name for storage spec action
+	StorageSpecAction = "openstorage.io.action.storagepool/expand"
+	// RuleActionsScalePercentage is name for scale percentage rule action
+	RuleActionsScalePercentage = "scalepercentage"
+	// RuleScaleType is name for scale type
+	RuleScaleType = "scaletype"
+	// RuleScaleTypeAddDisk is name for add disk scale type
+	RuleScaleTypeAddDisk = "add-disk"
+	// RuleScaleTypeResizeDisk is name for resize disk scale type
+	RuleScaleTypeResizeDisk = "resize-disk"
+	// RuleMaxSize is name for rule max size
+	RuleMaxSize = "maxsize"
 )
 
 var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
@@ -71,6 +94,8 @@ const (
 	validateClusterStartTimeout      = 2 * time.Minute
 	validatePXStartTimeout           = 5 * time.Minute
 	validateNodeStopTimeout          = 5 * time.Minute
+	validateStoragePoolSizeTimeout   = 3 * time.Hour
+	validateStoragePoolSizeInterval  = 30 * time.Second
 	getNodeTimeout                   = 3 * time.Minute
 	getNodeRetryInterval             = 5 * time.Second
 	stopDriverTimeout                = 5 * time.Minute
@@ -179,7 +204,6 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 	if err != nil {
 		return err
 	}
-
 	for _, n := range node.GetStorageDriverNodes() {
 		if err = d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
 			return err
@@ -255,6 +279,24 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []api.StorageNode) error {
 						return err
 					}
 					n.IsMetadataNode = isMetadataNode
+
+					if n.StoragePools == nil {
+						for _, pxNodePool := range pxNode.Pools {
+							storagePool := node.StoragePool{
+								StoragePool: pxNodePool,
+								InitialSize: pxNodePool.TotalSize,
+							}
+							n.StoragePools = append(n.StoragePools, storagePool)
+						}
+					} else {
+						for idx, nodeStoragePool := range n.StoragePools {
+							for _, pxNodePool := range pxNode.Pools {
+								if nodeStoragePool.Uuid == pxNodePool.Uuid {
+									n.StoragePools[idx].StoragePool = pxNodePool
+								}
+							}
+						}
+					}
 					if err = node.UpdateNode(*n); err != nil {
 						return fmt.Errorf("failed to update node %s. Cause: %v", n.Name, err)
 					}
@@ -653,11 +695,11 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 	respVol := out.(*api.Volume)
 
 	// Size Update
-	if respVol.Spec.Size != vol.Size {
+	if respVol.Spec.Size != vol.RequestedSize {
 		return &ErrFailedToInspectVolume{
 			ID: volumeName,
 			Cause: fmt.Sprintf("Volume size differs. Expected:%v Actual:%v",
-				vol.Size, respVol.Spec.Size),
+				vol.RequestedSize, respVol.Spec.Size),
 		}
 	}
 	return nil
@@ -952,6 +994,73 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	return nil
 }
 
+func (d *portworx) ValidateStoragePools() error {
+	// check if the sizes of pools match the expected sizes after storage expand
+	var listApRules *apapi.AutopilotRuleList
+	var err error
+	if listApRules, err = d.schedOps.ListAutopilotRules(); err != nil {
+		return err
+	}
+	if len(listApRules.Items) != 0 {
+		expectedStorPoolsSizes := d.getExpectedStorageSizesOfPools(listApRules)
+		t := func() (interface{}, bool, error) {
+			allDone := true
+			d.RefreshDriverEndpoints()
+			for _, n := range node.GetWorkerNodes() {
+				for _, sPool := range n.StoragePools {
+					ePoolSize := expectedStorPoolsSizes[sPool.Uuid]
+					if ePoolSize != sPool.TotalSize {
+						logrus.Infof("node: %s, pool: %s, size is not as expected. Expected: %v, Actual: %v",
+							n.Name, sPool.Uuid, ePoolSize, sPool.TotalSize)
+						allDone = false
+					} else {
+						logrus.Infof("node: %s, pool: %s, size is as expected. Expected: %v",
+							n.Name, sPool.Uuid, ePoolSize)
+					}
+				}
+			}
+			if allDone {
+				return "", false, nil
+			}
+			return "", true, fmt.Errorf("some sizes of pools are not as expected")
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, validateStoragePoolSizeTimeout, validateStoragePoolSizeInterval); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *portworx) getExpectedStorageSizesOfPools(listApRules *apapi.AutopilotRuleList) map[string]uint64 {
+	expectedStorPoolsSizes := map[string]uint64{}
+	d.RefreshDriverEndpoints()
+	for _, apRule := range listApRules.Items {
+		for _, n := range node.GetWorkerNodes() {
+			for _, strPool := range n.StoragePools {
+				apRuleLabels := apRule.Spec.Selector.LabelSelector.MatchLabels
+				strPoolLabels := strPool.Labels
+				storagePoolMatchedLabel := false
+				for k, v := range apRuleLabels {
+					if apRuleLabels[k] == strPoolLabels[k] && apRuleLabels[v] == strPoolLabels[v] {
+						storagePoolMatchedLabel = true
+					}
+				}
+				if storagePoolMatchedLabel {
+					calculatedStoragePoolSize := d.CalculateAutopilotObjectSize(apRule, uint64(strPool.InitialSize), strPool.WorkloadSize)
+					expectedStorPoolsSizes[strPool.Uuid] = calculatedStoragePoolSize
+				} else {
+					if _, ok := expectedStorPoolsSizes[strPool.Uuid]; !ok {
+						expectedStorPoolsSizes[strPool.Uuid] = strPool.InitialSize
+					}
+				}
+			}
+		}
+	}
+	logrus.Debugf("expected sizes of storage pools: %+v", expectedStorPoolsSizes)
+	return expectedStorPoolsSizes
+}
+
 // pickAlternateClusterManager returns a different node than given one, useful in case you want to skip nodes which are down
 func (d *portworx) pickAlternateClusterManager(n node.Node) (api.OpenStorageNodeClient, error) {
 	// Check if px is down on all node addresses. We don't want to keep track
@@ -978,6 +1087,52 @@ func (d *portworx) pickAlternateClusterManager(n node.Node) (api.OpenStorageNode
 		}
 	}
 	return nil, fmt.Errorf("failed to get an alternate cluster manager for %s", n.Name)
+}
+
+// CreateAutopilotRules creates autopilot rules
+func (d *portworx) CreateAutopilotRules(apRules []apapi.AutopilotRule) error {
+	for _, apRule := range apRules {
+		autopilotRule, err := d.schedOps.CreateAutopilotRule(apRule)
+		if err != nil {
+			return err
+		}
+		logrus.Infof("Created Autopilot rule: %v", autopilotRule)
+	}
+	return nil
+}
+
+func (d *portworx) IsStorageExpansionEnabled() (bool, error) {
+	var listApRules *apapi.AutopilotRuleList
+	var err error
+	d.RefreshDriverEndpoints()
+	if listApRules, err = d.schedOps.ListAutopilotRules(); err != nil {
+		return false, err
+	}
+
+	if len(listApRules.Items) != 0 {
+		for _, apRule := range listApRules.Items {
+			for _, n := range node.GetWorkerNodes() {
+				if isAutopilotMatchStoragePoolLabels(apRule, n.StoragePools) {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
+}
+
+func isAutopilotMatchStoragePoolLabels(apRule apapi.AutopilotRule, sPools []node.StoragePool) bool {
+	apRuleLabels := apRule.Spec.Selector.LabelSelector.MatchLabels
+	for k, v := range apRuleLabels {
+		for _, pool := range sPools {
+			if poolLabelValue, ok := pool.Labels[k]; ok {
+				if poolLabelValue == v {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
@@ -1773,6 +1928,75 @@ func (d *portworx) CollectDiags(n node.Node) error {
 	}
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 	return nil
+}
+
+// CalculateAutopilotObjectSize calculates the expected size based on autopilot rule, initial and workload sizes
+func (d *portworx) CalculateAutopilotObjectSize(apRule apapi.AutopilotRule, initSize, wklSize uint64) uint64 {
+	// this method calculates expected autopilot object size for given initial and workload sizes.
+	// It supports Volume and Storage pool objects based on PX metrics.
+	// for ex: autopilot rule says scale storage pool by 50% with scale type adding disks when
+	// available storage pool capacity is less that 70%. Initial storage pool size is 32Gb and
+	// workload size on this pool is 10Gb
+	// First, we get PX metric from the rule and calculate it's own value based on initial storage
+	// pool size. In our example metric value will be (32Gb-10Gb*100) / 32Gb = 68.75
+	// Second, we check if above mnetric match condition in the rule conditions. Metric value is
+	// less than 70% and we have to apply condition action, which will add another disk with 32Gb.
+	// It will continue until metric value won't match condition in the rule
+	var maxSize, calculatedTotalSize uint64
+	calculatedTotalSize = initSize
+	applyRuleTrigger := true
+	for applyRuleTrigger {
+		for _, condExpr := range apRule.Spec.Conditions.Expressions {
+			var metricValue float64
+			condExprValue, _ := strconv.ParseFloat(condExpr.Values[0], 64)
+			if condExpr.Key == PxVolumeUsagePercentMetric {
+				metricValue = float64(int64(wklSize)) * 100 / float64(calculatedTotalSize)
+			} else if condExpr.Key == PxVolumeCapacityPercentMetric {
+				metricValue = float64(calculatedTotalSize) / 1000000000
+			} else if condExpr.Key == PxPoolAvailableCapacityMetric {
+				availableSize := int64(calculatedTotalSize) - int64(wklSize)
+				metricValue = float64(availableSize*100) / float64(calculatedTotalSize)
+				// rule condition contains pool total capacity metric
+			} else if condExpr.Key == PxPoolTotalCapacityMetric {
+				metricValue = float64(calculatedTotalSize) / (1024 * 1024 * 1024)
+			}
+			// check if conditions are met
+			if metricValue < condExprValue && condExpr.Operator == apapi.LabelSelectorOpLt ||
+				metricValue > condExprValue && condExpr.Operator == apapi.LabelSelectorOpGt {
+				for _, ruleAction := range apRule.Spec.Actions {
+					// TODO: verify unsupported actions
+					var actionScaleType string
+					if ruleAction.Name == StorageSpecAction {
+						// TODO: verify if params are empty
+						actionScaleType = ruleAction.Params[RuleScaleType]
+					}
+					actionScalePercentage, _ := strconv.ParseUint(ruleAction.Params[RuleActionsScalePercentage], 10, 64)
+					// scale type add-disk
+					if actionScaleType == RuleScaleTypeAddDisk {
+						var scaleSize float64
+						var diskCount uint64
+
+						scaleSize = float64(calculatedTotalSize * actionScalePercentage / 100)
+						diskCount = uint64(math.Ceil(scaleSize / float64(initSize)))
+						calculatedTotalSize += diskCount * initSize
+					} else {
+						calculatedTotalSize += calculatedTotalSize * actionScalePercentage / 100
+					}
+					// check if calculated size is more than maxsize
+					if actionMaxSize, ok := ruleAction.Params[RuleMaxSize]; ok {
+						maxSize, _ = strconv.ParseUint(actionMaxSize, 10, 64)
+					}
+
+					if maxSize != 0 && calculatedTotalSize > maxSize {
+						calculatedTotalSize = maxSize
+					}
+				}
+			} else {
+				applyRuleTrigger = false
+			}
+		}
+	}
+	return calculatedTotalSize
 }
 
 func init() {

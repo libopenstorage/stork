@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -24,8 +25,8 @@ type Context struct {
 	UID string
 	// App defines a k8s application specification
 	App *spec.AppSpec
-	// Options are options that callers to pass to influence the apps that get schduled
-	Options ScheduleOptions
+	// ScheduleOptions are options that callers to pass to influence the apps that get schduled
+	ScheduleOptions ScheduleOptions
 }
 
 // DeepCopy create a copy of Context
@@ -45,56 +46,11 @@ func (in *Context) GetID() string {
 	return in.App.GetID(in.UID)
 }
 
-// AutopilotRuleConditionExpressions are the conditions to check on the rule objects
-type AutopilotRuleConditionExpressions struct {
-	Key      string
-	Operator string
-	Values   []string
-}
-
-// AutopilotRuleActions are the actions to run for the rule when the conditions are met
-type AutopilotRuleActions struct {
-	Name   string
-	Params map[string]string
-}
-
-// AutopilotRuleParameters are rule parameters for Autopilot
-type AutopilotRuleParameters struct {
-	// ActionsCoolDownPeriod is the duration in seconds for which autopilot will not
-	// re-trigger any actions once they have been executed.
-	ActionsCoolDownPeriod int64
-	// MatchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-	// map is equivalent to an element of matchExpressions, whose key field is "key", the
-	// operator is "In", and the values array contains only "value". The requirements are ANDed.
-	// +optional
-	MatchLabels map[string]string
-	// RuleAction defines an action for the rule
-	RuleActions []AutopilotRuleActions
-	// RuleConditionExpressions defines the conditions for the rule
-	RuleConditionExpressions []AutopilotRuleConditionExpressions
-	// ExpectedPVCSize is the expected PVC size after resize
-	ExpectedPVCSize int64
-}
-
-// AutopilotParameters are parameters that using for Autopilot
-type AutopilotParameters struct {
-	// Enabled indicates if the Autopilot is enabled
-	Enabled bool
-	// The unique Autopilotrule name within a namespace
-	Name string
-	// Namespace is the kubernetes namespace in which Autopilot rule will be created
-	Namespace string
-	// PollInterval defined the interval in seconds at which the conditions for the
-	// rule are queried from the metrics provider
-	PollInterval int64
-	// AutopilotRuleParameters are the parameters that will be used for Autopilot rule
-	AutopilotRuleParameters AutopilotRuleParameters
-}
-
 // AppConfig custom settings
 type AppConfig struct {
-	Replicas   int    `yaml:"replicas"`
-	VolumeSize string `yaml:"volume_size"`
+	Replicas     int    `yaml:"replicas"`
+	VolumeSize   string `yaml:"volume_size"`
+	WorkloadSize string `yaml:"workload_size"`
 }
 
 // InitOptions initialization options
@@ -122,8 +78,10 @@ type ScheduleOptions struct {
 	StorageProvisioner string
 	// ConfigMap  identifies what config map should be used to
 	ConfigMap string
-	// AutopilotParameters identifies options for autopilot (Optional)
-	AutopilotParameters *AutopilotParameters
+	// AutopilotRule identifies options for autopilot (Optional)
+	AutopilotRule apapi.AutopilotRule
+	// Labels is a map of {key,value} pairs for labeling spec objects
+	Labels map[string]string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -220,6 +178,15 @@ type Driver interface {
 
 	// Get token for a volume
 	GetTokenFromConfigMap(string) (string, error)
+
+	// AddLabelOnNode adds key value labels on the node
+	AddLabelOnNode(node.Node, string, string) error
+
+	//IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
+	IsAutopilotEnabledForVolume(*volume.Volume) bool
+
+	// GetSpecAppEnvVar gets app environment variable value by given key name
+	GetSpecAppEnvVar(ctx *Context, key string) string
 }
 
 var (

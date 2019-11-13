@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      schedulerName: stork
+      containers:
+      - name: postgres
+        image: postgres:9.5
+        imagePullPolicy: "IfNotPresent"
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          value: superpostgres
+        - name: PGBENCH_PASSWORD
+          value: superpostgres
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgredb
+          mountPath: /var/lib/postgresql/data
+        - name: postgresvolume
+          mountPath: /var/lib/postgresql/volume
+      - name: pgbench
+        image: portworx/torpedo-pgbench:latest
+        imagePullPolicy: "Always"
+        env:
+          - name: PG_HOST
+            value: 127.0.0.1
+          - name: PG_USER
+            value: postgres
+          - name: PGPASSWORD
+            value: superpostgres
+          - name: SIZE
+            {{ if .WorkloadSize }}
+            value: "{{ .WorkloadSize }}"
+            {{ else }}
+            value: "10"{{ end }}
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "cat /pgbench/pgbench_state.file"]
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: postgredb
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgredb
+        persistentVolumeClaim:
+          claimName: postgres-data
+      - name: postgresvolume
+        persistentVolumeClaim:
+          claimName: postgres-volume

@@ -35,6 +35,7 @@ do
             echo "Sleeping for ${DELAY} seconds"
             sleep $DELAY
         else
+            mkdir -p $pgbench_folder
             touch $pgbench_state_file
         fi
     fi

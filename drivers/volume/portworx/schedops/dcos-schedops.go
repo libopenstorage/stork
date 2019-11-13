@@ -1,6 +1,7 @@
 package schedops
 
 import (
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -77,6 +78,16 @@ func (d *dcosSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 
 // GetStorageInfo returns cluster pair info from destination clusterrefereced by kubeconfig
 func (d *dcosSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, error) {
+	// TODO: Implement this methid
+	return nil, nil
+}
+
+func (d *dcosSchedOps) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+	// TODO: Implement this methid
+	return nil, nil
+}
+
+func (d *dcosSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	// TODO: Implement this methid
 	return nil, nil
 }
