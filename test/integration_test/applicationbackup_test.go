@@ -4,6 +4,7 @@ package integrationtest
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -54,6 +55,10 @@ func TestApplicationBackup(t *testing.T) {
 	t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
 	t.Run("backupSyncController", applicationBackupSyncControllerTest)
+}
+
+func TestScaleApplicationBackup(t *testing.T) {
+	t.Run("scaleApplicationBackupRestore", scaleApplicationBackupRestore)
 }
 
 func triggerBackupRestoreTest(
@@ -160,6 +165,91 @@ func triggerBackupRestoreTest(
 		err = k8s.Instance().DeleteBackupLocation(currBackupLocation.Name, currBackupLocation.Namespace)
 		require.NoError(t, err, "Failed to delete backuplocation: %s for location %s.", currBackupLocation.Name, string(location), err)
 	}
+}
+
+func triggerScaleBackupRestoreTest(
+	t *testing.T,
+	appKey []string,
+	appBackupKey []string,
+	appRestoreKey []string,
+	configMap map[string]string,
+	createBackupLocationFlag bool,
+	backupSuccessExpected bool,
+	backupAllAppsExpected bool,
+) {
+	var appCtxs []*scheduler.Context
+	var appBkps []*storkv1.ApplicationBackup
+	var bkpLocations []*storkv1.BackupLocation
+	var appRestores []*storkv1.ApplicationRestore
+
+	backuplocationPrefix := "backuplocation-"
+	appbackupPrefix := testKey + "-backup-scale-"
+	restorePrefix := "mysql-restore-scale-"
+	for i := 0; i < backupScaleCount; i++ {
+		currCtx, err := schedulerDriver.Schedule("scale-"+strconv.Itoa(i),
+			scheduler.ScheduleOptions{AppKeys: appBackupKey})
+		require.NoError(t, err, "Error scheduling task")
+		require.Equal(t, 1, len(currCtx), "Only one task should have started")
+		appCtxs = append(appCtxs, currCtx...)
+
+		// Without the sleep, sometimes the mysql pods fail with permission denied error
+		time.Sleep(time.Second * 10)
+	}
+
+	for i, app := range appCtxs {
+		err := schedulerDriver.WaitForRunning(app, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for app in namespace %s to get to running state", "scale-"+strconv.Itoa(i))
+	}
+	// Trigger backups for all apps created
+	for idx, app := range appCtxs {
+		backupLocation, err := createBackupLocation(t, backuplocationPrefix+strconv.Itoa(idx), app.GetID(), storkv1.BackupLocationS3, defaultSecretName)
+		require.NoError(t, err, "Error creating backuplocation: %s", "backupLocation-"+strconv.Itoa(idx))
+		bkpLocations = append(bkpLocations, backupLocation)
+
+		currBackup, err := createApplicationBackupWithAnnotation(t, appbackupPrefix+strconv.Itoa(idx), app.GetID(), backupLocation)
+		require.NoError(t, err, "Error creating app backups")
+
+		appBkps = append(appBkps, currBackup)
+	}
+
+	// Wait for all backups to be completed
+	for _, bkp := range appBkps {
+		logrus.Infof("Verifying backup in namespace %s", bkp.Namespace)
+		err := waitForAppBackupCompletion(bkp.Name, bkp.Namespace)
+		require.NoError(t, err, "Application backup %s in namespace %s failed.", bkp.Name, bkp.Namespace)
+	}
+
+	logrus.Info("Deleting all apps before restoring them.")
+	destroyAndWait(t, appCtxs)
+
+	// Create restore objects and restore all backups in their namespaces
+	for idx, bkp := range appBkps {
+		logrus.Infof("Creating application restore in namespace %s", bkp.Namespace)
+		appRestoreForBackup, err := createApplicationRestore(t, restorePrefix+strconv.Itoa(idx), bkp.Namespace, bkp, bkpLocations[idx])
+		require.Nil(t, err, "failure to create restore object in namespace %s", bkp.Namespace)
+		require.NotNil(t, appRestoreForBackup, "failure to restore bkp in namespace %s", "mysql-restore-scale-"+strconv.Itoa(idx))
+
+		appRestores = append(appRestores, appRestoreForBackup)
+	}
+
+	// Wait for all apps to be running
+	for i, app := range appCtxs {
+		err := schedulerDriver.WaitForRunning(app, defaultWaitTimeout, defaultWaitInterval)
+		require.NoError(t, err, "Error waiting for app in namespace %s to get to running state", "scale-"+strconv.Itoa(i))
+	}
+	// Cleanup
+	for idx, bkp := range appBkps {
+		err := k8s.Instance().DeleteBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
+		require.NoError(t, err, "Failed to delete  backup location %s in namespace %s: %v", "backuplocation-"+strconv.Itoa(idx), bkp.Namespace, err)
+
+		err = deleteAndWaitForBackupDeletion(bkp.Namespace)
+		require.NoError(t, err, "All backups not deleted in namespace %s: %v", bkp.Namespace, err)
+	}
+
+	err := deleteApplicationRestoreList(appRestores)
+	require.Nil(t, err, "failure to delete application restore")
+
+	destroyAndWait(t, appCtxs)
 }
 
 func createBackupLocation(
@@ -367,6 +457,19 @@ func applicationBackupLabelSelectorTest(t *testing.T) {
 		true,
 		true,
 		false,
+	)
+}
+
+func scaleApplicationBackupRestore(t *testing.T) {
+	triggerScaleBackupRestoreTest(
+		t,
+		[]string{"mysql-1-pvc"},
+		[]string{"mysql-1-pvc"},
+		[]string{restoreName},
+		defaultConfigMap,
+		true,
+		true,
+		true,
 	)
 }
 
@@ -937,4 +1040,15 @@ func getBackupConfigMapForType(allTypes map[string]string, requiredType storkv1.
 		}
 	}
 	return reqConfigMap
+}
+
+func deleteApplicationRestoreList(appRestoreList []*storkv1.ApplicationRestore) error {
+	for _, appRestore := range appRestoreList {
+		err := k8s.Instance().DeleteApplicationRestore(appRestore.Name, appRestore.Namespace)
+		if err != nil {
+			return fmt.Errorf("Error deleting application restore %s in namespace %s", appRestore.Name, appRestore.Namespace)
+		}
+	}
+	logrus.Info("Deleted all restores")
+	return nil
 }
