@@ -3,6 +3,8 @@ package portworx
 import (
 	"fmt"
 	"math"
+	"os"
+	"os/exec"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -64,7 +66,7 @@ const (
 	defaultRetryInterval             = 10 * time.Second
 	maintenanceOpTimeout             = 1 * time.Minute
 	maintenanceWaitTimeout           = 2 * time.Minute
-	inspectVolumeTimeout             = 10 * time.Second
+	inspectVolumeTimeout             = 30 * time.Second
 	inspectVolumeRetryInterval       = 2 * time.Second
 	validateDeleteVolumeTimeout      = 3 * time.Minute
 	validateReplicationUpdateTimeout = 10 * time.Minute
@@ -81,6 +83,7 @@ const (
 	startDriverTimeout               = 2 * time.Minute
 	upgradeTimeout                   = 10 * time.Minute
 	upgradeRetryInterval             = 30 * time.Second
+	upgradePerNodeTimeout            = 15 * time.Minute
 	waitVolDriverToCrash             = 1 * time.Minute
 )
 
@@ -352,6 +355,28 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 	}
 
 	return pxnode.(api.Node), nil
+}
+
+func (d *portworx) getPxVersionOnNode(n node.Node, cManager cluster.Cluster) (string, error) {
+
+	t := func() (interface{}, bool, error) {
+		logrus.Debugf("Getting PX Version on node [%s]", n.Name)
+		pxNode, err := d.getPxNode(n, cManager)
+		if err != nil {
+			return "", false, err
+		}
+		if pxNode.Status != api.Status_STATUS_OK {
+			return "", true, fmt.Errorf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
+				api.Status_STATUS_OK, pxNode.Status)
+		}
+		pxVersion := pxNode.NodeLabels[pxVersionLabel]
+		return pxVersion, false, nil
+	}
+	pxVersion, err := task.DoRetryWithTimeout(t, getNodeTimeout, getNodeRetryInterval)
+	if err != nil {
+		return "", fmt.Errorf("Timeout after %v waiting to get PX Version", getNodeTimeout)
+	}
+	return fmt.Sprintf("%v", pxVersion), nil
 }
 
 func (d *portworx) GetStorageDevices(n node.Node) ([]string, error) {
@@ -912,35 +937,28 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 }
 
 func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
+	cManager, err := d.pickAlternateClusterManager(n)
+	if err != nil {
+		return &ErrFailedToWaitForPx{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+
 	t := func() (interface{}, bool, error) {
-		// Check if px is down on all node addresses. We don't want to keep track
-		// which was the actual interface px was listening on before it went down
-		for _, addr := range n.Addresses {
-			cManager, err := d.getClusterManagerByAddress(addr)
-			if err != nil {
-				return "", true, err
+		pxNode, err := cManager.Inspect(n.VolDriverNodeID)
+		if err != nil {
+			return "", true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: err.Error(),
 			}
+		}
 
-			pxNode, err := d.getPxNode(n, cManager)
-			if err != nil {
-				if regexp.MustCompile(`.+timeout|connection refused.*`).MatchString(err.Error()) {
-					logrus.Infof("px on node %s addr %s is down as inspect returned: %v",
-						n.Name, addr, err.Error())
-					continue
-				}
-
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: err.Error(),
-				}
-			}
-
-			if pxNode.Status != api.Status_STATUS_OFFLINE {
-				return "", true, &ErrFailedToWaitForPx{
-					Node: n,
-					Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
-						api.Status_STATUS_OFFLINE, pxNode.Status),
-				}
+		if pxNode.Status != api.Status_STATUS_OFFLINE {
+			return "", true, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
+					api.Status_STATUS_OFFLINE, pxNode.Status),
 			}
 		}
 
@@ -955,41 +973,62 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	return nil
 }
 
-func (d *portworx) WaitForUpgrade(n node.Node, image, tag string) error {
-	t := func() (interface{}, bool, error) {
-		pxNode, err := d.getPxNode(n, nil)
-		if err != nil {
-			return nil, true, &ErrFailedToWaitForPx{
-				Node:  n,
-				Cause: err.Error(),
-			}
+func (d *portworx) pickAlternateClusterManager(n node.Node) (cluster.Cluster, error) {
+	// Check if px is down on all node addresses. We don't want to keep track
+	// which was the actual interface px was listening on before it went down
+	for _, alternateNode := range node.GetWorkerNodes() {
+		if alternateNode.Name == n.Name {
+			continue
 		}
 
-		if pxNode.Status != api.Status_STATUS_OK {
-			return nil, true, &ErrFailedToWaitForPx{
-				Node: n,
-				Cause: fmt.Sprintf("px cluster is usable but node status is not ok. Expected: %v Actual: %v",
-					api.Status_STATUS_OK, pxNode.Status),
+		for _, addr := range alternateNode.Addresses {
+			cManager, err := d.getClusterManagerByAddress(addr)
+			if err != nil {
+				return nil, err
+			}
+			ns, err := cManager.Enumerate()
+			if err != nil {
+				// if not responding in this addr, continue and pick another one, log the error
+				logrus.Warnf("failed to check node %s on addr %s. Cause: %v", n.Name, addr, err)
+				continue
+			}
+			if len(ns.Nodes) != 0 {
+				return cManager, nil
 			}
 		}
+	}
+	return nil, fmt.Errorf("failed to get an alternate cluster manager for %s", n.Name)
+}
+
+func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
+	t := func() (interface{}, bool, error) {
 
 		// filter out first 3 octets from the tag
 		matches := regexp.MustCompile(`^(\d+\.\d+\.\d+).*`).FindStringSubmatch(tag)
 		if len(matches) != 2 {
 			return nil, false, &ErrFailedToUpgradeVolumeDriver{
-				Version: fmt.Sprintf("%s:%s", image, tag),
+				Version: fmt.Sprintf("%s", tag),
 				Cause:   fmt.Sprintf("failed to parse first 3 octets of version from new version tag: %s", tag),
 			}
 		}
 
-		pxVersion := pxNode.NodeLabels[pxVersionLabel]
+		pxVersion, err := d.getPxVersionOnNode(n, nil)
+		if err != nil {
+			return nil, true, &ErrFailedToWaitForPx{
+				Node:  n,
+				Cause: fmt.Sprintf("failed to get PX Version with error: %s", err),
+			}
+		}
 		if !strings.HasPrefix(pxVersion, matches[1]) {
 			return nil, true, &ErrFailedToUpgradeVolumeDriver{
-				Version: fmt.Sprintf("%s:%s", image, tag),
+				Version: fmt.Sprintf("%s", tag),
 				Cause: fmt.Sprintf("version on node %s is still %s. It was expected to begin with: %s",
 					n.VolDriverNodeID, pxVersion, matches[1]),
 			}
 		}
+
+		logrus.Infof("version on node %s is %s. Expected version is %s", n.VolDriverNodeID, pxVersion, matches[1])
+
 		return nil, false, nil
 	}
 
@@ -1238,47 +1277,71 @@ func (d *portworx) StartDriver(n node.Node) error {
 		}})
 }
 
-func (d *portworx) UpgradeDriver(images []torpedovolume.Image) error {
-	if len(images) == 0 {
-		return fmt.Errorf("no version supplied for upgrading portworx")
+func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) error {
+	upgradeFileName := "/upgrade.sh"
+
+	if endpointURL == "" {
+		return fmt.Errorf("no link supplied for upgrading portworx")
+	}
+	logrus.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
+
+	// Getting upgrade script
+	fullEndpointURL := fmt.Sprintf("%s/%s/upgrade", endpointURL, endpointVersion)
+	cmd := exec.Command("wget", "-O", upgradeFileName, fullEndpointURL)
+	output, err := cmd.Output()
+	logrus.Infof("%s", output)
+	if err != nil {
+		return fmt.Errorf("error on downloading endpoint: %+v", err)
+	}
+	// Check if downloaded file exists
+	file, err := os.Stat(upgradeFileName)
+	if err != nil {
+		return fmt.Errorf("file %s doesn't exist", upgradeFileName)
+	}
+	logrus.Infof("file %s exists", upgradeFileName)
+
+	// Check if downloaded file is not empty
+	fileSize := file.Size()
+	if fileSize == 0 {
+		return fmt.Errorf("file %s is empty", upgradeFileName)
+	}
+	logrus.Infof("file %s is not empty", upgradeFileName)
+
+	// Change permission on file to be able to execute
+	cmd = exec.Command("chmod", "+x", upgradeFileName)
+	if err = cmd.Run(); err != nil {
+		return fmt.Errorf("error on changing permission for %s file", upgradeFileName)
+	}
+	logrus.Infof("permission changed on file %s", upgradeFileName)
+
+	nodeList := node.GetStorageDriverNodes()
+	pxNode := nodeList[0]
+	pxVersion, err := d.getPxVersionOnNode(pxNode, nil)
+	if err != nil {
+		return fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
+	}
+	// If PX Version less than 2.x.x.x, then we have to add timeout parameter to avoid test failure
+	// more details in https://portworx.atlassian.net/browse/PWX-10108
+	cmdArgs := []string{upgradeFileName, "-f"}
+	majorPxVersion := pxVersion[:1]
+	if majorPxVersion < "2" {
+		cmdArgs = append(cmdArgs, "-u", strconv.Itoa(int(upgradePerNodeTimeout/time.Second)))
 	}
 
-	partsOci := make([]string, 2)
-	partsPx := make([]string, 2)
+	// Run upgrade script
+	logrus.Infof("executing /bin/sh with params: %s\n", cmdArgs)
+	cmd = exec.Command("/bin/sh", cmdArgs...)
+	output, err = cmd.Output()
 
-	for _, image := range images {
-		switch image.Type {
-		case "", "oci":
-			partsOci = strings.Split(image.Version, ":")
-		case "px":
-			partsPx = strings.Split(image.Version, ":")
-		}
+	// Print and replace all '\n' with new lines
+	logrus.Infof("%s", strings.Replace(string(output[:]), `\n`, "\n", -1))
+	if err != nil {
+		return fmt.Errorf("error: %+v", err)
 	}
-	version := partsOci[1]
-	if len(partsPx) > 0 {
-		version = partsPx[1]
-	}
-	logrus.Infof("upgrading portworx to %s", version)
-
-	ociImage := partsOci[0]
-	ociTag := partsOci[1]
-	pxImage := partsPx[0]
-	pxTag := partsPx[1]
-	if err := d.schedOps.UpgradePortworx(ociImage, ociTag, pxImage, pxTag); err != nil {
-		return &ErrFailedToUpgradeVolumeDriver{
-			Version: version,
-			Cause:   err.Error(),
-		}
-	}
+	logrus.Infof("Portworx cluster upgraded succesfully")
 
 	for _, n := range node.GetStorageDriverNodes() {
-		image := ociImage
-		tag := ociTag
-		if len(pxImage) > 0 && len(pxTag) > 0 {
-			image = pxImage
-			tag = pxTag
-		}
-		if err := d.WaitForUpgrade(n, image, tag); err != nil {
+		if err := d.WaitForUpgrade(n, endpointVersion); err != nil {
 			return err
 		}
 	}
@@ -1563,17 +1626,19 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snap_
 			" (" + snap + ")"
 	}
 
-	isSuccess := false
-	for _, alert := range alerts.GetAlert() {
-		if strings.Contains(alert.GetMessage(), grepMsg) {
-			isSuccess = true
-			break
+	t := func() (interface{}, bool, error) {
+		for _, alert := range alerts.GetAlert() {
+			if strings.Contains(alert.GetMessage(), grepMsg) {
+				return "", false, nil
+			}
 		}
+		return "", true, fmt.Errorf("alert not present, retrying")
 	}
-	if isSuccess {
-		return nil
+	_, err = task.DoRetryWithTimeout(t, getNodeTimeout, getNodeRetryInterval)
+	if err != nil {
+		return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
 	}
-	return fmt.Errorf("restore failed, expected alert to be present : %v", grepMsg)
+	return nil
 }
 
 func (d *portworx) getTokenForVolume(name string, params map[string]string) string {
@@ -1641,19 +1706,6 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		Timeout:         defaultTimeout,
 		Sudo:            true,
 	}
-
-	pxPid, err := d.nodeDriver.RunCommand(n, `ps -ef | grep "px -daemon" | grep -v grep | awk "{print $2}"`, opts)
-	if err != nil {
-		return fmt.Errorf("Failed to get process id of px daemon on %v, Err: %v", pxNode.Hostname, err)
-	}
-	logrus.Debugf("PX daemon is running with pid [%s] on [%v]", pxPid, pxNode.Hostname)
-
-	logrus.Debugf("Sending SIGUSR1 signal to PX process [%s]", pxPid)
-	_, err = d.nodeDriver.RunCommand(n, fmt.Sprintf("kill -SIGUSR1 %s", pxPid), opts)
-	if err != nil {
-		return fmt.Errorf("Failed to send SIGUSR1 signal to px process [%s] on %v, Err: %v", pxPid, pxNode.Hostname, err)
-	}
-	logrus.Debugf("Successfully sent SIGUSR1 signal to px process [%s] on [%v]", pxPid, pxNode.Hostname)
 
 	logrus.Debugf("Collecting diags on node %v, because there was an error", pxNode.Hostname)
 

@@ -12,8 +12,8 @@ import (
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snap_client "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
-	aut_v1alpaha1 "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
-	autopilotclientset "github.com/libopenstorage/autopilot/pkg/client/clientset/versioned"
+	aut_v1alpaha1 "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	autopilotclientset "github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned"
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	ocp_appsv1_api "github.com/openshift/api/apps/v1"
@@ -102,26 +102,15 @@ type Ops interface {
 	ApplicationBackupRestoreOps
 	ApplicationCloneOps
 	VolumeSnapshotRestoreOps
+	SecurityContextConstraintsOps
+	ClientSetter
 	GetVersion() (*version.Info, error)
-	SetConfig(config *rest.Config)
-	SetClient(
-		client kubernetes.Interface,
-		snapClient rest.Interface,
-		storkClient storkclientset.Interface,
-		apiExtensionClient apiextensionsclient.Interface,
-		dynamicInterface dynamic.Interface,
-		ocpClient ocp_clientset.Interface,
-		ocpSecurityClient ocp_security_clientset.Interface,
-		autopilotClient autopilotclientset.Interface,
-	)
-	SecurityContextConstraints
-
 	// private methods for unit tests
 	privateMethods
 }
 
-// SecurityContextConstraints is an interface to list, get and update security context constraints
-type SecurityContextConstraints interface {
+// SecurityContextConstraintsOps is an interface to list, get and update security context constraints
+type SecurityContextConstraintsOps interface {
 	// ListSecurityContextConstraints returns the list of all SecurityContextConstraints, and an error if there is any.
 	ListSecurityContextConstraints() (*ocp_securityv1_api.SecurityContextConstraintsList, error)
 	// GetSecurityContextConstraints takes name of the securityContextConstraints and returns the corresponding securityContextConstraints object, and an error if there is any.
@@ -782,7 +771,7 @@ type ApplicationBackupRestoreOps interface {
 		map[v1alpha1.SchedulePolicyType][]*v1alpha1.ScheduledApplicationBackupStatus, error)
 }
 
-// ApplicationCloneOps is an interface to perfrom k8s Application Clone operations
+// ApplicationCloneOps is an interface to perform k8s Application Clone operations
 type ApplicationCloneOps interface {
 	// CreateApplicationClone creates the ApplicationClone
 	CreateApplicationClone(*v1alpha1.ApplicationClone) (*v1alpha1.ApplicationClone, error)
@@ -796,6 +785,43 @@ type ApplicationCloneOps interface {
 	DeleteApplicationClone(string, string) error
 	// ValidateApplicationClone validates the ApplicationClone
 	ValidateApplicationClone(string, string, time.Duration, time.Duration) error
+}
+
+// ClientSetter is an interface to allow setting different clients on the Ops object
+type ClientSetter interface {
+	// SetConfig sets the config and resets the client
+	SetConfig(config *rest.Config)
+	// SetConfigFromPath sets the config from a kubeconfig file
+	SetConfigFromPath(configPath string) error
+	// SetClient set the k8s clients
+	SetClient(
+		kubernetes.Interface,
+		rest.Interface,
+		storkclientset.Interface,
+		apiextensionsclient.Interface,
+		dynamic.Interface,
+		ocp_clientset.Interface,
+		ocp_security_clientset.Interface,
+		autopilotclientset.Interface,
+	)
+	// SetBaseClient sets the kubernetes clientset
+	SetBaseClient(kubernetes.Interface)
+	// SetSnapshotClient sets the snapshot clientset
+	SetSnapshotClient(rest.Interface)
+	// SetStorkClient sets the stork clientset
+	SetStorkClient(storkclientset.Interface)
+	// SetApiExtensionsClient sets the api extensions clientset
+	SetApiExtensionsClient(apiextensionsclient.Interface)
+	// SetDynamicClient sets the dynamic clientset
+	SetDynamicClient(dynamic.Interface)
+	// SetOpenshiftAppsClient sets the openshift apps clientset
+	SetOpenshiftAppsClient(ocp_clientset.Interface)
+	// SetOpenshiftSecurityClient sets the openshift security clientset
+	SetOpenshiftSecurityClient(ocp_security_clientset.Interface)
+	// SetTalismanClient sets the talisman clientset
+	SetTalismanClient(talismanclientset.Interface)
+	// SetAutopilotClient sets the autopilot clientset
+	SetAutopilotClient(autopilotclientset.Interface)
 }
 
 type privateMethods interface {
@@ -852,12 +878,6 @@ func Instance() Ops {
 	return instance
 }
 
-func (k *k8sOps) SetConfig(config *rest.Config) {
-	// Set the config and reset the client
-	k.config = config
-	k.client = nil
-}
-
 // NewInstance returns new instance of k8sOps by using given config
 func NewInstance(config string) (Ops, error) {
 	newInstance := &k8sOps{}
@@ -869,7 +889,29 @@ func NewInstance(config string) (Ops, error) {
 	return newInstance, nil
 }
 
-// Set the k8s clients
+// SetConfig sets the config and resets the client
+func (k *k8sOps) SetConfig(config *rest.Config) {
+	k.config = config
+	k.client = nil
+}
+
+// SetConfigFromPath takes the path to a kubeconfig file
+// and then internally calls SetConfig to set it
+func (k *k8sOps) SetConfigFromPath(configPath string) error {
+	if configPath == "" {
+		k.SetConfig(nil)
+		return nil
+	}
+	config, err := clientcmd.BuildConfigFromFlags("", configPath)
+	if err != nil {
+		return err
+	}
+
+	k.SetConfig(config)
+	return nil
+}
+
+// SetClient set the k8s clients
 func (k *k8sOps) SetClient(
 	client kubernetes.Interface,
 	snapClient rest.Interface,
@@ -880,7 +922,6 @@ func (k *k8sOps) SetClient(
 	ocpSecurityClient ocp_security_clientset.Interface,
 	autopilotClient autopilotclientset.Interface,
 ) {
-
 	k.client = client
 	k.snapClient = snapClient
 	k.storkClient = storkClient
@@ -889,6 +930,51 @@ func (k *k8sOps) SetClient(
 	k.ocpClient = ocpClient
 	k.ocpSecurityClient = ocpSecurityClient
 	k.autopilotClient = autopilotClient
+}
+
+// SetBaseClient sets the kubernetes clientset
+func (k *k8sOps) SetBaseClient(client kubernetes.Interface) {
+	k.client = client
+}
+
+// SetSnapshotClient sets the snapshot clientset
+func (k *k8sOps) SetSnapshotClient(snapClient rest.Interface) {
+	k.snapClient = snapClient
+}
+
+// SetStorkClient sets the stork clientset
+func (k *k8sOps) SetStorkClient(storkClient storkclientset.Interface) {
+	k.storkClient = storkClient
+}
+
+// SetApiExtensionsClient sets the api extensions clientset
+func (k *k8sOps) SetApiExtensionsClient(apiExtensionsClient apiextensionsclient.Interface) {
+	k.apiExtensionClient = apiExtensionsClient
+}
+
+// SetDynamicClient sets the dynamic clientset
+func (k *k8sOps) SetDynamicClient(dynamicClient dynamic.Interface) {
+	k.dynamicInterface = dynamicClient
+}
+
+// SetOpenshiftAppsClient sets the openshift apps clientset
+func (k *k8sOps) SetOpenshiftAppsClient(ocpAppsClient ocp_clientset.Interface) {
+	k.ocpClient = ocpAppsClient
+}
+
+// SetOpenshiftSecurityClient sets the openshift security clientset
+func (k *k8sOps) SetOpenshiftSecurityClient(ocpSecurityClient ocp_security_clientset.Interface) {
+	k.ocpSecurityClient = ocpSecurityClient
+}
+
+// SetAutopilotClient sets the autopilot clientset
+func (k *k8sOps) SetAutopilotClient(autopilotClient autopilotclientset.Interface) {
+	k.autopilotClient = autopilotClient
+}
+
+// SetTalismanClient sets the talisman clientset
+func (k *k8sOps) SetTalismanClient(talismanClient talismanclientset.Interface) {
+	k.talismanClient = talismanClient
 }
 
 // Initialize the k8s client if uninitialized

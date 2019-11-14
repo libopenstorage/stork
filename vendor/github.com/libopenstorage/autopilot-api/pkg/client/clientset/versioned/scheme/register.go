@@ -19,7 +19,7 @@ limitations under the License.
 package scheme
 
 import (
-	autopilotv1alpha1 "github.com/libopenstorage/autopilot/pkg/apis/autopilot/v1alpha1"
+	autopilotv1alpha1 "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

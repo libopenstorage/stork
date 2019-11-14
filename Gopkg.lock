@@ -550,8 +550,8 @@
   source = "github.com/libopenstorage/external-storage"
 
 [[projects]]
-  digest = "1:4b459bbf1199adbbe060fa0f5aee5223c19da8f5881357dc9b3e560d0cedc6e5"
-  name = "github.com/libopenstorage/autopilot"
+  digest = "1:9a158cecac7b6a55c718b9e440c39e82985969d2cca08d43ab7a2efe532ba59b"
+  name = "github.com/libopenstorage/autopilot-api"
   packages = [
     "pkg/apis/autopilot",
     "pkg/apis/autopilot/v1alpha1",
@@ -560,7 +560,7 @@
     "pkg/client/clientset/versioned/typed/autopilot/v1alpha1",
   ]
   pruneopts = "UT"
-  revision = "7d0bad3b40e91e70d52456a9d955ff4b8e7b695c"
+  revision = "87c09b775364fd1f8fba8f74fab475b3723b23d3"
   version = "v0.6.0"
 
 [[projects]]
@@ -776,15 +776,15 @@
   revision = "1c18ebeaf685dfc584a49545bc590a13fa8b7617"
 
 [[projects]]
-  branch = "master"
-  digest = "1:b1485ffc45798e016223b6a707cf20c5755971bf7239e32ac2c9eba3b6fb1bb2"
+  branch = "kubernetes-1.11"
+  digest = "1:fbc0b6405af4b9578157aadf843bedab8074bbe20986e99d84881b7355a34564"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "4773a0468a8f92fcbc3f337bc012bf090637cbf1"
+  revision = "57be5866c9371831429d7fc929dedc957cadba27"
 
 [[projects]]
   branch = "master"
@@ -804,11 +804,7 @@
 
 [[projects]]
   branch = "master"
-<<<<<<< HEAD
-  digest = "1:1813e6aa809e50d1ea39aefaaf747cced0b059b48031bd1d567a34c36a1080d6"
-=======
-  digest = "1:87072682515a67a49b02de7a626fdd026d3c8ab6d2fa42cc7f8072d1142ff64a"
->>>>>>> 0edbe2c... Vendor update for torpedo.
+  digest = "1:7e350a0e769532d724ffe3c3c7a164e68a8ef573b9a05fde8f988fa4355f58c7"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -822,11 +818,7 @@
     "pkg/errors",
   ]
   pruneopts = "UT"
-<<<<<<< HEAD
-  revision = "f8cbc21655b87983ca01c5fc62e36b8445dd5fc8"
-=======
-  revision = "cc0f245ffe7c2f472d0b92d1e1f92bb6094e94ed"
->>>>>>> 0edbe2c... Vendor update for torpedo.
+  revision = "7a34eeb97f77f3b744150676017699466cd9ec61"
 
 [[projects]]
   branch = "master"
@@ -1823,7 +1815,6 @@
     "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
-    "github.com/libopenstorage/secrets/k8s",
     "github.com/openshift/api/apps/v1",
     "github.com/openshift/client-go/apps/clientset/versioned/fake",
     "github.com/operator-framework/operator-sdk/pkg/sdk",

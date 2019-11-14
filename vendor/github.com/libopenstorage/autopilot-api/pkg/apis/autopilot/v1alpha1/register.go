@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	"github.com/libopenstorage/autopilot/pkg/apis/autopilot"
+	"github.com/libopenstorage/autopilot-api/pkg/apis/autopilot"
 	sdkK8sutil "github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
