@@ -82,8 +82,8 @@ type Driver interface {
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
 
-	// UpgradeDriver upgrades the volume driver to the given images
-	UpgradeDriver(images []Image) error
+	// UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
+	UpgradeDriver(endpointURL string, endpointVersion string) error
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string

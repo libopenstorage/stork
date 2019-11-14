@@ -14,6 +14,7 @@ import (
 	"time"
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	ap_api "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	k8s_ops "github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
@@ -68,6 +69,7 @@ const (
 	//DefaultTimeout default timeout
 	DefaultTimeout               = 2 * time.Minute
 	resizeSupportedAnnotationKey = "torpedo/resize-supported"
+	autopilotResizeAnnotationKey = "torpedo.io/autopilot-enabled"
 )
 
 const (
@@ -122,11 +124,7 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName, secretConfigMap strin
 	}
 
 	for _, n := range nodes.Items {
-		newNode := k.parseK8SNode(n)
-		if err := k.IsNodeReady(newNode); err != nil {
-			return err
-		}
-		if err := node.AddNode(newNode); err != nil {
+		if err = k.addNewNode(n); err != nil {
 			return err
 		}
 	}
@@ -140,6 +138,17 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName, secretConfigMap strin
 	k.VolDriverName = volDriverName
 
 	k.secretConfigMapName = secretConfigMap
+	return nil
+}
+
+func (k *K8s) addNewNode(newNode v1.Node) error {
+	n := k.parseK8SNode(newNode)
+	if err := k.IsNodeReady(n); err != nil {
+		return err
+	}
+	if err := node.AddNode(n); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -167,11 +176,7 @@ func (k *K8s) RefreshNodeRegistry() error {
 	node.CleanupRegistry()
 
 	for _, n := range nodes.Items {
-		newNode := k.parseK8SNode(n)
-		if err := k.IsNodeReady(newNode); err != nil {
-			return err
-		}
-		if err := node.AddNode(newNode); err != nil {
+		if err = k.addNewNode(n); err != nil {
 			return err
 		}
 	}
@@ -243,6 +248,10 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 			return nil, err
 		}
 
+		if err := ap_api.AddToScheme(scheme); err != nil {
+			return nil, err
+		}
+
 		codecs := serializer.NewCodecFactory(scheme)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
@@ -294,6 +303,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*stork_api.ApplicationClone); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*stork_api.VolumeSnapshotRestore); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*ap_api.AutopilotRule); ok {
 		return specObj, nil
 	}
 
@@ -377,6 +388,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				SpecList: specObjects,
 				Enabled:  app.Enabled,
 			},
+			Options: options,
 		}
 
 		contexts = append(contexts, ctx)
@@ -536,7 +548,7 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string) (*v1.Namespac
 	t := func() (interface{}, bool, error) {
 		ns, err := k8sOps.CreateNamespace(namespace,
 			map[string]string{
-				"creater": "torpedo",
+				"creator": "torpedo",
 				"app":     app.Key,
 			})
 
@@ -626,6 +638,33 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		}
 
 		logrus.Infof("[%v] Created PVC: %v", app.Key, pvc.Name)
+
+		pvcAnnotationSupported := false
+		apParams := options.AutopilotParameters
+
+		if apParams != nil && apParams.Enabled {
+			if pvcAnnotation, ok := pvc.Annotations[autopilotResizeAnnotationKey]; ok {
+				pvcAnnotationSupported, _ = strconv.ParseBool(pvcAnnotation)
+			}
+			if pvcAnnotationSupported {
+				apParams.AutopilotRuleParameters.MatchLabels = pvc.Labels
+				apObject, err := k.createAutopilotObject(apParams)
+				if err != nil {
+					return nil, &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: fmt.Sprintf("Failed to create Autopilot object: %v. Err: %v", apParams.Name, err),
+					}
+				}
+				apRule, err := k.createAutopilotRule(apObject)
+				if err != nil {
+					return nil, &scheduler.ErrFailedToScheduleApp{
+						App:   app,
+						Cause: fmt.Sprintf("Failed to create Autopilot rule: %v. Err: %v", apObject, err),
+					}
+				}
+				logrus.Infof("[%v] Created Autopilot rule: %v", app.Key, apRule.Name)
+			}
+		}
 		return pvc, nil
 
 	} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
@@ -751,6 +790,12 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *v1.ConfigMap) e
 		obj.Annotations[secretName] = configMap.Data[secretNameKey]
 		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 	} else if obj, ok := spec.(*stork_api.VolumeSnapshotRestore); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*stork_api.GroupVolumeSnapshot); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
@@ -1002,10 +1047,67 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		logrus.Infof("[%v] Destroyed Config Map: %v", app.Key, obj.Name)
+	} else if obj, ok := spec.(*ap_api.AutopilotRule); ok {
+		err := k8sOps.DeleteAutopilotRule(obj.Name)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy AutopilotRule: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Destroyed AutopilotRule: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
 
+}
+
+func (k *K8s) createAutopilotObject(apParams *scheduler.AutopilotParameters) (*ap_api.AutopilotRule, error) {
+	obj := &ap_api.AutopilotRule{}
+	apRuleParams := apParams.AutopilotRuleParameters
+	obj.Name = apParams.Name
+	obj.Namespace = apParams.Namespace
+	obj.Labels = map[string]string{"creator": "torpedo"}
+	obj.Spec.PollInterval = apParams.PollInterval
+	obj.Spec.ActionsCoolDownPeriod = apRuleParams.ActionsCoolDownPeriod
+	obj.Spec.Selector.LabelSelector.MatchLabels = apRuleParams.MatchLabels //map[string]string{"name": "pgbench-data"}
+	obj.Spec.NamespaceSelector.LabelSelector.MatchLabels = map[string]string{"creator": "torpedo"}
+	for _, ruleExpression := range apRuleParams.RuleConditionExpressions {
+		exprVolumeUsage := &ap_api.LabelSelectorRequirement{
+			Key:      ruleExpression.Key,
+			Operator: ap_api.LabelSelectorOperator(ruleExpression.Operator),
+			Values:   ruleExpression.Values,
+		}
+		obj.Spec.Conditions.Expressions = append(obj.Spec.Conditions.Expressions, exprVolumeUsage)
+	}
+	for _, ruleAction := range apRuleParams.RuleActions {
+		actions := &ap_api.RuleAction{
+			Name:   ruleAction.Name,
+			Params: ruleAction.Params,
+		}
+		obj.Spec.Actions = append(obj.Spec.Actions, actions)
+	}
+
+	logrus.Infof("Using Autopilot Object: %+v\n", obj)
+
+	return obj, nil
+}
+
+func (k *K8s) createAutopilotRule(autopilotRule *ap_api.AutopilotRule) (*ap_api.AutopilotRule, error) {
+	k8sOps := k8s_ops.Instance()
+	apRule, err := k8sOps.CreateAutopilotRule(autopilotRule)
+	if errors.IsAlreadyExists(err) {
+		if apRule, err := k8sOps.GetAutopilotRule(autopilotRule.Name); err == nil {
+			logrus.Infof("Found existing AutopilotRule: %v", autopilotRule.Name)
+			return apRule, nil
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create AutopilotRule: %v. Err: %v", autopilotRule.Name, err)
+	}
+
+	return apRule, nil
 }
 
 func (k *K8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.Volume {
@@ -1153,6 +1255,15 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated VolumeSnapshotRestore: %v", ctx.App.Key, obj.Metadata.Name)
+		} else if obj, ok := spec.(*ap_api.AutopilotRule); ok {
+			if _, err := k8sOps.GetAutopilotRule(obj.Name); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate AutopilotRule: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated AutopilotRule: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -1162,8 +1273,6 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 //Destroy destroy
 func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []v1.Pod
-	var pods interface{}
-	var err error
 	for _, spec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			currPods, err := k.destroyCoreObject(spec, opts, ctx.App)
@@ -1172,9 +1281,17 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return currPods, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
+		pods, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
 		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+			// in case we're not waiting for resource cleanup
+			if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; !ok || !value {
+				return err
+			}
+			if pods != nil {
+				podList = append(podList, pods.([]v1.Pod)...)
+			}
+			// we're ignoring this error since we want to verify cleanup down below, so simply logging it
+			logrus.Warnf("Failed to destroy core objects. Cause: %v", err)
 		}
 	}
 	for _, spec := range ctx.App.SpecList {
@@ -1185,9 +1302,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
 		}
 	}
 	for _, spec := range ctx.App.SpecList {
@@ -1198,9 +1315,9 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
 		}
 	}
 
@@ -1212,21 +1329,21 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 			}
 			return nil, false, nil
 		}
-		pods, err = task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval)
-		if err != nil {
-			podList = append(podList, pods.(v1.Pod))
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
 		}
 	}
 
 	if value, ok := opts[scheduler.OptionsWaitForResourceLeakCleanup]; ok && value {
-		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
+		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
 		}
-		if err = k.waitForCleanup(ctx, podList); err != nil {
+		if err := k.waitForCleanup(ctx, podList); err != nil {
 			return err
 		}
-	} else if value, ok := opts[scheduler.OptionsWaitForDestroy]; ok && value {
-		if err = k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
+	} else if value, ok = opts[scheduler.OptionsWaitForDestroy]; ok && value {
+		if err := k.WaitForDestroy(ctx, DefaultTimeout); err != nil {
 			return err
 		}
 	}
@@ -1475,8 +1592,27 @@ func (k *K8s) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time
 					Cause: fmt.Sprintf("Failed to validate PVC: %v. Err: %v", obj.Name, err),
 				}
 			}
-
 			logrus.Infof("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
+
+			apParams := ctx.Options.AutopilotParameters
+			pvcAnnotationSupported := false
+			if apParams != nil && apParams.Enabled {
+				if pvcAnnotation, ok := obj.Annotations[autopilotResizeAnnotationKey]; ok {
+					pvcAnnotationSupported, _ = strconv.ParseBool(pvcAnnotation)
+				}
+				if pvcAnnotationSupported {
+					expectedPVCSize := apParams.AutopilotRuleParameters.ExpectedPVCSize
+
+					logrus.Infof("[%v] expecting PVC size: %+v\n", ctx.App.Key, expectedPVCSize)
+					if err := k8sOps.ValidatePersistentVolumeClaimSize(obj, expectedPVCSize, timeout, retryInterval); err != nil {
+						return &scheduler.ErrFailedToValidateStorage{
+							App:   ctx.App,
+							Cause: fmt.Sprintf("Failed to validate PVC %v of size: %v. Err: %v", obj.Name, expectedPVCSize, err),
+						}
+					}
+				}
+				logrus.Infof("[%v] Validated PVC: %v size based on Autopilot rule: %v calculation", ctx.App.Key, obj.Name, apParams.Name)
+			}
 		} else if obj, ok := spec.(*snap_v1.VolumeSnapshot); ok {
 			if err := k8sOps.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
@@ -1545,6 +1681,32 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+			pvcAnnotationSupported := false
+			apParams := ctx.Options.AutopilotParameters
+
+			pvc, err := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetVolumeParameters{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to get PVC: %v. Err: %v", obj.Name, err),
+				}
+			}
+
+			if apParams != nil && apParams.Enabled {
+				if pvcAnnotation, ok := pvc.Annotations[autopilotResizeAnnotationKey]; ok {
+					pvcAnnotationSupported, _ = strconv.ParseBool(pvcAnnotation)
+				}
+				if pvcAnnotationSupported {
+					if err := k8sOps.DeleteAutopilotRule(apParams.Name); err != nil {
+						if !errors.IsNotFound(err) {
+							return nil, &scheduler.ErrFailedToDestroyAutopilotRule{
+								Name:  apParams.Name,
+								Cause: fmt.Sprintf("Failed to destroy an autopilot rule: %v. Err: %v", obj.Name, err),
+							}
+						}
+					}
+				}
+			}
 			vols = append(vols, &volume.Volume{
 				ID:        string(obj.UID),
 				Name:      obj.Name,
@@ -1784,6 +1946,12 @@ func (k *K8s) GetNodesForApp(ctx *scheduler.Context) ([]node.Node, error) {
 		nodeMap := node.GetNodesByName()
 
 		for _, p := range pods {
+			if strings.TrimSpace(p.Spec.NodeName) == "" {
+				return nil, true, &scheduler.ErrFailedToGetNodesForApp{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("pod %s is not scheduled to any node yet", p.Name),
+				}
+			}
 			n, ok := nodeMap[p.Spec.NodeName]
 			if !ok {
 				return nil, true, &scheduler.ErrFailedToGetNodesForApp{
@@ -2178,7 +2346,7 @@ func (k *K8s) getPodsUsingStorage(pods []v1.Pod, provisioner string) []v1.Pod {
 	return podsUsingStorage
 }
 
-//PrepareNodeToDecommission Prepare the Node for decomission
+//PrepareNodeToDecommission Prepare the Node for decommission
 func (k *K8s) PrepareNodeToDecommission(n node.Node, provisioner string) error {
 	k8sOps := k8s_ops.Instance()
 	pods, err := k8sOps.GetPodsByNode(n.Name, "")
@@ -2285,6 +2453,10 @@ func (k *K8s) ValidateVolumeSnapshotRestore(ctx *scheduler.Context, timeStart ti
 			snapRestore, err = k8sOps.GetVolumeSnapshotRestore(obj.Name, obj.Namespace)
 			if err != nil {
 				return fmt.Errorf("unable to restore volumesnapshotrestore details %v", err)
+			}
+			err = k8sOps.ValidateVolumeSnapshotRestore(snapRestore.Name, snapRestore.Namespace, DefaultTimeout, DefaultRetryInterval)
+			if err != nil {
+				return err
 			}
 
 		}
@@ -2410,6 +2582,7 @@ func (k *K8s) destroyBackupObjects(
 	}
 	return nil
 }
+
 func insertLineBreak(note string) string {
 	return fmt.Sprintf("------------------------------\n%s\n------------------------------\n", note)
 }

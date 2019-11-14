@@ -82,7 +82,7 @@ type AutopilotRuleSpec struct {
 	// (optional)
 	Weight int64 `json:"weight,omitempty"`
 	// PollInterval defined the interval in seconds at which the conditions for the
-	// rule are queried from the metrics provider
+	// rule are queried from the monitoring provider
 	PollInterval int64 `json:"pollInterval,omitempty"`
 	// Enforcement specifies the enforcement type for rule. Can take values: required or preferred.
 	// (optional)
@@ -122,7 +122,7 @@ type RuleConditions struct {
 
 // RuleAction defines an action for the rule
 type RuleAction struct {
-	// Name is the name of the rule
+	// ObjectName is the name of the rule
 	Name string `json:"name"`
 	// Params are the opaque paramters that will be used for the above action
 	Params map[string]string `json:"params"`
@@ -146,6 +146,6 @@ const (
 type AutopilotRuleConditionType string
 
 const (
-	// RuleConditionMetrics is a metrics type of condition in a rule
-	RuleConditionMetrics AutopilotRuleConditionType = "metrics"
+	// RuleConditionMetrics is a monitoring type of condition in a rule
+	RuleConditionMetrics AutopilotRuleConditionType = "monitoring"
 )
