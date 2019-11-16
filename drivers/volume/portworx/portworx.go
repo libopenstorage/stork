@@ -1138,7 +1138,7 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeS
 		// Nothing to do for local snapshot
 		switch snapType {
 		case "", crdv1.PortworxSnapshotTypeLocal:
-			vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusRestore
+			vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusStaged
 			vol.Reason = fmt.Sprintf("Restore object is ready")
 		case crdv1.PortworxSnapshotTypeCloud:
 			uid := getUidforRestore(vol.Volume, string(snapRestore.GetUID()))
@@ -1161,7 +1161,7 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeS
 					vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusInProgress
 					vol.Reason = "Volume is in resync state"
 				}
-				vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusRestore
+				vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusStaged
 				vol.Reason = fmt.Sprintf("Restore object is ready")
 			}
 		default:
