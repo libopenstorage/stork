@@ -31,8 +31,8 @@ const (
 	VolumeSnapshotRestoreStatusInitial VolumeSnapshotRestoreStatusType = ""
 	// VolumeSnapshotRestoreStatusPending for when restore is in pending state
 	VolumeSnapshotRestoreStatusPending VolumeSnapshotRestoreStatusType = "Pending"
-	// VolumeSnapshotRestoreStatusRestore for when restore is in restore state
-	VolumeSnapshotRestoreStatusRestore VolumeSnapshotRestoreStatusType = "Restore"
+	// VolumeSnapshotRestoreStatusStaged for when restore has been staged locally
+	VolumeSnapshotRestoreStatusStaged VolumeSnapshotRestoreStatusType = "Staged"
 	// VolumeSnapshotRestoreStatusSuccessful for when restore is completed
 	VolumeSnapshotRestoreStatusSuccessful VolumeSnapshotRestoreStatusType = "Successful"
 	// VolumeSnapshotRestoreStatusInProgress for when restore is in progress
