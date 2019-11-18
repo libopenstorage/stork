@@ -21,16 +21,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
+	restclient "k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
 )
 
 const (
 	// Annotation to use when the resource shouldn't be collected
-	skipResourceAnnotation = "stork.libopenstorage.org/skipresource"
-
-	deletedMaxRetries    = 12
-	deletedRetryInterval = 10 * time.Second
+	skipResourceAnnotation   = "stork.libopenstorage.org/skipresource"
+	storkMigrationAnnotation = "stork.libopenstorage.org/storkMigration"
+	deletedMaxRetries        = 12
+	deletedRetryInterval     = 10 * time.Second
 )
 
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
@@ -42,12 +42,20 @@ type ResourceCollector struct {
 
 // Init initializes the resource collector
 func (r *ResourceCollector) Init() error {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return fmt.Errorf("error getting cluster config: %v", err)
+	return r.initClusterConfig(nil)
+}
+
+func (r *ResourceCollector) initClusterConfig(config *restclient.Config) error {
+	var clusterConfig *restclient.Config
+	var err error
+	if config == nil {
+		clusterConfig, err = restclient.InClusterConfig()
+		if err != nil {
+			return fmt.Errorf("error getting cluster config: %v", err)
+		}
 	}
 
-	aeclient, err := apiextensionsclient.NewForConfig(config)
+	aeclient, err := apiextensionsclient.NewForConfig(clusterConfig)
 	if err != nil {
 		return fmt.Errorf("error getting apiextension client, %v", err)
 	}
@@ -58,10 +66,11 @@ func (r *ResourceCollector) Init() error {
 		return err
 	}
 
-	r.dynamicInterface, err = dynamic.NewForConfig(config)
+	r.dynamicInterface, err = dynamic.NewForConfig(clusterConfig)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -92,12 +101,16 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
-func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map[string]string) ([]runtime.Unstructured, error) {
-	err := r.discoveryHelper.Refresh()
+func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map[string]string, remoteConfig *restclient.Config, destCluster bool) ([]runtime.Unstructured, error) {
+	err := r.initClusterConfig(remoteConfig)
 	if err != nil {
 		return nil, err
 	}
 
+	err = r.discoveryHelper.Refresh()
+	if err != nil {
+		return nil, err
+	}
 	allObjects := make([]runtime.Unstructured, 0)
 
 	// Map to prevent collection of duplicate objects
@@ -118,7 +131,11 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 			if !resourceToBeCollected(resource) {
 				continue
 			}
-
+			// skip collecting non-namespaced resources for
+			// destination cluster
+			if destCluster && !resource.Namespaced {
+				continue
+			}
 			for _, ns := range namespaces {
 				var dynamicClient dynamic.ResourceInterface
 				if !resource.Namespaced {
@@ -154,7 +171,7 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 						return nil, fmt.Errorf("error casting object: %v", o)
 					}
 
-					collect, err := r.objectToBeCollected(labelSelectors, resourceMap, runtimeObject, crbs, ns)
+					collect, err := r.objectToBeCollected(labelSelectors, resourceMap, runtimeObject, crbs, ns, destCluster)
 					if err != nil {
 						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 					}
@@ -187,10 +204,22 @@ func (r *ResourceCollector) objectToBeCollected(
 	object runtime.Unstructured,
 	crbs *rbacv1.ClusterRoleBindingList,
 	namespace string,
+	destCluster bool,
 ) (bool, error) {
 	metadata, err := meta.Accessor(object)
 	if err != nil {
 		return false, err
+	}
+
+	// check migration resources
+	if destCluster {
+		if val, ok := metadata.GetAnnotations()[storkMigrationAnnotation]; ok {
+			if skip, err := strconv.ParseBool(val); err == nil && !skip {
+				return true, err
+			}
+		} else {
+			return false, nil
+		}
 	}
 
 	if value, present := metadata.GetAnnotations()[skipResourceAnnotation]; present {
