@@ -119,6 +119,10 @@ func setDefaults(migration *stork_api.Migration) *stork_api.Migration {
 		defaultBool := false
 		migration.Spec.StartApplications = &defaultBool
 	}
+	if migration.Spec.AllowCleaningResources == nil {
+		defaultBool := false
+		migration.Spec.AllowCleaningResources = &defaultBool
+	}
 	return migration
 }
 
@@ -285,13 +289,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 					message)
 				return nil
 			}
-
 		case stork_api.MigrationStageFinal:
-			// delete resources on destination which are not present on source
-			// TODO: what should be idle location for this
-			if *migration.Spec.AllowCleaningResources {
-				return m.cleanupMigratedResources(migration)
-			}
 			return nil
 		default:
 			log.MigrationLog(migration).Errorf("Invalid stage for migration: %v", migration.Status.Stage)
@@ -301,7 +299,89 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 }
 
 func (m *MigrationController) cleanupMigratedResources(migration *stork_api.Migration) error {
+	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
+	if err != nil {
+		return err
+	}
+
+	destObjects, err := m.ResourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, remoteConfig, true)
+	if err != nil {
+		m.Recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error getting resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
+		return err
+	}
+	srcObjects, err := m.ResourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, nil, false)
+	if err != nil {
+		m.Recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error getting resource: %v", err))
+		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
+		return err
+	}
+	dynamicInterface, err := dynamic.NewForConfig(remoteConfig)
+	if err != nil {
+		return err
+	}
+
+	toBeDeleted := objectTobeDeleted(srcObjects, destObjects)
+	err = m.ResourceCollector.DeleteResources(dynamicInterface, toBeDeleted)
+	if err != nil {
+		return err
+	}
+
+	// update status of cleaned up objects migration info
+	for _, r := range toBeDeleted {
+		nm, ns, kind := getObjectDetails(r)
+		resourceInfo := &stork_api.MigrationResourceInfo{
+			Name:      nm,
+			Namespace: ns,
+			Status:    stork_api.MigrationStatusCleaned,
+		}
+		resourceInfo.Kind = kind
+		migration.Status.Resources = append(migration.Status.Resources, resourceInfo)
+	}
+
+	err = sdk.Update(migration)
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func getObjectDetails(o interface{}) (name, namespace, kind string) {
+	metadata, err := meta.Accessor(o)
+	if err != nil {
+		return "", "", ""
+	}
+	objType, err := meta.TypeAccessor(o)
+	if err != nil {
+		return "", "", ""
+	}
+	return metadata.GetName(), metadata.GetNamespace(), objType.GetKind()
+}
+
+func objectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
+	var deleteObjects []runtime.Unstructured
+	for _, o := range destObjects {
+		name, namespace, kind := getObjectDetails(o)
+		isPresent := false
+		logrus.Debugf("Checking if destObject(%v:%v:%v) present on source cluster", name, namespace, kind)
+		for _, s := range srcObjects {
+			sname, snamespace, skind := getObjectDetails(s)
+			if skind == kind && snamespace == namespace && sname == name {
+				isPresent = true
+			}
+		}
+		if !isPresent {
+			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
+			deleteObjects = append(deleteObjects, o)
+		}
+	}
+	return deleteObjects
 }
 
 func (m *MigrationController) namespaceMigrationAllowed(migration *stork_api.Migration) bool {
@@ -553,7 +633,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		}
 	}
 
-	allObjects, err := m.ResourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors)
+	allObjects, err := m.ResourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, nil, false)
 	if err != nil {
 		m.Recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -624,6 +704,20 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	err = sdk.Update(migration)
 	if err != nil {
 		return err
+	}
+	logrus.Infof("Cleaning up migrated resources")
+	// delete resources on destination which are not present on source
+	// TODO: what should be idle location for this
+	if *migration.Spec.AllowCleaningResources {
+		if err := m.cleanupMigratedResources(migration); err != nil {
+			message := fmt.Sprintf("Error cleaning up resources: %v", err)
+			log.MigrationLog(migration).Errorf(message)
+			m.Recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusPartialSuccess),
+				message)
+			return nil
+		}
 	}
 	return nil
 }
