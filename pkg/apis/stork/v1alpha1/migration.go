@@ -81,6 +81,8 @@ const (
 	MigrationStatusPartialSuccess MigrationStatusType = "PartialSuccess"
 	// MigrationStatusSuccessful for when migration has completed successfully
 	MigrationStatusSuccessful MigrationStatusType = "Successful"
+	// MigrationStatusCleaned for when migration objects has been deleted
+	MigrationStatusCleaned MigrationStatusType = "Cleaned"
 )
 
 // MigrationStageType is the stage of the migration
