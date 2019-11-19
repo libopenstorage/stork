@@ -289,14 +289,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 					message)
 				return nil
 			}
-
 		case stork_api.MigrationStageFinal:
-			// delete resources on destination which are not present on source
-			// TODO: what should be idle location for this
-			if *migration.Spec.AllowCleaningResources {
-				// TODO: add deleted resource to status info of CRD
-				return m.cleanupMigratedResources(migration)
-			}
 			return nil
 		default:
 			log.MigrationLog(migration).Errorf("Invalid stage for migration: %v", migration.Status.Stage)
@@ -329,15 +322,34 @@ func (m *MigrationController) cleanupMigratedResources(migration *stork_api.Migr
 		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
 		return err
 	}
-	logrus.Printf("objects collected src: %v \t dest: %v", srcObjects, destObjects)
-
 	dynamicInterface, err := dynamic.NewForConfig(remoteConfig)
 	if err != nil {
 		return err
 	}
 
 	toBeDeleted := objectTobeDeleted(srcObjects, destObjects)
-	return m.ResourceCollector.DeleteResources(dynamicInterface, toBeDeleted)
+	err = m.ResourceCollector.DeleteResources(dynamicInterface, toBeDeleted)
+	if err != nil {
+		return err
+	}
+
+	// update status of cleaned up objects migration info
+	for _, r := range toBeDeleted {
+		nm, ns, kind := getObjectDetails(r)
+		resourceInfo := &stork_api.MigrationResourceInfo{
+			Name:      nm,
+			Namespace: ns,
+			Status:    stork_api.MigrationStatusCleaned,
+		}
+		resourceInfo.Kind = kind
+		migration.Status.Resources = append(migration.Status.Resources, resourceInfo)
+	}
+
+	err = sdk.Update(migration)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func getObjectDetails(o interface{}) (name, namespace, kind string) {
@@ -345,11 +357,11 @@ func getObjectDetails(o interface{}) (name, namespace, kind string) {
 	if err != nil {
 		return "", "", ""
 	}
-	objectType, err := meta.TypeAccessor(o)
+	objType, err := meta.TypeAccessor(o)
 	if err != nil {
 		return "", "", ""
 	}
-	return metadata.GetName(), metadata.GetNamespace(), objectType.GetKind()
+	return metadata.GetName(), metadata.GetNamespace(), objType.GetKind()
 }
 
 func objectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
@@ -357,16 +369,15 @@ func objectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime
 	for _, o := range destObjects {
 		name, namespace, kind := getObjectDetails(o)
 		isPresent := false
-		logrus.Debugf("DestObject Name:%v \t Namespace:%v \t Kind:%v", name, namespace, kind)
+		logrus.Debugf("Checking if destObject(%v:%v:%v) present on source cluster", name, namespace, kind)
 		for _, s := range srcObjects {
 			sname, snamespace, skind := getObjectDetails(s)
-			logrus.Debugf("SrcObject Name:%v \t Namespace:%v \t Kind:%v", sname, snamespace, skind)
 			if skind == kind && snamespace == namespace && sname == name {
 				isPresent = true
 			}
 		}
 		if !isPresent {
-			logrus.Infof("Deleting object Name:%v \t Namespace:%v \t Kind:%v", name, namespace, kind)
+			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
 			deleteObjects = append(deleteObjects, o)
 		}
 	}
@@ -693,6 +704,20 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	err = sdk.Update(migration)
 	if err != nil {
 		return err
+	}
+	logrus.Infof("Cleaning up migrated resources")
+	// delete resources on destination which are not present on source
+	// TODO: what should be idle location for this
+	if *migration.Spec.AllowCleaningResources {
+		if err := m.cleanupMigratedResources(migration); err != nil {
+			message := fmt.Sprintf("Error cleaning up resources: %v", err)
+			log.MigrationLog(migration).Errorf(message)
+			m.Recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusPartialSuccess),
+				message)
+			return nil
+		}
 	}
 	return nil
 }

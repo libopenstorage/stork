@@ -46,16 +46,15 @@ func (r *ResourceCollector) Init() error {
 }
 
 func (r *ResourceCollector) initClusterConfig(config *restclient.Config) error {
-	var clusterConfig *restclient.Config
 	var err error
 	if config == nil {
-		clusterConfig, err = restclient.InClusterConfig()
+		config, err = restclient.InClusterConfig()
 		if err != nil {
 			return fmt.Errorf("error getting cluster config: %v", err)
 		}
 	}
 
-	aeclient, err := apiextensionsclient.NewForConfig(clusterConfig)
+	aeclient, err := apiextensionsclient.NewForConfig(config)
 	if err != nil {
 		return fmt.Errorf("error getting apiextension client, %v", err)
 	}
@@ -66,7 +65,7 @@ func (r *ResourceCollector) initClusterConfig(config *restclient.Config) error {
 		return err
 	}
 
-	r.dynamicInterface, err = dynamic.NewForConfig(clusterConfig)
+	r.dynamicInterface, err = dynamic.NewForConfig(config)
 	if err != nil {
 		return err
 	}
