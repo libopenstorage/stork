@@ -28,7 +28,7 @@ const (
 	defaultSecretName     = "s3secret"
 
 	applicationBackupScheduleRetryInterval = 10 * time.Second
-	applicationBackupScheduleRetryTimeout  = 3 * time.Minute
+	applicationBackupScheduleRetryTimeout  = 5 * time.Minute
 	applicationBackupSyncRetryTimeout      = 10 * time.Minute
 )
 
