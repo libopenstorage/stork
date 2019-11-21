@@ -83,7 +83,7 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 		case stork_api.VolumeSnapshotRestoreStatusPending,
 			stork_api.VolumeSnapshotRestoreStatusInProgress:
 			err = c.handleStartRestore(snapRestore)
-		case stork_api.VolumeSnapshotRestoreStatusRestore:
+		case stork_api.VolumeSnapshotRestoreStatusStaged:
 			err = c.handleFinal(snapRestore)
 			if err == nil {
 				c.Recorder.Event(snapRestore,
@@ -128,7 +128,7 @@ func (c *SnapshotRestoreController) handleStartRestore(snapRestore *stork_api.Vo
 	}
 
 	// start in-place restore
-	snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusRestore
+	snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusStaged
 	return nil
 }
 
