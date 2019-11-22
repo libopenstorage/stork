@@ -15,6 +15,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	apps_api "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -45,6 +47,7 @@ func testMigration(t *testing.T) {
 	t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
 	t.Run("monthlyScheduleTest", migrationMonthlyScheduleTest)
 	t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
+	t.Run("intervalScheduleCleanupTest", intervalScheduleCleanupTest)
 	t.Run("scaleTest", migrationScaleTest)
 }
 
@@ -330,6 +333,110 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	require.NoError(t, err, "Error setting mock time")
 
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false)
+}
+
+// intervalScheduleCleanupTest runs test for migrations with schedules that are
+// intervals of time, will try to perform cleanup of k8s resources which are deleted
+// on source cluster
+func intervalScheduleCleanupTest(t *testing.T) {
+	var err error
+	var name, namespace string
+	var pvcs *v1.PersistentVolumeClaimList
+	// Reset config in case of error
+	defer func() {
+		err = setRemoteConfig("")
+		require.NoError(t, err, "Error resetting remote config")
+	}()
+	err = setMockTime(nil)
+	require.NoError(t, err, "Error resetting mock time")
+	// the schedule interval for these specs it set to 5 minutes
+	ctxs, preMigrationCtx := triggerMigration(
+		t,
+		"mysql-migration-schedule-interval",
+		"mysql-1-pvc",
+		[]string{"cassandra"},
+		[]string{"mysql-migration-schedule-interval"},
+		true,
+		false,
+		false,
+	)
+
+	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+
+	// delete statefulset from source cluster
+	for i, spec := range ctxs[0].App.SpecList {
+		if obj, ok := spec.(*apps_api.StatefulSet); ok {
+			name = obj.GetName()
+			namespace = obj.GetNamespace()
+			pvcs, err = k8s.Instance().GetPVCsForStatefulSet(obj)
+			require.NoError(t, err, "error getting pvcs for ss")
+			err = k8s.Instance().DeleteStatefulSet(name, namespace)
+			require.NoError(t, err, "error deleting cassandra statefulset")
+			err = k8s.Instance().ValidateStatefulSet(obj, 1*time.Minute)
+			require.NoError(t, err, "error deleting cassandra statefulset")
+			ctxs[0].App.SpecList = append(ctxs[0].App.SpecList[:i], ctxs[0].App.SpecList[i+1:]...)
+			break
+		}
+	}
+	// remove statefulset from preMigrationCtx as well
+	for i, spec := range preMigrationCtx.App.SpecList {
+		if _, ok := spec.(*apps_api.StatefulSet); ok {
+			preMigrationCtx.App.SpecList = append(preMigrationCtx.App.SpecList[:i],
+				preMigrationCtx.App.SpecList[i+1:]...)
+			break
+		}
+	}
+
+	// delete pvcs
+	for _, pvc := range pvcs.Items {
+		err := k8s.Instance().DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace)
+		require.NoError(t, err, "Error deleting pvc")
+	}
+
+	// bump time of the world by 5 minutes
+	mockNow := time.Now().Add(6 * time.Minute)
+	err = setMockTime(&mockNow)
+	require.NoError(t, err, "Error setting mock time")
+
+	// verify app deleted on source cluster with second migration
+	time.Sleep(1 * time.Minute)
+	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
+	validateMigrationCleanup(t, name, namespace, pvcs)
+
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false)
+}
+
+func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.PersistentVolumeClaimList) {
+	// validate if statefulset got deleted on cluster2
+	err := setRemoteConfig(remoteFilePath)
+	require.NoError(t, err, "Error setting remote config")
+
+	// Verify if statefulset get delete
+	_, err = k8s.Instance().GetStatefulSet(name, namespace)
+	require.Error(t, err, "expected ss:%v error not found", name)
+
+	for _, pvc := range pvcs.Items {
+		_, err := k8s.Instance().GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
+		require.Error(t, err, "expected pvc:%v error not found", pvc.Name)
+	}
+
+	// reset config
+	err = setRemoteConfig("")
+	require.NoError(t, err, "Error setting remote config")
+}
+
+func validateMigration(t *testing.T, name, namespace string) {
+	//  ensure only one migration has run
+	migrationsMap, err := k8s.Instance().ValidateMigrationSchedule(
+		name, namespace, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "error getting migration schedule")
+	require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
+
+	migrationStatus := migrationsMap[v1alpha1.SchedulePolicyTypeInterval][0]
+	// Independently validate the migration
+	err = k8s.Instance().ValidateMigration(
+		migrationStatus.Name, namespace, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "failed to validate migration")
 }
 
 func migrationDailyScheduleTest(t *testing.T) {
