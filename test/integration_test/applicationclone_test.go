@@ -10,7 +10,7 @@ import (
 )
 
 func TestApplicationClone(t *testing.T) {
-	t.Run("deploymentTest", deploymentApplicationCloneTest)
+	/*t.Run("deploymentTest", deploymentApplicationCloneTest)
 	t.Run("statefulsetTest", statefulsetApplicationCloneTest)
 	t.Run("statefulsetRuleTest", statefulsetApplicationCloneRuleTest)
 	t.Run("preExecRuleMissingTest", applicationCloneRulePreExecMissingTest)
@@ -18,7 +18,7 @@ func TestApplicationClone(t *testing.T) {
 	t.Run("disallowedNamespaceTest", applicationCloneDisallowedNamespaceTest)
 	t.Run("failingPreExecRuleTest", applicationCloneFailingPreExecRuleTest)
 	t.Run("failingPostExecRuleTest", applicationCloneFailingPostExecRuleTest)
-	t.Run("labelSelectorTest", applicationCloneLabelSelectorTest)
+	t.Run("labelSelectorTest", applicationCloneLabelSelectorTest)*/
 
 }
 

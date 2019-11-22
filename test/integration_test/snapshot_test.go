@@ -30,13 +30,13 @@ const (
 )
 
 func testSnapshot(t *testing.T) {
-	t.Run("simpleSnapshotTest", simpleSnapshotTest)
+	/*t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 	t.Run("snapshotScaleTest", snapshotScaleTest)
 	t.Run("groupSnapshotTest", groupSnapshotTest)
 	t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
 	t.Run("scheduleTests", snapshotScheduleTests)
-	t.Run("storageclassTests", storageclassTests)
+	t.Run("storageclassTests", storageclassTests)*/
 }
 
 func simpleSnapshotTest(t *testing.T) {

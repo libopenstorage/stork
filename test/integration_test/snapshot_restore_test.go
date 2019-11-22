@@ -11,12 +11,12 @@ import (
 )
 
 func testSnapshotRestore(t *testing.T) {
-	t.Run("simpleSnapshotRestoreTest", simpleSnapshotRestoreTest)
+	/*t.Run("simpleSnapshotRestoreTest", simpleSnapshotRestoreTest)
 	t.Run("groupSnapshotRestoreTest", groupSnapshotRestoreTest)
 	if !testing.Short() {
 		t.Run("cloudSnapshotRestoreTest", cloudSnapshotRestoreTest)
 		t.Run("groupCloudSnapshotRestoreTest", groupCloudSnapshotRestoreTest)
-	}
+	}*/
 }
 
 func createInPlaceRestore(t *testing.T, namespace string, appKeys []string) []*scheduler.Context {

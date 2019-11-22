@@ -13,8 +13,8 @@ import (
 )
 
 func TestHealthMonitor(t *testing.T) {
-	t.Run("stopDriverTest", stopDriverTest)
-	t.Run("stopKubeletTest", stopKubeletTest)
+	//t.Run("stopDriverTest", stopDriverTest)
+	//t.Run("stopKubeletTest", stopKubeletTest)
 }
 
 func stopDriverTest(t *testing.T) {

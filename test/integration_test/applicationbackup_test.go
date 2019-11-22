@@ -35,7 +35,7 @@ const (
 var allConfigMap, defaultConfigMap map[string]string
 
 func TestApplicationBackup(t *testing.T) {
-	// Get location types and secret from config maps
+	/*// Get location types and secret from config maps
 	configMap, err := k8s.Instance().GetConfigMap(configMapName, "default")
 	require.NoError(t, err, "Failed to get config map  %s", configMap.Name)
 
@@ -43,8 +43,8 @@ func TestApplicationBackup(t *testing.T) {
 
 	// Default backup location
 	defaultConfigMap = getBackupConfigMapForType(allConfigMap, defaultBackupLocation)
-
-	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
+	*/
+	/*t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
 	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
 	t.Run("postExecRuleTest", applicationBackupRestorePostExecRuleTest)
 	t.Run("preExecMissingRuleTest", applicationBackupRestorePreExecMissingRuleTest)
@@ -53,7 +53,7 @@ func TestApplicationBackup(t *testing.T) {
 	t.Run("postExecFailingRuleTest", applicationBackupRestorePostExecFailingRuleTest)
 	t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
-	t.Run("backupSyncController", applicationBackupSyncControllerTest)
+	t.Run("backupSyncController", applicationBackupSyncControllerTest)*/
 }
 
 func triggerBackupRestoreTest(

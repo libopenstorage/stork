@@ -57,7 +57,7 @@ spec:
     - -migration-scale-count=10
     - -volume-driver=pxd
     imagePullPolicy: Always
-    image: openstorage/stork_test:latest
+    image: ramsuradkar/stork_test:dev26
     securityContext:
       privileged: false
     volumeMounts:
