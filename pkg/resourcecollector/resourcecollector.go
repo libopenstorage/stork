@@ -70,6 +70,8 @@ func (r *ResourceCollector) initClusterConfig(config *restclient.Config) error {
 		return err
 	}
 
+	// reset k8s instance to given cluster config
+	k8s.Instance().SetConfig(config)
 	return nil
 }
 
