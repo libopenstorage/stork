@@ -243,14 +243,18 @@ func (d *portworx) updateNode(n node.Node, pxNodes []api.Node) error {
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.Hostname {
-				n.VolDriverNodeID = pxNode.Id
-				n.IsStorageDriverInstalled = isPX
-				isMetadataNode, err := d.isMetadataNode(n, address)
-				if err != nil {
-					return err
+				if len(pxNode.Id) > 0 {
+					n.VolDriverNodeID = pxNode.Id
+					n.IsStorageDriverInstalled = isPX
+					isMetadataNode, err := d.isMetadataNode(n, address)
+					if err != nil {
+						return err
+					}
+					n.IsMetadataNode = isMetadataNode
+					node.UpdateNode(n)
+				} else {
+					return fmt.Errorf("StorageNodeId is empty for node %v", pxNode)
 				}
-				n.IsMetadataNode = isMetadataNode
-				node.UpdateNode(n)
 				return nil
 			}
 		}
@@ -341,7 +345,7 @@ func (d *portworx) getPxNode(n node.Node, cManager cluster.Cluster) (api.Node, e
 		logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
 		pxNode, err := cManager.Inspect(n.VolDriverNodeID)
 		if (err == nil && pxNode.Status == api.Status_STATUS_OFFLINE) || (err != nil && pxNode.Status == api.Status_STATUS_NONE) {
-			n, err = d.updateNodeID(n)
+			n, err = d.updateNodeID(n, cManager)
 			if err != nil {
 				return api.Node{}, true, err
 			}
@@ -1571,9 +1575,12 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 	return pxNodes, nil
 }
 
-func (d *portworx) updateNodeID(n node.Node) (node.Node, error) {
+func (d *portworx) updateNodeID(n node.Node, cManager cluster.Cluster) (node.Node, error) {
+	if cManager == nil {
+		cManager = d.getClusterManager("")
+	}
 	for _, addr := range n.Addresses {
-		nodeID, _ := d.getClusterManager("").GetNodeIdFromIp(addr)
+		nodeID, _ := cManager.GetNodeIdFromIp(addr)
 		if len(nodeID) > 0 {
 			n.VolDriverNodeID = nodeID
 			node.UpdateNode(n)
