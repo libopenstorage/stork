@@ -995,6 +995,19 @@ func (k *k8sOps) initK8sClient() error {
 	return nil
 }
 
+// NewInstanceFromRestConfig returns new instance of k8sOps by using given
+// k8s rest client config
+func NewInstanceFromRestConfig(config *rest.Config) (Ops, error) {
+	newInstance := &k8sOps{}
+	newInstance.config = config
+	err := newInstance.loadClientFor(config)
+	if err != nil {
+		logrus.Errorf("Unable to set new instance: %v", err)
+		return nil, err
+	}
+	return newInstance, nil
+}
+
 func (k *k8sOps) GetVersion() (*version.Info, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err

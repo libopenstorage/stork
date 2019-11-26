@@ -632,7 +632,7 @@ func (a *ApplicationCloneController) applyResources(
 func (a *ApplicationCloneController) cloneResources(
 	clone *stork_api.ApplicationClone,
 ) error {
-	allObjects, err := a.ResourceCollector.GetResources([]string{clone.Spec.SourceNamespace}, clone.Spec.Selectors, nil, false)
+	allObjects, err := a.ResourceCollector.GetResources([]string{clone.Spec.SourceNamespace}, clone.Spec.Selectors)
 	if err != nil {
 		log.ApplicationCloneLog(clone).Errorf("Error getting resources: %v", err)
 		return err

@@ -3,8 +3,7 @@ package resourcecollector
 import (
 	"fmt"
 
-	"github.com/portworx/sched-ops/k8s"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -19,7 +18,7 @@ func (r *ResourceCollector) pvcToBeCollected(
 	}
 
 	pvcName := metadata.GetName()
-	pvc, err := k8s.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+	pvc, err := r.k8sOps.GetPersistentVolumeClaim(pvcName, namespace)
 	if err != nil {
 		return false, err
 	}
