@@ -3,8 +3,7 @@ package resourcecollector
 import (
 	"fmt"
 
-	"github.com/portworx/sched-ops/k8s"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -37,7 +36,7 @@ func (r *ResourceCollector) pvToBeCollected(
 			return false, nil
 		}
 
-		pvc, err := k8s.Instance().GetPersistentVolumeClaim(pvcName, pvcNamespace)
+		pvc, err := r.k8sOps.GetPersistentVolumeClaim(pvcName, pvcNamespace)
 		if err != nil {
 			return false, err
 		}

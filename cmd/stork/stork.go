@@ -311,7 +311,7 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 	resourceCollector := resourcecollector.ResourceCollector{
 		Driver: d,
 	}
-	if err := resourceCollector.Init(); err != nil {
+	if err := resourceCollector.Init(nil); err != nil {
 		log.Fatalf("Error initializing ResourceCollector: %v", err)
 	}
 
