@@ -597,7 +597,7 @@ func (a *ApplicationBackupController) preparePVResource(
 func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
-	allObjects, err := a.ResourceCollector.GetResources(backup.Spec.Namespaces, backup.Spec.Selectors, nil, false)
+	allObjects, err := a.ResourceCollector.GetResources(backup.Spec.Namespaces, backup.Spec.Selectors)
 	if err != nil {
 		log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 		return err

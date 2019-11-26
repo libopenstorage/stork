@@ -1433,8 +1433,8 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.AllowCleaningResources != nil {
-		in, out := &in.AllowCleaningResources, &out.AllowCleaningResources
+	if in.PurgeDeletedResources != nil {
+		in, out := &in.PurgeDeletedResources, &out.PurgeDeletedResources
 		*out = new(bool)
 		**out = **in
 	}

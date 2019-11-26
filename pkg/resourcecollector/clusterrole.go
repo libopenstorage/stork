@@ -3,7 +3,6 @@ package resourcecollector
 import (
 	"strings"
 
-	"github.com/portworx/sched-ops/k8s"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -177,10 +176,10 @@ func (r *ResourceCollector) mergeAndUpdateClusterRoleBinding(
 		return err
 	}
 
-	currentCRB, err := k8s.Instance().GetClusterRoleBinding(newCRB.Name)
+	currentCRB, err := r.k8sOps.GetClusterRoleBinding(newCRB.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			_, err = k8s.Instance().CreateClusterRoleBinding(&newCRB)
+			_, err = r.k8sOps.CreateClusterRoleBinding(&newCRB)
 		}
 		return err
 	}
@@ -204,6 +203,6 @@ func (r *ResourceCollector) mergeAndUpdateClusterRoleBinding(
 		currentCRB.Subjects = append(currentCRB.Subjects, subject)
 	}
 
-	_, err = k8s.Instance().UpdateClusterRoleBinding(currentCRB)
+	_, err = r.k8sOps.UpdateClusterRoleBinding(currentCRB)
 	return err
 }
