@@ -92,7 +92,7 @@ func (m *MigrationScheduleController) Handle(ctx context.Context, event sdk.Even
 						domainInfo.State == stork_api.ClusterDomainInactive {
 						suspend := true
 						migrationSchedule.Spec.Suspend = &suspend
-						msg := fmt.Sprintf("Suspending migration schedule since local clusterdomain is inactive")
+						msg := "Suspending migration schedule since local clusterdomain is inactive"
 						m.Recorder.Event(migrationSchedule,
 							v1.EventTypeWarning,
 							"Suspended",
