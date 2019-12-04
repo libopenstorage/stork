@@ -186,7 +186,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 					migration.Status.Status = stork_api.MigrationStatusFailed
 					migration.Status.Stage = stork_api.MigrationStageFinal
 					migration.Status.FinishTimestamp = metav1.Now()
-					msg := fmt.Sprintf("Failing migration since local clusterdomain is inactive")
+					msg := "Failing migration since local clusterdomain is inactive"
 					m.Recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(stork_api.MigrationStatusFailed),

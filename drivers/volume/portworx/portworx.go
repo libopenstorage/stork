@@ -1150,7 +1150,7 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeS
 		switch snapType {
 		case "", crdv1.PortworxSnapshotTypeLocal:
 			vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusStaged
-			vol.Reason = fmt.Sprintf("Restore object is ready")
+			vol.Reason = "Restore object is ready"
 		case crdv1.PortworxSnapshotTypeCloud:
 			uid := getUidforRestore(vol.Volume, string(snapRestore.GetUID()))
 			taskID := restoreTaskPrefix + uid
@@ -1173,7 +1173,7 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *stork_crd.VolumeS
 					vol.Reason = "Volume is in resync state"
 				}
 				vol.RestoreStatus = stork_crd.VolumeSnapshotRestoreStatusStaged
-				vol.Reason = fmt.Sprintf("Restore object is ready")
+				vol.Reason = "Restore object is ready"
 			}
 		default:
 			vol.Reason = fmt.Sprintf("invalid SourceType for snapshot(local/cloud), found: %v", snapType)
@@ -1625,7 +1625,7 @@ func (p *portworx) waitForCloudSnapCompletion(
 
 	csStatus := cloudSnapStatus{
 		status: api.CloudBackupStatusFailed,
-		msg:    fmt.Sprintf("cloudsnap status unknown"),
+		msg:    "cloudsnap status unknown",
 	}
 
 	err := wait.ExponentialBackoff(cloudsnapBackoff, func() (bool, error) {
@@ -1983,7 +1983,7 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 				}
 			}
 			volumeInfo.Status = stork_crd.MigrationStatusInProgress
-			volumeInfo.Reason = fmt.Sprintf("Volume migration has started. Backup in progress.")
+			volumeInfo.Reason = "Volume migration has started. Backup in progress."
 		}
 	}
 
@@ -2034,7 +2034,7 @@ func (p *portworx) GetMigrationStatus(migration *stork_crd.Migration) ([]*stork_
 				} else if mInfo.CurrentStage == api.CloudMigrate_Done &&
 					mInfo.Status == api.CloudMigrate_Complete {
 					vInfo.Status = stork_crd.MigrationStatusSuccessful
-					vInfo.Reason = fmt.Sprintf("Migration successful for volume")
+					vInfo.Reason = "Migration successful for volume"
 				} else if mInfo.Status == api.CloudMigrate_InProgress {
 					vInfo.Reason = fmt.Sprintf("Volume migration has started. %v in progress. BytesDone: %v BytesTotal: %v ETA: %v seconds",
 						mInfo.CurrentStage.String(),
@@ -2520,7 +2520,7 @@ func (p *portworx) GetBackupStatus(backup *stork_crd.ApplicationBackup) ([]*stor
 		} else {
 			vInfo.BackupID = csStatus.cloudSnapID
 			vInfo.Status = stork_crd.ApplicationBackupStatusSuccessful
-			vInfo.Reason = fmt.Sprintf("Backup successful for volume")
+			vInfo.Reason = "Backup successful for volume"
 		}
 	}
 
@@ -2654,7 +2654,7 @@ func (p *portworx) GetRestoreStatus(restore *stork_crd.ApplicationRestore) ([]*s
 			vInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
 		} else {
 			vInfo.Status = stork_crd.ApplicationRestoreStatusSuccessful
-			vInfo.Reason = fmt.Sprintf("Restore successful for volume")
+			vInfo.Reason = "Restore successful for volume"
 		}
 	}
 
