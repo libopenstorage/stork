@@ -1068,7 +1068,7 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 	case "", crdv1.PortworxSnapshotTypeLocal:
 		return nil
 	case crdv1.PortworxSnapshotTypeCloud:
-		ok, msg, err := p.ensureNodesHaveMinVersion("2.3.0")
+		ok, msg, err := p.ensureNodesHaveMinVersion("2.3.2")
 		if err != nil {
 			return err
 		}
@@ -1076,7 +1076,7 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *stork_crd.VolumeSnaps
 		if !ok {
 			err = &errors.ErrNotSupported{
 				Feature: "VolumeSnapshotRestore for Cloudsnaps",
-				Reason:  "Only supported on PX version 2.3.0 onwards: " + msg,
+				Reason:  "Only supported on PX version 2.3.2 onwards: " + msg,
 			}
 
 			return err
