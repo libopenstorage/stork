@@ -14,7 +14,7 @@ func toTimeString(t time.Time) string {
 }
 
 func handleEmptyList(out io.Writer) {
-	msg := fmt.Sprintf("No resources found.")
+	msg := "No resources found."
 	printMsg(msg, out)
 }
 

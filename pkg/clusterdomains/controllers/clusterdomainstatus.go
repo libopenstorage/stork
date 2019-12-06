@@ -82,7 +82,7 @@ func (c *ClusterDomainsStatusController) Handle(ctx context.Context, event sdk.E
 				apiClusterDomainsStatus,
 				v1.EventTypeWarning,
 				err.Error(),
-				fmt.Sprintf("Failed to update ClusterDomainsStatuses"),
+				"Failed to update ClusterDomainsStatuses",
 			)
 			logrus.Errorf("Failed to get cluster domain info: %v", err)
 		} else {

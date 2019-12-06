@@ -38,6 +38,14 @@ const (
 	// StorkMigrationReplicasAnnotation is the annotation used to keep track of
 	// the number of replicas for an application when it was migrated
 	StorkMigrationReplicasAnnotation = "stork.libopenstorage.org/migrationReplicas"
+	// StorkMigrationAnnotation is the annotation used to keep track of resources
+	// migrated by stork
+	StorkMigrationAnnotation = "stork.libopenstorage.org/migrated"
+	// StorkMigrationName is the annotation used to identify resource migrated by
+	// migration CRD name
+	StorkMigrationName = "stork.libopenstorage.org/migrationName"
+	// StorkMigrationTime is the annotation used to specify time of migration
+	StorkMigrationTime = "stork.libopenstorage.org/migrationTime"
 	// Max number of times to retry applying resources on the desination
 	maxApplyRetries = 10
 )
@@ -116,6 +124,10 @@ func setDefaults(migration *stork_api.Migration) *stork_api.Migration {
 		defaultBool := false
 		migration.Spec.StartApplications = &defaultBool
 	}
+	if migration.Spec.PurgeDeletedResources == nil {
+		defaultBool := false
+		migration.Spec.PurgeDeletedResources = &defaultBool
+	}
 	return migration
 }
 
@@ -174,7 +186,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 					migration.Status.Status = stork_api.MigrationStatusFailed
 					migration.Status.Stage = stork_api.MigrationStageFinal
 					migration.Status.FinishTimestamp = metav1.Now()
-					msg := fmt.Sprintf("Failing migration since local clusterdomain is inactive")
+					msg := "Failing migration since local clusterdomain is inactive"
 					m.Recorder.Event(migration,
 						v1.EventTypeWarning,
 						string(stork_api.MigrationStatusFailed),
@@ -282,15 +294,141 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 					message)
 				return nil
 			}
-
 		case stork_api.MigrationStageFinal:
-			// Do Nothing
 			return nil
 		default:
 			log.MigrationLog(migration).Errorf("Invalid stage for migration: %v", migration.Status.Stage)
 		}
 	}
 	return nil
+}
+
+func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migration) error {
+	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
+	if err != nil {
+		return err
+	}
+
+	log.MigrationLog(migration).Infof("Purging old unused resources ...")
+	// use seperate resource collector for collecting resources
+	// from destination cluster
+	rc := resourcecollector.ResourceCollector{
+		Driver: m.Driver,
+	}
+	err = rc.Init(remoteConfig)
+	if err != nil {
+		log.MigrationLog(migration).Errorf("Error initializing resource collector: %v", err)
+		return err
+	}
+	destObjects, err := rc.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors)
+	if err != nil {
+		m.Recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error getting resources from destination: %v", err))
+		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
+		return err
+	}
+	srcObjects, err := m.ResourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors)
+	if err != nil {
+		m.Recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			fmt.Sprintf("Error getting resources from source: %v", err))
+		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
+		return err
+	}
+	obj, err := objectToCollect(destObjects)
+	if err != nil {
+		return err
+	}
+	toBeDeleted := objectTobeDeleted(srcObjects, obj)
+	dynamicInterface, err := dynamic.NewForConfig(remoteConfig)
+	if err != nil {
+		return err
+	}
+	err = m.ResourceCollector.DeleteResources(dynamicInterface, toBeDeleted)
+	if err != nil {
+		return err
+	}
+
+	// update status of cleaned up objects migration info
+	for _, r := range toBeDeleted {
+		nm, ns, kind, err := getObjectDetails(r)
+		if err != nil {
+			// log error and skip adding object to status
+			log.MigrationLog(migration).Errorf("Unable to get object details: %v", err)
+			continue
+		}
+		resourceInfo := &stork_api.MigrationResourceInfo{
+			Name:      nm,
+			Namespace: ns,
+			Status:    stork_api.MigrationStatusPurged,
+		}
+		resourceInfo.Kind = kind
+		migration.Status.Resources = append(migration.Status.Resources, resourceInfo)
+	}
+
+	return nil
+}
+
+func getObjectDetails(o interface{}) (name, namespace, kind string, err error) {
+	metadata, err := meta.Accessor(o)
+	if err != nil {
+		return "", "", "", err
+	}
+	objType, err := meta.TypeAccessor(o)
+	if err != nil {
+		return "", "", "", err
+	}
+	return metadata.GetName(), metadata.GetNamespace(), objType.GetKind(), nil
+}
+
+func objectToCollect(destObject []runtime.Unstructured) ([]runtime.Unstructured, error) {
+	var objects []runtime.Unstructured
+	for _, obj := range destObject {
+		metadata, err := meta.Accessor(obj)
+		if err != nil {
+			return nil, err
+		}
+		if metadata.GetNamespace() != "" {
+			if val, ok := metadata.GetAnnotations()[StorkMigrationAnnotation]; ok {
+				if skip, err := strconv.ParseBool(val); err == nil && skip {
+					objects = append(objects, obj)
+				}
+			}
+		}
+	}
+	return objects, nil
+}
+
+func objectTobeDeleted(srcObjects, destObjects []runtime.Unstructured) []runtime.Unstructured {
+	var deleteObjects []runtime.Unstructured
+	for _, o := range destObjects {
+		name, namespace, kind, err := getObjectDetails(o)
+		if err != nil {
+			// skip purging if we are not able to get object details
+			logrus.Errorf("Unable to get object details %v", err)
+			continue
+		}
+		isPresent := false
+		for _, s := range srcObjects {
+			sname, snamespace, skind, err := getObjectDetails(s)
+			if err != nil {
+				// skip purging if we are not able to get object details
+				continue
+			}
+			if skind == kind && snamespace == namespace && sname == name {
+				isPresent = true
+				break
+			}
+		}
+		if !isPresent {
+			logrus.Infof("Deleting object from destination(%v:%v:%v)", name, namespace, kind)
+			deleteObjects = append(deleteObjects, o)
+		}
+	}
+	return deleteObjects
 }
 
 func (m *MigrationController) namespaceMigrationAllowed(migration *stork_api.Migration) bool {
@@ -610,6 +748,18 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 			break
 		}
 	}
+	if *migration.Spec.PurgeDeletedResources {
+		if err := m.purgeMigratedResources(migration); err != nil {
+			message := fmt.Sprintf("Error cleaning up resources: %v", err)
+			log.MigrationLog(migration).Errorf(message)
+			m.Recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusPartialSuccess),
+				message)
+			return nil
+		}
+	}
+
 	err = sdk.Update(migration)
 	if err != nil {
 		return err
@@ -884,6 +1034,16 @@ func (m *MigrationController) applyResources(
 		if !ok {
 			return fmt.Errorf("unable to cast object to unstructured: %v", o)
 		}
+
+		// set migration annotations
+		migrAnnot := metadata.GetAnnotations()
+		if migrAnnot == nil {
+			migrAnnot = make(map[string]string)
+		}
+		migrAnnot[StorkMigrationAnnotation] = "true"
+		migrAnnot[StorkMigrationName] = migration.GetName()
+		migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
+		unstructured.SetAnnotations(migrAnnot)
 		retries := 0
 		for {
 			_, err = dynamicClient.Create(unstructured)

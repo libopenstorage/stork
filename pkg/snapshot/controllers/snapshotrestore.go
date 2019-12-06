@@ -182,7 +182,6 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("unable to mark pvc for restore %v", err)
 		return err
 	}
-
 	// Do driver volume snapshot restore here
 	err = c.Driver.CompleteVolumeSnapshotRestore(snapRestore)
 	if err != nil {
@@ -193,7 +192,6 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 		snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusFailed
 		return fmt.Errorf("failed to restore pvc %v", err)
 	}
-
 	err = unmarkPVCForRestore(snapRestore.Status.Volumes)
 	if err != nil {
 		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("unable to unmark pvc for restore %v", err)
@@ -218,7 +216,6 @@ func markPVCForRestore(volumes []*stork_api.RestoreVolumeInfo) error {
 		if err != nil {
 			return err
 		}
-		log.PVCLog(newPvc).Debugf("Updated pvc annotation %v", newPvc.Annotations)
 		pods, err := k8s.Instance().GetPodsUsingPVC(newPvc.Name, newPvc.Namespace)
 		if err != nil {
 			return err
@@ -232,7 +229,6 @@ func markPVCForRestore(volumes []*stork_api.RestoreVolumeInfo) error {
 				log.PodLog(&pod).Errorf("Error deleting pod %v: %v", pod.Name, err)
 				return err
 			}
-			log.PodLog(&pod).Debugf("Deleted before wait pod %v", pod.Name)
 			if err := k8s.Instance().WaitForPodDeletion(pod.UID, pod.Namespace, 120*time.Second); err != nil {
 				log.PodLog(&pod).Errorf("Pod is not deleted %v:%v", pod.Name, err)
 				return err

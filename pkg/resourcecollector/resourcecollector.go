@@ -21,16 +21,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
+	restclient "k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
 )
 
 const (
 	// Annotation to use when the resource shouldn't be collected
 	skipResourceAnnotation = "stork.libopenstorage.org/skipresource"
-
-	deletedMaxRetries    = 12
-	deletedRetryInterval = 10 * time.Second
+	deletedMaxRetries      = 12
+	deletedRetryInterval   = 10 * time.Second
 )
 
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
@@ -38,13 +37,17 @@ type ResourceCollector struct {
 	Driver           volume.Driver
 	discoveryHelper  discovery.Helper
 	dynamicInterface dynamic.Interface
+	k8sOps           k8s.Ops
 }
 
 // Init initializes the resource collector
-func (r *ResourceCollector) Init() error {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return fmt.Errorf("error getting cluster config: %v", err)
+func (r *ResourceCollector) Init(config *restclient.Config) error {
+	var err error
+	if config == nil {
+		config, err = restclient.InClusterConfig()
+		if err != nil {
+			return fmt.Errorf("error getting cluster config: %v", err)
+		}
 	}
 
 	aeclient, err := apiextensionsclient.NewForConfig(config)
@@ -59,6 +62,12 @@ func (r *ResourceCollector) Init() error {
 	}
 
 	r.dynamicInterface, err = dynamic.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	// reset k8s instance to given cluster config
+	r.k8sOps, err = k8s.NewInstanceFromRestConfig(config)
 	if err != nil {
 		return err
 	}
@@ -97,13 +106,12 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 	if err != nil {
 		return nil, err
 	}
-
 	allObjects := make([]runtime.Unstructured, 0)
 
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 
-	crbs, err := k8s.Instance().ListClusterRoleBindings()
+	crbs, err := r.k8sOps.ListClusterRoleBindings()
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +126,6 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 			if !resourceToBeCollected(resource) {
 				continue
 			}
-
 			for _, ns := range namespaces {
 				var dynamicClient dynamic.ResourceInterface
 				if !resource.Namespaced {
