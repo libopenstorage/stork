@@ -26,6 +26,17 @@
   version = "v0.1.9"
 
 [[projects]]
+  digest = "1:ebb68c03dbf050bd9675c4eef4deb5858559009287ebf408255f262990cb2409"
+  name = "github.com/Azure/azure-sdk-for-go"
+  packages = [
+    "services/compute/mgmt/2019-03-01/compute",
+    "version",
+  ]
+  pruneopts = "UT"
+  revision = "6b60506b6dd8ad5d949df27d20e67fe437aa1e47"
+  version = "v19.2.0"
+
+[[projects]]
   digest = "1:b15d5bdadce5d98f1e06353508a4029fccfeb68761957b3a2a8cb38ebb8caca4"
   name = "github.com/Azure/azure-storage-blob-go"
   packages = ["azblob"]
@@ -45,16 +56,22 @@
   revision = "d6e3b3328b783f23731bc4d058875b0371ff8109"
 
 [[projects]]
-  digest = "1:c54c12f9d6716aad8079084272c0c6ac6f21abe203c374e13b512e05d51669fb"
+  digest = "1:b8a61bb5402d1b01ada88ccb213da33a5d29683cba5ce93813aa67d5826afe56"
   name = "github.com/Azure/go-autorest"
   packages = [
     "autorest",
     "autorest/adal",
     "autorest/azure",
+    "autorest/azure/auth",
     "autorest/date",
+    "autorest/to",
+    "autorest/validation",
+    "logger",
+    "version",
   ]
   pruneopts = "UT"
-  revision = "1ff28809256a84bb6966640ff3d0371af82ccba4"
+  revision = "9bc4033dd347c7f416fca46b2f42a043dc1fbdf6"
+  version = "v10.15.5"
 
 [[projects]]
   digest = "1:9f3b30d9f8e0d7040f729b82dcbc8f0dead820a133b3147ce355fc451f32d761"
@@ -172,6 +189,14 @@
   pruneopts = "UT"
   revision = "06ea1031745cb8b3dab3f6a236daf2b0aa468b7e"
   version = "v3.2.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:cf0d2e435fd4ce45b789e93ef24b5f08e86be0e9807a16beb3694e2d8c9af965"
+  name = "github.com/dimchansky/utfbom"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "d2133a1ce379ef6fa992b0514a77146c60db9d1c"
 
 [[projects]]
   digest = "1:4189ee6a3844f555124d9d2656fe7af02fca961c2a9bad9074789df13a0c62e0"
@@ -993,7 +1018,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:e38354215a12bfa46eb3da4e6a51ccd1102c252f5d5f0ef36dd9a361ff1e2c1a"
+  digest = "1:7e4d7aca715c33da8ccf202f3e88abd8895d2c50415a88641bf16c7dc9cd78cc"
   name = "golang.org/x/crypto"
   packages = [
     "curve25519",
@@ -1002,6 +1027,8 @@
     "internal/chacha20",
     "internal/subtle",
     "pbkdf2",
+    "pkcs12",
+    "pkcs12/internal/rc2",
     "poly1305",
     "ssh",
     "ssh/terminal",
@@ -1794,7 +1821,10 @@
   input-imports = [
     "cloud.google.com/go/compute/metadata",
     "cloud.google.com/go/storage",
+    "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute",
     "github.com/Azure/azure-storage-blob-go/azblob",
+    "github.com/Azure/go-autorest/autorest/azure/auth",
+    "github.com/Azure/go-autorest/autorest/to",
     "github.com/aws/aws-sdk-go/aws",
     "github.com/aws/aws-sdk-go/aws/credentials",
     "github.com/aws/aws-sdk-go/aws/session",
