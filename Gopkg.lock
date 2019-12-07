@@ -1147,9 +1147,10 @@
   revision = "1b5146add8981d58be77b16229c0ff0f8bebd8c1"
 
 [[projects]]
-  digest = "1:4ed6be820fedca297ec9e1a843d16ce33f888f243359caa6cf1c653f4dad165e"
+  digest = "1:6afe0605a845fb2e7e8548e444a9e3e7f1ddd22fbfb1e31a1bf76d3ce2bb8b64"
   name = "google.golang.org/api"
   packages = [
+    "compute/v1",
     "gensupport",
     "googleapi",
     "googleapi/internal/uritemplates",
@@ -1791,6 +1792,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "cloud.google.com/go/compute/metadata",
     "cloud.google.com/go/storage",
     "github.com/Azure/azure-storage-blob-go/azblob",
     "github.com/aws/aws-sdk-go/aws",
@@ -1843,6 +1845,8 @@
     "gocloud.dev/gcerrors",
     "gocloud.dev/gcp",
     "golang.org/x/oauth2/google",
+    "google.golang.org/api/compute/v1",
+    "google.golang.org/api/option",
     "google.golang.org/grpc",
     "google.golang.org/grpc/credentials",
     "gopkg.in/yaml.v2",
