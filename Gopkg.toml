@@ -118,3 +118,12 @@ required = [
 [[override]]
   name = "gopkg.in/fsnotify.v1"
   source = "https://github.com/fsnotify/fsnotify.git"
+
+[[constraint]]
+  version = "=0.1.7"
+  name = "sigs.k8s.io/controller-runtime"
+
+#[[constraint]]
+#  name = "github.com/operator-framework/operator-sdk"
+#  version = "0.4.0"
+
