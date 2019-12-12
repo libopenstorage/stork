@@ -35,6 +35,16 @@ spec:
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
           name: postgredb
+        readinessProbe:
+          exec:
+            command: ["psql", "-U", "pgbench", "-d", "pgbench", "-c", "SELECT 1"]
+          initialDelaySeconds: 15
+          timeoutSeconds: 2
+        livenessProbe:
+          exec:
+            command: ["psql", "-U", "pgbench", "-d", "pgbench", "-c", "SELECT 1"]
+          initialDelaySeconds: 45
+          timeoutSeconds: 2
       volumes:
       - name: postgredb
         persistentVolumeClaim:
