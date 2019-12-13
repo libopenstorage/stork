@@ -148,22 +148,10 @@ func run(c *cli.Context) {
 
 	log.Infof("Starting stork version %v", version.Version)
 	driverName := c.String("driver")
-	if len(driverName) == 0 {
-		log.Fatalf("driver option is required")
-	}
 
 	verbose := c.Bool("verbose")
 	if verbose {
 		log.SetLevel(log.DebugLevel)
-	}
-
-	d, err := volume.Get(driverName)
-	if err != nil {
-		log.Fatalf("Error getting Stork Driver %v: %v", driverName, err)
-	}
-
-	if err = d.Init(nil); err != nil {
-		log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
 	}
 
 	config, err := rest.InClusterConfig()
@@ -180,14 +168,26 @@ func run(c *cli.Context) {
 	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: core_v1.New(k8sClient.CoreV1().RESTClient()).Events("")})
 	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, api_v1.EventSource{Component: eventComponentName})
 
-	if c.Bool("extender") {
-		ext = &extender.Extender{
-			Driver:   d,
-			Recorder: recorder,
+	var d volume.Driver
+	if driverName != "" {
+		d, err = volume.Get(driverName)
+		if err != nil {
+			log.Fatalf("Error getting Stork Driver %v: %v", driverName, err)
 		}
 
-		if err = ext.Start(); err != nil {
-			log.Fatalf("Error starting scheduler extender: %v", err)
+		if err = d.Init(nil); err != nil {
+			log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
+		}
+
+		if c.Bool("extender") {
+			ext = &extender.Extender{
+				Driver:   d,
+				Recorder: recorder,
+			}
+
+			if err = ext.Start(); err != nil {
+				log.Fatalf("Error starting scheduler extender: %v", err)
+			}
 		}
 	}
 
@@ -258,77 +258,87 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		log.Fatalf("Error initializing rule: %v", err)
 	}
 
-	initializer := &initializer.Initializer{
-		Driver: d,
-	}
-	if c.Bool("app-initializer") {
-		if err := initializer.Start(); err != nil {
-			log.Fatalf("Error starting initializer: %v", err)
-		}
-	}
-
-	monitor := &monitor.Monitor{
-		Driver:      d,
-		IntervalSec: c.Int64("health-monitor-interval"),
-	}
-
-	if c.Bool("health-monitor") {
-		if err := monitor.Start(); err != nil {
-			log.Fatalf("Error starting storage monitor: %v", err)
-		}
-	}
-
-	if err := schedule.Init(); err != nil {
-		log.Fatalf("Error initializing schedule: %v", err)
-	}
-
-	snapshot := &snapshot.Snapshot{
-		Driver:   d,
-		Recorder: recorder,
-	}
-	if c.Bool("snapshotter") {
-		if err := snapshot.Start(); err != nil {
-			log.Fatalf("Error starting snapshot controller: %v", err)
-		}
-
-		groupsnapshotInst := groupsnapshot.GroupSnapshot{
-			Driver:   d,
-			Recorder: recorder,
-		}
-		if err := groupsnapshotInst.Init(); err != nil {
-			log.Fatalf("Error initializing groupsnapshot controller: %v", err)
-		}
-	}
-	pvcWatcher := pvcwatcher.PVCWatcher{
-		Driver:   d,
-		Recorder: recorder,
-	}
-	if c.Bool("pvc-watcher") {
-		if err := pvcWatcher.Start(); err != nil {
-			log.Fatalf("Error starting pvc watcher: %v", err)
-		}
-	}
-
 	resourceCollector := resourcecollector.ResourceCollector{
 		Driver: d,
 	}
 	if err := resourceCollector.Init(nil); err != nil {
 		log.Fatalf("Error initializing ResourceCollector: %v", err)
 	}
-
 	adminNamespace := c.String("admin-namespace")
 	if adminNamespace == "" {
 		adminNamespace = c.String("migration-admin-namespace")
 	}
 
-	if c.Bool("migration-controller") {
-		migration := migration.Migration{
-			Driver:            d,
-			Recorder:          recorder,
-			ResourceCollector: resourceCollector,
+	initializer := &initializer.Initializer{
+		Driver: d,
+	}
+	monitor := &monitor.Monitor{
+		Driver:      d,
+		IntervalSec: c.Int64("health-monitor-interval"),
+	}
+	snapshot := &snapshot.Snapshot{
+		Driver:   d,
+		Recorder: recorder,
+	}
+	if d != nil {
+		if c.Bool("app-initializer") {
+			if err := initializer.Start(); err != nil {
+				log.Fatalf("Error starting initializer: %v", err)
+			}
 		}
-		if err := migration.Init(adminNamespace); err != nil {
-			log.Fatalf("Error initializing migration: %v", err)
+
+		if c.Bool("health-monitor") {
+			if err := monitor.Start(); err != nil {
+				log.Fatalf("Error starting storage monitor: %v", err)
+			}
+		}
+
+		if err := schedule.Init(); err != nil {
+			log.Fatalf("Error initializing schedule: %v", err)
+		}
+
+		if c.Bool("snapshotter") {
+			if err := snapshot.Start(); err != nil {
+				log.Fatalf("Error starting snapshot controller: %v", err)
+			}
+
+			groupsnapshotInst := groupsnapshot.GroupSnapshot{
+				Driver:   d,
+				Recorder: recorder,
+			}
+			if err := groupsnapshotInst.Init(); err != nil {
+				log.Fatalf("Error initializing groupsnapshot controller: %v", err)
+			}
+		}
+		pvcWatcher := pvcwatcher.PVCWatcher{
+			Driver:   d,
+			Recorder: recorder,
+		}
+		if c.Bool("pvc-watcher") {
+			if err := pvcWatcher.Start(); err != nil {
+				log.Fatalf("Error starting pvc watcher: %v", err)
+			}
+		}
+
+		if c.Bool("migration-controller") {
+			migration := migration.Migration{
+				Driver:            d,
+				Recorder:          recorder,
+				ResourceCollector: resourceCollector,
+			}
+			if err := migration.Init(adminNamespace); err != nil {
+				log.Fatalf("Error initializing migration: %v", err)
+			}
+		}
+
+		if c.Bool("cluster-domain-controllers") {
+			clusterDomains := clusterdomains.ClusterDomains{
+				Driver:   d,
+				Recorder: recorder,
+			}
+			if err := clusterDomains.Init(); err != nil {
+				log.Fatalf("Error initializing cluster domain controllers: %v", err)
+			}
 		}
 	}
 
@@ -342,17 +352,6 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 			log.Fatalf("Error initializing application manager: %v", err)
 		}
 	}
-
-	if c.Bool("cluster-domain-controllers") {
-		clusterDomains := clusterdomains.ClusterDomains{
-			Driver:   d,
-			Recorder: recorder,
-		}
-		if err := clusterDomains.Init(); err != nil {
-			log.Fatalf("Error initializing cluster domain controllers: %v", err)
-		}
-	}
-
 	// The controller should be started at the end
 	err := controller.Run()
 	if err != nil {
