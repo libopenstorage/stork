@@ -106,7 +106,7 @@
   revision = "de5bf2ad457846296e2031421a34e2568e304e35"
 
 [[projects]]
-  digest = "1:ee03883fd4e2a8511a2baea846f21d35396c99fb1b53c616ae13b78e8acf6687"
+  digest = "1:aeb8816471fa74dac02e0b6ed0d4e625156d0d7657fa2b9baf60dc54e3545a4d"
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -130,25 +130,30 @@
     "internal/ini",
     "internal/s3err",
     "internal/sdkio",
+    "internal/sdkmath",
     "internal/sdkrand",
     "internal/sdkuri",
     "internal/shareddefaults",
     "private/protocol",
+    "private/protocol/ec2query",
     "private/protocol/eventstream",
     "private/protocol/eventstream/eventstreamapi",
+    "private/protocol/json/jsonutil",
     "private/protocol/query",
     "private/protocol/query/queryutil",
     "private/protocol/rest",
     "private/protocol/restxml",
     "private/protocol/xml/xmlutil",
+    "service/ec2",
     "service/s3",
     "service/s3/s3iface",
     "service/s3/s3manager",
     "service/sts",
+    "service/sts/stsiface",
   ]
   pruneopts = "UT"
-  revision = "86dc5d0ebe9f30ac9e939da21c240a98519343f2"
-  version = "v1.19.24"
+  revision = "e1af1c7236c8be2fd71e8a2a57de65edc01634b4"
+  version = "v1.25.31"
 
 [[projects]]
   branch = "master"
@@ -573,6 +578,18 @@
   pruneopts = "UT"
   revision = "9394ee8dd5361cfe8fee25c233721e4060ff0473"
   source = "github.com/libopenstorage/external-storage"
+
+[[projects]]
+  branch = "master"
+  digest = "1:5c2211e5e424c6b83dfa91e0560fd1f9afba1bcd75408d2d8fb327dbc266037b"
+  name = "github.com/kubernetes-sigs/aws-ebs-csi-driver"
+  packages = [
+    "pkg/cloud",
+    "pkg/cloud/devicemanager",
+    "pkg/util",
+  ]
+  pruneopts = "UT"
+  revision = "db95482f8963350d70e9932b0936e6794fe76bf2"
 
 [[projects]]
   digest = "1:9a158cecac7b6a55c718b9e440c39e82985969d2cca08d43ab7a2efe532ba59b"
@@ -1827,7 +1844,10 @@
     "github.com/Azure/go-autorest/autorest/to",
     "github.com/aws/aws-sdk-go/aws",
     "github.com/aws/aws-sdk-go/aws/credentials",
+    "github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds",
+    "github.com/aws/aws-sdk-go/aws/ec2metadata",
     "github.com/aws/aws-sdk-go/aws/session",
+    "github.com/aws/aws-sdk-go/service/ec2",
     "github.com/go-openapi/inflect",
     "github.com/hashicorp/go-version",
     "github.com/heptio/ark/pkg/discovery",
@@ -1837,6 +1857,7 @@
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume",
+    "github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud",
     "github.com/libopenstorage/openstorage/api",
     "github.com/libopenstorage/openstorage/api/client",
     "github.com/libopenstorage/openstorage/api/client/cluster",
