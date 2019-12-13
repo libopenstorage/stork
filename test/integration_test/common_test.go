@@ -65,6 +65,7 @@ var storkVolumeDriver storkdriver.Driver
 
 var snapshotScaleCount int
 var migrationScaleCount int
+var backupScaleCount int
 var authToken string
 var authTokenConfigMap string
 var volumeDriverName string
@@ -476,6 +477,10 @@ func TestMain(m *testing.M) {
 		"migration-scale-count",
 		10,
 		"Number of migrations to use for migration test")
+	flag.IntVar(&backupScaleCount,
+		"backup-scale-count",
+		10,
+		"Number of different backups per app for scaled backup test")
 	flag.StringVar(&volumeDriverName,
 		"volume-driver",
 		"pxd",
