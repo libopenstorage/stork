@@ -119,3 +119,7 @@ required = [
   name = "github.com/Azure/go-autorest"
   version = "v10.6.2"
 
+[[constraint]]
+  name = "github.com/kubernetes-sigs/aws-ebs-csi-driver"
+  branch = "master"
+
