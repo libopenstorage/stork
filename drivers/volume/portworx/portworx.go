@@ -27,6 +27,8 @@ import (
 	auth_secrets "github.com/libopenstorage/openstorage/pkg/auth/secrets"
 	"github.com/libopenstorage/openstorage/pkg/grpcserver"
 	"github.com/libopenstorage/openstorage/volume"
+	lsecrets "github.com/libopenstorage/secrets"
+	k8s_secrets "github.com/libopenstorage/secrets/k8s"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	applicationcontrollers "github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
@@ -336,6 +338,16 @@ func (p *portworx) initPortworxClients() error {
 	err = p.sdkConn.setDialOptions(isTLSEnabled())
 	if err != nil {
 		return err
+	}
+
+	// Setup secrets instance
+	k8sSecrets, err := k8s_secrets.New(nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize secrets provider: %v", err)
+	}
+	err = lsecrets.SetInstance(k8sSecrets)
+	if err != nil {
+		return fmt.Errorf("failed to set secrets provider: %v", err)
 	}
 
 	// Save the token if any was given
