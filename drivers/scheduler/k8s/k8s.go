@@ -47,7 +47,6 @@ const (
 	// StatefulSetSuffix is the suffix for statefulset names stored as keys in maps
 	StatefulSetSuffix = "-ss"
 	// SystemdSchedServiceName is the name of the system service responsible for scheduling
-	// TODO Change this when running on openshift for the proper service name
 	SystemdSchedServiceName = "kubelet"
 	// ZoneK8SNodeLabel is label describing zone of the k8s node
 	ZoneK8SNodeLabel = "failure-domain.beta.kubernetes.io/zone"
