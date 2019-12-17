@@ -88,8 +88,6 @@ func (hook *Hook) Fire(entry *logrus.Entry) error {
 			entry.Message = green(entry.Message)
 		} else if errorMessage(entry.Message) {
 			entry.Message = red(entry.Message)
-		} else {
-			entry.Message = yellow(entry.Message)
 		}
 	}
 
