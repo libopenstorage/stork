@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx
+        image: bitnami/nginx
         ports:
         - containerPort: 80
         volumeMounts:
