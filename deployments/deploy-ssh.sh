@@ -75,6 +75,11 @@ if [ -z "$DRIVER_START_TIMEOUT" ]; then
     echo "Using default timeout of ${DRIVER_START_TIMEOUT}"
 fi
 
+APP_DESTROY_TIMEOUT_ARG=""
+if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
+    APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
+fi
+
 if [ -z "$STORAGENODE_RECOVERY_TIMEOUT" ]; then
     STORAGENODE_RECOVERY_TIMEOUT="35m0s"
     echo "Using default storage node recovery timeout of ${STORAGENODE_RECOVERY_TIMEOUT}"
@@ -271,7 +276,8 @@ spec:
             "--provisioner", "$PROVISIONER",
             "--config-map", "$CONFIGMAP",
             "$UPGRADE_ENDPOINT_URL_ARG",
-            "$UPGRADE_ENDPOINT_VERSION_ARG" ]
+            "$UPGRADE_ENDPOINT_VERSION_ARG",
+            "$APP_DESTROY_TIMEOUT_ARG" ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
