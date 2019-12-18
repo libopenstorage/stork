@@ -29,38 +29,16 @@ var _ = BeforeSuite(func() {
 var _ = Describe("{RebootOneNode}", func() {
 	It("has to schedule apps and reboot node(s) with volumes", func() {
 		var err error
-		timeout := 60 * time.Second
-		retryInterval := 5 * time.Second
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootonenode-%d", i))...)
 		}
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
-			for _, ctx := range contexts {
-				var nodesToReboot []node.Node
+				nodesToReboot:=node.GetWorkerNodes() 
 
-				Step(fmt.Sprintf("get nodes for %s app to reboot, where volumes are attached", ctx.App.Key), func() {
-					volumes, err := Inst().S.GetVolumes(ctx)
-					Expect(err).NotTo(HaveOccurred())
-
-					nodeMap := make(map[string]struct{})
-					for _, v := range volumes {
-						n, err := Inst().V.GetNodeForVolume(v, timeout, retryInterval)
-						Expect(err).NotTo(HaveOccurred())
-
-						if n == nil {
-							continue
-						}
-
-						if _, exists := nodeMap[n.Name]; !exists {
-							nodeMap[n.Name] = struct{}{}
-							nodesToReboot = append(nodesToReboot, *n)
-						}
-					}
-				})
-
-				Step(fmt.Sprintf("reboot app %s's node(s): %v", ctx.App.Key, nodesToReboot), func() {
+			// Reboot node and check driver status
+				Step(fmt.Sprintf("reboot node one at a time from the node(s): %v",  nodesToReboot), func() {
 					for _, n := range nodesToReboot {
 						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
@@ -98,7 +76,6 @@ var _ = Describe("{RebootOneNode}", func() {
 						})
 					}
 				})
-			}
 		})
 
 		ValidateAndDestroy(contexts, nil)
