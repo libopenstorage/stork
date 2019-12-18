@@ -42,7 +42,7 @@ metadata:
     name: px-mysql-sc-seq
 provisioner: kubernetes.io/portworx-volume
 parameters:
-   fs: "ext4"
+   fs: "xfs"
    repl: "3"
    aggregation_level: "1"
    io_profile: "sequential"
