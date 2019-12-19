@@ -31,8 +31,10 @@ var _ = Describe("{RebootOneNode}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootonenode-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootonenode-%d", i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
 			nodesToReboot := node.GetWorkerNodes()
@@ -87,8 +89,10 @@ var _ = Describe("{RebootAllNodes}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("rebootallnodes-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootallnodes-%d", i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		Step("get nodes for all apps in test and reboot their nodes", func() {
 			for _, ctx := range contexts {

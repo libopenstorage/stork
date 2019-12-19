@@ -250,6 +250,33 @@ func ScheduleAndValidate(testname string) []*scheduler.Context {
 	return contexts
 }
 
+// ScheduleApplications schedules but does not wait for applications
+func ScheduleApplications(testname string) []*scheduler.Context {
+	var contexts []*scheduler.Context
+	var err error
+
+	Step("schedule applications", func() {
+		taskName := fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+		})
+		expect(err).NotTo(haveOccurred())
+		expect(contexts).NotTo(beEmpty())
+	})
+
+	return contexts
+}
+
+// ValidateApplications validates applications
+func ValidateApplications(contexts []*scheduler.Context) {
+	Step("validate applications", func() {
+		for _, ctx := range contexts {
+			ValidateContext(ctx)
+		}
+	})
+}
+
 // StartVolDriverAndWait starts volume driver on given app nodes
 func StartVolDriverAndWait(appNodes []node.Node) {
 	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {

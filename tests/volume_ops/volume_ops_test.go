@@ -35,8 +35,10 @@ var _ = Describe("{VolumeUpdate}", func() {
 		var contexts []*scheduler.Context
 		expReplMap := make(map[*volume.Volume]int64)
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("volupdate-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdate-%d", i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		Step("get volumes for all apps in test and update replication factor and size", func() {
 			for _, ctx := range contexts {

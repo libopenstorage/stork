@@ -30,8 +30,10 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 	It("upgrade volume driver and ensure everything is running fine", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradevolumedriver-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		Step("start the upgrade of volume driver", func() {
 			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
@@ -74,8 +76,10 @@ var _ = PDescribe("{UpgradeDowngradeVolumeDriver}", func() {
 	It("upgrade and downgrade volume driver and ensure everything is running fine", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("upgradedowngradevolumedriver-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradedowngradevolumedriver-%d", i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		Step("start the upgrade of volume driver", func() {
 			images := getImages(Inst().StorageDriverUpgradeVersion)

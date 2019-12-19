@@ -33,8 +33,10 @@ var _ = Describe("{StopScheduler}", func() {
 		var err error
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		Step("get nodes for all apps in test and induce scheduler service to stop on one of the nodes", func() {
 			for _, ctx := range contexts {

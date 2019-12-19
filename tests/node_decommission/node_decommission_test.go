@@ -39,8 +39,10 @@ var _ = Describe("{DecommissionNode}", func() {
 	It("has to decommission a node and check if node was decommissioned successfully", func() {
 		var contexts []*scheduler.Context
 		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleAndValidate(fmt.Sprintf("%s-%d", testName, i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
+
+		ValidateApplications(contexts)
 
 		var workerNodes []node.Node
 		Step(fmt.Sprintf("get worker nodes"), func() {
