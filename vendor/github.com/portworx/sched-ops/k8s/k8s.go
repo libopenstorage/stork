@@ -37,7 +37,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth" // needed to initialize plugins on cloud providers
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 )
@@ -255,6 +254,8 @@ type RBACOps interface {
 	CreateRole(role *rbac_v1.Role) (*rbac_v1.Role, error)
 	// UpdateRole updates the given role
 	UpdateRole(role *rbac_v1.Role) (*rbac_v1.Role, error)
+	// GetRole gets the given role
+	GetRole(name, namespace string) (*rbac_v1.Role, error)
 	// CreateClusterRole creates the given cluster role
 	CreateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterRole, error)
 	// GetClusterRole gets the given cluster role
@@ -265,6 +266,8 @@ type RBACOps interface {
 	CreateRoleBinding(role *rbac_v1.RoleBinding) (*rbac_v1.RoleBinding, error)
 	// UpdateRoleBinding updates the given role binding
 	UpdateRoleBinding(role *rbac_v1.RoleBinding) (*rbac_v1.RoleBinding, error)
+	// GetRoleBinding gets the given role binding
+	GetRoleBinding(name, namespace string) (*rbac_v1.RoleBinding, error)
 	// GetClusterRoleBinding gets the given cluster role binding
 	GetClusterRoleBinding(name string) (*rbac_v1.ClusterRoleBinding, error)
 	// ListClusterRoleBindings lists the cluster role bindings
@@ -275,6 +278,8 @@ type RBACOps interface {
 	UpdateClusterRoleBinding(role *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error)
 	// CreateServiceAccount creates the given service account
 	CreateServiceAccount(account *v1.ServiceAccount) (*v1.ServiceAccount, error)
+	// GetServiceAccount gets the given service account
+	GetServiceAccount(name, namespace string) (*v1.ServiceAccount, error)
 	// DeleteRole deletes the given role
 	DeleteRole(name, namespace string) error
 	// DeleteRoleBinding deletes the given role binding
@@ -500,10 +505,36 @@ func Instance() Ops {
 	return instance
 }
 
-// NewInstance returns new instance of k8sOps by using given config
-func NewInstance(config string) (Ops, error) {
+// NewInstanceFromConfigFile returns new instance of k8sOps by using given
+// config file
+func NewInstanceFromConfigFile(config string) (Ops, error) {
 	newInstance := &k8sOps{}
 	err := newInstance.loadClientFromKubeconfig(config)
+	if err != nil {
+		logrus.Errorf("Unable to set new instance: %v", err)
+		return nil, err
+	}
+	return newInstance, nil
+}
+
+// NewInstanceFromConfigBytes returns new instance of k8sOps by using given
+// config bytes
+func NewInstanceFromConfigBytes(config []byte) (Ops, error) {
+	newInstance := &k8sOps{}
+	err := newInstance.loadClientFromConfigBytes(config)
+	if err != nil {
+		logrus.Errorf("Unable to set new instance: %v", err)
+		return nil, err
+	}
+	return newInstance, nil
+}
+
+// NewInstanceFromRestConfig returns new instance of k8sOps by using given
+// k8s rest client config
+func NewInstanceFromRestConfig(config *rest.Config) (Ops, error) {
+	newInstance := &k8sOps{}
+	newInstance.config = config
+	err := newInstance.loadClientFor(config)
 	if err != nil {
 		logrus.Errorf("Unable to set new instance: %v", err)
 		return nil, err
@@ -1258,8 +1289,13 @@ func (k *k8sOps) ValidateTerminatedDeployment(deployment *appsv1.Deployment, tim
 		if pods != nil && len(pods) > 0 {
 			var podNames []string
 			for _, pod := range pods {
-				podNames = append(podNames, pod.Name)
+				if len(pod.Spec.NodeName) > 0 {
+					podNames = append(podNames, fmt.Sprintf("%s (node=%s)", pod.Name, pod.Spec.NodeName))
+				} else {
+					podNames = append(podNames, pod.Name)
+				}
 			}
+
 			return "", true, &ErrAppNotTerminated{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("pods: %v are still present", podNames),
@@ -1689,7 +1725,11 @@ func (k *k8sOps) ValidateTerminatedStatefulSet(statefulset *appsv1.StatefulSet, 
 		if pods != nil && len(pods) > 0 {
 			var podNames []string
 			for _, pod := range pods {
-				podNames = append(podNames, pod.Name)
+				if len(pod.Spec.NodeName) > 0 {
+					podNames = append(podNames, fmt.Sprintf("%s (node=%s)", pod.Name, pod.Spec.NodeName))
+				} else {
+					podNames = append(podNames, pod.Name)
+				}
 			}
 			return "", true, &ErrAppNotTerminated{
 				ID:    sset.Name,
@@ -1807,6 +1847,14 @@ func (k *k8sOps) UpdateRole(role *rbac_v1.Role) (*rbac_v1.Role, error) {
 	return k.client.RbacV1().Roles(role.Namespace).Update(role)
 }
 
+func (k *k8sOps) GetRole(name, namespace string) (*rbac_v1.Role, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.RbacV1().Roles(namespace).Get(name, meta_v1.GetOptions{})
+}
+
 func (k *k8sOps) CreateClusterRole(role *rbac_v1.ClusterRole) (*rbac_v1.ClusterRole, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -1847,6 +1895,14 @@ func (k *k8sOps) UpdateRoleBinding(binding *rbac_v1.RoleBinding) (*rbac_v1.RoleB
 	return k.client.RbacV1().RoleBindings(binding.Namespace).Update(binding)
 }
 
+func (k *k8sOps) GetRoleBinding(name, namespace string) (*rbac_v1.RoleBinding, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.RbacV1().RoleBindings(namespace).Get(name, meta_v1.GetOptions{})
+}
+
 func (k *k8sOps) CreateClusterRoleBinding(binding *rbac_v1.ClusterRoleBinding) (*rbac_v1.ClusterRoleBinding, error) {
 	if err := k.initK8sClient(); err != nil {
 		return nil, err
@@ -1885,6 +1941,14 @@ func (k *k8sOps) CreateServiceAccount(account *v1.ServiceAccount) (*v1.ServiceAc
 	}
 
 	return k.client.CoreV1().ServiceAccounts(account.Namespace).Create(account)
+}
+
+func (k *k8sOps) GetServiceAccount(name, namespace string) (*v1.ServiceAccount, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+
+	return k.client.CoreV1().ServiceAccounts(namespace).Get(name, meta_v1.GetOptions{})
 }
 
 func (k *k8sOps) DeleteRole(name, namespace string) error {

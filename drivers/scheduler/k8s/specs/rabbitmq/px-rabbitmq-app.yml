@@ -1,0 +1,210 @@
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: endpoint-reader
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: endpoint-reader
+subjects:
+  - kind: ServiceAccount
+    name: rabbitmq
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: endpoint-reader
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rabbitmq
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: rabbitmq-internal
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  ports:
+    - name: http
+      protocol: TCP
+      port: 15672
+    - name: amqp
+      protocol: TCP
+      port: 5672
+  selector:
+    app: rabbitmq
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+    type: LoadBalancer
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+    - name: rabbitmq-mgmt-port
+      protocol: TCP
+      port: 15672
+      targetPort: 15672
+    - name: rabbitmq-amqp-port
+      protocol: TCP
+      port: 5672
+      targetPort: 5672
+  sessionAffinity: ClientIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+data:
+  enabled_plugins: |
+    [rabbitmq_management,rabbitmq_peer_discovery_k8s].
+  rabbitmq.conf: |
+    ## Cluster formation. See https://www.rabbitmq.com/cluster-formation.html to learn more.
+    cluster_formation.peer_discovery_backend  = rabbit_peer_discovery_k8s
+    cluster_formation.k8s.host = kubernetes.default.svc.cluster.local
+    ## Should RabbitMQ node name be computed from the pod's hostname or IP address?
+    ## IP addresses are not stable, so using [stable] hostnames is recommended when possible.
+    ## Set to "hostname" to use pod hostnames.
+    ## When this value is changed, so should the variable used to set the RABBITMQ_NODENAME
+    ## environment variable.
+    cluster_formation.k8s.address_type = ip
+    ## How often should node cleanup checks run?
+    cluster_formation.node_cleanup.interval = 30
+    ## Set to false if automatic removal of unknown/absent nodes
+    ## is desired. This can be dangerous, see
+    ##  * https://www.rabbitmq.com/cluster-formation.html#node-health-checks-and-cleanup
+    ##  * https://groups.google.com/forum/#!msg/rabbitmq-users/wuOfzEywHXo/k8z_HWIkBgAJ
+    cluster_formation.node_cleanup.only_log_warning = true
+    cluster_partition_handling = autoheal
+    ## See https://www.rabbitmq.com/ha.html#master-migration-data-locality
+    queue_master_locator=min-masters
+    ## See https://www.rabbitmq.com/access-control.html#loopback-users
+    loopback_users.guest = false
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+spec:
+  serviceName: rabbitmq-internal
+  updateStrategy:
+    type: RollingUpdate
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      serviceAccountName: rabbitmq
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: rabbitmq-k8s
+          image: rabbitmq
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/rabbitmq
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+          ports:
+            - name: http
+              protocol: TCP
+              containerPort: 15672
+            - name: amqp
+              protocol: TCP
+              containerPort: 5672
+          livenessProbe:
+            exec:
+              command: ["rabbitmqctl", "status"]
+            initialDelaySeconds: 60
+            # See https://www.rabbitmq.com/monitoring.html for monitoring frequency recommendations.
+            periodSeconds: 60
+            timeoutSeconds: 15
+          readinessProbe:
+            exec:
+              command: ["rabbitmqctl", "status"]
+            initialDelaySeconds: 20
+            periodSeconds: 60
+            timeoutSeconds: 10
+          imagePullPolicy: Always
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: RABBITMQ_USE_LONGNAME
+              value: "true"
+            # See a note on cluster_formation.k8s.address_type in the config file section
+            - name: RABBITMQ_NODENAME
+              value: "rabbit@$(MY_POD_IP)"
+            - name: K8S_SERVICE_NAME
+              value: "rabbitmq-internal"
+            - name: RABBITMQ_ERLANG_COOKIE
+              value: "mycookie"
+      volumes:
+        - name: config-volume
+          configMap:
+            name: rabbitmq-config
+            items:
+              - key: rabbitmq.conf
+                path: rabbitmq.conf
+              - key: enabled_plugins
+                path: enabled_plugins
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-data
+      spec:
+        storageClassName: rabbitmq-sc
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq-io
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      serviceAccountName: rabbitmq
+      initContainers:
+        - name: wait-for-rabbitmq
+          image: appropriate/curl
+          command: [ "sh" ]
+          args: [ "-c", "sleep 60; until curl http://rabbitmq:15672/api/aliveness-test/%2F; do echo \"waiting for rabbitmq to become ready...\"; sleep 15;done" ]
+      containers:
+        - name: rabbitmq-io
+          image: pivotalrabbitmq/perf-test
+          args:
+            - "--uri=amqp://rabbitmq"
+            - "--consumers=10"
+            - "--producers=5"
+            - "--servers-startup-timeout=60"
+            - "--slow-start"
+            - "--autoack"

@@ -91,7 +91,7 @@ func (k *k8sOps) ValidateCRD(resource CustomResource, timeout, retryInterval tim
 	}
 
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
-	return wait.Poll(retryInterval, timeout, func() (bool, error) {
+	return wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
 		crd, err := k.apiExtensionClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, meta_v1.GetOptions{})
 		if err != nil {
 			return false, err

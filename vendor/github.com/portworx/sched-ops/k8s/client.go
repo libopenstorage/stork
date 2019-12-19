@@ -223,6 +223,16 @@ func (k *k8sOps) loadClientFromKubeconfig(kubeconfig string) error {
 	return k.loadClientFor(config)
 }
 
+func (k *k8sOps) loadClientFromConfigBytes(kubeconfig []byte) error {
+	config, err := clientcmd.RESTConfigFromKubeConfig(kubeconfig)
+	if err != nil {
+		return err
+	}
+
+	k.config = config
+	return k.loadClientFor(config)
+}
+
 func (k *k8sOps) loadClientFor(config *rest.Config) error {
 	var err error
 	k.client, err = kubernetes.NewForConfig(config)

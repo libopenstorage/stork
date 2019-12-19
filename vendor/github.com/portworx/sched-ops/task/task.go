@@ -1,14 +1,15 @@
 package task
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 )
 
 //TODO: export the type: type Task func() (string, error)
 
+// Is this type used anywhere? If not we can get rid off it in favor context.DeadlineExceeded
 // ErrTimedOut is returned when an operation times out
 type ErrTimedOut struct {
 	// Reason is the reason for the timeout
@@ -24,59 +25,55 @@ func (e *ErrTimedOut) Error() string {
 	return errString
 }
 
+// TODO(stgleb): In future I would like to add context as a first param to this function
+// so calling code can cancel task.
 // DoRetryWithTimeout performs given task with given timeout and timeBeforeRetry
 func DoRetryWithTimeout(t func() (interface{}, bool, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
-	done := make(chan bool, 1)
-	quit := make(chan bool, 1)
-	var (
-		out     interface{}
-		err     error
-		errLock sync.Mutex
-		retry   bool
-	)
+	// Use context.Context as a standard go way of timeout and cancellation propagation amount goroutines.
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	resultChan := make(chan interface{})
+	errChan := make(chan error)
+
 	go func() {
-		count := 0
 		for {
 			select {
-			case q := <-quit:
-				if q {
-					return
+			case <-ctx.Done():
+
+				if ctx.Err() != nil {
+					errChan <- ctx.Err()
 				}
 
+				return
 			default:
-				errLock.Lock()
-				out, retry, err = t()
+				out, retry, err := t()
 				if err == nil || !retry {
-					done <- true
-					errLock.Unlock()
+					resultChan <- out
 					return
 				}
 
-				errLock.Unlock()
+				if err != nil && !retry {
+					errChan <- err
+					return
+				}
 
 				log.Printf("%v Next retry in: %v", err, timeBeforeRetry)
 				time.Sleep(timeBeforeRetry)
 			}
-
-			count++
 		}
 	}()
 
 	select {
-	case <-done:
-		return out, err
-	case <-time.After(timeout):
-		errLock.Lock()
-		defer errLock.Unlock()
-		quit <- true
-
-		var reason string
-		if err != nil {
-			reason = err.Error()
+	case result := <-resultChan:
+		return result, nil
+	case err := <-errChan:
+		if err == context.DeadlineExceeded {
+			return nil, &ErrTimedOut{
+				Reason: err.Error(),
+			}
 		}
 
-		return out, &ErrTimedOut{
-			Reason: reason,
-		}
+		return nil, err
 	}
 }

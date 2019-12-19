@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 	apps_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbac_v1 "k8s.io/api/rbac/v1"
 	storage_api "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -304,6 +305,12 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*stork_api.VolumeSnapshotRestore); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*ap_api.AutopilotRule); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*v1.ServiceAccount); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*rbac_v1.Role); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*rbac_v1.RoleBinding); ok {
 		return specObj, nil
 	}
 
@@ -701,6 +708,60 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		}
 
 		logrus.Infof("[%v] Created Group snapshot: %v", app.Key, snap.Name)
+		return snap, nil
+	} else if obj, ok := spec.(*v1.ServiceAccount); ok {
+		obj.Namespace = ns.Name
+		snap, err := k8sOps.CreateServiceAccount(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetServiceAccount(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Service Account: %v", app.Key, snap.Name)
+				return snap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Service Account: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Service Account: %v", app.Key, snap.Name)
+		return snap, nil
+	} else if obj, ok := spec.(*rbac_v1.Role); ok {
+		obj.Namespace = ns.Name
+		snap, err := k8sOps.CreateRole(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetRole(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Role: %v", app.Key, snap.Name)
+				return snap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Role: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Role: %v", app.Key, snap.Name)
+		return snap, nil
+	} else if obj, ok := spec.(*rbac_v1.RoleBinding); ok {
+		obj.Namespace = ns.Name
+		snap, err := k8sOps.CreateRoleBinding(obj)
+		if errors.IsAlreadyExists(err) {
+			if snap, err = k8sOps.GetRoleBinding(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Role Binding: %v", app.Key, snap.Name)
+				return snap, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Role Binding: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Role Binding: %v", app.Key, snap.Name)
 		return snap, nil
 	}
 

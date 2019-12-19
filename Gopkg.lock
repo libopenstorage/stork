@@ -10,21 +10,6 @@
   version = "v0.37.4"
 
 [[projects]]
-  digest = "1:b6b580057832a68f3e87fb3f90d139f7b775a520fed7d451d8617667255bbb68"
-  name = "github.com/Azure/go-autorest"
-  packages = [
-    "autorest",
-    "autorest/adal",
-    "autorest/azure",
-    "autorest/date",
-    "logger",
-    "tracing",
-  ]
-  pruneopts = "UT"
-  revision = "fa2154f3dfe448bf22f4b4771ad37c0247517727"
-  version = "v13.1.0"
-
-[[projects]]
   digest = "1:d5e752c67b445baa5b6cb6f8aa706775c2aa8e41aca95a0c651520ff2c80361a"
   name = "github.com/Microsoft/go-winio"
   packages = [
@@ -372,22 +357,6 @@
   version = "v0.3.1"
 
 [[projects]]
-  digest = "1:98996125fe832b116f882df3e55624bc481c88b436728ecbdf477534f3eb639f"
-  name = "github.com/gophercloud/gophercloud"
-  packages = [
-    ".",
-    "openstack",
-    "openstack/identity/v2/tenants",
-    "openstack/identity/v2/tokens",
-    "openstack/identity/v3/tokens",
-    "openstack/utils",
-    "pagination",
-  ]
-  pruneopts = "UT"
-  revision = "a84f8b330d669c6dff53ee9743a7579ac9541b69"
-  version = "v0.4.0"
-
-[[projects]]
   digest = "1:e03ebb3114d926b71fb8f52cefa8045e71c37f62096f7c99794d87b223d5f21f"
   name = "github.com/grpc-ecosystem/grpc-gateway"
   packages = [
@@ -727,14 +696,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:25cefb9550d373ed9abbafe6671185d2086e3f40f21002db78a65c041154b397"
+  digest = "1:1a467a4e419c9d6b5296d0c4307daeb51011fde7e581a956ff81a9fe13f38a2b"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "46daf9656d8593dfac07bc7d704ddaace9b82eb9"
+  revision = "e76403b281e8e747c1e7448dbe1323a52ab76284"
 
 [[projects]]
   branch = "master"
@@ -1163,7 +1132,7 @@
   version = "kubernetes-1.14.7"
 
 [[projects]]
-  digest = "1:02bcea22c6d8000edfb626f3f13b6b2be2b1174cd5706ac03f570ec205a0ce98"
+  digest = "1:194460eb9f2e7f7498d78f41df50f19d10d5deb6da434f9d674f4eddfaeda3d4"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -1210,12 +1179,8 @@
     "pkg/apis/clientauthentication/v1alpha1",
     "pkg/apis/clientauthentication/v1beta1",
     "pkg/version",
-    "plugin/pkg/client/auth",
-    "plugin/pkg/client/auth/azure",
     "plugin/pkg/client/auth/exec",
     "plugin/pkg/client/auth/gcp",
-    "plugin/pkg/client/auth/oidc",
-    "plugin/pkg/client/auth/openstack",
     "rest",
     "rest/watch",
     "third_party/forked/golang/template",
