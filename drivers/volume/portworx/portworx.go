@@ -1538,8 +1538,7 @@ func (d *portworx) getStorageStatus(n node.Node) string {
 	return status
 }
 
-func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]string, error) {
-	var pxNodes []string
+func (d *portworx) GetReplicaSets(torpedovol *torpedovolume.Volume) ([]*api.ReplicaSet, error) {
 	volName := d.schedOps.GetVolumeName(torpedovol)
 	vols, err := d.getVolDriver("").Inspect([]string{volName})
 	if err != nil {
@@ -1555,24 +1554,7 @@ func (d *portworx) GetReplicaSetNodes(torpedovol *torpedovolume.Volume) ([]strin
 			Cause: fmt.Sprintf("unable to find volume %s [%s]", torpedovol.Name, volName),
 		}
 	}
-
-	for _, rs := range vols[0].ReplicaSets {
-		for _, n := range rs.Nodes {
-			pxNode, err := d.clusterManager.Inspect(n)
-			if err != nil {
-				return nil, &ErrFailedToInspectVolume{
-					ID:    torpedovol.Name,
-					Cause: fmt.Sprintf("Failed to inspect replica set node: %s err: %v", n, err),
-				}
-			}
-			nodeName := pxNode.SchedulerNodeName
-			if nodeName == "" {
-				nodeName = pxNode.Hostname
-			}
-			pxNodes = append(pxNodes, nodeName)
-		}
-	}
-	return pxNodes, nil
+	return vols[0].ReplicaSets, nil
 }
 
 func (d *portworx) updateNodeID(n node.Node, cManager cluster.Cluster) (node.Node, error) {

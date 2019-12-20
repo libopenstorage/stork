@@ -126,8 +126,8 @@ type Driver interface {
 	// GetNodeStatus returns the status of a given node
 	GetNodeStatus(n node.Node) (*api.Status, error)
 
-	// GetReplicaSetNodes returns the replica sets for a given volume
-	GetReplicaSetNodes(vol *Volume) ([]string, error)
+	// GetReplicaSets returns the replica sets for a given volume
+	GetReplicaSets(vol *Volume) ([]*api.ReplicaSet, error)
 
 	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 	// given volumes

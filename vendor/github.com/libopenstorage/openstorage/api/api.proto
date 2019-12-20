@@ -482,6 +482,8 @@ message VolumeSpecPolicy {
 // coded - for clustered storage arrays
 message ReplicaSet {
   repeated string nodes = 1;
+  // Unique IDs of the storage pools for this replica set
+  repeated string pool_uuids = 2;
 }
 
 // RuntimeStateMap is a list of name value mapping of driver specific runtime
@@ -559,19 +561,19 @@ message Volume {
   google.protobuf.Timestamp ctime = 6;
   // User specified VolumeSpec
   VolumeSpec spec = 7;
-  // Usage is bytes consumed by vtheis volume.
+  // Usage is bytes consumed by this volume.
   uint64 usage = 8;
   // LastScan is the time when an integrity check was run.
   google.protobuf.Timestamp last_scan = 9;
   // Format specifies the filesytem for this volume.
   FSType format = 10;
-  // Status is the availability status of this volume.
+  // VolumeStatus is the availability status of this volume.
   VolumeStatus status = 11;
-  // State is the current runtime state of this volume.
+  // VolumeState is the current runtime state of this volume.
   VolumeState state = 12;
   // AttachedOn is the node instance identifier for clustered systems.
   string attached_on = 13;
-  // AttachedState shows whether the device is attached for internal or external use.
+  // AttachState shows whether the device is attached for internal or external use.
   AttachState attached_state = 14;
   // DevicePath is the device exported by block device implementations.
   string device_path = 15;
@@ -592,6 +594,10 @@ message Volume {
   repeated VolumeConsumer volume_consumers = 22;
   // FsResizeRequired if an FS resize is required on the volume.
   bool fs_resize_required = 23;
+  // AttachTime time this device was last attached externally.
+  google.protobuf.Timestamp attach_time = 24;
+  // DetachTime time this device was detached.
+  google.protobuf.Timestamp detach_time= 25;
 }
 
 // Stats is a structure that represents last collected stats for a volume
@@ -3225,7 +3231,11 @@ message SdkCloudBackupScheduleInfo{
   bool full = 5;
   // Number of days that Scheduled CloudBackups will be kept after which they
   // are deleted
- uint32 retention_days = 6;
+  uint32 retention_days = 6;
+  // GroupId indicates the group of volumes for which this schedule applies
+  string group_id = 7;
+  // labels indicates group of volumes with similar labels for which this schedule applies
+  map<string, string> labels = 8;
 }
 
 // Defines a request to create a schedule for volume backups to a
@@ -3469,7 +3479,7 @@ message SdkVersion {
     // SDK version minor value of this specification
     Minor = 42;
     // SDK version patch value of this specification
-    Patch = 20;
+    Patch = 22;
   }
 
   // The following cannot be set to use the enum Version because the REST
