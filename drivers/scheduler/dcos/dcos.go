@@ -414,7 +414,7 @@ func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	}
 }
 
-func (d *dcos) ResizeVolume(cxt *scheduler.Context) ([]*volume.Volume, error) {
+func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume.Volume, error) {
 	//TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",

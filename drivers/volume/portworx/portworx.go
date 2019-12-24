@@ -659,10 +659,14 @@ func (d *portworx) ValidateCreateVolume(name string, params map[string]string) e
 	return nil
 }
 
-func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume) error {
+func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[string]string) error {
+	var token string
+	if tk, ok := params["auth-token"]; ok {
+		token = tk
+	}
 	name := d.schedOps.GetVolumeName(vol)
 	t := func() (interface{}, bool, error) {
-		vols, err := d.getVolDriver("").Inspect([]string{name})
+		vols, err := d.getVolDriver(token).Inspect([]string{name})
 		if err != nil {
 			return nil, true, err
 		}

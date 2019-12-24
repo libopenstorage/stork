@@ -119,7 +119,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 					fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
 						Inst().V.String(), ctx.App.Key, appVolumes),
 					func() {
-						requestedVols, err = Inst().S.ResizeVolume(ctx)
+						requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
 						Expect(err).NotTo(HaveOccurred())
 						Step("wait for the volumes to be resized", func() {
 							time.Sleep(20 * time.Second)
@@ -131,7 +131,13 @@ var _ = Describe("{VolumeUpdate}", func() {
 						ctx.App.Key, appVolumes),
 					func() {
 						for _, v := range requestedVols {
-							err := Inst().V.ValidateUpdateVolume(v)
+							// Need to pass token before validating volume
+							params := make(map[string]string)
+							if Inst().ConfigMap != "" {
+								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+								Expect(err).NotTo(HaveOccurred())
+							}
+							err := Inst().V.ValidateUpdateVolume(v, params)
 							Expect(err).NotTo(HaveOccurred())
 						}
 					})

@@ -1886,10 +1886,26 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 }
 
 //ResizeVolume  Resize the volume
-func (k *K8s) ResizeVolume(ctx *scheduler.Context) ([]*volume.Volume, error) {
+func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*volume.Volume, error) {
 	k8sOps := k8s_ops.Instance()
 	var vols []*volume.Volume
 	for _, spec := range ctx.App.SpecList {
+		// Add security annotations if running with auth-enabled
+		if configMapName != "" {
+			configMap, err := k8sOps.GetConfigMap(configMapName, "default")
+			if err != nil {
+				return nil, &scheduler.ErrFailedToGetConfigMap{
+					Name:  configMapName,
+					Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+				}
+			}
+
+			err = k.addSecurityAnnotation(spec, configMap)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to add annotations to storage object: %v", err)
+			}
+
+		}
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 			updatedPVC, _ := k8sOps.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			vol, err := k.resizePVCBy1GB(ctx, updatedPVC)

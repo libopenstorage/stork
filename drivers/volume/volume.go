@@ -53,7 +53,7 @@ type Driver interface {
 	ValidateCreateVolume(name string, params map[string]string) error
 
 	// ValidateUpdateVolume validates if volume changes has been applied
-	ValidateUpdateVolume(vol *Volume) error
+	ValidateUpdateVolume(vol *Volume, params map[string]string) error
 
 	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 	ValidateDeleteVolume(vol *Volume) error
