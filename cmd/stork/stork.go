@@ -24,6 +24,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/libopenstorage/stork/pkg/version"
+	"github.com/libopenstorage/stork/pkg/webhookadmission"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	api_v1 "k8s.io/api/core/v1"
@@ -47,6 +48,7 @@ const (
 )
 
 var ext *extender.Extender
+var webhook *webhookadmission.Controller
 
 func main() {
 	// Parse empty flags to suppress warnings from the snapshotter which uses
@@ -189,6 +191,13 @@ func run(c *cli.Context) {
 				log.Fatalf("Error starting scheduler extender: %v", err)
 			}
 		}
+	}
+	webhook = &webhookadmission.Controller{
+		Driver:   d,
+		Recorder: recorder,
+	}
+	if err := webhook.Start(); err != nil {
+		log.Fatalf("error starting webhook controller: %v", err)
 	}
 
 	runFunc := func(_ <-chan struct{}) {
@@ -383,6 +392,9 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		}
 		if err := d.Stop(); err != nil {
 			log.Warnf("Error stopping driver: %v", err)
+		}
+		if err := webhook.Stop(); err != nil {
+			log.Warnf("error stopping webhook controller %v", err)
 		}
 		os.Exit(0)
 	}
