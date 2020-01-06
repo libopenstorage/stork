@@ -24,6 +24,7 @@ SIDECAR_WP_CLI_IMG=$(DOCKER_HUB_REPO)/wp-cli:$(SIDECAR_WP_CLI_DOCKER_TAG)
 SIDECAR_DIR=drivers/scheduler/sidecars
 SYSBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-sysbench:latest
 PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
+ESLOAD_IMG=$(DOCKER_HUB_REPO)/torpedo-esload:latest
 
 all: vet lint build fmt
 
@@ -110,3 +111,8 @@ sysbench:
 pgbench:
 	docker build -t $(PGBENCH_IMG) -f $(SIDECAR_DIR)/pgbench.dockerfile $(SIDECAR_DIR)
 	docker push $(PGBENCH_IMG)
+
+esload:
+	docker build -t $(ESLOAD_IMG) $(SIDECAR_DIR)/es-stress-test
+	docker push $(ESLOAD_IMG)
+

@@ -14,15 +14,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: elasticsearch-loadbalancer
+  name: elasticsearch-api
 spec:
   selector:
     app: es-cluster
   ports:
   - name: http
-    port: 80
+    port: 9200
     targetPort: 9200
-  type: LoadBalancer
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -44,7 +43,7 @@ kind: StatefulSet
 metadata:
   name: esnode
 spec:
-  serviceName: elasticsearch
+  serviceName: elasticsearch-api
   replicas: 3
   selector:
     matchLabels:
@@ -119,3 +118,35 @@ spec:
       resources:
         requests:
           storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: es-load
+  namespace: default
+  labels:
+    app: es-load
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: es-load
+  template:
+    metadata:
+      labels:
+        app: es-load
+    spec:
+      containers:
+      - name: es-load
+        image: portworx/torpedo-esload
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        command:
+          - /bin/bash
+          - -c
+          - "while true; do echo '=========='; python elasticsearch-stress-test.py --es_address esnode-0.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200 --indices 4 --documents 5 --seconds 120 --not-green --clients 1; sleep 5; done"
+      restartPolicy: Always
+
