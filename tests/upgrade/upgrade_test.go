@@ -27,8 +27,11 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{UpgradeVolumeDriver}", func() {
+	var contexts []*scheduler.Context
+
 	It("upgrade volume driver and ensure everything is running fine", func() {
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradevolumedriver-%d", i))...)
 		}
@@ -54,6 +57,9 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				TearDownContext(ctx, opts)
 			}
 		})
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 

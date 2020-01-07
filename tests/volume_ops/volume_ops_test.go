@@ -30,10 +30,13 @@ var _ = BeforeSuite(func() {
 
 // Volume replication change
 var _ = Describe("{VolumeUpdate}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and update replication factor and size on all volumes of the apps", func() {
 		var err error
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
 		expReplMap := make(map[*volume.Volume]int64)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdate-%d", i))...)
 		}
@@ -153,6 +156,9 @@ var _ = Describe("{VolumeUpdate}", func() {
 			}
 		})
 
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 

@@ -124,12 +124,13 @@ var _ = BeforeSuite(func() {
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes
 var _ = Describe(fmt.Sprintf("{%sWaitForWorkload}", testNameSuite), func() {
+	var contexts []*scheduler.Context
+
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
 		var err error
 		testName := strings.ToLower(fmt.Sprintf("%sWaitForWorkload", testNameSuite))
 
 		for _, apRule := range autopilotruleBasicTestCases {
-			var contexts []*scheduler.Context
 			apParameters := &scheduler.AutopilotParameters{
 				Enabled:                 true,
 				Name:                    testName,
@@ -184,18 +185,24 @@ var _ = Describe(fmt.Sprintf("{%sWaitForWorkload}", testNameSuite), func() {
 			})
 		}
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and doesn't wait until workload is completed on the volumes and then
 // validates PVC sizes of the volumes
 var _ = Describe(fmt.Sprintf("{%sDoesNotWaitForWorkload}", testNameSuite), func() {
+	var contexts []*scheduler.Context
+
 	It("will resize the volume until the max size of the volume", func() {
 		var err error
 		testName := strings.ToLower(fmt.Sprintf("%sDoesNotWaitForWorkload", testNameSuite))
 
 		for _, apRule := range autopilotruleScaleTestCases {
-			var contexts []*scheduler.Context
+			contexts = make([]*scheduler.Context, 0)
+
 			apParameters := &scheduler.AutopilotParameters{
 				Enabled:                 true,
 				Name:                    testName,
@@ -243,18 +250,24 @@ var _ = Describe(fmt.Sprintf("{%sDoesNotWaitForWorkload}", testNameSuite), func(
 			})
 		}
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes. Restarts volume
 // driver and validates PVC sizes of the volumes
 var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testNameSuite), func() {
+	var contexts []*scheduler.Context
+
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
 		var err error
 		testName := strings.ToLower(fmt.Sprintf("%sVolumeDriverDown", testNameSuite))
 
 		for _, apRule := range autopilotruleBasicTestCases {
-			var contexts []*scheduler.Context
+			contexts = make([]*scheduler.Context, 0)
+
 			apParameters := &scheduler.AutopilotParameters{
 				Enabled:                 true,
 				Name:                    testName,
@@ -330,6 +343,9 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testNameSuite), func() {
 				}
 			})
 		}
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 

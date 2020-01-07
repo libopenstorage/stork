@@ -39,9 +39,11 @@ var _ = BeforeSuite(func() {
 
 // This test performs basic test of scaling up and down the asg cluster
 var _ = Describe("{ClusterScaleUpDown}", func() {
-	It("has to validate that storage nodes are not lost during asg scaledown", func() {
+	var contexts []*scheduler.Context
 
-		var contexts []*scheduler.Context
+	It("has to validate that storage nodes are not lost during asg scaledown", func() {
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgscaleupdown-%d", i))...)
 		}
@@ -88,15 +90,20 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test randomly kills one volume driver node and ensures cluster remains
 // intact by ASG
 var _ = Describe("{ASGKillRandomNodes}", func() {
+	var contexts []*scheduler.Context
+
 	It("keeps killing worker nodes", func() {
 
-		var contexts []*scheduler.Context
 		var err error
+		contexts = make([]*scheduler.Context, 0)
 
 		// Get list of nodes where storage driver is installed
 		storageDriverNodes := node.GetStorageDriverNodes()
@@ -177,6 +184,9 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 				}
 			}
 		})
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 

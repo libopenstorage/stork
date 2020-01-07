@@ -27,9 +27,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{RebootOneNode}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and reboot node(s) with volumes", func() {
 		var err error
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootonenode-%d", i))...)
 		}
@@ -70,10 +73,6 @@ var _ = Describe("{RebootOneNode}", func() {
 						Expect(err).NotTo(HaveOccurred())
 
 						err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-						if err != nil {
-							diagsErr := Inst().V.CollectDiags(n)
-							Expect(diagsErr).NotTo(HaveOccurred())
-						}
 						Expect(err).NotTo(HaveOccurred())
 					})
 				}
@@ -82,12 +81,18 @@ var _ = Describe("{RebootOneNode}", func() {
 
 		ValidateAndDestroy(contexts, nil)
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = Describe("{RebootAllNodes}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to scheduler apps and reboot app node(s)", func() {
 		var err error
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("rebootallnodes-%d", i))...)
 		}
@@ -134,10 +139,6 @@ var _ = Describe("{RebootAllNodes}", func() {
 							Expect(err).NotTo(HaveOccurred())
 
 							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-							if err != nil {
-								diagsErr := Inst().V.CollectDiags(n)
-								Expect(diagsErr).NotTo(HaveOccurred())
-							}
 							Expect(err).NotTo(HaveOccurred())
 						})
 					}
@@ -146,6 +147,9 @@ var _ = Describe("{RebootAllNodes}", func() {
 		})
 
 		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 

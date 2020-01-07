@@ -33,10 +33,13 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{DriveFailure}", func() {
+	var contexts []*scheduler.Context
+
 	testName := "drivefailure"
 	It("has to schedule apps and induce a drive failure on one of the nodes", func() {
 		var err error
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
@@ -108,6 +111,9 @@ var _ = Describe("{DriveFailure}", func() {
 		})
 
 		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 

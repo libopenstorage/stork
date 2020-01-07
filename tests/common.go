@@ -59,6 +59,7 @@ const (
 	defaultNodeDriver                     = "ssh"
 	defaultStorageDriver                  = "pxd"
 	defaultLogLocation                    = "/mnt/torpedo_support_dir"
+	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
 	defaultMinRunTimeMins                 = 0
@@ -290,10 +291,6 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-				if err != nil {
-					diagsErr := Inst().V.CollectDiags(n)
-					expect(diagsErr).NotTo(haveOccurred())
-				}
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -330,10 +327,6 @@ func CrashVolDriverAndWait(appNodes []node.Node) {
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-				if err != nil {
-					diagsErr := Inst().V.CollectDiags(n)
-					expect(diagsErr).NotTo(haveOccurred())
-				}
 				expect(err).NotTo(haveOccurred())
 			}
 		})
@@ -356,6 +349,66 @@ func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	})
 }
 
+// DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
+func DescribeNamespace(contexts []*scheduler.Context) {
+	context(fmt.Sprintf("generating namespace info..."), func() {
+		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+			for _, ctx := range contexts {
+				logrus.Info(Inst().S.Describe(ctx))
+			}
+		})
+	})
+}
+
+// CollectSupport creates a support bundle
+func CollectSupport() {
+	context(fmt.Sprintf("generating support bundle..."), func() {
+		Step(fmt.Sprintf("save all useful logs on each node"), func() {
+			nodes := node.GetWorkerNodes()
+			expect(nodes).NotTo(beEmpty())
+
+			for _, n := range nodes {
+				if !n.IsStorageDriverInstalled {
+					continue
+				}
+
+				logrus.Infof("collecting diags from %s", n.Name)
+				Inst().V.CollectDiags(n)
+
+				journalCmd := fmt.Sprintf("journalctl -l > %s/all_journal_%v.log", Inst().BundleLocation, time.Now().Format(time.RFC3339))
+				logrus.Infof("saving journal output on %s", n.Name)
+				runCmd(journalCmd, n)
+
+				logrus.Infof("saving portworx journal output on %s", n.Name)
+				runCmd(fmt.Sprintf("journalctl -lu portworx* > %s/portworx.log", Inst().BundleLocation), n)
+
+				logrus.Infof("saving kubelet journal output on %s", n.Name)
+				runCmd(fmt.Sprintf("journalctl -lu kubelet* > %s/kubelet.log", Inst().BundleLocation), n)
+
+				logrus.Infof("saving dmesg output on %s", n.Name)
+				runCmd(fmt.Sprintf("dmesg -T > %s/dmesg.log", Inst().BundleLocation), n)
+
+				logrus.Infof("saving disk list on %s", n.Name)
+				runCmd(fmt.Sprintf("lsblk > %s/lsblk.log", Inst().BundleLocation), n)
+
+				logrus.Infof("saving mount list on %s", n.Name)
+				runCmd(fmt.Sprintf("cat /proc/mounts > %s/mounts.log", Inst().BundleLocation), n)
+			}
+		})
+	})
+}
+
+func runCmd(cmd string, n node.Node) {
+	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		logrus.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+}
+
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context(fmt.Sprintf("checking for core files..."), func() {
@@ -376,6 +429,15 @@ func PerformSystemCheck() {
 			}
 		})
 	})
+}
+
+// AfterEachTest runs collect support bundle after each test when it fails
+func AfterEachTest(contexts []*scheduler.Context) {
+	logrus.Debugf("contexts: %v", contexts)
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		CollectSupport()
+		DescribeNamespace(contexts)
+	}
 }
 
 // Inst returns the Torpedo instances
@@ -407,6 +469,7 @@ type Torpedo struct {
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	ConfigMap                           string
+	BundleLocation                      string
 }
 
 // ParseFlags parses command line flags
@@ -425,6 +488,7 @@ func ParseFlags() {
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
+	var bundleLocation string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -447,6 +511,7 @@ func ParseFlags() {
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
+	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 
 	flag.Parse()
 
@@ -485,6 +550,7 @@ func ParseFlags() {
 				DriverStartTimeout:                  driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,
+				BundleLocation:                      bundleLocation,
 			}
 		})
 	}

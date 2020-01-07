@@ -29,8 +29,11 @@ var _ = BeforeSuite(func() {
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{SetupTeardown}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to setup, validate and teardown apps", func() {
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
 		}
@@ -44,12 +47,18 @@ var _ = Describe("{SetupTeardown}", func() {
 			TearDownContext(ctx, opts)
 		}
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // Volume Driver Plugin is down, unavailable - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverDown}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and stop volume driver on app nodes", func() {
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldriverdown-%d", i))...)
 		}
@@ -92,13 +101,19 @@ var _ = Describe("{VolumeDriverDown}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // Volume Driver Plugin is down, unavailable on the nodes where the volumes are
 // attached - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and stop volume driver on nodes where volumes are attached", func() {
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldriverdownattachednode-%d", i))...)
 		}
@@ -143,12 +158,18 @@ var _ = Describe("{VolumeDriverDownAttachedNode}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // Volume Driver Plugin has crashed - and the client container should not be impacted.
 var _ = Describe("{VolumeDriverCrash}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps and crash volume driver on app nodes", func() {
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldrivercrash-%d", i))...)
 		}
@@ -170,14 +191,20 @@ var _ = Describe("{VolumeDriverCrash}", func() {
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 		ValidateAndDestroy(contexts, opts)
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // Volume driver plugin is down and the client container gets terminated.
 // There is a lost unmount call in this case. When the volume driver is
 // back up, we should be able to detach and delete the volume.
 var _ = Describe("{VolumeDriverAppDown}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule apps, stop volume driver on app nodes and destroy apps", func() {
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("voldriverappdown-%d", i))...)
 		}
@@ -218,13 +245,19 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test deletes all tasks of an application and checks if app converges back to desired state
 var _ = Describe("{AppTasksDown}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to schedule app and delete app tasks", func() {
 		var err error
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("apptasksdown-%d", i))...)
 		}
@@ -286,12 +319,18 @@ var _ = Describe("{AppTasksDown}", func() {
 			}
 		})
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
 var _ = Describe("{AppScaleUpAndDown}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to scale up and scale down the app", func() {
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("applicationscaleupdown-%d", i))...)
 		}
@@ -341,9 +380,14 @@ var _ = Describe("{AppScaleUpAndDown}", func() {
 		})
 
 	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = Describe("{CordonDeployDestroy}", func() {
+	var contexts []*scheduler.Context
+
 	It("has to cordon all nodes but one, deploy and destroy app", func() {
 
 		Step("Cordon all nodes but one", func() {
@@ -353,8 +397,9 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
-		var contexts []*scheduler.Context
 		Step("Deploy applications", func() {
+			contexts = make([]*scheduler.Context, 0)
+
 			for i := 0; i < Inst().ScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cordondeploydestroy-%d", i))...)
 			}
@@ -388,6 +433,9 @@ var _ = Describe("{CordonDeployDestroy}", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 

@@ -35,9 +35,12 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = Describe("{DecommissionNode}", func() {
+	var contexts []*scheduler.Context
+
 	testName := "decommissionnode"
 	It("has to decommission a node and check if node was decommissioned successfully", func() {
-		var contexts []*scheduler.Context
+		contexts = make([]*scheduler.Context, 0)
+
 		for i := 0; i < Inst().ScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
@@ -107,6 +110,9 @@ var _ = Describe("{DecommissionNode}", func() {
 			}
 		})
 
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
 	})
 })
 
