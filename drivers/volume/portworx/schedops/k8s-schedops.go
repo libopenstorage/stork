@@ -10,11 +10,11 @@ import (
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	k8sdriver "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
-	batch_v1 "k8s.io/api/batch/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -106,7 +106,7 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 	}
 }
 
-func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
+func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.StorageNode, vol *api.Volume) error {
 	pvc, ok := vol.Locator.VolumeLabels[pvcLabel]
 	if !ok {
 		return nil
@@ -357,9 +357,9 @@ func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[strin
 		return fmt.Errorf("Parent volume does not have a PVC label")
 	}
 
-	if parentName != params[k8s_driver.SnapshotParent] {
+	if parentName != params[k8sdriver.SnapshotParent] {
 		return fmt.Errorf("Parent PVC name [%s] does not match the snapshot's source "+
-			"PVC [%s]", parentName, params[k8s_driver.SnapshotParent])
+			"PVC [%s]", parentName, params[k8sdriver.SnapshotParent])
 	}
 	return nil
 }
@@ -523,12 +523,12 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 
 	// create a talisman job
 	var valOne int32 = 1
-	job := &batch_v1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "talisman",
 			Namespace: PXNamespace,
 		},
-		Spec: batch_v1.JobSpec{
+		Spec: batchv1.JobSpec{
 			BackoffLimit: &valOne,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
@@ -582,7 +582,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 	return nil
 }
 
-// Method to validate if Portworx pod is up and running
+// IsPXReadyOnNode validates if Portworx pod is up and running
 func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	pxPods, err := k8s.Instance().GetPodsByNode(n.Name, PXNamespace)
 	if err != nil {
@@ -591,7 +591,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	}
 	for _, pod := range pxPods.Items {
 		if pod.Labels["name"] == PXDaemonSet && !k8s.Instance().IsPodReady(pod) {
-			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase)
+			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v, Conditions: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase, pod.Status.Conditions)
 			return false
 		}
 	}

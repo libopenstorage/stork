@@ -24,7 +24,7 @@ func (d *dcosSchedOps) ValidateOnNode(n node.Node) error {
 	}
 }
 
-func (d *dcosSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
+func (d *dcosSchedOps) ValidateAddLabels(replicaNodes []api.StorageNode, vol *api.Volume) error {
 	// We do not have labels in DC/OS currently
 	return nil
 }
