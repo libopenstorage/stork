@@ -347,7 +347,7 @@ func (d *portworx) CleanupVolume(volumeName string) error {
 }
 
 func (d *portworx) getPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient) (api.StorageNode, error) {
-	if nManager == nil {
+	if len(nManager) == 0 {
 		nManager = []api.OpenStorageNodeClient{d.getNodeManager()}
 	}
 	logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
@@ -369,11 +369,11 @@ func isNodeNotFound(err error) bool {
 	return err != nil && (st.Code() == codes.NotFound || (st.Code() == codes.Internal && strings.Contains(err.Error(), "Unable to locate node")))
 }
 
-func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager api.OpenStorageNodeClient) (string, error) {
+func (d *portworx) getPxVersionOnNode(n node.Node, nodeManager ...api.OpenStorageNodeClient) (string, error) {
 
 	t := func() (interface{}, bool, error) {
 		logrus.Debugf("Getting PX Version on node [%s]", n.Name)
-		pxNode, err := d.getPxNode(&n, nodeManager)
+		pxNode, err := d.getPxNode(&n, nodeManager...)
 		if err != nil {
 			return "", false, err
 		}
@@ -992,7 +992,7 @@ func (d *portworx) WaitForUpgrade(n node.Node, tag string) error {
 			}
 		}
 
-		pxVersion, err := d.getPxVersionOnNode(n, nil)
+		pxVersion, err := d.getPxVersionOnNode(n)
 		if err != nil {
 			return nil, true, &ErrFailedToWaitForPx{
 				Node:  n,
@@ -1314,7 +1314,7 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) err
 
 	nodeList := node.GetStorageDriverNodes()
 	pxNode := nodeList[0]
-	pxVersion, err := d.getPxVersionOnNode(pxNode, nil)
+	pxVersion, err := d.getPxVersionOnNode(pxNode)
 	if err != nil {
 		return fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
 	}
