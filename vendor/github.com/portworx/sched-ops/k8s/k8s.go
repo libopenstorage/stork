@@ -26,6 +26,7 @@ import (
 	talisman_v1beta2 "github.com/portworx/talisman/pkg/apis/portworx/v1beta2"
 	talismanclientset "github.com/portworx/talisman/pkg/client/clientset/versioned"
 	"github.com/sirupsen/logrus"
+	hook "k8s.io/api/admissionregistration/v1beta1"
 	apps_api "k8s.io/api/apps/v1"
 	batch_v1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -48,6 +49,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	admissionregistrationv1beta1 "k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1"
 	appsv1_client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // needed to initialize plugins on cloud providers
 	"k8s.io/client-go/rest"
@@ -105,9 +107,22 @@ type Ops interface {
 	VolumeSnapshotRestoreOps
 	SecurityContextConstraintsOps
 	ClientSetter
+	MutatingWebhookConfigurationOps
 	GetVersion() (*version.Info, error)
 	// private methods for unit tests
 	privateMethods
+}
+
+// MutatingWebhookConfigurationOps is interface to perform CRUD ops on mutatting webhook controller
+type MutatingWebhookConfigurationOps interface {
+	// GetMutatingWebhookConfiguration returns a mutatingwebhook cofig given
+	GetMutatingWebhookConfiguration(name string) (*hook.MutatingWebhookConfiguration, error)
+	// CreateMutatingWebhookConfiguration creates new webhook configuration
+	CreateMutatingWebhookConfiguration(req *hook.MutatingWebhookConfiguration) (*hook.MutatingWebhookConfiguration, error)
+	// UpdateMutatingWebhookConfiguration updates given webhook configuration
+	UpdateMutatingWebhookConfiguration(*hook.MutatingWebhookConfiguration) (*hook.MutatingWebhookConfiguration, error)
+	// DeleteMutatingWebhookConfiguration deletes given webhook config
+	DeleteMutatingWebhookConfiguration(name string) error
 }
 
 // SecurityContextConstraintsOps is an interface to list, get and update security context constraints
@@ -5298,7 +5313,9 @@ func (k *k8sOps) UpdateVolumeAttachmentStatus(volumeAttachment *storagev1beta1.V
 func (k *k8sOps) appsClient() appsv1_client.AppsV1Interface {
 	return k.client.AppsV1()
 }
-
+func (k *k8sOps) admClient() admissionregistrationv1beta1.AdmissionregistrationV1beta1Interface {
+	return k.client.Admissionregistration()
+}
 func (k *k8sOps) ocpAppsClient() ocp_appsv1_client.AppsV1Interface {
 	return k.ocpClient.AppsV1()
 }
@@ -5486,3 +5503,41 @@ func mapToCSV(in map[string]string) string {
 
 	return strings.Join(items, ",")
 }
+
+// ----------- BEGIN ----------------- //
+// --------- MutatingWebhookConfig APIS --------- //
+
+// GetMutatingWebhookConfiguration returns a mutatingwebhook cofig given
+func (k *k8sOps) GetMutatingWebhookConfiguration(name string) (*hook.MutatingWebhookConfiguration, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.admClient().MutatingWebhookConfigurations().Get(name, meta_v1.GetOptions{})
+}
+
+// CreateMutatingWebhookConfiguration creates new webhook configuration
+func (k *k8sOps) CreateMutatingWebhookConfiguration(cfg *hook.MutatingWebhookConfiguration) (*hook.MutatingWebhookConfiguration, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.admClient().MutatingWebhookConfigurations().Create(cfg)
+}
+
+// UpdateMutatingWebhookConfiguration updates given webhook configuration
+func (k *k8sOps) UpdateMutatingWebhookConfiguration(cfg *hook.MutatingWebhookConfiguration) (*hook.MutatingWebhookConfiguration, error) {
+	if err := k.initK8sClient(); err != nil {
+		return nil, err
+	}
+	return k.admClient().MutatingWebhookConfigurations().Update(cfg)
+}
+
+// DeleteMutatingWebhookConfiguration deletes given webhook config
+func (k *k8sOps) DeleteMutatingWebhookConfiguration(name string) error {
+	if err := k.initK8sClient(); err != nil {
+		return err
+	}
+	return k.admClient().MutatingWebhookConfigurations().Delete(name, &meta_v1.DeleteOptions{})
+}
+
+// ----------- END ----------------- //
+// --------- MutatingWebhookConfig APIS --------- //

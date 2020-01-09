@@ -16,22 +16,26 @@ import (
 	"k8s.io/api/admission/v1beta1"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 )
 
 const (
-	mutateWebHook    = "/mutate"
-	validateWebHook  = "/validate"
-	certFile         = "/etc/webhook/certs/cert.pem"
-	certKeyFile      = "/etc/webhook/certs/key.pem"
-	appSchedPrefix   = "/spec/template"
-	podSpecSchedPath = "/spec/schedulerName"
-	storkScheduler   = "stork"
+	mutateWebHook            = "/mutate"
+	validateWebHook          = "/validate"
+	appSchedPrefix           = "/spec/template"
+	podSpecSchedPath         = "/spec/schedulerName"
+	storkScheduler           = "stork"
+	storkAdmissionController = "stork-webhooks-cfg"
+	secretName               = "servercert-secret"
+	privKey                  = "privKey"
+	privCert                 = "privCert"
 )
 
-// Controller for admission mutating webhook to initialise resources using px volume
-// with stork as scheduler
+// Controller for admission mutating webhook to initialise resources
+// with stork as scheduler, if given resources are using driver supported
+// by stork
 type Controller struct {
 	Recorder record.EventRecorder
 	Driver   volume.Driver
@@ -49,7 +53,6 @@ func (c *Controller) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// TODO: add logs to event recorder
 func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Request) {
 	var admissionResponse *v1beta1.AdmissionResponse
 	var err error
@@ -65,12 +68,12 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	}()
 	if err := decoder.Decode(&admissionReview); err != nil {
 		log.Errorf("Error decoding admission review request: %v", err)
-		c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Invalid admission review request", err.Error())
+		c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "invalid admission review request", err.Error())
 		http.Error(w, "Decode error", http.StatusBadRequest)
 		return
 	}
 
-	// TODO: This log does not get reflected in stork pods , check other logger
+	// TODO: This log does not get reflected in stork pods, check other logger
 	arReq := admissionReview.Request
 	switch arReq.Kind.Kind {
 	case "StatefulSet":
@@ -109,10 +112,10 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	}
 
 	if !isStorkResource {
-		// ignore for non portworx application + resources other than depoy/ ss
+		// ignore for non driver application + resources other than depoy/ss
 		admissionResponse = &v1beta1.AdmissionResponse{
 			Result: &metav1.Status{
-				Message: "Ignoring not portworx backed application",
+				Message: "Ignoring backends which are not supported by stork ",
 			},
 			Allowed: true,
 		}
@@ -165,17 +168,44 @@ func (c *Controller) Start() error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	var secretData, key, caBundle []byte
+	var err error
+	var ok bool
+	var tlsCert tls.Certificate
 	if c.started {
 		return fmt.Errorf("webhook server has already been started")
 	}
+	certSecrets, err := k8s.Instance().GetSecret(secretName, storkNamespace)
+	if err != nil && !k8serr.IsNotFound(err) {
+		log.Fatalf("Unable to retrieve %v secret: %v", secretName, err)
+	} else if k8serr.IsNotFound(err) {
+		caBundle, key, err = GenerateCertificate()
+		if err != nil {
+			log.Fatalf("Unable to generate x509 certificate: %v", err)
+		}
+		tlsCert, err = GetTLSCertificate(caBundle, key)
+		if err != nil {
+			log.Fatalf("Unable to create tls certificate: %v", tlsCert)
+		}
+		_, err = CreateCertSecrets(caBundle, key)
+		if err != nil {
+			log.Fatalf("unable to create secrets for cert details: %v", err)
+		}
+	} else {
+		if secretData, ok = certSecrets.Data[privKey]; !ok {
+			log.Fatalf("invalid secret key data")
+		}
+		if caBundle, ok = certSecrets.Data[privCert]; !ok {
+			log.Fatalf("invalid secret certificate")
+		}
 
-	pair, err := tls.LoadX509KeyPair(certFile, certKeyFile)
-	if err != nil {
-		log.Errorf("Failed to load key pair: %v", err)
+		tlsCert, err = GetTLSCertificate(caBundle, secretData)
+		if err != nil {
+			log.Fatalf("unable to generate tls certs: %v", err)
+		}
 	}
-	// TODO: port configurable, it will require to change in MutatingWebhookCFG resource
 	c.server = &http.Server{Addr: ":443",
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{pair}}}
+		TLSConfig: &tls.Config{Certificates: []tls.Certificate{tlsCert}}}
 
 	http.HandleFunc("/mutate", c.serveHTTP)
 	go func() {
@@ -185,7 +215,8 @@ func (c *Controller) Start() error {
 	}()
 	c.started = true
 	log.Debugf("Webhook server started")
-	return nil
+
+	return CreateMutateWebhook(caBundle)
 }
 
 // Stop Stops the webhook server
@@ -207,6 +238,7 @@ func (c *Controller) Stop() error {
 	return nil
 }
 
+// createJson patch to update container spec scheduler path
 func createPatch(schedpath string) []byte {
 	p := []map[string]string{}
 	patch := map[string]string{
@@ -217,7 +249,7 @@ func createPatch(schedpath string) []byte {
 	p = append(p, patch)
 	b, err := json.Marshal(p)
 	if err != nil {
-		log.Errorf("could not marshal patch %v", err)
+		log.Errorf("could not marshal patch: %v", err)
 	}
 	return b
 }
