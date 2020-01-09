@@ -169,7 +169,7 @@ spec:
     - metadata:
         name: rabbitmq-data
       spec:
-        storageClassName: rabbitmq-sc
+        storageClassName: px-rabbitmq-sc
         accessModes:
           - ReadWriteOnce
         resources:

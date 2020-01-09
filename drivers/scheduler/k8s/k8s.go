@@ -799,7 +799,7 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 }
 
 func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *v1.ConfigMap) error {
-	logrus.Infof("Config Map details:\n %v:", configMap.Data)
+	logrus.Debugf("Config Map details: %v", configMap.Data)
 	if _, ok := configMap.Data[secretNameKey]; !ok {
 		return fmt.Errorf("failed to get secret name from config map")
 	}
@@ -819,13 +819,16 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *v1.ConfigMap) e
 		obj.Metadata.Annotations[secretName] = configMap.Data[secretNameKey]
 		obj.Metadata.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 	} else if obj, ok := spec.(*appsapi.StatefulSet); ok {
-		for _, claim := range obj.Spec.VolumeClaimTemplates {
-			if claim.Annotations == nil {
-				claim.Annotations = make(map[string]string)
+		var pvcList []v1.PersistentVolumeClaim
+		for _, pvc := range obj.Spec.VolumeClaimTemplates {
+			if pvc.Annotations == nil {
+				pvc.Annotations = make(map[string]string)
 			}
-			claim.Annotations[secretName] = configMap.Data[secretNameKey]
-			claim.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+			pvc.Annotations[secretName] = configMap.Data[secretNameKey]
+			pvc.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+			pvcList = append(pvcList, pvc)
 		}
+		obj.Spec.VolumeClaimTemplates = pvcList
 	} else if obj, ok := spec.(*storkapi.ApplicationBackup); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
