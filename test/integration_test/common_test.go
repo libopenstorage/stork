@@ -142,6 +142,8 @@ func destroyAndWait(t *testing.T, ctxs []*scheduler.Context) {
 		require.NoError(t, err, "Error waiting for destroy of ctx: %+v", ctx)
 		_, err = schedulerDriver.DeleteVolumes(ctx)
 		require.NoError(t, err, "Error deleting volumes in ctx: %+v", ctx)
+		time.Sleep(10 * time.Second)
+
 	}
 }
 

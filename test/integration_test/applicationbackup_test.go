@@ -5,6 +5,7 @@ package integrationtest
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -177,66 +178,78 @@ func triggerScaleBackupRestoreTest(
 	backupSuccessExpected bool,
 	backupAllAppsExpected bool,
 ) {
-	var appCtxs []*scheduler.Context
 	var appBkps []*storkv1.ApplicationBackup
+	var currBkpList []*storkv1.ApplicationBackup
 	var bkpLocations []*storkv1.BackupLocation
 	var appRestores []*storkv1.ApplicationRestore
 
+	scaledWaitTimeout := defaultWaitTimeout * time.Duration((backupScaleCount/10 + 1))
 	backuplocationPrefix := "backuplocation-"
 	appbackupPrefix := testKey + "-backup-scale-"
 	restorePrefix := "mysql-restore-scale-"
-	for i := 0; i < backupScaleCount; i++ {
-		currCtx, err := schedulerDriver.Schedule("scale-"+strconv.Itoa(i),
-			scheduler.ScheduleOptions{AppKeys: appBackupKey})
-		require.NoError(t, err, "Error scheduling task")
-		require.Equal(t, 1, len(currCtx), "Only one task should have started")
-		appCtxs = append(appCtxs, currCtx...)
+	for i := 0; i < backupScaleCount/10; i++ {
+		var appCtxs []*scheduler.Context
+		for j := 0; j < 10; j++ {
+			currCtx, err := schedulerDriver.Schedule("scale-"+strconv.Itoa(i)+strconv.Itoa(j),
+				scheduler.ScheduleOptions{AppKeys: appBackupKey})
+			require.NoError(t, err, "Error scheduling task")
+			require.Equal(t, 1, len(currCtx), "Only one task should have started")
+			appCtxs = append(appCtxs, currCtx...)
 
-		// Without the sleep, sometimes the mysql pods fail with permission denied error
-		time.Sleep(time.Second * 10)
+			// Without the sleep, sometimes the mysql pods fail with permission denied error
+			time.Sleep(time.Second * 10)
+		}
+
+		for i, app := range appCtxs {
+			err := schedulerDriver.WaitForRunning(app, scaledWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "Error waiting for app in namespace %s to get to running state", "scale-"+strconv.Itoa(i))
+			time.Sleep(time.Second * 5)
+		}
+		// Trigger backups for all apps created
+		for idx, app := range appCtxs {
+			backupLocation, err := createBackupLocation(t, backuplocationPrefix+strconv.Itoa(idx), app.GetID(), storkv1.BackupLocationS3, defaultSecretName)
+			require.NoError(t, err, "Error creating backuplocation: %s", "backupLocation-"+strconv.Itoa(idx))
+			bkpLocations = append(bkpLocations, backupLocation)
+
+			currBackup, err := createApplicationBackupWithAnnotation(t, appbackupPrefix+strconv.Itoa(i)+strconv.Itoa(idx), app.GetID(), backupLocation)
+			require.NoError(t, err, "Error creating app backups")
+
+			currBkpList = append(currBkpList, currBackup)
+			appBkps = append(appBkps, currBackup)
+		}
+
+		// Wait for all backups to be completed
+		for _, bkp := range currBkpList {
+			logrus.Infof("Verifying backup in namespace %s", bkp.Namespace)
+			err := waitForAppBackupCompletion(bkp.Name, bkp.Namespace)
+			require.NoError(t, err, "Application backup %s in namespace %s failed.", bkp.Name, bkp.Namespace)
+		}
+		logrus.Info("Deleting curr set of  apps before restoring them.")
+		destroyAndWait(t, appCtxs)
+		time.Sleep(time.Second * 60)
 	}
-
-	for i, app := range appCtxs {
-		err := schedulerDriver.WaitForRunning(app, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for app in namespace %s to get to running state", "scale-"+strconv.Itoa(i))
-	}
-	// Trigger backups for all apps created
-	for idx, app := range appCtxs {
-		backupLocation, err := createBackupLocation(t, backuplocationPrefix+strconv.Itoa(idx), app.GetID(), storkv1.BackupLocationS3, defaultSecretName)
-		require.NoError(t, err, "Error creating backuplocation: %s", "backupLocation-"+strconv.Itoa(idx))
-		bkpLocations = append(bkpLocations, backupLocation)
-
-		currBackup, err := createApplicationBackupWithAnnotation(t, appbackupPrefix+strconv.Itoa(idx), app.GetID(), backupLocation)
-		require.NoError(t, err, "Error creating app backups")
-
-		appBkps = append(appBkps, currBackup)
-	}
-
-	// Wait for all backups to be completed
-	for _, bkp := range appBkps {
-		logrus.Infof("Verifying backup in namespace %s", bkp.Namespace)
-		err := waitForAppBackupCompletion(bkp.Name, bkp.Namespace)
-		require.NoError(t, err, "Application backup %s in namespace %s failed.", bkp.Name, bkp.Namespace)
-	}
-
-	logrus.Info("Deleting all apps before restoring them.")
-	destroyAndWait(t, appCtxs)
 
 	// Create restore objects and restore all backups in their namespaces
-	for idx, bkp := range appBkps {
-		logrus.Infof("Creating application restore in namespace %s", bkp.Namespace)
-		appRestoreForBackup, err := createApplicationRestore(t, restorePrefix+strconv.Itoa(idx), bkp.Namespace, bkp, bkpLocations[idx])
-		require.Nil(t, err, "failure to create restore object in namespace %s", bkp.Namespace)
-		require.NotNil(t, appRestoreForBackup, "failure to restore bkp in namespace %s", "mysql-restore-scale-"+strconv.Itoa(idx))
+	var wg sync.WaitGroup
+	for ind, currBackup := range appBkps {
+		go func(idx int, bkp *storkv1.ApplicationBackup, w *sync.WaitGroup) {
+			w.Add(1)
+			defer w.Done()
+			logrus.Infof("Creating application restore in namespace %s", bkp.Namespace)
+			appRestoreForBackup, err := createApplicationRestore(t, restorePrefix+strconv.Itoa(idx), bkp.Namespace, bkp, bkpLocations[idx])
+			require.Nil(t, err, "failure to create restore object in namespace %s", bkp.Namespace)
+			require.NotNil(t, appRestoreForBackup, "failure to restore bkp in namespace %s", "mysql-restore-scale-"+strconv.Itoa(idx))
 
-		appRestores = append(appRestores, appRestoreForBackup)
+			appRestores = append(appRestores, appRestoreForBackup)
+		}(ind, currBackup, &wg)
 	}
+	wg.Wait()
 
 	// Wait for all apps to be running
-	for i, app := range appCtxs {
-		err := schedulerDriver.WaitForRunning(app, defaultWaitTimeout, defaultWaitInterval)
-		require.NoError(t, err, "Error waiting for app in namespace %s to get to running state", "scale-"+strconv.Itoa(i))
-	}
+	//for i, app := range appCtxs {
+	//	err := schedulerDriver.WaitForRunning(app, scaledWaitTimeout, defaultWaitInterval)
+	//	require.NoError(t, err, "Error waiting for app in namespace %s to get to running state", "scale-"+strconv.Itoa(i))
+	//}
 	// Cleanup
 	for idx, bkp := range appBkps {
 		err := k8s.Instance().DeleteBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
@@ -249,7 +262,7 @@ func triggerScaleBackupRestoreTest(
 	err := deleteApplicationRestoreList(appRestores)
 	require.Nil(t, err, "failure to delete application restore")
 
-	destroyAndWait(t, appCtxs)
+	//destroyAndWait(t, appCtxs)
 }
 
 func createBackupLocation(
