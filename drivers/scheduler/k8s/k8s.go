@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -80,7 +82,8 @@ const (
 )
 
 var (
-	namespaceRegex = regexp.MustCompile("{{NAMESPACE}}")
+	// use underscore to avoid conflicts to text/template from golang
+	namespaceRegex = regexp.MustCompile("_NAMESPACE_")
 )
 
 //K8s  The kubernetes structure
@@ -89,6 +92,7 @@ type K8s struct {
 	NodeDriverName      string
 	VolDriverName       string
 	secretConfigMapName string
+	customConfig        map[string]scheduler.AppConfig
 }
 
 //IsNodeReady  Check whether the cluster node is ready
@@ -117,7 +121,12 @@ func (k *K8s) String() string {
 }
 
 //Init Initialize the driver
-func (k *K8s) Init(specDir, volDriverName, nodeDriverName, secretConfigMap string) error {
+func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
+	k.NodeDriverName = schedOpts.NodeDriverName
+	k.VolDriverName = schedOpts.VolDriverName
+	k.secretConfigMapName = schedOpts.SecretConfigMapName
+	k.customConfig = schedOpts.CustomAppConfig
+
 	nodes, err := k8sops.Instance().GetNodes()
 	if err != nil {
 		return err
@@ -129,15 +138,10 @@ func (k *K8s) Init(specDir, volDriverName, nodeDriverName, secretConfigMap strin
 		}
 	}
 
-	k.SpecFactory, err = spec.NewFactory(specDir, k)
+	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, k)
 	if err != nil {
 		return err
 	}
-
-	k.NodeDriverName = nodeDriverName
-	k.VolDriverName = volDriverName
-
-	k.secretConfigMapName = secretConfigMap
 	return nil
 }
 
@@ -183,8 +187,7 @@ func (k *K8s) RefreshNodeRegistry() error {
 	return nil
 }
 
-//ParseSpecs Parse the application spec file
-//
+//ParseSpecs parses the application spec file
 func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 	fileList := make([]string, 0)
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
@@ -199,14 +202,33 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 
 	var specs []interface{}
 
+	splitPath := strings.Split(specDir, "/")
+	appName := splitPath[len(splitPath)-1]
+
 	for _, fileName := range fileList {
-		file, err := os.Open(fileName)
+		file, err := ioutil.ReadFile(fileName)
 		if err != nil {
 			return nil, err
 		}
-		defer file.Close()
 
-		reader := bufio.NewReader(file)
+		var customConfig scheduler.AppConfig
+		var ok bool
+
+		if customConfig, ok = k.customConfig[appName]; !ok {
+			customConfig = scheduler.AppConfig{}
+		}
+
+		tmpl, err := template.New("customConfig").Parse(string(file))
+		if err != nil {
+			return nil, err
+		}
+		var processedFile bytes.Buffer
+		err = tmpl.Execute(&processedFile, customConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		reader := bufio.NewReader(&processedFile)
 		specReader := yaml.NewYAMLReader(reader)
 
 		for {

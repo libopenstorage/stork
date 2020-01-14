@@ -116,6 +116,16 @@ if [ $timeout -gt 600 ]; then
   describe_pod_then_exit
 fi
 
+TORPEDO_CUSTOM_PARAM_VOLUME=""
+TORPEDO_CUSTOM_PARAM_MOUNT=""
+CUSTOM_APP_CONFIG_PATH=""
+if [ -n "${CUSTOM_APP_CONFIG}" ]; then
+    kubectl create configmap custom-app-config --from-file=custom_app_config.yml=${CUSTOM_APP_CONFIG}
+    CUSTOM_APP_CONFIG_PATH="/mnt/torpedo/custom_app_config.yml"
+    TORPEDO_CUSTOM_PARAM_VOLUME="{ \"name\": \"custom-app-config-volume\", \"configMap\": { \"name\": \"custom-app-config\", \"items\": [{\"key\": \"custom_app_config.yml\", \"path\": \"custom_app_config.yml\"}] } }"
+    TORPEDO_CUSTOM_PARAM_MOUNT="{ \"name\": \"custom-app-config-volume\", \"mountPath\": \"${CUSTOM_APP_CONFIG_PATH}\", \"subPath\": \"custom_app_config.yml\" }"
+fi
+
 TORPEDO_SSH_KEY_VOLUME=""
 TORPEDO_SSH_KEY_MOUNT=""
 if [ -n "${TORPEDO_SSH_KEY}" ]; then
@@ -137,6 +147,14 @@ VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
 
 if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
+fi
+
+if [ -n "${TORPEDO_CUSTOM_PARAM_VOLUME}" ]; then
+    VOLUMES="${VOLUMES},${TORPEDO_CUSTOM_PARAM_VOLUME}"
+fi
+
+if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
 fi
 
 K8S_VENDOR_KEY=""
@@ -275,6 +293,7 @@ spec:
             "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
             "--provisioner", "$PROVISIONER",
             "--config-map", "$CONFIGMAP",
+            "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
             "$UPGRADE_ENDPOINT_URL_ARG",
             "$UPGRADE_ENDPOINT_VERSION_ARG",
             "$APP_DESTROY_TIMEOUT_ARG" ]

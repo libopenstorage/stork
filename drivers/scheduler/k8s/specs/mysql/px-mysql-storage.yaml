@@ -60,7 +60,7 @@ metadata:
   name: mysql-data
   annotations:
     px/secret-name: volume-secrets
-    px/secret-namespace: "{{NAMESPACE}}"
+    px/secret-namespace: "_NAMESPACE_"
     px/secret-key: mysql-secret
     volume.beta.kubernetes.io/storage-class: px-mysql-sc
 spec:

@@ -91,6 +91,27 @@ type AutopilotParameters struct {
 	AutopilotRuleParameters AutopilotRuleParameters
 }
 
+// AppConfig custom settings
+type AppConfig struct {
+	Replicas   int    `yaml:"replicas"`
+	VolumeSize string `yaml:"volume_size"`
+}
+
+// InitOptions initialization options
+type InitOptions struct {
+
+	// SpecDir app spec directory
+	SpecDir string
+	// VolDriverName volume driver name
+	VolDriverName string
+	// NodeDriverName node driver name
+	NodeDriverName string
+	// ConfigMap  identifies what config map should be used to
+	SecretConfigMapName string
+	// CustomAppConfig custom settings for apps
+	CustomAppConfig map[string]AppConfig
+}
+
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
 type ScheduleOptions struct {
 	// AppKeys identified a list of applications keys that users wants to schedule (Optional)
@@ -110,7 +131,7 @@ type Driver interface {
 	spec.Parser
 
 	// Init initializes the scheduler driver
-	Init(string, string, string, string) error
+	Init(schedOpts InitOptions) error
 
 	// String returns the string name of this driver.
 	String() string

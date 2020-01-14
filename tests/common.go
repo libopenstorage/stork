@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -32,6 +33,8 @@ import (
 	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -100,7 +103,13 @@ func InitInstance() {
 		token = ""
 	}
 
-	err = Inst().S.Init(Inst().SpecDir, Inst().V.String(), Inst().N.String(), Inst().ConfigMap)
+	err = Inst().S.Init(scheduler.InitOptions{
+		SpecDir:             Inst().SpecDir,
+		VolDriverName:       Inst().V.String(),
+		NodeDriverName:      Inst().N.String(),
+		SecretConfigMapName: Inst().ConfigMap,
+		CustomAppConfig:     Inst().CustomAppConfig,
+	})
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
@@ -470,6 +479,7 @@ type Torpedo struct {
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	ConfigMap                           string
 	BundleLocation                      string
+	CustomAppConfig                     map[string]scheduler.AppConfig
 }
 
 // ParseFlags parses command line flags
@@ -489,6 +499,8 @@ func ParseFlags() {
 	var driverStartTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
 	var bundleLocation string
+	var customConfigPath string
+	var customAppConfig map[string]scheduler.AppConfig
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -512,6 +524,7 @@ func ParseFlags() {
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
 	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
+	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
 
 	flag.Parse()
 
@@ -526,9 +539,23 @@ func ParseFlags() {
 		logrus.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 	} else if nodeDriver, err = node.Get(n); err != nil {
 		logrus.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
-	} else if err := os.MkdirAll(logLoc, os.ModeDir); err != nil {
+	} else if err = os.MkdirAll(logLoc, os.ModeDir); err != nil {
 		logrus.Fatalf("Cannot create path %s for saving support bundle. Error: %v", logLoc, err)
 	} else {
+		if _, err = os.Stat(customConfigPath); err == nil {
+			var data []byte
+
+			logrus.Infof("Using custom app config file %s", customConfigPath)
+			data, err = ioutil.ReadFile(customConfigPath)
+			if err != nil {
+				logrus.Fatalf("Cannot read file %s. Error: %v", customConfigPath, err)
+			}
+			err = yaml.Unmarshal(data, &customAppConfig)
+			if err != nil {
+				logrus.Fatalf("Cannot unmarshal yml %s. Error: %v", customConfigPath, err)
+			}
+			logrus.Infof("Parsed custom app config file: %+v", customAppConfig)
+		}
 		once.Do(func() {
 			instance = &Torpedo{
 				InstanceID:                          time.Now().Format("01-02-15h04m05s"),
@@ -551,6 +578,7 @@ func ParseFlags() {
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,
 				BundleLocation:                      bundleLocation,
+				CustomAppConfig:                     customAppConfig,
 			}
 		})
 	}

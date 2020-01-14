@@ -32,7 +32,7 @@ type dcos struct {
 	volDriverName string
 }
 
-func (d *dcos) Init(specDir, volDriver, nodeDriver, secretConfigMap string) error {
+func (d *dcos) Init(schedOpts scheduler.InitOptions) error {
 	privateAgents, err := MesosClient().GetPrivateAgentNodes()
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func (d *dcos) Init(specDir, volDriver, nodeDriver, secretConfigMap string) erro
 		}
 	}
 
-	d.specFactory, err = spec.NewFactory(specDir, d)
+	d.specFactory, err = spec.NewFactory(schedOpts.SpecDir, d)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (d *dcos) Init(specDir, volDriver, nodeDriver, secretConfigMap string) erro
 		return err
 	}
 
-	d.volDriverName = volDriver
+	d.volDriverName = schedOpts.VolDriverName
 	return nil
 }
 

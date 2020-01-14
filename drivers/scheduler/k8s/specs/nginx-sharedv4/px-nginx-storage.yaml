@@ -36,7 +36,7 @@ metadata:
   name: px-nginx-pvc-enc
   annotations:
     px/secret-name: volume-secrets
-    px/secret-namespace: "{{NAMESPACE}}"
+    px/secret-namespace: "_NAMESPACE_"
     px/secret-key: nginx-secret
     px/secure: "true"
 spec:
