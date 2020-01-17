@@ -777,14 +777,14 @@
 
 [[projects]]
   branch = "kubernetes-1.11"
-  digest = "1:cd1e41248a08329610f7859cb1768f7dbee3fead77c937b0b9a3c54d1413c1d8"
+  digest = "1:cec0a216123d68ade1d460a689781f3a8179d585e0511984a45679a5c1175368"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "80b302640aeb98ce531cb85a01e7c79a12df1261"
+  revision = "a912f4b5170beb5534645c6f97cd29a5899afe39"
 
 [[projects]]
   branch = "master"
@@ -1815,7 +1815,8 @@
     "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
-    "github.com/openshift/api/apps/v1",
+    "github.com/libopenstorage/secrets",
+    "github.com/libopenstorage/secrets/k8s",
     "github.com/openshift/client-go/apps/clientset/versioned/fake",
     "github.com/operator-framework/operator-sdk/pkg/sdk",
     "github.com/operator-framework/operator-sdk/pkg/util/k8sutil",

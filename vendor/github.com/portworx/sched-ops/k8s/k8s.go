@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/version"
@@ -680,6 +681,8 @@ type ObjectOps interface {
 	GetObject(object runtime.Object) (runtime.Object, error)
 	// UpdateObject updates a generic Object
 	UpdateObject(object runtime.Object) (runtime.Object, error)
+	// ListObjects returns a list of generic Objects using the options
+	ListObjects(options *meta_v1.ListOptions, namespace string) (*unstructured.UnstructuredList, error)
 }
 
 // SchedulePolicyOps is an interface to manage SchedulePolicy Object
@@ -4802,7 +4805,22 @@ func (k *k8sOps) UpdateObject(object runtime.Object) (runtime.Object, error) {
 		return nil, err
 	}
 
-	return client.Update(unstructured, "")
+	return client.Update(unstructured)
+}
+
+// ListObjects returns a list of generic Objects using the options
+func (k *k8sOps) ListObjects(options *meta_v1.ListOptions, namespace string) (*unstructured.UnstructuredList, error) {
+	var client dynamic.ResourceInterface
+	gvk := schema.FromAPIVersionAndKind(options.APIVersion, options.Kind)
+	resourceInterface := k.dynamicInterface.Resource(gvk.GroupVersion().WithResource(strings.ToLower(gvk.Kind) + "s"))
+
+	if namespace != "" {
+		client = resourceInterface.Namespace(namespace)
+	} else {
+		client = resourceInterface
+	}
+
+	return client.List(*options)
 }
 
 // Object APIs - END
