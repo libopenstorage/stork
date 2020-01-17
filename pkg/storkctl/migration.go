@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -15,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 	"k8s.io/kubernetes/pkg/printers"
@@ -134,6 +136,10 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				updateStatefulSets(ns, true, ioStreams)
 				updateDeployments(ns, true, ioStreams)
 				updateDeploymentConfigs(ns, true, ioStreams)
+				updateObjects("IBPPeer", ns, true, ioStreams)
+				updateObjects("IBPCA", ns, true, ioStreams)
+				updateObjects("IBPOrderer", ns, true, ioStreams)
+				updateObjects("IBPConsole", ns, true, ioStreams)
 			}
 
 		},
@@ -170,6 +176,10 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				updateStatefulSets(ns, false, ioStreams)
 				updateDeployments(ns, false, ioStreams)
 				updateDeploymentConfigs(ns, false, ioStreams)
+				updateObjects("IBPPeer", ns, false, ioStreams)
+				updateObjects("IBPCA", ns, false, ioStreams)
+				updateObjects("IBPOrderer", ns, false, ioStreams)
+				updateObjects("IBPConsole", ns, false, ioStreams)
 			}
 
 		},
@@ -235,6 +245,37 @@ func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericc
 				continue
 			}
 			printMsg(fmt.Sprintf("Updated replicas for deploymentconfig %v/%v to %v", deployment.Namespace, deployment.Name, replicas), ioStreams.Out)
+		}
+	}
+}
+
+func updateObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+	objects, err := k8s.Instance().ListObjects(
+		&metav1.ListOptions{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       kind,
+				APIVersion: "ibp.com/v1alpha1"},
+		},
+		namespace)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			util.CheckErr(err)
+		}
+		return
+	}
+	for _, o := range objects.Items {
+		if replicas, update := getUpdatedReplicaCount(o.GetAnnotations(), activate, ioStreams); update {
+			err := unstructured.SetNestedField(o.Object, int64(replicas), "spec", "replicas")
+			if err != nil {
+				printMsg(fmt.Sprintf("Error updating replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+				continue
+			}
+			_, err = k8s.Instance().UpdateObject(&o)
+			if err != nil {
+				printMsg(fmt.Sprintf("Error updating replicas for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+				continue
+			}
+			printMsg(fmt.Sprintf("Updated replicas for %v %v/%v to %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), replicas), ioStreams.Out)
 		}
 	}
 }
