@@ -8,12 +8,13 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
-	ocpv1 "github.com/openshift/api/apps/v1"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/stretchr/testify/require"
-	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	// Used by disabled test
+	//migration "github.com/libopenstorage/stork/pkg/migration/controllers"
+	//ocpv1 "github.com/openshift/api/apps/v1"
+	//appv1 "k8s.io/api/apps/v1"
 )
 
 func TestGetMigrationsNoMigration(t *testing.T) {
@@ -254,6 +255,8 @@ func TestExclueResourcesForMigrations(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
+// Disabled because of bug in fake client for Object
+/*
 func createMigratedDeployment(t *testing.T) {
 	replicas := int32(0)
 	_, err := k8s.Instance().CreateNamespace("dep", nil)
@@ -359,6 +362,7 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
+*/
 
 func TestCreateMigrationWaitSuccess(t *testing.T) {
 	migrRetryTimeout = 10 * time.Second
