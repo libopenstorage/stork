@@ -26,19 +26,28 @@ SYSBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-sysbench:latest
 PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
 ESLOAD_IMG=$(DOCKER_HUB_REPO)/torpedo-esload:latest
 
+HAS_GOMODULES := $(shell go help mod why 2> /dev/null)
+
+ifdef HAS_GOMODULES
+export GO111MODULE=on
+export GOFLAGS = -mod=vendor
+else
+$(error torpedo can only be built with go 1.11+ which supports go modules)
+endif
+
 all: vet lint build fmt
 
 deps:
-	GO15VENDOREXPERIMENT=0 go get -d -v $(PKGS)
+	go get -d -v $(PKGS)
 
 update-deps:
-	GO15VENDOREXPERIMENT=0 go get -d -v -u -f $(PKGS)
+	go get -d -v -u -f $(PKGS)
 
 test-deps:
-	GO15VENDOREXPERIMENT=0 go get -d -v -t $(PKGS)
+	go get -d -v -t $(PKGS)
 
 update-test-deps:
-	GO15VENDOREXPERIMENT=0 go get -tags "$(TAGS)" -d -v -t -u -f $(PKGS)
+	go get -tags "$(TAGS)" -d -v -t -u -f $(PKGS)
 
 fmt:
 	@echo -e "Performing gofmt on following: $(PKGS)"
@@ -48,24 +57,27 @@ build:
 	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
 
-	go get github.com/onsi/ginkgo/ginkgo
-	go get github.com/onsi/gomega
+	(mkdir -p tools && cd tools && GO111MODULE=off go get github.com/onsi/ginkgo/ginkgo)
+	(mkdir -p tools && cd tools && GO111MODULE=off go get github.com/onsi/gomega)
 	ginkgo build -r
 
 	find . -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
 
 vendor-update:
-	dep ensure -update
+	go mod download
+
+vendor-tidy:
+	go mod tidy
 
 vendor:
-	dep ensure
+	go mod vendor
 
 install:
 	go install -tags "$(TAGS)" $(PKGS)
 
 lint:
-	go get -v golang.org/x/lint/golint
+	(mkdir -p tools && GO111MODULE=off go get -v golang.org/x/lint/golint)
 	for file in $$(find . -name '*.go' | grep -v vendor | grep -v '\.pb\.go' | grep -v '\.pb\.gw\.go'); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
@@ -77,7 +89,7 @@ vet:
 	go vet $(PKGS)
 
 errcheck:
-	go get -v github.com/kisielk/errcheck
+	(mkdir -p tools && GO111MODULE=off && go get -v github.com/kisielk/errcheck)
 	errcheck -tags "$(TAGS)" $(PKGS)
 
 pretest: lint vet errcheck
