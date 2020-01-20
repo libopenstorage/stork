@@ -28,8 +28,8 @@ const (
 	defaultSecretName     = "s3secret"
 
 	applicationBackupScheduleRetryInterval = 10 * time.Second
-	applicationBackupScheduleRetryTimeout  = 3 * time.Minute
-	applicationBackupSyncRetryTimeout      = 10 * time.Minute
+	applicationBackupScheduleRetryTimeout  = 5 * time.Minute
+	applicationBackupSyncRetryTimeout      = 15 * time.Minute
 )
 
 var allConfigMap, defaultConfigMap map[string]string
@@ -763,7 +763,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 
 	backupLocation2, err := createBackupLocation(t, backupLocationName, ns.Name, storkv1.BackupLocationS3, defaultSecretName)
 	require.NoError(t, err, "Error creating backuplocation on second cluster")
-	logrus.Infof("Created application backup on second cluster %s: sync:%t", backupLocation.Name, backupLocation.Location.Sync)
+	logrus.Infof("Created backup location on second cluster %s: sync:%t", backupLocation.Name, backupLocation.Location.Sync)
 
 	// Set sync to true on second cluster so that backup location gets synced
 	backupLocation2.Location.Sync = true
