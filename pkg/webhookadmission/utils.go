@@ -21,22 +21,21 @@ import (
 )
 
 const (
-	webhookName        = "stork.webhook.com"
-	storkService       = "stork-service"
-	storkNamespace     = "kube-system"
-	storkServiceAccess = "stork-service.kube-system.svc"
+	webhookName       = "webhook.stork.libopenstorage.io"
+	storkService      = "stork-service"
+	storkNamespaceEnv = "STORK-NAMESPACE"
+	defaultNamespace  = "kube-system"
 )
 
 // CreateMutateWebhook create new webhookconfig for stork if not exist already
-func CreateMutateWebhook(caBundle []byte) error {
+func CreateMutateWebhook(caBundle []byte, ns string) error {
 	path := "/mutate"
-
 	webhook := hook.Webhook{
 		Name: webhookName,
 		ClientConfig: hook.WebhookClientConfig{
 			Service: &hook.ServiceReference{
 				Name:      storkService,
-				Namespace: storkNamespace,
+				Namespace: ns,
 				Path:      &path,
 			},
 			CABundle: caBundle,
@@ -47,7 +46,7 @@ func CreateMutateWebhook(caBundle []byte) error {
 				Rule: hook.Rule{
 					APIGroups:   []string{"apps", ""},
 					APIVersions: []string{"v1"},
-					Resources:   []string{"deployments", "statefulset", "pods"},
+					Resources:   []string{"deployments", "statefulsets", "pods"},
 				},
 			},
 		},
@@ -67,9 +66,9 @@ func CreateMutateWebhook(caBundle []byte) error {
 	return nil
 }
 
-// GenerateCertificate Self Signed certificate , returns x509 cert
+// GenerateCertificate Self Signed certificate using given CN, returns x509 cert
 // and priv key in PEM format
-func GenerateCertificate() ([]byte, []byte, error) {
+func GenerateCertificate(cn string) ([]byte, []byte, error) {
 	var err error
 	pemCert := &bytes.Buffer{}
 
@@ -84,7 +83,7 @@ func GenerateCertificate() ([]byte, []byte, error) {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
-			CommonName: storkServiceAccess,
+			CommonName: cn,
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(10, 0, 0),
@@ -95,7 +94,7 @@ func GenerateCertificate() ([]byte, []byte, error) {
 	}
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
-		log.Fatalf("Failed to create x509 certificate: %s", err)
+		log.Errorf("Failed to create x509 certificate: %s", err)
 		return nil, nil, err
 	}
 
@@ -107,7 +106,7 @@ func GenerateCertificate() ([]byte, []byte, error) {
 
 	b, err := x509.MarshalECPrivateKey(priv)
 	if err != nil {
-		log.Fatalf("Unable to marshal ECDSA private key: %v", err)
+		log.Errorf("Unable to marshal ECDSA private key: %v", err)
 		return nil, nil, err
 	}
 	privBlock := pem.Block{
@@ -126,14 +125,14 @@ func GetTLSCertificate(cert, priv []byte) (tls.Certificate, error) {
 
 // CreateCertSecrets creates k8s secret to store self signed cert
 // data
-func CreateCertSecrets(cert, key []byte) (*v1.Secret, error) {
+func CreateCertSecrets(cert, key []byte, ns string) (*v1.Secret, error) {
 	secretData := make(map[string][]byte)
 	secretData[privKey] = key
 	secretData[privCert] = cert
 	secret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
-			Namespace: storkNamespace,
+			Namespace: ns,
 		},
 		Data: secretData,
 	}
