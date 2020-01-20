@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -82,9 +83,9 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			log.Errorf("Could not unmarshal admission review object: %v", err)
 			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
 		}
-		isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, ss.Namespace)
+		isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, ss.GetNamespace())
 		if err != nil {
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info %v", err.Error())
+			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info for ss: %v", err.Error())
 		}
 		schedPath = appSchedPrefix + podSpecSchedPath
 	case "Deployment":
@@ -93,9 +94,9 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			log.Errorf("Could not unmarshal admission review object: %v", err)
 			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
 		}
-		isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, deployment.Namespace)
+		isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, deployment.GetNamespace())
 		if err != nil {
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info %v", err.Error())
+			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info deployment: %v", err.Error())
 		}
 		schedPath = appSchedPrefix + podSpecSchedPath
 	case "Pod":
@@ -104,9 +105,9 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			log.Errorf("Could not unmarshal admission review object: %v", err)
 			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
 		}
-		isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, pod.Namespace)
+		isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, pod.GetNamespace())
 		if err != nil {
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info %v", err.Error())
+			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info for pod: %v", err.Error())
 		}
 		schedPath = podSpecSchedPath
 	}
@@ -175,33 +176,45 @@ func (c *Controller) Start() error {
 	if c.started {
 		return fmt.Errorf("webhook server has already been started")
 	}
-	certSecrets, err := k8s.Instance().GetSecret(secretName, storkNamespace)
+
+	ns := os.Getenv(storkNamespaceEnv)
+	if ns == "" {
+		ns = defaultNamespace
+	}
+	certSecrets, err := k8s.Instance().GetSecret(secretName, ns)
 	if err != nil && !k8serr.IsNotFound(err) {
-		log.Fatalf("Unable to retrieve %v secret: %v", secretName, err)
+		log.Errorf("Unable to retrieve %v secret: %v", secretName, err)
+		return err
 	} else if k8serr.IsNotFound(err) {
-		caBundle, key, err = GenerateCertificate()
+		// create CN string
+		cn := storkService + "." + ns + ".svc"
+		caBundle, key, err = GenerateCertificate(cn)
 		if err != nil {
-			log.Fatalf("Unable to generate x509 certificate: %v", err)
+			log.Errorf("Unable to generate x509 certificate: %v", err)
+			return err
 		}
 		tlsCert, err = GetTLSCertificate(caBundle, key)
 		if err != nil {
-			log.Fatalf("Unable to create tls certificate: %v", tlsCert)
+			log.Errorf("Unable to create tls certificate: %v", err)
+			return err
 		}
-		_, err = CreateCertSecrets(caBundle, key)
+		_, err = CreateCertSecrets(caBundle, key, ns)
 		if err != nil {
-			log.Fatalf("unable to create secrets for cert details: %v", err)
+			log.Errorf("unable to create secrets for cert details: %v", err)
+			return err
 		}
 	} else {
 		if secretData, ok = certSecrets.Data[privKey]; !ok {
-			log.Fatalf("invalid secret key data")
+			return fmt.Errorf("invalid secret key data")
 		}
 		if caBundle, ok = certSecrets.Data[privCert]; !ok {
-			log.Fatalf("invalid secret certificate")
+			return fmt.Errorf("invalid secret certificate")
 		}
 
 		tlsCert, err = GetTLSCertificate(caBundle, secretData)
 		if err != nil {
-			log.Fatalf("unable to generate tls certs: %v", err)
+			log.Errorf("unable to generate tls certs: %v", err)
+			return err
 		}
 	}
 	c.server = &http.Server{Addr: ":443",
@@ -210,13 +223,13 @@ func (c *Controller) Start() error {
 	http.HandleFunc("/mutate", c.serveHTTP)
 	go func() {
 		if err := c.server.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
-			log.Panicf("Error starting webhook server: %v", err)
+			log.Errorf("Error starting webhook server: %v", err)
 		}
 	}()
 	c.started = true
 	log.Debugf("Webhook server started")
 
-	return CreateMutateWebhook(caBundle)
+	return CreateMutateWebhook(caBundle, ns)
 }
 
 // Stop Stops the webhook server
