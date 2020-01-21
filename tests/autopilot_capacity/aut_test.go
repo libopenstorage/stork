@@ -131,10 +131,37 @@ var ruleResizeBy50IfPvcCapacityLessThan10 = apapi.AutopilotRule{
 	},
 }
 
+// Resize PVC by 300% until volume usage is more than 50%
+var ruleResizeBy300IfPvcUsageMoreThan50 = apapi.AutopilotRule{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "volresize-usage-scale300",
+	},
+	Spec: apapi.AutopilotRuleSpec{
+		Conditions: apapi.RuleConditions{
+			Expressions: []*apapi.LabelSelectorRequirement{
+				{
+					Key:      portworx.PxVolumeUsagePercentMetric,
+					Operator: apapi.LabelSelectorOpGt,
+					Values:   []string{"50"},
+				},
+			},
+		},
+		Actions: []*apapi.RuleAction{
+			{
+				Name: portworx.VolumeSpecAction,
+				Params: map[string]string{
+					portworx.RuleActionsScalePercentage: "300",
+				},
+			},
+		},
+	},
+}
+
 var autopilotruleBasicTestCases = []apapi.AutopilotRule{
 	ruleResizeBy50IfPvcUsageMoreThan50,
 	ruleResizeBy50IfPvcUsageMoreThan90,
 	ruleResizeBy50UntilPvcMaxSize20,
+	ruleResizeBy300IfPvcUsageMoreThan50,
 }
 
 func TestAutoPilot(t *testing.T) {
