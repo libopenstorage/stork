@@ -514,20 +514,6 @@ func (a *ApplicationBackupController) prepareResources(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
 ) error {
-	for _, o := range objects {
-		metadata, err := meta.Accessor(o)
-		if err != nil {
-			return err
-		}
-
-		switch o.GetObjectKind().GroupVersionKind().Kind {
-		case "PersistentVolume":
-			err := a.preparePVResource(o)
-			if err != nil {
-				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
-			}
-		}
-	}
 	return nil
 }
 
@@ -605,36 +591,6 @@ func (a *ApplicationBackupController) uploadMetadata(
 	}
 
 	return a.uploadObject(backup, metadataObjectName, jsonBytes)
-}
-
-func (a *ApplicationBackupController) preparePVResource(
-	object runtime.Unstructured,
-) error {
-	var pv v1.PersistentVolume
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pv); err != nil {
-		return err
-	}
-
-	driverName, err := volume.GetPVDriver(&pv)
-	if err != nil {
-		return err
-	}
-	driver, err := volume.Get(driverName)
-	if err != nil {
-		return err
-	}
-	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv)
-	if err != nil {
-		return err
-	}
-
-	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pv)
-	if err != nil {
-		return err
-	}
-	object.SetUnstructuredContent(o)
-
-	return err
 }
 
 func (a *ApplicationBackupController) backupResources(
