@@ -290,7 +290,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if err != nil {
 					return err
 				}
-				log.ApplicationBackupLog(backup).Errorf("PVC: %v Driver: %v", pvc.Name, driverName)
 				if driverName != "" {
 					if pvcMappings[driverName] == nil {
 						pvcMappings[driverName] = make([]v1.PersistentVolumeClaim, 0)
