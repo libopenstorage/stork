@@ -219,7 +219,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				continue
 			}
 			for _, volumeBackup := range backup.Status.Volumes {
-				log.ApplicationRestoreLog(restore).Infof("Driver for restore: %v", volumeBackup.DriverName)
 				if volumeBackup.Namespace != namespace {
 					continue
 				}
@@ -231,7 +230,6 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		}
 
 		for driverName, vInfos := range backupVolumeInfoMappings {
-			log.ApplicationRestoreLog(restore).Infof("Driver for restore: %v", driverName)
 			driver, err := volume.Get(driverName)
 			if err != nil {
 				return err
