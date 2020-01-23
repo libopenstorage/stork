@@ -30,6 +30,10 @@
   version = "0.37.4"
 
 [[constraint]]
+  name = "github.com/libopenstorage/openstorage"
+  branch = "release-7.0"
+
+[[constraint]]
   name = "github.com/Azure/azure-sdk-for-go"
   version = "26.0.0"
 

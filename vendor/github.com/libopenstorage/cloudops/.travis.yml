@@ -1,14 +1,17 @@
 sudo: required
-dist: trusty
+dist: xenial
 language: go
 go:
-  - 1.10.4
+  - 1.11.2
 before_install:
   - sudo apt-get update -yq
 script:
   - |
-    make 
+    # TODO add pretest here too once it's fixed
+    make && make test
 notifications:
   email:
     on_success: always
     on_failure: always
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

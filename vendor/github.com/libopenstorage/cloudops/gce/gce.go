@@ -483,6 +483,23 @@ func (s *gceOps) detachInternal(devicePath, instanceName string) error {
 }
 
 func (s *gceOps) DeviceMappings() (map[string]string, error) {
+	/*
+	 * The names of disk devices in GCE are determined by
+	 * UDEV rules that must be installed on each host node running
+	 * in GCE.
+	 *
+	 * The UDEV rules can be found in the following files on the host:
+	 *
+	 *    /lib/udev/rules.d/64-gce-disk-removal.rules
+	 *    /lib/udev/rules.d/99-gce.rules
+	 *    /lib/udev/rules.d/65-gce-disk-naming.rules
+	 *
+	 * These rules can also be found at:
+	 *  https://github.com/GoogleCloudPlatform/compute-image-packages/tree/master/packages/google-compute-engine/src/lib/udev/rules.d/
+	 *
+	 * These UDEV rules are installed by default in images supplied by Google.
+	 * However, in custom images, these files may not be there, so they must be installed.
+	 */
 	instance, err := s.describeinstance()
 	if err != nil {
 		return nil, err
@@ -600,6 +617,16 @@ func (s *gceOps) GetDeviceID(disk interface{}) (string, error) {
 		return d.Name, nil
 	} else {
 		return "", fmt.Errorf("invalid type: %v given to GetDeviceID", disk)
+	}
+}
+
+func (s *gceOps) Expand(
+	volumeID string,
+	newSizeInGiB uint64,
+) (uint64, error) {
+	// TODO
+	return 0, &cloudops.ErrNotSupported{
+		Operation: "Expand",
 	}
 }
 

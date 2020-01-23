@@ -92,6 +92,11 @@ type Storage interface {
 	// Attach volumeID.
 	// Return attach path.
 	Attach(volumeID string) (string, error)
+	// Expand expands the provided device from the existing size to the new size
+	// It returns the new size of the device. It is a blocking API where it will
+	// only return once the requested size is validated with the cloud provider or
+	// the number of retries prescribed by the cloud provider are exhausted.
+	Expand(volumeID string, newSizeInGiB uint64) (uint64, error)
 	// Detach volumeID.
 	Detach(volumeID string) error
 	// DetachFrom detaches the disk/volume with given ID from the given instance ID
