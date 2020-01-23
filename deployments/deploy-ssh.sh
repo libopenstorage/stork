@@ -85,6 +85,21 @@ if [ -z "$STORAGENODE_RECOVERY_TIMEOUT" ]; then
     echo "Using default storage node recovery timeout of ${STORAGENODE_RECOVERY_TIMEOUT}"
 fi
 
+AZURE_TENANTID=""
+if [ -n "$AZURE_TENANT_ID" ]; then
+    AZURE_TENANTID="${AZURE_TENANT_ID}"
+fi
+
+AZURE_CLIENTID=""
+if [ -n "$AZURE_CLIENT_ID" ]; then
+    AZURE_CLIENTID="${AZURE_CLIENT_ID}"
+fi
+
+AZURE_CLIENTSECRET=""
+if [ -n "$AZURE_CLIENT_SECRET" ]; then
+    AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
+fi
+
 if [ -z "$TEST_SUITE" ]; then
     TEST_SUITE='"bin/asg.test",
             "bin/autopilot-capacity.test",
@@ -183,6 +198,7 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["false"]'
+            NODE_DRIVER="aks"
             ;;
         eks)
             # Run torpedo on worker node, where px installation is disabled.
@@ -306,6 +322,12 @@ spec:
       value: "${TORPEDO_SSH_PASSWORD}"
     - name: TORPEDO_SSH_KEY
       value: "${TORPEDO_SSH_KEY}"
+    - name: AZURE_TENANT_ID
+      value: "${AZURE_TENANTID}"
+    - name: AZURE_CLIENT_ID
+      value: "${AZURE_CLIENTID}"
+    - name: AZURE_CLIENT_SECRET
+      value: "${AZURE_CLIENTSECRET}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
