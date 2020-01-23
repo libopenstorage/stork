@@ -36,6 +36,7 @@ spec:
         volumeMounts:
         - name: wordpress-persistent-storage
           mountPath: /var/www/html
+          subPath: html
         livenessProbe:
           httpGet:
             path: /
@@ -64,3 +65,4 @@ spec:
     app: wordpress
     tier: frontend
   type: NodePort
+  sessionAffinity: ClientIP

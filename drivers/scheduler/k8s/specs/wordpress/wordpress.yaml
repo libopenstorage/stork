@@ -65,3 +65,4 @@ spec:
     app: wordpress
     tier: frontend
   type: NodePort
+  sessionAffinity: ClientIP
