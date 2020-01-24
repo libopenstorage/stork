@@ -671,7 +671,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	}
 
 	if migration.Spec.AdminClusterPair != "" {
-		schedulerStatus, err = getClusterPairSchedulerStatus(migration.Spec.AdminClusterPair, m.migrationAdminNamespace)
+		schedulerStatus, err = getClusterPairSchedulerStatus(migration.Spec.AdminClusterPair, migration.Namespace)
 		if err != nil {
 			return err
 		}
