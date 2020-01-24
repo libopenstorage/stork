@@ -132,7 +132,7 @@ func (c *ClusterPairController) Handle(ctx context.Context, event sdk.Event) err
 func getClusterPairSchedulerConfig(clusterPairName string, namespace string) (*restclient.Config, error) {
 	clusterPair, err := k8s.Instance().GetClusterPair(clusterPairName, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("error getting clusterpair: %v", err)
+		return nil, fmt.Errorf("error getting clusterpair (%v/%v): %v", namespace, clusterPairName, err)
 	}
 	remoteClientConfig := clientcmd.NewNonInteractiveClientConfig(
 		clusterPair.Spec.Config,
