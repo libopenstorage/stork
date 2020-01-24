@@ -57,6 +57,14 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		Step(fmt.Sprintf("scale up cluster from %d to %d nodes and validate",
 			intitialNodeCount, (scaleupCount/3)*3), func() {
 
+			// After scale up, get fresh list of nodes
+			// by re-initializing scheduler and volume driver
+			err = Inst().S.RefreshNodeRegistry()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = Inst().V.RefreshDriverEndpoints()
+			Expect(err).NotTo(HaveOccurred())
+
 			Scale(scaleupCount)
 			Step(fmt.Sprintf("validate number of storage nodes after scale up"), func() {
 				ValidateClusterSize(scaleupCount)
@@ -229,8 +237,9 @@ func ValidateClusterSize(count int64) {
 	storageNodes, err := getStorageNodes()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(storageNodes)).Should(Equal(expectedStorageNodesPerZone*3),
-		"Current number of storeage nodes [%d] does not match expected number of storage nodes [%d]",
-		len(storageNodes), expectedStorageNodesPerZone*3)
+		"Current number of storeage nodes [%d] does not match expected number of storage nodes [%d]."+
+			"List of storage nodes:[%v]",
+		len(storageNodes), expectedStorageNodesPerZone*3, storageNodes)
 
 	logrus.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
 }

@@ -371,6 +371,23 @@ func (e *exponentialBackoff) DevicePath(volumeID string) (string, error) {
 	return devicePath, origErr
 }
 
+func (e *exponentialBackoff) Expand(volumeID string, targetSize uint64) (uint64, error) {
+	var (
+		actualSize uint64
+		origErr    error
+	)
+	conditionFn := func() (bool, error) {
+		actualSize, origErr = e.cloudOps.Expand(volumeID, targetSize)
+		msg := fmt.Sprintf("Failed to get device path for drive (%v).", volumeID)
+		return e.handleError(origErr, msg)
+	}
+	expErr := wait.ExponentialBackoff(e.backoff, conditionFn)
+	if expErr == wait.ErrWaitTimeout {
+		return 0, cloudops.NewStorageError(cloudops.ErrExponentialTimeout, origErr.Error(), "")
+	}
+	return actualSize, origErr
+}
+
 // Snapshot the volume with given volumeID
 func (e *exponentialBackoff) Snapshot(volumeID string, readonly bool) (interface{}, error) {
 	var (

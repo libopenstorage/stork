@@ -18,10 +18,11 @@
   version = "v0.4.12"
 
 [[projects]]
-  digest = "1:dbd9b91777416615df7c4bb91b0245e1ea8edfa27cb213c5a94dbe3be84d6dc9"
+  digest = "1:e4b9b0a9ec5363f559004a8353a4340a25a934d4c6b612f2d80e253c65209895"
   name = "github.com/Azure/azure-sdk-for-go"
   packages = [
     "services/compute/mgmt/2018-06-01/compute",
+    "services/containerservice/mgmt/2019-02-01/containerservice",
     "version",
   ]
   pruneopts = "UT"
@@ -131,6 +132,14 @@
   version = "0.2"
 
 [[projects]]
+  digest = "1:d64c893fc7d2c3d395f421b00d21f0adb8ceffc4d3c90299e732b3985ca16eb4"
+  name = "github.com/coreos/go-oidc"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "2be1c5b8a260760503f66dc0996e102b683b3ac3"
+  version = "v2.1.0"
+
+[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -235,12 +244,16 @@
   version = "v1.0.2"
 
 [[projects]]
-  digest = "1:aa4c9cc32ff73326d53ca92bcd7042a100cc1da41f6ecbad731c66fd278fbff7"
+  branch = "release-7.0"
+  digest = "1:ee1c6fb80613e7b01eca1fb44965832fdef1d0c81cee499e843e92e53d4ed916"
   name = "github.com/libopenstorage/openstorage"
-  packages = ["pkg/parser"]
+  packages = [
+    "api",
+    "pkg/auth",
+    "pkg/parser",
+  ]
   pruneopts = "UT"
-  revision = "4c9c952a83e4f31e97538e4bda698712f711d3e8"
-  version = "v8.0.0"
+  revision = "daaed777713e0b71bc9aef4d7dff07e6c2c4feaa"
 
 [[projects]]
   branch = "master"
@@ -267,6 +280,14 @@
   version = "v1.1.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:84bd7f8a2e0bcd53ddc33c3b47c34c1fe340c8632cbe928f7f8ae10ec6ecdd62"
+  name = "github.com/mohae/deepcopy"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "c48cc78d482608239f6c4c92a4abd87eb8761c90"
+
+[[projects]]
   digest = "1:e5d0bd87abc2781d14e274807a470acd180f0499f8bf5bb18606e9ec22ad9de9"
   name = "github.com/pborman/uuid"
   packages = ["."]
@@ -289,6 +310,17 @@
   packages = ["task"]
   pruneopts = "UT"
   revision = "93d74efcd2c481f7c5adcfaa6b4aa9e14b762a64"
+
+[[projects]]
+  branch = "master"
+  digest = "1:bd9efe4e0b0f768302a1e2f0c22458149278de533e521206e5ddc71848c269a0"
+  name = "github.com/pquerna/cachecontrol"
+  packages = [
+    ".",
+    "cacheobject",
+  ]
+  pruneopts = "UT"
+  revision = "1555304b9b35fdd2b425bccf1a5613677705e7d0"
 
 [[projects]]
   digest = "1:75d51eeab0df85a3cea9e1297ccd3183b20a10cb4b48c753d8ec8d113cc14250"
@@ -404,9 +436,12 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:994c4915a59f821705d08ea77b117ec7a3e6a46cc867fd194d887500dac1c3c2"
+  digest = "1:a3dff303fe00bb5559a9d7d8feb4a5a7d919aeb55c3f68616c0b724dd20106b2"
   name = "golang.org/x/crypto"
   packages = [
+    "ed25519",
+    "ed25519/internal/edwards25519",
+    "pbkdf2",
     "pkcs12",
     "pkcs12/internal/rc2",
   ]
@@ -526,9 +561,10 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:5dc13cd8c0b417e12d187938d2ccb2348dda90f6d3d4a3d8402a40677a5ac982"
+  digest = "1:51b95dc2db289865b71364c0da23ca6bcc0b199e0d827c9cfb053b32248b77ad"
   name = "google.golang.org/genproto"
   packages = [
+    "googleapis/api/annotations",
     "googleapis/api/httpbody",
     "googleapis/rpc/status",
     "protobuf/field_mask",
@@ -578,6 +614,18 @@
   version = "v1.20.1"
 
 [[projects]]
+  digest = "1:8c05919580be8a5be668709d7e5a69d5cd19b8ee9f23d62ce5b10d3457bf6a13"
+  name = "gopkg.in/square/go-jose.v2"
+  packages = [
+    ".",
+    "cipher",
+    "json",
+  ]
+  pruneopts = "UT"
+  revision = "730df5f748271903322feb182be83b43ebbbe27d"
+  version = "v2.3.1"
+
+[[projects]]
   digest = "1:4d2e5a73dc1500038e504a8d78b986630e3626dc027bc030ba5c75da257cdb96"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -621,6 +669,7 @@
   input-imports = [
     "cloud.google.com/go/compute/metadata",
     "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2018-06-01/compute",
+    "github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2019-02-01/containerservice",
     "github.com/Azure/go-autorest/autorest",
     "github.com/Azure/go-autorest/autorest/azure",
     "github.com/Azure/go-autorest/autorest/azure/auth",
@@ -634,6 +683,7 @@
     "github.com/aws/aws-sdk-go/service/opsworks",
     "github.com/codeskyblue/go-sh",
     "github.com/golang/mock/gomock",
+    "github.com/libopenstorage/openstorage/api",
     "github.com/libopenstorage/openstorage/pkg/parser",
     "github.com/libopenstorage/secrets/aws/credentials",
     "github.com/pborman/uuid",

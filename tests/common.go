@@ -16,8 +16,11 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
 
+	// import aks driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/node/aks"
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
+	// import gke driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/gke"
 
 	// import ssh driver to invoke it's init

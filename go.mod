@@ -4,11 +4,16 @@ go 1.12
 
 require (
 	cloud.google.com/go v0.37.4 // indirect
+	github.com/Azure/azure-sdk-for-go v38.2.0+incompatible // indirect
+	github.com/Azure/go-autorest v13.3.1+incompatible // indirect
+	github.com/Azure/go-autorest/autorest v0.9.4 // indirect
+	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2 // indirect
+	github.com/Azure/go-autorest/autorest/to v0.3.0 // indirect
+	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/aws/aws-sdk-go v1.25.11
 	github.com/coreos/go-oidc v2.1.0+incompatible // indirect
 	github.com/coreos/prometheus-operator v0.31.1 // indirect
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -31,7 +36,7 @@ require (
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
 	github.com/libopenstorage/autopilot-api v0.6.0
-	github.com/libopenstorage/cloudops v0.0.0-20190814221430-32b6af4bb132
+	github.com/libopenstorage/cloudops v0.0.0-20200114171448-10fa10d97720
 	github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952 // indirect
 	github.com/libopenstorage/openstorage v7.0.1-0.20191218211301-d03367435351+incompatible
 	github.com/libopenstorage/operator v0.0.0-20191009190641-8642de5d0812 // indirect
@@ -54,7 +59,7 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.opencensus.io v0.22.1 // indirect
-	golang.org/x/crypto v0.0.0-20191011161858-a950601f39e6
+	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
 	golang.org/x/net v0.0.0-20191009170851-d66e71096ffb
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
 	golang.org/x/sys v0.0.0-20191010194322-b09406accb47 // indirect

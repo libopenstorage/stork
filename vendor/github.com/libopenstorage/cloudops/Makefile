@@ -18,7 +18,7 @@ LDFLAGS += "-s -w -X github.com/libopenstorage/cloudops/pkg/version.Version=$(VE
 BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 .DEFAULT_GOAL=all
-.PHONY: clean vendor vendor-update container deploy
+.PHONY: test clean vendor vendor-update container deploy
 
 all: build vet lint
 
@@ -55,6 +55,7 @@ staticcheck: $(GOPATH)/bin/staticcheck
 errcheck:
 	go get -v github.com/kisielk/errcheck
 	errcheck -verbose -blank $(PKGS)
+	errcheck -verbose -blank -tags unittest $(PKGS)
 
 pretest: lint vet errcheck staticcheck
 
@@ -92,6 +93,16 @@ docker-build: docker-build-osd-dev
 		-e "BUILDFLAGS=$(BUILDFLAGS)" \
 		openstorage/osd-dev \
 			make
+
+test:
+	echo "" > coverage.txt
+	for pkg in $(PKGS);	do \
+		go test -v -tags unittest -coverprofile=profile.out -covermode=atomic $(BUILD_OPTIONS) $${pkg} || exit 1; \
+		if [ -f profile.out ]; then \
+			cat profile.out >> coverage.txt; \
+			rm profile.out; \
+		fi; \
+	done
 
 clean:
 	go clean -i $(PKGS)
