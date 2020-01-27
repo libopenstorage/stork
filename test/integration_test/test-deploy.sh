@@ -109,10 +109,6 @@ apk add jq
 if [ "$initializer" == "true" ] ; then
     # Remove schedule name from all specs
     find /testspecs/specs -name '*.yaml' | xargs sed -i '/schedulerName: stork/d'
-    # Create the initializer
-    kubectl apply -f /specs/stork-initializer.yaml
-    # Enable it in the stork spec
-    sed -i s/'#- --app-initializer=true'/'- --app-initializer=true'/g /specs/stork-deployment.yaml
 fi
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
