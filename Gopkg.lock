@@ -777,14 +777,14 @@
 
 [[projects]]
   branch = "kubernetes-1.11"
-  digest = "1:cec0a216123d68ade1d460a689781f3a8179d585e0511984a45679a5c1175368"
+  digest = "1:34ee0f22ef110d89ac792e5f53f3b2397a0ec8e753b5551967e18acd54820f38"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s",
     "task",
   ]
   pruneopts = "UT"
-  revision = "a912f4b5170beb5534645c6f97cd29a5899afe39"
+  revision = "5f02eda82ff128b10e27d51433ce796b182828a8"
 
 [[projects]]
   branch = "master"
@@ -1850,6 +1850,8 @@
     "google.golang.org/grpc",
     "google.golang.org/grpc/credentials",
     "gopkg.in/yaml.v2",
+    "k8s.io/api/admission/v1beta1",
+    "k8s.io/api/admissionregistration/v1beta1",
     "k8s.io/api/apps/v1",
     "k8s.io/api/apps/v1beta1",
     "k8s.io/api/apps/v1beta2",
