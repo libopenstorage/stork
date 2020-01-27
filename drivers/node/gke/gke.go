@@ -28,6 +28,7 @@ func (g *gke) String() string {
 }
 
 func (g *gke) Init() error {
+	g.SSH.Init()
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
@@ -76,11 +77,8 @@ func (g *gke) DeleteNode(node node.Node, timeout time.Duration) error {
 }
 
 func init() {
-
-	SSHDriver := ssh.SSH{}
-	SSHDriver.Init()
 	g := &gke{
-		SSH: SSHDriver,
+		SSH: ssh.SSH{},
 	}
 
 	node.Register(DriverName, g)

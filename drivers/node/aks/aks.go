@@ -29,6 +29,7 @@ func (a *aks) String() string {
 }
 
 func (a *aks) Init() error {
+	a.SSH.Init()
 
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
@@ -69,12 +70,9 @@ func (a *aks) GetASGClusterSize() (int64, error) {
 }
 
 func init() {
-
-	SSHDriver := ssh.SSH{}
-	SSHDriver.Init()
-	g := &aks{
-		SSH: SSHDriver,
+	a := &aks{
+		SSH: ssh.SSH{},
 	}
 
-	node.Register(DriverName, g)
+	node.Register(DriverName, a)
 }
