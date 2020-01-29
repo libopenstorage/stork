@@ -759,6 +759,8 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 				logrus.Warnf("failed to run cmd : %s. on node %s err: %v", pxCrashCmd, n.Name, err)
 				return err
 			}
+			logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
+			time.Sleep(waitVolDriverToCrash)
 		} else {
 			err = d.schedOps.StopPxOnNode(n)
 			if err != nil {
@@ -774,11 +776,11 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
 				logrus.Warnf("failed to run systemctl stopcmd  on node %s err: %v", n.Name, err)
 				return err
 			}
+			logrus.Infof("Sleeping for %v for volume driver to gracefully go down.", waitVolDriverToCrash/6)
+			time.Sleep(waitVolDriverToCrash / 6)
 		}
 
 	}
-	logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
-	time.Sleep(waitVolDriverToCrash)
 	return nil
 }
 
