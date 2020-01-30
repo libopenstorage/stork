@@ -12,6 +12,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/applicationmanager"
 	"github.com/libopenstorage/stork/pkg/clusterdomains"
 	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/dataexport"
 	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
@@ -137,6 +138,10 @@ func main() {
 		cli.BoolTFlag{
 			Name:  "pvc-watcher",
 			Usage: "Start the controller to monitor PVC creation and deletions (default: true)",
+		},
+		cli.BoolTFlag{
+			Name:  "data-export-controller",
+			Usage: "Start the controller to monitor DataExport resources (default: true)",
 		},
 	}
 
@@ -361,6 +366,14 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 			log.Fatalf("Error initializing application manager: %v", err)
 		}
 	}
+
+	if c.Bool("data-export-controller") {
+		de := dataexport.New()
+		if err := de.Init(); err != nil {
+			log.Fatalf("Error initializing data-export controller: %v", err)
+		}
+	}
+
 	// The controller should be started at the end
 	err := controller.Run()
 	if err != nil {
