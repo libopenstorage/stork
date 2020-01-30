@@ -35,6 +35,7 @@ type StorkV1alpha1Interface interface {
 	ClusterDomainUpdatesGetter
 	ClusterDomainsStatusesGetter
 	ClusterPairsGetter
+	DataExportsGetter
 	GroupVolumeSnapshotsGetter
 	MigrationsGetter
 	MigrationSchedulesGetter
@@ -79,6 +80,10 @@ func (c *StorkV1alpha1Client) ClusterDomainsStatuses() ClusterDomainsStatusInter
 
 func (c *StorkV1alpha1Client) ClusterPairs(namespace string) ClusterPairInterface {
 	return newClusterPairs(c, namespace)
+}
+
+func (c *StorkV1alpha1Client) DataExports(namespace string) DataExportInterface {
+	return newDataExports(c, namespace)
 }
 
 func (c *StorkV1alpha1Client) GroupVolumeSnapshots(namespace string) GroupVolumeSnapshotInterface {

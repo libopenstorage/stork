@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/portworx/sched-ops/k8s"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 // GetPVCsForGroupSnapshot returns all PVCs in given namespace that match the given matchLabels. All PVCs need to be bound.

@@ -60,6 +60,10 @@ func (c *FakeStorkV1alpha1) ClusterPairs(namespace string) v1alpha1.ClusterPairI
 	return &FakeClusterPairs{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) DataExports(namespace string) v1alpha1.DataExportInterface {
+	return &FakeDataExports{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) GroupVolumeSnapshots(namespace string) v1alpha1.GroupVolumeSnapshotInterface {
 	return &FakeGroupVolumeSnapshots{c, namespace}
 }

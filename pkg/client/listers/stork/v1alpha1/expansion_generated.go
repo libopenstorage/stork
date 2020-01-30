@@ -74,6 +74,14 @@ type ClusterPairListerExpansion interface{}
 // ClusterPairNamespaceLister.
 type ClusterPairNamespaceListerExpansion interface{}
 
+// DataExportListerExpansion allows custom methods to be added to
+// DataExportLister.
+type DataExportListerExpansion interface{}
+
+// DataExportNamespaceListerExpansion allows custom methods to be added to
+// DataExportNamespaceLister.
+type DataExportNamespaceListerExpansion interface{}
+
 // GroupVolumeSnapshotListerExpansion allows custom methods to be added to
 // GroupVolumeSnapshotLister.
 type GroupVolumeSnapshotListerExpansion interface{}

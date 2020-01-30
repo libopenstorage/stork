@@ -69,6 +69,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().ClusterDomainsStatuses().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("clusterpairs"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().ClusterPairs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("dataexports"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().DataExports().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("groupvolumesnapshots"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Stork().V1alpha1().GroupVolumeSnapshots().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("migrations"):

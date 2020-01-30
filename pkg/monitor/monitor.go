@@ -9,7 +9,7 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storagev1beta1 "k8s.io/api/storage/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
