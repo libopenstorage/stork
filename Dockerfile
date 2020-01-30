@@ -7,10 +7,7 @@ WORKDIR /go/src/github.com/portworx/torpedo
 RUN apk update && \
     apk add git gcc  musl-dev && \
     apk add make && \
-    apk add openssh-client && \
-    go get github.com/onsi/ginkgo/ginkgo && \
-    go get github.com/onsi/gomega && \
-    go get github.com/sirupsen/logrus
+    apk add openssh-client
 
 # No need to copy *everything*. This keeps the cache useful
 COPY deployments deployments
