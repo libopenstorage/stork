@@ -69,6 +69,7 @@ type ApplicationBackupVolumeInfo struct {
 	Volume                string                      `json:"volume"`
 	BackupID              string                      `json:"backupID"`
 	DriverName            string                      `json:"driverName"`
+	Zones                 []string                    `json:"zones"`
 	Status                ApplicationBackupStatusType `json:"status"`
 	Reason                string                      `json:"reason"`
 	Options               map[string]string           `jons:"options"`

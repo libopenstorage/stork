@@ -73,6 +73,7 @@ type ApplicationRestoreVolumeInfo struct {
 	SourceVolume          string                       `json:"sourceVolume"`
 	RestoreVolume         string                       `json:"restoreVolume"`
 	DriverName            string                       `json:"driverName"`
+	Zones                 []string                     `json:"zones"`
 	Status                ApplicationRestoreStatusType `json:"status"`
 	Reason                string                       `json:"reason"`
 }
