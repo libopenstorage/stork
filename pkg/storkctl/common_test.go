@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest/fake"
-	"k8s.io/kubernetes/pkg/apis/core/v1"
+	v1 "k8s.io/kubernetes/pkg/apis/core/v1"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )

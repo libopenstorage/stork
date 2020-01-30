@@ -34,6 +34,8 @@ type ClusterDomainsStatusExpansion interface{}
 
 type ClusterPairExpansion interface{}
 
+type DataExportExpansion interface{}
+
 type GroupVolumeSnapshotExpansion interface{}
 
 type MigrationExpansion interface{}

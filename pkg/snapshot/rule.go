@@ -5,7 +5,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/portworx/sched-ops/k8s"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (

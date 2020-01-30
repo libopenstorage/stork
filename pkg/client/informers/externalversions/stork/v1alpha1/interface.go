@@ -40,6 +40,8 @@ type Interface interface {
 	ClusterDomainsStatuses() ClusterDomainsStatusInformer
 	// ClusterPairs returns a ClusterPairInformer.
 	ClusterPairs() ClusterPairInformer
+	// DataExports returns a DataExportInformer.
+	DataExports() DataExportInformer
 	// GroupVolumeSnapshots returns a GroupVolumeSnapshotInformer.
 	GroupVolumeSnapshots() GroupVolumeSnapshotInformer
 	// Migrations returns a MigrationInformer.
@@ -105,6 +107,11 @@ func (v *version) ClusterDomainsStatuses() ClusterDomainsStatusInformer {
 // ClusterPairs returns a ClusterPairInformer.
 func (v *version) ClusterPairs() ClusterPairInformer {
 	return &clusterPairInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// DataExports returns a DataExportInformer.
+func (v *version) DataExports() DataExportInformer {
+	return &dataExportInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // GroupVolumeSnapshots returns a GroupVolumeSnapshotInformer.
