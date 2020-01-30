@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"cloud.google.com/go/compute/metadata"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 )
 
 const (
@@ -33,6 +35,7 @@ const (
 	// provisioner name
 	pvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
 	pvNamePrefix              = "pvc-"
+	zoneSeperator             = "__"
 )
 
 type gcp struct {
@@ -154,6 +157,9 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
+		volumeInfo.Options = map[string]string{
+			"projectID": g.projectID,
+		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 
 		pvName, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
@@ -166,23 +172,79 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		volume := pvc.Spec.VolumeName
 		pdName := pv.Spec.GCEPersistentDisk.PDName
+		// Get the zone from the PV, fallback to the zone where stork is running
+		// if the label is empty
+		volumeInfo.Zones = g.getZones(pv.Labels[kubeletapis.LabelZoneFailureDomain])
+		if len(volumeInfo.Zones) == 0 {
+			volumeInfo.Zones = []string{g.zone}
+		}
 		volumeInfo.Volume = volume
-		snapshot := &compute.Snapshot{
-			Name:   "stork-snapshot-" + string(uuid.NewUUID()),
-			Labels: storkvolume.GetApplicationBackupLabels(backup, &pvc),
-		}
-		snapshotCall := g.service.Disks.CreateSnapshot(g.projectID, g.zone, pdName, snapshot)
+		if len(volumeInfo.Zones) > 1 {
+			snapshot := &compute.Snapshot{
+				Name:   "stork-snapshot-" + string(uuid.NewUUID()),
+				Labels: storkvolume.GetApplicationBackupLabels(backup, &pvc),
+			}
+			region, err := g.getRegion(volumeInfo.Zones[0])
+			if err != nil {
+				return nil, err
+			}
+			snapshotCall := g.service.RegionDisks.CreateSnapshot(g.projectID, region, pdName, snapshot)
 
-		_, err = snapshotCall.Do()
-		if err != nil {
-			return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
-		}
-		volumeInfo.BackupID = snapshot.Name
-		volumeInfo.Options = map[string]string{
-			"projectID": g.projectID,
+			_, err = snapshotCall.Do()
+			if err != nil {
+				return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+			}
+			volumeInfo.BackupID = snapshot.Name
+		} else {
+			snapshot := &compute.Snapshot{
+				Name:   "stork-snapshot-" + string(uuid.NewUUID()),
+				Labels: storkvolume.GetApplicationBackupLabels(backup, &pvc),
+			}
+			snapshotCall := g.service.Disks.CreateSnapshot(g.projectID, volumeInfo.Zones[0], pdName, snapshot)
+
+			_, err = snapshotCall.Do()
+			if err != nil {
+				return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+			}
+			volumeInfo.BackupID = snapshot.Name
 		}
 	}
 	return volumeInfos, nil
+}
+
+func (g *gcp) getZones(zone string) []string {
+	if g.isRegional(zone) {
+		return g.getRegionalZones(zone)
+	}
+	return []string{zone}
+}
+
+func (g *gcp) getRegionalZones(zones string) []string {
+	return strings.Split(zones, zoneSeperator)
+}
+
+func (g *gcp) isRegional(zone string) bool {
+	return strings.Contains(zone, zoneSeperator)
+}
+
+func (g *gcp) getRegion(zone string) (string, error) {
+	s := strings.Split(zone, "-")
+	if len(s) < 3 {
+		return "", fmt.Errorf("invalid zone: %v", zone)
+	}
+	return strings.Join(s[0:2], "-"), nil
+}
+
+func (g *gcp) getZoneURLs(zones []string) ([]string, error) {
+	zoneURLs := make([]string, 0)
+	for _, zone := range zones {
+		zoneInfo, err := g.service.Zones.Get(g.projectID, zone).Do()
+		if err != nil {
+			return nil, err
+		}
+		zoneURLs = append(zoneURLs, zoneInfo.SelfLink)
+	}
+	return zoneURLs, nil
 }
 
 func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
@@ -258,6 +320,7 @@ func (g *gcp) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	var err error
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, backupVolumeInfo := range volumeBackupInfos {
@@ -267,6 +330,7 @@ func (g *gcp) StartRestore(
 			SourceVolume:          backupVolumeInfo.Volume,
 			RestoreVolume:         g.generatePVName(),
 			DriverName:            driverName,
+			Zones:                 backupVolumeInfo.Zones,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 		disk := &compute.Disk{
@@ -274,9 +338,29 @@ func (g *gcp) StartRestore(
 			SourceSnapshot: g.getSnapshotResourceName(backupVolumeInfo),
 			Labels:         storkvolume.GetApplicationRestoreLabels(restore, volumeInfo),
 		}
-		_, err := g.service.Disks.Insert(g.projectID, g.zone, disk).Do()
-		if err != nil {
-			return nil, err
+		if len(backupVolumeInfo.Zones) == 0 {
+			return nil, fmt.Errorf("zones missing for backup volume %v/%v",
+				backupVolumeInfo.Namespace,
+				backupVolumeInfo.PersistentVolumeClaim,
+			)
+		} else if len(backupVolumeInfo.Zones) > 1 {
+			disk.ReplicaZones, err = g.getZoneURLs(backupVolumeInfo.Zones)
+			if err != nil {
+				return nil, err
+			}
+			region, err := g.getRegion(backupVolumeInfo.Zones[0])
+			if err != nil {
+				return nil, err
+			}
+			_, err = g.service.RegionDisks.Insert(g.projectID, region, disk).Do()
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			_, err := g.service.Disks.Insert(g.projectID, backupVolumeInfo.Zones[0], disk).Do()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return volumeInfos, nil
@@ -293,17 +377,35 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		if vInfo.DriverName != driverName {
 			continue
 		}
-		disk, err := g.service.Disks.Get(g.projectID, g.zone, vInfo.RestoreVolume).Do()
-		if err != nil {
-			return nil, err
+		var status string
+		if len(vInfo.Zones) == 0 {
+			return nil, fmt.Errorf("zones missing for restore volume %v",
+				vInfo.PersistentVolumeClaim,
+			)
+		} else if len(vInfo.Zones) > 1 {
+			region, err := g.getRegion(vInfo.Zones[0])
+			if err != nil {
+				return nil, err
+			}
+			disk, err := g.service.RegionDisks.Get(g.projectID, region, vInfo.RestoreVolume).Do()
+			if err != nil {
+				return nil, err
+			}
+			status = disk.Status
+		} else {
+			disk, err := g.service.Disks.Get(g.projectID, vInfo.Zones[0], vInfo.RestoreVolume).Do()
+			if err != nil {
+				return nil, err
+			}
+			status = disk.Status
 		}
-		switch disk.Status {
+		switch status {
 		case "CREATING", "RESTORING":
 			vInfo.Status = storkapi.ApplicationRestoreStatusInProgress
-			vInfo.Reason = fmt.Sprintf("Volume restore in progress: %v", disk.Status)
+			vInfo.Reason = fmt.Sprintf("Volume restore in progress: %v", status)
 		case "DELETING", "FAILED":
 			vInfo.Status = storkapi.ApplicationRestoreStatusFailed
-			vInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", disk.Status)
+			vInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", status)
 		case "READY":
 			vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 			vInfo.Reason = "Restore successful for volume"
