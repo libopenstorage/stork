@@ -1,4 +1,4 @@
-FROM golang:1.12.10-alpine AS build
+FROM golang:1.13.7-alpine AS build
 LABEL maintainer="harsh@portworx.com"
 
 WORKDIR /go/src/github.com/portworx/torpedo
@@ -20,6 +20,8 @@ COPY scripts scripts
 COPY tests tests
 COPY vendor vendor
 COPY Makefile Makefile
+COPY go.mod go.mod
+COPY go.sum go.sum
 
 # Why? Errors if this is removed
 COPY .git .git
