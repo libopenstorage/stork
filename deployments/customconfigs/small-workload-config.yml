@@ -1,0 +1,3 @@
+aut-postgres:
+  workload_size: 1
+  volume_size: 10Gi

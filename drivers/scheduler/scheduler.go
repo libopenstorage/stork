@@ -118,8 +118,8 @@ type Driver interface {
 	// WaitForDestroy waits for application to destroy.
 	WaitForDestroy(*Context, time.Duration) error
 
-	// DeleteTasks deletes all tasks of the application (not the applicaton)
-	DeleteTasks(*Context) error
+	// DeleteTasks deletes all tasks of the application (not the application). DeleteTasksOptions is optional.
+	DeleteTasks(*Context, *DeleteTasksOptions) error
 
 	// GetVolumeParameters Returns a maps, each item being a volume and it's options
 	GetVolumeParameters(*Context) (map[string]map[string]string, error)
@@ -192,6 +192,25 @@ type Driver interface {
 var (
 	schedulers = make(map[string]Driver)
 )
+
+// DeleteTasksOptions are options supplied to the DeleteTasks API
+type DeleteTasksOptions struct {
+	TriggerOptions
+}
+
+// TriggerOptions are common options used to check if any action is okay to be triggered/performed
+type TriggerOptions struct {
+	// TriggerCb is the callback function to invoke to check trigger condition
+	TriggerCb TriggerCallbackFunc
+	// TriggerCheckInterval is the interval at which to check the trigger conditions
+	TriggerCheckInterval time.Duration
+	// TriggerCheckTimeout is the duration at which the trigger checks should timeout. If the trigger
+	TriggerCheckTimeout time.Duration
+}
+
+// TriggerCallbackFunc is a callback function that are used by scheduler APIs to decide when to trigger/perform actions.
+// the function should return true, when it is the right time to perform the respective action
+type TriggerCallbackFunc func() (bool, error)
 
 // Register registers the given scheduler driver
 func Register(name string, d Driver) error {

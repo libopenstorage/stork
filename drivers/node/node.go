@@ -31,14 +31,16 @@ const (
 // StoragePool is the storage pool structure on the node
 type StoragePool struct {
 	*api.StoragePool
-	// InitialSize is the initial size of storage pool in bytes
-	InitialSize uint64
+	// StoragePoolAtInit in the storage pool that's captured when the test initializes. This is useful for tests that
+	// want to track changes in a pool since the test was started. For e.g tracking pool expansion changes
+	StoragePoolAtInit *api.StoragePool
 	// WorkloadSize is the size in bytes of the workload that will be launched by test on this storage pool
 	WorkloadSize uint64
 }
 
 // Node encapsulates a node in the cluster
 type Node struct {
+	api.StorageNode
 	uuid                     string
 	VolDriverNodeID          string
 	Name                     string

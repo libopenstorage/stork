@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/aututils"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	portworx "github.com/portworx/torpedo/drivers/volume/portworx"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -35,7 +36,7 @@ var ruleResizeBy50IfPvcUsageMoreThan50 = apapi.AutopilotRule{
 		Conditions: apapi.RuleConditions{
 			Expressions: []*apapi.LabelSelectorRequirement{
 				{
-					Key:      portworx.PxVolumeUsagePercentMetric,
+					Key:      aututils.PxVolumeUsagePercentMetric,
 					Operator: apapi.LabelSelectorOpGt,
 					Values:   []string{"50"},
 				},
@@ -43,9 +44,9 @@ var ruleResizeBy50IfPvcUsageMoreThan50 = apapi.AutopilotRule{
 		},
 		Actions: []*apapi.RuleAction{
 			{
-				Name: portworx.VolumeSpecAction,
+				Name: aututils.VolumeSpecAction,
 				Params: map[string]string{
-					portworx.RuleActionsScalePercentage: "50",
+					aututils.RuleActionsScalePercentage: "50",
 				},
 			},
 		},
@@ -61,7 +62,7 @@ var ruleResizeBy50IfPvcUsageMoreThan90 = apapi.AutopilotRule{
 		Conditions: apapi.RuleConditions{
 			Expressions: []*apapi.LabelSelectorRequirement{
 				{
-					Key:      portworx.PxVolumeUsagePercentMetric,
+					Key:      aututils.PxVolumeUsagePercentMetric,
 					Operator: apapi.LabelSelectorOpGt,
 					Values:   []string{"90"},
 				},
@@ -69,9 +70,9 @@ var ruleResizeBy50IfPvcUsageMoreThan90 = apapi.AutopilotRule{
 		},
 		Actions: []*apapi.RuleAction{
 			{
-				Name: portworx.VolumeSpecAction,
+				Name: aututils.VolumeSpecAction,
 				Params: map[string]string{
-					portworx.RuleActionsScalePercentage: "50",
+					aututils.RuleActionsScalePercentage: "50",
 				},
 			},
 		},
@@ -87,7 +88,7 @@ var ruleResizeBy50UntilPvcMaxSize20 = apapi.AutopilotRule{
 		Conditions: apapi.RuleConditions{
 			Expressions: []*apapi.LabelSelectorRequirement{
 				{
-					Key:      portworx.PxVolumeUsagePercentMetric,
+					Key:      aututils.PxVolumeUsagePercentMetric,
 					Operator: apapi.LabelSelectorOpGt,
 					Values:   []string{"50"},
 				},
@@ -95,10 +96,10 @@ var ruleResizeBy50UntilPvcMaxSize20 = apapi.AutopilotRule{
 		},
 		Actions: []*apapi.RuleAction{
 			{
-				Name: portworx.VolumeSpecAction,
+				Name: aututils.VolumeSpecAction,
 				Params: map[string]string{
-					portworx.RuleActionsScalePercentage: "50",
-					portworx.RuleMaxSize:                "21474836480",
+					aututils.RuleActionsScalePercentage: "50",
+					aututils.RuleMaxSize:                "21474836480",
 				},
 			},
 		},
@@ -114,7 +115,7 @@ var ruleResizeBy50IfPvcCapacityLessThan10 = apapi.AutopilotRule{
 		Conditions: apapi.RuleConditions{
 			Expressions: []*apapi.LabelSelectorRequirement{
 				{
-					Key:      portworx.PxVolumeCapacityPercentMetric,
+					Key:      aututils.PxVolumeTotalCapacityMetric,
 					Operator: apapi.LabelSelectorOpLt,
 					Values:   []string{"10"},
 				},
@@ -122,9 +123,9 @@ var ruleResizeBy50IfPvcCapacityLessThan10 = apapi.AutopilotRule{
 		},
 		Actions: []*apapi.RuleAction{
 			{
-				Name: portworx.VolumeSpecAction,
+				Name: aututils.VolumeSpecAction,
 				Params: map[string]string{
-					portworx.RuleActionsScalePercentage: "50",
+					aututils.RuleActionsScalePercentage: "50",
 				},
 			},
 		},
@@ -140,7 +141,7 @@ var ruleResizeBy300IfPvcUsageMoreThan50 = apapi.AutopilotRule{
 		Conditions: apapi.RuleConditions{
 			Expressions: []*apapi.LabelSelectorRequirement{
 				{
-					Key:      portworx.PxVolumeUsagePercentMetric,
+					Key:      aututils.PxVolumeUsagePercentMetric,
 					Operator: apapi.LabelSelectorOpGt,
 					Values:   []string{"50"},
 				},
@@ -148,9 +149,9 @@ var ruleResizeBy300IfPvcUsageMoreThan50 = apapi.AutopilotRule{
 		},
 		Actions: []*apapi.RuleAction{
 			{
-				Name: portworx.VolumeSpecAction,
+				Name: aututils.VolumeSpecAction,
 				Params: map[string]string{
-					portworx.RuleActionsScalePercentage: "300",
+					aututils.RuleActionsScalePercentage: "300",
 				},
 			},
 		},

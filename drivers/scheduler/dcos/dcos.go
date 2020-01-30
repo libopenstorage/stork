@@ -334,7 +334,11 @@ func (d *dcos) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) err
 	return nil
 }
 
-func (d *dcos) DeleteTasks(ctx *scheduler.Context) error {
+func (d *dcos) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOptions) error {
+	if opts != nil {
+		logrus.Warnf("DCOS driver doesn't yet support delete task options")
+	}
+
 	for _, spec := range ctx.App.SpecList {
 		if obj, ok := spec.(*marathon.Application); ok {
 			if err := MarathonClient().KillApplicationTasks(obj.ID); err != nil {

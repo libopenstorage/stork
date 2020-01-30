@@ -288,7 +288,7 @@ var _ = Describe("{AppTasksDown}", func() {
 			if minRunTime == 0 {
 				for _, ctx := range contexts {
 					Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
-						err = Inst().S.DeleteTasks(ctx)
+						err = Inst().S.DeleteTasks(ctx, nil)
 						Expect(err).NotTo(HaveOccurred())
 					})
 
@@ -299,7 +299,7 @@ var _ = Describe("{AppTasksDown}", func() {
 				for int(time.Since(start).Seconds()) < timeout {
 					for _, ctx := range contexts {
 						Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
-							err = Inst().S.DeleteTasks(ctx)
+							err = Inst().S.DeleteTasks(ctx, nil)
 							Expect(err).NotTo(HaveOccurred())
 						})
 

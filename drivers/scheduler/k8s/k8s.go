@@ -24,6 +24,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
+	tp_errors "github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -69,7 +70,10 @@ const (
 	//DefaultRetryInterval  Default retry interval
 	DefaultRetryInterval = 10 * time.Second
 	//DefaultTimeout default timeout
-	DefaultTimeout                       = 2 * time.Minute
+	DefaultTimeout = 2 * time.Minute
+
+	defaultTriggerCheckInterval          = 5 * time.Second
+	defaultTriggerCheckTimeout           = 5 * time.Minute
 	resizeSupportedAnnotationKey         = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey        = "torpedo.io/autopilot-enabled"
 	deploymentAppEnvEnabledAnnotationKey = "torpedo.io/appenv-enabled"
@@ -1529,33 +1533,85 @@ func (k *K8s) WaitForDestroy(ctx *scheduler.Context, timeout time.Duration) erro
 }
 
 //DeleteTasks delete the task
-func (k *K8s) DeleteTasks(ctx *scheduler.Context) error {
-	k8sOps := k8sops.Instance()
-	pods, err := k.getPodsForApp(ctx)
-	if err != nil {
-		return &scheduler.ErrFailedToDeleteTasks{
-			App:   ctx.App,
-			Cause: fmt.Sprintf("failed to get pods due to: %v", err),
-		}
-	}
-
-	if err := k8sOps.DeletePods(pods, false); err != nil {
-		return &scheduler.ErrFailedToDeleteTasks{
-			App:   ctx.App,
-			Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
-		}
-	}
-
-	// Ensure the pods are deleted and removed from the system
-	for _, pod := range pods {
-		err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
+func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOptions) error {
+	fn := "DeleteTasks"
+	deleteTasks := func() error {
+		k8sOps := k8sops.Instance()
+		pods, err := k.getPodsForApp(ctx)
 		if err != nil {
-			logrus.Errorf("k8s DeleteTasks failed to wait for pod: [%s] %s to terminate. err: %v", pod.Namespace, pod.Name, err)
-			return err
+			return &scheduler.ErrFailedToDeleteTasks{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("failed to get pods due to: %v", err),
+			}
 		}
+
+		if err := k8sOps.DeletePods(pods, false); err != nil {
+			return &scheduler.ErrFailedToDeleteTasks{
+				App:   ctx.App,
+				Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
+			}
+		}
+
+		// Ensure the pods are deleted and removed from the system
+		for _, pod := range pods {
+			err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
+			if err != nil {
+				logrus.Errorf("k8s DeleteTasks failed to wait for pod: [%s] %s to terminate. err: %v", pod.Namespace, pod.Name, err)
+				return err
+			}
+		}
+
+		return nil
 	}
 
-	return nil
+	if opts == nil || opts.TriggerCb == nil { // caller hasn't provided any trigger checks
+		return deleteTasks()
+	}
+
+	if opts.TriggerCheckTimeout == time.Duration(0) {
+		opts.TriggerCheckTimeout = defaultTriggerCheckTimeout
+	}
+
+	if opts.TriggerCheckInterval == time.Duration(0) {
+		opts.TriggerCheckInterval = defaultTriggerCheckInterval
+	}
+
+	// perform trigger checks and then perform the actual deletion
+	t := func() (interface{}, bool, error) {
+		triggered, err := opts.TriggerCb()
+		if err != nil {
+			logrus.Warnf("failed to invoke trigger callback function due to: %v", err)
+			return false, false, err
+		}
+
+		if triggered {
+			return triggered, false, nil // done
+		}
+
+		return false, true, nil // not yet triggered
+	}
+
+	_, err := task.DoRetryWithTimeout(t, opts.TriggerCheckTimeout, opts.TriggerCheckInterval)
+	if err != nil {
+		// timeout error is expected if the trigger conditions don't meet within above timeouts. For any other error,
+		// return the error
+		_, timedOut := err.(*task.ErrTimedOut)
+		if timedOut {
+			err = &tp_errors.ErrOperationNotPerformed{
+				Operation: fn,
+				Reason:    fmt.Sprintf("Trigger checks did not pass"),
+			}
+		} else {
+			err = &tp_errors.ErrOperationNotPerformed{
+				Operation: fn,
+				Reason:    fmt.Sprintf("Trigger checks could not be performed: %v", err),
+			}
+		}
+		return err
+	}
+
+	// perform the actual delete tasks logic
+	return deleteTasks()
 }
 
 //GetVolumeParameters Get the volume parameters
@@ -2847,8 +2903,10 @@ func (k *K8s) destroyBackupObjects(
 
 // getExpectedAutopilotSizeForPvc calculates exected size of PVC based on autopilot rules and workload
 func (k *K8s) getExpectedAutopilotSizeForPvc(pvc *v1.PersistentVolumeClaim, apRules *apapi.AutopilotRuleList, wSize uint64) (uint64, error) {
-	var err error
-	var expectedPVCSize uint64
+	var (
+		err             error
+		expectedPVCSize uint64
+	)
 
 	driver, err := volume.Get(k.VolDriverName)
 	if err != nil {
@@ -2861,7 +2919,10 @@ func (k *K8s) getExpectedAutopilotSizeForPvc(pvc *v1.PersistentVolumeClaim, apRu
 
 	for _, apRule := range apRules.Items {
 		if isAutopilotMatchPvcLabels(apRule, pvc) {
-			expectedPVCSize = driver.CalculateAutopilotObjectSize(apRule, uint64(pvcSize), wSize)
+			expectedPVCSize, err = driver.EstimateVolumeExpandSize(apRule, uint64(pvcSize), wSize)
+			if err != nil {
+				return 0, nil
+			}
 			break
 		}
 	}

@@ -117,10 +117,10 @@ func InitInstance() {
 	})
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
+	err = Inst().N.Init()
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().N.Init()
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
 }
 
@@ -381,11 +381,11 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 
 	if strExpansionEnabled {
 		var wSize uint64
-		var expectedStoragePoolsWorkloadSize = make(map[string]uint64)
-		logrus.Debugf("storage expansion enabled")
-		// for each replica set add the size of app workload to each storage pool where replica resides on
+		var workloadSizesByPool = make(map[string]uint64)
+		logrus.Debugf("storage expansion enabled on at least one storage pool")
+		// for each replica set add the workloadSize of app workload to each storage pool where replica resides on
 		for _, ctx := range contexts {
-			Step(fmt.Sprintf("get replica sets %s app volumes", ctx.App.Key), func() {
+			Step(fmt.Sprintf("get replica sets for app: %s's volumes", ctx.App.Key), func() {
 				appVolumes, err := Inst().S.GetVolumes(ctx)
 				expect(err).NotTo(haveOccurred())
 				expect(appVolumes).NotTo(beEmpty())
@@ -395,44 +395,47 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 						expect(err).NotTo(haveOccurred())
 						expect(replicaSets).NotTo(beEmpty())
 						for _, poolUUID := range replicaSets[0].PoolUuids {
-							wSize, err = getSpecAppWorkloadSize(ctx)
+							wSize, err = getWorkloadSizeFromAppSpec(ctx)
 							expect(err).NotTo(haveOccurred())
-							expectedStoragePoolsWorkloadSize[poolUUID] += wSize
+							workloadSizesByPool[poolUUID] += wSize
+							logrus.Debugf("pool: %s workloadSize increased by: %d total now: %d", poolUUID, wSize, workloadSizesByPool[poolUUID])
 						}
 					}
 				}
 			})
 		}
-		logrus.Debugf("storage pools workload sizes map: %v\n", expectedStoragePoolsWorkloadSize)
 
 		// update each storage pool with the app workload sizes
 		nodes := node.GetWorkerNodes()
 		expect(nodes).NotTo(beEmpty())
 		for _, n := range nodes {
-			for idx, sPool := range n.StoragePools {
-				if wkldSize, ok := expectedStoragePoolsWorkloadSize[sPool.Uuid]; ok {
-					tenPercentOfStoragePool := float64(sPool.InitialSize) / 10
-					n.StoragePools[idx].WorkloadSize = wkldSize + uint64(tenPercentOfStoragePool)
+			for id, sPool := range n.StoragePools {
+				if workloadSizeForPool, ok := workloadSizesByPool[sPool.Uuid]; ok {
+					n.StoragePools[id].WorkloadSize = workloadSizeForPool
 				}
+
+				logrus.Debugf("pool: %s InitialSize: %d WorkloadSize: %d", sPool.Uuid, sPool.StoragePoolAtInit.TotalSize, n.StoragePools[id].WorkloadSize)
 			}
 			err = node.UpdateNode(n)
 			expect(err).NotTo(haveOccurred())
 		}
 	}
+
 	err = Inst().V.ValidateStoragePools()
 	expect(err).NotTo(haveOccurred())
 
 }
 
-func getSpecAppWorkloadSize(context *scheduler.Context) (uint64, error) {
+func getWorkloadSizeFromAppSpec(context *scheduler.Context) (uint64, error) {
 	var err error
 	var wSize uint64
 	appEnvVar := Inst().S.GetSpecAppEnvVar(context, specObjAppWorkloadSizeEnvVar)
 	if appEnvVar != "" {
 		wSize, err = strconv.ParseUint(appEnvVar, 10, 64)
 		if err != nil {
-			return 0, fmt.Errorf("Can't parse value %v of environment variable. Err: %v", appEnvVar, err)
+			return 0, fmt.Errorf("can't parse value %v of environment variable. Err: %v", appEnvVar, err)
 		}
+
 		// if size less than 1024 we assume that value is in Gb
 		if wSize < 1024 {
 			return wSize * 1024 * 1024 * 1024, nil

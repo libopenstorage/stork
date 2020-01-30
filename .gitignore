@@ -2,5 +2,6 @@ bin/
 *.swp
 *.swo
 *.test
+.DS_Store
 
 .idea
