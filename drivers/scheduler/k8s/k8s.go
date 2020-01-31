@@ -693,7 +693,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 				if err != nil {
 					return nil, err
 				}
-				logrus.Infof("[%v] Created Autopilot rule: %v", app.Key, aRule)
+				logrus.Infof("[%v] Created Autopilot rule: %+v", app.Key, aRule)
 			}
 		}
 

@@ -1092,7 +1092,7 @@ func (d *portworx) CreateAutopilotRules(apRules []apapi.AutopilotRule) error {
 		if err != nil {
 			return err
 		}
-		logrus.Infof("Created Autopilot rule: %v", autopilotRule)
+		logrus.Infof("Created Autopilot rule: %+v", autopilotRule)
 	}
 	return nil
 }
