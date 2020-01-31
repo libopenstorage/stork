@@ -36,10 +36,10 @@ const (
 )
 
 var autopilotruleBasicTestCases = []apapi.AutopilotRule{
-	aututils.PvcRuleByUsageCapacity(50, 50, ""),
-	aututils.PvcRuleByUsageCapacity(90, 50, ""),
-	aututils.PvcRuleByUsageCapacity(50, 50, "21474836480"),
-	aututils.PvcRuleByUsageCapacity(50, 300, ""),
+	aututils.PVCRuleByUsageCapacity(50, 50, ""),
+	aututils.PVCRuleByUsageCapacity(90, 50, ""),
+	aututils.PVCRuleByUsageCapacity(50, 50, "21474836480"),
+	aututils.PVCRuleByUsageCapacity(50, 300, ""),
 }
 
 func TestAutoPilot(t *testing.T) {
@@ -345,7 +345,6 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandAddDisk}", testSuiteName), func() {
 // sizes of storage pools on the nodes where volumes reside
 var _ = Describe(fmt.Sprintf("{%sPoolExpandResizeDisk}", testSuiteName), func() {
 	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
-		var err error
 		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandResizeDisk", testSuiteName))
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByAvailableCapacity(70, 50, aututils.RuleScaleTypeResizeDisk),
@@ -354,7 +353,7 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandResizeDisk}", testSuiteName), func() 
 		contexts := scheduleAppsWithAutopilot(testName, apRules)
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -382,16 +381,13 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandResizeDisk}", testSuiteName), func() 
 	})
 })
 
-// This testsuite is used for performing basic scenarios with Autopilot rules where it
-// schedules apps and wait until workload is completed on the volumes and then validates
-// PVC sizes of the volumes and sizes of storage pools
 var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 
 		testName := strings.ToLower(fmt.Sprintf("%sPvcAndPoolExpand", testSuiteName))
 		pvcApRules := []apapi.AutopilotRule{
-			aututils.PvcRuleByUsageCapacity(50, 50, ""),
+			aututils.PVCRuleByUsageCapacity(50, 50, ""),
 		}
 		poolApRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByAvailableCapacity(70, 50, aututils.RuleScaleTypeResizeDisk),
@@ -464,6 +460,54 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 
 		Step("validate storage pools", func() {
 			ValidateStoragePools(contexts)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+})
+
+var _ = Describe(fmt.Sprintf("{%sPvcExpand}", testSuiteName), func() {
+	It("Starts resizing volumes, when the volume capacity is less than 5Gb", func() {
+		var contexts []*scheduler.Context
+		apRule := aututils.PVCRuleByTotalSize(5, 100, "15Gi")
+
+		testName := strings.ToLower(fmt.Sprintf("%sPvcExpand", testSuiteName))
+		apRule.Name = fmt.Sprintf("%s", apRule.Name)
+		taskName := fmt.Sprintf("%s", fmt.Sprintf("%s-%s", testName, apRule.Name))
+		labels := map[string]string{
+			"autopilot": apRule.Name,
+		}
+		coolDownPeriod := 60
+		apRule.Spec.ActionsCoolDownPeriod = int64(coolDownPeriod)
+		context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+			AppKeys:            Inst().AppList,
+			StorageProvisioner: Inst().Provisioner,
+			AutopilotRule:      apRule,
+			Labels:             labels,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(context).NotTo(BeEmpty())
+		contexts = append(contexts, context...)
+
+		Step("wait until workload completes on volume", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+				err = Inst().S.ValidateAutopilotEvents(ctx)
+				Expect(err).NotTo(HaveOccurred())
+			}
 		})
 
 		Step("destroy apps", func() {

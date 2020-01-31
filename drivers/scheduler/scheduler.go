@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Options specifies keys for a key-value pair that can be passed to scheduler methods
@@ -126,8 +127,8 @@ type Driver interface {
 	// GetVolumeParameters Returns a maps, each item being a volume and it's options
 	GetVolumeParameters(*Context) (map[string]map[string]string, error)
 
-	// InspectVolumes inspects a storage volume.
-	InspectVolumes(cc *Context, timeout, retryInterval time.Duration) error
+	// ValidateVolumes validates storage volumes in the provided context
+	ValidateVolumes(cc *Context, timeout, retryInterval time.Duration) error
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context) ([]*volume.Volume, error)
@@ -184,11 +185,17 @@ type Driver interface {
 	// AddLabelOnNode adds key value labels on the node
 	AddLabelOnNode(node.Node, string, string) error
 
-	//IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
+	// IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
 	IsAutopilotEnabledForVolume(*volume.Volume) bool
 
-	// GetSpecAppEnvVar gets app environment variable value by given key name
-	GetSpecAppEnvVar(ctx *Context, key string) string
+	// GetEvents should return all the events from the scheduler since the time torpedo started
+	GetEvents() map[string][]Event
+
+	// ValidateAutopilotEvents validates events for PVCs injected by autopilot
+	ValidateAutopilotEvents(ctx *Context) error
+
+	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
+	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)
 }
 
 var (
@@ -198,6 +205,16 @@ var (
 // DeleteTasksOptions are options supplied to the DeleteTasks API
 type DeleteTasksOptions struct {
 	TriggerOptions
+}
+
+// Event collects kubernetes events data for further validation
+type Event struct {
+	Message   string
+	EventTime v1.MicroTime
+	Count     int32
+	LastSeen  v1.Time
+	Kind      string
+	Type      string
 }
 
 // TriggerOptions are common options used to check if any action is okay to be triggered/performed

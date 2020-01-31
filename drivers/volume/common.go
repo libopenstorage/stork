@@ -47,7 +47,7 @@ func (d *DefaultDriver) CleanupVolume(name string) error {
 
 // GetStorageDevices returns the list of storage devices used by the given node.
 func (d *DefaultDriver) GetStorageDevices(n node.Node) ([]string, error) {
-	//TODO: Implement
+	// TODO: Implement
 	devPaths := []string{}
 	return devPaths, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -294,7 +294,7 @@ func (d *DefaultDriver) IsStorageExpansionEnabled() (bool, error) {
 
 }
 
-//CalculateAutopilotObjectSize calculates expected size based on autopilot rule, initial and workload sizes
+// CalculateAutopilotObjectSize calculates expected size based on autopilot rule, initial and workload sizes
 func (d *DefaultDriver) CalculateAutopilotObjectSize(apRule apapi.AutopilotRule, initSize uint64, workloadSize uint64) uint64 {
 	return 0
 }
@@ -307,10 +307,10 @@ func (d *DefaultDriver) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool 
 	}
 }
 
-// EstimateVolumeExpandSize calculates the expected size of a volume based on autopilot rule, initial and workload sizes
-func (d *DefaultDriver) EstimateVolumeExpandSize(apRule apapi.AutopilotRule, initialSize, workloadSize uint64) (uint64, error) {
-	return 0, &errors.ErrNotSupported{
+// EstimateVolumeExpand calculates the expected size of a volume based on autopilot rule, initial and workload sizes
+func (d *DefaultDriver) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize, workloadSize uint64) (uint64, int, error) {
+	return 0, 0, &errors.ErrNotSupported{
 		Type:      "Function",
-		Operation: "EstimateVolumeExpandSize()",
+		Operation: "EstimateVolumeExpand()",
 	}
 }

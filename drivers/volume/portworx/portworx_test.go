@@ -109,3 +109,64 @@ func getTestNode(poolSize, totalDisks uint64, medium api.StorageMedium) node.Nod
 		StorageNode: api.StorageNode{Disks: disks},
 	}
 }
+
+func TestEstimatedVolumeSize(t *testing.T) {
+	driver := portworx{}
+	testCases := []struct {
+		rule                   apapi.AutopilotRule
+		initialSize            uint64
+		workloadSize           uint64
+		expectedCalculatedSize uint64
+		expectedResizeCount    int
+		errorExpected          bool
+	}{
+		{
+			rule:                   aututils.PVCRuleByTotalSize(5, 100, "10Gi"),
+			initialSize:            5 * units.GiB,
+			workloadSize:           10 * units.GiB,
+			expectedCalculatedSize: 10 * units.GiB,
+			expectedResizeCount:    1,
+			errorExpected:          false,
+		},
+		{
+			rule:                   aututils.PVCRuleByTotalSize(5, 100, "5Gi"),
+			initialSize:            5 * units.GiB,
+			workloadSize:           10 * units.GiB,
+			expectedCalculatedSize: 5 * units.GiB,
+			expectedResizeCount:    0,
+			errorExpected:          false,
+		},
+		{
+			rule:                   aututils.PVCRuleByTotalSize(5, 100, "12Gi"),
+			initialSize:            5 * units.GiB,
+			workloadSize:           10 * units.GiB,
+			expectedCalculatedSize: 12 * units.GiB,
+			expectedResizeCount:    2,
+			errorExpected:          false,
+		},
+		{
+			rule:                   aututils.PVCRuleByUsageCapacity(50, 100, ""),
+			initialSize:            10 * units.GiB,
+			workloadSize:           10 * units.GiB,
+			expectedCalculatedSize: 40 * units.GiB,
+			expectedResizeCount:    2,
+			errorExpected:          false,
+		},
+		{
+			rule:                   aututils.PVCRuleByUsageCapacity(50, 100, "12Gi"),
+			initialSize:            10 * units.GiB,
+			workloadSize:           10 * units.GiB,
+			expectedCalculatedSize: 12 * units.GiB,
+			expectedResizeCount:    1,
+			errorExpected:          false,
+		},
+	}
+	for _, tc := range testCases {
+		size, resizeCount, err := driver.EstimateVolumeExpand(tc.rule, tc.initialSize, tc.workloadSize)
+		msg := fmt.Sprintf("Expected: %v, got: %v", tc.expectedCalculatedSize, size)
+		require.NoError(t, err)
+		require.Equal(t, tc.expectedCalculatedSize, size, msg)
+		msg = fmt.Sprintf("Expected: %v, got: %v", tc.expectedResizeCount, resizeCount)
+		require.Equal(t, tc.expectedResizeCount, resizeCount)
+	}
+}
