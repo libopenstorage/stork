@@ -72,7 +72,7 @@ func PvcRuleByUsageCapacity(usage, scalePercentage int, maxSize string) apapi.Au
 }
 
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
-func PoolRuleByTotalSize(total, scalePercentage int, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
+func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
 	return apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: fmt.Sprintf("pool-%s-total-%d", expandType, total),
@@ -106,7 +106,7 @@ func PoolRuleByTotalSize(total, scalePercentage int, expandType string, labelSel
 }
 
 // PoolRuleByAvailableCapacity is a helper method to get the pool expand autopilot spec object using configuration params
-func PoolRuleByAvailableCapacity(usage, scalePercentage int, expandType string) apapi.AutopilotRule {
+func PoolRuleByAvailableCapacity(usage, scalePercentage uint64, expandType string) apapi.AutopilotRule {
 	return apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: fmt.Sprintf("pool-%s-available-%d", expandType, usage),

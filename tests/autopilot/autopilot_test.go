@@ -6,6 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/sched"
+	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	appsapi "k8s.io/api/apps/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -13,14 +19,19 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aututils"
+	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
 )
 
-var (
+const (
 	testSuiteName            = "AUT"
 	workloadTimeout          = 5 * time.Hour
 	retryInterval            = 30 * time.Second
 	unscheduledResizeTimeout = 10 * time.Minute
+	triggerCheckInterval     = 2 * time.Second
+	triggerCheckTimeout      = 30 * time.Minute
+	autDeploymentName        = "autopilot"
+	autDeploymentNamespace   = "kube-system"
 )
 
 var autopilotruleBasicTestCases = []apapi.AutopilotRule{
@@ -197,10 +208,71 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 	It("has to start IO workloads, create rules that resize pools based on capacity, restart autopilot and validate pools have been resized once", func() {
 		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilot", testSuiteName))
 
-		// TODO get pools, create a rule per pool so that all pools get expanded
-		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByTotalSize(31, 10, aututils.RuleScaleTypeAddDisk, nil),
+		// find the smallest pool and create a rule with size cap above that
+		var smallestPoolSize uint64
+		for _, node := range node.GetWorkerNodes() {
+			for _, p := range node.StoragePools {
+				if smallestPoolSize == 0 {
+					smallestPoolSize = p.TotalSize
+				} else {
+					if p.TotalSize < smallestPoolSize {
+						smallestPoolSize = p.TotalSize
+					}
+				}
+			}
 		}
+
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByTotalSize((smallestPoolSize/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, nil),
+		}
+
+		// setup task to delete autopilot pods as soon as it starts doing expansions
+		eventCheck := func() (bool, error) {
+			for _, apRule := range apRules {
+				ruleEvents, err := k8s.Instance().ListEvents("", meta_v1.ListOptions{
+					FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, ruleEvent := range ruleEvents.Items {
+					if strings.Contains(ruleEvent.Message, string(apapi.RuleStateActiveActionsInProgress)) {
+						return true, nil
+					}
+				}
+			}
+
+			return false, nil
+		}
+
+		deleteOpts := &scheduler.DeleteTasksOptions{
+			TriggerOptions: scheduler.TriggerOptions{
+				TriggerCb:            eventCheck,
+				TriggerCheckInterval: triggerCheckInterval,
+				TriggerCheckTimeout:  triggerCheckTimeout,
+			},
+		}
+
+		t := func(interval sched.Interval) {
+			err := Inst().S.DeleteTasks(&scheduler.Context{
+				App: &spec.AppSpec{
+					SpecList: []interface{}{
+						&appsapi.Deployment{
+							ObjectMeta: meta_v1.ObjectMeta{
+								Name:      autDeploymentName,
+								Namespace: autDeploymentNamespace,
+							},
+						},
+					},
+				},
+			}, deleteOpts)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		id, err := sched.Instance().Schedule(t, sched.Periodic(time.Second), time.Now(), true)
+		Expect(err).NotTo(HaveOccurred())
+
+		defer sched.Instance().Cancel(id)
+
 		contexts := scheduleAppsWithAutopilot(testName, apRules)
 
 		// schedule deletion of autopilot once the pool expansion starts

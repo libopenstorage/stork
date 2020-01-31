@@ -287,6 +287,8 @@ github.com/leanovate/gopter v0.2.4/go.mod h1:gNcbPWNEWRe4lm+bycKqxUYoH5uoVje5SkO
 github.com/lib/pq v1.0.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
 github.com/libopenstorage/autopilot-api v0.6.0 h1:xPB47jeWA7j0kyzlnR5vKBQCFVxyafULpQiSKn08ceQ=
 github.com/libopenstorage/autopilot-api v0.6.0/go.mod h1:6JLrPbR3ZJQFbUY/+QJMl/aF00YdIrLf8/GWAplgvJs=
+github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283 h1:USwWEQGeaxMJATgZ1DkBhMKSFLun09Q5EhQmtMlzy/Q=
+github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283/go.mod h1:6JLrPbR3ZJQFbUY/+QJMl/aF00YdIrLf8/GWAplgvJs=
 github.com/libopenstorage/cloudops v0.0.0-20190814221430-32b6af4bb132 h1:uLspFdYgbXX3UjjKWfklmZAUOm0azPgVXjX1xfO0uAg=
 github.com/libopenstorage/cloudops v0.0.0-20190814221430-32b6af4bb132/go.mod h1:quSDXGC3Fhc+pBwMRIi1Gk+kaSfBDZo5rRsftapTzGE=
 github.com/libopenstorage/cloudops v0.0.0-20200114171448-10fa10d97720 h1:Rjx1Xvg/VzRTldQdzQ5VGThMwV0q3tLmjFqenMHEk4E=

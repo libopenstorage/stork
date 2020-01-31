@@ -35,7 +35,7 @@ require (
 	github.com/json-iterator/go v1.1.7 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
-	github.com/libopenstorage/autopilot-api v0.6.0
+	github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
 	github.com/libopenstorage/cloudops v0.0.0-20200114171448-10fa10d97720
 	github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952 // indirect
 	github.com/libopenstorage/openstorage v7.0.1-0.20191218211301-d03367435351+incompatible

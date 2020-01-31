@@ -184,7 +184,7 @@ github.com/konsorten/go-windows-terminal-sequences
 # github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.1.1-0.20190919185747-9394ee8dd536+incompatible
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/client
-# github.com/libopenstorage/autopilot-api v0.6.0
+# github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
 github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned
 github.com/libopenstorage/autopilot-api/pkg/apis/autopilot
@@ -204,6 +204,7 @@ github.com/libopenstorage/openstorage/api/client
 github.com/libopenstorage/openstorage/api/client/cluster
 github.com/libopenstorage/openstorage/api/spec
 github.com/libopenstorage/openstorage/cluster
+github.com/libopenstorage/openstorage/pkg/sched
 github.com/libopenstorage/openstorage/pkg/auth
 github.com/libopenstorage/openstorage/pkg/parser
 github.com/libopenstorage/openstorage/objectstore
@@ -628,7 +629,7 @@ k8s.io/kube-openapi/pkg/common
 # k8s.io/utils v0.0.0-20191010214722-8d271d903fe4
 k8s.io/utils/integer
 # sigs.k8s.io/controller-runtime v0.2.2
-sigs.k8s.io/controller-runtime/pkg/runtime/scheme
 sigs.k8s.io/controller-runtime/pkg/scheme
+sigs.k8s.io/controller-runtime/pkg/runtime/scheme
 # sigs.k8s.io/yaml v1.1.0
 sigs.k8s.io/yaml

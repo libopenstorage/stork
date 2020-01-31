@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
@@ -625,6 +626,8 @@ func ParseFlags() {
 	if err != nil {
 		logrus.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
 	}
+
+	sched.Init(time.Second)
 
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
 		logrus.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)

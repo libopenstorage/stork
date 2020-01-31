@@ -979,12 +979,11 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 }
 
 func (d *portworx) ValidateStoragePools() error {
-	// check if the sizes of pools match the expected sizes after storage expand
-	var listApRules *apapi.AutopilotRuleList
-	var err error
-	if listApRules, err = d.schedOps.ListAutopilotRules(); err != nil {
+	listApRules, err := d.schedOps.ListAutopilotRules()
+	if err != nil {
 		return err
 	}
+
 	if len(listApRules.Items) != 0 {
 		expectedPoolSizes, err := d.getExpectedPoolSizes(listApRules)
 		if err != nil {
@@ -999,15 +998,23 @@ func (d *portworx) ValidateStoragePools() error {
 			}
 
 			for _, n := range node.GetWorkerNodes() {
-				for _, sPool := range n.StoragePools {
-					ePoolSize := expectedPoolSizes[sPool.Uuid]
-					if ePoolSize != sPool.TotalSize {
+				for _, pool := range n.StoragePools {
+					expectedSize := expectedPoolSizes[pool.Uuid]
+					if expectedSize != pool.TotalSize {
+						if pool.TotalSize > expectedSize {
+							// no need to retry with this state as pool is already at larger size than expected
+							err := fmt.Errorf("node: %s pool: %s was expanded to size: %d larger than expected: %d",
+								n.Name, pool.Uuid, pool.TotalSize, expectedSize)
+							logrus.Errorf(err.Error())
+							return "", false, err
+						}
+
 						logrus.Infof("node: %s, pool: %s, size is not as expected. Expected: %v, Actual: %v",
-							n.Name, sPool.Uuid, ePoolSize, sPool.TotalSize)
+							n.Name, pool.Uuid, expectedSize, pool.TotalSize)
 						allDone = false
 					} else {
 						logrus.Infof("node: %s, pool: %s, size is as expected. Expected: %v",
-							n.Name, sPool.Uuid, ePoolSize)
+							n.Name, pool.Uuid, expectedSize)
 					}
 				}
 			}
