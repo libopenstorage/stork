@@ -14,6 +14,7 @@ TAGS := daemon
 endif
 
 ifndef PKGS
+# shell does not honor export command above, so we need to explicitly pass GOFLAGS here
 PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/tests')
 endif
 
