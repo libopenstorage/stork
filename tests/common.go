@@ -451,7 +451,7 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
 			for _, ctx := range contexts {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
-				namespaceDescription, err := Inst().S.Describe(ctx);
+				namespaceDescription, err := Inst().S.Describe(ctx)
 				if err != nil {
 					logrus.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
 				}
