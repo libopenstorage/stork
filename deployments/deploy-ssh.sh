@@ -100,7 +100,7 @@ fi
 
 if [ -z "$TEST_SUITE" ]; then
     TEST_SUITE='"bin/asg.test",
-            "bin/autopilot-capacity.test",
+            "bin/autopilot.test",
             "bin/basic.test",
             "bin/reboot.test",
             "bin/upgrade.test",
