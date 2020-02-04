@@ -45,36 +45,38 @@ var _ = Describe("{RebootOneNode}", func() {
 			// Reboot node and check driver status
 			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
 				for _, n := range nodesToReboot {
-					err = Inst().N.RebootNode(n, node.RebootNodeOpts{
-						Force: true,
-						ConnectionOpts: node.ConnectionOpts{
-							Timeout:         1 * time.Minute,
-							TimeBeforeRetry: 5 * time.Second,
-						},
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					Step("wait for node to go down", func() {
-						time.Sleep(20 * time.Second)
-					})
-
-					Step("wait for node to be back up", func() {
-						err = Inst().N.TestConnection(n, node.ConnectionOpts{
-							Timeout:         15 * time.Minute,
-							TimeBeforeRetry: 10 * time.Second,
+					if n.IsStorageDriverInstalled {
+						err = Inst().N.RebootNode(n, node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+							},
 						})
 						Expect(err).NotTo(HaveOccurred())
-					})
 
-					Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
-						Inst().S.String(), Inst().V.String()), func() {
+						Step("wait for node to go down", func() {
+							time.Sleep(20 * time.Second)
+						})
 
-						err = Inst().S.IsNodeReady(n)
-						Expect(err).NotTo(HaveOccurred())
+						Step("wait for node to be back up", func() {
+							err = Inst().N.TestConnection(n, node.ConnectionOpts{
+								Timeout:         15 * time.Minute,
+								TimeBeforeRetry: 10 * time.Second,
+							})
+							Expect(err).NotTo(HaveOccurred())
+						})
 
-						err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-						Expect(err).NotTo(HaveOccurred())
-					})
+						Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+							Inst().S.String(), Inst().V.String()), func() {
+
+							err = Inst().S.IsNodeReady(n)
+							Expect(err).NotTo(HaveOccurred())
+
+							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+							Expect(err).NotTo(HaveOccurred())
+						})
+					}
 				}
 			})
 		})
