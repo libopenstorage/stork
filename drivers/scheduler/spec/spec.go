@@ -4,7 +4,7 @@ import "fmt"
 
 // Parser provides operations for parsing application specs
 type Parser interface {
-	ParseSpecs(specDir string) ([]interface{}, error)
+	ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error)
 }
 
 // AppSpec defines a k8s application specification

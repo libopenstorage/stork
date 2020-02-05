@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	volumedriver "github.com/portworx/torpedo/drivers/volume"
 	"github.com/sirupsen/logrus"
 	ssh_pkg "golang.org/x/crypto/ssh"
 	appsv1_api "k8s.io/api/apps/v1"
@@ -118,7 +119,7 @@ func (s *SSH) initExecPod() error {
 	k8sops := k8s.Instance()
 	if ds, err = k8sops.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
 		s, err := scheduler.Get(k8s_driver.SchedName)
-		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), s)
+		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), s)
 		if err != nil {
 			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
 		}

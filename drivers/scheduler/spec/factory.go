@@ -56,7 +56,7 @@ func (f *Factory) GetAll() []*AppSpec {
 }
 
 // NewFactory creates a new spec factory
-func NewFactory(specDir string, parser Parser) (*Factory, error) {
+func NewFactory(specDir, storageProvisioner string, parser Parser) (*Factory, error) {
 	f := &Factory{
 		specDir:    specDir,
 		specParser: parser,
@@ -69,12 +69,13 @@ func NewFactory(specDir string, parser Parser) (*Factory, error) {
 
 	for _, file := range appDirList {
 		if file.IsDir() {
+
 			specID := file.Name()
 
 			specToParse := path.Join(f.specDir, specID)
-			logrus.Infof("Parsing: %v...", specToParse)
+			logrus.Infof("Parsing: %v...", path.Join(f.specDir, specID))
 
-			specs, err := f.specParser.ParseSpecs(specToParse)
+			specs, err := f.specParser.ParseSpecs(specToParse, storageProvisioner)
 			if err != nil {
 				return nil, err
 			}

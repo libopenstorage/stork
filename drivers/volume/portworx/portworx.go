@@ -38,15 +38,32 @@ import (
 
 const (
 	//PortworxStorage portworx storage name
-	portworxStorage torpedovolume.StorageProvisionerType = "portworx"
-	//CsiStorage csi storage name
-	csiStorage torpedovolume.StorageProvisionerType = "csi"
+	PortworxStorage torpedovolume.StorageProvisionerType = "portworx"
+	//PortworxCsi csi storage name
+	PortworxCsi torpedovolume.StorageProvisionerType = "csi"
+	// PxPoolAvailableCapacityMetric is metric for pool available capacity
+	PxPoolAvailableCapacityMetric = "100 * ( px_pool_stats_available_bytes/ px_pool_stats_total_bytes)"
+	// PxPoolTotalCapacityMetric is metric for pool total capacity
+	PxPoolTotalCapacityMetric = "px_pool_stats_total_bytes/(1024*1024*1024)"
+	// PxVolumeUsagePercentMetric is metric for volume usage percentage
+	PxVolumeUsagePercentMetric = "100 * (px_volume_usage_bytes / px_volume_capacity_bytes)"
+	// PxVolumeCapacityPercentMetric is metric for volume capacity percentage
+	PxVolumeCapacityPercentMetric = "px_volume_capacity_bytes / 1000000000"
+	// VolumeSpecAction is name for volume spec action
+	VolumeSpecAction = "openstorage.io.action.volume/resize"
+	// StorageSpecAction is name for storage spec action
+	StorageSpecAction = "openstorage.io.action.storagepool/expand"
+	// RuleActionsScalePercentage is name for scale percentage rule action
+	RuleActionsScalePercentage = "scalepercentage"
+	// RuleScaleType is name for scale type
+	RuleScaleType = "scaletype"
+	// RuleScaleTypeAddDisk is name for add disk scale type
+	RuleScaleTypeAddDisk = "add-disk"
+	// RuleScaleTypeResizeDisk is name for resize disk scale type
+	RuleScaleTypeResizeDisk = "resize-disk"
+	// RuleMaxSize is name for rule max size
+	RuleMaxSize = "maxsize"
 )
-
-var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	portworxStorage: "kubernetes.io/portworx-volume",
-	csiStorage:      "pxd.portworx.com",
-}
 
 const (
 	// DriverName is the name of the portworx driver implementation
@@ -90,6 +107,12 @@ const (
 	secretName      = "openstorage.io/auth-secret-name"
 	secretNamespace = "openstorage.io/auth-secret-namespace"
 )
+
+// Provisioners types of supported provisioners
+var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
+	PortworxStorage: "kubernetes.io/portworx-volume",
+	PortworxCsi:     "pxd.portworx.com",
+}
 
 var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io"}
 
@@ -153,7 +176,7 @@ func (d *portworx) String() string {
 }
 
 func (d *portworx) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
-	logrus.Infof("Using the Portworx volume driver under scheduler: %v", sched)
+	logrus.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
 
 	d.token = token
@@ -202,9 +225,11 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 	if storageProvisioner != "" {
 		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
 			torpedovolume.StorageProvisioner = p
+		} else {
+			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, storageProvisioner)
 		}
 	} else {
-		torpedovolume.StorageProvisioner = provisioners[portworxStorage]
+		torpedovolume.StorageProvisioner = torpedovolume.DefaultStorageProvisioner
 	}
 	return nil
 }

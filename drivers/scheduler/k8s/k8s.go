@@ -147,7 +147,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 		}
 	}
 
-	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, k)
+	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, k)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (k *K8s) addNewNode(newNode v1.Node) error {
 func (k *K8s) RescanSpecs(specDir string) error {
 	var err error
 	logrus.Infof("Rescanning specs for %v", specDir)
-	k.SpecFactory, err = spec.NewFactory(specDir, k)
+	k.SpecFactory, err = spec.NewFactory(specDir, volume.GetStorageProvisioner(), k)
 	if err != nil {
 		return err
 	}
@@ -197,11 +197,17 @@ func (k *K8s) RefreshNodeRegistry() error {
 }
 
 //ParseSpecs parses the application spec file
-func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
+func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
 	fileList := make([]string, 0)
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
 		if !f.IsDir() {
-			fileList = append(fileList, path)
+			if !isValidProvider(path) {
+				fileList = append(fileList, path)
+			} else { //specs from cloud provider directory
+				if strings.Contains(path, "/"+storageProvisioner+"/") {
+					fileList = append(fileList, path)
+				}
+			}
 		}
 
 		return nil
@@ -264,6 +270,15 @@ func (k *K8s) ParseSpecs(specDir string) ([]interface{}, error) {
 	}
 
 	return specs, nil
+}
+
+func isValidProvider(specPath string) bool {
+	for _, driver := range volume.GetVolumeDrivers() {
+		if strings.Contains(specPath, "/"+driver+"/") { // Check for directories for cloud providers, ignore files
+			return true
+		}
+	}
+	return false
 }
 
 func decodeSpec(specContents []byte) (runtime.Object, error) {

@@ -158,6 +158,11 @@ type Driver interface {
 // StorageProvisionerType provisioner to be used for torpedo volumes
 type StorageProvisionerType string
 
+const (
+	//DefaultStorageProvisioner default storage provisioner name
+	DefaultStorageProvisioner StorageProvisionerType = "portworx"
+)
+
 var (
 	volDrivers = make(map[string]Driver)
 	// StorageProvisioner to be used to store name of the storage provisioner
@@ -191,6 +196,15 @@ func Get(name string) (Driver, error) {
 // GetStorageProvisioner storage provsioner name to be used with Torpedo
 func GetStorageProvisioner() string {
 	return string(StorageProvisioner)
+}
+
+// GetVolumeDrivers returns list of supported volume drivers
+func GetVolumeDrivers() []string {
+	var voldrivers []string
+	for v := range volDrivers {
+		voldrivers = append(voldrivers, v)
+	}
+	return voldrivers
 }
 
 func (v *Volume) String() string {

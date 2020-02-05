@@ -48,7 +48,7 @@ func (d *dcos) Init(schedOpts scheduler.InitOptions) error {
 		}
 	}
 
-	d.specFactory, err = spec.NewFactory(schedOpts.SpecDir, d)
+	d.specFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, d)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func (d *dcos) String() string {
 	return SchedName
 }
 
-func (d *dcos) ParseSpecs(specDir string) ([]interface{}, error) {
+func (d *dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
 	fileList := []string{}
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
 		if !f.IsDir() {

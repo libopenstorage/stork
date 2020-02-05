@@ -37,6 +37,8 @@ import (
 
 	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	// import gce driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/gce"
 	"github.com/portworx/torpedo/pkg/log"
 
 	yaml "gopkg.in/yaml.v2"

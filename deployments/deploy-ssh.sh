@@ -53,6 +53,10 @@ if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
 
+if [ -z "${STORAGE_DRIVER}" ]; then
+    STORAGE_DRIVER="pxd"
+fi
+
 CONFIGMAP=""
 if [ -n "${CONFIG_MAP}" ]; then
     CONFIGMAP="${CONFIG_MAP}"
@@ -306,6 +310,7 @@ spec:
             "--chaos-level", "$CHAOS_LEVEL",
             "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
             "--provisioner", "$PROVISIONER",
+            "--storage-driver", "$STORAGE_DRIVER",
             "--config-map", "$CONFIGMAP",
             "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
