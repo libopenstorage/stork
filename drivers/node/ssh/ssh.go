@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -52,6 +53,11 @@ type SSH struct {
 	sshConfig *ssh_pkg.ClientConfig
 	// TODO keyPath-based ssh
 }
+
+var (
+	k8sApps = apps.Instance()
+	k8sCore = core.Instance()
+)
 
 func (s *SSH) String() string {
 	return DriverName
@@ -116,8 +122,7 @@ func (s *SSH) Init() error {
 func (s *SSH) initExecPod() error {
 	var ds *appsv1_api.DaemonSet
 	var err error
-	k8sops := k8s.Instance()
-	if ds, err = k8sops.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
+	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
 		s, err := scheduler.Get(k8s_driver.SchedName)
 		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), s)
 		if err != nil {
@@ -127,12 +132,12 @@ func (s *SSH) initExecPod() error {
 		if err != nil {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
-		ds, err = k8sops.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet))
+		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet))
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
 		}
 	}
-	err = k8sops.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
+	err = k8sApps.ValidateDaemonSet(ds.Name, ds.Namespace, defaultTimeout)
 	if err != nil {
 		return fmt.Errorf("Error while validating debug daemonset. Err: %s", err)
 	}
@@ -384,14 +389,14 @@ func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignore
 func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
 	cmds := []string{"nsenter", "--mount=/hostproc/1/ns/mnt", "/bin/bash", "-c", cmd}
 
-	allPodsForNode, err := k8s.Instance().GetPodsByNode(n.Name, execPodDefaultNamespace)
+	allPodsForNode, err := k8sCore.GetPodsByNode(n.Name, execPodDefaultNamespace)
 	if err != nil {
 		logrus.Errorf("failed to get pods in node: %s err: %v", n.Name, err)
 		return "", err
 	}
 	var debugPod *v1.Pod
 	for _, pod := range allPodsForNode.Items {
-		if pod.Labels["name"] == execPodDaemonSetLabel && k8s.Instance().IsPodReady(pod) {
+		if pod.Labels["name"] == execPodDaemonSetLabel && k8sCore.IsPodReady(pod) {
 			debugPod = &pod
 			break
 		}
@@ -405,7 +410,7 @@ func (s *SSH) doCmdUsingPod(n node.Node, options node.ConnectionOpts, cmd string
 	}
 
 	t := func() (interface{}, bool, error) {
-		output, err := k8s.Instance().RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
+		output, err := k8sCore.RunCommandInPod(cmds, debugPod.Name, "", debugPod.Namespace)
 		if ignoreErr == false && err != nil {
 			return nil, true, &node.ErrFailedToRunCommand{
 				Node:  n,

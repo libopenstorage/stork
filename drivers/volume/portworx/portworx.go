@@ -21,7 +21,7 @@ import (
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
 	"github.com/pborman/uuid"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
@@ -115,6 +115,7 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 }
 
 var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io"}
+var k8sCore = core.Instance()
 
 type portworx struct {
 	legacyClusterManager cluster.Cluster
@@ -1584,7 +1585,7 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 
 func (d *portworx) DecommissionNode(n *node.Node) error {
 
-	if err := k8s.Instance().AddLabelOnNode(n.Name, schedops.PXEnabledLabelKey, "remove"); err != nil {
+	if err := k8sCore.AddLabelOnNode(n.Name, schedops.PXEnabledLabelKey, "remove"); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
@@ -1639,19 +1640,19 @@ func (d *portworx) RejoinNode(n *node.Node) error {
 			Cause: err.Error(),
 		}
 	}
-	if err := k8s.Instance().RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
+	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXServiceLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
-	if err := k8s.Instance().RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
+	if err := k8sCore.RemoveLabelOnNode(n.Name, schedops.PXEnabledLabelKey); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to set label on node: %v. Err: %v", n.Name, err),
 		}
 	}
-	if err := k8s.Instance().UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
+	if err := k8sCore.UnCordonNode(n.Name, defaultTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToRejoinNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to uncordon node: %v. Err: %v", n.Name, err),
@@ -2180,7 +2181,7 @@ func doesConditionMatch(metricValue float64, conditionExpression *apapi.LabelSel
 
 // getRestPort gets the service port for rest api, required when using service endpoint
 func getRestPort() (int32, error) {
-	svc, err := k8s.Instance().GetService(schedops.PXServiceName, schedops.PXNamespace)
+	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
 	if err != nil {
 		return 0, err
 	}
@@ -2194,7 +2195,7 @@ func getRestPort() (int32, error) {
 
 // getRestContainerPort gets the rest api container port exposed in the node, required when using node ip
 func getRestContainerPort() (int32, error) {
-	svc, err := k8s.Instance().GetService(schedops.PXServiceName, schedops.PXNamespace)
+	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
 	if err != nil {
 		return 0, err
 	}
@@ -2208,7 +2209,7 @@ func getRestContainerPort() (int32, error) {
 
 // getSDKPort gets sdk service port, required when using service endpoint
 func getSDKPort() (int32, error) {
-	svc, err := k8s.Instance().GetService(schedops.PXServiceName, schedops.PXNamespace)
+	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
 	if err != nil {
 		return 0, err
 	}
@@ -2222,7 +2223,7 @@ func getSDKPort() (int32, error) {
 
 // getSDKContainerPort gets the sdk container port in the node, required when using node ip
 func getSDKContainerPort() (int32, error) {
-	svc, err := k8s.Instance().GetService(schedops.PXServiceName, schedops.PXNamespace)
+	svc, err := k8sCore.GetService(schedops.PXServiceName, schedops.PXNamespace)
 	if err != nil {
 		return 0, err
 	}

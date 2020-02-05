@@ -1,7 +1,7 @@
 package openshift
 
 import (
-	k8s_ops "github.com/portworx/sched-ops/k8s"
+	opnshift "github.com/portworx/sched-ops/k8s/openshift"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -18,6 +18,8 @@ const (
 type openshift struct {
 	kube.K8s
 }
+
+var k8sOpenShift = opnshift.Instance()
 
 func (k *openshift) StopSchedOnNode(n node.Node) error {
 	driver, _ := node.Get(k.K8s.NodeDriverName)
@@ -105,7 +107,7 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 
 func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 	// Get privileged context
-	context, err := k8s_ops.Instance().GetSecurityContextConstraints("privileged")
+	context, err := k8sOpenShift.GetSecurityContextConstraints("privileged")
 	if err != nil {
 		return err
 	}
@@ -114,7 +116,7 @@ func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 	context.Users = append(context.Users, "system:serviceaccount:"+namespace+":default")
 
 	// Update context
-	_, err = k8s_ops.Instance().UpdateSecurityContextConstraints(context)
+	_, err = k8sOpenShift.UpdateSecurityContextConstraints(context)
 	if err != nil {
 		return err
 	}

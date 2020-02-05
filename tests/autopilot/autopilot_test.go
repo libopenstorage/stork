@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/pkg/sched"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -229,7 +229,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 		// setup task to delete autopilot pods as soon as it starts doing expansions
 		eventCheck := func() (bool, error) {
 			for _, apRule := range apRules {
-				ruleEvents, err := k8s.Instance().ListEvents("", meta_v1.ListOptions{
+				ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
 					FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
 				})
 				Expect(err).NotTo(HaveOccurred())
