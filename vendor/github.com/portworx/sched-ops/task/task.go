@@ -9,8 +9,8 @@ import (
 
 //TODO: export the type: type Task func() (string, error)
 
-// Is this type used anywhere? If not we can get rid off it in favor context.DeadlineExceeded
 // ErrTimedOut is returned when an operation times out
+// Is this type used anywhere? If not we can get rid off it in favor context.DeadlineExceeded
 type ErrTimedOut struct {
 	// Reason is the reason for the timeout
 	Reason string
@@ -25,9 +25,9 @@ func (e *ErrTimedOut) Error() string {
 	return errString
 }
 
+// DoRetryWithTimeout performs given task with given timeout and timeBeforeRetry
 // TODO(stgleb): In future I would like to add context as a first param to this function
 // so calling code can cancel task.
-// DoRetryWithTimeout performs given task with given timeout and timeBeforeRetry
 func DoRetryWithTimeout(t func() (interface{}, bool, error), timeout, timeBeforeRetry time.Duration) (interface{}, error) {
 	// Use context.Context as a standard go way of timeout and cancellation propagation amount goroutines.
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
