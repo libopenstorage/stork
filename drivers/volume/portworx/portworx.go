@@ -229,7 +229,7 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, storageProvisioner)
 		}
 	} else {
-		torpedovolume.StorageProvisioner = torpedovolume.DefaultStorageProvisioner
+		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
 	}
 	return nil
 }
