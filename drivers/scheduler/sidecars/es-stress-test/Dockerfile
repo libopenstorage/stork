@@ -8,7 +8,6 @@ WORKDIR /usr/src/elasticsearch-stress-test
 
 COPY --from=downloader /tmp/elasticsearch-stress-test/elasticsearch-stress-test.py ./
 COPY --from=downloader /tmp/elasticsearch-stress-test/requirements.txt ./
-COPY esload.sh ./
 
 RUN pip install --no-cache-dir -r requirements.txt
 

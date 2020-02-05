@@ -147,6 +147,6 @@ spec:
         command:
           - /bin/bash
           - -c
-          - "./esload.sh --es_address esnode-0.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200 --indices 4 --documents 5 --seconds 120 --not-green --clients 1"
+          - "while true; do echo '=========='; python elasticsearch-stress-test.py --es_address esnode-0.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200 --indices 4 --documents 5 --seconds 120 --not-green --clients 1; sleep 5; done"
       restartPolicy: Always
 
