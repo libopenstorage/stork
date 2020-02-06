@@ -2494,7 +2494,7 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		_, err = volDriver.CloudBackupCreate(request)
 		if err != nil {
 			if _, ok := err.(*ost_errors.ErrExists); !ok {
-				return nil, err
+				return nil, fmt.Errorf("failed to start backup for %v (%v/%v): %v", volume, pvc.Namespace, pvc.Name, err)
 			}
 		}
 	}
