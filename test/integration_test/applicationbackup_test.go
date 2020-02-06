@@ -30,7 +30,7 @@ const (
 
 	applicationBackupScheduleRetryInterval = 10 * time.Second
 	applicationBackupScheduleRetryTimeout  = 5 * time.Minute
-	applicationBackupSyncRetryTimeout      = 15 * time.Minute
+	applicationBackupSyncRetryTimeout      = 21 * time.Minute
 )
 
 var allConfigMap, defaultConfigMap map[string]string
