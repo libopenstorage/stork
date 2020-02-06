@@ -291,6 +291,9 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		Driver:   d,
 		Recorder: recorder,
 	}
+	if err := schedule.Init(); err != nil {
+		log.Fatalf("Error initializing schedule: %v", err)
+	}
 	if d != nil {
 		if c.Bool("app-initializer") {
 			if err := initializer.Start(); err != nil {
@@ -302,10 +305,6 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 			if err := monitor.Start(); err != nil {
 				log.Fatalf("Error starting storage monitor: %v", err)
 			}
-		}
-
-		if err := schedule.Init(); err != nil {
-			log.Fatalf("Error initializing schedule: %v", err)
 		}
 
 		if c.Bool("snapshotter") {
