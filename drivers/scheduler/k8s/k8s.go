@@ -1046,6 +1046,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		return rule, nil
 	} else if obj, ok := spec.(*v1.Pod); ok {
 		obj.Namespace = ns.Name
+		if options.Scheduler != "" {
+			obj.Spec.SchedulerName = options.Scheduler
+		}
 		pod, err := k8sCore.CreatePod(obj)
 		if errors.IsAlreadyExists(err) {
 			if pod, err := k8sCore.GetPodByName(obj.Name, obj.Namespace); err == nil {
