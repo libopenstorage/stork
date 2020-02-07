@@ -6,17 +6,23 @@ import (
 	"strings"
 	"time"
 
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/autopilot"
+	"github.com/portworx/sched-ops/k8s/batch"
+	"github.com/portworx/sched-ops/k8s/core"
+	k8serrors "github.com/portworx/sched-ops/k8s/errors"
+	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	k8s_driver "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	k8sdriver "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
-	batch_v1 "k8s.io/api/batch/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -65,6 +71,13 @@ var (
 	}
 )
 
+var (
+	k8sCore      = core.Instance()
+	k8sBatch     = batch.Instance()
+	k8sRbac      = rbac.Instance()
+	k8sAutopilot = autopilot.Instance()
+)
+
 // errLabelPresent error type for a label being present on a node
 type errLabelPresent struct {
 	// label is the label key
@@ -92,11 +105,11 @@ func (e *errLabelAbsent) Error() string {
 type k8sSchedOps struct{}
 
 func (k *k8sSchedOps) StopPxOnNode(n node.Node) error {
-	return k8s.Instance().AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStop)
+	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStop)
 }
 
 func (k *k8sSchedOps) StartPxOnNode(n node.Node) error {
-	return k8s.Instance().AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStart)
+	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStart)
 }
 
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
@@ -106,7 +119,7 @@ func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {
 	}
 }
 
-func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume) error {
+func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.StorageNode, vol *api.Volume) error {
 	pvc, ok := vol.Locator.VolumeLabels[pvcLabel]
 	if !ok {
 		return nil
@@ -115,10 +128,10 @@ func (k *k8sSchedOps) ValidateAddLabels(replicaNodes []api.Node, vol *api.Volume
 	var missingLabelNodes []string
 	for _, rs := range replicaNodes {
 		t := func() (interface{}, bool, error) {
-			n, err := k8s.Instance().GetNodeByName(rs.Id)
+			n, err := k8sCore.GetNodeByName(rs.Id)
 			if err != nil || n == nil {
 				addrs := []string{rs.DataIp, rs.MgmtIp}
-				n, err = k8s.Instance().SearchNodeByAddresses(addrs)
+				n, err = k8sCore.SearchNodeByAddresses(addrs)
 				if err != nil || n == nil {
 					return nil, true, fmt.Errorf("failed to locate node using id: %s and addresses: %v",
 						rs.Id, addrs)
@@ -157,7 +170,7 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 	var staleLabelNodes []string
 	for _, n := range node.GetWorkerNodes() {
 		t := func() (interface{}, bool, error) {
-			nodeLabels, err := k8s.Instance().GetLabelsOnNode(n.Name)
+			nodeLabels, err := k8sCore.GetLabelsOnNode(n.Name)
 			if err != nil {
 				return nil, true, err
 			}
@@ -197,7 +210,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 	}
 
 	t := func() (interface{}, bool, error) {
-		pods, err := k8s.Instance().GetPodsUsingPV(pvName)
+		pods, err := k8sCore.GetPodsUsingPV(pvName)
 		if err != nil {
 			return nil, true, err
 		}
@@ -234,11 +247,11 @@ func (k *k8sSchedOps) validateMountsInPods(
 	nodes := node.GetNodesByName()
 PodLoop:
 	for _, p := range pods {
-		pod, err := k8s.Instance().GetPodByName(p.Name, p.Namespace)
-		if err != nil && err == k8s.ErrPodsNotFound {
+		pod, err := k8sCore.GetPodByName(p.Name, p.Namespace)
+		if err != nil && err == k8serrors.ErrPodsNotFound {
 			logrus.Warnf("pod %s not found. probably it got rescheduled", p.Name)
 			continue
-		} else if !k8s.Instance().IsPodReady(*pod) {
+		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
 			logrus.Warnf("pod %s still not running. Status: %v", pod.Name, pod.Status.Phase)
 			continue
@@ -250,8 +263,8 @@ PodLoop:
 		skipHostMountCheck := false
 		for containerName, path := range containerPaths {
 			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s.+", path))
-			output, err := k8s.Instance().RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
-			if err != nil && (err == k8s.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
+			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
+			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
 				logrus.Warnf("Failed to execute command in pod. Cause %v", err)
 				continue PodLoop
@@ -357,9 +370,9 @@ func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[strin
 		return fmt.Errorf("Parent volume does not have a PVC label")
 	}
 
-	if parentName != params[k8s_driver.SnapshotParent] {
+	if parentName != params[k8sdriver.SnapshotParent] {
 		return fmt.Errorf("Parent PVC name [%s] does not match the snapshot's source "+
-			"PVC [%s]", parentName, params[k8s_driver.SnapshotParent])
+			"PVC [%s]", parentName, params[k8sdriver.SnapshotParent])
 	}
 	return nil
 }
@@ -390,7 +403,7 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 		nodeMap[n.Name] = n
 	}
 
-	existingPods, _ := k8s.Instance().GetPods("", nil)
+	existingPods, _ := k8sCore.GetPods("", nil)
 
 	orphanPodsMap := make(map[string][]string)
 	dirtyVolPodsMap := make(map[string][]string)
@@ -469,7 +482,7 @@ func isDirEmpty(path string, n node.Node, d node.Driver) bool {
 }
 
 func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
-	svc, err := k8s.Instance().GetService(PXServiceName, PXNamespace)
+	svc, err := k8sCore.GetService(PXServiceName, PXNamespace)
 	if err == nil {
 		return svc.Spec.ClusterIP, nil
 	}
@@ -477,7 +490,6 @@ func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
 }
 
 func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
-	inst := k8s.Instance()
 
 	binding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -493,7 +505,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 			Name: "cluster-admin",
 		},
 	}
-	binding, err := inst.CreateClusterRoleBinding(binding)
+	binding, err := k8sRbac.CreateClusterRoleBinding(binding)
 	if err != nil {
 		return err
 	}
@@ -504,7 +516,7 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 			Namespace: PXNamespace,
 		},
 	}
-	account, err = inst.CreateServiceAccount(account)
+	account, err = k8sCore.CreateServiceAccount(account)
 	if err != nil {
 		return err
 	}
@@ -523,12 +535,12 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 
 	// create a talisman job
 	var valOne int32 = 1
-	job := &batch_v1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "talisman",
 			Namespace: PXNamespace,
 		},
-		Spec: batch_v1.JobSpec{
+		Spec: batchv1.JobSpec{
 			BackoffLimit: &valOne,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
@@ -546,35 +558,35 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 		},
 	}
 
-	job, err = inst.CreateJob(job)
+	job, err = k8sBatch.CreateJob(job)
 	if err != nil {
 		return err
 	}
 
-	numNodes, err := inst.GetNodes()
+	numNodes, err := k8sCore.GetNodes()
 	if err != nil {
 		return err
 	}
 
 	jobTimeout := time.Duration(len(numNodes.Items)) * 10 * time.Minute
 
-	err = inst.ValidateJob(job.Name, job.Namespace, jobTimeout)
+	err = k8sBatch.ValidateJob(job.Name, job.Namespace, jobTimeout)
 	if err != nil {
 		return err
 	}
 
 	// cleanup
-	err = inst.DeleteJob(job.Name, job.Namespace)
+	err = k8sBatch.DeleteJob(job.Name, job.Namespace)
 	if err != nil {
 		return err
 	}
 
-	err = inst.DeleteClusterRoleBinding(binding.Name)
+	err = k8sRbac.DeleteClusterRoleBinding(binding.Name)
 	if err != nil {
 		return err
 	}
 
-	err = inst.DeleteServiceAccount(account.Name, account.Namespace)
+	err = k8sCore.DeleteServiceAccount(account.Name, account.Namespace)
 	if err != nil {
 		return err
 	}
@@ -582,16 +594,16 @@ func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) e
 	return nil
 }
 
-// Method to validate if Portworx pod is up and running
+// IsPXReadyOnNode validates if Portworx pod is up and running
 func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
-	pxPods, err := k8s.Instance().GetPodsByNode(n.Name, PXNamespace)
+	pxPods, err := k8sCore.GetPodsByNode(n.Name, PXNamespace)
 	if err != nil {
 		logrus.Errorf("Failed to get apps on node %s", n.Name)
 		return false
 	}
 	for _, pod := range pxPods.Items {
-		if pod.Labels["name"] == PXDaemonSet && !k8s.Instance().IsPodReady(pod) {
-			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase)
+		if pod.Labels["name"] == PXDaemonSet && !k8sCore.IsPodReady(pod) {
+			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v, Conditions: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase, pod.Status.Conditions)
 			return false
 		}
 	}
@@ -601,7 +613,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 // IsPXEnabled returns true  if px is enabled on given node
 func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	t := func() (interface{}, bool, error) {
-		node, err := k8s.Instance().GetNodeByName(n.Name)
+		node, err := k8sCore.GetNodeByName(n.Name)
 		if err != nil {
 			logrus.Errorf("Failed to get node %v", err)
 			return nil, true, err
@@ -711,7 +723,7 @@ func extractPodUID(volDirPath string) string {
 func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 	var pxNodes []corev1.Node
 	// get schd-ops/k8s instance of destination cluster
-	destClient, err := k8s.NewInstance(destKubeConfig)
+	destClient, err := core.NewInstanceFromConfigFile(destKubeConfig)
 	if err != nil {
 		logrus.Errorf("Unable to get k8s instance: %v", err)
 		return nil, err
@@ -738,6 +750,35 @@ func getPXNodes(destKubeConfig string) ([]corev1.Node, error) {
 	}
 
 	return pxNodes, nil
+}
+
+// CreateAutopilotRule creates the AutopilotRule object
+func (k *k8sSchedOps) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+	k8sOps := k8sAutopilot
+	apRule.Labels = map[string]string{
+		"creator": "torpedo",
+	}
+	autopilotRule, err := k8sOps.CreateAutopilotRule(&apRule)
+	if k8s_errors.IsAlreadyExists(err) {
+		if autopilotRule, err := k8sOps.GetAutopilotRule(apRule.Name); err == nil {
+			logrus.Infof("Using existing autopilot rule: %v", apRule.ObjectMeta.Name)
+			return autopilotRule, nil
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
+	}
+	logrus.Infof("Created Autopilot Rule: %v", autopilotRule.ObjectMeta.Name)
+	return autopilotRule, nil
+}
+
+func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
+	k8sOps := k8sAutopilot
+	listAutopilotRules, err := k8sOps.ListAutopilotRules()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get list of autopilotrules. Err: %v", err)
+	}
+	return listAutopilotRules, nil
 }
 
 func init() {

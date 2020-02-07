@@ -29,7 +29,7 @@ func UpdateNode(n Node) error {
 	lock.Lock()
 	defer lock.Unlock()
 	if _, ok := nodeRegistry[n.uuid]; !ok {
-		return fmt.Errorf("Node to be updated does not exist")
+		return fmt.Errorf("node to be updated does not exist")
 	}
 	nodeRegistry[n.uuid] = n
 	return nil

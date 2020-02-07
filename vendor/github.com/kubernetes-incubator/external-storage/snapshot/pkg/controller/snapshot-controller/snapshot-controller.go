@@ -29,7 +29,6 @@ import (
 	"k8s.io/client-go/rest"
 	kcache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
-	kcontroller "k8s.io/kubernetes/pkg/controller"
 
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/cache"
@@ -169,7 +168,7 @@ func (c *snapshotController) Run(ctx <-chan struct{}) {
 	c.snapshotter.Run(ctx)
 	go c.snapshotController.Run(ctx)
 
-	if !kcontroller.WaitForCacheSync("snapshot-controller", ctx, c.snapshotController.HasSynced) {
+	if !kcache.WaitForCacheSync(ctx, c.snapshotController.HasSynced) {
 		return
 	}
 
@@ -208,12 +207,12 @@ func (c *snapshotController) onSnapshotDelete(obj interface{}) {
 		// DeletedFinalStateUnkown is an expected data type here
 		deletedState, isState := obj.(kcache.DeletedFinalStateUnknown)
 		if !isState {
-			glog.Errorf("Error: unkown type passed as snapshot for deletion: %T", obj)
+			glog.Errorf("Error: unknown type passed as snapshot for deletion: %T", obj)
 			return
 		}
 		deletedSnapshot, ok = deletedState.Obj.(*crdv1.VolumeSnapshot)
 		if !ok {
-			glog.Errorf("Error: unkown data type in DeletedState: %T", deletedState.Obj)
+			glog.Errorf("Error: unknown data type in DeletedState: %T", deletedState.Obj)
 			return
 		}
 	}

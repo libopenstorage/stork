@@ -116,7 +116,7 @@ func (c *FakeDeploymentConfigs) DeleteCollection(options *v1.DeleteOptions, list
 // Patch applies the patch and returns the patched deploymentConfig.
 func (c *FakeDeploymentConfigs) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *apps_v1.DeploymentConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(deploymentconfigsResource, c.ns, name, data, subresources...), &apps_v1.DeploymentConfig{})
+		Invokes(testing.NewPatchSubresourceAction(deploymentconfigsResource, c.ns, name, pt, data, subresources...), &apps_v1.DeploymentConfig{})
 
 	if obj == nil {
 		return nil, err

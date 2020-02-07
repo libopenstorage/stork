@@ -45,7 +45,7 @@ func Create(object Object) (err error) {
 	if err != nil {
 		return err
 	}
-	unstructObj, err = resourceClient.Create(unstructObj)
+	unstructObj, err = resourceClient.Create(unstructObj, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func Patch(object Object, pt types.PatchType, patch []byte) (err error) {
 		return fmt.Errorf("failed to get resource client: %v", err)
 	}
 
-	unstructObj, err := resourceClient.Patch(name, pt, patch)
+	unstructObj, err := resourceClient.Patch(name, pt, patch, metav1.PatchOptions{})
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func Update(object Object) (err error) {
 	if err != nil {
 		return err
 	}
-	unstructObj, err = resourceClient.Update(unstructObj)
+	unstructObj, err = resourceClient.Update(unstructObj, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
