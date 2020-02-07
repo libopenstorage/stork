@@ -102,6 +102,17 @@ if [ -n "$AZURE_CLIENT_SECRET" ]; then
     AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
 fi
 
+for i in $@
+do
+case $i in
+	--backup-driver)
+	BACKUP_DRIVER=$2
+	shift
+	shift
+	;;
+esac
+done
+
 if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
     TEST_SUITE='"bin/asg.test",
             "bin/autopilot.test",
@@ -213,7 +224,6 @@ else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
 fi
 
-
 echo "Deploying torpedo pod..."
 cat <<EOF | kubectl create -f -
 ---
@@ -315,7 +325,8 @@ spec:
             "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
-            "$APP_DESTROY_TIMEOUT_ARG"
+            "$APP_DESTROY_TIMEOUT_ARG",
+            "--backup-driver", "$BACKUP_DRIVER"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]

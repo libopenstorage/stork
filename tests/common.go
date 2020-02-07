@@ -17,8 +17,11 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
 
+	"github.com/portworx/torpedo/drivers/backup"
 	// import aks driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aks"
+	// import backup driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
 	// import gke driver to invoke it's init
@@ -49,6 +52,7 @@ const (
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
 	storageDriverCliFlag                 = "storage-driver"
+	backupCliFlag                        = "backup-driver"
 	specDirCliFlag                       = "spec-dir"
 	appListCliFlag                       = "app-list"
 	logLocationCliFlag                   = "log-location"
@@ -124,6 +128,11 @@ func InitInstance() {
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
 	expect(err).NotTo(haveOccurred())
+
+	if Inst().Backup != nil {
+		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
+		expect(err).NotTo(haveOccurred())
+	}
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -533,15 +542,17 @@ type Torpedo struct {
 	ConfigMap                           string
 	BundleLocation                      string
 	CustomAppConfig                     map[string]scheduler.AppConfig
+	Backup                              backup.Driver
 }
 
 // ParseFlags parses command line flags
 func ParseFlags() {
 	var err error
-	var s, n, v, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
+	var s, n, v, backupDriverName, specDir, logLoc, logLevel, appListCSV, provisionerName, configMapName string
 	var schedulerDriver scheduler.Driver
 	var volumeDriver volume.Driver
 	var nodeDriver node.Driver
+	var backupDriver backup.Driver
 	var appScaleFactor int
 	var volUpgradeEndpointURL string
 	var volUpgradeEndpointVersion string
@@ -558,6 +569,7 @@ func ParseFlags() {
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
+	flag.StringVar(&backupDriverName, backupCliFlag, "", "Name of the backup driver to use")
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
@@ -611,6 +623,11 @@ func ParseFlags() {
 			}
 			logrus.Infof("Parsed custom app config file: %+v", customAppConfig)
 		}
+		if backupDriverName != "" {
+			if backupDriver, err = backup.Get(backupDriverName); err != nil {
+				logrus.Fatal("cannot find backup driver for %v. Err: %v\n", backupDriverName, err)
+			}
+		}
 		once.Do(func() {
 			instance = &Torpedo{
 				InstanceID:                          time.Now().Format("01-02-15h04m05s"),
@@ -634,6 +651,7 @@ func ParseFlags() {
 				ConfigMap:                           configMapName,
 				BundleLocation:                      bundleLocation,
 				CustomAppConfig:                     customAppConfig,
+				Backup:                              backupDriver,
 			}
 		})
 	}
