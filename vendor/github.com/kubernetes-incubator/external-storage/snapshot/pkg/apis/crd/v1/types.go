@@ -85,7 +85,7 @@ type VolumeSnapshotCondition struct {
 // +genclient=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// VolumeSnapshot is the volume snapshot object accessible to the user. Upon succesful creation of the actual
+// VolumeSnapshot is the volume snapshot object accessible to the user. Upon successful creation of the actual
 // snapshot by the volume provider it is bound to the corresponding VolumeSnapshotData through
 // the VolumeSnapshotSpec
 type VolumeSnapshot struct {
@@ -127,7 +127,7 @@ type VolumeSnapshotDataStatus struct {
 	// +optional
 	CreationTimestamp metav1.Time `json:"creationTimestamp" protobuf:"bytes,1,opt,name=creationTimestamp"`
 
-	// Representes the lates available observations about the volume snapshot
+	// Represents the lates available observations about the volume snapshot
 	Conditions []VolumeSnapshotDataCondition `json:"conditions" protobuf:"bytes,2,rep,name=conditions"`
 }
 
@@ -257,9 +257,9 @@ type PortworxVolumeSnapshotSource struct {
 	// SnapshotData stores the name of VolumeSnapshotData for this snapshot. This is populated only for group snapshots.
 	SnapshotData string `json:"snapshotData,omitempty"`
 	// SnapshotTaskID stores the task ID used for the snapshot
-	SnapshotTaskID string `json:"snapshotTaskID, omitempty"`
+	SnapshotTaskID string `json:"snapshotTaskID,omitempty"`
 	// VolumeProvisioner is either the intree or CSI driver name
-	VolumeProvisioner string `json:"volumeProvisioner, omitempty"`
+	VolumeProvisioner string `json:"volumeProvisioner,omitempty"`
 }
 
 // VolumeSnapshotDataSource represents the actual location and type of the snapshot. Only one of its members may be specified.

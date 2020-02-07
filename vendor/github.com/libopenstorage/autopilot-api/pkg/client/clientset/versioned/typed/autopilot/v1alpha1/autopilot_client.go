@@ -28,6 +28,7 @@ import (
 type AutopilotV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	AutopilotRulesGetter
+	AutopilotRuleObjectsGetter
 }
 
 // AutopilotV1alpha1Client is used to interact with features provided by the autopilot.libopenstorage.org group.
@@ -37,6 +38,10 @@ type AutopilotV1alpha1Client struct {
 
 func (c *AutopilotV1alpha1Client) AutopilotRules() AutopilotRuleInterface {
 	return newAutopilotRules(c)
+}
+
+func (c *AutopilotV1alpha1Client) AutopilotRuleObjects() AutopilotRuleObjectInterface {
+	return newAutopilotRuleObjects(c)
 }
 
 // NewForConfig creates a new AutopilotV1alpha1Client for the given config.
@@ -71,7 +76,7 @@ func setConfigDefaults(config *rest.Config) error {
 	gv := v1alpha1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: scheme.Codecs}
+	config.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()

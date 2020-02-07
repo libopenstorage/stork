@@ -35,7 +35,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ccache "k8s.io/client-go/tools/cache"
-	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/goroutinemap"
 	"k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff"
 )
@@ -138,7 +137,7 @@ func NewVolumeSnapshotter(
 
 func (vs *volumeSnapshotter) Run(stopCh <-chan struct{}) {
 	go vs.controller.Run(stopCh)
-	if !controller.WaitForCacheSync("snapshotdata-cache", stopCh, vs.controller.HasSynced) {
+	if !ccache.WaitForCacheSync(stopCh, vs.controller.HasSynced) {
 		return
 	}
 }
@@ -432,7 +431,7 @@ func (vs *volumeSnapshotter) syncSnapshot(uniqueSnapshotName string, snapshot *c
 		status := vs.getSimplifiedSnapshotStatus(snapshot.Status.Conditions)
 		var err error
 		// When the condition is new, it is still possible that snapshot is already triggered but has not yet updated the condition.
-		// Check the metadata and avaiable VolumeSnapshotData objects and update the snapshot accordingly
+		// Check the metadata and available VolumeSnapshotData objects and update the snapshot accordingly
 		if status == statusNew {
 			status, snapshotObj, err = vs.updateSnapshotIfExists(uniqueSnapshotName, snapshot)
 			if err != nil {
