@@ -80,6 +80,8 @@ type ScheduleOptions struct {
 	ConfigMap string
 	// AutopilotRule identifies options for autopilot (Optional)
 	AutopilotRule apapi.AutopilotRule
+	// Scheduler  identifies what scheduler will be used
+	Scheduler string
 	// Labels is a map of {key,value} pairs for labeling spec objects
 	Labels map[string]string
 }
