@@ -11,7 +11,8 @@ import (
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -89,12 +90,12 @@ func (c *ClusterDomainUpdateController) Handle(ctx context.Context, event sdk.Ev
 			// Do a dummy update on the cluster domain status so that it queries
 			// the storage driver and gets updated too
 			if clusterDomainUpdate.Status.Status == storkv1.ClusterDomainUpdateStatusSuccessful {
-				cdsList, err := k8s.Instance().ListClusterDomainStatuses()
+				cdsList, err := storkops.Instance().ListClusterDomainStatuses()
 				if err != nil {
 					return err
 				}
 				for _, cds := range cdsList.Items {
-					_, err := k8s.Instance().UpdateClusterDomainsStatus(&cds)
+					_, err := storkops.Instance().UpdateClusterDomainsStatus(&cds)
 					if err != nil {
 						return err
 					}
@@ -114,7 +115,7 @@ func (c *ClusterDomainUpdateController) Handle(ctx context.Context, event sdk.Ev
 
 // createCRD creates the CRD for ClusterDomainsStatus object
 func (c *ClusterDomainUpdateController) createCRD() error {
-	resource := k8s.CustomResource{
+	resource := apiextensions.CustomResource{
 		Name:       storkv1.ClusterDomainUpdateResourceName,
 		Plural:     storkv1.ClusterDomainUpdatePlural,
 		Group:      stork.GroupName,
@@ -123,10 +124,10 @@ func (c *ClusterDomainUpdateController) createCRD() error {
 		Kind:       reflect.TypeOf(storkv1.ClusterDomainUpdate{}).Name(),
 		ShortNames: []string{storkv1.ClusterDomainUpdateShortName},
 	}
-	err := k8s.Instance().CreateCRD(resource)
+	err := apiextensions.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }

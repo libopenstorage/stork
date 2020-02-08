@@ -14,7 +14,8 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -152,7 +153,7 @@ func (m *MigrationScheduleController) updateMigrationStatus(migrationSchedule *s
 			// Get the updated status if we see it as not completed
 			if !m.isMigrationComplete(migration.Status) {
 				var updatedStatus stork_api.MigrationStatusType
-				pendingMigration, err := k8s.Instance().GetMigration(migration.Name, migrationSchedule.Namespace)
+				pendingMigration, err := storkops.Instance().GetMigration(migration.Name, migrationSchedule.Namespace)
 				if err != nil {
 					m.Recorder.Event(migrationSchedule,
 						v1.EventTypeWarning,
@@ -294,7 +295,7 @@ func (m *MigrationScheduleController) startMigration(
 		Spec: migrationSchedule.Spec.Template.Spec,
 	}
 	log.MigrationScheduleLog(migrationSchedule).Infof("Starting migration %v", migrationName)
-	_, err = k8s.Instance().CreateMigration(migration)
+	_, err = storkops.Instance().CreateMigration(migration)
 	return err
 }
 
@@ -314,7 +315,7 @@ func (m *MigrationScheduleController) pruneMigrations(migrationSchedule *stork_a
 				}
 			}
 			for i := 0; i < deleteBefore; i++ {
-				err := k8s.Instance().DeleteMigration(policyMigration[i].Name, migrationSchedule.Namespace)
+				err := storkops.Instance().DeleteMigration(policyMigration[i].Name, migrationSchedule.Namespace)
 				if err != nil {
 					log.MigrationScheduleLog(migrationSchedule).Warnf("Error deleting %v: %v", policyMigration[i].Name, err)
 				}
@@ -336,7 +337,7 @@ func (m *MigrationScheduleController) deleteMigrations(migrationSchedule *stork_
 	var lastError error
 	for _, policyMigration := range migrationSchedule.Status.Items {
 		for _, migration := range policyMigration {
-			err := k8s.Instance().DeleteMigration(migration.Name, migrationSchedule.Namespace)
+			err := storkops.Instance().DeleteMigration(migration.Name, migrationSchedule.Namespace)
 			if err != nil && !errors.IsNotFound(err) {
 				log.MigrationScheduleLog(migrationSchedule).Warnf("Error deleting %v: %v", migration.Name, err)
 				lastError = err
@@ -347,7 +348,7 @@ func (m *MigrationScheduleController) deleteMigrations(migrationSchedule *stork_
 }
 
 func (m *MigrationScheduleController) createCRD() error {
-	resource := k8s.CustomResource{
+	resource := apiextensions.CustomResource{
 		Name:    stork_api.MigrationScheduleResourceName,
 		Plural:  stork_api.MigrationScheduleResourcePlural,
 		Group:   stork.GroupName,
@@ -355,10 +356,10 @@ func (m *MigrationScheduleController) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.MigrationSchedule{}).Name(),
 	}
-	err := k8s.Instance().CreateCRD(resource)
+	err := apiextensions.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }

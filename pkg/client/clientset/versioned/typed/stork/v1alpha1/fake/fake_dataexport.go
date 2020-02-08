@@ -131,7 +131,7 @@ func (c *FakeDataExports) DeleteCollection(options *v1.DeleteOptions, listOption
 // Patch applies the patch and returns the patched dataExport.
 func (c *FakeDataExports) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.DataExport, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(dataexportsResource, c.ns, name, data, subresources...), &v1alpha1.DataExport{})
+		Invokes(testing.NewPatchSubresourceAction(dataexportsResource, c.ns, name, pt, data, subresources...), &v1alpha1.DataExport{})
 
 	if obj == nil {
 		return nil, err

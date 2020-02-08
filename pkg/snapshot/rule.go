@@ -3,7 +3,8 @@ package snapshot
 import (
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/stork/pkg/rule"
-	"github.com/portworx/sched-ops/k8s"
+	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 )
@@ -36,7 +37,7 @@ func validateSnapRules(snap *crdv1.VolumeSnapshot) error {
 		for _, annotation := range ruleAnnotations {
 			ruleName, present := snap.Metadata.Annotations[annotation]
 			if present && len(ruleName) > 0 {
-				r, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
+				r, err := storkops.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 				if err != nil {
 					return err
 				}
@@ -71,7 +72,7 @@ func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeCl
 				return nil, nil
 			}
 		}
-		r, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
+		r, err := storkops.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +96,7 @@ func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnap
 				return nil
 			}
 		}
-		r, err := k8s.Instance().GetRule(ruleName, snap.Metadata.Namespace)
+		r, err := storkops.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 		if err != nil {
 			return err
 		}
@@ -108,7 +109,7 @@ func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnap
 // performRuleRecovery terminates potential background commands running pods for
 // the given snapshot
 func performRuleRecovery() error {
-	allSnaps, err := k8s.Instance().ListSnapshots(v1.NamespaceAll)
+	allSnaps, err := k8sextops.Instance().ListSnapshots(v1.NamespaceAll)
 	if err != nil {
 		logrus.Errorf("Failed to list all snapshots due to: %v. Will retry.", err)
 		return err

@@ -9,7 +9,7 @@ import (
 	snapshotcontroller "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/errors"
 	log "github.com/sirupsen/logrus"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/kubernetes"
@@ -49,7 +49,7 @@ func (s *Snapshotter) Start(stopChannel <-chan struct{}) error {
 	}
 
 	if clientset == nil {
-		return k8s.ErrK8SApiAccountNotSet
+		return errors.ErrK8SApiAccountNotSet
 	}
 
 	aeclientset, err := apiextensionsclient.NewForConfig(config)

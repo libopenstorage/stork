@@ -10,15 +10,17 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume/mock"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
-	storagev1beta1 "k8s.io/api/storage/v1beta1"
+	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	"k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -58,8 +60,9 @@ func setup(t *testing.T) {
 
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeKubeClient := kubernetes.NewSimpleClientset()
-
-	k8s.Instance().SetClient(fakeKubeClient, nil, fakeStorkClient, nil, nil, nil, nil, nil)
+	core.SetInstance(core.New(fakeKubeClient, fakeKubeClient.CoreV1(), fakeKubeClient.StorageV1()))
+	storage.SetInstance(storage.New(fakeKubeClient.StorageV1()))
+	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
 
 	storkdriver, err := volume.Get(mockDriverName)
 	require.NoError(t, err, "Error getting mock volume driver")
@@ -80,7 +83,7 @@ func setup(t *testing.T) {
 	nodes.Items = append(nodes.Items, *newNode("node6.domain", "node6.domain", "192.168.0.1", "rack1", "", ""))
 
 	for _, n := range nodes.Items {
-		node, err := k8s.Instance().CreateNode(&n)
+		node, err := core.Instance().CreateNode(&n)
 		require.NoError(t, err, "failed to create fake node")
 		require.NotNil(t, node, "got nil node from create node api")
 	}
@@ -156,11 +159,11 @@ func testLostPod(
 	testUnknownPod bool,
 	testTaintBasedEviction bool,
 ) {
-	pod, err := k8s.Instance().CreatePod(pod)
+	pod, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
 	require.NotNil(t, pod, "got nil pod back from create pod")
 
-	pod, err = k8s.Instance().GetPodByName(pod.Name, "")
+	pod, err = core.Instance().GetPodByName(pod.Name, "")
 	require.NoError(t, err, "failed to get pod from fake API")
 	require.NotNil(t, pod, "got nil pod back from get pod")
 
@@ -182,20 +185,20 @@ func testLostPod(
 
 	if testTaintBasedEviction {
 		pod.ObjectMeta.DeletionTimestamp = &metav1.Time{Time: time.Now()}
-		node, err := k8s.Instance().GetNodeByName(nodeForPod)
+		node, err := core.Instance().GetNodeByName(nodeForPod)
 		require.NoError(t, err, "failed to get node for pod")
 		node.Spec.Taints = []v1.Taint{
 			{
-				Key:    algorithm.TaintNodeUnreachable,
+				Key:    api.TaintNodeUnreachable,
 				Effect: v1.TaintEffectNoExecute,
 			},
 		}
 
-		_, err = k8s.Instance().UpdateNode(node)
+		_, err = core.Instance().UpdateNode(node)
 		require.NoError(t, err, "failed to taint fake node")
 	}
 
-	pod, err = k8s.Instance().UpdatePod(pod)
+	pod, err = core.Instance().UpdatePod(pod)
 	require.NoError(t, err, "failed to update pod")
 	require.NotNil(t, pod, "got nil pod back from update pod")
 
@@ -203,16 +206,16 @@ func testLostPod(
 
 	if driverPod {
 		// pod should be deleted
-		_, err = k8s.Instance().GetPodByName(pod.Name, "")
+		_, err = core.Instance().GetPodByName(pod.Name, "")
 		require.Error(t, err, "expected error from get pod as pod should be deleted")
 	} else {
 		// pod should still be present
-		pod, err = k8s.Instance().GetPodByName(pod.Name, "")
+		pod, err = core.Instance().GetPodByName(pod.Name, "")
 		require.NoError(t, err, "failed to get pod")
 		require.NotNil(t, pod, "got nil pod back from get pod")
 
 		// cleanup pod
-		err = k8s.Instance().DeletePod(pod.Name, pod.Namespace, false)
+		err = core.Instance().DeletePod(pod.Name, pod.Namespace, false)
 		require.NoError(t, err, "failed to delete pod")
 	}
 }
@@ -259,11 +262,11 @@ func newNode(name, hostname, ip, rack, zone, region string) *v1.Node {
 
 func testOfflineStorageNode(t *testing.T) {
 	pod := newPod("driverPod", []string{driverVolumeName})
-	_, err := k8s.Instance().CreatePod(pod)
+	_, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
 
 	noStoragePod := newPod("noStoragePod", nil)
-	_, err = k8s.Instance().CreatePod(noStoragePod)
+	_, err = core.Instance().CreatePod(noStoragePod)
 	require.NoError(t, err, "failed to create pod")
 
 	err = driver.UpdateNodeStatus(0, volume.NodeOffline)
@@ -274,19 +277,19 @@ func testOfflineStorageNode(t *testing.T) {
 	}()
 
 	time.Sleep(35 * time.Second)
-	_, err = k8s.Instance().GetPodByName(pod.Name, "")
+	_, err = core.Instance().GetPodByName(pod.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
-	_, err = k8s.Instance().GetPodByName(noStoragePod.Name, "")
+	_, err = core.Instance().GetPodByName(noStoragePod.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
 
 func testOfflineStorageNodeDuplicateIP(t *testing.T) {
 	pod := newPod("driverPodDuplicateIPTest", []string{driverVolumeName})
-	_, err := k8s.Instance().CreatePod(pod)
+	_, err := core.Instance().CreatePod(pod)
 	require.NoError(t, err, "failed to create pod")
 
 	time.Sleep(35 * time.Second)
-	_, err = k8s.Instance().GetPodByName(pod.Name, "")
+	_, err = core.Instance().GetPodByName(pod.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
 
@@ -300,14 +303,14 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 
 	// Create PVC and PV for all test volumes.
 	for _, volumeName := range []string{driverVolumeName, attachmentVolumeName, unknownPodsVolumeName} {
-		_, err := k8s.Instance().CreatePersistentVolumeClaim(&v1.PersistentVolumeClaim{
+		_, err := core.Instance().CreatePersistentVolumeClaim(&v1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      volumeName,
 				Namespace: "",
 			},
 		})
 		require.NoError(t, err, "failed to create pv for %s", volumeName)
-		_, err = k8s.Instance().CreatePersistentVolume(&v1.PersistentVolume{
+		_, err = core.Instance().CreatePersistentVolume(&v1.PersistentVolume{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      volumeName,
 				Namespace: "",
@@ -328,15 +331,15 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	// Create two pods on node N1 that will remain healthy. One attached, one not.
 	healthyPodAttached := newPod("testVolumeAttachmentCleanupHealtyAttached", []string{driverVolumeName})
 	healthyPodAttached.Spec.NodeName = nodeToKeepOnline
-	_, err := k8s.Instance().CreatePod(healthyPodAttached)
+	_, err := core.Instance().CreatePod(healthyPodAttached)
 	require.NoError(t, err, "failed to create healthy attached pod")
-	_, err = k8s.Instance().CreateVolumeAttachment(&storagev1beta1.VolumeAttachment{
+	_, err = storage.Instance().CreateVolumeAttachment(&storagev1.VolumeAttachment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "va-healthy",
 		},
-		Spec: storagev1beta1.VolumeAttachmentSpec{
+		Spec: storagev1.VolumeAttachmentSpec{
 			NodeName: nodeToKeepOnline,
-			Source: storagev1beta1.VolumeAttachmentSource{
+			Source: storagev1.VolumeAttachmentSource{
 				PersistentVolumeName: &driverVolumeName,
 			},
 		},
@@ -345,21 +348,21 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 
 	healthyPodDetached := newPod("testVolumeAttachmentCleanHealtyupDetached", []string{driverVolumeName})
 	healthyPodDetached.Spec.NodeName = nodeToKeepOnline
-	_, err = k8s.Instance().CreatePod(healthyPodDetached)
+	_, err = core.Instance().CreatePod(healthyPodDetached)
 	require.NoError(t, err, "failed to create healthy detached pod")
 
 	// Create two pods on node N2 that will be taken offline temporarily. One attached, one not.
 	unhealthyPodAttached := newPod("testVolumeAttachmentCleanupUnheathyAttached", []string{attachmentVolumeName})
 	unhealthyPodAttached.Spec.NodeName = nodeToTakeOffline
-	_, err = k8s.Instance().CreatePod(unhealthyPodAttached)
+	_, err = core.Instance().CreatePod(unhealthyPodAttached)
 	require.NoError(t, err, "failed to create pod")
-	_, err = k8s.Instance().CreateVolumeAttachment(&storagev1beta1.VolumeAttachment{
+	_, err = storage.Instance().CreateVolumeAttachment(&storagev1.VolumeAttachment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "va-unhealthy",
 		},
-		Spec: storagev1beta1.VolumeAttachmentSpec{
+		Spec: storagev1.VolumeAttachmentSpec{
 			NodeName: nodeToTakeOffline,
-			Source: storagev1beta1.VolumeAttachmentSource{
+			Source: storagev1.VolumeAttachmentSource{
 				PersistentVolumeName: &attachmentVolumeName,
 			},
 		},
@@ -368,7 +371,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 
 	unhealthyPodDetached := newPod("testVolumeAttachmentCleanupUnheathyDetached", []string{attachmentVolumeName})
 	unhealthyPodDetached.Spec.NodeName = nodeToTakeOffline
-	_, err = k8s.Instance().CreatePod(unhealthyPodDetached)
+	_, err = core.Instance().CreatePod(unhealthyPodDetached)
 	require.NoError(t, err, "failed to create pod")
 
 	// Create two pods on node N3 that will have unknown state. One attached, one not.
@@ -377,15 +380,15 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	unknownPodAttached.Status = v1.PodStatus{
 		Reason: node.NodeUnreachablePodReason,
 	}
-	_, err = k8s.Instance().CreatePod(unknownPodAttached)
+	_, err = core.Instance().CreatePod(unknownPodAttached)
 	require.NoError(t, err, "failed to create pod")
-	_, err = k8s.Instance().CreateVolumeAttachment(&storagev1beta1.VolumeAttachment{
+	_, err = storage.Instance().CreateVolumeAttachment(&storagev1.VolumeAttachment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "va-unknown",
 		},
-		Spec: storagev1beta1.VolumeAttachmentSpec{
+		Spec: storagev1.VolumeAttachmentSpec{
 			NodeName: nodeToPutUnknownPodsOn,
-			Source: storagev1beta1.VolumeAttachmentSource{
+			Source: storagev1.VolumeAttachmentSource{
 				PersistentVolumeName: &unknownPodsVolumeName,
 			},
 		},
@@ -397,7 +400,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	unknownPodDetached.Status = v1.PodStatus{
 		Reason: node.NodeUnreachablePodReason,
 	}
-	_, err = k8s.Instance().CreatePod(unknownPodDetached)
+	_, err = core.Instance().CreatePod(unknownPodDetached)
 	require.NoError(t, err, "failed to create unknown detached pod")
 
 	// Kill N2
@@ -411,7 +414,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	// VolumeAttachments (VA) for N2 and N3 should be deleted, but VA for N1 should remain.
 	time.Sleep(35 * time.Second)
 
-	vaList, err := k8s.Instance().ListVolumeAttachments()
+	vaList, err := storage.Instance().ListVolumeAttachments()
 	require.NoError(t, err, "expected no error from list vol attachments")
 
 	// There should be exactly one attachment left - the healthy one.
@@ -419,24 +422,24 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	require.Equal(t, "va-healthy", vaList.Items[0].Name)
 
 	// Healthy pods should remain
-	_, err = k8s.Instance().GetPodByName(healthyPodAttached.Name, "")
+	_, err = core.Instance().GetPodByName(healthyPodAttached.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 
-	_, err = k8s.Instance().GetPodByName(healthyPodDetached.Name, "")
+	_, err = core.Instance().GetPodByName(healthyPodDetached.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 
 	// Unhealthy pods should be deleted.
-	_, err = k8s.Instance().GetPodByName(unhealthyPodAttached.Name, "")
+	_, err = core.Instance().GetPodByName(unhealthyPodAttached.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
 
-	_, err = k8s.Instance().GetPodByName(unhealthyPodDetached.Name, "")
+	_, err = core.Instance().GetPodByName(unhealthyPodDetached.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
 
 	// Unknown pods should be deleted.
-	_, err = k8s.Instance().GetPodByName(unknownPodAttached.Name, "")
+	_, err = core.Instance().GetPodByName(unknownPodAttached.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
 
-	_, err = k8s.Instance().GetPodByName(unknownPodDetached.Name, "")
+	_, err = core.Instance().GetPodByName(unknownPodDetached.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
 
 }

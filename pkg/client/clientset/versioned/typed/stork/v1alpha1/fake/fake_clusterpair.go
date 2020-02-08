@@ -131,7 +131,7 @@ func (c *FakeClusterPairs) DeleteCollection(options *v1.DeleteOptions, listOptio
 // Patch applies the patch and returns the patched clusterPair.
 func (c *FakeClusterPairs) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(clusterpairsResource, c.ns, name, data, subresources...), &v1alpha1.ClusterPair{})
+		Invokes(testing.NewPatchSubresourceAction(clusterpairsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ClusterPair{})
 
 	if obj == nil {
 		return nil, err

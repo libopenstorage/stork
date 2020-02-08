@@ -2,17 +2,17 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -60,7 +60,7 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 			}
 			applicationRestore.Name = applicationRestoreName
 			applicationRestore.Namespace = cmdFactory.GetNamespace()
-			_, err := k8s.Instance().CreateApplicationRestore(applicationRestore)
+			_, err := storkops.Instance().CreateApplicationRestore(applicationRestore)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -105,7 +105,7 @@ func newGetApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcliopt
 				applicationRestores = new(storkv1.ApplicationRestoreList)
 				for _, applicationRestoreName := range args {
 					for _, ns := range namespaces {
-						applicationRestore, err := k8s.Instance().GetApplicationRestore(applicationRestoreName, ns)
+						applicationRestore, err := storkops.Instance().GetApplicationRestore(applicationRestoreName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -116,7 +116,7 @@ func newGetApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcliopt
 			} else {
 				var tempApplicationRestores storkv1.ApplicationRestoreList
 				for _, ns := range namespaces {
-					applicationRestores, err = k8s.Instance().ListApplicationRestores(ns)
+					applicationRestores, err = storkops.Instance().ListApplicationRestores(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -165,7 +165,7 @@ func newDeleteApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 
 func deleteApplicationRestores(applicationRestores []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, applicationRestore := range applicationRestores {
-		err := k8s.Instance().DeleteApplicationRestore(applicationRestore, namespace)
+		err := storkops.Instance().DeleteApplicationRestore(applicationRestore, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -175,18 +175,17 @@ func deleteApplicationRestores(applicationRestores []string, namespace string, i
 	}
 }
 
-func applicationRestorePrinter(applicationRestoreList *storkv1.ApplicationRestoreList, writer io.Writer, options printers.PrintOptions) error {
+func applicationRestorePrinter(
+	applicationRestoreList *storkv1.ApplicationRestoreList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if applicationRestoreList == nil {
-		return nil
+		return nil, nil
 	}
+	rows := make([]metav1beta1.TableRow, 0)
 	for _, applicationRestore := range applicationRestoreList.Items {
-		name := printers.FormatResourceName(options.Kind, applicationRestore.Name, options.WithKind)
+		name := applicationRestore.Name
 
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", applicationRestore.Namespace); err != nil {
-				return err
-			}
-		}
 		totalVolumes := len(applicationRestore.Status.Volumes)
 		doneVolumes := 0
 		for _, volume := range applicationRestore.Status.Volumes {
@@ -208,18 +207,18 @@ func applicationRestorePrinter(applicationRestoreList *storkv1.ApplicationRestor
 		}
 
 		creationTime := toTimeString(applicationRestore.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-			name,
-			applicationRestore.Status.Stage,
-			applicationRestore.Status.Status,
-			volumeStatus,
-			len(applicationRestore.Status.Resources),
-			creationTime,
-			elapsed); err != nil {
-			return err
-		}
+		row := getRow(&applicationRestore,
+			[]interface{}{name,
+				applicationRestore.Status.Stage,
+				applicationRestore.Status.Status,
+				volumeStatus,
+				len(applicationRestore.Status.Resources),
+				creationTime,
+				elapsed},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }
 
 func waitForApplicationRestore(name, namespace string, ioStreams genericclioptions.IOStreams) (string, error) {
@@ -231,7 +230,7 @@ func waitForApplicationRestore(name, namespace string, ioStreams genericclioptio
 	heading := fmt.Sprintf("%s\t\t%-20s", stage, status)
 	printMsg(heading, ioStreams.Out)
 	t := func() (interface{}, bool, error) {
-		restore, err := k8s.Instance().GetApplicationRestore(name, namespace)
+		restore, err := storkops.Instance().GetApplicationRestore(name, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return "", false, err

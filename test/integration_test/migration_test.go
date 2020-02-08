@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
@@ -368,11 +370,11 @@ func intervalScheduleCleanupTest(t *testing.T) {
 		if obj, ok := spec.(*apps_api.StatefulSet); ok {
 			name = obj.GetName()
 			namespace = obj.GetNamespace()
-			pvcs, err = k8s.Instance().GetPVCsForStatefulSet(obj)
+			pvcs, err = apps.Instance().GetPVCsForStatefulSet(obj)
 			require.NoError(t, err, "error getting pvcs for ss")
-			err = k8s.Instance().DeleteStatefulSet(name, namespace)
+			err = apps.Instance().DeleteStatefulSet(name, namespace)
 			require.NoError(t, err, "error deleting cassandra statefulset")
-			err = k8s.Instance().ValidateStatefulSet(obj, 1*time.Minute)
+			err = apps.Instance().ValidateStatefulSet(obj, 1*time.Minute)
 			require.NoError(t, err, "error deleting cassandra statefulset")
 			ctxs[0].App.SpecList = append(ctxs[0].App.SpecList[:i], ctxs[0].App.SpecList[i+1:]...)
 			break
@@ -389,7 +391,7 @@ func intervalScheduleCleanupTest(t *testing.T) {
 
 	// delete pvcs
 	for _, pvc := range pvcs.Items {
-		err := k8s.Instance().DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace)
+		err := core.Instance().DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace)
 		require.NoError(t, err, "Error deleting pvc")
 	}
 
@@ -412,11 +414,11 @@ func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.Per
 	require.NoError(t, err, "Error setting remote config")
 
 	// Verify if statefulset get delete
-	_, err = k8s.Instance().GetStatefulSet(name, namespace)
+	_, err = apps.Instance().GetStatefulSet(name, namespace)
 	require.Error(t, err, "expected ss:%v error not found", name)
 
 	for _, pvc := range pvcs.Items {
-		_, err := k8s.Instance().GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
+		_, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
 		require.Error(t, err, "expected pvc:%v error not found", pvc.Name)
 	}
 
@@ -427,14 +429,14 @@ func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.Per
 
 func validateMigration(t *testing.T, name, namespace string) {
 	//  ensure only one migration has run
-	migrationsMap, err := k8s.Instance().ValidateMigrationSchedule(
+	migrationsMap, err := storkops.Instance().ValidateMigrationSchedule(
 		name, namespace, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "error getting migration schedule")
 	require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
 
 	migrationStatus := migrationsMap[v1alpha1.SchedulePolicyTypeInterval][0]
 	// Independently validate the migration
-	err = k8s.Instance().ValidateMigration(
+	err = storkops.Instance().ValidateMigration(
 		migrationStatus.Name, namespace, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "failed to validate migration")
 }
@@ -474,7 +476,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 
 	// **** TEST ensure 0 migrations since the schedule is invalid. Also check events for invalid specs
 	for _, migrationScheduleName := range migrationSchedules {
-		migrationSchedule, err := k8s.Instance().GetMigrationSchedule(migrationScheduleName, namespace)
+		migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, namespace)
 		require.NoError(t, err, fmt.Sprintf("failed to get migration schedule: [%s] %s", namespace, migrationScheduleName))
 		require.Empty(t, migrationSchedule.Status.Items, "expected 0 items in migration schedule status")
 
@@ -483,7 +485,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 			Watch:         false,
 		}
 
-		storkEvents, err := k8s.Instance().ListEvents(namespace, listOptions)
+		storkEvents, err := core.Instance().ListEvents(namespace, listOptions)
 		require.NoError(t, err, "failed to list stork events")
 
 		foundFailedEvent := false
@@ -570,7 +572,7 @@ func migrationScheduleTest(
 		namespace, migrationScheduleName)
 
 	// **** TEST 1: ensure 0 migrations since we haven't reached the daily scheduled time
-	migrationSchedule, err := k8s.Instance().GetMigrationSchedule(migrationScheduleName, namespace)
+	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, namespace)
 	require.NoError(t, err, "failed to get migration schedule")
 	require.Empty(t, migrationSchedule.Status.Items, "expected 0 items in migration schedule status")
 
@@ -580,7 +582,7 @@ func migrationScheduleTest(
 	require.NoError(t, err, "Error setting mock time")
 
 	//  ensure only one migration has run
-	migrationsMap, err := k8s.Instance().ValidateMigrationSchedule(
+	migrationsMap, err := storkops.Instance().ValidateMigrationSchedule(
 		migrationScheduleName, namespace, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, failureErrString)
 	require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
@@ -591,7 +593,7 @@ func migrationScheduleTest(
 	migrationStatus := migrations[0]
 
 	// Independently validate the migration
-	err = k8s.Instance().ValidateMigration(migrationStatus.Name, namespace, 1*time.Minute, defaultWaitInterval)
+	err = storkops.Instance().ValidateMigration(migrationStatus.Name, namespace, 1*time.Minute, defaultWaitInterval)
 	require.NoError(t, err, "failed to validate first daily migration")
 
 	// check creation time of the new migration
@@ -606,7 +608,7 @@ func migrationScheduleTest(
 	require.NoError(t, err, "Error setting mock time")
 
 	//  ensure no new migrations
-	migrationsMap, err = k8s.Instance().ValidateMigrationSchedule(
+	migrationsMap, err = storkops.Instance().ValidateMigrationSchedule(
 		migrationScheduleName, namespace, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, failureErrString)
 	require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
@@ -636,7 +638,7 @@ func migrationScheduleTest(
 	time.Sleep(time.Minute)
 
 	for i := 0; i < 10; i++ {
-		migrationsMap, err = k8s.Instance().ValidateMigrationSchedule(
+		migrationsMap, err = storkops.Instance().ValidateMigrationSchedule(
 			migrationScheduleName, namespace, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, failureErrString)
 		require.Len(t, migrationsMap, 1, "expected only one schedule type in migration map")
@@ -663,7 +665,7 @@ func migrationScheduleTest(
 	f := func() (interface{}, bool, error) {
 		for _, migrations := range migrationsMap {
 			for _, m := range migrations {
-				_, err := k8s.Instance().GetMigration(m.Name, namespace)
+				_, err := storkops.Instance().GetMigration(m.Name, namespace)
 				if err == nil {
 					return "", true, fmt.Errorf("get on migration: %s should have failed", m.Name)
 				}
@@ -779,12 +781,12 @@ func createMigration(
 			Namespaces:        []string{migrationNamespace},
 		},
 	}
-	return k8s.Instance().CreateMigration(migration)
+	return storkops.Instance().CreateMigration(migration)
 }
 
 func deleteMigrations(migrations []*v1alpha1.Migration) error {
 	for _, mig := range migrations {
-		err := k8s.Instance().DeleteMigration(mig.Name, mig.Namespace)
+		err := storkops.Instance().DeleteMigration(mig.Name, mig.Namespace)
 		if err != nil {
 			return fmt.Errorf("Failed to delete migration %s in namespace %s. Error: %v", mig.Name, mig.Namespace, err)
 		}
@@ -796,7 +798,7 @@ func WaitForMigration(migrationList []*v1alpha1.Migration) error {
 	checkMigrations := func() (interface{}, bool, error) {
 		isComplete := true
 		for _, m := range migrationList {
-			mig, err := k8s.Instance().GetMigration(m.Name, m.Namespace)
+			mig, err := storkops.Instance().GetMigration(m.Name, m.Namespace)
 			if err != nil {
 				return "", false, err
 			}

@@ -2,18 +2,19 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/stork/drivers/volume"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -54,7 +55,7 @@ func newCreateSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 					PersistentVolumeClaimName: pvcName,
 				},
 			}
-			_, err := k8s.Instance().CreateSnapshot(snapshot)
+			_, err := k8sextops.Instance().CreateSnapshot(snapshot)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -87,7 +88,7 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 				snapshots = new(snapv1.VolumeSnapshotList)
 				for _, snapName := range args {
 					for _, ns := range namespaces {
-						snapshot, err := k8s.Instance().GetSnapshot(snapName, ns)
+						snapshot, err := k8sextops.Instance().GetSnapshot(snapName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -98,7 +99,7 @@ func newGetSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IOStr
 			} else {
 				var tempSnapshots snapv1.VolumeSnapshotList
 				for _, ns := range namespaces {
-					snapshots, err = k8s.Instance().ListSnapshots(ns)
+					snapshots, err = k8sextops.Instance().ListSnapshots(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -154,7 +155,7 @@ func newDeleteSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 				}
 				snaps = args
 			} else {
-				snapshots, err := k8s.Instance().ListSnapshots(namespace)
+				snapshots, err := k8sextops.Instance().ListSnapshots(namespace)
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -181,7 +182,7 @@ func newDeleteSnapshotCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 
 func deleteSnapshots(snaps []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, snap := range snaps {
-		err := k8s.Instance().DeleteSnapshot(snap, namespace)
+		err := k8sextops.Instance().DeleteSnapshot(snap, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -191,27 +192,30 @@ func deleteSnapshots(snaps []string, namespace string, ioStreams genericclioptio
 	}
 }
 
-func snapshotPrinter(snapList *snapv1.VolumeSnapshotList, writer io.Writer, options printers.PrintOptions) error {
+func snapshotPrinter(
+	snapList *snapv1.VolumeSnapshotList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if snapList == nil {
-		return nil
+		return nil, nil
 	}
+
+	rows := make([]metav1beta1.TableRow, 0)
 	for _, snap := range snapList.Items {
-		name := printers.FormatResourceName(options.Kind, snap.Metadata.Name, options.WithKind)
-
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", snap.Metadata.Namespace); err != nil {
-				return err
-			}
-		}
-
 		status, completedTime := getSnapshotStatusAndTime(&snap)
 		snapType := volume.GetSnapshotType(&snap)
 		creationTime := toTimeString(snap.Metadata.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\n", name, snap.Spec.PersistentVolumeClaimName, status, creationTime, completedTime, snapType); err != nil {
-			return err
-		}
+		row := getRow(&snap,
+			[]interface{}{snap.Metadata.Name,
+				snap.Spec.PersistentVolumeClaimName,
+				status,
+				creationTime,
+				completedTime,
+				snapType},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }
 
 func getSnapshotStatusAndTime(snap *snapv1.VolumeSnapshot) (string, string) {
@@ -250,7 +254,7 @@ func newCreateVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams generic
 			}
 			snapRestore.Name = restoreCRDName
 			snapRestore.Namespace = cmdFactory.GetNamespace()
-			_, err := k8s.Instance().CreateVolumeSnapshotRestore(snapRestore)
+			_, err := storkops.Instance().CreateVolumeSnapshotRestore(snapRestore)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -285,7 +289,7 @@ func newGetVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericcli
 				snapRestoreList = new(storkv1.VolumeSnapshotRestoreList)
 				for _, restoreName := range args {
 					for _, ns := range namespaces {
-						snapRestore, err := k8s.Instance().GetVolumeSnapshotRestore(restoreName, ns)
+						snapRestore, err := storkops.Instance().GetVolumeSnapshotRestore(restoreName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -296,7 +300,7 @@ func newGetVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericcli
 			} else {
 				var tempRestoreList storkv1.VolumeSnapshotRestoreList
 				for _, ns := range namespaces {
-					snapRestoreList, err = k8s.Instance().ListVolumeSnapshotRestore(ns)
+					snapRestoreList, err = storkops.Instance().ListVolumeSnapshotRestore(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -333,7 +337,7 @@ func newDeleteVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams generic
 				return
 			}
 			name := args[0]
-			err := k8s.Instance().DeleteVolumeSnapshotRestore(name, cmdFactory.GetNamespace())
+			err := storkops.Instance().DeleteVolumeSnapshotRestore(name, cmdFactory.GetNamespace())
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -347,31 +351,26 @@ func newDeleteVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams generic
 	return restoreSnapshotCommand
 }
 
-func snapshotRestorePrinter(snapRestoreList *storkv1.VolumeSnapshotRestoreList, writer io.Writer, options printers.PrintOptions) error {
+func snapshotRestorePrinter(
+	snapRestoreList *storkv1.VolumeSnapshotRestoreList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if snapRestoreList == nil {
-		return nil
+		return nil, nil
 	}
 
+	rows := make([]metav1beta1.TableRow, 0)
 	for _, snapRestore := range snapRestoreList.Items {
-		name := printers.FormatResourceName(options.Kind, snapRestore.Name, options.WithKind)
-
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", snapRestore.Namespace); err != nil {
-				return err
-			}
-		}
-
 		creationTime := toTimeString(snapRestore.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%d\t%v\n",
-			name,
-			snapRestore.Spec.SourceName,
-			snapRestore.Spec.SourceNamespace,
-			snapRestore.Status.Status,
-			len(snapRestore.Status.Volumes),
-			creationTime,
-		); err != nil {
-			return err
-		}
+		row := getRow(&snapRestore,
+			[]interface{}{snapRestore.Name,
+				snapRestore.Spec.SourceName,
+				snapRestore.Spec.SourceNamespace,
+				snapRestore.Status.Status,
+				len(snapRestore.Status.Volumes),
+				creationTime},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }

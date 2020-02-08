@@ -131,7 +131,7 @@ func (c *FakeApplicationRestores) DeleteCollection(options *v1.DeleteOptions, li
 // Patch applies the patch and returns the patched applicationRestore.
 func (c *FakeApplicationRestores) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationRestore, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(applicationrestoresResource, c.ns, name, data, subresources...), &v1alpha1.ApplicationRestore{})
+		Invokes(testing.NewPatchSubresourceAction(applicationrestoresResource, c.ns, name, pt, data, subresources...), &v1alpha1.ApplicationRestore{})
 
 	if obj == nil {
 		return nil, err

@@ -37,7 +37,7 @@ func (r *ResourceCollector) pvToBeCollected(
 			return false, nil
 		}
 
-		pvc, err := r.k8sOps.GetPersistentVolumeClaim(pvcName, pvcNamespace)
+		pvc, err := r.coreOps.GetPersistentVolumeClaim(pvcName, pvcNamespace)
 		if err != nil {
 			return false, err
 		}

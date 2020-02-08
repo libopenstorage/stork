@@ -18,7 +18,8 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -146,7 +147,7 @@ func (a *azure) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 	} else {
 		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 		if storageClassName != "" {
-			storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
+			storageClass, err := storage.Instance().GetStorageClass(storageClassName)
 			if err == nil {
 				provisioner = storageClass.Provisioner
 			} else {
@@ -157,7 +158,7 @@ func (a *azure) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 
 	if provisioner == "" {
 		// Try to get info from the PV since storage class could be deleted
-		pv, err := k8s.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
+		pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
 		if err != nil {
 			logrus.Warnf("Error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 			return false
@@ -215,11 +216,11 @@ func (a *azure) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 
-		pvName, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
 			return nil, fmt.Errorf("error getting PV name for PVC (%v/%v): %v", pvc.Namespace, pvc.Name, err)
 		}
-		pv, err := k8s.Instance().GetPersistentVolume(pvName)
+		pv, err := core.Instance().GetPersistentVolume(pvName)
 		if err != nil {
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}

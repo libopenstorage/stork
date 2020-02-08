@@ -8,7 +8,8 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -42,7 +43,7 @@ func createSnapshotScheduleAndVerify(
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
-	snapshot, err := k8s.Instance().GetSnapshotSchedule(name, namespace)
+	snapshot, err := storkops.Instance().GetSnapshotSchedule(name, namespace)
 	require.NoError(t, err, "Error getting snapshot schedule")
 	require.Equal(t, name, snapshot.Name, "SnapshotSchedule name mismatch")
 	require.Equal(t, namespace, snapshot.Namespace, "SnapshotSchedule namespace mismatch")
@@ -86,9 +87,9 @@ func TestGetSnapshotSchedulesMultiple(t *testing.T) {
 
 func TestGetSnapshotSchedulesMultipleNamespaces(t *testing.T) {
 	defer resetTest()
-	_, err := k8s.Instance().CreateNamespace("test1", nil)
+	_, err := core.Instance().CreateNamespace("test1", nil)
 	require.NoError(t, err, "Error creating test1 namespace")
-	_, err = k8s.Instance().CreateNamespace("test2", nil)
+	_, err = core.Instance().CreateNamespace("test2", nil)
 	require.NoError(t, err, "Error creating test2 namespace")
 
 	createSnapshotScheduleAndVerify(t, "getsnapshotscheduletest1", "pvcname", "testpolicy", "test1", "preExec", "postExec", true)
@@ -123,7 +124,7 @@ func TestGetSnapshotSchedulesWithPVC(t *testing.T) {
 func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 	defer resetTest()
 	createSnapshotScheduleAndVerify(t, "getsnapshotschedulestatustest", "pvcname1", "testpolicy", "test", "preExec", "postExec", true)
-	snapshotSchedule, err := k8s.Instance().GetSnapshotSchedule("getsnapshotschedulestatustest", "test")
+	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule("getsnapshotschedulestatustest", "test")
 	require.NoError(t, err, "Error getting snapshot schedule")
 
 	// Update the status of the daily snapshot
@@ -138,7 +139,7 @@ func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 			Status:            snapv1.VolumeSnapshotConditionReady,
 		},
 	)
-	snapshotSchedule, err = k8s.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+	snapshotSchedule, err = storkops.Instance().UpdateSnapshotSchedule(snapshotSchedule)
 	require.NoError(t, err, "Error updating snapshot schedule")
 	expected := "NAME                            PVC        POLICYNAME   PRE-EXEC-RULE   POST-EXEC-RULE   RECLAIM-POLICY   SUSPEND   LAST-SUCCESS-TIME\n" +
 		"getsnapshotschedulestatustest   pvcname1   testpolicy   preExec         postExec         Retain           true      " + toTimeString(now.Time) + "\n"
@@ -155,7 +156,7 @@ func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 			Status:            snapv1.VolumeSnapshotConditionReady,
 		},
 	)
-	snapshotSchedule, err = k8s.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+	snapshotSchedule, err = storkops.Instance().UpdateSnapshotSchedule(snapshotSchedule)
 	require.NoError(t, err, "Error updating snapshot schedule")
 
 	expected = "NAME                            PVC        POLICYNAME   PRE-EXEC-RULE   POST-EXEC-RULE   RECLAIM-POLICY   SUSPEND   LAST-SUCCESS-TIME\n" +
@@ -172,7 +173,7 @@ func TestGetSnapshotSchedulesWithStatus(t *testing.T) {
 			Status:            snapv1.VolumeSnapshotConditionReady,
 		},
 	)
-	_, err = k8s.Instance().UpdateSnapshotSchedule(snapshotSchedule)
+	_, err = storkops.Instance().UpdateSnapshotSchedule(snapshotSchedule)
 	require.NoError(t, err, "Error updating snapshot schedule")
 
 	expected = "NAME                            PVC        POLICYNAME   PRE-EXEC-RULE   POST-EXEC-RULE   RECLAIM-POLICY   SUSPEND   LAST-SUCCESS-TIME\n" +
@@ -255,7 +256,7 @@ func TestSuspendResumeSnapshotSchedule(t *testing.T) {
 	expected := "VolumeSnapshotSchedule " + name + " suspended successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	snapshotSchedule, err := k8s.Instance().GetSnapshotSchedule(name, namespace)
+	snapshotSchedule, err := storkops.Instance().GetSnapshotSchedule(name, namespace)
 	require.NoError(t, err, "Error getting snapshotschedule")
 	require.True(t, *snapshotSchedule.Spec.Suspend, "snapshot schedule not suspended")
 
@@ -263,7 +264,7 @@ func TestSuspendResumeSnapshotSchedule(t *testing.T) {
 	expected = "VolumeSnapshotSchedule " + name + " resumed successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	snapshotSchedule, err = k8s.Instance().GetSnapshotSchedule(name, namespace)
+	snapshotSchedule, err = storkops.Instance().GetSnapshotSchedule(name, namespace)
 	require.NoError(t, err, "Error getting snapshotschedule")
 	require.False(t, *snapshotSchedule.Spec.Suspend, "snapshot schedule suspended")
 

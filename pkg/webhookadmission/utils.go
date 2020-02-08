@@ -12,7 +12,8 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/admissionregistration"
+	"github.com/portworx/sched-ops/k8s/core"
 	log "github.com/sirupsen/logrus"
 	hook "k8s.io/api/admissionregistration/v1beta1"
 	v1 "k8s.io/api/core/v1"
@@ -30,7 +31,7 @@ const (
 // CreateMutateWebhook create new webhookconfig for stork if not exist already
 func CreateMutateWebhook(caBundle []byte, ns string) error {
 	path := "/mutate"
-	webhook := hook.Webhook{
+	webhook := hook.MutatingWebhook{
 		Name: webhookName,
 		ClientConfig: hook.WebhookClientConfig{
 			Service: &hook.ServiceReference{
@@ -55,9 +56,9 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: storkAdmissionController,
 		},
-		Webhooks: []hook.Webhook{webhook},
+		Webhooks: []hook.MutatingWebhook{webhook},
 	}
-	_, err := k8s.Instance().CreateMutatingWebhookConfiguration(req)
+	_, err := admissionregistration.Instance().CreateMutatingWebhookConfiguration(req)
 	if !k8serr.IsAlreadyExists(err) && err != nil {
 		log.Errorf("unable to create mutate webhook: %v", err)
 		return err
@@ -136,5 +137,5 @@ func CreateCertSecrets(cert, key []byte, ns string) (*v1.Secret, error) {
 		},
 		Data: secretData,
 	}
-	return k8s.Instance().CreateSecret(secret)
+	return core.Instance().CreateSecret(secret)
 }
