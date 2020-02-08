@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
 	appv1 "k8s.io/api/apps/v1"
@@ -153,7 +153,7 @@ func (c *Controller) checkVolumeOwner(volumes []v1.Volume, namespace string) (bo
 		if v.PersistentVolumeClaim == nil {
 			continue
 		}
-		pvc, err := k8s.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
+		pvc, err := core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
 		if err != nil {
 			return false, err
 		}
@@ -181,7 +181,7 @@ func (c *Controller) Start() error {
 	if ns == "" {
 		ns = defaultNamespace
 	}
-	certSecrets, err := k8s.Instance().GetSecret(secretName, ns)
+	certSecrets, err := core.Instance().GetSecret(secretName, ns)
 	if err != nil && !k8serr.IsNotFound(err) {
 		log.Errorf("Unable to retrieve %v secret: %v", secretName, err)
 		return err

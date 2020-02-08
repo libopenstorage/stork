@@ -8,7 +8,9 @@ import (
 
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -52,7 +54,7 @@ func TriggerRequired(
 	policyType stork_api.SchedulePolicyType,
 	lastTrigger meta.Time,
 ) (bool, error) {
-	schedulePolicy, err := k8s.Instance().GetSchedulePolicy(policyName)
+	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 	if err != nil {
 		return false, err
 	}
@@ -175,7 +177,7 @@ func ValidateSchedulePolicy(policy *stork_api.SchedulePolicy) error {
 // GetRetain Returns the retain value for the specified policy. Returns the
 // default for the policy if none is specified
 func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stork_api.Retain, error) {
-	schedulePolicy, err := k8s.Instance().GetSchedulePolicy(policyName)
+	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
 	if err != nil {
 		return 0, err
 	}
@@ -254,7 +256,7 @@ func Init() error {
 		}
 
 		logrus.Infof("Stork test mode enabled. Watching for config map: %s for mock times", MockTimeConfigMapName)
-		cm, err := k8s.Instance().GetConfigMap(MockTimeConfigMapName, MockTimeConfigMapNamespace)
+		cm, err := core.Instance().GetConfigMap(MockTimeConfigMapName, MockTimeConfigMapNamespace)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				logrus.Infof("Stork in test mode, however no config map present to mock time. Creating it.")
@@ -271,7 +273,7 @@ func Init() error {
 					Data: data,
 				}
 
-				cm, err = k8s.Instance().CreateConfigMap(cm)
+				cm, err = core.Instance().CreateConfigMap(cm)
 				if err != nil {
 					return err
 				}
@@ -283,7 +285,7 @@ func Init() error {
 
 		cm = cm.DeepCopy()
 
-		err = k8s.Instance().WatchConfigMap(cm, fn)
+		err = core.Instance().WatchConfigMap(cm, fn)
 		if err != nil {
 			logrus.Errorf("Failed to watch on config map: %s due to: %v", MockTimeConfigMapName, err)
 			return err
@@ -294,7 +296,7 @@ func Init() error {
 }
 
 func createDefaultPolicy() error {
-	_, err := k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+	_, err := storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "default-migration-policy",
 		},
@@ -306,7 +308,7 @@ func createDefaultPolicy() error {
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-	_, err = k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "default-interval-policy",
 		},
@@ -319,7 +321,7 @@ func createDefaultPolicy() error {
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-	_, err = k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "default-daily-policy",
 		},
@@ -332,7 +334,7 @@ func createDefaultPolicy() error {
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-	_, err = k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "default-weekly-policy",
 		},
@@ -347,7 +349,7 @@ func createDefaultPolicy() error {
 		return err
 	}
 
-	_, err = k8s.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "default-monthly-policy",
 		},
@@ -365,7 +367,7 @@ func createDefaultPolicy() error {
 }
 
 func createCRD() error {
-	resource := k8s.CustomResource{
+	resource := apiextensions.CustomResource{
 		Name:    stork_api.SchedulePolicyResourceName,
 		Plural:  stork_api.SchedulePolicyResourcePlural,
 		Group:   stork.GroupName,
@@ -373,10 +375,10 @@ func createCRD() error {
 		Scope:   apiextensionsv1beta1.ClusterScoped,
 		Kind:    reflect.TypeOf(stork_api.SchedulePolicy{}).Name(),
 	}
-	err := k8s.Instance().CreateCRD(resource)
+	err := apiextensions.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }

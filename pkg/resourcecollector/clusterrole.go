@@ -176,10 +176,10 @@ func (r *ResourceCollector) mergeAndUpdateClusterRoleBinding(
 		return err
 	}
 
-	currentCRB, err := r.k8sOps.GetClusterRoleBinding(newCRB.Name)
+	currentCRB, err := r.rbacOps.GetClusterRoleBinding(newCRB.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			_, err = r.k8sOps.CreateClusterRoleBinding(&newCRB)
+			_, err = r.rbacOps.CreateClusterRoleBinding(&newCRB)
 		}
 		return err
 	}
@@ -203,6 +203,6 @@ func (r *ResourceCollector) mergeAndUpdateClusterRoleBinding(
 		currentCRB.Subjects = append(currentCRB.Subjects, subject)
 	}
 
-	_, err = r.k8sOps.UpdateClusterRoleBinding(currentCRB)
+	_, err = r.rbacOps.UpdateClusterRoleBinding(currentCRB)
 	return err
 }

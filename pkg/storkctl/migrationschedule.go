@@ -2,14 +2,14 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -52,7 +52,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				return
 			}
 
-			_, err := k8s.Instance().GetSchedulePolicy(schedulePolicyName)
+			_, err := storkops.Instance().GetSchedulePolicy(schedulePolicyName)
 			if err != nil {
 				util.CheckErr(fmt.Errorf("error getting schedulepolicy %v: %v", schedulePolicyName, err))
 				return
@@ -77,7 +77,7 @@ func newCreateMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 			}
 			migrationSchedule.Name = migrationScheduleName
 			migrationSchedule.Namespace = cmdFactory.GetNamespace()
-			_, err = k8s.Instance().CreateMigrationSchedule(migrationSchedule)
+			_, err = storkops.Instance().CreateMigrationSchedule(migrationSchedule)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -118,7 +118,7 @@ func newGetMigrationScheduleCommand(cmdFactory Factory, ioStreams genericcliopti
 				migrationSchedules = new(storkv1.MigrationScheduleList)
 				for _, migrationScheduleName := range args {
 					for _, ns := range namespaces {
-						migrationSchedule, err := k8s.Instance().GetMigrationSchedule(migrationScheduleName, ns)
+						migrationSchedule, err := storkops.Instance().GetMigrationSchedule(migrationScheduleName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -129,7 +129,7 @@ func newGetMigrationScheduleCommand(cmdFactory Factory, ioStreams genericcliopti
 			} else {
 				var tempMigrationSchedules storkv1.MigrationScheduleList
 				for _, ns := range namespaces {
-					migrationSchedules, err = k8s.Instance().ListMigrationSchedules(ns)
+					migrationSchedules, err = storkops.Instance().ListMigrationSchedules(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -184,7 +184,7 @@ func newDeleteMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 				}
 				migrationSchedules = args
 			} else {
-				migrationScheduleList, err := k8s.Instance().ListMigrationSchedules(cmdFactory.GetNamespace())
+				migrationScheduleList, err := storkops.Instance().ListMigrationSchedules(cmdFactory.GetNamespace())
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -211,7 +211,7 @@ func newDeleteMigrationScheduleCommand(cmdFactory Factory, ioStreams genericclio
 
 func deleteMigrationSchedules(migrationSchedules []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, migrationSchedule := range migrationSchedules {
-		err := k8s.Instance().DeleteMigrationSchedule(migrationSchedule, namespace)
+		err := storkops.Instance().DeleteMigrationSchedule(migrationSchedule, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -227,13 +227,13 @@ func getMigrationSchedules(clusterPair string, args []string, namespace string) 
 		if len(args) == 0 {
 			return nil, fmt.Errorf("at least one argument needs to be provided for migration schedule name if cluster pair isn't provided")
 		}
-		migrationSchedule, err := k8s.Instance().GetMigrationSchedule(args[0], namespace)
+		migrationSchedule, err := storkops.Instance().GetMigrationSchedule(args[0], namespace)
 		if err != nil {
 			return nil, err
 		}
 		migrationSchedules = append(migrationSchedules, migrationSchedule)
 	} else {
-		migrationScheduleList, err := k8s.Instance().ListMigrationSchedules(namespace)
+		migrationScheduleList, err := storkops.Instance().ListMigrationSchedules(namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -305,7 +305,7 @@ func updateMigrationSchedules(migrationSchedules []*storkv1.MigrationSchedule, n
 	}
 	for _, migrationSchedule := range migrationSchedules {
 		migrationSchedule.Spec.Suspend = &suspend
-		_, err := k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+		_, err := storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -315,19 +315,16 @@ func updateMigrationSchedules(migrationSchedules []*storkv1.MigrationSchedule, n
 	}
 }
 
-func migrationSchedulePrinter(migrationScheduleList *storkv1.MigrationScheduleList, writer io.Writer, options printers.PrintOptions) error {
+func migrationSchedulePrinter(
+	migrationScheduleList *storkv1.MigrationScheduleList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if migrationScheduleList == nil {
-		return nil
+		return nil, nil
 	}
+
+	rows := make([]metav1beta1.TableRow, 0)
 	for _, migrationSchedule := range migrationScheduleList.Items {
-		name := printers.FormatResourceName(options.Kind, migrationSchedule.Name, options.WithKind)
-
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", migrationSchedule.Namespace); err != nil {
-				return err
-			}
-		}
-
 		lastSuccessTime := time.Time{}
 		lastSuccessDuration := ""
 		for _, policyType := range storkv1.GetValidSchedulePolicyTypes() {
@@ -349,16 +346,15 @@ func migrationSchedulePrinter(migrationScheduleList *storkv1.MigrationScheduleLi
 			suspend = *migrationSchedule.Spec.Suspend
 		}
 
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\n",
-			name,
-			migrationSchedule.Spec.SchedulePolicyName,
-			migrationSchedule.Spec.Template.Spec.ClusterPair,
-			suspend,
-			toTimeString(lastSuccessTime),
-			lastSuccessDuration,
-		); err != nil {
-			return err
-		}
+		row := getRow(&migrationSchedule,
+			[]interface{}{migrationSchedule.Name,
+				migrationSchedule.Spec.SchedulePolicyName,
+				migrationSchedule.Spec.Template.Spec.ClusterPair,
+				suspend,
+				toTimeString(lastSuccessTime),
+				lastSuccessDuration},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }

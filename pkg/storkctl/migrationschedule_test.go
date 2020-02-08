@@ -9,7 +9,8 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,7 +42,7 @@ func createMigrationScheduleAndVerify(
 		cmdArgs = append(cmdArgs, "--postExecRule", postExecRule)
 	}
 
-	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: schedulePolicyName,
 		},
@@ -56,7 +57,7 @@ func createMigrationScheduleAndVerify(
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
-	migration, err := k8s.Instance().GetMigrationSchedule(name, namespace)
+	migration, err := storkops.Instance().GetMigrationSchedule(name, namespace)
 	require.NoError(t, err, "Error getting migration schedule")
 	require.Equal(t, name, migration.Name, "MigrationSchedule name mismatch")
 	require.Equal(t, namespace, migration.Namespace, "MigrationSchedule namespace mismatch")
@@ -102,9 +103,9 @@ func TestGetMigrationSchedulesMultiple(t *testing.T) {
 
 func TestGetMigrationSchedulesMultipleNamespaces(t *testing.T) {
 	defer resetTest()
-	_, err := k8s.Instance().CreateNamespace("test1", nil)
+	_, err := core.Instance().CreateNamespace("test1", nil)
 	require.NoError(t, err, "Error creating test1 namespace")
-	_, err = k8s.Instance().CreateNamespace("test2", nil)
+	_, err = core.Instance().CreateNamespace("test2", nil)
 	require.NoError(t, err, "Error creating test2 namespace")
 
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "test1", "clusterpair1", []string{"namespace1"}, "", "", true)
@@ -139,7 +140,7 @@ func TestGetMigrationSchedulesWithClusterPair(t *testing.T) {
 func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 	defer resetTest()
 	createMigrationScheduleAndVerify(t, "getmigrationschedulestatustest", "testpolicy", "default", "clusterpair1", []string{"namespace1"}, "", "", true)
-	migrationSchedule, err := k8s.Instance().GetMigrationSchedule("getmigrationschedulestatustest", "default")
+	migrationSchedule, err := storkops.Instance().GetMigrationSchedule("getmigrationschedulestatustest", "default")
 	require.NoError(t, err, "Error getting migration schedule")
 
 	// Update the status of the daily migration
@@ -155,7 +156,7 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
-	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	migrationSchedule, err = storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 	require.NoError(t, err, "Error updating migration schedule")
 
 	expected := "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
@@ -173,7 +174,7 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
-	migrationSchedule, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	migrationSchedule, err = storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 	require.NoError(t, err, "Error updating migration schedule")
 
 	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
@@ -191,7 +192,7 @@ func TestGetMigrationSchedulesWithStatus(t *testing.T) {
 			Status:            storkv1.MigrationStatusSuccessful,
 		},
 	)
-	_, err = k8s.Instance().UpdateMigrationSchedule(migrationSchedule)
+	_, err = storkops.Instance().UpdateMigrationSchedule(migrationSchedule)
 	require.NoError(t, err, "Error updating migration schedule")
 
 	expected = "NAME                             POLICYNAME   CLUSTERPAIR    SUSPEND   LAST-SUCCESS-TIME     LAST-SUCCESS-DURATION\n" +
@@ -289,7 +290,7 @@ func TestDefaultMigrationSchedulePolicy(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, true)
 
 	// Create again adding default policy
-	_, err := k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default-migration-policy",
 		},
@@ -313,7 +314,7 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 	expected := "MigrationSchedule " + name + " suspended successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	migrationSchedule, err := k8s.Instance().GetMigrationSchedule(name, namespace)
+	migrationSchedule, err := storkops.Instance().GetMigrationSchedule(name, namespace)
 	require.NoError(t, err, "Error getting migrationschedule")
 	require.True(t, *migrationSchedule.Spec.Suspend, "migration schedule not suspended")
 
@@ -321,7 +322,7 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 	expected = "MigrationSchedule " + name + " resumed successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	migrationSchedule, err = k8s.Instance().GetMigrationSchedule(name, namespace)
+	migrationSchedule, err = storkops.Instance().GetMigrationSchedule(name, namespace)
 	require.NoError(t, err, "Error getting migrationschedule")
 	require.False(t, *migrationSchedule.Spec.Suspend, "migration schedule suspended")
 
@@ -329,7 +330,7 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 	expected = "MigrationSchedule " + name + " suspended successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	migrationSchedule, err = k8s.Instance().GetMigrationSchedule(name, namespace)
+	migrationSchedule, err = storkops.Instance().GetMigrationSchedule(name, namespace)
 	require.NoError(t, err, "Error getting migrationschedule")
 	require.True(t, *migrationSchedule.Spec.Suspend, "migration schedule not suspended")
 
@@ -337,7 +338,7 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 	expected = "MigrationSchedule " + name + " resumed successfully\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	migrationSchedule, err = k8s.Instance().GetMigrationSchedule(name, namespace)
+	migrationSchedule, err = storkops.Instance().GetMigrationSchedule(name, namespace)
 	require.NoError(t, err, "Error getting migrationschedule")
 	require.False(t, *migrationSchedule.Spec.Suspend, "migration schedule suspended")
 

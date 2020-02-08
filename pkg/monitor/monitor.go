@@ -7,14 +7,15 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	storagev1beta1 "k8s.io/api/storage/v1beta1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	"k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -82,7 +83,7 @@ func (m *Monitor) isSameNode(k8sNodeName string, driverNode *volume.NodeInfo) bo
 	if k8sNodeName == driverNode.Hostname {
 		return true
 	}
-	node, err := k8s.Instance().GetNodeByName(k8sNodeName)
+	node, err := core.Instance().GetNodeByName(k8sNodeName)
 	if err != nil {
 		log.Errorf("Error getting node %v: %v", k8sNodeName, err)
 		return false
@@ -103,14 +104,14 @@ func (m *Monitor) podMonitor() error {
 		if pod.Status.Reason == node.NodeUnreachablePodReason {
 			podUnknownState = true
 		} else if pod.ObjectMeta.DeletionTimestamp != nil {
-			n, err := k8s.Instance().GetNodeByName(pod.Spec.NodeName)
+			n, err := core.Instance().GetNodeByName(pod.Spec.NodeName)
 			if err != nil {
 				return err
 			}
 
 			// Check if node has eviction taint
 			for _, taint := range n.Spec.Taints {
-				if taint.Key == algorithm.TaintNodeUnreachable &&
+				if taint.Key == api.TaintNodeUnreachable &&
 					taint.Effect == v1.TaintEffectNoExecute {
 					podUnknownState = true
 					break
@@ -133,7 +134,7 @@ func (m *Monitor) podMonitor() error {
 			}
 
 			// force delete the pod
-			err = k8s.Instance().DeletePods([]v1.Pod{*pod}, true)
+			err = core.Instance().DeletePods([]v1.Pod{*pod}, true)
 			if err != nil {
 				if errors.IsNotFound(err) {
 					return nil
@@ -147,7 +148,7 @@ func (m *Monitor) podMonitor() error {
 		return nil
 	}
 
-	if err := k8s.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
+	if err := core.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
 		log.Errorf("failed to watch pods due to: %v", err)
 		return err
 	}
@@ -173,7 +174,7 @@ func (m *Monitor) driverMonitor() {
 				// If not online, look at all the pods on that node
 				// For any Running pod on that node using volume by the driver, kill the pod
 				if node.Status != volume.NodeOnline {
-					pods, err := k8s.Instance().GetPods("", nil)
+					pods, err := core.Instance().GetPods("", nil)
 					if err != nil {
 						log.Errorf("Error getting pods: %v", err)
 						continue
@@ -193,7 +194,7 @@ func (m *Monitor) driverMonitor() {
 
 						if m.isSameNode(pod.Spec.NodeName, node) {
 							storklog.PodLog(&pod).Infof("Deleting Pod from Node: %v", pod.Spec.NodeName)
-							err = k8s.Instance().DeletePods([]v1.Pod{pod}, true)
+							err = core.Instance().DeletePods([]v1.Pod{pod}, true)
 							if err != nil {
 								storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
 								continue
@@ -224,14 +225,14 @@ func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
 	return true, nil
 }
 
-func (m *Monitor) doesDriverOwnVolumeAttachment(va *storagev1beta1.VolumeAttachment) (bool, error) {
-	pv, err := k8s.Instance().GetPersistentVolume(*va.Spec.Source.PersistentVolumeName)
+func (m *Monitor) doesDriverOwnVolumeAttachment(va *storagev1.VolumeAttachment) (bool, error) {
+	pv, err := core.Instance().GetPersistentVolume(*va.Spec.Source.PersistentVolumeName)
 	if err != nil {
 		log.Errorf("Error getting persistent volume from volume attachment: %v", err)
 		return false, err
 	}
 
-	pvc, err := k8s.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
+	pvc, err := core.Instance().GetPersistentVolumeClaim(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace)
 	if err != nil {
 		log.Errorf("Error getting persistent volume claim from volume attachment: %v", err)
 		return false, err
@@ -244,7 +245,7 @@ func (m *Monitor) cleanupVolumeAttachmentsByPod(pod *v1.Pod) error {
 	log.Infof("Cleaning up volume attachments for pod %s", pod.Name)
 
 	// Get all vol attachments
-	vaList, err := k8s.Instance().ListVolumeAttachments()
+	vaList, err := storage.Instance().ListVolumeAttachments()
 	if err != nil {
 		return err
 	}
@@ -253,7 +254,7 @@ func (m *Monitor) cleanupVolumeAttachmentsByPod(pod *v1.Pod) error {
 		for _, va := range vaList.Items {
 			// Delete attachments for this pod
 			if pod.Spec.NodeName == va.Spec.NodeName {
-				err := k8s.Instance().DeleteVolumeAttachment(va.Name)
+				err := storage.Instance().DeleteVolumeAttachment(va.Name)
 				if err != nil {
 					return err
 				}
@@ -270,7 +271,7 @@ func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
 	log.Infof("Cleaning up volume attachments for node %s", node.StorageID)
 
 	// Get all vol attachments
-	vaList, err := k8s.Instance().ListVolumeAttachments()
+	vaList, err := storage.Instance().ListVolumeAttachments()
 	if err != nil {
 		return err
 	}
@@ -284,7 +285,7 @@ func (m *Monitor) cleanupVolumeAttachmentsByNode(node *volume.NodeInfo) error {
 
 			// Delete attachments for this pod
 			if m.isSameNode(va.Spec.NodeName, node) {
-				err := k8s.Instance().DeleteVolumeAttachment(va.Name)
+				err := storage.Instance().DeleteVolumeAttachment(va.Name)
 				if err != nil {
 					return err
 				}

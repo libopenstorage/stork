@@ -13,7 +13,8 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -143,7 +144,7 @@ func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 				Name: getNameForClusterDomainsStatus(clusterID),
 			},
 		}
-		if _, err := k8s.Instance().CreateClusterDomainsStatus(clusterDomainStatus); err != nil && !errors.IsAlreadyExists(err) {
+		if _, err := storkops.Instance().CreateClusterDomainsStatus(clusterDomainStatus); err != nil && !errors.IsAlreadyExists(err) {
 			return nil, true, fmt.Errorf("failed to create cluster domain"+
 				" status object for driver %v: %v", c.Driver.String(), err)
 		}
@@ -158,7 +159,7 @@ func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 
 // createCRD creates the CRD for ClusterDomainsStatus object
 func (c *ClusterDomainsStatusController) createCRD() error {
-	resource := k8s.CustomResource{
+	resource := apiextensions.CustomResource{
 		Name:       storkv1.ClusterDomainsStatusResourceName,
 		Plural:     storkv1.ClusterDomainsStatusPlural,
 		Group:      stork.GroupName,
@@ -167,12 +168,12 @@ func (c *ClusterDomainsStatusController) createCRD() error {
 		Kind:       reflect.TypeOf(storkv1.ClusterDomainsStatus{}).Name(),
 		ShortNames: []string{storkv1.ClusterDomainsStatusShortName},
 	}
-	err := k8s.Instance().CreateCRD(resource)
+	err := apiextensions.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }
 
 func getNameForClusterDomainsStatus(clusterID string) string {

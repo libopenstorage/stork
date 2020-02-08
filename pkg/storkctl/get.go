@@ -5,9 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -37,6 +38,15 @@ func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *c
 	return getCommands
 }
 
+func getRow(object runtime.Object, cells []interface{}) metav1beta1.TableRow {
+	return metav1beta1.TableRow{
+		Cells: cells,
+		Object: runtime.RawExtension{
+			Object: object.DeepCopyObject(),
+		},
+	}
+}
+
 func printTable(
 	cmd *cobra.Command,
 	object runtime.Object,
@@ -45,13 +55,30 @@ func printTable(
 	printerFunc interface{},
 	out io.Writer,
 ) error {
-	printer := printers.NewHumanReadablePrinter(nil, printers.PrintOptions{
-		WithNamespace: withNamespace,
-	})
-	if err := printer.Handler(columns, nil, printerFunc); err != nil {
+
+	columnDefinitions := make([]metav1beta1.TableColumnDefinition, 0)
+	for _, c := range columns {
+		columnDefinitions = append(columnDefinitions, metav1beta1.TableColumnDefinition{
+			Name: c,
+		})
+	}
+	generator := printers.NewTableGenerator()
+	err := generator.TableHandler(columnDefinitions, printerFunc)
+	if err != nil {
 		return err
 	}
-	return printer.PrintObj(object, out)
+	table, err := generator.GenerateTable(object, printers.GenerateOptions{
+		NoHeaders: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	printer := printers.NewTablePrinter(printers.PrintOptions{
+		ColumnLabels:  columns,
+		WithNamespace: withNamespace,
+	})
+	return printer.PrintObj(table, out)
 }
 
 func printEncoded(cmd *cobra.Command, object runtime.Object, outputFormat string, out io.Writer) error {

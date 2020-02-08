@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
@@ -17,7 +19,6 @@ import (
 	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
-	"github.com/libopenstorage/stork/pkg/initializer"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/pvcwatcher"
@@ -31,14 +32,13 @@ import (
 	"github.com/urfave/cli"
 	api_v1 "k8s.io/api/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	core_v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	componentconfig "k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1"
 )
 
 const (
@@ -118,10 +118,6 @@ func main() {
 			Name:  "application-controller",
 			Usage: "Start the controllers for managing applications (default: true)",
 		},
-		cli.BoolFlag{
-			Name:  "app-initializer",
-			Usage: "EXPERIMENTAL: Enable application initializer to update scheduler name automatically (default: false)",
-		},
 		cli.StringFlag{
 			Name:  "admin-namespace",
 			Value: defaultAdminNamespace,
@@ -169,8 +165,8 @@ func run(c *cli.Context) {
 	}
 
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: core_v1.New(k8sClient.CoreV1().RESTClient()).Events("")})
-	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, api_v1.EventSource{Component: eventComponentName})
+	eventBroadcaster.StartRecordingToSink(&core_v1.EventSinkImpl{Interface: k8sClient.CoreV1().Events("")})
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, api_v1.EventSource{Component: eventComponentName})
 
 	var d volume.Driver
 	if driverName != "" {
@@ -202,7 +198,7 @@ func run(c *cli.Context) {
 		log.Fatalf("error starting webhook controller: %v", err)
 	}
 
-	runFunc := func(_ <-chan struct{}) {
+	runFunc := func(context.Context) {
 		runStork(d, recorder, c)
 	}
 
@@ -226,19 +222,17 @@ func run(c *cli.Context) {
 			lockObjectNamespace,
 			lockObjectName,
 			k8sClient.CoreV1(),
+			k8sClient.CoordinationV1(),
 			lockConfig)
 		if err != nil {
 			log.Fatalf("Error creating resource lock: %v", err)
 		}
 
-		defaultConfig := &componentconfig.LeaderElectionConfiguration{}
-		componentconfig.SetDefaults_LeaderElectionConfiguration(defaultConfig)
-
 		leaderElectionConfig := leaderelection.LeaderElectionConfig{
 			Lock:          resourceLock,
-			LeaseDuration: defaultConfig.LeaseDuration.Duration,
-			RenewDeadline: defaultConfig.RenewDeadline.Duration,
-			RetryPeriod:   defaultConfig.RetryPeriod.Duration,
+			LeaseDuration: 15 * time.Second,
+			RenewDeadline: 10 * time.Second,
+			RetryPeriod:   2 * time.Second,
 
 			Callbacks: leaderelection.LeaderCallbacks{
 				OnStartedLeading: runFunc,
@@ -252,7 +246,7 @@ func run(c *cli.Context) {
 			log.Fatalf("Error creating leader elector: %v", err)
 		}
 
-		leaderElector.Run()
+		leaderElector.Run(context.Background())
 	} else {
 		runFunc(nil)
 	}
@@ -280,9 +274,6 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		adminNamespace = c.String("migration-admin-namespace")
 	}
 
-	initializer := &initializer.Initializer{
-		Driver: d,
-	}
 	monitor := &monitor.Monitor{
 		Driver:      d,
 		IntervalSec: c.Int64("health-monitor-interval"),
@@ -295,12 +286,6 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		log.Fatalf("Error initializing schedule: %v", err)
 	}
 	if d != nil {
-		if c.Bool("app-initializer") {
-			if err := initializer.Start(); err != nil {
-				log.Fatalf("Error starting initializer: %v", err)
-			}
-		}
-
 		if c.Bool("health-monitor") {
 			if err := monitor.Start(); err != nil {
 				log.Fatalf("Error starting storage monitor: %v", err)
@@ -384,11 +369,6 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		if c.Bool("snapshotter") {
 			if err := snapshot.Stop(); err != nil {
 				log.Warnf("Error stopping snapshot controllers: %v", err)
-			}
-		}
-		if c.Bool("app-initializer") {
-			if err := initializer.Stop(); err != nil {
-				log.Warnf("Error stopping app-initializer: %v", err)
 			}
 		}
 		if err := d.Stop(); err != nil {

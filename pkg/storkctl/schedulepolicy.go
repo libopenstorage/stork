@@ -2,13 +2,13 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -29,7 +29,7 @@ func newGetSchedulePolicyCommand(cmdFactory Factory, ioStreams genericclioptions
 			if len(args) > 0 {
 				schedulePolicies = new(storkv1.SchedulePolicyList)
 				for _, policyName := range args {
-					policy, err := k8s.Instance().GetSchedulePolicy(policyName)
+					policy, err := storkops.Instance().GetSchedulePolicy(policyName)
 					if err == nil {
 						schedulePolicies.Items = append(schedulePolicies.Items, *policy)
 					} else {
@@ -38,7 +38,7 @@ func newGetSchedulePolicyCommand(cmdFactory Factory, ioStreams genericclioptions
 					}
 				}
 			} else {
-				schedulePolicies, err = k8s.Instance().ListSchedulePolicies()
+				schedulePolicies, err = storkops.Instance().ListSchedulePolicies()
 				if err != nil {
 					util.CheckErr(err)
 					return
@@ -60,15 +60,19 @@ func newGetSchedulePolicyCommand(cmdFactory Factory, ioStreams genericclioptions
 	return getSchedulePolicyCommand
 }
 
-func schedulePolicyPrinter(schedulePolicyList *storkv1.SchedulePolicyList, writer io.Writer, options printers.PrintOptions) error {
+func schedulePolicyPrinter(
+	schedulePolicyList *storkv1.SchedulePolicyList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	const notConfiguredString = "N/A"
 	const invalidString = "Invalid"
-	if schedulePolicyList == nil {
-		return nil
-	}
-	for _, schedulePolicy := range schedulePolicyList.Items {
-		name := printers.FormatResourceName(options.Kind, schedulePolicy.Name, options.WithKind)
 
+	if schedulePolicyList == nil {
+		return nil, nil
+	}
+
+	rows := make([]metav1beta1.TableRow, 0)
+	for _, schedulePolicy := range schedulePolicyList.Items {
 		interval := notConfiguredString
 		daily := notConfiguredString
 		weekly := notConfiguredString
@@ -104,15 +108,14 @@ func schedulePolicyPrinter(schedulePolicyList *storkv1.SchedulePolicyList, write
 			}
 		}
 
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\n",
-			name,
-			interval,
-			daily,
-			weekly,
-			monthly,
-		); err != nil {
-			return err
-		}
+		row := getRow(&schedulePolicy,
+			[]interface{}{schedulePolicy.Name,
+				interval,
+				daily,
+				weekly,
+				monthly},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }

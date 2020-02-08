@@ -13,7 +13,9 @@ import (
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -83,7 +85,7 @@ func (a *ApplicationCloneController) setKind(snap *stork_api.ApplicationClone) {
 // performRuleRecovery terminates potential background commands running pods for
 // all applicationClone objects
 func (a *ApplicationCloneController) performRuleRecovery() error {
-	applicationClones, err := k8s.Instance().ListApplicationClones(v1.NamespaceAll)
+	applicationClones, err := storkops.Instance().ListApplicationClones(v1.NamespaceAll)
 	if err != nil {
 		logrus.Errorf("Failed to list all application clones during rule recovery: %v", err)
 		return err
@@ -113,11 +115,11 @@ func (a *ApplicationCloneController) setDefaults(clone *stork_api.ApplicationClo
 // Make sure the source namespaces exists and create the destination
 // namespace if it doesn't exist
 func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.ApplicationClone) error {
-	_, err := k8s.Instance().GetNamespace(clone.Spec.SourceNamespace)
+	_, err := core.Instance().GetNamespace(clone.Spec.SourceNamespace)
 	if err != nil {
 		return fmt.Errorf("error getting source namespace %v: %v", clone.Spec.SourceNamespace, err)
 	}
-	_, err = k8s.Instance().CreateNamespace(clone.Spec.DestinationNamespace, nil)
+	_, err = core.Instance().CreateNamespace(clone.Spec.DestinationNamespace, nil)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("error creating destination namespace %v: %v", clone.Spec.DestinationNamespace, err)
 	}
@@ -163,7 +165,7 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 			}
 			// Make sure the rules exist if configured
 			if clone.Spec.PreExecRule != "" {
-				_, err := k8s.Instance().GetRule(clone.Spec.PreExecRule, clone.Namespace)
+				_, err := storkops.Instance().GetRule(clone.Spec.PreExecRule, clone.Namespace)
 				if err != nil {
 					message := fmt.Sprintf("Error getting PreExecRule %v: %v", clone.Spec.PreExecRule, err)
 					log.ApplicationCloneLog(clone).Errorf(message)
@@ -175,7 +177,7 @@ func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event
 				}
 			}
 			if clone.Spec.PostExecRule != "" {
-				_, err := k8s.Instance().GetRule(clone.Spec.PostExecRule, clone.Namespace)
+				_, err := storkops.Instance().GetRule(clone.Spec.PostExecRule, clone.Namespace)
 				if err != nil {
 					message := fmt.Sprintf("Error getting PostExecRule %v: %v", clone.Spec.PostExecRule, err)
 					log.ApplicationCloneLog(clone).Errorf(message)
@@ -245,7 +247,7 @@ func (a *ApplicationCloneController) namespaceCloneAllowed(clone *stork_api.Appl
 }
 
 func (a *ApplicationCloneController) generateCloneVolumeNames(clone *stork_api.ApplicationClone) error {
-	pvcList, err := k8s.Instance().GetPersistentVolumeClaims(clone.Spec.SourceNamespace, clone.Spec.Selectors)
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(clone.Spec.SourceNamespace, clone.Spec.Selectors)
 	if err != nil {
 		return fmt.Errorf("error getting list of volumes to clone: %v", err)
 	}
@@ -255,7 +257,7 @@ func (a *ApplicationCloneController) generateCloneVolumeNames(clone *stork_api.A
 		if !a.Driver.OwnsPVC(&pvc) {
 			continue
 		}
-		volume, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
 			return fmt.Errorf("error getting volume for PVC: %v", err)
 		}
@@ -407,7 +409,7 @@ func (a *ApplicationCloneController) runPreExecRule(clone *stork_api.Application
 			return nil, nil
 		}
 	}
-	r, err := k8s.Instance().GetRule(clone.Spec.PreExecRule, clone.Namespace)
+	r, err := storkops.Instance().GetRule(clone.Spec.PreExecRule, clone.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +422,7 @@ func (a *ApplicationCloneController) runPreExecRule(clone *stork_api.Application
 }
 
 func (a *ApplicationCloneController) runPostExecRule(clone *stork_api.ApplicationClone) error {
-	r, err := k8s.Instance().GetRule(clone.Spec.PostExecRule, clone.Namespace)
+	r, err := storkops.Instance().GetRule(clone.Spec.PostExecRule, clone.Namespace)
 	if err != nil {
 		return err
 	}
@@ -689,7 +691,7 @@ func (a *ApplicationCloneController) deleteClone(clone *stork_api.ApplicationClo
 }
 
 func (a *ApplicationCloneController) createCRD() error {
-	resource := k8s.CustomResource{
+	resource := apiextensions.CustomResource{
 		Name:    stork_api.ApplicationCloneResourceName,
 		Plural:  stork_api.ApplicationCloneResourcePlural,
 		Group:   stork.GroupName,
@@ -697,10 +699,10 @@ func (a *ApplicationCloneController) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationClone{}).Name(),
 	}
-	err := k8s.Instance().CreateCRD(resource)
+	err := apiextensions.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }

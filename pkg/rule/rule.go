@@ -15,18 +15,21 @@ import (
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/dynamic"
+	"github.com/portworx/sched-ops/k8s/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/apis/core"
+	coreapi "k8s.io/kubernetes/pkg/apis/core"
 )
 
 const (
@@ -90,7 +93,7 @@ var ownerAPICallBackoff = wait.Backoff{
 
 // Init initializes the rule executor
 func Init() error {
-	storkRuleResource := k8s.CustomResource{
+	storkRuleResource := apiextensions.CustomResource{
 		Name:    "rule",
 		Plural:  "rules",
 		Group:   stork.GroupName,
@@ -99,14 +102,14 @@ func Init() error {
 		Kind:    reflect.TypeOf(stork_api.Rule{}).Name(),
 	}
 
-	err := k8s.Instance().CreateCRD(storkRuleResource)
+	err := apiextensions.Instance().CreateCRD(storkRuleResource)
 	if err != nil {
-		if !errors.IsAlreadyExists(err) {
+		if !k8serrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create CRD due to: %v", err)
 		}
 	}
 
-	err = k8s.Instance().ValidateCRD(storkRuleResource, validateCRDTimeout, validateCRDInterval)
+	err = apiextensions.Instance().ValidateCRD(storkRuleResource, validateCRDTimeout, validateCRDInterval)
 	if err != nil {
 		return fmt.Errorf("failed to validate stork rules CRD due to: %v", err)
 	}
@@ -159,9 +162,9 @@ func PerformRuleRecovery(
 		backgroundPodList := make([]v1.Pod, 0)
 		log.RuleLog(nil, owner).Infof("Performing recovery to terminate commands tracker: %v", taskTracker)
 		for _, pod := range taskTracker.Pods {
-			p, err := k8s.Instance().GetPodByUID(types.UID(pod.UID), pod.Namespace)
+			p, err := core.Instance().GetPodByUID(types.UID(pod.UID), pod.Namespace)
 			if err != nil {
-				if err == k8s.ErrPodsNotFound {
+				if err == errors.ErrPodsNotFound {
 					continue
 				}
 
@@ -192,7 +195,7 @@ func PerformRuleRecovery(
 						Component: "stork",
 					},
 				}
-				if _, err = k8s.Instance().CreateEvent(ev); err != nil {
+				if _, err = core.Instance().CreateEvent(ev); err != nil {
 					log.RuleLog(nil, owner).Warnf("failed to create event for missing pod err: %v", err)
 				}
 
@@ -233,7 +236,7 @@ func ExecuteRule(
 
 	pods := make([]v1.Pod, 0)
 	for _, item := range rule.Rules {
-		p, err := k8s.Instance().GetPods(podNamespace, item.PodSelector)
+		p, err := core.Instance().GetPods(podNamespace, item.PodSelector)
 		if err != nil {
 			return nil, err
 		}
@@ -345,9 +348,9 @@ func executeCommandAction(
 		if existingTracker != nil && len(existingTracker.Pods) > 0 {
 			for _, existingPod := range existingTracker.Pods {
 				// Check if pod exists in cluster
-				existingPodObject, err := k8s.Instance().GetPodByUID(types.UID(existingPod.UID), existingPod.Namespace)
+				existingPodObject, err := core.Instance().GetPodByUID(types.UID(existingPod.UID), existingPod.Namespace)
 				if err != nil {
-					if err == k8s.ErrPodsNotFound {
+					if err == errors.ErrPodsNotFound {
 						continue
 					}
 
@@ -417,7 +420,7 @@ func updateRunningCommandPodListInOwner(
 	}
 
 	err = wait.ExponentialBackoff(ownerAPICallBackoff, func() (bool, error) {
-		ownerCopy, err := k8s.Instance().GetObject(owner)
+		ownerCopy, err := dynamic.Instance().GetObject(owner)
 		if err != nil {
 			log.RuleLog(nil, owner).Warnf("Failed to get latest owner due to: %v. Will retry.", err)
 			return false, nil
@@ -440,7 +443,7 @@ func updateRunningCommandPodListInOwner(
 		}
 
 		metadata.SetAnnotations(annotations)
-		if _, err := k8s.Instance().UpdateObject(ownerCopy); err != nil {
+		if _, err := dynamic.Instance().UpdateObject(ownerCopy); err != nil {
 			log.RuleLog(nil, owner).Warnf("Failed to update owner due to: %v. Will retry.", err)
 			return false, nil
 		}
@@ -468,9 +471,9 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 			defer wg.Done()
 			err := wait.ExponentialBackoff(backOff, func() (bool, error) {
 				ns, name := pod.GetNamespace(), pod.GetName()
-				_, err := k8s.Instance().GetPodByUID(pod.GetUID(), ns)
+				_, err := core.Instance().GetPodByUID(pod.GetUID(), ns)
 				if err != nil {
-					if err == k8s.ErrPodsNotFound {
+					if err == errors.ErrPodsNotFound {
 						logrus.Infof("Pod with uuid: %s in namespace: %s is no longer present", string(pod.GetUID()), ns)
 						return true, nil
 					}
@@ -495,14 +498,14 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 							Component: "stork",
 						},
 					}
-					if _, err = k8s.Instance().CreateEvent(ev); err != nil {
+					if _, err = core.Instance().CreateEvent(ev); err != nil {
 						logrus.Warnf("failed to create event for missing pod err: %v", err)
 					}
 
 					return false, nil
 				}
 
-				_, err = k8s.Instance().RunCommandInPod([]string{"sh", "-c", cmd}, name, "", ns)
+				_, err = core.Instance().RunCommandInPod([]string{"sh", "-c", cmd}, name, "", ns)
 				if err != nil {
 					logrus.Warnf("Failed to run command: %s on pod: [%s] %s due to: %v", cmd, ns, name, err)
 					return false, nil
@@ -573,7 +576,7 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 	executorPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("pod-cmd-executor-%s", taskID),
-			Namespace: core.NamespaceSystem,
+			Namespace: coreapi.NamespaceSystem,
 			Labels:    labels,
 		},
 		Spec: v1.PodSpec{
@@ -600,14 +603,14 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 		},
 	}
 
-	createdPod, err := k8s.Instance().CreatePod(executorPod)
+	createdPod, err := core.Instance().CreatePod(executorPod)
 	if err != nil {
 		return err
 	}
 
 	defer func() {
 		if createdPod != nil {
-			err := k8s.Instance().DeletePods([]v1.Pod{*createdPod}, false)
+			err := core.Instance().DeletePods([]v1.Pod{*createdPod}, false)
 			if err != nil {
 				logrus.Warnf("Failed to delete command executor pod: [%s] %s due to: %v",
 					createdPod.GetNamespace(), createdPod.GetName(), err)
@@ -637,7 +640,7 @@ func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage str
 func waitForExecPodCompletion(pod *v1.Pod) error {
 	logrus.Infof("Waiting for pod: [%s] %s readiness with backoff: %v", pod.GetNamespace(), pod.GetName(), execCmdBackoff)
 	return wait.ExponentialBackoff(execCmdBackoff, func() (bool, error) {
-		p, err := k8s.Instance().GetPodByUID(pod.GetUID(), pod.GetNamespace())
+		p, err := core.Instance().GetPodByUID(pod.GetUID(), pod.GetNamespace())
 		if err != nil {
 			return false, nil
 		}

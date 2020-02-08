@@ -9,7 +9,8 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -37,7 +38,7 @@ var allConfigMap, defaultConfigMap map[string]string
 
 func TestApplicationBackup(t *testing.T) {
 	// Get location types and secret from config maps
-	configMap, err := k8s.Instance().GetConfigMap(configMapName, "default")
+	configMap, err := core.Instance().GetConfigMap(configMapName, "default")
 	require.NoError(t, err, "Failed to get config map  %s", configMap.Name)
 
 	allConfigMap = configMap.Data
@@ -162,7 +163,7 @@ func triggerBackupRestoreTest(
 			destroyAndWait(t, []*scheduler.Context{postRestoreCtx})
 
 		}
-		err = k8s.Instance().DeleteBackupLocation(currBackupLocation.Name, currBackupLocation.Namespace)
+		err = storkops.Instance().DeleteBackupLocation(currBackupLocation.Name, currBackupLocation.Namespace)
 		require.NoError(t, err, "Failed to delete backuplocation: %s for location %s.", currBackupLocation.Name, string(location), err)
 	}
 }
@@ -239,7 +240,7 @@ func triggerScaleBackupRestoreTest(
 	}
 	// Cleanup
 	for idx, bkp := range appBkps {
-		err := k8s.Instance().DeleteBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
+		err := storkops.Instance().DeleteBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
 		require.NoError(t, err, "Failed to delete  backup location %s in namespace %s: %v", "backuplocation-"+strconv.Itoa(idx), bkp.Namespace, err)
 
 		err = deleteAndWaitForBackupDeletion(bkp.Namespace)
@@ -260,14 +261,14 @@ func createBackupLocation(
 	secretName string,
 ) (*storkv1.BackupLocation, error) {
 
-	secretObj, err := k8s.Instance().GetSecret(secretName, "default")
+	secretObj, err := core.Instance().GetSecret(secretName, "default")
 	require.NoError(t, err, "Failed to get secret %s", secretName)
 
 	// copy secret to the app namespace
 	newSecretObj := secretObj.DeepCopy()
 	newSecretObj.Namespace = namespace
 	newSecretObj.ResourceVersion = ""
-	_, err = k8s.Instance().CreateSecret(newSecretObj)
+	_, err = core.Instance().CreateSecret(newSecretObj)
 	// Ignore if secret already exists
 	if err != nil && !errors.IsAlreadyExists(err) {
 		require.NoError(t, err, "Failed to copy secret %s  to namespace %s", name, namespace)
@@ -287,7 +288,7 @@ func createBackupLocation(
 			SecretConfig: secretObj.Name,
 		},
 	}
-	return k8s.Instance().CreateBackupLocation(backupLocation)
+	return storkops.Instance().CreateBackupLocation(backupLocation)
 }
 
 func createApplicationRestore(
@@ -310,7 +311,7 @@ func createApplicationRestore(
 			NamespaceMapping: namespaceMapping,
 		},
 	}
-	return k8s.Instance().CreateApplicationRestore(appRestore)
+	return storkops.Instance().CreateApplicationRestore(appRestore)
 }
 
 func createApplicationBackupWithAnnotation(
@@ -331,7 +332,7 @@ func createApplicationBackupWithAnnotation(
 			BackupLocation: backupLocation.Name,
 		},
 	}
-	return k8s.Instance().CreateApplicationBackup(appBackup)
+	return storkops.Instance().CreateApplicationBackup(appBackup)
 }
 
 func generateTimestampAnnotationMap(annotationKey string) map[string]string {
@@ -484,15 +485,15 @@ func applicationBackupScheduleTests(t *testing.T) {
 }
 
 func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, policyName string, applicationBackupScheduleName string) {
-	err := k8s.Instance().DeleteSchedulePolicy(policyName)
+	err := storkops.Instance().DeleteSchedulePolicy(policyName)
 	require.NoError(t, err, fmt.Sprintf("Error deleting schedule policy %v", policyName))
 
-	err = k8s.Instance().DeleteApplicationBackupSchedule(applicationBackupScheduleName, namespace)
+	err = storkops.Instance().DeleteApplicationBackupSchedule(applicationBackupScheduleName, namespace)
 	require.NoError(t, err, fmt.Sprintf("Error deleting applicationBackup schedule %v from namespace %v",
 		applicationBackupScheduleName, namespace))
 
 	time.Sleep(10 * time.Second)
-	applicationBackupList, err := k8s.Instance().ListApplicationBackups(namespace)
+	applicationBackupList, err := storkops.Instance().ListApplicationBackups(namespace)
 	require.NoError(t, err, fmt.Sprintf("Error getting list of applicationBackups for namespace: %v", namespace))
 	require.Equal(t, 0, len(applicationBackupList.Items), fmt.Sprintf("All applicationBackups should have been deleted in namespace %v", namespace))
 }
@@ -509,7 +510,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 	policyName := "intervalpolicy-appbackup"
 	retain := 2
 	interval := 2
-	_, err = k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -524,7 +525,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "intervalscheduletest"
 	namespace := ctx.GetID()
-	_, err = k8s.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -546,7 +547,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 		scheduleName, namespace, sleepTime)
 	time.Sleep(sleepTime)
 
-	backupStatuses, err := k8s.Instance().ValidateApplicationBackupSchedule("intervalscheduletest",
+	backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule("intervalscheduletest",
 		namespace,
 		applicationBackupScheduleRetryTimeout,
 		applicationBackupScheduleRetryInterval)
@@ -572,7 +573,7 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 	// Set first trigger 2 minutes from now
 	scheduledTime := time.Now().Add(2 * time.Minute)
 	nextScheduledTime := scheduledTime.AddDate(0, 0, 1)
-	_, err = k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -588,7 +589,7 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "dailyscheduletest"
 	namespace := ctx.GetID()
-	_, err = k8s.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -624,7 +625,7 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 	// Set first trigger 2 minutes from now
 	scheduledTime := time.Now().Add(2 * time.Minute)
 	nextScheduledTime := scheduledTime.AddDate(0, 0, 7)
-	_, err = k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -641,7 +642,7 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "weeklyscheduletest"
 	namespace := ctx.GetID()
-	_, err = k8s.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -681,7 +682,7 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 	if nextScheduledTime.Day() != scheduledTime.Day() {
 		nextScheduledTime = time.Time{}
 	}
-	_, err = k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -698,7 +699,7 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "monthlyscheduletest"
 	namespace := ctx.GetID()
-	_, err = k8s.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -732,7 +733,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 	policyName := "invalidpolicy-appbackup"
 	scheduledTime := time.Now()
 	retain := 2
-	_, err = k8s.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -749,7 +750,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "invalidpolicyschedule"
 	namespace := ctx.GetID()
-	_, err = k8s.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -768,7 +769,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 	require.NoError(t, err, "Error creating applicationBackup schedule with invalid policy")
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v",
 		scheduleName, namespace)
-	_, err = k8s.Instance().ValidateApplicationBackupSchedule(scheduleName,
+	_, err = storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
 		3*time.Minute,
 		applicationBackupScheduleRetryInterval)
@@ -786,7 +787,7 @@ func commonApplicationBackupScheduleTests(
 	nextTriggerTime time.Time,
 	policyType storkv1.SchedulePolicyType) {
 	// Make sure no backup gets created in the next minute
-	_, err := k8s.Instance().ValidateApplicationBackupSchedule(scheduleName,
+	_, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
 		1*time.Minute,
 		applicationBackupScheduleRetryInterval)
@@ -797,7 +798,7 @@ func commonApplicationBackupScheduleTests(
 		sleepTime)
 	time.Sleep(sleepTime)
 
-	backupStatuses, err := k8s.Instance().ValidateApplicationBackupSchedule(scheduleName,
+	backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
 		applicationBackupScheduleRetryTimeout,
 		applicationBackupScheduleRetryInterval)
@@ -817,7 +818,7 @@ func commonApplicationBackupScheduleTests(
 		}()
 		logrus.Infof("Sleeping for 90 seconds for the schedule to get triggered")
 		time.Sleep(90 * time.Second)
-		backupStatuses, err := k8s.Instance().ValidateApplicationBackupSchedule(scheduleName,
+		backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 			namespace,
 			applicationBackupScheduleRetryTimeout,
 			applicationBackupScheduleRetryInterval)
@@ -861,7 +862,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "Error setting remote config")
 
 	// Create namespace for the backuplocation on second cluster
-	ns, err := k8s.Instance().CreateNamespace(appCtx.GetID(),
+	ns, err := core.Instance().CreateNamespace(appCtx.GetID(),
 		map[string]string{
 			"creator": "stork-test",
 			"app":     appCtx.App.Key,
@@ -874,14 +875,14 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 
 	// Set sync to true on second cluster so that backup location gets synced
 	backupLocation2.Location.Sync = true
-	_, err = k8s.Instance().UpdateBackupLocation(backupLocation2)
+	_, err = storkops.Instance().UpdateBackupLocation(backupLocation2)
 	require.NoError(t, err, "Failed to set backup-location sync to true")
 	logrus.Infof("Updated application backup on 2nd cluster %s: sync:%t", backupLocation2.Name, backupLocation2.Location.Sync)
 
 	// Check periodically to see if the backup from this test is synced on second cluster
 	var allAppBackups *storkv1.ApplicationBackupList
 	listBackupsTask := func() (interface{}, bool, error) {
-		allAppBackups, err = k8s.Instance().ListApplicationBackups(ns.Name)
+		allAppBackups, err = storkops.Instance().ListApplicationBackups(ns.Name)
 		if err != nil {
 			logrus.Infof("Failed to list app backups on second cluster. Error: %v", err)
 			return "", true, fmt.Errorf("Failed to list app backups on second cluster")
@@ -912,7 +913,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	logrus.Infof("Restore complete on second cluster.")
 
 	// Delete backup object on second cluster
-	err = k8s.Instance().DeleteApplicationBackup(backupToRestore.Name, backupToRestore.Namespace)
+	err = storkops.Instance().DeleteApplicationBackup(backupToRestore.Name, backupToRestore.Namespace)
 	require.NoError(t, err, "Failed to delete backup post-restore on second cluster.")
 
 	// Destroy app on first cluster
@@ -943,7 +944,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "App is not running on second cluster post-restore.")
 
 	// Cleanup both clusters
-	err = k8s.Instance().DeleteBackupLocation(backupLocationName, ns.Name)
+	err = storkops.Instance().DeleteBackupLocation(backupLocationName, ns.Name)
 	require.NoError(t, err, "Failed to delete  backup location %s on first cluster: %v.", ns.Name, err)
 
 	err = deleteAndWaitForBackupDeletion(ns.Name)
@@ -957,7 +958,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	err = setRemoteConfig(remoteFilePath)
 	require.NoError(t, err, "Error setting remote config")
 
-	err = k8s.Instance().DeleteBackupLocation(backupLocationName, ns.Name)
+	err = storkops.Instance().DeleteBackupLocation(backupLocationName, ns.Name)
 	require.NoError(t, err, "Failed to delete  backup location %s on first cluster: %v.", ns.Name, err)
 
 	err = deleteAndWaitForBackupDeletion(ns.Name)
@@ -968,7 +969,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 
 func waitForAppBackupCompletion(name, namespace string) error {
 	getAppBackup := func() (interface{}, bool, error) {
-		appBackup, err := k8s.Instance().GetApplicationBackup(name, namespace)
+		appBackup, err := storkops.Instance().GetApplicationBackup(name, namespace)
 		if err != nil {
 			return "", false, err
 		}
@@ -984,12 +985,12 @@ func waitForAppBackupCompletion(name, namespace string) error {
 }
 
 func deleteAllBackupsNamespace(namespace string) error {
-	allAppBackups, err := k8s.Instance().ListApplicationBackups(namespace)
+	allAppBackups, err := storkops.Instance().ListApplicationBackups(namespace)
 	if err != nil {
 		return fmt.Errorf("Failed to list backups before deleting: %v", err)
 	}
 	for _, bkp := range allAppBackups.Items {
-		err = k8s.Instance().DeleteApplicationBackup(bkp.Name, namespace)
+		err = storkops.Instance().DeleteApplicationBackup(bkp.Name, namespace)
 		if err != nil {
 			return fmt.Errorf("Failed to delete backup %s", bkp.Name)
 		}
@@ -1004,7 +1005,7 @@ func deleteAndWaitForBackupDeletion(namespace string) error {
 			return "", false, err
 		}
 
-		allAppBackups, err := k8s.Instance().ListApplicationBackups(namespace)
+		allAppBackups, err := storkops.Instance().ListApplicationBackups(namespace)
 		if err != nil || len(allAppBackups.Items) != 0 {
 			logrus.Infof("Failed to delete all app backups in %s. Error: %v. Number of backups: %v", namespace, err, len(allAppBackups.Items))
 			return "", true, fmt.Errorf("All backups not deleted yet")
@@ -1044,7 +1045,7 @@ func getBackupConfigMapForType(allTypes map[string]string, requiredType storkv1.
 
 func deleteApplicationRestoreList(appRestoreList []*storkv1.ApplicationRestore) error {
 	for _, appRestore := range appRestoreList {
-		err := k8s.Instance().DeleteApplicationRestore(appRestore.Name, appRestore.Namespace)
+		err := storkops.Instance().DeleteApplicationRestore(appRestore.Name, appRestore.Namespace)
 		if err != nil {
 			return fmt.Errorf("Error deleting application restore %s in namespace %s", appRestore.Name, appRestore.Namespace)
 		}
