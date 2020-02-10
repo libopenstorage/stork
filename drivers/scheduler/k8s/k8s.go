@@ -927,6 +927,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 	if obj, ok := spec.(*appsapi.Deployment); ok {
 		obj.Namespace = ns.Name
 		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
+		if options.Scheduler != "" {
+			obj.Spec.Template.Spec.SchedulerName = options.Scheduler
+		}
 		dep, err := k8sApps.CreateDeployment(obj)
 		if errors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
@@ -964,6 +967,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 		obj.Namespace = ns.Name
 		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
+		if options.Scheduler != "" {
+			obj.Spec.Template.Spec.SchedulerName = options.Scheduler
+		}
 		ss, err := k8sApps.CreateStatefulSet(obj)
 		if errors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
@@ -1040,6 +1046,9 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		return rule, nil
 	} else if obj, ok := spec.(*v1.Pod); ok {
 		obj.Namespace = ns.Name
+		if options.Scheduler != "" {
+			obj.Spec.SchedulerName = options.Scheduler
+		}
 		pod, err := k8sCore.CreatePod(obj)
 		if errors.IsAlreadyExists(err) {
 			if pod, err := k8sCore.GetPodByName(obj.Name, obj.Namespace); err == nil {
