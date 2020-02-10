@@ -129,7 +129,7 @@ func (c *Client) ValidatePersistentVolumeClaimSize(pvc *corev1.PersistentVolumeC
 			return "", true, err
 		}
 
-		capacity, ok := result.Spec.Resources.Requests[corev1.ResourceName(corev1.ResourceStorage)]
+		capacity, ok := result.Status.Capacity[corev1.ResourceName(corev1.ResourceStorage)]
 		if !ok {
 			return "", true, fmt.Errorf("failed to get storage size for pvc: %v", pvc.Name)
 		}

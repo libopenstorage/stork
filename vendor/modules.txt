@@ -272,7 +272,7 @@ github.com/pmezard/go-difflib/difflib
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/sched-ops v0.0.0-20200205200838-f224d01bafb5
+# github.com/portworx/sched-ops v0.0.0-20200209173159-9fc20df3f771
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
 github.com/portworx/sched-ops/k8s/batch
