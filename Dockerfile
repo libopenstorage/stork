@@ -1,4 +1,4 @@
-FROM golang:1.12.10-alpine AS build
+FROM golang:1.13.7-alpine AS build
 LABEL maintainer="harsh@portworx.com"
 
 WORKDIR /go/src/github.com/portworx/torpedo
@@ -7,10 +7,7 @@ WORKDIR /go/src/github.com/portworx/torpedo
 RUN apk update && \
     apk add git gcc  musl-dev && \
     apk add make && \
-    apk add openssh-client && \
-    go get github.com/onsi/ginkgo/ginkgo && \
-    go get github.com/onsi/gomega && \
-    go get github.com/sirupsen/logrus
+    apk add openssh-client
 
 # No need to copy *everything*. This keeps the cache useful
 COPY deployments deployments
@@ -20,6 +17,8 @@ COPY scripts scripts
 COPY tests tests
 COPY vendor vendor
 COPY Makefile Makefile
+COPY go.mod go.mod
+COPY go.sum go.sum
 
 # Why? Errors if this is removed
 COPY .git .git

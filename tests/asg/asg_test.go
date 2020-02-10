@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -203,8 +204,10 @@ var _ = AfterSuite(func() {
 	ValidateCleanup()
 })
 
-func init() {
+func TestMain(m *testing.M) {
+	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
+	os.Exit(m.Run())
 }
 
 func Scale(count int64) {

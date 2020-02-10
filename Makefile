@@ -1,12 +1,21 @@
 TORPEDO_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_TORPEDO_IMAGE):$(DOCKER_HUB_TAG)
 .PHONY: vendor
 
+export GO111MODULE=on
+export GOFLAGS = -mod=vendor
+HAS_GOMODULES := $(shell go help mod why 2> /dev/null)
+
+ifndef HAS_GOMODULES
+$(error torpedo can only be built with go 1.11+ which supports go modules)
+endif
+
 ifndef TAGS
 TAGS := daemon
 endif
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/vendor' | grep -v 'github.com/portworx/torpedo/tests')
+# shell does not honor export command above, so we need to explicitly pass GOFLAGS here
+PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/tests')
 endif
 
 ifeq ($(BUILD_TYPE),debug)
@@ -26,14 +35,6 @@ SYSBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-sysbench:latest
 PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
 ESLOAD_IMG=$(DOCKER_HUB_REPO)/torpedo-esload:latest
 
-HAS_GOMODULES := $(shell go help mod why 2> /dev/null)
-
-ifdef HAS_GOMODULES
-export GO111MODULE=on
-export GOFLAGS = -mod=vendor
-else
-$(error torpedo can only be built with go 1.11+ which supports go modules)
-endif
 
 all: vet lint build fmt
 
