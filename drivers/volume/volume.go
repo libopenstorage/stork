@@ -143,9 +143,6 @@ type Driver interface {
 	// ValidateStoragePools validates all the storage pools
 	ValidateStoragePools() error
 
-	// CreateAutopilotRules creates autopilot rules
-	CreateAutopilotRules([]apapi.AutopilotRule) error
-
 	// IsStorageExpansionEnabled returns true if storage expansion enabled
 	IsStorageExpansionEnabled() (bool, error)
 

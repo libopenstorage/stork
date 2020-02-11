@@ -102,7 +102,7 @@ if [ -n "$AZURE_CLIENT_SECRET" ]; then
     AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
 fi
 
-if [ -z "$TEST_SUITE" ]; then
+if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
     TEST_SUITE='"bin/asg.test",
             "bin/autopilot.test",
             "bin/basic.test",

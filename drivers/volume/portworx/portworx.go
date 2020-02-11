@@ -42,28 +42,6 @@ const (
 	PortworxStorage torpedovolume.StorageProvisionerType = "portworx"
 	// PortworxCsi csi storage name
 	PortworxCsi torpedovolume.StorageProvisionerType = "csi"
-	// PxPoolAvailableCapacityMetric is metric for pool available capacity
-	PxPoolAvailableCapacityMetric = "100 * ( px_pool_stats_available_bytes/ px_pool_stats_total_bytes)"
-	// PxPoolTotalCapacityMetric is metric for pool total capacity
-	PxPoolTotalCapacityMetric = "px_pool_stats_total_bytes/(1024*1024*1024)"
-	// PxVolumeUsagePercentMetric is metric for volume usage percentage
-	PxVolumeUsagePercentMetric = "100 * (px_volume_usage_bytes / px_volume_capacity_bytes)"
-	// PxVolumeCapacityPercentMetric is metric for volume capacity percentage
-	PxVolumeCapacityPercentMetric = "px_volume_capacity_bytes / 1000000000"
-	// VolumeSpecAction is name for volume spec action
-	VolumeSpecAction = "openstorage.io.action.volume/resize"
-	// StorageSpecAction is name for storage spec action
-	StorageSpecAction = "openstorage.io.action.storagepool/expand"
-	// RuleActionsScalePercentage is name for scale percentage rule action
-	RuleActionsScalePercentage = "scalepercentage"
-	// RuleScaleType is name for scale type
-	RuleScaleType = "scaletype"
-	// RuleScaleTypeAddDisk is name for add disk scale type
-	RuleScaleTypeAddDisk = "add-disk"
-	// RuleScaleTypeResizeDisk is name for resize disk scale type
-	RuleScaleTypeResizeDisk = "resize-disk"
-	// RuleMaxSize is name for rule max size
-	RuleMaxSize = "maxsize"
 )
 
 const (
@@ -1115,18 +1093,6 @@ func (d *portworx) pickAlternateClusterManager(n node.Node) (api.OpenStorageNode
 		}
 	}
 	return nil, fmt.Errorf("failed to get an alternate cluster manager for %s", n.Name)
-}
-
-// CreateAutopilotRules creates autopilot rules
-func (d *portworx) CreateAutopilotRules(apRules []apapi.AutopilotRule) error {
-	for _, apRule := range apRules {
-		autopilotRule, err := d.schedOps.CreateAutopilotRule(apRule)
-		if err != nil {
-			return err
-		}
-		logrus.Infof("Created Autopilot rule: %+v", autopilotRule)
-	}
-	return nil
 }
 
 func (d *portworx) IsStorageExpansionEnabled() (bool, error) {

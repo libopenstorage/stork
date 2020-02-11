@@ -10,6 +10,7 @@ import (
 
 	docker "github.com/docker/docker/client"
 	marathon "github.com/gambol99/go-marathon"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -596,6 +597,30 @@ func (d *dcos) GetSpecAppEnvVar(ctx *scheduler.Context, key string) string {
 func (d *dcos) GetWorkloadSizeFromAppSpec(ctx *scheduler.Context) (uint64, error) {
 	// TODO: not implemented
 	return 0, nil
+}
+
+func (d *dcos) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateAutopilotRule()",
+	}
+}
+
+func (d *dcos) UpdateAutopilotRule(apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateAutopilotRule()",
+	}
+}
+
+func (d *dcos) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ListAutopilotRules()",
+	}
 }
 
 func init() {
