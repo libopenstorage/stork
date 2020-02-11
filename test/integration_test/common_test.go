@@ -462,7 +462,7 @@ func createApp(t *testing.T, testID string) *scheduler.Context {
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
 	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 1, len(volumeNames), "Should only have one volume")
+	require.Equal(t, 2, len(volumeNames), "Should only have two volumes")
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 	return ctxs[0]

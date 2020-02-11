@@ -31,7 +31,7 @@ func stopDriverTest(t *testing.T) {
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
 	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 1, len(volumeNames), "Should have one volume")
+	require.Equal(t, 2, len(volumeNames), "Should have one volume")
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
