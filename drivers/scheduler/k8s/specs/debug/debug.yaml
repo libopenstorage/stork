@@ -24,8 +24,13 @@ spec:
             - matchExpressions:
               - key: node-role.kubernetes.io/master
                 operator: DoesNotExist
+              - key: px/enabled
+                operator: NotIn
+                values:
+                - "false"
       hostNetwork: true
       hostPID: true
+      priorityClassName: system-cluster-critical
       containers:
       - name: debug
         image: ubuntu:latest
