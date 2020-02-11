@@ -4,8 +4,8 @@ initializer="false"
 snapshot_scale=10
 migration_scale=10
 backup_scale=10
-image_name="stork:master"
-test_image_name="stork_test:latest"
+image_name="openstorage/stork:master"
+test_image_name="openstorage/stork_test:latest"
 remote_config_path=""
 run_cluster_domain_test=false
 environment_variables=""
@@ -104,7 +104,7 @@ esac
 done
 
 apk update
-apk add jq
+apk add jq bash
 
 if [ "$initializer" == "true" ] ; then
     # Remove schedule name from all specs
@@ -117,7 +117,8 @@ fi
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
-sed -i 's/'stork:.*'/'"$image_name"'/g' /specs/stork-deployment.yaml
+image_escaped=$(sed 's/[&/\]/\\&/g' <<<"$image_name")
+sed -i 's/'openstorage\\/stork:.*'/'"$image_escaped"'/g' /specs/stork-deployment.yaml
 
 # For integration test mock times
 kubectl delete cm stork-mock-time  -n kube-system || true
@@ -204,7 +205,8 @@ sed -i 's/- -migration-scale-count=10/- -migration-scale-count='"$migration_scal
 sed -i 's/- -backup-scale-count=10/- -backup-scale-count='"$backup_scale"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
-sed -i 's/'stork_test:.*'/'"$test_image_name"'/g' /testspecs/stork-test-pod.yaml
+image_escaped=$(sed 's/[&/\]/\\&/g' <<<"$test_image_name")
+sed -i 's/'openstorage\\/stork_test:.*'/'"$image_escaped"'/g' /testspecs/stork-test-pod.yaml
 
 if [ "$volume_driver" != "" ] ; then
 	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml
