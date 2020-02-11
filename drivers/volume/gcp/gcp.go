@@ -449,7 +449,7 @@ func init() {
 	g := &gcp{}
 	err := g.Init(nil)
 	if err != nil {
-		logrus.Errorf("Error init'ing gcp driver: %v", err)
+		logrus.Debugf("Error init'ing gcp driver: %v", err)
 		return
 	}
 	if err := storkvolume.Register(driverName, g); err != nil {

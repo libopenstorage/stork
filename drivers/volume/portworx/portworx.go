@@ -3059,7 +3059,7 @@ func init() {
 	p := &portworx{}
 	err := p.Init(nil)
 	if err != nil {
-		logrus.Errorf("Error init'ing portworx driver")
+		logrus.Debugf("Error init'ing portworx driver: %v", err)
 		return
 	}
 

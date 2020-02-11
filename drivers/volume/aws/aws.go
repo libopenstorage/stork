@@ -495,7 +495,7 @@ func init() {
 	a := &aws{}
 	err := a.Init(nil)
 	if err != nil {
-		logrus.Errorf("Error init'ing aws driver")
+		logrus.Debugf("Error init'ing aws driver: %v", err)
 		return
 	}
 	if err := storkvolume.Register(driverName, a); err != nil {
