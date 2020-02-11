@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	// DriverName is the name of the gke driver
+	// DriverName is the name of the aks driver
 	DriverName = "aks"
 	// ZoneCount number of zones in autoscaling group
 	ZoneCount = 3

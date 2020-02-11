@@ -33,6 +33,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aututils"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
@@ -730,8 +731,13 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		}
 		if autopilotEnabled {
 			apRule := options.AutopilotRule
+			labels := options.Labels
 			if apRule.Name != "" {
-				aRule, err := k.createAutopilotRule(apRule, options)
+				apRule.Labels = defaultTorpedoLabel
+				labelSelector := metav1.LabelSelector{MatchLabels: labels}
+				apRule.Spec.Selector = apapi.RuleObjectSelector{LabelSelector: labelSelector}
+				apRule.Spec.NamespaceSelector = apapi.RuleObjectSelector{LabelSelector: labelSelector}
+				aRule, err := k.CreateAutopilotRule(apRule)
 				if err != nil {
 					return nil, err
 				}
@@ -1199,44 +1205,6 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 	return pods, nil
 
-}
-
-func (k *K8s) createAutopilotRule(autopilotRule apapi.AutopilotRule, options scheduler.ScheduleOptions) (*apapi.AutopilotRule, error) {
-	k8sOps := k8sAutopilot
-
-	t := func() (interface{}, bool, error) {
-		autopilotRule.Labels = defaultTorpedoLabel
-		autopilotRule.Spec.Selector = apapi.RuleObjectSelector{
-			LabelSelector: metav1.LabelSelector{
-				MatchLabels: options.Labels,
-			},
-		}
-		autopilotRule.Spec.NamespaceSelector = apapi.RuleObjectSelector{
-			LabelSelector: metav1.LabelSelector{
-				MatchLabels: options.Labels,
-			},
-		}
-
-		apRule, err := k8sOps.CreateAutopilotRule(&autopilotRule)
-		if errors.IsAlreadyExists(err) {
-			if apRule, err := k8sOps.GetAutopilotRule(autopilotRule.Name); err == nil {
-				logrus.Infof("Using existing AutopilotRule: %v", apRule.Name)
-				return apRule, false, nil
-			}
-		}
-		if err != nil {
-			return nil, true, fmt.Errorf("Failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
-		}
-
-		return apRule, false, nil
-	}
-
-	apRuleObj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
-	if err != nil {
-		return nil, err
-	}
-
-	return apRuleObj.(*apapi.AutopilotRule), nil
 }
 
 func (k *K8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.Volume {
@@ -1795,22 +1763,14 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				if err != nil {
 					return err
 				}
-				wSize, err := k.GetWorkloadSizeFromAppSpec(ctx)
-				if err != nil {
-					return err
-				}
-				var expectedPVCSize uint64
 				for _, rule := range listApRules.Items {
-					if expectedPVCSize, _, err = k.EstimatePVCExpansion(obj, rule, wSize); err != nil {
-						return err
-					}
-				}
-				logrus.Infof("[%v] expecting PVC size: %v\n", ctx.App.Key, expectedPVCSize)
-				err = k8sCore.ValidatePersistentVolumeClaimSize(obj, int64(expectedPVCSize), timeout, retryInterval)
-				if err != nil {
-					return &scheduler.ErrFailedToValidateStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to validate size: %v of PVC: %v. Err: %v", expectedPVCSize, obj.Name, err),
+					for _, a := range rule.Spec.Actions {
+						if a.Name == aututils.VolumeSpecAction {
+							err := k.validatePVCSize(ctx, obj, rule, timeout, retryInterval)
+							if err != nil {
+								return err
+							}
+						}
 					}
 				}
 				logrus.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
@@ -1887,6 +1847,26 @@ func getSpecAppEnvVar(ctx *scheduler.Context, key string) string {
 		}
 	}
 	return ""
+}
+
+func (k *K8s) validatePVCSize(ctx *scheduler.Context, obj *v1.PersistentVolumeClaim, rule apapi.AutopilotRule, timeout time.Duration, retryInterval time.Duration) error {
+	wSize, err := k.GetWorkloadSizeFromAppSpec(ctx)
+	if err != nil {
+		return err
+	}
+	expectedPVCSize, _, err := k.EstimatePVCExpansion(obj, rule, wSize)
+	if err != nil {
+		return err
+	}
+	logrus.Infof("[%v] expecting PVC size: %v\n", ctx.App.Key, expectedPVCSize)
+	err = k8sCore.ValidatePersistentVolumeClaimSize(obj, int64(expectedPVCSize), timeout, retryInterval)
+	if err != nil {
+		return &scheduler.ErrFailedToValidateStorage{
+			App:   ctx.App,
+			Cause: fmt.Sprintf("Failed to validate size: %v of PVC: %v. Err: %v", expectedPVCSize, obj.Name, err),
+		}
+	}
+	return nil
 }
 
 func (k *K8s) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
@@ -3206,6 +3186,48 @@ func (k *K8s) addLabelsToPVC(pvc *v1.PersistentVolumeClaim, labels map[string]st
 	for k, v := range labels {
 		pvc.Labels[k] = v
 	}
+}
+
+// CreateAutopilotRule creates the AutopilotRule object
+func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+	t := func() (interface{}, bool, error) {
+		apRule.Labels = defaultTorpedoLabel
+		aRule, err := k8sAutopilot.CreateAutopilotRule(&apRule)
+		if errors.IsAlreadyExists(err) {
+			if rule, err := k8sAutopilot.GetAutopilotRule(apRule.Name); err == nil {
+				logrus.Infof("Using existing AutopilotRule: %v", rule.Name)
+				return aRule, false, nil
+			}
+		}
+		if err != nil {
+			return nil, true, fmt.Errorf("Failed to create autopilot rule: %v. Err: %v", apRule.Name, err)
+		}
+		return aRule, false, nil
+	}
+
+	apRuleObj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Infof("Created autopilot rule: %+v", apRuleObj)
+
+	return apRuleObj.(*apapi.AutopilotRule), nil
+}
+
+// UpdateAutopilotRule updates the AutopilotRule
+func (k *K8s) UpdateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+	aRule, err := k8sAutopilot.GetAutopilotRule(apRule.Name)
+	if err != nil {
+		return nil, err
+	}
+	aRule.Spec = apRule.Spec
+
+	return k8sAutopilot.UpdateAutopilotRule(aRule)
+}
+
+// ListAutopilotRules lists AutopilotRules
+func (k *K8s) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
+	return k8sAutopilot.ListAutopilotRules()
 }
 
 func insertLineBreak(note string) string {

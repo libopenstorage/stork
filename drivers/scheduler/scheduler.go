@@ -188,6 +188,15 @@ type Driver interface {
 	// IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
 	IsAutopilotEnabledForVolume(*volume.Volume) bool
 
+	// CreateAutopilotRule creates the AutopilotRule object
+	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)
+
+	// UpdateAutopilotRule updates the AutopilotRule
+	UpdateAutopilotRule(apapi.AutopilotRule) (*apapi.AutopilotRule, error)
+
+	// ListAutopilotRules lists AutopilotRules
+	ListAutopilotRules() (*apapi.AutopilotRuleList, error)
+
 	// GetEvents should return all the events from the scheduler since the time torpedo started
 	GetEvents() map[string][]Event
 
