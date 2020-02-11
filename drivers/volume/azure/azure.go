@@ -430,7 +430,7 @@ func init() {
 	a := &azure{}
 	err := a.Init(nil)
 	if err != nil {
-		logrus.Errorf("Error init'ing azure driver")
+		logrus.Debugf("Error init'ing azure driver: %v", err)
 		return
 	}
 	if err := storkvolume.Register(driverName, a); err != nil {
