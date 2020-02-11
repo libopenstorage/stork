@@ -83,8 +83,6 @@ const (
 	ApplicationBackupStatusInitial ApplicationBackupStatusType = ""
 	// ApplicationBackupStatusPending for when backup is still pending
 	ApplicationBackupStatusPending ApplicationBackupStatusType = "Pending"
-	// ApplicationBackupStatusCaptured for when backup specs have been captured
-	ApplicationBackupStatusCaptured ApplicationBackupStatusType = "Captured"
 	// ApplicationBackupStatusInProgress for when backup is in progress
 	ApplicationBackupStatusInProgress ApplicationBackupStatusType = "InProgress"
 	// ApplicationBackupStatusFailed for when backup has failed
