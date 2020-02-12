@@ -129,7 +129,7 @@ func InitInstance() {
 
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
-	context("To validate clean up", func() {
+	context("For validate clean up", func() {
 		ginkgo.It(fmt.Sprintf("validate cleanup of resources used by the test suite"), func() {
 			t := func() (interface{}, bool, error) {
 				if err := Inst().V.ValidateVolumeCleanup(); err != nil {
@@ -499,8 +499,8 @@ func runCmd(cmd string, n node.Node) {
 
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
-	context(fmt.Sprintf("To check for core files"), func() {
-		ginkgo.It(fmt.Sprintf("verify if core files are present on any node"), func() {
+	context(fmt.Sprintf("checking for core files..."), func() {
+		ginkgo.It(fmt.Sprintf("verifying if core files are present on each node"), func() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
