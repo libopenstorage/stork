@@ -129,24 +129,17 @@ func InitInstance() {
 
 // ValidateCleanup checks that there are no resource leaks after the test run
 func ValidateCleanup() {
-	context("For validate clean up", func() {
-		ginkgo.It(fmt.Sprintf("validate cleanup of resources used by the test suite"), func() {
-			t := func() (interface{}, bool, error) {
-				if err := Inst().V.ValidateVolumeCleanup(); err != nil {
-					return "", true, err
-				}
-
-				return "", false, nil
+	Step(fmt.Sprintf("validate cleanup of resources used by the test suite"), func() {
+		t := func() (interface{}, bool, error) {
+			if err := Inst().V.ValidateVolumeCleanup(); err != nil {
+				return "", true, err
 			}
 
-			_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
-			expect(err).NotTo(haveOccurred())
-		})
-		ginkgo.JustAfterEach(func() {
-			if ginkgo.CurrentGinkgoTestDescription().Failed {
-				CollectSupport()
-			}
-		})
+			return "", false, nil
+		}
+
+		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
+		expect(err).NotTo(haveOccurred())
 	})
 }
 
@@ -500,7 +493,7 @@ func runCmd(cmd string, n node.Node) {
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
 	context(fmt.Sprintf("checking for core files..."), func() {
-		ginkgo.It(fmt.Sprintf("verifying if core files are present on each node"), func() {
+		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
 			nodes := node.GetWorkerNodes()
 			expect(nodes).NotTo(beEmpty())
 			for _, n := range nodes {
@@ -514,11 +507,6 @@ func PerformSystemCheck() {
 				})
 				expect(err).NotTo(haveOccurred())
 				expect(file).To(beEmpty())
-			}
-		})
-		ginkgo.JustAfterEach(func() {
-			if ginkgo.CurrentGinkgoTestDescription().Failed {
-				CollectSupport()
 			}
 		})
 	})
