@@ -71,8 +71,6 @@ const (
 	MigrationStatusInitial MigrationStatusType = ""
 	// MigrationStatusPending for when migration is still pending
 	MigrationStatusPending MigrationStatusType = "Pending"
-	// MigrationStatusCaptured for when migration specs have been captured
-	MigrationStatusCaptured MigrationStatusType = "Captured"
 	// MigrationStatusInProgress for when migration is in progress
 	MigrationStatusInProgress MigrationStatusType = "InProgress"
 	// MigrationStatusFailed for when migration has failed

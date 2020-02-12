@@ -198,7 +198,6 @@ func (m *MigrationScheduleController) updateMigrationStatus(migrationSchedule *s
 
 func (m *MigrationScheduleController) isMigrationComplete(status stork_api.MigrationStatusType) bool {
 	if status == stork_api.MigrationStatusPending ||
-		status == stork_api.MigrationStatusCaptured ||
 		status == stork_api.MigrationStatusInProgress {
 		return false
 	}
