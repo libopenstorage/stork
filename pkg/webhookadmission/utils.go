@@ -15,14 +15,14 @@ import (
 	"github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/core"
 	log "github.com/sirupsen/logrus"
-	hook "k8s.io/api/admissionregistration/v1beta1"
+	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	webhookName       = "webhook.stork.libopenstorage.io"
+	webhookName       = "webhook.stork.libopenstorage.org"
 	storkService      = "stork-service"
 	storkNamespaceEnv = "STORK-NAMESPACE"
 	defaultNamespace  = "kube-system"
@@ -31,20 +31,20 @@ const (
 // CreateMutateWebhook create new webhookconfig for stork if not exist already
 func CreateMutateWebhook(caBundle []byte, ns string) error {
 	path := "/mutate"
-	webhook := hook.MutatingWebhook{
+	webhook := admissionv1beta1.MutatingWebhook{
 		Name: webhookName,
-		ClientConfig: hook.WebhookClientConfig{
-			Service: &hook.ServiceReference{
+		ClientConfig: admissionv1beta1.WebhookClientConfig{
+			Service: &admissionv1beta1.ServiceReference{
 				Name:      storkService,
 				Namespace: ns,
 				Path:      &path,
 			},
 			CABundle: caBundle,
 		},
-		Rules: []hook.RuleWithOperations{
+		Rules: []admissionv1beta1.RuleWithOperations{
 			{
-				Operations: []hook.OperationType{hook.Create},
-				Rule: hook.Rule{
+				Operations: []admissionv1beta1.OperationType{admissionv1beta1.Create},
+				Rule: admissionv1beta1.Rule{
 					APIGroups:   []string{"apps", ""},
 					APIVersions: []string{"v1"},
 					Resources:   []string{"deployments", "statefulsets", "pods"},
@@ -52,11 +52,11 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 			},
 		},
 	}
-	req := &hook.MutatingWebhookConfiguration{
+	req := &admissionv1beta1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: storkAdmissionController,
 		},
-		Webhooks: []hook.MutatingWebhook{webhook},
+		Webhooks: []admissionv1beta1.MutatingWebhook{webhook},
 	}
 	_, err := admissionregistration.Instance().CreateMutatingWebhookConfiguration(req)
 	if !k8serr.IsAlreadyExists(err) && err != nil {
