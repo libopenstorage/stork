@@ -34,12 +34,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
-	//PortworxStorage portworx storage name
+	// PortworxStorage portworx storage name
 	PortworxStorage torpedovolume.StorageProvisionerType = "portworx"
-	//PortworxCsi csi storage name
+	// PortworxCsi csi storage name
 	PortworxCsi torpedovolume.StorageProvisionerType = "csi"
 	// PxPoolAvailableCapacityMetric is metric for pool available capacity
 	PxPoolAvailableCapacityMetric = "100 * ( px_pool_stats_available_bytes/ px_pool_stats_total_bytes)"
@@ -631,9 +632,9 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		case api.SpecSnapshotSchedule:
 			// TODO currently volume spec has a different format than request
 			// i.e request "daily=12:00,7" turns into "- freq: daily\n  hour: 12\n  retain: 7\n" in volume spec
-			//if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
+			// if requestedSpec.SnapshotSchedule != vol.Spec.SnapshotSchedule {
 			//	return errFailedToInspectVolume(name, k, requestedSpec.SnapshotSchedule, vol.Spec.SnapshotSchedule)
-			//}
+			// }
 		case api.SpecAggregationLevel:
 			if requestedSpec.AggregationLevel != vol.Spec.AggregationLevel {
 				return errFailedToInspectVolume(volumeName, k, requestedSpec.AggregationLevel, vol.Spec.AggregationLevel)
@@ -2117,14 +2118,15 @@ func (d *portworx) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.
 	}
 }
 
-// EstimatePoolExpandSize calculates the expected size of a volume based on autopilot rule, initial and workload sizes
-func (d *portworx) EstimateVolumeExpandSize(apRule apapi.AutopilotRule, initialSize, workloadSize uint64) (uint64, error) {
+// EstimateVolumeExpand calculates the expected size of a volume based on autopilot rule, initial and workload sizes
+func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize, workloadSize uint64) (uint64, int, error) {
+	resizeCount := 0
 	// this method calculates expected autopilot object size for given initial and workload sizes.
 	for _, ruleAction := range apRule.Spec.Actions {
 		if ruleAction.Name != aututils.VolumeSpecAction {
-			return 0, &tp_errors.ErrNotSupported{
+			return 0, resizeCount, &tp_errors.ErrNotSupported{
 				Type:      ruleAction.Name,
-				Operation: "EstimateVolumeExpandSize for action",
+				Operation: "EstimateVolumeExpand for action",
 			}
 		}
 	}
@@ -2133,50 +2135,62 @@ func (d *portworx) EstimateVolumeExpandSize(apRule apapi.AutopilotRule, initialS
 	//	The goal of the below for loop is to keep increasing calculatedTotalSize until the rule conditions match
 	for {
 		for _, conditionExpression := range apRule.Spec.Conditions.Expressions {
-			var metricValue float64
+			var expectedMetricValue float64
 			switch conditionExpression.Key {
 			case aututils.PxVolumeUsagePercentMetric:
-				metricValue = float64(int64(workloadSize)) * 100 / float64(calculatedTotalSize)
+				expectedMetricValue = float64(int64(workloadSize)) * 100 / float64(calculatedTotalSize)
 			case aututils.PxVolumeTotalCapacityMetric:
-				metricValue = float64(calculatedTotalSize) / units.GB
+				expectedMetricValue = float64(calculatedTotalSize) / units.GB
 			default:
-				return 0, &tp_errors.ErrNotSupported{
+				return 0, resizeCount, &tp_errors.ErrNotSupported{
 					Type:      conditionExpression.Key,
 					Operation: "Volume Condition Expression Key",
 				}
 			}
 
-			if doesConditionMatch(metricValue, conditionExpression) {
+			if doesConditionMatch(expectedMetricValue, conditionExpression) {
 				for _, ruleAction := range apRule.Spec.Actions {
 					actionScalePercentage, err := strconv.ParseUint(ruleAction.Params[aututils.RuleActionsScalePercentage], 10, 64)
 					if err != nil {
-						return 0, err
+						return 0, 0, err
 					}
 
 					requiredScaleSize := float64(calculatedTotalSize * actionScalePercentage / 100)
 					calculatedTotalSize += uint64(requiredScaleSize)
+					if calculatedTotalSize != initialSize {
+						resizeCount++
+					}
 
 					// check if calculated size is more than maxsize
 					if actionMaxSize, ok := ruleAction.Params[aututils.RuleMaxSize]; ok {
-						maxSize, _ := strconv.ParseUint(actionMaxSize, 10, 64)
-						if maxSize != 0 && calculatedTotalSize > maxSize {
-							return maxSize, nil
+						maxSize, err := strconv.ParseUint(actionMaxSize, 10, 64)
+						if err != nil {
+							a, parseErr := resource.ParseQuantity(actionMaxSize)
+							if parseErr != nil {
+								logrus.Errorf("Can't parse actionMaxSize: '%s', cause err: %s/%s", actionMaxSize, err, parseErr)
+								return 0, 0, err
+							}
+							maxSize = uint64(a.Value())
+						}
+						if maxSize != 0 && calculatedTotalSize >= maxSize {
+							if maxSize == initialSize {
+								resizeCount = 0
+							}
+							return maxSize, resizeCount, nil
 						}
 					}
-
 				}
 			} else {
-				return calculatedTotalSize, nil
+				return calculatedTotalSize, resizeCount, nil
 			}
 		}
 	}
 }
 
-func doesConditionMatch(metricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
+func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {
 	condExprValue, _ := strconv.ParseFloat(conditionExpression.Values[0], 64)
-	return metricValue < condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpLt ||
-		metricValue > condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpGt
-
+	return expectedMetricValue < condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpLt ||
+		expectedMetricValue > condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpGt
 }
 
 // getRestPort gets the service port for rest api, required when using service endpoint

@@ -2,7 +2,6 @@ package gce
 
 import (
 	"fmt"
-
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/sirupsen/logrus"

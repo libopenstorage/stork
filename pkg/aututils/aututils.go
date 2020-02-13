@@ -33,44 +33,6 @@ const (
 	StorageSpecAction = "openstorage.io.action.storagepool/expand"
 )
 
-// PvcRuleByUsageCapacity returns an autopilot pvc expand rule that uses usage of pvc size
-func PvcRuleByUsageCapacity(usage, scalePercentage int, maxSize string) apapi.AutopilotRule {
-	apRuleName := fmt.Sprintf("pvc-usage-%d-scale-%d", usage, scalePercentage)
-	apRuleSpecActions := []*apapi.RuleAction{
-		{
-			Name: VolumeSpecAction,
-			Params: map[string]string{
-				RuleActionsScalePercentage: fmt.Sprintf("%d", scalePercentage),
-			},
-		},
-	}
-	if maxSize != "" {
-		apRuleName = fmt.Sprintf("%s-maxsize-%s", apRuleName, maxSize)
-		for _, specAction := range apRuleSpecActions {
-			specAction.Params[RuleMaxSize] = maxSize
-		}
-	}
-	apRuleObject := apapi.AutopilotRule{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name: strings.ToLower(apRuleName),
-		},
-		Spec: apapi.AutopilotRuleSpec{
-			Conditions: apapi.RuleConditions{
-				Expressions: []*apapi.LabelSelectorRequirement{
-					{
-						Key:      PxVolumeUsagePercentMetric,
-						Operator: apapi.LabelSelectorOpGt,
-						Values:   []string{fmt.Sprintf("%d", usage)},
-					},
-				},
-			},
-			Actions: apRuleSpecActions,
-		},
-	}
-
-	return apRuleObject
-}
-
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
 func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
 	return apapi.AutopilotRule{
@@ -132,4 +94,72 @@ func PoolRuleByAvailableCapacity(usage, scalePercentage uint64, expandType strin
 			},
 		},
 	}
+}
+
+// PVCRuleByTotalSize resizes volume by its total size
+func PVCRuleByTotalSize(capacity int, scalePercentage int, maxSize string) apapi.AutopilotRule {
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-total-size-%s", strings.ToLower(maxSize)),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						Key:      PxVolumeTotalCapacityMetric,
+						Operator: apapi.LabelSelectorOpGt,
+						Values:   []string{fmt.Sprintf("%d", capacity)},
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: VolumeSpecAction,
+					Params: map[string]string{
+						RuleActionsScalePercentage: fmt.Sprintf("%d", scalePercentage),
+					},
+				},
+			},
+		},
+	}
+	if maxSize != "" {
+		for _, action := range apRuleObject.Spec.Actions {
+			action.Params[RuleMaxSize] = maxSize
+		}
+	}
+	return apRuleObject
+}
+
+// PVCRuleByUsageCapacity returns an autopilot pvc expand rule that uses usage of pvc size
+func PVCRuleByUsageCapacity(usagePercentage int, scalePercentage int, maxSize string) apapi.AutopilotRule {
+	apRuleObject := apapi.AutopilotRule{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-usage-%d", usagePercentage),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						Key:      PxVolumeUsagePercentMetric,
+						Operator: apapi.LabelSelectorOpGt,
+						Values:   []string{fmt.Sprintf("%d", usagePercentage)},
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: VolumeSpecAction,
+					Params: map[string]string{
+						RuleActionsScalePercentage: fmt.Sprintf("%d", scalePercentage),
+					},
+				},
+			},
+		},
+	}
+	if maxSize != "" {
+		for _, action := range apRuleObject.Spec.Actions {
+			action.Params[RuleMaxSize] = maxSize
+		}
+	}
+	return apRuleObject
 }

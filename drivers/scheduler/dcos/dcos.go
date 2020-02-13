@@ -74,6 +74,19 @@ func (d *dcos) String() string {
 	return SchedName
 }
 
+// GetEvents dumps events from event storage
+func (d *dcos) GetEvents() map[string][]scheduler.Event {
+	return nil
+}
+
+// ValidateAutopilotEvents validates events for PVCs injected by autopilot
+func (d *dcos) ValidateAutopilotEvents(ctx *scheduler.Context) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateAutopilotEvents()",
+	}
+}
+
 func (d *dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
 	fileList := []string{}
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
@@ -367,7 +380,7 @@ func (d *dcos) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[strin
 	return result, nil
 }
 
-func (d *dcos) InspectVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+func (d *dcos) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	inspectDockerVolumeFunc := func(volName string, _ map[string]string) error {
 		t := func() (interface{}, bool, error) {
 			out, err := d.dockerClient.VolumeInspect(context.Background(), volName)
@@ -419,7 +432,7 @@ func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 }
 
 func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume.Volume, error) {
-	//TODO implement this method
+	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ResizeVolume()",
@@ -477,7 +490,7 @@ func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 }
 
 func (d *dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[string]int32) error {
-	//TODO implement this method
+	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ScaleApplication()",
@@ -485,7 +498,7 @@ func (d *dcos) ScaleApplication(ctx *scheduler.Context, scaleFactorMap map[strin
 }
 
 func (d *dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, error) {
-	//TODO implement this method
+	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetScaleFactorMap()",
@@ -493,7 +506,7 @@ func (d *dcos) GetScaleFactorMap(ctx *scheduler.Context) (map[string]int32, erro
 }
 
 func (d *dcos) StopSchedOnNode(node node.Node) error {
-	//TODO implement this method
+	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StopSchedOnNode()",
@@ -501,7 +514,7 @@ func (d *dcos) StopSchedOnNode(node node.Node) error {
 }
 
 func (d *dcos) StartSchedOnNode(node node.Node) error {
-	//TODO implement this method
+	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StartSchedOnNode()",
@@ -516,7 +529,7 @@ func (d *dcos) RescanSpecs(specDir string) error {
 }
 
 func (d *dcos) PrepareNodeToDecommission(n node.Node, provisioner string) error {
-	//TODO implement this method
+	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "PrepareNodeToDecommission()",
@@ -578,6 +591,13 @@ func (d *dcos) GetSpecAppEnvVar(ctx *scheduler.Context, key string) string {
 	// TODO implement this method
 	return ""
 }
+
+// GetWorkloadSizeFromAppSpec gets workload size from an application spec
+func (d *dcos) GetWorkloadSizeFromAppSpec(ctx *scheduler.Context) (uint64, error) {
+	// TODO: not implemented
+	return 0, nil
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

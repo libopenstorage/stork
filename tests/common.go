@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -176,7 +175,7 @@ func ValidateVolumes(ctx *scheduler.Context) {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
-			err = Inst().S.InspectVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 
@@ -354,7 +353,7 @@ func AddLabelsOnNode(n node.Node, labels map[string]string) error {
 
 // ValidateStoragePools is the ginkgo spec for validating storage pools
 func ValidateStoragePools(contexts []*scheduler.Context) {
-	var err error
+
 	strExpansionEnabled, err := Inst().V.IsStorageExpansionEnabled()
 	expect(err).NotTo(haveOccurred())
 
@@ -374,7 +373,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 						expect(err).NotTo(haveOccurred())
 						expect(replicaSets).NotTo(beEmpty())
 						for _, poolUUID := range replicaSets[0].PoolUuids {
-							wSize, err = getWorkloadSizeFromAppSpec(ctx)
+							wSize, err = Inst().S.GetWorkloadSizeFromAppSpec(ctx)
 							expect(err).NotTo(haveOccurred())
 							workloadSizesByPool[poolUUID] += wSize
 							logrus.Debugf("pool: %s workloadSize increased by: %d total now: %d", poolUUID, wSize, workloadSizesByPool[poolUUID])
@@ -403,24 +402,6 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 	err = Inst().V.ValidateStoragePools()
 	expect(err).NotTo(haveOccurred())
 
-}
-
-func getWorkloadSizeFromAppSpec(context *scheduler.Context) (uint64, error) {
-	var err error
-	var wSize uint64
-	appEnvVar := Inst().S.GetSpecAppEnvVar(context, specObjAppWorkloadSizeEnvVar)
-	if appEnvVar != "" {
-		wSize, err = strconv.ParseUint(appEnvVar, 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("can't parse value %v of environment variable. Err: %v", appEnvVar, err)
-		}
-
-		// if size less than 1024 we assume that value is in Gb
-		if wSize < 1024 {
-			return wSize * 1024 * 1024 * 1024, nil
-		}
-	}
-	return 0, nil
 }
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
