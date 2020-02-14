@@ -37,6 +37,14 @@ const (
 	// provisioner name
 	pvProvisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
 	pvNamePrefix              = "pvc-"
+
+	// Tags used for snapshots and disks
+	restoreUIDTag         = "restore-uid"
+	nameTag               = "Name"
+	createdByTag          = "created-by"
+	backupUIDTag          = "backup-uid"
+	sourcePVCNameTag      = "source-pvc-name"
+	sourcePVCNamespaceTag = "source-pvc-namespace"
 )
 
 type aws struct {
@@ -191,23 +199,23 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 					ResourceType: aws_sdk.String(ec2.ResourceTypeSnapshot),
 					Tags: []*ec2.Tag{
 						{
-							Key:   aws_sdk.String("created-by"),
+							Key:   aws_sdk.String(createdByTag),
 							Value: aws_sdk.String("stork"),
 						},
 						{
-							Key:   aws_sdk.String("backup-uid"),
+							Key:   aws_sdk.String(backupUIDTag),
 							Value: aws_sdk.String(string(backup.UID)),
 						},
 						{
-							Key:   aws_sdk.String("source-pvc-name"),
+							Key:   aws_sdk.String(sourcePVCNameTag),
 							Value: aws_sdk.String(pvc.Name),
 						},
 						{
-							Key:   aws_sdk.String("source-pvc-namespace"),
+							Key:   aws_sdk.String(sourcePVCNamespaceTag),
 							Value: aws_sdk.String(pvc.Namespace),
 						},
 						{
-							Key:   aws_sdk.String("Name"),
+							Key:   aws_sdk.String(nameTag),
 							Value: aws_sdk.String("stork-snapshot-" + volume),
 						},
 					},
@@ -216,11 +224,11 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		sourceTags := make([]*ec2.Tag, 0)
 		for _, tag := range ebsVolume.Tags {
-			if *tag.Key == "Name" ||
-				*tag.Key == "created-by" ||
-				*tag.Key == "backup-uid" ||
-				*tag.Key == "source-pvc-name" ||
-				*tag.Key == "source-pvc-namespace" {
+			if *tag.Key == nameTag ||
+				*tag.Key == createdByTag ||
+				*tag.Key == backupUIDTag ||
+				*tag.Key == sourcePVCNameTag ||
+				*tag.Key == sourcePVCNamespaceTag {
 				continue
 			}
 			sourceTags = append(sourceTags, tag)
@@ -384,23 +392,23 @@ func (a *aws) StartRestore(
 					Tags: []*ec2.Tag{
 
 						{
-							Key:   aws_sdk.String("created-by"),
+							Key:   aws_sdk.String(createdByTag),
 							Value: aws_sdk.String("stork"),
 						},
 						{
-							Key:   aws_sdk.String("restore-uid"),
+							Key:   aws_sdk.String(restoreUIDTag),
 							Value: aws_sdk.String(string(restore.UID)),
 						},
 						{
-							Key:   aws_sdk.String("source-pvc-name"),
+							Key:   aws_sdk.String(sourcePVCNameTag),
 							Value: aws_sdk.String(volumeInfo.PersistentVolumeClaim),
 						},
 						{
-							Key:   aws_sdk.String("source-pvc-namespace"),
+							Key:   aws_sdk.String(sourcePVCNamespaceTag),
 							Value: aws_sdk.String(volumeInfo.SourceNamespace),
 						},
 						{
-							Key:   aws_sdk.String("Name"),
+							Key:   aws_sdk.String(nameTag),
 							Value: aws_sdk.String(volumeInfo.RestoreVolume),
 						},
 					},
@@ -410,11 +418,11 @@ func (a *aws) StartRestore(
 
 		sourceTags := make([]*ec2.Tag, 0)
 		for _, tag := range ebsSnapshot.Tags {
-			if *tag.Key == "Name" ||
-				*tag.Key == "created-by" ||
-				*tag.Key == "resore-uid" ||
-				*tag.Key == "source-pvc-name" ||
-				*tag.Key == "source-pvc-namespace" {
+			if *tag.Key == nameTag ||
+				*tag.Key == createdByTag ||
+				*tag.Key == restoreUIDTag ||
+				*tag.Key == sourcePVCNameTag ||
+				*tag.Key == sourcePVCNamespaceTag {
 				continue
 			}
 			sourceTags = append(sourceTags, tag)
