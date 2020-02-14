@@ -1,6 +1,5 @@
 #!/bin/bash -x
 
-initializer="false"
 snapshot_scale=10
 migration_scale=10
 backup_scale=10
@@ -17,11 +16,6 @@ short_test=false
 for i in "$@"
 do
 case $i in
-    --with-initializer)
-        echo "Starting test with initializer"
-        initializer="true"
-        shift
-        ;;
     --snapshot-scale-count)
         echo "Scale for snapshot test (default 10): $2"
         snapshot_scale=$2
@@ -105,15 +99,6 @@ done
 
 apk update
 apk add jq
-
-if [ "$initializer" == "true" ] ; then
-    # Remove schedule name from all specs
-    find /testspecs/specs -name '*.yaml' | xargs sed -i '/schedulerName: stork/d'
-    # Create the initializer
-    kubectl apply -f /specs/stork-initializer.yaml
-    # Enable it in the stork spec
-    sed -i s/'#- --app-initializer=true'/'- --app-initializer=true'/g /specs/stork-deployment.yaml
-fi
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
