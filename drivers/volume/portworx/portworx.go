@@ -1575,7 +1575,7 @@ func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	}
 	pairInfo[clusterIP] = clusterIPAddress
 	pairInfo[tokenKey] = resp.Result.Token
-	pwxServicePort, err := getSDKPort()
+	pwxServicePort, err := getRestContainerPort()
 	if err != nil {
 		return nil, err
 	}
