@@ -40,7 +40,7 @@ relocate  pods on to other nodes so that they can continue running.
 
 ## Volume Snapshots
 
-Stork uses the external-storage project from [kubernetes-incuabator](https://github.com/kubernetes-incubator/external-storage)
+Stork uses the external-storage project from [kubernetes-incubator](https://github.com/kubernetes-incubator/external-storage)
 to add support for snapshots.
 
 Refer to [Snapshots with Stork](doc/snaps.md) for instructions on creating and using snapshots with Stork.

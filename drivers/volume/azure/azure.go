@@ -210,6 +210,9 @@ func (a *azure) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
+		volumeInfo.Options = map[string]string{
+			resourceGroupKey: a.resourceGroup,
+		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 
 		pvName, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
@@ -331,7 +334,15 @@ func (a *azure) StartRestore(
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, backupVolumeInfo := range volumeBackupInfos {
-		snapshot, err := a.snapshotClient.Get(context.TODO(), a.resourceGroup, backupVolumeInfo.BackupID)
+		var resourceGroup string
+		if val, present := backupVolumeInfo.Options[resourceGroupKey]; present {
+			resourceGroup = val
+		} else {
+			resourceGroup = a.resourceGroup
+			logrus.Warnf("missing resource group in snapshot %v, will use current resource group", backupVolumeInfo.BackupID)
+		}
+
+		snapshot, err := a.snapshotClient.Get(context.TODO(), resourceGroup, backupVolumeInfo.BackupID)
 		if err != nil {
 			return nil, err
 		}
@@ -430,7 +441,7 @@ func init() {
 	a := &azure{}
 	err := a.Init(nil)
 	if err != nil {
-		logrus.Errorf("Error init'ing azure driver")
+		logrus.Debugf("Error init'ing azure driver: %v", err)
 		return
 	}
 	if err := storkvolume.Register(driverName, a); err != nil {
