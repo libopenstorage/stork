@@ -55,6 +55,7 @@ const (
 	tokenKey             = "token"
 	clusterIP            = "ip"
 	clusterPort          = "port"
+	remoteKubeConfigPath = "/tmp/kubeconfig"
 )
 
 const (
@@ -1527,19 +1528,28 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) err
 // GetClusterPairingInfo returns cluster pair information
 func (d *portworx) GetClusterPairingInfo() (map[string]string, error) {
 	pairInfo := make(map[string]string)
+	pxNodes, err := d.schedOps.GetRemotePXNodes(remoteKubeConfigPath)
+	if err != nil {
+		logrus.Errorf("err retrieving remote px nodes: %v", err)
+		return nil, err
+	}
+	if len(pxNodes) == 0 {
+		return nil, fmt.Errorf("No PX Node found")
+	}
 
-	resp, err := d.clusterPairManager.GetToken(d.getContext(), &api.SdkClusterPairGetTokenRequest{})
+	clusterPairManager, err := d.getClusterPairManagerByAddress(pxNodes[0].Addresses[0])
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := clusterPairManager.GetToken(d.getContext(), &api.SdkClusterPairGetTokenRequest{})
 	if err != nil {
 		return nil, err
 	}
 	logrus.Infof("Response for token: %v", resp.Result.Token)
 
 	// file up cluster pair info
-	clusterIPAddress, err := d.schedOps.GetServiceEndpoint()
-	if err != nil {
-		return pairInfo, err
-	}
-	pairInfo[clusterIP] = clusterIPAddress
+	pairInfo[clusterIP] = pxNodes[0].Addresses[0]
 	pairInfo[tokenKey] = resp.Result.Token
 	pwxServicePort, err := getRestContainerPort()
 	if err != nil {
@@ -1680,6 +1690,25 @@ func (d *portworx) getClusterPairManager() api.OpenStorageClusterPairClient {
 	}
 	return d.clusterPairManager
 
+}
+
+func (d *portworx) getClusterPairManagerByAddress(addr string) (api.OpenStorageClusterPairClient, error) {
+	pxPort, err := getSDKContainerPort()
+	if err != nil {
+		return nil, err
+	}
+	pxEndpoint := fmt.Sprintf("%s:%d", addr, pxPort)
+	conn, err := grpc.Dial(pxEndpoint, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	dClient := api.NewOpenStorageClusterPairClient(conn)
+	_, err = dClient.Enumerate(d.getContext(), &api.SdkClusterPairEnumerateRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	return dClient, nil
 }
 
 func (d *portworx) getAlertsManager() api.OpenStorageAlertsClient {
