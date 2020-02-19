@@ -103,7 +103,8 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"IBPCA",
 		"IBPConsole",
 		"IBPPeer",
-		"IBPOrderer":
+		"IBPOrderer",
+		"CronJob":
 		return true
 	default:
 		return false
