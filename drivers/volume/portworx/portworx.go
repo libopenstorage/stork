@@ -35,6 +35,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s"
@@ -1969,6 +1970,9 @@ func (p *portworx) StartMigration(migration *stork_crd.Migration) ([]*stork_crd.
 		}
 		for _, pvc := range pvcList.Items {
 			if !p.OwnsPVC(&pvc) {
+				continue
+			}
+			if resourcecollector.SkipResource(pvc.Annotations) {
 				continue
 			}
 			volumeInfo := &stork_crd.MigrationVolumeInfo{
