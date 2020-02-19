@@ -196,6 +196,17 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 	return allObjects, nil
 }
 
+// SkipResource returns whether the annotations of the object require it to be
+// skipped
+func SkipResource(annotations map[string]string) bool {
+	if value, present := annotations[skipResourceAnnotation]; present {
+		if skip, err := strconv.ParseBool(value); err == nil && skip {
+			return true
+		}
+	}
+	return false
+}
+
 // Returns whether an object should be collected or not for the requested
 // namespace
 func (r *ResourceCollector) objectToBeCollected(
@@ -210,10 +221,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return false, err
 	}
 
-	if value, present := metadata.GetAnnotations()[skipResourceAnnotation]; present {
-		if skip, err := strconv.ParseBool(value); err == nil && skip {
-			return false, err
-		}
+	if SkipResource(metadata.GetAnnotations()) {
+		return false, err
 	}
 
 	// Skip if we've already processed this object
