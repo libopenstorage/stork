@@ -119,7 +119,7 @@ func (c *FakeBackupLocations) DeleteCollection(options *v1.DeleteOptions, listOp
 // Patch applies the patch and returns the patched backupLocation.
 func (c *FakeBackupLocations) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.BackupLocation, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(backuplocationsResource, c.ns, name, data, subresources...), &v1alpha1.BackupLocation{})
+		Invokes(testing.NewPatchSubresourceAction(backuplocationsResource, c.ns, name, pt, data, subresources...), &v1alpha1.BackupLocation{})
 
 	if obj == nil {
 		return nil, err

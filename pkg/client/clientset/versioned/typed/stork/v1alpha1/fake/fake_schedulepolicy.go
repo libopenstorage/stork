@@ -112,7 +112,7 @@ func (c *FakeSchedulePolicies) DeleteCollection(options *v1.DeleteOptions, listO
 // Patch applies the patch and returns the patched schedulePolicy.
 func (c *FakeSchedulePolicies) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.SchedulePolicy, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(schedulepoliciesResource, name, data, subresources...), &v1alpha1.SchedulePolicy{})
+		Invokes(testing.NewRootPatchSubresourceAction(schedulepoliciesResource, name, pt, data, subresources...), &v1alpha1.SchedulePolicy{})
 	if obj == nil {
 		return nil, err
 	}

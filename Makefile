@@ -34,9 +34,11 @@ all: stork storkctl cmdexecutor pretest
 
 vendor-update:
 	dep ensure -update
+	./hack/update-deprecated-apis.sh
 
 vendor:
 	dep ensure
+	./hack/update-deprecated-apis.sh
 
 lint:
 	go get -u golang.org/x/lint/golint

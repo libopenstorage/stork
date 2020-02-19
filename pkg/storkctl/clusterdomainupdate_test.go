@@ -8,7 +8,7 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +26,7 @@ func createClusterDomainUpdate(t *testing.T, name string, clusterDomain string, 
 
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	cdu, err := k8s.Instance().GetClusterDomainUpdate(name)
+	cdu, err := storkops.Instance().GetClusterDomainUpdate(name)
 	require.NoError(t, err, "Error getting ClusterDomainUpdate")
 	require.Equal(t, name, cdu.Name, "ClusterDomainUpdate name mismatch")
 	require.Equal(t, cdu.Spec.ClusterDomain, clusterDomain, "ClusterDomain name mismatch")
@@ -52,8 +52,8 @@ func TestGetClusterDomainUpdate(t *testing.T) {
 	createClusterDomainUpdate(t, "test1", "zone1", true)
 	cmdArgs := []string{"get", "clusterdomainupdate"}
 
-	expected := "NAME      CLUSTER-DOMAIN   ACTION     STATUS    CREATED\n" +
-		"test1     zone1            Activate             \n"
+	expected := "NAME    CLUSTER-DOMAIN   ACTION     STATUS   CREATED\n" +
+		"test1   zone1            Activate            \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -62,28 +62,28 @@ func TestGetClusterDomainUpdateWithChanges(t *testing.T) {
 	cdu := createClusterDomainUpdate(t, "test1", "zone1", true)
 	cmdArgs := []string{"get", "clusterdomainupdate", "test1"}
 
-	expected := "NAME      CLUSTER-DOMAIN   ACTION     STATUS    CREATED" +
-		"\ntest1     zone1            Activate             \n"
+	expected := "NAME    CLUSTER-DOMAIN   ACTION     STATUS   CREATED\n" +
+		"test1   zone1            Activate            \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cdu.Status.Status = storkv1.ClusterDomainUpdateStatusFailed
-	_, err := k8s.Instance().UpdateClusterDomainUpdate(cdu)
+	_, err := storkops.Instance().UpdateClusterDomainUpdate(cdu)
 	require.NoError(t, err, "Error updating cluster domain")
 
 	cmdArgs = []string{"get", "clusterdomainupdate", "test1"}
 
-	expected = "NAME      CLUSTER-DOMAIN   ACTION     STATUS    CREATED\n" +
-		"test1     zone1            Activate   Failed    \n"
+	expected = "NAME    CLUSTER-DOMAIN   ACTION     STATUS   CREATED\n" +
+		"test1   zone1            Activate   Failed   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cdu.Status.Status = storkv1.ClusterDomainUpdateStatusSuccessful
-	_, err = k8s.Instance().UpdateClusterDomainUpdate(cdu)
+	_, err = storkops.Instance().UpdateClusterDomainUpdate(cdu)
 	require.NoError(t, err, "Error updating cluster domain")
 
 	cmdArgs = []string{"get", "clusterdomainupdate", "test1"}
 
-	expected = "NAME      CLUSTER-DOMAIN   ACTION     STATUS       CREATED\n" +
-		"test1     zone1            Activate   Successful   \n"
+	expected = "NAME    CLUSTER-DOMAIN   ACTION     STATUS       CREATED\n" +
+		"test1   zone1            Activate   Successful   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 }
@@ -105,7 +105,7 @@ func TestActivateClusterDomain(t *testing.T) {
 	expected := "Cluster Domain activate operation started successfully for zone2\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	cdus, err := k8s.Instance().ListClusterDomainUpdates()
+	cdus, err := storkops.Instance().ListClusterDomainUpdates()
 	require.NoError(t, err, "Error listing ClusterDomainUpdate")
 	require.Equal(t, len(cdus.Items), 1, "ClusterDomainUpdates count mismatch")
 	cdu := cdus.Items[0]
@@ -123,8 +123,8 @@ func TestActivateClusterDomainWithName(t *testing.T) {
 
 	cmdArgs = []string{"get", "clusterdomainupdate", "testupdate1"}
 
-	expected = "NAME          CLUSTER-DOMAIN   ACTION     STATUS    CREATED\n" +
-		"testupdate1   zone2            Activate             \n"
+	expected = "NAME          CLUSTER-DOMAIN   ACTION     STATUS   CREATED\n" +
+		"testupdate1   zone2            Activate            \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -145,7 +145,7 @@ func TestActivateAllClusterDomain(t *testing.T) {
 	expected := "Cluster Domain activate operation started successfully for zone3\nCluster Domain activate operation started successfully for zone4\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	cdus, err := k8s.Instance().ListClusterDomainUpdates()
+	cdus, err := storkops.Instance().ListClusterDomainUpdates()
 	require.NoError(t, err, "Error listing ClusterDomainUpdate")
 	require.Equal(t, len(cdus.Items), 2, "ClusterDomainUpdates count mismatch")
 
@@ -171,14 +171,14 @@ func TestActivateAllClusterDomainWithName(t *testing.T) {
 
 	cmdArgs = []string{"get", "cdu", "testupdate1-0"}
 
-	expected = "NAME            CLUSTER-DOMAIN   ACTION     STATUS    CREATED\n" +
-		"testupdate1-0   zone3            Activate             \n"
+	expected = "NAME            CLUSTER-DOMAIN   ACTION     STATUS   CREATED\n" +
+		"testupdate1-0   zone3            Activate            \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"get", "cdu", "testupdate1-1"}
 
-	expected = "NAME            CLUSTER-DOMAIN   ACTION     STATUS    CREATED\n" +
-		"testupdate1-1   zone4            Activate             \n"
+	expected = "NAME            CLUSTER-DOMAIN   ACTION     STATUS   CREATED\n" +
+		"testupdate1-1   zone4            Activate            \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 }
@@ -191,7 +191,7 @@ func TestDeactivateClusterDomain(t *testing.T) {
 	expected := "Cluster Domain deactivate operation started successfully for zone2\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	cdus, err := k8s.Instance().ListClusterDomainUpdates()
+	cdus, err := storkops.Instance().ListClusterDomainUpdates()
 	require.Equal(t, len(cdus.Items), 1, "ClusterDomainUpdates count mismatch")
 	cdu := cdus.Items[0]
 	require.NoError(t, err, "Error getting ClusterDomainUpdate")
@@ -209,8 +209,8 @@ func TestDeactivateClusterDomainWithName(t *testing.T) {
 
 	cmdArgs = []string{"get", "clusterdomainupdate", "testupdate1"}
 
-	expected = "NAME          CLUSTER-DOMAIN   ACTION       STATUS    CREATED\n" +
-		"testupdate1   zone2            Deactivate             \n"
+	expected = "NAME          CLUSTER-DOMAIN   ACTION       STATUS   CREATED\n" +
+		"testupdate1   zone2            Deactivate            \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -237,7 +237,6 @@ func TestActivateClusterDomainWaitSuccess(t *testing.T) {
 	cmdArgs = []string{"get", "clusterdomainupdate", name}
 	expected = "NAME       CLUSTER-DOMAIN   ACTION     STATUS       CREATED\ntestzone   zone2            Activate   Successful   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
-
 }
 
 func TestActivateClusterDomainWaitFailed(t *testing.T) {
@@ -253,9 +252,8 @@ func TestActivateClusterDomainWaitFailed(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"get", "clusterdomainupdate", name}
-	expected = "NAME       CLUSTER-DOMAIN   ACTION     STATUS    CREATED\ntestzone   zone2            Activate   Failed    \n"
+	expected = "NAME       CLUSTER-DOMAIN   ACTION     STATUS   CREATED\n" + "testzone   zone2            Activate   Failed   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
-
 }
 
 func TestDeactivateClusterDomainWaitSuccess(t *testing.T) {
@@ -273,7 +271,6 @@ func TestDeactivateClusterDomainWaitSuccess(t *testing.T) {
 	cmdArgs = []string{"get", "clusterdomainupdate", name}
 	expected = "NAME       CLUSTER-DOMAIN   ACTION       STATUS       CREATED\ntestzone   zone2            Deactivate   Successful   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
-
 }
 
 func TestDectivateClusterDomainWaitFailed(t *testing.T) {
@@ -289,14 +286,14 @@ func TestDectivateClusterDomainWaitFailed(t *testing.T) {
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"get", "clusterdomainupdate", name}
-	expected = "NAME       CLUSTER-DOMAIN   ACTION       STATUS    CREATED\ntestzone   zone2            Deactivate   Failed    \n"
+	expected = "NAME       CLUSTER-DOMAIN   ACTION       STATUS   CREATED\n" +
+		"testzone   zone2            Deactivate   Failed   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
-
 }
 
 func setClusterDomainStatus(name string, isFail bool, t *testing.T) {
 	time.Sleep(10 * time.Second)
-	cdu, err := k8s.Instance().GetClusterDomainUpdate(name)
+	cdu, err := storkops.Instance().GetClusterDomainUpdate(name)
 	require.NoError(t, err, "Error getting cluster domain")
 	require.Equal(t, cdu.Status.Status, storkv1.ClusterDomainUpdateStatusInitial)
 	cdu.Status.Status = storkv1.ClusterDomainUpdateStatusSuccessful
@@ -305,6 +302,6 @@ func setClusterDomainStatus(name string, isFail bool, t *testing.T) {
 		cdu.Status.Reason = "Unavailable"
 	}
 
-	_, err = k8s.Instance().UpdateClusterDomainUpdate(cdu)
+	_, err = storkops.Instance().UpdateClusterDomainUpdate(cdu)
 	require.NoError(t, err, "Error updating cluster domain")
 }

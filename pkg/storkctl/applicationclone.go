@@ -2,17 +2,17 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -55,7 +55,7 @@ func newCreateApplicationCloneCommand(cmdFactory Factory, ioStreams genericcliop
 			}
 			applicationClone.Name = applicationCloneName
 			applicationClone.Namespace = cmdFactory.GetNamespace()
-			_, err := k8s.Instance().CreateApplicationClone(applicationClone)
+			_, err := storkops.Instance().CreateApplicationClone(applicationClone)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -102,7 +102,7 @@ func newGetApplicationCloneCommand(cmdFactory Factory, ioStreams genericclioptio
 				applicationClones = new(storkv1.ApplicationCloneList)
 				for _, applicationCloneName := range args {
 					for _, ns := range namespaces {
-						applicationClone, err := k8s.Instance().GetApplicationClone(applicationCloneName, ns)
+						applicationClone, err := storkops.Instance().GetApplicationClone(applicationCloneName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -113,7 +113,7 @@ func newGetApplicationCloneCommand(cmdFactory Factory, ioStreams genericclioptio
 			} else {
 				var tempApplicationClones storkv1.ApplicationCloneList
 				for _, ns := range namespaces {
-					applicationClones, err = k8s.Instance().ListApplicationClones(ns)
+					applicationClones, err = storkops.Instance().ListApplicationClones(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -162,7 +162,7 @@ func newDeleteApplicationCloneCommand(cmdFactory Factory, ioStreams genericcliop
 
 func deleteApplicationClones(applicationClones []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, applicationClone := range applicationClones {
-		err := k8s.Instance().DeleteApplicationClone(applicationClone, namespace)
+		err := storkops.Instance().DeleteApplicationClone(applicationClone, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -172,18 +172,19 @@ func deleteApplicationClones(applicationClones []string, namespace string, ioStr
 	}
 }
 
-func applicationClonePrinter(applicationCloneList *storkv1.ApplicationCloneList, writer io.Writer, options printers.PrintOptions) error {
-	if applicationCloneList == nil {
-		return nil
-	}
-	for _, applicationClone := range applicationCloneList.Items {
-		name := printers.FormatResourceName(options.Kind, applicationClone.Name, options.WithKind)
+func applicationClonePrinter(
+	applicationCloneList *storkv1.ApplicationCloneList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", applicationClone.Namespace); err != nil {
-				return err
-			}
-		}
+	if applicationCloneList == nil {
+		return nil, nil
+	}
+	rows := make([]metav1beta1.TableRow, 0)
+
+	for _, applicationClone := range applicationCloneList.Items {
+		name := applicationClone.Name
+
 		totalVolumes := len(applicationClone.Status.Volumes)
 		doneVolumes := 0
 		for _, volume := range applicationClone.Status.Volumes {
@@ -205,20 +206,20 @@ func applicationClonePrinter(applicationCloneList *storkv1.ApplicationCloneList,
 		}
 
 		creationTime := toTimeString(applicationClone.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-			name,
-			applicationClone.Spec.SourceNamespace,
-			applicationClone.Spec.DestinationNamespace,
-			applicationClone.Status.Stage,
-			applicationClone.Status.Status,
-			volumeStatus,
-			len(applicationClone.Status.Resources),
-			creationTime,
-			elapsed); err != nil {
-			return err
-		}
+		row := getRow(&applicationClone,
+			[]interface{}{name,
+				applicationClone.Spec.SourceNamespace,
+				applicationClone.Spec.DestinationNamespace,
+				applicationClone.Status.Stage,
+				applicationClone.Status.Status,
+				volumeStatus,
+				len(applicationClone.Status.Resources),
+				creationTime,
+				elapsed},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }
 
 func waitForApplicationClone(name, namespace string, ioStreams genericclioptions.IOStreams) (string, error) {
@@ -230,7 +231,7 @@ func waitForApplicationClone(name, namespace string, ioStreams genericclioptions
 	heading := fmt.Sprintf("%s\t\t%-20s", stage, status)
 	printMsg(heading, ioStreams.Out)
 	t := func() (interface{}, bool, error) {
-		clone, err := k8s.Instance().GetApplicationClone(name, namespace)
+		clone, err := storkops.Instance().GetApplicationClone(name, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return "", false, err

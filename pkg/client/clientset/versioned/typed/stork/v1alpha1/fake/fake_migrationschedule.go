@@ -131,7 +131,7 @@ func (c *FakeMigrationSchedules) DeleteCollection(options *v1.DeleteOptions, lis
 // Patch applies the patch and returns the patched migrationSchedule.
 func (c *FakeMigrationSchedules) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.MigrationSchedule, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(migrationschedulesResource, c.ns, name, data, subresources...), &v1alpha1.MigrationSchedule{})
+		Invokes(testing.NewPatchSubresourceAction(migrationschedulesResource, c.ns, name, pt, data, subresources...), &v1alpha1.MigrationSchedule{})
 
 	if obj == nil {
 		return nil, err

@@ -7,7 +7,8 @@ import (
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	core "github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,7 +35,7 @@ func createApplicationRestoreAndVerify(
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
-	restore, err := k8s.Instance().GetApplicationRestore(name, namespace)
+	restore, err := storkops.Instance().GetApplicationRestore(name, namespace)
 	require.NoError(t, err, "Error getting restore")
 	require.Equal(t, name, restore.Name, "ApplicationRestore name mismatch")
 	require.Equal(t, namespace, restore.Namespace, "ApplicationRestore namespace mismatch")
@@ -46,8 +47,8 @@ func TestGetApplicationRestoresOneApplicationRestore(t *testing.T) {
 	defer resetTest()
 	createApplicationRestoreAndVerify(t, "getrestoretest", "test", []string{"namespace1"}, "backuplocation", "backupname")
 
-	expected := "NAME             STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"getrestoretest                       0/0       0                     \n"
+	expected := "NAME             STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
+		"getrestoretest                    0/0       0                     \n"
 
 	cmdArgs := []string{"get", "apprestores", "-n", "test"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -55,15 +56,15 @@ func TestGetApplicationRestoresOneApplicationRestore(t *testing.T) {
 
 func TestGetApplicationRestoresMultiple(t *testing.T) {
 	defer resetTest()
-	_, err := k8s.Instance().CreateNamespace("default", nil)
+	_, err := core.Instance().CreateNamespace("default", nil)
 	require.NoError(t, err, "Error creating default namespace")
 
 	createApplicationRestoreAndVerify(t, "getrestoretest1", "default", []string{"namespace1"}, "backuplocation", "backupname")
 	createApplicationRestoreAndVerify(t, "getrestoretest2", "default", []string{"namespace1"}, "backuplocation", "backupname")
 
-	expected := "NAME              STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"getrestoretest1                       0/0       0                     \n" +
-		"getrestoretest2                       0/0       0                     \n"
+	expected := "NAME              STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
+		"getrestoretest1                    0/0       0                     \n" +
+		"getrestoretest2                    0/0       0                     \n"
 
 	cmdArgs := []string{"get", "apprestores", "getrestoretest1", "getrestoretest2"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -72,27 +73,27 @@ func TestGetApplicationRestoresMultiple(t *testing.T) {
 	cmdArgs = []string{"get", "apprestores"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	expected = "NAME              STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"getrestoretest1                       0/0       0                     \n"
+	expected = "NAME              STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
+		"getrestoretest1                    0/0       0                     \n"
 	// Should get only one restore if name given
 	cmdArgs = []string{"get", "apprestores", "getrestoretest1"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	_, err = k8s.Instance().CreateNamespace("ns1", nil)
+	_, err = core.Instance().CreateNamespace("ns1", nil)
 	require.NoError(t, err, "Error creating ns1 namespace")
 	createApplicationRestoreAndVerify(t, "getrestoretest21", "ns1", []string{"namespace1"}, "backuplocation", "backupname")
 	cmdArgs = []string{"get", "apprestores", "--all-namespaces"}
-	expected = "NAMESPACE   NAME               STAGE     STATUS    VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
-		"default     getrestoretest1                        0/0       0                     \n" +
-		"default     getrestoretest2                        0/0       0                     \n" +
-		"ns1         getrestoretest21                       0/0       0                     \n"
+	expected = "NAMESPACE   NAME               STAGE   STATUS   VOLUMES   RESOURCES   CREATED   ELAPSED\n" +
+		"default     getrestoretest1                     0/0       0                     \n" +
+		"default     getrestoretest2                     0/0       0                     \n" +
+		"ns1         getrestoretest21                    0/0       0                     \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
 func TestGetApplicationRestoresWithStatusAndProgress(t *testing.T) {
 	defer resetTest()
 	createApplicationRestoreAndVerify(t, "getrestorestatustest", "default", []string{"namespace1"}, "backuplocation", "backupname")
-	restore, err := k8s.Instance().GetApplicationRestore("getrestorestatustest", "default")
+	restore, err := storkops.Instance().GetApplicationRestore("getrestorestatustest", "default")
 	require.NoError(t, err, "Error getting restore")
 
 	// Update the status of the restore
@@ -101,11 +102,11 @@ func TestGetApplicationRestoresWithStatusAndProgress(t *testing.T) {
 	restore.Status.Stage = storkv1.ApplicationRestoreStageFinal
 	restore.Status.Status = storkv1.ApplicationRestoreStatusSuccessful
 	restore.Status.Volumes = []*storkv1.ApplicationRestoreVolumeInfo{}
-	_, err = k8s.Instance().UpdateApplicationRestore(restore)
+	_, err = storkops.Instance().UpdateApplicationRestore(restore)
 	require.NoError(t, err, "Error updating restore")
 
-	expected := "NAME                   STAGE     STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED\n" +
-		"getrestorestatustest   Final     Successful   0/0       0           " + toTimeString(restore.CreationTimestamp.Time) + "   5m0s\n"
+	expected := "NAME                   STAGE   STATUS       VOLUMES   RESOURCES   CREATED               ELAPSED\n" +
+		"getrestorestatustest   Final   Successful   0/0       0           " + toTimeString(restore.CreationTimestamp.Time) + "   5m0s\n"
 	cmdArgs := []string{"get", "apprestores", "getrestorestatustest"}
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -210,7 +211,7 @@ func TestCreateApplicationRestoreWaitFailed(t *testing.T) {
 
 func setApplicationRestoreStatus(name, namespace string, isFail bool, t *testing.T) {
 	time.Sleep(10 * time.Second)
-	restore, err := k8s.Instance().GetApplicationRestore(name, namespace)
+	restore, err := storkops.Instance().GetApplicationRestore(name, namespace)
 	require.NoError(t, err, "Error getting ApplicationRestore details")
 	require.Equal(t, restore.Status.Status, storkv1.ApplicationRestoreStatusInitial)
 	require.Equal(t, restore.Status.Stage, storkv1.ApplicationRestoreStageInitial)
@@ -220,6 +221,6 @@ func setApplicationRestoreStatus(name, namespace string, isFail bool, t *testing
 		restore.Status.Status = storkv1.ApplicationRestoreStatusFailed
 	}
 
-	_, err = k8s.Instance().UpdateApplicationRestore(restore)
+	_, err = storkops.Instance().UpdateApplicationRestore(restore)
 	require.NoError(t, err, "Error updating ApplicationRestores")
 }

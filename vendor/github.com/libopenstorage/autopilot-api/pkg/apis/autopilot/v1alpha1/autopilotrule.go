@@ -10,11 +10,17 @@ type LabelSelectorOperator string
 const (
 	// AutopilotRuleResourceName is the name of the singular AutopilotRule objects
 	AutopilotRuleResourceName = "autopilotrule"
+	// AutopilotRuleObjectResourceName is the name of the singular AutopilotObject objects
+	AutopilotRuleObjectResourceName = "autopilotruleobject"
 	// AutopilotRuleResourceShortName is the short name for AutopilotRule objects
 	AutopilotRuleResourceShortName = "ar"
+	// AutopilotRuleObjectResourceShortName is the short name for AutopilotRuleObject objects
+	AutopilotRuleObjectResourceShortName = "aro"
 
 	// AutopilotRuleResourcePlural is the name of the plural AutopilotRule objects
 	AutopilotRuleResourcePlural = "autopilotrules"
+	// AutopilotRuleObjectResourcePlural is the name of the plural AutopilotRuleObject objects
+	AutopilotRuleObjectResourcePlural = "autopilotruleobjects"
 
 	// LabelSelectorOpIn is operator where the key must have one of the values
 	LabelSelectorOpIn LabelSelectorOperator = "In"
@@ -61,13 +67,11 @@ type AutopilotRule struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
 	Spec            AutopilotRuleSpec `json:"spec"`
-	// TODO: add status
-	//Status          AutopilotRuleStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// AutopilotRuleList is a list of AutopilotRule objects in Kubernetes
+// AutopilotRuleList is a list of AutopilotRules in Kubernetes
 type AutopilotRuleList struct {
 	meta.TypeMeta `json:",inline"`
 	meta.ListMeta `json:"metadata,omitempty"`
@@ -99,6 +103,72 @@ type AutopilotRuleSpec struct {
 	// re-trigger any actions once they have been executed.
 	ActionsCoolDownPeriod int64 `json:"actionsCoolDownPeriod,omitempty"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// AutopilotRuleObject represents a particular object that is being monitored by autopilot. This is primarily used
+// for status purposes
+type AutopilotRuleObject struct {
+	meta.TypeMeta   `json:",inline"`
+	meta.ObjectMeta `json:"metadata,omitempty"`
+	// Status is the status of an object monitored by an autopilot rule
+	Status AutopilotRuleObjectStatus `json:"status,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// AutopilotRuleObjectList is a list of AutopilotRule objects in Kubernetes
+type AutopilotRuleObjectList struct {
+	meta.TypeMeta `json:",inline"`
+	meta.ListMeta `json:"metadata,omitempty"`
+
+	Items []AutopilotRuleObject `json:"items"`
+}
+
+// AutopilotRuleObjectStatus represents the status of an autopilot object
+type AutopilotRuleObjectStatus struct {
+	// Items contains list of recent status items for an autopilot object
+	Items []*AutopilotRuleObjectStatusItem `json:"items,omitempty"`
+}
+
+// AutopilotRuleObjectStatusItem is a single status item of an autopilot object
+type AutopilotRuleObjectStatusItem struct {
+	// LastProcessTimestamp was the last time the object was processed
+	LastProcessTimestamp meta.Time `json:"lastProcessTimestamp"`
+	// State of the object
+	State RuleState `json:"state"`
+	// Message is the user friendly status
+	Message string `json:"message"`
+	// TODO add NextProcessTimestamp
+}
+
+// RuleState is the type for the state of a rule
+type RuleState string
+
+const (
+	// RuleStateInit is the initial state of the rule where monitorign has not yet begin
+	RuleStateInit RuleState = "Initializing"
+	// RuleStateNormal is when the rule is being monitored and is in normal state
+	RuleStateNormal RuleState = "Normal"
+	// RuleStateTriggered is when the rule has it's conditions met
+	RuleStateTriggered RuleState = "Triggered"
+	// RuleStateActiveActionsPending is when the rule has it's conditions met but the actions are
+	// not being performed yet.
+	RuleStateActiveActionsPending RuleState = "ActiveActionsPending"
+	// RuleStateActiveActionsTaken is when the rule has it's actions already taken
+	// but still hasn't moved out of active status
+	RuleStateActiveActionsTaken RuleState = "ActiveActionsTaken"
+	// RuleStateActionsDeclined is when action was intentionally declined by autopilot
+	RuleStateActionsDeclined RuleState = "ActionsDeclined"
+	// RuleStateActiveActionsInProgress is when the rule is active and has met its
+	// conditions and there is an on going action on the object.
+	RuleStateActiveActionsInProgress RuleState = "ActiveActionsInProgress"
+)
+
+// RuleStatusObjectKey is a type to use as key for rule object statuses
+type RuleStatusObjectKey string
 
 // RuleObjectSelector defines an object for the rule
 type RuleObjectSelector struct {
@@ -149,3 +219,7 @@ const (
 	// RuleConditionMetrics is a monitoring type of condition in a rule
 	RuleConditionMetrics AutopilotRuleConditionType = "monitoring"
 )
+
+func init() {
+	SchemeBuilder.Register(&AutopilotRule{}, &AutopilotRuleObject{}, &AutopilotRuleList{}, &AutopilotRuleObjectList{})
+}

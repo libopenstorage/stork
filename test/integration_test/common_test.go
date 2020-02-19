@@ -16,7 +16,14 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/dynamic"
+	"github.com/portworx/sched-ops/k8s/externalstorage"
+	"github.com/portworx/sched-ops/k8s/openshift"
+	"github.com/portworx/sched-ops/k8s/rbac"
+	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -29,6 +36,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -116,7 +124,12 @@ func setup() error {
 
 	}
 	logrus.Infof("Using provisioner: %s", provisioner)
-	if err = schedulerDriver.Init("specs", volumeDriverName, nodeDriverName, authTokenConfigMap); err != nil {
+	if err = schedulerDriver.Init(scheduler.InitOptions{
+		SpecDir:             "specs",
+		VolDriverName:       volumeDriverName,
+		NodeDriverName:      nodeDriverName,
+		SecretConfigMapName: authTokenConfigMap,
+	}); err != nil {
 		return fmt.Errorf("Error initializing scheduler driver %v: %v", schedulerDriverName, err)
 	}
 
@@ -248,7 +261,7 @@ func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
 
 // write kubbeconfig file to /tmp/kubeconfig
 func dumpRemoteKubeConfig(configObject string) error {
-	cm, err := k8s.Instance().GetConfigMap(configObject, "kube-system")
+	cm, err := core.Instance().GetConfigMap(configObject, "kube-system")
 	if err != nil {
 		logrus.Errorf("Error reading config map: %v", err)
 		return err
@@ -263,21 +276,42 @@ func dumpRemoteKubeConfig(configObject string) error {
 }
 
 func setRemoteConfig(kubeConfig string) error {
-	k8sOps := k8s.Instance()
-	if k8sOps == nil {
-		return fmt.Errorf("Unable to get k8s ops instance")
-	}
+
+	var config *rest.Config
+	var err error
 
 	if kubeConfig == "" {
-		k8sOps.SetConfig(nil)
-		return nil
-	}
-	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
-	if err != nil {
-		return err
+		config = nil
+	} else {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeConfig)
+		if err != nil {
+			return err
+		}
 	}
 
+	k8sOps := core.Instance()
 	k8sOps.SetConfig(config)
+
+	storkOps := stork.Instance()
+	storkOps.SetConfig(config)
+
+	appsOps := apps.Instance()
+	appsOps.SetConfig(config)
+
+	storageOps := storage.Instance()
+	storageOps.SetConfig(config)
+
+	dynamicOps := dynamic.Instance()
+	dynamicOps.SetConfig(config)
+
+	extOps := externalstorage.Instance()
+	extOps.SetConfig(config)
+
+	ocpOps := openshift.Instance()
+	ocpOps.SetConfig(config)
+
+	rbacOps := rbac.Instance()
+	rbacOps.SetConfig(config)
 	return nil
 }
 
@@ -409,7 +443,7 @@ func setMockTime(t *time.Time) error {
 		timeString = t.Format(time.RFC1123)
 	}
 
-	cm, err := k8s.Instance().GetConfigMap(schedule.MockTimeConfigMapName, schedule.MockTimeConfigMapNamespace)
+	cm, err := core.Instance().GetConfigMap(schedule.MockTimeConfigMapName, schedule.MockTimeConfigMapNamespace)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return err
@@ -427,7 +461,7 @@ func setMockTime(t *time.Time) error {
 			},
 			Data: data,
 		}
-		_, err = k8s.Instance().CreateConfigMap(cm)
+		_, err = core.Instance().CreateConfigMap(cm)
 		return err
 	}
 
@@ -438,7 +472,7 @@ func setMockTime(t *time.Time) error {
 	}
 
 	cmCopy.Data[schedule.MockTimeConfigMapKey] = timeString
-	_, err = k8s.Instance().UpdateConfigMap(cmCopy)
+	_, err = core.Instance().UpdateConfigMap(cmCopy)
 	if err != nil {
 		return err
 	}

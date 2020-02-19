@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -45,10 +45,10 @@ func createClusterDomainsStatus(t *testing.T, name string) *storkv1.ClusterDomai
 			ClusterDomainInfos: append(activeDomainInfos, inactiveDomainInfos...),
 		},
 	}
-	_, err := k8s.Instance().CreateClusterDomainsStatus(cds)
+	_, err := storkops.Instance().CreateClusterDomainsStatus(cds)
 	require.NoError(t, err, "Error creating ClusterDomainsStatus")
 
-	cds, err = k8s.Instance().GetClusterDomainsStatus(name)
+	cds, err = storkops.Instance().GetClusterDomainsStatus(name)
 	require.NoError(t, err, "Error getting ClusterDomainsStatus")
 	require.Equal(t, name, cds.Name, "ClusterDomainsStatus name mismatch")
 	require.Equal(t, len(cds.Status.ClusterDomainInfos), 4, "Number of ClusterDomainInfo objects do not match")
@@ -98,9 +98,8 @@ func TestGetClusterDomainsStatus(t *testing.T) {
 	createClusterDomainsStatus(t, "test1")
 	cmdArgs := []string{"get", "clusterdomainsstatus", "test1"}
 
-	expected := "NAME      LOCAL-DOMAIN   ACTIVE                                     " +
-		"INACTIVE                                 CREATED\ntest1     zone1       " +
-		"   [zone1 (SyncInProgress), zone2 (InSync)]   [zone3 (NotInSync), zone4 (NotInSync)]   \n"
+	expected := "NAME    LOCAL-DOMAIN   ACTIVE                                   INACTIVE                               CREATED\n" +
+		"test1   zone1          zone1 (SyncInProgress), zone2 (InSync)   zone3 (NotInSync), zone4 (NotInSync)   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
@@ -109,9 +108,8 @@ func TestGetClusterDomainsStatusWithChanges(t *testing.T) {
 	cds := createClusterDomainsStatus(t, "test1")
 	cmdArgs := []string{"get", "clusterdomainsstatus", "test1"}
 
-	expected := "NAME      LOCAL-DOMAIN   ACTIVE                                     " +
-		"INACTIVE                                 CREATED\ntest1     zone1       " +
-		"   [zone1 (SyncInProgress), zone2 (InSync)]   [zone3 (NotInSync), zone4 (NotInSync)]   \n"
+	expected := "NAME    LOCAL-DOMAIN   ACTIVE                                   INACTIVE                               CREATED\n" +
+		"test1   zone1          zone1 (SyncInProgress), zone2 (InSync)   zone3 (NotInSync), zone4 (NotInSync)   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cds.Status.LocalDomain = "zone1"
@@ -122,16 +120,14 @@ func TestGetClusterDomainsStatusWithChanges(t *testing.T) {
 			break
 		}
 	}
-	_, err := k8s.Instance().UpdateClusterDomainsStatus(cds)
+	_, err := storkops.Instance().UpdateClusterDomainsStatus(cds)
 	require.NoError(t, err, "Error updating cluster domains status")
 
 	cmdArgs = []string{"get", "clusterdomainsstatus", "test1"}
 
-	expected = "NAME      LOCAL-DOMAIN   ACTIVE                                     " +
-		"INACTIVE                                 CREATED\ntest1     zone1       " +
-		"   [zone1 (SyncInProgress), zone2 (InSync)]   [zone3 (NotInSync), zone4 (NotInSync)]   \n"
+	expected = "NAME    LOCAL-DOMAIN   ACTIVE                                   INACTIVE                               CREATED\n" +
+		"test1   zone1          zone1 (SyncInProgress), zone2 (InSync)   zone3 (NotInSync), zone4 (NotInSync)   \n"
 	testCommon(t, cmdArgs, nil, expected, false)
-
 }
 
 func TestGetClusterDomainsStatusNotFound(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
 )
@@ -69,16 +69,16 @@ func stopKubeletTest(t *testing.T) {
 	// Cordon node where the test is running. This is so that we don't end up stopping
 	// kubelet on the node where the stork-test pod is running
 	testPodNode := ""
-	testPod, err := k8s.Instance().GetPodByName("stork-test", "kube-system")
+	testPod, err := core.Instance().GetPodByName("stork-test", "kube-system")
 	if err == nil { // if this hits an error, skip below logic to allow running tests outside a pod
 		testPodNode = testPod.Spec.NodeName
-		err = k8s.Instance().CordonNode(testPodNode, defaultWaitTimeout, defaultWaitInterval)
+		err = core.Instance().CordonNode(testPodNode, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error cordorning k8s node for stork test pod")
 	}
 
 	defer func() {
 		if len(testPodNode) > 0 {
-			err = k8s.Instance().UnCordonNode(testPodNode, defaultWaitTimeout, defaultWaitInterval)
+			err = core.Instance().UnCordonNode(testPodNode, defaultWaitTimeout, defaultWaitInterval)
 			require.NoError(t, err, "Error uncordorning k8s node for stork test pod")
 		}
 	}()

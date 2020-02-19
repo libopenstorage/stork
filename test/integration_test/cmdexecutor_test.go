@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
-	k8s_ops "github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -91,7 +91,7 @@ func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecut
 }
 
 func getContextPods(ctx *scheduler.Context) ([]v1.Pod, error) {
-	k8sOps := k8s_ops.Instance()
+	k8sOps := apps.Instance()
 	var pods []v1.Pod
 
 	for _, spec := range ctx.App.SpecList {

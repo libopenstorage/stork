@@ -2,17 +2,17 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"time"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -61,7 +61,7 @@ func newCreateApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 			}
 			applicationBackup.Name = applicationBackupName
 			applicationBackup.Namespace = cmdFactory.GetNamespace()
-			_, err := k8s.Instance().CreateApplicationBackup(applicationBackup)
+			_, err := storkops.Instance().CreateApplicationBackup(applicationBackup)
 			if err != nil {
 				util.CheckErr(err)
 				return
@@ -107,7 +107,7 @@ func newGetApplicationBackupCommand(cmdFactory Factory, ioStreams genericcliopti
 				applicationBackups = new(storkv1.ApplicationBackupList)
 				for _, applicationBackupName := range args {
 					for _, ns := range namespaces {
-						applicationBackup, err := k8s.Instance().GetApplicationBackup(applicationBackupName, ns)
+						applicationBackup, err := storkops.Instance().GetApplicationBackup(applicationBackupName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -118,7 +118,7 @@ func newGetApplicationBackupCommand(cmdFactory Factory, ioStreams genericcliopti
 			} else {
 				var tempApplicationBackups storkv1.ApplicationBackupList
 				for _, ns := range namespaces {
-					applicationBackups, err = k8s.Instance().ListApplicationBackups(ns)
+					applicationBackups, err = storkops.Instance().ListApplicationBackups(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -167,7 +167,7 @@ func newDeleteApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 
 func deleteApplicationBackups(applicationBackups []string, namespace string, ioStreams genericclioptions.IOStreams) {
 	for _, applicationBackup := range applicationBackups {
-		err := k8s.Instance().DeleteApplicationBackup(applicationBackup, namespace)
+		err := storkops.Instance().DeleteApplicationBackup(applicationBackup, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return
@@ -177,18 +177,16 @@ func deleteApplicationBackups(applicationBackups []string, namespace string, ioS
 	}
 }
 
-func applicationBackupPrinter(applicationBackupList *storkv1.ApplicationBackupList, writer io.Writer, options printers.PrintOptions) error {
+func applicationBackupPrinter(
+	applicationBackupList *storkv1.ApplicationBackupList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if applicationBackupList == nil {
-		return nil
+		return nil, nil
 	}
-	for _, applicationBackup := range applicationBackupList.Items {
-		name := printers.FormatResourceName(options.Kind, applicationBackup.Name, options.WithKind)
 
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", applicationBackup.Namespace); err != nil {
-				return err
-			}
-		}
+	rows := make([]metav1beta1.TableRow, 0)
+	for _, applicationBackup := range applicationBackupList.Items {
 		totalVolumes := len(applicationBackup.Status.Volumes)
 		doneVolumes := 0
 		for _, volume := range applicationBackup.Status.Volumes {
@@ -212,18 +210,18 @@ func applicationBackupPrinter(applicationBackupList *storkv1.ApplicationBackupLi
 		}
 
 		creationTime := toTimeString(applicationBackup.Status.TriggerTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-			name,
-			applicationBackup.Status.Stage,
-			applicationBackup.Status.Status,
-			volumeStatus,
-			len(applicationBackup.Status.Resources),
-			creationTime,
-			elapsed); err != nil {
-			return err
-		}
+		row := getRow(&applicationBackup,
+			[]interface{}{applicationBackup.Name,
+				applicationBackup.Status.Stage,
+				applicationBackup.Status.Status,
+				volumeStatus,
+				len(applicationBackup.Status.Resources),
+				creationTime,
+				elapsed},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }
 
 func waitForApplicationBackup(name, namespace string, ioStreams genericclioptions.IOStreams) (string, error) {
@@ -235,7 +233,7 @@ func waitForApplicationBackup(name, namespace string, ioStreams genericclioption
 	heading := fmt.Sprintf("%s\t\t%-20s", stage, status)
 	printMsg(heading, ioStreams.Out)
 	t := func() (interface{}, bool, error) {
-		backup, err := k8s.Instance().GetApplicationBackup(name, namespace)
+		backup, err := storkops.Instance().GetApplicationBackup(name, namespace)
 		if err != nil {
 			util.CheckErr(err)
 			return "", false, err

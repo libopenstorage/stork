@@ -12,7 +12,9 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -105,7 +107,7 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *v1.PersistentVolumeClaim
 	if storageClassName == "" {
 		return nil
 	}
-	storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
+	storageClass, err := storage.Instance().GetStorageClass(storageClassName)
 	// Ignore if storageclass cannot be found
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -120,7 +122,7 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *v1.PersistentVolumeClaim
 	}
 	for snapshotScheduleName, policy := range policiesMap {
 		schedulePolicyName := policy.SchedulePolicyName
-		if _, err := k8s.Instance().GetSnapshotSchedule(snapshotScheduleName, pvc.Namespace); err == nil {
+		if _, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, pvc.Namespace); err == nil {
 			continue
 		}
 
@@ -150,7 +152,7 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *v1.PersistentVolumeClaim
 				ReclaimPolicy:      policy.ReclaimPolicy,
 			},
 		}
-		_, err = k8s.Instance().CreateSnapshotSchedule(snapshotSchedule)
+		_, err = storkops.Instance().CreateSnapshotSchedule(snapshotSchedule)
 		if err != nil {
 			p.Recorder.Event(pvc,
 				v1.EventTypeWarning,
@@ -168,7 +170,7 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *v1.PersistentVolumeClaim
 			pvc.Annotations = make(map[string]string)
 		}
 		pvc.Annotations[scheduleCreatedAnnotation] = "yes"
-		_, err = k8s.Instance().UpdatePersistentVolumeClaim(pvc)
+		_, err = core.Instance().UpdatePersistentVolumeClaim(pvc)
 		if err != nil {
 			return err
 		}

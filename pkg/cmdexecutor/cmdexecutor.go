@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -72,7 +72,7 @@ func (c *cmdExecutor) Start(errChan chan error) error {
 	waitScriptCreateCmd := fmt.Sprintf("rm -rf %s %s && echo 'touch %s && while [ ! -f %s ]; do sleep 2; done' > %s && chmod +x %s",
 		c.statusFile, killFile, c.statusFile, killFile, waitScriptLocation, waitScriptLocation)
 	cmdSplit := []string{"/bin/sh", "-c", waitScriptCreateCmd}
-	_, err := k8s.Instance().RunCommandInPod(cmdSplit, c.podName, c.container, c.podNamespace)
+	_, err := core.Instance().RunCommandInPod(cmdSplit, c.podName, c.container, c.podNamespace)
 	if err != nil {
 		err = fmt.Errorf("failed to create wait script in pod: [%s] %s using command: %s due to err: %v",
 			c.podNamespace, c.podName, waitScriptCreateCmd, err)
@@ -84,7 +84,7 @@ func (c *cmdExecutor) Start(errChan chan error) error {
 	go func() {
 		logrus.Infof("Running command: %s on pod: [%s] %s", command, c.podNamespace, c.podName)
 		cmdSplit = []string{"/bin/sh", "-c", command}
-		_, err = k8s.Instance().RunCommandInPod(cmdSplit, c.podName, c.container, c.podNamespace)
+		_, err = core.Instance().RunCommandInPod(cmdSplit, c.podName, c.container, c.podNamespace)
 		if err != nil {
 			err = fmt.Errorf("failed to run command: %s in pod: [%s] %s due to err: %v",
 				command, c.podNamespace, c.podName, err)
@@ -120,7 +120,7 @@ func (c *cmdExecutor) Wait(timeout time.Duration) error {
 
 	statusCmd := fmt.Sprintf(cmdStatusFormat, c.statusFile)
 	if err := wait.ExponentialBackoff(cmdCheckBackoff, func() (bool, error) {
-		_, err := k8s.Instance().RunCommandInPod([]string{"/bin/sh", "-c", statusCmd},
+		_, err := core.Instance().RunCommandInPod([]string{"/bin/sh", "-c", statusCmd},
 			c.podName, c.container, c.podNamespace)
 		if err != nil {
 			return false, nil
@@ -135,7 +135,7 @@ func (c *cmdExecutor) Wait(timeout time.Duration) error {
 
 	// Remove status file
 	if err := wait.ExponentialBackoff(cmdCheckBackoff, func() (bool, error) {
-		_, err := k8s.Instance().RunCommandInPod([]string{
+		_, err := core.Instance().RunCommandInPod([]string{
 			"/bin/sh",
 			"-c",
 			fmt.Sprintf("rm -rf %s", c.statusFile)}, c.podName, c.container, c.podNamespace)

@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/kubernetes-incubator/external-storage/lib/controller"
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	crdclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
@@ -16,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/sig-storage-lib-external-provisioner/controller"
 )
 
 // Most of this has been taken from the kubernetes-incubator snapshot
@@ -67,7 +67,7 @@ var _ controller.Provisioner = &snapshotProvisioner{}
 func (p *snapshotProvisioner) snapshotRestore(
 	snapshotName string,
 	snapshotData crdv1.VolumeSnapshotData,
-	options controller.VolumeOptions,
+	options controller.ProvisionOptions,
 ) (*v1.PersistentVolumeSource, map[string]string, error) {
 	// validate the PV supports snapshot and restore
 	spec := &snapshotData.Spec
@@ -81,7 +81,7 @@ func (p *snapshotProvisioner) snapshotRestore(
 	}
 
 	// restore snapshot
-	pvSrc, labels, err := plugin.SnapshotRestore(&snapshotData, options.PVC, options.PVName, options.Parameters)
+	pvSrc, labels, err := plugin.SnapshotRestore(&snapshotData, options.PVC, options.PVName, options.StorageClass.Parameters)
 	if err != nil {
 		log.Warnf("failed to clone %#v, err: %v", spec, err)
 	} else {
@@ -131,7 +131,7 @@ func (p *snapshotProvisioner) isSnapshotAllowed(
 }
 
 // Provision creates a storage asset and returns a PV object representing it.
-func (p *snapshotProvisioner) Provision(options controller.VolumeOptions) (*v1.PersistentVolume, error) {
+func (p *snapshotProvisioner) Provision(options controller.ProvisionOptions) (*v1.PersistentVolume, error) {
 	if options.PVC.Spec.Selector != nil {
 		return nil, fmt.Errorf("claim Selector is not supported")
 	}
@@ -190,7 +190,7 @@ func (p *snapshotProvisioner) Provision(options controller.VolumeOptions) (*v1.P
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
-			PersistentVolumeReclaimPolicy: options.PersistentVolumeReclaimPolicy,
+			PersistentVolumeReclaimPolicy: *options.StorageClass.ReclaimPolicy,
 			AccessModes:                   options.PVC.Spec.AccessModes,
 			Capacity: v1.ResourceList{
 				v1.ResourceName(v1.ResourceStorage): options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)],

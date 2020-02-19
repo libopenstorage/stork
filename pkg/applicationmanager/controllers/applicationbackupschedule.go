@@ -13,7 +13,8 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -130,7 +131,7 @@ func (s *ApplicationBackupScheduleController) setDefaults(backupSchedule *stork_
 }
 
 func getApplicationBackupStatus(name string, namespace string) (stork_api.ApplicationBackupStatusType, error) {
-	backup, err := k8s.Instance().GetApplicationBackup(name, namespace)
+	backup, err := storkops.Instance().GetApplicationBackup(name, namespace)
 	if err != nil {
 		return stork_api.ApplicationBackupStatusFailed, err
 	}
@@ -283,7 +284,7 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 			},
 		}
 	}
-	_, err = k8s.Instance().CreateApplicationBackup(backup)
+	_, err = storkops.Instance().CreateApplicationBackup(backup)
 	return err
 }
 
@@ -313,7 +314,7 @@ func (s *ApplicationBackupScheduleController) pruneApplicationBackups(backupSche
 			failedDeletes := make([]*stork_api.ScheduledApplicationBackupStatus, 0)
 			if numReady > int(retainNum) {
 				for i := 0; i < deleteBefore; i++ {
-					err := k8s.Instance().DeleteApplicationBackup(policyApplicationBackup[i].Name, backupSchedule.Namespace)
+					err := storkops.Instance().DeleteApplicationBackup(policyApplicationBackup[i].Name, backupSchedule.Namespace)
 					if err != nil && !errors.IsNotFound(err) {
 						log.ApplicationBackupScheduleLog(backupSchedule).Warnf("Error deleting %v: %v", policyApplicationBackup[i].Name, err)
 						// Keep a track of the failed deletes
@@ -332,7 +333,7 @@ func (s *ApplicationBackupScheduleController) pruneApplicationBackups(backupSche
 }
 
 func (s *ApplicationBackupScheduleController) createCRD() error {
-	resource := k8s.CustomResource{
+	resource := apiextensions.CustomResource{
 		Name:    stork_api.ApplicationBackupScheduleResourceName,
 		Plural:  stork_api.ApplicationBackupScheduleResourcePlural,
 		Group:   stork.GroupName,
@@ -340,10 +341,10 @@ func (s *ApplicationBackupScheduleController) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationBackupSchedule{}).Name(),
 	}
-	err := k8s.Instance().CreateCRD(resource)
+	err := apiextensions.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"gocloud.dev/blob"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -37,7 +37,7 @@ func (b *BackupSyncController) startBackupSync() {
 	for {
 		select {
 		case <-time.After(b.SyncInterval):
-			backupLocations, err := k8s.Instance().ListBackupLocations("")
+			backupLocations, err := storkops.Instance().ListBackupLocations("")
 			if err != nil {
 				logrus.Errorf("Error getting backup location to sync: %v", err)
 				continue
@@ -112,7 +112,7 @@ func (b *BackupSyncController) syncBackupsFromLocation(location *storkv1.BackupL
 					continue
 				}
 
-				localBackupInfo, err := k8s.Instance().GetApplicationBackup(backupInfo.Name, backupInfo.Namespace)
+				localBackupInfo, err := storkops.Instance().GetApplicationBackup(backupInfo.Name, backupInfo.Namespace)
 				if err == nil {
 					// The UIDs will match if it was originally created on this
 					// cluster. We don't want to sync those backups
@@ -127,7 +127,7 @@ func (b *BackupSyncController) syncBackupsFromLocation(location *storkv1.BackupL
 				// Now check if we've synced this backup to this cluster
 				// already using the generated name
 				syncedBackupName := b.getSyncedBackupName(&backupInfo)
-				_, err = k8s.Instance().GetApplicationBackup(syncedBackupName, backupInfo.Namespace)
+				_, err = storkops.Instance().GetApplicationBackup(syncedBackupName, backupInfo.Namespace)
 				if !errors.IsNotFound(err) {
 					// If we get anything other than NotFound ignore it
 					continue
@@ -139,7 +139,7 @@ func (b *BackupSyncController) syncBackupsFromLocation(location *storkv1.BackupL
 				backupInfo.SelfLink = ""
 				backupInfo.OwnerReferences = nil
 				backupInfo.Spec.ReclaimPolicy = storkv1.ApplicationBackupReclaimPolicyRetain
-				_, err = k8s.Instance().CreateApplicationBackup(&backupInfo)
+				_, err = storkops.Instance().CreateApplicationBackup(&backupInfo)
 				if err != nil {
 					return err
 				}

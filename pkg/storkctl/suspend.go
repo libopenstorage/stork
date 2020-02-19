@@ -2,7 +2,7 @@ package storkctl
 
 import (
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func newSuspendCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {

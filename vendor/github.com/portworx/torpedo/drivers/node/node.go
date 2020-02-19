@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/errors"
 )
 
@@ -27,8 +28,19 @@ const (
 	Directory FindType = "d"
 )
 
+// StoragePool is the storage pool structure on the node
+type StoragePool struct {
+	*api.StoragePool
+	// StoragePoolAtInit in the storage pool that's captured when the test initializes. This is useful for tests that
+	// want to track changes in a pool since the test was started. For e.g tracking pool expansion changes
+	StoragePoolAtInit *api.StoragePool
+	// WorkloadSize is the size in bytes of the workload that will be launched by test on this storage pool
+	WorkloadSize uint64
+}
+
 // Node encapsulates a node in the cluster
 type Node struct {
+	api.StorageNode
 	uuid                     string
 	VolDriverNodeID          string
 	Name                     string
@@ -39,6 +51,7 @@ type Node struct {
 	Region                   string
 	IsStorageDriverInstalled bool
 	IsMetadataNode           bool
+	StoragePools             []StoragePool
 }
 
 // ConnectionOpts provide basic options for all operations and can be embedded by other options
@@ -125,8 +138,8 @@ type Driver interface {
 	// SystemCheck checks whether core files are present on the given node.
 	SystemCheck(node Node, options ConnectionOpts) (string, error)
 
-	// SetASGClusterSize sets node count for an asg cluster
-	SetASGClusterSize(count int64, timeout time.Duration) error
+	// SetASGClusterSize sets node count per zone for an asg cluster
+	SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 
 	// GetASGClusterSize gets node count for an asg cluster
 	GetASGClusterSize() (int64, error)

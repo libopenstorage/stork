@@ -12,9 +12,10 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
+	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -61,6 +62,12 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	admissionReview := v1beta1.AdmissionReview{}
 	isStorkResource := false
 
+	webhookConfig := &admissionv1beta1.MutatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: storkAdmissionController,
+		},
+	}
+
 	decoder := json.NewDecoder(req.Body)
 	defer func() {
 		if err := req.Body.Close(); err != nil {
@@ -69,7 +76,7 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	}()
 	if err := decoder.Decode(&admissionReview); err != nil {
 		log.Errorf("Error decoding admission review request: %v", err)
-		c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "invalid admission review request", err.Error())
+		c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "invalid admission review request", err.Error())
 		http.Error(w, "Decode error", http.StatusBadRequest)
 		return
 	}
@@ -81,33 +88,33 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		var ss appv1.StatefulSet
 		if err = json.Unmarshal(arReq.Object.Raw, &ss); err != nil {
 			log.Errorf("Could not unmarshal admission review object: %v", err)
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
+			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
 		}
 		isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, ss.GetNamespace())
 		if err != nil {
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info for ss: %v", err.Error())
+			c.Recorder.Event(&ss, v1.EventTypeWarning, "Could not get volume owner info for ss: %v", err.Error())
 		}
 		schedPath = appSchedPrefix + podSpecSchedPath
 	case "Deployment":
 		var deployment appv1.Deployment
 		if err := json.Unmarshal(arReq.Object.Raw, &deployment); err != nil {
 			log.Errorf("Could not unmarshal admission review object: %v", err)
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
+			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
 		}
 		isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, deployment.GetNamespace())
 		if err != nil {
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info deployment: %v", err.Error())
+			c.Recorder.Event(&deployment, v1.EventTypeWarning, "Could not get volume owner info deployment: %v", err.Error())
 		}
 		schedPath = appSchedPrefix + podSpecSchedPath
 	case "Pod":
 		var pod v1.Pod
 		if err := json.Unmarshal(arReq.Object.Raw, &pod); err != nil {
 			log.Errorf("Could not unmarshal admission review object: %v", err)
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
+			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
 		}
 		isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, pod.GetNamespace())
 		if err != nil {
-			c.Recorder.Event(&admissionReview, v1.EventTypeWarning, "Could not get volume owner info for pod: %v", err.Error())
+			c.Recorder.Event(&pod, v1.EventTypeWarning, "Could not get volume owner info for pod: %v", err.Error())
 		}
 		schedPath = podSpecSchedPath
 	}
@@ -153,7 +160,7 @@ func (c *Controller) checkVolumeOwner(volumes []v1.Volume, namespace string) (bo
 		if v.PersistentVolumeClaim == nil {
 			continue
 		}
-		pvc, err := k8s.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
+		pvc, err := core.Instance().GetPersistentVolumeClaim(v.PersistentVolumeClaim.ClaimName, namespace)
 		if err != nil {
 			return false, err
 		}
@@ -181,7 +188,7 @@ func (c *Controller) Start() error {
 	if ns == "" {
 		ns = defaultNamespace
 	}
-	certSecrets, err := k8s.Instance().GetSecret(secretName, ns)
+	certSecrets, err := core.Instance().GetSecret(secretName, ns)
 	if err != nil && !k8serr.IsNotFound(err) {
 		log.Errorf("Unable to retrieve %v secret: %v", secretName, err)
 		return err
