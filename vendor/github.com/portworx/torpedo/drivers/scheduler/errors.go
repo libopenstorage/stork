@@ -56,18 +56,6 @@ func (e *ErrFailedToDestroyStorage) Error() string {
 	return fmt.Sprintf("Failed to destory storage for app: %v due to err: %v", e.App.Key, e.Cause)
 }
 
-// ErrFailedToDestroyAutopilotRule error type for failing to destroy an autopilotrule
-type ErrFailedToDestroyAutopilotRule struct {
-	// Name is the autopilot name that failed to destroy
-	Name string
-	// Cause is the underlying cause of the error
-	Cause string
-}
-
-func (e *ErrFailedToDestroyAutopilotRule) Error() string {
-	return fmt.Sprintf("Failed to destory an autopilot rule: %v due to err: %v", e.Name, e.Cause)
-}
-
 // ErrFailedToValidateStorage error type for failing to validate an app's storage
 type ErrFailedToValidateStorage struct {
 	// App is the app whose storage validation failed
@@ -336,4 +324,60 @@ type ErrFailedToGetConfigMap struct {
 
 func (e *ErrFailedToGetConfigMap) Error() string {
 	return fmt.Sprintf("Failed to get config map: %s due to err: %v", e.Name, e.Cause)
+}
+
+// ErrFailedToAddLabelOnNode error type for failing to add label on node
+type ErrFailedToAddLabelOnNode struct {
+	// Key is the label key
+	Key string
+	// Value is the label value
+	Value string
+	// Node is the node where label should be added
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToAddLabelOnNode) Error() string {
+	return fmt.Sprintf("Failed to add label: %s=%s on node %v due to err: %v", e.Key, e.Value, e.Node, e.Cause)
+}
+
+// ErrFailedToGetCustomSpec error type for failing to get config map
+type ErrFailedToGetCustomSpec struct {
+	// Name of config map
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+	// Type is the underlying type of CRD objects
+	Type interface{}
+}
+
+func (e *ErrFailedToGetCustomSpec) Error() string {
+	return fmt.Sprintf("Failed to get custom spec: %s due to err: %v", e.Name, e.Cause)
+}
+
+// ErrFailedToGetSecret error when we are unable to get the defined secret
+type ErrFailedToGetSecret struct {
+	// App is the spec for which we want to get the secret
+	App *spec.AppSpec
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetSecret) Error() string {
+	return fmt.Sprintf("Failed to get Secret : %v due to err: %v", e.App.Key, e.Cause)
+}
+
+// ErrFailedToGetEvents error when we are unable to get events
+type ErrFailedToGetEvents struct {
+	// Type is the resource type which we want to get the events
+	Type string
+	// Name of object
+	Name string
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToGetEvents) Error() string {
+	return fmt.Sprintf("Failed to get Events for: [%v]%v due to err: %v", e.Type, e.Name, e.Cause)
 }

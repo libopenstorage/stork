@@ -8,7 +8,8 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -42,8 +43,8 @@ func TestGetVolumeSnapshotsOneSnapshot(t *testing.T) {
 
 	snapshots.Items = append(snapshots.Items, *snap)
 
-	expected := `NAME      PVC                         STATUS    CREATED   COMPLETED   TYPE
-snap1     persistentVolumeClaimName   Pending                         Local
+	expected := `NAME    PVC                         STATUS    CREATED   COMPLETED   TYPE
+snap1   persistentVolumeClaimName   Pending                         Local
 `
 
 	testCommon(t, cmdArgs, &snapshots, expected, false)
@@ -51,9 +52,9 @@ snap1     persistentVolumeClaimName   Pending                         Local
 
 func TestGetVolumeSnapshotsMultipleSnapshots(t *testing.T) {
 	var snapshots snapv1.VolumeSnapshotList
-	_, err := k8s.Instance().CreateNamespace("test1", nil)
+	_, err := core.Instance().CreateNamespace("test1", nil)
 	require.NoError(t, err, "Error creating test1 namespace")
-	_, err = k8s.Instance().CreateNamespace("test2", nil)
+	_, err = core.Instance().CreateNamespace("test2", nil)
 	require.NoError(t, err, "Error creating test2 namespace")
 
 	cmdArgs := []string{"get", "volumesnapshots", "--all-namespaces"}
@@ -91,11 +92,11 @@ func TestGetVolumeSnapshotsMultipleSnapshots(t *testing.T) {
 
 	// The test API for snapshot doesn't know about namespaces, so it return
 	// all snapshots on List calls
-	expected := "NAMESPACE   NAME      PVC                         STATUS    CREATED   COMPLETED   TYPE\n" +
-		"test1       snap1     persistentVolumeClaimName   Pending                         Local\n" +
-		"test2       snap1     persistentVolumeClaimName   Pending                         Local\n" +
-		"test1       snap1     persistentVolumeClaimName   Pending                         Local\n" +
-		"test2       snap1     persistentVolumeClaimName   Pending                         Local\n"
+	expected := "NAMESPACE   NAME    PVC                         STATUS    CREATED   COMPLETED   TYPE\n" +
+		"test1       snap1   persistentVolumeClaimName   Pending                         Local\n" +
+		"test2       snap1   persistentVolumeClaimName   Pending                         Local\n" +
+		"test1       snap1   persistentVolumeClaimName   Pending                         Local\n" +
+		"test2       snap1   persistentVolumeClaimName   Pending                         Local\n"
 
 	testCommon(t, cmdArgs, &snapshots, expected, false)
 }
@@ -152,9 +153,9 @@ func TestGetVolumeSnapshotRestoreNoRestores(t *testing.T) {
 
 func TestGetVolumeSnapshotRestoreAllRestores(t *testing.T) {
 
-	_, err := k8s.Instance().CreateNamespace("ns", nil)
+	_, err := core.Instance().CreateNamespace("ns", nil)
 	require.NoError(t, err, "Error creating ns namespace")
-	_, err = k8s.Instance().CreateNamespace("default", nil)
+	_, err = core.Instance().CreateNamespace("default", nil)
 	require.NoError(t, err, "Error creating ns1 namespace")
 
 	cmdArgs := []string{"get", "volumesnapshotrestore", "--all-namespaces"}
@@ -162,9 +163,9 @@ func TestGetVolumeSnapshotRestoreAllRestores(t *testing.T) {
 	createSnapshotRestoreAndVerify(t, "test3", "ns", "sourceSnapName3", "ns", false, 2)
 
 	var snapshots storkv1.VolumeSnapshotRestoreList
-	expected := "NAMESPACE   NAME      SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS    VOLUMES   CREATED\n" +
-		"ns          test3     sourceSnapName3   ns                                    2         \n" +
-		"default     test2     sourceSnapName2   default                               1         \n"
+	expected := "NAMESPACE   NAME    SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS   VOLUMES   CREATED\n" +
+		"ns          test3   sourceSnapName3   ns                                   2         \n" +
+		"default     test2   sourceSnapName2   default                              1         \n"
 	testCommon(t, cmdArgs, &snapshots, expected, false)
 }
 
@@ -173,8 +174,8 @@ func TestGetVolumeSnapshotsOneRestore(t *testing.T) {
 	cmdArgs := []string{"get", "volumesnapshotrestore", crdRestore}
 	namespace := "default"
 	createSnapshotRestoreAndVerify(t, crdRestore, namespace, "sourceSnapName", "sourceSnapnamespace", false, 1)
-	expected := "NAME               SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS    VOLUMES   CREATED\n" +
-		"crd-restore-test   sourceSnapName    sourceSnapnamespace                   1         \n"
+	expected := "NAME               SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS   VOLUMES   CREATED\n" +
+		"crd-restore-test   sourceSnapName    sourceSnapnamespace                  1         \n"
 
 	testCommon(t, cmdArgs, nil, expected, false)
 }
@@ -187,11 +188,11 @@ func TestGetVolumeSnapshotMultipleRestore(t *testing.T) {
 	createSnapshotRestoreAndVerify(t, crdRestore1, namespace, "sourceName1", "sourceNamespace1", false, 1)
 	createSnapshotRestoreAndVerify(t, crdRestore2, namespace, "sourceName2", "sourceNamespace2", false, 1)
 
-	expected := "NAME               SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS    VOLUMES   CREATED\n" +
-		"test2              sourceSnapName2   default                               1         \n" +
-		"crd-restore-test   sourceSnapName    sourceSnapnamespace                   1         \n" +
-		"crd-restore1       sourceName1       sourceNamespace1                      1         \n" +
-		"crd-restore2       sourceName2       sourceNamespace2                      1         \n"
+	expected := "NAME               SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS   VOLUMES   CREATED\n" +
+		"test2              sourceSnapName2   default                              1         \n" +
+		"crd-restore-test   sourceSnapName    sourceSnapnamespace                  1         \n" +
+		"crd-restore1       sourceName1       sourceNamespace1                     1         \n" +
+		"crd-restore2       sourceName2       sourceNamespace2                     1         \n"
 
 	cmdArgs := []string{"get", "volumesnapshotrestore"}
 	testCommon(t, cmdArgs, nil, expected, false)
@@ -229,7 +230,7 @@ func createSnapshotRestoreAndVerify(
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	// Make sure it was created correctly
-	snapRestore, err := k8s.Instance().GetVolumeSnapshotRestore(name, namespace)
+	snapRestore, err := storkops.Instance().GetVolumeSnapshotRestore(name, namespace)
 	require.NoError(t, err, "Error getting volumesnapshotrestores")
 	require.Equal(t, name, snapRestore.Name, "VolumeSnapshotRestore name mismatch")
 	require.Equal(t, sourceName, snapRestore.Spec.SourceName, "VolumeSnapshotRestore sourceName mismatch")
@@ -245,6 +246,6 @@ func createSnapshotRestoreAndVerify(
 		}
 		snapRestore.Status.Volumes = append(snapRestore.Status.Volumes, vols)
 	}
-	_, err = k8s.Instance().UpdateVolumeSnapshotRestore(snapRestore)
+	_, err = storkops.Instance().UpdateVolumeSnapshotRestore(snapRestore)
 	require.NoError(t, err, "Error updating volumesnapshotrestores")
 }

@@ -17,7 +17,9 @@ import (
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/core"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -90,7 +92,7 @@ func setKind(snap *stork_api.Migration) {
 // performRuleRecovery terminates potential background commands running pods for
 // all migration objects
 func (m *MigrationController) performRuleRecovery() error {
-	migrations, err := k8s.Instance().ListMigrations(v1.NamespaceAll)
+	migrations, err := storkops.Instance().ListMigrations(v1.NamespaceAll)
 	if err != nil {
 		logrus.Errorf("Failed to list all migrations during rule recovery: %v", err)
 		return err
@@ -201,7 +203,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 		case stork_api.MigrationStageInitial:
 			// Make sure the namespaces exist
 			for _, ns := range migration.Spec.Namespaces {
-				_, err := k8s.Instance().GetNamespace(ns)
+				_, err := core.Instance().GetNamespace(ns)
 				if err != nil {
 					migration.Status.Status = stork_api.MigrationStatusFailed
 					migration.Status.Stage = stork_api.MigrationStageFinal
@@ -221,7 +223,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			}
 			// Make sure the rules exist if configured
 			if migration.Spec.PreExecRule != "" {
-				_, err := k8s.Instance().GetRule(migration.Spec.PreExecRule, migration.Namespace)
+				_, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, migration.Namespace)
 				if err != nil {
 					message := fmt.Sprintf("Error getting PreExecRule %v: %v", migration.Spec.PreExecRule, err)
 					log.MigrationLog(migration).Errorf(message)
@@ -233,7 +235,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 				}
 			}
 			if migration.Spec.PostExecRule != "" {
-				_, err := k8s.Instance().GetRule(migration.Spec.PostExecRule, migration.Namespace)
+				_, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, migration.Namespace)
 				if err != nil {
 					message := fmt.Sprintf("Error getting PostExecRule %v: %v", migration.Spec.PreExecRule, err)
 					log.MigrationLog(migration).Errorf(message)
@@ -623,7 +625,7 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]
 	}
 	terminationChannels := make([]chan bool, 0)
 	for _, ns := range migration.Spec.Namespaces {
-		r, err := k8s.Instance().GetRule(migration.Spec.PreExecRule, ns)
+		r, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, ns)
 		if err != nil {
 			for _, channel := range terminationChannels {
 				channel <- true
@@ -647,7 +649,7 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]
 
 func (m *MigrationController) runPostExecRule(migration *stork_api.Migration) error {
 	for _, ns := range migration.Spec.Namespaces {
-		r, err := k8s.Instance().GetRule(migration.Spec.PostExecRule, ns)
+		r, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, ns)
 		if err != nil {
 			return err
 		}
@@ -983,7 +985,7 @@ func (m *MigrationController) applyResources(
 	// First make sure all the namespaces are created on the
 	// remote cluster
 	for _, ns := range migration.Spec.Namespaces {
-		namespace, err := k8s.Instance().GetNamespace(ns)
+		namespace, err := core.Instance().GetNamespace(ns)
 		if err != nil {
 			return err
 		}
@@ -1057,7 +1059,7 @@ func (m *MigrationController) applyResources(
 		unstructured.SetAnnotations(migrAnnot)
 		retries := 0
 		for {
-			_, err = dynamicClient.Create(unstructured)
+			_, err = dynamicClient.Create(unstructured, metav1.CreateOptions{})
 			if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
 				switch objectType.GetKind() {
 				// Don't want to delete the Volume resources
@@ -1067,7 +1069,7 @@ func (m *MigrationController) applyResources(
 					if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
 						err = nil
 					} else {
-						_, err = dynamicClient.Update(unstructured)
+						_, err = dynamicClient.Update(unstructured, metav1.UpdateOptions{})
 					}
 				case "ServiceAccount":
 					err = m.checkAndUpdateDefaultSA(migration, o)
@@ -1076,7 +1078,7 @@ func (m *MigrationController) applyResources(
 					// cluster and try creating again
 					err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
 					if err == nil {
-						_, err = dynamicClient.Create(unstructured)
+						_, err = dynamicClient.Create(unstructured, metav1.CreateOptions{})
 					} else {
 						log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
 					}
@@ -1108,7 +1110,7 @@ func (m *MigrationController) applyResources(
 }
 
 func (m *MigrationController) createCRD() error {
-	resource := k8s.CustomResource{
+	resource := apiextensions.CustomResource{
 		Name:    stork_api.MigrationResourceName,
 		Plural:  stork_api.MigrationResourcePlural,
 		Group:   stork.GroupName,
@@ -1116,10 +1118,10 @@ func (m *MigrationController) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.Migration{}).Name(),
 	}
-	err := k8s.Instance().CreateCRD(resource)
+	err := apiextensions.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return k8s.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }

@@ -5,13 +5,13 @@ import (
 
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 )
 
 var defaultStrokSnapshotStorageClass = "stork-snapshot-sc"
@@ -71,7 +71,7 @@ func newCreatePVCCommand(cmdFactory Factory, ioStreams genericclioptions.IOStrea
 			if len(sourceNamespace) != 0 {
 				pvc.Annotations[snapshotcontrollers.StorkSnapshotSourceNamespaceAnnotation] = sourceNamespace
 			}
-			_, err = k8s.Instance().CreatePersistentVolumeClaim(pvc)
+			_, err = core.Instance().CreatePersistentVolumeClaim(pvc)
 			if err != nil {
 				util.CheckErr(err)
 				return

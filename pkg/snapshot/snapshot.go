@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kubernetes-incubator/external-storage/lib/controller"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/snapshot/controllers"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/sig-storage-lib-external-provisioner/controller"
 )
 
 const (
@@ -73,7 +73,7 @@ func (s *Snapshot) Start() error {
 	}
 
 	if clientset == nil {
-		return k8s.ErrK8SApiAccountNotSet
+		return errors.ErrK8SApiAccountNotSet
 	}
 
 	// Start the provisioner controller

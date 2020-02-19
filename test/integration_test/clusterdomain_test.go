@@ -10,7 +10,7 @@ import (
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/pborman/uuid"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/sirupsen/logrus"
@@ -35,7 +35,7 @@ func TestClusterDomains(t *testing.T) {
 		logrus.Info("Running cluster domain tests")
 		listCdsTask := func() (interface{}, bool, error) {
 			// Fetch the cluster domains
-			cdses, err := k8s.Instance().ListClusterDomainStatuses()
+			cdses, err := storkops.Instance().ListClusterDomainStatuses()
 			if err != nil || len(cdses.Items) == 0 {
 				logrus.Infof("Failed to list cluster domains statuses. Error: %v. List of cluster domains: %v", err, len(cdses.Items))
 				return "", true, fmt.Errorf("failed to list cluster domains statuses")
@@ -78,7 +78,7 @@ func triggerClusterDomainUpdate(
 	}()
 
 	updateName := name + uuid.New()
-	_, err = k8s.Instance().CreateClusterDomainUpdate(&v1alpha1.ClusterDomainUpdate{
+	_, err = storkops.Instance().CreateClusterDomainUpdate(&v1alpha1.ClusterDomainUpdate{
 		ObjectMeta: meta.ObjectMeta{
 			Name: updateName,
 		},
@@ -89,13 +89,13 @@ func triggerClusterDomainUpdate(
 	})
 	require.NoError(t, err, "Unexpected error on cluster domain update: %v", err)
 
-	err = k8s.Instance().ValidateClusterDomainUpdate(updateName, defaultWaitTimeout, defaultWaitInterval)
+	err = storkops.Instance().ValidateClusterDomainUpdate(updateName, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Failed to validate cluster domain update")
 }
 
 func failoverAndFailbackClusterDomainTest(t *testing.T) {
 	// validate the cluster domains status
-	err := k8s.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
+	err := storkops.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "validation of cluster domain status for %v failed", cdsName)
 
 	// Migrate the resources
@@ -141,7 +141,7 @@ func testClusterDomainsFailover(
 	// build the expected domain map
 	domainMap[domainList[0]] = false
 	// validate the cluster domains status
-	err := k8s.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
+	err := storkops.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "validation of cluster domain status for %v failed", cdsName)
 
 	// Reduce the replicas on cluster 1
@@ -218,7 +218,7 @@ func testClusterDomainsFailback(
 	domainMap[domainList[0]] = true
 
 	// validate the cluster domains status
-	err = k8s.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
+	err = storkops.Instance().ValidateClusterDomainsStatus(cdsName, domainMap, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "validation of cluster domain status for %v failed", cdsName)
 
 	// start the app on cluster 1

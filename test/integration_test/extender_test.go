@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1"
@@ -130,7 +132,7 @@ func driverNodeErrorTest(t *testing.T) {
 	stoppedNode := scheduledNodes[0]
 
 	time.Sleep(1 * time.Minute)
-	err = schedulerDriver.DeleteTasks(ctxs[0])
+	err = schedulerDriver.DeleteTasks(ctxs[0], nil)
 	require.NoError(t, err, "Error deleting pod")
 	time.Sleep(10 * time.Second)
 
@@ -176,16 +178,16 @@ func pvcOwnershipTest(t *testing.T) {
 
 	for _, spec := range ctxs[0].App.SpecList {
 		if obj, ok := spec.(*storage_api.StorageClass); ok {
-			err := k8s.Instance().DeleteStorageClass(obj.Name)
+			err := storage.Instance().DeleteStorageClass(obj.Name)
 			require.NoError(t, err, "Error deleting storage class for mysql.")
 		}
 		if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
-			updatePVC, err := k8s.Instance().GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			updatePVC, err := core.Instance().GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			require.NoError(t, err, "Error getting persistent volume claim.")
 			if _, hasKey := updatePVC.Annotations[annotationStorageProvisioner]; hasKey {
 				delete(updatePVC.Annotations, "storage-provisioner")
 			}
-			_, err = k8s.Instance().UpdatePersistentVolumeClaim(updatePVC)
+			_, err = core.Instance().UpdatePersistentVolumeClaim(updatePVC)
 			require.NoError(t, err, "Error updating annotations in PVC.")
 		}
 	}
@@ -199,7 +201,7 @@ func pvcOwnershipTest(t *testing.T) {
 	for _, spec := range ctxs[0].App.SpecList {
 		if obj, ok := spec.(*apps_api.Deployment); ok {
 			if obj.Name == "mysql" {
-				depPods, err := k8s.Instance().GetDeploymentPods(obj)
+				depPods, err := apps.Instance().GetDeploymentPods(obj)
 				require.NoError(t, err, "Error getting pods for deployment ,mysql.")
 				for _, pod := range depPods {
 					for _, cond := range pod.Status.Conditions {

@@ -2,13 +2,13 @@ package storkctl
 
 import (
 	"fmt"
-	"io"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -37,7 +37,7 @@ func newGetBackupLocationCommand(cmdFactory Factory, ioStreams genericclioptions
 
 				backupLocations = new(storkv1.BackupLocationList)
 				for _, name := range args {
-					bl, err := k8s.Instance().GetBackupLocation(name, cmdFactory.GetNamespace())
+					bl, err := storkops.Instance().GetBackupLocation(name, cmdFactory.GetNamespace())
 					if err == nil {
 						backupLocations.Items = append(backupLocations.Items, *bl)
 					} else {
@@ -54,7 +54,7 @@ func newGetBackupLocationCommand(cmdFactory Factory, ioStreams genericclioptions
 
 				var tempBackupLocations storkv1.BackupLocationList
 				for _, ns := range namespaces {
-					backupLocations, err := k8s.Instance().ListBackupLocations(ns)
+					backupLocations, err := storkops.Instance().ListBackupLocations(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -147,75 +147,67 @@ func newGetBackupLocationCommand(cmdFactory Factory, ioStreams genericclioptions
 	return getBackupLocationCommand
 }
 
-func s3BackupLocationPrinter(backupLocationList *storkv1.BackupLocationList, writer io.Writer, options printers.PrintOptions) error {
+func s3BackupLocationPrinter(
+	backupLocationList *storkv1.BackupLocationList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if backupLocationList == nil {
-		return nil
+		return nil, nil
 	}
-	for _, backupLocation := range backupLocationList.Items {
-		name := printers.FormatResourceName(options.Kind, backupLocation.Name, options.WithKind)
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", backupLocation.Namespace); err != nil {
-				return err
-			}
-		}
 
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-			name,
-			backupLocation.Location.Path,
-			backupLocation.Location.S3Config.AccessKeyID,
-			backupLocation.Location.S3Config.SecretAccessKey,
-			backupLocation.Location.S3Config.Region,
-			backupLocation.Location.S3Config.Endpoint,
-			backupLocation.Location.S3Config.DisableSSL,
-		); err != nil {
-			return err
-		}
+	rows := make([]metav1beta1.TableRow, 0)
+	for _, backupLocation := range backupLocationList.Items {
+		row := getRow(&backupLocation,
+			[]interface{}{backupLocation.Name,
+				backupLocation.Location.Path,
+				backupLocation.Location.S3Config.AccessKeyID,
+				backupLocation.Location.S3Config.SecretAccessKey,
+				backupLocation.Location.S3Config.Region,
+				backupLocation.Location.S3Config.Endpoint,
+				backupLocation.Location.S3Config.DisableSSL},
+		)
+		rows = append(rows, row)
+
 	}
-	return nil
+	return rows, nil
 }
-func azureBackupLocationPrinter(backupLocationList *storkv1.BackupLocationList, writer io.Writer, options printers.PrintOptions) error {
+func azureBackupLocationPrinter(
+	backupLocationList *storkv1.BackupLocationList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if backupLocationList == nil {
-		return nil
+		return nil, nil
 	}
-	for _, backupLocation := range backupLocationList.Items {
-		name := printers.FormatResourceName(options.Kind, backupLocation.Name, options.WithKind)
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", backupLocation.Namespace); err != nil {
-				return err
-			}
-		}
 
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\n",
-			name,
-			backupLocation.Location.Path,
-			backupLocation.Location.AzureConfig.StorageAccountName,
-			backupLocation.Location.AzureConfig.StorageAccountKey,
-		); err != nil {
-			return err
-		}
+	rows := make([]metav1beta1.TableRow, 0)
+	for _, backupLocation := range backupLocationList.Items {
+		row := getRow(&backupLocation,
+			[]interface{}{backupLocation.Name,
+				backupLocation.Location.Path,
+				backupLocation.Location.AzureConfig.StorageAccountName,
+				backupLocation.Location.AzureConfig.StorageAccountKey},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }
 
-func googleBackupLocationPrinter(backupLocationList *storkv1.BackupLocationList, writer io.Writer, options printers.PrintOptions) error {
+func googleBackupLocationPrinter(
+	backupLocationList *storkv1.BackupLocationList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if backupLocationList == nil {
-		return nil
+		return nil, nil
 	}
-	for _, backupLocation := range backupLocationList.Items {
-		name := printers.FormatResourceName(options.Kind, backupLocation.Name, options.WithKind)
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", backupLocation.Namespace); err != nil {
-				return err
-			}
-		}
 
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\n",
-			name,
-			backupLocation.Location.Path,
-			backupLocation.Location.GoogleConfig.ProjectID,
-		); err != nil {
-			return err
-		}
+	rows := make([]metav1beta1.TableRow, 0)
+	for _, backupLocation := range backupLocationList.Items {
+		row := getRow(&backupLocation,
+			[]interface{}{backupLocation.Name,
+				backupLocation.Location.Path,
+				backupLocation.Location.GoogleConfig.ProjectID},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }

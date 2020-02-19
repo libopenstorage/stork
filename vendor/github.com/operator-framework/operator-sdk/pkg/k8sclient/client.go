@@ -48,7 +48,7 @@ var (
 // Private constructor for once.Do
 func newSingletonFactory() {
 	kubeClient, kubeConfig := mustNewKubeClientAndConfig()
-	cachedDiscoveryClient := cached.NewMemCacheClient(kubeClient.Discovery())
+	cachedDiscoveryClient := memory.NewMemCacheClient(kubeClient.Discovery())
 	restMapper := restmapper.NewDeferredDiscoveryRESTMapper(cachedDiscoveryClient)
 	restMapper.Reset()
 

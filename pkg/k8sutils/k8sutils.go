@@ -3,13 +3,13 @@ package k8sutils
 import (
 	"fmt"
 
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
 )
 
 // GetPVCsForGroupSnapshot returns all PVCs in given namespace that match the given matchLabels. All PVCs need to be bound.
 func GetPVCsForGroupSnapshot(namespace string, matchLabels map[string]string) ([]v1.PersistentVolumeClaim, error) {
-	pvcList, err := k8s.Instance().GetPersistentVolumeClaims(namespace, matchLabels)
+	pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, matchLabels)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func GetVolumeNamesFromLabelSelector(namespace string, labels map[string]string)
 
 	volNames := make([]string, 0)
 	for _, pvc := range pvcs {
-		volName, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		volName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
 			return nil, err
 		}

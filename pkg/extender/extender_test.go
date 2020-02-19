@@ -16,7 +16,9 @@ import (
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/openshift"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -58,14 +60,17 @@ func setup(t *testing.T) {
 
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.Core().RESTClient()).Events("")})
+	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(fakeKubeClient.CoreV1().RESTClient()).Events("")})
 	recorder := eventBroadcaster.NewRecorder(legacyscheme.Scheme, v1.EventSource{Component: "storktest"})
 
 	// setup fake k8s instances
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeOCPClient = fakeocpclient.NewSimpleClientset()
 	fakeRestClient = &fake.RESTClient{}
-	k8s.Instance().SetClient(fakeKubeClient, fakeRestClient, fakeStorkClient, nil, nil, fakeOCPClient, nil, nil)
+
+	core.SetInstance(core.New(fakeKubeClient, fakeKubeClient.CoreV1(), fakeKubeClient.StorageV1()))
+	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
+	openshift.SetInstance(openshift.New(fakeKubeClient, fakeOCPClient, nil))
 
 	extender = &Extender{
 		Driver:   storkdriver,
@@ -94,7 +99,7 @@ func newPod(podName string, volumes []string) *v1.Pod {
 			ClaimName: pvc.Name,
 		}
 		pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
-		_, err := k8s.Instance().CreatePersistentVolumeClaim(pvc)
+		_, err := core.Instance().CreatePersistentVolumeClaim(pvc)
 		if err != nil {
 			return nil
 		}
@@ -346,7 +351,7 @@ func noDriverVolumeTest(t *testing.T) {
 	pvcSpec := &v1.PersistentVolumeClaimVolumeSource{
 		ClaimName: pvcClaim.Name,
 	}
-	_, err := k8s.Instance().CreatePersistentVolumeClaim(pvcClaim)
+	_, err := core.Instance().CreatePersistentVolumeClaim(pvcClaim)
 	require.NoError(t, err)
 	podVolume.PersistentVolumeClaim = pvcSpec
 	pod.Spec.Volumes = append(pod.Spec.Volumes, podVolume)
@@ -878,7 +883,7 @@ func restorePVCTest(t *testing.T) {
 			VolumeName: "restoreVol",
 		},
 	}
-	pvc, err := k8s.Instance().CreatePersistentVolumeClaim(pvcClaim)
+	pvc, err := core.Instance().CreatePersistentVolumeClaim(pvcClaim)
 	require.NoError(t, err)
 
 	// invalid pvc
@@ -905,7 +910,7 @@ func restorePVCTest(t *testing.T) {
 	require.Contains(t, err.Error(), "Volume restore is in progress for pvc")
 
 	delete(pvc.Annotations, restore.RestoreAnnotation)
-	_, err = k8s.Instance().UpdatePersistentVolumeClaim(pvc)
+	_, err = core.Instance().UpdatePersistentVolumeClaim(pvc)
 	require.NoError(t, err)
 	_, err = sendFilterRequest(pod, nodes)
 	require.NoError(t, err)

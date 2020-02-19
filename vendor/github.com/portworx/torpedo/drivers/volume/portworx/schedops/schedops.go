@@ -3,6 +3,7 @@ package schedops
 import (
 	"fmt"
 
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -18,7 +19,7 @@ type Driver interface {
 	// ValidateOnNode validates portworx on given node (from scheduler perspective)
 	ValidateOnNode(n node.Node) error
 	// ValidateAddLabels validates whether the labels for the volume are applied appropriately on the vol replica nodes
-	ValidateAddLabels(replicaNodes []api.Node, v *api.Volume) error
+	ValidateAddLabels(replicaNodes []api.StorageNode, v *api.Volume) error
 	// ValidateRemoveLabels validates whether the volume labels have been removed
 	ValidateRemoveLabels(v *volume.Volume) error
 	// ValidateVolumeCleanup validates that volume dir does not exist and no data present inside it
@@ -40,6 +41,10 @@ type Driver interface {
 	// GetRemotePXNodes returns list of PX node found on destination k8s cluster
 	// referenced by kubeconfig
 	GetRemotePXNodes(destKubeConfig string) ([]node.Node, error)
+	// CreateAutopilotRule creates the AutopilotRule object
+	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)
+	// ListAutopilotRules lists AutopilotRules
+	ListAutopilotRules() (*apapi.AutopilotRuleList, error)
 }
 
 var (

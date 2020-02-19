@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -12,11 +13,14 @@ import (
 
 // Volume is a generic struct encapsulating volumes in the cluster
 type Volume struct {
-	ID        string
-	Name      string
-	Namespace string
-	Size      uint64
-	Shared    bool
+	ID            string
+	Name          string
+	Namespace     string
+	Annotations   map[string]string
+	Labels        map[string]string
+	Size          uint64
+	RequestedSize uint64
+	Shared        bool
 }
 
 // Snapshot is a generic struct encapsulating snapshots in the cluster
@@ -53,7 +57,7 @@ type Driver interface {
 	ValidateCreateVolume(name string, params map[string]string) error
 
 	// ValidateUpdateVolume validates if volume changes has been applied
-	ValidateUpdateVolume(vol *Volume) error
+	ValidateUpdateVolume(vol *Volume, params map[string]string) error
 
 	// ValidateDeleteVolume validates whether a volume is cleanly removed from the volume driver
 	ValidateDeleteVolume(vol *Volume) error
@@ -118,27 +122,44 @@ type Driver interface {
 	GetClusterPairingInfo() (map[string]string, error)
 
 	// DecommissionNode decommissions the given node from the cluster
-	DecommissionNode(n node.Node) error
+	DecommissionNode(n *node.Node) error
 
 	// RejoinNode rejoins a given node back to the cluster
-	RejoinNode(n node.Node) error
+	RejoinNode(n *node.Node) error
 
 	// GetNodeStatus returns the status of a given node
 	GetNodeStatus(n node.Node) (*api.Status, error)
 
-	// GetReplicaSetNodes returns the replica sets for a given volume
-	GetReplicaSetNodes(vol *Volume) ([]string, error)
+	// GetReplicaSets returns the replica sets for a given volume
+	GetReplicaSets(vol *Volume) ([]*api.ReplicaSet, error)
 
 	// ValidateVolumeSnapshotRestore return nil if snapshot is restored successuflly to
 	// given volumes
-	ValidateVolumeSnapshotRestore(vol string, snapData *snap_v1.VolumeSnapshotData, timeStart time.Time) error
+	ValidateVolumeSnapshotRestore(vol string, snapData *snapv1.VolumeSnapshotData, timeStart time.Time) error
 
-	// Collect live diags on a node
+	// CollectDiags collects live diags on a node
 	CollectDiags(n node.Node) error
+
+	// ValidateStoragePools validates all the storage pools
+	ValidateStoragePools() error
+
+	// IsStorageExpansionEnabled returns true if storage expansion enabled
+	IsStorageExpansionEnabled() (bool, error)
+
+	// EstimatePoolExpandSize calculates expected pool size based on autopilot rule
+	EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.StoragePool, node node.Node) (uint64, error)
+
+	// EstimatePoolExpandSize calculates expected volume size based on autopilot rule, initial and workload sizes
+	EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize, workloadSize uint64) (uint64, int, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
 type StorageProvisionerType string
+
+const (
+	// DefaultStorageProvisioner default storage provisioner name
+	DefaultStorageProvisioner StorageProvisionerType = "portworx"
+)
 
 var (
 	volDrivers = make(map[string]Driver)
@@ -173,6 +194,15 @@ func Get(name string) (Driver, error) {
 // GetStorageProvisioner storage provsioner name to be used with Torpedo
 func GetStorageProvisioner() string {
 	return string(StorageProvisioner)
+}
+
+// GetVolumeDrivers returns list of supported volume drivers
+func GetVolumeDrivers() []string {
+	var voldrivers []string
+	for v := range volDrivers {
+		voldrivers = append(voldrivers, v)
+	}
+	return voldrivers
 }
 
 func (v *Volume) String() string {

@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"time"
 
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Options specifies keys for a key-value pair that can be passed to scheduler methods
@@ -24,8 +26,8 @@ type Context struct {
 	UID string
 	// App defines a k8s application specification
 	App *spec.AppSpec
-	// Options are options that callers to pass to influence the apps that get schduled
-	Options ScheduleOptions
+	// ScheduleOptions are options that callers to pass to influence the apps that get schduled
+	ScheduleOptions ScheduleOptions
 }
 
 // DeepCopy create a copy of Context
@@ -45,50 +47,26 @@ func (in *Context) GetID() string {
 	return in.App.GetID(in.UID)
 }
 
-// AutopilotRuleConditionExpressions are the conditions to check on the rule objects
-type AutopilotRuleConditionExpressions struct {
-	Key      string
-	Operator string
-	Values   []string
+// AppConfig custom settings
+type AppConfig struct {
+	Replicas     int    `yaml:"replicas"`
+	VolumeSize   string `yaml:"volume_size"`
+	WorkloadSize string `yaml:"workload_size"`
 }
 
-// AutopilotRuleActions are the actions to run for the rule when the conditions are met
-type AutopilotRuleActions struct {
-	Name   string
-	Params map[string]string
-}
+// InitOptions initialization options
+type InitOptions struct {
 
-// AutopilotRuleParameters are rule parameters for Autopilot
-type AutopilotRuleParameters struct {
-	// ActionsCoolDownPeriod is the duration in seconds for which autopilot will not
-	// re-trigger any actions once they have been executed.
-	ActionsCoolDownPeriod int64
-	// MatchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-	// map is equivalent to an element of matchExpressions, whose key field is "key", the
-	// operator is "In", and the values array contains only "value". The requirements are ANDed.
-	// +optional
-	MatchLabels map[string]string
-	// RuleAction defines an action for the rule
-	RuleActions []AutopilotRuleActions
-	// RuleConditionExpressions defines the conditions for the rule
-	RuleConditionExpressions []AutopilotRuleConditionExpressions
-	// ExpectedPVCSize is the expected PVC size after resize
-	ExpectedPVCSize int64
-}
-
-// AutopilotParameters are parameters that using for Autopilot
-type AutopilotParameters struct {
-	// Enabled indicates if the Autopilot is enabled
-	Enabled bool
-	// The unique Autopilotrule name within a namespace
-	Name string
-	// Namespace is the kubernetes namespace in which Autopilot rule will be created
-	Namespace string
-	// PollInterval defined the interval in seconds at which the conditions for the
-	// rule are queried from the metrics provider
-	PollInterval int64
-	// AutopilotRuleParameters are the parameters that will be used for Autopilot rule
-	AutopilotRuleParameters AutopilotRuleParameters
+	// SpecDir app spec directory
+	SpecDir string
+	// VolDriverName volume driver name
+	VolDriverName string
+	// NodeDriverName node driver name
+	NodeDriverName string
+	// ConfigMap  identifies what config map should be used to
+	SecretConfigMapName string
+	// CustomAppConfig custom settings for apps
+	CustomAppConfig map[string]AppConfig
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
@@ -101,8 +79,12 @@ type ScheduleOptions struct {
 	StorageProvisioner string
 	// ConfigMap  identifies what config map should be used to
 	ConfigMap string
-	// AutopilotParameters identifies options for autopilot (Optional)
-	AutopilotParameters *AutopilotParameters
+	// AutopilotRule identifies options for autopilot (Optional)
+	AutopilotRule apapi.AutopilotRule
+	// Scheduler  identifies what scheduler will be used
+	Scheduler string
+	// Labels is a map of {key,value} pairs for labeling spec objects
+	Labels map[string]string
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -110,7 +92,7 @@ type Driver interface {
 	spec.Parser
 
 	// Init initializes the scheduler driver
-	Init(string, string, string, string) error
+	Init(schedOpts InitOptions) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -139,14 +121,14 @@ type Driver interface {
 	// WaitForDestroy waits for application to destroy.
 	WaitForDestroy(*Context, time.Duration) error
 
-	// DeleteTasks deletes all tasks of the application (not the applicaton)
-	DeleteTasks(*Context) error
+	// DeleteTasks deletes all tasks of the application (not the application). DeleteTasksOptions is optional.
+	DeleteTasks(*Context, *DeleteTasksOptions) error
 
 	// GetVolumeParameters Returns a maps, each item being a volume and it's options
 	GetVolumeParameters(*Context) (map[string]map[string]string, error)
 
-	// InspectVolumes inspects a storage volume.
-	InspectVolumes(cc *Context, timeout, retryInterval time.Duration) error
+	// ValidateVolumes validates storage volumes in the provided context
+	ValidateVolumes(cc *Context, timeout, retryInterval time.Duration) error
 
 	// DeleteVolumes will delete all storage volumes for the given context
 	DeleteVolumes(*Context) ([]*volume.Volume, error)
@@ -155,7 +137,7 @@ type Driver interface {
 	GetVolumes(*Context) ([]*volume.Volume, error)
 
 	// ResizeVolume resizes all the volumes of a given context
-	ResizeVolume(*Context) ([]*volume.Volume, error)
+	ResizeVolume(*Context, string) ([]*volume.Volume, error)
 
 	// GetSnapshots returns all storage snapshots for the given context
 	GetSnapshots(*Context) ([]*volume.Snapshot, error)
@@ -199,11 +181,64 @@ type Driver interface {
 
 	// Get token for a volume
 	GetTokenFromConfigMap(string) (string, error)
+
+	// AddLabelOnNode adds key value labels on the node
+	AddLabelOnNode(node.Node, string, string) error
+
+	// IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
+	IsAutopilotEnabledForVolume(*volume.Volume) bool
+
+	// CreateAutopilotRule creates the AutopilotRule object
+	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)
+
+	// UpdateAutopilotRule updates the AutopilotRule
+	UpdateAutopilotRule(apapi.AutopilotRule) (*apapi.AutopilotRule, error)
+
+	// ListAutopilotRules lists AutopilotRules
+	ListAutopilotRules() (*apapi.AutopilotRuleList, error)
+
+	// GetEvents should return all the events from the scheduler since the time torpedo started
+	GetEvents() map[string][]Event
+
+	// ValidateAutopilotEvents validates events for PVCs injected by autopilot
+	ValidateAutopilotEvents(ctx *Context) error
+
+	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
+	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)
 }
 
 var (
 	schedulers = make(map[string]Driver)
 )
+
+// DeleteTasksOptions are options supplied to the DeleteTasks API
+type DeleteTasksOptions struct {
+	TriggerOptions
+}
+
+// Event collects kubernetes events data for further validation
+type Event struct {
+	Message   string
+	EventTime v1.MicroTime
+	Count     int32
+	LastSeen  v1.Time
+	Kind      string
+	Type      string
+}
+
+// TriggerOptions are common options used to check if any action is okay to be triggered/performed
+type TriggerOptions struct {
+	// TriggerCb is the callback function to invoke to check trigger condition
+	TriggerCb TriggerCallbackFunc
+	// TriggerCheckInterval is the interval at which to check the trigger conditions
+	TriggerCheckInterval time.Duration
+	// TriggerCheckTimeout is the duration at which the trigger checks should timeout. If the trigger
+	TriggerCheckTimeout time.Duration
+}
+
+// TriggerCallbackFunc is a callback function that are used by scheduler APIs to decide when to trigger/perform actions.
+// the function should return true, when it is the right time to perform the respective action
+type TriggerCallbackFunc func() (bool, error)
 
 // Register registers the given scheduler driver
 func Register(name string, d Driver) error {

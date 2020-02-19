@@ -3,19 +3,19 @@ package storkctl
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
 
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/api/validation"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/apis/core/validation"
-	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -46,7 +46,7 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 				clusterPairs = new(storkv1.ClusterPairList)
 				for _, pairName := range args {
 					for _, ns := range namespaces {
-						pair, err := k8s.Instance().GetClusterPair(pairName, ns)
+						pair, err := storkops.Instance().GetClusterPair(pairName, ns)
 						if err != nil {
 							util.CheckErr(err)
 							return
@@ -57,7 +57,7 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 			} else {
 				var tempClusterPairs storkv1.ClusterPairList
 				for _, ns := range namespaces {
-					clusterPairs, err = k8s.Instance().ListClusterPairs(ns)
+					clusterPairs, err = storkops.Instance().ListClusterPairs(ns)
 					if err != nil {
 						util.CheckErr(err)
 						return
@@ -84,28 +84,25 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 	return getClusterPairCommand
 }
 
-func clusterPairPrinter(clusterPairList *storkv1.ClusterPairList, writer io.Writer, options printers.PrintOptions) error {
+func clusterPairPrinter(
+	clusterPairList *storkv1.ClusterPairList,
+	options printers.GenerateOptions,
+) ([]metav1beta1.TableRow, error) {
 	if clusterPairList == nil {
-		return nil
+		return nil, nil
 	}
+	rows := make([]metav1beta1.TableRow, 0)
 	for _, clusterPair := range clusterPairList.Items {
-		if options.WithNamespace {
-			if _, err := fmt.Fprintf(writer, "%v\t", clusterPair.Namespace); err != nil {
-				return err
-			}
-		}
-		name := printers.FormatResourceName(options.Kind, clusterPair.Name, options.WithKind)
-
 		creationTime := toTimeString(clusterPair.CreationTimestamp.Time)
-		if _, err := fmt.Fprintf(writer, "%v\t%v\t%v\t%v\n",
-			name,
-			clusterPair.Status.StorageStatus,
-			clusterPair.Status.SchedulerStatus,
-			creationTime); err != nil {
-			return err
-		}
+		row := getRow(&clusterPair,
+			[]interface{}{clusterPair.Name,
+				clusterPair.Status.StorageStatus,
+				clusterPair.Status.SchedulerStatus,
+				creationTime},
+		)
+		rows = append(rows, row)
 	}
-	return nil
+	return rows, nil
 }
 
 func getStringData(fileName string) (string, error) {

@@ -37,7 +37,10 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
+	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
+	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -54,7 +57,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
-	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 )
 
 // TODO: Make some of these configurable
@@ -280,7 +282,7 @@ func (p *portworx) initPortworxClients() error {
 	}
 
 	var scheme string
-	svc, err := k8s.Instance().GetService(serviceName, namespace)
+	svc, err := core.Instance().GetService(serviceName, namespace)
 	if err == nil {
 		endpoint = svc.Spec.ClusterIP
 	} else {
@@ -525,10 +527,10 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 			if rack, ok := labels[pxRackLabelKey]; ok {
 				nodeInfo.Rack = rack
 			}
-			if zone, ok := labels[kubeletapis.LabelZoneFailureDomain]; ok {
+			if zone, ok := labels[v1.LabelZoneFailureDomain]; ok {
 				nodeInfo.Zone = zone
 			}
-			if region, ok := labels[kubeletapis.LabelZoneRegion]; ok {
+			if region, ok := labels[v1.LabelZoneRegion]; ok {
 				nodeInfo.Region = region
 			}
 		}
@@ -563,7 +565,7 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 	} else {
 		storageClassName := k8shelper.GetPersistentVolumeClaimClass(pvc)
 		if storageClassName != "" {
-			storageClass, err := k8s.Instance().GetStorageClass(storageClassName)
+			storageClass, err := storage.Instance().GetStorageClass(storageClassName)
 			if err == nil {
 				provisioner = storageClass.Provisioner
 			} else {
@@ -574,7 +576,7 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 
 	if provisioner == "" {
 		// Try to get info from the PV since storage class could be deleted
-		pv, err := k8s.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
+		pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
 		if err != nil {
 			logrus.Warnf("Error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 			return false
@@ -616,7 +618,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 	for _, volume := range podSpec.Volumes {
 		volumeName := ""
 		if volume.PersistentVolumeClaim != nil {
-			pvc, err := k8s.Instance().GetPersistentVolumeClaim(
+			pvc, err := core.Instance().GetPersistentVolumeClaim(
 				volume.PersistentVolumeClaim.ClaimName,
 				namespace)
 			if err != nil {
@@ -988,7 +990,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 			if len(snapDataNames) > 0 {
 				var lastError error
 				for _, snapDataName := range snapDataNames {
-					snapData, err := k8s.Instance().GetSnapshotData(snapDataName)
+					snapData, err := k8sextops.Instance().GetSnapshotData(snapDataName)
 					if err != nil {
 						lastError = err
 						logrus.Errorf("Failed to get volume snapshot data: %s due to err: %v", snapDataName, err)
@@ -1000,7 +1002,7 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 
 					logrus.Infof("Deleting VolumeSnapshot:[%s] %s", snapNamespace, snapName)
 					err = wait.ExponentialBackoff(snapAPICallBackoff, func() (bool, error) {
-						err = k8s.Instance().DeleteSnapshot(snapName, snapNamespace)
+						err = k8sextops.Instance().DeleteSnapshot(snapName, snapNamespace)
 						if err != nil {
 							return false, nil
 						}
@@ -1303,13 +1305,13 @@ func (p *portworx) CompleteVolumeSnapshotRestore(snapRestore *storkapi.VolumeSna
 // getSnapshotDetails returns PX snapID, snapshotType, credID(if any)
 // error if unable to retrive snap data
 func getSnapshotDetails(snapDataName string) (string, crdv1.PortworxSnapshotType, string, error) {
-	snapshotData, err := k8s.Instance().GetSnapshotData(snapDataName)
+	snapshotData, err := k8sextops.Instance().GetSnapshotData(snapDataName)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to retrieve VolumeSnapshotData %s: %v",
 			snapDataName, err)
 	}
 	// Let's verify if source snapshotdata is complete
-	err = k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
+	err = k8sextops.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
 	if err != nil {
 		return "", "", "", fmt.Errorf("snapshot: %s is not complete. %v", snapshotData.Metadata.Name, err)
 	}
@@ -1431,7 +1433,7 @@ func (p *portworx) SnapshotRestore(
 	}
 
 	// Let's verify if source snapshotdata is complete
-	err = k8s.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
+	err = k8sextops.Instance().ValidateSnapshotData(snapshotData.Metadata.Name, false, validateSnapshotTimeout, validateSnapshotRetryInterval)
 	if err != nil {
 		return nil, nil, fmt.Errorf("snapshot: %s is not complete. %v", snapshotName, err)
 	}
@@ -1448,7 +1450,7 @@ func (p *portworx) SnapshotRestore(
 		}
 
 		// Check if this is a group snapshot
-		snap, err := k8s.Instance().GetSnapshot(snapshotName, snapshotNamespace)
+		snap, err := k8sextops.Instance().GetSnapshot(snapshotName, snapshotNamespace)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1786,7 +1788,7 @@ func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Persiste
 
 	switch snapType {
 	case crdv1.PortworxSnapshotTypeCloud:
-		pvc, err := k8s.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
+		pvc, err := core.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1801,7 +1803,7 @@ func (p *portworx) getPVCsForSnapshot(snap *crdv1.VolumeSnapshot) ([]v1.Persiste
 		}
 
 		// local single snapshot
-		pvc, err := k8s.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
+		pvc, err := core.Instance().GetPersistentVolumeClaim(snap.Spec.PersistentVolumeClaimName, snap.Metadata.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -1967,13 +1969,13 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 		return nil, fmt.Errorf("namespaces for migration cannot be empty")
 	}
 
-	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
+	clusterPair, err := storkops.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
 	volumeInfos := make([]*storkapi.MigrationVolumeInfo, 0)
 	for _, namespace := range migration.Spec.Namespaces {
-		pvcList, err := k8s.Instance().GetPersistentVolumeClaims(namespace, migration.Spec.Selectors)
+		pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, migration.Spec.Selectors)
 		if err != nil {
 			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)
 		}
@@ -1987,7 +1989,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 			}
 			volumeInfos = append(volumeInfos, volumeInfo)
 
-			volume, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+			volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 			if err != nil {
 				return nil, fmt.Errorf("error getting volume for PVC: %v", err)
 			}
@@ -2034,7 +2036,7 @@ func (p *portworx) GetMigrationStatus(migration *storkapi.Migration) ([]*storkap
 		return nil, err
 	}
 
-	clusterPair, err := k8s.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
+	clusterPair, err := storkops.Instance().GetClusterPair(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error getting clusterpair: %v", err)
 	}
@@ -2175,7 +2177,7 @@ func (p *portworx) DeleteGroupSnapshot(snap *storkapi.GroupVolumeSnapshot) error
 			continue
 		}
 
-		err := k8s.Instance().DeleteSnapshot(vs.VolumeSnapshotName, snap.Namespace)
+		err := k8sextops.Instance().DeleteSnapshot(vs.VolumeSnapshotName, snap.Namespace)
 		if err != nil {
 			if !k8s_errors.IsNotFound(err) {
 				log.GroupSnapshotLog(snap).Errorf("failed to delete snapshot due to: %v", err)
@@ -2475,7 +2477,7 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.DriverName = driverName
 		volumeInfos = append(volumeInfos, volumeInfo)
 
-		volume, err := k8s.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
+		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
 			return nil, fmt.Errorf("Error getting volume for PVC: %v", err)
 		}

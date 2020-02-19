@@ -7,7 +7,7 @@ import (
 
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/stretchr/testify/require"
-	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func TestVersion(t *testing.T) {
