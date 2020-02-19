@@ -30,7 +30,9 @@ func triggerApplicationCloneTest(
 	cloneAppKey string,
 	cloneSuccessExpected bool,
 	cloneAllAppsExpected bool,
+	scaleDownAppAfterClone bool,
 ) {
+	var scaleMap map[string]int32
 	ctxs, err := schedulerDriver.Schedule(instanceID,
 		scheduler.ScheduleOptions{AppKeys: []string{appKey}})
 	require.NoError(t, err, "Error scheduling task")
@@ -67,12 +69,31 @@ func triggerApplicationCloneTest(
 	err = schedulerDriver.WaitForRunning(cloneTaskCtx[0], timeout, defaultWaitInterval)
 	if cloneSuccessExpected {
 		require.NoError(t, err, "Error waiting for app clone task to get to running state")
+		if scaleDownAppAfterClone {
+			// After app has been cloned scale it down to 0, else cloned apps may start running
+			scaleMap, err = schedulerDriver.GetScaleFactorMap(cloneAppCtx)
+			require.NoError(t, err, "Error getting scale map")
+			reducedScaleMap := make(map[string]int32, len(scaleMap))
+			for name := range scaleMap {
+				reducedScaleMap[name] = 0
+			}
+			err = schedulerDriver.ScaleApplication(cloneAppCtx, reducedScaleMap)
+			require.NoError(t, err, "Error getting scaling down app")
+		}
 
 		// Make sure the cloned app is running
 		err = schedulerDriver.UpdateTasksID(cloneAppCtx, appKey+"-"+instanceID+"-dest")
 		require.NoError(t, err, "Error updating task id for app clone context")
 		err = schedulerDriver.WaitForRunning(cloneAppCtx, defaultWaitTimeout, defaultWaitInterval)
 		require.NoError(t, err, "Error waiting for cloned app to get to running state")
+
+		// Scale up the original app
+		if scaleDownAppAfterClone {
+			err = schedulerDriver.ScaleApplication(cloneAppCtx, scaleMap)
+			require.NoError(t, err, "Error getting scaling up app %v", cloneAppCtx)
+			err = schedulerDriver.WaitForRunning(cloneAppCtx, defaultWaitTimeout, defaultWaitInterval)
+			require.NoError(t, err, "Error waiting for app to get to running state")
+		}
 
 		// Destroy the clone task and cloned app
 		require.NoError(t, err, "Error updating task id for app clone context")
@@ -98,6 +119,7 @@ func deploymentApplicationCloneTest(t *testing.T) {
 		"mysql-clone",
 		true,
 		true,
+		false,
 	)
 }
 
@@ -108,6 +130,7 @@ func statefulsetApplicationCloneTest(t *testing.T) {
 		"cassandra",
 		nil,
 		"cassandra-clone",
+		true,
 		true,
 		true,
 	)
@@ -122,6 +145,7 @@ func statefulsetApplicationCloneRuleTest(t *testing.T) {
 		"cassandra-clone-rule",
 		true,
 		true,
+		true,
 	)
 }
 
@@ -134,6 +158,7 @@ func applicationCloneRulePreExecMissingTest(t *testing.T) {
 		"mysql-clone-pre-exec-missing",
 		false,
 		true,
+		false,
 	)
 }
 
@@ -146,6 +171,7 @@ func applicationCloneRulePostExecMissingTest(t *testing.T) {
 		"mysql-clone-post-exec-missing",
 		false,
 		true,
+		false,
 	)
 }
 
@@ -158,6 +184,7 @@ func applicationCloneDisallowedNamespaceTest(t *testing.T) {
 		"mysql-clone-disallowed-ns",
 		false,
 		true,
+		false,
 	)
 }
 
@@ -170,6 +197,7 @@ func applicationCloneFailingPreExecRuleTest(t *testing.T) {
 		"mysql-clone-failing-pre-exec",
 		false,
 		true,
+		false,
 	)
 }
 
@@ -182,6 +210,7 @@ func applicationCloneFailingPostExecRuleTest(t *testing.T) {
 		"mysql-clone-failing-post-exec",
 		false,
 		true,
+		false,
 	)
 }
 
@@ -193,6 +222,7 @@ func applicationCloneLabelSelectorTest(t *testing.T) {
 		[]string{"mysql-1-pvc"},
 		"label-selector-applicationclone",
 		true,
+		false,
 		false,
 	)
 }
