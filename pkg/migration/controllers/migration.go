@@ -111,24 +111,24 @@ func (m *MigrationController) performRuleRecovery() error {
 	return lastError
 }
 
-func setDefaults(migration *stork_api.Migration) *stork_api.Migration {
-	if migration.Spec.IncludeVolumes == nil {
+func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
+	if spec.IncludeVolumes == nil {
 		defaultBool := true
-		migration.Spec.IncludeVolumes = &defaultBool
+		spec.IncludeVolumes = &defaultBool
 	}
-	if migration.Spec.IncludeResources == nil {
+	if spec.IncludeResources == nil {
 		defaultBool := true
-		migration.Spec.IncludeResources = &defaultBool
+		spec.IncludeResources = &defaultBool
 	}
-	if migration.Spec.StartApplications == nil {
+	if spec.StartApplications == nil {
 		defaultBool := false
-		migration.Spec.StartApplications = &defaultBool
+		spec.StartApplications = &defaultBool
 	}
-	if migration.Spec.PurgeDeletedResources == nil {
+	if spec.PurgeDeletedResources == nil {
 		defaultBool := false
-		migration.Spec.PurgeDeletedResources = &defaultBool
+		spec.PurgeDeletedResources = &defaultBool
 	}
-	return migration
+	return spec
 }
 
 // Handle updates for Migration objects
@@ -142,7 +142,7 @@ func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error
 			}
 			return nil
 		}
-		migration = setDefaults(migration)
+		migration.Spec = setDefaults(migration.Spec)
 
 		if migration.Spec.ClusterPair == "" {
 			err := fmt.Errorf("clusterPair to migrate to cannot be empty")
