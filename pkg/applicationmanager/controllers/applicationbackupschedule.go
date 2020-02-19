@@ -125,7 +125,7 @@ func (s *ApplicationBackupScheduleController) Handle(ctx context.Context, event 
 
 func (s *ApplicationBackupScheduleController) setDefaults(backupSchedule *stork_api.ApplicationBackupSchedule) {
 	if backupSchedule.Spec.ReclaimPolicy == "" {
-		backupSchedule.Spec.ReclaimPolicy = stork_api.ReclaimPolicyDelete
+		backupSchedule.Spec.ReclaimPolicy = stork_api.ReclaimPolicyRetain
 	}
 }
 
