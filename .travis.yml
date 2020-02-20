@@ -7,6 +7,9 @@ before_install:
   - sudo apt-get update -yq
   - sudo apt-get install go-md2man -y
   - sudo apt-get install -y awscli
+cache:
+  directories:
+    - $HOME/.cache/go-build
 script:
   - |
     if [ "${TRAVIS_BRANCH}" == "2.3" ]; then
