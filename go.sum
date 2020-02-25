@@ -419,6 +419,8 @@ github.com/portworx/sched-ops v0.0.0-20200205200838-f224d01bafb5 h1:rPBpZXeo9M1B
 github.com/portworx/sched-ops v0.0.0-20200205200838-f224d01bafb5/go.mod h1:yb1ypNIiZQAmM7xAWGzO6dydwl/+vNC0WjUm5IvHUEY=
 github.com/portworx/sched-ops v0.0.0-20200209173159-9fc20df3f771 h1:jyovf+v7840+//M+tEKqXZvM0pcX56akKhizUjD4buA=
 github.com/portworx/sched-ops v0.0.0-20200209173159-9fc20df3f771/go.mod h1:yb1ypNIiZQAmM7xAWGzO6dydwl/+vNC0WjUm5IvHUEY=
+github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee h1:HnMAyWZRxHxHEEw1/QuCkmvtf3Woej/IboUBaiuVbyo=
+github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee/go.mod h1:yb1ypNIiZQAmM7xAWGzO6dydwl/+vNC0WjUm5IvHUEY=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224 h1:r4LpGHxnh3tliXnaJcciROXU/snARMN6/OXhGPJyzGA=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224/go.mod h1:OjpMH9Uh5o9ntVGktm4FbjLNwubJ3ITih2OfYrAeWtA=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=

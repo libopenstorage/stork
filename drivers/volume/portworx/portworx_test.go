@@ -121,7 +121,7 @@ func TestEstimatedVolumeSize(t *testing.T) {
 		errorExpected          bool
 	}{
 		{
-			rule:                   aututils.PVCRuleByTotalSize(5, 100, "10Gi"),
+			rule:                   aututils.PVCRuleByTotalSize(6, 100, "10Gi"),
 			initialSize:            5 * units.GiB,
 			workloadSize:           10 * units.GiB,
 			expectedCalculatedSize: 10 * units.GiB,
@@ -129,7 +129,7 @@ func TestEstimatedVolumeSize(t *testing.T) {
 			errorExpected:          false,
 		},
 		{
-			rule:                   aututils.PVCRuleByTotalSize(5, 100, "5Gi"),
+			rule:                   aututils.PVCRuleByTotalSize(6, 100, "5Gi"),
 			initialSize:            5 * units.GiB,
 			workloadSize:           10 * units.GiB,
 			expectedCalculatedSize: 5 * units.GiB,
@@ -137,7 +137,7 @@ func TestEstimatedVolumeSize(t *testing.T) {
 			errorExpected:          false,
 		},
 		{
-			rule:                   aututils.PVCRuleByTotalSize(5, 100, "12Gi"),
+			rule:                   aututils.PVCRuleByTotalSize(15, 100, "12Gi"),
 			initialSize:            5 * units.GiB,
 			workloadSize:           10 * units.GiB,
 			expectedCalculatedSize: 12 * units.GiB,
@@ -145,11 +145,27 @@ func TestEstimatedVolumeSize(t *testing.T) {
 			errorExpected:          false,
 		},
 		{
+			rule:                   aututils.PVCRuleByTotalSize(6, 100, ""),
+			initialSize:            5 * units.GiB,
+			workloadSize:           10 * units.GiB,
+			expectedCalculatedSize: 10 * units.GiB,
+			expectedResizeCount:    1,
+			errorExpected:          false,
+		},
+		{
+			rule:                   aututils.PVCRuleByUsageCapacity(50, 100, ""),
+			initialSize:            10 * units.GiB,
+			workloadSize:           4 * units.GiB,
+			expectedCalculatedSize: 10 * units.GiB,
+			expectedResizeCount:    0,
+			errorExpected:          false,
+		},
+		{
 			rule:                   aututils.PVCRuleByUsageCapacity(50, 100, ""),
 			initialSize:            10 * units.GiB,
 			workloadSize:           10 * units.GiB,
-			expectedCalculatedSize: 40 * units.GiB,
-			expectedResizeCount:    2,
+			expectedCalculatedSize: 20 * units.GiB,
+			expectedResizeCount:    1,
 			errorExpected:          false,
 		},
 		{
