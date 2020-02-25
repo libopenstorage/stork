@@ -147,6 +147,10 @@ func ValidateCleanup() {
 		}
 
 		_, err := task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
+		if err != nil {
+			logrus.Info("an error occurred, collecting bundle")
+			CollectSupport()
+		}
 		expect(err).NotTo(haveOccurred())
 	})
 }
@@ -495,6 +499,10 @@ func PerformSystemCheck() {
 					Timeout:         2 * time.Minute,
 					TimeBeforeRetry: 10 * time.Second,
 				})
+				if len(file) != 0 || err != nil {
+					logrus.Info("an error occurred, collecting bundle")
+					CollectSupport()
+				}
 				expect(err).NotTo(haveOccurred())
 				expect(file).To(beEmpty())
 			}
