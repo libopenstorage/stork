@@ -846,7 +846,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:98a2b0cdb0d8d65ac089c4819c199af26ee48949382024c6227cd657cae66a48"
+  digest = "1:850f4f1702c50eb0940b04bcffc211e100d3f76099c5dd47e62fccce76e0803d"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -855,6 +855,7 @@
     "drivers/scheduler/k8s",
     "drivers/scheduler/spec",
     "drivers/volume",
+    "drivers/volume/gce",
     "drivers/volume/portworx",
     "drivers/volume/portworx/schedops",
     "pkg/aututils",
@@ -1993,6 +1994,7 @@
     "github.com/portworx/torpedo/drivers/scheduler/k8s",
     "github.com/portworx/torpedo/drivers/scheduler/spec",
     "github.com/portworx/torpedo/drivers/volume",
+    "github.com/portworx/torpedo/drivers/volume/gce",
     "github.com/portworx/torpedo/drivers/volume/portworx",
     "github.com/sirupsen/logrus",
     "github.com/skyrings/skyring-common/tools/uuid",
