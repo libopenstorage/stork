@@ -822,7 +822,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:1bf8dae0e5d256596a6c03d631472f35604745077ed8e59cd85492c3af50f50b"
+  digest = "1:8ba0bc0bfa1980dd2681b2a27cc95d0d5f576200df51afd665ea4ae91e30b48a"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -842,11 +842,11 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "b8377c17c2776ca13f77439106a76db6ea11db57"
+  revision = "24315e6ffbb1005c5260d47df73f7fe7ad3cb7c2"
 
 [[projects]]
   branch = "master"
-  digest = "1:98a2b0cdb0d8d65ac089c4819c199af26ee48949382024c6227cd657cae66a48"
+  digest = "1:850f4f1702c50eb0940b04bcffc211e100d3f76099c5dd47e62fccce76e0803d"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -855,6 +855,7 @@
     "drivers/scheduler/k8s",
     "drivers/scheduler/spec",
     "drivers/volume",
+    "drivers/volume/gce",
     "drivers/volume/portworx",
     "drivers/volume/portworx/schedops",
     "pkg/aututils",
@@ -1993,6 +1994,7 @@
     "github.com/portworx/torpedo/drivers/scheduler/k8s",
     "github.com/portworx/torpedo/drivers/scheduler/spec",
     "github.com/portworx/torpedo/drivers/volume",
+    "github.com/portworx/torpedo/drivers/volume/gce",
     "github.com/portworx/torpedo/drivers/volume/portworx",
     "github.com/sirupsen/logrus",
     "github.com/skyrings/skyring-common/tools/uuid",
