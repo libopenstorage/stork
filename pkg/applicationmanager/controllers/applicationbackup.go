@@ -156,6 +156,7 @@ func (a *ApplicationBackupController) Handle(ctx context.Context, event sdk.Even
 				_, err := core.Instance().GetNamespace(ns)
 				if err != nil {
 					backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+					backup.Status.Reason = fmt.Sprintf("Error checking for namespace %v: %v", ns, err)
 					backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 					backup.Status.FinishTimestamp = metav1.Now()
 					err = fmt.Errorf("error getting namespace %v: %v", ns, err)
@@ -318,6 +319,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					string(stork_api.ApplicationBackupStatusFailed),
 					message)
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+				backup.Status.Reason = message
 				err = sdk.Update(backup)
 				if err != nil {
 					return err
@@ -328,6 +331,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			backup.Status.Volumes = append(backup.Status.Volumes, volumeInfos...)
 		}
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
+		backup.Status.Reason = "Volume backups are in progress"
 		err := sdk.Update(backup)
 		if err != nil {
 			return err
@@ -353,6 +357,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.FinishTimestamp = metav1.Now()
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				backup.Status.Reason = message
 				err = sdk.Update(backup)
 				if err != nil {
 					return err
@@ -404,6 +409,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.FinishTimestamp = metav1.Now()
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+				backup.Status.Reason = vInfo.Reason
 				break
 			} else if vInfo.Status == stork_api.ApplicationBackupStatusSuccessful {
 				a.Recorder.Event(backup,
@@ -423,6 +429,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	if backup.Status.Status != stork_api.ApplicationBackupStatusFailed {
 		backup.Status.Stage = stork_api.ApplicationBackupStageApplications
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
+		backup.Status.Reason = "Application resources backup is in progress"
 		// Update the current state and then move on to backing up resources
 		err := sdk.Update(backup)
 		if err != nil {
@@ -461,6 +468,7 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 	if backup.Status.Stage == stork_api.ApplicationBackupStageInitial {
 		backup.Status.Stage = stork_api.ApplicationBackupStagePreExecRule
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
+		backup.Status.Reason = "Pre-Exec rules are being executed"
 		err := sdk.Update(backup)
 		if err != nil {
 			return nil, err
@@ -655,6 +663,7 @@ func (a *ApplicationBackupController) backupResources(
 	backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 	backup.Status.FinishTimestamp = metav1.Now()
 	backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
+	backup.Status.Reason = "Volumes and resources were backed up successfuly"
 
 	// Upload the metadata for the backup to the backup location
 	if err = a.uploadMetadata(backup); err != nil {

@@ -48,6 +48,7 @@ const (
 type ApplicationBackupStatus struct {
 	Stage            ApplicationBackupStageType       `json:"stage"`
 	Status           ApplicationBackupStatusType      `json:"status"`
+	Reason           string                           `json:"reason"`
 	Resources        []*ApplicationBackupResourceInfo `json:"resources"`
 	Volumes          []*ApplicationBackupVolumeInfo   `json:"volumes"`
 	BackupPath       string                           `json:"backupPath"`
