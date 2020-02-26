@@ -245,6 +245,14 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 					v1.EventTypeWarning,
 					string(storkapi.ApplicationRestoreStatusFailed),
 					message)
+				restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
+				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
+				restore.Status.Reason = message
+				err = sdk.Update(restore)
+				if err != nil {
+					return err
+				}
+
 				return nil
 			}
 			restore.Status.Volumes = append(restore.Status.Volumes, restoreVolumeInfos...)
@@ -298,6 +306,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 				restore.Status.FinishTimestamp = metav1.Now()
 				restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
+				restore.Status.Reason = vInfo.Reason
 				break
 			} else if vInfo.Status == storkapi.ApplicationRestoreStatusSuccessful {
 				a.Recorder.Event(restore,
@@ -317,6 +326,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	if restore.Status.Status != storkapi.ApplicationRestoreStatusFailed {
 		restore.Status.Stage = storkapi.ApplicationRestoreStageApplications
 		restore.Status.Status = storkapi.ApplicationRestoreStatusInProgress
+		restore.Status.Reason = "Application resources restore is in progress"
 		// Update the current state and then move on to restoring resources
 		err := sdk.Update(restore)
 		if err != nil {
@@ -562,9 +572,11 @@ func (a *ApplicationRestoreController) restoreResources(
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
 	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
+	restore.Status.Reason = "Volumes and resources were restored up successfuly"
 	for _, resource := range restore.Status.Resources {
 		if resource.Status != storkapi.ApplicationRestoreStatusSuccessful {
 			restore.Status.Status = storkapi.ApplicationRestoreStatusPartialSuccess
+			restore.Status.Reason = "Volumes were restored successfuly. Some existing resources were not replaced"
 			break
 		}
 	}

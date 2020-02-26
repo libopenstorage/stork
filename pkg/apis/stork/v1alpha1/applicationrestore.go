@@ -52,6 +52,7 @@ const (
 type ApplicationRestoreStatus struct {
 	Stage           ApplicationRestoreStageType       `json:"stage"`
 	Status          ApplicationRestoreStatusType      `json:"status"`
+	Reason          string                            `json:"reason"`
 	Resources       []*ApplicationRestoreResourceInfo `json:"resources"`
 	Volumes         []*ApplicationRestoreVolumeInfo   `json:"volumes"`
 	FinishTimestamp metav1.Time                       `json:"finishTimestamp"`
