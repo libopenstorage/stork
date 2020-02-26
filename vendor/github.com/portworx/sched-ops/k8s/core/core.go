@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -49,6 +50,8 @@ type Ops interface {
 	SetConfig(config *rest.Config)
 	// GetVersion gets the version from the kubernetes cluster
 	GetVersion() (*version.Info, error)
+	// ResourceExists returns true if given resource type exists in kubernetes API server
+	ResourceExists(schema.GroupVersionKind) (bool, error)
 }
 
 // Instance returns a singleton instance of the client.
@@ -133,6 +136,26 @@ func (c *Client) GetVersion() (*version.Info, error) {
 	}
 
 	return c.kubernetes.Discovery().ServerVersion()
+}
+
+func (c *Client) ResourceExists(gvk schema.GroupVersionKind) (bool, error) {
+	if err := c.initClient(); err != nil {
+		return false, err
+	}
+	_, apiLists, err := c.kubernetes.Discovery().ServerGroupsAndResources()
+	if err != nil {
+		return false, err
+	}
+	for _, apiList := range apiLists {
+		if apiList.GroupVersion == gvk.GroupVersion().String() {
+			for _, r := range apiList.APIResources {
+				if r.Kind == gvk.Kind {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
 }
 
 // initClient the k8s client if uninitialized
