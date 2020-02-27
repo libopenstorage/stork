@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/portworx/sched-ops/k8s"
@@ -529,7 +530,7 @@ func (r *ResourceCollector) getDynamicClient(
 		return nil, err
 	}
 	resource := &metav1.APIResource{
-		Name:       strings.ToLower(objectType.GetKind()) + "s",
+		Name:       inflect.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,
 	}
 
