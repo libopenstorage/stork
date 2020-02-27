@@ -41,6 +41,10 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	// import gce driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/gce"
+	// import aws driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/aws"
+	// import azure driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/azure"
 	"github.com/portworx/torpedo/pkg/log"
 
 	yaml "gopkg.in/yaml.v2"
