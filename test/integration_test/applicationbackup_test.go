@@ -483,7 +483,7 @@ func applicationBackupScheduleTests(t *testing.T) {
 	t.Run("invalidPolicyTest", invalidPolicyApplicationBackupScheduleTest)
 }
 
-func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, policyName string, applicationBackupScheduleName string, expectedBackups int64) {
+func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, policyName string, applicationBackupScheduleName string, expectedBackups int) {
 	err := k8s.Instance().DeleteSchedulePolicy(policyName)
 	require.NoError(t, err, fmt.Sprintf("Error deleting schedule policy %v", policyName))
 
