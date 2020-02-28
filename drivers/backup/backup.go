@@ -2,6 +2,7 @@ package backup
 
 import (
 	"fmt"
+	"time"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -104,6 +105,11 @@ type Backup interface {
 
 	// DeleteBackup deletes backup
 	DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error)
+
+	// WaitForBackupCompletion waits for backup to complete successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+	WaitForBackupCompletion(backupName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
 // Restore object interface
@@ -119,6 +125,14 @@ type Restore interface {
 
 	// DeleteRestore deletes a restore object
 	DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error)
+
+	CreateNewRestore(restoreName string, backupName string, namespaceMapping map[string]string,
+		clusterName string, orgID string) (*api.RestoreCreateResponse, error)
+
+	// WaitForRestoreCompletion waits for restore to complete successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+	WaitForRestoreCompletion(restoreName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
 // SchedulePolicy interface

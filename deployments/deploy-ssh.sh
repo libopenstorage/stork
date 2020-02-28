@@ -117,6 +117,7 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
     TEST_SUITE='"bin/asg.test",
             "bin/autopilot.test",
             "bin/basic.test",
+	          "bin/backup.test",
             "bin/reboot.test",
             "bin/upgrade.test",
             "bin/drive_failure.test",
@@ -142,6 +143,12 @@ done
 if [ $timeout -gt 600 ]; then
   echo "Torpedo is taking too long to terminate. Operation timeout."
   describe_pod_then_exit
+fi
+
+if [ -n "${PXBACKUP_KUBECONFIG}" ]; then
+    kubectl create configmap pxbackup-kubeconfig --from-file=${PXBACKUP_KUBECONFIG}
+    PXB_KUBECONFIG_VOLUME="{ \"name\": \"pxbackup-kubeconfig\", \"configMap\": { \"name\": \"pxbackup-kubeconfig\"}}"
+    PXB_KUBECONFIG_MOUNT="{ \"name\": \"pxbackup-kubeconfig\", \"mountPath\": \"${PXBACKUP_KUBECONFIG}\" }"
 fi
 
 TORPEDO_CUSTOM_PARAM_VOLUME=""
@@ -185,6 +192,11 @@ if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
 fi
 
+if [ -n "${PXBACKUP_KUBECONFIG}" ]; then
+    VOLUMES="${VOLUMES},${PXB_KUBECONFIG_VOLUME}"
+    VOLUME_MOUNTS="${VOLUME_MOUNTS},${PXB_KUBECONFIG_MOUNT}"
+fi
+
 K8S_VENDOR_KEY=""
 K8S_VENDOR_VALUE=""
 K8S_VENDOR_OPERATOR="Exists"
@@ -222,6 +234,15 @@ if [ -n "${K8S_VENDOR}" ]; then
     esac
 else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
+fi
+
+# TODO: Mount this secret as ENV var to torpedo pod if created
+if [[ -n "${AWS_ACCESS_KEY_ID}" && -n "${AWS_SECRET_ACCESS_KEY}" ]]; then
+echo "Creating AWS secret..."
+kubectl create secret generic aws-access \
+        --from-literal=AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+        --from-literal=AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+        --from-literal=AWS_REGION=$AWS_REGION
 fi
 
 echo "Deploying torpedo pod..."
@@ -343,6 +364,20 @@ spec:
       value: "${AZURE_CLIENTID}"
     - name: AZURE_CLIENT_SECRET
       value: "${AZURE_CLIENTSECRET}"
+    - name: AWS_ACCESS_KEY_ID
+      value: "${AWS_ACCESS_KEY_ID}"
+    - name: AWS_SECRET_ACCESS_KEY
+      value: "${AWS_SECRET_ACCESS_KEY}"
+    - name: BUCKET_NAME
+      value: "${BUCKET_NAME}" 
+    - name: PXBACKUP_KUBECONFIG
+      value: "${PXBACKUP_KUBECONFIG}/kubeconfig"     
+    - name: S3_ENDPOINT
+      value: "${S3_ENDPOINT}"  
+    - name: S3_REGION
+      value: "${S3_REGION}"  
+    - name: S3_DISABLE_SSL
+      value: "${S3_DISABLE_SSL}"  
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
@@ -375,3 +410,4 @@ done
 
 echo "Error: Failed to wait for torpedo to start running..."
 describe_pod_then_exit
+
