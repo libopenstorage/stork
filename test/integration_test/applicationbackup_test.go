@@ -513,7 +513,7 @@ func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, po
 	require.NoError(t, err, fmt.Sprintf("Error getting list of applicationBackups for namespace: %v", namespace))
 	require.Equal(t, expectedBackups, len(applicationBackupList.Items), fmt.Sprintf("Should have %v ApplicationBackups triggered by schedule in namespace %v", expectedBackups, namespace))
 	err = deleteApplicationBackupList(applicationBackupList)
-	require.Nil(t, err, "failed to delete application backups")
+	require.NoError(t, err, "failed to delete application backups")
 }
 
 func intervalApplicationBackupScheduleTest(t *testing.T) {
@@ -1074,7 +1074,7 @@ func deleteApplicationRestoreList(appRestoreList []*storkv1.ApplicationRestore) 
 
 func deleteApplicationBackupList(appBackupList *storkv1.ApplicationBackupList) error {
 	for _, appBackup := range appBackupList.Items {
-		err := storkops.Instance().DeleteApplicationRestore(appBackup.Name, appBackup.Namespace)
+		err := storkops.Instance().DeleteApplicationBackup(appBackup.Name, appBackup.Namespace)
 		if err != nil {
 			return fmt.Errorf("Error deleting application backup %s in namespace %s", appBackup.Name, appBackup.Namespace)
 		}
