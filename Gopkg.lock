@@ -846,7 +846,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:850f4f1702c50eb0940b04bcffc211e100d3f76099c5dd47e62fccce76e0803d"
+  digest = "1:1d75b6d1eac9dac690a6f0b1ccabc487536da7adf8cdc4c3286aff72d34d9d93"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/node",
@@ -855,6 +855,8 @@
     "drivers/scheduler/k8s",
     "drivers/scheduler/spec",
     "drivers/volume",
+    "drivers/volume/aws",
+    "drivers/volume/azure",
     "drivers/volume/gce",
     "drivers/volume/portworx",
     "drivers/volume/portworx/schedops",
@@ -863,7 +865,7 @@
     "pkg/units",
   ]
   pruneopts = "UT"
-  revision = "8fd1a314d9aa46901c9d6062073087ec87087b18"
+  revision = "477ebea6e69b67481dff52b0a10833b62089bf85"
 
 [[projects]]
   branch = "master"
@@ -1994,6 +1996,8 @@
     "github.com/portworx/torpedo/drivers/scheduler/k8s",
     "github.com/portworx/torpedo/drivers/scheduler/spec",
     "github.com/portworx/torpedo/drivers/volume",
+    "github.com/portworx/torpedo/drivers/volume/aws",
+    "github.com/portworx/torpedo/drivers/volume/azure",
     "github.com/portworx/torpedo/drivers/volume/gce",
     "github.com/portworx/torpedo/drivers/volume/portworx",
     "github.com/sirupsen/logrus",
