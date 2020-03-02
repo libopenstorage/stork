@@ -71,7 +71,7 @@ func resetTest() {
 	tf.Client = fakeRestClient
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
-	core.SetInstance(core.New(fakeKubeClient, fakeKubeClient.CoreV1(), fakeKubeClient.StorageV1()))
+	core.SetInstance(core.New(fakeKubeClient))
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, fakeRestClient))
 	externalstorage.SetInstance(externalstorage.New(fakeRestClient))
 	openshift.SetInstance(openshift.New(fakeKubeClient, fakeOCPClient, fakeOCPSecurityClient))

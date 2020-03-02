@@ -60,7 +60,7 @@ func setup(t *testing.T) {
 
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeKubeClient := kubernetes.NewSimpleClientset()
-	core.SetInstance(core.New(fakeKubeClient, fakeKubeClient.CoreV1(), fakeKubeClient.StorageV1()))
+	core.SetInstance(core.New(fakeKubeClient))
 	storage.SetInstance(storage.New(fakeKubeClient.StorageV1()))
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
 
