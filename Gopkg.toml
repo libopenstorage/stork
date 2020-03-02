@@ -46,7 +46,7 @@ required = [
   name = "github.com/portworx/sched-ops"
   branch = "master"
 
-[[constraint]]
+[[override]]
   name = "github.com/portworx/torpedo"
   branch = "master"
 
