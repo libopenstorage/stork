@@ -24,7 +24,7 @@ import (
 var storkStorageClass = "stork-snapshot-sc"
 
 const (
-	waitPvcBound         = 120 * time.Second
+	waitPvcBound         = 300 * time.Second
 	waitPvcRetryInterval = 5 * time.Second
 
 	snapshotScheduleRetryInterval = 10 * time.Second
