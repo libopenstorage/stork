@@ -1,6 +1,8 @@
 package openshift
 
 import (
+	"fmt"
+
 	opnshift "github.com/portworx/sched-ops/k8s/openshift"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -103,6 +105,17 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 	}
 
 	return contexts, nil
+}
+
+func (k *openshift) SaveSchedulerLogsToFile(n node.Node, location string) error {
+	driver, _ := node.Get(k.K8s.NodeDriverName)
+	cmd := fmt.Sprintf("journalctl -lu %s* > %s/kubelet.log", SystemdSchedServiceName, location)
+	_, err := driver.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         kube.DefaultTimeout,
+		TimeBeforeRetry: kube.DefaultRetryInterval,
+		Sudo:            true,
+	})
+	return err
 }
 
 func (k *openshift) updateSecurityContextConstraints(namespace string) error {

@@ -593,6 +593,14 @@ func (d *dcos) GetSpecAppEnvVar(ctx *scheduler.Context, key string) string {
 	return ""
 }
 
+func (d *dcos) SaveSchedulerLogsToFile(n node.Node, location string) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SaveSchedulerLogsToFile()",
+	}
+}
+
 // GetWorkloadSizeFromAppSpec gets workload size from an application spec
 func (d *dcos) GetWorkloadSizeFromAppSpec(ctx *scheduler.Context) (uint64, error) {
 	// TODO: not implemented

@@ -35,6 +35,7 @@ import (
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
+	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
@@ -462,7 +463,7 @@ func CollectSupport() {
 				runCmd(fmt.Sprintf("journalctl -lu portworx* > %s/portworx.log", Inst().BundleLocation), n)
 
 				logrus.Infof("saving kubelet journal output on %s", n.Name)
-				runCmd(fmt.Sprintf("journalctl -lu kubelet* > %s/kubelet.log", Inst().BundleLocation), n)
+				Inst().S.SaveSchedulerLogsToFile(n, Inst().BundleLocation)
 
 				logrus.Infof("saving dmesg output on %s", n.Name)
 				runCmd(fmt.Sprintf("dmesg -T > %s/dmesg.log", Inst().BundleLocation), n)
@@ -472,6 +473,10 @@ func CollectSupport() {
 
 				logrus.Infof("saving mount list on %s", n.Name)
 				runCmd(fmt.Sprintf("cat /proc/mounts > %s/mounts.log", Inst().BundleLocation), n)
+
+				// this is a small tweak especially for providers like openshift, aws where oci-mon saves this file
+				// with root read permissions only but collect support bundle is a non-root user
+				runCmd(fmt.Sprintf("chmod 755 %s/oci.log", Inst().BundleLocation), n)
 			}
 		})
 	})
@@ -479,8 +484,8 @@ func CollectSupport() {
 
 func runCmd(cmd string, n node.Node) {
 	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
-		Timeout:         defaultTimeout,
-		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
 		Sudo:            true,
 	})
 	if err != nil {
@@ -637,7 +642,7 @@ func ParseFlags() {
 		}
 		if backupDriverName != "" {
 			if backupDriver, err = backup.Get(backupDriverName); err != nil {
-				logrus.Fatal("cannot find backup driver for %v. Err: %v\n", backupDriverName, err)
+				logrus.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
 			}
 		}
 		once.Do(func() {
