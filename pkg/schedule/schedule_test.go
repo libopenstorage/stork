@@ -25,7 +25,7 @@ func TestSchedule(t *testing.T) {
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
-	core.SetInstance(core.New(fakeKubeClient, nil, nil))
+	core.SetInstance(core.New(fakeKubeClient))
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
 
 	t.Run("createDefaultPoliciesTest", createDefaultPoliciesTest)

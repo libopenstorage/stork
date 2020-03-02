@@ -68,7 +68,7 @@ func setup(t *testing.T) {
 	fakeOCPClient = fakeocpclient.NewSimpleClientset()
 	fakeRestClient = &fake.RESTClient{}
 
-	core.SetInstance(core.New(fakeKubeClient, fakeKubeClient.CoreV1(), fakeKubeClient.StorageV1()))
+	core.SetInstance(core.New(fakeKubeClient))
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
 	openshift.SetInstance(openshift.New(fakeKubeClient, fakeOCPClient, nil))
 
