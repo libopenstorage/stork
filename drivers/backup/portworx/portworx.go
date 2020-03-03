@@ -204,6 +204,54 @@ func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDelete
 	return p.backupManager.Delete(context.Background(), req)
 }
 
+func (p *portworx) CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {
+	return p.restoreManager.Create(context.Background(), req)
+}
+
+func (p *portworx) EnumerateRestore(req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
+	return p.restoreManager.Enumerate(context.Background(), req)
+}
+
+func (p *portworx) InspectRestore(req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error) {
+	return p.restoreManager.Inspect(context.Background(), req)
+}
+
+func (p *portworx) DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error) {
+	return p.restoreManager.Delete(context.Background(), req)
+}
+
+func (p *portworx) CreateSchedulePolicy(req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error) {
+	return p.schedulePolicyManager.Create(context.Background(), req)
+}
+
+func (p *portworx) EnumerateSchedulePolicy(req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
+	return p.schedulePolicyManager.Enumerate(context.Background(), req)
+}
+
+func (p *portworx) InspectSchedulePolicy(req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error) {
+	return p.schedulePolicyManager.Inspect(context.Background(), req)
+}
+
+func (p *portworx) DeleteSchedulePolicy(req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error) {
+	return p.schedulePolicyManager.Delete(context.Background(), req)
+}
+
+func (p *portworx) CreateBackupSchedule(req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error) {
+	return p.backupScheduleManager.Create(context.Background(), req)
+}
+
+func (p *portworx) EnumerateBackupSchedule(req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
+	return p.backupScheduleManager.Enumerate(context.Background(), req)
+}
+
+func (p *portworx) InspectBackupSchedule(req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error) {
+	return p.backupScheduleManager.Inspect(context.Background(), req)
+}
+
+func (p *portworx) DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error) {
+	return p.backupScheduleManager.Delete(context.Background(), req)
+}
+
 func init() {
 	backup.Register(driverName, &portworx{})
 }

@@ -32,7 +32,3 @@ var _ = AfterSuite(func() {
 	//PerformSystemCheck()
 	//ValidateCleanup()
 })
-
-func init() {
-	ParseFlags()
-}

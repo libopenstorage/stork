@@ -25,6 +25,12 @@ type Driver interface {
 	BLocation
 	// Backup interface
 	Backup
+	// Restore interface
+	Restore
+	// SchedulePolicy interface
+	SchedulePolicy
+	// ScheduleBackup
+	ScheduleBackup
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
 	// String returns the name of this driver
@@ -98,6 +104,45 @@ type Backup interface {
 
 	// DeleteBackup deletes backup
 	DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error)
+}
+
+// Restore object interface
+type Restore interface {
+	// CreateRestore creates restore
+	CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error)
+
+	// EnumerateRestore lists restore objects
+	EnumerateRestore(req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
+
+	// InspectRestore inspects a restore object
+	InspectRestore(req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error)
+
+	// DeleteRestore deletes a restore object
+	DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error)
+}
+
+// SchedulePolicy interface
+type SchedulePolicy interface {
+	// CreateSchedulePolicy
+	CreateSchedulePolicy(req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error)
+	// EnumerateSchedulePolicy
+	EnumerateSchedulePolicy(req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
+	// InspectSchedulePolicy
+	InspectSchedulePolicy(req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error)
+	// DeleteSchedulePolicy
+	DeleteSchedulePolicy(req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error)
+}
+
+// ScheduleBackup interface
+type ScheduleBackup interface {
+	// CreateBackupSchedule
+	CreateBackupSchedule(req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error)
+	// EnumerateBackupSchedule
+	EnumerateBackupSchedule(req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
+	// InspectBackupSchedule
+	InspectBackupSchedule(req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error)
+	// DeleteBackupSchedule
+	DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)
