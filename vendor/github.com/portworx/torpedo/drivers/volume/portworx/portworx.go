@@ -380,13 +380,15 @@ func (d *portworx) getPxNode(n *node.Node, nManager ...api.OpenStorageNodeClient
 	}
 	logrus.Debugf("Inspecting node [%s] with volume driver node id [%s]", n.Name, n.VolDriverNodeID)
 	nodeInspectResponse, err := nManager[0].Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
-	if isNodeNotFound(err) {
-		logrus.Warnf("node %s with ID %s not found, trying to update node ID...", n.Name, n.VolDriverNodeID)
-		n, err = d.updateNodeID(n, nManager...)
-		if err != nil {
-			return api.StorageNode{Status: api.Status_STATUS_NONE}, err
+	if err != nil {
+		if isNodeNotFound(err) {
+			logrus.Warnf("node %s with ID %s not found, trying to update node ID...", n.Name, n.VolDriverNodeID)
+			n, err = d.updateNodeID(n, nManager...)
+			if err == nil {
+				return d.getPxNode(n, nManager...)
+			}
 		}
-		return d.getPxNode(n, nManager...)
+		return api.StorageNode{Status: api.Status_STATUS_NONE}, err
 	}
 	return *nodeInspectResponse.Node, nil
 }

@@ -500,7 +500,7 @@ func applicationBackupScheduleTests(t *testing.T) {
 	t.Run("invalidPolicyTest", invalidPolicyApplicationBackupScheduleTest)
 }
 
-func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, policyName string, applicationBackupScheduleName string) {
+func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, policyName string, applicationBackupScheduleName string, expectedBackups int) {
 	err := storkops.Instance().DeleteSchedulePolicy(policyName)
 	require.NoError(t, err, fmt.Sprintf("Error deleting schedule policy %v", policyName))
 
@@ -511,9 +511,9 @@ func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, po
 	time.Sleep(10 * time.Second)
 	applicationBackupList, err := storkops.Instance().ListApplicationBackups(namespace)
 	require.NoError(t, err, fmt.Sprintf("Error getting list of applicationBackups for namespace: %v", namespace))
-	require.Equal(t, 2, len(applicationBackupList.Items), fmt.Sprintf("ApplicationBackups triggered by schedule should not have been deleted in namespace %v", namespace))
+	require.Equal(t, expectedBackups, len(applicationBackupList.Items), fmt.Sprintf("Should have %v ApplicationBackups triggered by schedule in namespace %v", expectedBackups, namespace))
 	err = deleteApplicationBackupList(applicationBackupList)
-	require.Nil(t, err, "failed to delete application backups")
+	require.NoError(t, err, "failed to delete application backups")
 }
 
 func intervalApplicationBackupScheduleTest(t *testing.T) {
@@ -574,7 +574,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 	require.Equal(t, retain, len(backupStatuses[storkv1.SchedulePolicyTypeInterval]), fmt.Sprintf("Should have only %v applicationBackup for interval policy", retain))
 	logrus.Infof("Validated applicationBackupschedule %v", scheduleName)
 
-	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName)
+	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName, 2)
 	destroyAndWait(t, []*scheduler.Context{ctx})
 }
 
@@ -793,7 +793,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 		applicationBackupScheduleRetryInterval)
 	require.Error(t, err, fmt.Sprintf("No applicationBackups should have been created for %v in namespace %v",
 		scheduleName, namespace))
-	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName)
+	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName, 0)
 	destroyAndWait(t, []*scheduler.Context{ctx})
 }
 
@@ -845,7 +845,7 @@ func commonApplicationBackupScheduleTests(
 		require.Equal(t, 2, len(backupStatuses[policyType]), fmt.Sprintf("Should have 2 backups for %v schedule", scheduleName))
 		logrus.Infof("Validated second backupschedule %v", scheduleName)
 	}
-	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName)
+	deletePolicyAndApplicationBackupSchedule(t, namespace, policyName, scheduleName, 2)
 }
 
 func applicationBackupSyncControllerTest(t *testing.T) {
@@ -1074,7 +1074,7 @@ func deleteApplicationRestoreList(appRestoreList []*storkv1.ApplicationRestore) 
 
 func deleteApplicationBackupList(appBackupList *storkv1.ApplicationBackupList) error {
 	for _, appBackup := range appBackupList.Items {
-		err := storkops.Instance().DeleteApplicationRestore(appBackup.Name, appBackup.Namespace)
+		err := storkops.Instance().DeleteApplicationBackup(appBackup.Name, appBackup.Namespace)
 		if err != nil {
 			return fmt.Errorf("Error deleting application backup %s in namespace %s", appBackup.Name, appBackup.Namespace)
 		}

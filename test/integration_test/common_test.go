@@ -30,6 +30,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
+	_ "github.com/portworx/torpedo/drivers/volume/aws"
+	_ "github.com/portworx/torpedo/drivers/volume/azure"
 	_ "github.com/portworx/torpedo/drivers/volume/gce"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/sirupsen/logrus"
