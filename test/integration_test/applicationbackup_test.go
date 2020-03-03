@@ -1124,7 +1124,10 @@ func deleteAllBackupsNamespace(namespace string) error {
 	for _, bkp := range allAppBackups.Items {
 		err = storkops.Instance().DeleteApplicationBackup(bkp.Name, namespace)
 		if err != nil {
-			return fmt.Errorf("Failed to delete backup %s", bkp.Name)
+			if errors.IsNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("Failed to delete backup %s: %s", bkp.Name, err)
 		}
 	}
 	return nil

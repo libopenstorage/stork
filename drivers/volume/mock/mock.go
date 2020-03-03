@@ -11,7 +11,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 

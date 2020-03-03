@@ -13,9 +13,9 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/azure"
 	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	"github.com/libopenstorage/stork/pkg/apis"
 	"github.com/libopenstorage/stork/pkg/applicationmanager"
 	"github.com/libopenstorage/stork/pkg/clusterdomains"
-	"github.com/libopenstorage/stork/pkg/controller"
 	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
@@ -39,6 +39,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 const (
@@ -198,25 +199,32 @@ func run(c *cli.Context) {
 		log.Fatalf("error starting webhook controller: %v", err)
 	}
 
+	// Create operator-sdk manager that will manage all controllers.
+	mgr, err := manager.New(config, manager.Options{})
+	if err != nil {
+		log.Fatalf("Setup controller manager: %v", err)
+	}
+
+	// Setup scheme for all stork resources
+	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
+		log.Fatalf("Setup scheme failed for stork resources: %v", err)
+	}
+
 	runFunc := func(context.Context) {
-		runStork(d, recorder, c)
+		runStork(mgr, d, recorder, c)
 	}
 
 	if c.BoolT("leader-elect") {
-
 		lockObjectName := c.String("lock-object-name")
 		lockObjectNamespace := c.String("lock-object-namespace")
-
 		id, err := os.Hostname()
 		if err != nil {
 			log.Fatalf("Error getting hostname: %v", err)
 		}
-
 		lockConfig := resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: recorder,
 		}
-
 		resourceLock, err := resourcelock.New(
 			resourcelock.ConfigMapsResourceLock,
 			lockObjectNamespace,
@@ -227,13 +235,11 @@ func run(c *cli.Context) {
 		if err != nil {
 			log.Fatalf("Error creating resource lock: %v", err)
 		}
-
 		leaderElectionConfig := leaderelection.LeaderElectionConfig{
 			Lock:          resourceLock,
 			LeaseDuration: 15 * time.Second,
 			RenewDeadline: 10 * time.Second,
 			RetryPeriod:   2 * time.Second,
-
 			Callbacks: leaderelection.LeaderCallbacks{
 				OnStartedLeading: runFunc,
 				OnStoppedLeading: func() {
@@ -245,19 +251,15 @@ func run(c *cli.Context) {
 		if err != nil {
 			log.Fatalf("Error creating leader elector: %v", err)
 		}
-
 		leaderElector.Run(context.Background())
 	} else {
 		runFunc(nil)
 	}
 }
 
-func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
+func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	if err := controller.Init(); err != nil {
-		log.Fatalf("Error initializing controller: %v", err)
-	}
 
 	if err := rule.Init(); err != nil {
 		log.Fatalf("Error initializing rule: %v", err)
@@ -293,7 +295,7 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 		}
 
 		if c.Bool("snapshotter") {
-			if err := snapshot.Start(); err != nil {
+			if err := snapshot.Start(mgr); err != nil {
 				log.Fatalf("Error starting snapshot controller: %v", err)
 			}
 
@@ -301,16 +303,13 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 				Driver:   d,
 				Recorder: recorder,
 			}
-			if err := groupsnapshotInst.Init(); err != nil {
+			if err := groupsnapshotInst.Init(mgr); err != nil {
 				log.Fatalf("Error initializing groupsnapshot controller: %v", err)
 			}
 		}
-		pvcWatcher := pvcwatcher.PVCWatcher{
-			Driver:   d,
-			Recorder: recorder,
-		}
 		if c.Bool("pvc-watcher") {
-			if err := pvcWatcher.Start(); err != nil {
+			pvcWatcher := pvcwatcher.New(mgr, d, recorder)
+			if err := pvcWatcher.Start(mgr); err != nil {
 				log.Fatalf("Error starting pvc watcher: %v", err)
 			}
 		}
@@ -321,7 +320,7 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 				Recorder:          recorder,
 				ResourceCollector: resourceCollector,
 			}
-			if err := migration.Init(adminNamespace); err != nil {
+			if err := migration.Init(mgr, adminNamespace); err != nil {
 				log.Fatalf("Error initializing migration: %v", err)
 			}
 		}
@@ -331,7 +330,7 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 				Driver:   d,
 				Recorder: recorder,
 			}
-			if err := clusterDomains.Init(); err != nil {
+			if err := clusterDomains.Init(mgr); err != nil {
 				log.Fatalf("Error initializing cluster domain controllers: %v", err)
 			}
 		}
@@ -343,40 +342,45 @@ func runStork(d volume.Driver, recorder record.EventRecorder, c *cli.Context) {
 			Recorder:          recorder,
 			ResourceCollector: resourceCollector,
 		}
-		if err := appManager.Init(adminNamespace, signalChan); err != nil {
+		if err := appManager.Init(mgr, adminNamespace, signalChan); err != nil {
 			log.Fatalf("Error initializing application manager: %v", err)
 		}
 	}
-	// The controller should be started at the end
-	err := controller.Run()
-	if err != nil {
-		log.Fatalf("Error starting controller: %v", err)
-	}
 
-	for {
-		<-signalChan
-		log.Printf("Shutdown signal received, exiting...")
-		if c.Bool("extender") {
-			if err := ext.Stop(); err != nil {
-				log.Warnf("Error stopping extender: %v", err)
+	stopCh := make(chan struct{}, 1)
+
+	go func() {
+		for {
+			<-signalChan
+			log.Printf("Shutdown signal received, exiting...")
+			if c.Bool("extender") {
+				if err := ext.Stop(); err != nil {
+					log.Warnf("Error stopping extender: %v", err)
+				}
 			}
-		}
-		if c.Bool("health-monitor") {
-			if err := monitor.Stop(); err != nil {
-				log.Warnf("Error stopping monitor: %v", err)
+			if c.Bool("health-monitor") {
+				if err := monitor.Stop(); err != nil {
+					log.Warnf("Error stopping monitor: %v", err)
+				}
 			}
-		}
-		if c.Bool("snapshotter") {
-			if err := snapshot.Stop(); err != nil {
-				log.Warnf("Error stopping snapshot controllers: %v", err)
+			if c.Bool("snapshotter") {
+				if err := snapshot.Stop(); err != nil {
+					log.Warnf("Error stopping snapshot controllers: %v", err)
+				}
 			}
+			if err := d.Stop(); err != nil {
+				log.Warnf("Error stopping driver: %v", err)
+			}
+			if err := webhook.Stop(); err != nil {
+				log.Warnf("error stopping webhook controller %v", err)
+			}
+
+			stopCh <- struct{}{}
 		}
-		if err := d.Stop(); err != nil {
-			log.Warnf("Error stopping driver: %v", err)
-		}
-		if err := webhook.Stop(); err != nil {
-			log.Warnf("error stopping webhook controller %v", err)
-		}
-		os.Exit(0)
+	}()
+
+	if err := mgr.Start(stopCh); err != nil {
+		log.Fatalf("Controller manager: %v", err)
 	}
+	os.Exit(0)
 }

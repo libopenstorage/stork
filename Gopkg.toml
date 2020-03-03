@@ -9,7 +9,6 @@ required = [
   "k8s.io/kube-openapi/cmd/openapi-gen",
   "k8s.io/gengo/args",
   "k8s.io/gengo/generator",
-  "sigs.k8s.io/controller-tools/pkg/crd/generator",
 ]
 
 [[constraint]]
@@ -65,10 +64,6 @@ required = [
   branch = "master"
 
 [[override]]
-  name = "sigs.k8s.io/controller-tools"
-  revision = "9d55346c2bde73fb3326ac22eac2e5210a730207"
-
-[[override]]
   name = "github.com/coreos/prometheus-operator"
   version = "=v0.29.0"
 
@@ -122,15 +117,15 @@ required = [
 
 [[override]]
   name = "github.com/docker/distribution"
-  revision = "edc3ab29cdff8694dd6feb85cfeb4b5f1b38ed9c"
+  revision = "v2.7.0"
 
 [[override]]
   name = "github.com/docker/docker"
-  revision = "4f3616fb1c112e206b88cb7a9922bf49067a7756"
+  revision = "v19.03.0"
 
 [[override]]
   name = "github.com/russross/blackfriday"
-  revision = "300106c228d52c8941d4b3de6054a6062a86dda3"
+  revision = "v1.5.2"
 
 [[constraint]]
   name = "gocloud.dev"
@@ -150,13 +145,13 @@ required = [
 
 [[override]]
   name = "github.com/libopenstorage/secrets"
-  branch = "sched-ops-fix"
+  branch = "master"
 
 [[override]]
   name = "github.com/openshift/api"
-  revision = "ecbc01928def629f4422dcbcc3362efddfc513ee" # bump to kube 1.16
+  branch = "release-4.4"
 
 [[override]]
   name = "github.com/openshift/client-go"
-  revision = "3b6373338c9bb11fbcf329c25e81ae7e9a1ed8c6" # bump to 1.16
+  branch = "release-4.4"
 
