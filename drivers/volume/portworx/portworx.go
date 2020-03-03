@@ -150,6 +150,9 @@ type cloudSnapStatus struct {
 	status         api.CloudBackupStatusType
 	msg            string
 	cloudSnapID    string
+	bytesTotal     uint64
+	bytesDone      uint64
+	etaSeconds     int64
 }
 
 // snapshot annotation constants
@@ -1713,6 +1716,8 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 		return cloudSnapStatus{
 			sourceVolumeID: csStatus.SrcVolumeID,
 			terminal:       true,
+			bytesTotal:     csStatus.BytesTotal,
+			bytesDone:      csStatus.BytesDone,
 			status:         csStatus.Status,
 			cloudSnapID:    csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s did not succeed.",
@@ -1724,6 +1729,9 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 		return cloudSnapStatus{
 			sourceVolumeID: csStatus.SrcVolumeID,
 			status:         api.CloudBackupStatusActive,
+			bytesTotal:     csStatus.BytesTotal,
+			bytesDone:      csStatus.BytesDone,
+			etaSeconds:     csStatus.EtaSeconds,
 			cloudSnapID:    csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s has started and is active.",
 				op, csStatus.ID, taskID),
@@ -1734,6 +1742,9 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 		return cloudSnapStatus{
 			sourceVolumeID: csStatus.SrcVolumeID,
 			status:         api.CloudBackupStatusNotStarted,
+			bytesTotal:     csStatus.BytesTotal,
+			bytesDone:      csStatus.BytesDone,
+			etaSeconds:     csStatus.EtaSeconds,
 			cloudSnapID:    csStatus.ID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s still not done. status: %s",
 				op, csStatus.ID, taskID, statusStr),
@@ -1744,6 +1755,9 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 		sourceVolumeID: csStatus.SrcVolumeID,
 		terminal:       true,
 		status:         api.CloudBackupStatusDone,
+		bytesTotal:     csStatus.BytesTotal,
+		bytesDone:      csStatus.BytesDone,
+		etaSeconds:     csStatus.EtaSeconds,
 		cloudSnapID:    csStatus.ID,
 		msg:            fmt.Sprintf("cloudsnap %s id: %s for %s done.", op, csStatus.ID, taskID),
 	}
@@ -2521,7 +2535,10 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudBackupOp, taskID)
 		if isCloudsnapStatusActive(csStatus.status) {
 			vInfo.Status = storkapi.ApplicationBackupStatusInProgress
-			vInfo.Reason = "Volume backup in progress"
+			vInfo.Reason = fmt.Sprintf("Volume backup in progress. BytesDone: %v BytesTotal: %v ETA: %v seconds",
+				csStatus.bytesDone,
+				csStatus.bytesTotal,
+				csStatus.etaSeconds)
 		} else if isCloudsnapStatusFailed(csStatus.status) {
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
 			vInfo.Reason = fmt.Sprintf("Backup failed for volume: %v", csStatus.msg)
@@ -2653,7 +2670,10 @@ func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*st
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudRestoreOp, taskID)
 		if isCloudsnapStatusActive(csStatus.status) {
 			vInfo.Status = storkapi.ApplicationRestoreStatusInProgress
-			vInfo.Reason = "Volume restore in progress"
+			vInfo.Reason = fmt.Sprintf("Volume restore in progress. BytesDone: %v BytesTotal: %v ETA: %v seconds",
+				csStatus.bytesDone,
+				csStatus.bytesTotal,
+				csStatus.etaSeconds)
 		} else if isCloudsnapStatusFailed(csStatus.status) {
 			vInfo.Status = storkapi.ApplicationRestoreStatusFailed
 			vInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
