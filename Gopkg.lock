@@ -205,24 +205,24 @@
   version = "v1.1.0"
 
 [[projects]]
-  digest = "1:4189ee6a3844f555124d9d2656fe7af02fca961c2a9bad9074789df13a0c62e0"
+  digest = "1:4ddc17aeaa82cb18c5f0a25d7c253a10682f518f4b2558a82869506eec223d76"
   name = "github.com/docker/distribution"
   packages = [
     "digestset",
     "reference",
   ]
   pruneopts = "UT"
-  revision = "edc3ab29cdff8694dd6feb85cfeb4b5f1b38ed9c"
+  revision = "v2.7.0"
 
 [[projects]]
-  digest = "1:f8ca070c752be41953bab5de47e01c9ad7c4eb61313a350dc8fd52781c68622e"
+  digest = "1:95458523bb918fc3d4111538e92d460e1c5dd8bbc5469f75c754ca5f67c8b81f"
   name = "github.com/docker/docker"
   packages = [
     "pkg/term",
     "pkg/term/windows",
   ]
   pruneopts = "UT"
-  revision = "4f3616fb1c112e206b88cb7a9922bf49067a7756"
+  revision = "v19.03.0"
 
 [[projects]]
   branch = "master"
@@ -317,14 +317,6 @@
   pruneopts = "UT"
   revision = "1d29f06aebd59ccdf11ae04aa0334ded96e2d909"
   version = "v0.18.0"
-
-[[projects]]
-  digest = "1:57ae8919194013fb07b8390fb8a32e700c12fdab96e8dc4bb15d5fe45dc43245"
-  name = "github.com/gobuffalo/envy"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "dc9565002201aca1286f8d6262f5cd568226562a"
-  version = "v1.8.1"
 
 [[projects]]
   digest = "1:b402bb9a24d108a9405a6f34675091b036c8b056aac843bf6ef2389a65c5cf48"
@@ -550,14 +542,6 @@
   revision = "c2b33e84"
 
 [[projects]]
-  digest = "1:ecd9aa82687cf31d1585d4ac61d0ba180e42e8a6182b85bd785fcca8dfeefc1b"
-  name = "github.com/joho/godotenv"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "23d116af351c84513e1946b527c88823e476be13"
-  version = "v1.3.0"
-
-[[projects]]
   digest = "1:3e551bbb3a7c0ab2a2bf4660e7fcad16db089fdcfbb44b0199e62838038623ea"
   name = "github.com/json-iterator/go"
   packages = ["."]
@@ -655,7 +639,7 @@
   revision = "c29b6c67036a9371ab64ee758a686979acd07d12"
 
 [[projects]]
-  branch = "sched-ops-fix"
+  branch = "master"
   digest = "1:f0a54a0fd5337e3295ef575be163d1c14b11eb12042d9bcef126e7e455241f5e"
   name = "github.com/libopenstorage/secrets"
   packages = [
@@ -663,7 +647,7 @@
     "k8s",
   ]
   pruneopts = "UT"
-  revision = "15d90cf0ccfb3bc261c805144af17c500c90593a"
+  revision = "cdb443738c6796ef4f34f203646a7a6bd0e7df05"
 
 [[projects]]
   branch = "master"
@@ -684,14 +668,6 @@
   ]
   pruneopts = "UT"
   revision = "60711f1a8329503b04e1c88535f419d0bb440bff"
-
-[[projects]]
-  digest = "1:3804a3a02964db8e6db3e5e7960ac1c1a9b12835642dd4f4ac4e56c749ec73eb"
-  name = "github.com/markbates/inflect"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "24b83195037b3bc61fcda2d28b7b0518bce293b6"
-  version = "v1.0.4"
 
 [[projects]]
   digest = "1:ff5ebae34cfbf047d505ee150de27e60570e8c394b3b8fdbb720ff6ac71985fc"
@@ -758,16 +734,18 @@
   version = "v1.0.0-rc1"
 
 [[projects]]
-  digest = "1:247a26a79ce85a1e294b6aeb1707df7c29b69f292e621e2390c3cba4af4eeff9"
+  branch = "release-4.4"
+  digest = "1:43306ec4a2e985cc39d7d5ba66770273fb7896b54a28fc6e1c3f4f75db54492f"
   name = "github.com/openshift/api"
   packages = [
     "apps/v1",
     "security/v1",
   ]
   pruneopts = "UT"
-  revision = "ecbc01928def629f4422dcbcc3362efddfc513ee"
+  revision = "c99157bc6492218400b18cde7f66510f9ee56a9a"
 
 [[projects]]
+  branch = "release-4.4"
   digest = "1:ef7b982af72de7600de565100963a3339863c2b5dab171489a6dd7efbf135248"
   name = "github.com/openshift/client-go"
   packages = [
@@ -783,7 +761,7 @@
     "security/clientset/versioned/typed/security/v1/fake",
   ]
   pruneopts = "UT"
-  revision = "3b6373338c9bb11fbcf329c25e81ae7e9a1ed8c6"
+  revision = "92a2713fa240ea8a375a982d60b43ef5119f85ba"
 
 [[projects]]
   digest = "1:e5d0bd87abc2781d14e274807a470acd180f0499f8bf5bb18606e9ec22ad9de9"
@@ -941,31 +919,11 @@
   revision = "316cf8ccfec56d206735d46333ca162eb374da8b"
 
 [[projects]]
-  digest = "1:e09ada96a5a41deda4748b1659cc8953961799e798aea557257b56baee4ecaf3"
-  name = "github.com/rogpeppe/go-internal"
-  packages = [
-    "modfile",
-    "module",
-    "semver",
-  ]
-  pruneopts = "UT"
-  revision = "bc89b17ba21ce5b8a495fa55a94e3fe32ecf4ed8"
-  version = "v1.5.2"
-
-[[projects]]
-  digest = "1:f78dee1142c1e43c9288534cadfa82f21dfd9a1163b06fa0fdf872f8020f2a53"
+  digest = "1:b36a0ede02c4c2aef7df7f91cbbb7bb88a98b5d253509d4f997dda526e50c88c"
   name = "github.com/russross/blackfriday"
   packages = ["."]
   pruneopts = "UT"
-  revision = "300106c228d52c8941d4b3de6054a6062a86dda3"
-
-[[projects]]
-  digest = "1:9421f6e9e28ef86933e824b5caff441366f2b69bb281085b9dca40e1f27a1602"
-  name = "github.com/shurcooL/sanitized_anchor_name"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "7bfe4c7ecddb3666a94b053b422cdd8f5aaa3615"
-  version = "v1.0.0"
+  revision = "v1.5.2"
 
 [[projects]]
   digest = "1:87c2e02fb01c27060ccc5ba7c5a407cc91147726f8f40b70cceeedbc52b1f3a8"
@@ -982,17 +940,6 @@
   packages = ["tools/uuid"]
   pruneopts = "UT"
   revision = "d1c0bb1cbd5ed8438be1385c85c4f494608cde1e"
-
-[[projects]]
-  digest = "1:bb495ec276ab82d3dd08504bbc0594a65de8c3b22c6f2aaa92d05b73fbf3a82e"
-  name = "github.com/spf13/afero"
-  packages = [
-    ".",
-    "mem",
-  ]
-  pruneopts = "UT"
-  revision = "588a75ec4f32903aa5e39a2619ba6a4631e28424"
-  version = "v1.2.2"
 
 [[projects]]
   digest = "1:645cabccbb4fa8aab25a956cbcbdf6a6845ca736b2c64e197ca7cbb9d210b939"
@@ -1981,20 +1928,6 @@
   version = "v0.5.0"
 
 [[projects]]
-  digest = "1:024781b25f1d15e78be60cc44842c092d3cda8d494f6c972e6f35707ac35419a"
-  name = "sigs.k8s.io/controller-tools"
-  packages = [
-    "pkg/crd/generator",
-    "pkg/crd/util",
-    "pkg/internal/codegen",
-    "pkg/internal/codegen/parse",
-    "pkg/internal/general",
-    "pkg/util",
-  ]
-  pruneopts = "UT"
-  revision = "9d55346c2bde73fb3326ac22eac2e5210a730207"
-
-[[projects]]
   digest = "1:cb422c75bab66a8339a38b64e837f3b28f3d5a8c06abd7b9048f420363baa18a"
   name = "sigs.k8s.io/kustomize"
   packages = [
@@ -2203,7 +2136,6 @@
     "sigs.k8s.io/controller-runtime/pkg/manager",
     "sigs.k8s.io/controller-runtime/pkg/reconcile",
     "sigs.k8s.io/controller-runtime/pkg/source",
-    "sigs.k8s.io/controller-tools/pkg/crd/generator",
     "sigs.k8s.io/sig-storage-lib-external-provisioner/controller",
   ]
   solver-name = "gps-cdcl"

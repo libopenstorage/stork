@@ -20,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/kubernetes/pkg/scheduler/api"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -189,7 +189,7 @@ func testLostPod(
 		require.NoError(t, err, "failed to get node for pod")
 		node.Spec.Taints = []v1.Taint{
 			{
-				Key:    api.TaintNodeUnreachable,
+				Key:    schedulerapi.TaintNodeUnreachable,
 				Effect: v1.TaintEffectNoExecute,
 			},
 		}

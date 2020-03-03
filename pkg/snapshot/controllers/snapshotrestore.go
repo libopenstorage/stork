@@ -8,11 +8,9 @@ import (
 
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/log"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
@@ -21,8 +19,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -34,84 +34,113 @@ const (
 	validateSnapshotRetryTimeout = 5 * time.Second
 )
 
+// NewSnapshotRestoreController creates a new instance of SnapshotRestoreController.
+func NewSnapshotRestoreController(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *SnapshotRestoreController {
+	return &SnapshotRestoreController{
+		client:    mgr.GetClient(),
+		volDriver: d,
+		recorder:  r,
+	}
+}
+
 // SnapshotRestoreController controller to watch over In-Place snap restore CRD's
 type SnapshotRestoreController struct {
-	Driver   volume.Driver
-	Recorder record.EventRecorder
+	client runtimeclient.Client
+
+	volDriver volume.Driver
+	recorder  record.EventRecorder
 }
 
 // Init initialize the cluster pair controller
-func (c *SnapshotRestoreController) Init() error {
+func (c *SnapshotRestoreController) Init(mgr manager.Manager) error {
 	err := c.createCRD()
 	if err != nil {
 		return err
 	}
 
-	return controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.VolumeSnapshotRestore{}).Name(),
-		},
-		"",
-		1*time.Minute,
-		c)
+	return controllers.RegisterTo(mgr, "snapshot-restore-controller", c, &stork_api.VolumeSnapshotRestore{})
+}
+
+// Reconcile manages SnapShot resources.
+func (c *SnapshotRestoreController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	logrus.Tracef("Reconciling VolumeSnapshotRestore %s/%s", request.Namespace, request.Name)
+
+	// Fetch the ApplicationBackup instance
+	restore := &stork_api.VolumeSnapshotRestore{}
+	err := c.client.Get(context.TODO(), request.NamespacedName, restore)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return reconcile.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	if !controllers.ContainsFinalizer(restore, controllers.FinalizerCleanup) {
+		controllers.SetFinalizer(restore, controllers.FinalizerCleanup)
+		return reconcile.Result{Requeue: true}, c.client.Update(context.TODO(), restore)
+	}
+
+	if err = c.handle(context.TODO(), restore); err != nil {
+		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(c), restore.Namespace, restore.Name, err)
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
 
 // Handle updates for SnapshotRestore objects
-func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event) error {
-	var (
-		snapRestore *stork_api.VolumeSnapshotRestore
-		err         error
-	)
-
-	switch o := event.Object.(type) {
-	case *stork_api.VolumeSnapshotRestore:
-		snapRestore = o
-		if snapRestore.Spec.SourceName == "" {
-			c.Recorder.Event(snapRestore,
-				v1.EventTypeWarning,
-				string(snapRestore.Spec.SourceName),
-				"Empty Snapshot Name")
-			return fmt.Errorf("empty snapshot name")
-		}
-
-		if event.Deleted {
-			return c.handleDelete(snapRestore)
-		}
-
-		switch snapRestore.Status.Status {
-		case stork_api.VolumeSnapshotRestoreStatusInitial:
-			err = c.handleInitial(snapRestore)
-		case stork_api.VolumeSnapshotRestoreStatusPending,
-			stork_api.VolumeSnapshotRestoreStatusInProgress:
-			err = c.handleStartRestore(snapRestore)
-		case stork_api.VolumeSnapshotRestoreStatusStaged:
-			err = c.handleFinal(snapRestore)
-			if err == nil {
-				c.Recorder.Event(snapRestore,
-					v1.EventTypeNormal,
-					string(snapRestore.Status.Status),
-					"Snapshot in-Place Restore completed")
+func (c *SnapshotRestoreController) handle(ctx context.Context, snapRestore *stork_api.VolumeSnapshotRestore) error {
+	if snapRestore.DeletionTimestamp != nil {
+		if controllers.ContainsFinalizer(snapRestore, controllers.FinalizerCleanup) {
+			if err := c.handleDelete(snapRestore); err != nil {
+				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(c), err)
 			}
-		case stork_api.VolumeSnapshotRestoreStatusFailed:
-			err = c.Driver.CleanupSnapshotRestoreObjects(snapRestore)
-		case stork_api.VolumeSnapshotRestoreStatusSuccessful:
-			return nil
-		default:
-			err = fmt.Errorf("invalid stage for volume snapshot restore: %v", snapRestore.Status.Status)
 		}
+
+		if snapRestore.GetFinalizers() != nil {
+			controllers.RemoveFinalizer(snapRestore, controllers.FinalizerCleanup)
+			return c.client.Update(ctx, snapRestore)
+		}
+
+		return nil
+	}
+
+	var err error
+	switch snapRestore.Status.Status {
+	case stork_api.VolumeSnapshotRestoreStatusInitial:
+		err = c.handleInitial(snapRestore)
+	case stork_api.VolumeSnapshotRestoreStatusPending,
+		stork_api.VolumeSnapshotRestoreStatusInProgress:
+		err = c.handleStartRestore(snapRestore)
+	case stork_api.VolumeSnapshotRestoreStatusStaged:
+		err = c.handleFinal(snapRestore)
+		if err == nil {
+			c.recorder.Event(snapRestore,
+				v1.EventTypeNormal,
+				string(snapRestore.Status.Status),
+				"Snapshot in-Place  Restore completed")
+		}
+	case stork_api.VolumeSnapshotRestoreStatusFailed:
+		err = c.volDriver.CleanupSnapshotRestoreObjects(snapRestore)
+	case stork_api.VolumeSnapshotRestoreStatusSuccessful:
+		return nil
+	default:
+		err = fmt.Errorf("invalid stage for volume snapshot restore: %v", snapRestore.Status.Status)
 	}
 
 	if err != nil {
-		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Error handling event: %v err: %v", event, err.Error())
-		c.Recorder.Event(snapRestore,
+		log.VolumeSnapshotRestoreLog(snapRestore).Errorf("Error handling event: %v err: %v", snapRestore, err.Error())
+		c.recorder.Event(snapRestore,
 			v1.EventTypeWarning,
 			string(stork_api.VolumeSnapshotRestoreStatusFailed),
 			err.Error())
 	}
 
-	err = sdk.Update(snapRestore)
+	err = c.client.Update(context.TODO(), snapRestore)
 	if err != nil {
 		return err
 	}
@@ -186,7 +215,7 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 		return err
 	}
 	// Do driver volume snapshot restore here
-	err = c.Driver.CompleteVolumeSnapshotRestore(snapRestore)
+	err = c.volDriver.CompleteVolumeSnapshotRestore(snapRestore)
 	if err != nil {
 		if err := unmarkPVCForRestore(snapRestore.Status.Volumes); err != nil {
 			log.VolumeSnapshotRestoreLog(snapRestore).Errorf("unable to umark pvc for restore %v", err)
@@ -306,7 +335,7 @@ func (c *SnapshotRestoreController) createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:    stork_api.SnapshotRestoreResourceName,
 		Plural:  stork_api.SnapshotRestoreResourcePlural,
-		Group:   stork.GroupName,
+		Group:   stork_api.SchemeGroupVersion.Group,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.VolumeSnapshotRestore{}).Name(),
@@ -320,18 +349,18 @@ func (c *SnapshotRestoreController) createCRD() error {
 }
 
 func (c *SnapshotRestoreController) handleDelete(snapRestore *stork_api.VolumeSnapshotRestore) error {
-	return c.Driver.CleanupSnapshotRestoreObjects(snapRestore)
+	return c.volDriver.CleanupSnapshotRestoreObjects(snapRestore)
 }
 
 func (c *SnapshotRestoreController) waitForRestoreToReady(
 	snapRestore *stork_api.VolumeSnapshotRestore,
 ) (bool, error) {
 	if snapRestore.Status.Status == stork_api.VolumeSnapshotRestoreStatusPending {
-		err := c.Driver.StartVolumeSnapshotRestore(snapRestore)
+		err := c.volDriver.StartVolumeSnapshotRestore(snapRestore)
 		if err != nil {
 			message := fmt.Sprintf("Error starting snapshot restore for volumes: %v", err)
 			log.VolumeSnapshotRestoreLog(snapRestore).Errorf(message)
-			c.Recorder.Event(snapRestore,
+			c.recorder.Event(snapRestore,
 				v1.EventTypeWarning,
 				string(stork_api.VolumeSnapshotRestoreStatusFailed),
 				message)
@@ -339,7 +368,7 @@ func (c *SnapshotRestoreController) waitForRestoreToReady(
 		}
 
 		snapRestore.Status.Status = stork_api.VolumeSnapshotRestoreStatusInProgress
-		err = sdk.Update(snapRestore)
+		err = c.client.Update(context.TODO(), snapRestore)
 		if err != nil {
 			return false, err
 		}
@@ -349,7 +378,7 @@ func (c *SnapshotRestoreController) waitForRestoreToReady(
 	continueProcessing := false
 	// Skip checking status if no volumes are being restored
 	if len(snapRestore.Status.Volumes) != 0 {
-		err := c.Driver.GetVolumeSnapshotRestoreStatus(snapRestore)
+		err := c.volDriver.GetVolumeSnapshotRestoreStatus(snapRestore)
 		if err != nil {
 			return continueProcessing, err
 		}
@@ -360,13 +389,13 @@ func (c *SnapshotRestoreController) waitForRestoreToReady(
 				log.VolumeSnapshotRestoreLog(snapRestore).Infof("Volume restore for volume %v is in %v state", vInfo.PVC, vInfo.RestoreStatus)
 				continueProcessing = true
 			} else if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusFailed {
-				c.Recorder.Event(snapRestore,
+				c.recorder.Event(snapRestore,
 					v1.EventTypeWarning,
 					string(vInfo.RestoreStatus),
 					fmt.Sprintf("Error restoring volume %v: %v", vInfo.PVC, vInfo.Reason))
 				return false, fmt.Errorf("restore failed for volume: %v", vInfo.PVC)
 			} else if vInfo.RestoreStatus == stork_api.VolumeSnapshotRestoreStatusSuccessful {
-				c.Recorder.Event(snapRestore,
+				c.recorder.Event(snapRestore,
 					v1.EventTypeNormal,
 					string(vInfo.RestoreStatus),
 					fmt.Sprintf("Volume %v restored successfully", vInfo.PVC))

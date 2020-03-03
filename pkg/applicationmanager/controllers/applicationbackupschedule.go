@@ -7,20 +7,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/schedule"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -35,92 +36,117 @@ const (
 	ApplicationBackupSchedulePolicyTypeAnnotation = annotationPrefix + "applicationBackupSchedulePolicyType"
 )
 
+// NewApplicationBackupSchedule creates a new instance of ApplicationBackupScheduleController.
+func NewApplicationBackupSchedule(mgr manager.Manager, r record.EventRecorder) *ApplicationBackupScheduleController {
+	return &ApplicationBackupScheduleController{
+		client:   mgr.GetClient(),
+		recorder: r,
+	}
+}
+
 // ApplicationBackupScheduleController reconciles ApplicationBackupSchedule objects
 type ApplicationBackupScheduleController struct {
-	Recorder record.EventRecorder
+	client runtimeclient.Client
+
+	recorder record.EventRecorder
 }
 
 // Init Initialize the backup schedule controller
-func (s *ApplicationBackupScheduleController) Init() error {
+func (s *ApplicationBackupScheduleController) Init(mgr manager.Manager) error {
 	err := s.createCRD()
 	if err != nil {
 		return err
 	}
-	return controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.ApplicationBackupSchedule{}).Name(),
-		},
-		"",
-		1*time.Minute,
-		s)
+
+	return controllers.RegisterTo(mgr, "application-backup-schedule-controller", s, &stork_api.ApplicationBackupSchedule{})
+}
+
+// Reconcile updates for ApplicationBackupSchedule objects.
+func (s *ApplicationBackupScheduleController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	logrus.Tracef("Reconciling ApplicationBackupSchedule %s/%s", request.Namespace, request.Name)
+
+	// Fetch the ApplicationBackup instance
+	backup := &stork_api.ApplicationBackupSchedule{}
+	err := s.client.Get(context.TODO(), request.NamespacedName, backup)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return reconcile.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	if err = s.handle(context.TODO(), backup); err != nil {
+		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(s), backup.Namespace, backup.Name, err)
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
 
 // Handle updates for ApplicationBackupSchedule objects
-func (s *ApplicationBackupScheduleController) Handle(ctx context.Context, event sdk.Event) error {
-	switch o := event.Object.(type) {
-	case *stork_api.ApplicationBackupSchedule:
-		backupSchedule := o
-		// Nothing to do for delete
-		if event.Deleted {
-			return nil
-		}
+func (s *ApplicationBackupScheduleController) handle(ctx context.Context, backupSchedule *stork_api.ApplicationBackupSchedule) error {
+	if backupSchedule.DeletionTimestamp != nil {
+		return nil
+	}
 
-		s.setDefaults(backupSchedule)
-		// First update the status of any pending backups
-		err := s.updateApplicationBackupStatus(backupSchedule)
+	s.setDefaults(backupSchedule)
+	// First update the status of any pending backups
+	err := s.updateApplicationBackupStatus(backupSchedule)
+	if err != nil {
+		msg := fmt.Sprintf("Error updating backup status: %v", err)
+		s.recorder.Event(backupSchedule,
+			v1.EventTypeWarning,
+			string(stork_api.ApplicationBackupStatusFailed),
+			msg)
+		log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
+		return err
+	}
+
+	if backupSchedule.Spec.Suspend == nil || !*backupSchedule.Spec.Suspend {
+		// Then check if any of the policies require a trigger
+		policyType, start, err := s.shouldStartApplicationBackup(backupSchedule)
 		if err != nil {
-			msg := fmt.Sprintf("Error updating backup status: %v", err)
-			s.Recorder.Event(backupSchedule,
+			msg := fmt.Sprintf("Error checking if backup should be triggered: %v", err)
+			s.recorder.Event(backupSchedule,
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationBackupStatusFailed),
 				msg)
 			log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
-			return err
+			return nil
 		}
 
-		if backupSchedule.Spec.Suspend == nil || !*backupSchedule.Spec.Suspend {
-			// Then check if any of the policies require a trigger
-			policyType, start, err := s.shouldStartApplicationBackup(backupSchedule)
+		// Start a backup for a policy if required
+		if start {
+			err := s.startApplicationBackup(backupSchedule, policyType)
 			if err != nil {
-				msg := fmt.Sprintf("Error checking if backup should be triggered: %v", err)
-				s.Recorder.Event(backupSchedule,
+				msg := fmt.Sprintf("Error triggering backup for schedule(%v): %v", policyType, err)
+				s.recorder.Event(backupSchedule,
 					v1.EventTypeWarning,
 					string(stork_api.ApplicationBackupStatusFailed),
 					msg)
 				log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
-				return nil
+				return err
 			}
-
-			// Start a backup for a policy if required
-			if start {
-				err := s.startApplicationBackup(backupSchedule, policyType)
-				if err != nil {
-					msg := fmt.Sprintf("Error triggering backup for schedule(%v): %v", policyType, err)
-					s.Recorder.Event(backupSchedule,
-						v1.EventTypeWarning,
-						string(stork_api.ApplicationBackupStatusFailed),
-						msg)
-					log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
-					return err
-				}
-			}
-		}
-
-		// Finally, prune any old backups that were triggered for this
-		// schedule
-		err = s.pruneApplicationBackups(backupSchedule)
-		if err != nil {
-			msg := fmt.Sprintf("Error pruning old backups: %v", err)
-			s.Recorder.Event(backupSchedule,
-				v1.EventTypeWarning,
-				string(stork_api.ApplicationBackupStatusFailed),
-				msg)
-			log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
-			return nil
 		}
 	}
+
+	// Finally, prune any old backups that were triggered for this
+	// schedule
+	err = s.pruneApplicationBackups(backupSchedule)
+	if err != nil {
+		msg := fmt.Sprintf("Error pruning old backups: %v", err)
+		s.recorder.Event(backupSchedule,
+			v1.EventTypeWarning,
+			string(stork_api.ApplicationBackupStatusFailed),
+			msg)
+		log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
+		return err
+	}
+
 	return nil
 }
 
@@ -147,7 +173,7 @@ func (s *ApplicationBackupScheduleController) updateApplicationBackupStatus(back
 			if !s.isApplicationBackupComplete(backup.Status) {
 				pendingApplicationBackupStatus, err := getApplicationBackupStatus(backup.Name, backupSchedule.Namespace)
 				if err != nil {
-					s.Recorder.Event(backupSchedule,
+					s.recorder.Event(backupSchedule,
 						v1.EventTypeWarning,
 						string(stork_api.ApplicationBackupStatusFailed),
 						fmt.Sprintf("Error getting status of backup %v: %v", backup.Name, err))
@@ -165,12 +191,12 @@ func (s *ApplicationBackupScheduleController) updateApplicationBackupStatus(back
 				if s.isApplicationBackupComplete(backup.Status) {
 					backup.FinishTimestamp = meta.NewTime(schedule.GetCurrentTime())
 					if pendingApplicationBackupStatus == stork_api.ApplicationBackupStatusSuccessful {
-						s.Recorder.Event(backupSchedule,
+						s.recorder.Event(backupSchedule,
 							v1.EventTypeNormal,
 							string(stork_api.ApplicationBackupStatusSuccessful),
 							fmt.Sprintf("Scheduled backup (%v) completed successfully", backup.Name))
 					} else {
-						s.Recorder.Event(backupSchedule,
+						s.recorder.Event(backupSchedule,
 							v1.EventTypeWarning,
 							string(stork_api.ApplicationBackupStatusFailed),
 							fmt.Sprintf("Scheduled backup (%v) failed", backup.Name))
@@ -181,7 +207,7 @@ func (s *ApplicationBackupScheduleController) updateApplicationBackupStatus(back
 		}
 	}
 	if updated {
-		err := sdk.Update(backupSchedule)
+		err := s.client.Update(context.TODO(), backupSchedule)
 		if err != nil {
 			return err
 		}
@@ -251,7 +277,7 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 			CreationTimestamp: meta.NewTime(schedule.GetCurrentTime()),
 			Status:            stork_api.ApplicationBackupStatusPending,
 		})
-	err := sdk.Update(backupSchedule)
+	err := s.client.Update(context.TODO(), backupSchedule)
 	if err != nil {
 		return err
 	}
@@ -329,14 +355,14 @@ func (s *ApplicationBackupScheduleController) pruneApplicationBackups(backupSche
 			backupSchedule.Status.Items[policyType] = append(failedDeletes, backupSchedule.Status.Items[policyType]...)
 		}
 	}
-	return sdk.Update(backupSchedule)
+	return s.client.Update(context.TODO(), backupSchedule)
 }
 
 func (s *ApplicationBackupScheduleController) createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:    stork_api.ApplicationBackupScheduleResourceName,
 		Plural:  stork_api.ApplicationBackupScheduleResourcePlural,
-		Group:   stork.GroupName,
+		Group:   stork_api.SchemeGroupVersion.Group,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationBackupSchedule{}).Name(),

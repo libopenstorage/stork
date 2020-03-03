@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
@@ -18,7 +17,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
-	"github.com/portworx/sched-ops/k8s/errors"
+	errors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	v1 "k8s.io/api/core/v1"
@@ -96,7 +95,7 @@ func Init() error {
 	storkRuleResource := apiextensions.CustomResource{
 		Name:    "rule",
 		Plural:  "rules",
-		Group:   stork.GroupName,
+		Group:   stork_api.SchemeGroupVersion.Group,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.Rule{}).Name(),

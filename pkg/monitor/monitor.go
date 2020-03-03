@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/kubernetes/pkg/scheduler/api"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -111,7 +111,7 @@ func (m *Monitor) podMonitor() error {
 
 			// Check if node has eviction taint
 			for _, taint := range n.Spec.Taints {
-				if taint.Key == api.TaintNodeUnreachable &&
+				if taint.Key == schedulerapi.TaintNodeUnreachable &&
 					taint.Effect == v1.TaintEffectNoExecute {
 					podUnknownState = true
 					break

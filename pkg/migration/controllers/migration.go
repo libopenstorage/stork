@@ -10,13 +10,11 @@ import (
 
 	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -28,15 +26,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
-	resyncPeriod = 30 * time.Second
 	// StorkMigrationReplicasAnnotation is the annotation used to keep track of
 	// the number of replicas for an application when it was migrated
 	StorkMigrationReplicasAnnotation = "stork.libopenstorage.org/migrationReplicas"
@@ -52,16 +51,28 @@ const (
 	maxApplyRetries = 10
 )
 
+// NewMigration creates a new instance of MigrationController.
+func NewMigration(mgr manager.Manager, d volume.Driver, r record.EventRecorder, rc resourcecollector.ResourceCollector) *MigrationController {
+	return &MigrationController{
+		client:            mgr.GetClient(),
+		volDriver:         d,
+		recorder:          r,
+		resourceCollector: rc,
+	}
+}
+
 // MigrationController reconciles migration objects
 type MigrationController struct {
-	Driver                  volume.Driver
-	Recorder                record.EventRecorder
-	ResourceCollector       resourcecollector.ResourceCollector
+	client runtimeclient.Client
+
+	volDriver               volume.Driver
+	recorder                record.EventRecorder
+	resourceCollector       resourcecollector.ResourceCollector
 	migrationAdminNamespace string
 }
 
 // Init Initialize the migration controller
-func (m *MigrationController) Init(migrationAdminNamespace string) error {
+func (m *MigrationController) Init(mgr manager.Manager, migrationAdminNamespace string) error {
 	err := m.createCRD()
 	if err != nil {
 		return err
@@ -73,15 +84,38 @@ func (m *MigrationController) Init(migrationAdminNamespace string) error {
 		return err
 	}
 
-	return controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.Migration{}).Name(),
-		},
-		"",
-		resyncPeriod,
-		m)
+	return controllers.RegisterTo(mgr, "migration-controller", m, &stork_api.Migration{})
+}
+
+// Reconcile manages Migration resources.
+func (m *MigrationController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	logrus.Tracef("Reconciling Migration %s/%s", request.Namespace, request.Name)
+
+	// Fetch the ApplicationBackup instance
+	migration := &stork_api.Migration{}
+	err := m.client.Get(context.TODO(), request.NamespacedName, migration)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return reconcile.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	if !controllers.ContainsFinalizer(migration, controllers.FinalizerCleanup) {
+		controllers.SetFinalizer(migration, controllers.FinalizerCleanup)
+		return reconcile.Result{Requeue: true}, m.client.Update(context.TODO(), migration)
+	}
+
+	if err = m.handle(context.TODO(), migration); err != nil {
+		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(m), migration.Namespace, migration.Name, err)
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
 
 func setKind(snap *stork_api.Migration) {
@@ -133,175 +167,180 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 	return spec
 }
 
-// Handle updates for Migration objects
-func (m *MigrationController) Handle(ctx context.Context, event sdk.Event) error {
-	switch o := event.Object.(type) {
-	case *stork_api.Migration:
-		migration := o
-		if event.Deleted {
-			if migration.Status.Stage != stork_api.MigrationStageFinal {
-				return m.Driver.CancelMigration(migration)
+func (m *MigrationController) handle(ctx context.Context, migration *stork_api.Migration) error {
+	if migration.DeletionTimestamp != nil {
+		if controllers.ContainsFinalizer(migration, controllers.FinalizerCleanup) {
+			if err := m.cleanup(migration); err != nil {
+				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(m), err)
 			}
-			return nil
-		}
-		migration.Spec = setDefaults(migration.Spec)
-
-		if migration.Spec.ClusterPair == "" {
-			err := fmt.Errorf("clusterPair to migrate to cannot be empty")
-			log.MigrationLog(migration).Errorf(err.Error())
-			m.Recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				err.Error())
-			return nil
 		}
 
-		// Check whether namespace is allowed to be migrated before each stage
-		// Restrict migration to only the namespace that the object belongs
-		// except for the namespace designated by the admin
-		if !m.namespaceMigrationAllowed(migration) {
-			err := fmt.Errorf("Spec.Namespaces should only contain the current namespace")
-			log.MigrationLog(migration).Errorf(err.Error())
-			m.Recorder.Event(migration,
-				v1.EventTypeWarning,
-				string(stork_api.MigrationStatusFailed),
-				err.Error())
-			return nil
+		if migration.GetFinalizers() != nil {
+			controllers.RemoveFinalizer(migration, controllers.FinalizerCleanup)
+			return m.client.Update(ctx, migration)
 		}
 
-		var terminationChannels []chan bool
-		var err error
-		var clusterDomains *stork_api.ClusterDomains
-		for i := 0; i < domainsMaxRetries; i++ {
-			clusterDomains, err = m.Driver.GetClusterDomains()
-			if err == nil {
-				break
-			}
-			time.Sleep(domainsRetryInterval)
-		}
-		// Fail the migration if the current domain is inactive
-		// Ignore errors
+		return nil
+	}
+
+	migration.Spec = setDefaults(migration.Spec)
+
+	if migration.Spec.ClusterPair == "" {
+		err := fmt.Errorf("clusterPair to migrate to cannot be empty")
+		log.MigrationLog(migration).Errorf(err.Error())
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			err.Error())
+		return nil
+	}
+
+	// Check whether namespace is allowed to be migrated before each stage
+	// Restrict migration to only the namespace that the object belongs
+	// except for the namespace designated by the admin
+	if !m.namespaceMigrationAllowed(migration) {
+		err := fmt.Errorf("Spec.Namespaces should only contain the current namespace")
+		log.MigrationLog(migration).Errorf(err.Error())
+		m.recorder.Event(migration,
+			v1.EventTypeWarning,
+			string(stork_api.MigrationStatusFailed),
+			err.Error())
+		return nil
+	}
+
+	var terminationChannels []chan bool
+	var err error
+	var clusterDomains *stork_api.ClusterDomains
+	for i := 0; i < domainsMaxRetries; i++ {
+		clusterDomains, err = m.volDriver.GetClusterDomains()
 		if err == nil {
-			for _, domainInfo := range clusterDomains.ClusterDomainInfos {
-				if domainInfo.Name == clusterDomains.LocalDomain &&
-					domainInfo.State == stork_api.ClusterDomainInactive {
-					migration.Status.Status = stork_api.MigrationStatusFailed
-					migration.Status.Stage = stork_api.MigrationStageFinal
-					migration.Status.FinishTimestamp = metav1.Now()
-					msg := "Failing migration since local clusterdomain is inactive"
-					m.Recorder.Event(migration,
-						v1.EventTypeWarning,
-						string(stork_api.MigrationStatusFailed),
-						msg)
-					log.MigrationLog(migration).Warn(msg)
-					return sdk.Update(migration)
-				}
-			}
+			break
 		}
-
-		switch migration.Status.Stage {
-		case stork_api.MigrationStageInitial:
-			// Make sure the namespaces exist
-			for _, ns := range migration.Spec.Namespaces {
-				_, err := core.Instance().GetNamespace(ns)
-				if err != nil {
-					migration.Status.Status = stork_api.MigrationStatusFailed
-					migration.Status.Stage = stork_api.MigrationStageFinal
-					migration.Status.FinishTimestamp = metav1.Now()
-					err = fmt.Errorf("error getting namespace %v: %v", ns, err)
-					log.MigrationLog(migration).Errorf(err.Error())
-					m.Recorder.Event(migration,
-						v1.EventTypeWarning,
-						string(stork_api.MigrationStatusFailed),
-						err.Error())
-					err = sdk.Update(migration)
-					if err != nil {
-						log.MigrationLog(migration).Errorf("Error updating")
-					}
-					return nil
-				}
-			}
-			// Make sure the rules exist if configured
-			if migration.Spec.PreExecRule != "" {
-				_, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, migration.Namespace)
-				if err != nil {
-					message := fmt.Sprintf("Error getting PreExecRule %v: %v", migration.Spec.PreExecRule, err)
-					log.MigrationLog(migration).Errorf(message)
-					m.Recorder.Event(migration,
-						v1.EventTypeWarning,
-						string(stork_api.MigrationStatusFailed),
-						message)
-					return nil
-				}
-			}
-			if migration.Spec.PostExecRule != "" {
-				_, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, migration.Namespace)
-				if err != nil {
-					message := fmt.Sprintf("Error getting PostExecRule %v: %v", migration.Spec.PreExecRule, err)
-					log.MigrationLog(migration).Errorf(message)
-					m.Recorder.Event(migration,
-						v1.EventTypeWarning,
-						string(stork_api.MigrationStatusFailed),
-						message)
-					return nil
-				}
-			}
-			fallthrough
-		case stork_api.MigrationStagePreExecRule:
-			terminationChannels, err = m.runPreExecRule(migration)
-			if err != nil {
-				message := fmt.Sprintf("Error running PreExecRule: %v", err)
-				log.MigrationLog(migration).Errorf(message)
-				m.Recorder.Event(migration,
+		time.Sleep(domainsRetryInterval)
+	}
+	// Fail the migration if the current domain is inactive
+	// Ignore errors
+	if err == nil {
+		for _, domainInfo := range clusterDomains.ClusterDomainInfos {
+			if domainInfo.Name == clusterDomains.LocalDomain &&
+				domainInfo.State == stork_api.ClusterDomainInactive {
+				migration.Status.Status = stork_api.MigrationStatusFailed
+				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.FinishTimestamp = metav1.Now()
+				msg := "Failing migration since local clusterdomain is inactive"
+				m.recorder.Event(migration,
 					v1.EventTypeWarning,
 					string(stork_api.MigrationStatusFailed),
-					message)
-				migration.Status.Stage = stork_api.MigrationStageInitial
-				migration.Status.Status = stork_api.MigrationStatusInitial
-				err := sdk.Update(migration)
-				if err != nil {
-					return err
-				}
-				return nil
+					msg)
+				log.MigrationLog(migration).Warn(msg)
+				return m.client.Update(context.TODO(), migration)
 			}
-			fallthrough
-		case stork_api.MigrationStageVolumes:
-			if *migration.Spec.IncludeVolumes {
-				err := m.migrateVolumes(migration, terminationChannels)
-				if err != nil {
-					message := fmt.Sprintf("Error migrating volumes: %v", err)
-					log.MigrationLog(migration).Errorf(message)
-					m.Recorder.Event(migration,
-						v1.EventTypeWarning,
-						string(stork_api.MigrationStatusFailed),
-						message)
-					return nil
-				}
-			} else {
-				migration.Status.Stage = stork_api.MigrationStageApplications
-				migration.Status.Status = stork_api.MigrationStatusInitial
-				err := sdk.Update(migration)
-				if err != nil {
-					return err
-				}
-			}
-		case stork_api.MigrationStageApplications:
-			err := m.migrateResources(migration)
-			if err != nil {
-				message := fmt.Sprintf("Error migrating resources: %v", err)
-				log.MigrationLog(migration).Errorf(message)
-				m.Recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					message)
-				return nil
-			}
-		case stork_api.MigrationStageFinal:
-			return nil
-		default:
-			log.MigrationLog(migration).Errorf("Invalid stage for migration: %v", migration.Status.Stage)
 		}
 	}
+
+	switch migration.Status.Stage {
+	case stork_api.MigrationStageInitial:
+		// Make sure the namespaces exist
+		for _, ns := range migration.Spec.Namespaces {
+			_, err := core.Instance().GetNamespace(ns)
+			if err != nil {
+				migration.Status.Status = stork_api.MigrationStatusFailed
+				migration.Status.Stage = stork_api.MigrationStageFinal
+				migration.Status.FinishTimestamp = metav1.Now()
+				err = fmt.Errorf("error getting namespace %v: %v", ns, err)
+				log.MigrationLog(migration).Errorf(err.Error())
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					err.Error())
+				err = m.client.Update(context.Background(), migration)
+				if err != nil {
+					log.MigrationLog(migration).Errorf("Error updating")
+				}
+				return nil
+			}
+		}
+		// Make sure the rules exist if configured
+		if migration.Spec.PreExecRule != "" {
+			_, err := storkops.Instance().GetRule(migration.Spec.PreExecRule, migration.Namespace)
+			if err != nil {
+				message := fmt.Sprintf("Error getting PreExecRule %v: %v", migration.Spec.PreExecRule, err)
+				log.MigrationLog(migration).Errorf(message)
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					message)
+				return nil
+			}
+		}
+		if migration.Spec.PostExecRule != "" {
+			_, err := storkops.Instance().GetRule(migration.Spec.PostExecRule, migration.Namespace)
+			if err != nil {
+				message := fmt.Sprintf("Error getting PostExecRule %v: %v", migration.Spec.PreExecRule, err)
+				log.MigrationLog(migration).Errorf(message)
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					message)
+				return nil
+			}
+		}
+		fallthrough
+	case stork_api.MigrationStagePreExecRule:
+		terminationChannels, err = m.runPreExecRule(migration)
+		if err != nil {
+			message := fmt.Sprintf("Error running PreExecRule: %v", err)
+			log.MigrationLog(migration).Errorf(message)
+			m.recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				message)
+			migration.Status.Stage = stork_api.MigrationStageInitial
+			migration.Status.Status = stork_api.MigrationStatusInitial
+			err := m.client.Update(context.Background(), migration)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		fallthrough
+	case stork_api.MigrationStageVolumes:
+		if *migration.Spec.IncludeVolumes {
+			err := m.migrateVolumes(migration, terminationChannels)
+			if err != nil {
+				message := fmt.Sprintf("Error migrating volumes: %v", err)
+				log.MigrationLog(migration).Errorf(message)
+				m.recorder.Event(migration,
+					v1.EventTypeWarning,
+					string(stork_api.MigrationStatusFailed),
+					message)
+				return nil
+			}
+		} else {
+			migration.Status.Stage = stork_api.MigrationStageApplications
+			migration.Status.Status = stork_api.MigrationStatusInitial
+			err := m.client.Update(context.Background(), migration)
+			if err != nil {
+				return err
+			}
+		}
+	case stork_api.MigrationStageApplications:
+		err := m.migrateResources(migration)
+		if err != nil {
+			message := fmt.Sprintf("Error migrating resources: %v", err)
+			log.MigrationLog(migration).Errorf(message)
+			m.recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				message)
+			return nil
+		}
+	case stork_api.MigrationStageFinal:
+		return nil
+	default:
+		log.MigrationLog(migration).Errorf("Invalid stage for migration: %v", migration.Status.Stage)
+	}
+
 	return nil
 }
 
@@ -315,7 +354,7 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 	// use seperate resource collector for collecting resources
 	// from destination cluster
 	rc := resourcecollector.ResourceCollector{
-		Driver: m.Driver,
+		Driver: m.volDriver,
 	}
 	err = rc.Init(remoteConfig)
 	if err != nil {
@@ -324,16 +363,16 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 	}
 	destObjects, err := rc.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, false)
 	if err != nil {
-		m.Recorder.Event(migration,
+		m.recorder.Event(migration,
 			v1.EventTypeWarning,
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error getting resources from destination: %v", err))
 		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
 		return err
 	}
-	srcObjects, err := m.ResourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, false)
+	srcObjects, err := m.resourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, false)
 	if err != nil {
-		m.Recorder.Event(migration,
+		m.recorder.Event(migration,
 			v1.EventTypeWarning,
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error getting resources from source: %v", err))
@@ -349,7 +388,7 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 	if err != nil {
 		return err
 	}
-	err = m.ResourceCollector.DeleteResources(dynamicInterface, toBeDeleted)
+	err = m.resourceCollector.DeleteResources(dynamicInterface, toBeDeleted)
 	if err != nil {
 		return err
 	}
@@ -465,7 +504,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			// gets retriggered in the next cycle
 			if migration.Spec.PreExecRule != "" {
 				migration.Status.Stage = stork_api.MigrationStageInitial
-				err := sdk.Update(migration)
+				err := m.client.Update(context.TODO(), migration)
 				if err != nil {
 					return err
 				}
@@ -474,7 +513,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 				storageStatus, err)
 		}
 
-		volumeInfos, err := m.Driver.StartMigration(migration)
+		volumeInfos, err := m.volDriver.StartMigration(migration)
 		if err != nil {
 			return err
 		}
@@ -483,7 +522,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 		}
 		migration.Status.Volumes = volumeInfos
 		migration.Status.Status = stork_api.MigrationStatusInProgress
-		err = sdk.Update(migration)
+		err = m.client.Update(context.TODO(), migration)
 		if err != nil {
 			return err
 		}
@@ -500,20 +539,20 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			if err != nil {
 				message := fmt.Sprintf("Error running PostExecRule: %v", err)
 				log.MigrationLog(migration).Errorf(message)
-				m.Recorder.Event(migration,
+				m.recorder.Event(migration,
 					v1.EventTypeWarning,
 					string(stork_api.MigrationStatusFailed),
 					message)
 
 				// Cancel the migration and mark it as failed if the postExecRule failed
-				err = m.Driver.CancelMigration(migration)
+				err = m.volDriver.CancelMigration(migration)
 				if err != nil {
 					log.MigrationLog(migration).Errorf("Error cancelling migration: %v", err)
 				}
 				migration.Status.Stage = stork_api.MigrationStageFinal
 				migration.Status.FinishTimestamp = metav1.Now()
 				migration.Status.Status = stork_api.MigrationStatusFailed
-				err = sdk.Update(migration)
+				err = m.client.Update(context.TODO(), migration)
 				if err != nil {
 					return err
 				}
@@ -526,7 +565,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 	// Skip checking status if no volumes are being migrated
 	if len(migration.Status.Volumes) != 0 {
 		// Now check the status
-		volumeInfos, err := m.Driver.GetMigrationStatus(migration)
+		volumeInfos, err := m.volDriver.GetMigrationStatus(migration)
 		if err != nil {
 			return err
 		}
@@ -535,7 +574,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 		}
 		migration.Status.Volumes = volumeInfos
 		// Store the new status
-		err = sdk.Update(migration)
+		err = m.client.Update(context.TODO(), migration)
 		if err != nil {
 			return err
 		}
@@ -547,7 +586,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 				log.MigrationLog(migration).Infof("Volume migration still in progress: %v", vInfo.Volume)
 				inProgress = true
 			} else if vInfo.Status == stork_api.MigrationStatusFailed {
-				m.Recorder.Event(migration,
+				m.recorder.Event(migration,
 					v1.EventTypeWarning,
 					string(vInfo.Status),
 					fmt.Sprintf("Error migrating volume %v: %v", vInfo.Volume, vInfo.Reason))
@@ -555,7 +594,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 				migration.Status.FinishTimestamp = metav1.Now()
 				migration.Status.Status = stork_api.MigrationStatusFailed
 			} else if vInfo.Status == stork_api.MigrationStatusSuccessful {
-				m.Recorder.Event(migration,
+				m.recorder.Event(migration,
 					v1.EventTypeNormal,
 					string(vInfo.Status),
 					fmt.Sprintf("Volume %v migrated successfully", vInfo.Volume))
@@ -575,7 +614,7 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			migration.Status.Status = stork_api.MigrationStatusInProgress
 			// Update the current state and then move on to migrating
 			// resources
-			err := sdk.Update(migration)
+			err := m.client.Update(context.TODO(), migration)
 			if err != nil {
 				return err
 			}
@@ -591,14 +630,14 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 		}
 	}
 
-	return sdk.Update(migration)
+	return m.client.Update(context.TODO(), migration)
 }
 
 func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]chan bool, error) {
 	if migration.Spec.PreExecRule == "" {
 		migration.Status.Stage = stork_api.MigrationStageVolumes
 		migration.Status.Status = stork_api.MigrationStatusPending
-		err := sdk.Update(migration)
+		err := m.client.Update(context.TODO(), migration)
 		if err != nil {
 			return nil, err
 		}
@@ -611,12 +650,12 @@ func (m *MigrationController) runPreExecRule(migration *stork_api.Migration) ([]
 	if migration.Status.Stage == stork_api.MigrationStagePreExecRule {
 		if migration.Status.Status == stork_api.MigrationStatusPending {
 			migration.Status.Status = stork_api.MigrationStatusInProgress
-			err := sdk.Update(migration)
+			err := m.client.Update(context.TODO(), migration)
 			if err != nil {
 				return nil, err
 			}
 		} else if migration.Status.Status == stork_api.MigrationStatusInProgress {
-			m.Recorder.Event(migration,
+			m.recorder.Event(migration,
 				v1.EventTypeNormal,
 				string(stork_api.MigrationStatusInProgress),
 				fmt.Sprintf("Waiting for PreExecRule %v", migration.Spec.PreExecRule))
@@ -682,9 +721,9 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		}
 	}
 
-	allObjects, err := m.ResourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, false)
+	allObjects, err := m.resourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, false)
 	if err != nil {
-		m.Recorder.Event(migration,
+		m.recorder.Event(migration,
 			v1.EventTypeWarning,
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error getting resource: %v", err))
@@ -717,14 +756,14 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		resourceInfos = append(resourceInfos, resourceInfo)
 	}
 	migration.Status.Resources = resourceInfos
-	err = sdk.Update(migration)
+	err = m.client.Update(context.TODO(), migration)
 	if err != nil {
 		return err
 	}
 
 	err = m.prepareResources(migration, allObjects)
 	if err != nil {
-		m.Recorder.Event(migration,
+		m.recorder.Event(migration,
 			v1.EventTypeWarning,
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error preparing resource: %v", err))
@@ -733,7 +772,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	}
 	err = m.applyResources(migration, allObjects)
 	if err != nil {
-		m.Recorder.Event(migration,
+		m.recorder.Event(migration,
 			v1.EventTypeWarning,
 			string(stork_api.MigrationStatusFailed),
 			fmt.Sprintf("Error applying resource: %v", err))
@@ -754,7 +793,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		if err := m.purgeMigratedResources(migration); err != nil {
 			message := fmt.Sprintf("Error cleaning up resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
-			m.Recorder.Event(migration,
+			m.recorder.Event(migration,
 				v1.EventTypeWarning,
 				string(stork_api.MigrationStatusPartialSuccess),
 				message)
@@ -762,7 +801,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		}
 	}
 
-	err = sdk.Update(migration)
+	err = m.client.Update(context.TODO(), migration)
 	if err != nil {
 		return err
 	}
@@ -823,7 +862,7 @@ func (m *MigrationController) updateResourceStatus(
 				resource.Namespace,
 				resource.Name,
 				reason)
-			m.Recorder.Event(migration, eventType, string(status), eventMessage)
+			m.recorder.Event(migration, eventType, string(status), eventMessage)
 			return
 		}
 	}
@@ -913,7 +952,7 @@ func (m *MigrationController) preparePVResource(
 		pv.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
 	}
 
-	_, err := m.Driver.UpdateMigratedPersistentVolumeSpec(&pv)
+	_, err := m.volDriver.UpdateMigratedPersistentVolumeSpec(&pv)
 	if err != nil {
 		return err
 	}
@@ -1109,11 +1148,18 @@ func (m *MigrationController) applyResources(
 	return nil
 }
 
+func (m *MigrationController) cleanup(migration *stork_api.Migration) error {
+	if migration.Status.Stage != stork_api.MigrationStageFinal {
+		return m.volDriver.CancelMigration(migration)
+	}
+	return nil
+}
+
 func (m *MigrationController) createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:    stork_api.MigrationResourceName,
 		Plural:  stork_api.MigrationResourcePlural,
-		Group:   stork.GroupName,
+		Group:   stork_api.SchemeGroupVersion.Group,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.Migration{}).Name(),
