@@ -1,12 +1,3 @@
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: px-high-sc
-provisioner: kubernetes.io/portworx-volume
-parameters:
-  repl: "2"
-  priority_io: "high"
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -101,7 +92,7 @@ spec:
   - metadata:
       name: cassandra-data
       annotations:
-        volume.beta.kubernetes.io/storage-class: px-high-sc
+        volume.beta.kubernetes.io/storage-class: mysql-sc
     spec:
       accessModes: [ "ReadWriteOnce" ]
       resources:

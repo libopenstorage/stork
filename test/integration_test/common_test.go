@@ -13,6 +13,7 @@ import (
 	"time"
 
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
+	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
@@ -29,6 +30,9 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
+	_ "github.com/portworx/torpedo/drivers/volume/aws"
+	_ "github.com/portworx/torpedo/drivers/volume/azure"
+	_ "github.com/portworx/torpedo/drivers/volume/gce"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -50,6 +54,7 @@ const (
 	pairFileName          = pairFilePath + "/cluster-pair.yaml"
 	remoteFilePath        = "/tmp/kubeconfig"
 	configMapSyncWaitTime = 3 * time.Second
+	defaultSchedulerName  = "default-scheduler"
 
 	nodeScore   = 100
 	rackScore   = 50
@@ -77,6 +82,7 @@ var backupScaleCount int
 var authToken string
 var authTokenConfigMap string
 var volumeDriverName string
+var schedulerName string
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -90,6 +96,7 @@ func setup() error {
 	var err error
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
+	provisioner := os.Getenv(storageProvisioner)
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
 		return fmt.Errorf("Error getting stork driver %s: %v", volumeDriverName, err)
 	}
@@ -114,7 +121,6 @@ func setup() error {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
-	provisioner := os.Getenv(storageProvisioner)
 	authTokenConfigMap = os.Getenv(authSecretConfigMap)
 	if authTokenConfigMap != "" {
 		if authToken, err = schedulerDriver.GetTokenFromConfigMap(authTokenConfigMap); err != nil {
@@ -124,11 +130,16 @@ func setup() error {
 
 	}
 	logrus.Infof("Using provisioner: %s", provisioner)
-	if err = schedulerDriver.Init(scheduler.InitOptions{
-		SpecDir:             "specs",
+	var customAppConfig map[string]scheduler.AppConfig
+	// For non-PX backups use default-scheduler in apps instead of stork
+	if provisioner != "pxd" {
+		schedulerName = defaultSchedulerName
+	}
+	if err = schedulerDriver.Init(scheduler.InitOptions{SpecDir: "specs",
 		VolDriverName:       volumeDriverName,
 		NodeDriverName:      nodeDriverName,
 		SecretConfigMapName: authTokenConfigMap,
+		CustomAppConfig:     customAppConfig,
 	}); err != nil {
 		return fmt.Errorf("Error initializing scheduler driver %v: %v", schedulerDriverName, err)
 	}
@@ -136,6 +147,7 @@ func setup() error {
 	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, authToken, provisioner); err != nil {
 		return fmt.Errorf("Error initializing volume driver %v: %v", volumeDriverName, err)
 	}
+
 	return nil
 }
 
@@ -170,6 +182,10 @@ func getVolumeNames(t *testing.T, ctx *scheduler.Context) []string {
 }
 
 func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
+	if schedulerName == defaultSchedulerName {
+		return
+	}
+
 	driverNodes, err := storkVolumeDriver.GetNodes()
 	require.NoError(t, err, "Error getting nodes from stork driver")
 
@@ -484,7 +500,7 @@ func setMockTime(t *time.Time) error {
 func createApp(t *testing.T, testID string) *scheduler.Context {
 
 	ctxs, err := schedulerDriver.Schedule(testID,
-		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
+		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}, Scheduler: schedulerName})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 

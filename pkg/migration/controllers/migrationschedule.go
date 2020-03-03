@@ -63,6 +63,7 @@ func (m *MigrationScheduleController) Handle(ctx context.Context, event sdk.Even
 			return m.deleteMigrations(migrationSchedule)
 		}
 
+		migrationSchedule.Spec.Template.Spec = setDefaults(migrationSchedule.Spec.Template.Spec)
 		// First update the status of any pending migrations
 		err := m.updateMigrationStatus(migrationSchedule)
 		if err != nil {

@@ -32,21 +32,13 @@ metadata:
    labels:
      app: mysql 
    annotations:
-     volume.beta.kubernetes.io/storage-class: px-mysql-sc
+     volume.beta.kubernetes.io/storage-class: mysql-sc
 spec:
    accessModes:
      - ReadWriteOnce
    resources:
      requests:
        storage: 2Gi
----
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-    name: px-mysql-sc
-provisioner: kubernetes.io/portworx-volume
-parameters:
-   repl: "2"
 ---
 apiVersion: apps/v1
 kind: Deployment

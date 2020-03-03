@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -103,7 +104,8 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"IBPCA",
 		"IBPConsole",
 		"IBPPeer",
-		"IBPOrderer":
+		"IBPOrderer",
+		"CronJob":
 		return true
 	default:
 		return false
@@ -201,6 +203,17 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 	return allObjects, nil
 }
 
+// SkipResource returns whether the annotations of the object require it to be
+// skipped
+func SkipResource(annotations map[string]string) bool {
+	if value, present := annotations[skipResourceAnnotation]; present {
+		if skip, err := strconv.ParseBool(value); err == nil && skip {
+			return true
+		}
+	}
+	return false
+}
+
 // Returns whether an object should be collected or not for the requested
 // namespace
 func (r *ResourceCollector) objectToBeCollected(
@@ -216,10 +229,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return false, err
 	}
 
-	if value, present := metadata.GetAnnotations()[skipResourceAnnotation]; present {
-		if skip, err := strconv.ParseBool(value); err == nil && skip {
-			return false, err
-		}
+	if SkipResource(metadata.GetAnnotations()) {
+		return false, err
 	}
 
 	// Skip if we've already processed this object
@@ -526,7 +537,7 @@ func (r *ResourceCollector) getDynamicClient(
 		return nil, err
 	}
 	resource := &metav1.APIResource{
-		Name:       strings.ToLower(objectType.GetKind()) + "s",
+		Name:       inflect.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,
 	}
 
