@@ -3,9 +3,11 @@ package portworx
 import (
 	"context"
 	"fmt"
+	"time"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -202,6 +204,37 @@ func (p *portworx) InspectBackup(req *api.BackupInspectRequest) (*api.BackupInsp
 
 func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
 	return p.backupManager.Delete(context.Background(), req)
+}
+
+// WaitForBackupCompletion waits for backup to complete successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func (p *portworx) WaitForBackupCompletion(req *api.BackupInspectRequest,
+	timeout time.Duration, timeBeforeRetry time.Duration) error {
+	f := func() (interface{}, bool, error) {
+		inspectBkpResp, err := p.backupManager.Inspect(context.Background(), req)
+		if err != nil {
+			// Error occured, just retry
+			return nil, true, err
+		}
+
+		// Check if backup status is complete
+		currentStatus := inspectBkpResp.GetBackup().GetStatus().GetStatus()
+		if currentStatus == api.BackupInfo_StatusInfo_Success {
+			// If backup is complete, dont retry again
+			return nil, false, nil
+		}
+		return nil,
+			true,
+			fmt.Errorf("backup [%v] is in [%s] state. Waiting to become Complete",
+				req.GetName(), currentStatus)
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (p *portworx) CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {
