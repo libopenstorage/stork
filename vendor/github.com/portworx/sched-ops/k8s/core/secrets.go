@@ -27,7 +27,7 @@ func (c *Client) GetSecret(name string, namespace string) (*corev1.Secret, error
 		return nil, err
 	}
 
-	return c.core.Secrets(namespace).Get(name, metav1.GetOptions{})
+	return c.kubernetes.CoreV1().Secrets(namespace).Get(name, metav1.GetOptions{})
 }
 
 // CreateSecret creates the given secret
@@ -36,7 +36,7 @@ func (c *Client) CreateSecret(secret *corev1.Secret) (*corev1.Secret, error) {
 		return nil, err
 	}
 
-	return c.core.Secrets(secret.Namespace).Create(secret)
+	return c.kubernetes.CoreV1().Secrets(secret.Namespace).Create(secret)
 }
 
 // UpdateSecret updates the given secret
@@ -45,7 +45,7 @@ func (c *Client) UpdateSecret(secret *corev1.Secret) (*corev1.Secret, error) {
 		return nil, err
 	}
 
-	return c.core.Secrets(secret.Namespace).Update(secret)
+	return c.kubernetes.CoreV1().Secrets(secret.Namespace).Update(secret)
 }
 
 // UpdateSecretData updates or creates a new secret with the given data
@@ -82,7 +82,7 @@ func (c *Client) DeleteSecret(name, namespace string) error {
 		return err
 	}
 
-	return c.core.Secrets(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.kubernetes.CoreV1().Secrets(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

@@ -568,6 +568,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 
 	backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule("intervalscheduletest",
 		namespace,
+		retain,
 		applicationBackupScheduleRetryTimeout,
 		applicationBackupScheduleRetryInterval)
 	require.NoError(t, err, "Error validating interval applicationBackup schedule")
@@ -790,6 +791,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 		scheduleName, namespace)
 	_, err = storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
+		0,
 		3*time.Minute,
 		applicationBackupScheduleRetryInterval)
 	require.Error(t, err, fmt.Sprintf("No applicationBackups should have been created for %v in namespace %v",
@@ -808,6 +810,7 @@ func commonApplicationBackupScheduleTests(
 	// Make sure no backup gets created in the next minute
 	_, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
+		0,
 		1*time.Minute,
 		applicationBackupScheduleRetryInterval)
 	require.Error(t, err, fmt.Sprintf("No backups should have been created for %v in namespace %v",
@@ -819,11 +822,12 @@ func commonApplicationBackupScheduleTests(
 
 	backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
+		1,
 		applicationBackupScheduleRetryTimeout,
 		applicationBackupScheduleRetryInterval)
 	require.NoError(t, err, "Error validating backup schedule")
 	require.Equal(t, 1, len(backupStatuses), "Should have backups for only one policy type")
-	require.Equal(t, 1, len(backupStatuses[policyType]), fmt.Sprintf("Should have only one backupshot for %v schedule", scheduleName))
+	require.Equal(t, 1, len(backupStatuses[policyType]), fmt.Sprintf("Should have only one backup for %v schedule", scheduleName))
 	logrus.Infof("Validated first backupschedule %v", scheduleName)
 
 	// Now advance time to the next trigger if the next trigger is not zero
@@ -839,6 +843,7 @@ func commonApplicationBackupScheduleTests(
 		time.Sleep(90 * time.Second)
 		backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 			namespace,
+			2,
 			applicationBackupScheduleRetryTimeout,
 			applicationBackupScheduleRetryInterval)
 		require.NoError(t, err, "Error validating backup schedule")

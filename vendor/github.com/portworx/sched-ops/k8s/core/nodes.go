@@ -52,7 +52,7 @@ func (c *Client) CreateNode(n *corev1.Node) (*corev1.Node, error) {
 		return nil, err
 	}
 
-	return c.core.Nodes().Create(n)
+	return c.kubernetes.CoreV1().Nodes().Create(n)
 }
 
 // UpdateNode updates the given node
@@ -61,7 +61,7 @@ func (c *Client) UpdateNode(n *corev1.Node) (*corev1.Node, error) {
 		return nil, err
 	}
 
-	return c.core.Nodes().Update(n)
+	return c.kubernetes.CoreV1().Nodes().Update(n)
 }
 
 // GetNodes talks to the k8s api server and gets the nodes in the cluster
@@ -70,7 +70,7 @@ func (c *Client) GetNodes() (*corev1.NodeList, error) {
 		return nil, err
 	}
 
-	nodes, err := c.core.Nodes().List(metav1.ListOptions{})
+	nodes, err := c.kubernetes.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (c *Client) GetNodeByName(name string) (*corev1.Node, error) {
 		return nil, err
 	}
 
-	node, err := c.core.Nodes().Get(name, metav1.GetOptions{})
+	node, err := c.kubernetes.CoreV1().Nodes().Get(name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func (c *Client) AddLabelOnNode(name, key, value string) error {
 	for retryCnt < labelUpdateMaxRetries {
 		retryCnt++
 
-		node, err := c.core.Nodes().Get(name, metav1.GetOptions{})
+		node, err := c.kubernetes.CoreV1().Nodes().Get(name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -218,7 +218,7 @@ func (c *Client) AddLabelOnNode(name, key, value string) error {
 		}
 
 		node.Labels[key] = value
-		if _, err = c.core.Nodes().Update(node); err == nil {
+		if _, err = c.kubernetes.CoreV1().Nodes().Update(node); err == nil {
 			return nil
 		}
 	}
@@ -237,14 +237,14 @@ func (c *Client) RemoveLabelOnNode(name, key string) error {
 	for retryCnt < labelUpdateMaxRetries {
 		retryCnt++
 
-		node, err := c.core.Nodes().Get(name, metav1.GetOptions{})
+		node, err := c.kubernetes.CoreV1().Nodes().Get(name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
 
 		if _, present := node.Labels[key]; present {
 			delete(node.Labels, key)
-			if _, err = c.core.Nodes().Update(node); err == nil {
+			if _, err = c.kubernetes.CoreV1().Nodes().Update(node); err == nil {
 				return nil
 			}
 		}
@@ -268,7 +268,7 @@ func (c *Client) WatchNode(node *corev1.Node, watchNodeFn WatchFunc) error {
 		Watch:         true,
 	}
 
-	watchInterface, err := c.core.Nodes().Watch(listOptions)
+	watchInterface, err := c.kubernetes.CoreV1().Nodes().Watch(listOptions)
 	if err != nil {
 		return err
 	}
@@ -292,7 +292,7 @@ func (c *Client) CordonNode(nodeName string, timeout, retryInterval time.Duratio
 
 		nCopy := n.DeepCopy()
 		nCopy.Spec.Unschedulable = true
-		n, err = c.core.Nodes().Update(nCopy)
+		n, err = c.kubernetes.CoreV1().Nodes().Update(nCopy)
 		if err != nil {
 			return nil, true, err
 		}
@@ -322,7 +322,7 @@ func (c *Client) UnCordonNode(nodeName string, timeout, retryInterval time.Durat
 
 		nCopy := n.DeepCopy()
 		nCopy.Spec.Unschedulable = false
-		n, err = c.core.Nodes().Update(nCopy)
+		n, err = c.kubernetes.CoreV1().Nodes().Update(nCopy)
 		if err != nil {
 			return nil, true, err
 		}

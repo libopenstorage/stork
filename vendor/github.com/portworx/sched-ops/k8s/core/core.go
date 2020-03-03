@@ -15,8 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	storagev1client "k8s.io/client-go/kubernetes/typed/storage/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -70,11 +68,9 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new client.
-func New(kubernetes kubernetes.Interface, core corev1client.CoreV1Interface, storage storagev1client.StorageV1Interface) *Client {
+func New(kubernetes kubernetes.Interface) *Client {
 	return &Client{
 		kubernetes: kubernetes,
-		core:       core,
-		storage:    storage,
 	}
 }
 
@@ -85,20 +81,8 @@ func NewForConfig(c *rest.Config) (*Client, error) {
 		return nil, err
 	}
 
-	core, err := corev1client.NewForConfig(c)
-	if err != nil {
-		return nil, err
-	}
-
-	storage, err := storagev1client.NewForConfig(c)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Client{
 		kubernetes: kubernetes,
-		core:       core,
-		storage:    storage,
 	}, nil
 }
 
@@ -116,16 +100,12 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 // Client is a wrapper for kubernetes core client.
 type Client struct {
 	config     *rest.Config
-	core       corev1client.CoreV1Interface
-	storage    storagev1client.StorageV1Interface
 	kubernetes kubernetes.Interface
 }
 
 // SetConfig sets the config and resets the client.
 func (c *Client) SetConfig(cfg *rest.Config) {
 	c.config = cfg
-	c.core = nil
-	c.storage = nil
 	c.kubernetes = nil
 }
 
@@ -160,7 +140,7 @@ func (c *Client) ResourceExists(gvk schema.GroupVersionKind) (bool, error) {
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.core != nil && c.storage != nil {
+	if c.kubernetes != nil {
 		return nil
 	}
 
@@ -218,17 +198,6 @@ func (c *Client) loadClient() error {
 	if err != nil {
 		return err
 	}
-
-	c.core, err = corev1client.NewForConfig(c.config)
-	if err != nil {
-		return err
-	}
-
-	c.storage, err = storagev1client.NewForConfig(c.config)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
