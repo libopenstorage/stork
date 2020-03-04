@@ -258,6 +258,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			restore.Status.Volumes = append(restore.Status.Volumes, restoreVolumeInfos...)
 		}
 		restore.Status.Status = storkapi.ApplicationRestoreStatusInProgress
+		restore.Status.LastUpdateTimestamp = metav1.Now()
 		err = sdk.Update(restore)
 		if err != nil {
 			return err
@@ -285,6 +286,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		}
 
 		restore.Status.Volumes = volumeInfos
+		restore.Status.LastUpdateTimestamp = metav1.Now()
 		// Store the new status
 		err = sdk.Update(restore)
 		if err != nil {
@@ -327,6 +329,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		restore.Status.Stage = storkapi.ApplicationRestoreStageApplications
 		restore.Status.Status = storkapi.ApplicationRestoreStatusInProgress
 		restore.Status.Reason = "Application resources restore is in progress"
+		restore.Status.LastUpdateTimestamp = metav1.Now()
 		// Update the current state and then move on to restoring resources
 		err := sdk.Update(restore)
 		if err != nil {
@@ -339,6 +342,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		}
 	}
 
+	restore.Status.LastUpdateTimestamp = metav1.Now()
 	err := sdk.Update(restore)
 	if err != nil {
 		return err
@@ -581,6 +585,7 @@ func (a *ApplicationRestoreController) restoreResources(
 		}
 	}
 
+	restore.Status.LastUpdateTimestamp = metav1.Now()
 	if err := sdk.Update(restore); err != nil {
 		return err
 	}

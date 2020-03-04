@@ -159,6 +159,7 @@ func (a *ApplicationBackupController) Handle(ctx context.Context, event sdk.Even
 					backup.Status.Reason = fmt.Sprintf("Error checking for namespace %v: %v", ns, err)
 					backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 					backup.Status.FinishTimestamp = metav1.Now()
+					backup.Status.LastUpdateTimestamp = metav1.Now()
 					err = fmt.Errorf("error getting namespace %v: %v", ns, err)
 					log.ApplicationBackupLog(backup).Errorf(err.Error())
 					a.Recorder.Event(backup,
@@ -209,6 +210,7 @@ func (a *ApplicationBackupController) Handle(ctx context.Context, event sdk.Even
 					message)
 				backup.Status.Stage = stork_api.ApplicationBackupStageInitial
 				backup.Status.Status = stork_api.ApplicationBackupStatusInitial
+				backup.Status.LastUpdateTimestamp = metav1.Now()
 				err := sdk.Update(backup)
 				if err != nil {
 					return err
@@ -321,6 +323,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.Reason = message
+				backup.Status.LastUpdateTimestamp = metav1.Now()
 				err = sdk.Update(backup)
 				if err != nil {
 					return err
@@ -332,6 +335,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		}
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
 		backup.Status.Reason = "Volume backups are in progress"
+		backup.Status.LastUpdateTimestamp = metav1.Now()
 		err := sdk.Update(backup)
 		if err != nil {
 			return err
@@ -356,6 +360,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 				backup.Status.FinishTimestamp = metav1.Now()
+				backup.Status.LastUpdateTimestamp = metav1.Now()
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 				backup.Status.Reason = message
 				err = sdk.Update(backup)
@@ -388,6 +393,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			volumeInfos = append(volumeInfos, status...)
 		}
 		backup.Status.Volumes = volumeInfos
+		backup.Status.LastUpdateTimestamp = metav1.Now()
 		// Store the new status
 		err = sdk.Update(backup)
 		if err != nil {
@@ -430,6 +436,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		backup.Status.Stage = stork_api.ApplicationBackupStageApplications
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
 		backup.Status.Reason = "Application resources backup is in progress"
+		backup.Status.LastUpdateTimestamp = metav1.Now()
 		// Update the current state and then move on to backing up resources
 		err := sdk.Update(backup)
 		if err != nil {
@@ -447,6 +454,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		}
 	}
 
+	backup.Status.LastUpdateTimestamp = metav1.Now()
 	err := sdk.Update(backup)
 	if err != nil {
 		return err
@@ -458,6 +466,7 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 	if backup.Spec.PreExecRule == "" {
 		backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
 		backup.Status.Status = stork_api.ApplicationBackupStatusPending
+		backup.Status.LastUpdateTimestamp = metav1.Now()
 		err := sdk.Update(backup)
 		if err != nil {
 			return nil, err
@@ -469,6 +478,7 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 		backup.Status.Stage = stork_api.ApplicationBackupStagePreExecRule
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
 		backup.Status.Reason = "Pre-Exec rules are being executed"
+		backup.Status.LastUpdateTimestamp = metav1.Now()
 		err := sdk.Update(backup)
 		if err != nil {
 			return nil, err
@@ -636,6 +646,7 @@ func (a *ApplicationBackupController) backupResources(
 		resourceInfos = append(resourceInfos, resourceInfo)
 	}
 	backup.Status.Resources = resourceInfos
+	backup.Status.LastUpdateTimestamp = metav1.Now()
 	if err = sdk.Update(backup); err != nil {
 		return err
 	}
@@ -675,6 +686,7 @@ func (a *ApplicationBackupController) backupResources(
 		return err
 	}
 
+	backup.Status.LastUpdateTimestamp = metav1.Now()
 	if err = sdk.Update(backup); err != nil {
 		return err
 	}
