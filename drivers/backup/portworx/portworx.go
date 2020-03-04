@@ -210,6 +210,7 @@ func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDelete
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForBackupCompletion(req *api.BackupInspectRequest,
 	timeout time.Duration, timeBeforeRetry time.Duration) error {
+	var backupError error
 	f := func() (interface{}, bool, error) {
 		inspectBkpResp, err := p.backupManager.Inspect(context.Background(), req)
 		if err != nil {
@@ -222,6 +223,12 @@ func (p *portworx) WaitForBackupCompletion(req *api.BackupInspectRequest,
 		if currentStatus == api.BackupInfo_StatusInfo_Success {
 			// If backup is complete, dont retry again
 			return nil, false, nil
+		} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
+			currentStatus == api.BackupInfo_StatusInfo_Aborted ||
+			currentStatus == api.BackupInfo_StatusInfo_Invalid {
+			backupError = fmt.Errorf("backup [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+			return nil, false, backupError
 		}
 		return nil,
 			true,
@@ -230,8 +237,8 @@ func (p *portworx) WaitForBackupCompletion(req *api.BackupInspectRequest,
 	}
 
 	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
-	if err != nil {
-		return err
+	if err != nil || backupError != nil {
+		return fmt.Errorf("failed to wait for backup. Error:[%v] Reason:[%v]", err, backupError)
 	}
 
 	return nil
