@@ -18,7 +18,7 @@ func (c *Client) CreateEvent(event *corev1.Event) (*corev1.Event, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.core.Events(event.Namespace).Create(event)
+	return c.kubernetes.CoreV1().Events(event.Namespace).Create(event)
 }
 
 // ListEvents retrieves all events registered with kubernetes
@@ -26,5 +26,5 @@ func (c *Client) ListEvents(namespace string, opts metav1.ListOptions) (*corev1.
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.core.Events(namespace).List(opts)
+	return c.kubernetes.CoreV1().Events(namespace).List(opts)
 }

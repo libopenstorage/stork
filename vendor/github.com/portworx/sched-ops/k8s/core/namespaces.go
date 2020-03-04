@@ -23,7 +23,7 @@ func (c *Client) ListNamespaces(labelSelector map[string]string) (*corev1.Namesp
 		return nil, err
 	}
 
-	return c.core.Namespaces().List(metav1.ListOptions{
+	return c.kubernetes.CoreV1().Namespaces().List(metav1.ListOptions{
 		LabelSelector: mapToCSV(labelSelector),
 	})
 }
@@ -34,7 +34,7 @@ func (c *Client) GetNamespace(name string) (*corev1.Namespace, error) {
 		return nil, err
 	}
 
-	return c.core.Namespaces().Get(name, metav1.GetOptions{})
+	return c.kubernetes.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
 }
 
 // CreateNamespace creates a namespace with given name and metadata
@@ -43,7 +43,7 @@ func (c *Client) CreateNamespace(name string, metadata map[string]string) (*core
 		return nil, err
 	}
 
-	return c.core.Namespaces().Create(&corev1.Namespace{
+	return c.kubernetes.CoreV1().Namespaces().Create(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
 			Labels: metadata,
@@ -57,5 +57,5 @@ func (c *Client) DeleteNamespace(name string) error {
 		return err
 	}
 
-	return c.core.Namespaces().Delete(name, &metav1.DeleteOptions{})
+	return c.kubernetes.CoreV1().Namespaces().Delete(name, &metav1.DeleteOptions{})
 }

@@ -40,7 +40,7 @@ func (c *Client) CreateService(service *corev1.Service) (*corev1.Service, error)
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.core.Services(ns).Create(service)
+	return c.kubernetes.CoreV1().Services(ns).Create(service)
 }
 
 // DeleteService deletes the given service
@@ -49,7 +49,7 @@ func (c *Client) DeleteService(name, namespace string) error {
 		return err
 	}
 
-	return c.core.Services(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.kubernetes.CoreV1().Services(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -64,7 +64,7 @@ func (c *Client) GetService(svcName string, svcNS string) (*corev1.Service, erro
 		return nil, fmt.Errorf("cannot return service obj without service name")
 	}
 
-	return c.core.Services(svcNS).Get(svcName, metav1.GetOptions{})
+	return c.kubernetes.CoreV1().Services(svcNS).Get(svcName, metav1.GetOptions{})
 }
 
 // ListServices list services using filters or list all if options are empty
@@ -73,7 +73,7 @@ func (c *Client) ListServices(svcNamespace string, listOptions metav1.ListOption
 		return nil, err
 	}
 
-	return c.core.Services(svcNamespace).List(listOptions)
+	return c.kubernetes.CoreV1().Services(svcNamespace).List(listOptions)
 }
 
 // GetServiceEndpoint gets the externalIP if service is a LoadBalancer or ClusterIP otherwise
@@ -118,7 +118,7 @@ func (c *Client) ValidateDeletedService(svcName string, svcNS string) error {
 		return fmt.Errorf("cannot validate service without service name")
 	}
 
-	_, err := c.core.Services(svcNS).Get(svcName, metav1.GetOptions{})
+	_, err := c.kubernetes.CoreV1().Services(svcNS).Get(svcName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -136,5 +136,5 @@ func (c *Client) PatchService(name, namespace string, jsonPatch []byte) (*corev1
 		return nil, err
 	}
 
-	return c.core.Services(current.Namespace).Patch(current.Name, types.StrategicMergePatchType, jsonPatch)
+	return c.kubernetes.CoreV1().Services(current.Namespace).Patch(current.Name, types.StrategicMergePatchType, jsonPatch)
 }

@@ -1,6 +1,5 @@
 #!/bin/sh
 
-find vendor/github.com/portworx/sched-ops/k8s/stork -name '*.go' -exec sed -i "s/c.stork.Stork()/c.stork.StorkV1alpha1()/g" {} \;
 find vendor/github.com/operator-framework/operator-sdk -name '*.go' -exec sed -i "s/cached.NewMemCacheClient/memory.NewMemCacheClient/g" {} \;
 find vendor -name '*.go' -exec sed -i 's/resourceClient.Create(unstructObj)/resourceClient.Create(unstructObj, metav1.CreateOptions\{\})/g' {} \;
 find vendor -name '*.go' -exec sed -i 's/resourceClient.Update(unstructObj)/resourceClient.Update(unstructObj, metav1.UpdateOptions\{\})/g' {} \;

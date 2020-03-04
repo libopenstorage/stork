@@ -61,6 +61,8 @@ func TestApplicationBackup(t *testing.T) {
 	defaultConfigMap = getBackupConfigMapForType(allConfigMap, defaultBackupLocation)
 
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
+	t.Run("applicationBackupDelBackupLocation", applicationBackupDelBackupLocation)
+	t.Run("applicationBackupMultiple", applicationBackupMultiple)
 	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
 	t.Run("postExecRuleTest", applicationBackupRestorePostExecRuleTest)
 	t.Run("preExecMissingRuleTest", applicationBackupRestorePreExecMissingRuleTest)
@@ -231,7 +233,7 @@ func triggerScaleBackupRestoreTest(
 	// Wait for all backups to be completed
 	for _, bkp := range appBkps {
 		logrus.Infof("Verifying backup in namespace %s", bkp.Namespace)
-		err := waitForAppBackupCompletion(bkp.Name, bkp.Namespace)
+		err := waitForAppBackupCompletion(bkp.Name, bkp.Namespace, applicationBackupSyncRetryTimeout)
 		require.NoError(t, err, "Application backup %s in namespace %s failed.", bkp.Name, bkp.Namespace)
 	}
 
@@ -567,6 +569,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 
 	backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule("intervalscheduletest",
 		namespace,
+		retain,
 		applicationBackupScheduleRetryTimeout,
 		applicationBackupScheduleRetryInterval)
 	require.NoError(t, err, "Error validating interval applicationBackup schedule")
@@ -789,6 +792,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 		scheduleName, namespace)
 	_, err = storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
+		0,
 		3*time.Minute,
 		applicationBackupScheduleRetryInterval)
 	require.Error(t, err, fmt.Sprintf("No applicationBackups should have been created for %v in namespace %v",
@@ -807,6 +811,7 @@ func commonApplicationBackupScheduleTests(
 	// Make sure no backup gets created in the next minute
 	_, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
+		0,
 		1*time.Minute,
 		applicationBackupScheduleRetryInterval)
 	require.Error(t, err, fmt.Sprintf("No backups should have been created for %v in namespace %v",
@@ -818,11 +823,12 @@ func commonApplicationBackupScheduleTests(
 
 	backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 		namespace,
+		1,
 		applicationBackupScheduleRetryTimeout,
 		applicationBackupScheduleRetryInterval)
 	require.NoError(t, err, "Error validating backup schedule")
 	require.Equal(t, 1, len(backupStatuses), "Should have backups for only one policy type")
-	require.Equal(t, 1, len(backupStatuses[policyType]), fmt.Sprintf("Should have only one backupshot for %v schedule", scheduleName))
+	require.Equal(t, 1, len(backupStatuses[policyType]), fmt.Sprintf("Should have only one backup for %v schedule", scheduleName))
 	logrus.Infof("Validated first backupschedule %v", scheduleName)
 
 	// Now advance time to the next trigger if the next trigger is not zero
@@ -838,6 +844,7 @@ func commonApplicationBackupScheduleTests(
 		time.Sleep(90 * time.Second)
 		backupStatuses, err := storkops.Instance().ValidateApplicationBackupSchedule(scheduleName,
 			namespace,
+			2,
 			applicationBackupScheduleRetryTimeout,
 			applicationBackupScheduleRetryInterval)
 		require.NoError(t, err, "Error validating backup schedule")
@@ -869,7 +876,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "Error creating app backups")
 
 	// Wait for backup completion
-	err = waitForAppBackupCompletion(firstBackup.Name, firstBackup.Namespace)
+	err = waitForAppBackupCompletion(firstBackup.Name, firstBackup.Namespace, applicationBackupSyncRetryTimeout)
 	require.NoError(t, err, "Application backup %s failed.", firstBackup)
 
 	// Create backup location on second cluster
@@ -985,7 +992,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	destroyAndWait(t, []*scheduler.Context{appCtx})
 }
 
-func waitForAppBackupCompletion(name, namespace string) error {
+func waitForAppBackupCompletion(name, namespace string, timeout time.Duration) error {
 	getAppBackup := func() (interface{}, bool, error) {
 		appBackup, err := storkops.Instance().GetApplicationBackup(name, namespace)
 		if err != nil {
@@ -997,9 +1004,91 @@ func waitForAppBackupCompletion(name, namespace string) error {
 		}
 		return "", false, nil
 	}
-	_, err := task.DoRetryWithTimeout(getAppBackup, applicationBackupSyncRetryTimeout, defaultWaitInterval)
+	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, defaultWaitInterval)
 	return err
 
+}
+
+func waitForAppBackupToStart(name, namespace string, timeout time.Duration) error {
+	getAppBackup := func() (interface{}, bool, error) {
+		appBackup, err := storkops.Instance().GetApplicationBackup(name, namespace)
+		if err != nil {
+			return "", false, err
+		}
+
+		if appBackup.Status.Status != storkv1.ApplicationBackupStatusInProgress {
+			return "", true, fmt.Errorf("App backups %s in %s has not started yet.Retrying Status: %s", name, namespace, appBackup.Status.Status)
+		}
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, defaultWaitInterval)
+	return err
+
+}
+
+func applicationBackupDelBackupLocation(t *testing.T) {
+	// Create myqsl app deployment
+	appCtx := createApp(t, appKey)
+
+	backupLocationName := appKey + "-backup-location"
+	// Create backup location on first cluster
+	backupLocation, err := createBackupLocation(t, backupLocationName, appCtx.GetID(), defaultBackupLocation, defaultSecretName)
+	require.NoError(t, err, "Error creating backuplocation")
+
+	appBackup, err := createApplicationBackupWithAnnotation(t, appKey+"-backup", appCtx.GetID(), backupLocation)
+	require.NoError(t, err, "Error creating app backups")
+
+	// Wait for backup completion
+	err = waitForAppBackupToStart(appBackup.Name, appBackup.Namespace, applicationBackupScheduleRetryTimeout)
+	require.NoError(t, err, "Application backup %s failed to start", appBackup)
+
+	// Application backup started, delete backuplocation
+	err = storkops.Instance().DeleteBackupLocation(backupLocation.Name, backupLocation.Namespace)
+	require.NoError(t, err, "Failed to delete backuplocation: %s", backupLocation.Name, err)
+
+	err = waitForAppBackupCompletion(appBackup.Name, appBackup.Namespace, applicationBackupScheduleRetryTimeout/time.Duration(5))
+	require.Error(t, err, "Application backup %s in namespace %s should have failed.", backupLocation.Name, backupLocation.Namespace)
+
+	err = deleteAndWaitForBackupDeletion(appBackup.Namespace)
+	require.NoError(t, err, "Backups %s not deleted: %s", appBackup.Name, err)
+
+	destroyAndWait(t, []*scheduler.Context{appCtx})
+}
+
+func applicationBackupMultiple(t *testing.T) {
+	// Create myqsl app deployment
+	appCtx := createApp(t, appKey)
+
+	backupLocationName := appKey + "-backup-location"
+	// Create backup location
+	backupLocation, err := createBackupLocation(t, backupLocationName, appCtx.GetID(), defaultBackupLocation, defaultSecretName)
+	require.NoError(t, err, "Error creating backuplocation")
+
+	// Create first application backup
+	appBackup, err := createApplicationBackupWithAnnotation(t, appKey+"-backup", appCtx.GetID(), backupLocation)
+	require.NoError(t, err, "Error creating app backups")
+
+	// Wait for backup to start
+	err = waitForAppBackupToStart(appBackup.Name, appBackup.Namespace, applicationBackupScheduleRetryTimeout)
+	require.NoError(t, err, "Application backup %s failed to start", appBackup)
+
+	// Create second application backup
+	appBackupSecond, err := createApplicationBackupWithAnnotation(t, appKey+"-backup-2", appCtx.GetID(), backupLocation)
+	require.NoError(t, err, "Error creating app backups")
+
+	err = waitForAppBackupCompletion(appBackup.Name, appBackup.Namespace, applicationBackupScheduleRetryTimeout)
+	require.NoError(t, err, "Application backup %s in namespace %s failed.", appBackup.Name, appBackup.Namespace)
+
+	err = waitForAppBackupCompletion(appBackupSecond.Name, appBackupSecond.Namespace, (applicationBackupScheduleRetryTimeout)*time.Duration(5))
+	require.NoError(t, err, "Application backup %s in namespace %s failed.", appBackupSecond.Name, appBackupSecond.Namespace)
+
+	err = deleteAndWaitForBackupDeletion(appBackup.Namespace)
+	require.NoError(t, err, "Backups not deleted: %v", err)
+
+	err = storkops.Instance().DeleteBackupLocation(backupLocation.Name, backupLocation.Namespace)
+	require.NoError(t, err, "Failed to delete backuplocation: %s", backupLocation.Name, err)
+
+	destroyAndWait(t, []*scheduler.Context{appCtx})
 }
 
 func deleteAllBackupsNamespace(namespace string) error {
