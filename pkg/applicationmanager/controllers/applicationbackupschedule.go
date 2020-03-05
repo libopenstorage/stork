@@ -118,7 +118,7 @@ func (s *ApplicationBackupScheduleController) Handle(ctx context.Context, event 
 				string(stork_api.ApplicationBackupStatusFailed),
 				msg)
 			log.ApplicationBackupScheduleLog(backupSchedule).Error(msg)
-			return err
+			return nil
 		}
 	}
 	return nil
