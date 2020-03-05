@@ -181,7 +181,6 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		if err != nil {
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
-		volume := pvc.Spec.VolumeName
 		ebsName := a.getEBSVolumeID(pv.Spec.AWSElasticBlockStore.VolumeID)
 
 		ebsVolume, err := a.getEBSVolume(ebsName, nil)
@@ -189,58 +188,57 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 			return nil, err
 		}
 
+		volume := pvc.Spec.VolumeName
 		volumeInfo.Volume = volume
 		volumeInfo.Zones = []string{*ebsVolume.AvailabilityZone}
-		snapshotInput := &ec2.CreateSnapshotInput{
-			VolumeId: aws_sdk.String(ebsName),
-			Description: aws_sdk.String(fmt.Sprintf("Created by stork for %v for PVC %v Namespace %v Volume: %v",
-				backup.Name, pvc.Name, pvc.Namespace, pv.Spec.AWSElasticBlockStore.VolumeID)),
-			TagSpecifications: []*ec2.TagSpecification{
-				{
-					ResourceType: aws_sdk.String(ec2.ResourceTypeSnapshot),
-					Tags: []*ec2.Tag{
-						{
-							Key:   aws_sdk.String(createdByTag),
-							Value: aws_sdk.String("stork"),
-						},
-						{
-							Key:   aws_sdk.String(backupUIDTag),
-							Value: aws_sdk.String(string(backup.UID)),
-						},
-						{
-							Key:   aws_sdk.String(sourcePVCNameTag),
-							Value: aws_sdk.String(pvc.Name),
-						},
-						{
-							Key:   aws_sdk.String(sourcePVCNamespaceTag),
-							Value: aws_sdk.String(pvc.Namespace),
-						},
-						{
-							Key:   aws_sdk.String(nameTag),
-							Value: aws_sdk.String("stork-snapshot-" + volume),
-						},
+
+		tags := map[string]string{
+			createdByTag:          "stork",
+			backupUIDTag:          string(backup.UID),
+			sourcePVCNameTag:      pvc.Name,
+			sourcePVCNamespaceTag: pvc.Namespace,
+			nameTag:               "stork-snapshot-" + volume,
+		}
+		// First check if we've already created a snapshot for this volume
+		if snapshot, err := a.getEBSSnapshot("", tags); err == nil {
+			volumeInfo.BackupID = *snapshot.SnapshotId
+		} else {
+
+			snapshotInput := &ec2.CreateSnapshotInput{
+				VolumeId: aws_sdk.String(ebsName),
+				Description: aws_sdk.String(fmt.Sprintf("Created by stork for %v for PVC %v Namespace %v Volume: %v",
+					backup.Name, pvc.Name, pvc.Namespace, pv.Spec.AWSElasticBlockStore.VolumeID)),
+				TagSpecifications: []*ec2.TagSpecification{
+					{
+						ResourceType: aws_sdk.String(ec2.ResourceTypeSnapshot),
 					},
 				},
-			},
-		}
-		sourceTags := make([]*ec2.Tag, 0)
-		for _, tag := range ebsVolume.Tags {
-			if *tag.Key == nameTag ||
-				*tag.Key == createdByTag ||
-				*tag.Key == backupUIDTag ||
-				*tag.Key == sourcePVCNameTag ||
-				*tag.Key == sourcePVCNamespaceTag {
-				continue
 			}
-			sourceTags = append(sourceTags, tag)
-		}
-		snapshotInput.TagSpecifications[0].Tags = append(snapshotInput.TagSpecifications[0].Tags, sourceTags...)
-		snapshot, err := a.client.CreateSnapshot(snapshotInput)
-		if err != nil {
-			return nil, err
+			snapshotInput.TagSpecifications[0].Tags = make([]*ec2.Tag, 0)
+			for k, v := range tags {
+				snapshotInput.TagSpecifications[0].Tags = append(snapshotInput.TagSpecifications[0].Tags, &ec2.Tag{
+					Key:   aws_sdk.String(k),
+					Value: aws_sdk.String(v),
+				})
+			}
+
+			// Pick up all tags from source that don't conflict with new ones we've
+			// created
+			sourceTags := make([]*ec2.Tag, 0)
+			for _, tag := range ebsVolume.Tags {
+				if _, present := tags[*tag.Key]; present {
+					continue
+				}
+				sourceTags = append(sourceTags, tag)
+			}
+			snapshotInput.TagSpecifications[0].Tags = append(snapshotInput.TagSpecifications[0].Tags, sourceTags...)
+			snapshot, err := a.client.CreateSnapshot(snapshotInput)
+			if err != nil {
+				return nil, err
+			}
+			volumeInfo.BackupID = *snapshot.SnapshotId
 		}
 
-		volumeInfo.BackupID = *snapshot.SnapshotId
 	}
 	return volumeInfos, nil
 }
@@ -255,13 +253,7 @@ func (a *aws) getEBSVolume(volumeID string, filters map[string]string) (*ec2.Vol
 		input.VolumeIds = []*string{&volumeID}
 	}
 	if len(filters) > 0 {
-		input.Filters = make([]*ec2.Filter, 0)
-		for k, v := range filters {
-			input.Filters = append(input.Filters, &ec2.Filter{
-				Name:   aws_sdk.String(k),
-				Values: []*string{aws_sdk.String(v)},
-			})
-		}
+		input.Filters = a.getFiltersFromMap(filters)
 	}
 
 	output, err := a.client.DescribeVolumes(input)
@@ -275,9 +267,14 @@ func (a *aws) getEBSVolume(volumeID string, filters map[string]string) (*ec2.Vol
 	return output.Volumes[0], nil
 }
 
-func (a *aws) getEBSSnapshot(snapshotID string) (*ec2.Snapshot, error) {
-	input := &ec2.DescribeSnapshotsInput{
-		SnapshotIds: []*string{&snapshotID},
+func (a *aws) getEBSSnapshot(snapshotID string, filters map[string]string) (*ec2.Snapshot, error) {
+	input := &ec2.DescribeSnapshotsInput{}
+	if snapshotID != "" {
+		input.SnapshotIds = []*string{&snapshotID}
+	}
+
+	if len(filters) > 0 {
+		input.Filters = a.getFiltersFromMap(filters)
 	}
 
 	output, err := a.client.DescribeSnapshots(input)
@@ -291,6 +288,17 @@ func (a *aws) getEBSSnapshot(snapshotID string) (*ec2.Snapshot, error) {
 	return output.Snapshots[0], nil
 }
 
+func (a *aws) getFiltersFromMap(filters map[string]string) []*ec2.Filter {
+	tagFilters := make([]*ec2.Filter, 0)
+	for k, v := range filters {
+		tagFilters = append(tagFilters, &ec2.Filter{
+			Name:   aws_sdk.String(fmt.Sprintf("tag:%v", k)),
+			Values: []*string{aws_sdk.String(v)},
+		})
+	}
+	return tagFilters
+}
+
 func (a *aws) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
@@ -298,7 +306,7 @@ func (a *aws) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		if vInfo.DriverName != driverName {
 			continue
 		}
-		snapshot, err := a.getEBSSnapshot(vInfo.BackupID)
+		snapshot, err := a.getEBSSnapshot(vInfo.BackupID, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -377,63 +385,59 @@ func (a *aws) StartRestore(
 		volumeInfo.RestoreVolume = a.generatePVName()
 		volumeInfos = append(volumeInfos, volumeInfo)
 
-		if len(backupVolumeInfo.Zones) == 0 {
-			return nil, fmt.Errorf("zone missing in backup for volume (%v) %v", backupVolumeInfo.Namespace, backupVolumeInfo.PersistentVolumeClaim)
+		tags := map[string]string{
+			createdByTag:          "stork",
+			restoreUIDTag:         string(restore.UID),
+			sourcePVCNameTag:      volumeInfo.PersistentVolumeClaim,
+			sourcePVCNamespaceTag: volumeInfo.SourceNamespace,
+			nameTag:               volumeInfo.RestoreVolume,
 		}
-		ebsSnapshot, err := a.getEBSSnapshot(backupVolumeInfo.BackupID)
-		if err != nil {
-			return nil, err
-		}
-		input := &ec2.CreateVolumeInput{
-			SnapshotId:       aws_sdk.String(backupVolumeInfo.BackupID),
-			AvailabilityZone: aws_sdk.String(backupVolumeInfo.Zones[0]),
-			TagSpecifications: []*ec2.TagSpecification{
-				{
-					ResourceType: aws_sdk.String(ec2.ResourceTypeVolume),
-					Tags: []*ec2.Tag{
+		// First check if we've already created a volume for this restore
+		// operation
+		if output, err := a.getEBSVolume("", tags); err == nil {
+			volumeInfo.RestoreVolume = *output.VolumeId
+		} else {
+			if len(backupVolumeInfo.Zones) == 0 {
+				return nil, fmt.Errorf("zone missing in backup for volume (%v) %v", backupVolumeInfo.Namespace, backupVolumeInfo.PersistentVolumeClaim)
+			}
+			ebsSnapshot, err := a.getEBSSnapshot(backupVolumeInfo.BackupID, nil)
+			if err != nil {
+				return nil, err
+			}
 
-						{
-							Key:   aws_sdk.String(createdByTag),
-							Value: aws_sdk.String("stork"),
-						},
-						{
-							Key:   aws_sdk.String(restoreUIDTag),
-							Value: aws_sdk.String(string(restore.UID)),
-						},
-						{
-							Key:   aws_sdk.String(sourcePVCNameTag),
-							Value: aws_sdk.String(volumeInfo.PersistentVolumeClaim),
-						},
-						{
-							Key:   aws_sdk.String(sourcePVCNamespaceTag),
-							Value: aws_sdk.String(volumeInfo.SourceNamespace),
-						},
-						{
-							Key:   aws_sdk.String(nameTag),
-							Value: aws_sdk.String(volumeInfo.RestoreVolume),
-						},
+			input := &ec2.CreateVolumeInput{
+				SnapshotId:       aws_sdk.String(backupVolumeInfo.BackupID),
+				AvailabilityZone: aws_sdk.String(backupVolumeInfo.Zones[0]),
+				TagSpecifications: []*ec2.TagSpecification{
+					{
+						ResourceType: aws_sdk.String(ec2.ResourceTypeVolume),
 					},
 				},
-			},
-		}
-
-		sourceTags := make([]*ec2.Tag, 0)
-		for _, tag := range ebsSnapshot.Tags {
-			if *tag.Key == nameTag ||
-				*tag.Key == createdByTag ||
-				*tag.Key == restoreUIDTag ||
-				*tag.Key == sourcePVCNameTag ||
-				*tag.Key == sourcePVCNamespaceTag {
-				continue
 			}
-			sourceTags = append(sourceTags, tag)
+
+			input.TagSpecifications[0].Tags = make([]*ec2.Tag, 0)
+			for k, v := range tags {
+				input.TagSpecifications[0].Tags = append(input.TagSpecifications[0].Tags, &ec2.Tag{
+					Key:   aws_sdk.String(k),
+					Value: aws_sdk.String(v),
+				})
+			}
+			// Pick up all tags from source that don't conflict with new ones we've
+			// created
+			sourceTags := make([]*ec2.Tag, 0)
+			for _, tag := range ebsSnapshot.Tags {
+				if _, present := tags[*tag.Key]; present {
+					continue
+				}
+				sourceTags = append(sourceTags, tag)
+			}
+			input.TagSpecifications[0].Tags = append(input.TagSpecifications[0].Tags, sourceTags...)
+			output, err := a.client.CreateVolume(input)
+			if err != nil {
+				return nil, err
+			}
+			volumeInfo.RestoreVolume = *output.VolumeId
 		}
-		input.TagSpecifications[0].Tags = append(input.TagSpecifications[0].Tags, sourceTags...)
-		output, err := a.client.CreateVolume(input)
-		if err != nil {
-			return nil, err
-		}
-		volumeInfo.RestoreVolume = *output.VolumeId
 	}
 	return volumeInfos, nil
 }
