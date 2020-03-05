@@ -224,6 +224,8 @@ func (a *azure) StartBackup(backup *storkapi.ApplicationBackup,
 		if err != nil {
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
+		tags := storkvolume.GetApplicationBackupLabels(backup, &pvc)
+
 		volume := pv.Spec.AzureDisk.DiskName
 		disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, volume)
 		if err != nil {
@@ -238,13 +240,11 @@ func (a *azure) StartBackup(backup *storkapi.ApplicationBackup,
 					SourceResourceID: disk.ID,
 				},
 			},
-			Tags: map[string]*string{
-				"created-by":           to.StringPtr("stork"),
-				"backup-uid":           to.StringPtr(string(backup.UID)),
-				"source-pvc-name":      to.StringPtr(pvc.Name),
-				"source-pvc-namespace": to.StringPtr(pvc.Namespace),
-			},
+			Tags:     make(map[string]*string),
 			Location: disk.Location,
+		}
+		for k, v := range tags {
+			snapshot.Tags[k] = to.StringPtr(v)
 		}
 		_, err = a.snapshotClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *snapshot.Name, snapshot)
 		if err != nil {
@@ -354,6 +354,9 @@ func (a *azure) StartRestore(
 		volumeInfo.RestoreVolume = a.generatePVName()
 		volumeInfo.DriverName = driverName
 		volumeInfos = append(volumeInfos, volumeInfo)
+
+		tags := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
+
 		disk := compute.Disk{
 
 			Name: &volumeInfo.RestoreVolume,
@@ -363,13 +366,12 @@ func (a *azure) StartRestore(
 					SourceResourceID: snapshot.ID,
 				},
 			},
-			Tags: map[string]*string{
-				"created-by":           to.StringPtr("stork"),
-				"restore-uid":          to.StringPtr(string(restore.UID)),
-				"source-pvc-name":      to.StringPtr(volumeInfo.PersistentVolumeClaim),
-				"source-pvc-namespace": to.StringPtr(volumeInfo.SourceNamespace),
-			},
+			Tags:     make(map[string]*string),
 			Location: snapshot.Location,
+		}
+
+		for k, v := range tags {
+			disk.Tags[k] = to.StringPtr(v)
 		}
 		_, err = a.diskClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *disk.Name, disk)
 		if err != nil {

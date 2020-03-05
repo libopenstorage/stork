@@ -192,13 +192,9 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.Volume = volume
 		volumeInfo.Zones = []string{*ebsVolume.AvailabilityZone}
 
-		tags := map[string]string{
-			createdByTag:          "stork",
-			backupUIDTag:          string(backup.UID),
-			sourcePVCNameTag:      pvc.Name,
-			sourcePVCNamespaceTag: pvc.Namespace,
-			nameTag:               "stork-snapshot-" + volume,
-		}
+		tags := storkvolume.GetApplicationBackupLabels(backup, &pvc)
+		tags[nameTag] = "stork-snapshot-" + volume
+
 		// First check if we've already created a snapshot for this volume
 		if snapshot, err := a.getEBSSnapshot("", tags); err == nil {
 			volumeInfo.BackupID = *snapshot.SnapshotId
@@ -385,13 +381,9 @@ func (a *aws) StartRestore(
 		volumeInfo.RestoreVolume = a.generatePVName()
 		volumeInfos = append(volumeInfos, volumeInfo)
 
-		tags := map[string]string{
-			createdByTag:          "stork",
-			restoreUIDTag:         string(restore.UID),
-			sourcePVCNameTag:      volumeInfo.PersistentVolumeClaim,
-			sourcePVCNamespaceTag: volumeInfo.SourceNamespace,
-			nameTag:               volumeInfo.RestoreVolume,
-		}
+		tags := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
+		tags[nameTag] = volumeInfo.RestoreVolume
+
 		// First check if we've already created a volume for this restore
 		// operation
 		if output, err := a.getEBSVolume("", tags); err == nil {
