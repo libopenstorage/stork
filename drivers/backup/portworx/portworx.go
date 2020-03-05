@@ -208,8 +208,12 @@ func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDelete
 
 // WaitForBackupCompletion waits for backup to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupCompletion(req *api.BackupInspectRequest,
+func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 	timeout time.Duration, timeBeforeRetry time.Duration) error {
+	req := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+	}
 	var backupError error
 	f := func() (interface{}, bool, error) {
 		inspectBkpResp, err := p.backupManager.Inspect(context.Background(), req)
@@ -258,6 +262,46 @@ func (p *portworx) InspectRestore(req *api.RestoreInspectRequest) (*api.RestoreI
 
 func (p *portworx) DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error) {
 	return p.restoreManager.Delete(context.Background(), req)
+}
+
+func (p *portworx) WaitForRestoreCompletion(restoreName string, orgID string,
+	timeout time.Duration, timeBeforeRetry time.Duration) error {
+	req := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	var restoreError error
+	f := func() (interface{}, bool, error) {
+		inspectRestoreResp, err := p.restoreManager.Inspect(context.Background(), req)
+		if err != nil {
+			// Error occured, just retry
+			return nil, true, err
+		}
+
+		// Check if restore is complete
+		currentStatus := inspectRestoreResp.GetRestore().GetStatus().GetStatus()
+		if currentStatus == api.RestoreInfo_StatusInfo_Success {
+			// If restore is complete, dont retry again
+			return nil, false, nil
+		} else if currentStatus == api.RestoreInfo_StatusInfo_Failed ||
+			currentStatus == api.RestoreInfo_StatusInfo_Aborted ||
+			currentStatus == api.RestoreInfo_StatusInfo_Invalid {
+			restoreError = fmt.Errorf("restore [%v] is in [%s] state. Reason: [%s]",
+				req.GetName(), currentStatus, inspectRestoreResp.GetRestore().GetStatus().GetReason())
+			return nil, false, restoreError
+		}
+		return nil,
+			true,
+			fmt.Errorf("restore [%v] is in [%s] state. Waiting to become Complete",
+				req.GetName(), currentStatus)
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil || restoreError != nil {
+		return fmt.Errorf("failed to wait for restore to complete. Error:[%v] Reason:[%v]", err, restoreError)
+	}
+
+	return nil
 }
 
 func (p *portworx) CreateSchedulePolicy(req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error) {

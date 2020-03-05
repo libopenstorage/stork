@@ -108,7 +108,7 @@ type Backup interface {
 
 	// WaitForBackupCompletion waits for backup to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry`
-	WaitForBackupCompletion(req *api.BackupInspectRequest,
+	WaitForBackupCompletion(backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
@@ -125,6 +125,11 @@ type Restore interface {
 
 	// DeleteRestore deletes a restore object
 	DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error)
+
+	// WaitForRestoreCompletion waits for restore to complete successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+	WaitForRestoreCompletion(restoreName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
 // SchedulePolicy interface
