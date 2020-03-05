@@ -99,6 +99,7 @@ done
 
 apk update
 apk add jq
+apt-get -y install jq
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
