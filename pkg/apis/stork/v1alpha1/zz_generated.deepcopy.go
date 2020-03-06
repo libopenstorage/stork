@@ -278,6 +278,7 @@ func (in *ApplicationBackupStatus) DeepCopyInto(out *ApplicationBackupStatus) {
 		}
 	}
 	in.TriggerTimestamp.DeepCopyInto(&out.TriggerTimestamp)
+	in.LastUpdateTimestamp.DeepCopyInto(&out.LastUpdateTimestamp)
 	in.FinishTimestamp.DeepCopyInto(&out.FinishTimestamp)
 	return
 }
@@ -632,6 +633,7 @@ func (in *ApplicationRestoreStatus) DeepCopyInto(out *ApplicationRestoreStatus) 
 		}
 	}
 	in.FinishTimestamp.DeepCopyInto(&out.FinishTimestamp)
+	in.LastUpdateTimestamp.DeepCopyInto(&out.LastUpdateTimestamp)
 	return
 }
 
