@@ -13,6 +13,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -47,23 +48,29 @@ var _ = BeforeSuite(func() {
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{BackupCreateRestore}", func() {
 	var contexts []*scheduler.Context
+	var bkpNamespaces []string
+	var namespaceMapping map[string]string
+	labelSelectores := make(map[string]string)
 	It("has to connect and check the backup setup", func() {
-
-		labelSelectores := make(map[string]string)
-		namespaces := []string{"default"}
-		namespaceMapping := map[string]string{"default": "restore-namespace"}
 
 		Step("Deploy applications", func() {
 			contexts = make([]*scheduler.Context, 0)
+			bkpNamespaces = make([]string, 0)
 			for i := 0; i < Inst().ScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("backupcreaterestore-%d", i))...)
+				taskName := fmt.Sprintf("backupcreaterestore-%d", i)
+				appContexts := ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				for _, ctx := range appContexts {
+					bkpNamespaces = append(bkpNamespaces, GetAppNamespace(ctx, taskName))
+				}
 			}
+			namespaceMapping = GetRestoreAppNamespaceMapping(bkpNamespaces)
 			ValidateApplications(contexts)
 		})
 
 		Step(fmt.Sprintf("Create Backup [%s]", BackupName), func() {
 			CreateBackup(BackupName, ClusterName, BLocationName,
-				namespaces, labelSelectores, orgID)
+				bkpNamespaces, labelSelectores, orgID)
 		})
 
 		Step(fmt.Sprintf("Wait for Backup [%s] to complete", BackupName), func() {
@@ -78,8 +85,8 @@ var _ = Describe("{BackupCreateRestore}", func() {
 		Step(fmt.Sprintf("Create Restore [%s]", RestoreName), func() {
 			_, err := Inst().Backup.CreateNewRestore(RestoreName, BackupName, namespaceMapping, ClusterName, orgID)
 			Expect(err).NotTo(HaveOccurred(),
-				fmt.Sprintf("Failed to create restore [%s] in namespace [%s] on cluster [%s]. Error: [%v]",
-					RestoreName, namespaces, ClusterName, err))
+				fmt.Sprintf("Failed to create restore [%s] on cluster [%s]. Error: [%v]",
+					RestoreName, ClusterName, err))
 		})
 
 		Step(fmt.Sprintf("Wait for Restore [%s] to complete", BackupName), func() {

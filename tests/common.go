@@ -88,6 +88,7 @@ const (
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
 	specObjAppWorkloadSizeEnvVar          = "SIZE"
+	restoreNamespacePrefix                = "restore"
 )
 
 const (
@@ -259,6 +260,21 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 func DeleteVolumesAndWait(ctx *scheduler.Context) {
 	vols := DeleteVolumes(ctx)
 	ValidateVolumesDeleted(ctx.App.Key, vols)
+}
+
+// GetAppNamespace returns namespace in which context is created
+func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
+	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
+}
+
+// GetRestoreAppNamespaceMapping returns a mapping between
+// restore namespaces and backup namespaces
+func GetRestoreAppNamespaceMapping(bkpNamespaces []string) map[string]string {
+	namespaceMapping := make(map[string]string)
+	for _, bkpNamespace := range bkpNamespaces {
+		namespaceMapping[bkpNamespace] = fmt.Sprintf("%s-%s", restoreNamespacePrefix, bkpNamespace)
+	}
+	return namespaceMapping
 }
 
 // ScheduleApplications schedules but does not wait for applications

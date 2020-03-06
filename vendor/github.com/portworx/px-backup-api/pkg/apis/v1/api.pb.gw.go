@@ -2437,6 +2437,24 @@ func local_request_Rules_Delete_0(ctx context.Context, marshaler runtime.Marshal
 
 }
 
+func request_Version_Get_0(ctx context.Context, marshaler runtime.Marshaler, client VersionClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq VersionGetRequest
+	var metadata runtime.ServerMetadata
+
+	msg, err := client.Get(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_Version_Get_0(ctx context.Context, marshaler runtime.Marshaler, server VersionServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq VersionGetRequest
+	var metadata runtime.ServerMetadata
+
+	msg, err := server.Get(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
 // RegisterHealthHandlerServer registers the http handlers for service Health to "mux".
 // UnaryRPC     :call HealthServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -3391,6 +3409,34 @@ func RegisterRulesHandlerServer(ctx context.Context, mux *runtime.ServeMux, serv
 		}
 
 		forward_Rules_Delete_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	return nil
+}
+
+// RegisterVersionHandlerServer registers the http handlers for service Version to "mux".
+// UnaryRPC     :call VersionServer directly.
+// StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+func RegisterVersionHandlerServer(ctx context.Context, mux *runtime.ServeMux, server VersionServer) error {
+
+	mux.Handle("GET", pattern_Version_Get_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Version_Get_0(rctx, inboundMarshaler, server, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Version_Get_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -4901,4 +4947,73 @@ var (
 	forward_Rules_Inspect_0 = runtime.ForwardResponseMessage
 
 	forward_Rules_Delete_0 = runtime.ForwardResponseMessage
+)
+
+// RegisterVersionHandlerFromEndpoint is same as RegisterVersionHandler but
+// automatically dials to "endpoint" and closes the connection when "ctx" gets done.
+func RegisterVersionHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
+	conn, err := grpc.Dial(endpoint, opts...)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if cerr := conn.Close(); cerr != nil {
+				grpclog.Infof("Failed to close conn to %s: %v", endpoint, cerr)
+			}
+			return
+		}
+		go func() {
+			<-ctx.Done()
+			if cerr := conn.Close(); cerr != nil {
+				grpclog.Infof("Failed to close conn to %s: %v", endpoint, cerr)
+			}
+		}()
+	}()
+
+	return RegisterVersionHandler(ctx, mux, conn)
+}
+
+// RegisterVersionHandler registers the http handlers for service Version to "mux".
+// The handlers forward requests to the grpc endpoint over "conn".
+func RegisterVersionHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return RegisterVersionHandlerClient(ctx, mux, NewVersionClient(conn))
+}
+
+// RegisterVersionHandlerClient registers the http handlers for service Version
+// to "mux". The handlers forward requests to the grpc endpoint over the given implementation of "VersionClient".
+// Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "VersionClient"
+// doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
+// "VersionClient" to call the correct interceptors.
+func RegisterVersionHandlerClient(ctx context.Context, mux *runtime.ServeMux, client VersionClient) error {
+
+	mux.Handle("GET", pattern_Version_Get_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Version_Get_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Version_Get_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	return nil
+}
+
+var (
+	pattern_Version_Get_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "version"}, "", runtime.AssumeColonVerbOpt(true)))
+)
+
+var (
+	forward_Version_Get_0 = runtime.ForwardResponseMessage
 )

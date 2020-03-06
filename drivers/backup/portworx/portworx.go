@@ -217,7 +217,6 @@ func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 			// Error occured, just retry
 			return nil, true, err
 		}
-
 		// Check if backup status is complete
 		currentStatus := inspectBkpResp.GetBackup().GetStatus().GetStatus()
 		if currentStatus == api.BackupInfo_StatusInfo_Success {
