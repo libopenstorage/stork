@@ -83,21 +83,43 @@ var _ = Describe("{BackupCreateRestore}", func() {
 		})
 
 		Step(fmt.Sprintf("Create Restore [%s]", RestoreName), func() {
-			_, err := Inst().Backup.CreateNewRestore(RestoreName, BackupName, namespaceMapping, ClusterName, orgID)
+			_, err := Inst().Backup.CreateNewRestore(RestoreName, BackupName,
+				namespaceMapping, ClusterName, orgID)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create restore [%s] on cluster [%s]. Error: [%v]",
 					RestoreName, ClusterName, err))
 		})
 
-		Step(fmt.Sprintf("Wait for Restore [%s] to complete", BackupName), func() {
+		Step(fmt.Sprintf("Wait for Restore [%s] to complete", RestoreName), func() {
 			err := Inst().Backup.WaitForRestoreCompletion(RestoreName, orgID,
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to wait for restore [%s] to complete. Error: [%v]",
 					BackupName, err))
-
 		})
+
+		Step("teardown all backed up apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+
+		// Change namespaces to restored apps only after backed up apps are cleaned up
+		// to avoid switching back namespaces to backup namespaces
+		Step(fmt.Sprintf("Validate Restore [%s]", RestoreName), func() {
+			err := ChangeNamespaces(contexts, namespaceMapping)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to change namespace to restored namespace. Error: [%v]", err))
+			ValidateApplications(contexts)
+		})
+
+		Step("teardown all restored apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+
 	})
 })
 
