@@ -179,37 +179,55 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 			volumeInfo.Zones = []string{g.zone}
 		}
 		volumeInfo.Volume = volume
-		if len(volumeInfo.Zones) > 1 {
-			snapshot := &compute.Snapshot{
-				Name:   "stork-snapshot-" + string(uuid.NewUUID()),
-				Labels: storkvolume.GetApplicationBackupLabels(backup, &pvc),
-			}
-			region, err := g.getRegion(volumeInfo.Zones[0])
-			if err != nil {
-				return nil, err
-			}
-			snapshotCall := g.service.RegionDisks.CreateSnapshot(g.projectID, region, pdName, snapshot)
-
-			_, err = snapshotCall.Do()
-			if err != nil {
-				return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
-			}
-			volumeInfo.BackupID = snapshot.Name
+		labels := storkvolume.GetApplicationBackupLabels(backup, &pvc)
+		filter := g.getFilterFromMap(labels)
+		// First check if the snapshot has already been created with the same labels
+		if snapshots, err := g.service.Snapshots.List(g.projectID).Filter(filter).Do(); err == nil && len(snapshots.Items) == 1 {
+			volumeInfo.BackupID = snapshots.Items[0].Name
 		} else {
-			snapshot := &compute.Snapshot{
-				Name:   "stork-snapshot-" + string(uuid.NewUUID()),
-				Labels: storkvolume.GetApplicationBackupLabels(backup, &pvc),
-			}
-			snapshotCall := g.service.Disks.CreateSnapshot(g.projectID, volumeInfo.Zones[0], pdName, snapshot)
+			if len(volumeInfo.Zones) > 1 {
+				snapshot := &compute.Snapshot{
+					Name:   "stork-snapshot-" + string(uuid.NewUUID()),
+					Labels: labels,
+				}
+				region, err := g.getRegion(volumeInfo.Zones[0])
+				if err != nil {
+					return nil, err
+				}
+				snapshotCall := g.service.RegionDisks.CreateSnapshot(g.projectID, region, pdName, snapshot)
 
-			_, err = snapshotCall.Do()
-			if err != nil {
-				return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+				_, err = snapshotCall.Do()
+				if err != nil {
+					return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+				}
+				volumeInfo.BackupID = snapshot.Name
+			} else {
+				snapshot := &compute.Snapshot{
+					Name:   "stork-snapshot-" + string(uuid.NewUUID()),
+					Labels: labels,
+				}
+				snapshotCall := g.service.Disks.CreateSnapshot(g.projectID, volumeInfo.Zones[0], pdName, snapshot)
+
+				_, err = snapshotCall.Do()
+				if err != nil {
+					return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+				}
+				volumeInfo.BackupID = snapshot.Name
 			}
-			volumeInfo.BackupID = snapshot.Name
 		}
 	}
 	return volumeInfos, nil
+}
+
+func (g *gcp) getFilterFromMap(labels map[string]string) string {
+	filters := make([]string, 0)
+	// Construct an array of filters in the format "labels.key=value"
+	for k, v := range labels {
+
+		filters = append(filters, fmt.Sprintf("labels.%v=%v", k, v))
+	}
+	// Add all the filters to one string seperated by AND
+	return strings.Join(filters, " AND ")
 }
 
 func (g *gcp) getZones(zone string) []string {
@@ -328,15 +346,16 @@ func (g *gcp) StartRestore(
 			PersistentVolumeClaim: backupVolumeInfo.PersistentVolumeClaim,
 			SourceNamespace:       backupVolumeInfo.Namespace,
 			SourceVolume:          backupVolumeInfo.Volume,
-			RestoreVolume:         g.generatePVName(),
 			DriverName:            driverName,
 			Zones:                 backupVolumeInfo.Zones,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
+		labels := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
+		filter := g.getFilterFromMap(labels)
 		disk := &compute.Disk{
-			Name:           volumeInfo.RestoreVolume,
+			Name:           g.generatePVName(),
 			SourceSnapshot: g.getSnapshotResourceName(backupVolumeInfo),
-			Labels:         storkvolume.GetApplicationRestoreLabels(restore, volumeInfo),
+			Labels:         labels,
 		}
 		if len(backupVolumeInfo.Zones) == 0 {
 			return nil, fmt.Errorf("zones missing for backup volume %v/%v",
@@ -352,14 +371,27 @@ func (g *gcp) StartRestore(
 			if err != nil {
 				return nil, err
 			}
-			_, err = g.service.RegionDisks.Insert(g.projectID, region, disk).Do()
-			if err != nil {
-				return nil, err
+
+			// First check if the disk has already been created with the same labels
+			if disks, err := g.service.RegionDisks.List(g.projectID, region).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
+				volumeInfo.RestoreVolume = disks.Items[0].Name
+			} else {
+				_, err = g.service.RegionDisks.Insert(g.projectID, region, disk).Do()
+				if err != nil {
+					return nil, err
+				}
+				volumeInfo.RestoreVolume = disk.Name
 			}
 		} else {
-			_, err := g.service.Disks.Insert(g.projectID, backupVolumeInfo.Zones[0], disk).Do()
-			if err != nil {
-				return nil, err
+			// First check if the disk has already been created with the same labels
+			if disks, err := g.service.Disks.List(g.projectID, backupVolumeInfo.Zones[0]).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
+				volumeInfo.RestoreVolume = disks.Items[0].Name
+			} else {
+				_, err := g.service.Disks.Insert(g.projectID, backupVolumeInfo.Zones[0], disk).Do()
+				if err != nil {
+					return nil, err
+				}
+				volumeInfo.RestoreVolume = disk.Name
 			}
 		}
 	}
