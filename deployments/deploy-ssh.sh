@@ -145,10 +145,19 @@ if [ $timeout -gt 600 ]; then
   describe_pod_then_exit
 fi
 
-if [ -n "${PXBACKUP_KUBECONFIG}" ]; then
-    kubectl create configmap pxbackup-kubeconfig --from-file=${PXBACKUP_KUBECONFIG}
-    PXB_KUBECONFIG_VOLUME="{ \"name\": \"pxbackup-kubeconfig\", \"configMap\": { \"name\": \"pxbackup-kubeconfig\"}}"
-    PXB_KUBECONFIG_MOUNT="{ \"name\": \"pxbackup-kubeconfig\", \"mountPath\": \"${PXBACKUP_KUBECONFIG}\" }"
+# List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr 
+FROM_FILE=""
+CLUSTER_CONFIGS=""
+if [ -n "${KUBECONFIGS}" ]; then
+  for i in ${KUBECONFIGS//,/ };do
+    FROM_FILE="${FROM_FILE} --from-file=${i}"
+    if [[ -z ${CLUSTER_CONFIGS} ]]; then
+      CLUSTER_CONFIGS="`basename ${i}`"
+    else 
+      CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
+    fi
+  done
+  kubectl create configmap kubeconfigs ${FROM_FILE}
 fi
 
 TORPEDO_CUSTOM_PARAM_VOLUME=""
@@ -190,11 +199,6 @@ fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
-fi
-
-if [ -n "${PXBACKUP_KUBECONFIG}" ]; then
-    VOLUMES="${VOLUMES},${PXB_KUBECONFIG_VOLUME}"
-    VOLUME_MOUNTS="${VOLUME_MOUNTS},${PXB_KUBECONFIG_MOUNT}"
 fi
 
 K8S_VENDOR_KEY=""
@@ -370,8 +374,8 @@ spec:
       value: "${AWS_SECRET_ACCESS_KEY}"
     - name: BUCKET_NAME
       value: "${BUCKET_NAME}" 
-    - name: PXBACKUP_KUBECONFIG
-      value: "${PXBACKUP_KUBECONFIG}/kubeconfig"     
+    - name: KUBECONFIGS
+      value: "${CLUSTER_CONFIGS}"     
     - name: S3_ENDPOINT
       value: "${S3_ENDPOINT}"  
     - name: S3_REGION

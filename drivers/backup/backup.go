@@ -126,9 +126,6 @@ type Restore interface {
 	// DeleteRestore deletes a restore object
 	DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error)
 
-	CreateNewRestore(restoreName string, backupName string, namespaceMapping map[string]string,
-		clusterName string, orgID string) (*api.RestoreCreateResponse, error)
-
 	// WaitForRestoreCompletion waits for restore to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	WaitForRestoreCompletion(restoreName string, orgID string,

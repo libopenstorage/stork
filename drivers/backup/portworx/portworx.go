@@ -249,21 +249,6 @@ func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDelete
 func (p *portworx) CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {
 	return p.restoreManager.Create(context.Background(), req)
 }
-func (p *portworx) CreateNewRestore(restoreName string, backupName string,
-	namespaceMapping map[string]string, clusterName string, orgID string) (*api.RestoreCreateResponse, error) {
-
-	createRestoreReq := &api.RestoreCreateRequest{
-		CreateMetadata: &api.CreateMetadata{
-			Name:  restoreName,
-			OrgId: orgID,
-		},
-		Backup:           backupName,
-		Cluster:          clusterName,
-		NamespaceMapping: namespaceMapping,
-	}
-
-	return p.CreateRestore(createRestoreReq)
-}
 
 func (p *portworx) EnumerateRestore(req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
 	return p.restoreManager.Enumerate(context.Background(), req)
