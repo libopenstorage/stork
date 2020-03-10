@@ -34,6 +34,10 @@ type Driver interface {
 	ScheduleBackup
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
+
+	// WaitForRunning waits for application to start running.
+	WaitForRunning(req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error
+
 	// String returns the name of this driver
 	String() string
 }

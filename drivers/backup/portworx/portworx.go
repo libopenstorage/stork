@@ -336,6 +336,43 @@ func (p *portworx) DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*
 	return p.backupScheduleManager.Delete(context.Background(), req)
 }
 
+// Wait for backup to start running
+func (p *portworx) WaitForRunning(req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error {
+	var backupErr error
+
+	t := func() (interface{}, bool, error) {
+		resp, err := p.backupManager.Inspect(context.Background(), req)
+
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Check if backup in progress - stop
+		currentStatus := resp.GetBackup().GetStatus().GetStatus()
+		if currentStatus == api.BackupInfo_StatusInfo_InProgress {
+			return nil, false, nil
+		} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
+			currentStatus == api.BackupInfo_StatusInfo_Aborted ||
+			currentStatus == api.BackupInfo_StatusInfo_Invalid {
+
+			backupErr = fmt.Errorf("backup [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+			return nil, false, backupErr
+		}
+
+		// Otherwise retry
+		return nil, true, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+
+	if err != nil || backupErr != nil {
+		return fmt.Errorf("failed to wait for running start. Error:[%v] Reason:[%v]", err, backupErr)
+	}
+
+	return nil
+}
+
 func init() {
 	backup.Register(driverName, &portworx{})
 }
