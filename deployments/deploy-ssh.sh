@@ -49,6 +49,10 @@ if [ -z "${UPGRADE_ENDPOINT_VERSION}" ]; then
     UPGRADE_ENDPOINT_VERSION=""
 fi
 
+if [ -z "${ENABLE_STORK_UPGRADE}" ]; then
+    ENABLE_STORK_UPGRADE=false
+fi
+
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
@@ -325,6 +329,7 @@ spec:
             "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
+            "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "$APP_DESTROY_TIMEOUT_ARG",
             "--backup-driver", "$BACKUP_DRIVER"
     ]

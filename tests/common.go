@@ -83,6 +83,7 @@ const (
 	provisionerFlag                      = "provisioner"
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
+	enableStorkUpgradeFlag               = "enable-stork-upgrade"
 )
 
 const (
@@ -690,6 +691,7 @@ type Torpedo struct {
 	ScaleFactor                         int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
+	EnableStorkUpgrade                  bool
 	MinRunTimeMins                      int
 	ChaosLevel                          int
 	Provisioner                         string
@@ -723,6 +725,7 @@ func ParseFlags() {
 	var bundleLocation string
 	var customConfigPath string
 	var customAppConfig map[string]scheduler.AppConfig
+	var enableStorkUpgrade bool
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -739,6 +742,7 @@ func ParseFlags() {
 		"Endpoint URL link which will be used for upgrade storage driver")
 	flag.StringVar(&volUpgradeEndpointVersion, storageUpgradeEndpointVersionCliFlag, defaultStorageUpgradeEndpointVersion,
 		"Endpoint version which will be used for checking version after upgrade storage driver")
+	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
 	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
@@ -800,6 +804,7 @@ func ParseFlags() {
 				ChaosLevel:                          chaosLevel,
 				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,
 				StorageDriverUpgradeEndpointVersion: volUpgradeEndpointVersion,
+				EnableStorkUpgrade:                  enableStorkUpgrade,
 				AppList:                             appList,
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
