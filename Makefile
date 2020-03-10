@@ -37,7 +37,7 @@ LDFLAGS += "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSI
 BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 .DEFAULT_GOAL=all
-.PHONY: test clean vendor vendor-update
+.PHONY: test clean vendor vendor-update vendor-tidy tools
 
 all: stork storkctl cmdexecutor pretest
 
@@ -51,8 +51,15 @@ vendor:
 vendor-tidy:
 	go mod tidy
 
+fetch-tools:
+	( cd tools && \
+	GOFLAGS= go get -u golang.org/x/lint/golint && \
+	GOFLAGS= go get -u honnef.co/go/tools/cmd/staticcheck && \
+	GOFLAGS= go get -u github.com/kisielk/errcheck && \
+	GOFLAGS= go get -u github.com/fzipp/gocyclo \
+	)
+
 lint:
-	go get -u golang.org/x/lint/golint
 	for file in $(GO_FILES); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
@@ -66,13 +73,11 @@ vet:
 	go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
 staticcheck:
-	go get -u honnef.co/go/tools/cmd/staticcheck
 	staticcheck $(PKGS)
 	staticcheck -tags integrationtest test/integration_test/*.go
 	staticcheck -tags unittest $(PKGS)
 
 errcheck:
-	go get -u github.com/kisielk/errcheck
 	errcheck -verbose -blank $(PKGS)
 	errcheck -verbose -blank -tags unittest $(PKGS)
 	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
@@ -84,10 +89,9 @@ do-fmt:
 	 gofmt -s -w $(GO_FILES)
 
 gocyclo:
-	go get -u github.com/fzipp/gocyclo
 	gocyclo -over 15 $(GO_FILES)
 
-pretest: check-fmt lint vet errcheck staticcheck
+pretest: fetch-tools check-fmt lint vet errcheck staticcheck
 
 test:
 	echo "" > coverage.txt
