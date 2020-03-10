@@ -100,14 +100,14 @@ func PoolRuleByAvailableCapacity(usage, scalePercentage uint64, expandType strin
 func PVCRuleByTotalSize(capacity int, scalePercentage int, maxSize string) apapi.AutopilotRule {
 	apRuleObject := apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
-			Name: fmt.Sprintf("pvc-total-size-%s", strings.ToLower(maxSize)),
+			Name: fmt.Sprintf("pool-total-%d-scale-%d", capacity, scalePercentage),
 		},
 		Spec: apapi.AutopilotRuleSpec{
 			Conditions: apapi.RuleConditions{
 				Expressions: []*apapi.LabelSelectorRequirement{
 					{
 						Key:      PxVolumeTotalCapacityMetric,
-						Operator: apapi.LabelSelectorOpGt,
+						Operator: apapi.LabelSelectorOpLt,
 						Values:   []string{fmt.Sprintf("%d", capacity)},
 					},
 				},
@@ -123,6 +123,7 @@ func PVCRuleByTotalSize(capacity int, scalePercentage int, maxSize string) apapi
 		},
 	}
 	if maxSize != "" {
+		apRuleObject.Name = fmt.Sprintf("%s-maxsize-%s", apRuleObject.Name, strings.ToLower(maxSize))
 		for _, action := range apRuleObject.Spec.Actions {
 			action.Params[RuleMaxSize] = maxSize
 		}
