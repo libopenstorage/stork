@@ -47,11 +47,6 @@ func TestApplicationBackup(t *testing.T) {
 
 	allConfigMap = configMap.Data
 
-	// If running on COLO backup to all locations
-	if volumeDriverName != "pxd" {
-		allConfigMap = defaultConfigMap
-	}
-
 	// Default backup location
 	defaultBackupLocation, err = getBackupLocationForVolumeDriver(volumeDriverName)
 	require.NoError(t, err, "Failed to get default backuplocation for %s: %v", volumeDriverName, err)
@@ -59,6 +54,11 @@ func TestApplicationBackup(t *testing.T) {
 	require.NoError(t, err, "Failed to get default secret name for %s: %v", volumeDriverName, err)
 	logrus.Infof("Default backup location set to %v", defaultBackupLocation)
 	defaultConfigMap = getBackupConfigMapForType(allConfigMap, defaultBackupLocation)
+
+	// If running pxd driver backup to all locations
+	if volumeDriverName != "pxd" {
+		allConfigMap = defaultConfigMap
+	}
 
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
 	t.Run("applicationBackupDelBackupLocation", applicationBackupDelBackupLocation)
