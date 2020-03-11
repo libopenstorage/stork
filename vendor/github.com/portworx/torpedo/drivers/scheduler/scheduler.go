@@ -179,7 +179,7 @@ type Driver interface {
 	// parent volumes
 	ValidateVolumeSnapshotRestore(*Context, time.Time) error
 
-	// Get token for a volume
+	// GetTokenFromConfigMap gets token for a volume
 	GetTokenFromConfigMap(string) (string, error)
 
 	// AddLabelOnNode adds key value labels on the node
@@ -187,6 +187,9 @@ type Driver interface {
 
 	// IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
 	IsAutopilotEnabledForVolume(*volume.Volume) bool
+
+	// SaveSchedulerLogsToFile gathers all scheduler logs into a file
+	SaveSchedulerLogsToFile(node.Node, string) error
 
 	// CreateAutopilotRule creates the AutopilotRule object
 	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)

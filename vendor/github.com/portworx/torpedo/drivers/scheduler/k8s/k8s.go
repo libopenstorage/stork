@@ -3179,6 +3179,18 @@ func (k *K8s) IsAutopilotEnabledForVolume(vol *volume.Volume) bool {
 	return autopilotEnabled
 }
 
+// SaveSchedulerLogsToFile gathers all scheduler logs into a file
+func (k *K8s) SaveSchedulerLogsToFile(n node.Node, location string) error {
+	driver, _ := node.Get(k.NodeDriverName)
+	cmd := fmt.Sprintf("journalctl -lu %s* > %s/kubelet.log", SystemdSchedServiceName, location)
+	_, err := driver.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         DefaultTimeout,
+		TimeBeforeRetry: DefaultRetryInterval,
+		Sudo:            true,
+	})
+	return err
+}
+
 func (k *K8s) addLabelsToPVC(pvc *v1.PersistentVolumeClaim, labels map[string]string) {
 	if len(pvc.Labels) == 0 {
 		pvc.Labels = map[string]string{}

@@ -3,7 +3,8 @@ CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HU
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork')
+# shell does not honor export command above, so we need to explicitly pass GOFLAGS here
+PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork')
 endif
 
 GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
@@ -17,6 +18,14 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
+HAS_GOMODULES := $(shell go help mod why 2> /dev/null)
+ifdef HAS_GOMODULES
+export GO111MODULE=on
+export GOFLAGS= -mod=vendor
+else
+$(warn vendor import can only be done on  go 1.11+ which supports go modules)
+endif
+
 RELEASE_VER := 2.4.0
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
@@ -28,20 +37,29 @@ LDFLAGS += "-s -w -X github.com/libopenstorage/stork/pkg/version.Version=$(VERSI
 BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 .DEFAULT_GOAL=all
-.PHONY: test clean vendor vendor-update
+.PHONY: test clean vendor vendor-update vendor-tidy tools
 
 all: stork storkctl cmdexecutor pretest
 
 vendor-update:
-	dep ensure -update
-	./hack/update-deprecated-apis.sh
+	go mod download
 
 vendor:
-	dep ensure
+	go mod vendor
 	./hack/update-deprecated-apis.sh
 
+vendor-tidy:
+	go mod tidy
+
+fetch-tools:
+	( cd tools && \
+	GOFLAGS= go get -u golang.org/x/lint/golint && \
+	GOFLAGS= go get -u honnef.co/go/tools/cmd/staticcheck && \
+	GOFLAGS= go get -u github.com/kisielk/errcheck && \
+	GOFLAGS= go get -u github.com/fzipp/gocyclo \
+	)
+
 lint:
-	go get -u golang.org/x/lint/golint
 	for file in $(GO_FILES); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
@@ -55,13 +73,11 @@ vet:
 	go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
 staticcheck:
-	go get -u honnef.co/go/tools/cmd/staticcheck
 	staticcheck $(PKGS)
 	staticcheck -tags integrationtest test/integration_test/*.go
 	staticcheck -tags unittest $(PKGS)
 
 errcheck:
-	go get -u github.com/kisielk/errcheck
 	errcheck -verbose -blank $(PKGS)
 	errcheck -verbose -blank -tags unittest $(PKGS)
 	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
@@ -73,10 +89,9 @@ do-fmt:
 	 gofmt -s -w $(GO_FILES)
 
 gocyclo:
-	go get -u github.com/fzipp/gocyclo
 	gocyclo -over 15 $(GO_FILES)
 
-pretest: check-fmt lint vet errcheck staticcheck
+pretest: fetch-tools check-fmt lint vet errcheck staticcheck
 
 test:
 	echo "" > coverage.txt

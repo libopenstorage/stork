@@ -16,6 +16,7 @@ The kvdb library abstracts the caller from the specific key-value database imple
 * `Consul`
 * `In-memory store` (local to the node)
 * `Bolt DB` (local to the node)
+* `Zookeeper`
 
 ### Usage
 
@@ -40,13 +41,13 @@ func getKvdb(
 
 	kv, err := kvdb.New(
 		kvdbName,
-		basePath, 
+		basePath,
 		discoveryEndpoints,
-		options, 
+		options,
 		panicHandler,
 	)
   return kv, err
-  
+
 }
 
 type A struct {
@@ -68,16 +69,16 @@ func main() {
     fmt.Println("Failed to create a kvdb instance: ", err)
     return
   }
-  
+
   // Put a key value pair foo=bar
   a := &A{"bar", 1}
   _, err = kv.Put("foo", &a, 0)
   if err != nil {
     fmt.Println("Failed to put a key in kvdb: ", err)
-    return 
+    return
   }
-  
-  // Get a key 
+
+  // Get a key
   value := A{}
   _, err = kv.GetVal("foo", &value)
   if err != nil {

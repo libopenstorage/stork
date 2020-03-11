@@ -1061,7 +1061,9 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 						return nil, err
 					}
 				} else {
-					expectedPoolSizes[pool.Uuid] = pool.StoragePoolAtInit.TotalSize
+					if _, ok := expectedPoolSizes[pool.Uuid]; !ok {
+						expectedPoolSizes[pool.Uuid] = pool.StoragePoolAtInit.TotalSize
+					}
 				}
 			}
 		}

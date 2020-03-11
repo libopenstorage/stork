@@ -3,6 +3,7 @@ package common
 import (
 	"container/list"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,21 @@ type BaseKvdb struct {
 	lock sync.Mutex
 }
 
+func (b *BaseKvdb) WrapperName() kvdb.WrapperName {
+	return kvdb.Wrapper_None
+}
+
+func (b *BaseKvdb) WrappedKvdb() kvdb.Kvdb {
+	return nil
+}
+
+func (b *BaseKvdb) Removed() {
+}
+
+func (b *BaseKvdb) SetWrappedKvdb(kvdb kvdb.Kvdb) error {
+	return fmt.Errorf("not suppoorted")
+}
+
 // SetFatalCb callback is invoked when an unrecoverable KVDB error happens.
 func (b *BaseKvdb) SetFatalCb(f kvdb.FatalErrorCB) {
 	b.lock.Lock()
@@ -63,7 +79,7 @@ func (b *BaseKvdb) CheckLockTimeout(
 ) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	if b.LockTimeout > 0 && time.Since(startTime) > lockTimeout {
+	if lockTimeout > 0 && time.Since(startTime) > lockTimeout {
 		b.lockTimedout(key)
 	}
 }
@@ -84,7 +100,7 @@ func (b *BaseKvdb) LockTimedout(key string) {
 
 // lockTimedout function is invoked if lock is held past configured timeout.
 func (b *BaseKvdb) lockTimedout(key string) {
-	b.FatalCb("Lock %s hold timeout triggered", key)
+	b.FatalCb(kvdb.ErrLockHoldTimeoutTriggered, "Lock %s hold timeout triggered", key)
 }
 
 // SerializeAll Serializes all key value pairs to a byte array.

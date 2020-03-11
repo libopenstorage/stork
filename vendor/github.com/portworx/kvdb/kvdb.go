@@ -72,6 +72,8 @@ const (
 	InsecureSkipVerify = "InsecureSkipVerify"
 	// TransportScheme points to http transport being either http or https.
 	TransportScheme = "TransportScheme"
+	// LogPathOption is the name of the option which specified the log path location
+	LogPathOption = "LogPathOption"
 )
 
 // List of kvdb endpoints supported versions
@@ -86,6 +88,8 @@ const (
 	MemVersion1 = "memv1"
 	// BoltVersion1 key
 	BoltVersion1 = "boltv1"
+	// ZookeeperVersion1 key
+	ZookeeperVersion1 = "zookeeperv1"
 )
 
 const (
@@ -94,6 +98,25 @@ const (
 	// DefaultSeparator separate key components
 	DefaultSeparator = "/"
 )
+
+type WrapperName string
+
+const (
+	Wrapper_None     = WrapperName("Wrapper_None")
+	Wrapper_Log      = WrapperName("Wrapper_Log")
+	Wrapper_NoQuorum = WrapperName("Wrapper_NoQuorum")
+)
+
+type KvdbWrapper interface {
+	// WrapperName is the name of this wrapper
+	WrapperName() WrapperName
+	// WrappedKvdb is the Kvdb wrapped by this wrapper
+	WrappedKvdb() Kvdb
+	// Removed is called when wrapper is removed
+	Removed()
+	// WrappedKvdb is the Kvdb wrapped by this wrapper
+	SetWrappedKvdb(kvdb Kvdb) error
+}
 
 var (
 	// ErrNotSupported implemenation of a specific function is not supported.
@@ -110,6 +133,8 @@ var (
 	ErrIllegal = errors.New("Illegal operation")
 	// ErrValueMismatch raised if existing KVDB value mismatches with user provided value
 	ErrValueMismatch = errors.New("Value mismatch")
+	// ErrEmptyValue raised if the value is empty
+	ErrEmptyValue = errors.New("Value cannot be empty")
 	// ErrModified raised during an atomic operation if the index does not match the one in the store
 	ErrModified = errors.New("Key Index mismatch")
 	// ErrSetTTLFailed raised if unable to set ttl value for a key create/put/update action
@@ -129,6 +154,16 @@ var (
 	// ErrMemberDoesNotExist returned when an operation fails for a member
 	// which does not exist
 	ErrMemberDoesNotExist = errors.New("Kvdb member does not exist")
+	// ErrWatchRevisionCompacted requested watch version has been compacted
+	ErrWatchRevisionCompacted = errors.New("Kvdb watch revision compacted")
+	// ErrLockRefreshFailed could not refresh lock key so exclusive access to lock may be lost
+	ErrLockRefreshFailed = errors.New("Failed to refresh lock")
+	// ErrLockHoldTimeoutTriggered triggers if lock is held beyond configured timeout
+	ErrLockHoldTimeoutTriggered = errors.New("Lock held beyond configured timeout")
+	// ErrNoConnection no connection to server
+	ErrNoConnection = errors.New("No server connection")
+	// ErrNoQuorum kvdb has lost quorum
+	ErrNoQuorum = errors.New("Kvdb lost quorum")
 )
 
 // KVAction specifies the action on a KV pair. This is useful to make decisions
@@ -147,7 +182,7 @@ type PermissionType int
 type WatchCB func(prefix string, opaque interface{}, kvp *KVPair, err error) error
 
 // FatalErrorCB callback is invoked incase of fatal errors
-type FatalErrorCB func(format string, args ...interface{})
+type FatalErrorCB func(err error, format string, args ...interface{})
 
 // DatastoreInit is called to activate a backend KV store.
 type DatastoreInit func(domain string, machines []string, options map[string]string,
@@ -155,6 +190,9 @@ type DatastoreInit func(domain string, machines []string, options map[string]str
 
 // DatastoreVersion is called to get the version of a backend KV store
 type DatastoreVersion func(url string, kvdbOptions map[string]string) (string, error)
+
+// WrapperInit is called to activate a backend KV store.
+type WrapperInit func(kv Kvdb, options map[string]string) (Kvdb, error)
 
 // EnumerateSelect function is a callback function provided to EnumerateWithSelect API
 // This fn is executed over all the keys and only those values are returned by Enumerate for which
@@ -256,8 +294,11 @@ type Kvdb interface {
 	// WatchTree is the same as WatchKey except that watchCB is triggered
 	// for updates on all keys that share the prefix.
 	WatchTree(prefix string, waitIndex uint64, opaque interface{}, watchCB WatchCB) error
-	// Snapshot returns a kvdb snapshot of the provided list of prefixes and the last updated index. If no prefixes are provided, then the whole kvdb tree is snapshotted and could be potentially an expensive operation
-	Snapshot(prefixes []string) (Kvdb, uint64, error)
+	// Snapshot returns a kvdb snapshot of the provided list of prefixes and the last updated index.
+	// If no prefixes are provided, then the whole kvdb tree is snapshotted and could be potentially an expensive operation
+	// If consistent is true, then snapshot is going to return all the updates happening during the snapshot operation and the last
+	// updated index from the snapshot
+	Snapshot(prefixes []string, consistent bool) (Kvdb, uint64, error)
 	// SnapPut records the key value pair including the index.
 	SnapPut(kvp *KVPair) (*KVPair, error)
 	// Lock specfied key and associate a lockerID with it, probably to identify
@@ -295,6 +336,7 @@ type Kvdb interface {
 	Serialize() ([]byte, error)
 	// Deserialize deserializes the given byte array into a list of kv pairs
 	Deserialize([]byte) (KVPairs, error)
+	KvdbWrapper
 }
 
 // ReplayCb provides info required for replay
@@ -382,4 +424,9 @@ type Controller interface {
 	// Defragment defrags the underlying database for the given endpoint
 	// with a timeout specified in seconds
 	Defragment(endpoint string, timeout int) error
+}
+
+func LogFatalErrorCB(err error, format string, args ...interface{}) {
+	logrus.Errorf("encountered fatal error: %v", err)
+	logrus.Panicf(format, args...)
 }
