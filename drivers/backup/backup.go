@@ -56,6 +56,9 @@ type CloudCredential interface {
 	// CreateCloudCredential creates cloud credential objects
 	CreateCloudCredential(req *api.CloudCredentialCreateRequest) (*api.CloudCredentialCreateResponse, error)
 
+	// UpdateCloudCredential updates cloud credential objects
+	UpdateCloudCredential(req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error)
+
 	// InspectCloudCredential describes the cloud credential
 	InspectCloudCredential(req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error)
 
@@ -68,8 +71,11 @@ type CloudCredential interface {
 
 // Cluster obj interface
 type Cluster interface {
-	// CreateCluster creates a cluste object
+	// CreateCluster creates a cluster object
 	CreateCluster(req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error)
+
+	// UpdateCluster updates a cluster object
+	UpdateCluster(req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error)
 
 	// EnumerateCluster enumerates the cluster objects
 	EnumerateCluster(req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error)
@@ -86,6 +92,9 @@ type BLocation interface {
 	// CreateBackupLocation creates backup location object
 	CreateBackupLocation(req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error)
 
+	// UpdateBackupLocation updates backup location object
+	UpdateBackupLocation(req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error)
+
 	// EnumerateBackupLocation lists backup locations for an org
 	EnumerateBackupLocation(req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error)
 
@@ -100,6 +109,9 @@ type BLocation interface {
 type Backup interface {
 	// CreateBackup creates backup
 	CreateBackup(req *api.BackupCreateRequest) (*api.BackupCreateResponse, error)
+
+	// UpdateBackup updates backup object
+	UpdateBackup(req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error)
 
 	// EnumerateBackup enumerates backup objects
 	EnumerateBackup(req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error)
@@ -118,8 +130,11 @@ type Backup interface {
 
 // Restore object interface
 type Restore interface {
-	// CreateRestore creates restore
+	// CreateRestore creates restore object
 	CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error)
+
+	// UpdateRestore updates restore object
+	UpdateRestore(req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error)
 
 	// EnumerateRestore lists restore objects
 	EnumerateRestore(req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
@@ -140,10 +155,16 @@ type Restore interface {
 type SchedulePolicy interface {
 	// CreateSchedulePolicy
 	CreateSchedulePolicy(req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error)
+
+	// UpdateSchedulePolicy
+	UpdateSchedulePolicy(req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error)
+
 	// EnumerateSchedulePolicy
 	EnumerateSchedulePolicy(req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
+
 	// InspectSchedulePolicy
 	InspectSchedulePolicy(req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error)
+
 	// DeleteSchedulePolicy
 	DeleteSchedulePolicy(req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error)
 }
@@ -152,10 +173,16 @@ type SchedulePolicy interface {
 type ScheduleBackup interface {
 	// CreateBackupSchedule
 	CreateBackupSchedule(req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error)
+
+	// UpdateBackupSchedule
+	UpdateBackupSchedule(req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error)
+
 	// EnumerateBackupSchedule
 	EnumerateBackupSchedule(req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
+
 	// InspectBackupSchedule
 	InspectBackupSchedule(req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error)
+
 	// DeleteBackupSchedule
 	DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error)
 }
