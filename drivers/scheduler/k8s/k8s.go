@@ -1749,7 +1749,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					Cause: fmt.Sprintf("Failed to validate PVC: %v. Err: %v", obj.Name, err),
 				}
 			}
-			logrus.Infof("[%v] Validated PVC: %v", ctx.App.Key, obj.Name)
+			logrus.Infof("[%v] Validated PVC: %v, Namespace: %v", ctx.App.Key, obj.Name, obj.Namespace)
 
 			autopilotEnabled := false
 			if pvcAnnotationValue, ok := obj.Annotations[autopilotEnabledAnnotationKey]; ok {
@@ -1765,7 +1765,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 				for _, rule := range listApRules.Items {
 					for _, a := range rule.Spec.Actions {
-						if a.Name == aututils.VolumeSpecAction {
+						if a.Name == aututils.VolumeSpecAction && isAutopilotMatchPvcLabels(rule, obj) {
 							err := k.validatePVCSize(ctx, obj, rule, timeout, retryInterval)
 							if err != nil {
 								return err
@@ -2949,16 +2949,16 @@ func (k *K8s) destroyBackupObjects(
 func (k *K8s) EstimatePVCExpansion(pvc *v1.PersistentVolumeClaim, apRule apapi.AutopilotRule, wSize uint64) (uint64, int, error) {
 	pvcObjSize := pvc.Spec.Resources.Requests[v1.ResourceStorage]
 	pvcSize, _ := pvcObjSize.AsInt64()
-	expectedPVCSize := uint64(pvcSize)
+	initialPVCSize := uint64(pvcSize)
 
 	volDriver, err := volume.Get(k.VolDriverName)
 	if err != nil {
 		return 0, 0, err
 	}
 	if isAutopilotMatchPvcLabels(apRule, pvc) {
-		return volDriver.EstimateVolumeExpand(apRule, expectedPVCSize, wSize)
+		return volDriver.EstimateVolumeExpand(apRule, initialPVCSize, wSize)
 	}
-	return expectedPVCSize, 0, nil
+	return initialPVCSize, 0, nil
 }
 
 // ValidateAutopilotEvents verifies proper alerts and events on resize completion

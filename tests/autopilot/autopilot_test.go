@@ -40,7 +40,7 @@ const (
 var autopilotruleBasicTestCases = []apapi.AutopilotRule{
 	aututils.PVCRuleByUsageCapacity(50, 50, ""),
 	aututils.PVCRuleByUsageCapacity(90, 50, ""),
-	aututils.PVCRuleByUsageCapacity(50, 50, "21474836480"),
+	aututils.PVCRuleByUsageCapacity(50, 50, "20Gi"),
 	aututils.PVCRuleByUsageCapacity(50, 300, ""),
 }
 
@@ -63,7 +63,6 @@ var _ = BeforeSuite(func() {
 var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
-		var err error
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPvcBasic", testSuiteName))
 
@@ -91,7 +90,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
 		})
@@ -331,12 +330,95 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandAddDisk}", testSuiteName), func() {
 
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
-// sizes of storage pools on the nodes where volumes reside
+// sizes of storage pools by adding new disks with fixed size to the nodes where volumes reside
+var _ = Describe(fmt.Sprintf("{%sPoolExpandFixedSizeAddDisk}", testSuiteName), func() {
+	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
+		var err error
+		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandFixedSizeAddDisk", testSuiteName))
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleFixedScaleSizeByAvailableCapacity(70, "32Gi", aututils.RuleScaleTypeAddDisk),
+		}
+		contexts := scheduleAppsWithAutopilot(testName, apRules)
+
+		Step("wait until workload completes on volume", func() {
+			for _, ctx := range contexts {
+				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
+		})
+
+		Step(fmt.Sprintf("wait for unscheduled resize of storage pool (%s)", unscheduledResizeTimeout), func() {
+			time.Sleep(unscheduledResizeTimeout)
+		})
+
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+	})
+})
+
+// This testsuite is used for performing basic scenarios with Autopilot rules where it
+// schedules apps and wait until workload is completed on the volumes and then validates
+// sizes of storage pools by resizing existing disks on the nodes where volumes reside
 var _ = Describe(fmt.Sprintf("{%sPoolExpandResizeDisk}", testSuiteName), func() {
 	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
 		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandResizeDisk", testSuiteName))
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByAvailableCapacity(70, 50, aututils.RuleScaleTypeResizeDisk),
+		}
+
+		contexts := scheduleAppsWithAutopilot(testName, apRules)
+		Step("wait until workload completes on volume", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
+		})
+
+		Step(fmt.Sprintf("wait for unscheduled resize of storage pool (%s)", unscheduledResizeTimeout), func() {
+			time.Sleep(unscheduledResizeTimeout)
+		})
+
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+	})
+})
+
+// This testsuite is used for performing basic scenarios with Autopilot rules where it
+// schedules apps and wait until workload is completed on the volumes and then validates
+// sizes of storage pools by resizing existing disks with fixed size on the nodes where volumes reside
+var _ = Describe(fmt.Sprintf("{%sPoolExpandFixedSizeResizeDisk}", testSuiteName), func() {
+	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
+		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandFixedSizeResizeDisk", testSuiteName))
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleFixedScaleSizeByAvailableCapacity(70, "16Gi", aututils.RuleScaleTypeResizeDisk),
 		}
 
 		contexts := scheduleAppsWithAutopilot(testName, apRules)
