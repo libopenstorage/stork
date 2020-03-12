@@ -197,7 +197,39 @@ func isCsiProvisioner(provisioner string) bool {
 	return false
 }
 
-func (a *azure) StartBackup(backup *storkapi.ApplicationBackup,
+func (a *azure) findExistingSnapshot(tags map[string]string) (*compute.Snapshot, error) {
+	snapshotList, err := a.snapshotClient.List(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	for {
+		for _, snap := range snapshotList.Values() {
+			match := true
+			// If any of the tags aren't found or match, skip the snapshot
+			for k, v := range tags {
+				if value, present := snap.Tags[k]; !present || *value != v {
+					match = false
+					break
+				}
+			}
+			if match {
+				return &snap, nil
+			}
+		}
+		// Move to the next page if there are more snapshots
+		if snapshotList.NotDone() {
+			if err := snapshotList.Next(); err != nil {
+				return nil, err
+			}
+		} else {
+			break
+		}
+	}
+	return nil, nil
+}
+
+func (a *azure) StartBackup(
+	backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
@@ -207,12 +239,14 @@ func (a *azure) StartBackup(backup *storkapi.ApplicationBackup,
 			log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
 			continue
 		}
-		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{}
-		volumeInfo.PersistentVolumeClaim = pvc.Name
-		volumeInfo.Namespace = pvc.Namespace
-		volumeInfo.DriverName = driverName
-		volumeInfo.Options = map[string]string{
-			resourceGroupKey: a.resourceGroup,
+		volumeInfo := &storkapi.ApplicationBackupVolumeInfo{
+			PersistentVolumeClaim: pvc.Name,
+			Namespace:             pvc.Namespace,
+			DriverName:            driverName,
+			Volume:                pvc.Spec.VolumeName,
+			Options: map[string]string{
+				resourceGroupKey: a.resourceGroup,
+			},
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
 
@@ -224,33 +258,36 @@ func (a *azure) StartBackup(backup *storkapi.ApplicationBackup,
 		if err != nil {
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
-		volume := pv.Spec.AzureDisk.DiskName
-		disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, volume)
-		if err != nil {
-			return nil, err
-		}
-		volumeInfo.Volume = pvc.Spec.VolumeName
-		snapshot := compute.Snapshot{
-			Name: to.StringPtr("stork-snapshot-" + string(uuid.NewUUID())),
-			SnapshotProperties: &compute.SnapshotProperties{
-				CreationData: &compute.CreationData{
-					CreateOption:     compute.Copy,
-					SourceResourceID: disk.ID,
+		tags := storkvolume.GetApplicationBackupLabels(backup, &pvc)
+
+		if snapshot, err := a.findExistingSnapshot(tags); err == nil && snapshot != nil {
+			volumeInfo.BackupID = *snapshot.Name
+		} else {
+			volume := pv.Spec.AzureDisk.DiskName
+			disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, volume)
+			if err != nil {
+				return nil, err
+			}
+			snapshot := compute.Snapshot{
+				Name: to.StringPtr("stork-snapshot-" + string(uuid.NewUUID())),
+				SnapshotProperties: &compute.SnapshotProperties{
+					CreationData: &compute.CreationData{
+						CreateOption:     compute.Copy,
+						SourceResourceID: disk.ID,
+					},
 				},
-			},
-			Tags: map[string]*string{
-				"created-by":           to.StringPtr("stork"),
-				"backup-uid":           to.StringPtr(string(backup.UID)),
-				"source-pvc-name":      to.StringPtr(pvc.Name),
-				"source-pvc-namespace": to.StringPtr(pvc.Namespace),
-			},
-			Location: disk.Location,
+				Tags:     make(map[string]*string),
+				Location: disk.Location,
+			}
+			for k, v := range tags {
+				snapshot.Tags[k] = to.StringPtr(v)
+			}
+			_, err = a.snapshotClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *snapshot.Name, snapshot)
+			if err != nil {
+				return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+			}
+			volumeInfo.BackupID = *snapshot.Name
 		}
-		_, err = a.snapshotClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *snapshot.Name, snapshot)
-		if err != nil {
-			return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
-		}
-		volumeInfo.BackupID = *snapshot.Name
 	}
 	return volumeInfos, nil
 }
@@ -328,6 +365,37 @@ func (a *azure) generatePVName() string {
 	return pvNamePrefix + string(uuid.NewUUID())
 }
 
+func (a *azure) findExistingDisk(tags map[string]string) (*compute.Disk, error) {
+	diskList, err := a.diskClient.List(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	for {
+		for _, disk := range diskList.Values() {
+			match := true
+			// If any of the tags aren't found or match, skip the disk
+			for k, v := range tags {
+				if value, present := disk.Tags[k]; !present || *value != v {
+					match = false
+					break
+				}
+			}
+			if match {
+				return &disk, nil
+			}
+		}
+		// Move to the next page if there are more disks
+		if diskList.NotDone() {
+			if err := diskList.Next(); err != nil {
+				return nil, err
+			}
+		} else {
+			break
+		}
+	}
+	return nil, nil
+}
+
 func (a *azure) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
@@ -347,34 +415,41 @@ func (a *azure) StartRestore(
 		if err != nil {
 			return nil, err
 		}
-		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{}
-		volumeInfo.PersistentVolumeClaim = backupVolumeInfo.PersistentVolumeClaim
-		volumeInfo.SourceNamespace = backupVolumeInfo.Namespace
-		volumeInfo.SourceVolume = backupVolumeInfo.Volume
-		volumeInfo.RestoreVolume = a.generatePVName()
-		volumeInfo.DriverName = driverName
-		volumeInfos = append(volumeInfos, volumeInfo)
-		disk := compute.Disk{
-
-			Name: &volumeInfo.RestoreVolume,
-			DiskProperties: &compute.DiskProperties{
-				CreationData: &compute.CreationData{
-					CreateOption:     compute.Copy,
-					SourceResourceID: snapshot.ID,
-				},
-			},
-			Tags: map[string]*string{
-				"created-by":           to.StringPtr("stork"),
-				"restore-uid":          to.StringPtr(string(restore.UID)),
-				"source-pvc-name":      to.StringPtr(volumeInfo.PersistentVolumeClaim),
-				"source-pvc-namespace": to.StringPtr(volumeInfo.SourceNamespace),
-			},
-			Location: snapshot.Location,
+		volumeInfo := &storkapi.ApplicationRestoreVolumeInfo{
+			PersistentVolumeClaim: backupVolumeInfo.PersistentVolumeClaim,
+			SourceNamespace:       backupVolumeInfo.Namespace,
+			SourceVolume:          backupVolumeInfo.Volume,
+			DriverName:            driverName,
 		}
-		_, err = a.diskClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *disk.Name, disk)
-		if err != nil {
-			return nil, fmt.Errorf("error triggering restore for volume: %v: %v",
-				backupVolumeInfo.Volume, err)
+		volumeInfos = append(volumeInfos, volumeInfo)
+
+		tags := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
+
+		if disk, err := a.findExistingDisk(tags); err == nil && disk != nil {
+			volumeInfo.RestoreVolume = *disk.Name
+		} else {
+			disk := compute.Disk{
+
+				Name: to.StringPtr(a.generatePVName()),
+				DiskProperties: &compute.DiskProperties{
+					CreationData: &compute.CreationData{
+						CreateOption:     compute.Copy,
+						SourceResourceID: snapshot.ID,
+					},
+				},
+				Tags:     make(map[string]*string),
+				Location: snapshot.Location,
+			}
+
+			for k, v := range tags {
+				disk.Tags[k] = to.StringPtr(v)
+			}
+			_, err = a.diskClient.CreateOrUpdate(context.TODO(), a.resourceGroup, *disk.Name, disk)
+			if err != nil {
+				return nil, fmt.Errorf("error triggering restore for volume: %v: %v",
+					backupVolumeInfo.Volume, err)
+			}
+			volumeInfo.RestoreVolume = *disk.Name
 		}
 	}
 	return volumeInfos, nil

@@ -105,9 +105,11 @@ KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
 sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g'  /specs/stork-deployment.yaml
 
+# Replace volume driver in stork
 if [ "$volume_driver" != "pxd" ] ; then
-	sed -i 's/- --driver=pxd//g' /testspecs/stork-test-pod.yaml
+	sed -i 's/- --driver=pxd//g' /specs/stork-deployment.yaml
 fi
+
 # For integration test mock times
 kubectl delete cm stork-mock-time  -n kube-system || true
 kubectl create cm stork-mock-time  -n kube-system --from-literal=time=""
