@@ -15,6 +15,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	restoreNamespacePrefix = "restore"
+)
+
 // CreateOrganization creates org on px-backup
 func CreateOrganization(orgID string) {
 	Step(fmt.Sprintf("Create organization [%s]", orgID), func() {
@@ -201,15 +205,46 @@ func CreateSourceAndDestClusters(cloudCred string, orgID string) {
 
 	// Register source cluster with backup driver
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", SourceClusterName, orgID), func() {
-		srcClusterKubeConfig := fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0])
-		CreateCluster(SourceClusterName, cloudCred, srcClusterKubeConfig, orgID)
+		srcClusterConfigPath, err := getSourceClusterConfigPath()
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+
+		CreateCluster(SourceClusterName, cloudCred, srcClusterConfigPath, orgID)
 	})
 
 	// Register destination cluster with backup driver
 	Step(fmt.Sprintf("Create cluster [%s] in org [%s]", DestinationClusterName, orgID), func() {
-		destClusterKubeConfig := fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1])
-		CreateCluster(DestinationClusterName, cloudCred, destClusterKubeConfig, orgID)
+		dstClusterConfigPath, err := getDestinationClusterConfigPath()
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+		CreateCluster(DestinationClusterName, cloudCred, dstClusterConfigPath, orgID)
 	})
+}
+
+func getSourceClusterConfigPath() (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("Empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	Expect(len(kubeconfigList)).Should(BeNumerically(">=", 2),
+		"At least minimum two kubeconfigs required")
+
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
+}
+
+func getDestinationClusterConfigPath() (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("Empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	Expect(len(kubeconfigList)).Should(BeNumerically(">=", 2),
+		"At least minimum two kubeconfigs required")
+
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
 }
 
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
@@ -233,6 +268,16 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 		}
 	}
 	return nil
+}
+
+// GetRestoreAppNamespaceMapping returns a mapping between
+// restore namespaces and backup namespaces
+func GetRestoreAppNamespaceMapping(bkpNamespaces []string) map[string]string {
+	namespaceMapping := make(map[string]string)
+	for _, bkpNamespace := range bkpNamespaces {
+		namespaceMapping[bkpNamespace] = fmt.Sprintf("%s-%s", restoreNamespacePrefix, bkpNamespace)
+	}
+	return namespaceMapping
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup

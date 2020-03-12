@@ -106,9 +106,18 @@ var _ = Describe("{BackupCreateRestore}", func() {
 		// Change namespaces to restored apps only after backed up apps are cleaned up
 		// to avoid switching back namespaces to backup namespaces
 		Step(fmt.Sprintf("Validate Restore [%s]", RestoreName), func() {
-			err := ChangeNamespaces(contexts, namespaceMapping)
+			destClusterConfigPath, err := getDestinationClusterConfigPath()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+
+			err = Inst().S.SetConfig(destClusterConfigPath)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to switch to context to destination cluster. Error: [%v]", err))
+
+			/*err = ChangeNamespaces(contexts, namespaceMapping)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to change namespace to restored namespace. Error: [%v]", err))
+			*/
 			ValidateApplications(contexts)
 		})
 
