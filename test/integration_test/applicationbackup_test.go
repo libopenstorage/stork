@@ -905,7 +905,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	backupLocation2.Location.Sync = true
 	_, err = storkops.Instance().UpdateBackupLocation(backupLocation2)
 	require.NoError(t, err, "Failed to set backup-location sync to true")
-	logrus.Infof("Updated application backup on 2nd cluster %s: sync:%t", backupLocation2.Name, backupLocation2.Location.Sync)
+	logrus.Infof("Updated backup location on 2nd cluster %s: sync:%t", backupLocation2.Name, backupLocation2.Location.Sync)
 
 	// Check periodically to see if the backup from this test is synced on second cluster
 	var allAppBackups *storkv1.ApplicationBackupList
@@ -972,11 +972,31 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "App is not running on second cluster post-restore.")
 
 	// Cleanup both clusters
-	err = storkops.Instance().DeleteBackupLocation(backupLocationName, ns.Name)
-	require.NoError(t, err, "Failed to delete  backup location %s on first cluster: %v.", ns.Name, err)
+	srcBackupLocation, err := storkops.Instance().GetBackupLocation(backupLocation.Name, backupLocation.Namespace)
+	require.NoError(t, err, "Failed to get backup-location on first cluster")
+
+	srcBackupLocation.Location.Sync = false
+	_, err = storkops.Instance().UpdateBackupLocation(srcBackupLocation)
+	require.NoError(t, err, "Failed to set backup-location sync to false on first cluster")
+	logrus.Infof("Updated backup location on first cluster %s: sync:%t", srcBackupLocation.Name, srcBackupLocation.Location.Sync)
+
+	destBackupLocation, err := storkops.Instance().GetBackupLocation(backupLocation2.Name, backupLocation2.Namespace)
+	require.NoError(t, err, "Failed to get backup-location on second cluster")
+
+	destBackupLocation.Location.Sync = false
+	_, err = storkops.Instance().UpdateBackupLocation(destBackupLocation)
+	require.NoError(t, err, "Failed to set backup-location sync to false on second cluster")
+	logrus.Infof("Updated backup location on second cluster %s: sync:%t", destBackupLocation.Name, destBackupLocation.Location.Sync)
+
+	time.Sleep(time.Second * 30)
 
 	err = deleteAndWaitForBackupDeletion(ns.Name)
-	require.NoError(t, err, "All backups not delete backup: %v.", err)
+	require.NoError(t, err, "All backups not deleted on the first cluster: %v.", err)
+
+	time.Sleep(time.Second * 30)
+
+	err = storkops.Instance().DeleteBackupLocation(srcBackupLocation.Name, ns.Name)
+	require.NoError(t, err, "Failed to delete  backup location %s on first cluster: %v.", ns.Name, err)
 
 	destroyAndWait(t, []*scheduler.Context{appCtx})
 
@@ -986,11 +1006,13 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	err = setRemoteConfig(remoteFilePath)
 	require.NoError(t, err, "Error setting remote config")
 
-	err = storkops.Instance().DeleteBackupLocation(backupLocationName, ns.Name)
-	require.NoError(t, err, "Failed to delete  backup location %s on first cluster: %v.", ns.Name, err)
-
 	err = deleteAndWaitForBackupDeletion(ns.Name)
-	require.NoError(t, err, "All backups not delete backup: %v.", err)
+	require.NoError(t, err, "All backups not deleted on the second cluster: %v.", err)
+
+	time.Sleep(time.Second * 30)
+
+	err = storkops.Instance().DeleteBackupLocation(destBackupLocation.Name, ns.Name)
+	require.NoError(t, err, "Failed to delete  backup location %s on second cluster: %v.", ns.Name, err)
 
 	destroyAndWait(t, []*scheduler.Context{appCtx})
 }
