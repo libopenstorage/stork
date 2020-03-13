@@ -13,6 +13,7 @@ focus_tests=""
 auth_secret_configmap=""
 volume_driver="pxd"
 short_test=false
+backup_location_path="test-restore-path"
 for i in "$@"
 do
 case $i in
@@ -91,6 +92,12 @@ case $i in
     --short_test)
         echo "Skip tests that are long/not supported: $2"
         short_test=$2
+        shift
+        shift
+        ;;
+    --backup_location_path)
+        echo "Path used for backups in application backup tests: $2"
+        backup_location_path=$2
         shift
         shift
         ;;
@@ -198,6 +205,7 @@ sed -i 's/- -backup-scale-count=10/- -backup-scale-count='"$backup_scale"'/g' /t
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed  -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml
+sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-test-pod.yaml
 
 if [ "$volume_driver" != "" ] ; then
 	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml

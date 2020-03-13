@@ -78,6 +78,8 @@ spec:
       value: auth_secret_configmap
     - name: PX_SHARED_SECRET
       value: px_shared_secret_key
+    - name: BACKUP_LOCATION_PATH 
+      value: backup_location_path 
   hostNetwork: false
   hostPID: false
   volumes:
