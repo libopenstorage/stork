@@ -72,6 +72,7 @@ const (
 	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
 	storageProvisioner       = "STORAGE_PROVISIONER"
 	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
+	backupPathVar            = "BACKUP_LOCATION_PATH"
 )
 
 var nodeDriver node.Driver
@@ -86,6 +87,7 @@ var authToken string
 var authTokenConfigMap string
 var volumeDriverName string
 var schedulerName string
+var backupLocationPath string
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -100,6 +102,7 @@ func setup() error {
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	provisioner := os.Getenv(storageProvisioner)
+	backupLocationPath = os.Getenv(backupPathVar)
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
 		return fmt.Errorf("Error getting stork driver %s: %v", volumeDriverName, err)
 	}
