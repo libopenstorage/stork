@@ -128,6 +128,7 @@ type Backup interface {
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
+// Restore object interface
 type Restore interface {
 	// CreateRestore creates restore object
 	CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error)

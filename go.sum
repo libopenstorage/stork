@@ -421,6 +421,8 @@ github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f h1:3jJaQhY+
 github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/px-backup-api v0.0.0-20200304031550-dcf5fdb94751 h1:bxjtn1yF7umEDPoaA2DUbHlt7WOEAgs1Zqr7lm/QWnQ=
 github.com/portworx/px-backup-api v0.0.0-20200304031550-dcf5fdb94751/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
+github.com/portworx/px-backup-api v0.0.0-20200313163823-1505cf973cc3 h1:X933t8gXhRfXuYF0e/8Qs1fO8++aRyAwYmpgoi5rnGI=
+github.com/portworx/px-backup-api v0.0.0-20200313163823-1505cf973cc3/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/sched-ops v0.0.0-20200131092350-9f2d9518f7b5 h1:GJsCBrEGu5ecxyReRpxTxqoqqDl8XwayWRGkRBa6IZ4=
 github.com/portworx/sched-ops v0.0.0-20200131092350-9f2d9518f7b5/go.mod h1:yb1ypNIiZQAmM7xAWGzO6dydwl/+vNC0WjUm5IvHUEY=
 github.com/portworx/sched-ops v0.0.0-20200205200838-f224d01bafb5 h1:rPBpZXeo9M1B8Z+uZnyGJ6sLaPHENNBVdbSS6kzhhsM=

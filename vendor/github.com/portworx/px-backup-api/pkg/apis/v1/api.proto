@@ -258,7 +258,20 @@ message BackupLocationInfo {
         (gogoproto.moretags) = "secure:\"true\""
     ];
     string cloud_credential = 4;
+    StatusInfo status = 5;
+    bool delete_backups = 6;
     oneof config { S3Config s3_config = 100; }
+    // Message for maintaing status of the object.
+    message StatusInfo {
+        enum Status {
+            Invalid = 0;
+            Valid = 1;
+            DeletePending = 2;
+        }
+
+        Status status = 1;
+        string reason = 2;
+    }
 }
 
 message BackupLocationObject {
@@ -283,6 +296,10 @@ message BackupInfo {
     Stage stage = 9;
     string pre_exec_rule = 10;
     string post_exec_rule = 11;
+    // Name of the backup schedule, if the backup was taken by schedule through
+    // px-backup.
+    // Otherwise it will be empty.
+    BackupSchedule backup_schedule = 12;
     enum Stage {
         Invalid = 0;
         Initial = 1;
@@ -291,6 +308,11 @@ message BackupInfo {
         Volumes = 4;
         Applications = 5;
         Final = 6;
+    }
+
+    message BackupSchedule {
+        string uid = 1;
+        string name = 2;
     }
 
     message Resource {
@@ -362,6 +384,14 @@ message RuleObject {
     RulesInfo rules_info = 2 [ (gogoproto.embed) = true ];
 }
 
+message ReplacePolicy {
+    enum Type {
+        Invalid = 0;
+        Retain = 1;
+        Delete = 2;
+    }
+}
+
 // Message for restore info
 message RestoreInfo {
     // Name of backup to restore from
@@ -373,12 +403,7 @@ message RestoreInfo {
     // Namespace Mapping
     map<string, string> namespace_mapping = 4;
     // Restore replace policy type ("delete"/"retain")
-    ReplacePolicy replace_policy = 5;
-    enum ReplacePolicy {
-        Invalid = 0;
-        Retain = 1;
-        Delete = 2;
-    }
+    ReplacePolicy.Type replace_policy = 5;
 
     StatusInfo status = 6;
     repeated Resource resources = 7;
@@ -878,6 +903,9 @@ message BackupLocationInspectResponse {
 message BackupLocationDeleteRequest {
     string org_id = 1;
     string name = 2;
+    // delete_backups indicates whether the cloud backup files need to
+    // be deleted or retained.
+    bool delete_backups = 3;
 }
 
 // Define BackupLocationInspectResponse struct
@@ -1031,6 +1059,8 @@ message RestoreCreateRequest {
     string cluster = 3;
     // mapping of the namespaces from the backup to which restore should be done
     map<string, string> namespace_mapping = 4;
+    // replace policy to use if the resource already exists
+    ReplacePolicy.Type replace_policy = 5;
 }
 
 // Define RestoreCreateResponse struct

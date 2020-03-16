@@ -354,6 +354,14 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "delete_backups",
+            "description": "delete_backups indicates whether the cloud backup files need to\nbe deleted or retained.",
+            "in": "query",
+            "required": false,
+            "type": "boolean",
+            "format": "boolean"
           }
         ],
         "tags": [
@@ -1661,6 +1669,21 @@
         },
         "post_exec_rule": {
           "type": "string"
+        },
+        "backup_schedule": {
+          "$ref": "#/definitions/BackupInfoBackupSchedule",
+          "description": "Name of the backup schedule, if the backup was taken by schedule through\npx-backup.\nOtherwise it will be empty."
+        }
+      }
+    },
+    "BackupInfoBackupSchedule": {
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
         }
       }
     },
@@ -1816,10 +1839,38 @@
         "cloud_credential": {
           "type": "string"
         },
+        "status": {
+          "$ref": "#/definitions/BackupLocationInfoStatusInfo"
+        },
+        "delete_backups": {
+          "type": "boolean",
+          "format": "boolean"
+        },
         "s3_config": {
           "$ref": "#/definitions/S3Config"
         }
       }
+    },
+    "BackupLocationInfoStatusInfo": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/BackupLocationInfoStatusInfoStatus"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "description": "Message for maintaing status of the object."
+    },
+    "BackupLocationInfoStatusInfoStatus": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "Valid",
+        "DeletePending"
+      ],
+      "default": "Invalid"
     },
     "BackupLocationInfoType": {
       "type": "string",
@@ -2410,6 +2461,15 @@
         }
       }
     },
+    "ReplacePolicyType": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "Retain",
+        "Delete"
+      ],
+      "default": "Invalid"
+    },
     "RestoreCreateRequest": {
       "type": "object",
       "properties": {
@@ -2430,6 +2490,10 @@
             "type": "string"
           },
           "title": "mapping of the namespaces from the backup to which restore should be done"
+        },
+        "replace_policy": {
+          "$ref": "#/definitions/ReplacePolicyType",
+          "title": "replace policy to use if the resource already exists"
         }
       },
       "title": "Define RestoreCreateRequest struct"
@@ -2484,7 +2548,7 @@
           "title": "Namespace Mapping"
         },
         "replace_policy": {
-          "$ref": "#/definitions/RestoreInfoReplacePolicy",
+          "$ref": "#/definitions/ReplacePolicyType",
           "title": "Restore replace policy type (\"delete\"/\"retain\")"
         },
         "status": {
@@ -2508,15 +2572,6 @@
         }
       },
       "title": "Message for restore info"
-    },
-    "RestoreInfoReplacePolicy": {
-      "type": "string",
-      "enum": [
-        "Invalid",
-        "Retain",
-        "Delete"
-      ],
-      "default": "Invalid"
     },
     "RestoreInfoResource": {
       "type": "object",
