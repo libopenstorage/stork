@@ -146,6 +146,10 @@ func (p *portworx) CreateCloudCredential(req *api.CloudCredentialCreateRequest) 
 	return p.cloudCredentialManager.Create(context.Background(), req)
 }
 
+func (p *portworx) UpdateCloudCredential(req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error) {
+	return p.cloudCredentialManager.Update(context.Background(), req)
+}
+
 func (p *portworx) InspectCloudCredential(req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error) {
 	return p.cloudCredentialManager.Inspect(context.Background(), req)
 }
@@ -160,6 +164,10 @@ func (p *portworx) DeleteCloudCredential(req *api.CloudCredentialDeleteRequest) 
 
 func (p *portworx) CreateCluster(req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error) {
 	return p.clusterManager.Create(context.Background(), req)
+}
+
+func (p *portworx) UpdateCluster(req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error) {
+	return p.clusterManager.Update(context.Background(), req)
 }
 
 func (p *portworx) InspectCluster(req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error) {
@@ -178,6 +186,10 @@ func (p *portworx) CreateBackupLocation(req *api.BackupLocationCreateRequest) (*
 	return p.backupLocationManager.Create(context.Background(), req)
 }
 
+func (p *portworx) UpdateBackupLocation(req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error) {
+	return p.backupLocationManager.Update(context.Background(), req)
+}
+
 func (p *portworx) EnumerateBackupLocation(req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
 	return p.backupLocationManager.Enumerate(context.Background(), req)
 }
@@ -192,6 +204,10 @@ func (p *portworx) DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*
 
 func (p *portworx) CreateBackup(req *api.BackupCreateRequest) (*api.BackupCreateResponse, error) {
 	return p.backupManager.Create(context.Background(), req)
+}
+
+func (p *portworx) UpdateBackup(req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error) {
+	return p.backupManager.Update(context.Background(), req)
 }
 
 func (p *portworx) EnumerateBackup(req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error) {
@@ -250,6 +266,10 @@ func (p *portworx) CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCre
 	return p.restoreManager.Create(context.Background(), req)
 }
 
+func (p *portworx) UpdateRestore(req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error) {
+	return p.restoreManager.Update(context.Background(), req)
+}
+
 func (p *portworx) EnumerateRestore(req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
 	return p.restoreManager.Enumerate(context.Background(), req)
 }
@@ -262,6 +282,8 @@ func (p *portworx) DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDel
 	return p.restoreManager.Delete(context.Background(), req)
 }
 
+// WaitForRestoreCompletion waits for restore to complete successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForRestoreCompletion(restoreName string, orgID string,
 	timeout time.Duration, timeBeforeRetry time.Duration) error {
 	req := &api.RestoreInspectRequest{
@@ -306,6 +328,10 @@ func (p *portworx) CreateSchedulePolicy(req *api.SchedulePolicyCreateRequest) (*
 	return p.schedulePolicyManager.Create(context.Background(), req)
 }
 
+func (p *portworx) UpdateSchedulePolicy(req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error) {
+	return p.schedulePolicyManager.Update(context.Background(), req)
+}
+
 func (p *portworx) EnumerateSchedulePolicy(req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
 	return p.schedulePolicyManager.Enumerate(context.Background(), req)
 }
@@ -322,6 +348,10 @@ func (p *portworx) CreateBackupSchedule(req *api.BackupScheduleCreateRequest) (*
 	return p.backupScheduleManager.Create(context.Background(), req)
 }
 
+func (p *portworx) UpdateBackupSchedule(req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error) {
+	return p.backupScheduleManager.Update(context.Background(), req)
+}
+
 func (p *portworx) EnumerateBackupSchedule(req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
 	return p.backupScheduleManager.Enumerate(context.Background(), req)
 }
@@ -332,6 +362,43 @@ func (p *portworx) InspectBackupSchedule(req *api.BackupScheduleInspectRequest) 
 
 func (p *portworx) DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error) {
 	return p.backupScheduleManager.Delete(context.Background(), req)
+}
+
+// Wait for backup to start running
+func (p *portworx) WaitForRunning(req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error {
+	var backupErr error
+
+	t := func() (interface{}, bool, error) {
+		resp, err := p.backupManager.Inspect(context.Background(), req)
+
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Check if backup in progress - stop
+		currentStatus := resp.GetBackup().GetStatus().GetStatus()
+		if currentStatus == api.BackupInfo_StatusInfo_InProgress {
+			return nil, false, nil
+		} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
+			currentStatus == api.BackupInfo_StatusInfo_Aborted ||
+			currentStatus == api.BackupInfo_StatusInfo_Invalid {
+
+			backupErr = fmt.Errorf("backup [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+			return nil, false, backupErr
+		}
+
+		// Otherwise retry
+		return nil, true, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+
+	if err != nil || backupErr != nil {
+		return fmt.Errorf("failed to wait for running start. Error:[%v] Reason:[%v]", err, backupErr)
+	}
+
+	return nil
 }
 
 func init() {
