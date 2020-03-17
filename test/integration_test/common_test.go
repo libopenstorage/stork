@@ -68,6 +68,7 @@ const (
 	clusterDomainWaitTimeout time.Duration = 10 * time.Minute
 	groupSnapshotWaitTimeout time.Duration = 15 * time.Minute
 	defaultWaitInterval      time.Duration = 10 * time.Second
+	backupWaitInterval       time.Duration = 2 * time.Second
 
 	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
 	storageProvisioner       = "STORAGE_PROVISIONER"
