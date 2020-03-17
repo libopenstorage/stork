@@ -14,6 +14,7 @@ auth_secret_configmap=""
 volume_driver="pxd"
 short_test=false
 backup_location_path="test-restore-path"
+cloud_secret=""
 for i in "$@"
 do
 case $i in
@@ -101,6 +102,12 @@ case $i in
         shift
         shift
         ;;
+    --cloud_secret)
+        echo "Secret name for cloud provider API access: $2"
+        cloud_secret=$2
+        shift
+        shift
+        ;;
 esac
 done
 
@@ -137,6 +144,10 @@ else
   echo "No environment variables passed."
 fi
 
+if [ "$volume_driver" == "azure" ] ; then
+    echo "For azure backups add environment variables to stork from existing k8s secret px-azure"
+    kubectl -n  kube-system set env --from=secret/$cloud_secret deploy/stork
+fi
 
 # Delete the pods to make sure we are waiting for the status from the
 # new pods
