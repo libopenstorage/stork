@@ -183,6 +183,33 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	return nil
 }
 
+// SetConfig sets kubeconfig. If kubeconfigPath == "" then
+// sets it to inClusterConfig
+func (k *K8s) SetConfig(kubeconfigPath string) error {
+	var config *rest.Config
+	var err error
+
+	if kubeconfigPath == "" {
+		config = nil
+	} else {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return err
+		}
+	}
+	k8sCore.SetConfig(config)
+	k8sApps.SetConfig(config)
+	k8sCore.SetConfig(config)
+	k8sApps.SetConfig(config)
+	k8sStork.SetConfig(config)
+	k8sStorage.SetConfig(config)
+	k8sExternalStorage.SetConfig(config)
+	k8sAutopilot.SetConfig(config)
+	k8sRbac.SetConfig(config)
+
+	return nil
+}
+
 func (k *K8s) addNewNode(newNode v1.Node) error {
 	n := k.parseK8SNode(newNode)
 	if err := k.IsNodeReady(n); err != nil {
