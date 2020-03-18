@@ -482,14 +482,6 @@ func (d *dcos) volumeOperation(ctx *scheduler.Context, f func(string, map[string
 	return nil
 }
 
-func (d *dcos) SetConfig(configPath string) error {
-	// TODO: Implement this method
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "SetConfig()",
-	}
-}
-
 func (d *dcos) Describe(ctx *scheduler.Context) (string, error) {
 	// TODO: Implement this method
 	return "", &errors.ErrNotSupported{

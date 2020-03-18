@@ -29,9 +29,7 @@ type Ops interface {
 // Instance returns a singleton instance of the client.
 func Instance() Ops {
 	once.Do(func() {
-		if instance == nil {
-			instance = &Client{}
-		}
+		instance = &Client{}
 	})
 	return instance
 }

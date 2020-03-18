@@ -46,18 +46,6 @@ message ClusterInfo {
         (gogoproto.moretags) = "secure:\"true\""
     ];
     string cloud_credential = 3;
-    StatusInfo status = 4;
-
-    // Message for maintaing status of the cluster.
-    message StatusInfo {
-        enum Status {
-            Invalid = 0;
-            Online = 1;
-            Offline = 2;
-        }
-        Status status = 1;
-        string reason = 2;
-    }
 }
 
 message ClusterObject {
@@ -89,23 +77,6 @@ message AzureConfig {
     string account_name = 1;
     string account_key = 2 [
         (gogoproto.jsontag) = "accountkey",
-        (gogoproto.moretags) = "secure:\"true\""
-    ];
-    string client_secret = 3 [
-        (gogoproto.jsontag) = "clientsecret",
-        (gogoproto.moretags) = "secure:\"true\""
-    ];
-    string client_id = 4 [
-        (gogoproto.jsontag) = "clientid",
-        (gogoproto.moretags) = "secure:\"true\""
-    ];
-    string tenant_id = 5 [
-        (gogoproto.jsontag) = "tenantid",
-        (gogoproto.moretags) = "secure:\"true\""
-    ];
-    // TODO: Need to see if this has to be here or in the backup object.
-    string subscription_id = 6 [
-        (gogoproto.jsontag) = "subscriptionid",
         (gogoproto.moretags) = "secure:\"true\""
     ];
 }
@@ -186,8 +157,11 @@ message SchedulePolicyInfo {
     DailyPolicy daily = 2;
     WeeklyPolicy weekly = 3;
     MonthlyPolicy monthly = 4;
+    // Reference count to track the number of backup schedule that are using
+    // this schedulePolicy.
+    int32 ref_count = 5;
     // list of backup schedule object that uses this schedule policy.
-    repeated string backup_schedule = 5;
+    repeated string backup_schedule = 6;
 }
 
 message SchedulePolicyObject {
@@ -209,8 +183,6 @@ message BackupScheduleInfo {
     repeated string namespaces = 7;
     // Label selectors to choose resources
     map<string, string> label_selectors = 8;
-    string pre_exec_rule = 9;
-    string post_exec_rule = 10;
     enum ReclaimPolicyType {
         Invalid = 0;
         Delete = 1;
@@ -258,20 +230,7 @@ message BackupLocationInfo {
         (gogoproto.moretags) = "secure:\"true\""
     ];
     string cloud_credential = 4;
-    StatusInfo status = 5;
-    bool delete_backups = 6;
     oneof config { S3Config s3_config = 100; }
-    // Message for maintaing status of the object.
-    message StatusInfo {
-        enum Status {
-            Invalid = 0;
-            Valid = 1;
-            DeletePending = 2;
-        }
-
-        Status status = 1;
-        string reason = 2;
-    }
 }
 
 message BackupLocationObject {
@@ -296,10 +255,6 @@ message BackupInfo {
     Stage stage = 9;
     string pre_exec_rule = 10;
     string post_exec_rule = 11;
-    // Name of the backup schedule, if the backup was taken by schedule through
-    // px-backup.
-    // Otherwise it will be empty.
-    BackupSchedule backup_schedule = 12;
     enum Stage {
         Invalid = 0;
         Initial = 1;
@@ -308,11 +263,6 @@ message BackupInfo {
         Volumes = 4;
         Applications = 5;
         Final = 6;
-    }
-
-    message BackupSchedule {
-        string uid = 1;
-        string name = 2;
     }
 
     message Resource {
@@ -384,14 +334,6 @@ message RuleObject {
     RulesInfo rules_info = 2 [ (gogoproto.embed) = true ];
 }
 
-message ReplacePolicy {
-    enum Type {
-        Invalid = 0;
-        Retain = 1;
-        Delete = 2;
-    }
-}
-
 // Message for restore info
 message RestoreInfo {
     // Name of backup to restore from
@@ -403,7 +345,12 @@ message RestoreInfo {
     // Namespace Mapping
     map<string, string> namespace_mapping = 4;
     // Restore replace policy type ("delete"/"retain")
-    ReplacePolicy.Type replace_policy = 5;
+    ReplacePolicy replace_policy = 5;
+    enum ReplacePolicy {
+        Invalid = 0;
+        Retain = 1;
+        Delete = 2;
+    }
 
     StatusInfo status = 6;
     repeated Resource resources = 7;
@@ -417,7 +364,6 @@ message RestoreInfo {
         string group = 3;
         string kind = 4;
         string version = 5;
-        StatusInfo status = 6;
     }
 
     message Volume {
@@ -441,7 +387,7 @@ message RestoreInfo {
             Failed = 4;
             Deleting = 5;
             Success = 6;
-            Retained = 7;
+            Captured = 7;
             PartialSuccess = 8;
         }
 
@@ -903,9 +849,6 @@ message BackupLocationInspectResponse {
 message BackupLocationDeleteRequest {
     string org_id = 1;
     string name = 2;
-    // delete_backups indicates whether the cloud backup files need to
-    // be deleted or retained.
-    bool delete_backups = 3;
 }
 
 // Define BackupLocationInspectResponse struct
@@ -1057,10 +1000,6 @@ message RestoreCreateRequest {
     string backup = 2;
     // uid or name of cluster
     string cluster = 3;
-    // mapping of the namespaces from the backup to which restore should be done
-    map<string, string> namespace_mapping = 4;
-    // replace policy to use if the resource already exists
-    ReplacePolicy.Type replace_policy = 5;
 }
 
 // Define RestoreCreateResponse struct
@@ -1223,27 +1162,4 @@ service Rules {
             delete : "/v1/rule/{org_id}/{name}"
         };
     }
-}
-
-service Version {
-    // Get gets the version of the server
-    rpc Get(VersionGetRequest) returns (VersionGetResponse) {
-        option (google.api.http) = {
-            get : "/v1/version"
-        };
-    }
-}
-
-message VersionInfo {
-    string major = 1;
-    string minor = 2;
-    string patch = 3;
-    string git_commit = 4;
-    string build_date = 5;
-}
-
-message VersionGetRequest {}
-message VersionGetResponse {
-    // version information of the server
-    VersionInfo version = 1;
 }

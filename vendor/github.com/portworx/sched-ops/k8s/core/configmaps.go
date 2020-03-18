@@ -27,7 +27,7 @@ func (c *Client) GetConfigMap(name string, namespace string) (*corev1.ConfigMap,
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().ConfigMaps(namespace).Get(name, metav1.GetOptions{})
+	return c.core.ConfigMaps(namespace).Get(name, metav1.GetOptions{})
 }
 
 // CreateConfigMap creates a new config map object if it does not already exist.
@@ -41,7 +41,7 @@ func (c *Client) CreateConfigMap(configMap *corev1.ConfigMap) (*corev1.ConfigMap
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.kubernetes.CoreV1().ConfigMaps(ns).Create(configMap)
+	return c.core.ConfigMaps(ns).Create(configMap)
 }
 
 // DeleteConfigMap deletes the given config map
@@ -54,7 +54,7 @@ func (c *Client) DeleteConfigMap(name, namespace string) error {
 		namespace = corev1.NamespaceDefault
 	}
 
-	return c.kubernetes.CoreV1().ConfigMaps(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.core.ConfigMaps(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -70,7 +70,7 @@ func (c *Client) UpdateConfigMap(configMap *corev1.ConfigMap) (*corev1.ConfigMap
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.kubernetes.CoreV1().ConfigMaps(ns).Update(configMap)
+	return c.core.ConfigMaps(ns).Update(configMap)
 }
 
 // WatchConfigMap sets up a watcher that listens for changes on the config map
@@ -84,7 +84,7 @@ func (c *Client) WatchConfigMap(configMap *corev1.ConfigMap, fn WatchFunc) error
 		Watch:         true,
 	}
 
-	watchInterface, err := c.kubernetes.CoreV1().ConfigMaps(configMap.Namespace).Watch(listOptions)
+	watchInterface, err := c.core.ConfigMaps(configMap.Namespace).Watch(listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for config maps")
 		return err

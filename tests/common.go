@@ -6,24 +6,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
 
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/sched"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/sirupsen/logrus"
-	appsapi "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	storageapi "k8s.io/api/storage/v1"
 
 	"github.com/portworx/torpedo/drivers/backup"
 	// import aks driver to invoke it's init
@@ -267,11 +259,6 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 func DeleteVolumesAndWait(ctx *scheduler.Context) {
 	vols := DeleteVolumes(ctx)
 	ValidateVolumesDeleted(ctx.App.Key, vols)
-}
-
-// GetAppNamespace returns namespace in which context is created
-func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
-	return ctx.App.GetID(fmt.Sprintf("%s-%s", taskname, Inst().InstanceID))
 }
 
 // ScheduleApplications schedules but does not wait for applications
@@ -530,128 +517,6 @@ func PerformSystemCheck() {
 			}
 		})
 	})
-}
-
-// ChangeNamespaces updates the namespace in supplied in-memory contexts.
-// It does not apply changes on scheduler
-func ChangeNamespaces(contexts []*scheduler.Context,
-	namespaceMapping map[string]string) error {
-
-	for _, ctx := range contexts {
-		for _, spec := range ctx.App.SpecList {
-			err := updateNamespace(spec, namespaceMapping)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func updateNamespace(in interface{}, namespaceMapping map[string]string) error {
-	if specObj, ok := in.(*appsapi.Deployment); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*appsapi.StatefulSet); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*appsapi.DaemonSet); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*v1.Service); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*v1.PersistentVolumeClaim); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storageapi.StorageClass); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*snapv1.VolumeSnapshot); ok {
-		namespace := namespaceMapping[specObj.Metadata.GetNamespace()]
-		specObj.Metadata.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.GroupVolumeSnapshot); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*v1.Secret); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*v1.ConfigMap); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.Rule); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*v1.Pod); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.ClusterPair); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.Migration); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.MigrationSchedule); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.BackupLocation); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.ApplicationBackup); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.SchedulePolicy); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.ApplicationRestore); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.ApplicationClone); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*storkapi.VolumeSnapshotRestore); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*apapi.AutopilotRule); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*v1.ServiceAccount); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*rbacv1.Role); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	} else if specObj, ok := in.(*rbacv1.RoleBinding); ok {
-		namespace := namespaceMapping[specObj.GetNamespace()]
-		specObj.SetNamespace(namespace)
-		return nil
-	}
-
-	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
 }
 
 // AfterEachTest runs collect support bundle after each test when it fails

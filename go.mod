@@ -14,7 +14,7 @@ require (
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
 	github.com/docker/go-connections v0.4.0 // indirect
-	github.com/docker/go-units v0.4.0 // indirect
+	github.com/docker/go-units v0.4.0
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7 // indirect
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
 	github.com/fatih/color v1.7.0
@@ -34,7 +34,7 @@ require (
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pborman/uuid v0.0.0-20180906182336-adf5a7427709
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
-	github.com/portworx/px-backup-api v0.0.0-20200313163823-1505cf973cc3
+	github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
 	github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.4.0

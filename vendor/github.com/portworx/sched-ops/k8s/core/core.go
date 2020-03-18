@@ -11,10 +11,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	storagev1client "k8s.io/client-go/kubernetes/typed/storage/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -48,16 +49,12 @@ type Ops interface {
 	SetConfig(config *rest.Config)
 	// GetVersion gets the version from the kubernetes cluster
 	GetVersion() (*version.Info, error)
-	// ResourceExists returns true if given resource type exists in kubernetes API server
-	ResourceExists(schema.GroupVersionKind) (bool, error)
 }
 
 // Instance returns a singleton instance of the client.
 func Instance() Ops {
 	once.Do(func() {
-		if instance == nil {
-			instance = &Client{}
-		}
+		instance = &Client{}
 	})
 	return instance
 }
@@ -68,9 +65,11 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new client.
-func New(kubernetes kubernetes.Interface) *Client {
+func New(kubernetes kubernetes.Interface, core corev1client.CoreV1Interface, storage storagev1client.StorageV1Interface) *Client {
 	return &Client{
 		kubernetes: kubernetes,
+		core:       core,
+		storage:    storage,
 	}
 }
 
@@ -81,8 +80,20 @@ func NewForConfig(c *rest.Config) (*Client, error) {
 		return nil, err
 	}
 
+	core, err := corev1client.NewForConfig(c)
+	if err != nil {
+		return nil, err
+	}
+
+	storage, err := storagev1client.NewForConfig(c)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Client{
 		kubernetes: kubernetes,
+		core:       core,
+		storage:    storage,
 	}, nil
 }
 
@@ -100,13 +111,16 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 // Client is a wrapper for kubernetes core client.
 type Client struct {
 	config     *rest.Config
+	core       corev1client.CoreV1Interface
+	storage    storagev1client.StorageV1Interface
 	kubernetes kubernetes.Interface
 }
 
 // SetConfig sets the config and resets the client.
 func (c *Client) SetConfig(cfg *rest.Config) {
 	c.config = cfg
-	c.kubernetes = nil
+	c.core = nil
+	c.storage = nil
 }
 
 // GetVersion returns server version
@@ -118,29 +132,9 @@ func (c *Client) GetVersion() (*version.Info, error) {
 	return c.kubernetes.Discovery().ServerVersion()
 }
 
-func (c *Client) ResourceExists(gvk schema.GroupVersionKind) (bool, error) {
-	if err := c.initClient(); err != nil {
-		return false, err
-	}
-	_, apiLists, err := c.kubernetes.Discovery().ServerGroupsAndResources()
-	if err != nil {
-		return false, err
-	}
-	for _, apiList := range apiLists {
-		if apiList.GroupVersion == gvk.GroupVersion().String() {
-			for _, r := range apiList.APIResources {
-				if r.Kind == gvk.Kind {
-					return true, nil
-				}
-			}
-		}
-	}
-	return false, nil
-}
-
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.kubernetes != nil {
+	if c.core != nil && c.storage != nil {
 		return nil
 	}
 
@@ -198,6 +192,17 @@ func (c *Client) loadClient() error {
 	if err != nil {
 		return err
 	}
+
+	c.core, err = corev1client.NewForConfig(c.config)
+	if err != nil {
+		return err
+	}
+
+	c.storage, err = storagev1client.NewForConfig(c.config)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

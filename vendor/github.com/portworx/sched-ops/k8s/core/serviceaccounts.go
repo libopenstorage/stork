@@ -21,7 +21,7 @@ func (c *Client) CreateServiceAccount(account *corev1.ServiceAccount) (*corev1.S
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().ServiceAccounts(account.Namespace).Create(account)
+	return c.core.ServiceAccounts(account.Namespace).Create(account)
 }
 
 // GetServiceAccount gets the given service account
@@ -30,7 +30,7 @@ func (c *Client) GetServiceAccount(name, namespace string) (*corev1.ServiceAccou
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().ServiceAccounts(namespace).Get(name, metav1.GetOptions{})
+	return c.core.ServiceAccounts(namespace).Get(name, metav1.GetOptions{})
 }
 
 // DeleteServiceAccount deletes the given service account
@@ -39,7 +39,7 @@ func (c *Client) DeleteServiceAccount(accountName, namespace string) error {
 		return err
 	}
 
-	return c.kubernetes.CoreV1().ServiceAccounts(namespace).Delete(accountName, &metav1.DeleteOptions{
+	return c.core.ServiceAccounts(namespace).Delete(accountName, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

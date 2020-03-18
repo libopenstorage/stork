@@ -218,6 +218,10 @@ func (p *portworx) InspectBackup(req *api.BackupInspectRequest) (*api.BackupInsp
 	return p.backupManager.Inspect(context.Background(), req)
 }
 
+func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
+	return p.backupManager.Delete(context.Background(), req)
+}
+
 // WaitForBackupCompletion waits for backup to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
@@ -233,6 +237,7 @@ func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 			// Error occured, just retry
 			return nil, true, err
 		}
+
 		// Check if backup status is complete
 		currentStatus := inspectBkpResp.GetBackup().GetStatus().GetStatus()
 		if currentStatus == api.BackupInfo_StatusInfo_Success {
@@ -241,8 +246,8 @@ func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 		} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
 			currentStatus == api.BackupInfo_StatusInfo_Aborted ||
 			currentStatus == api.BackupInfo_StatusInfo_Invalid {
-			backupError = fmt.Errorf("backup [%v] is in [%s] state. Reason: [%s]",
-				req.GetName(), currentStatus, inspectBkpResp.GetBackup().GetStatus().GetReason())
+			backupError = fmt.Errorf("backup [%v] is in [%s] state",
+				req.GetName(), currentStatus)
 			return nil, false, backupError
 		}
 		return nil,
@@ -257,9 +262,6 @@ func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 	}
 
 	return nil
-}
-func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
-	return p.backupManager.Delete(context.Background(), req)
 }
 
 func (p *portworx) CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {

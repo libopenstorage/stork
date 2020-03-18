@@ -48,7 +48,7 @@ func DoRetryWithTimeout(t func() (interface{}, bool, error), timeout, timeBefore
 				return
 			default:
 				out, retry, err := t()
-				if err == nil {
+				if err == nil || !retry {
 					resultChan <- out
 					return
 				}
