@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"testing"
 	"time"
 
@@ -53,8 +54,8 @@ const (
 	remotePairName        = "remoteclusterpair"
 	remoteConfig          = "remoteconfigmap"
 	specDir               = "./specs"
-	pairFilePath          = "./specs/cluster-pair"
-	pairFileName          = pairFilePath + "/cluster-pair.yaml"
+	defaultClusterPairDir = "cluster-pair"
+	pairFileName          = "cluster-pair.yaml"
 	remoteFilePath        = "/tmp/kubeconfig"
 	configMapSyncWaitTime = 3 * time.Second
 	defaultSchedulerName  = "default-scheduler"
@@ -338,13 +339,14 @@ func setRemoteConfig(kubeConfig string) error {
 	return nil
 }
 
-func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
-	err := os.MkdirAll(pairFilePath, 0777)
+func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir string) error {
+	err := os.MkdirAll(path.Join(specDir, clusterPairDir), 0777)
 	if err != nil {
-		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", pairFilePath, err)
+		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", specDir+"/"+clusterPairDir, err)
 		return err
 	}
-	pairFile, err := os.Create(pairFileName)
+	clusterPairFileName := path.Join(specDir, clusterPairDir, pairFileName)
+	pairFile, err := os.Create(clusterPairFileName)
 	if err != nil {
 		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
 		return err
@@ -364,7 +366,7 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		return err
 	}
 
-	truncCmd := `sed -i "$((` + "`wc -l " + pairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + pairFileName
+	truncCmd := `sed -i "$((` + "`wc -l " + clusterPairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + clusterPairFileName
 	logrus.Infof("trunc cmd: %v", truncCmd)
 	err = exec.Command("sh", "-c", truncCmd).Run()
 	if err != nil {
@@ -372,11 +374,27 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		return err
 	}
 
-	// stokctl generate command sets sched-ops to remoteclusterconfig
-	err = setRemoteConfig("")
-	if err != nil {
-		logrus.Errorf("setting kubeconfig to default failed %v", err)
-		return err
+	if resetConfig {
+		// stokctl generate command sets sched-ops to remoteclusterconfig
+		err = setRemoteConfig("")
+		if err != nil {
+			logrus.Errorf("setting kubeconfig to default failed %v", err)
+			return err
+		}
+	} else {
+		// Change kubeconfig to second cluster
+		err = dumpRemoteKubeConfig(remoteConfig)
+		if err != nil {
+			logrus.Errorf("unable to dump remote config: %v", err)
+			return err
+		}
+
+		// Change kubeconfig to destination
+		err = setRemoteConfig(remoteFilePath)
+		if err != nil {
+			logrus.Errorf("unable to set remote config: %v", err)
+			return err
+		}
 	}
 
 	if skipStorage {
@@ -384,11 +402,11 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		return nil
 	}
 
-	return addStorageOptions(pairInfo)
+	return addStorageOptions(pairInfo, clusterPairFileName)
 }
 
-func addStorageOptions(pairInfo map[string]string) error {
-	file, err := os.OpenFile(pairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
+	file, err := os.OpenFile(clusterPairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		logrus.Errorf("Unable to open %v: %v", pairFileName, err)
 		return err
@@ -416,11 +434,11 @@ func addStorageOptions(pairInfo map[string]string) error {
 		return err
 	}
 
-	logrus.Info("cluster-pair.yml created")
+	logrus.Infof("cluster-pair.yml created with storage options in %s", clusterPairFileName)
 	return nil
 }
 
-func scheduleClusterPair(ctx *scheduler.Context, skipStorage bool) error {
+func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string) error {
 	err := dumpRemoteKubeConfig(remoteConfig)
 	if err != nil {
 		logrus.Errorf("Unable to write clusterconfig: %v", err)
@@ -432,7 +450,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage bool) error {
 		return err
 	}
 
-	err = createClusterPair(info, skipStorage)
+	err = createClusterPair(info, skipStorage, resetConfig, clusterPairDir)
 	if err != nil {
 		logrus.Errorf("Error creating cluster Spec: %v", err)
 		return err
@@ -445,7 +463,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage bool) error {
 	}
 
 	err = schedulerDriver.AddTasks(ctx,
-		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
+		scheduler.ScheduleOptions{AppKeys: []string{clusterPairDir}})
 	if err != nil {
 		logrus.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
 		return err

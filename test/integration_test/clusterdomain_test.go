@@ -113,7 +113,7 @@ func failoverAndFailbackClusterDomainTest(t *testing.T) {
 	// validate the following
 	// - migration is successful
 	// - app starts on cluster 1
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, false, true)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, false, true, false)
 
 	testClusterDomainsFailover(t, preMigrationCtx, ctxs)
 
