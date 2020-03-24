@@ -3,7 +3,12 @@ package storkctl
 import (
 	"fmt"
 
+	appsops "github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	dynamicops "github.com/portworx/sched-ops/k8s/dynamic"
+	externalstorageops "github.com/portworx/sched-ops/k8s/externalstorage"
+	ocpops "github.com/portworx/sched-ops/k8s/openshift"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -112,6 +117,11 @@ func (f *factory) UpdateConfig() error {
 		return err
 	}
 	core.Instance().SetConfig(config)
+	storkops.Instance().SetConfig(config)
+	ocpops.Instance().SetConfig(config)
+	appsops.Instance().SetConfig(config)
+	dynamicops.Instance().SetConfig(config)
+	externalstorageops.Instance().SetConfig(config)
 	return nil
 }
 

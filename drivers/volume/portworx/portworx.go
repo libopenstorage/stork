@@ -1196,12 +1196,12 @@ func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *storkapi.VolumeSn
 					vol.RestoreStatus = storkapi.VolumeSnapshotRestoreStatusFailed
 					vol.Reason = fmt.Sprintf("Restore ha-update failed for volume: %v", err.Error())
 				}
+				vol.RestoreStatus = storkapi.VolumeSnapshotRestoreStatusStaged
+				vol.Reason = "Restore object is ready"
 				if !isUpdate {
 					vol.RestoreStatus = storkapi.VolumeSnapshotRestoreStatusInProgress
 					vol.Reason = "Volume is in resync state"
 				}
-				vol.RestoreStatus = storkapi.VolumeSnapshotRestoreStatusStaged
-				vol.Reason = "Restore object is ready"
 			}
 		default:
 			vol.Reason = fmt.Sprintf("invalid SourceType for snapshot(local/cloud), found: %v", snapType)

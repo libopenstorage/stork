@@ -54,7 +54,7 @@ func TriggerRequired(
 	policyType stork_api.SchedulePolicyType,
 	lastTrigger meta.Time,
 ) (bool, error) {
-	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+	schedulePolicy, err := getSchedulePolicy(policyName)
 	if err != nil {
 		return false, err
 	}
@@ -292,6 +292,9 @@ func Init() error {
 		}
 	}
 
+	if err := startSchedulePolicyCache(); err != nil {
+		return err
+	}
 	return createDefaultPolicy()
 }
 

@@ -1046,7 +1046,7 @@ func waitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 		}
 		return "", false, nil
 	}
-	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, defaultWaitInterval)
+	_, err := task.DoRetryWithTimeout(getAppBackup, timeout, backupWaitInterval)
 	return err
 
 }
