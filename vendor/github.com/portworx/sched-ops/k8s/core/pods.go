@@ -25,8 +25,12 @@ type PodOps interface {
 	// GetPods returns pods for the given namespace
 	GetPods(string, map[string]string) (*corev1.PodList, error)
 	// GetPodsByNode returns all pods in given namespace and given k8s node name.
-	//  If namespace is empty, it will return pods from all namespaces
+	//  If namespace is empty, it will return pods from all namespaces.
 	GetPodsByNode(nodeName, namespace string) (*corev1.PodList, error)
+	// GetPodsByNodeAndLabels returns all pods in given namespace and given k8s node name
+	// with a given label selector.
+	//  If namespace is empty, it will return pods from all namespaces.
+	GetPodsByNodeAndLabels(nodeName, namespace string, labelSelector map[string]string) (*corev1.PodList, error)
 	// GetPodsByOwner returns pods for the given owner and namespace
 	GetPodsByOwner(types.UID, string) ([]corev1.Pod, error)
 	// GetPodsUsingPV returns all pods in cluster using given pv
@@ -125,6 +129,21 @@ func (c *Client) GetPodsByNode(nodeName, namespace string) (*corev1.PodList, err
 
 	listOptions := metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+	}
+
+	return c.getPodsWithListOptions(namespace, listOptions)
+}
+
+// GetPodsByNodeAndLabels returns all pods in given namespace and given k8s node name for the given labels
+//  If namespace is empty, it will return pods from all namespaces
+func (c *Client) GetPodsByNodeAndLabels(nodeName, namespace string, labels map[string]string) (*corev1.PodList, error) {
+	if len(nodeName) == 0 {
+		return nil, fmt.Errorf("node name is required for this API")
+	}
+
+	listOptions := metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+		LabelSelector: mapToCSV(labels),
 	}
 
 	return c.getPodsWithListOptions(namespace, listOptions)
