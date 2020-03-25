@@ -822,7 +822,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:1808e1111cffcf7acd0f6f57997533211ad0757c2bae48425e947f99fbb69908"
+  digest = "1:a29a78f0fe27b1734e457687eeac585fcdb76a93ae0b4206b012b4628f8a7ead"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -842,7 +842,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "a1146419098ea97dd9dd5f21021f2989841d5ff9"
+  revision = "9178a48cfc33ad50ffa8e2966d6a3f07adf7d9d5"
 
 [[projects]]
   branch = "master"
@@ -2042,6 +2042,7 @@
     "k8s.io/apimachinery/pkg/runtime/serializer",
     "k8s.io/apimachinery/pkg/types",
     "k8s.io/apimachinery/pkg/util/runtime",
+    "k8s.io/apimachinery/pkg/util/sets",
     "k8s.io/apimachinery/pkg/util/uuid",
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/apimachinery/pkg/watch",
