@@ -142,6 +142,10 @@ const (
 
 	restoreNamePrefix = "in-place-restore-"
 	restoreTaskPrefix = "restore-"
+
+	// Annotation to skip checking if the backup is being done to the same
+	// BackupLocationName
+	skipBackupLocationNameCheckAnnotation = "portworx.io/skip-backup-location-name-check"
 )
 
 type cloudSnapStatus struct {
@@ -2509,6 +2513,9 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 		request.Labels = make(map[string]string)
 		request.Labels[cloudBackupOwnerLabel] = "stork"
+		if val, ok := backup.Annotations[skipBackupLocationNameCheckAnnotation]; ok {
+			request.Labels[api.OptCloudBackupIgnoreCreds] = val
+		}
 		p.addApplicationBackupCloudsnapInfo(request, backup)
 
 		_, err = volDriver.CloudBackupCreate(request)
