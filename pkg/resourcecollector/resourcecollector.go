@@ -413,7 +413,8 @@ func (r *ResourceCollector) mergeSupportedForResource(
 		return false
 	}
 	switch objectType.GetKind() {
-	case "ClusterRoleBinding":
+	case "ClusterRoleBinding",
+		"ServiceAccount":
 		return true
 	}
 	return false
@@ -430,6 +431,8 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 	switch objectType.GetKind() {
 	case "ClusterRoleBinding":
 		return r.mergeAndUpdateClusterRoleBinding(object)
+	case "ServiceAccount":
+		return r.mergeAndUpdateServiceAccount(object)
 	}
 	return nil
 }
