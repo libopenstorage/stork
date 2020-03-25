@@ -2,8 +2,10 @@ package errors
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/libopenstorage/openstorage/pkg/parser"
 )
 
 // ErrNotFound error type for objects not found
@@ -45,13 +47,25 @@ type ErrStoragePoolResizeInProgress struct {
 }
 
 func (e *ErrStoragePoolResizeInProgress) Error() string {
-	errMsg := fmt.Sprintf("a resize for pool: %s is already in progress.", e.Pool.GetUuid())
+	errMsg := fmt.Sprintf("resize for pool %s is already in progress.", e.Pool.GetUuid())
 	if e.Pool.LastOperation != nil {
 		op := e.Pool.LastOperation
 		if op.Type == api.SdkStoragePool_OPERATION_RESIZE {
-			errMsg = fmt.Sprintf("%s %s %s", errMsg, op.Msg, op.Params)
+			errMsg = fmt.Sprintf("%s %s %s", errMsg, op.Msg, parser.LabelsToString(op.Params))
 		}
 	}
 
 	return errMsg
+}
+
+func IsAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if strings.Contains(err.Error(), "Access denied") {
+		return true
+	}
+
+	return false
 }
