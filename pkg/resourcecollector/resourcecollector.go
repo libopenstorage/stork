@@ -29,9 +29,11 @@ import (
 
 const (
 	// Annotation to use when the resource shouldn't be collected
-	skipResourceAnnotation = "stork.libopenstorage.org/skipresource"
-	deletedMaxRetries      = 12
-	deletedRetryInterval   = 10 * time.Second
+	skipResourceAnnotationDeprecated = "stork.libopenstorage.org/skipresource"
+	skipResourceAnnotation           = "stork.libopenstorage.org/skip-resource"
+	skipOwnerRefCheckAnnotation      = "stork.libopenstorage.org/skip-owner-ref-check"
+	deletedMaxRetries                = 12
+	deletedRetryInterval             = 10 * time.Second
 )
 
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
@@ -210,6 +212,24 @@ func SkipResource(annotations map[string]string) bool {
 		if skip, err := strconv.ParseBool(value); err == nil && skip {
 			return true
 		}
+		return false
+	}
+	if value, present := annotations[skipResourceAnnotationDeprecated]; present {
+		if skip, err := strconv.ParseBool(value); err == nil && skip {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+// skipOwnerRefCheck returns whether the object should be collected even if it
+// has an owner reference
+func skipOwnerRefCheck(annotations map[string]string) bool {
+	if value, present := annotations[skipOwnerRefCheckAnnotation]; present {
+		if skip, err := strconv.ParseBool(value); err == nil && skip {
+			return true
+		}
 	}
 	return false
 }
@@ -296,19 +316,21 @@ func (r *ResourceCollector) pruneOwnedResources(
 		if objectType.GetKind() != "PersistentVolumeClaim" {
 			owners := metadata.GetOwnerReferences()
 			if len(owners) != 0 {
-				for _, owner := range owners {
-					// We don't collect pods, there might be come leader
-					// election objects that could have pods as the owner, so
-					// don't collect those objects
-					if owner.Kind == "Pod" {
-						collect = false
-						break
-					}
+				if !skipOwnerRefCheck(metadata.GetAnnotations()) {
+					for _, owner := range owners {
+						// We don't collect pods, there might be some leader
+						// election objects that could have pods as the owner, so
+						// don't collect those objects
+						if owner.Kind == "Pod" {
+							collect = false
+							break
+						}
 
-					// Skip object if we are already collecting its owner
-					if _, exists := resourceMap[owner.UID]; exists {
-						collect = false
-						break
+						// Skip object if we are already collecting its owner
+						if _, exists := resourceMap[owner.UID]; exists {
+							collect = false
+							break
+						}
 					}
 				}
 				// If the owner isn't being collected delete the owner reference
