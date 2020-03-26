@@ -92,7 +92,7 @@ func (c *SnapshotRestoreController) Handle(ctx context.Context, event sdk.Event)
 				c.Recorder.Event(snapRestore,
 					v1.EventTypeNormal,
 					string(snapRestore.Status.Status),
-					"Snapshot in-Place  Restore completed")
+					"Snapshot in-Place Restore completed")
 			}
 		case stork_api.VolumeSnapshotRestoreStatusFailed:
 			err = c.Driver.CleanupSnapshotRestoreObjects(snapRestore)
@@ -279,24 +279,26 @@ func initRestoreVolumesInfo(snapshotList []*snap_v1.VolumeSnapshot, snapRestore 
 		if err != nil {
 			return fmt.Errorf("failed to get pvc details for snapshot %v", err)
 		}
-
 		volInfo := &stork_api.RestoreVolumeInfo{}
 		// check whether we have volInfo already processed for given
 		// pvc. If so update existing vol info
+		isPresent := false
 		for _, vol := range snapRestore.Status.Volumes {
-			if pvc.Spec.VolumeName == vol.PVC {
+			if pvc.Name == vol.PVC {
 				volInfo = vol
+				isPresent = true
 				break
 			}
 		}
-		volInfo.Volume = pvc.Spec.VolumeName
-		volInfo.PVC = pvc.Name
-		volInfo.Namespace = pvc.Namespace
-		volInfo.Snapshot = snapData
-		volInfo.RestoreStatus = stork_api.VolumeSnapshotRestoreStatusInitial
-		snapRestore.Status.Volumes = append(snapRestore.Status.Volumes, volInfo)
+		if !isPresent {
+			volInfo.Volume = pvc.Spec.VolumeName
+			volInfo.PVC = pvc.Name
+			volInfo.Namespace = pvc.Namespace
+			volInfo.Snapshot = snapData
+			volInfo.RestoreStatus = stork_api.VolumeSnapshotRestoreStatusInitial
+			snapRestore.Status.Volumes = append(snapRestore.Status.Volumes, volInfo)
+		}
 	}
-
 	return nil
 }
 
