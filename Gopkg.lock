@@ -603,7 +603,7 @@
 
 [[projects]]
   branch = "release-7.0"
-  digest = "1:d736c1f63e4e6d20667fda3d1bdd6d0fa53d6a5fef33464fdbdc2600bdb81767"
+  digest = "1:304fd9d9335c25c9793c5ec5fb0f1fea40e6c955a7bd421b47cffd8faa47eeb0"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -628,7 +628,7 @@
     "volume",
   ]
   pruneopts = "UT"
-  revision = "90b7250c9f4be8bc33c6e2b5360f31f833e2c669"
+  revision = "c29b6c67036a9371ab64ee758a686979acd07d12"
 
 [[projects]]
   branch = "master"
@@ -810,7 +810,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:80b66e0eddfbae95ad6e0f566bb813c568b363572a4c379cba0d346c574c22d8"
+  digest = "1:ed150a0e6f2ee0429864f9fbcf9d9dc2e3ffb16685090bacfbe99a8171633d5c"
   name = "github.com/portworx/kvdb"
   packages = [
     ".",
@@ -818,7 +818,7 @@
     "mem",
   ]
   pruneopts = "UT"
-  revision = "1c18ebeaf685dfc584a49545bc590a13fa8b7617"
+  revision = "b2c72382d65221c65236a7b571abac79e2c7a1da"
 
 [[projects]]
   branch = "master"

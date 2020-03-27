@@ -53,6 +53,13 @@ const (
 	SpecIoProfile            = "io_profile"
 	SpecAsyncIo              = "async_io"
 	SpecEarlyAck             = "early_ack"
+	SpecExportProtocol       = "export"
+	SpecExportProtocolISCSI  = "iscsi"
+	SpecExportProtocolPXD    = "pxd"
+	SpecExportProtocolNFS    = "nfs"
+	SpecExportProtocolCustom = "custom"
+	SpecExportOptions        = "export_options"
+	SpecExportOptionsEmpty   = "empty_export_options"
 	// SpecBestEffortLocationProvisioning default is false. If set provisioning request will succeed
 	// even if specified data location parameters could not be satisfied.
 	SpecBestEffortLocationProvisioning = "best_effort_location_provisioning"
@@ -60,8 +67,12 @@ const (
 	// the VolumeSpec.force_unsupported_fs_type. When set to true it asks
 	// the driver to use an unsupported value of VolumeSpec.format if possible
 	SpecForceUnsupportedFsType = "force_unsupported_fs_type"
-	SpecNodiscard              = "nodiscard"
-	StoragePolicy              = "storagepolicy"
+	// SpecMatchSrcVolProvision defaults to false. Applicable to cloudbackup restores only.
+	// If set to "true", cloudbackup restore volume gets provisioned on same pools as
+	// backup, allowing for inplace restore after.
+	SpecMatchSrcVolProvision = "match_src_vol_provision"
+	SpecNodiscard            = "nodiscard"
+	StoragePolicy            = "storagepolicy"
 )
 
 // OptionKey specifies a set of recognized query params.
@@ -116,8 +127,14 @@ const (
 	OptCredAzureAccountKey = "CredAccountKey"
 	// Credential ownership key in params
 	OptCredOwnership = "CredOwnership"
+	// OptCredProxy proxy key in params
+	OptCredProxy = "CredProxy"
+	// OptCredIAMPolicy if "true", indicates IAM creds to be used
+	OptCredIAMPolicy = "CredIAMPolicy"
 	// OptCloudBackupID is the backID in the cloud
 	OptCloudBackupID = "CloudBackID"
+	// OptCloudBackupIgnoreCreds ignores credentials for incr backups
+	OptCloudBackupIgnoreCreds = "CloudBackupIgnoreCreds"
 	// OptSrcVolID is the source volume ID of the backup
 	OptSrcVolID = "SrcVolID"
 	// OptBkupOpState is the desired operational state
@@ -129,6 +146,8 @@ const (
 	OptCatalogSubFolder = "subfolder"
 	// OptCatalogMaxDepth query parameter used to limit the depth we return
 	OptCatalogMaxDepth = "depth"
+	// OptVolumeService query parameter used to request background volume services
+	OptVolService = "volservice"
 )
 
 // Api clientserver Constants
@@ -311,6 +330,13 @@ type CloudBackupRestoreRequest struct {
 	// Name is optional unique id to be used for this restore op
 	// restore creates this by default
 	Name string
+	// Optional RestoreVolumeSpec allows some of the restoreVolume fields to be modified.
+	// These fields default to the volume spec stored with cloudbackup.
+	// The request fails if both RestoreVolSpec and NodeID are specified.
+	Spec *RestoreVolumeSpec
+	// Optional Locator for restoreVolume. Request fails if both Name and
+	// locator are specified
+	Locator *VolumeLocator
 }
 
 type CloudBackupGroupCreateResponse struct {
@@ -771,16 +797,26 @@ func (v *Volume) Scaled() bool {
 	return v.Spec.Scale > 1
 }
 
-// Contains returns true if mid is a member of volume's replication set.
-func (m *Volume) Contains(mid string) bool {
+// Contains returns true if locationConstraint is a member of volume's replication set.
+func (m *Volume) Contains(locationConstraint string) bool {
 	rsets := m.GetReplicaSets()
 	for _, rset := range rsets {
 		for _, node := range rset.Nodes {
-			if node == mid {
+			if node == locationConstraint {
 				return true
 			}
 		}
 	}
+
+	// also check storage pool UUIDs
+	for _, replSet := range m.ReplicaSets {
+		for _, uid := range replSet.PoolUuids {
+			if uid == locationConstraint {
+				return true
+			}
+		}
+	}
+
 	return false
 }
 
@@ -1036,6 +1072,10 @@ func (r *CloudBackupHistoryResponse) ToSdkCloudBackupHistoryResponse() *SdkCloud
 }
 
 func (l *VolumeLocator) MergeVolumeSpecLabels(s *VolumeSpec) *VolumeLocator {
+	if l.VolumeLabels == nil && len(s.GetVolumeLabels()) > 0 {
+		l.VolumeLabels = make(map[string]string)
+	}
+
 	for k, v := range s.GetVolumeLabels() {
 		l.VolumeLabels[k] = v
 	}
@@ -1052,7 +1092,7 @@ func (v *VolumeSpec) IsPermitted(ctx context.Context, accessType Ownership_Acces
 }
 
 func (v *VolumeSpec) IsPermittedFromUserInfo(user *auth.UserInfo, accessType Ownership_AccessType) bool {
-	if v.IsPublic() {
+	if v.IsPublic(accessType) {
 		return true
 	}
 
@@ -1062,8 +1102,8 @@ func (v *VolumeSpec) IsPermittedFromUserInfo(user *auth.UserInfo, accessType Own
 	return true
 }
 
-func (v *VolumeSpec) IsPublic() bool {
-	return v.GetOwnership() == nil || v.GetOwnership().IsPublic()
+func (v *VolumeSpec) IsPublic(accessType Ownership_AccessType) bool {
+	return v.GetOwnership() == nil || v.GetOwnership().IsPublic(accessType)
 }
 
 // GetCloneCreatorOwnership returns the appropriate ownership for the
@@ -1073,7 +1113,6 @@ func (v *VolumeSpec) GetCloneCreatorOwnership(ctx context.Context) (*Ownership, 
 
 	// If there is user information, then auth is enabled
 	if userinfo, ok := auth.NewUserInfoFromContext(ctx); ok {
-
 		// Check if the owner is the one who cloned it
 		if o != nil && o.IsOwner(userinfo) {
 			return o, false
@@ -1090,7 +1129,7 @@ func (v *VolumeSpec) GetCloneCreatorOwnership(ctx context.Context) (*Ownership, 
 // Check access permission of SdkStoragePolicy Objects
 
 func (s *SdkStoragePolicy) IsPermitted(ctx context.Context, accessType Ownership_AccessType) bool {
-	if s.IsPublic() {
+	if s.IsPublic(accessType) {
 		return true
 	}
 
@@ -1106,7 +1145,7 @@ func (s *SdkStoragePolicy) IsPermitted(ctx context.Context, accessType Ownership
 }
 
 func (s *SdkStoragePolicy) IsPermittedFromUserInfo(user *auth.UserInfo, accessType Ownership_AccessType) bool {
-	if s.IsPublic() {
+	if s.IsPublic(accessType) {
 		return true
 	}
 
@@ -1116,8 +1155,8 @@ func (s *SdkStoragePolicy) IsPermittedFromUserInfo(user *auth.UserInfo, accessTy
 	return true
 }
 
-func (s *SdkStoragePolicy) IsPublic() bool {
-	return s.GetOwnership() == nil || s.GetOwnership().IsPublic()
+func (s *SdkStoragePolicy) IsPublic(accessType Ownership_AccessType) bool {
+	return s.GetOwnership() == nil || s.GetOwnership().IsPublic(accessType)
 }
 
 func CloudBackupRequestedStateToSdkCloudBackupRequestedState(
