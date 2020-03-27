@@ -646,7 +646,6 @@ func (a *ApplicationBackupController) backupResources(
 		resourceInfos = append(resourceInfos, resourceInfo)
 	}
 	backup.Status.Resources = resourceInfos
-	backup.Status.LastUpdateTimestamp = metav1.Now()
 	if err = sdk.Update(backup); err != nil {
 		return err
 	}
