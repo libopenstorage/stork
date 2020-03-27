@@ -131,7 +131,7 @@ type Driver interface {
 	ValidateVolumes(cc *Context, timeout, retryInterval time.Duration) error
 
 	// DeleteVolumes will delete all storage volumes for the given context
-	DeleteVolumes(*Context) ([]*volume.Volume, error)
+	DeleteVolumes(*Context, *DeleteVolumeOptions) ([]*volume.Volume, error)
 
 	// GetVolumes returns all storage volumes for the given context
 	GetVolumes(*Context) ([]*volume.Volume, error)
@@ -217,6 +217,11 @@ var (
 // DeleteTasksOptions are options supplied to the DeleteTasks API
 type DeleteTasksOptions struct {
 	TriggerOptions
+}
+
+// DeleteVolumeOptions are options supplied to the DeleteVolume API
+type DeleteVolumeOptions struct {
+	SkipClusterScopedObjects bool
 }
 
 // Event collects kubernetes events data for further validation

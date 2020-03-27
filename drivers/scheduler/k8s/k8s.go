@@ -1880,20 +1880,22 @@ func (k *K8s) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
 }
 
 // DeleteVolumes  delete the volumes
-func (k *K8s) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
-			if err := k8sStorage.DeleteStorageClass(obj.Name); err != nil {
-				if !errors.IsNotFound(err) {
-					return nil, &scheduler.ErrFailedToDestroyStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
+			if options != nil && !options.SkipClusterScopedObjects {
+				if err := k8sStorage.DeleteStorageClass(obj.Name); err != nil {
+					if !errors.IsNotFound(err) {
+						return nil, &scheduler.ErrFailedToDestroyStorage{
+							App:   ctx.App,
+							Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
+						}
 					}
 				}
-			}
 
-			logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
+				logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
+			}
 		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
 			vols = append(vols, &volume.Volume{
 				ID:        string(obj.UID),

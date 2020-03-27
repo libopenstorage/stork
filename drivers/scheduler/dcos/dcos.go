@@ -400,7 +400,7 @@ func (d *dcos) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval ti
 	return d.volumeOperation(ctx, inspectDockerVolumeFunc)
 }
 
-func (d *dcos) DeleteVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
+func (d *dcos) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 
 	deleteDockerVolumeFunc := func(volName string, _ map[string]string) error {

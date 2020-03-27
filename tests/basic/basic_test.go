@@ -242,7 +242,7 @@ var _ = Describe("{VolumeDriverAppDown}", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				DeleteVolumesAndWait(ctx)
+				DeleteVolumesAndWait(ctx, nil)
 			}
 		})
 	})
