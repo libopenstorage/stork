@@ -103,6 +103,10 @@ type BLocation interface {
 
 	// DeleteBackupLocation deletes backup location objects
 	DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error)
+
+	// WaitForBackupLocationDeletion watis for backup location to be deleted
+	WaitForBackupLocationDeletion(backupLocationName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
 // Backup obj interface
@@ -125,6 +129,11 @@ type Backup interface {
 	// WaitForBackupCompletion waits for backup to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry`
 	WaitForBackupCompletion(backupName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
+
+	// WaitForBackupDeletion waits for backup to be deleted successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry
+	WaitForBackupDeletion(backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 

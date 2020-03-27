@@ -202,6 +202,44 @@ func (p *portworx) DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*
 	return p.backupLocationManager.Delete(context.Background(), req)
 }
 
+// WaitForBackupLocationDeletion waits for backup location to be deleted successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func (p *portworx) WaitForBackupLocationDeletion(backupLocationName string, orgID string,
+	timeout time.Duration, timeBeforeRetry time.Duration) error {
+	req := &api.BackupLocationInspectRequest{
+		Name:  backupLocationName,
+		OrgId: orgID,
+	}
+	var blError error
+	f := func() (interface{}, bool, error) {
+		inspectBlResp, err := p.backupLocationManager.Inspect(context.Background(), req)
+		if err == nil {
+			// Object still exsts, just retry
+			currentStatus := inspectBlResp.GetBackupLocation().GetStatus().GetStatus()
+			return nil, true, fmt.Errorf("backup location [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+		}
+
+		if inspectBlResp == nil {
+			return nil, false, nil
+		}
+		currentStatus := inspectBlResp.GetBackupLocation().GetStatus().GetStatus()
+		if currentStatus == api.BackupLocationInfo_StatusInfo_Invalid {
+			logrus.Infof("in invalid state")
+			blError = fmt.Errorf("backup location is [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+			return nil, false, blError
+		}
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for backup location deletion. Error:[%v]", err)
+	}
+	return nil
+}
+
 func (p *portworx) CreateBackup(req *api.BackupCreateRequest) (*api.BackupCreateResponse, error) {
 	return p.backupManager.Create(context.Background(), req)
 }
@@ -259,6 +297,54 @@ func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
 	if err != nil || backupError != nil {
 		return fmt.Errorf("failed to wait for backup. Error:[%v] Reason:[%v]", err, backupError)
+	}
+
+	return nil
+}
+
+// WaitForBackupDeletion waits for backup to be deleted successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func (p *portworx) WaitForBackupDeletion(backupName string, orgID string,
+	timeout time.Duration, timeBeforeRetry time.Duration) error {
+	req := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+	}
+	var backupError error
+	f := func() (interface{}, bool, error) {
+		inspectBackupResp, err := p.backupManager.Inspect(context.Background(), req)
+		if err == nil {
+			// Object still exsts, just retry
+			currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
+			return nil, true, fmt.Errorf("backup [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+		}
+
+		if inspectBackupResp == nil {
+			return nil, false, nil
+		}
+		// Check if backup location delete status is complete
+		currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
+		if currentStatus == api.BackupInfo_StatusInfo_Deleting ||
+			currentStatus == api.BackupInfo_StatusInfo_DeletePending {
+			// Backup deletion is not complete, retry again
+			return nil,
+				true,
+				fmt.Errorf("backup [%v] is in [%s] state. Waiting to become Complete",
+					req.GetName(), currentStatus)
+		} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
+			currentStatus == api.BackupInfo_StatusInfo_Aborted ||
+			currentStatus == api.BackupInfo_StatusInfo_Invalid {
+			backupError = fmt.Errorf("backup [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+			return nil, false, backupError
+		}
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for backup deletion. Error:[%v] Reason:[%v]", err, backupError)
 	}
 
 	return nil

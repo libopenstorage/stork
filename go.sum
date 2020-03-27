@@ -411,8 +411,8 @@ github.com/portworx/kvdb v0.0.0-20190911174000-a0108bddd091 h1:DqGiNhvCpvhWW/HJ1
 github.com/portworx/kvdb v0.0.0-20190911174000-a0108bddd091/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 h1:DtyCSm4R57CsThpY501rbVj0utQqKrI8UXm9mfuaRrk=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
-github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f h1:3jJaQhY+7yAV4QfKpwobHf93zwiy+RY9a2ta74ZkcUQ=
-github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
+github.com/portworx/px-backup-api v0.0.0-20200324132531-0457dfcc09d3 h1:5g4UqLpeNQOHL8Y8UxrwvtGXxjwiEzmSuh4pFb1YqOA=
+github.com/portworx/px-backup-api v0.0.0-20200324132531-0457dfcc09d3/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/sched-ops v0.0.0-20200131092350-9f2d9518f7b5 h1:GJsCBrEGu5ecxyReRpxTxqoqqDl8XwayWRGkRBa6IZ4=
 github.com/portworx/sched-ops v0.0.0-20200131092350-9f2d9518f7b5/go.mod h1:yb1ypNIiZQAmM7xAWGzO6dydwl/+vNC0WjUm5IvHUEY=
 github.com/portworx/sched-ops v0.0.0-20200205200838-f224d01bafb5 h1:rPBpZXeo9M1B8Z+uZnyGJ6sLaPHENNBVdbSS6kzhhsM=

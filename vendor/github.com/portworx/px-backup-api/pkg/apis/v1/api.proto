@@ -9,31 +9,7 @@ import "google/protobuf/timestamp.proto";
 option go_package = "api";
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
-
-message Metadata {
-    // name of the object
-    string name = 1;
-    // uid for the object
-    string uid = 2;
-    string owner = 3;
-    // organization uid
-    string org_id = 4;
-    google.protobuf.Timestamp create_time = 5;
-    google.protobuf.Timestamp last_update_time = 6;
-    // label selectors for the object for filtering
-    map<string, string> labels = 7;
-}
-
-message CreateMetadata {
-    // name of the object
-    string name = 1;
-    // org id of the object
-    string org_id = 2;
-    // owner of the object
-    string owner = 3;
-    // labels associated with the object
-    map<string, string> labels = 4;
-}
+import "pkg/apis/v1/common.proto";
 
 message OrganizationObject {
     Metadata metadata = 1 [ (gogoproto.embed) = true ];
@@ -46,6 +22,20 @@ message ClusterInfo {
         (gogoproto.moretags) = "secure:\"true\""
     ];
     string cloud_credential = 3;
+    StatusInfo status = 4;
+    bool delete_backups = 5;
+
+    // Message for maintaing status of the cluster.
+    message StatusInfo {
+        enum Status {
+            Invalid = 0;
+            Online = 1;
+            Offline = 2;
+            DeletePending = 3;
+        }
+        Status status = 1;
+        string reason = 2;
+    }
 }
 
 message ClusterObject {
@@ -77,6 +67,23 @@ message AzureConfig {
     string account_name = 1;
     string account_key = 2 [
         (gogoproto.jsontag) = "accountkey",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    string client_secret = 3 [
+        (gogoproto.jsontag) = "clientsecret",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    string client_id = 4 [
+        (gogoproto.jsontag) = "clientid",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    string tenant_id = 5 [
+        (gogoproto.jsontag) = "tenantid",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    // TODO: Need to see if this has to be here or in the backup object.
+    string subscription_id = 6 [
+        (gogoproto.jsontag) = "subscriptionid",
         (gogoproto.moretags) = "secure:\"true\""
     ];
 }
@@ -157,11 +164,8 @@ message SchedulePolicyInfo {
     DailyPolicy daily = 2;
     WeeklyPolicy weekly = 3;
     MonthlyPolicy monthly = 4;
-    // Reference count to track the number of backup schedule that are using
-    // this schedulePolicy.
-    int32 ref_count = 5;
     // list of backup schedule object that uses this schedule policy.
-    repeated string backup_schedule = 6;
+    repeated string backup_schedule = 5;
 }
 
 message SchedulePolicyObject {
@@ -174,7 +178,7 @@ message BackupScheduleInfo {
     string schedule_policy_name = 1;
     bool suspend = 2;
     ReclaimPolicyType reclaim_policy_type = 3;
-    map<string, StatusInfoList> Status = 4;
+    map<string, StatusInfoList> backup_status = 4;
     // Name of BackupLocation
     string backup_location = 5;
     // Name of Cluster
@@ -183,6 +187,10 @@ message BackupScheduleInfo {
     repeated string namespaces = 7;
     // Label selectors to choose resources
     map<string, string> label_selectors = 8;
+    string pre_exec_rule = 9;
+    string post_exec_rule = 10;
+    bool delete_backups = 11;
+    StatusInfo status = 12;
     enum ReclaimPolicyType {
         Invalid = 0;
         Delete = 1;
@@ -230,7 +238,20 @@ message BackupLocationInfo {
         (gogoproto.moretags) = "secure:\"true\""
     ];
     string cloud_credential = 4;
+    StatusInfo status = 5;
+    bool delete_backups = 6;
     oneof config { S3Config s3_config = 100; }
+    // Message for maintaing status of the object.
+    message StatusInfo {
+        enum Status {
+            Invalid = 0;
+            Valid = 1;
+            DeletePending = 2;
+        }
+
+        Status status = 1;
+        string reason = 2;
+    }
 }
 
 message BackupLocationObject {
@@ -255,6 +276,17 @@ message BackupInfo {
     Stage stage = 9;
     string pre_exec_rule = 10;
     string post_exec_rule = 11;
+    // Name of the backup schedule, if the backup was taken by schedule through
+    // px-backup.
+    // Otherwise it will be empty.
+    BackupSchedule backup_schedule = 12;
+    CreatedBy created_by = 13;
+    enum CreatedBy {
+        Unsupported = 0;
+        PxBackup = 1;
+        stork = 2;
+    }
+
     enum Stage {
         Invalid = 0;
         Initial = 1;
@@ -263,6 +295,11 @@ message BackupInfo {
         Volumes = 4;
         Applications = 5;
         Final = 6;
+    }
+
+    message BackupSchedule {
+        string uid = 1;
+        string name = 2;
     }
 
     message Resource {
@@ -334,6 +371,14 @@ message RuleObject {
     RulesInfo rules_info = 2 [ (gogoproto.embed) = true ];
 }
 
+message ReplacePolicy {
+    enum Type {
+        Invalid = 0;
+        Retain = 1;
+        Delete = 2;
+    }
+}
+
 // Message for restore info
 message RestoreInfo {
     // Name of backup to restore from
@@ -345,12 +390,7 @@ message RestoreInfo {
     // Namespace Mapping
     map<string, string> namespace_mapping = 4;
     // Restore replace policy type ("delete"/"retain")
-    ReplacePolicy replace_policy = 5;
-    enum ReplacePolicy {
-        Invalid = 0;
-        Retain = 1;
-        Delete = 2;
-    }
+    ReplacePolicy.Type replace_policy = 5;
 
     StatusInfo status = 6;
     repeated Resource resources = 7;
@@ -364,6 +404,7 @@ message RestoreInfo {
         string group = 3;
         string kind = 4;
         string version = 5;
+        StatusInfo status = 6;
     }
 
     message Volume {
@@ -387,7 +428,7 @@ message RestoreInfo {
             Failed = 4;
             Deleting = 5;
             Success = 6;
-            Captured = 7;
+            Retained = 7;
             PartialSuccess = 8;
         }
 
@@ -414,6 +455,11 @@ service Health {
 message HealthStatusRequest {}
 message HealthStatusResponse {}
 
+message TimeRange {
+    google.protobuf.Timestamp start_time = 1;
+    google.protobuf.Timestamp end_time = 2;
+}
+
 message EnumerateOptions {
     // label selectors for the object for filtering
     map<string, string> labels = 1;
@@ -421,6 +467,11 @@ message EnumerateOptions {
     int64 page_size = 2;
     // continuation token
     string continuation_token = 3;
+    // Time range for which to return objects
+    TimeRange time_range = 4;
+    // Filter to use for name of objects. Any object that contains the filter
+    // will be returned
+    string name_filter = 5;
 }
 
 service SchedulePolicy {
@@ -489,7 +540,7 @@ message SchedulePolicyEnumerateRequest {
 }
 // Define SchedulePolicyEnumerateResponse struct
 message SchedulePolicyEnumerateResponse {
-    repeated SchedulePolicyObject schedule_policy = 1;
+    repeated SchedulePolicyObject schedule_policies = 1;
 }
 // Define SchedulePolicyInspectRequest struct
 message SchedulePolicyInspectRequest {
@@ -574,7 +625,7 @@ message BackupScheduleEnumerateRequest {
 }
 // Define BackupScheduleEnumerateResponse struct
 message BackupScheduleEnumerateResponse {
-    repeated BackupScheduleObject backup_schedule = 1;
+    repeated BackupScheduleObject backup_schedules = 1;
 }
 // Define BackupScheduleInspectRequest struct
 message BackupScheduleInspectRequest {
@@ -589,6 +640,9 @@ message BackupScheduleInspectResponse {
 message BackupScheduleDeleteRequest {
     string org_id = 1;
     string name = 2;
+    // delete_backups indicates whether the cloud backup files need to
+    // be deleted or retained.
+    bool delete_backups = 3;
 }
 // Define BackupScheduleDeleteResponse struct
 message BackupScheduleDeleteResponse {}
@@ -656,7 +710,7 @@ message ClusterEnumerateRequest {
     map<string, string> labels = 2;
 }
 // Define ClusterEnumerateResponse struct
-message ClusterEnumerateResponse { repeated ClusterObject cluster = 1; }
+message ClusterEnumerateResponse { repeated ClusterObject clusters = 1; }
 // Define ClusterInspectRequest struct
 message ClusterInspectRequest {
     string org_id = 1;
@@ -668,6 +722,9 @@ message ClusterInspectResponse { ClusterObject cluster = 1; }
 message ClusterDeleteRequest {
     string org_id = 1;
     string name = 2;
+    // delete_backups indicates whether the cloud backup files need to
+    // be deleted or retained.
+    bool delete_backups = 3;
 }
 // Define ClusterInspectResponse struct
 message ClusterDeleteResponse {}
@@ -735,17 +792,21 @@ message CloudCredentialUpdateRequest {
 message CloudCredentialUpdateResponse {}
 
 // Define CloudCredentialEnumerateRequest struct
-message CloudCredentialEnumerateRequest { string org_id = 1; }
+message CloudCredentialEnumerateRequest {
+    string org_id = 1;
+    bool include_secrets = 2;
+}
 
 // Define CloudCredentialEnumerateResponse struct
 message CloudCredentialEnumerateResponse {
-    repeated CloudCredentialObject cloud_credential = 1;
+    repeated CloudCredentialObject cloud_credentials = 1;
 }
 
 // Define CloudCredentialInspectRequest struct
 message CloudCredentialInspectRequest {
     string org_id = 1;
     string name = 2;
+    bool include_secrets = 3;
 }
 
 // Define CloudCredentialInspectResponse struct
@@ -831,7 +892,7 @@ message BackupLocationEnumerateRequest {
 }
 // Define BackupLocationEnumerateResponse struct
 message BackupLocationEnumerateResponse {
-    repeated BackupLocationObject backup_location = 1;
+    repeated BackupLocationObject backup_locations = 1;
 }
 
 // Define BackupLocationInspectRequest struct
@@ -849,6 +910,9 @@ message BackupLocationInspectResponse {
 message BackupLocationDeleteRequest {
     string org_id = 1;
     string name = 2;
+    // delete_backups indicates whether the cloud backup files need to
+    // be deleted or retained.
+    bool delete_backups = 3;
 }
 
 // Define BackupLocationInspectResponse struct
@@ -930,7 +994,7 @@ message BackupEnumerateRequest {
 
 //  Response message structure for enumerate create
 message BackupEnumerateResponse {
-    repeated BackupObject backup = 1;
+    repeated BackupObject backups = 1;
     // continuation token
     string continuation_token = 2;
 }
@@ -1000,6 +1064,10 @@ message RestoreCreateRequest {
     string backup = 2;
     // uid or name of cluster
     string cluster = 3;
+    // mapping of the namespaces from the backup to which restore should be done
+    map<string, string> namespace_mapping = 4;
+    // replace policy to use if the resource already exists
+    ReplacePolicy.Type replace_policy = 5;
 }
 
 // Define RestoreCreateResponse struct
@@ -1022,7 +1090,7 @@ message RestoreEnumerateRequest {
 
 // Define RestoreEnumerateResponse struct
 message RestoreEnumerateResponse {
-    repeated RestoreObject restore = 1;
+    repeated RestoreObject restores = 1;
     // continuation token
     string continuation_token = 2;
 }
@@ -1078,7 +1146,7 @@ message OrganizationCreateResponse {}
 message OrganizationEnumerateRequest {}
 // Define OrganizationEnumerateResponse struct
 message OrganizationEnumerateResponse {
-    repeated OrganizationObject organization = 1;
+    repeated OrganizationObject organizations = 1;
 }
 // Define OrganizationInspectRequest struct
 message OrganizationInspectRequest { string name = 2; }
@@ -1105,7 +1173,7 @@ message RuleUpdateResponse {}
 message RuleEnumerateRequest { string org_id = 1; }
 
 // Define RuleEnumerateResponse struct
-message RuleEnumerateResponse { repeated RuleObject rule_object = 1; }
+message RuleEnumerateResponse { repeated RuleObject rules = 1; }
 
 // Define RuleInspectRequest struct
 message RuleInspectRequest {
@@ -1114,7 +1182,7 @@ message RuleInspectRequest {
 }
 
 // Define RuleInspectResponse struct
-message RuleInspectResponse { RuleObject rule_object = 1; }
+message RuleInspectResponse { RuleObject rule = 1; }
 
 // Define RuleDeleteRequest struct
 message RuleDeleteRequest {
@@ -1162,4 +1230,27 @@ service Rules {
             delete : "/v1/rule/{org_id}/{name}"
         };
     }
+}
+
+service Version {
+    // Get gets the version of the server
+    rpc Get(VersionGetRequest) returns (VersionGetResponse) {
+        option (google.api.http) = {
+            get : "/v1/version"
+        };
+    }
+}
+
+message VersionInfo {
+    string major = 1;
+    string minor = 2;
+    string patch = 3;
+    string git_commit = 4;
+    string build_date = 5;
+}
+
+message VersionGetRequest {}
+message VersionGetResponse {
+    // version information of the server
+    VersionInfo version = 1;
 }
