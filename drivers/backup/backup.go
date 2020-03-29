@@ -194,6 +194,16 @@ type ScheduleBackup interface {
 
 	// DeleteBackupSchedule
 	DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error)
+
+	// BackupScheduleWaitForNBackupsCompletion, waits for backup schedule to complete successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+	BackupScheduleWaitForNBackupsCompletion(name, orgID string, count int,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
+	// WaitForBackupScheduleDeletion waits for backupschedule to be deleted successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+	// This wait function is for the backupschedule deletion with delete-backup option set.
+	WaitForBackupScheduleDeletion(backupScheduleName, namespace, orgID string,
+		clusterObj *api.ClusterObject, timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
 var backupDrivers = make(map[string]Driver)
