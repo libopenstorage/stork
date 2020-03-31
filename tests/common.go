@@ -52,6 +52,10 @@ import (
 )
 
 const (
+	skipClusterScopedObjects = "skipClusterScopedObjects"
+)
+
+const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
 	defaultSpecsRoot                     = "/specs"
 	schedulerCliFlag                     = "scheduler"
@@ -221,7 +225,8 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
 		var err error
 
-		vols := DeleteVolumes(ctx)
+		options := mapToDeleteOptions(opts)
+		vols := DeleteVolumes(ctx, options)
 
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
 			err = Inst().S.Destroy(ctx, opts)
@@ -234,11 +239,11 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 }
 
 // DeleteVolumes deletes volumes of a given context
-func DeleteVolumes(ctx *scheduler.Context) []*volume.Volume {
+func DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) []*volume.Volume {
 	var err error
 	var vols []*volume.Volume
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
-		vols, err = Inst().S.DeleteVolumes(ctx)
+		vols, err = Inst().S.DeleteVolumes(ctx, options)
 		expect(err).NotTo(haveOccurred())
 	})
 	return vols
@@ -256,8 +261,8 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context) {
-	vols := DeleteVolumes(ctx)
+func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) {
+	vols := DeleteVolumes(ctx, options)
 	ValidateVolumesDeleted(ctx.App.Key, vols)
 }
 
@@ -692,6 +697,18 @@ func splitCsv(in string) ([]string, error) {
 		return []string{}, fmt.Errorf("Multiline CSV not supported")
 	}
 	return records[0], err
+}
+
+func mapToDeleteOptions(options map[string]bool) *scheduler.DeleteVolumeOptions {
+	if val, ok := options[skipClusterScopedObjects]; ok {
+		return &scheduler.DeleteVolumeOptions{
+			SkipClusterScopedObjects: val,
+		}
+	}
+
+	return &scheduler.DeleteVolumeOptions{
+		SkipClusterScopedObjects: false,
+	}
 }
 
 func init() {
