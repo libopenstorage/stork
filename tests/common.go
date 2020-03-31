@@ -52,7 +52,7 @@ import (
 )
 
 const (
-	SkipClusterScopedObjects             = "skipClusterScopedObjects"
+	SkipClusterScopedObjects = "skipClusterScopedObjects"
 )
 
 const (
