@@ -52,7 +52,7 @@ import (
 )
 
 const (
-	SkipClusterScopedObjects = "skipClusterScopedObjects"
+	skipClusterScopedObjects = "skipClusterScopedObjects"
 )
 
 const (
@@ -700,7 +700,7 @@ func splitCsv(in string) ([]string, error) {
 }
 
 func mapToDeleteOptions(options map[string]bool) *scheduler.DeleteVolumeOptions {
-	if val, ok := options[SkipClusterScopedObjects]; ok {
+	if val, ok := options[skipClusterScopedObjects]; ok {
 		return &scheduler.DeleteVolumeOptions{
 			SkipClusterScopedObjects: val,
 		}
