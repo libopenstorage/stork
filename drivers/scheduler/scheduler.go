@@ -221,6 +221,7 @@ type DeleteTasksOptions struct {
 
 // DeleteVolumeOptions are options supplied to the DeleteVolume API
 type DeleteVolumeOptions struct {
+	// SkipClusterScopedObjects skips deletion of cluster scoped objects like storage class
 	SkipClusterScopedObjects bool
 }
 
