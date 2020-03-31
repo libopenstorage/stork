@@ -2094,15 +2094,28 @@ func (d *portworx) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.
 					Operation: "Pool Condition Expression Key",
 				}
 			}
-
 			if doesConditionMatch(metricValue, conditionExpression) {
 				for _, ruleAction := range apRule.Spec.Actions {
-					actionScalePercentage, err := strconv.ParseUint(ruleAction.Params[aututils.RuleActionsScalePercentage], 10, 64)
-					if err != nil {
-						return 0, err
-					}
+					var requiredScaleSize float64
+					if actionScalePercentageValue, ok := ruleAction.Params[aututils.RuleActionsScalePercentage]; ok {
+						actionScalePercentage, err := strconv.ParseUint(actionScalePercentageValue, 10, 64)
+						if err != nil {
+							return 0, err
+						}
 
-					requiredScaleSize := float64(calculatedTotalSize * actionScalePercentage / 100)
+						requiredScaleSize = float64(calculatedTotalSize * actionScalePercentage / 100)
+					} else if actionScaleSizeValue, ok := ruleAction.Params[aututils.RuleActionsScaleSize]; ok {
+						actionScaleSize, err := strconv.ParseUint(actionScaleSizeValue, 10, 64)
+						if err != nil {
+							a, parseErr := resource.ParseQuantity(actionScaleSizeValue)
+							if parseErr != nil {
+								logrus.Errorf("Can't parse actionScaleSize: '%d', cause err: %s/%s", actionScaleSize, err, parseErr)
+								return 0, err
+							}
+							actionScaleSize = uint64(a.Value())
+						}
+						requiredScaleSize = float64(actionScaleSize)
+					}
 					if actionScaleType == aututils.RuleScaleTypeAddDisk {
 						requiredNewDisks := uint64(math.Ceil(requiredScaleSize / float64(baseDiskSize)))
 						calculatedTotalSize += requiredNewDisks * baseDiskSize
@@ -2131,6 +2144,7 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 	}
 
 	calculatedTotalSize := initialSize
+
 	//	The goal of the below for loop is to keep increasing calculatedTotalSize until the rule conditions match
 	for {
 		for _, conditionExpression := range apRule.Spec.Conditions.Expressions {
@@ -2149,6 +2163,12 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 
 			if doesConditionMatch(expectedMetricValue, conditionExpression) {
 				for _, ruleAction := range apRule.Spec.Actions {
+					if actionMaxSize, ok := ruleAction.Params[aututils.RuleMaxSize]; ok {
+						maxSize := parseMaxSize(actionMaxSize)
+						if calculatedTotalSize >= maxSize {
+							return calculatedTotalSize, 0, nil
+						}
+					}
 					actionScalePercentage, err := strconv.ParseUint(ruleAction.Params[aututils.RuleActionsScalePercentage], 10, 64)
 					if err != nil {
 						return 0, 0, err
@@ -2162,19 +2182,8 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 
 					// check if calculated size is more than maxsize
 					if actionMaxSize, ok := ruleAction.Params[aututils.RuleMaxSize]; ok {
-						maxSize, err := strconv.ParseUint(actionMaxSize, 10, 64)
-						if err != nil {
-							a, parseErr := resource.ParseQuantity(actionMaxSize)
-							if parseErr != nil {
-								logrus.Errorf("Can't parse actionMaxSize: '%s', cause err: %s/%s", actionMaxSize, err, parseErr)
-								return 0, 0, err
-							}
-							maxSize = uint64(a.Value())
-						}
+						maxSize := parseMaxSize(actionMaxSize)
 						if maxSize != 0 && calculatedTotalSize >= maxSize {
-							if maxSize == initialSize {
-								resizeCount = 0
-							}
 							return maxSize, resizeCount, nil
 						}
 					}
@@ -2190,6 +2199,19 @@ func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.
 	condExprValue, _ := strconv.ParseFloat(conditionExpression.Values[0], 64)
 	return expectedMetricValue < condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpLt ||
 		expectedMetricValue > condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpGt
+}
+
+func parseMaxSize(maxSize string) uint64 {
+	mSize, err := strconv.ParseUint(maxSize, 10, 64)
+	if err != nil {
+		a, parseErr := resource.ParseQuantity(maxSize)
+		if parseErr != nil {
+			logrus.Errorf("Can't parse maxSize: '%s', cause err: %s/%s", maxSize, err, parseErr)
+			return 0
+		}
+		mSize = uint64(a.Value())
+	}
+	return mSize
 }
 
 // getRestPort gets the service port for rest api, required when using service endpoint

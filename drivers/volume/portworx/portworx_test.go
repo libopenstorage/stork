@@ -26,40 +26,112 @@ func TestCalculateAutopilotObjectSize(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			rule:         aututils.PoolRuleByTotalSize(11, 10, aututils.RuleScaleTypeAddDisk, nil),
+			rule:         aututils.PoolRuleByTotalSize(11, 50, aututils.RuleScaleTypeAddDisk, nil),
 			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
 			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
-			expectedSize: 20,
+			expectedSize: 20 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleByTotalSize(11, 300, aututils.RuleScaleTypeAddDisk, nil),
+			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 40 * units.GiB,
 		},
 		{
 			rule:         aututils.PoolRuleByTotalSize(21, 10, aututils.RuleScaleTypeAddDisk, nil),
 			pool:         getTestPool(20, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
 			node:         getTestNode(20, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
-			expectedSize: 30,
+			expectedSize: 30 * units.GiB,
 		},
 		{
 			rule:         aututils.PoolRuleByTotalSize(11, 10, aututils.RuleScaleTypeResizeDisk, nil),
 			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
 			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
-			expectedSize: 11,
+			expectedSize: 11 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleByTotalSize(11, 300, aututils.RuleScaleTypeResizeDisk, nil),
+			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 40 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(41, "10Gi", aututils.RuleScaleTypeAddDisk, nil),
+			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 50 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(11, "5Gi", aututils.RuleScaleTypeAddDisk, nil),
+			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 20 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(11, "25Gi", aututils.RuleScaleTypeAddDisk, nil),
+			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 40 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(21, "5Gi", aututils.RuleScaleTypeAddDisk, nil),
+			pool:         getTestPool(20, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(20, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 30 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(11, "5Gi", aututils.RuleScaleTypeResizeDisk, nil),
+			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 15 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(11, "25Gi", aututils.RuleScaleTypeResizeDisk, nil),
+			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 35 * units.GiB,
 		},
 		{
 			rule:         aututils.PoolRuleByAvailableCapacity(50, 10, aututils.RuleScaleTypeAddDisk),
 			pool:         getTestPool(10, 6, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
 			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
-			expectedSize: 20,
+			expectedSize: 20 * units.GiB,
 		},
 		{
-			rule:         aututils.PoolRuleByAvailableCapacity(50, 10, aututils.RuleScaleTypeAddDisk),
+			rule:         aututils.PoolRuleByAvailableCapacity(50, 50, aututils.RuleScaleTypeAddDisk),
 			pool:         getTestPool(10, 16, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
 			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
-			expectedSize: 40,
+			expectedSize: 50 * units.GiB,
 		},
 		{
 			rule:         aututils.PoolRuleByAvailableCapacity(50, 100, aututils.RuleScaleTypeAddDisk),
+			pool:         getTestPool(20, 16, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(20, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 40 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleByAvailableCapacity(50, 50, aututils.RuleScaleTypeResizeDisk),
+			pool:         getTestPool(10, 6, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 22.5 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleByAvailableCapacity(50, 100, aututils.RuleScaleTypeResizeDisk),
+			pool:         getTestPool(10, 6, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 20 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleByAvailableCapacity(50, 50, aututils.RuleScaleTypeResizeDisk),
 			pool:         getTestPool(10, 16, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
 			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
-			expectedSize: 40,
+			expectedSize: 50.625 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleByAvailableCapacity(50, 100, aututils.RuleScaleTypeResizeDisk),
+			pool:         getTestPool(10, 16, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 40 * units.GiB,
 		},
 	}
 
@@ -67,7 +139,7 @@ func TestCalculateAutopilotObjectSize(t *testing.T) {
 		calculatedSize, err := inst.EstimatePoolExpandSize(tc.rule, tc.pool, tc.node)
 		if !tc.expectedToFail {
 			require.NoError(t, err)
-			require.Equalf(t, tc.expectedSize*units.GiB, calculatedSize, fmt.Sprintf("expected: %d actual: %d", tc.expectedSize, calculatedSize/units.GiB))
+			require.Equalf(t, tc.expectedSize, calculatedSize, fmt.Sprintf("expected: %d actual: %d", tc.expectedSize, calculatedSize))
 		} else {
 			require.Errorf(t, err, "test case was expected to fail")
 		}
@@ -104,7 +176,6 @@ func getTestNode(poolSize, totalDisks uint64, medium api.StorageMedium) node.Nod
 		suffixStart++
 		totalDisks--
 	}
-
 	return node.Node{
 		StorageNode: api.StorageNode{Disks: disks},
 	}
@@ -142,6 +213,14 @@ func TestEstimatedVolumeSize(t *testing.T) {
 			workloadSize:           10 * units.GiB,
 			expectedCalculatedSize: 12 * units.GiB,
 			expectedResizeCount:    2,
+			errorExpected:          false,
+		},
+		{
+			rule:                   aututils.PVCRuleByTotalSize(15, 100, "4Gi"),
+			initialSize:            5 * units.GiB,
+			workloadSize:           10 * units.GiB,
+			expectedCalculatedSize: 5 * units.GiB,
+			expectedResizeCount:    0,
 			errorExpected:          false,
 		},
 		{
