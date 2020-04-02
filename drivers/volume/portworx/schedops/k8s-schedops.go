@@ -2,6 +2,7 @@ package schedops
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/version"
 	"regexp"
 	"strings"
 	"time"
@@ -103,6 +104,10 @@ func (e *errLabelAbsent) Error() string {
 }
 
 type k8sSchedOps struct{}
+
+func (k *k8sSchedOps) GetKubernetesVersion() (*version.Info, error) {
+	return k8sCore.GetVersion()
+}
 
 func (k *k8sSchedOps) StopPxOnNode(n node.Node) error {
 	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStop)

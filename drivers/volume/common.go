@@ -200,7 +200,7 @@ func (d *DefaultDriver) StartDriver(n node.Node) error {
 }
 
 // UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
-func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string) error {
+func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpgradeDriver()",

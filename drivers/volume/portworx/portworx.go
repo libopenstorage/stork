@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
-	"os/exec"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -13,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
@@ -28,6 +27,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -46,16 +46,17 @@ const (
 
 const (
 	// DriverName is the name of the portworx driver implementation
-	DriverName           = "pxd"
-	pxDiagPath           = "/remotediags"
-	pxVersionLabel       = "PX Version"
-	enterMaintenancePath = "/entermaintenance"
-	exitMaintenancePath  = "/exitmaintenance"
-	pxSystemdServiceName = "portworx.service"
-	tokenKey             = "token"
-	clusterIP            = "ip"
-	clusterPort          = "port"
-	remoteKubeConfigPath = "/tmp/kubeconfig"
+	DriverName                  = "pxd"
+	pxDiagPath                  = "/remotediags"
+	pxVersionLabel              = "PX Version"
+	enterMaintenancePath        = "/entermaintenance"
+	exitMaintenancePath         = "/exitmaintenance"
+	pxSystemdServiceName        = "portworx.service"
+	tokenKey                    = "token"
+	clusterIP                   = "ip"
+	clusterPort                 = "port"
+	remoteKubeConfigPath        = "/tmp/kubeconfig"
+	pxMinVersionForStorkUpgrade = "2.1"
 )
 
 const (
@@ -1457,42 +1458,43 @@ func (d *portworx) StartDriver(n node.Node) error {
 		}})
 }
 
-func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) error {
-	upgradeFileName := "/upgrade.sh"
-
+func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error {
 	if endpointURL == "" {
-		return fmt.Errorf("no link supplied for upgrading portworx")
+		return fmt.Errorf("no link supplied for upgrading driver")
 	}
-	logrus.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
+	if endpointVersion == "" {
+		return fmt.Errorf("no endpoint supplied for upgrading driver")
+	}
 
-	// Getting upgrade script
+	if err := d.upgradePortworx(endpointURL, endpointVersion); err != nil {
+		return err
+	}
+
+	if enableStork {
+		if err := d.upgradeStork(endpointURL, endpointVersion); err != nil {
+			return err
+		}
+	} else {
+		logrus.Infof("stork upgrade is disabled, skipping...")
+	}
+	return nil
+}
+
+// upgradePortworx upgrades Portworx
+func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) error {
+	upgradeFileName := "/upgrade.sh"
 	fullEndpointURL := fmt.Sprintf("%s/%s/upgrade", endpointURL, endpointVersion)
-	cmd := exec.Command("wget", "-O", upgradeFileName, fullEndpointURL)
-	output, err := cmd.Output()
-	logrus.Infof("%s", output)
-	if err != nil {
-		return fmt.Errorf("error on downloading endpoint: %+v", err)
-	}
-	// Check if downloaded file exists
-	file, err := os.Stat(upgradeFileName)
-	if err != nil {
-		return fmt.Errorf("file %s doesn't exist", upgradeFileName)
-	}
-	logrus.Infof("file %s exists", upgradeFileName)
 
-	// Check if downloaded file is not empty
-	fileSize := file.Size()
-	if fileSize == 0 {
-		return fmt.Errorf("file %s is empty", upgradeFileName)
+	logrus.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
+	// Getting upgrade script
+	if err := osutils.Wget(fullEndpointURL, upgradeFileName, true); err != nil {
+		return fmt.Errorf("%+v", err)
 	}
-	logrus.Infof("file %s is not empty", upgradeFileName)
 
 	// Change permission on file to be able to execute
-	cmd = exec.Command("chmod", "+x", upgradeFileName)
-	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("error on changing permission for %s file", upgradeFileName)
+	if err := osutils.Chmod("+x", upgradeFileName); err != nil {
+		return err
 	}
-	logrus.Infof("permission changed on file %s", upgradeFileName)
 
 	nodeList := node.GetStorageDriverNodes()
 	pxNode := nodeList[0]
@@ -1509,21 +1511,63 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) err
 	}
 
 	// Run upgrade script
-	logrus.Infof("executing /bin/sh with params: %s\n", cmdArgs)
-	cmd = exec.Command("/bin/sh", cmdArgs...)
-	output, err = cmd.Output()
-
-	// Print and replace all '\n' with new lines
-	logrus.Infof("%s", strings.Replace(string(output[:]), `\n`, "\n", -1))
-	if err != nil {
-		return fmt.Errorf("error: %+v", err)
+	if err := osutils.Sh(cmdArgs); err != nil {
+		return err
 	}
+
 	logrus.Infof("Portworx cluster upgraded successfully")
 
 	for _, n := range node.GetStorageDriverNodes() {
 		if err := d.WaitForUpgrade(n, endpointVersion); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// upgradeStork upgrades stork
+func (d *portworx) upgradeStork(endpointURL string, endpointVersion string) error {
+	storkSpecFileName := "/stork.yaml"
+	nodeList := node.GetStorageDriverNodes()
+	pxNode := nodeList[0]
+	pxVersion, err := d.getPxVersionOnNode(pxNode)
+	if err != nil {
+		return fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
+	}
+	pVersion, err := version.NewVersion(pxVersion)
+	if err != nil {
+		return err
+	}
+
+	storkMinVersion, err := version.NewVersion(pxMinVersionForStorkUpgrade)
+	if err != nil {
+		return err
+	}
+	if pVersion.LessThan(storkMinVersion) {
+		logrus.Debugf("skipping stork upgrade as PX Version is less than %s", pxMinVersionForStorkUpgrade)
+		return nil
+	}
+	kubeVersion, err := d.schedOps.GetKubernetesVersion()
+	if err != nil {
+		return err
+	}
+
+	// Getting stork spec
+	URL := fmt.Sprintf("%s/%s?kbver=%s&comp=stork", endpointURL, endpointVersion, kubeVersion)
+	logrus.Debugf("getting stork spec from: %s", URL)
+	if err := osutils.Wget(URL, storkSpecFileName, true); err != nil {
+		return err
+	}
+
+	// Getting context of the file
+	if _, err := osutils.Cat(storkSpecFileName); err != nil {
+		return err
+	}
+
+	// Apply stork spec
+	cmdArgs := []string{"apply", "-f", storkSpecFileName}
+	if err := osutils.Kubectl(cmdArgs); err != nil {
+		return err
 	}
 
 	return nil

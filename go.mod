@@ -21,6 +21,7 @@ require (
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/golang/protobuf v1.3.2
+	github.com/hashicorp/go-version v1.1.0
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
 	github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
 	github.com/libopenstorage/cloudops v0.0.0-20200114171448-10fa10d97720

@@ -41,7 +41,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 		Step("start the upgrade of volume driver", func() {
 			err := Inst().V.UpgradeDriver(Inst().StorageDriverUpgradeEndpointURL,
-				Inst().StorageDriverUpgradeEndpointVersion)
+				Inst().StorageDriverUpgradeEndpointVersion,
+				Inst().EnableStorkUpgrade)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
