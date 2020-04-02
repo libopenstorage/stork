@@ -23,7 +23,12 @@ message ClusterInfo {
     ];
     string cloud_credential = 3;
     StatusInfo status = 4;
+    // delete_backups will determine whether the backups
+    // belong to given cluster needs to be deleted or not.
     bool delete_backups = 5;
+    // delete_restores will determine whether the restore
+    // belong to given cluster needs to be deleted or not.
+    bool delete_restores = 6;
 
     // Message for maintaing status of the cluster.
     message StatusInfo {
@@ -175,9 +180,9 @@ message SchedulePolicyObject {
 }
 
 message BackupScheduleInfo {
-    string schedule_policy_name = 1;
+    string schedule_policy = 1;
     bool suspend = 2;
-    ReclaimPolicyType reclaim_policy_type = 3;
+    ReclaimPolicyType reclaim_policy = 3;
     map<string, StatusInfoList> backup_status = 4;
     // Name of BackupLocation
     string backup_location = 5;
@@ -191,6 +196,17 @@ message BackupScheduleInfo {
     string post_exec_rule = 10;
     bool delete_backups = 11;
     StatusInfo status = 12;
+    SuspendedBy suspended_by = 13;
+
+    message SuspendedBy {
+        Source source = 1;
+        enum Source {
+            Invalid = 0;
+            User = 1;
+            LicenseCheck = 2;
+        }
+    }
+
     enum ReclaimPolicyType {
         Invalid = 0;
         Delete = 1;
@@ -217,6 +233,7 @@ message BackupScheduleInfo {
         }
     }
 }
+
 message BackupScheduleObject {
     Metadata metadata = 1
         [ (gogoproto.jsontag) = "metadata", (gogoproto.embed) = true ];
@@ -280,12 +297,7 @@ message BackupInfo {
     // px-backup.
     // Otherwise it will be empty.
     BackupSchedule backup_schedule = 12;
-    CreatedBy created_by = 13;
-    enum CreatedBy {
-        Unsupported = 0;
-        PxBackup = 1;
-        stork = 2;
-    }
+    string cr_name = 13;
 
     enum Stage {
         Invalid = 0;
@@ -351,18 +363,17 @@ message RulesInfo {
     repeated RuleItem rules = 1 [ (gogoproto.moretags) = "yaml:\"rules\"" ];
 
     message RuleItem {
-        map<string, string> PodSelector = 1
+        map<string, string> pod_selector = 1
             [ (gogoproto.moretags) = "yaml:\"podSelector\"" ];
-        repeated RuleAction rule_action = 2
+        repeated RuleAction actions = 2
             [ (gogoproto.moretags) = "yaml:\"actions\"" ];
     }
 
     message RuleAction {
-        string type = 1;
-        bool back_ground = 2 [ (gogoproto.moretags) = "yaml:\"background\"" ];
-        bool running_in_single_pod = 3
+        bool background = 1 [ (gogoproto.moretags) = "yaml:\"background\"" ];
+        bool run_in_single_pod = 2
             [ (gogoproto.moretags) = "yaml:\"runInSinglePod\"" ];
-        string value = 4;
+        string value = 3;
     }
 }
 
@@ -606,15 +617,41 @@ service BackupSchedule {
 // Define BackupScheduleCreateRequest struct
 message BackupScheduleCreateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
-    BackupScheduleInfo backup_schedule = 2;
+    string schedule_policy = 2;
+    BackupScheduleInfo.ReclaimPolicyType reclaim_policy = 3;
+    // Name of BackupLocation
+    string backup_location = 4;
+    // Name of Cluster
+    string cluster = 5;
+    // Namespaces to backup. Only an admin can provide multiple namespaces
+    repeated string namespaces = 6;
+    // Label selectors to choose resources
+    map<string, string> label_selectors = 7;
+    string pre_exec_rule = 8;
+    string post_exec_rule = 9;
 }
+
 // Define BackupScheduleCreateResponse struct
 message BackupScheduleCreateResponse {}
+
 // Define BackupScheduleUpdateRequest struct
 message BackupScheduleUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
-    BackupScheduleInfo backup_schedule = 2;
+    string schedule_policy = 2;
+    BackupScheduleInfo.ReclaimPolicyType reclaim_policy = 3;
+    // Name of BackupLocation
+    string backup_location = 4;
+    // Name of Cluster
+    string cluster = 5;
+    // Namespaces to backup. Only an admin can provide multiple namespaces
+    repeated string namespaces = 6;
+    // Label selectors to choose resources
+    map<string, string> label_selectors = 7;
+    string pre_exec_rule = 8;
+    string post_exec_rule = 9;
+    bool suspend = 10;
 }
+
 // Define BackupScheduleUpdateResponse struct
 message BackupScheduleUpdateResponse {}
 // Define BackupScheduleEnumerateRequest struct
@@ -623,19 +660,23 @@ message BackupScheduleEnumerateRequest {
     // label selectors for the object for filtering
     map<string, string> labels = 2;
 }
+
 // Define BackupScheduleEnumerateResponse struct
 message BackupScheduleEnumerateResponse {
     repeated BackupScheduleObject backup_schedules = 1;
 }
+
 // Define BackupScheduleInspectRequest struct
 message BackupScheduleInspectRequest {
     string org_id = 1;
     string name = 2;
 }
+
 // Define BackupScheduleInspectResponse struct
 message BackupScheduleInspectResponse {
     BackupScheduleObject backup_schedule = 1;
 }
+
 // Define BackupScheduleDeleteRequest struct
 message BackupScheduleDeleteRequest {
     string org_id = 1;
@@ -644,6 +685,7 @@ message BackupScheduleDeleteRequest {
     // be deleted or retained.
     bool delete_backups = 3;
 }
+
 // Define BackupScheduleDeleteResponse struct
 message BackupScheduleDeleteResponse {}
 
@@ -690,16 +732,28 @@ service Cluster {
 // Define ClusterCreateRequest struct
 message ClusterCreateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
-    ClusterInfo cluster = 2;
+    PXConfig px_config = 2 [ (gogoproto.jsontag) = "pxconfig" ];
+    string kubeconfig = 3 [
+        (gogoproto.jsontag) = "kubeconfig",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    string cloud_credential = 4;
 }
+
 // Define ClusterCreateResponse struct
 message ClusterCreateResponse {}
 
 // Define ClusterUpdateRequest struct
 message ClusterUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
-    ClusterInfo cluster = 2;
+    PXConfig px_config = 2 [ (gogoproto.jsontag) = "pxconfig" ];
+    string kubeconfig = 3 [
+        (gogoproto.jsontag) = "kubeconfig",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    string cloud_credential = 4;
 }
+
 // Define ClusterUpdateResponse struct
 message ClusterUpdateResponse {}
 
@@ -709,23 +763,31 @@ message ClusterEnumerateRequest {
     // label selectors for the object for filtering
     map<string, string> labels = 2;
 }
+
 // Define ClusterEnumerateResponse struct
 message ClusterEnumerateResponse { repeated ClusterObject clusters = 1; }
+
 // Define ClusterInspectRequest struct
 message ClusterInspectRequest {
     string org_id = 1;
     string name = 2;
 }
+
 // Define ClusterInspectResponse struct
 message ClusterInspectResponse { ClusterObject cluster = 1; }
+
 // Define ClusterDeleteRequest struct
 message ClusterDeleteRequest {
     string org_id = 1;
     string name = 2;
-    // delete_backups indicates whether the cloud backup files need to
+    // delete_backups indicates whether the backup related to cluster need to
     // be deleted or retained.
     bool delete_backups = 3;
+    // delete_restores indicates whether the restore related to cluster  need to
+    // be deleted or retained.
+    bool delete_restores = 4;
 }
+
 // Define ClusterInspectResponse struct
 message ClusterDeleteResponse {}
 
@@ -881,6 +943,7 @@ message BackupLocationUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
     BackupLocationInfo backup_location = 2;
 }
+
 // Define BackupLocationUpdateResponse struct
 message BackupLocationUpdateResponse {}
 
@@ -890,6 +953,7 @@ message BackupLocationEnumerateRequest {
     // label selectors for the object for filtering
     map<string, string> labels = 2;
 }
+
 // Define BackupLocationEnumerateResponse struct
 message BackupLocationEnumerateResponse {
     repeated BackupLocationObject backup_locations = 1;
@@ -981,6 +1045,7 @@ message BackupCreateResponse {}
 message BackupUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
 }
+
 // Define BackupUpdateResponse struct
 message BackupUpdateResponse {}
 
@@ -1077,6 +1142,7 @@ message RestoreCreateResponse {}
 message RestoreUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
 }
+
 // Define RestoreUpdateResponse struct
 message RestoreUpdateResponse {}
 
@@ -1094,11 +1160,13 @@ message RestoreEnumerateResponse {
     // continuation token
     string continuation_token = 2;
 }
+
 // Define RestoreInspectRequest struct
 message RestoreInspectRequest {
     string org_id = 1;
     string name = 2;
 }
+
 // Define RestoreInspectResponse struct
 message RestoreInspectResponse { RestoreObject restore = 1; }
 // Define RestoreDeleteRequest struct
@@ -1106,6 +1174,7 @@ message RestoreDeleteRequest {
     string org_id = 1;
     string name = 2;
 }
+
 // Define RestoreDeleteResponse struct
 message RestoreDeleteResponse {}
 
@@ -1144,12 +1213,15 @@ message OrganizationCreateResponse {}
 
 // Define OrganizationEnumerateRequest struct
 message OrganizationEnumerateRequest {}
+
 // Define OrganizationEnumerateResponse struct
 message OrganizationEnumerateResponse {
     repeated OrganizationObject organizations = 1;
 }
+
 // Define OrganizationInspectRequest struct
 message OrganizationInspectRequest { string name = 2; }
+
 // Define OrganizationInspectResponse struct
 message OrganizationInspectResponse { OrganizationObject organization = 1; }
 
@@ -1250,6 +1322,7 @@ message VersionInfo {
 }
 
 message VersionGetRequest {}
+
 message VersionGetResponse {
     // version information of the server
     VersionInfo version = 1;

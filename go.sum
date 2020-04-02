@@ -34,6 +34,7 @@ github.com/Azure/go-autorest/autorest/date v0.2.0 h1:yW+Zlqf26583pE43KhfnhFcdmSW
 github.com/Azure/go-autorest/autorest/date v0.2.0/go.mod h1:vcORJHLJEh643/Ioh9+vPmf1Ij9AEBM5FuBIXLmIy0g=
 github.com/Azure/go-autorest/autorest/mocks v0.1.0/go.mod h1:OTyCOPRA2IgIlWxVYxBee2F5Gr4kF2zd2J5cFRaIDN0=
 github.com/Azure/go-autorest/autorest/mocks v0.2.0/go.mod h1:OTyCOPRA2IgIlWxVYxBee2F5Gr4kF2zd2J5cFRaIDN0=
+github.com/Azure/go-autorest/autorest/mocks v0.3.0 h1:qJumjCaCudz+OcqE9/XtEPfvtOjOmKaui4EOpFI6zZc=
 github.com/Azure/go-autorest/autorest/mocks v0.3.0/go.mod h1:a8FDP3DYzQ4RYfVAxAN3SVSiiO77gL2j2ronKKP0syM=
 github.com/Azure/go-autorest/autorest/to v0.3.0 h1:zebkZaadz7+wIQYgC7GXaz3Wb28yKYfVkkBKwc38VF8=
 github.com/Azure/go-autorest/autorest/to v0.3.0/go.mod h1:MgwOyqaIuKdG4TL/2ywSsIWKAfJfgHDo8ObuUk3t5sA=
@@ -413,6 +414,8 @@ github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 h1:DtyCSm4R57CsThpY5
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/px-backup-api v0.0.0-20200324132531-0457dfcc09d3 h1:5g4UqLpeNQOHL8Y8UxrwvtGXxjwiEzmSuh4pFb1YqOA=
 github.com/portworx/px-backup-api v0.0.0-20200324132531-0457dfcc09d3/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
+github.com/portworx/px-backup-api v0.0.0-20200402112707-c49de5730ac1 h1:z3CiQFGbIOG09kIpNY7M18sDPgfErpTpFOy/IOrLh64=
+github.com/portworx/px-backup-api v0.0.0-20200402112707-c49de5730ac1/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/sched-ops v0.0.0-20200131092350-9f2d9518f7b5 h1:GJsCBrEGu5ecxyReRpxTxqoqqDl8XwayWRGkRBa6IZ4=
 github.com/portworx/sched-ops v0.0.0-20200131092350-9f2d9518f7b5/go.mod h1:yb1ypNIiZQAmM7xAWGzO6dydwl/+vNC0WjUm5IvHUEY=
 github.com/portworx/sched-ops v0.0.0-20200205200838-f224d01bafb5 h1:rPBpZXeo9M1B8Z+uZnyGJ6sLaPHENNBVdbSS6kzhhsM=

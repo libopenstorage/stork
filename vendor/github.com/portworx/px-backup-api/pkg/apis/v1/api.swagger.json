@@ -14,7 +14,7 @@
     "/v1/backup": {
       "post": {
         "summary": "Create creates a new backup object",
-        "operationId": "Create",
+        "operationId": "Backup_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -45,7 +45,7 @@
       },
       "put": {
         "summary": "Update given backup details",
-        "operationId": "Update",
+        "operationId": "Backup_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -78,7 +78,7 @@
     "/v1/backup/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of objects",
-        "operationId": "Enumerate",
+        "operationId": "Backup_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -146,7 +146,7 @@
     "/v1/backup/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detail information about a specified object",
-        "operationId": "Inspect",
+        "operationId": "Backup_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -181,7 +181,7 @@
       },
       "delete": {
         "summary": "Delete triggers delete of a backup",
-        "operationId": "Delete",
+        "operationId": "Backup_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -218,7 +218,7 @@
     "/v1/backuplocation": {
       "post": {
         "summary": "Create creates new backup location",
-        "operationId": "Create",
+        "operationId": "BackupLocation_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -249,7 +249,7 @@
       },
       "put": {
         "summary": "Update given backup location details",
-        "operationId": "Update",
+        "operationId": "BackupLocation_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -282,7 +282,7 @@
     "/v1/backuplocation/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of backup locations",
-        "operationId": "Enumerate",
+        "operationId": "BackupLocation_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -313,7 +313,7 @@
     "/v1/backuplocation/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about a specified backup location",
-        "operationId": "Inspect",
+        "operationId": "BackupLocation_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -348,7 +348,7 @@
       },
       "delete": {
         "summary": "Delete removes a backup location",
-        "operationId": "Delete",
+        "operationId": "BackupLocation_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -393,7 +393,7 @@
     "/v1/backupschedule": {
       "post": {
         "summary": "Create creates new backup schedule",
-        "operationId": "Create",
+        "operationId": "BackupSchedule_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -424,7 +424,7 @@
       },
       "put": {
         "summary": "Update updates a backup schedule",
-        "operationId": "Update",
+        "operationId": "BackupSchedule_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -457,7 +457,7 @@
     "/v1/backupschedule/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of backup schedule",
-        "operationId": "Enumerate",
+        "operationId": "BackupSchedule_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -488,7 +488,7 @@
     "/v1/backupschedule/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detail information about a specified backup schedule",
-        "operationId": "Inspect",
+        "operationId": "BackupSchedule_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -523,7 +523,7 @@
       },
       "delete": {
         "summary": "Delete removes a backup schedule",
-        "operationId": "Delete",
+        "operationId": "BackupSchedule_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -568,7 +568,7 @@
     "/v1/cloudcredential": {
       "post": {
         "summary": "Create creates new cloud credential",
-        "operationId": "Create",
+        "operationId": "CloudCredential_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -599,7 +599,7 @@
       },
       "put": {
         "summary": "Update given cloud credential details",
-        "operationId": "Update",
+        "operationId": "CloudCredential_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -632,7 +632,7 @@
     "/v1/cloudcredential/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of cloud credentials",
-        "operationId": "Enumerate",
+        "operationId": "CloudCredential_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -670,7 +670,7 @@
     "/v1/cloudcredential/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about the specified cloud credential",
-        "operationId": "Inspect",
+        "operationId": "CloudCredential_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -712,7 +712,7 @@
       },
       "delete": {
         "summary": "Delete removes a cloud credential",
-        "operationId": "Delete",
+        "operationId": "CloudCredential_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -749,7 +749,7 @@
     "/v1/cluster": {
       "post": {
         "summary": "Create creates a new cluster",
-        "operationId": "Create",
+        "operationId": "Cluster_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -780,7 +780,7 @@
       },
       "put": {
         "summary": "Update given cluster details",
-        "operationId": "Update",
+        "operationId": "Cluster_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -813,7 +813,7 @@
     "/v1/cluster/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of clusters",
-        "operationId": "Enumerate",
+        "operationId": "Cluster_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -844,7 +844,7 @@
     "/v1/cluster/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detail information about a specified cluster",
-        "operationId": "Inspect",
+        "operationId": "Cluster_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -879,7 +879,7 @@
       },
       "delete": {
         "summary": "Delete removes a cluster",
-        "operationId": "Delete",
+        "operationId": "Cluster_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -909,7 +909,15 @@
           },
           {
             "name": "delete_backups",
-            "description": "delete_backups indicates whether the cloud backup files need to\nbe deleted or retained.",
+            "description": "delete_backups indicates whether the backup related to cluster need to\nbe deleted or retained.",
+            "in": "query",
+            "required": false,
+            "type": "boolean",
+            "format": "boolean"
+          },
+          {
+            "name": "delete_restores",
+            "description": "delete_restores indicates whether the restore related to cluster  need to\nbe deleted or retained.",
             "in": "query",
             "required": false,
             "type": "boolean",
@@ -924,7 +932,7 @@
     "/v1/health": {
       "get": {
         "summary": "Status checks the health of the server",
-        "operationId": "Status",
+        "operationId": "Health_Status",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -947,7 +955,7 @@
     "/v1/organization": {
       "get": {
         "summary": "Enumerate returns a list of organization object",
-        "operationId": "Enumerate",
+        "operationId": "Organization_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -968,7 +976,7 @@
       },
       "post": {
         "summary": "Create creates new organization object in datastore",
-        "operationId": "Create",
+        "operationId": "Organization_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1001,7 +1009,7 @@
     "/v1/organization/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about specified organization object",
-        "operationId": "Inspect",
+        "operationId": "Organization_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1032,7 +1040,7 @@
     "/v1/restore": {
       "post": {
         "summary": "Create creates new restore object in datastore\nIt will also trigger a restore operation on the target cluster",
-        "operationId": "Create",
+        "operationId": "Restore_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1063,7 +1071,7 @@
       },
       "put": {
         "summary": "Update given restore details",
-        "operationId": "Update",
+        "operationId": "Restore_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1096,7 +1104,7 @@
     "/v1/restore/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of restore objects",
-        "operationId": "Enumerate",
+        "operationId": "Restore_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1164,7 +1172,7 @@
     "/v1/restore/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about specified restore object",
-        "operationId": "Inspect",
+        "operationId": "Restore_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1199,7 +1207,7 @@
       },
       "delete": {
         "summary": "Delete removes a restore object",
-        "operationId": "Delete",
+        "operationId": "Restore_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1236,7 +1244,7 @@
     "/v1/rule": {
       "post": {
         "summary": "Create creates new rule",
-        "operationId": "Create",
+        "operationId": "Rules_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1267,7 +1275,7 @@
       },
       "put": {
         "summary": "Update given rule details",
-        "operationId": "Update",
+        "operationId": "Rules_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1300,7 +1308,7 @@
     "/v1/rule/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of rules",
-        "operationId": "Enumerate",
+        "operationId": "Rules_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1331,7 +1339,7 @@
     "/v1/rule/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about the specified rule",
-        "operationId": "Inspect",
+        "operationId": "Rules_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1366,7 +1374,7 @@
       },
       "delete": {
         "summary": "Delete removes rule from px-backup",
-        "operationId": "Delete",
+        "operationId": "Rules_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1403,7 +1411,7 @@
     "/v1/schedulepolicy": {
       "post": {
         "summary": "Create creates new schedule policy.",
-        "operationId": "Create",
+        "operationId": "SchedulePolicy_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1434,7 +1442,7 @@
       },
       "put": {
         "summary": "Update given schedule policy details",
-        "operationId": "Update",
+        "operationId": "SchedulePolicy_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1467,7 +1475,7 @@
     "/v1/schedulepolicy/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of schedule policy",
-        "operationId": "Enumerate",
+        "operationId": "SchedulePolicy_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1498,7 +1506,7 @@
     "/v1/schedulepolicy/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detail information about a specified schedule policy",
-        "operationId": "Inspect",
+        "operationId": "SchedulePolicy_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1533,7 +1541,7 @@
       },
       "delete": {
         "summary": "Delete removes a schedule policy",
-        "operationId": "Delete",
+        "operationId": "SchedulePolicy_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1570,7 +1578,7 @@
     "/v1/version": {
       "get": {
         "summary": "Get gets the version of the server",
-        "operationId": "Get",
+        "operationId": "Version_Get",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -1746,8 +1754,8 @@
           "$ref": "#/definitions/BackupInfoBackupSchedule",
           "description": "Name of the backup schedule, if the backup was taken by schedule through\npx-backup.\nOtherwise it will be empty."
         },
-        "created_by": {
-          "$ref": "#/definitions/BackupInfoCreatedBy"
+        "cr_name": {
+          "type": "string"
         }
       }
     },
@@ -1761,15 +1769,6 @@
           "type": "string"
         }
       }
-    },
-    "BackupInfoCreatedBy": {
-      "type": "string",
-      "enum": [
-        "Unsupported",
-        "PxBackup",
-        "stork"
-      ],
-      "default": "Unsupported"
     },
     "BackupInfoResource": {
       "type": "object",
@@ -2020,8 +2019,39 @@
         "metadata": {
           "$ref": "#/definitions/CreateMetadata"
         },
-        "backup_schedule": {
-          "$ref": "#/definitions/BackupScheduleInfo"
+        "schedule_policy": {
+          "type": "string"
+        },
+        "reclaim_policy": {
+          "$ref": "#/definitions/BackupScheduleInfoReclaimPolicyType"
+        },
+        "backup_location": {
+          "type": "string",
+          "title": "Name of BackupLocation"
+        },
+        "cluster": {
+          "type": "string",
+          "title": "Name of Cluster"
+        },
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Namespaces to backup. Only an admin can provide multiple namespaces"
+        },
+        "label_selectors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Label selectors to choose resources"
+        },
+        "pre_exec_rule": {
+          "type": "string"
+        },
+        "post_exec_rule": {
+          "type": "string"
         }
       },
       "title": "Define BackupScheduleCreateRequest struct"
@@ -2049,14 +2079,14 @@
     "BackupScheduleInfo": {
       "type": "object",
       "properties": {
-        "schedule_policy_name": {
+        "schedule_policy": {
           "type": "string"
         },
         "suspend": {
           "type": "boolean",
           "format": "boolean"
         },
-        "reclaim_policy_type": {
+        "reclaim_policy": {
           "$ref": "#/definitions/BackupScheduleInfoReclaimPolicyType"
         },
         "backup_status": {
@@ -2099,6 +2129,9 @@
         },
         "status": {
           "$ref": "#/definitions/BackupScheduleInfoStatusInfo"
+        },
+        "suspended_by": {
+          "$ref": "#/definitions/BackupScheduleInfoSuspendedBy"
         }
       }
     },
@@ -2158,6 +2191,14 @@
       ],
       "default": "Invalid"
     },
+    "BackupScheduleInfoSuspendedBy": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/SuspendedBySource"
+        }
+      }
+    },
     "BackupScheduleInspectResponse": {
       "type": "object",
       "properties": {
@@ -2184,8 +2225,43 @@
         "metadata": {
           "$ref": "#/definitions/CreateMetadata"
         },
-        "backup_schedule": {
-          "$ref": "#/definitions/BackupScheduleInfo"
+        "schedule_policy": {
+          "type": "string"
+        },
+        "reclaim_policy": {
+          "$ref": "#/definitions/BackupScheduleInfoReclaimPolicyType"
+        },
+        "backup_location": {
+          "type": "string",
+          "title": "Name of BackupLocation"
+        },
+        "cluster": {
+          "type": "string",
+          "title": "Name of Cluster"
+        },
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Namespaces to backup. Only an admin can provide multiple namespaces"
+        },
+        "label_selectors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Label selectors to choose resources"
+        },
+        "pre_exec_rule": {
+          "type": "string"
+        },
+        "post_exec_rule": {
+          "type": "string"
+        },
+        "suspend": {
+          "type": "boolean",
+          "format": "boolean"
         }
       },
       "title": "Define BackupScheduleUpdateRequest struct"
@@ -2308,8 +2384,14 @@
         "metadata": {
           "$ref": "#/definitions/CreateMetadata"
         },
-        "cluster": {
-          "$ref": "#/definitions/ClusterInfo"
+        "px_config": {
+          "$ref": "#/definitions/PXConfig"
+        },
+        "kubeconfig": {
+          "type": "string"
+        },
+        "cloud_credential": {
+          "type": "string"
         }
       },
       "title": "Define ClusterCreateRequest struct"
@@ -2351,7 +2433,13 @@
         },
         "delete_backups": {
           "type": "boolean",
-          "format": "boolean"
+          "format": "boolean",
+          "description": "delete_backups will determine whether the backups\nbelong to given cluster needs to be deleted or not."
+        },
+        "delete_restores": {
+          "type": "boolean",
+          "format": "boolean",
+          "description": "delete_restores will determine whether the restore\nbelong to given cluster needs to be deleted or not."
         }
       }
     },
@@ -2403,8 +2491,14 @@
         "metadata": {
           "$ref": "#/definitions/CreateMetadata"
         },
-        "cluster": {
-          "$ref": "#/definitions/ClusterInfo"
+        "px_config": {
+          "$ref": "#/definitions/PXConfig"
+        },
+        "kubeconfig": {
+          "type": "string"
+        },
+        "cloud_credential": {
+          "type": "string"
         }
       },
       "title": "Define ClusterUpdateRequest struct"
@@ -2877,14 +2971,11 @@
     "RulesInfoRuleAction": {
       "type": "object",
       "properties": {
-        "type": {
-          "type": "string"
-        },
-        "back_ground": {
+        "background": {
           "type": "boolean",
           "format": "boolean"
         },
-        "running_in_single_pod": {
+        "run_in_single_pod": {
           "type": "boolean",
           "format": "boolean"
         },
@@ -2896,13 +2987,13 @@
     "RulesInfoRuleItem": {
       "type": "object",
       "properties": {
-        "PodSelector": {
+        "pod_selector": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           }
         },
-        "rule_action": {
+        "actions": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/RulesInfoRuleAction"
@@ -3086,6 +3177,15 @@
     "SchedulePolicyUpdateResponse": {
       "type": "object",
       "title": "Define SchedulePolicyUpdateResponse struct"
+    },
+    "SuspendedBySource": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "User",
+        "LicenseCheck"
+      ],
+      "default": "Invalid"
     },
     "TimeRange": {
       "type": "object",
