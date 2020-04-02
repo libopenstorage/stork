@@ -19,15 +19,15 @@ import (
 )
 
 const (
-	orgID                             = "tp-org"
-	BLocationName                     = "tp-blocation"
-	ClusterName                       = "tp-cluster"
-	CredName                          = "tp-backup-cred"
-	BackupName                        = "tp-backup"
-	ConfigMapName                     = "kubeconfigs"
-	KubeconfigDirectory               = "/tmp"
-	SourceClusterName                 = "source-cluster"
-	DestinationClusterName            = "destination-cluster"
+	orgID                  = "tp-org"
+	BLocationName          = "tp-blocation"
+	ClusterName            = "tp-cluster"
+	CredName               = "tp-backup-cred"
+	BackupName             = "tp-backup"
+	ConfigMapName          = "kubeconfigs"
+	KubeconfigDirectory    = "/tmp"
+	SourceClusterName      = "source-cluster"
+	DestinationClusterName = "destination-cluster"
 
 	providerAws   = "aws"
 	providerAzure = "azure"
@@ -357,16 +357,16 @@ func CreateCluster(name string, cloudCred string, kubeconfigPath string, orgID s
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to read kubeconfig file from location [%s]. Error:[%v]",
 				kubeconfigPath, err))
+
 		clusterCreateReq := &api.ClusterCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
 				Name:  name,
 				OrgId: orgID,
 			},
-			Cluster: &api.ClusterInfo{
-				Kubeconfig:      base64.StdEncoding.EncodeToString(kubeconfigRaw),
-				CloudCredential: cloudCred,
-			},
+			Kubeconfig:      base64.StdEncoding.EncodeToString(kubeconfigRaw),
+			CloudCredential: cloudCred,
 		}
+
 		_, err = backupDriver.CreateCluster(clusterCreateReq)
 		Expect(err).NotTo(HaveOccurred(),
 			fmt.Sprintf("Failed to create cluster [%s] in org [%s]. Error : [%v]",

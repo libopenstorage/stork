@@ -61,7 +61,7 @@ import (
 
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
-	SkipClusterScopedObjects             = "skipClusterScopedObjects"
+	SkipClusterScopedObjects = "skipClusterScopedObjects"
 )
 
 const (
