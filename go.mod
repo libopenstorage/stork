@@ -3,7 +3,6 @@ module github.com/portworx/torpedo
 go 1.12
 
 require (
-	cloud.google.com/go v0.38.0 // indirect
 	github.com/Azure/azure-sdk-for-go v38.2.0+incompatible // indirect
 	github.com/Azure/go-autorest v13.3.1+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.9.4 // indirect
@@ -22,9 +21,6 @@ require (
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/golang/protobuf v1.3.2
-	github.com/google/btree v1.0.0 // indirect
-	github.com/google/uuid v1.1.1 // indirect
-	github.com/gophercloud/gophercloud v0.1.0 // indirect
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
 	github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
 	github.com/libopenstorage/cloudops v0.0.0-20200114171448-10fa10d97720
@@ -37,7 +33,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pborman/uuid v0.0.0-20180906182336-adf5a7427709
-	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v0.0.0-20200324132531-0457dfcc09d3
 	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
