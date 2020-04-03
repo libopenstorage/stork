@@ -106,11 +106,11 @@ func setup() error {
 	provisioner := os.Getenv(storageProvisioner)
 	backupLocationPath = os.Getenv(backupPathVar)
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
-		return fmt.Errorf("Error getting stork driver %s: %v", volumeDriverName, err)
+		return fmt.Errorf("Error getting stork volume driver %s: %v", volumeDriverName, err)
 	}
 
 	if err = storkVolumeDriver.Init(nil); err != nil {
-		return fmt.Errorf("Error getting stork driver %v: %v", volumeDriverName, err)
+		return fmt.Errorf("Error initializing stork volume driver %v: %v", volumeDriverName, err)
 	}
 
 	if nodeDriver, err = node.Get(nodeDriverName); err != nil {
