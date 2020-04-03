@@ -70,7 +70,7 @@ func triggerMigrationTest(
 
 	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration)
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, false)
 }
 
 func triggerMigration(
@@ -125,6 +125,7 @@ func validateAndDestroyMigration(
 	startAppsOnMigration bool,
 	migrateAllAppsExpected bool,
 	skipAppDeletion bool,
+	skipDestDeletion bool,
 ) {
 	var err error
 
@@ -332,7 +333,7 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	err = setMockTime(&mockNow)
 	require.NoError(t, err, "Error setting mock time")
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
 }
 
 // intervalScheduleCleanupTest runs test for migrations with schedules that are
@@ -403,7 +404,7 @@ func intervalScheduleCleanupTest(t *testing.T) {
 	validateMigration(t, "mysql-migration-schedule-interval", preMigrationCtx.GetID())
 	validateMigrationCleanup(t, name, namespace, pvcs)
 
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
 }
 
 func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.PersistentVolumeClaimList) {
@@ -657,7 +658,7 @@ func migrationScheduleTest(
 			firstMigrationCreationTime, migrationStatus.CreationTimestamp))
 
 	// validate and destroy apps on both clusters
-	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false)
+	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, false, true, false, false)
 
 	// explicitly check if all child migrations of the schedule are deleted
 	f := func() (interface{}, bool, error) {

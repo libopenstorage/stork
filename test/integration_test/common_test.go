@@ -56,6 +56,7 @@ const (
 	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
 	storageProvisioner       = "STORAGE_PROVISIONER"
 	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
+	backupPathVar            = "BACKUP_LOCATION_PATH"
 )
 
 var nodeDriver node.Driver
@@ -69,6 +70,7 @@ var backupScaleCount int
 var authToken string
 var authTokenConfigMap string
 var volumeDriverName string
+var backupLocationPath string
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -83,11 +85,11 @@ func setup() error {
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
-		return fmt.Errorf("Error getting stork driver %s: %v", volumeDriverName, err)
+		return fmt.Errorf("Error getting stork volume driver %s: %v", volumeDriverName, err)
 	}
 
 	if err = storkVolumeDriver.Init(nil); err != nil {
-		return fmt.Errorf("Error getting stork driver %v: %v", volumeDriverName, err)
+		return fmt.Errorf("Error initializing stork volume driver %v: %v", volumeDriverName, err)
 	}
 
 	if nodeDriver, err = node.Get(nodeDriverName); err != nil {
@@ -108,6 +110,8 @@ func setup() error {
 
 	provisioner := os.Getenv(storageProvisioner)
 	authTokenConfigMap = os.Getenv(authSecretConfigMap)
+	backupLocationPath = os.Getenv(backupPathVar)
+
 	if authTokenConfigMap != "" {
 		if authToken, err = schedulerDriver.GetTokenFromConfigMap(authTokenConfigMap); err != nil {
 			return fmt.Errorf("Failed to get config map for token when running on an auth-enabled cluster %v", err)
