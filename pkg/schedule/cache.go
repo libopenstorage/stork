@@ -60,9 +60,12 @@ func getSchedulePolicy(name string) (*stork_api.SchedulePolicy, error) {
 		return storkops.Instance().GetSchedulePolicy(name)
 	}
 
-	obj, _, err := store.GetByKey(name)
+	obj, exists, err := store.GetByKey(name)
 	if err != nil {
 		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("schedulepolicy %v not found in cache", name)
 	}
 	return obj.(*stork_api.SchedulePolicy), nil
 }
