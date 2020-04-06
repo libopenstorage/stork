@@ -8,30 +8,39 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	orgID                  = "tp-org"
-	BLocationName          = "tp-blocation"
-	ClusterName            = "tp-cluster"
-	CredName               = "tp-backup-cred"
-	BackupName             = "tp-backup"
-	ConfigMapName          = "kubeconfigs"
-	KubeconfigDirectory    = "/tmp"
-	SourceClusterName      = "source-cluster"
-	DestinationClusterName = "destination-cluster"
+	BLocationName                     = "tp-blocation"
+	ClusterName                       = "tp-cluster"
+	CredName                          = "tp-backup-cred"
+	BackupName                        = "tp-backup"
+	RestoreName                       = "tp-restore"
+	ConfigMapName                     = "kubeconfigs"
+	KubeconfigDirectory               = "/tmp"
+	SourceClusterName                 = "source-cluster"
+	DestinationClusterName            = "destination-cluster"
+	BackupRestoreCompletionTimeoutMin = 3
+	RetrySeconds                      = 30
 
 	providerAws   = "aws"
 	providerAzure = "azure"
+
+	defaultTimeout       = 5 * time.Minute
+	defaultRetryInterval = 10 * time.Second
 )
+
+var orgID string
 
 func TestBackup(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -46,9 +55,122 @@ var _ = BeforeSuite(func() {
 	InitInstance()
 })
 
+// This test performs basic test of starting an application and destroying it (along with storage)
+var _ = Describe("{BackupCreateRestore}", func() {
+	var contexts []*scheduler.Context
+	var bkpNamespaces []string
+	var namespaceMapping map[string]string
+	labelSelectores := make(map[string]string)
+
+	It("has to complete backup and restore", func() {
+
+		SetupBackup()
+
+		sourceClusterConfigPath, err := getSourceClusterConfigPath()
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to get kubeconfig path for source cluster. Error: [%v]", err))
+
+		SetClusterContext(sourceClusterConfigPath)
+
+		Step("Deploy applications", func() {
+			contexts = make([]*scheduler.Context, 0)
+			bkpNamespaces = make([]string, 0)
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				taskName := fmt.Sprintf("backupcreaterestore-%d", i)
+				appContexts := ScheduleApplications(taskName)
+				contexts = append(contexts, appContexts...)
+				for _, ctx := range appContexts {
+					bkpNamespaces = append(bkpNamespaces, GetAppNamespace(ctx, taskName))
+				}
+			}
+
+			ValidateApplications(contexts)
+		})
+
+		Step(fmt.Sprintf("Create Backup [%s]", BackupName), func() {
+			CreateBackup(BackupName, SourceClusterName, BLocationName,
+				bkpNamespaces, labelSelectores, orgID)
+		})
+
+		Step(fmt.Sprintf("Wait for Backup [%s] to complete", BackupName), func() {
+			err := Inst().Backup.WaitForBackupCompletion(BackupName, orgID,
+				BackupRestoreCompletionTimeoutMin*time.Minute,
+				RetrySeconds*time.Second)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to wait for backup [%s] to complete. Error: [%v]",
+					BackupName, err))
+		})
+
+		Step(fmt.Sprintf("Create Restore [%s]", RestoreName), func() {
+			CreateRestore(RestoreName, BackupName,
+				namespaceMapping, DestinationClusterName, orgID)
+		})
+
+		Step(fmt.Sprintf("Wait for Restore [%s] to complete", RestoreName), func() {
+			err := Inst().Backup.WaitForRestoreCompletion(RestoreName, orgID,
+				BackupRestoreCompletionTimeoutMin*time.Minute,
+				RetrySeconds*time.Second)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to wait for restore [%s] to complete. Error: [%v]",
+					BackupName, err))
+		})
+
+		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, map[string]bool{
+					SkipClusterScopedObjects: true,
+				})
+			}
+		})
+
+		// Change namespaces to restored apps only after backed up apps are cleaned up
+		// to avoid switching back namespaces to backup namespaces
+		Step(fmt.Sprintf("Validate Restore [%s]", RestoreName), func() {
+			destClusterConfigPath, err := getDestinationClusterConfigPath()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get kubeconfig path for destination cluster. Error: [%v]", err))
+
+			SetClusterContext(destClusterConfigPath)
+
+			for _, ctx := range contexts {
+				err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			// TODO: Restored PVCs are created by stork-snapshot StorageClass
+			// And not by respective app's StorageClass. Need to fix below function
+			// ValidateApplications(contexts)
+		})
+
+		Step("teardown all restored apps", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, nil)
+			}
+		})
+
+		Step("teardown backup objects", func() {
+			BackupCleanup()
+		})
+	})
+})
+
+func SetupBackup() {
+	orgID = Inst().InstanceID
+	provider := discoverProvider()
+	if provider == "" {
+		return
+	}
+
+	CreateOrganization(orgID)
+	CreateCloudCredential(provider, CredName, orgID)
+	CreateBackupLocation(provider, BLocationName, CredName, orgID)
+	CreateSourceAndDestClusters(provider, CredName, orgID)
+}
+
 func BackupCleanup() {
-	DeleteBackup(BackupName, ClusterName, orgID)
-	DeleteCluster(ClusterName, orgID)
+	DeleteRestore(RestoreName, orgID)
+	DeleteBackup(BackupName, SourceClusterName, orgID)
+	DeleteCluster(DestinationClusterName, orgID)
+	DeleteCluster(SourceClusterName, orgID)
 	DeleteBackupLocation(BLocationName, orgID)
 	DeleteCloudCredential(CredName, orgID)
 }
@@ -63,6 +185,18 @@ func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
 	os.Exit(m.Run())
+}
+
+func SetClusterContext(clusterConfigPath string) {
+	err := Inst().S.SetConfig(clusterConfigPath)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to switch to context. Error: [%v]", err))
+
+	err = Inst().S.RefreshNodeRegistry()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = Inst().V.RefreshDriverEndpoints()
+	Expect(err).NotTo(HaveOccurred())
 }
 
 // CreateOrganization creates org on px-backup
@@ -440,6 +574,28 @@ func DeleteBackup(backupName string, clusterName string, orgID string) {
 		// Best effort cleanup, dont fail test, if deletion fails
 		//Expect(err).NotTo(HaveOccurred(),
 		//	fmt.Sprintf("Failed to delete backup [%s] in org [%s]", backupName, orgID))
+		// TODO: validate createClusterResponse also
+	})
+}
+
+// DeleteRestore creates restore
+func DeleteRestore(restoreName string, orgID string) {
+
+	Step(fmt.Sprintf("Delete restore [%s] in org [%s]",
+		restoreName, orgID), func() {
+
+		backupDriver := Inst().Backup
+		Expect(backupDriver).NotTo(BeNil(),
+			"Backup driver is not initialized")
+
+		deleteRestoreReq := &api.RestoreDeleteRequest{
+			OrgId: orgID,
+			Name:  restoreName,
+		}
+		_, err := backupDriver.DeleteRestore(deleteRestoreReq)
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to delete restore [%s] in org [%s]",
+				restoreName, orgID))
 		// TODO: validate createClusterResponse also
 	})
 }

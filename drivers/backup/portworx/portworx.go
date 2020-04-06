@@ -284,8 +284,9 @@ func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 		} else if currentStatus == api.BackupInfo_StatusInfo_Failed ||
 			currentStatus == api.BackupInfo_StatusInfo_Aborted ||
 			currentStatus == api.BackupInfo_StatusInfo_Invalid {
-			backupError = fmt.Errorf("backup [%v] is in [%s] state",
-				req.GetName(), currentStatus)
+			backupError = fmt.Errorf("backup [%v] is in [%s] state. reason: [%v]",
+				req.GetName(), currentStatus,
+				inspectBkpResp.GetBackup().GetStatus().GetReason())
 			return nil, false, backupError
 		}
 		return nil,
