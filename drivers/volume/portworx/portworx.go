@@ -217,6 +217,8 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
+	// Force update px endpoints
+	d.refreshEndpoint = true
 	storageNodes, err := d.getStorageNodesOnStart()
 	if err != nil {
 		return err
@@ -261,9 +263,10 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []api.StorageNode) error {
 					n.StorageNode = pxNode
 					n.VolDriverNodeID = pxNode.Id
 					n.IsStorageDriverInstalled = isPX
+					// TODO: PTX-2445 Replace isMetadataNode API call with SDK call
 					isMetadataNode, err := d.isMetadataNode(*n, address)
 					if err != nil {
-						return err
+						logrus.Warnf("can not check if %v is metadata node", *n)
 					}
 					n.IsMetadataNode = isMetadataNode
 
