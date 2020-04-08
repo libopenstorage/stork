@@ -369,8 +369,6 @@ spec:
       value: "${AWS_ACCESS_KEY_ID}"
     - name: AWS_SECRET_ACCESS_KEY
       value: "${AWS_SECRET_ACCESS_KEY}"
-    - name: BUCKET_NAME
-      value: "${BUCKET_NAME}"
     - name: KUBECONFIGS
       value: "${CLUSTER_CONFIGS}"
     - name: S3_ENDPOINT
