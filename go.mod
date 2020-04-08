@@ -10,7 +10,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/Microsoft/go-winio v0.4.14 // indirect
-	github.com/aws/aws-sdk-go v1.25.11
+	github.com/aws/aws-sdk-go v1.30.6
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -29,6 +29,7 @@ require (
 	github.com/libopenstorage/openstorage v8.0.1-0.20200129213931-ba5ed2ee0f18+incompatible
 	github.com/libopenstorage/stork v1.3.0-beta1.0.20191009210244-6a3497c42b2a
 	github.com/mattn/go-isatty v0.0.10 // indirect
+	github.com/minio/minio-go/v6 v6.0.52 // indirect
 	github.com/onsi/ginkgo v1.10.2
 	github.com/onsi/gomega v1.7.0
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
@@ -38,11 +39,11 @@ require (
 	github.com/portworx/px-backup-api v0.0.0-20200402112707-c49de5730ac1
 	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
 	github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee
-	github.com/sirupsen/logrus v1.4.2
-	github.com/stretchr/testify v1.4.0
+	github.com/sirupsen/logrus v1.5.0
+	github.com/stretchr/testify v1.5.1
 	go.opencensus.io v0.22.1 // indirect
 	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
-	golang.org/x/net v0.0.0-20191009170851-d66e71096ffb
+	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	google.golang.org/grpc v1.24.0
 	gopkg.in/yaml.v2 v2.2.4
 	k8s.io/api v0.17.2
