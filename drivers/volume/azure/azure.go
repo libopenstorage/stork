@@ -504,6 +504,10 @@ func (a *azure) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
+func (a *azure) InspectNode(id string) (*storkvolume.NodeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
 func (a *azure) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
 	return nil, &errors.ErrNotSupported{}
 }
