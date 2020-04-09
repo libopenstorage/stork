@@ -460,6 +460,10 @@ func (g *gcp) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
+func (g *gcp) InspectNode(id string) (*storkvolume.NodeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
 func (g *gcp) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
 	return nil, &errors.ErrNotSupported{}
 }
