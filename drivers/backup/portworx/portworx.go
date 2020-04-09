@@ -17,6 +17,8 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -359,7 +361,7 @@ func (p *portworx) WaitForBackupDeletion(backupName string, orgID string,
 	f := func() (interface{}, bool, error) {
 		inspectBackupResp, err := p.backupManager.Inspect(context.Background(), req)
 		if err == nil {
-			// Object still exsts, just retry
+			// Object still exists, just retry
 			currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
 			return nil, true, fmt.Errorf("backup [%v] is in [%s] state",
 				req.GetName(), currentStatus)
@@ -368,7 +370,7 @@ func (p *portworx) WaitForBackupDeletion(backupName string, orgID string,
 		if inspectBackupResp == nil {
 			return nil, false, nil
 		}
-		// Check if backup location delete status is complete
+		// Check if backup delete status is complete
 		currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
 		if currentStatus == api.BackupInfo_StatusInfo_Deleting ||
 			currentStatus == api.BackupInfo_StatusInfo_DeletePending {
@@ -649,6 +651,38 @@ func (p *portworx) WaitForRunning(req *api.BackupInspectRequest, timeout, retryI
 
 	if err != nil || backupErr != nil {
 		return fmt.Errorf("failed to wait for running start. Error:[%v] Reason:[%v]", err, backupErr)
+	}
+
+	return nil
+}
+
+// WaitForClusterDeletion waits for cluster to be deleted successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func (p *portworx) WaitForClusterDeletion(clusterName string, orgID string,
+	timeout time.Duration, timeBeforeRetry time.Duration) error {
+	req := &api.ClusterInspectRequest{
+		Name:  clusterName,
+		OrgId: orgID,
+	}
+	f := func() (interface{}, bool, error) {
+		inspectClusterResp, err := p.clusterManager.Inspect(context.Background(), req)
+		if err == nil {
+			// Object still exists, just retry
+			currentStatus := inspectClusterResp.GetCluster().GetStatus().GetStatus()
+			return nil, true, fmt.Errorf("cluster [%v] is in [%s] state. Waiting to become complete",
+				req.GetName(), currentStatus)
+		}
+		code := status.Code(err)
+		// If error has code.NotFound, the cluster object is deleted.
+		if code == codes.NotFound {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("Fetching cluster[%v] failed with err: %v", req.GetName(), err.Error())
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for cluster deletion. Error:[%v]", err)
 	}
 
 	return nil
