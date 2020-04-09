@@ -2,10 +2,11 @@ package schedops
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/version"
 	"regexp"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/version"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
@@ -40,6 +41,8 @@ const (
 	k8sServiceOperationStart = "start"
 	// k8sServiceOperationStop is label value for stopping Portworx service
 	k8sServiceOperationStop = "stop"
+	// k8sServiceOperationRestart is label value for restarting Portworx service
+	k8sServiceOperationRestart = "restart"
 	// k8sPodsRootDir is the directory under which k8s keeps all pods data
 	k8sPodsRootDir = "/var/lib/kubelet/pods"
 	// snapshotAnnotation is the annotation used to get the parent of a PVC
@@ -115,6 +118,10 @@ func (k *k8sSchedOps) StopPxOnNode(n node.Node) error {
 
 func (k *k8sSchedOps) StartPxOnNode(n node.Node) error {
 	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationStart)
+}
+
+func (k *k8sSchedOps) RestartPxOnNode(n node.Node) error {
+	return k8sCore.AddLabelOnNode(n.Name, PXServiceLabelKey, k8sServiceOperationRestart)
 }
 
 func (k *k8sSchedOps) ValidateOnNode(n node.Node) error {

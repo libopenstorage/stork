@@ -2,6 +2,7 @@ package schedops
 
 import (
 	"fmt"
+
 	"k8s.io/apimachinery/pkg/version"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -19,6 +20,8 @@ type Driver interface {
 	StartPxOnNode(n node.Node) error
 	// StopPxOnNode disables portworx service  on given node
 	StopPxOnNode(n node.Node) error
+	// RestartPxOnNode restarts portworx service on given node
+	RestartPxOnNode(n node.Node) error
 	// ValidateOnNode validates portworx on given node (from scheduler perspective)
 	ValidateOnNode(n node.Node) error
 	// ValidateAddLabels validates whether the labels for the volume are applied appropriately on the vol replica nodes

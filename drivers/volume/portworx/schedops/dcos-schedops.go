@@ -23,6 +23,13 @@ func (d *dcosSchedOps) StopPxOnNode(n node.Node) error {
 	return nil
 }
 
+func (d *dcosSchedOps) RestartPxOnNode(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Portworx DCOS operation",
+		Operation: "RestartPxOnNode",
+	}
+}
+
 func (d *dcosSchedOps) ValidateOnNode(n node.Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",

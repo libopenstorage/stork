@@ -5,6 +5,7 @@ import (
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -219,7 +220,7 @@ var (
 
 // DeleteTasksOptions are options supplied to the DeleteTasks API
 type DeleteTasksOptions struct {
-	TriggerOptions
+	api.TriggerOptions
 }
 
 // DeleteVolumeOptions are options supplied to the DeleteVolume API
@@ -237,20 +238,6 @@ type Event struct {
 	Kind      string
 	Type      string
 }
-
-// TriggerOptions are common options used to check if any action is okay to be triggered/performed
-type TriggerOptions struct {
-	// TriggerCb is the callback function to invoke to check trigger condition
-	TriggerCb TriggerCallbackFunc
-	// TriggerCheckInterval is the interval at which to check the trigger conditions
-	TriggerCheckInterval time.Duration
-	// TriggerCheckTimeout is the duration at which the trigger checks should timeout. If the trigger
-	TriggerCheckTimeout time.Duration
-}
-
-// TriggerCallbackFunc is a callback function that are used by scheduler APIs to decide when to trigger/perform actions.
-// the function should return true, when it is the right time to perform the respective action
-type TriggerCallbackFunc func() (bool, error)
 
 // Register registers the given scheduler driver
 func Register(name string, d Driver) error {

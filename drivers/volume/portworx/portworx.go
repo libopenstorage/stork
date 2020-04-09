@@ -22,6 +22,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -1481,6 +1482,14 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, ena
 		logrus.Infof("stork upgrade is disabled, skipping...")
 	}
 	return nil
+}
+
+func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return driver_api.PerformTask(
+		func() error {
+			return d.schedOps.RestartPxOnNode(n)
+		},
+		triggerOpts)
 }
 
 // upgradePortworx upgrades Portworx

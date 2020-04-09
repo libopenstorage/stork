@@ -29,12 +29,12 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
-	tp_errors "github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -1597,7 +1597,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 		for _, pod := range pods {
 			err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
 			if err != nil {
-				logrus.Errorf("k8s DeleteTasks failed to wait for pod: [%s] %s to terminate. err: %v", pod.Namespace, pod.Name, err)
+				logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				return err
 			}
 		}
@@ -1605,54 +1605,11 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 		return nil
 	}
 
-	if opts == nil || opts.TriggerCb == nil { // caller hasn't provided any trigger checks
+	if opts == nil {
 		return deleteTasks()
 	}
 
-	if opts.TriggerCheckTimeout == time.Duration(0) {
-		opts.TriggerCheckTimeout = defaultTriggerCheckTimeout
-	}
-
-	if opts.TriggerCheckInterval == time.Duration(0) {
-		opts.TriggerCheckInterval = defaultTriggerCheckInterval
-	}
-
-	// perform trigger checks and then perform the actual deletion
-	t := func() (interface{}, bool, error) {
-		triggered, err := opts.TriggerCb()
-		if err != nil {
-			logrus.Warnf("failed to invoke trigger callback function due to: %v", err)
-			return false, false, err
-		}
-
-		if triggered {
-			return triggered, false, nil // done
-		}
-
-		return false, true, fmt.Errorf("%s: trigger check hasn't been met yet", fn)
-	}
-
-	_, err := task.DoRetryWithTimeout(t, opts.TriggerCheckTimeout, opts.TriggerCheckInterval)
-	if err != nil {
-		// timeout error is expected if the trigger conditions don't meet within above timeouts. For any other error,
-		// return the error
-		_, timedOut := err.(*task.ErrTimedOut)
-		if timedOut {
-			err = &tp_errors.ErrOperationNotPerformed{
-				Operation: fn,
-				Reason:    fmt.Sprintf("Trigger checks did not pass"),
-			}
-		} else {
-			err = &tp_errors.ErrOperationNotPerformed{
-				Operation: fn,
-				Reason:    fmt.Sprintf("Trigger checks could not be performed: %v", err),
-			}
-		}
-		return err
-	}
-
-	// perform the actual delete tasks logic
-	return deleteTasks()
+	return api.PerformTask(deleteTasks, &opts.TriggerOptions)
 }
 
 // GetVolumeParameters Get the volume parameters

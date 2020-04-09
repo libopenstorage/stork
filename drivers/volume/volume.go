@@ -7,6 +7,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
@@ -73,6 +74,9 @@ type Driver interface {
 
 	// StartDriver must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
+
+	// RestartDriver must cause the volume driver to get restarted on a given node.
+	RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error
 
 	// WaitDriverUpOnNode must wait till the volume driver becomes usable on a given node
 	WaitDriverUpOnNode(n node.Node, timeout time.Duration) error
