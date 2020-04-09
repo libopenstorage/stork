@@ -14,20 +14,31 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	"k8s.io/apimachinery/pkg/util/wait"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
 const (
-	defaultIntervalSec = 120
-	minimumIntervalSec = 30
+	defaultIntervalSec   = 120
+	minimumIntervalSec   = 30
+	initialNodeWaitDelay = 10 * time.Second
+	nodeWaitFactor       = 1
+	nodeWaitSteps        = 5
 )
+
+var nodeWaitCallBackoff = wait.Backoff{
+	Duration: initialNodeWaitDelay,
+	Factor:   nodeWaitFactor,
+	Steps:    nodeWaitSteps,
+}
 
 // Monitor Storage driver monitor
 type Monitor struct {
 	Driver      volume.Driver
 	IntervalSec int64
 	lock        sync.Mutex
+	wg          sync.WaitGroup
 	started     bool
 	stopChannel chan int
 	done        chan int
@@ -173,40 +184,64 @@ func (m *Monitor) driverMonitor() {
 				// If not online, look at all the pods on that node
 				// For any Running pod on that node using volume by the driver, kill the pod
 				if node.Status != volume.NodeOnline {
-					pods, err := k8s.Instance().GetPods("", nil)
-					if err != nil {
-						log.Errorf("Error getting pods: %v", err)
-						continue
-					}
-
-					// delete volume attachments if the node is down for this pod
-					err = m.cleanupVolumeAttachmentsByNode(node)
-					if err != nil {
-						log.Errorf("Error cleaning up volume attachments: %v", err)
-					}
-
-					for _, pod := range pods.Items {
-						owns, err := m.doesDriverOwnPodVolumes(&pod)
-						if err != nil || !owns {
-							continue
-						}
-
-						if m.isSameNode(pod.Spec.NodeName, node) {
-							storklog.PodLog(&pod).Infof("Deleting Pod from Node: %v", pod.Spec.NodeName)
-							err = k8s.Instance().DeletePods([]v1.Pod{pod}, true)
-							if err != nil {
-								storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
-								continue
-							}
-						}
-					}
+					m.wg.Add(1)
+					// wait for 1 min if node is upgrading
+					go m.cleanupDriverNodePods(node)
 				}
 			}
+			// lets all node to finish processing and then start sleep
+			m.wg.Wait()
 			time.Sleep(time.Duration(m.IntervalSec) * time.Second)
 		case <-m.stopChannel:
 			return
 		}
 	}
+}
+
+func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) error {
+	defer m.wg.Done()
+	err := wait.ExponentialBackoff(nodeWaitCallBackoff, func() (bool, error) {
+		n, err := m.Driver.InspectNode(node.StorageID)
+		if err != nil {
+			return false, nil
+		}
+		if n.Status != volume.NodeOnline {
+			log.Infof("Node is still offline %v , %v", n.Status, n.Hostname)
+			return false, nil
+		}
+		return true, nil
+	})
+	if err == nil {
+		return nil
+	}
+	log.Infof("Node is not online still 1 min retry deleting pod %v", node.StorageID)
+	pods, err := k8s.Instance().GetPods("", nil)
+	if err != nil {
+		log.Errorf("Error getting pods: %v", err)
+	}
+
+	// delete volume attachments if the node is down for this pod
+	err = m.cleanupVolumeAttachmentsByNode(node)
+	if err != nil {
+		log.Errorf("Error cleaning up volume attachments: %v", err)
+	}
+
+	for _, pod := range pods.Items {
+		owns, err := m.doesDriverOwnPodVolumes(&pod)
+		if err != nil || !owns {
+			continue
+		}
+
+		if m.isSameNode(pod.Spec.NodeName, node) {
+			storklog.PodLog(&pod).Infof("Deleting Pod from Node: %v", pod.Spec.NodeName)
+			err = k8s.Instance().DeletePods([]v1.Pod{pod}, true)
+			if err != nil {
+				storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
+				continue
+			}
+		}
+	}
+	return err
 }
 
 func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
