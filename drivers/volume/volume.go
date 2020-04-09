@@ -34,6 +34,9 @@ type Driver interface {
 	// GetNodes Get the list of nodes where the driver is available
 	GetNodes() ([]*NodeInfo, error)
 
+	// InspectNode using ID
+	InspectNode(id string) (*NodeInfo, error)
+
 	// GetPodVolumes Get all the volumes used by a pod backed by the driver
 	GetPodVolumes(*v1.PodSpec, string) ([]*Info, error)
 
