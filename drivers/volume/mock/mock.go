@@ -207,6 +207,7 @@ func (m Driver) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return m.nodes, nil
 }
 
+// InspectNode using ID
 func (m Driver) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
