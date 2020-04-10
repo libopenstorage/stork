@@ -694,21 +694,39 @@ func (a *ApplicationBackupController) backupResources(
 
 	// Do any additional preparation for the resources if required
 	if err = a.prepareResources(backup, allObjects); err != nil {
+		message := fmt.Sprintf("Error preparing resources for backup: %v", err)
+		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+		backup.Status.Reason = message
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+		err = a.client.Update(context.TODO(), backup)
+		if err != nil {
+			return err
+		}
 		a.recorder.Event(backup,
 			v1.EventTypeWarning,
 			string(stork_api.ApplicationBackupStatusFailed),
-			fmt.Sprintf("Error preparing resource: %v", err))
-		log.ApplicationBackupLog(backup).Errorf("Error preparing resources: %v", err)
+			message)
+		log.ApplicationBackupLog(backup).Errorf(message)
 		return err
 	}
 
 	// Upload the resources to the backup location
 	if err = a.uploadResources(backup, allObjects); err != nil {
+		message := fmt.Sprintf("Error uploading resources: %v", err)
+		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+		backup.Status.Reason = message
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+		err = a.client.Update(context.TODO(), backup)
+		if err != nil {
+			return err
+		}
 		a.recorder.Event(backup,
 			v1.EventTypeWarning,
 			string(stork_api.ApplicationBackupStatusFailed),
-			fmt.Sprintf("Error uploading resource: %v", err))
-		log.ApplicationBackupLog(backup).Errorf("Error uploading resources: %v", err)
+			message)
+		log.ApplicationBackupLog(backup).Errorf(message)
 		return err
 	}
 	backup.Status.BackupPath = a.getObjectPath(backup)
