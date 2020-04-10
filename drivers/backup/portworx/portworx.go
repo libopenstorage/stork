@@ -250,15 +250,20 @@ func (p *portworx) DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*
 
 // WaitForBackupLocationDeletion waits for backup location to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupLocationDeletion(backupLocationName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForBackupLocationDeletion(
+	ctx context.Context,
+	backupLocationName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.BackupLocationInspectRequest{
 		Name:  backupLocationName,
 		OrgId: orgID,
 	}
 	var blError error
 	f := func() (interface{}, bool, error) {
-		inspectBlResp, err := p.backupLocationManager.Inspect(context.Background(), req)
+		inspectBlResp, err := p.backupLocationManager.Inspect(ctx, req)
 		if err == nil {
 			// Object still exsts, just retry
 			currentStatus := inspectBlResp.GetBackupLocation().GetStatus().GetStatus()
@@ -308,15 +313,20 @@ func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDelete
 
 // WaitForBackupCompletion waits for backup to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForBackupCompletion(
+	ctx context.Context,
+	backupName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
 	}
 	var backupError error
 	f := func() (interface{}, bool, error) {
-		inspectBkpResp, err := p.backupManager.Inspect(context.Background(), req)
+		inspectBkpResp, err := p.backupManager.Inspect(ctx, req)
 		if err != nil {
 			// Error occured, just retry
 			return nil, true, err
@@ -351,15 +361,20 @@ func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 
 // WaitForBackupDeletion waits for backup to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupDeletion(backupName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForBackupDeletion(
+	ctx context.Context,
+	backupName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
 	}
 	var backupError error
 	f := func() (interface{}, bool, error) {
-		inspectBackupResp, err := p.backupManager.Inspect(context.Background(), req)
+		inspectBackupResp, err := p.backupManager.Inspect(ctx, req)
 		if err == nil {
 			// Object still exists, just retry
 			currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
@@ -419,15 +434,20 @@ func (p *portworx) DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDel
 
 // WaitForRestoreCompletion waits for restore to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForRestoreCompletion(restoreName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForRestoreCompletion(
+	ctx context.Context,
+	restoreName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
 	}
 	var restoreError error
 	f := func() (interface{}, bool, error) {
-		inspectRestoreResp, err := p.restoreManager.Inspect(context.Background(), req)
+		inspectRestoreResp, err := p.restoreManager.Inspect(ctx, req)
 		if err != nil {
 			// Error occured, just retry
 			return nil, true, err
@@ -503,6 +523,7 @@ func (p *portworx) DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*
 // BackupScheduleWaitForNBackupsCompletion waits for given number of backup to be complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) BackupScheduleWaitForNBackupsCompletion(
+	ctx context.Context,
 	name,
 	orgID string,
 	count int,
@@ -515,7 +536,7 @@ func (p *portworx) BackupScheduleWaitForNBackupsCompletion(
 	f := func() (interface{}, bool, error) {
 		var backups []*api.BackupObject
 		// Get backup list
-		resp, err := p.backupManager.Enumerate(context.Background(), req)
+		resp, err := p.backupManager.Enumerate(ctx, req)
 		if err != nil {
 			return nil, true, err
 		}
@@ -554,6 +575,7 @@ func (p *portworx) BackupScheduleWaitForNBackupsCompletion(
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 // This wait function is for the backupschedule deletion with delete-backup option set.
 func (p *portworx) WaitForBackupScheduleDeletion(
+	ctx context.Context,
 	backupScheduleName,
 	namespace,
 	orgID string,
@@ -566,7 +588,7 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 		OrgId: orgID,
 	}
 	f := func() (interface{}, bool, error) {
-		inspectBackupScheduleResp, err := p.backupScheduleManager.Inspect(context.Background(), req)
+		inspectBackupScheduleResp, err := p.backupScheduleManager.Inspect(ctx, req)
 		if err == nil {
 			// Object still exists, just retry
 			currentStatus := inspectBackupScheduleResp.GetBackupSchedule().GetStatus().GetStatus()
@@ -583,7 +605,7 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 			OrgId: orgID,
 		}
 		// Get backup list
-		resp, err := p.backupManager.Enumerate(context.Background(), req)
+		resp, err := p.backupManager.Enumerate(ctx, req)
 		if err != nil {
 			return nil, true, err
 		}
@@ -620,11 +642,16 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 }
 
 // Wait for backup to start running
-func (p *portworx) WaitForRunning(req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error {
+func (p *portworx) WaitForRunning(
+	ctx context.Context,
+	req *api.BackupInspectRequest,
+	timeout,
+	retryInterval time.Duration,
+) error {
 	var backupErr error
 
 	t := func() (interface{}, bool, error) {
-		resp, err := p.backupManager.Inspect(context.Background(), req)
+		resp, err := p.backupManager.Inspect(ctx, req)
 
 		if err != nil {
 			return nil, true, err
@@ -658,14 +685,19 @@ func (p *portworx) WaitForRunning(req *api.BackupInspectRequest, timeout, retryI
 
 // WaitForClusterDeletion waits for cluster to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForClusterDeletion(clusterName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForClusterDeletion(
+	ctx context.Context,
+	clusterName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.ClusterInspectRequest{
 		Name:  clusterName,
 		OrgId: orgID,
 	}
 	f := func() (interface{}, bool, error) {
-		inspectClusterResp, err := p.clusterManager.Inspect(context.Background(), req)
+		inspectClusterResp, err := p.clusterManager.Inspect(ctx, req)
 		if err == nil {
 			// Object still exists, just retry
 			currentStatus := inspectClusterResp.GetCluster().GetStatus().GetStatus()

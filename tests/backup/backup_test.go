@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -102,7 +103,7 @@ var _ = Describe("{BackupCreateRestore}", func() {
 		})
 
 		Step(fmt.Sprintf("Wait for Backup [%s] to complete", BackupName), func() {
-			err := Inst().Backup.WaitForBackupCompletion(BackupName, orgID,
+			err := Inst().Backup.WaitForBackupCompletion(context.Background(), BackupName, orgID,
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			Expect(err).NotTo(HaveOccurred(),
@@ -116,7 +117,7 @@ var _ = Describe("{BackupCreateRestore}", func() {
 		})
 
 		Step(fmt.Sprintf("Wait for Restore [%s] to complete", RestoreName), func() {
-			err := Inst().Backup.WaitForRestoreCompletion(RestoreName, orgID,
+			err := Inst().Backup.WaitForRestoreCompletion(context.Background(), RestoreName, orgID,
 				BackupRestoreCompletionTimeoutMin*time.Minute,
 				RetrySeconds*time.Second)
 			Expect(err).NotTo(HaveOccurred(),

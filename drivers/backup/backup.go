@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -36,7 +37,7 @@ type Driver interface {
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
 
 	// WaitForRunning waits for application to start running.
-	WaitForRunning(req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error
+	WaitForRunning(ctx context.Context, req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error
 
 	// String returns the name of this driver
 	String() string
@@ -105,7 +106,7 @@ type BLocation interface {
 	DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error)
 
 	// WaitForBackupLocationDeletion watis for backup location to be deleted
-	WaitForBackupLocationDeletion(backupLocationName string, orgID string,
+	WaitForBackupLocationDeletion(ctx context.Context, backupLocationName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
@@ -128,12 +129,12 @@ type Backup interface {
 
 	// WaitForBackupCompletion waits for backup to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry`
-	WaitForBackupCompletion(backupName string, orgID string,
+	WaitForBackupCompletion(ctx context.Context, backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 
 	// WaitForBackupDeletion waits for backup to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry
-	WaitForBackupDeletion(backupName string, orgID string,
+	WaitForBackupDeletion(ctx context.Context, backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
@@ -156,7 +157,7 @@ type Restore interface {
 
 	// WaitForRestoreCompletion waits for restore to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
-	WaitForRestoreCompletion(restoreName string, orgID string,
+	WaitForRestoreCompletion(ctx context.Context, restoreName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
@@ -197,12 +198,12 @@ type ScheduleBackup interface {
 
 	// BackupScheduleWaitForNBackupsCompletion, waits for backup schedule to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
-	BackupScheduleWaitForNBackupsCompletion(name, orgID string, count int,
+	BackupScheduleWaitForNBackupsCompletion(ctx context.Context, name, orgID string, count int,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 	// WaitForBackupScheduleDeletion waits for backupschedule to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	// This wait function is for the backupschedule deletion with delete-backup option set.
-	WaitForBackupScheduleDeletion(backupScheduleName, namespace, orgID string,
+	WaitForBackupScheduleDeletion(ctx context.Context, backupScheduleName, namespace, orgID string,
 		clusterObj *api.ClusterObject, timeout time.Duration, timeBeforeRetry time.Duration) error
 }
 
