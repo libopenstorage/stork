@@ -2,11 +2,13 @@ package portworx
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"time"
 
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -15,6 +17,10 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -49,6 +55,46 @@ type portworx struct {
 
 func (p *portworx) String() string {
 	return driverName
+}
+
+func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error) {
+	if clusterObj.GetKubeconfig() == "" {
+		return nil, fmt.Errorf("empty cluster kubeconfig")
+	}
+	config, err := base64.StdEncoding.DecodeString(clusterObj.GetKubeconfig())
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode account details %v", err)
+	}
+
+	client, err := clientcmd.RESTConfigFromKubeConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+// getKubernetesInstance - Get hanlder to k8s cluster.
+func getKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, error) {
+	client, err := getKubernetesRestConfig(cluster)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	storkInst, err := stork.NewForConfig(client)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error initializing stork client instance: %v", err)
+	}
+	coreInst, err := core.NewForConfig(client)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error initializing core client instance: %v", err)
+	}
+
+	// validate we are able to access k8s apis
+	_, err = coreInst.GetVersion()
+	if err != nil {
+		return nil, nil, fmt.Errorf("error getting cluster version: %v", err)
+	}
+	return coreInst, storkInst, nil
 }
 
 func (p *portworx) Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error {
@@ -204,15 +250,20 @@ func (p *portworx) DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*
 
 // WaitForBackupLocationDeletion waits for backup location to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupLocationDeletion(backupLocationName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForBackupLocationDeletion(
+	ctx context.Context,
+	backupLocationName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.BackupLocationInspectRequest{
 		Name:  backupLocationName,
 		OrgId: orgID,
 	}
 	var blError error
 	f := func() (interface{}, bool, error) {
-		inspectBlResp, err := p.backupLocationManager.Inspect(context.Background(), req)
+		inspectBlResp, err := p.backupLocationManager.Inspect(ctx, req)
 		if err == nil {
 			// Object still exsts, just retry
 			currentStatus := inspectBlResp.GetBackupLocation().GetStatus().GetStatus()
@@ -262,15 +313,20 @@ func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDelete
 
 // WaitForBackupCompletion waits for backup to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForBackupCompletion(
+	ctx context.Context,
+	backupName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
 	}
 	var backupError error
 	f := func() (interface{}, bool, error) {
-		inspectBkpResp, err := p.backupManager.Inspect(context.Background(), req)
+		inspectBkpResp, err := p.backupManager.Inspect(ctx, req)
 		if err != nil {
 			// Error occured, just retry
 			return nil, true, err
@@ -305,17 +361,22 @@ func (p *portworx) WaitForBackupCompletion(backupName string, orgID string,
 
 // WaitForBackupDeletion waits for backup to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForBackupDeletion(backupName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForBackupDeletion(
+	ctx context.Context,
+	backupName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.BackupInspectRequest{
 		Name:  backupName,
 		OrgId: orgID,
 	}
 	var backupError error
 	f := func() (interface{}, bool, error) {
-		inspectBackupResp, err := p.backupManager.Inspect(context.Background(), req)
+		inspectBackupResp, err := p.backupManager.Inspect(ctx, req)
 		if err == nil {
-			// Object still exsts, just retry
+			// Object still exists, just retry
 			currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
 			return nil, true, fmt.Errorf("backup [%v] is in [%s] state",
 				req.GetName(), currentStatus)
@@ -324,7 +385,7 @@ func (p *portworx) WaitForBackupDeletion(backupName string, orgID string,
 		if inspectBackupResp == nil {
 			return nil, false, nil
 		}
-		// Check if backup location delete status is complete
+		// Check if backup delete status is complete
 		currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
 		if currentStatus == api.BackupInfo_StatusInfo_Deleting ||
 			currentStatus == api.BackupInfo_StatusInfo_DeletePending {
@@ -373,15 +434,20 @@ func (p *portworx) DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDel
 
 // WaitForRestoreCompletion waits for restore to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForRestoreCompletion(restoreName string, orgID string,
-	timeout time.Duration, timeBeforeRetry time.Duration) error {
+func (p *portworx) WaitForRestoreCompletion(
+	ctx context.Context,
+	restoreName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
 	req := &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
 	}
 	var restoreError error
 	f := func() (interface{}, bool, error) {
-		inspectRestoreResp, err := p.restoreManager.Inspect(context.Background(), req)
+		inspectRestoreResp, err := p.restoreManager.Inspect(ctx, req)
 		if err != nil {
 			// Error occured, just retry
 			return nil, true, err
@@ -389,7 +455,8 @@ func (p *portworx) WaitForRestoreCompletion(restoreName string, orgID string,
 
 		// Check if restore is complete
 		currentStatus := inspectRestoreResp.GetRestore().GetStatus().GetStatus()
-		if currentStatus == api.RestoreInfo_StatusInfo_Success {
+		if currentStatus == api.RestoreInfo_StatusInfo_Success ||
+			currentStatus == api.RestoreInfo_StatusInfo_PartialSuccess {
 			// If restore is complete, dont retry again
 			return nil, false, nil
 		} else if currentStatus == api.RestoreInfo_StatusInfo_Failed ||
@@ -453,12 +520,138 @@ func (p *portworx) DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*
 	return p.backupScheduleManager.Delete(context.Background(), req)
 }
 
+// BackupScheduleWaitForNBackupsCompletion waits for given number of backup to be complete successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func (p *portworx) BackupScheduleWaitForNBackupsCompletion(
+	ctx context.Context,
+	name,
+	orgID string,
+	count int,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+	}
+	f := func() (interface{}, bool, error) {
+		var backups []*api.BackupObject
+		// Get backup list
+		resp, err := p.backupManager.Enumerate(ctx, req)
+		if err != nil {
+			return nil, true, err
+		}
+		backups = append(backups, resp.GetBackups()...)
+		if len(backups) < count {
+			return nil,
+				true,
+				fmt.Errorf("waiting for request number of backup. Current[%v] and requested[%v]", len(backups), count)
+		}
+		for _, backupObj := range backups {
+			if backupObj.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_Success ||
+				backupObj.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_PartialSuccess {
+				continue
+			} else if backupObj.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_Failed ||
+				backupObj.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_Aborted ||
+				backupObj.GetStatus().GetStatus() == api.BackupInfo_StatusInfo_Invalid {
+				backupError := fmt.Errorf("backup[%v] is in [%s] state. Reason: [%s]",
+					backupObj.GetName(), backupObj.GetStatus().GetStatus(), backupObj.GetStatus().GetReason())
+				return nil, false, backupError
+			}
+			return nil,
+				true,
+				fmt.Errorf("backup [%v] is in [%v] state. Waiting to become completed", backupObj.GetName(), backupObj.GetStatus().GetStatus())
+		}
+
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for backupschedule. Error:[%v]", err)
+	}
+	return nil
+}
+
+// WaitForBackupScheduleDeleteWithDeleteFlag waits for backupschedule to be deleted successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+// This wait function is for the backupschedule deletion with delete-backup option set.
+func (p *portworx) WaitForBackupScheduleDeletion(
+	ctx context.Context,
+	backupScheduleName,
+	namespace,
+	orgID string,
+	clusterObj *api.ClusterObject,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.BackupScheduleInspectRequest{
+		Name:  backupScheduleName,
+		OrgId: orgID,
+	}
+	f := func() (interface{}, bool, error) {
+		inspectBackupScheduleResp, err := p.backupScheduleManager.Inspect(ctx, req)
+		if err == nil {
+			// Object still exists, just retry
+			currentStatus := inspectBackupScheduleResp.GetBackupSchedule().GetStatus().GetStatus()
+			return nil, true, fmt.Errorf("backupSchedule [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+		}
+		// Object does not exist.
+		if inspectBackupScheduleResp == nil {
+			return nil, false, nil
+		}
+		// Make sure the backup objects are deleted.
+		var backups []*api.BackupObject
+		req := &api.BackupEnumerateRequest{
+			OrgId: orgID,
+		}
+		// Get backup list
+		resp, err := p.backupManager.Enumerate(ctx, req)
+		if err != nil {
+			return nil, true, err
+		}
+		backups = append(backups, resp.GetBackups()...)
+		// retry again, if backup objects remained undeleted.
+		if len(backups) != 0 {
+			return nil,
+				true,
+				fmt.Errorf("[%v] number of backups remain undeleted", len(backups))
+		}
+		// Check all the backup CRs are deleted.
+		_, inst, err := getKubernetesInstance(clusterObj)
+		if err != nil {
+			return nil, true, err
+		}
+		backupCrs, err := inst.ListApplicationBackups(namespace)
+		if err != nil {
+			return nil, true, err
+		}
+		if len(backupCrs.Items) != 0 {
+			return nil,
+				true,
+				fmt.Errorf("[%v] number of backup CR remain undeleted", len(backupCrs.Items))
+		}
+
+		return nil, false, nil
+	}
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for backup schedule deletion. Error:[%v]", err)
+	}
+
+	return nil
+}
+
 // Wait for backup to start running
-func (p *portworx) WaitForRunning(req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error {
+func (p *portworx) WaitForRunning(
+	ctx context.Context,
+	req *api.BackupInspectRequest,
+	timeout,
+	retryInterval time.Duration,
+) error {
 	var backupErr error
 
 	t := func() (interface{}, bool, error) {
-		resp, err := p.backupManager.Inspect(context.Background(), req)
+		resp, err := p.backupManager.Inspect(ctx, req)
 
 		if err != nil {
 			return nil, true, err
@@ -485,6 +678,43 @@ func (p *portworx) WaitForRunning(req *api.BackupInspectRequest, timeout, retryI
 
 	if err != nil || backupErr != nil {
 		return fmt.Errorf("failed to wait for running start. Error:[%v] Reason:[%v]", err, backupErr)
+	}
+
+	return nil
+}
+
+// WaitForClusterDeletion waits for cluster to be deleted successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func (p *portworx) WaitForClusterDeletion(
+	ctx context.Context,
+	clusterName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.ClusterInspectRequest{
+		Name:  clusterName,
+		OrgId: orgID,
+	}
+	f := func() (interface{}, bool, error) {
+		inspectClusterResp, err := p.clusterManager.Inspect(ctx, req)
+		if err == nil {
+			// Object still exists, just retry
+			currentStatus := inspectClusterResp.GetCluster().GetStatus().GetStatus()
+			return nil, true, fmt.Errorf("cluster [%v] is in [%s] state. Waiting to become complete",
+				req.GetName(), currentStatus)
+		}
+		code := status.Code(err)
+		// If error has code.NotFound, the cluster object is deleted.
+		if code == codes.NotFound {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("Fetching cluster[%v] failed with err: %v", req.GetName(), err.Error())
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for cluster deletion. Error:[%v]", err)
 	}
 
 	return nil
