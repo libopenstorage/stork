@@ -133,5 +133,8 @@ func deploymentMigrationBackupTest(t *testing.T) {
 		require.NoError(t, err, "Failed to delete  backup location %s on source cluster: %v.", currBackupLocation.Name, err)
 
 		logrus.Infoln("Completed cleanup on destination cluster")
+
+		err = setRemoteConfig("")
+		require.NoError(t, err, "Error resetting remote config")
 	}
 }
