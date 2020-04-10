@@ -33,6 +33,9 @@ type Driver interface {
 	SchedulePolicy
 	// ScheduleBackup
 	ScheduleBackup
+	// License
+	License
+
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
 
@@ -215,6 +218,18 @@ type ScheduleBackup interface {
 	// This wait function is for the backupschedule deletion with delete-backup option set.
 	WaitForBackupScheduleDeletion(ctx context.Context, backupScheduleName, namespace, orgID string,
 		clusterObj *api.ClusterObject, timeout time.Duration, timeBeforeRetry time.Duration) error
+}
+
+// License interface
+type License interface {
+	// ActivateLicense
+	ActivateLicense(req *api.LicenseActivateRequest) (*api.LicenseActivateResponse, error)
+
+	// InspectLicense
+	InspectLicense(req *api.LicenseInspectRequest) (*api.LicenseInspectResponse, error)
+
+	// WaitForLicenseActivation
+	WaitForLicenseActivation(ctx context.Context, req *api.LicenseInspectRequest, timeout, retryInterval time.Duration) error
 }
 
 var backupDrivers = make(map[string]Driver)
