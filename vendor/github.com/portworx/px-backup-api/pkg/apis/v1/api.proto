@@ -483,6 +483,9 @@ message EnumerateOptions {
     // Filter to use for name of objects. Any object that contains the filter
     // will be returned
     string name_filter = 5;
+    // Filter to use for cluster name of objects. Any object that contains the
+    // filter will be returned
+    string cluster_name_filter = 6;
 }
 
 service SchedulePolicy {
@@ -1326,4 +1329,46 @@ message VersionGetRequest {}
 message VersionGetResponse {
     // version information of the server
     VersionInfo version = 1;
+}
+
+message LicenseActivateRequest {
+    CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    string activation_id = 2;
+    bytes license_data = 3;
+}
+
+message LicenseActivateResponse {}
+
+message LicenseInspectRequest { string org_id = 1; }
+
+message LicenseInspectResponse {
+    repeated LicenseResponseInfo response_info = 1;
+}
+
+message LicenseResponseInfo {
+    // Represents feature name of license
+    string name = 1;
+    // Number of nodes/clusters supporting the feature
+    int64 count = 2;
+    // Expire time of license
+    google.protobuf.Timestamp expires = 3;
+    // Start time of license
+    google.protobuf.Timestamp starts = 4;
+}
+
+service License {
+    // Activate activate a new license
+    rpc Activate(LicenseActivateRequest) returns (LicenseActivateResponse) {
+        option (google.api.http) = {
+            post : "/v1/license"
+            body : "*"
+        };
+    }
+
+    // Enumerate returns a list of license for given cluster
+    rpc Inspect(LicenseInspectRequest) returns (LicenseInspectResponse) {
+        option (google.api.http) = {
+            get : "/v1/license/{org_id}"
+        };
+    }
 }

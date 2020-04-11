@@ -136,6 +136,13 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.cluster_name_filter",
+            "description": "Filter to use for cluster name of objects. Any object that contains the\nfilter will be returned.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -952,6 +959,70 @@
         ]
       }
     },
+    "/v1/license": {
+      "post": {
+        "summary": "Activate activate a new license",
+        "operationId": "License_Activate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/LicenseActivateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LicenseActivateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "License"
+        ]
+      }
+    },
+    "/v1/license/{org_id}": {
+      "get": {
+        "summary": "Enumerate returns a list of license for given cluster",
+        "operationId": "License_Inspect",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/LicenseInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "License"
+        ]
+      }
+    },
     "/v1/organization": {
       "get": {
         "summary": "Enumerate returns a list of organization object",
@@ -1159,6 +1230,13 @@
           {
             "name": "enumerate_options.name_filter",
             "description": "Filter to use for name of objects. Any object that contains the filter\nwill be returned.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "enumerate_options.cluster_name_filter",
+            "description": "Filter to use for cluster name of objects. Any object that contains the\nfilter will be returned.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -2557,6 +2635,10 @@
         "name_filter": {
           "type": "string",
           "title": "Filter to use for name of objects. Any object that contains the filter\nwill be returned"
+        },
+        "cluster_name_filter": {
+          "type": "string",
+          "title": "Filter to use for cluster name of objects. Any object that contains the\nfilter will be returned"
         }
       }
     },
@@ -2573,6 +2655,59 @@
     },
     "HealthStatusResponse": {
       "type": "object"
+    },
+    "LicenseActivateRequest": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/definitions/CreateMetadata"
+        },
+        "activation_id": {
+          "type": "string"
+        },
+        "license_data": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "LicenseActivateResponse": {
+      "type": "object"
+    },
+    "LicenseInspectResponse": {
+      "type": "object",
+      "properties": {
+        "response_info": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LicenseResponseInfo"
+          }
+        }
+      }
+    },
+    "LicenseResponseInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Represents feature name of license"
+        },
+        "count": {
+          "type": "string",
+          "format": "int64",
+          "title": "Number of nodes/clusters supporting the feature"
+        },
+        "expires": {
+          "type": "string",
+          "format": "date-time",
+          "title": "Expire time of license"
+        },
+        "starts": {
+          "type": "string",
+          "format": "date-time",
+          "title": "Start time of license"
+        }
+      }
     },
     "Metadata": {
       "type": "object",
