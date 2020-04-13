@@ -611,7 +611,7 @@
 
 [[projects]]
   branch = "release-7.0"
-  digest = "1:304fd9d9335c25c9793c5ec5fb0f1fea40e6c955a7bd421b47cffd8faa47eeb0"
+  digest = "1:f49ae50438ba2c97f0a36e790731f34e973d2b46d3526bbd634c5fc306abe042"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -636,7 +636,7 @@
     "volume",
   ]
   pruneopts = "UT"
-  revision = "c29b6c67036a9371ab64ee758a686979acd07d12"
+  revision = "6f72c3de1e77ffdcb2c4b346c9fae061088c4711"
 
 [[projects]]
   branch = "master"
