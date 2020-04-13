@@ -199,7 +199,7 @@ func (m *Monitor) driverMonitor() {
 	}
 }
 
-func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) error {
+func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	defer m.wg.Done()
 	err := wait.ExponentialBackoff(nodeWaitCallBackoff, func() (bool, error) {
 		n, err := m.Driver.InspectNode(node.StorageID)
@@ -213,9 +213,8 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) error {
 		return true, nil
 	})
 	if err == nil {
-		return nil
+		return
 	}
-	log.Infof("Node is not online still 1 min retry deleting pod %v", node.StorageID)
 	pods, err := core.Instance().GetPods("", nil)
 	if err != nil {
 		log.Errorf("Error getting pods: %v", err)
@@ -242,7 +241,6 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) error {
 			}
 		}
 	}
-	return err
 }
 
 func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
