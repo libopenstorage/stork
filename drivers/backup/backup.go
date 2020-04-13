@@ -86,6 +86,16 @@ type Cluster interface {
 
 	// DeleteCluster deletes a cluster object
 	DeleteCluster(req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error)
+
+	// WaitForClusterDeletion waits for cluster to be deleted successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+	WaitForClusterDeletion(
+		ctx context.Context,
+		clusterName,
+		orgID string,
+		timeout time.Duration,
+		timeBeforeRetry time.Duration,
+	) error
 }
 
 // BLocation obj interface

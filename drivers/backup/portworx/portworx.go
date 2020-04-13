@@ -228,6 +228,43 @@ func (p *portworx) DeleteCluster(req *api.ClusterDeleteRequest) (*api.ClusterDel
 	return p.clusterManager.Delete(context.Background(), req)
 }
 
+// WaitForClusterDeletion waits for cluster to be deleted successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration
+func (p *portworx) WaitForClusterDeletion(
+	ctx context.Context,
+	clusterName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.ClusterInspectRequest{
+		Name:  clusterName,
+		OrgId: orgID,
+	}
+	f := func() (interface{}, bool, error) {
+		inspectClusterResp, err := p.clusterManager.Inspect(ctx, req)
+		if err == nil {
+			// Object still exists, just retry
+			currentStatus := inspectClusterResp.GetCluster().GetStatus().GetStatus()
+			return nil, true, fmt.Errorf("cluster [%v] is in [%s] state. Waiting to become complete",
+				req.GetName(), currentStatus)
+		}
+		code := status.Code(err)
+		// If error has code.NotFound, the cluster object is deleted.
+		if code == codes.NotFound {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("Fetching cluster[%v] failed with err: %v", req.GetName(), err.Error())
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for cluster deletion. Error:[%v]", err)
+	}
+
+	return nil
+}
+
 func (p *portworx) CreateBackupLocation(req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error) {
 	return p.backupLocationManager.Create(context.Background(), req)
 }
@@ -678,43 +715,6 @@ func (p *portworx) WaitForRunning(
 
 	if err != nil || backupErr != nil {
 		return fmt.Errorf("failed to wait for running start. Error:[%v] Reason:[%v]", err, backupErr)
-	}
-
-	return nil
-}
-
-// WaitForClusterDeletion waits for cluster to be deleted successfully
-// or till timeout is reached. API should poll every `timeBeforeRetry` duration
-func (p *portworx) WaitForClusterDeletion(
-	ctx context.Context,
-	clusterName,
-	orgID string,
-	timeout time.Duration,
-	timeBeforeRetry time.Duration,
-) error {
-	req := &api.ClusterInspectRequest{
-		Name:  clusterName,
-		OrgId: orgID,
-	}
-	f := func() (interface{}, bool, error) {
-		inspectClusterResp, err := p.clusterManager.Inspect(ctx, req)
-		if err == nil {
-			// Object still exists, just retry
-			currentStatus := inspectClusterResp.GetCluster().GetStatus().GetStatus()
-			return nil, true, fmt.Errorf("cluster [%v] is in [%s] state. Waiting to become complete",
-				req.GetName(), currentStatus)
-		}
-		code := status.Code(err)
-		// If error has code.NotFound, the cluster object is deleted.
-		if code == codes.NotFound {
-			return nil, false, nil
-		}
-		return nil, false, fmt.Errorf("Fetching cluster[%v] failed with err: %v", req.GetName(), err.Error())
-	}
-
-	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
-	if err != nil {
-		return fmt.Errorf("failed to wait for cluster deletion. Error:[%v]", err)
 	}
 
 	return nil
