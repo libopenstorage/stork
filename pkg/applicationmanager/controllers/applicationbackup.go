@@ -157,6 +157,19 @@ func (a *ApplicationBackupController) setDefaults(backup *stork_api.ApplicationB
 	}
 }
 
+// Try to create the backup location path. Ignore errors since this is best
+// effort
+func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api.ApplicationBackup) error {
+	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return fmt.Errorf("error getting backup location path: %v", err)
+	}
+	if err := objectstore.CreateBucket(backupLocation); err != nil {
+		return fmt.Errorf("error creating backup location path: %v", err)
+	}
+	return nil
+}
+
 // handle updates for ApplicationBackup objects
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
 	if backup.DeletionTimestamp != nil {
@@ -215,6 +228,17 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				return nil
 			}
 		}
+
+		// Try to create the backupLocation path, just log error if it fails
+		err := a.createBackupLocationPath(backup)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf(err.Error())
+			a.recorder.Event(backup,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationBackupStatusFailed),
+				err.Error())
+		}
+
 		// Make sure the rules exist if configured
 		if backup.Spec.PreExecRule != "" {
 			_, err := storkops.Instance().GetRule(backup.Spec.PreExecRule, backup.Namespace)
