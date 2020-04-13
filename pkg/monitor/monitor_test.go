@@ -44,6 +44,7 @@ func TestMonitor(t *testing.T) {
 	t.Run("testUnknownOtherDriverPod", testUnknownOtherDriverPod)
 	t.Run("testEvictedDriverPod", testEvictedDriverPod)
 	t.Run("testEvictedOtherDriverPod", testEvictedOtherDriverPod)
+	t.Run("testTempOfflineStorageNode", testTempOfflineStorageNode)
 	t.Run("testOfflineStorageNode", testOfflineStorageNode)
 	t.Run("testOfflineStorageNodeDuplicateIP", testOfflineStorageNodeDuplicateIP)
 	t.Run("testVolumeAttachmentCleanup", testVolumeAttachmentCleanup)
@@ -273,9 +274,34 @@ func testOfflineStorageNode(t *testing.T) {
 		require.NoError(t, err, "Error setting node status to Online")
 	}()
 
-	time.Sleep(35 * time.Second)
+	time.Sleep(95 * time.Second)
 	_, err = k8s.Instance().GetPodByName(pod.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
+	_, err = k8s.Instance().GetPodByName(noStoragePod.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
+}
+
+func testTempOfflineStorageNode(t *testing.T) {
+	pod := newPod("driverPodTemp", []string{driverVolumeName})
+	_, err := k8s.Instance().CreatePod(pod)
+	require.NoError(t, err, "failed to create pod")
+
+	noStoragePod := newPod("noStoragePodTemp", nil)
+	_, err = k8s.Instance().CreatePod(noStoragePod)
+	require.NoError(t, err, "failed to create pod")
+
+	err = driver.UpdateNodeStatus(0, volume.NodeOffline)
+	require.NoError(t, err, "Error setting node status to Offline")
+
+	go func() {
+		time.Sleep(30 * time.Second)
+		err = driver.UpdateNodeStatus(0, volume.NodeOnline)
+		require.NoError(t, err, "Error setting node status to Online")
+	}()
+
+	time.Sleep(60 * time.Second)
+	_, err = k8s.Instance().GetPodByName(pod.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 	_, err = k8s.Instance().GetPodByName(noStoragePod.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
@@ -409,7 +435,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	}()
 
 	// VolumeAttachments (VA) for N2 and N3 should be deleted, but VA for N1 should remain.
-	time.Sleep(35 * time.Second)
+	time.Sleep(95 * time.Second)
 
 	vaList, err := k8s.Instance().ListVolumeAttachments()
 	require.NoError(t, err, "expected no error from list vol attachments")

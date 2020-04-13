@@ -9,13 +9,13 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	storagev1beta1 "k8s.io/api/storage/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -198,7 +198,7 @@ func (m *Monitor) driverMonitor() {
 	}
 }
 
-func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) error {
+func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 	defer m.wg.Done()
 	err := wait.ExponentialBackoff(nodeWaitCallBackoff, func() (bool, error) {
 		n, err := m.Driver.InspectNode(node.StorageID)
@@ -212,9 +212,9 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) error {
 		return true, nil
 	})
 	if err == nil {
-		return nil
+		return
 	}
-	log.Infof("Node is not online still 1 min retry deleting pod %v", node.StorageID)
+	log.Infof("Node is not online after retries, deleting pod %v", node.StorageID)
 	pods, err := k8s.Instance().GetPods("", nil)
 	if err != nil {
 		log.Errorf("Error getting pods: %v", err)
@@ -241,7 +241,6 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) error {
 			}
 		}
 	}
-	return err
 }
 
 func (m *Monitor) doesDriverOwnPodVolumes(pod *v1.Pod) (bool, error) {
