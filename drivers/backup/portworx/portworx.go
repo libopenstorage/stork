@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/stork"
@@ -86,6 +87,7 @@ func getKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, err
 	if err != nil {
 		return nil, nil, fmt.Errorf("error initializing stork client instance: %v", err)
 	}
+
 	coreInst, err := core.NewForConfig(client)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error initializing core client instance: %v", err)
@@ -349,6 +351,60 @@ func (p *portworx) InspectBackup(req *api.BackupInspectRequest) (*api.BackupInsp
 
 func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
 	return p.backupManager.Delete(context.Background(), req)
+}
+
+// GetVolumeBackupIDs returns backup IDs of volumes
+func (p *portworx) GetVolumeBackupIDs(
+	ctx context.Context,
+	backupName string,
+	namespace string,
+	clusterObj *api.ClusterObject,
+	orgID string,
+) ([]string, error) {
+
+	var volumeBackupIDs []string
+	_, storkClient, err := getKubernetesInstance(clusterObj)
+	if err != nil {
+		return volumeBackupIDs, err
+	}
+
+	backupInspectReq := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+	}
+	inspectResp, err := p.backupManager.Inspect(ctx, backupInspectReq)
+	if err != nil {
+		return volumeBackupIDs, err
+	}
+	backupUUID := inspectResp.GetBackup().GetUid()
+	storkApplicationBackupCRName := fmt.Sprintf("%s-%s", backupName, backupUUID[0:7])
+	var storkApplicationBackupCR *v1alpha1.ApplicationBackup
+
+	getBackupIDfromStork := func() (interface{}, bool, error) {
+		storkApplicationBackupCR, err = storkClient.GetApplicationBackup(storkApplicationBackupCRName, namespace)
+		if err != nil {
+			logrus.Warnf("failed to get application backup CR [%s], Error:[%v]", storkApplicationBackupCRName, err)
+			return false, true, err
+		}
+		logrus.Debugf("GetVolumeBackupIDs storkApplicationBackupCR: [%+v]\n", storkApplicationBackupCR)
+		if len(storkApplicationBackupCR.Status.Volumes) > 0 {
+			return false, false, nil
+		}
+
+		return false, true, fmt.Errorf("Volume backup has not started yet")
+	}
+
+	_, err = task.DoRetryWithTimeout(getBackupIDfromStork, 5*time.Minute, 15*time.Second)
+	if err != nil {
+		return volumeBackupIDs, err
+	}
+
+	for _, backupVolume := range storkApplicationBackupCR.Status.Volumes {
+		if backupVolume.Status == "InProgress" && backupVolume.BackupID != "" {
+			volumeBackupIDs = append(volumeBackupIDs, backupVolume.BackupID)
+		}
+	}
+	return volumeBackupIDs, nil
 }
 
 // WaitForBackupCompletion waits for backup to complete successfully

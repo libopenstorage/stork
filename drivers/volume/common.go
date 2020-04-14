@@ -109,7 +109,7 @@ func (d *DefaultDriver) ValidateVolumeSetup(vol *Volume) error {
 }
 
 // StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
-func (d *DefaultDriver) StopDriver(nodes []node.Node, force bool) error {
+func (d *DefaultDriver) StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StopDriver()",
@@ -121,6 +121,15 @@ func (d *DefaultDriver) GetNodeForVolume(vol *Volume, timeout time.Duration, ret
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetNodeForVolume()",
+	}
+
+}
+
+// GetNodeForBackup returns the node on which the volume is attached
+func (d *DefaultDriver) GetNodeForBackup(backupID string) (node.Node, error) {
+	return node.Node{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodeForBackup()",
 	}
 
 }

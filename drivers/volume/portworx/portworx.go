@@ -107,6 +107,7 @@ type portworx struct {
 	volDriver            api.OpenStorageVolumeClient
 	clusterPairManager   api.OpenStorageClusterPairClient
 	alertsManager        api.OpenStorageAlertsClient
+	csbackupManager      api.OpenStorageCloudBackupClient
 	schedOps             schedops.Driver
 	nodeDriver           node.Driver
 	refreshEndpoint      bool
@@ -738,43 +739,46 @@ func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
 	return d.schedOps.ValidateVolumeSetup(vol, d.nodeDriver)
 }
 
-func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
-	var err error
-	for _, n := range nodes {
-		logrus.Infof("Stopping volume driver on %s.", n.Name)
-		if force {
-			pxCrashCmd := "sudo pkill -9 px-storage"
-			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
-				Timeout:         crashDriverTimeout,
-				TimeBeforeRetry: defaultRetryInterval,
-			})
-			if err != nil {
-				logrus.Warnf("failed to run cmd : %s. on node %s err: %v", pxCrashCmd, n.Name, err)
-				return err
-			}
-			logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
-			time.Sleep(waitVolDriverToCrash)
-		} else {
-			err = d.schedOps.StopPxOnNode(n)
-			if err != nil {
-				return err
-			}
-			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
-				Action: "stop",
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         stopDriverTimeout,
+func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error {
+	stopFn := func() error {
+		var err error
+		for _, n := range nodes {
+			logrus.Infof("Stopping volume driver on %s.", n.Name)
+			if force {
+				pxCrashCmd := "sudo pkill -9 px-storage"
+				_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+					Timeout:         crashDriverTimeout,
 					TimeBeforeRetry: defaultRetryInterval,
-				}})
-			if err != nil {
-				logrus.Warnf("failed to run systemctl stopcmd  on node %s err: %v", n.Name, err)
-				return err
+				})
+				if err != nil {
+					logrus.Warnf("failed to run cmd : %s. on node %s err: %v", pxCrashCmd, n.Name, err)
+					return err
+				}
+				logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
+				time.Sleep(waitVolDriverToCrash)
+			} else {
+				err = d.schedOps.StopPxOnNode(n)
+				if err != nil {
+					return err
+				}
+				err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+					Action: "stop",
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         stopDriverTimeout,
+						TimeBeforeRetry: defaultRetryInterval,
+					}})
+				if err != nil {
+					logrus.Warnf("failed to run systemctl stopcmd  on node %s err: %v", n.Name, err)
+					return err
+				}
+				logrus.Infof("Sleeping for %v for volume driver to gracefully go down.", waitVolDriverToCrash/6)
+				time.Sleep(waitVolDriverToCrash / 6)
 			}
-			logrus.Infof("Sleeping for %v for volume driver to gracefully go down.", waitVolDriverToCrash/6)
-			time.Sleep(waitVolDriverToCrash / 6)
-		}
 
+		}
+		return nil
 	}
-	return nil
+	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
@@ -825,6 +829,20 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 	}
 
 	return nil, nil
+}
+
+func (d *portworx) GetNodeForBackup(backupID string) (node.Node, error) {
+	nodeMap := node.GetNodesByVoDriverNodeID()
+	csStatuses, err := d.csbackupManager.Status(context.Background(), &api.SdkCloudBackupStatusRequest{})
+	if err != nil {
+		return node.Node{}, err
+	}
+	for _, backup := range csStatuses.Statuses {
+		if backup.GetBackupId() == backupID {
+			return nodeMap[backup.NodeId], nil
+		}
+	}
+	return node.Node{}, fmt.Errorf("node where backup with id [%s] running, not found", backupID)
 }
 
 func isVolumeAttachedOnNode(volume *api.Volume, node node.Node) bool {
@@ -1398,6 +1416,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	d.mountAttachManager = api.NewOpenStorageMountAttachClient(conn)
 	d.clusterPairManager = api.NewOpenStorageClusterPairClient(conn)
 	d.alertsManager = api.NewOpenStorageAlertsClient(conn)
+	d.csbackupManager = api.NewOpenStorageCloudBackupClient(conn)
 	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint, apiport); err == nil {
 		d.legacyClusterManager = legacyClusterManager
 	} else {
@@ -1629,7 +1648,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	if err := d.StopDriver([]node.Node{*n}, false); err != nil {
+	if err := d.StopDriver([]node.Node{*n}, false, nil); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),

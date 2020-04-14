@@ -149,6 +149,10 @@ type Backup interface {
 	// or till timeout is reached. API should poll every `timeBeforeRetry
 	WaitForBackupDeletion(ctx context.Context, backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
+
+	// GetVolumeBackupIDs return volume backup IDs of initiated backup
+	GetVolumeBackupIDs(ctx context.Context, backupName string, namespace string,
+		clusterObj *api.ClusterObject, orgID string) ([]string, error)
 }
 
 // Restore object interface
