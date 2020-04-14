@@ -362,7 +362,11 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 		log.MigrationLog(migration).Errorf("Error initializing resource collector: %v", err)
 		return err
 	}
-	destObjects, err := rc.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, false)
+	destObjects, err := rc.GetResources(
+		migration.Spec.Namespaces,
+		migration.Spec.Selectors,
+		migration.Spec.IncludeOptionalResourceTypes,
+		false)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -371,7 +375,11 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 		log.MigrationLog(migration).Errorf("Error getting resources: %v", err)
 		return err
 	}
-	srcObjects, err := m.resourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, false)
+	srcObjects, err := m.resourceCollector.GetResources(
+		migration.Spec.Namespaces,
+		migration.Spec.Selectors,
+		migration.Spec.IncludeOptionalResourceTypes,
+		false)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -722,7 +730,11 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		}
 	}
 
-	allObjects, err := m.resourceCollector.GetResources(migration.Spec.Namespaces, migration.Spec.Selectors, false)
+	allObjects, err := m.resourceCollector.GetResources(
+		migration.Spec.Namespaces,
+		migration.Spec.Selectors,
+		migration.Spec.IncludeOptionalResourceTypes,
+		false)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
