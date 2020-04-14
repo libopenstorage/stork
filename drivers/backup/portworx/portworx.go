@@ -32,6 +32,7 @@ const (
 	schedulerDriverName   = "k8s"
 	nodeDriverName        = "ssh"
 	volumeDriverName      = "pxd"
+	licFeatureName        = "ClusterCount"
 )
 
 type portworx struct {
@@ -43,6 +44,7 @@ type portworx struct {
 	backupScheduleManager  api.BackupScheduleClient
 	schedulePolicyManager  api.SchedulePolicyClient
 	organizationManager    api.OrganizationClient
+	licenseManager         api.LicenseClient
 	healthManager          api.HealthClient
 
 	schedulerDriver scheduler.Driver
@@ -153,6 +155,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.backupScheduleManager = api.NewBackupScheduleClient(conn)
 	p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
 	p.organizationManager = api.NewOrganizationClient(conn)
+	p.licenseManager = api.NewLicenseClient(conn)
 
 	logrus.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -715,6 +718,49 @@ func (p *portworx) WaitForRunning(
 
 	if err != nil || backupErr != nil {
 		return fmt.Errorf("failed to wait for running start. Error:[%v] Reason:[%v]", err, backupErr)
+	}
+
+	return nil
+}
+
+func (p *portworx) ActivateLicense(req *api.LicenseActivateRequest) (*api.LicenseActivateResponse, error) {
+	return p.licenseManager.Activate(context.Background(), req)
+}
+
+func (p *portworx) InspectLicense(req *api.LicenseInspectRequest) (*api.LicenseInspectResponse, error) {
+	return p.licenseManager.Inspect(context.Background(), req)
+}
+
+func (p *portworx) WaitForLicenseActivation(ctx context.Context, req *api.LicenseInspectRequest, timeout, retryInterval time.Duration) error {
+	var licenseErr error
+
+	t := func() (interface{}, bool, error) {
+		resp, err := p.licenseManager.Inspect(ctx, req)
+
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Check if we got response from license server
+		if len(resp.GetResponseInfo()) == 0 {
+			licenseErr = fmt.Errorf("failed to activate license for orgID %v", req.GetOrgId())
+			return nil, false, licenseErr
+		}
+		// iterate over the feature and check if valid feature is present
+		for _, ft := range resp.GetResponseInfo() {
+			if ft.GetName() != licFeatureName {
+				licenseErr = fmt.Errorf("found invalid feature name")
+				return nil, false, licenseErr
+			}
+		}
+		// All good
+		return nil, true, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
+
+	if err != nil || licenseErr != nil {
+		return fmt.Errorf("failed to wait for license activation. Error:[%v] Reason:[%v]", err, licenseErr)
 	}
 
 	return nil
