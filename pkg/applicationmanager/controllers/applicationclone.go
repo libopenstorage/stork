@@ -510,7 +510,8 @@ func (a *ApplicationCloneController) prepareResources(
 		_, err = a.resourceCollector.PrepareResourceForApply(
 			o,
 			namespaceMapping,
-			pvNameMappings)
+			pvNameMappings,
+			clone.Spec.IncludeOptionalResourceTypes)
 		if err != nil {
 			return nil, err
 		}
@@ -692,7 +693,11 @@ func (a *ApplicationCloneController) applyResources(
 func (a *ApplicationCloneController) cloneResources(
 	clone *stork_api.ApplicationClone,
 ) error {
-	allObjects, err := a.resourceCollector.GetResources([]string{clone.Spec.SourceNamespace}, clone.Spec.Selectors, false)
+	allObjects, err := a.resourceCollector.GetResources(
+		[]string{clone.Spec.SourceNamespace},
+		clone.Spec.Selectors,
+		clone.Spec.IncludeOptionalResourceTypes,
+		false)
 	if err != nil {
 		log.ApplicationCloneLog(clone).Errorf("Error getting resources: %v", err)
 		return err

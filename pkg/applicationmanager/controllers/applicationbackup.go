@@ -49,11 +49,14 @@ const (
 	backupCancelBackoffSteps        = math.MaxInt32
 )
 
-var backupCancelBackoff = wait.Backoff{
-	Duration: backupCancelBackoffInitialDelay,
-	Factor:   backupCancelBackoffFactor,
-	Steps:    backupCancelBackoffSteps,
-}
+var (
+	backupCancelBackoff = wait.Backoff{
+		Duration: backupCancelBackoffInitialDelay,
+		Factor:   backupCancelBackoffFactor,
+		Steps:    backupCancelBackoffSteps,
+	}
+	optionalBackupResources = []string{"Job"}
+)
 
 // NewApplicationBackup creates a new instance of ApplicationBackupController.
 func NewApplicationBackup(mgr manager.Manager, r record.EventRecorder, rc resourcecollector.ResourceCollector) *ApplicationBackupController {
@@ -721,7 +724,13 @@ func (a *ApplicationBackupController) uploadMetadata(
 func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
-	allObjects, err := a.resourceCollector.GetResources(backup.Spec.Namespaces, backup.Spec.Selectors, true)
+	// Always backup optional resources. When restorting they need to be
+	// explicitly added to the spec
+	allObjects, err := a.resourceCollector.GetResources(
+		backup.Spec.Namespaces,
+		backup.Spec.Selectors,
+		optionalBackupResources,
+		true)
 	if err != nil {
 		log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 		return err
