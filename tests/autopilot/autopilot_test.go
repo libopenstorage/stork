@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
@@ -234,7 +235,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 		}
 
 		deleteOpts := &scheduler.DeleteTasksOptions{
-			TriggerOptions: scheduler.TriggerOptions{
+			TriggerOptions: api.TriggerOptions{
 				TriggerCb:            eventCheck,
 				TriggerCheckInterval: triggerCheckInterval,
 				TriggerCheckTimeout:  triggerCheckTimeout,
