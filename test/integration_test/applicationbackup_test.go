@@ -40,25 +40,7 @@ var defaultBackupLocation storkv1.BackupLocationType
 var defaultSecretName string
 
 func TestApplicationBackup(t *testing.T) {
-	var err error
-	// Get location types and secret from config maps
-	configMap, err := core.Instance().GetConfigMap(configMapName, "default")
-	require.NoError(t, err, "Failed to get config map  %s", configMap.Name)
-
-	allConfigMap = configMap.Data
-
-	// Default backup location
-	defaultBackupLocation, err = getBackupLocationForVolumeDriver(volumeDriverName)
-	require.NoError(t, err, "Failed to get default backuplocation for %s: %v", volumeDriverName, err)
-	defaultSecretName, err = getSecretForVolumeDriver(volumeDriverName)
-	require.NoError(t, err, "Failed to get default secret name for %s: %v", volumeDriverName, err)
-	logrus.Infof("Default backup location set to %v", defaultBackupLocation)
-	defaultConfigMap = getBackupConfigMapForType(allConfigMap, defaultBackupLocation)
-
-	// If running pxd driver backup to all locations
-	if volumeDriverName != "pxd" {
-		allConfigMap = defaultConfigMap
-	}
+	setDefaultsForBackup(t)
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
@@ -907,26 +889,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "Failed to set backup-location sync to true")
 	logrus.Infof("Updated backup location on 2nd cluster %s: sync:%t", backupLocation2.Name, backupLocation2.Location.Sync)
 
-	// Check periodically to see if the backup from this test is synced on second cluster
-	var allAppBackups *storkv1.ApplicationBackupList
-	listBackupsTask := func() (interface{}, bool, error) {
-		allAppBackups, err = storkops.Instance().ListApplicationBackups(ns.Name)
-		if err != nil {
-			logrus.Infof("Failed to list app backups on second cluster. Error: %v", err)
-			return "", true, fmt.Errorf("Failed to list app backups on second cluster")
-		} else if allAppBackups != nil && len(allAppBackups.Items) > 0 {
-			// backups sync has started, check if current backup has synced
-			backupToRestore := getBackupFromListWithAnnotations(allAppBackups, firstBackup.Annotations[backupSyncAnnotation])
-			if backupToRestore != nil {
-				return "", false, nil
-			}
-		}
-		return "", true, fmt.Errorf("Failed to list app backups on second cluster")
-	}
-	_, err = task.DoRetryWithTimeout(listBackupsTask, applicationBackupSyncRetryTimeout, defaultWaitInterval)
-	require.NoError(t, err, "Error listing application backups")
-
-	backupToRestore := getBackupFromListWithAnnotations(allAppBackups, firstBackup.Annotations[backupSyncAnnotation])
+	backupToRestore, err := getSyncedBackupWithAnnotation(firstBackup, backupSyncAnnotation)
 	require.NotNil(t, backupToRestore, "Backup sync failed. Backup not found on the second cluster")
 
 	// Create application restore using the backup selected, on second cluster
@@ -1117,11 +1080,13 @@ func applicationBackupMultiple(t *testing.T) {
 }
 
 func deleteAllBackupsNamespace(namespace string) error {
+	logrus.Infof("Deleting all backups in namespace: %s", namespace)
 	allAppBackups, err := storkops.Instance().ListApplicationBackups(namespace)
 	if err != nil {
 		return fmt.Errorf("Failed to list backups before deleting: %v", err)
 	}
 	for _, bkp := range allAppBackups.Items {
+		logrus.Infof("Deleting backup: %s", bkp.Name)
 		err = storkops.Instance().DeleteApplicationBackup(bkp.Name, namespace)
 		if err != nil {
 			if errors.IsNotFound(err) {
@@ -1182,7 +1147,7 @@ func deleteApplicationRestoreList(appRestoreList []*storkv1.ApplicationRestore) 
 	for _, appRestore := range appRestoreList {
 		err := storkops.Instance().DeleteApplicationRestore(appRestore.Name, appRestore.Namespace)
 		if err != nil {
-			return fmt.Errorf("Error deleting application restore %s in namespace %s", appRestore.Name, appRestore.Namespace)
+			return fmt.Errorf("Error deleting application restore %s in namespace %s, reason: %v", appRestore.Name, appRestore.Namespace, err)
 		}
 	}
 	logrus.Info("Deleted all restores")
@@ -1193,7 +1158,7 @@ func deleteApplicationBackupList(appBackupList *storkv1.ApplicationBackupList) e
 	for _, appBackup := range appBackupList.Items {
 		err := storkops.Instance().DeleteApplicationBackup(appBackup.Name, appBackup.Namespace)
 		if err != nil {
-			return fmt.Errorf("Error deleting application backup %s in namespace %s", appBackup.Name, appBackup.Namespace)
+			return fmt.Errorf("Error deleting application backup %s in namespace %s: %v", appBackup.Name, appBackup.Namespace, err)
 		}
 	}
 	logrus.Info("Deleted all backups")
@@ -1202,7 +1167,7 @@ func deleteApplicationBackupList(appBackupList *storkv1.ApplicationBackupList) e
 
 func getBackupLocationForVolumeDriver(volumeDriver string) (storkv1.BackupLocationType, error) {
 	switch volumeDriver {
-	case "pxd", "s3":
+	case "pxd", "aws":
 		return storkv1.BackupLocationS3, nil
 	case "azure":
 		return storkv1.BackupLocationAzure, nil
@@ -1215,7 +1180,7 @@ func getBackupLocationForVolumeDriver(volumeDriver string) (storkv1.BackupLocati
 
 func getSecretForVolumeDriver(volumeDriver string) (string, error) {
 	switch volumeDriver {
-	case "pxd", "s3":
+	case "pxd", "aws":
 		return s3SecretName, nil
 	case "azure":
 		return azureSecretName, nil
@@ -1224,4 +1189,51 @@ func getSecretForVolumeDriver(volumeDriver string) (string, error) {
 	default:
 		return "", fmt.Errorf("Invalid volume driver provided: %s", volumeDriver)
 	}
+}
+
+func setDefaultsForBackup(t *testing.T) {
+	// Get location types and secret from config maps
+	configMap, err := core.Instance().GetConfigMap(configMapName, "default")
+	require.NoError(t, err, "Failed to get config map  %s", configMap.Name)
+
+	allConfigMap = configMap.Data
+
+	// Default backup location
+	defaultBackupLocation, err = getBackupLocationForVolumeDriver(volumeDriverName)
+	require.NoError(t, err, "Failed to get default backuplocation for %s: %v", volumeDriverName, err)
+	defaultSecretName, err = getSecretForVolumeDriver(volumeDriverName)
+	require.NoError(t, err, "Failed to get default secret name for %s: %v", volumeDriverName, err)
+	logrus.Infof("Default backup location set to %v", defaultBackupLocation)
+	defaultConfigMap = getBackupConfigMapForType(allConfigMap, defaultBackupLocation)
+
+	// If running pxd driver backup to all locations
+	if volumeDriverName != "pxd" {
+		allConfigMap = defaultConfigMap
+	}
+
+}
+func getSyncedBackupWithAnnotation(appBackup *storkv1.ApplicationBackup, lookUpAnnotation string) (*storkv1.ApplicationBackup, error) {
+	// Check periodically to see if the backup from this test is synced on second cluster
+	var allAppBackups *storkv1.ApplicationBackupList
+	var backupToRestore *storkv1.ApplicationBackup
+	var err error
+	listBackupsTask := func() (interface{}, bool, error) {
+		allAppBackups, err = storkops.Instance().ListApplicationBackups(appBackup.Namespace)
+		if err != nil {
+			logrus.Infof("Failed to list app backups on first cluster post migrate and sync. Error: %v", err)
+			return "", true, fmt.Errorf("Failed to list app backups on first cluster")
+		} else if allAppBackups != nil && len(allAppBackups.Items) > 0 {
+			// backups sync has started, check if current backup has synced
+			backupToRestore = getBackupFromListWithAnnotations(allAppBackups, appBackup.Annotations[lookUpAnnotation])
+			if backupToRestore != nil {
+				return "", false, nil
+			}
+		}
+		return "", true, fmt.Errorf("Failed to list app backups on first cluster")
+	}
+	_, err = task.DoRetryWithTimeout(listBackupsTask, applicationBackupSyncRetryTimeout, defaultWaitInterval)
+	if err != nil {
+		return nil, err
+	}
+	return backupToRestore, nil
 }

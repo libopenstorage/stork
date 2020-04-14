@@ -2568,10 +2568,10 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
 			vInfo.Reason = fmt.Sprintf("Backup failed for volume: %v", csStatus.msg)
 		} else {
-			vInfo.BackupID = csStatus.cloudSnapID
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
 		}
+		vInfo.BackupID = csStatus.cloudSnapID
 		volumeInfos = append(volumeInfos, vInfo)
 	}
 
