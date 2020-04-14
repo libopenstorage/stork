@@ -171,6 +171,7 @@ func run(c *cli.Context) {
 
 	var d volume.Driver
 	if driverName != "" {
+		log.Infof("Using driver %v", driverName)
 		d, err = volume.Get(driverName)
 		if err != nil {
 			log.Fatalf("Error getting Stork Driver %v: %v", driverName, err)
@@ -190,15 +191,14 @@ func run(c *cli.Context) {
 				log.Fatalf("Error starting scheduler extender: %v", err)
 			}
 		}
+		webhook = &webhookadmission.Controller{
+			Driver:   d,
+			Recorder: recorder,
+		}
+		if err := webhook.Start(); err != nil {
+			log.Fatalf("error starting webhook controller: %v", err)
+		}
 	}
-	webhook = &webhookadmission.Controller{
-		Driver:   d,
-		Recorder: recorder,
-	}
-	if err := webhook.Start(); err != nil {
-		log.Fatalf("error starting webhook controller: %v", err)
-	}
-
 	// Create operator-sdk manager that will manage all controllers.
 	mgr, err := manager.New(config, manager.Options{})
 	if err != nil {
