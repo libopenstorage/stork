@@ -426,6 +426,11 @@ func (in *ApplicationCloneSpec) DeepCopyInto(out *ApplicationCloneSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.IncludeOptionalResourceTypes != nil {
+		in, out := &in.IncludeOptionalResourceTypes, &out.IncludeOptionalResourceTypes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
@@ -593,6 +598,11 @@ func (in *ApplicationRestoreSpec) DeepCopyInto(out *ApplicationRestoreSpec) {
 		in, out := &in.EncryptionKey, &out.EncryptionKey
 		*out = new(v1.EnvVarSource)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.IncludeOptionalResourceTypes != nil {
+		in, out := &in.IncludeOptionalResourceTypes, &out.IncludeOptionalResourceTypes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	return
 }
@@ -1600,6 +1610,11 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 		for key, val := range *in {
 			(*out)[key] = val
 		}
+	}
+	if in.IncludeOptionalResourceTypes != nil {
+		in, out := &in.IncludeOptionalResourceTypes, &out.IncludeOptionalResourceTypes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	return
 }
