@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/version"
-
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/sched-ops/k8s/autopilot"
@@ -26,6 +24,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/version"
 )
 
 const (

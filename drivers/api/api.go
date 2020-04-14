@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/pkg/sched"
-
 	"github.com/portworx/sched-ops/task"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -60,11 +59,10 @@ func PerformTask(userTask func() error, opts *TriggerOptions) error {
 
 			if triggered {
 				// run user task and return
-				logrus.Debugf("[debug] %s trigger check passed. Now running user task.\n", fn)
 				return triggered, false, userTask()
 			}
 
-			return false, true, fmt.Errorf("%s: trigger check hasn'userTaskWithTriggerChecks been met yet", fn)
+			return false, true, fmt.Errorf("%s: trigger check has not been met yet", fn)
 		}
 
 		triggered, err := task.DoRetryWithTimeout(userTaskWithTriggerChecks, opts.TriggerCheckTimeout, opts.TriggerCheckInterval)
