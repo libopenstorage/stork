@@ -229,6 +229,11 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
+// GetDefaultDriverName returns the default driver name in case on isn't set
+func GetDefaultDriverName() string {
+	return "pxd"
+}
+
 // Get an external storage provider to be used with Stork
 func Get(name string) (Driver, error) {
 	d, ok := volDrivers[name]
