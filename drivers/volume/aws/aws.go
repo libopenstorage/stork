@@ -3,6 +3,7 @@ package aws
 import (
 	"fmt"
 	"regexp"
+	"time"
 
 	aws_sdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -23,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/wait"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
@@ -46,6 +48,15 @@ const (
 	backupUIDTag          = "backup-uid"
 	sourcePVCNameTag      = "source-pvc-name"
 	sourcePVCNamespaceTag = "source-pvc-namespace"
+)
+
+var (
+	apiBackoff = wait.Backoff{
+		Duration: 5 * time.Second,
+		Factor:   2,
+		Jitter:   1,
+		Steps:    10,
+	}
 )
 
 type aws struct {
@@ -228,10 +239,28 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 				sourceTags = append(sourceTags, tag)
 			}
 			snapshotInput.TagSpecifications[0].Tags = append(snapshotInput.TagSpecifications[0].Tags, sourceTags...)
-			snapshot, err := a.client.CreateSnapshot(snapshotInput)
+			var snapshot *ec2.Snapshot
+			var snapErr error
+			err = wait.ExponentialBackoff(apiBackoff, func() (bool, error) {
+				snapshot, snapErr = a.client.CreateSnapshot(snapshotInput)
+				if snapErr != nil {
+					if awsErr, ok := snapErr.(awserr.Error); ok {
+						if awsErr.Code() != "SnapshotCreationPerVolumeRateExceeded" {
+							return true, snapErr
+						}
+						log.ApplicationBackupLog(backup).Warnf("Retrying AWS snapshot for %v/%v : %v", pvc.Name, pvc.Namespace, snapErr)
+					}
+					return false, nil
+				}
+				return true, nil
+			})
 			if err != nil {
+				if snapErr != nil {
+					return nil, snapErr
+				}
 				return nil, err
 			}
+
 			volumeInfo.BackupID = *snapshot.SnapshotId
 		}
 
