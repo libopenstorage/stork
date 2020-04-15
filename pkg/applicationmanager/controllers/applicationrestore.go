@@ -259,6 +259,9 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				if volumeBackup.Namespace != namespace {
 					continue
 				}
+				if volumeBackup.DriverName == "" {
+					volumeBackup.DriverName = volume.GetDefaultDriverName()
+				}
 				if backupVolumeInfoMappings[volumeBackup.DriverName] == nil {
 					backupVolumeInfoMappings[volumeBackup.DriverName] = make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 				}
