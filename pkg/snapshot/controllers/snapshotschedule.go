@@ -188,10 +188,7 @@ func (s *SnapshotScheduleController) updateVolumeSnapshotStatus(snapshotSchedule
 			if !s.isVolumeSnapshotComplete(snapshot.Status) {
 				pendingVolumeSnapshotStatus, err := getVolumeSnapshotStatus(snapshot.Name, snapshotSchedule.Namespace)
 				if err != nil {
-					s.recorder.Event(snapshotSchedule,
-						v1.EventTypeWarning,
-						string(snapv1.VolumeSnapshotConditionError),
-						fmt.Sprintf("Error getting status of snapshot %v: %v", snapshot.Name, err))
+					return err
 				}
 
 				// Check again and update the status if it is completed
