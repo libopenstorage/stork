@@ -1724,8 +1724,8 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 			bytesDone:      csStatus.BytesDone,
 			status:         csStatus.Status,
 			cloudSnapID:    csStatus.ID,
-			msg: fmt.Sprintf("cloudsnap %s id: %s for %s did not succeed.",
-				op, csStatus.ID, taskID),
+			msg: fmt.Sprintf("cloudsnap %s id: %s for %s did not succeed: %v",
+				op, csStatus.ID, taskID, csStatus.Info),
 		}
 	}
 
@@ -1750,7 +1750,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 			bytesDone:      csStatus.BytesDone,
 			etaSeconds:     csStatus.EtaSeconds,
 			cloudSnapID:    csStatus.ID,
-			msg: fmt.Sprintf("cloudsnap %s id: %s for %s still not done. status: %s",
+			msg: fmt.Sprintf("cloudsnap %s id: %s for %s queued. status: %s",
 				op, csStatus.ID, taskID, statusStr),
 		}
 	}
