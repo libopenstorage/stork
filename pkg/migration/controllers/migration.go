@@ -48,7 +48,8 @@ const (
 	// StorkMigrationTime is the annotation used to specify time of migration
 	StorkMigrationTime = "stork.libopenstorage.org/migrationTime"
 	// Max number of times to retry applying resources on the desination
-	maxApplyRetries = 10
+	maxApplyRetries   = 10
+	cattleAnnotations = "cattle.io"
 )
 
 // NewMigration creates a new instance of MigrationController.
@@ -999,6 +1000,16 @@ func (m *MigrationController) prepareApplicationResource(
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
 
+func (m *MigrationController) getPrunedAnnotations(annotations map[string]string) map[string]string {
+	a := make(map[string]string)
+	for k, v := range annotations {
+		if !strings.Contains(k, cattleAnnotations) {
+			a[k] = v
+		}
+	}
+	return a
+}
+
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
@@ -1035,11 +1046,12 @@ func (m *MigrationController) applyResources(
 			continue
 		}
 
+		annotations := m.getPrunedAnnotations(namespace.Annotations)
 		_, err = adminClient.CoreV1().Namespaces().Create(&v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        namespace.Name,
 				Labels:      namespace.Labels,
-				Annotations: namespace.Annotations,
+				Annotations: annotations,
 			},
 		})
 		if err != nil && !errors.IsAlreadyExists(err) {
