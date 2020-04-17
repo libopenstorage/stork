@@ -245,7 +245,7 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 				snapshot, snapErr = a.client.CreateSnapshot(snapshotInput)
 				if snapErr != nil {
 					if awsErr, ok := snapErr.(awserr.Error); ok {
-						if awsErr.Code() != "SnapshotCreationPerVolumeRateExceeded" {
+						if awsErr.Code() != "SnapshotCreationPerVolumeRateExceeded" && awsErr.Code() != "InternalError" {
 							return true, snapErr
 						}
 						log.ApplicationBackupLog(backup).Warnf("Retrying AWS snapshot for %v/%v : %v", pvc.Name, pvc.Namespace, snapErr)
