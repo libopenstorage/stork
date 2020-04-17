@@ -507,7 +507,7 @@ func (a *ApplicationCloneController) prepareResources(
 				return nil, fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		}
-		err = a.resourceCollector.PrepareResourceForApply(
+		_, err = a.resourceCollector.PrepareResourceForApply(
 			o,
 			namespaceMapping,
 			pvNameMappings)

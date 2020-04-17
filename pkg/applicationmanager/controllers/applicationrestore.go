@@ -515,15 +515,20 @@ func (a *ApplicationRestoreController) applyResources(
 		return err
 	}
 
+	tempObjects := make([]runtime.Unstructured, 0)
 	for _, o := range objects {
-		err = a.resourceCollector.PrepareResourceForApply(
+		skip, err := a.resourceCollector.PrepareResourceForApply(
 			o,
 			restore.Spec.NamespaceMapping,
 			pvNameMappings)
 		if err != nil {
 			return err
 		}
+		if !skip {
+			tempObjects = append(tempObjects, o)
+		}
 	}
+	objects = tempObjects
 
 	// First delete the existing objects if they exist and replace policy is set
 	// to Delete
@@ -546,7 +551,7 @@ func (a *ApplicationRestoreController) applyResources(
 			return err
 		}
 
-		log.ApplicationRestoreLog(restore).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
+		log.ApplicationRestoreLog(restore).Infof("Applying %v %v/%v", objectType.GetKind(), metadata.GetNamespace(), metadata.GetName())
 		retained := false
 
 		err = a.resourceCollector.ApplyResource(

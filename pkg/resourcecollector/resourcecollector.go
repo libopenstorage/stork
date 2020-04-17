@@ -397,34 +397,36 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	object runtime.Unstructured,
 	namespaceMappings map[string]string,
 	pvNameMappings map[string]string,
-) error {
+) (bool, error) {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	metadata, err := meta.Accessor(object)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if metadata.GetNamespace() != "" {
+		var val string
+		var present bool
+		// Skip the object if it isn't in the namespace mapping
+		if val, present = namespaceMappings[metadata.GetNamespace()]; !present {
+			return true, nil
+		}
 		// Update the namespace of the object, will be no-op for clustered resources
-		metadata.SetNamespace(namespaceMappings[metadata.GetNamespace()])
+		metadata.SetNamespace(val)
 	}
 
 	switch objectType.GetKind() {
 	case "PersistentVolume":
-		return r.preparePVResourceForApply(object, pvNameMappings)
+		return false, r.preparePVResourceForApply(object, pvNameMappings)
 	case "PersistentVolumeClaim":
-		return r.preparePVCResourceForApply(object, pvNameMappings)
+		return false, r.preparePVCResourceForApply(object, pvNameMappings)
 	case "ClusterRoleBinding":
-		err := r.prepareClusterRoleBindingForApply(object, namespaceMappings)
-		if err != nil {
-			return err
-		}
-
+		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	}
-	return nil
+	return false, nil
 }
 
 func (r *ResourceCollector) mergeSupportedForResource(
