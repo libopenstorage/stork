@@ -420,7 +420,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 
 	switch objectType.GetKind() {
 	case "PersistentVolume":
-		return false, r.preparePVResourceForApply(object, pvNameMappings)
+		return r.preparePVResourceForApply(object, pvNameMappings)
 	case "PersistentVolumeClaim":
 		return false, r.preparePVCResourceForApply(object, pvNameMappings)
 	case "ClusterRoleBinding":
