@@ -266,7 +266,8 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 		}
 		fallthrough
 	case stork_api.ApplicationBackupStagePreExecRule:
-		terminationChannels, err = a.runPreExecRule(backup)
+		var inProgress bool
+		terminationChannels, inProgress, err = a.runPreExecRule(backup)
 		if err != nil {
 			message := fmt.Sprintf("Error running PreExecRule: %v", err)
 			log.ApplicationBackupLog(backup).Errorf(message)
@@ -274,13 +275,25 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationBackupStatusFailed),
 				message)
-			backup.Status.Stage = stork_api.ApplicationBackupStageInitial
-			backup.Status.Status = stork_api.ApplicationBackupStatusInitial
-			backup.Status.LastUpdateTimestamp = metav1.Now()
-			err := a.client.Update(context.TODO(), backup)
+			key, err := runtimeclient.ObjectKeyFromObject(backup)
 			if err != nil {
 				return err
 			}
+			err = a.client.Get(context.TODO(), key, backup)
+			if err != nil {
+				return err
+			}
+			backup.Status.Stage = stork_api.ApplicationBackupStageFinal
+			backup.Status.Status = stork_api.ApplicationBackupStatusFailed
+			backup.Status.Reason = message
+			backup.Status.LastUpdateTimestamp = metav1.Now()
+			err = a.client.Update(context.TODO(), backup)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		if inProgress {
 			return nil
 		}
 		fallthrough
@@ -528,33 +541,35 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	return nil
 }
 
-func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.ApplicationBackup) ([]chan bool, error) {
+func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.ApplicationBackup) ([]chan bool, bool, error) {
 	if backup.Spec.PreExecRule == "" {
 		backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
 		backup.Status.Status = stork_api.ApplicationBackupStatusPending
 		backup.Status.LastUpdateTimestamp = metav1.Now()
 		err := a.client.Update(context.TODO(), backup)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return nil, nil
+		return nil, false, nil
 	}
 
-	if backup.Status.Stage == stork_api.ApplicationBackupStageInitial {
-		backup.Status.Stage = stork_api.ApplicationBackupStagePreExecRule
-		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
-		backup.Status.Reason = "Pre-Exec rules are being executed"
-		backup.Status.LastUpdateTimestamp = metav1.Now()
-		err := a.client.Update(context.TODO(), backup)
-		if err != nil {
-			return nil, err
-		}
-	} else if backup.Status.Status == stork_api.ApplicationBackupStatusInProgress {
-		a.recorder.Event(backup,
-			v1.EventTypeNormal,
-			string(stork_api.ApplicationBackupStatusInProgress),
-			fmt.Sprintf("Waiting for PreExecRule %v", backup.Spec.PreExecRule))
-		return nil, nil
+	backup.Status.Stage = stork_api.ApplicationBackupStagePreExecRule
+	backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
+	backup.Status.Reason = "Pre-Exec rules are being executed"
+	backup.Status.LastUpdateTimestamp = metav1.Now()
+	err := a.client.Update(context.TODO(), backup)
+	if err != nil {
+		return nil, false, err
+	}
+	// Get the latest object so that the rules engine can update annotations if
+	// required
+	key, err := runtimeclient.ObjectKeyFromObject(backup)
+	if err != nil {
+		return nil, false, err
+	}
+	err = a.client.Get(context.TODO(), key, backup)
+	if err != nil {
+		return nil, false, err
 	}
 
 	terminationChannels := make([]chan bool, 0)
@@ -564,7 +579,7 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 			for _, channel := range terminationChannels {
 				channel <- true
 			}
-			return nil, err
+			return nil, false, err
 		}
 
 		ch, err := rule.ExecuteRule(r, rule.PreExecRule, backup, ns)
@@ -572,13 +587,30 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 			for _, channel := range terminationChannels {
 				channel <- true
 			}
-			return nil, fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
+			return nil, false, fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
 		}
 		if ch != nil {
 			terminationChannels = append(terminationChannels, ch)
 		}
 	}
-	return terminationChannels, nil
+
+	// Get the latest object again since the rules engine could have updated
+	// annotations
+	key, err = runtimeclient.ObjectKeyFromObject(backup)
+	if err != nil {
+		for _, channel := range terminationChannels {
+			channel <- true
+		}
+		return nil, false, err
+	}
+	err = a.client.Get(context.TODO(), key, backup)
+	if err != nil {
+		for _, channel := range terminationChannels {
+			channel <- true
+		}
+		return nil, false, err
+	}
+	return terminationChannels, false, nil
 }
 
 func (a *ApplicationBackupController) runPostExecRule(backup *stork_api.ApplicationBackup) error {
