@@ -2488,7 +2488,6 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 	}
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, pvc := range pvcs {
-		log.ApplicationBackupLog(backup).Infof("PVC %v in portworx", pvc.Name)
 		if pvc.DeletionTimestamp != nil {
 			log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
 			continue
