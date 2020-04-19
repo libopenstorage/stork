@@ -19,6 +19,7 @@ import (
 	compute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
@@ -332,6 +333,13 @@ func (g *gcp) getSnapshotResourceName(
 ) string {
 	return fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%v/global/snapshots/%v",
 		backupVolumeInfo.Options["projectID"], backupVolumeInfo.BackupID)
+}
+
+func (g *gcp) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	[]runtime.Unstructured,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
 }
 
 func (g *gcp) StartRestore(

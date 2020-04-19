@@ -23,6 +23,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
@@ -393,6 +394,12 @@ func (a *aws) UpdateMigratedPersistentVolumeSpec(
 
 func (a *aws) generatePVName() string {
 	return pvNamePrefix + string(uuid.NewUUID())
+}
+func (a *aws) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	[]runtime.Unstructured,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
 }
 
 func (a *aws) StartRestore(
