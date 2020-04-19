@@ -548,7 +548,8 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 		backup.Status.LastUpdateTimestamp = metav1.Now()
 		err := a.client.Update(context.TODO(), backup)
 		if err != nil {
-			return nil, false, err
+			// Ignore error and return true so that it can be reconciled again
+			return nil, true, nil
 		}
 		return nil, false, nil
 	}
@@ -559,7 +560,8 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 	backup.Status.LastUpdateTimestamp = metav1.Now()
 	err := a.client.Update(context.TODO(), backup)
 	if err != nil {
-		return nil, false, err
+		// Ignore error and return true so that it can be reconciled again
+		return nil, true, nil
 	}
 	// Get the latest object so that the rules engine can update annotations if
 	// required
