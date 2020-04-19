@@ -275,6 +275,23 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				return err
 			}
 
+			// For each driver, check if it needs any additional resources to be
+			// restored before starting the volume restore
+			objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
+			if err != nil {
+				log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
+				return err
+			}
+
+			preRestoreObjects, err := driver.GetPreRestoreResources(backup, objects)
+			if err != nil {
+				log.ApplicationRestoreLog(restore).Errorf("Error getting PreRestore Resources: %v", err)
+				return err
+			}
+			if err := a.applyResources(restore, preRestoreObjects); err != nil {
+				return err
+			}
+
 			restoreVolumeInfos, err := driver.StartRestore(restore, vInfos)
 			if err != nil {
 				message := fmt.Sprintf("Error starting Application Restore for volumes: %v", err)
