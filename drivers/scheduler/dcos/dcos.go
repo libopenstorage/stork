@@ -424,6 +424,14 @@ func (d *dcos) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVo
 	return vols, nil
 }
 
+func (d *dcos) GetVolumeDriverVolumeName(name string, namespace string) (string, error) {
+	// TODO: Add implementation
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetVolumeDriverVolumeName()",
+	}
+}
+
 func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{

@@ -102,6 +102,8 @@ const (
 	secretNamespaceKey = "secret_namespace"
 	secretName         = "openstorage.io/auth-secret-name"
 	secretNamespace    = "openstorage.io/auth-secret-namespace"
+	PvcNameKey         = "pvc_name"
+	PvcNamespaceKey    = "pvc_namespace"
 )
 
 var (
@@ -1641,6 +1643,15 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 	return api.PerformTask(deleteTasks, &opts.TriggerOptions)
 }
 
+// GetVolumeDriverVolumeName returns name of volume which is refered by volume driver
+func (k *K8s) GetVolumeDriverVolumeName(name string, namespace string) (string, error) {
+	pvc, err := k8sCore.GetPersistentVolumeClaim(name, namespace)
+	if err != nil {
+		return "", fmt.Errorf("failed to get PVC: %v in namespace %v. Err: %v", name, namespace, err)
+	}
+	return pvc.Spec.VolumeName, nil
+}
+
 // GetVolumeParameters Get the volume parameters
 func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string]string, error) {
 	result := make(map[string]map[string]string)
@@ -1666,6 +1677,8 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			for k, v := range pvc.Annotations {
 				params[k] = v
 			}
+			params[PvcNameKey] = pvc.GetName()
+			params[PvcNamespaceKey] = pvc.GetNamespace()
 
 			result[pvc.Spec.VolumeName] = params
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
@@ -1734,7 +1747,8 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				for k, v := range pvc.Annotations {
 					params[k] = v
 				}
-
+				params[PvcNameKey] = pvc.GetName()
+				params[PvcNamespaceKey] = pvc.GetNamespace()
 				result[pvc.Spec.VolumeName] = params
 			}
 		}

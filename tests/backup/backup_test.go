@@ -155,12 +155,13 @@ func SetClusterContext(clusterConfigPath string) {
 
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup.
-var _ = Describe("{BackupCreateKillStoreRestore}", func() {
+var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 	var contexts []*scheduler.Context
 	var bkpNamespaces []string
 	var namespaceMapping map[string]string
 	taskNamePrefix := "backupcreaterestore"
 	labelSelectores := make(map[string]string)
+	volumeParams := make(map[string]map[string]string)
 
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
@@ -184,11 +185,15 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
-					namespace := GetAppNamespace(ctx, taskName)
-					bkpNamespaces = append(bkpNamespaces, namespace)
+					bkpNamespaces = append(bkpNamespaces, GetAppNamespace(ctx, taskName))
 				}
 			}
-			//ValidateApplications(contexts)
+			ValidateApplications(contexts)
+			for _, ctx := range contexts {
+				for vol, params := range GetVolumeParameters(ctx) {
+					volumeParams[vol] = params
+				}
+			}
 		})
 
 		// Wait for IO to run
@@ -326,9 +331,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 				err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
 				Expect(err).NotTo(HaveOccurred())
 			}
-
-			// TODO(stgleb): Uncomment it in future when problem with StorageClasses is resolved
-			// ValidateApplications(contexts)
+			ValidateRestoredApplications(contexts, volumeParams)
 		})
 
 		Step("teardown all restored apps", func() {

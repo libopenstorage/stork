@@ -125,6 +125,9 @@ type Driver interface {
 	// DeleteTasks deletes all tasks of the application (not the application). DeleteTasksOptions is optional.
 	DeleteTasks(*Context, *DeleteTasksOptions) error
 
+	// GetVolumeDriverVolumeName returns name of volume which is refered by volume driver
+	GetVolumeDriverVolumeName(name string, namespace string) (string, error)
+
 	// GetVolumeParameters Returns a maps, each item being a volume and it's options
 	GetVolumeParameters(*Context) (map[string]map[string]string, error)
 
