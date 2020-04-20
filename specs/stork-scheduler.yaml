@@ -101,7 +101,7 @@ spec:
         - --policy-configmap=stork-config
         - --policy-configmap-namespace=kube-system
         - --lock-object-name=stork-scheduler
-        image: gcr.io/google_containers/kube-scheduler-amd64:<kube_version>
+        image: gcr.io/google_containers/kube-scheduler-amd64:v1.14.10
         livenessProbe:
           httpGet:
             path: /healthz

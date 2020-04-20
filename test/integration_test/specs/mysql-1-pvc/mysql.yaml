@@ -36,7 +36,7 @@ spec:
         app: mysql
         version: "1"
     spec:
-      schedulerName: stork
+      
       containers:
       - image: mysql:5.6
         name: mysql

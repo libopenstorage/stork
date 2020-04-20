@@ -3,8 +3,8 @@
 snapshot_scale=10
 migration_scale=10
 backup_scale=10
-image_name="openstorage/stork:master"
-test_image_name="openstorage/stork_test:latest"
+image_name="ramsuradkar/stork:hook"
+test_image_name="ramsuradkar/stork_test:latest"
 remote_config_path=""
 run_cluster_domain_test=false
 environment_variables=""

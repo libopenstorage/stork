@@ -43,7 +43,7 @@ spec:
         component: elasticsearch
         role: data
     spec:
-      schedulerName: stork
+      
       initContainers:
       - name: init-sysctl
         image: busybox

@@ -19,7 +19,7 @@ spec:
         app: mysql-nopvc
         version: "1"
     spec:
-      schedulerName: stork
+      
       containers:
       - image: mysql:5.6
         name: mysql-nopvc

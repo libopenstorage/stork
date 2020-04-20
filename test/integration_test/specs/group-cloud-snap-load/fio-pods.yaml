@@ -3,7 +3,7 @@ apiVersion: v1
 metadata:
   name: loadvolumes1
 spec:
-  schedulerName: stork
+  
   restartPolicy: Never
   containers:
   - image: ankitgd/fio_drv
@@ -24,7 +24,7 @@ apiVersion: v1
 metadata:
   name: loadvolumes2
 spec:
-  schedulerName: stork
+  
   restartPolicy: Never
   containers:
   - image: ankitgd/fio_drv
@@ -45,7 +45,7 @@ apiVersion: v1
 metadata:
   name: loadvolumes3
 spec:
-  schedulerName: stork
+  
   restartPolicy: Never
   containers:
   - image: ankitgd/fio_drv
