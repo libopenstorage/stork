@@ -8,6 +8,10 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
+if [ -z "${PROVIDER}" ]; then
+    PROVIDER="none"
+fi
+
 if [ -z "${SCHEDULER}" ]; then
     SCHEDULER="k8s"
 fi
@@ -121,7 +125,7 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
     TEST_SUITE='"bin/asg.test",
             "bin/autopilot.test",
             "bin/basic.test",
-            "bin/backup.test",
+	          "bin/backup.test",
             "bin/reboot.test",
             "bin/upgrade.test",
             "bin/drive_failure.test",
@@ -221,14 +225,14 @@ if [ -n "${K8S_VENDOR}" ]; then
             K8S_VENDOR_VALUE='values: ["true"]'
             ;;
         gke)
-            # Run torpedo on worker node, where px installation is disabled. 
+            # Run torpedo on worker node, where px installation is disabled.
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["false"]'
             NODE_DRIVER="gke"
             ;;
         aks)
-            # Run torpedo on worker node, where px installation is disabled. 
+            # Run torpedo on worker node, where px installation is disabled.
             K8S_VENDOR_KEY=px/enabled
             K8S_VENDOR_OPERATOR="In"
             K8S_VENDOR_VALUE='values: ["false"]'
@@ -333,6 +337,7 @@ spec:
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
+            "--backup-driver", "$BACKUP_DRIVER",
             "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
             "--scale-factor", "$SCALE_FACTOR",
@@ -347,12 +352,13 @@ spec:
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
-            "$APP_DESTROY_TIMEOUT_ARG",
-            "--backup-driver", "$BACKUP_DRIVER"
+            "$APP_DESTROY_TIMEOUT_ARG"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
+    - name: K8S_VENDOR
+      value: "${K8S_VENDOR}"
     - name: TORPEDO_SSH_USER
       value: "${TORPEDO_SSH_USER}"
     - name: TORPEDO_SSH_PASSWORD
@@ -361,10 +367,18 @@ spec:
       value: "${TORPEDO_SSH_KEY}"
     - name: AZURE_TENANT_ID
       value: "${AZURE_TENANTID}"
+    - name: PROVIDER
+      value: "${PROVIDER}"
     - name: AZURE_CLIENT_ID
       value: "${AZURE_CLIENTID}"
     - name: AZURE_CLIENT_SECRET
       value: "${AZURE_CLIENTSECRET}"
+    - name: AZURE_ACCOUNT_NAME
+      value: "${AZURE_ACCOUNT_NAME}"
+    - name: AZURE_ACCOUNT_KEY
+      value: "${AZURE_ACCOUNT_KEY}"
+    - name: AZURE_SUBSCRIPTION_ID
+      value: "${AZURE_SUBSCRIPTION_ID}"
     - name: AWS_ACCESS_KEY_ID
       value: "${AWS_ACCESS_KEY_ID}"
     - name: AWS_SECRET_ACCESS_KEY

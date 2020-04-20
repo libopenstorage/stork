@@ -785,9 +785,12 @@ func ParseFlags() {
 			}
 			logrus.Infof("Parsed custom app config file: %+v", customAppConfig)
 		}
+		logrus.Infof("Backup driver name %s", backupDriverName)
 		if backupDriverName != "" {
 			if backupDriver, err = backup.Get(backupDriverName); err != nil {
 				logrus.Fatalf("cannot find backup driver for %s. Err: %v\n", backupDriverName, err)
+			} else {
+				logrus.Infof("Backup driver found %v", backupDriver)
 			}
 		}
 		once.Do(func() {

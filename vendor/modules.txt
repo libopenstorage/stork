@@ -1,9 +1,13 @@
 # cloud.google.com/go v0.38.0
 cloud.google.com/go/compute/metadata
+# github.com/Azure/azure-pipeline-go v0.1.8
+github.com/Azure/azure-pipeline-go/pipeline
 # github.com/Azure/azure-sdk-for-go v38.2.0+incompatible
 github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2018-06-01/compute
 github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2019-02-01/containerservice
 github.com/Azure/azure-sdk-for-go/version
+# github.com/Azure/azure-storage-blob-go v0.0.0-20181022225951-5152f14ace1c
+github.com/Azure/azure-storage-blob-go/azblob
 # github.com/Azure/go-autorest/autorest v0.9.4
 github.com/Azure/go-autorest/autorest
 github.com/Azure/go-autorest/autorest/azure
@@ -292,7 +296,6 @@ github.com/portworx/kvdb/mem
 # github.com/portworx/px-backup-api v0.0.0-20200406122257-9f46d747b02a
 github.com/portworx/px-backup-api/pkg/apis/v1
 # github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee
-github.com/portworx/sched-ops/k8s
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
 github.com/portworx/sched-ops/k8s/batch
