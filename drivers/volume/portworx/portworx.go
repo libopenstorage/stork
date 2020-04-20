@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -47,6 +48,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -94,6 +96,10 @@ const (
 
 	// pxRackLabelKey Label for rack information
 	pxRackLabelKey = "px/rack"
+	// px annotation for secret name
+	pxSecretNameAnnotation = "px/secret-name"
+	// px annotation for secret namespace
+	pxSecretNamespaceAnnotation = "px/secret-namespace"
 
 	snapshotDataNamePrefix = "k8s-volume-snapshot"
 	readySnapshotMsg       = "Snapshot created successfully and it is ready"
@@ -2524,7 +2530,6 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 	}
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, pvc := range pvcs {
-		log.ApplicationBackupLog(backup).Infof("PVC %v in portworx", pvc.Name)
 		if pvc.DeletionTimestamp != nil {
 			log.ApplicationBackupLog(backup).Warnf("Ignoring PVC %v which is being deleted", pvc.Name)
 			continue
@@ -2645,6 +2650,54 @@ func (p *portworx) stopCloudBackupTask(volDriver volume.VolumeDriver, taskID str
 
 func (p *portworx) generatePVName() string {
 	return pvNamePrefix + string(uuid.NewUUID())
+}
+
+func (p *portworx) GetPreRestoreResources(
+	backup *storkapi.ApplicationBackup,
+	objects []runtime.Unstructured,
+) ([]runtime.Unstructured, error) {
+	secretsToRestore := make(map[string]bool)
+	objectsToRestore := make([]runtime.Unstructured, 0)
+
+	for _, o := range objects {
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return nil, err
+		}
+		if objectType.GetKind() == "PersistentVolumeClaim" {
+			metadata, err := meta.Accessor(o)
+			if err != nil {
+				return nil, err
+			}
+			annotations := metadata.GetAnnotations()
+			if annotations == nil {
+				continue
+			}
+			if secretName, present := annotations[pxSecretNameAnnotation]; present && secretName != "" {
+				// Also pick up the namespace from the annotation, if absent
+				// it'll be empty
+				secretsToRestore[filepath.Join(annotations[pxSecretNamespaceAnnotation], secretName)] = true
+			}
+		}
+	}
+	if len(secretsToRestore) > 0 {
+		for _, o := range objects {
+			objectType, err := meta.TypeAccessor(o)
+			if err != nil {
+				return nil, err
+			}
+			if objectType.GetKind() == "Secret" {
+				metadata, err := meta.Accessor(o)
+				if err != nil {
+					return nil, err
+				}
+				if secretsToRestore[filepath.Join(metadata.GetNamespace(), metadata.GetName())] {
+					objectsToRestore = append(objectsToRestore, o)
+				}
+			}
+		}
+	}
+	return objectsToRestore, nil
 }
 
 func (p *portworx) StartRestore(

@@ -10,6 +10,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -139,6 +140,8 @@ type BackupRestorePluginInterface interface {
 	CancelBackup(*storkapi.ApplicationBackup) error
 	// Delete the backups specified in the status
 	DeleteBackup(*storkapi.ApplicationBackup) error
+	// Get any resources that should be created before the restore is started
+	GetPreRestoreResources(*storkapi.ApplicationBackup, []runtime.Unstructured) ([]runtime.Unstructured, error)
 	// Start restore of volumes specified by the spec. Should only restore
 	// volumes, not the specs associated with them
 	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
@@ -376,6 +379,14 @@ func (b *BackupRestoreNotSupported) CancelBackup(*storkapi.ApplicationBackup) er
 // DeleteBackup returns ErrNotSupported
 func (b *BackupRestoreNotSupported) DeleteBackup(*storkapi.ApplicationBackup) error {
 	return &errors.ErrNotSupported{}
+}
+
+// GetPreRestoreResources returns ErrNotSupported
+func (b *BackupRestoreNotSupported) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	[]runtime.Unstructured,
+) ([]runtime.Unstructured, error) {
+	return nil, &errors.ErrNotSupported{}
 }
 
 // StartRestore returns ErrNotSupported
