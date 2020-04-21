@@ -75,6 +75,7 @@ type ApplicationBackupVolumeInfo struct {
 	Status                ApplicationBackupStatusType `json:"status"`
 	Reason                string                      `json:"reason"`
 	Options               map[string]string           `jons:"options"`
+	Size                  uint64                      `json:"size"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup
