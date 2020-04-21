@@ -1,26 +1,3 @@
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: portworx-sc-cms-repl3-shared
-provisioner: kubernetes.io/portworx-volume
-parameters:
-  repl: "3"
-  priority_io: "high"
-  shared: "true"
-  io_profile: "cms"
-allowVolumeExpansion: true
----
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: portworx-sc-db-repl3
-provisioner: kubernetes.io/portworx-volume
-parameters:
-  repl: "3"
-  io_profile: "db"
-  priority_io: "high"
-allowVolumeExpansion: true
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -29,6 +6,7 @@ metadata:
     app: wordpress
   annotations:
     volume.beta.kubernetes.io/storage-class: portworx-sc-cms-repl3-shared
+    azure-storage-class: azure-file-sc-wordpress
 spec:
   accessModes:
     - ReadWriteMany
@@ -42,6 +20,7 @@ metadata:
   name: mysql-pvc-1
   annotations:
     volume.beta.kubernetes.io/storage-class: portworx-sc-db-repl3
+    azure-storage-class: azure-disk-sc-wordpress
 spec:
   accessModes:
     - ReadWriteOnce

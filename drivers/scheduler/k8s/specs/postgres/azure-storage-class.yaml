@@ -1,0 +1,11 @@
+##### Azure storage class
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: azure-postgres-sc
+provisioner: kubernetes.io/azure-disk
+parameters:
+  skuName: Standard_LRS
+  location: eastus
+  storageAccount: pwxautomation
+

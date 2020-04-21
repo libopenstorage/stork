@@ -139,6 +139,7 @@ func InitInstance() {
 		NodeDriverName:      Inst().N.String(),
 		SecretConfigMapName: Inst().ConfigMap,
 		CustomAppConfig:     Inst().CustomAppConfig,
+		ProviderName:        Inst().Provider,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -681,6 +682,7 @@ var once sync.Once
 // Torpedo is the torpedo testsuite
 type Torpedo struct {
 	InstanceID                          string
+	Provider                            string
 	S                                   scheduler.Driver
 	V                                   volume.Driver
 	N                                   node.Driver
@@ -793,9 +795,13 @@ func ParseFlags() {
 				logrus.Infof("Backup driver found %v", backupDriver)
 			}
 		}
+		provider, _ := os.LookupEnv("VOLUME_PROVIDER")
+		logrus.Infof("use provider %s", provider)
+
 		once.Do(func() {
 			instance = &Torpedo{
 				InstanceID:                          time.Now().Format("01-02-15h04m05s"),
+				Provider:                            provider,
 				S:                                   schedulerDriver,
 				V:                                   volumeDriver,
 				N:                                   nodeDriver,

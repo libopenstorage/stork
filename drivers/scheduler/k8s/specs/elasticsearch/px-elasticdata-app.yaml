@@ -113,6 +113,7 @@ spec:
       name: es-data
       annotations:
         volume.beta.kubernetes.io/storage-class: px-elasticdata-sc
+        azure-storage-class: azure-es-sc
     spec:
       accessModes: [ "ReadWriteOnce" ]
       resources:

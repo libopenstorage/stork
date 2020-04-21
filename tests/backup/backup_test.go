@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -51,10 +52,6 @@ const (
 
 	storkDeploymentName      = "stork"
 	storkDeploymentNamespace = "kube-system"
-
-	providerAws   = "aws"
-	providerAzure = "azure"
-	providerGke   = "gke"
 
 	triggerCheckInterval = 2 * time.Second
 	triggerCheckTimeout  = 30 * time.Minute
@@ -84,14 +81,14 @@ func TestBackup(t *testing.T) {
 
 // getProvider validates and return object store provider
 func getProvider() string {
-	provider, ok := os.LookupEnv("PROVIDER")
+	provider, ok := os.LookupEnv("OBJECT_STORE_PROVIDER")
 	Expect(ok).To(BeTrue(), fmt.Sprintf("No environment variable 'PROVIDER' supplied. Valid values are: %s, %s, %s",
-		providerAws, providerAzure, providerGke))
+		drivers.ProviderAws, drivers.ProviderAzure, drivers.ProviderGke))
 	switch provider {
-	case providerAws, providerAzure, providerGke:
+	case drivers.ProviderAws, drivers.ProviderAzure, drivers.ProviderGke:
 	default:
 		Fail(fmt.Sprintf("Valid values for 'PROVIDER' environment variables are: %s, %s, %s",
-			providerAws, providerAzure, providerGke))
+			drivers.ProviderAws, drivers.ProviderAzure, drivers.ProviderGke))
 	}
 	return provider
 }
@@ -536,9 +533,9 @@ func DeleteCloudCredential(name string, orgID string) {
 func CreateBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Create bucket [%s]", bucketName), func() {
 		switch provider {
-		case providerAws:
+		case drivers.ProviderAws:
 			CreateS3Bucket(bucketName)
-		case providerAzure:
+		case drivers.ProviderAzure:
 			CreateAzureBucket(bucketName)
 		}
 	})
@@ -596,7 +593,7 @@ func CreateAzureBucket(bucketName string) {
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
 		switch provider {
-		case providerAws:
+		case drivers.ProviderAws:
 			DeleteS3Bucket(bucketName)
 		}
 	})
@@ -638,7 +635,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 		logrus.Printf("Create credential name %s for org %s provider %s", name, orgID, provider)
 		backupDriver := Inst().Backup
 		switch provider {
-		case providerAws:
+		case drivers.ProviderAws:
 			log.Printf("Create creds for aws")
 			id := os.Getenv("AWS_ACCESS_KEY_ID")
 			Expect(id).NotTo(Equal(""),
@@ -667,7 +664,7 @@ func CreateCloudCredential(provider, name string, orgID string) {
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create cloud credential [%s] in org [%s]", name, orgID))
 		// TODO: validate CreateCloudCredentialResponse also
-		case providerAzure:
+		case drivers.ProviderAzure:
 			logrus.Infof("Create creds for azure")
 			tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := getAzureCredsFromEnv()
 			credCreateRequest := &api.CloudCredentialCreateRequest{
@@ -759,9 +756,9 @@ func getAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 
 func CreateBackupLocation(provider, name, credName, bucketName, orgID string) {
 	switch provider {
-	case providerAws:
+	case drivers.ProviderAws:
 		createS3BackupLocation(name, credName, bucketName, orgID)
-	case providerAzure:
+	case drivers.ProviderAzure:
 		createAzureBackupLocation(name, credName, bucketName, orgID)
 	}
 }

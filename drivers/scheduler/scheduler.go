@@ -68,6 +68,8 @@ type InitOptions struct {
 	SecretConfigMapName string
 	// CustomAppConfig custom settings for apps
 	CustomAppConfig map[string]AppConfig
+	// Provider name
+	ProviderName string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

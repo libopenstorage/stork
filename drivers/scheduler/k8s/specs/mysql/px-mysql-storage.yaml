@@ -6,53 +6,6 @@ type: Opaque
 data:
   mysql-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
 ---
-##### Portworx storage class
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: px-mysql-sc
-provisioner: kubernetes.io/portworx-volume
-parameters:
-  repl: "3"
-  priority_io: "high"
-  io_profile: "db"
-allowVolumeExpansion: true
----
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-    name: px-mysql-sc-aggr
-provisioner: kubernetes.io/portworx-volume
-parameters:
-   fs: "ext4"
-   block_size: "512b"
-   repl: "2"
-   aggregation_level: "2"
-   io_profile: "random"
-   priority_io: "high"
-   shared: "false"
-   snap_schedule: "periodic=60,5"
-   labels: "type=aggregated"
-   group: "mysql-data"
-allowVolumeExpansion: true
----
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-    name: px-mysql-sc-seq
-provisioner: kubernetes.io/portworx-volume
-parameters:
-   fs: "xfs"
-   repl: "3"
-   aggregation_level: "1"
-   io_profile: "sequential"
-   priority_io: "high"
-   shared: "false"
-   snap_schedule: "daily=12:00,7"
-   labels: "type=replicated"
-   group: "mysql-data"
-allowVolumeExpansion: true
----
 ##### Portworx persistent volume claim
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -63,6 +16,7 @@ metadata:
     px/secret-namespace: "_NAMESPACE_"
     px/secret-key: mysql-secret
     volume.beta.kubernetes.io/storage-class: px-mysql-sc
+    azure-storage-class: azure-mysql-sc
 spec:
   storageClassName: px-mysql-sc
   accessModes:
@@ -77,6 +31,7 @@ metadata:
    name: mysql-data-seq
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-seq
+     azure-storage-class: azure-mysql-sc
 spec:
    accessModes:
      - ReadWriteOnce
@@ -90,6 +45,7 @@ metadata:
    name: mysql-data-aggr
    annotations:
      volume.beta.kubernetes.io/storage-class: px-mysql-sc-aggr
+     azure-storage-class: azure-mysql-sc
 spec:
    accessModes:
      - ReadWriteOnce
