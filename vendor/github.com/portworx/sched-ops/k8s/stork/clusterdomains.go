@@ -43,7 +43,7 @@ func (c *Client) CreateClusterDomainsStatus(clusterDomainsStatus *storkv1alpha1.
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterDomainsStatuses().Create(clusterDomainsStatus)
+	return c.stork.StorkV1alpha1().ClusterDomainsStatuses().Create(clusterDomainsStatus)
 }
 
 // GetClusterDomainsStatus gets the ClusterDomainsStatus
@@ -51,7 +51,7 @@ func (c *Client) GetClusterDomainsStatus(name string) (*storkv1alpha1.ClusterDom
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterDomainsStatuses().Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ClusterDomainsStatuses().Get(name, metav1.GetOptions{})
 }
 
 // UpdateClusterDomainsStatus updates the ClusterDomainsStatus
@@ -59,7 +59,7 @@ func (c *Client) UpdateClusterDomainsStatus(clusterDomainsStatus *storkv1alpha1.
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterDomainsStatuses().Update(clusterDomainsStatus)
+	return c.stork.StorkV1alpha1().ClusterDomainsStatuses().Update(clusterDomainsStatus)
 }
 
 // DeleteClusterDomainsStatus deletes the ClusterDomainsStatus
@@ -67,7 +67,7 @@ func (c *Client) DeleteClusterDomainsStatus(name string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().ClusterDomainsStatuses().Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ClusterDomainsStatuses().Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -122,7 +122,7 @@ func (c *Client) ListClusterDomainStatuses() (*storkv1alpha1.ClusterDomainsStatu
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterDomainsStatuses().List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ClusterDomainsStatuses().List(metav1.ListOptions{})
 }
 
 // CreateClusterDomainUpdate creates the ClusterDomainUpdate
@@ -130,7 +130,7 @@ func (c *Client) CreateClusterDomainUpdate(clusterDomainUpdate *storkv1alpha1.Cl
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterDomainUpdates().Create(clusterDomainUpdate)
+	return c.stork.StorkV1alpha1().ClusterDomainUpdates().Create(clusterDomainUpdate)
 }
 
 // GetClusterDomainUpdate gets the ClusterDomainUpdate
@@ -138,7 +138,7 @@ func (c *Client) GetClusterDomainUpdate(name string) (*storkv1alpha1.ClusterDoma
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterDomainUpdates().Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ClusterDomainUpdates().Get(name, metav1.GetOptions{})
 }
 
 // UpdateClusterDomainUpdate updates the ClusterDomainUpdate
@@ -146,7 +146,7 @@ func (c *Client) UpdateClusterDomainUpdate(clusterDomainUpdate *storkv1alpha1.Cl
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterDomainUpdates().Update(clusterDomainUpdate)
+	return c.stork.StorkV1alpha1().ClusterDomainUpdates().Update(clusterDomainUpdate)
 }
 
 // DeleteClusterDomainUpdate deletes the ClusterDomainUpdate
@@ -154,7 +154,7 @@ func (c *Client) DeleteClusterDomainUpdate(name string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().ClusterDomainUpdates().Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ClusterDomainUpdates().Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -198,5 +198,5 @@ func (c *Client) ListClusterDomainUpdates() (*storkv1alpha1.ClusterDomainUpdateL
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterDomainUpdates().List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ClusterDomainUpdates().List(metav1.ListOptions{})
 }

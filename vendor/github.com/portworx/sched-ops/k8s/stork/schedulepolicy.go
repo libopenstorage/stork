@@ -24,7 +24,7 @@ func (c *Client) CreateSchedulePolicy(schedulePolicy *storkv1alpha1.SchedulePoli
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().SchedulePolicies().Create(schedulePolicy)
+	return c.stork.StorkV1alpha1().SchedulePolicies().Create(schedulePolicy)
 }
 
 // GetSchedulePolicy gets the SchedulePolicy
@@ -32,7 +32,7 @@ func (c *Client) GetSchedulePolicy(name string) (*storkv1alpha1.SchedulePolicy, 
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().SchedulePolicies().Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().SchedulePolicies().Get(name, metav1.GetOptions{})
 }
 
 // ListSchedulePolicies lists all the SchedulePolicies
@@ -40,7 +40,7 @@ func (c *Client) ListSchedulePolicies() (*storkv1alpha1.SchedulePolicyList, erro
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().SchedulePolicies().List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().SchedulePolicies().List(metav1.ListOptions{})
 }
 
 // UpdateSchedulePolicy updates the SchedulePolicy
@@ -48,7 +48,7 @@ func (c *Client) UpdateSchedulePolicy(schedulePolicy *storkv1alpha1.SchedulePoli
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().SchedulePolicies().Update(schedulePolicy)
+	return c.stork.StorkV1alpha1().SchedulePolicies().Update(schedulePolicy)
 }
 
 // DeleteSchedulePolicy deletes the SchedulePolicy
@@ -56,7 +56,7 @@ func (c *Client) DeleteSchedulePolicy(name string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().SchedulePolicies().Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().SchedulePolicies().Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

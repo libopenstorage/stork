@@ -39,7 +39,7 @@ require (
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v0.0.0-20200406122257-9f46d747b02a
 	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
-	github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee
+	github.com/portworx/sched-ops v0.0.0-20200417162209-33e2d7134846
 	github.com/sirupsen/logrus v1.5.0
 	github.com/stretchr/testify v1.5.1
 	go.opencensus.io v0.22.1 // indirect

@@ -36,7 +36,7 @@ func (c *Client) CreateSnapshotSchedule(snapshotSchedule *storkv1alpha1.VolumeSn
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().VolumeSnapshotSchedules(snapshotSchedule.Namespace).Create(snapshotSchedule)
+	return c.stork.StorkV1alpha1().VolumeSnapshotSchedules(snapshotSchedule.Namespace).Create(snapshotSchedule)
 }
 
 // GetSnapshotSchedule gets the SnapshotSchedule
@@ -44,7 +44,7 @@ func (c *Client) GetSnapshotSchedule(name string, namespace string) (*storkv1alp
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().VolumeSnapshotSchedules(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().VolumeSnapshotSchedules(namespace).Get(name, metav1.GetOptions{})
 }
 
 // ListSnapshotSchedules lists all the SnapshotSchedules
@@ -52,7 +52,7 @@ func (c *Client) ListSnapshotSchedules(namespace string) (*storkv1alpha1.VolumeS
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().VolumeSnapshotSchedules(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().VolumeSnapshotSchedules(namespace).List(metav1.ListOptions{})
 }
 
 // UpdateSnapshotSchedule updates the SnapshotSchedule
@@ -60,7 +60,7 @@ func (c *Client) UpdateSnapshotSchedule(snapshotSchedule *storkv1alpha1.VolumeSn
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().VolumeSnapshotSchedules(snapshotSchedule.Namespace).Update(snapshotSchedule)
+	return c.stork.StorkV1alpha1().VolumeSnapshotSchedules(snapshotSchedule.Namespace).Update(snapshotSchedule)
 }
 
 // DeleteSnapshotSchedule deletes the SnapshotSchedule
@@ -68,7 +68,7 @@ func (c *Client) DeleteSnapshotSchedule(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().VolumeSnapshotSchedules(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().VolumeSnapshotSchedules(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

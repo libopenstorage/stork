@@ -36,7 +36,7 @@ func (c *Client) GetGroupSnapshot(name, namespace string) (*storkv1alpha1.GroupV
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().GroupVolumeSnapshots(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().GroupVolumeSnapshots(namespace).Get(name, metav1.GetOptions{})
 }
 
 // ListGroupSnapshots lists all group snapshots for the given namespace
@@ -44,7 +44,7 @@ func (c *Client) ListGroupSnapshots(namespace string) (*storkv1alpha1.GroupVolum
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().GroupVolumeSnapshots(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().GroupVolumeSnapshots(namespace).List(metav1.ListOptions{})
 }
 
 // CreateGroupSnapshot creates the given group snapshot
@@ -52,12 +52,12 @@ func (c *Client) CreateGroupSnapshot(snap *storkv1alpha1.GroupVolumeSnapshot) (*
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().GroupVolumeSnapshots(snap.Namespace).Create(snap)
+	return c.stork.StorkV1alpha1().GroupVolumeSnapshots(snap.Namespace).Create(snap)
 }
 
 // UpdateGroupSnapshot updates the given group snapshot
 func (c *Client) UpdateGroupSnapshot(snap *storkv1alpha1.GroupVolumeSnapshot) (*storkv1alpha1.GroupVolumeSnapshot, error) {
-	return c.stork.Stork().GroupVolumeSnapshots(snap.Namespace).Update(snap)
+	return c.stork.StorkV1alpha1().GroupVolumeSnapshots(snap.Namespace).Update(snap)
 }
 
 // DeleteGroupSnapshot deletes the group snapshot with the given name and namespace
@@ -65,7 +65,7 @@ func (c *Client) DeleteGroupSnapshot(name, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().GroupVolumeSnapshots(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().GroupVolumeSnapshots(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

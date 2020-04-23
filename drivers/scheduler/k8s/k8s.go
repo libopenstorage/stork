@@ -22,9 +22,11 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/autopilot"
+	"github.com/portworx/sched-ops/k8s/batch"
 	k8sCommon "github.com/portworx/sched-ops/k8s/common"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
+	"github.com/portworx/sched-ops/k8s/networking"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
@@ -37,7 +39,9 @@ import (
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
+	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	v1 "k8s.io/api/core/v1"
+	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -113,6 +117,8 @@ var (
 	k8sExternalStorage = externalstorage.Instance()
 	k8sAutopilot       = autopilot.Instance()
 	k8sRbac            = rbac.Instance()
+	k8sNetworking      = networking.Instance()
+	k8sBatch           = batch.Instance()
 )
 
 // K8s  The kubernetes structure
@@ -413,6 +419,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*rbacv1.RoleBinding); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))
@@ -597,6 +605,63 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 		if err != nil {
 			return nil, err
 		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createRbacObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createNetworkingObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createBatchObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
 		if obj != nil {
 			specObjects = append(specObjects, obj)
 		}
@@ -810,62 +875,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 
 		logrus.Infof("[%v] Created Group snapshot: %v", app.Key, snap.Name)
 		return snap, nil
-	} else if obj, ok := spec.(*v1.ServiceAccount); ok {
-		obj.Namespace = ns.Name
-		snap, err := k8sCore.CreateServiceAccount(obj)
-		if errors.IsAlreadyExists(err) {
-			if snap, err = k8sCore.GetServiceAccount(obj.Name, obj.Namespace); err == nil {
-				logrus.Infof("[%v] Found existing Service Account: %v", app.Key, snap.Name)
-				return snap, nil
-			}
-		}
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Service Account: %v. Err: %v", obj.Name, err),
-			}
-		}
 
-		logrus.Infof("[%v] Created Service Account: %v", app.Key, snap.Name)
-		return snap, nil
-	} else if obj, ok := spec.(*rbacv1.Role); ok {
-		obj.Namespace = ns.Name
-		snap, err := k8sRbac.CreateRole(obj)
-		if errors.IsAlreadyExists(err) {
-			if snap, err = k8sRbac.GetRole(obj.Name, obj.Namespace); err == nil {
-				logrus.Infof("[%v] Found existing Role: %v", app.Key, snap.Name)
-				return snap, nil
-			}
-		}
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Role: %v. Err: %v", obj.Name, err),
-			}
-		}
-
-		logrus.Infof("[%v] Created Role: %v", app.Key, snap.Name)
-		return snap, nil
-	} else if obj, ok := spec.(*rbacv1.RoleBinding); ok {
-		obj.Namespace = ns.Name
-		snap, err := k8sRbac.CreateRoleBinding(obj)
-		if errors.IsAlreadyExists(err) {
-			if snap, err = k8sRbac.GetRoleBinding(obj.Name, obj.Namespace); err == nil {
-				logrus.Infof("[%v] Found existing Role Binding: %v", app.Key, snap.Name)
-				return snap, nil
-			}
-		}
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Role Binding: %v. Err: %v", obj.Name, err),
-			}
-		}
-
-		logrus.Infof("[%v] Created Role Binding: %v", app.Key, snap.Name)
-		return snap, nil
 	}
-
 	return nil, nil
 }
 
@@ -1389,6 +1400,24 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			logrus.Infof("[%v] Validated AutopilotRule: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*networkingv1beta1.Ingress); ok {
+			if err := k8sNetworking.ValidateIngress(obj, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate Ingress: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated Ingress: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*batchv1beta1.CronJob); ok {
+			if err := k8sBatch.ValidateCronJob(obj, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate CronJob: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			logrus.Infof("[%v] Validated CronJob: %v", ctx.App.Key, obj.Name)
 		}
 	}
 
@@ -2929,6 +2958,160 @@ func (k *K8s) destroyBackupObjects(
 		logrus.Infof("[%v] Destroyed ApplicationClone: %v", app.Key, obj.Name)
 	}
 	return nil
+}
+
+func (k *K8s) createRbacObjects(
+	spec interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*rbacv1.Role); ok {
+		obj.Namespace = ns.Name
+		role, err := k8sRbac.CreateRole(obj)
+		if errors.IsAlreadyExists(err) {
+			if role, err = k8sRbac.GetRole(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Role: %v", app.Key, role.Name)
+				return role, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Role: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Role: %v", app.Key, role.Name)
+		return role, nil
+	} else if obj, ok := spec.(*rbacv1.RoleBinding); ok {
+		obj.Namespace = ns.Name
+		rolebinding, err := k8sRbac.CreateRoleBinding(obj)
+		if errors.IsAlreadyExists(err) {
+			if rolebinding, err = k8sRbac.GetRoleBinding(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Role Binding: %v", app.Key, rolebinding.Name)
+				return rolebinding, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Role Binding: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Role Binding: %v", app.Key, rolebinding.Name)
+		return rolebinding, nil
+	} else if obj, ok := spec.(*rbacv1.ClusterRole); ok {
+		obj.Namespace = ns.Name
+		clusterrole, err := k8sRbac.CreateClusterRole(obj)
+		if errors.IsAlreadyExists(err) {
+			if clusterrole, err = k8sRbac.GetClusterRole(obj.Name); err == nil {
+				logrus.Infof("[%v] Found existing Role Binding: %v", app.Key, clusterrole.Name)
+				return clusterrole, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Cluster Role: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Cluster Role: %v", app.Key, clusterrole.Name)
+		return clusterrole, nil
+	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
+		obj.Namespace = ns.Name
+		clusterrolebinding, err := k8sRbac.CreateClusterRoleBinding(obj)
+		if errors.IsAlreadyExists(err) {
+			if clusterrolebinding, err = k8sRbac.GetClusterRoleBinding(obj.Name); err == nil {
+				logrus.Infof("[%v] Found existing Cluster Role Binding: %v", app.Key, clusterrolebinding.Name)
+				return clusterrolebinding, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Cluster Role Binding: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Cluster Role: %v", app.Key, clusterrolebinding.Name)
+		return clusterrolebinding, nil
+	} else if obj, ok := spec.(*v1.ServiceAccount); ok {
+		obj.Namespace = ns.Name
+		serviceaccount, err := k8sCore.CreateServiceAccount(obj)
+		if errors.IsAlreadyExists(err) {
+			if serviceaccount, err = k8sCore.GetServiceAccount(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Service Account: %v", app.Key, serviceaccount.Name)
+				return serviceaccount, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Service Account: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Service Account: %v", app.Key, serviceaccount.Name)
+		return serviceaccount, nil
+	}
+
+	return nil, nil
+}
+
+func (k *K8s) createNetworkingObjects(
+	spec interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*networkingv1beta1.Ingress); ok {
+		obj.Namespace = ns.Name
+		ingress, err := k8sNetworking.CreateIngress(obj)
+		if errors.IsAlreadyExists(err) {
+			if ingress, err = k8sNetworking.GetIngress(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing Ingress: %v", app.Key, ingress.Name)
+				return ingress, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Ingress: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created Ingress: %v", app.Key, ingress.Name)
+		return ingress, nil
+	}
+	return nil, nil
+}
+
+func (k *K8s) createBatchObjects(
+	spec interface{},
+	ns *v1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*batchv1beta1.CronJob); ok {
+		obj.Namespace = ns.Name
+		cronjob, err := k8sBatch.CreateCronJob(obj)
+		if errors.IsAlreadyExists(err) {
+			if cronjob, err = k8sBatch.GetCronJob(obj.Name, obj.Namespace); err == nil {
+				logrus.Infof("[%v] Found existing CronJob: %v", app.Key, cronjob.Name)
+				return cronjob, nil
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create CronJob: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		logrus.Infof("[%v] Created CronJob: %v", app.Key, cronjob.Name)
+		return cronjob, nil
+	}
+	return nil, nil
 }
 
 // EstimatePVCExpansion calculates expected size of PVC based on autopilot rule and workload

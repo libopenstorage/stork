@@ -31,7 +31,7 @@ func (c *Client) CreateClusterPair(pair *storkv1alpha1.ClusterPair) (*storkv1alp
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterPairs(pair.Namespace).Create(pair)
+	return c.stork.StorkV1alpha1().ClusterPairs(pair.Namespace).Create(pair)
 }
 
 // GetClusterPair gets the ClusterPair
@@ -39,7 +39,7 @@ func (c *Client) GetClusterPair(name string, namespace string) (*storkv1alpha1.C
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterPairs(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ClusterPairs(namespace).Get(name, metav1.GetOptions{})
 }
 
 // ListClusterPairs gets all the ClusterPairs
@@ -47,7 +47,7 @@ func (c *Client) ListClusterPairs(namespace string) (*storkv1alpha1.ClusterPairL
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterPairs(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ClusterPairs(namespace).List(metav1.ListOptions{})
 }
 
 // UpdateClusterPair updates the ClusterPair
@@ -55,7 +55,7 @@ func (c *Client) UpdateClusterPair(pair *storkv1alpha1.ClusterPair) (*storkv1alp
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().ClusterPairs(pair.Namespace).Update(pair)
+	return c.stork.StorkV1alpha1().ClusterPairs(pair.Namespace).Update(pair)
 }
 
 // DeleteClusterPair deletes the ClusterPair
@@ -63,7 +63,7 @@ func (c *Client) DeleteClusterPair(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().ClusterPairs(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ClusterPairs(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

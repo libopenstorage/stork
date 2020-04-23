@@ -11,6 +11,8 @@ type RuleOps interface {
 	GetRule(name, namespace string) (*storkv1alpha1.Rule, error)
 	// CreateRule creates the given stork rule
 	CreateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, error)
+	// UpdateRule updates the given stork rule
+	UpdateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, error)
 	// DeleteRule deletes the given stork rule
 	DeleteRule(name, namespace string) error
 }
@@ -20,7 +22,7 @@ func (c *Client) GetRule(name, namespace string) (*storkv1alpha1.Rule, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().Rules(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().Rules(namespace).Get(name, metav1.GetOptions{})
 }
 
 // CreateRule creates the given stork rule
@@ -28,7 +30,15 @@ func (c *Client) CreateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, erro
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().Rules(rule.GetNamespace()).Create(rule)
+	return c.stork.StorkV1alpha1().Rules(rule.GetNamespace()).Create(rule)
+}
+
+// UpdateRule updates the given stork rule
+func (c *Client) UpdateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.stork.StorkV1alpha1().Rules(rule.GetNamespace()).Update(rule)
 }
 
 // DeleteRule deletes the given stork rule
@@ -36,7 +46,7 @@ func (c *Client) DeleteRule(name, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().Rules(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().Rules(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

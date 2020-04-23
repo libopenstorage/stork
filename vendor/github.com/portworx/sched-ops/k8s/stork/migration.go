@@ -47,7 +47,7 @@ func (c *Client) GetMigration(name string, namespace string) (*storkv1alpha1.Mig
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().Migrations(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().Migrations(namespace).Get(name, metav1.GetOptions{})
 }
 
 // ListMigrations lists all the Migrations
@@ -55,7 +55,7 @@ func (c *Client) ListMigrations(namespace string) (*storkv1alpha1.MigrationList,
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().Migrations(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().Migrations(namespace).List(metav1.ListOptions{})
 }
 
 // CreateMigration creates the Migration
@@ -63,7 +63,7 @@ func (c *Client) CreateMigration(migration *storkv1alpha1.Migration) (*storkv1al
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().Migrations(migration.Namespace).Create(migration)
+	return c.stork.StorkV1alpha1().Migrations(migration.Namespace).Create(migration)
 }
 
 // DeleteMigration deletes the Migration
@@ -71,7 +71,7 @@ func (c *Client) DeleteMigration(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().Migrations(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().Migrations(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -81,7 +81,7 @@ func (c *Client) UpdateMigration(migration *storkv1alpha1.Migration) (*storkv1al
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().Migrations(migration.Namespace).Update(migration)
+	return c.stork.StorkV1alpha1().Migrations(migration.Namespace).Update(migration)
 }
 
 // ValidateMigration validate the Migration status
@@ -124,7 +124,7 @@ func (c *Client) GetMigrationSchedule(name string, namespace string) (*storkv1al
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().MigrationSchedules(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().MigrationSchedules(namespace).Get(name, metav1.GetOptions{})
 }
 
 // ListMigrationSchedules lists all the MigrationSchedules
@@ -132,7 +132,7 @@ func (c *Client) ListMigrationSchedules(namespace string) (*storkv1alpha1.Migrat
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().MigrationSchedules(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().MigrationSchedules(namespace).List(metav1.ListOptions{})
 }
 
 // CreateMigrationSchedule creates a MigrationSchedule
@@ -140,7 +140,7 @@ func (c *Client) CreateMigrationSchedule(migrationSchedule *storkv1alpha1.Migrat
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().MigrationSchedules(migrationSchedule.Namespace).Create(migrationSchedule)
+	return c.stork.StorkV1alpha1().MigrationSchedules(migrationSchedule.Namespace).Create(migrationSchedule)
 }
 
 // UpdateMigrationSchedule updates the MigrationSchedule
@@ -148,7 +148,7 @@ func (c *Client) UpdateMigrationSchedule(migrationSchedule *storkv1alpha1.Migrat
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.Stork().MigrationSchedules(migrationSchedule.Namespace).Update(migrationSchedule)
+	return c.stork.StorkV1alpha1().MigrationSchedules(migrationSchedule.Namespace).Update(migrationSchedule)
 }
 
 // DeleteMigrationSchedule deletes the MigrationSchedule
@@ -156,7 +156,7 @@ func (c *Client) DeleteMigrationSchedule(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.Stork().MigrationSchedules(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().MigrationSchedules(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
