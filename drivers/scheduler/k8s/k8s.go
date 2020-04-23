@@ -2004,6 +2004,12 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
+			logrus.Infof("\n[GetVolumes]: PVC from ctx: [%+v]\n", obj)
+			logrus.Infof("\n[GetVolumes]: PVC name from ctx: [%+v]\n", obj.ObjectMeta.GetName())
+			logrus.Infof("\n[GetVolumes]: PVC namespace from ctx: [%+v]\n", obj.ObjectMeta.GetNamespace())
+			logrus.Infof("\n[GetVolumes]: Volume name from ctx: [%+v]\n", obj.Spec.VolumeName)
+			logrus.Infof("\n[GetVolumes]: PVC name from ctx obj.Name: [%+v]\n", obj.Name)
+			logrus.Infof("\n[GetVolumes]: Volume name from ctx obj.Namespace: [%+v]\n", obj.Namespace)
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, err

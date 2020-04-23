@@ -289,11 +289,12 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 			})
 
 			updatedVolumeParams = UpdateVolumeInVolumeParameters(volumeParameters)
-			logrus.Infof("Updated parameter list: [%+v]", updatedVolumeParams)
+			logrus.Infof("Updated parameter list: [%+v]\n", updatedVolumeParams)
 			ValidateVolumeParameters(updatedVolumeParams)
 
 			Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
 				vols, err := Inst().S.GetVolumes(ctx)
+				logrus.Infof("List of volumes from scheduler driver :[%+v] \n for context : [%+v]\n", vols, ctx)
 				expect(err).NotTo(haveOccurred())
 
 				for _, vol := range vols {
