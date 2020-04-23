@@ -82,18 +82,25 @@ func TestBackup(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
 }
 
-func SetupBackup() {
-	logrus.Infof("Backup instance %v", Inst().Backup)
-	provider := os.Getenv("PROVIDER")
-
-	if provider == "" {
-		logrus.Infof("Empty provider")
-		return
+// getProvider validates and return object store provider
+func getProvider() string {
+	provider, ok := os.LookupEnv("PROVIDER")
+	Expect(ok).To(BeTrue(), fmt.Sprintf("No environment variable 'PROVIDER' supplied. Valid values are: %s, %s, %s",
+		providerAws, providerAzure, providerGke))
+	switch provider {
+	case providerAws, providerAzure, providerGke:
+	default:
+		Fail(fmt.Sprintf("Valid values for 'PROVIDER' environment variables are: %s, %s, %s",
+			providerAws, providerAzure, providerGke))
 	}
+	return provider
+}
 
-	logrus.Infof("Run Setup backup with provider: %s", provider)
+func SetupBackup() {
+	logrus.Infof("Backup driver: %v", Inst().Backup)
+	provider := getProvider()
+	logrus.Infof("Run Setup backup with object store provider: %s", provider)
 	orgID = Inst().InstanceID
-	logrus.Infof("Instance id %s\n", Inst().InstanceID)
 	bucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
 
 	CreateBucket(provider, bucketName)
@@ -104,12 +111,7 @@ func SetupBackup() {
 }
 
 func BackupCleanup() {
-	provider := os.Getenv("PROVIDER")
-
-	if provider == "" {
-		logrus.Infof("Backup cleanup Empty provider")
-		return
-	}
+	provider := getProvider()
 
 	DeleteRestore(RestoreName, orgID)
 	DeleteBackup(BackupName, SourceClusterName, orgID)
