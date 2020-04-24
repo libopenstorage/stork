@@ -239,6 +239,11 @@ type DeleteTasksOptions struct {
 	api.TriggerOptions
 }
 
+// UpgradeAutopilotOptions are options supplied to the UpgradeAutopilot API
+type UpgradeAutopilotOptions struct {
+	api.TriggerOptions
+}
+
 // DeleteVolumeOptions are options supplied to the DeleteVolume API
 type DeleteVolumeOptions struct {
 	// SkipClusterScopedObjects skips deletion of cluster scoped objects like storage class

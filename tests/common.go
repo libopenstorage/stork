@@ -84,6 +84,7 @@ const (
 	storageNodesPerAZFlag                = "max-storage-nodes-per-az"
 	configMapFlag                        = "config-map"
 	enableStorkUpgradeFlag               = "enable-stork-upgrade"
+	autopilotUpgradeImageCliFlag         = "autopilot-upgrade-version"
 )
 
 const (
@@ -778,6 +779,7 @@ type Torpedo struct {
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
+	AutopilotUpgradeImage               string
 }
 
 // ParseFlags parses command line flags
@@ -805,6 +807,7 @@ func ParseFlags() {
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
+	var autopilotUpgradeImage string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -835,7 +838,7 @@ func ParseFlags() {
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
-
+	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
 	flag.Parse()
 
 	appList, err := splitCsv(appListCSV)
@@ -906,6 +909,7 @@ func ParseFlags() {
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,
+				AutopilotUpgradeImage:               autopilotUpgradeImage,
 			}
 		})
 	}

@@ -90,12 +90,9 @@ const (
 	// DefaultTimeout default timeout
 	DefaultTimeout = 2 * time.Minute
 
-	defaultTriggerCheckInterval          = 5 * time.Second
-	defaultTriggerCheckTimeout           = 5 * time.Minute
-	resizeSupportedAnnotationKey         = "torpedo.io/resize-supported"
-	autopilotEnabledAnnotationKey        = "torpedo.io/autopilot-enabled"
-	deploymentAppEnvEnabledAnnotationKey = "torpedo.io/appenv-enabled"
-	specObjAppWorkloadSizeEnvVar         = "SIZE"
+	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
+	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
+	specObjAppWorkloadSizeEnvVar  = "SIZE"
 )
 
 const (

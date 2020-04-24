@@ -12,15 +12,18 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
+	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -31,7 +34,7 @@ const (
 	retryInterval            = 30 * time.Second
 	unscheduledResizeTimeout = 10 * time.Minute
 	triggerCheckInterval     = 2 * time.Second
-	triggerCheckTimeout      = 30 * time.Minute
+	triggerCheckTimeout      = 5 * time.Minute
 	eventCheckInterval       = 2 * time.Second
 	eventCheckTimeout        = 30 * time.Minute
 	autDeploymentName        = "autopilot"
@@ -255,6 +258,84 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 					},
 				},
 			}, deleteOpts)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		id, err := sched.Instance().Schedule(t, sched.Periodic(time.Second), time.Now(), true)
+		Expect(err).NotTo(HaveOccurred())
+
+		defer sched.Instance().Cancel(id)
+
+		contexts := scheduleAppsWithAutopilot(testName, apRules)
+
+		// schedule deletion of autopilot once the pool expansion starts
+		Step("wait until workload completes on volume", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+})
+
+// This test is used for performing upgrade autopilot when autopilot rules in ActionInProgress state
+var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
+	It("has to start IO workloads, create rules that resize pools based on capacity, upgrade autopilot and validate pools have been resized once", func() {
+		var err error
+		if Inst().AutopilotUpgradeImage == "" {
+			err = fmt.Errorf("no image supplied for upgrading autopilot")
+		}
+		Expect(err).NotTo(HaveOccurred())
+
+		testName := strings.ToLower(fmt.Sprintf("%sUpgradeAutopilot", testSuiteName))
+
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByTotalSize((getTheSmallestPoolSize()/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, nil),
+		}
+
+		// setup task to upgrade autopilot pod as soon as it starts doing expansions
+		eventCheck := func() (bool, error) {
+			for _, apRule := range apRules {
+				ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+					FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				for _, ruleEvent := range ruleEvents.Items {
+					if strings.Contains(ruleEvent.Message,
+						fmt.Sprintf("transition from %s => %s",
+							string(apapi.RuleStateActiveActionsPending),
+							string(apapi.RuleStateActiveActionsInProgress))) {
+						return true, nil
+					}
+				}
+			}
+
+			return false, nil
+		}
+
+		upgradeOpts := &scheduler.UpgradeAutopilotOptions{
+			TriggerOptions: api.TriggerOptions{
+				TriggerCb:            eventCheck,
+				TriggerCheckInterval: triggerCheckInterval,
+				TriggerCheckTimeout:  triggerCheckTimeout,
+			},
+		}
+
+		t := func(interval sched.Interval) {
+			err := upgradeAutopilot(Inst().AutopilotUpgradeImage, upgradeOpts)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -728,6 +809,44 @@ func waitForAutopilotFailedEvent(apRules []apapi.AutopilotRule, objectName strin
 		return err
 	}
 	return nil
+}
+
+func upgradeAutopilot(image string, opts *scheduler.UpgradeAutopilotOptions) error {
+
+	upgradeAutopilot := func() error {
+		k8sApps := apps.Instance()
+
+		logrus.Infof("Upgrading autopilot with new image %s", image)
+		autopilotObj, err := k8sApps.GetDeployment(autDeploymentName, autDeploymentNamespace)
+
+		if err != nil {
+			return fmt.Errorf("failed to get autopilot deployment object. Err: %v", err)
+		}
+		containers := autopilotObj.Spec.Template.Spec.Containers
+		for i := range containers {
+			containers[i].Image = image
+		}
+		upgradedAutopilotObj, err := k8sApps.UpdateDeployment(autopilotObj)
+		if err != nil {
+			return fmt.Errorf("failed to update autopilot version. Err: %v", err)
+		}
+		if err := k8sApps.ValidateDeployment(upgradedAutopilotObj, k8s.DefaultTimeout, k8s.DefaultRetryInterval); err != nil {
+			return fmt.Errorf("failed to validate autopilot deployment %s. Err: %v", autopilotObj.Name, err)
+		}
+
+		for _, container := range upgradedAutopilotObj.Spec.Template.Spec.Containers {
+			if container.Image != image {
+				return fmt.Errorf("failed to upgrade autopilot. New version mismatch. Actual %s, Expected: %s", container.Image, image)
+			}
+		}
+		logrus.Infof("autopilot with new image %s upgraded successfully", image)
+		return nil
+	}
+	if opts == nil {
+		return upgradeAutopilot()
+	}
+
+	return api.PerformTask(upgradeAutopilot, &opts.TriggerOptions)
 }
 
 var _ = AfterSuite(func() {

@@ -165,6 +165,9 @@ else
 fi
 echo "Using list of test suite(s): ${TEST_SUITE}"
 
+if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
+    AUTOPILOT_UPGRADE_VERSION=""
+fi
 
 kubectl delete pod torpedo
 state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
@@ -390,6 +393,7 @@ spec:
             "--secret-type=$SECRET_TYPE",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
+            "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCHEDULER_UPGRADE_HOPS_ARG",
             "$MAX_STORAGE_NODES_PER_AZ_ARG"
