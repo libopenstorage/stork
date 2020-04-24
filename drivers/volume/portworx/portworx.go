@@ -504,6 +504,24 @@ func (p *portworx) getNodeLabels(nodeInfo *storkvolume.NodeInfo) (map[string]str
 	return node.Labels, nil
 }
 
+func (p *portworx) InspectNode(id string) (*storkvolume.NodeInfo, error) {
+	if id == "" {
+		return nil, fmt.Errorf("invalid node id")
+	}
+	node, err := p.clusterManager.Inspect(id)
+	if err != nil {
+		return nil, &ErrFailedToGetNodes{
+			Cause: err.Error(),
+		}
+	}
+	return &storkvolume.NodeInfo{
+		StorageID:   node.Id,
+		SchedulerID: node.SchedulerNodeName,
+		Hostname:    strings.ToLower(node.Hostname),
+		Status:      p.mapNodeStatus(node.Status),
+	}, nil
+}
+
 func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	cluster, err := p.clusterManager.Enumerate()
 	if err != nil {

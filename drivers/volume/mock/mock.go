@@ -207,6 +207,10 @@ func (m Driver) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return m.nodes, nil
 }
 
+func (m Driver) InspectNode(id string) (*storkvolume.NodeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
 // GetPodVolumes Get the Volumes in the Pod that use the mock driver
 func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
 	if m.interfaceError != nil {
