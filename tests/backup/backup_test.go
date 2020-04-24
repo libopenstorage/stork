@@ -41,7 +41,7 @@ const (
 	CredName                          = "tp-backup-cred"
 	BackupName                        = "tp-backup"
 	RestoreName                       = "tp-restore"
-	BackupRestoreCompletionTimeoutMin = 3
+	BackupRestoreCompletionTimeoutMin = 6
 	RetrySeconds                      = 30
 	BucketNamePrefix                  = "tp-backup-bucket"
 	ConfigMapName                     = "kubeconfigs"
@@ -96,11 +96,11 @@ func getProvider() string {
 	return provider
 }
 
-func SetupBackup() {
+func SetupBackup(testName string) {
 	logrus.Infof("Backup driver: %v", Inst().Backup)
 	provider := getProvider()
 	logrus.Infof("Run Setup backup with object store provider: %s", provider)
-	orgID = Inst().InstanceID
+	orgID = fmt.Sprintf("%s-%s", strings.ToLower(testName), Inst().InstanceID)
 	bucketName = fmt.Sprintf("%s-%s", BucketNamePrefix, Inst().InstanceID)
 
 	CreateBucket(provider, bucketName)
@@ -157,7 +157,9 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
-			SetupBackup()
+			// Set cluster context to cluster where torpedo is running
+			SetClusterContext("")
+			SetupBackup("BackupCreateKillStoreRestore")
 		})
 
 		sourceClusterConfigPath, err := getSourceClusterConfigPath()
@@ -179,7 +181,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 					bkpNamespaces = append(bkpNamespaces, namespace)
 				}
 			}
-			// ValidateApplications(contexts)
+			//ValidateApplications(contexts)
 		})
 
 		// Wait for IO to run
@@ -333,12 +335,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 		})
 
 		Step("teardown backup objects", func() {
-			provider := os.Getenv("PROVIDER")
-
-			if provider == "" {
-				logrus.Infof("Backup cleanup Empty provider")
-				return
-			}
+			provider := getProvider()
 
 			for _, namespace := range bkpNamespaces {
 				restoreName := fmt.Sprintf("%s-%s", RestoreName, namespace)
@@ -384,8 +381,9 @@ var _ = Describe("{BackupCreateRestore}", func() {
 	labelSelectores := make(map[string]string)
 
 	It("has to complete backup and restore", func() {
-
-		SetupBackup()
+		// Set cluster context to cluster where torpedo is running
+		SetClusterContext("")
+		SetupBackup("BackupCreateRestore")
 
 		sourceClusterConfigPath, err := getSourceClusterConfigPath()
 		Expect(err).NotTo(HaveOccurred(),
