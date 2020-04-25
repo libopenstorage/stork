@@ -147,6 +147,12 @@ func isCsiProvisioner(provisioner string) bool {
 func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, pvc := range pvcs {
@@ -267,6 +273,12 @@ func (g *gcp) getZoneURLs(zones []string) ([]string, error) {
 }
 
 func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
@@ -300,6 +312,12 @@ func (g *gcp) CancelBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return err
+		}
+	}
+
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
@@ -346,6 +364,12 @@ func (g *gcp) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	var err error
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
@@ -412,6 +436,12 @@ func (g *gcp) CancelRestore(restore *storkapi.ApplicationRestore) error {
 }
 
 func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
 		if vInfo.DriverName != driverName {
@@ -494,7 +524,6 @@ func init() {
 	err := g.Init(nil)
 	if err != nil {
 		logrus.Debugf("Error init'ing gcp driver: %v", err)
-		return
 	}
 	if err := storkvolume.Register(driverName, g); err != nil {
 		logrus.Panicf("Error registering gcp volume driver: %v", err)

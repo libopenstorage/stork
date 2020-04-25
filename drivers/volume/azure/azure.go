@@ -46,6 +46,7 @@ const (
 )
 
 type azure struct {
+	initDone       bool
 	resourceGroup  string
 	diskClient     compute.DisksClient
 	snapshotClient compute.SnapshotsClient
@@ -82,6 +83,7 @@ func (a *azure) Init(_ interface{}) error {
 		return fmt.Errorf("error detecting subscription ID from cluster context")
 	}
 
+	a.initDone = true
 	return nil
 }
 
@@ -233,6 +235,12 @@ func (a *azure) StartBackup(
 	backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if !a.initDone {
+		if err := a.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, pvc := range pvcs {
@@ -294,6 +302,12 @@ func (a *azure) StartBackup(
 }
 
 func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if !a.initDone {
+		if err := a.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
@@ -327,6 +341,12 @@ func (a *azure) CancelBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (a *azure) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+	if !a.initDone {
+		if err := a.Init(nil); err != nil {
+			return err
+		}
+	}
+
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
@@ -408,6 +428,11 @@ func (a *azure) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if !a.initDone {
+		if err := a.Init(nil); err != nil {
+			return nil, err
+		}
+	}
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, backupVolumeInfo := range volumeBackupInfos {
@@ -469,6 +494,12 @@ func (a *azure) CancelRestore(*storkapi.ApplicationRestore) error {
 }
 
 func (a *azure) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if !a.initDone {
+		if err := a.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
 		disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, vInfo.RestoreVolume)
@@ -530,7 +561,6 @@ func init() {
 	err := a.Init(nil)
 	if err != nil {
 		logrus.Debugf("Error init'ing azure driver: %v", err)
-		return
 	}
 	if err := storkvolume.Register(driverName, a); err != nil {
 		logrus.Panicf("Error registering azure volume driver: %v", err)
