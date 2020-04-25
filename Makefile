@@ -107,6 +107,7 @@ deploy: container
 
 clean:
 	-sudo rm -rf bin
+	-sudo find . -type f -name "*.test" -delete
 	@echo "Deleting image "$(TORPEDO_IMG)
 	-docker rmi -f $(TORPEDO_IMG)
 	go clean -i $(PKGS)

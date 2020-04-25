@@ -70,7 +70,7 @@ type Driver interface {
 	ValidateVolumeSetup(vol *Volume) error
 
 	// StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
-	StopDriver(nodes []node.Node, force bool) error
+	StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error
 
 	// StartDriver must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
@@ -86,6 +86,9 @@ type Driver interface {
 
 	// GetNodeForVolume returns the node on which the volume is attached
 	GetNodeForVolume(vol *Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error)
+
+	// GetNodeForBackup returns the node on which cloudsnap backup is started
+	GetNodeForBackup(backupID string) (node.Node, error)
 
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
