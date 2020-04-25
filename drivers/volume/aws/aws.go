@@ -172,6 +172,12 @@ func isCsiProvisioner(provisioner string) bool {
 func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if a.client == nil {
+		if err := a.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, pvc := range pvcs {
@@ -326,6 +332,12 @@ func (a *aws) getFiltersFromMap(filters map[string]string) []*ec2.Filter {
 }
 
 func (a *aws) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if a.client == nil {
+		if err := a.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
@@ -358,6 +370,12 @@ func (a *aws) CancelBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (a *aws) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+	if a.client == nil {
+		if err := a.Init(nil); err != nil {
+			return err
+		}
+	}
+
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
@@ -406,6 +424,11 @@ func (a *aws) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if a.client == nil {
+		if err := a.Init(nil); err != nil {
+			return nil, err
+		}
+	}
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, backupVolumeInfo := range volumeBackupInfos {
@@ -475,6 +498,12 @@ func (a *aws) CancelRestore(*storkapi.ApplicationRestore) error {
 }
 
 func (a *aws) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if a.client == nil {
+		if err := a.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
 		if vInfo.DriverName != driverName {
@@ -541,7 +570,6 @@ func init() {
 	err := a.Init(nil)
 	if err != nil {
 		logrus.Debugf("Error init'ing aws driver: %v", err)
-		return
 	}
 	if err := storkvolume.Register(driverName, a); err != nil {
 		logrus.Panicf("Error registering aws volume driver: %v", err)
