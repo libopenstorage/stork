@@ -210,6 +210,7 @@ type portworx struct {
 	id              string
 	endpoint        string
 	jwtSharedSecret string
+	initDone        bool
 }
 
 type portworxGrpcConnection struct {
@@ -373,6 +374,7 @@ func (p *portworx) initPortworxClients() error {
 		return fmt.Errorf("unable to get hostname: %v", err)
 	}
 
+	p.initDone = true
 	return err
 }
 
@@ -518,6 +520,12 @@ func (p *portworx) getNodeLabels(nodeInfo *storkvolume.NodeInfo) (map[string]str
 }
 
 func (p *portworx) InspectNode(id string) (*storkvolume.NodeInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	if id == "" {
 		return nil, fmt.Errorf("invalid node id")
 	}
@@ -536,6 +544,12 @@ func (p *portworx) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 }
 
 func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	cluster, err := p.clusterManager.Enumerate()
 	if err != nil {
 		return nil, &ErrFailedToGetNodes{
@@ -573,6 +587,12 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 }
 
 func (p *portworx) GetClusterID() (string, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return "", err
+		}
+	}
+
 	cluster, err := p.clusterManager.Enumerate()
 	if err != nil {
 		return "", &ErrFailedToGetClusterID{
@@ -836,6 +856,12 @@ func (p *portworx) SnapshotCreate(
 	pv *v1.PersistentVolume,
 	tags *map[string]string,
 ) (*crdv1.VolumeSnapshotDataSource, *[]crdv1.VolumeSnapshotCondition, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(snap.Metadata.Annotations)
 	if err != nil {
 		return nil, nil, err
@@ -994,6 +1020,12 @@ func (p *portworx) SnapshotCreate(
 }
 
 func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _ *v1.PersistentVolume) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		return err
@@ -1057,6 +1089,12 @@ func (p *portworx) SnapshotDelete(snapDataSrc *crdv1.VolumeSnapshotDataSource, _
 
 // CleanupSnapshotRestoreObjects deletes restore objects if any
 func (p *portworx) CleanupSnapshotRestoreObjects(snapRestore *storkapi.VolumeSnapshotRestore) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	logrus.Infof("Cleaning up in-place restore objects")
 
 	for _, vol := range snapRestore.Status.Volumes {
@@ -1108,6 +1146,11 @@ func getUidforRestore(volID, restoreID string) string {
 
 // StartVolumeSnapshotRestore will prepare volume for restore
 func (p *portworx) StartVolumeSnapshotRestore(snapRestore *storkapi.VolumeSnapshotRestore) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
 
 	if len(snapRestore.Status.Volumes) == 0 {
 		return fmt.Errorf("no restore volumes information")
@@ -1207,6 +1250,12 @@ func (p *portworx) StartVolumeSnapshotRestore(snapRestore *storkapi.VolumeSnapsh
 }
 
 func (p *portworx) GetVolumeSnapshotRestoreStatus(snapRestore *storkapi.VolumeSnapshotRestore) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	// Get volume client from user context
 	volDriver, err := p.getUserVolDriver(snapRestore.Annotations)
 	if err != nil {
@@ -1345,6 +1394,12 @@ func (p *portworx) checkAndUpdateHaLevel(volID, uid string, params map[string]st
 
 // CompleteVolumeSnapshotRestore does in-place restore of snapshot to it's parent volume
 func (p *portworx) CompleteVolumeSnapshotRestore(snapRestore *storkapi.VolumeSnapshotRestore) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	// TODO: Restoring snapshot to volume other than parent volume is not supported by PX
 	if snapRestore.Spec.DestinationPVC != nil {
 		return fmt.Errorf("restore to volume other than parent is not supported")
@@ -1463,6 +1518,12 @@ func (p *portworx) SnapshotRestore(
 	_ string,
 	parameters map[string]string,
 ) (*v1.PersistentVolumeSource, map[string]string, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(pvc.ObjectMeta.Annotations)
 	if err != nil {
 		return nil, nil, err
@@ -1594,6 +1655,12 @@ func (p *portworx) SnapshotRestore(
 }
 
 func (p *portworx) DescribeSnapshot(snapshotData *crdv1.VolumeSnapshotData) (*[]crdv1.VolumeSnapshotCondition, bool /* isCompleted */, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, false, err
+		}
+	}
+
 	var err error
 	if snapshotData == nil || snapshotData.Spec.PortworxSnapshot == nil {
 		err = fmt.Errorf("invalid VolumeSnapshotDataSource: %v", snapshotData)
@@ -1665,6 +1732,12 @@ func (p *portworx) GetSnapshotType(snap *crdv1.VolumeSnapshot) (string, error) {
 }
 
 func (p *portworx) VolumeDelete(pv *v1.PersistentVolume) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		return err
@@ -1964,6 +2037,12 @@ func getCloudSnapStatusString(status *api.CloudBackupStatus) string {
 }
 
 func (p *portworx) CreatePair(pair *storkapi.ClusterPair) (string, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return "", err
+		}
+	}
+
 	ok, msg, err := p.ensureNodesHaveMinVersion("2.0")
 	if err != nil {
 		return "", err
@@ -2005,10 +2084,22 @@ func (p *portworx) CreatePair(pair *storkapi.ClusterPair) (string, error) {
 }
 
 func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	return p.clusterManager.DeletePair(pair.Status.RemoteStorageID)
 }
 
 func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(migration.Annotations)
 	if err != nil {
 		return nil, err
@@ -2091,6 +2182,12 @@ func (p *portworx) getCredID(backupLocation string, namespace string) string {
 }
 
 func (p *portworx) GetMigrationStatus(migration *storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(migration.Annotations)
 	if err != nil {
 		return nil, err
@@ -2145,6 +2242,12 @@ func (p *portworx) GetMigrationStatus(migration *storkapi.Migration) ([]*storkap
 }
 
 func (p *portworx) CancelMigration(migration *storkapi.Migration) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(migration.Annotations)
 	if err != nil {
 		return err
@@ -2181,6 +2284,12 @@ func (p *portworx) UpdateMigratedPersistentVolumeSpec(
 
 func (p *portworx) CreateGroupSnapshot(snap *storkapi.GroupVolumeSnapshot) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	ok, msg, err := p.ensureNodesHaveMinVersion("2.0.2")
 	if err != nil {
 		return nil, err
@@ -2216,6 +2325,12 @@ func (p *portworx) CreateGroupSnapshot(snap *storkapi.GroupVolumeSnapshot) (
 
 func (p *portworx) GetGroupSnapshotStatus(snap *storkapi.GroupVolumeSnapshot) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	snapType, err := getSnapshotType(snap.Spec.Options)
 	if err != nil {
 		return nil, err
@@ -2234,6 +2349,12 @@ func (p *portworx) GetGroupSnapshotStatus(snap *storkapi.GroupVolumeSnapshot) (
 }
 
 func (p *portworx) DeleteGroupSnapshot(snap *storkapi.GroupVolumeSnapshot) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	var lastError error
 	for _, vs := range snap.Status.VolumeSnapshots {
 		if len(vs.VolumeSnapshotName) == 0 {
@@ -2254,6 +2375,11 @@ func (p *portworx) DeleteGroupSnapshot(snap *storkapi.GroupVolumeSnapshot) error
 }
 
 func (p *portworx) GetClusterDomains() (*storkapi.ClusterDomains, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
 
 	// get the cluster details
 	cluster, err := p.clusterManager.Enumerate()
@@ -2347,6 +2473,12 @@ cluster_domain_info:
 }
 
 func (p *portworx) ActivateClusterDomain(cdu *storkapi.ClusterDomainUpdate) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return err
@@ -2368,6 +2500,12 @@ func (p *portworx) ActivateClusterDomain(cdu *storkapi.ClusterDomainUpdate) erro
 }
 
 func (p *portworx) DeactivateClusterDomain(cdu *storkapi.ClusterDomainUpdate) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	clusterDomainClient, err := p.getClusterDomainClient()
 	if err != nil {
 		return err
@@ -2510,6 +2648,12 @@ func (p *portworx) addApplicationBackupCloudsnapInfo(
 func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	ok, msg, err := p.ensureNodesHaveMinVersion("2.2.0")
 	if err != nil {
 		return nil, err
@@ -2570,6 +2714,12 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 }
 
 func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(backup.Annotations)
 	if err != nil {
 		return nil, err
@@ -2602,6 +2752,12 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 }
 
 func (p *portworx) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(backup.Annotations)
 	if err != nil {
 		return err
@@ -2621,6 +2777,12 @@ func (p *portworx) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (p *portworx) CancelBackup(backup *storkapi.ApplicationBackup) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(backup.Annotations)
 	if err != nil {
 		return err
@@ -2704,6 +2866,12 @@ func (p *portworx) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	ok, msg, err := p.ensureNodesHaveMinVersion("2.2.0")
 	if err != nil {
 		return nil, err
@@ -2752,6 +2920,12 @@ func (p *portworx) StartRestore(
 }
 
 func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(restore.Annotations)
 	if err != nil {
 		return nil, err
@@ -2784,6 +2958,12 @@ func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*st
 }
 
 func (p *portworx) CancelRestore(restore *storkapi.ApplicationRestore) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	volDriver, err := p.getUserVolDriver(restore.Annotations)
 	if err != nil {
 		return err
@@ -2798,6 +2978,12 @@ func (p *portworx) CancelRestore(restore *storkapi.ApplicationRestore) error {
 }
 
 func (p *portworx) CreateVolumeClones(clone *storkapi.ApplicationClone) error {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return err
+		}
+	}
+
 	createdClones := make([]string, 0)
 	volDriver, err := p.getUserVolDriver(clone.Annotations)
 	if err != nil {
@@ -2835,6 +3021,7 @@ func (p *portworx) CreateVolumeClones(clone *storkapi.ApplicationClone) error {
 	}
 	return nil
 }
+
 func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *storkapi.GroupVolumeSnapshot, volNames []string, options map[string]string) (
 	*storkvolume.GroupSnapshotCreateResponse, error) {
 	volDriver, err := p.getUserVolDriver(groupSnap.Annotations)
@@ -3182,7 +3369,6 @@ func init() {
 	err := p.Init(nil)
 	if err != nil {
 		logrus.Debugf("Error init'ing portworx driver: %v", err)
-		return
 	}
 
 	if err := storkvolume.Register(driverName, p); err != nil {
