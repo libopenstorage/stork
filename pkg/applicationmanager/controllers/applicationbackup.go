@@ -14,6 +14,7 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/crypto"
+	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
@@ -25,7 +26,7 @@ import (
 	"gocloud.dev/gcerrors"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -96,7 +97,7 @@ func (a *ApplicationBackupController) Reconcile(request reconcile.Request) (reco
 	backup := &stork_api.ApplicationBackup{}
 	err := a.client.Get(context.TODO(), request.NamespacedName, backup)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8s_errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -372,6 +373,10 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			for _, pvc := range pvcList.Items {
 				driverName, err := volume.GetPVCDriver(&pvc)
 				if err != nil {
+					// Skip unsupported PVCs
+					if _, ok := err.(*errors.ErrNotSupported); ok {
+						continue
+					}
 					return err
 				}
 				if driverName != "" {
@@ -841,7 +846,7 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
 	if err != nil {
 		// Can't do anything if the backup location is deleted
-		if errors.IsNotFound(err) {
+		if k8s_errors.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -875,7 +880,7 @@ func (a *ApplicationBackupController) createCRD() error {
 		Kind:    reflect.TypeOf(stork_api.ApplicationBackup{}).Name(),
 	}
 	err := apiextensions.Instance().CreateCRD(resource)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		return err
 	}
 

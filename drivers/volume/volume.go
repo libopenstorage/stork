@@ -1,6 +1,7 @@
 package volume
 
 import (
+	"fmt"
 	"net"
 	"strings"
 
@@ -261,9 +262,9 @@ func GetPVCDriver(pvc *v1.PersistentVolumeClaim) (string, error) {
 			return driverName, nil
 		}
 	}
-	return "", &errors.ErrNotFound{
-		ID:   pvc.Name,
-		Type: "VolumeDriver",
+	return "", &errors.ErrNotSupported{
+		Feature: "VolumeDriver",
+		Reason:  fmt.Sprintf("PVC %v/%v provisioned using unsupported driver", pvc.Namespace, pvc.Name),
 	}
 }
 
@@ -275,9 +276,9 @@ func GetPVDriver(pv *v1.PersistentVolume) (string, error) {
 			return driverName, nil
 		}
 	}
-	return "", &errors.ErrNotFound{
-		ID:   pv.Name,
-		Type: "VolumeDriver",
+	return "", &errors.ErrNotSupported{
+		Feature: "VolumeDriver",
+		Reason:  fmt.Sprintf("PV %v provisioned using unsupported driver", pv.Name),
 	}
 }
 
