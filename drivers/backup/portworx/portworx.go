@@ -798,13 +798,13 @@ func (p *portworx) WaitForLicenseActivation(ctx context.Context, req *api.Licens
 		}
 
 		// Check if we got response from license server
-		if len(resp.GetResponseInfo()) == 0 {
+		if len(resp.GetLicenseRespInfo().GetFeatureInfo()) == 0 {
 			licenseErr = fmt.Errorf("failed to activate license for orgID %v", req.GetOrgId())
 			return nil, false, licenseErr
 		}
 		// iterate over the feature and check if valid feature is present
-		for _, ft := range resp.GetResponseInfo() {
-			if ft.GetName() != licFeatureName {
+		for _, featureInfo := range resp.GetLicenseRespInfo().GetFeatureInfo() {
+			if featureInfo.GetName() != licFeatureName {
 				licenseErr = fmt.Errorf("found invalid feature name")
 				return nil, false, licenseErr
 			}
