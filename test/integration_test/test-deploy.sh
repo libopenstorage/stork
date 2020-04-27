@@ -15,6 +15,8 @@ volume_driver="pxd"
 short_test=false
 backup_location_path="test-restore-path"
 cloud_secret=""
+aws_id=""
+aws_key=""
 for i in "$@"
 do
 case $i in
@@ -105,6 +107,18 @@ case $i in
     --cloud_secret)
         echo "Secret name for cloud provider API access: $2"
         cloud_secret=$2
+        shift
+        shift
+        ;;
+    --aws_id)
+        echo "AWS user id for API access: $2"
+        aws_id=$2
+        shift
+        shift
+        ;;
+    --aws_key)
+        echo "AWS key for API access: $2"
+        aws_key=$2
         shift
         shift
         ;;
@@ -217,6 +231,10 @@ sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed  -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml
 sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-test-pod.yaml
+
+# Add AWS creds to stork-test pod
+sed -i 's/'aws_access_key_id'/'"$aws_id"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/'aws_secret_access_key'/'"$aws_key"'/g' /testspecs/stork-test-pod.yaml
 
 if [ "$volume_driver" != "" ] ; then
 	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml
