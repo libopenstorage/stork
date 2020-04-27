@@ -408,8 +408,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 h1:DtyCSm4R57CsThpY501rbVj0utQqKrI8UXm9mfuaRrk=
 github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
-github.com/portworx/px-backup-api v0.0.0-20200406122257-9f46d747b02a h1:Dd0vFJau5LF3fkgYajXEHgdjnybWoa7Lww2f3DH7yKU=
-github.com/portworx/px-backup-api v0.0.0-20200406122257-9f46d747b02a/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
+github.com/portworx/px-backup-api v0.0.0-20200427154119-bf6c416dd552 h1:XSYVDcBkHtxaaONSROdw8X13IMGHszkW43YcyvCV1HA=
+github.com/portworx/px-backup-api v0.0.0-20200427154119-bf6c416dd552/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee h1:HnMAyWZRxHxHEEw1/QuCkmvtf3Woej/IboUBaiuVbyo=
 github.com/portworx/sched-ops v0.0.0-20200221004841-9205a51a1fee/go.mod h1:yb1ypNIiZQAmM7xAWGzO6dydwl/+vNC0WjUm5IvHUEY=
 github.com/portworx/sched-ops v0.0.0-20200417162209-33e2d7134846 h1:NsSc4z9GOIoOfYJK/7E80u1Wxzgid4hCIhihBqHHqqE=

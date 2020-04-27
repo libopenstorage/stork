@@ -2239,6 +2239,9 @@
         },
         "status": {
           "$ref": "#/definitions/BackupScheduleInfoStatusInfoStatus"
+        },
+        "Reason": {
+          "type": "string"
         }
       }
     },
@@ -2677,35 +2680,60 @@
     "LicenseInspectResponse": {
       "type": "object",
       "properties": {
-        "response_info": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/LicenseResponseInfo"
-          }
+        "license_resp_info": {
+          "$ref": "#/definitions/LicenseResponseInfo"
         }
       }
     },
     "LicenseResponseInfo": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string",
-          "title": "Represents feature name of license"
-        },
+        "feature_info": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LicenseResponseInfoFeatureInfo"
+          }
+        }
+      }
+    },
+    "LicenseResponseInfoEntitlementInfo": {
+      "type": "object",
+      "properties": {
         "count": {
           "type": "string",
           "format": "int64",
-          "title": "Number of nodes/clusters supporting the feature"
+          "title": "License count"
         },
         "expires": {
           "type": "string",
           "format": "date-time",
-          "title": "Expire time of license"
+          "title": "Expiry time of license"
         },
         "starts": {
           "type": "string",
           "format": "date-time",
           "title": "Start time of license"
+        }
+      }
+    },
+    "LicenseResponseInfoFeatureInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Feature name"
+        },
+        "consumed": {
+          "type": "string",
+          "format": "int64",
+          "title": "Consumed count"
+        },
+        "entitlement_info": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LicenseResponseInfoEntitlementInfo"
+          },
+          "title": "License entitlement info"
         }
       }
     },

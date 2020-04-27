@@ -219,6 +219,7 @@ message BackupScheduleInfo {
         google.protobuf.Timestamp create_time = 2;
         google.protobuf.Timestamp finish_time = 3;
         Status status = 4;
+        string Reason = 5;
         enum Status {
             Invalid = 0;
             Pending = 1;
@@ -1341,19 +1342,28 @@ message LicenseActivateResponse {}
 
 message LicenseInspectRequest { string org_id = 1; }
 
-message LicenseInspectResponse {
-    repeated LicenseResponseInfo response_info = 1;
-}
+message LicenseInspectResponse { LicenseResponseInfo license_resp_info = 1; }
 
 message LicenseResponseInfo {
-    // Represents feature name of license
-    string name = 1;
-    // Number of nodes/clusters supporting the feature
-    int64 count = 2;
-    // Expire time of license
-    google.protobuf.Timestamp expires = 3;
-    // Start time of license
-    google.protobuf.Timestamp starts = 4;
+    repeated FeatureInfo feature_info = 1;
+
+    message FeatureInfo {
+        // Feature name
+        string name = 1;
+        // Consumed count
+        int64 consumed = 2;
+        // License entitlement info
+        repeated EntitlementInfo entitlement_info = 3;
+    }
+
+    message EntitlementInfo {
+        // License count
+        int64 count = 1;
+        // Expiry time of license
+        google.protobuf.Timestamp expires = 3;
+        // Start time of license
+        google.protobuf.Timestamp starts = 4;
+    }
 }
 
 service License {
