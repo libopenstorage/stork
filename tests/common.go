@@ -701,6 +701,7 @@ type Torpedo struct {
 	DestroyAppTimeout                   time.Duration
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
+	IOWaitTimeout                       time.Duration
 	ConfigMap                           string
 	BundleLocation                      string
 	CustomAppConfig                     map[string]scheduler.AppConfig
@@ -724,6 +725,7 @@ func ParseFlags() {
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
+	var ioWaitTimeout time.Duration
 	var bundleLocation string
 	var customConfigPath string
 	var customAppConfig map[string]scheduler.AppConfig
@@ -754,6 +756,7 @@ func ParseFlags() {
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
 	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
+	flag.DurationVar(&ioWaitTimeout, "io-wait-timeout", defaultTimeout, "Maximum wait for application IOs to run before starting tests")
 
 	flag.Parse()
 
@@ -820,6 +823,7 @@ func ParseFlags() {
 				DestroyAppTimeout:                   destroyAppTimeout,
 				DriverStartTimeout:                  driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
+				IOWaitTimeout:                       ioWaitTimeout,
 				ConfigMap:                           configMapName,
 				BundleLocation:                      bundleLocation,
 				CustomAppConfig:                     customAppConfig,
