@@ -42,6 +42,8 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+
+	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
 	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -207,7 +209,7 @@ func ValidateVolumes(ctx *scheduler.Context) {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
-			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
 			expect(err).NotTo(haveOccurred())
 		})
 
@@ -271,17 +273,19 @@ func ValidateVolumeParameters(volParam map[string]map[string]string) {
 // ValidateRestoredApplications validates applications restored by backup driver
 func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameters map[string]map[string]string) {
 	var updatedVolumeParams map[string]map[string]string
+	volOptsMap := make(map[string]bool)
+	volOptsMap[SkipClusterScopedObjects] = true
+
 	for _, ctx := range contexts {
 		ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
-			/* TODO: Once Inst().S.ValidateVolumes() has way to skip validation of storage classes, add
-			this section
 			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 				appScaleFactor := time.Duration(Inst().ScaleFactor)
-				err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+				volOpts := mapToVolumeOptions(volOptsMap)
+				err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, volOpts)
 				expect(err).NotTo(haveOccurred())
 			})
-			*/
+
 			Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 				appScaleFactor := time.Duration(Inst().ScaleFactor)
 				err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
@@ -313,7 +317,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
 		var err error
 
-		options := mapToDeleteOptions(opts)
+		options := mapToVolumeOptions(opts)
 		vols := DeleteVolumes(ctx, options)
 
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
@@ -327,7 +331,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 }
 
 // DeleteVolumes deletes volumes of a given context
-func DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) []*volume.Volume {
+func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*volume.Volume {
 	var err error
 	var vols []*volume.Volume
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
@@ -349,7 +353,7 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) {
+func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) {
 	vols := DeleteVolumes(ctx, options)
 	ValidateVolumesDeleted(ctx.App.Key, vols)
 }
@@ -921,14 +925,14 @@ func splitCsv(in string) ([]string, error) {
 	return records[0], err
 }
 
-func mapToDeleteOptions(options map[string]bool) *scheduler.DeleteVolumeOptions {
+func mapToVolumeOptions(options map[string]bool) *scheduler.VolumeOptions {
 	if val, ok := options[SkipClusterScopedObjects]; ok {
-		return &scheduler.DeleteVolumeOptions{
+		return &scheduler.VolumeOptions{
 			SkipClusterScopedObjects: val,
 		}
 	}
 
-	return &scheduler.DeleteVolumeOptions{
+	return &scheduler.VolumeOptions{
 		SkipClusterScopedObjects: false,
 	}
 }

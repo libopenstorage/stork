@@ -352,6 +352,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 	var namespaceMapping map[string]string
 	taskNamePrefix := "backupcrashvoldriver"
 	labelSelectores := make(map[string]string)
+	volumeParams := make(map[string]map[string]string)
 
 	It("has to complete backup and restore", func() {
 		// Set cluster context to cluster where torpedo is running
@@ -372,6 +373,11 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				contexts = append(contexts, appContexts...)
 			}
 			ValidateApplications(contexts)
+			for _, ctx := range contexts {
+				for vol, params := range GetVolumeParameters(ctx) {
+					volumeParams[vol] = params
+				}
+			}
 		})
 
 		for _, ctx := range contexts {
@@ -414,7 +420,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				Step(fmt.Sprintf("Kill volume driver %s on node [%v] after backup [%s] starts",
 					Inst().V.String(), bkpNode[0].Name, BackupName), func() {
 					// Just kill storage driver on one of the node where volume backup is in progress
-					Inst().V.StopDriver(bkpNode[0:1], true, triggerOpts)
+					//Inst().V.StopDriver(bkpNode[0:1], true, triggerOpts)
 				})
 
 				Step(fmt.Sprintf("Wait for Backup [%s] to complete", BackupName), func() {
@@ -450,13 +456,13 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			}
 		}
 
-		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
+		/*Step("teardown all applications on source cluster before switching context to destination cluster", func() {
 			for _, ctx := range contexts {
-				TearDownContext(ctx, map[string]bool{
-					SkipClusterScopedObjects: true,
-				})
+				//TearDownContext(ctx, map[string]bool{
+				//	SkipClusterScopedObjects: true,
+				//})
 			}
-		})
+		})*/
 
 		// Change namespaces to restored apps only after backed up apps are cleaned up
 		// to avoid switching back namespaces to backup namespaces
@@ -473,7 +479,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			}
 			// TODO: Restored PVCs are created by stork-snapshot StorageClass
 			// And not by respective app's StorageClass. Need to fix below function
-			// ValidateApplications(contexts)
+			ValidateRestoredApplications(contexts, volumeParams)
 		})
 
 		Step("teardown all restored apps", func() {

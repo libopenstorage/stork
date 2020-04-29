@@ -102,8 +102,10 @@ const (
 	secretNamespaceKey = "secret_namespace"
 	secretName         = "openstorage.io/auth-secret-name"
 	secretNamespace    = "openstorage.io/auth-secret-namespace"
-	PvcNameKey         = "pvc_name"
-	PvcNamespaceKey    = "pvc_namespace"
+	// PvcNameKey key used in volume param map to store PVC name
+	PvcNameKey = "pvc_name"
+	// PvcNamespaceKey key used in volume param map to store PVC namespace
+	PvcNamespaceKey = "pvc_namespace"
 )
 
 var (
@@ -1758,14 +1760,19 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 }
 
 // ValidateVolumes Validates the volumes
-func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration,
+	options *scheduler.VolumeOptions) error {
 	var err error
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			if _, err := k8sStorage.GetStorageClass(obj.Name); err != nil {
-				return &scheduler.ErrFailedToValidateStorage{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate StorageClass: %v. Err: %v", obj.Name, err),
+				if options != nil && options.SkipClusterScopedObjects {
+					logrus.Warnf("[%v] Skipping validation of storage class: %v", ctx.App.Key, obj.Name)
+				} else {
+					return &scheduler.ErrFailedToValidateStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to validate StorageClass: %v. Err: %v", obj.Name, err),
+					}
 				}
 			}
 			logrus.Infof("[%v] Validated storage class: %v", ctx.App.Key, obj.Name)
@@ -1907,7 +1914,7 @@ func (k *K8s) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
 }
 
 // DeleteVolumes  delete the volumes
-func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) ([]*volume.Volume, error) {
+func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
@@ -2004,7 +2011,10 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
+
+			logrus.Info("=================================================\n")
 			logrus.Infof("\n[GetVolumes]: PVC from ctx: [%+v]\n", obj)
+			logrus.Infof("\n[GetVolumes]: PVC obj.UID ctx: [%+v]\n", obj.UID)
 			logrus.Infof("\n[GetVolumes]: PVC name from ctx: [%+v]\n", obj.ObjectMeta.GetName())
 			logrus.Infof("\n[GetVolumes]: PVC namespace from ctx: [%+v]\n", obj.ObjectMeta.GetNamespace())
 			logrus.Infof("\n[GetVolumes]: Volume name from ctx: [%+v]\n", obj.Spec.VolumeName)
@@ -2014,10 +2024,17 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			if err != nil {
 				return nil, err
 			}
+
+			logrus.Infof("\nGetVolumes]: pvcObj return by sched-ops : [%+v]]n", pvcObj)
+			logrus.Infof("\nGetVolumes]: pvcObj.name return by sched-ops : [%+v]]n", pvcObj.GetName())
+			logrus.Infof("\nGetVolumes]: pvcObj.UID return by sched-ops : [%+v]]n", pvcObj.UID)
+			logrus.Infof("\nGetVolumes]: pvcObj.Labels return by sched-ops : [%+v]]n", pvcObj.GetLabels())
+			logrus.Infof("\nGetVolumes]: pvcObj.Spec.VolumeName return by sched-ops : [%+v]]n", pvcObj.Spec.VolumeName)
+
 			pvcSizeObj := pvcObj.Spec.Resources.Requests[v1.ResourceStorage]
 			pvcSize, _ := pvcSizeObj.AsInt64()
 			vol := &volume.Volume{
-				ID:          string(obj.UID),
+				ID:          string(pvcObj.Spec.VolumeName),
 				Name:        obj.Name,
 				Namespace:   obj.Namespace,
 				Shared:      k.isPVCShared(obj),
@@ -2025,6 +2042,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				Labels:      pvcObj.Labels,
 				Size:        uint64(pvcSize),
 			}
+			logrus.Infof("\n[GetVolumes]: volume.Volume : [%+v]", vol)
 			for key, val := range obj.Annotations {
 				vol.Annotations[key] = val
 			}
