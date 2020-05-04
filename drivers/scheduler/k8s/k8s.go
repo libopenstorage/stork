@@ -2011,25 +2011,10 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
-
-			logrus.Info("=================================================\n")
-			logrus.Infof("\n[GetVolumes]: PVC from ctx: [%+v]\n", obj)
-			logrus.Infof("\n[GetVolumes]: PVC obj.UID ctx: [%+v]\n", obj.UID)
-			logrus.Infof("\n[GetVolumes]: PVC name from ctx: [%+v]\n", obj.ObjectMeta.GetName())
-			logrus.Infof("\n[GetVolumes]: PVC namespace from ctx: [%+v]\n", obj.ObjectMeta.GetNamespace())
-			logrus.Infof("\n[GetVolumes]: Volume name from ctx: [%+v]\n", obj.Spec.VolumeName)
-			logrus.Infof("\n[GetVolumes]: PVC name from ctx obj.Name: [%+v]\n", obj.Name)
-			logrus.Infof("\n[GetVolumes]: Volume name from ctx obj.Namespace: [%+v]\n", obj.Namespace)
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, err
 			}
-
-			logrus.Infof("\nGetVolumes]: pvcObj return by sched-ops : [%+v]]n", pvcObj)
-			logrus.Infof("\nGetVolumes]: pvcObj.name return by sched-ops : [%+v]]n", pvcObj.GetName())
-			logrus.Infof("\nGetVolumes]: pvcObj.UID return by sched-ops : [%+v]]n", pvcObj.UID)
-			logrus.Infof("\nGetVolumes]: pvcObj.Labels return by sched-ops : [%+v]]n", pvcObj.GetLabels())
-			logrus.Infof("\nGetVolumes]: pvcObj.Spec.VolumeName return by sched-ops : [%+v]]n", pvcObj.Spec.VolumeName)
 
 			pvcSizeObj := pvcObj.Spec.Resources.Requests[v1.ResourceStorage]
 			pvcSize, _ := pvcSizeObj.AsInt64()
@@ -2042,7 +2027,6 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				Labels:      pvcObj.Labels,
 				Size:        uint64(pvcSize),
 			}
-			logrus.Infof("\n[GetVolumes]: volume.Volume : [%+v]", vol)
 			for key, val := range obj.Annotations {
 				vol.Annotations[key] = val
 			}
@@ -2066,7 +2050,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 			for _, pvc := range pvcList.Items {
 				vols = append(vols, &volume.Volume{
-					ID:        string(pvc.UID),
+					ID:        string(pvc.Spec.VolumeName),
 					Name:      pvc.Name,
 					Namespace: pvc.Namespace,
 					Shared:    k.isPVCShared(&pvc),

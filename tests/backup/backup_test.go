@@ -420,7 +420,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				Step(fmt.Sprintf("Kill volume driver %s on node [%v] after backup [%s] starts",
 					Inst().V.String(), bkpNode[0].Name, BackupName), func() {
 					// Just kill storage driver on one of the node where volume backup is in progress
-					//Inst().V.StopDriver(bkpNode[0:1], true, triggerOpts)
+					Inst().V.StopDriver(bkpNode[0:1], true, triggerOpts)
 				})
 
 				Step(fmt.Sprintf("Wait for Backup [%s] to complete", BackupName), func() {
@@ -456,13 +456,13 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			}
 		}
 
-		/*Step("teardown all applications on source cluster before switching context to destination cluster", func() {
+		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
 			for _, ctx := range contexts {
-				//TearDownContext(ctx, map[string]bool{
-				//	SkipClusterScopedObjects: true,
-				//})
+				TearDownContext(ctx, map[string]bool{
+					SkipClusterScopedObjects: true,
+				})
 			}
-		})*/
+		})
 
 		// Change namespaces to restored apps only after backed up apps are cleaned up
 		// to avoid switching back namespaces to backup namespaces

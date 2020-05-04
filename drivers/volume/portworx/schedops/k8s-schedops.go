@@ -215,16 +215,13 @@ func (k *k8sSchedOps) ValidateRemoveLabels(vol *volume.Volume) error {
 }
 
 func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) error {
-	logrus.Infof("[in k8s schedops - ValidateVolumeSetup] recieved vol for validation: [%+v]", vol)
 	pvName := k.GetVolumeName(vol)
-	logrus.Infof("[in k8s schedops - ValidateVolumeSetup] got pvName as : %s", pvName)
 	if len(pvName) == 0 {
 		return fmt.Errorf("failed to get PV name for : %v", vol)
 	}
 
 	t := func() (interface{}, bool, error) {
 		pods, err := k8sCore.GetPodsUsingPV(pvName)
-		logrus.Infof("[in k8s schedops - ValidateVolumeSetup] [%+v] pods are using pv [%+v]", pvName)
 		if err != nil {
 			return nil, true, err
 		}
@@ -392,12 +389,10 @@ func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[strin
 }
 
 func (k *k8sSchedOps) GetVolumeName(vol *volume.Volume) string {
-	logrus.Infof("[in k8sschedops-GetVolumeName] for vol :[%+v]", vol)
 	if vol != nil && vol.ID != "" {
 		logrus.Infof("Returning vol name as : %s", vol.ID)
 		return vol.ID
 	}
-	logrus.Infof("Returning vol name as : %s", "")
 	return ""
 }
 
