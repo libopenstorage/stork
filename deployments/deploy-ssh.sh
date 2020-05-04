@@ -73,6 +73,10 @@ if [ -z "${STORAGE_DRIVER}" ]; then
     STORAGE_DRIVER="pxd"
 fi
 
+if [ -z "${PROVISIONER}" ]; then
+    PROVISIONER="portworx"
+fi
+
 CONFIGMAP=""
 if [ -n "${CONFIG_MAP}" ]; then
     CONFIGMAP="${CONFIG_MAP}"
@@ -182,7 +186,15 @@ fi
 TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
+AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
+AWS_VOLUME_MOUNT="{ \"name\": \"aws-volume\", \"mountPath\": \"/root/.aws/\" }"
+
 VOLUMES="${TESTRESULTS_VOLUME}"
+
+if [ "${STORAGE_DRIVER}" == "aws" ]; then
+  VOLUMES="${VOLUMES},${AWS_VOLUME}"
+  VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
+fi
 
 if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
     VOLUMES="${VOLUMES},${TORPEDO_SSH_KEY_VOLUME}"
@@ -405,6 +417,7 @@ spec:
   serviceAccountName: torpedo-account
 EOF
 
+cat torpedo.yaml
 echo "Deploying torpedo pod..."
 kubectl apply -f torpedo.yaml
 

@@ -111,10 +111,8 @@ spec:
   volumeClaimTemplates:
   - metadata:
       name: es-data
-      annotations:
-        volume.beta.kubernetes.io/storage-class: px-elasticdata-sc
-        azure-storage-class: azure-es-sc
     spec:
+      storageClassName: elasticsearch-sc
       accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:

@@ -19,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/libopenstorage/openstorage/pkg/sched"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -155,11 +154,15 @@ func SetClusterContext(clusterConfigPath string) {
 // This test performs basic test of starting an application, backing it up and killing stork while
 // performing backup.
 var _ = Describe("{BackupCreateKillStoreRestore}", func() {
-	var contexts []*scheduler.Context
-	var bkpNamespaces []string
-	var namespaceMapping map[string]string
-	taskNamePrefix := "backupcreaterestore"
+	var (
+		contexts         []*scheduler.Context
+		bkpNamespaces    []string
+		namespaceMapping map[string]string
+		taskNamePrefix   = "backupcreaterestore"
+	)
+
 	labelSelectores := make(map[string]string)
+	namespaceMapping = make(map[string]string)
 
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
@@ -189,14 +192,18 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 					bkpNamespaces = append(bkpNamespaces, namespace)
 				}
 			}
-			// TODO(stgleb): Adjust this logic to skip cluster scoped resources
-			// that do not get backed up
+
+			// Skip volume validation until other volume providers are implemented.
+			for _, ctx := range contexts {
+				ctx.SkipVolumeValidation = true
+			}
+
 			ValidateApplications(contexts)
 		})
 
-		// TODO(stgleb): Parametrize this timeout
-		// Wait for some IO to run
-		time.Sleep(time.Minute * 20)
+		logrus.Info("Wait for IO to proceed\n")
+		time.Sleep(time.Minute * 5)
+
 		// TODO(stgleb): Add multi-namespace backup when ready in px-backup
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
@@ -208,64 +215,44 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			})
 		}
 
-		Step("Kill stork", func() {
+		Step("Kill stork during backup", func() {
 			// setup task to delete stork pods as soon as it starts doing backup
-			eventCheck := func() (bool, error) {
-				for _, namespace := range bkpNamespaces {
-					backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
-					req := &api.BackupInspectRequest{
-						Name:  backupName,
-						OrgId: orgID,
-					}
-
-					logrus.Infof("backup %s wait for running", backupName)
-					err := Inst().Backup.WaitForRunning(context.Background(),
-						req, time.Millisecond, time.Millisecond)
-
-					if err != nil {
-						logrus.Infof("backup %s wait for running err %v",
-							backupName, err)
-
-						continue
-					} else {
-						logrus.Infof("backup %s is running", backupName)
-						return true, nil
-					}
+			for _, namespace := range bkpNamespaces {
+				backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
+				req := &api.BackupInspectRequest{
+					Name:  backupName,
+					OrgId: orgID,
 				}
-				return false, nil
+
+				logrus.Infof("backup %s wait for running", backupName)
+				err := Inst().Backup.WaitForRunning(context.Background(),
+					req, BackupRestoreCompletionTimeoutMin*time.Minute,
+					RetrySeconds*time.Second)
+
+				if err != nil {
+					logrus.Warnf("backup %s wait for running err %v",
+						backupName, err)
+					continue
+				} else {
+					break
+				}
 			}
 
-			deleteOpts := &scheduler.DeleteTasksOptions{
-				TriggerOptions: driver_api.TriggerOptions{
-					TriggerCb:            eventCheck,
-					TriggerCheckInterval: triggerCheckInterval,
-					TriggerCheckTimeout:  triggerCheckTimeout,
-				},
-			}
-
-			t := func(interval sched.Interval) {
-				ctx := &scheduler.Context{
-					App: &spec.AppSpec{
-						SpecList: []interface{}{
-							&appsapi.Deployment{
-								ObjectMeta: meta_v1.ObjectMeta{
-									Name:      storkDeploymentName,
-									Namespace: storkDeploymentNamespace,
-								},
+			ctx := &scheduler.Context{
+				App: &spec.AppSpec{
+					SpecList: []interface{}{
+						&appsapi.Deployment{
+							ObjectMeta: meta_v1.ObjectMeta{
+								Name:      storkDeploymentName,
+								Namespace: storkDeploymentNamespace,
 							},
 						},
 					},
-				}
-
-				err := Inst().S.DeleteTasks(ctx, deleteOpts)
-				Expect(err).NotTo(HaveOccurred())
+				},
 			}
-
-			taskID, err := sched.Instance().Schedule(t,
-				sched.Periodic(time.Second),
-				time.Now(), true)
+			logrus.Infof("Execute task for killing stork")
+			err := Inst().S.DeleteTasks(ctx, nil)
 			Expect(err).NotTo(HaveOccurred())
-			defer sched.Instance().Cancel(taskID)
 		})
 
 		for _, namespace := range bkpNamespaces {
@@ -281,6 +268,16 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 						backupName, err))
 			})
 		}
+
+		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
+			for _, ctx := range contexts {
+				TearDownContext(ctx, map[string]bool{
+					SkipClusterScopedObjects:                    true,
+					scheduler.OptionsWaitForResourceLeakCleanup: true,
+					scheduler.OptionsWaitForDestroy:             true,
+				})
+			}
+		})
 
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
@@ -307,14 +304,6 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			})
 		}
 
-		Step("teardown all applications on source cluster before switching context to destination cluster", func() {
-			for _, ctx := range contexts {
-				TearDownContext(ctx, map[string]bool{
-					SkipClusterScopedObjects: true,
-				})
-			}
-		})
-
 		// Change namespaces to restored apps only after backed up apps are cleaned up
 		// to avoid switching back namespaces to backup namespaces
 		Step("Validate Restored applications", func() {
@@ -326,12 +315,11 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 
 			// Populate contexts
 			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, defaultTimeout, defaultRetryInterval)
-				Expect(err).NotTo(HaveOccurred())
+				ctx.SkipClusterScopedObject = true
+				ctx.SkipVolumeValidation = true
 			}
 
-			// TODO(stgleb): Uncomment it in future when problem with StorageClasses is resolved
-			// ValidateApplications(contexts)
+			ValidateApplications(contexts)
 		})
 
 		Step("teardown all restored apps", func() {
@@ -717,15 +705,15 @@ func getAWSDetailsFromEnv() (id string, secret string, endpoint string,
 		"AWS_SECRET_ACCESS_KEY Environment variable should not be empty")
 
 	endpoint = os.Getenv("S3_ENDPOINT")
-	Expect(secret).NotTo(Equal(""),
+	Expect(endpoint).NotTo(Equal(""),
 		"S3_ENDPOINT Environment variable should not be empty")
 
 	s3Region = os.Getenv("S3_REGION")
-	Expect(secret).NotTo(Equal(""),
+	Expect(s3Region).NotTo(Equal(""),
 		"S3_REGION Environment variable should not be empty")
 
 	disableSSL := os.Getenv("S3_DISABLE_SSL")
-	Expect(secret).NotTo(Equal(""),
+	Expect(disableSSL).NotTo(Equal(""),
 		"S3_DISABLE_SSL Environment variable should not be empty")
 
 	disableSSLBool, err := strconv.ParseBool(disableSSL)

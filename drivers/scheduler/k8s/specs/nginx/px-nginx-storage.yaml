@@ -11,10 +11,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: px-nginx-pvc
-  annotations:
-    azure-storage-class: azure-file-sc-nginx
 spec:
-  storageClassName: px-nginx-sc
+  storageClassName: nginx-sc
   accessModes:
     - ReadWriteMany
   resources:
@@ -30,9 +28,8 @@ metadata:
     px/secret-namespace: "_NAMESPACE_"
     px/secret-key: nginx-secret
     px/secure: "true"
-    azure-storage-class: azure-file-sc-nginx
 spec:
-  storageClassName: px-nginx-sc
+  storageClassName: nginx-sc
   accessModes:
     - ReadWriteMany
   resources:
