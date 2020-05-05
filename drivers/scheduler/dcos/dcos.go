@@ -381,8 +381,7 @@ func (d *dcos) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[strin
 	return result, nil
 }
 
-func (d *dcos) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration,
-	options *scheduler.VolumeOptions) error {
+func (d *dcos) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
 	inspectDockerVolumeFunc := func(volName string, _ map[string]string) error {
 		t := func() (interface{}, bool, error) {
 			out, err := d.dockerClient.VolumeInspect(context.Background(), volName)
@@ -401,7 +400,7 @@ func (d *dcos) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval ti
 	return d.volumeOperation(ctx, inspectDockerVolumeFunc)
 }
 
-func (d *dcos) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) ([]*volume.Volume, error) {
+func (d *dcos) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 
 	deleteDockerVolumeFunc := func(volName string, _ map[string]string) error {
@@ -423,14 +422,6 @@ func (d *dcos) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOp
 		return nil, err
 	}
 	return vols, nil
-}
-
-func (d *dcos) GetVolumeDriverVolumeName(name string, namespace string) (string, error) {
-	// TODO: Add implementation
-	return "", &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "GetVolumeDriverVolumeName()",
-	}
 }
 
 func (d *dcos) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
