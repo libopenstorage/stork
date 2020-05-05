@@ -17,6 +17,17 @@ spec:
       labels:
         app: postgres
     spec:
+      schedulerName: stork
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: "app"
+                operator: In
+                values:
+                - postgres
+            topologyKey: "kubernetes.io/hostname"
       containers:
       - name: postgres
         image: postgres:9.5
