@@ -415,11 +415,19 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*v1.ServiceAccount); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*rbacv1.ClusterRole); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*rbacv1.ClusterRoleBinding); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*rbacv1.Role); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*rbacv1.RoleBinding); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*batchv1beta1.CronJob); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*v1.LimitRange); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*networkingv1beta1.Ingress); ok {
 		return specObj, nil
 	}
 
