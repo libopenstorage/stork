@@ -611,7 +611,7 @@
 
 [[projects]]
   branch = "release-7.0"
-  digest = "1:e98690e3989ae50dbdcda3041d02b7f51327146590e5a99eb9d0a0d63376a351"
+  digest = "1:9aa9298d16e4a4082adcabf6ff1e3ccc956b39c07ab52d08391def56ba206431"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -621,6 +621,7 @@
     "api/errors",
     "api/spec",
     "cluster",
+    "config",
     "objectstore",
     "osdconfig",
     "pkg/auth",
@@ -630,14 +631,16 @@
     "pkg/grpcserver",
     "pkg/parser",
     "pkg/sched",
+    "pkg/storagepool",
     "pkg/units",
     "pkg/util",
     "schedpolicy",
     "secrets",
     "volume",
+    "volume/drivers/pwx",
   ]
   pruneopts = "UT"
-  revision = "6f72c3de1e77ffdcb2c4b346c9fae061088c4711"
+  revision = "e8909c08089ee89809fdcb12f339dc696655d9de"
 
 [[projects]]
   branch = "master"
@@ -2023,6 +2026,7 @@
     "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
+    "github.com/libopenstorage/openstorage/volume/drivers/pwx",
     "github.com/libopenstorage/secrets",
     "github.com/libopenstorage/secrets/k8s",
     "github.com/openshift/api/apps/v1",
@@ -2069,7 +2073,6 @@
     "google.golang.org/api/googleapi",
     "google.golang.org/api/option",
     "google.golang.org/grpc",
-    "google.golang.org/grpc/credentials",
     "gopkg.in/yaml.v2",
     "k8s.io/api/admission/v1beta1",
     "k8s.io/api/admissionregistration/v1beta1",
