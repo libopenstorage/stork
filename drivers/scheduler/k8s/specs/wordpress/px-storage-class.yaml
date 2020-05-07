@@ -1,0 +1,22 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: portworx-sc-cms-repl3-shared
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  priority_io: "high"
+  shared: "true"
+  io_profile: "cms"
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: portworx-sc-db-repl3
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  io_profile: "db"
+  priority_io: "high"
+allowVolumeExpansion: true

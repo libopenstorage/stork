@@ -8,8 +8,16 @@ if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
 
-if [ -z "${PROVIDER}" ]; then
-    PROVIDER="none"
+if [ -z "${VOLUME_PROVIDER}" ]; then
+    VOLUME_PROVIDER="none"
+fi
+
+if [ -z "${OBJECT_STORE_PROVIDER}" ]; then
+    OBJECT_STORE_PROVIDER="aws"
+fi
+
+if [ -z "${SPEC_DIR}" ]; then
+    SPEC_DIR="../drivers/scheduler/k8s/specs"
 fi
 
 if [ -z "${SCHEDULER}" ]; then
@@ -249,8 +257,7 @@ else
     K8S_VENDOR_KEY=node-role.kubernetes.io/master
 fi
 
-echo "Deploying torpedo pod..."
-cat <<EOF | kubectl create -f -
+cat > torpedo.yaml <<EOF
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -334,7 +341,7 @@ spec:
             "$SKIP_ARG",
             $TEST_SUITE
             "--",
-            "--spec-dir", "../drivers/scheduler/k8s/specs",
+            "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
             "--backup-driver", "$BACKUP_DRIVER",
@@ -367,8 +374,10 @@ spec:
       value: "${TORPEDO_SSH_KEY}"
     - name: AZURE_TENANT_ID
       value: "${AZURE_TENANTID}"
-    - name: PROVIDER
-      value: "${PROVIDER}"
+    - name: VOLUME_PROVIDER
+      value: "${VOLUME_PROVIDER}"
+    - name: OBJECT_STORE_PROVIDER
+      value: "${OBJECT_STORE_PROVIDER}"
     - name: AZURE_CLIENT_ID
       value: "${AZURE_CLIENTID}"
     - name: AZURE_CLIENT_SECRET
@@ -395,6 +404,9 @@ spec:
   restartPolicy: Never
   serviceAccountName: torpedo-account
 EOF
+
+echo "Deploying torpedo pod..."
+kubectl apply -f torpedo.yaml
 
 echo "Waiting for torpedo to start running"
 

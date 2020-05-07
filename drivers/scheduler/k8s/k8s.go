@@ -56,6 +56,8 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/portworx/torpedo/drivers"
 )
 
 const (
@@ -74,6 +76,12 @@ const (
 	ZoneK8SNodeLabel = "failure-domain.beta.kubernetes.io/zone"
 	// RegionK8SNodeLabel is node label describing region of the k8s node
 	RegionK8SNodeLabel = "failure-domain.beta.kubernetes.io/region"
+	// AzureStorageClassKey key for storing azure storage class
+	AzureStorageClassKey = "azure-storage-class"
+	// AwsStorageClassKey key for storing aws storage class
+	AwsStorageClassKey = "aws-storage-class"
+	// GkeStorageClassKey key for storing gke storage class
+	GkeStorageClassKey = "gke-storage-class"
 )
 
 const (
@@ -102,6 +110,7 @@ const (
 	secretNamespaceKey = "secret_namespace"
 	secretName         = "openstorage.io/auth-secret-name"
 	secretNamespace    = "openstorage.io/auth-secret-namespace"
+	storageClassKey    = "volume.beta.kubernetes.io/storage-class"
 )
 
 var (
@@ -126,6 +135,7 @@ type K8s struct {
 	SpecFactory         *spec.Factory
 	NodeDriverName      string
 	VolDriverName       string
+	ProviderName        string
 	secretConfigMapName string
 	customConfig        map[string]scheduler.AppConfig
 	eventsStorage       map[string][]scheduler.Event
@@ -160,6 +170,7 @@ func (k *K8s) String() string {
 func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.NodeDriverName = schedOpts.NodeDriverName
 	k.VolDriverName = schedOpts.VolDriverName
+	k.ProviderName = schedOpts.ProviderName
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
 	k.customConfig = schedOpts.CustomAppConfig
 	k.eventsStorage = make(map[string][]scheduler.Event)
@@ -783,7 +794,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
-		obj.Provisioner = volume.GetStorageProvisioner()
 
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if errors.IsAlreadyExists(err) {
@@ -808,6 +818,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 		if len(options.Labels) > 0 {
 			k.addLabelsToPVC(obj, options.Labels)
 		}
+
+		k.substitutePvcWithStorageClass(obj)
 
 		pvc, err := k8sCore.CreatePersistentVolumeClaim(obj)
 		if errors.IsAlreadyExists(err) {
@@ -1035,6 +1047,18 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 		if options.Scheduler != "" {
 			obj.Spec.Template.Spec.SchedulerName = options.Scheduler
 		}
+
+		var pvcList []v1.PersistentVolumeClaim
+		for _, pvc := range obj.Spec.VolumeClaimTemplates {
+			if pvc.Annotations == nil {
+				pvc.Annotations = make(map[string]string)
+			}
+
+			k.substitutePvcWithStorageClass(&pvc)
+			pvcList = append(pvcList, pvc)
+		}
+		obj.Spec.VolumeClaimTemplates = pvcList
+
 		ss, err := k8sApps.CreateStatefulSet(obj)
 		if errors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
@@ -3417,6 +3441,28 @@ func (k *K8s) UpdateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 // ListAutopilotRules lists AutopilotRules
 func (k *K8s) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	return k8sAutopilot.ListAutopilotRules()
+}
+
+// Update pvc with appropriate storage class
+func (k *K8s) substitutePvcWithStorageClass(pvc *v1.PersistentVolumeClaim) {
+	var storageClassKey string
+
+	switch k.ProviderName {
+	case drivers.ProviderAzure:
+		storageClassKey = AzureStorageClassKey
+	case drivers.ProviderAws:
+		storageClassKey = AwsStorageClassKey
+	case drivers.ProviderGke:
+		storageClassKey = GkeStorageClassKey
+	default:
+		return
+	}
+
+	if scName, ok := pvc.Annotations[storageClassKey]; ok {
+		logrus.Infof("Substitute original pvc storage class with %s", scName)
+		pvc.Annotations[storageClassKey] = scName
+		pvc.Spec.StorageClassName = &scName
+	}
 }
 
 func insertLineBreak(note string) string {
