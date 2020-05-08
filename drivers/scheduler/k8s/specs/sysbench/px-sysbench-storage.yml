@@ -23,9 +23,8 @@ parameters:
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: mysql-data
+  name: sysbench-mysql-data
   annotations:
-    volume.beta.kubernetes.io/storage-class: portworx-sc-db-repl3
     azure-storage-class: azure-mysql-sysbench-sc
 spec:
   storageClassName: mysql-sysbench-sc
