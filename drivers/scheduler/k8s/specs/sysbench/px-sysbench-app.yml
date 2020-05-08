@@ -55,4 +55,4 @@ spec:
       volumes:
         - name: mysql-persistent-storage
           persistentVolumeClaim:
-            claimName: mysql-data
+            claimName: sysbench-mysql-data
