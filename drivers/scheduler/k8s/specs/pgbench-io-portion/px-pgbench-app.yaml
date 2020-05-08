@@ -1,3 +1,6 @@
+# pgbench container becomes ready as soon as IO_PORTION amount of IO finishes
+# For e.g if SIZE=4 and IO_PORTION=0.25, as soon as pgbench writes 1GB of data,
+# pod becomes ready
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,7 +44,7 @@ spec:
           - mountPath: /var/lib/postgresql/data
             name: pgbenchdb
         - name: pgbench
-          image: portworx/torpedo-pgbench:latest
+          image: portworx/torpedo-pgbench:ioportion
           imagePullPolicy: "Always"
           env:
             - name: PG_HOST
@@ -49,7 +52,9 @@ spec:
             - name: PG_USER
               value: pgbench
             - name: SIZE
-              value: "10"
+              value: "4"
+            - name: IO_PORTION
+              value: "0.25"
           readinessProbe:
             exec:
               command: ["sh", "-c", "cat /pgbench/pgbench_state.file"]

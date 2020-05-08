@@ -188,9 +188,6 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			//ValidateApplications(contexts)
 		})
 
-		// Wait for IO to run
-		time.Sleep(Inst().IOWaitTimeout)
-
 		// TODO(stgleb): Add multi-namespace backup when ready in px-backup
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
@@ -367,9 +364,6 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			}
 			ValidateApplications(contexts)
 		})
-
-		// Wait for IO to run
-		time.Sleep(Inst().IOWaitTimeout)
 
 		for _, ctx := range contexts {
 			for i := 0; i < Inst().ScaleFactor; i++ {
