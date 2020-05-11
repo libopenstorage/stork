@@ -205,9 +205,9 @@ fi
 
 if [ "$focus_tests" != "" ] ; then
      echo "Running focussed test: ${focus_tests}"
-	sed -i 's/'FOCUS_TESTS'/- -test.run='"$focus_tests"'/g' /testspecs/stork-test-pod.yaml
+	sed -i 's|'FOCUS_TESTS'|- -test.run='"$focus_tests"'|g' /testspecs/stork-test-pod.yaml
 else 
-	sed -i 's/'FOCUS_TESTS'/''/g' /testspecs/stork-test-pod.yaml
+	sed -i 's|'FOCUS_TESTS'|''|g' /testspecs/stork-test-pod.yaml
 fi
 
 sed -i 's/'SHORT_FLAG'/'"$short_test"'/g' /testspecs/stork-test-pod.yaml
