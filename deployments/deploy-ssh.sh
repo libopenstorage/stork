@@ -133,7 +133,7 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
     TEST_SUITE='"bin/asg.test",
             "bin/autopilot.test",
             "bin/basic.test",
-	          "bin/backup.test",
+            "bin/backup.test",
             "bin/reboot.test",
             "bin/upgrade.test",
             "bin/drive_failure.test",
