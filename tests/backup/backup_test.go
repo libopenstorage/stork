@@ -187,7 +187,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			}
 			// TODO(stgleb): Adjust this logic to skip cluster scoped resources
 			// that do not get backed up
-			//ValidateApplications(contexts)
+			ValidateApplications(contexts)
 		})
 
 		// TODO(stgleb): Parametrize this timeout
@@ -369,8 +369,6 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			}
 			ValidateApplications(contexts)
 		})
-
-		time.Sleep(time.Minute * 20)
 
 		for _, ctx := range contexts {
 			for i := 0; i < Inst().ScaleFactor; i++ {
