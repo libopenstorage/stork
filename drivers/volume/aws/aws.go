@@ -34,6 +34,8 @@ const (
 	driverName = "aws"
 	// provisioner names for ebs volumes
 	provisionerName = "kubernetes.io/aws-ebs"
+	// CSI provisioner name for ebs volumes
+	csiProvisionerName = "ebs.csi.aws.com"
 	// pvcProvisionerAnnotation is the annotation on PVC which has the
 	// provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -166,7 +168,7 @@ func (a *aws) OwnsPV(pv *v1.PersistentVolume) bool {
 }
 
 func isCsiProvisioner(provisioner string) bool {
-	return false
+	return csiProvisionerName == provisioner
 }
 
 func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
