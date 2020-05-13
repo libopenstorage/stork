@@ -29,6 +29,8 @@ const (
 	driverName = "gce"
 	// provisioner names for gce volumes
 	provisionerName = "kubernetes.io/gce-pd"
+	// CSI provisioner name for for gce volumes
+	csiProvisionerName = "pd.csi.storage.gke.io"
 	// pvcProvisionerAnnotation is the annotation on PVC which has the
 	// provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -141,7 +143,7 @@ func (g *gcp) OwnsPV(pv *v1.PersistentVolume) bool {
 }
 
 func isCsiProvisioner(provisioner string) bool {
-	return false
+	return csiProvisionerName == provisioner
 }
 
 func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
