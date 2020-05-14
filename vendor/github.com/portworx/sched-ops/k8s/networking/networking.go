@@ -1,13 +1,11 @@
-package batch
+package networking
 
 import (
 	"fmt"
 	"os"
 	"sync"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	batchv1client "k8s.io/client-go/kubernetes/typed/batch/v1"
-	batchv1beta1client "k8s.io/client-go/kubernetes/typed/batch/v1beta1"
+	networkingv1betaclient "k8s.io/client-go/kubernetes/typed/networking/v1beta1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -15,14 +13,11 @@ import (
 var (
 	instance Ops
 	once     sync.Once
-
-	deleteForegroundPolicy = metav1.DeletePropagationForeground
 )
 
-// Ops is an interface to perform kubernetes related operations on the batch resources.
+// Ops is an interface to perform kubernetes related operations on the networking resources.
 type Ops interface {
-	JobOps
-	CronOps
+	IngressOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
@@ -43,22 +38,22 @@ func SetInstance(i Ops) {
 	instance = i
 }
 
-// New builds a new batch client.
-func New(client batchv1client.BatchV1Interface) *Client {
+// New builds a new networking client.
+func New(networking networkingv1betaclient.NetworkingV1beta1Interface) *Client {
 	return &Client{
-		batch: client,
+		networking: networking,
 	}
 }
 
-// NewForConfig builds a new batch client for the given config.
+// NewForConfig builds a new networking client for the given config.
 func NewForConfig(c *rest.Config) (*Client, error) {
-	batch, err := batchv1client.NewForConfig(c)
+	networking, err := networkingv1betaclient.NewForConfig(c)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		batch: batch,
+		networking: networking,
 	}, nil
 }
 
@@ -73,22 +68,21 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 	return newInstance, nil
 }
 
-// Client is a wrapper for the kubernetes batch client.
+// Client provides a wrapper for the kubernetes networking client.
 type Client struct {
-	config       *rest.Config
-	batch        batchv1client.BatchV1Interface
-	batchv1beta1 batchv1beta1client.BatchV1beta1Interface
+	config     *rest.Config
+	networking networkingv1betaclient.NetworkingV1beta1Interface
 }
 
-// SetConfig sets the config and resets the client.
+// SetConfig sets the config and resets the client
 func (c *Client) SetConfig(cfg *rest.Config) {
 	c.config = cfg
-	c.batch = nil
+	c.networking = nil
 }
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.batch != nil {
+	if c.networking != nil {
 		return nil
 	}
 
@@ -142,7 +136,7 @@ func (c *Client) loadClient() error {
 
 	var err error
 
-	c.batch, err = batchv1client.NewForConfig(c.config)
+	c.networking, err = networkingv1betaclient.NewForConfig(c.config)
 	if err != nil {
 		return err
 	}
