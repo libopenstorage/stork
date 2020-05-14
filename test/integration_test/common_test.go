@@ -173,7 +173,7 @@ func destroyAndWait(t *testing.T, ctxs []*scheduler.Context) {
 	for _, ctx := range ctxs {
 		err := schedulerDriver.WaitForDestroy(ctx, defaultWaitTimeout)
 		require.NoError(t, err, "Error waiting for destroy of ctx: %+v", ctx)
-		_, err = schedulerDriver.DeleteVolumes(ctx)
+		_, err = schedulerDriver.DeleteVolumes(ctx, nil)
 		require.NoError(t, err, "Error deleting volumes in ctx: %+v", ctx)
 	}
 }
