@@ -611,7 +611,7 @@
 
 [[projects]]
   branch = "release-7.0"
-  digest = "1:f49ae50438ba2c97f0a36e790731f34e973d2b46d3526bbd634c5fc306abe042"
+  digest = "1:e98690e3989ae50dbdcda3041d02b7f51327146590e5a99eb9d0a0d63376a351"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -629,6 +629,7 @@
     "pkg/dbg",
     "pkg/grpcserver",
     "pkg/parser",
+    "pkg/sched",
     "pkg/units",
     "pkg/util",
     "schedpolicy",
@@ -817,7 +818,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:a29a78f0fe27b1734e457687eeac585fcdb76a93ae0b4206b012b4628f8a7ead"
+  digest = "1:b37682af267432318e0f30746339f826280c2876d33e0abc1c985f8fb6396e78"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -830,6 +831,7 @@
     "k8s/dynamic",
     "k8s/errors",
     "k8s/externalstorage",
+    "k8s/networking",
     "k8s/openshift",
     "k8s/rbac",
     "k8s/storage",
@@ -837,13 +839,15 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "9178a48cfc33ad50ffa8e2966d6a3f07adf7d9d5"
+  revision = "30fe0dc403445ed92659f59a1954da1cc8a86697"
 
 [[projects]]
   branch = "master"
-  digest = "1:658480db60137146afdb35c072f988d42298d0c7bc70b92a8d8452537c52e5f7"
+  digest = "1:898816691aa2e7611983b67cd71758acfc6831186a4b61324045766573e1af5b"
   name = "github.com/portworx/torpedo"
   packages = [
+    "drivers",
+    "drivers/api",
     "drivers/node",
     "drivers/node/ssh",
     "drivers/scheduler",
@@ -857,10 +861,11 @@
     "drivers/volume/portworx/schedops",
     "pkg/aututils",
     "pkg/errors",
+    "pkg/osutils",
     "pkg/units",
   ]
   pruneopts = "UT"
-  revision = "157114f3d1a3f4b474b248fa5a1cdcc7c81ca35d"
+  revision = "f27481c58078e3e55dab1bd1b3d8323840299ca9"
 
 [[projects]]
   branch = "master"
