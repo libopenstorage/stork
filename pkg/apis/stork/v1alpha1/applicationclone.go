@@ -36,7 +36,8 @@ type ApplicationCloneSpec struct {
 	PreExecRule  string            `json:"preExecRule"`
 	PostExecRule string            `json:"postExecRule"`
 	// ReplacePolicy to decide how to react when a object conflict occurs in the cloning process
-	ReplacePolicy ApplicationCloneReplacePolicyType `json:"replacePolicy"`
+	ReplacePolicy                ApplicationCloneReplacePolicyType `json:"replacePolicy"`
+	IncludeOptionalResourceTypes []string                          `json:"includeOptionalResourceTypes"`
 }
 
 // ApplicationCloneStatus defines the status of the clone
