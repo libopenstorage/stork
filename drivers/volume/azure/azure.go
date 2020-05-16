@@ -32,6 +32,8 @@ const (
 	driverName = "azure"
 	// provisioner names for azure disks
 	provisionerName = "kubernetes.io/azure-disk"
+	// CSI provisioner names for azure disks
+	csiProvisionerName = "disk.csi.azure.com"
 	// pvcProvisionerAnnotation is the annotation on PVC which has the
 	// provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -197,7 +199,7 @@ func (a *azure) OwnsPV(pv *v1.PersistentVolume) bool {
 }
 
 func isCsiProvisioner(provisioner string) bool {
-	return false
+	return csiProvisionerName == provisioner
 }
 
 func (a *azure) findExistingSnapshot(tags map[string]string) (*compute.Snapshot, error) {

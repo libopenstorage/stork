@@ -537,7 +537,8 @@ func (a *ApplicationRestoreController) applyResources(
 		skip, err := a.resourceCollector.PrepareResourceForApply(
 			o,
 			restore.Spec.NamespaceMapping,
-			pvNameMappings)
+			pvNameMappings,
+			restore.Spec.IncludeOptionalResourceTypes)
 		if err != nil {
 			return err
 		}

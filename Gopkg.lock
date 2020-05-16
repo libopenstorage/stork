@@ -1857,7 +1857,7 @@
   version = "kubernetes-1.16.6"
 
 [[projects]]
-  digest = "1:025f785d59f3327d14f9ef94b0fe0a044d67a1615dde354e763947457d4463db"
+  digest = "1:3d4d9153f2d42a04e7bb52a67600679e554a88210ad6e2bbc88979a92fee45d2"
   name = "k8s.io/kubernetes"
   packages = [
     "pkg/api/legacyscheme",
@@ -1876,6 +1876,7 @@
     "pkg/util/goroutinemap/exponentialbackoff",
     "pkg/util/node",
     "pkg/util/parsers",
+    "pkg/util/slice",
   ]
   pruneopts = "UT"
   revision = "72c30166b2105cd7d3350f2c28a219e6abcd79eb"
@@ -2075,6 +2076,7 @@
     "k8s.io/api/apps/v1",
     "k8s.io/api/apps/v1beta1",
     "k8s.io/api/apps/v1beta2",
+    "k8s.io/api/batch/v1",
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
@@ -2139,6 +2141,7 @@
     "k8s.io/kubernetes/pkg/registry/core/service/portallocator",
     "k8s.io/kubernetes/pkg/scheduler/api",
     "k8s.io/kubernetes/pkg/util/node",
+    "k8s.io/kubernetes/pkg/util/slice",
     "sigs.k8s.io/controller-runtime/pkg/client",
     "sigs.k8s.io/controller-runtime/pkg/controller",
     "sigs.k8s.io/controller-runtime/pkg/handler",

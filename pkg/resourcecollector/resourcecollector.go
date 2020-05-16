@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
+	"k8s.io/kubernetes/pkg/util/slice"
 )
 
 const (
@@ -83,7 +84,7 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	return nil
 }
 
-func resourceToBeCollected(resource metav1.APIResource) bool {
+func resourceToBeCollected(resource metav1.APIResource, optionalResourceTypes []string) bool {
 	switch resource.Kind {
 	case "PersistentVolumeClaim",
 		"PersistentVolume",
@@ -109,13 +110,20 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"IBPOrderer",
 		"CronJob":
 		return true
+	case "Job":
+		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
+			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower)
 	default:
 		return false
 	}
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
-func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map[string]string, allDrivers bool) ([]runtime.Unstructured, error) {
+func (r *ResourceCollector) GetResources(
+	namespaces []string,
+	labelSelectors map[string]string,
+	optionalResourceTypes []string,
+	allDrivers bool) ([]runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, err
@@ -137,7 +145,7 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource) {
+			if !resourceToBeCollected(resource, optionalResourceTypes) {
 				continue
 			}
 			for _, ns := range namespaces {
@@ -372,6 +380,11 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 			if err != nil {
 				return fmt.Errorf("error preparing ClusterRoleBindings resource %v: %v", metadata.GetName(), err)
 			}
+		case "Job":
+			err := r.prepareJobForCollection(o, namespaces)
+			if err != nil {
+				return fmt.Errorf("error preparing ClusterRoleBindings resource %v: %v", metadata.GetName(), err)
+			}
 		}
 
 		content := o.UnstructuredContent()
@@ -397,6 +410,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	object runtime.Unstructured,
 	namespaceMappings map[string]string,
 	pvNameMappings map[string]string,
+	optionalResourceTypes []string,
 ) (bool, error) {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
@@ -419,6 +433,12 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	}
 
 	switch objectType.GetKind() {
+	case "Job":
+		if slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
+			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower) {
+			return true, nil
+		}
+		return false, nil
 	case "PersistentVolume":
 		return r.preparePVResourceForApply(object, pvNameMappings)
 	case "PersistentVolumeClaim":
