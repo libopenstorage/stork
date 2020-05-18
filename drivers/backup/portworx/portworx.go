@@ -516,6 +516,49 @@ func (p *portworx) WaitForBackupDeletion(
 	return nil
 }
 
+// WaitForDeletePending checking if a given backup object is in delete pending state
+func (p *portworx) WaitForDeletePending(
+	ctx context.Context,
+	backupName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.BackupInspectRequest{
+		Name:  backupName,
+		OrgId: orgID,
+	}
+	var backupError error
+	f := func() (interface{}, bool, error) {
+		inspectBackupResp, err := p.backupManager.Inspect(ctx, req)
+		if err != nil {
+			// Error occured, just retry
+			return nil, true, err
+		}
+
+		if inspectBackupResp == nil {
+			return nil, false, nil
+		}
+		// Check if backup delete status is complete
+		currentStatus := inspectBackupResp.GetBackup().GetStatus().GetStatus()
+		if currentStatus != api.BackupInfo_StatusInfo_DeletePending {
+			return nil,
+				true,
+				fmt.Errorf("backup [%v] is in [%s] state. Waiting to transition to delete pending",
+					req.GetName(), currentStatus)
+		}
+
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to transition to delete pending. Error:[%v] Reason:[%v]", err, backupError)
+	}
+
+	return nil
+}
+
 func (p *portworx) CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {
 	return p.restoreManager.Create(context.Background(), req)
 }

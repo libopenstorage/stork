@@ -150,6 +150,11 @@ type Backup interface {
 	WaitForBackupDeletion(ctx context.Context, backupName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 
+	// WaitForDeletePending waits for the backup to transitioned to
+	// delete pending state. API should poll every `timeBeforeRetry
+	WaitForDeletePending(ctx context.Context, backupName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
+
 	// GetVolumeBackupIDs return volume backup IDs of initiated backup
 	GetVolumeBackupIDs(ctx context.Context, backupName string, namespace string,
 		clusterObj *api.ClusterObject, orgID string) ([]string, error)
