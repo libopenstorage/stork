@@ -75,6 +75,11 @@ const (
 	storageProvisioner       = "STORAGE_PROVISIONER"
 	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
 	backupPathVar            = "BACKUP_LOCATION_PATH"
+
+	secretNameKey      = "secret_name"
+	secretNamespaceKey = "secret_namespace"
+	secretName         = "openstorage.io/auth-secret-name"
+	secretNamespace    = "openstorage.io/auth-secret-namespace"
 )
 
 var nodeDriver node.Driver

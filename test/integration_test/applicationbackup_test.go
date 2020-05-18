@@ -334,6 +334,12 @@ func createApplicationBackupWithAnnotation(
 			BackupLocation: backupLocation.Name,
 		},
 	}
+
+	err := addSecurityAnnotationBackup(appBackup)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add annotations to backup object: %v", err)
+	}
+
 	return storkops.Instance().CreateApplicationBackup(appBackup)
 }
 
@@ -530,7 +536,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "intervalscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	backupSchedule := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -545,7 +551,12 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	err = addSecurityAnnotationBackup(backupSchedule)
+	require.NoError(t, err, "failed to add annotations to object:%v error:%v", backupSchedule, err)
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(backupSchedule)
 	require.NoError(t, err, "Error creating interval applicationBackup schedule")
 	sleepTime := time.Duration((retain+1)*interval) * time.Minute
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v, sleeping for %v for schedule to trigger",
@@ -1236,4 +1247,47 @@ func getSyncedBackupWithAnnotation(appBackup *storkv1.ApplicationBackup, lookUpA
 		return nil, err
 	}
 	return backupToRestore, nil
+}
+
+// Add security annotations to backup/restore objects
+func addSecurityAnnotationBackup(spec interface{}) error {
+	if authTokenConfigMap != "" {
+		// Add security annotations if running with auth-enabled
+		configMap, err := core.Instance().GetConfigMap(authTokenConfigMap, "default")
+		if err != nil {
+			return &scheduler.ErrFailedToGetConfigMap{
+				Name:  configMapName,
+				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+			}
+		}
+		logrus.Debugf("Config Map details: %v", configMap.Data)
+		if _, ok := configMap.Data[secretNameKey]; !ok {
+			return fmt.Errorf("failed to get secret name from config map")
+		}
+		if _, ok := configMap.Data[secretNamespaceKey]; !ok {
+			return fmt.Errorf("failed to get secret namespace from config map")
+		}
+		if obj, ok := spec.(*storkv1.ApplicationBackup); ok {
+			if obj.Annotations == nil {
+				obj.Annotations = make(map[string]string)
+			}
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+
+		} else if obj, ok := spec.(*storkv1.ApplicationBackupSchedule); ok {
+			if obj.Annotations == nil {
+				obj.Annotations = make(map[string]string)
+			}
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		} else if obj, ok := spec.(*storkv1.ApplicationRestore); ok {
+			if obj.Annotations == nil {
+				obj.Annotations = make(map[string]string)
+			}
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
+	}
+
+	return nil
 }
