@@ -185,9 +185,14 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 					bkpNamespaces = append(bkpNamespaces, namespace)
 				}
 			}
-			//ValidateApplications(contexts)
+			// TODO(stgleb): Adjust this logic to skip cluster scoped resources
+			// that do not get backed up
+			ValidateApplications(contexts)
 		})
 
+		// TODO(stgleb): Parametrize this timeout
+		// Wait for some IO to run
+		time.Sleep(time.Minute * 20)
 		// TODO(stgleb): Add multi-namespace backup when ready in px-backup
 		for _, namespace := range bkpNamespaces {
 			backupName := fmt.Sprintf("%s-%s", BackupNamePrefix, namespace)
