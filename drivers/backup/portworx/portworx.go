@@ -399,9 +399,17 @@ func (p *portworx) GetVolumeBackupIDs(
 		return volumeBackupIDs, err
 	}
 
+	if len(storkApplicationBackupCR.Status.Volumes) == 0 {
+		return nil, fmt.Errorf("no volumes are being backed up by backup [%s]/applicationBackup CR [%s]",
+			backupName, storkApplicationBackupCRName)
+	}
+
 	for _, backupVolume := range storkApplicationBackupCR.Status.Volumes {
 		if backupVolume.Status == "InProgress" && backupVolume.BackupID != "" {
 			volumeBackupIDs = append(volumeBackupIDs, backupVolume.BackupID)
+		} else {
+			logrus.Debugf("Status of backup of volume [+%v] is [%s]. BackupID: [%+v] Reason: [%+v]",
+				backupVolume, backupVolume.Status, backupVolume.BackupID, backupVolume.Reason)
 		}
 	}
 	return volumeBackupIDs, nil

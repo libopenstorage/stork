@@ -1031,6 +1031,8 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to inspect cluster [%s] in org [%s]. Error: [%v]",
 			clusterName, orgID, err))
+	Expect(clusterInspectRes).NotTo(BeNil(),
+		"Got an empty response while inspecting cluster [%s] in org [%s]", clusterName, orgID)
 
 	cluster := clusterInspectRes.GetCluster()
 	volumeBackupIDs, err := backupDriver.GetVolumeBackupIDs(context.Background(),
@@ -1038,6 +1040,8 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to get volume backup IDs for backup [%s] in org [%s]. Error: [%v]",
 			backupName, orgID, err))
+	Expect(len(volumeBackupIDs)).NotTo(Equal(0),
+		"Got empty list of volumeBackup IDs from backup driver")
 
 	for _, backupID := range volumeBackupIDs {
 		n, err := Inst().V.GetNodeForBackup(backupID)
