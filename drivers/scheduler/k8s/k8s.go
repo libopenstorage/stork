@@ -793,9 +793,12 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
-		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
-		obj.Provisioner = volume.GetStorageProvisioner()
-		
+
+		if volume.GetStorageProvisioner() == "csi" {
+			logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
+			obj.Provisioner = volume.GetStorageProvisioner()
+		}
+
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if errors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
