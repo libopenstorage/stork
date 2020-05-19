@@ -794,7 +794,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *v1.Namespace, app *spec.
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if volume.GetStorageProvisioner() == "csi" {
+		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
 			logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
 			obj.Provisioner = volume.GetStorageProvisioner()
 		}
