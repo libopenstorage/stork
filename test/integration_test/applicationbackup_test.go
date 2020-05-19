@@ -553,6 +553,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 		},
 	}
 
+	// Will add security annotations if required
 	err = addSecurityAnnotationBackup(backupSchedule)
 	require.NoError(t, err, "failed to add annotations to object:%v error:%v", backupSchedule, err)
 
@@ -606,7 +607,7 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "dailyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	backupSchedule := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -621,7 +622,13 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	// Will add security annotations if required
+	err = addSecurityAnnotationBackup(backupSchedule)
+	require.NoError(t, err, "failed to add annotations to object:%v error:%v", backupSchedule, err)
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(backupSchedule)
 	require.NoError(t, err, "Error creating daily applicationBackup schedule")
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v",
 		scheduleName, namespace)
@@ -659,7 +666,7 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "weeklyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	backupSchedule := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -674,7 +681,12 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+	// Will add security annotations if required
+	err = addSecurityAnnotationBackup(backupSchedule)
+	require.NoError(t, err, "failed to add annotations to object:%v error:%v", backupSchedule, err)
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(backupSchedule)
 	require.NoError(t, err, "Error creating weekly applicationBackup schedule")
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v",
 		scheduleName, namespace)
@@ -716,7 +728,7 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "monthlyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	backupSchedule := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -731,7 +743,13 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	// Will add security annotations if required
+	err = addSecurityAnnotationBackup(backupSchedule)
+	require.NoError(t, err, "failed to add annotations to object:%v error:%v", backupSchedule, err)
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(backupSchedule)
 	require.NoError(t, err, "Error creating monthly applicationBackup schedule")
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v",
 		scheduleName, namespace)
@@ -767,7 +785,7 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 
 	scheduleName := "invalidpolicyschedule"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	backupSchedule := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -782,7 +800,13 @@ func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	// Will add security annotations if required
+	err = addSecurityAnnotationBackup(backupSchedule)
+	require.NoError(t, err, "failed to add annotations to object:%v error:%v", backupSchedule, err)
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(backupSchedule)
 	require.NoError(t, err, "Error creating applicationBackup schedule with invalid policy")
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v",
 		scheduleName, namespace)
