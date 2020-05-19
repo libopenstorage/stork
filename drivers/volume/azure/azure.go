@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
 	"github.com/Azure/go-autorest/autorest"
+	azure_rest "github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/Azure/go-autorest/autorest/to"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -274,11 +275,23 @@ func (a *azure) StartBackup(
 		if snapshot, err := a.findExistingSnapshot(tags); err == nil && snapshot != nil {
 			volumeInfo.BackupID = *snapshot.Name
 		} else {
-			volume := pv.Spec.AzureDisk.DiskName
+			var volume string
+			if pv.Spec.AzureDisk != nil {
+				volume = pv.Spec.AzureDisk.DiskName
+			} else if pv.Spec.CSI != nil {
+				resource, err := azure_rest.ParseResourceID(pv.Spec.CSI.VolumeHandle)
+				if err != nil {
+					return nil, err
+				}
+				volume = resource.ResourceName
+			} else {
+				return nil, fmt.Errorf("azure disk info not found in PV %v", pvName)
+			}
 			disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, volume)
 			if err != nil {
 				return nil, err
 			}
+
 			snapshot := compute.Snapshot{
 				Name: to.StringPtr("stork-snapshot-" + string(uuid.NewUUID())),
 				SnapshotProperties: &compute.SnapshotProperties{
@@ -369,16 +382,17 @@ func (a *azure) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 func (a *azure) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 ) (*v1.PersistentVolume, error) {
-	if pv.Spec.CSI != nil {
-		pv.Spec.CSI.VolumeHandle = pv.Name
-		return pv, nil
-	}
-
-	pv.Spec.AzureDisk.DiskName = pv.Name
 	disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, pv.Name)
 	if err != nil {
 		return nil, err
 	}
+
+	if pv.Spec.CSI != nil {
+		pv.Spec.CSI.VolumeHandle = *disk.ID
+		return pv, nil
+	}
+
+	pv.Spec.AzureDisk.DiskName = pv.Name
 	pv.Spec.AzureDisk.DataDiskURI = *disk.ID
 
 	return pv, nil
