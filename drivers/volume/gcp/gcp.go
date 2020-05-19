@@ -180,7 +180,14 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
 		volume := pvc.Spec.VolumeName
-		pdName := pv.Spec.GCEPersistentDisk.PDName
+		var pdName string
+		if pv.Spec.GCEPersistentDisk != nil {
+			pdName = pv.Spec.GCEPersistentDisk.PDName
+		} else if pv.Spec.CSI != nil {
+			pdName = pv.Spec.CSI.VolumeHandle
+		} else {
+			return nil, fmt.Errorf("GCE PD info not found in PV %v", pvName)
+		}
 		// Get the zone from the PV, fallback to the zone where stork is running
 		// if the label is empty
 		volumeInfo.Zones = g.getZones(pv.Labels[v1.LabelZoneFailureDomain])
