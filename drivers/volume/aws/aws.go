@@ -201,7 +201,10 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		if err != nil {
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
-		ebsName := a.getEBSVolumeID(pv.Spec.AWSElasticBlockStore.VolumeID)
+		ebsName := a.getEBSVolumeID(pv)
+		if ebsName == "" {
+			return nil, fmt.Errorf("AWS EBS info not found in PV %v", pvName)
+		}
 
 		ebsVolume, err := a.getEBSVolume(ebsName, nil)
 		if err != nil {
@@ -277,7 +280,13 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 	return volumeInfos, nil
 }
 
-func (a *aws) getEBSVolumeID(volumeID string) string {
+func (a *aws) getEBSVolumeID(pv *v1.PersistentVolume) string {
+	var volumeID string
+	if pv.Spec.AWSElasticBlockStore != nil {
+		volumeID = pv.Spec.AWSElasticBlockStore.VolumeID
+	} else if pv.Spec.CSI != nil {
+		volumeID = pv.Spec.CSI.VolumeHandle
+	}
 	return regexp.MustCompile("vol-.*").FindString(volumeID)
 }
 
