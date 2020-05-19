@@ -47,7 +47,7 @@ const (
 	KubeconfigDirectory               = "/tmp"
 	SourceClusterName                 = "source-cluster"
 	DestinationClusterName            = "destination-cluster"
-	BackupRestoreCompletionTimeoutMin = 6
+	BackupRestoreCompletionTimeoutMin = 15
 	RetrySeconds                      = 30
 
 	storkDeploymentName      = "stork"
@@ -187,7 +187,7 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 			}
 			// TODO(stgleb): Adjust this logic to skip cluster scoped resources
 			// that do not get backed up
-			ValidateApplications(contexts)
+			ValidateApplicationsWithTimeout(contexts, time.Duration(10*time.Minute))
 		})
 
 		// TODO(stgleb): Parametrize this timeout
@@ -367,7 +367,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 			}
-			ValidateApplications(contexts)
+			ValidateApplicationsWithTimeout(contexts, time.Duration(10*time.Minute))
 		})
 
 		for _, ctx := range contexts {
