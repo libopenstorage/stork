@@ -29,6 +29,8 @@ type Context struct {
 	App *spec.AppSpec
 	// ScheduleOptions are options that callers to pass to influence the apps that get schduled
 	ScheduleOptions ScheduleOptions
+	// ReadinessTimeout time within which context is expected to be up
+	ReadinessTimeout time.Duration
 }
 
 // DeepCopy create a copy of Context

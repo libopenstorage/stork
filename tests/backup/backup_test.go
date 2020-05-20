@@ -58,6 +58,8 @@ const (
 
 	defaultTimeout       = 5 * time.Minute
 	defaultRetryInterval = 5 * time.Second
+
+	appReadinessTimeout = 10 * time.Minute
 )
 
 var (
@@ -181,13 +183,15 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
+					// Override default App readiness time out of 5 mins with 10 mins
+					ctx.ReadinessTimeout = appReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
 					bkpNamespaces = append(bkpNamespaces, namespace)
 				}
 			}
 			// TODO(stgleb): Adjust this logic to skip cluster scoped resources
 			// that do not get backed up
-			ValidateApplicationsWithTimeout(contexts, time.Duration(10*time.Minute))
+			ValidateApplications(contexts)
 		})
 
 		// TODO(stgleb): Parametrize this timeout
@@ -367,7 +371,11 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 			}
-			ValidateApplicationsWithTimeout(contexts, time.Duration(10*time.Minute))
+			// Override default App readiness time out of 5 mins with 10 mins
+			for _, ctx := range contexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+			}
+			ValidateApplications(contexts)
 		})
 
 		for _, ctx := range contexts {

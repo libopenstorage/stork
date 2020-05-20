@@ -177,19 +177,20 @@ func ValidateCleanup() {
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context) {
-	appScaleFactor := time.Duration(Inst().ScaleFactor)
-	ValidateContextWithTimeout(ctx, appScaleFactor*defaultTimeout)
-}
-
-// ValidateContextWithTimeout is the ginkgo spec for validating a scheduled context within specified timeout
-func ValidateContextWithTimeout(ctx *scheduler.Context, timeout time.Duration) {
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		var timeout time.Duration
+		appScaleFactor := time.Duration(Inst().ScaleFactor)
+		if ctx.ReadinessTimeout == time.Duration(0) {
+			timeout = appScaleFactor * defaultTimeout
+		} else {
+			timeout = appScaleFactor * ctx.ReadinessTimeout
+		}
+
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			ValidateVolumes(ctx)
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
@@ -311,16 +312,6 @@ func ValidateApplications(contexts []*scheduler.Context) {
 	Step("validate applications", func() {
 		for _, ctx := range contexts {
 			ValidateContext(ctx)
-		}
-	})
-}
-
-// ValidateApplicationsWithTimeout validates applications with
-// expectation of apps to come up within speficied timeout
-func ValidateApplicationsWithTimeout(contexts []*scheduler.Context, timeout time.Duration) {
-	Step("validate applications", func() {
-		for _, ctx := range contexts {
-			ValidateContextWithTimeout(ctx, timeout)
 		}
 	})
 }
