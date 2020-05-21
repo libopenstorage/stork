@@ -58,15 +58,16 @@ var _ = Describe("{RebootOneNode}", func() {
 							Expect(err).NotTo(HaveOccurred())
 						})
 
-						Step(fmt.Sprintf("wait for node: %s to go down", n.Name), func() {
-							time.Sleep(20 * time.Second)
-						})
-
 						Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
 							err = Inst().N.TestConnection(n, node.ConnectionOpts{
 								Timeout:         15 * time.Minute,
 								TimeBeforeRetry: 10 * time.Second,
 							})
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
+							err := Inst().V.WaitDriverDownOnNode(n)
 							Expect(err).NotTo(HaveOccurred())
 						})
 
