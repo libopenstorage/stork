@@ -47,7 +47,7 @@ const (
 	KubeconfigDirectory               = "/tmp"
 	SourceClusterName                 = "source-cluster"
 	DestinationClusterName            = "destination-cluster"
-	BackupRestoreCompletionTimeoutMin = 6
+	BackupRestoreCompletionTimeoutMin = 15
 	RetrySeconds                      = 30
 
 	storkDeploymentName      = "stork"
@@ -58,6 +58,8 @@ const (
 
 	defaultTimeout       = 5 * time.Minute
 	defaultRetryInterval = 5 * time.Second
+
+	appReadinessTimeout = 10 * time.Minute
 )
 
 var (
@@ -181,6 +183,8 @@ var _ = Describe("{BackupCreateKillStoreRestore}", func() {
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
 				for _, ctx := range appContexts {
+					// Override default App readiness time out of 5 mins with 10 mins
+					ctx.ReadinessTimeout = appReadinessTimeout
 					namespace := GetAppNamespace(ctx, taskName)
 					bkpNamespaces = append(bkpNamespaces, namespace)
 				}
@@ -366,6 +370,10 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
+			}
+			// Override default App readiness time out of 5 mins with 10 mins
+			for _, ctx := range contexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
 			}
 			ValidateApplications(contexts)
 		})

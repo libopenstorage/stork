@@ -178,13 +178,20 @@ func ValidateCleanup() {
 // ValidateContext is the ginkgo spec for validating a scheduled context
 func ValidateContext(ctx *scheduler.Context) {
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		var timeout time.Duration
+		appScaleFactor := time.Duration(Inst().ScaleFactor)
+		if ctx.ReadinessTimeout == time.Duration(0) {
+			timeout = appScaleFactor * defaultTimeout
+		} else {
+			timeout = appScaleFactor * ctx.ReadinessTimeout
+		}
+
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			ValidateVolumes(ctx)
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-			appScaleFactor := time.Duration(Inst().ScaleFactor)
-			err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			expect(err).NotTo(haveOccurred())
 		})
 
