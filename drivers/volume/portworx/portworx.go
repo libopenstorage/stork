@@ -2,7 +2,6 @@ package portworx
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/csv"
 	"fmt"
 	"math"
@@ -28,6 +27,7 @@ import (
 	auth_secrets "github.com/libopenstorage/openstorage/pkg/auth/secrets"
 	"github.com/libopenstorage/openstorage/pkg/grpcserver"
 	"github.com/libopenstorage/openstorage/volume"
+	"github.com/libopenstorage/openstorage/volume/drivers/pwx"
 	lsecrets "github.com/libopenstorage/secrets"
 	k8s_secrets "github.com/libopenstorage/secrets/k8s"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
@@ -45,7 +45,6 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -66,12 +65,6 @@ import (
 const (
 	// driverName is the name of the portworx driver implementation
 	driverName = "pxd"
-
-	// defaultServiceName is the default name of the portworx service
-	defaultServiceName = "portworx-service"
-
-	// defaultNamespace is the kubernetes namespace in which portworx daemon set runs
-	defaultNamespace = "kube-system"
 
 	// default API port
 	defaultAPIPort = 9001
@@ -138,12 +131,6 @@ const (
 
 	clusterDomainsTimeout = 1 * time.Minute
 
-	pxNamespace   = "PX_NAMESPACE"
-	pxServiceName = "PX_SERVICE_NAME"
-
-	pxRestPort     = "px-api"
-	pxSdkPort      = "px-sdk"
-	pxEnableTLS    = "PX_ENABLE_TLS"
 	pxSharedSecret = "PX_SHARED_SECRET"
 
 	restoreNamePrefix = "in-place-restore-"
@@ -204,8 +191,6 @@ type portworx struct {
 	clusterManager  cluster.Cluster
 	store           cache.Store
 	stopChannel     chan struct{}
-	restPort        int
-	sdkPort         int
 	sdkConn         *portworxGrpcConnection
 	id              string
 	endpoint        string
@@ -219,19 +204,11 @@ type portworxGrpcConnection struct {
 	endpoint    string
 }
 
-func isTLSEnabled() bool {
-	if v, err := strconv.ParseBool(os.Getenv(pxEnableTLS)); err == nil {
-		return v
-	}
-	return false
-}
-
 func (p *portworx) String() string {
 	return driverName
 }
 
 func (p *portworx) Init(_ interface{}) error {
-
 	if err := p.initPortworxClients(); err != nil {
 		return err
 	}
@@ -245,30 +222,13 @@ func (p *portworx) Stop() error {
 	return nil
 }
 
-func (pg *portworxGrpcConnection) setDialOptions(tls bool) error {
-	if tls {
-		// Setup a connection
-		capool, err := x509.SystemCertPool()
-		if err != nil {
-			return fmt.Errorf("failed to load CA system certs: %v", err)
-		}
-		pg.dialOptions = []grpc.DialOption{grpc.WithTransportCredentials(
-			credentials.NewClientTLSFromCert(capool, ""),
-		)}
-	} else {
-		pg.dialOptions = []grpc.DialOption{grpc.WithInsecure()}
-	}
-
-	return nil
-}
-
 func (pg *portworxGrpcConnection) getGrpcConn() (*grpc.ClientConn, error) {
 
 	if pg.conn == nil {
 		var err error
 		pg.conn, err = grpcserver.Connect(pg.endpoint, pg.dialOptions)
 		if err != nil {
-			return nil, fmt.Errorf("Error connecting to GRPC server[%s]: %v", pg.endpoint, err)
+			return nil, fmt.Errorf("error connecting to GRPC server[%s]: %v", pg.endpoint, err)
 		}
 	}
 	return pg.conn, nil
@@ -283,76 +243,34 @@ func (p *portworx) getClusterDomainClient() (api.OpenStorageClusterDomainsClient
 }
 
 func (p *portworx) initPortworxClients() error {
-	var endpoint string
+	kubeOps := core.Instance()
 
-	// Check if service name and namespace is provided
-	// as environment variables
-	serviceName := os.Getenv(pxServiceName)
-	if len(serviceName) == 0 {
-		serviceName = defaultServiceName
-	}
-	namespace := os.Getenv(pxNamespace)
-	if len(namespace) == 0 {
-		namespace = defaultNamespace
-	}
-
-	var scheme string
-	svc, err := core.Instance().GetService(serviceName, namespace)
-	if err == nil {
-		endpoint = svc.Spec.ClusterIP
-	} else {
-		return fmt.Errorf("failed to get k8s service spec: %v", err)
-	}
-
-	if len(endpoint) == 0 {
-		return fmt.Errorf("failed to get endpoint for portworx volume driver")
-	}
-
-	// Get the ports from service
-	for _, svcPort := range svc.Spec.Ports {
-		if svcPort.Name == pxSdkPort &&
-			svcPort.Port != 0 {
-			p.sdkPort = int(svcPort.Port)
-		} else if svcPort.Name == pxRestPort &&
-			svcPort.Port != 0 {
-			p.restPort = int(svcPort.Port)
-		}
-	}
-
-	// check if the ports were parsed
-	if p.sdkPort == 0 || p.restPort == 0 {
-		err := fmt.Errorf("%s in %s namespace has been not updated to the latest spec. "+
-			"%s and/or %s ports are missing. Follow "+
-			"https://docs.portworx.com/portworx-install-with-kubernetes/operate-and-maintain-on-kubernetes/upgrade/"+
-			" to upgrade Portworx", serviceName, namespace, pxSdkPort, pxRestPort)
-		logrus.Errorf(err.Error())
+	paramsBuilder, err := pwx.NewConnectionParamsBuilder(kubeOps, pwx.NewConnectionParamsBuilderDefaultConfig())
+	if err != nil {
 		return err
 	}
 
-	logrus.Infof("Using %v:%v as endpoint for portworx REST endpoint", endpoint, p.restPort)
-	logrus.Infof("Using %v:%v as endpoint for portworx gRPC endpoint", endpoint, p.sdkPort)
-
-	// Setup REST clients
-	if isTLSEnabled() {
-		scheme = "https"
-	} else {
-		scheme = "http"
+	pxMgmtEndpoint, sdkEndpoint, err := paramsBuilder.BuildClientsEndpoints()
+	if err != nil {
+		return err
 	}
-	p.endpoint = fmt.Sprintf("%s://%v:%v", scheme, endpoint, p.restPort)
-	logrus.Infof("Using %s as the endpoint", p.endpoint)
-	clnt, err := clusterclient.NewClusterClient(p.endpoint, "v1")
+
+	sdkDialOps, err := paramsBuilder.BuildDialOps()
+	if err != nil {
+		return err
+	}
+
+	clnt, err := clusterclient.NewClusterClient(pxMgmtEndpoint, "v1")
 	if err != nil {
 		return err
 	}
 	p.clusterManager = clusterclient.ClusterManager(clnt)
+	p.endpoint = pxMgmtEndpoint
 
 	// Setup gRPC clients
 	p.sdkConn = &portworxGrpcConnection{
-		endpoint: fmt.Sprintf("%s:%d", endpoint, p.sdkPort),
-	}
-	err = p.sdkConn.setDialOptions(isTLSEnabled())
-	if err != nil {
-		return err
+		endpoint:    sdkEndpoint,
+		dialOptions: sdkDialOps,
 	}
 
 	// Setup secrets instance
@@ -3028,7 +2946,7 @@ func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *storkapi.GroupVolumeS
 	if err != nil {
 		return nil, err
 	}
-	resp, err := volDriver.SnapshotGroup("", nil, volNames)
+	resp, err := volDriver.SnapshotGroup("", nil, volNames, true)
 	if err != nil {
 		return nil, err
 	}
