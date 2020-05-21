@@ -518,6 +518,58 @@ func (p *portworx) WaitForBackupDeletion(
 	return nil
 }
 
+// WaitForBackupDeletion waits for restore to be deleted successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry
+func (p *portworx) WaitForRestoreDeletion(
+	ctx context.Context,
+	restoreName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	var backupError error
+	f := func() (interface{}, bool, error) {
+		restoreInspectResponse, err := p.restoreManager.Inspect(ctx, req)
+		if err == nil {
+			// Object still exists, just retry
+			currentStatus := restoreInspectResponse.GetRestore().GetStatus().GetStatus()
+			return nil, true, fmt.Errorf("restore [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+		}
+
+		if restoreInspectResponse == nil {
+			return nil, false, nil
+		}
+		// Check if restore delete status is complete
+		currentStatus := restoreInspectResponse.GetRestore().GetStatus().GetStatus()
+		if currentStatus == api.RestoreInfo_StatusInfo_Deleting {
+			// Restore deletion is not complete, retry again
+			return nil,
+				true,
+				fmt.Errorf("restore [%v] is in [%s] state. Waiting to become Complete",
+					req.GetName(), currentStatus)
+		} else if currentStatus == api.RestoreInfo_StatusInfo_Failed ||
+			currentStatus == api.RestoreInfo_StatusInfo_Aborted ||
+			currentStatus == api.RestoreInfo_StatusInfo_Invalid {
+			backupError = fmt.Errorf("restore [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+			return nil, false, backupError
+		}
+		return nil, false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for restore deletion. Error:[%v] Reason:[%v]", err, backupError)
+	}
+
+	return nil
+}
+
 // WaitForDeletePending checking if a given backup object is in delete pending state
 func (p *portworx) WaitForDeletePending(
 	ctx context.Context,
@@ -790,8 +842,8 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 	return nil
 }
 
-// Wait for backup to start running
-func (p *portworx) WaitForRunning(
+// WaitForBackupRunning wait for backup to start running
+func (p *portworx) WaitForBackupRunning(
 	ctx context.Context,
 	req *api.BackupInspectRequest,
 	timeout,
@@ -800,7 +852,7 @@ func (p *portworx) WaitForRunning(
 	var backupErr error
 
 	t := func() (interface{}, bool, error) {
-		logrus.Debugf("WaitForRunning inspect backup state for %s", req.Name)
+		logrus.Debugf("WaitForBackupRunning inspect backup state for %s", req.Name)
 		resp, err := p.backupManager.Inspect(ctx, req)
 
 		if err != nil {
@@ -826,6 +878,48 @@ func (p *portworx) WaitForRunning(
 
 	_, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
 
+	if err != nil || backupErr != nil {
+		return fmt.Errorf("failed to wait for running start. Error:[%v] Reason:[%v]", err, backupErr)
+	}
+
+	return nil
+}
+
+// WaitForRestoreRunning wait for backup to start running
+func (p *portworx) WaitForRestoreRunning(
+	ctx context.Context,
+	req *api.RestoreInspectRequest,
+	timeout,
+	retryInterval time.Duration,
+) error {
+	var backupErr error
+
+	t := func() (interface{}, bool, error) {
+		logrus.Debugf("WaitForRestoreRunning inspect backup state for %s", req.Name)
+		resp, err := p.restoreManager.Inspect(ctx, req)
+
+		if err != nil {
+			return nil, true, err
+		}
+
+		// Check if backup in progress - stop
+		currentStatus := resp.GetRestore().GetStatus().GetStatus()
+		if currentStatus == api.RestoreInfo_StatusInfo_InProgress {
+			return nil, false, nil
+		} else if currentStatus == api.RestoreInfo_StatusInfo_Failed ||
+			currentStatus == api.RestoreInfo_StatusInfo_Aborted ||
+			currentStatus == api.RestoreInfo_StatusInfo_Invalid {
+
+			backupErr = fmt.Errorf("restore [%v] is in [%s] state",
+				req.GetName(), currentStatus)
+			return nil, false, backupErr
+		}
+
+		// Otherwise retry
+		return nil, true, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, timeout, retryInterval)
 	if err != nil || backupErr != nil {
 		return fmt.Errorf("failed to wait for running start. Error:[%v] Reason:[%v]", err, backupErr)
 	}

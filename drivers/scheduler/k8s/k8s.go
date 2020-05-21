@@ -232,12 +232,11 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	return nil
 }
 
-// RescanSpecs Rescan the application spec file
-//
-func (k *K8s) RescanSpecs(specDir string) error {
+// RescanSpecs Rescan the application spec file for spei
+func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 	var err error
-	logrus.Infof("Rescanning specs for %v", specDir)
-	k.SpecFactory, err = spec.NewFactory(specDir, volume.GetStorageDriver(), k)
+	logrus.Infof("Rescanning specs for %v and driver %s", specDir, storageDriver)
+	k.SpecFactory, err = spec.NewFactory(specDir, storageDriver, k)
 	if err != nil {
 		return err
 	}
