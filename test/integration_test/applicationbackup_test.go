@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -56,7 +57,7 @@ func TestApplicationBackup(t *testing.T) {
 	t.Run("postExecFailingRuleTest", applicationBackupRestorePostExecFailingRuleTest)
 	t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
-	t.Run("backupSyncController", applicationBackupSyncControllerTest)
+	//t.Run("backupSyncController", applicationBackupSyncControllerTest)
 }
 
 func TestScaleApplicationBackup(t *testing.T) {
@@ -335,6 +336,7 @@ func createApplicationBackupWithAnnotation(
 		},
 	}
 
+	// Will add security annotations if required
 	err := addSecurityAnnotationBackup(appBackup)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add annotations to backup object: %v", err)
@@ -1305,6 +1307,18 @@ func addSecurityAnnotationBackup(spec interface{}) error {
 			obj.Annotations[secretName] = configMap.Data[secretNameKey]
 			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 		} else if obj, ok := spec.(*storkv1.ApplicationRestore); ok {
+			if obj.Annotations == nil {
+				obj.Annotations = make(map[string]string)
+			}
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		} else if obj, ok := spec.(*storkv1.VolumeSnapshotSchedule); ok {
+			if obj.Annotations == nil {
+				obj.Annotations = make(map[string]string)
+			}
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
 			if obj.Annotations == nil {
 				obj.Annotations = make(map[string]string)
 			}
