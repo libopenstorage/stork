@@ -80,8 +80,6 @@ metadata:
     tier: control-plane
   name: stork
   namespace: kube-system
-  initializers:
-    pending: []
 spec:
   strategy:
     rollingUpdate:
