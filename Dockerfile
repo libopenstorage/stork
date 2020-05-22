@@ -32,8 +32,8 @@ RUN wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK 
 
 WORKDIR /
 
-COPY ./bin/stork /
 COPY ./bin/linux/storkctl /storkctl/linux/
 COPY ./bin/darwin/storkctl /storkctl/darwin/
 COPY ./bin/windows/storkctl.exe /storkctl/windows/
 COPY ./LICENSE /licenses
+COPY ./bin/stork /
