@@ -1,7 +1,7 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: portworx-sc-cms-repl3-shared
+  name: wordpress-sc-shared
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
@@ -13,7 +13,7 @@ allowVolumeExpansion: true
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: portworx-sc-db-repl3
+  name: worpress-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"

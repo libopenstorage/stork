@@ -7,6 +7,8 @@ const (
 	ProviderAzure = "azure"
 	// ProviderGke for gke provider
 	ProviderGke = "gke"
+	// ProviderPortworx for portworx provider
+	ProviderPortworx = "pxd"
 )
 
 // Driver specifies the most basic methods to be implemented by a Torpedo driver.

@@ -798,6 +798,7 @@ func (p *portworx) WaitForRunning(
 	var backupErr error
 
 	t := func() (interface{}, bool, error) {
+		logrus.Debugf("WaitForRunning inspect backup state for %s", req.Name)
 		resp, err := p.backupManager.Inspect(ctx, req)
 
 		if err != nil {

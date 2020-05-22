@@ -1,8 +1,8 @@
-##### Azure storage class
-apiVersion: storage.k8s.io/v1
+# Azure sysbench storage class
 kind: StorageClass
+apiVersion: storage.k8s.io/v1
 metadata:
-  name: azure-mysql-sc
+  name: sysbench-sc
 provisioner: kubernetes.io/azure-disk
 parameters:
   skuName: Standard_LRS

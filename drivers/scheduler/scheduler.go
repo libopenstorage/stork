@@ -29,6 +29,10 @@ type Context struct {
 	App *spec.AppSpec
 	// ScheduleOptions are options that callers to pass to influence the apps that get schduled
 	ScheduleOptions ScheduleOptions
+	// SkipVolumeValidation for cases when use volume driver other than portworx
+	SkipVolumeValidation bool
+	// SkipClusterScopedObject for cases of multi-cluster backup when Storage class does not restored
+	SkipClusterScopedObject bool
 	// ReadinessTimeout time within which context is expected to be up
 	ReadinessTimeout time.Duration
 }
@@ -70,8 +74,8 @@ type InitOptions struct {
 	SecretConfigMapName string
 	// CustomAppConfig custom settings for apps
 	CustomAppConfig map[string]AppConfig
-	// Provider name
-	ProviderName string
+	// StorageProvisioner name
+	StorageProvisioner string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

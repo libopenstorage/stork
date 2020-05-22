@@ -1,13 +1,3 @@
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: postgres-pgbench-sc
-provisioner: kubernetes.io/portworx-volume
-parameters:
-  repl: "1"
-  priority_io: "low"
-allowVolumeExpansion: true
----
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -16,9 +6,9 @@ metadata:
   labels:
     name: pgbench-data
   annotations:
-   torpedo.io/autopilot-enabled: "true"
+    torpedo.io/autopilot-enabled: "true"
 spec:
-  storageClassName: postgres-pgbench-sc
+  storageClassName: pgbench-sc
   accessModes:
     - ReadWriteOnce
   resources:
@@ -31,7 +21,7 @@ metadata:
   name: pgbench-state
   namespace: pgbench
 spec:
-  storageClassName: postgres-pgbench-sc
+  storageClassName: pgbench-sc
   accessModes:
     - ReadWriteOnce
   resources:

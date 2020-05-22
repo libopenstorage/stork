@@ -2351,5 +2351,5 @@ func getSDKContainerPort() (int32, error) {
 }
 
 func init() {
-	torpedovolume.Register(DriverName, &portworx{})
+	torpedovolume.Register(DriverName, provisioners, &portworx{})
 }

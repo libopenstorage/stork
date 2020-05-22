@@ -1,19 +1,8 @@
-# Azure disk storage class
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: azure-disk-sc-nginx
-provisioner: kubernetes.io/azure-disk
-parameters:
-  skuName: Standard_LRS
-  location: eastus
-  storageAccount: pwxautomation
----
 ##### Azure file storage class
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: azure-file-sc-nginx
+  name: nginx-sc
 provisioner: kubernetes.io/azure-file
 mountOptions:
   - dir_mode=0777

@@ -15,10 +15,8 @@ metadata:
     px/secret-name: volume-secrets
     px/secret-namespace: "_NAMESPACE_"
     px/secret-key: mysql-secret
-    volume.beta.kubernetes.io/storage-class: px-mysql-sc
-    azure-storage-class: azure-mysql-sc
 spec:
-  storageClassName: px-mysql-sc
+  storageClassName: mysql-sc
   accessModes:
     - ReadWriteOnce
   resources:
@@ -29,10 +27,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: mysql-data-seq
-   annotations:
-     volume.beta.kubernetes.io/storage-class: px-mysql-sc-seq
-     azure-storage-class: azure-mysql-sc
 spec:
+   storageClassName: mysql-sc-seq
    accessModes:
      - ReadWriteOnce
    resources:
@@ -43,10 +39,8 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: mysql-data-aggr
-   annotations:
-     volume.beta.kubernetes.io/storage-class: px-mysql-sc-aggr
-     azure-storage-class: azure-mysql-sc
 spec:
+   storageClassName: mysql-sc-aggr
    accessModes:
      - ReadWriteOnce
    resources:

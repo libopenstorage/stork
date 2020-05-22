@@ -4,10 +4,8 @@ metadata:
   name: wp-pv-claim
   labels:
     app: wordpress
-  annotations:
-    volume.beta.kubernetes.io/storage-class: portworx-sc-cms-repl3-shared
-    azure-storage-class: azure-file-sc-wordpress
 spec:
+  storageClassName: wordpress-sc-shared
   accessModes:
     - ReadWriteMany
   resources:
@@ -18,10 +16,8 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mysql-pvc-1
-  annotations:
-    volume.beta.kubernetes.io/storage-class: portworx-sc-db-repl3
-    azure-storage-class: azure-disk-sc-wordpress
 spec:
+  storageClassName: worpress-sc
   accessModes:
     - ReadWriteOnce
   resources:
