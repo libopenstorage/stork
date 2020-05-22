@@ -934,6 +934,11 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			if len(pxNode.Pools) == 0 {
 				d.updateNodeID(&n, d.getNodeManager())
 			}
+			return "", true, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("node %s status is up but px cluster is not ok. Expected: %v Actual: %v",
+					n.Name, api.Status_STATUS_OK, pxNode.Status),
+			}
 		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
