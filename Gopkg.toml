@@ -71,10 +71,6 @@ required = [
   name = "k8s.io/kube-state-metrics"
   version = "v1.6.0"
 
-[prune]
-  go-tests = true
-  unused-packages = true
-
 [[prune.project]]
   name = "k8s.io/code-generator"
   unused-packages = false
@@ -154,4 +150,12 @@ required = [
 [[override]]
   name = "github.com/openshift/client-go"
   branch = "release-4.4"
+
+#[[override]]
+#  name = "sigs.k8s.io/gcp-compute-persistent-disk-csi-driver"
+#  version = "v0.7.0"
+
+[prune]
+  go-tests = true
+  unused-packages = true
 
