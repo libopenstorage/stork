@@ -47,6 +47,7 @@ type portworx struct {
 	organizationManager    api.OrganizationClient
 	licenseManager         api.LicenseClient
 	healthManager          api.HealthClient
+	ruleManager            api.RulesClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -158,6 +159,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.schedulePolicyManager = api.NewSchedulePolicyClient(conn)
 	p.organizationManager = api.NewOrganizationClient(conn)
 	p.licenseManager = api.NewLicenseClient(conn)
+	p.ruleManager = api.NewRulesClient(conn)
 
 	logrus.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -872,6 +874,26 @@ func (p *portworx) WaitForLicenseActivation(ctx context.Context, req *api.Licens
 	}
 
 	return nil
+}
+
+func (p *portworx) CreateRule(req *api.RuleCreateRequest) (*api.RuleCreateResponse, error) {
+	return p.ruleManager.Create(context.Background(), req)
+}
+
+func (p *portworx) UpdateRule(req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error) {
+	return p.ruleManager.Update(context.Background(), req)
+}
+
+func (p *portworx) EnumerateRule(req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
+	return p.ruleManager.Enumerate(context.Background(), req)
+}
+
+func (p *portworx) InspectRule(req *api.RuleInspectRequest) (*api.RuleInspectResponse, error) {
+	return p.ruleManager.Inspect(context.Background(), req)
+}
+
+func (p *portworx) DeleteRule(req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error) {
+	return p.ruleManager.Delete(context.Background(), req)
 }
 
 func init() {
