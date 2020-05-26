@@ -35,6 +35,8 @@ type Driver interface {
 	ScheduleBackup
 	// License
 	License
+	// Rule
+	Rule
 
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
@@ -239,6 +241,24 @@ type License interface {
 
 	// WaitForLicenseActivation
 	WaitForLicenseActivation(ctx context.Context, req *api.LicenseInspectRequest, timeout, retryInterval time.Duration) error
+}
+
+// Rule interface
+type Rule interface {
+	// CreateRule creates rule object
+	CreateRule(req *api.RuleCreateRequest) (*api.RuleCreateResponse, error)
+
+	// UpdateRule updates rule object
+	UpdateRule(req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error)
+
+	// EnumerateRule enumerates rule objects
+	EnumerateRule(req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error)
+
+	// InspectRule inspects a rule object
+	InspectRule(req *api.RuleInspectRequest) (*api.RuleInspectResponse, error)
+
+	// DeleteRule deletes a rule
+	DeleteRule(req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)

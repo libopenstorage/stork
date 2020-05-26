@@ -169,7 +169,7 @@ const (
 )
 
 var (
-	volDrivers = make(map[string]Driver)
+	volDrivers   = make(map[string]Driver)
 	provisioners = make([]string, 0)
 	// StorageDriver to be used to store name of the storage driver
 	StorageDriver string
