@@ -43,7 +43,7 @@ var _ = Describe("{StopScheduler}", func() {
 		Step("get nodes and induce scheduler service to stop on the node", func() {
 			for _, storageNode := range node.GetStorageDriverNodes() {
 
-				Step(fmt.Sprintf("stop scheduler service"), func() {
+				Step(fmt.Sprintf("stop scheduler service on node %s", storageNode.Name), func() {
 					err := Inst().S.StopSchedOnNode(storageNode)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -58,7 +58,7 @@ var _ = Describe("{StopScheduler}", func() {
 					}
 				})
 
-				Step(fmt.Sprintf("start scheduler service"), func() {
+				Step(fmt.Sprintf("start scheduler service on node %s", storageNode.Name), func() {
 					err := Inst().S.StartSchedOnNode(storageNode)
 					Expect(err).NotTo(HaveOccurred())
 				})

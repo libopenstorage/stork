@@ -1227,6 +1227,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 			Cause: fmt.Sprintf("Replication factor is not of type int64"),
 		}
 	}
+	logrus.Debugf("Replication factor for volume: %s is %d", vol.ID, replFactor)
 
 	return replFactor, nil
 }
@@ -1320,6 +1321,7 @@ func (d *portworx) GetAggregationLevel(vol *torpedovolume.Volume) (int64, error)
 			Cause: fmt.Sprintf("Aggregation level is not of type uint32"),
 		}
 	}
+	logrus.Debugf("Aggregation level for volume: %s is %d", vol.ID, aggrLevel)
 
 	return int64(aggrLevel), nil
 }

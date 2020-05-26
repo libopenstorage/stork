@@ -82,7 +82,7 @@ func (hook *Hook) Fire(entry *logrus.Entry) error {
 	if entry.Level < logrus.WarnLevel {
 		entry.Message = red(entry.Message)
 	} else if entry.Level == logrus.WarnLevel {
-		entry.Message = hiyellow(entry.Message)
+		entry.Message = yellow(entry.Message)
 	} else {
 		if successMessage(entry.Message) {
 			entry.Message = green(entry.Message)
