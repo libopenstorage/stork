@@ -171,6 +171,8 @@ const (
 var (
 	volDrivers   = make(map[string]Driver)
 	provisioners = make([]string, 0)
+	// StorageDriver to be used to store name of the storage driver
+	StorageDriver string
 	// StorageProvisioner to be used to store name of the storage provisioner
 	StorageProvisioner StorageProvisionerType
 )
@@ -207,6 +209,11 @@ func Get(name string) (Driver, error) {
 // GetStorageProvisioner storage provsioner name to be used with Torpedo
 func GetStorageProvisioner() string {
 	return string(StorageProvisioner)
+}
+
+// GetStorageDriver storage driver name to be used with Torpedo
+func GetStorageDriver() string {
+	return string(StorageDriver)
 }
 
 // GetVolumeDrivers returns list of supported volume drivers

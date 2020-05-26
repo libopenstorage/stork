@@ -205,6 +205,7 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 			n.Status,
 		)
 	}
+	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {
 		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {

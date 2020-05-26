@@ -233,7 +233,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 func (k *K8s) RescanSpecs(specDir string) error {
 	var err error
 	logrus.Infof("Rescanning specs for %v", specDir)
-	k.SpecFactory, err = spec.NewFactory(specDir, volume.GetStorageProvisioner(), k)
+	k.SpecFactory, err = spec.NewFactory(specDir, volume.GetStorageDriver(), k)
 	if err != nil {
 		return err
 	}

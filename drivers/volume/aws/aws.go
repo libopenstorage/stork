@@ -39,6 +39,7 @@ func (d *aws) RefreshDriverEndpoints() error {
 
 func (d *aws) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
 	logrus.Infof("Using the AWS EBS volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {
 		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
