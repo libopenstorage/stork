@@ -436,9 +436,9 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	case "Job":
 		if slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
 			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower) {
-			return true, nil
+			return false, nil
 		}
-		return false, nil
+		return true, nil
 	case "PersistentVolume":
 		return r.preparePVResourceForApply(object, pvNameMappings)
 	case "PersistentVolumeClaim":
