@@ -52,9 +52,10 @@ var _ = Describe("{VolumeUpdate}", func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(appVolumes).NotTo(BeEmpty())
 				})
-				MaxRF := Inst().V.GetMaxReplicationFactor()
-				MinRF := Inst().V.GetMinReplicationFactor()
 				for _, v := range appVolumes {
+					MaxRF := Inst().V.GetMaxReplicationFactor()
+					MinRF := Inst().V.GetMinReplicationFactor()
+
 					Step(
 						fmt.Sprintf("repl decrease volume driver %s on app %s's volume: %v",
 							Inst().V.String(), ctx.App.Key, v),
