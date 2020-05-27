@@ -15,10 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	storagev1client "k8s.io/client-go/kubernetes/typed/storage/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 )
 
 const (
@@ -37,7 +36,9 @@ var (
 // Ops is an interface to perform kubernetes related operations on the core resources.
 type Ops interface {
 	ConfigMapOps
+	EndpointsOps
 	EventOps
+	RecorderOps
 	NamespaceOps
 	NodeOps
 	PersistentVolumeClaimOps
@@ -45,6 +46,7 @@ type Ops interface {
 	SecretOps
 	ServiceOps
 	ServiceAccountOps
+	LimitRangeOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
@@ -70,11 +72,9 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new client.
-func New(kubernetes kubernetes.Interface, core corev1client.CoreV1Interface, storage storagev1client.StorageV1Interface) *Client {
+func New(kubernetes kubernetes.Interface) *Client {
 	return &Client{
 		kubernetes: kubernetes,
-		core:       core,
-		storage:    storage,
 	}
 }
 
@@ -85,20 +85,8 @@ func NewForConfig(c *rest.Config) (*Client, error) {
 		return nil, err
 	}
 
-	core, err := corev1client.NewForConfig(c)
-	if err != nil {
-		return nil, err
-	}
-
-	storage, err := storagev1client.NewForConfig(c)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Client{
 		kubernetes: kubernetes,
-		core:       core,
-		storage:    storage,
 	}, nil
 }
 
@@ -116,16 +104,16 @@ func NewInstanceFromConfigFile(config string) (Ops, error) {
 // Client is a wrapper for kubernetes core client.
 type Client struct {
 	config     *rest.Config
-	core       corev1client.CoreV1Interface
-	storage    storagev1client.StorageV1Interface
 	kubernetes kubernetes.Interface
+	// eventRecorders is a map of component to event recorders
+	eventRecorders     map[string]record.EventRecorder
+	eventRecordersLock sync.Mutex
+	eventBroadcaster   record.EventBroadcaster
 }
 
 // SetConfig sets the config and resets the client.
 func (c *Client) SetConfig(cfg *rest.Config) {
 	c.config = cfg
-	c.core = nil
-	c.storage = nil
 	c.kubernetes = nil
 }
 
@@ -138,6 +126,7 @@ func (c *Client) GetVersion() (*version.Info, error) {
 	return c.kubernetes.Discovery().ServerVersion()
 }
 
+// ResourceExists checks if resource already exists
 func (c *Client) ResourceExists(gvk schema.GroupVersionKind) (bool, error) {
 	if err := c.initClient(); err != nil {
 		return false, err
@@ -160,7 +149,7 @@ func (c *Client) ResourceExists(gvk schema.GroupVersionKind) (bool, error) {
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.core != nil && c.storage != nil {
+	if c.kubernetes != nil {
 		return nil
 	}
 
@@ -182,7 +171,6 @@ func (c *Client) setClient() error {
 		}
 
 	}
-
 	return err
 }
 
@@ -218,17 +206,6 @@ func (c *Client) loadClient() error {
 	if err != nil {
 		return err
 	}
-
-	c.core, err = corev1client.NewForConfig(c.config)
-	if err != nil {
-		return err
-	}
-
-	c.storage, err = storagev1client.NewForConfig(c.config)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -259,6 +236,8 @@ func (c *Client) handleWatch(
 						err = c.WatchConfigMap(cm, fn)
 					} else if _, ok := object.(*corev1.Pod); ok {
 						err = c.WatchPods(namespace, fn, listOptions)
+					} else if sc, ok := object.(*corev1.Secret); ok {
+						err = c.WatchSecret(sc, fn)
 					} else {
 						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
 					}

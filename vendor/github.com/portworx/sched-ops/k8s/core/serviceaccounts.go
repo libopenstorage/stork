@@ -11,6 +11,8 @@ type ServiceAccountOps interface {
 	CreateServiceAccount(account *corev1.ServiceAccount) (*corev1.ServiceAccount, error)
 	// GetServiceAccount gets the given service account
 	GetServiceAccount(name, namespace string) (*corev1.ServiceAccount, error)
+	// UpdateServiceAccount updates the given service account
+	UpdateServiceAccount(account *corev1.ServiceAccount) (*corev1.ServiceAccount, error)
 	// DeleteServiceAccount deletes the given service account
 	DeleteServiceAccount(accountName, namespace string) error
 }
@@ -21,7 +23,7 @@ func (c *Client) CreateServiceAccount(account *corev1.ServiceAccount) (*corev1.S
 		return nil, err
 	}
 
-	return c.core.ServiceAccounts(account.Namespace).Create(account)
+	return c.kubernetes.CoreV1().ServiceAccounts(account.Namespace).Create(account)
 }
 
 // GetServiceAccount gets the given service account
@@ -30,7 +32,16 @@ func (c *Client) GetServiceAccount(name, namespace string) (*corev1.ServiceAccou
 		return nil, err
 	}
 
-	return c.core.ServiceAccounts(namespace).Get(name, metav1.GetOptions{})
+	return c.kubernetes.CoreV1().ServiceAccounts(namespace).Get(name, metav1.GetOptions{})
+}
+
+// UpdaeServiceAccount updates the given service account
+func (c *Client) UpdateServiceAccount(account *corev1.ServiceAccount) (*corev1.ServiceAccount, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.kubernetes.CoreV1().ServiceAccounts(account.Namespace).Update(account)
 }
 
 // DeleteServiceAccount deletes the given service account
@@ -39,7 +50,7 @@ func (c *Client) DeleteServiceAccount(accountName, namespace string) error {
 		return err
 	}
 
-	return c.core.ServiceAccounts(namespace).Delete(accountName, &metav1.DeleteOptions{
+	return c.kubernetes.CoreV1().ServiceAccounts(namespace).Delete(accountName, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

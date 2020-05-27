@@ -4,7 +4,9 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 )
 
 // SecretOps is an interface to perform k8s Secret operations
@@ -19,6 +21,8 @@ type SecretOps interface {
 	UpdateSecretData(string, string, map[string][]byte) (*corev1.Secret, error)
 	// DeleteSecret deletes the given secret
 	DeleteSecret(name, namespace string) error
+	// WatchSecret changes and callback fn
+	WatchSecret(*corev1.Secret, WatchFunc) error
 }
 
 // GetSecret gets the secrets object given its name and namespace
@@ -27,7 +31,7 @@ func (c *Client) GetSecret(name string, namespace string) (*corev1.Secret, error
 		return nil, err
 	}
 
-	return c.core.Secrets(namespace).Get(name, metav1.GetOptions{})
+	return c.kubernetes.CoreV1().Secrets(namespace).Get(name, metav1.GetOptions{})
 }
 
 // CreateSecret creates the given secret
@@ -36,7 +40,7 @@ func (c *Client) CreateSecret(secret *corev1.Secret) (*corev1.Secret, error) {
 		return nil, err
 	}
 
-	return c.core.Secrets(secret.Namespace).Create(secret)
+	return c.kubernetes.CoreV1().Secrets(secret.Namespace).Create(secret)
 }
 
 // UpdateSecret updates the given secret
@@ -45,7 +49,7 @@ func (c *Client) UpdateSecret(secret *corev1.Secret) (*corev1.Secret, error) {
 		return nil, err
 	}
 
-	return c.core.Secrets(secret.Namespace).Update(secret)
+	return c.kubernetes.CoreV1().Secrets(secret.Namespace).Update(secret)
 }
 
 // UpdateSecretData updates or creates a new secret with the given data
@@ -82,7 +86,27 @@ func (c *Client) DeleteSecret(name, namespace string) error {
 		return err
 	}
 
-	return c.core.Secrets(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.kubernetes.CoreV1().Secrets(namespace).Delete(name, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
+}
+
+func (c *Client) WatchSecret(secret *v1.Secret, fn WatchFunc) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions := metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("metadata.name", secret.Name).String(),
+		Watch:         true,
+	}
+
+	watchInterface, err := c.kubernetes.CoreV1().Secrets(secret.Namespace).Watch(listOptions)
+	if err != nil {
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, secret, "", fn, listOptions)
+	return nil
 }

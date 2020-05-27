@@ -23,11 +23,17 @@ const (
 
 type volumeClient struct {
 	volume.IODriver
+	volume.FilesystemTrimDriver
+	volume.FilesystemCheckDriver
 	c *client.Client
 }
 
 func newVolumeClient(c *client.Client) volume.VolumeDriver {
-	return &volumeClient{volume.IONotSupported, c}
+	return &volumeClient{
+		IODriver:              volume.IONotSupported,
+		FilesystemTrimDriver:  volume.FilesystemTrimNotSupported,
+		FilesystemCheckDriver: volume.FilesystemCheckNotSupported,
+		c: c}
 }
 
 // String description of this driver.
@@ -770,13 +776,14 @@ func (v *volumeClient) CloudBackupSchedEnumerate() (*api.CloudBackupSchedEnumera
 	return enumerateResponse, nil
 }
 
-func (v *volumeClient) SnapshotGroup(groupID string, labels map[string]string, volumeIDs []string) (*api.GroupSnapCreateResponse, error) {
+func (v *volumeClient) SnapshotGroup(groupID string, labels map[string]string, volumeIDs []string, deleteOnFailure bool) (*api.GroupSnapCreateResponse, error) {
 
 	response := &api.GroupSnapCreateResponse{}
 	request := &api.GroupSnapCreateRequest{
-		Id:        groupID,
-		Labels:    labels,
-		VolumeIds: volumeIDs,
+		Id:              groupID,
+		Labels:          labels,
+		VolumeIds:       volumeIDs,
+		DeleteOnFailure: deleteOnFailure,
 	}
 
 	req := v.c.Post().Resource(snapPath + "/snapshotgroup").Body(request)
@@ -842,4 +849,13 @@ func (v *volumeClient) Catalog(id, subfolder, maxDepth string) (api.CatalogRespo
 	}
 
 	return catalog, nil
+}
+
+func (v *volumeClient) VolService(volumeID string, vsreq *api.VolumeServiceRequest) (*api.VolumeServiceResponse, error) {
+	vsresp := &api.VolumeServiceResponse{}
+
+	req := v.c.Post().Resource(volumePath + "/volservice").Instance(volumeID).Body(vsreq)
+	err := req.Do().Unmarshal(&vsresp)
+
+	return vsresp, err
 }

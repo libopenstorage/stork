@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
-	"os/exec"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -13,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
@@ -23,11 +22,13 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -46,16 +47,17 @@ const (
 
 const (
 	// DriverName is the name of the portworx driver implementation
-	DriverName           = "pxd"
-	pxDiagPath           = "/remotediags"
-	pxVersionLabel       = "PX Version"
-	enterMaintenancePath = "/entermaintenance"
-	exitMaintenancePath  = "/exitmaintenance"
-	pxSystemdServiceName = "portworx.service"
-	tokenKey             = "token"
-	clusterIP            = "ip"
-	clusterPort          = "port"
-	remoteKubeConfigPath = "/tmp/kubeconfig"
+	DriverName                  = "pxd"
+	pxDiagPath                  = "/remotediags"
+	pxVersionLabel              = "PX Version"
+	enterMaintenancePath        = "/entermaintenance"
+	exitMaintenancePath         = "/exitmaintenance"
+	pxSystemdServiceName        = "portworx.service"
+	tokenKey                    = "token"
+	clusterIP                   = "ip"
+	clusterPort                 = "port"
+	remoteKubeConfigPath        = "/tmp/kubeconfig"
+	pxMinVersionForStorkUpgrade = "2.1"
 )
 
 const (
@@ -105,6 +107,7 @@ type portworx struct {
 	volDriver            api.OpenStorageVolumeClient
 	clusterPairManager   api.OpenStorageClusterPairClient
 	alertsManager        api.OpenStorageAlertsClient
+	csbackupManager      api.OpenStorageCloudBackupClient
 	schedOps             schedops.Driver
 	nodeDriver           node.Driver
 	refreshEndpoint      bool
@@ -216,6 +219,8 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
+	// Force update px endpoints
+	d.refreshEndpoint = true
 	storageNodes, err := d.getStorageNodesOnStart()
 	if err != nil {
 		return err
@@ -260,9 +265,10 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []api.StorageNode) error {
 					n.StorageNode = pxNode
 					n.VolDriverNodeID = pxNode.Id
 					n.IsStorageDriverInstalled = isPX
+					// TODO: PTX-2445 Replace isMetadataNode API call with SDK call
 					isMetadataNode, err := d.isMetadataNode(*n, address)
 					if err != nil {
-						return err
+						logrus.Warnf("can not check if %v is metadata node", *n)
 					}
 					n.IsMetadataNode = isMetadataNode
 
@@ -733,43 +739,46 @@ func (d *portworx) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
 	return d.schedOps.ValidateVolumeSetup(vol, d.nodeDriver)
 }
 
-func (d *portworx) StopDriver(nodes []node.Node, force bool) error {
-	var err error
-	for _, n := range nodes {
-		logrus.Infof("Stopping volume driver on %s.", n.Name)
-		if force {
-			pxCrashCmd := "sudo pkill -9 px-storage"
-			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
-				Timeout:         crashDriverTimeout,
-				TimeBeforeRetry: defaultRetryInterval,
-			})
-			if err != nil {
-				logrus.Warnf("failed to run cmd : %s. on node %s err: %v", pxCrashCmd, n.Name, err)
-				return err
-			}
-			logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
-			time.Sleep(waitVolDriverToCrash)
-		} else {
-			err = d.schedOps.StopPxOnNode(n)
-			if err != nil {
-				return err
-			}
-			err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
-				Action: "stop",
-				ConnectionOpts: node.ConnectionOpts{
-					Timeout:         stopDriverTimeout,
+func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error {
+	stopFn := func() error {
+		var err error
+		for _, n := range nodes {
+			logrus.Infof("Stopping volume driver on %s.", n.Name)
+			if force {
+				pxCrashCmd := "sudo pkill -9 px-storage"
+				_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+					Timeout:         crashDriverTimeout,
 					TimeBeforeRetry: defaultRetryInterval,
-				}})
-			if err != nil {
-				logrus.Warnf("failed to run systemctl stopcmd  on node %s err: %v", n.Name, err)
-				return err
+				})
+				if err != nil {
+					logrus.Warnf("failed to run cmd : %s. on node %s err: %v", pxCrashCmd, n.Name, err)
+					return err
+				}
+				logrus.Infof("Sleeping for %v for volume driver to go down.", waitVolDriverToCrash)
+				time.Sleep(waitVolDriverToCrash)
+			} else {
+				err = d.schedOps.StopPxOnNode(n)
+				if err != nil {
+					return err
+				}
+				err = d.nodeDriver.Systemctl(n, pxSystemdServiceName, node.SystemctlOpts{
+					Action: "stop",
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         stopDriverTimeout,
+						TimeBeforeRetry: defaultRetryInterval,
+					}})
+				if err != nil {
+					logrus.Warnf("failed to run systemctl stopcmd  on node %s err: %v", n.Name, err)
+					return err
+				}
+				logrus.Infof("Sleeping for %v for volume driver to gracefully go down.", waitVolDriverToCrash/6)
+				time.Sleep(waitVolDriverToCrash / 6)
 			}
-			logrus.Infof("Sleeping for %v for volume driver to gracefully go down.", waitVolDriverToCrash/6)
-			time.Sleep(waitVolDriverToCrash / 6)
-		}
 
+		}
+		return nil
 	}
-	return nil
+	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
@@ -820,6 +829,20 @@ func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Dura
 	}
 
 	return nil, nil
+}
+
+func (d *portworx) GetNodeForBackup(backupID string) (node.Node, error) {
+	nodeMap := node.GetNodesByVoDriverNodeID()
+	csStatuses, err := d.csbackupManager.Status(context.Background(), &api.SdkCloudBackupStatusRequest{})
+	if err != nil {
+		return node.Node{}, err
+	}
+	for _, backup := range csStatuses.Statuses {
+		if backup.GetBackupId() == backupID {
+			return nodeMap[backup.NodeId], nil
+		}
+	}
+	return node.Node{}, fmt.Errorf("node where backup with id [%s] running, not found", backupID)
 }
 
 func isVolumeAttachedOnNode(volume *api.Volume, node node.Node) bool {
@@ -1061,7 +1084,9 @@ func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (m
 						return nil, err
 					}
 				} else {
-					expectedPoolSizes[pool.Uuid] = pool.StoragePoolAtInit.TotalSize
+					if _, ok := expectedPoolSizes[pool.Uuid]; !ok {
+						expectedPoolSizes[pool.Uuid] = pool.StoragePoolAtInit.TotalSize
+					}
 				}
 			}
 		}
@@ -1391,6 +1416,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	d.mountAttachManager = api.NewOpenStorageMountAttachClient(conn)
 	d.clusterPairManager = api.NewOpenStorageClusterPairClient(conn)
 	d.alertsManager = api.NewOpenStorageAlertsClient(conn)
+	d.csbackupManager = api.NewOpenStorageCloudBackupClient(conn)
 	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint, apiport); err == nil {
 		d.legacyClusterManager = legacyClusterManager
 	} else {
@@ -1455,42 +1481,51 @@ func (d *portworx) StartDriver(n node.Node) error {
 		}})
 }
 
-func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) error {
-	upgradeFileName := "/upgrade.sh"
-
+func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error {
 	if endpointURL == "" {
-		return fmt.Errorf("no link supplied for upgrading portworx")
+		return fmt.Errorf("no link supplied for upgrading driver")
 	}
-	logrus.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
+	if endpointVersion == "" {
+		return fmt.Errorf("no endpoint supplied for upgrading driver")
+	}
 
-	// Getting upgrade script
+	if err := d.upgradePortworx(endpointURL, endpointVersion); err != nil {
+		return err
+	}
+
+	if enableStork {
+		if err := d.upgradeStork(endpointURL, endpointVersion); err != nil {
+			return err
+		}
+	} else {
+		logrus.Infof("stork upgrade is disabled, skipping...")
+	}
+	return nil
+}
+
+func (d *portworx) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return driver_api.PerformTask(
+		func() error {
+			return d.schedOps.RestartPxOnNode(n)
+		},
+		triggerOpts)
+}
+
+// upgradePortworx upgrades Portworx
+func (d *portworx) upgradePortworx(endpointURL string, endpointVersion string) error {
+	upgradeFileName := "/upgrade.sh"
 	fullEndpointURL := fmt.Sprintf("%s/%s/upgrade", endpointURL, endpointVersion)
-	cmd := exec.Command("wget", "-O", upgradeFileName, fullEndpointURL)
-	output, err := cmd.Output()
-	logrus.Infof("%s", output)
-	if err != nil {
-		return fmt.Errorf("error on downloading endpoint: %+v", err)
-	}
-	// Check if downloaded file exists
-	file, err := os.Stat(upgradeFileName)
-	if err != nil {
-		return fmt.Errorf("file %s doesn't exist", upgradeFileName)
-	}
-	logrus.Infof("file %s exists", upgradeFileName)
 
-	// Check if downloaded file is not empty
-	fileSize := file.Size()
-	if fileSize == 0 {
-		return fmt.Errorf("file %s is empty", upgradeFileName)
+	logrus.Infof("upgrading portworx from %s URL and %s endpoint version", endpointURL, endpointVersion)
+	// Getting upgrade script
+	if err := osutils.Wget(fullEndpointURL, upgradeFileName, true); err != nil {
+		return fmt.Errorf("%+v", err)
 	}
-	logrus.Infof("file %s is not empty", upgradeFileName)
 
 	// Change permission on file to be able to execute
-	cmd = exec.Command("chmod", "+x", upgradeFileName)
-	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("error on changing permission for %s file", upgradeFileName)
+	if err := osutils.Chmod("+x", upgradeFileName); err != nil {
+		return err
 	}
-	logrus.Infof("permission changed on file %s", upgradeFileName)
 
 	nodeList := node.GetStorageDriverNodes()
 	pxNode := nodeList[0]
@@ -1507,21 +1542,63 @@ func (d *portworx) UpgradeDriver(endpointURL string, endpointVersion string) err
 	}
 
 	// Run upgrade script
-	logrus.Infof("executing /bin/sh with params: %s\n", cmdArgs)
-	cmd = exec.Command("/bin/sh", cmdArgs...)
-	output, err = cmd.Output()
-
-	// Print and replace all '\n' with new lines
-	logrus.Infof("%s", strings.Replace(string(output[:]), `\n`, "\n", -1))
-	if err != nil {
-		return fmt.Errorf("error: %+v", err)
+	if err := osutils.Sh(cmdArgs); err != nil {
+		return err
 	}
+
 	logrus.Infof("Portworx cluster upgraded successfully")
 
 	for _, n := range node.GetStorageDriverNodes() {
 		if err := d.WaitForUpgrade(n, endpointVersion); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// upgradeStork upgrades stork
+func (d *portworx) upgradeStork(endpointURL string, endpointVersion string) error {
+	storkSpecFileName := "/stork.yaml"
+	nodeList := node.GetStorageDriverNodes()
+	pxNode := nodeList[0]
+	pxVersion, err := d.getPxVersionOnNode(pxNode)
+	if err != nil {
+		return fmt.Errorf("error on getting PX Version on node %s with err: %v", pxNode.Name, err)
+	}
+	pVersion, err := version.NewVersion(pxVersion)
+	if err != nil {
+		return err
+	}
+
+	storkMinVersion, err := version.NewVersion(pxMinVersionForStorkUpgrade)
+	if err != nil {
+		return err
+	}
+	if pVersion.LessThan(storkMinVersion) {
+		logrus.Debugf("skipping stork upgrade as PX Version is less than %s", pxMinVersionForStorkUpgrade)
+		return nil
+	}
+	kubeVersion, err := d.schedOps.GetKubernetesVersion()
+	if err != nil {
+		return err
+	}
+
+	// Getting stork spec
+	URL := fmt.Sprintf("%s/%s?kbver=%s&comp=stork", endpointURL, endpointVersion, kubeVersion)
+	logrus.Debugf("getting stork spec from: %s", URL)
+	if err := osutils.Wget(URL, storkSpecFileName, true); err != nil {
+		return err
+	}
+
+	// Getting context of the file
+	if _, err := osutils.Cat(storkSpecFileName); err != nil {
+		return err
+	}
+
+	// Apply stork spec
+	cmdArgs := []string{"apply", "-f", storkSpecFileName}
+	if err := osutils.Kubectl(cmdArgs); err != nil {
+		return err
 	}
 
 	return nil
@@ -1571,7 +1648,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		}
 	}
 
-	if err := d.StopDriver([]node.Node{*n}, false); err != nil {
+	if err := d.StopDriver([]node.Node{*n}, false, nil); err != nil {
 		return &ErrFailedToDecommissionNode{
 			Node:  n.Name,
 			Cause: fmt.Sprintf("Failed to stop driver on node: %v. Err: %v", n.Name, err),
@@ -2092,15 +2169,28 @@ func (d *portworx) EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.
 					Operation: "Pool Condition Expression Key",
 				}
 			}
-
 			if doesConditionMatch(metricValue, conditionExpression) {
 				for _, ruleAction := range apRule.Spec.Actions {
-					actionScalePercentage, err := strconv.ParseUint(ruleAction.Params[aututils.RuleActionsScalePercentage], 10, 64)
-					if err != nil {
-						return 0, err
-					}
+					var requiredScaleSize float64
+					if actionScalePercentageValue, ok := ruleAction.Params[aututils.RuleActionsScalePercentage]; ok {
+						actionScalePercentage, err := strconv.ParseUint(actionScalePercentageValue, 10, 64)
+						if err != nil {
+							return 0, err
+						}
 
-					requiredScaleSize := float64(calculatedTotalSize * actionScalePercentage / 100)
+						requiredScaleSize = float64(calculatedTotalSize * actionScalePercentage / 100)
+					} else if actionScaleSizeValue, ok := ruleAction.Params[aututils.RuleActionsScaleSize]; ok {
+						actionScaleSize, err := strconv.ParseUint(actionScaleSizeValue, 10, 64)
+						if err != nil {
+							a, parseErr := resource.ParseQuantity(actionScaleSizeValue)
+							if parseErr != nil {
+								logrus.Errorf("Can't parse actionScaleSize: '%d', cause err: %s/%s", actionScaleSize, err, parseErr)
+								return 0, err
+							}
+							actionScaleSize = uint64(a.Value())
+						}
+						requiredScaleSize = float64(actionScaleSize)
+					}
 					if actionScaleType == aututils.RuleScaleTypeAddDisk {
 						requiredNewDisks := uint64(math.Ceil(requiredScaleSize / float64(baseDiskSize)))
 						calculatedTotalSize += requiredNewDisks * baseDiskSize
@@ -2129,6 +2219,7 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 	}
 
 	calculatedTotalSize := initialSize
+
 	//	The goal of the below for loop is to keep increasing calculatedTotalSize until the rule conditions match
 	for {
 		for _, conditionExpression := range apRule.Spec.Conditions.Expressions {
@@ -2147,6 +2238,12 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 
 			if doesConditionMatch(expectedMetricValue, conditionExpression) {
 				for _, ruleAction := range apRule.Spec.Actions {
+					if actionMaxSize, ok := ruleAction.Params[aututils.RuleMaxSize]; ok {
+						maxSize := parseMaxSize(actionMaxSize)
+						if calculatedTotalSize >= maxSize {
+							return calculatedTotalSize, 0, nil
+						}
+					}
 					actionScalePercentage, err := strconv.ParseUint(ruleAction.Params[aututils.RuleActionsScalePercentage], 10, 64)
 					if err != nil {
 						return 0, 0, err
@@ -2160,19 +2257,8 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 
 					// check if calculated size is more than maxsize
 					if actionMaxSize, ok := ruleAction.Params[aututils.RuleMaxSize]; ok {
-						maxSize, err := strconv.ParseUint(actionMaxSize, 10, 64)
-						if err != nil {
-							a, parseErr := resource.ParseQuantity(actionMaxSize)
-							if parseErr != nil {
-								logrus.Errorf("Can't parse actionMaxSize: '%s', cause err: %s/%s", actionMaxSize, err, parseErr)
-								return 0, 0, err
-							}
-							maxSize = uint64(a.Value())
-						}
+						maxSize := parseMaxSize(actionMaxSize)
 						if maxSize != 0 && calculatedTotalSize >= maxSize {
-							if maxSize == initialSize {
-								resizeCount = 0
-							}
 							return maxSize, resizeCount, nil
 						}
 					}
@@ -2188,6 +2274,19 @@ func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.
 	condExprValue, _ := strconv.ParseFloat(conditionExpression.Values[0], 64)
 	return expectedMetricValue < condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpLt ||
 		expectedMetricValue > condExprValue && conditionExpression.Operator == apapi.LabelSelectorOpGt
+}
+
+func parseMaxSize(maxSize string) uint64 {
+	mSize, err := strconv.ParseUint(maxSize, 10, 64)
+	if err != nil {
+		a, parseErr := resource.ParseQuantity(maxSize)
+		if parseErr != nil {
+			logrus.Errorf("Can't parse maxSize: '%s', cause err: %s/%s", maxSize, err, parseErr)
+			return 0
+		}
+		mSize = uint64(a.Value())
+	}
+	return mSize
 }
 
 // getRestPort gets the service port for rest api, required when using service endpoint

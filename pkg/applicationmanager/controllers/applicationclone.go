@@ -6,13 +6,11 @@ import (
 	"reflect"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/controller"
+	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -23,28 +21,42 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
 	pvNamePrefix = "pvc-"
 )
 
+// NewApplicationClone create a new instance of ApplicationCloneController.
+func NewApplicationClone(mgr manager.Manager, d volume.Driver, r record.EventRecorder, rc resourcecollector.ResourceCollector) *ApplicationCloneController {
+	return &ApplicationCloneController{
+		client:            mgr.GetClient(),
+		volDriver:         d,
+		recorder:          r,
+		resourceCollector: rc,
+	}
+}
+
 // ApplicationCloneController reconciles applicationclone objects
 type ApplicationCloneController struct {
-	Driver            volume.Driver
-	Recorder          record.EventRecorder
-	ResourceCollector resourcecollector.ResourceCollector
+	client runtimeclient.Client
+
+	volDriver         volume.Driver
+	recorder          record.EventRecorder
+	resourceCollector resourcecollector.ResourceCollector
 	dynamicInterface  dynamic.Interface
 	adminNamespace    string
 }
 
 // Init Initialize the application clone controller
-func (a *ApplicationCloneController) Init(adminNamespace string) error {
+func (a *ApplicationCloneController) Init(mgr manager.Manager, adminNamespace string) error {
 	err := a.createCRD()
 	if err != nil {
 		return err
@@ -66,15 +78,7 @@ func (a *ApplicationCloneController) Init(adminNamespace string) error {
 		return err
 	}
 
-	return controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: stork_api.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(stork_api.ApplicationClone{}).Name(),
-		},
-		"",
-		resyncPeriod,
-		a)
+	return controllers.RegisterTo(mgr, "application-clone-controller", a, &stork_api.ApplicationClone{})
 }
 
 func (a *ApplicationCloneController) setKind(snap *stork_api.ApplicationClone) {
@@ -126,117 +130,156 @@ func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.Applicati
 	return nil
 }
 
+// Reconcile updates for ApplicationClone objects.
+func (a *ApplicationCloneController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	logrus.Tracef("Reconciling ApplicationClone %s/%s", request.Namespace, request.Name)
+
+	// Fetch the ApplicationBackup instance
+	clone := &stork_api.ApplicationClone{}
+	err := a.client.Get(context.TODO(), request.NamespacedName, clone)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return reconcile.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	if !controllers.ContainsFinalizer(clone, controllers.FinalizerCleanup) {
+		controllers.SetFinalizer(clone, controllers.FinalizerCleanup)
+		return reconcile.Result{Requeue: true}, a.client.Update(context.TODO(), clone)
+	}
+
+	if err = a.handle(context.TODO(), clone); err != nil {
+		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(a), clone.Namespace, clone.Name, err)
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
+
+	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
+}
+
 // Handle updates for ApplicationClone objects
-func (a *ApplicationCloneController) Handle(ctx context.Context, event sdk.Event) error {
-	switch o := event.Object.(type) {
-	case *stork_api.ApplicationClone:
-		clone := o
-		if event.Deleted {
-			return a.deleteClone(clone)
+func (a *ApplicationCloneController) handle(ctx context.Context, clone *stork_api.ApplicationClone) error {
+	if clone.DeletionTimestamp != nil {
+		if controllers.ContainsFinalizer(clone, controllers.FinalizerCleanup) {
+			if err := a.deleteClone(clone); err != nil {
+				logrus.Errorf("%s: cleanup: %s", reflect.TypeOf(a), err)
+			}
 		}
 
-		// Check whether namespace is allowed to be backed before each stage
-		// Restrict clone to only the namespace that the object belongs
-		// except for the namespace designated by the admin
-		if !a.namespaceCloneAllowed(clone) {
-			err := fmt.Errorf("application clone objects can only be created in the admin namespace (%v)", a.adminNamespace)
+		if clone.GetFinalizers() != nil {
+			controllers.RemoveFinalizer(clone, controllers.FinalizerCleanup)
+			return a.client.Update(ctx, clone)
+		}
+
+		return nil
+	}
+
+	// Check whether namespace is allowed to be backed before each stage
+	// Restrict clone to only the namespace that the object belongs
+	// except for the namespace designated by the admin
+	if !a.namespaceCloneAllowed(clone) {
+		err := fmt.Errorf("application clone objects can only be created in the admin namespace (%v)", a.adminNamespace)
+		log.ApplicationCloneLog(clone).Errorf(err.Error())
+		a.recorder.Event(clone,
+			v1.EventTypeWarning,
+			string(stork_api.ApplicationCloneStatusFailed),
+			err.Error())
+		return nil
+	}
+
+	var terminationChannel chan bool
+	var err error
+
+	a.setDefaults(clone)
+	switch clone.Status.Stage {
+	case stork_api.ApplicationCloneStageInitial:
+		err = a.verifyNamespaces(clone)
+		if err != nil {
 			log.ApplicationCloneLog(clone).Errorf(err.Error())
-			a.Recorder.Event(clone,
+			a.recorder.Event(clone,
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationCloneStatusFailed),
 				err.Error())
 			return nil
 		}
-
-		var terminationChannel chan bool
-		var err error
-
-		a.setDefaults(clone)
-		switch clone.Status.Stage {
-		case stork_api.ApplicationCloneStageInitial:
-			err = a.verifyNamespaces(clone)
+		// Make sure the rules exist if configured
+		if clone.Spec.PreExecRule != "" {
+			_, err := storkops.Instance().GetRule(clone.Spec.PreExecRule, clone.Namespace)
 			if err != nil {
-				log.ApplicationCloneLog(clone).Errorf(err.Error())
-				a.Recorder.Event(clone,
-					v1.EventTypeWarning,
-					string(stork_api.ApplicationCloneStatusFailed),
-					err.Error())
-				return nil
-			}
-			// Make sure the rules exist if configured
-			if clone.Spec.PreExecRule != "" {
-				_, err := storkops.Instance().GetRule(clone.Spec.PreExecRule, clone.Namespace)
-				if err != nil {
-					message := fmt.Sprintf("Error getting PreExecRule %v: %v", clone.Spec.PreExecRule, err)
-					log.ApplicationCloneLog(clone).Errorf(message)
-					a.Recorder.Event(clone,
-						v1.EventTypeWarning,
-						string(stork_api.ApplicationCloneStatusFailed),
-						message)
-					return nil
-				}
-			}
-			if clone.Spec.PostExecRule != "" {
-				_, err := storkops.Instance().GetRule(clone.Spec.PostExecRule, clone.Namespace)
-				if err != nil {
-					message := fmt.Sprintf("Error getting PostExecRule %v: %v", clone.Spec.PostExecRule, err)
-					log.ApplicationCloneLog(clone).Errorf(message)
-					a.Recorder.Event(clone,
-						v1.EventTypeWarning,
-						string(stork_api.ApplicationCloneStatusFailed),
-						message)
-					return nil
-				}
-			}
-			fallthrough
-		case stork_api.ApplicationCloneStagePreExecRule:
-			terminationChannel, err = a.runPreExecRule(clone)
-			if err != nil {
-				message := fmt.Sprintf("Error running PreExecRule: %v", err)
+				message := fmt.Sprintf("Error getting PreExecRule %v: %v", clone.Spec.PreExecRule, err)
 				log.ApplicationCloneLog(clone).Errorf(message)
-				a.Recorder.Event(clone,
-					v1.EventTypeWarning,
-					string(stork_api.ApplicationCloneStatusFailed),
-					message)
-				clone.Status.Stage = stork_api.ApplicationCloneStageInitial
-				clone.Status.Status = stork_api.ApplicationCloneStatusInitial
-				err := sdk.Update(clone)
-				if err != nil {
-					return err
-				}
-				return nil
-			}
-			fallthrough
-		case stork_api.ApplicationCloneStageVolumes:
-			err := a.cloneVolumes(clone, terminationChannel)
-			if err != nil {
-				message := fmt.Sprintf("Error cloning volumes: %v", err)
-				log.ApplicationCloneLog(clone).Errorf(message)
-				a.Recorder.Event(clone,
+				a.recorder.Event(clone,
 					v1.EventTypeWarning,
 					string(stork_api.ApplicationCloneStatusFailed),
 					message)
 				return nil
 			}
-		case stork_api.ApplicationCloneStageApplications:
-			err := a.cloneResources(clone)
-			if err != nil {
-				message := fmt.Sprintf("Error cloning resources: %v", err)
-				log.ApplicationCloneLog(clone).Errorf(message)
-				a.Recorder.Event(clone,
-					v1.EventTypeWarning,
-					string(stork_api.ApplicationCloneStatusFailed),
-					message)
-				return nil
-			}
-
-		case stork_api.ApplicationCloneStageFinal:
-			// Do Nothing
-			return nil
-		default:
-			log.ApplicationCloneLog(clone).Errorf("Invalid stage for clone: %v", clone.Status.Stage)
 		}
+		if clone.Spec.PostExecRule != "" {
+			_, err := storkops.Instance().GetRule(clone.Spec.PostExecRule, clone.Namespace)
+			if err != nil {
+				message := fmt.Sprintf("Error getting PostExecRule %v: %v", clone.Spec.PostExecRule, err)
+				log.ApplicationCloneLog(clone).Errorf(message)
+				a.recorder.Event(clone,
+					v1.EventTypeWarning,
+					string(stork_api.ApplicationCloneStatusFailed),
+					message)
+				return nil
+			}
+		}
+		fallthrough
+	case stork_api.ApplicationCloneStagePreExecRule:
+		terminationChannel, err = a.runPreExecRule(clone)
+		if err != nil {
+			message := fmt.Sprintf("Error running PreExecRule: %v", err)
+			log.ApplicationCloneLog(clone).Errorf(message)
+			a.recorder.Event(clone,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationCloneStatusFailed),
+				message)
+			clone.Status.Stage = stork_api.ApplicationCloneStageInitial
+			clone.Status.Status = stork_api.ApplicationCloneStatusInitial
+			err := a.client.Update(context.TODO(), clone)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		fallthrough
+	case stork_api.ApplicationCloneStageVolumes:
+		err := a.cloneVolumes(clone, terminationChannel)
+		if err != nil {
+			message := fmt.Sprintf("Error cloning volumes: %v", err)
+			log.ApplicationCloneLog(clone).Errorf(message)
+			a.recorder.Event(clone,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationCloneStatusFailed),
+				message)
+			return nil
+		}
+	case stork_api.ApplicationCloneStageApplications:
+		err := a.cloneResources(clone)
+		if err != nil {
+			message := fmt.Sprintf("Error cloning resources: %v", err)
+			log.ApplicationCloneLog(clone).Errorf(message)
+			a.recorder.Event(clone,
+				v1.EventTypeWarning,
+				string(stork_api.ApplicationCloneStatusFailed),
+				message)
+			return nil
+		}
+
+	case stork_api.ApplicationCloneStageFinal:
+		// Do Nothing
+		return nil
+	default:
+		log.ApplicationCloneLog(clone).Errorf("Invalid stage for clone: %v", clone.Status.Stage)
 	}
+
 	return nil
 }
 
@@ -254,7 +297,7 @@ func (a *ApplicationCloneController) generateCloneVolumeNames(clone *stork_api.A
 
 	volumeInfos := make([]*stork_api.ApplicationCloneVolumeInfo, 0)
 	for _, pvc := range pvcList.Items {
-		if !a.Driver.OwnsPVC(&pvc) {
+		if !a.volDriver.OwnsPVC(&pvc) {
 			continue
 		}
 		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
@@ -271,7 +314,7 @@ func (a *ApplicationCloneController) generateCloneVolumeNames(clone *stork_api.A
 		volumeInfos = append(volumeInfos, volumeInfo)
 	}
 	clone.Status.Volumes = volumeInfos
-	return sdk.Update(clone)
+	return a.client.Update(context.TODO(), clone)
 }
 
 func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationClone, terminationChannel chan bool) error {
@@ -290,7 +333,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 			return err
 		}
 		clone.Status.Status = stork_api.ApplicationCloneStatusInProgress
-		if err := sdk.Update(clone); err != nil {
+		if err := a.client.Update(context.TODO(), clone); err != nil {
 			return err
 		}
 	}
@@ -298,7 +341,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 	// Start clone of the volumes if it hasn't started yet
 	if clone.Status.Stage == stork_api.ApplicationCloneStageVolumes &&
 		clone.Status.Status == stork_api.ApplicationCloneStatusInProgress {
-		if err := a.Driver.CreateVolumeClones(clone); err != nil {
+		if err := a.volDriver.CreateVolumeClones(clone); err != nil {
 			return err
 		}
 
@@ -313,7 +356,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 			if err := a.runPostExecRule(clone); err != nil {
 				message := fmt.Sprintf("Error running PostExecRule: %v", err)
 				log.ApplicationCloneLog(clone).Errorf(message)
-				a.Recorder.Event(clone,
+				a.recorder.Event(clone,
 					v1.EventTypeWarning,
 					string(stork_api.ApplicationCloneStatusFailed),
 					message)
@@ -321,7 +364,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 				clone.Status.Stage = stork_api.ApplicationCloneStageFinal
 				clone.Status.FinishTimestamp = metav1.Now()
 				clone.Status.Status = stork_api.ApplicationCloneStatusFailed
-				err = sdk.Update(clone)
+				err = a.client.Update(context.TODO(), clone)
 				if err != nil {
 					return err
 				}
@@ -336,7 +379,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 		// TODO: On failure of one volume cancel other clones?
 		for _, vInfo := range clone.Status.Volumes {
 			if vInfo.Status == stork_api.ApplicationCloneStatusFailed {
-				a.Recorder.Event(clone,
+				a.recorder.Event(clone,
 					v1.EventTypeWarning,
 					string(vInfo.Status),
 					fmt.Sprintf("Error cloning volume %v: %v", vInfo.Volume, vInfo.Reason))
@@ -344,7 +387,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 				clone.Status.FinishTimestamp = metav1.Now()
 				clone.Status.Status = stork_api.ApplicationCloneStatusFailed
 			} else if vInfo.Status == stork_api.ApplicationCloneStatusSuccessful {
-				a.Recorder.Event(clone,
+				a.recorder.Event(clone,
 					v1.EventTypeNormal,
 					string(vInfo.Status),
 					fmt.Sprintf("Volume %v cloned successfully", vInfo.Volume))
@@ -357,7 +400,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 		clone.Status.Stage = stork_api.ApplicationCloneStageApplications
 		clone.Status.Status = stork_api.ApplicationCloneStatusInProgress
 		// Update the current state and then move on to cloning resources
-		err := sdk.Update(clone)
+		err := a.client.Update(context.TODO(), clone)
 		if err != nil {
 			return err
 		}
@@ -365,7 +408,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 		if err != nil {
 			message := fmt.Sprintf("Error cloning resources: %v", err)
 			log.ApplicationCloneLog(clone).Errorf(message)
-			a.Recorder.Event(clone,
+			a.recorder.Event(clone,
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationCloneStatusFailed),
 				message)
@@ -373,7 +416,7 @@ func (a *ApplicationCloneController) cloneVolumes(clone *stork_api.ApplicationCl
 		}
 	}
 
-	err := sdk.Update(clone)
+	err := a.client.Update(context.TODO(), clone)
 	if err != nil {
 		return err
 	}
@@ -384,7 +427,7 @@ func (a *ApplicationCloneController) runPreExecRule(clone *stork_api.Application
 	if clone.Spec.PreExecRule == "" {
 		clone.Status.Stage = stork_api.ApplicationCloneStageVolumes
 		clone.Status.Status = stork_api.ApplicationCloneStatusPending
-		err := sdk.Update(clone)
+		err := a.client.Update(context.TODO(), clone)
 		if err != nil {
 			return nil, err
 		}
@@ -397,12 +440,12 @@ func (a *ApplicationCloneController) runPreExecRule(clone *stork_api.Application
 	if clone.Status.Stage == stork_api.ApplicationCloneStagePreExecRule {
 		if clone.Status.Status == stork_api.ApplicationCloneStatusPending {
 			clone.Status.Status = stork_api.ApplicationCloneStatusInProgress
-			err := sdk.Update(clone)
+			err := a.client.Update(context.TODO(), clone)
 			if err != nil {
 				return nil, err
 			}
 		} else if clone.Status.Status == stork_api.ApplicationCloneStatusInProgress {
-			a.Recorder.Event(clone,
+			a.recorder.Event(clone,
 				v1.EventTypeNormal,
 				string(stork_api.ApplicationCloneStatusInProgress),
 				fmt.Sprintf("Waiting for PreExecRule %v", clone.Spec.PreExecRule))
@@ -464,10 +507,11 @@ func (a *ApplicationCloneController) prepareResources(
 				return nil, fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		}
-		err = a.ResourceCollector.PrepareResourceForApply(
+		_, err = a.resourceCollector.PrepareResourceForApply(
 			o,
 			namespaceMapping,
-			pvNameMappings)
+			pvNameMappings,
+			clone.Spec.IncludeOptionalResourceTypes)
 		if err != nil {
 			return nil, err
 		}
@@ -484,7 +528,7 @@ func (a *ApplicationCloneController) preparePVResource(
 		return err
 	}
 
-	_, err := a.Driver.UpdateMigratedPersistentVolumeSpec(&pv)
+	_, err := a.volDriver.UpdateMigratedPersistentVolumeSpec(&pv)
 	if err != nil {
 		return err
 	}
@@ -552,7 +596,7 @@ func (a *ApplicationCloneController) updateResourceStatus(
 		gvk,
 		resourceInfo.Name,
 		reason)
-	a.Recorder.Event(clone, eventType, string(status), eventMessage)
+	a.recorder.Event(clone, eventType, string(status), eventMessage)
 
 	clone.Status.Resources = append(clone.Status.Resources, resourceInfo)
 	return nil
@@ -578,7 +622,7 @@ func (a *ApplicationCloneController) applyResources(
 	// First delete the existing objects if they exist and replace policy is set
 	// to Delete
 	if clone.Spec.ReplacePolicy == stork_api.ApplicationCloneReplacePolicyDelete {
-		err := a.ResourceCollector.DeleteResources(
+		err := a.resourceCollector.DeleteResources(
 			a.dynamicInterface,
 			objects)
 		if err != nil {
@@ -598,7 +642,7 @@ func (a *ApplicationCloneController) applyResources(
 
 		log.ApplicationCloneLog(clone).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
 		retained := false
-		err = a.ResourceCollector.ApplyResource(
+		err = a.resourceCollector.ApplyResource(
 			a.dynamicInterface,
 			o)
 		if err != nil && errors.IsAlreadyExists(err) {
@@ -649,7 +693,11 @@ func (a *ApplicationCloneController) applyResources(
 func (a *ApplicationCloneController) cloneResources(
 	clone *stork_api.ApplicationClone,
 ) error {
-	allObjects, err := a.ResourceCollector.GetResources([]string{clone.Spec.SourceNamespace}, clone.Spec.Selectors, false)
+	allObjects, err := a.resourceCollector.GetResources(
+		[]string{clone.Spec.SourceNamespace},
+		clone.Spec.Selectors,
+		clone.Spec.IncludeOptionalResourceTypes,
+		false)
 	if err != nil {
 		log.ApplicationCloneLog(clone).Errorf("Error getting resources: %v", err)
 		return err
@@ -657,7 +705,7 @@ func (a *ApplicationCloneController) cloneResources(
 
 	// Do any additional preparation for the resources if required
 	if allObjects, err = a.prepareResources(clone, allObjects); err != nil {
-		a.Recorder.Event(clone,
+		a.recorder.Event(clone,
 			v1.EventTypeWarning,
 			string(stork_api.ApplicationCloneStatusFailed),
 			fmt.Sprintf("Error preparing resource: %v", err))
@@ -679,7 +727,7 @@ func (a *ApplicationCloneController) cloneResources(
 		}
 	}
 
-	if err = sdk.Update(clone); err != nil {
+	if err = a.client.Update(context.TODO(), clone); err != nil {
 		return err
 	}
 
@@ -694,7 +742,7 @@ func (a *ApplicationCloneController) createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:    stork_api.ApplicationCloneResourceName,
 		Plural:  stork_api.ApplicationCloneResourcePlural,
-		Group:   stork.GroupName,
+		Group:   stork_api.SchemeGroupVersion.Group,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationClone{}).Name(),

@@ -124,6 +124,9 @@ var (
 	forceUnsupportedFsTypeRegex = regexp.MustCompile(api.SpecForceUnsupportedFsType + "=([A-Za-z]+),?")
 	nodiscardRegex              = regexp.MustCompile(api.SpecNodiscard + "=([A-Za-z]+),?")
 	storagePolicyRegex          = regexp.MustCompile(api.StoragePolicy + "=([0-9A-Za-z_-]+),?")
+	exportProtocolRegex         = regexp.MustCompile(api.SpecExportProtocol + "=([A-Za-z]+),?")
+	exportOptionsRegex          = regexp.MustCompile(api.SpecExportOptions + "=([A-Za-z]+),?")
+	cowOnDemandRegex            = regexp.MustCompile(api.SpecCowOnDemand + "=([A-Za-z]+),?")
 )
 
 type specHandler struct {
@@ -366,6 +369,34 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 			// skip, if not it would be added to the labels
 		case api.StoragePolicy:
 			spec.StoragePolicy = v
+		case api.SpecExportProtocol:
+			if spec.ExportSpec == nil {
+				spec.ExportSpec = &api.ExportSpec{}
+			}
+			if v == api.SpecExportProtocolPXD {
+				spec.ExportSpec.ExportProtocol = api.ExportProtocol_PXD
+			} else if v == api.SpecExportProtocolNFS {
+				spec.ExportSpec.ExportProtocol = api.ExportProtocol_NFS
+			} else if v == api.SpecExportProtocolISCSI {
+				spec.ExportSpec.ExportProtocol = api.ExportProtocol_ISCSI
+			} else if v == api.SpecExportProtocolCustom {
+				spec.ExportSpec.ExportProtocol = api.ExportProtocol_CUSTOM
+			} else {
+				return nil, nil, nil, fmt.Errorf("unsupported Export Protocol %v", v)
+			}
+		case api.SpecExportOptions:
+			if spec.ExportSpec == nil {
+				spec.ExportSpec = &api.ExportSpec{}
+			}
+			spec.ExportSpec.ExportOptions = v
+		case api.SpecCowOnDemand:
+			if cowOnDemand, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				if cowOnDemand {
+					spec.Xattr = api.Xattr_COW_ON_DEMAND
+				}
+			}
 		default:
 			locator.VolumeLabels[k] = v
 		}
@@ -508,6 +539,15 @@ func (d *specHandler) SpecOptsFromString(
 	}
 	if ok, storagepolicy := d.getVal(storagePolicyRegex, str); ok {
 		opts[api.StoragePolicy] = storagepolicy
+	}
+	if ok, exportProtocol := d.getVal(exportProtocolRegex, str); ok {
+		opts[api.SpecExportProtocol] = exportProtocol
+	}
+	if ok, exportOptions := d.getVal(exportOptionsRegex, str); ok {
+		opts[api.SpecExportOptions] = exportOptions
+	}
+	if ok, cowOnDemand := d.getVal(cowOnDemandRegex, str); ok {
+		opts[api.SpecCowOnDemand] = cowOnDemand
 	}
 
 	return true, opts, name

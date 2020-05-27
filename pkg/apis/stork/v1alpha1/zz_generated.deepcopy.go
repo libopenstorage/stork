@@ -278,6 +278,7 @@ func (in *ApplicationBackupStatus) DeepCopyInto(out *ApplicationBackupStatus) {
 		}
 	}
 	in.TriggerTimestamp.DeepCopyInto(&out.TriggerTimestamp)
+	in.LastUpdateTimestamp.DeepCopyInto(&out.LastUpdateTimestamp)
 	in.FinishTimestamp.DeepCopyInto(&out.FinishTimestamp)
 	return
 }
@@ -424,6 +425,11 @@ func (in *ApplicationCloneSpec) DeepCopyInto(out *ApplicationCloneSpec) {
 		for key, val := range *in {
 			(*out)[key] = val
 		}
+	}
+	if in.IncludeOptionalResourceTypes != nil {
+		in, out := &in.IncludeOptionalResourceTypes, &out.IncludeOptionalResourceTypes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	return
 }
@@ -593,6 +599,11 @@ func (in *ApplicationRestoreSpec) DeepCopyInto(out *ApplicationRestoreSpec) {
 		*out = new(v1.EnvVarSource)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.IncludeOptionalResourceTypes != nil {
+		in, out := &in.IncludeOptionalResourceTypes, &out.IncludeOptionalResourceTypes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
@@ -632,6 +643,7 @@ func (in *ApplicationRestoreStatus) DeepCopyInto(out *ApplicationRestoreStatus) 
 		}
 	}
 	in.FinishTimestamp.DeepCopyInto(&out.FinishTimestamp)
+	in.LastUpdateTimestamp.DeepCopyInto(&out.LastUpdateTimestamp)
 	return
 }
 
@@ -1598,6 +1610,11 @@ func (in *MigrationSpec) DeepCopyInto(out *MigrationSpec) {
 		for key, val := range *in {
 			(*out)[key] = val
 		}
+	}
+	if in.IncludeOptionalResourceTypes != nil {
+		in, out := &in.IncludeOptionalResourceTypes, &out.IncludeOptionalResourceTypes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	return
 }

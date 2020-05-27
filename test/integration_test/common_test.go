@@ -9,10 +9,13 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"testing"
 	"time"
 
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
+	_ "github.com/libopenstorage/stork/drivers/volume/aws"
+	_ "github.com/libopenstorage/stork/drivers/volume/azure"
 	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/schedule"
@@ -40,6 +43,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -50,8 +54,8 @@ const (
 	remotePairName        = "remoteclusterpair"
 	remoteConfig          = "remoteconfigmap"
 	specDir               = "./specs"
-	pairFilePath          = "./specs/cluster-pair"
-	pairFileName          = pairFilePath + "/cluster-pair.yaml"
+	defaultClusterPairDir = "cluster-pair"
+	pairFileName          = "cluster-pair.yaml"
 	remoteFilePath        = "/tmp/kubeconfig"
 	configMapSyncWaitTime = 3 * time.Second
 	defaultSchedulerName  = "default-scheduler"
@@ -65,10 +69,12 @@ const (
 	clusterDomainWaitTimeout time.Duration = 10 * time.Minute
 	groupSnapshotWaitTimeout time.Duration = 15 * time.Minute
 	defaultWaitInterval      time.Duration = 10 * time.Second
+	backupWaitInterval       time.Duration = 2 * time.Second
 
 	enableClusterDomainTests = "ENABLE_CLUSTER_DOMAIN_TESTS"
 	storageProvisioner       = "STORAGE_PROVISIONER"
 	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
+	backupPathVar            = "BACKUP_LOCATION_PATH"
 )
 
 var nodeDriver node.Driver
@@ -83,6 +89,7 @@ var authToken string
 var authTokenConfigMap string
 var volumeDriverName string
 var schedulerName string
+var backupLocationPath string
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -97,12 +104,13 @@ func setup() error {
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	provisioner := os.Getenv(storageProvisioner)
+	backupLocationPath = os.Getenv(backupPathVar)
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
-		return fmt.Errorf("Error getting stork driver %s: %v", volumeDriverName, err)
+		return fmt.Errorf("Error getting stork volume driver %s: %v", volumeDriverName, err)
 	}
 
 	if err = storkVolumeDriver.Init(nil); err != nil {
-		return fmt.Errorf("Error getting stork driver %v: %v", volumeDriverName, err)
+		return fmt.Errorf("Error initializing stork volume driver %v: %v", volumeDriverName, err)
 	}
 
 	if nodeDriver, err = node.Get(nodeDriverName); err != nil {
@@ -165,7 +173,7 @@ func destroyAndWait(t *testing.T, ctxs []*scheduler.Context) {
 	for _, ctx := range ctxs {
 		err := schedulerDriver.WaitForDestroy(ctx, defaultWaitTimeout)
 		require.NoError(t, err, "Error waiting for destroy of ctx: %+v", ctx)
-		_, err = schedulerDriver.DeleteVolumes(ctx)
+		_, err = schedulerDriver.DeleteVolumes(ctx, nil)
 		require.NoError(t, err, "Error deleting volumes in ctx: %+v", ctx)
 	}
 }
@@ -331,13 +339,14 @@ func setRemoteConfig(kubeConfig string) error {
 	return nil
 }
 
-func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
-	err := os.MkdirAll(pairFilePath, 0777)
+func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir string) error {
+	err := os.MkdirAll(path.Join(specDir, clusterPairDir), 0777)
 	if err != nil {
-		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", pairFilePath, err)
+		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", specDir+"/"+clusterPairDir, err)
 		return err
 	}
-	pairFile, err := os.Create(pairFileName)
+	clusterPairFileName := path.Join(specDir, clusterPairDir, pairFileName)
+	pairFile, err := os.Create(clusterPairFileName)
 	if err != nil {
 		logrus.Errorf("Unable to create clusterPair.yaml: %v", err)
 		return err
@@ -357,7 +366,7 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		return err
 	}
 
-	truncCmd := `sed -i "$((` + "`wc -l " + pairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + pairFileName
+	truncCmd := `sed -i "$((` + "`wc -l " + clusterPairFileName + "|awk '{print $1}'`" + `-4)),$ d" ` + clusterPairFileName
 	logrus.Infof("trunc cmd: %v", truncCmd)
 	err = exec.Command("sh", "-c", truncCmd).Run()
 	if err != nil {
@@ -365,11 +374,27 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		return err
 	}
 
-	// stokctl generate command sets sched-ops to remoteclusterconfig
-	err = setRemoteConfig("")
-	if err != nil {
-		logrus.Errorf("setting kubeconfig to default failed %v", err)
-		return err
+	if resetConfig {
+		// stokctl generate command sets sched-ops to remoteclusterconfig
+		err = setRemoteConfig("")
+		if err != nil {
+			logrus.Errorf("setting kubeconfig to default failed %v", err)
+			return err
+		}
+	} else {
+		// Change kubeconfig to second cluster
+		err = dumpRemoteKubeConfig(remoteConfig)
+		if err != nil {
+			logrus.Errorf("unable to dump remote config: %v", err)
+			return err
+		}
+
+		// Change kubeconfig to destination
+		err = setRemoteConfig(remoteFilePath)
+		if err != nil {
+			logrus.Errorf("unable to set remote config: %v", err)
+			return err
+		}
 	}
 
 	if skipStorage {
@@ -377,11 +402,11 @@ func createClusterPair(pairInfo map[string]string, skipStorage bool) error {
 		return nil
 	}
 
-	return addStorageOptions(pairInfo)
+	return addStorageOptions(pairInfo, clusterPairFileName)
 }
 
-func addStorageOptions(pairInfo map[string]string) error {
-	file, err := os.OpenFile(pairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) error {
+	file, err := os.OpenFile(clusterPairFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		logrus.Errorf("Unable to open %v: %v", pairFileName, err)
 		return err
@@ -409,11 +434,11 @@ func addStorageOptions(pairInfo map[string]string) error {
 		return err
 	}
 
-	logrus.Info("cluster-pair.yml created")
+	logrus.Infof("cluster-pair.yml created with storage options in %s", clusterPairFileName)
 	return nil
 }
 
-func scheduleClusterPair(ctx *scheduler.Context, skipStorage bool) error {
+func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string) error {
 	err := dumpRemoteKubeConfig(remoteConfig)
 	if err != nil {
 		logrus.Errorf("Unable to write clusterconfig: %v", err)
@@ -425,7 +450,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage bool) error {
 		return err
 	}
 
-	err = createClusterPair(info, skipStorage)
+	err = createClusterPair(info, skipStorage, resetConfig, clusterPairDir)
 	if err != nil {
 		logrus.Errorf("Error creating cluster Spec: %v", err)
 		return err
@@ -438,7 +463,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage bool) error {
 	}
 
 	err = schedulerDriver.AddTasks(ctx,
-		scheduler.ScheduleOptions{AppKeys: []string{"cluster-pair"}})
+		scheduler.ScheduleOptions{AppKeys: []string{clusterPairDir}})
 	if err != nil {
 		logrus.Errorf("Failed to schedule Cluster Pair Specs: %v", err)
 		return err

@@ -20,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubernetes "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/kubernetes/pkg/scheduler/api"
+	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -46,6 +46,7 @@ func TestMonitor(t *testing.T) {
 	t.Run("testUnknownOtherDriverPod", testUnknownOtherDriverPod)
 	t.Run("testEvictedDriverPod", testEvictedDriverPod)
 	t.Run("testEvictedOtherDriverPod", testEvictedOtherDriverPod)
+	t.Run("testTempOfflineStorageNode", testTempOfflineStorageNode)
 	t.Run("testOfflineStorageNode", testOfflineStorageNode)
 	t.Run("testOfflineStorageNodeDuplicateIP", testOfflineStorageNodeDuplicateIP)
 	t.Run("testVolumeAttachmentCleanup", testVolumeAttachmentCleanup)
@@ -60,7 +61,7 @@ func setup(t *testing.T) {
 
 	fakeStorkClient = fakeclient.NewSimpleClientset()
 	fakeKubeClient := kubernetes.NewSimpleClientset()
-	core.SetInstance(core.New(fakeKubeClient, fakeKubeClient.CoreV1(), fakeKubeClient.StorageV1()))
+	core.SetInstance(core.New(fakeKubeClient))
 	storage.SetInstance(storage.New(fakeKubeClient.StorageV1()))
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
 
@@ -189,7 +190,7 @@ func testLostPod(
 		require.NoError(t, err, "failed to get node for pod")
 		node.Spec.Taints = []v1.Taint{
 			{
-				Key:    api.TaintNodeUnreachable,
+				Key:    schedulerapi.TaintNodeUnreachable,
 				Effect: v1.TaintEffectNoExecute,
 			},
 		}
@@ -276,9 +277,34 @@ func testOfflineStorageNode(t *testing.T) {
 		require.NoError(t, err, "Error setting node status to Online")
 	}()
 
-	time.Sleep(35 * time.Second)
+	time.Sleep(95 * time.Second)
 	_, err = core.Instance().GetPodByName(pod.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
+	_, err = core.Instance().GetPodByName(noStoragePod.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
+}
+
+func testTempOfflineStorageNode(t *testing.T) {
+	pod := newPod("driverPodTemp", []string{driverVolumeName})
+	_, err := core.Instance().CreatePod(pod)
+	require.NoError(t, err, "failed to create pod")
+
+	noStoragePod := newPod("noStoragePodTemp", nil)
+	_, err = core.Instance().CreatePod(noStoragePod)
+	require.NoError(t, err, "failed to create pod")
+
+	err = driver.UpdateNodeStatus(0, volume.NodeOffline)
+	require.NoError(t, err, "Error setting node status to Offline")
+
+	go func() {
+		time.Sleep(30 * time.Second)
+		err = driver.UpdateNodeStatus(0, volume.NodeOnline)
+		require.NoError(t, err, "Error setting node status to Online")
+	}()
+
+	time.Sleep(60 * time.Second)
+	_, err = core.Instance().GetPodByName(pod.Name, "")
+	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 	_, err = core.Instance().GetPodByName(noStoragePod.Name, "")
 	require.NoError(t, err, "expected no error from get pod as pod should not be deleted")
 }
@@ -412,7 +438,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	}()
 
 	// VolumeAttachments (VA) for N2 and N3 should be deleted, but VA for N1 should remain.
-	time.Sleep(35 * time.Second)
+	time.Sleep(95 * time.Second)
 
 	vaList, err := storage.Instance().ListVolumeAttachments()
 	require.NoError(t, err, "expected no error from list vol attachments")

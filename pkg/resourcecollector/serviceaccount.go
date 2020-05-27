@@ -5,8 +5,10 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func (r *ResourceCollector) serviceAccountToBeCollected(
@@ -34,4 +36,42 @@ func (r *ResourceCollector) serviceAccountToBeCollected(
 		return false, nil
 	}
 	return true, nil
+}
+
+func (r *ResourceCollector) mergeAndUpdateServiceAccount(
+	object runtime.Unstructured,
+) error {
+	var newSA v1.ServiceAccount
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &newSA); err != nil {
+		return err
+	}
+
+	currentSA, err := r.coreOps.GetServiceAccount(newSA.Name, newSA.Namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			_, err = r.coreOps.CreateServiceAccount(&newSA)
+		}
+		return err
+	}
+	imagePullSecrets := sets.NewString()
+	for _, secret := range currentSA.ImagePullSecrets {
+		imagePullSecrets.Insert(secret.Name)
+	}
+	for _, secret := range newSA.ImagePullSecrets {
+		if !imagePullSecrets.Has(secret.Name) {
+			currentSA.ImagePullSecrets = append(currentSA.ImagePullSecrets, secret)
+		}
+	}
+
+	secrets := sets.NewString()
+	for _, secret := range currentSA.Secrets {
+		secrets.Insert(secret.Name)
+	}
+	for _, secret := range newSA.Secrets {
+		if !imagePullSecrets.Has(secret.Name) {
+			currentSA.Secrets = append(currentSA.Secrets, secret)
+		}
+	}
+	_, err = r.coreOps.UpdateServiceAccount(currentSA)
+	return err
 }

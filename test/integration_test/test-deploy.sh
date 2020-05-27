@@ -13,6 +13,10 @@ focus_tests=""
 auth_secret_configmap=""
 volume_driver="pxd"
 short_test=false
+backup_location_path="test-restore-path"
+cloud_secret=""
+aws_id=""
+aws_key=""
 for i in "$@"
 do
 case $i in
@@ -94,15 +98,45 @@ case $i in
         shift
         shift
         ;;
+    --backup_location_path)
+        echo "Path used for backups in application backup tests: $2"
+        backup_location_path=$2
+        shift
+        shift
+        ;;
+    --cloud_secret)
+        echo "Secret name for cloud provider API access: $2"
+        cloud_secret=$2
+        shift
+        shift
+        ;;
+    --aws_id)
+        echo "AWS user id for API access: $2"
+        aws_id=$2
+        shift
+        shift
+        ;;
+    --aws_key)
+        echo "AWS key for API access: $2"
+        aws_key=$2
+        shift
+        shift
+        ;;
 esac
 done
 
 apk update
 apk add jq
+apt-get -y install jq
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
 sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g'  /specs/stork-deployment.yaml
+
+# Replace volume driver in stork
+if [ "$volume_driver" != "pxd" ] ; then
+	sed -i 's/- --driver=pxd//g' /specs/stork-deployment.yaml
+fi
 
 # For integration test mock times
 kubectl delete cm stork-mock-time  -n kube-system || true
@@ -124,6 +158,10 @@ else
   echo "No environment variables passed."
 fi
 
+if [ "$volume_driver" == "azure" ] ; then
+    echo "For azure backups add environment variables to stork from existing k8s secret px-azure"
+    kubectl -n  kube-system set env --from=secret/$cloud_secret deploy/stork
+fi
 
 # Delete the pods to make sure we are waiting for the status from the
 # new pods
@@ -140,22 +178,24 @@ for i in $(seq 1 100) ; do
     fi
 done
 
-echo "Creating stork scheduler"
-kubectl apply -f /specs/stork-scheduler.yaml
+if [ "$volume_driver" == "pxd" ] ; then
+	echo "Creating stork scheduler"
+	kubectl apply -f /specs/stork-scheduler.yaml
 # Delete the pods to make sure we are waiting for the status from the
 # new pods
-kubectl delete pods -n kube-system -l name=stork-scheduler
+	kubectl delete pods -n kube-system -l name=stork-scheduler
 
-echo "Waiting for stork-scheduler to be in running state"
-for i in $(seq 1 100) ; do
-    replicas=$(kubectl get deployment -n kube-system stork-scheduler -o json | jq ".status.readyReplicas")
-    if [ "$replicas" == "3" ]; then
-        break
-    else
-        echo "Stork scheduler is not ready yet"
-        sleep 10
-    fi
-done
+	echo "Waiting for stork-scheduler to be in running state"
+	for i in $(seq 1 100) ; do
+		replicas=$(kubectl get deployment -n kube-system stork-scheduler -o json | jq ".status.readyReplicas")
+		if [ "$replicas" == "3" ]; then
+			break
+		else
+			echo "Stork scheduler is not ready yet"
+			sleep 10
+		fi
+	done
+fi
 
 if [ "$run_cluster_domain_test" == "true" ] ; then
 	sed -i 's/'enable_cluster_domain'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
@@ -165,9 +205,9 @@ fi
 
 if [ "$focus_tests" != "" ] ; then
      echo "Running focussed test: ${focus_tests}"
-	sed -i 's/'FOCUS_TESTS'/- -test.run='"$focus_tests"'/g' /testspecs/stork-test-pod.yaml
+	sed -i 's|'FOCUS_TESTS'|- -test.run='"$focus_tests"'|g' /testspecs/stork-test-pod.yaml
 else 
-	sed -i 's/'FOCUS_TESTS'/''/g' /testspecs/stork-test-pod.yaml
+	sed -i 's|'FOCUS_TESTS'|''|g' /testspecs/stork-test-pod.yaml
 fi
 
 sed -i 's/'SHORT_FLAG'/'"$short_test"'/g' /testspecs/stork-test-pod.yaml
@@ -190,6 +230,11 @@ sed -i 's/- -backup-scale-count=10/- -backup-scale-count='"$backup_scale"'/g' /t
 sed -i 's/'username'/'"$SSH_USERNAME"'/g' /testspecs/stork-test-pod.yaml
 sed -i 's/'password'/'"$SSH_PASSWORD"'/g' /testspecs/stork-test-pod.yaml
 sed  -i 's|'openstorage/stork_test:.*'|'"$test_image_name"'|g'  /testspecs/stork-test-pod.yaml
+sed -i 's/'backup_location_path'/'"$backup_location_path"'/g' /testspecs/stork-test-pod.yaml
+
+# Add AWS creds to stork-test pod
+sed -i 's/'aws_access_key_id'/'"$aws_id"'/g' /testspecs/stork-test-pod.yaml
+sed -i 's/'aws_secret_access_key'/'"$aws_key"'/g' /testspecs/stork-test-pod.yaml
 
 if [ "$volume_driver" != "" ] ; then
 	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml

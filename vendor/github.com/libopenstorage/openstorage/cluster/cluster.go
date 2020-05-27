@@ -47,6 +47,8 @@ type ClusterServerConfiguration struct {
 	ConfigSystemTokenManager auth.TokenGenerator
 	// holds implementation to ClusterDomains interface
 	ConfigClusterDomainProvider clusterdomain.ClusterDomainProvider
+	// holds implementation to the OpenStoragePoolServer interface
+	ConfigStoragePoolProvider api.OpenStoragePoolServer
 }
 
 // NodeEntry is used to discover other nodes in the cluster
@@ -108,6 +110,9 @@ type ClusterListener interface {
 
 	// Init is called when this node is joining an existing cluster for the first time.
 	Init(self *api.Node, state *ClusterInfo) (FinalizeInitCb, error)
+
+	// PreJoin is called before the node joins an existing cluster
+	PreJoin(self *api.Node) error
 
 	// Join is called when this node is joining an existing cluster.
 	Join(self *api.Node, state *ClusterInitState) error
@@ -375,6 +380,7 @@ type Cluster interface {
 	secrets.Secrets
 	sched.SchedulePolicyProvider
 	objectstore.ObjectStore
+	api.OpenStoragePoolServer
 }
 
 // NullClusterListener is a NULL implementation of ClusterListener functions
@@ -411,7 +417,14 @@ func (nc *NullClusterListener) NodeInspect(node *api.Node) error {
 
 func (nc *NullClusterListener) Halt(
 	self *api.Node,
-	clusterInfo *ClusterInfo) error {
+	clusterInfo *ClusterInfo,
+) error {
+	return nil
+}
+
+func (nc *NullClusterListener) PreJoin(
+	self *api.Node,
+) error {
 	return nil
 }
 
@@ -514,4 +527,8 @@ func (nc *NullClusterListener) ValidatePair(
 	pair *api.ClusterPairInfo,
 ) error {
 	return nil
+}
+
+// StoragePoolProvider is the backing provider for openstorage SDK operations on storage pools
+type StoragePoolProvider interface {
 }

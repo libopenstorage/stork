@@ -36,7 +36,7 @@ metadata:
   name: px-mysql-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "2"
+  repl: "3"
 ---
 apiVersion: apps/v1
 kind: Deployment

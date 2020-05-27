@@ -127,7 +127,7 @@ func driverNodeErrorTest(t *testing.T) {
 
 	time.Sleep(1 * time.Minute)
 
-	err = volumeDriver.StopDriver(scheduledNodes, false)
+	err = volumeDriver.StopDriver(scheduledNodes, false, nil)
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
 	stoppedNode := scheduledNodes[0]
 
@@ -192,7 +192,7 @@ func pvcOwnershipTest(t *testing.T) {
 		}
 	}
 
-	err = volumeDriver.StopDriver(scheduledNodes, false)
+	err = volumeDriver.StopDriver(scheduledNodes, false, nil)
 	require.NoError(t, err, "Error stopping driver on scheduled Node %+v", scheduledNodes[0])
 
 	time.Sleep(3 * time.Minute)

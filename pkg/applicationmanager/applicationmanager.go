@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
@@ -14,6 +13,7 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 const (
@@ -29,39 +29,27 @@ type ApplicationManager struct {
 }
 
 // Init Initializes the ApplicationManager and any children controller
-func (a *ApplicationManager) Init(adminNamespace string, stopChannel chan os.Signal) error {
+func (a *ApplicationManager) Init(mgr manager.Manager, adminNamespace string, stopChannel chan os.Signal) error {
 	if err := a.createCRD(); err != nil {
 		return err
 	}
-	backupController := &controllers.ApplicationBackupController{
-		Recorder:          a.Recorder,
-		ResourceCollector: a.ResourceCollector,
-	}
-	if err := backupController.Init(adminNamespace); err != nil {
+	backupController := controllers.NewApplicationBackup(mgr, a.Recorder, a.ResourceCollector)
+	if err := backupController.Init(mgr, adminNamespace); err != nil {
 		return err
 	}
 
-	restoreController := &controllers.ApplicationRestoreController{
-		Recorder:          a.Recorder,
-		ResourceCollector: a.ResourceCollector,
-	}
-	if err := restoreController.Init(adminNamespace); err != nil {
+	restoreController := controllers.NewApplicationRestore(mgr, a.Recorder, a.ResourceCollector)
+	if err := restoreController.Init(mgr, adminNamespace); err != nil {
 		return err
 	}
 
-	cloneController := &controllers.ApplicationCloneController{
-		Driver:            a.Driver,
-		Recorder:          a.Recorder,
-		ResourceCollector: a.ResourceCollector,
-	}
-	if err := cloneController.Init(adminNamespace); err != nil {
+	cloneController := controllers.NewApplicationClone(mgr, a.Driver, a.Recorder, a.ResourceCollector)
+	if err := cloneController.Init(mgr, adminNamespace); err != nil {
 		return err
 	}
 
-	scheduleController := &controllers.ApplicationBackupScheduleController{
-		Recorder: a.Recorder,
-	}
-	if err := scheduleController.Init(); err != nil {
+	scheduleController := controllers.NewApplicationBackupSchedule(mgr, a.Recorder)
+	if err := scheduleController.Init(mgr); err != nil {
 		return err
 	}
 
@@ -79,7 +67,7 @@ func (a *ApplicationManager) createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:    stork_api.BackupLocationResourceName,
 		Plural:  stork_api.BackupLocationResourcePlural,
-		Group:   stork.GroupName,
+		Group:   stork_api.SchemeGroupVersion.Group,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.BackupLocation{}).Name(),

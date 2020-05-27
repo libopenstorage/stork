@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -54,7 +53,7 @@ func TriggerRequired(
 	policyType stork_api.SchedulePolicyType,
 	lastTrigger meta.Time,
 ) (bool, error) {
-	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+	schedulePolicy, err := getSchedulePolicy(policyName)
 	if err != nil {
 		return false, err
 	}
@@ -292,6 +291,9 @@ func Init() error {
 		}
 	}
 
+	if err := startSchedulePolicyCache(); err != nil {
+		return err
+	}
 	return createDefaultPolicy()
 }
 
@@ -370,7 +372,7 @@ func createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:    stork_api.SchedulePolicyResourceName,
 		Plural:  stork_api.SchedulePolicyResourcePlural,
-		Group:   stork.GroupName,
+		Group:   stork_api.SchemeGroupVersion.Group,
 		Version: stork_api.SchemeGroupVersion.Version,
 		Scope:   apiextensionsv1beta1.ClusterScoped,
 		Kind:    reflect.TypeOf(stork_api.SchedulePolicy{}).Name(),

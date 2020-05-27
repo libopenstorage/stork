@@ -25,13 +25,16 @@ import (
 	"k8s.io/client-go/dynamic"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
+	"k8s.io/kubernetes/pkg/util/slice"
 )
 
 const (
 	// Annotation to use when the resource shouldn't be collected
-	skipResourceAnnotation = "stork.libopenstorage.org/skipresource"
-	deletedMaxRetries      = 12
-	deletedRetryInterval   = 10 * time.Second
+	skipResourceAnnotationDeprecated = "stork.libopenstorage.org/skipresource"
+	skipResourceAnnotation           = "stork.libopenstorage.org/skip-resource"
+	skipOwnerRefCheckAnnotation      = "stork.libopenstorage.org/skip-owner-ref-check"
+	deletedMaxRetries                = 12
+	deletedRetryInterval             = 10 * time.Second
 )
 
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
@@ -81,7 +84,7 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	return nil
 }
 
-func resourceToBeCollected(resource metav1.APIResource) bool {
+func resourceToBeCollected(resource metav1.APIResource, optionalResourceTypes []string) bool {
 	switch resource.Kind {
 	case "PersistentVolumeClaim",
 		"PersistentVolume",
@@ -107,13 +110,20 @@ func resourceToBeCollected(resource metav1.APIResource) bool {
 		"IBPOrderer",
 		"CronJob":
 		return true
+	case "Job":
+		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
+			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower)
 	default:
 		return false
 	}
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
-func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map[string]string, allDrivers bool) ([]runtime.Unstructured, error) {
+func (r *ResourceCollector) GetResources(
+	namespaces []string,
+	labelSelectors map[string]string,
+	optionalResourceTypes []string,
+	allDrivers bool) ([]runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, err
@@ -135,7 +145,7 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource) {
+			if !resourceToBeCollected(resource, optionalResourceTypes) {
 				continue
 			}
 			for _, ns := range namespaces {
@@ -207,6 +217,24 @@ func (r *ResourceCollector) GetResources(namespaces []string, labelSelectors map
 // skipped
 func SkipResource(annotations map[string]string) bool {
 	if value, present := annotations[skipResourceAnnotation]; present {
+		if skip, err := strconv.ParseBool(value); err == nil && skip {
+			return true
+		}
+		return false
+	}
+	if value, present := annotations[skipResourceAnnotationDeprecated]; present {
+		if skip, err := strconv.ParseBool(value); err == nil && skip {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+// skipOwnerRefCheck returns whether the object should be collected even if it
+// has an owner reference
+func skipOwnerRefCheck(annotations map[string]string) bool {
+	if value, present := annotations[skipOwnerRefCheckAnnotation]; present {
 		if skip, err := strconv.ParseBool(value); err == nil && skip {
 			return true
 		}
@@ -296,19 +324,21 @@ func (r *ResourceCollector) pruneOwnedResources(
 		if objectType.GetKind() != "PersistentVolumeClaim" {
 			owners := metadata.GetOwnerReferences()
 			if len(owners) != 0 {
-				for _, owner := range owners {
-					// We don't collect pods, there might be come leader
-					// election objects that could have pods as the owner, so
-					// don't collect those objects
-					if owner.Kind == "Pod" {
-						collect = false
-						break
-					}
+				if !skipOwnerRefCheck(metadata.GetAnnotations()) {
+					for _, owner := range owners {
+						// We don't collect pods, there might be some leader
+						// election objects that could have pods as the owner, so
+						// don't collect those objects
+						if owner.Kind == "Pod" {
+							collect = false
+							break
+						}
 
-					// Skip object if we are already collecting its owner
-					if _, exists := resourceMap[owner.UID]; exists {
-						collect = false
-						break
+						// Skip object if we are already collecting its owner
+						if _, exists := resourceMap[owner.UID]; exists {
+							collect = false
+							break
+						}
 					}
 				}
 				// If the owner isn't being collected delete the owner reference
@@ -350,6 +380,11 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 			if err != nil {
 				return fmt.Errorf("error preparing ClusterRoleBindings resource %v: %v", metadata.GetName(), err)
 			}
+		case "Job":
+			err := r.prepareJobForCollection(o, namespaces)
+			if err != nil {
+				return fmt.Errorf("error preparing ClusterRoleBindings resource %v: %v", metadata.GetName(), err)
+			}
 		}
 
 		content := o.UnstructuredContent()
@@ -375,34 +410,43 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	object runtime.Unstructured,
 	namespaceMappings map[string]string,
 	pvNameMappings map[string]string,
-) error {
+	optionalResourceTypes []string,
+) (bool, error) {
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	metadata, err := meta.Accessor(object)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if metadata.GetNamespace() != "" {
+		var val string
+		var present bool
+		// Skip the object if it isn't in the namespace mapping
+		if val, present = namespaceMappings[metadata.GetNamespace()]; !present {
+			return true, nil
+		}
 		// Update the namespace of the object, will be no-op for clustered resources
-		metadata.SetNamespace(namespaceMappings[metadata.GetNamespace()])
+		metadata.SetNamespace(val)
 	}
 
 	switch objectType.GetKind() {
+	case "Job":
+		if slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
+			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower) {
+			return false, nil
+		}
+		return true, nil
 	case "PersistentVolume":
 		return r.preparePVResourceForApply(object, pvNameMappings)
 	case "PersistentVolumeClaim":
-		return r.preparePVCResourceForApply(object, pvNameMappings)
+		return false, r.preparePVCResourceForApply(object, pvNameMappings)
 	case "ClusterRoleBinding":
-		err := r.prepareClusterRoleBindingForApply(object, namespaceMappings)
-		if err != nil {
-			return err
-		}
-
+		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	}
-	return nil
+	return false, nil
 }
 
 func (r *ResourceCollector) mergeSupportedForResource(
@@ -413,7 +457,8 @@ func (r *ResourceCollector) mergeSupportedForResource(
 		return false
 	}
 	switch objectType.GetKind() {
-	case "ClusterRoleBinding":
+	case "ClusterRoleBinding",
+		"ServiceAccount":
 		return true
 	}
 	return false
@@ -430,6 +475,8 @@ func (r *ResourceCollector) mergeAndUpdateResource(
 	switch objectType.GetKind() {
 	case "ClusterRoleBinding":
 		return r.mergeAndUpdateClusterRoleBinding(object)
+	case "ServiceAccount":
+		return r.mergeAndUpdateServiceAccount(object)
 	}
 	return nil
 }

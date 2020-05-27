@@ -11,7 +11,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 )
 
@@ -205,6 +205,11 @@ func (m Driver) GetNodes() ([]*storkvolume.NodeInfo, error) {
 		return nil, m.interfaceError
 	}
 	return m.nodes, nil
+}
+
+// InspectNode using ID
+func (m Driver) InspectNode(id string) (*storkvolume.NodeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
 }
 
 // GetPodVolumes Get the Volumes in the Pod that use the mock driver

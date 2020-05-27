@@ -82,36 +82,37 @@ func (r *ResourceCollector) preparePVResourceForCollection(
 func (r *ResourceCollector) preparePVResourceForApply(
 	object runtime.Unstructured,
 	pvNameMappings map[string]string,
-) error {
+) (bool, error) {
 	var updatedName string
 	var present bool
 
 	var pv v1.PersistentVolume
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &pv); err != nil {
-		return fmt.Errorf("error converting to persistent volume: %v", err)
+		return false, fmt.Errorf("error converting to persistent volume: %v", err)
 	}
 
+	// Skip the PV if it isn't bound to a PVC that needs to be restored
 	if updatedName, present = pvNameMappings[pv.Name]; !present {
-		return fmt.Errorf("PV name mapping not found for %v", pv.Name)
+		return true, nil
 	}
 	pv.Name = updatedName
 	driverName, err := volume.GetPVDriver(&pv)
 	if err != nil {
-		return err
+		return false, err
 	}
 	driver, err := volume.Get(driverName)
 	if err != nil {
-		return err
+		return false, err
 	}
 	_, err = driver.UpdateMigratedPersistentVolumeSpec(&pv)
 	if err != nil {
-		return err
+		return false, err
 	}
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pv)
 	if err != nil {
-		return err
+		return false, err
 	}
 	object.SetUnstructuredContent(o)
 
-	return err
+	return false, err
 }

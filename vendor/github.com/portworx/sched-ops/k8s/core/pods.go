@@ -25,8 +25,12 @@ type PodOps interface {
 	// GetPods returns pods for the given namespace
 	GetPods(string, map[string]string) (*corev1.PodList, error)
 	// GetPodsByNode returns all pods in given namespace and given k8s node name.
-	//  If namespace is empty, it will return pods from all namespaces
+	//  If namespace is empty, it will return pods from all namespaces.
 	GetPodsByNode(nodeName, namespace string) (*corev1.PodList, error)
+	// GetPodsByNodeAndLabels returns all pods in given namespace and given k8s node name
+	// with a given label selector.
+	//  If namespace is empty, it will return pods from all namespaces.
+	GetPodsByNodeAndLabels(nodeName, namespace string, labelSelector map[string]string) (*corev1.PodList, error)
 	// GetPodsByOwner returns pods for the given owner and namespace
 	GetPodsByOwner(types.UID, string) ([]corev1.Pod, error)
 	// GetPodsUsingPV returns all pods in cluster using given pv
@@ -88,7 +92,7 @@ func (c *Client) DeletePod(name string, ns string, force bool) error {
 		deleteOptions.GracePeriodSeconds = &gracePeriodSec
 	}
 
-	return c.core.Pods(ns).Delete(name, &deleteOptions)
+	return c.kubernetes.CoreV1().Pods(ns).Delete(name, &deleteOptions)
 }
 
 // CreatePod creates the given pod.
@@ -97,7 +101,7 @@ func (c *Client) CreatePod(pod *corev1.Pod) (*corev1.Pod, error) {
 		return nil, err
 	}
 
-	return c.core.Pods(pod.Namespace).Create(pod)
+	return c.kubernetes.CoreV1().Pods(pod.Namespace).Create(pod)
 }
 
 // UpdatePod updates the given pod
@@ -106,7 +110,7 @@ func (c *Client) UpdatePod(pod *corev1.Pod) (*corev1.Pod, error) {
 		return nil, err
 	}
 
-	return c.core.Pods(pod.Namespace).Update(pod)
+	return c.kubernetes.CoreV1().Pods(pod.Namespace).Update(pod)
 }
 
 // GetPods returns pods for the given namespace
@@ -130,9 +134,27 @@ func (c *Client) GetPodsByNode(nodeName, namespace string) (*corev1.PodList, err
 	return c.getPodsWithListOptions(namespace, listOptions)
 }
 
+// GetPodsByNodeAndLabels returns all pods in given namespace and given k8s node name for the given labels
+//  If namespace is empty, it will return pods from all namespaces
+func (c *Client) GetPodsByNodeAndLabels(nodeName, namespace string, labels map[string]string) (*corev1.PodList, error) {
+	if len(nodeName) == 0 {
+		return nil, fmt.Errorf("node name is required for this API")
+	}
+
+	listOptions := metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+		LabelSelector: mapToCSV(labels),
+	}
+
+	return c.getPodsWithListOptions(namespace, listOptions)
+}
+
 // GetPodsByOwner returns pods for the given owner and namespace
 func (c *Client) GetPodsByOwner(ownerUID types.UID, namespace string) ([]corev1.Pod, error) {
-	return common.GetPodsByOwner(c.core, ownerUID, namespace)
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return common.GetPodsByOwner(c.kubernetes.CoreV1(), ownerUID, namespace)
 }
 
 // GetPodsUsingPV returns all pods in cluster using given pv
@@ -174,7 +196,7 @@ func (c *Client) getPodsWithListOptions(namespace string, opts metav1.ListOption
 		return nil, err
 	}
 
-	return c.core.Pods(namespace).List(opts)
+	return c.kubernetes.CoreV1().Pods(namespace).List(opts)
 }
 
 func (c *Client) getPodsUsingPVWithListOptions(pvName string, opts metav1.ListOptions) ([]corev1.Pod, error) {
@@ -227,7 +249,7 @@ func (c *Client) listPluginPodsWithOptions(opts metav1.ListOptions, plugin strin
 		return nil, err
 	}
 
-	nodePods, err := c.core.Pods("").List(opts)
+	nodePods, err := c.kubernetes.CoreV1().Pods("").List(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +269,7 @@ func (c *Client) GetPodByName(podName string, namespace string) (*corev1.Pod, er
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	pod, err := c.core.Pods(namespace).Get(podName, metav1.GetOptions{})
+	pod, err := c.kubernetes.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 	if err != nil {
 		return nil, schederrors.ErrPodsNotFound
 	}
@@ -331,7 +353,7 @@ func (c *Client) WatchPods(namespace string, fn WatchFunc, listOptions metav1.Li
 	}
 
 	listOptions.Watch = true
-	watchInterface, err := c.core.Pods(namespace).Watch(listOptions)
+	watchInterface, err := c.kubernetes.CoreV1().Pods(namespace).Watch(listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for pods")
 		return err
@@ -390,7 +412,7 @@ func (c *Client) RunCommandInPod(cmds []string, podName, containerName, namespac
 		execErr bytes.Buffer
 	)
 
-	pod, err := c.core.Pods(namespace).Get(podName, metav1.GetOptions{})
+	pod, err := c.kubernetes.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -403,7 +425,7 @@ func (c *Client) RunCommandInPod(cmds []string, podName, containerName, namespac
 		containerName = pod.Spec.Containers[0].Name
 	}
 
-	req := c.core.RESTClient().Post().
+	req := c.kubernetes.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
 		Namespace(namespace).

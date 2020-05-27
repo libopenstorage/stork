@@ -18,9 +18,11 @@ import (
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	"sigs.k8s.io/gcp-compute-persistent-disk-csi-driver/pkg/common"
 )
 
 const (
@@ -28,6 +30,8 @@ const (
 	driverName = "gce"
 	// provisioner names for gce volumes
 	provisionerName = "kubernetes.io/gce-pd"
+	// CSI provisioner name for for gce volumes
+	csiProvisionerName = "pd.csi.storage.gke.io"
 	// pvcProvisionerAnnotation is the annotation on PVC which has the
 	// provisioner name
 	pvcProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
@@ -140,12 +144,18 @@ func (g *gcp) OwnsPV(pv *v1.PersistentVolume) bool {
 }
 
 func isCsiProvisioner(provisioner string) bool {
-	return false
+	return csiProvisionerName == provisioner
 }
 
 func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, pvc := range pvcs {
@@ -171,52 +181,95 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
 		volume := pvc.Spec.VolumeName
-		pdName := pv.Spec.GCEPersistentDisk.PDName
+		var pdName string
+		if pv.Spec.GCEPersistentDisk != nil {
+			pdName = pv.Spec.GCEPersistentDisk.PDName
+		} else if pv.Spec.CSI != nil {
+			key, err := common.VolumeIDToKey(pv.Spec.CSI.VolumeHandle)
+			if err != nil {
+				return nil, err
+			}
+			pdName = key.Name
+		} else {
+			return nil, fmt.Errorf("GCE PD info not found in PV %v", pvName)
+		}
 		// Get the zone from the PV, fallback to the zone where stork is running
 		// if the label is empty
-		volumeInfo.Zones = g.getZones(pv.Labels[v1.LabelZoneFailureDomain])
+		volumeInfo.Zones = g.getZones(pv)
 		if len(volumeInfo.Zones) == 0 {
 			volumeInfo.Zones = []string{g.zone}
 		}
 		volumeInfo.Volume = volume
-		if len(volumeInfo.Zones) > 1 {
-			snapshot := &compute.Snapshot{
-				Name:   "stork-snapshot-" + string(uuid.NewUUID()),
-				Labels: storkvolume.GetApplicationBackupLabels(backup, &pvc),
-			}
-			region, err := g.getRegion(volumeInfo.Zones[0])
-			if err != nil {
-				return nil, err
-			}
-			snapshotCall := g.service.RegionDisks.CreateSnapshot(g.projectID, region, pdName, snapshot)
-
-			_, err = snapshotCall.Do()
-			if err != nil {
-				return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
-			}
-			volumeInfo.BackupID = snapshot.Name
+		labels := storkvolume.GetApplicationBackupLabels(backup, &pvc)
+		filter := g.getFilterFromMap(labels)
+		// First check if the snapshot has already been created with the same labels
+		if snapshots, err := g.service.Snapshots.List(g.projectID).Filter(filter).Do(); err == nil && len(snapshots.Items) == 1 {
+			volumeInfo.BackupID = snapshots.Items[0].Name
 		} else {
-			snapshot := &compute.Snapshot{
-				Name:   "stork-snapshot-" + string(uuid.NewUUID()),
-				Labels: storkvolume.GetApplicationBackupLabels(backup, &pvc),
-			}
-			snapshotCall := g.service.Disks.CreateSnapshot(g.projectID, volumeInfo.Zones[0], pdName, snapshot)
+			if len(volumeInfo.Zones) > 1 {
+				snapshot := &compute.Snapshot{
+					Name:   "stork-snapshot-" + string(uuid.NewUUID()),
+					Labels: labels,
+				}
+				region, err := g.getRegion(volumeInfo.Zones[0])
+				if err != nil {
+					return nil, err
+				}
+				snapshotCall := g.service.RegionDisks.CreateSnapshot(g.projectID, region, pdName, snapshot)
 
-			_, err = snapshotCall.Do()
-			if err != nil {
-				return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+				_, err = snapshotCall.Do()
+				if err != nil {
+					return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+				}
+				volumeInfo.BackupID = snapshot.Name
+			} else {
+				snapshot := &compute.Snapshot{
+					Name:   "stork-snapshot-" + string(uuid.NewUUID()),
+					Labels: labels,
+				}
+				snapshotCall := g.service.Disks.CreateSnapshot(g.projectID, volumeInfo.Zones[0], pdName, snapshot)
+
+				_, err = snapshotCall.Do()
+				if err != nil {
+					return nil, fmt.Errorf("error triggering backup for volume: %v (PVC: %v, Namespace: %v): %v", volume, pvc.Name, pvc.Namespace, err)
+				}
+				volumeInfo.BackupID = snapshot.Name
 			}
-			volumeInfo.BackupID = snapshot.Name
 		}
 	}
 	return volumeInfos, nil
 }
 
-func (g *gcp) getZones(zone string) []string {
-	if g.isRegional(zone) {
-		return g.getRegionalZones(zone)
+func (g *gcp) getFilterFromMap(labels map[string]string) string {
+	filters := make([]string, 0)
+	// Construct an array of filters in the format "labels.key=value"
+	for k, v := range labels {
+
+		filters = append(filters, fmt.Sprintf("labels.%v=%v", k, v))
 	}
-	return []string{zone}
+	// Add all the filters to one string seperated by AND
+	return strings.Join(filters, " AND ")
+}
+
+func (g *gcp) getZones(pv *v1.PersistentVolume) []string {
+	if pv.Spec.GCEPersistentDisk != nil {
+		zone := pv.Labels[v1.LabelZoneFailureDomain]
+		if g.isRegional(zone) {
+			return g.getRegionalZones(zone)
+		}
+		return []string{zone}
+	}
+	if pv.Spec.NodeAffinity != nil &&
+		pv.Spec.NodeAffinity.Required != nil &&
+		len(pv.Spec.NodeAffinity.Required.NodeSelectorTerms) != 0 {
+		for _, selector := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions {
+			if selector.Key == common.TopologyKeyZone {
+				return selector.Values
+			}
+		}
+	}
+	return nil
+
 }
 
 func (g *gcp) getRegionalZones(zones string) []string {
@@ -248,6 +301,12 @@ func (g *gcp) getZoneURLs(zones []string) ([]string, error) {
 }
 
 func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 
 	for _, vInfo := range backup.Status.Volumes {
@@ -281,6 +340,12 @@ func (g *gcp) CancelBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (g *gcp) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return err
+		}
+	}
+
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
@@ -297,7 +362,15 @@ func (g *gcp) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 ) (*v1.PersistentVolume, error) {
 	if pv.Spec.CSI != nil {
-		pv.Spec.CSI.VolumeHandle = pv.Name
+		key, err := common.VolumeIDToKey(pv.Spec.CSI.VolumeHandle)
+		if err != nil {
+			return nil, err
+		}
+		key.Name = pv.Name
+		pv.Spec.CSI.VolumeHandle, err = common.KeyToVolumeID(key, g.projectID)
+		if err != nil {
+			return nil, err
+		}
 		return pv, nil
 	}
 
@@ -316,10 +389,23 @@ func (g *gcp) getSnapshotResourceName(
 		backupVolumeInfo.Options["projectID"], backupVolumeInfo.BackupID)
 }
 
+func (g *gcp) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	[]runtime.Unstructured,
+) ([]runtime.Unstructured, error) {
+	return nil, nil
+}
+
 func (g *gcp) StartRestore(
 	restore *storkapi.ApplicationRestore,
 	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
 ) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	var err error
 
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
@@ -328,15 +414,16 @@ func (g *gcp) StartRestore(
 			PersistentVolumeClaim: backupVolumeInfo.PersistentVolumeClaim,
 			SourceNamespace:       backupVolumeInfo.Namespace,
 			SourceVolume:          backupVolumeInfo.Volume,
-			RestoreVolume:         g.generatePVName(),
 			DriverName:            driverName,
 			Zones:                 backupVolumeInfo.Zones,
 		}
 		volumeInfos = append(volumeInfos, volumeInfo)
+		labels := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
+		filter := g.getFilterFromMap(labels)
 		disk := &compute.Disk{
-			Name:           volumeInfo.RestoreVolume,
+			Name:           g.generatePVName(),
 			SourceSnapshot: g.getSnapshotResourceName(backupVolumeInfo),
-			Labels:         storkvolume.GetApplicationRestoreLabels(restore, volumeInfo),
+			Labels:         labels,
 		}
 		if len(backupVolumeInfo.Zones) == 0 {
 			return nil, fmt.Errorf("zones missing for backup volume %v/%v",
@@ -352,14 +439,27 @@ func (g *gcp) StartRestore(
 			if err != nil {
 				return nil, err
 			}
-			_, err = g.service.RegionDisks.Insert(g.projectID, region, disk).Do()
-			if err != nil {
-				return nil, err
+
+			// First check if the disk has already been created with the same labels
+			if disks, err := g.service.RegionDisks.List(g.projectID, region).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
+				volumeInfo.RestoreVolume = disks.Items[0].Name
+			} else {
+				_, err = g.service.RegionDisks.Insert(g.projectID, region, disk).Do()
+				if err != nil {
+					return nil, err
+				}
+				volumeInfo.RestoreVolume = disk.Name
 			}
 		} else {
-			_, err := g.service.Disks.Insert(g.projectID, backupVolumeInfo.Zones[0], disk).Do()
-			if err != nil {
-				return nil, err
+			// First check if the disk has already been created with the same labels
+			if disks, err := g.service.Disks.List(g.projectID, backupVolumeInfo.Zones[0]).Filter(filter).Do(); err == nil && len(disks.Items) == 1 {
+				volumeInfo.RestoreVolume = disks.Items[0].Name
+			} else {
+				_, err := g.service.Disks.Insert(g.projectID, backupVolumeInfo.Zones[0], disk).Do()
+				if err != nil {
+					return nil, err
+				}
+				volumeInfo.RestoreVolume = disk.Name
 			}
 		}
 	}
@@ -372,6 +472,12 @@ func (g *gcp) CancelRestore(restore *storkapi.ApplicationRestore) error {
 }
 
 func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
+	if g.service == nil {
+		if err := g.Init(nil); err != nil {
+			return nil, err
+		}
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	for _, vInfo := range restore.Status.Volumes {
 		if vInfo.DriverName != driverName {
@@ -428,6 +534,10 @@ func (g *gcp) GetNodes() ([]*storkvolume.NodeInfo, error) {
 	return nil, &errors.ErrNotSupported{}
 }
 
+func (g *gcp) InspectNode(id string) (*storkvolume.NodeInfo, error) {
+	return nil, &errors.ErrNotSupported{}
+}
+
 func (g *gcp) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvolume.Info, error) {
 	return nil, &errors.ErrNotSupported{}
 }
@@ -450,7 +560,6 @@ func init() {
 	err := g.Init(nil)
 	if err != nil {
 		logrus.Debugf("Error init'ing gcp driver: %v", err)
-		return
 	}
 	if err := storkvolume.Register(driverName, g); err != nil {
 		logrus.Panicf("Error registering gcp volume driver: %v", err)

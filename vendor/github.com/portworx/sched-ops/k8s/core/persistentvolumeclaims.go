@@ -46,6 +46,8 @@ type PersistentVolumeClaimOps interface {
 	GetPVCsUsingStorageClass(scName string) ([]corev1.PersistentVolumeClaim, error)
 	// GetStorageProvisionerForPVC returns storage provisioner for given PVC if it exists
 	GetStorageProvisionerForPVC(pvc *corev1.PersistentVolumeClaim) (string, error)
+	// GetStorageClassForPVC returns the appropriate storage class object for a certain pvc
+	GetStorageClassForPVC(pvc *corev1.PersistentVolumeClaim) (*storagev1.StorageClass, error)
 }
 
 // CreatePersistentVolumeClaim creates the given persistent volume claim
@@ -59,7 +61,7 @@ func (c *Client) CreatePersistentVolumeClaim(pvc *corev1.PersistentVolumeClaim) 
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.core.PersistentVolumeClaims(ns).Create(pvc)
+	return c.kubernetes.CoreV1().PersistentVolumeClaims(ns).Create(pvc)
 }
 
 // UpdatePersistentVolumeClaim updates an existing persistent volume claim
@@ -73,7 +75,7 @@ func (c *Client) UpdatePersistentVolumeClaim(pvc *corev1.PersistentVolumeClaim) 
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.core.PersistentVolumeClaims(ns).Update(pvc)
+	return c.kubernetes.CoreV1().PersistentVolumeClaims(ns).Update(pvc)
 }
 
 // DeletePersistentVolumeClaim deletes the given persistent volume claim
@@ -82,7 +84,7 @@ func (c *Client) DeletePersistentVolumeClaim(name, namespace string) error {
 		return err
 	}
 
-	return c.core.PersistentVolumeClaims(namespace).Delete(name, &metav1.DeleteOptions{})
+	return c.kubernetes.CoreV1().PersistentVolumeClaims(namespace).Delete(name, &metav1.DeleteOptions{})
 }
 
 // ValidatePersistentVolumeClaim validates the given pvc
@@ -92,7 +94,7 @@ func (c *Client) ValidatePersistentVolumeClaim(pvc *corev1.PersistentVolumeClaim
 			return "", true, err
 		}
 
-		result, err := c.core.
+		result, err := c.kubernetes.CoreV1().
 			PersistentVolumeClaims(pvc.Namespace).
 			Get(pvc.Name, metav1.GetOptions{})
 		if err != nil {
@@ -122,7 +124,7 @@ func (c *Client) ValidatePersistentVolumeClaimSize(pvc *corev1.PersistentVolumeC
 			return "", true, err
 		}
 
-		result, err := c.core.
+		result, err := c.kubernetes.CoreV1().
 			PersistentVolumeClaims(pvc.Namespace).
 			Get(pvc.Name, metav1.GetOptions{})
 		if err != nil {
@@ -156,7 +158,7 @@ func (c *Client) CreatePersistentVolume(pv *corev1.PersistentVolume) (*corev1.Pe
 		return nil, err
 	}
 
-	return c.core.PersistentVolumes().Create(pv)
+	return c.kubernetes.CoreV1().PersistentVolumes().Create(pv)
 }
 
 // GetPersistentVolumeClaim returns the PVC for given name and namespace
@@ -165,7 +167,7 @@ func (c *Client) GetPersistentVolumeClaim(pvcName string, namespace string) (*co
 		return nil, err
 	}
 
-	return c.core.PersistentVolumeClaims(namespace).
+	return c.kubernetes.CoreV1().PersistentVolumeClaims(namespace).
 		Get(pvcName, metav1.GetOptions{})
 }
 
@@ -181,7 +183,7 @@ func (c *Client) getPVCsWithListOptions(namespace string, listOpts metav1.ListOp
 		return nil, err
 	}
 
-	return c.core.PersistentVolumeClaims(namespace).List(listOpts)
+	return c.kubernetes.CoreV1().PersistentVolumeClaims(namespace).List(listOpts)
 }
 
 // GetPersistentVolume returns the PV for given name
@@ -190,7 +192,7 @@ func (c *Client) GetPersistentVolume(pvName string) (*corev1.PersistentVolume, e
 		return nil, err
 	}
 
-	return c.core.PersistentVolumes().Get(pvName, metav1.GetOptions{})
+	return c.kubernetes.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
 }
 
 // DeletePersistentVolume deletes the PV for given name
@@ -199,7 +201,7 @@ func (c *Client) DeletePersistentVolume(pvName string) error {
 		return err
 	}
 
-	return c.core.PersistentVolumes().Delete(pvName, &metav1.DeleteOptions{
+	return c.kubernetes.CoreV1().PersistentVolumes().Delete(pvName, &metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -210,7 +212,7 @@ func (c *Client) GetPersistentVolumes() (*corev1.PersistentVolumeList, error) {
 		return nil, err
 	}
 
-	return c.core.PersistentVolumes().List(metav1.ListOptions{})
+	return c.kubernetes.CoreV1().PersistentVolumes().List(metav1.ListOptions{})
 }
 
 // GetVolumeForPersistentVolumeClaim returns the volumeID for the given PVC
@@ -229,7 +231,7 @@ func (c *Client) GetPersistentVolumeClaimStatus(pvc *corev1.PersistentVolumeClai
 		return nil, err
 	}
 
-	result, err := c.core.PersistentVolumeClaims(pvc.Namespace).Get(pvc.Name, metav1.GetOptions{})
+	result, err := c.kubernetes.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(pvc.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +247,7 @@ func (c *Client) GetPersistentVolumeClaimParams(pvc *corev1.PersistentVolumeClai
 
 	params := make(map[string]string)
 
-	result, err := c.core.PersistentVolumeClaims(pvc.Namespace).Get(pvc.Name, metav1.GetOptions{})
+	result, err := c.kubernetes.CoreV1().PersistentVolumeClaims(pvc.Namespace).Get(pvc.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +261,7 @@ func (c *Client) GetPersistentVolumeClaimParams(pvc *corev1.PersistentVolumeClai
 	requestGB := uint64(roundUpSize(capacity.Value(), 1024*1024*1024))
 	params["size"] = fmt.Sprintf("%dG", requestGB)
 
-	sc, err := c.getStorageClassForPVC(result)
+	sc, err := c.GetStorageClassForPVC(result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get storage class for pvc: %v", result.Name)
 	}
@@ -278,13 +280,13 @@ func (c *Client) GetPVCsUsingStorageClass(scName string) ([]corev1.PersistentVol
 	}
 
 	var retList []corev1.PersistentVolumeClaim
-	pvcs, err := c.core.PersistentVolumeClaims("").List(metav1.ListOptions{})
+	pvcs, err := c.kubernetes.CoreV1().PersistentVolumeClaims("").List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	for _, pvc := range pvcs.Items {
-		sc, err := c.getStorageClassForPVC(&pvc)
+		sc, err := c.GetStorageClassForPVC(&pvc)
 		if err == nil && sc.Name == scName {
 			retList = append(retList, pvc)
 		}
@@ -301,7 +303,7 @@ func (c *Client) GetStorageProvisionerForPVC(pvc *corev1.PersistentVolumeClaim) 
 		return provisionerName, nil
 	}
 
-	sc, err := c.getStorageClassForPVC(pvc)
+	sc, err := c.GetStorageClassForPVC(pvc)
 	if err != nil {
 		return "", err
 	}
@@ -321,6 +323,7 @@ func (c *Client) isPVCShared(pvc *corev1.PersistentVolumeClaim) bool {
 	return false
 }
 
-func (c *Client) getStorageClassForPVC(pvc *corev1.PersistentVolumeClaim) (*storagev1.StorageClass, error) {
-	return common.GetStorageClassForPVC(c.storage, pvc)
+// GetStorageClassForPVC returns the appropriate storage class object for a certain pvc
+func (c *Client) GetStorageClassForPVC(pvc *corev1.PersistentVolumeClaim) (*storagev1.StorageClass, error) {
+	return common.GetStorageClassForPVC(c.kubernetes.StorageV1(), pvc)
 }

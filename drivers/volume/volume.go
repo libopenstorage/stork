@@ -1,6 +1,7 @@
 package volume
 
 import (
+	"fmt"
 	"net"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -33,6 +35,9 @@ type Driver interface {
 
 	// GetNodes Get the list of nodes where the driver is available
 	GetNodes() ([]*NodeInfo, error)
+
+	// InspectNode using ID
+	InspectNode(id string) (*NodeInfo, error)
 
 	// GetPodVolumes Get all the volumes used by a pod backed by the driver
 	GetPodVolumes(*v1.PodSpec, string) ([]*Info, error)
@@ -136,6 +141,8 @@ type BackupRestorePluginInterface interface {
 	CancelBackup(*storkapi.ApplicationBackup) error
 	// Delete the backups specified in the status
 	DeleteBackup(*storkapi.ApplicationBackup) error
+	// Get any resources that should be created before the restore is started
+	GetPreRestoreResources(*storkapi.ApplicationBackup, []runtime.Unstructured) ([]runtime.Unstructured, error)
 	// Start restore of volumes specified by the spec. Should only restore
 	// volumes, not the specs associated with them
 	StartRestore(*storkapi.ApplicationRestore, []*storkapi.ApplicationBackupVolumeInfo) ([]*storkapi.ApplicationRestoreVolumeInfo, error)
@@ -229,6 +236,11 @@ func Register(name string, d Driver) error {
 	return nil
 }
 
+// GetDefaultDriverName returns the default driver name in case on isn't set
+func GetDefaultDriverName() string {
+	return "pxd"
+}
+
 // Get an external storage provider to be used with Stork
 func Get(name string) (Driver, error) {
 	d, ok := volDrivers[name]
@@ -250,9 +262,9 @@ func GetPVCDriver(pvc *v1.PersistentVolumeClaim) (string, error) {
 			return driverName, nil
 		}
 	}
-	return "", &errors.ErrNotFound{
-		ID:   pvc.Name,
-		Type: "VolumeDriver",
+	return "", &errors.ErrNotSupported{
+		Feature: "VolumeDriver",
+		Reason:  fmt.Sprintf("PVC %v/%v provisioned using unsupported driver", pvc.Namespace, pvc.Name),
 	}
 }
 
@@ -264,9 +276,9 @@ func GetPVDriver(pv *v1.PersistentVolume) (string, error) {
 			return driverName, nil
 		}
 	}
-	return "", &errors.ErrNotFound{
-		ID:   pv.Name,
-		Type: "VolumeDriver",
+	return "", &errors.ErrNotSupported{
+		Feature: "VolumeDriver",
+		Reason:  fmt.Sprintf("PV %v provisioned using unsupported driver", pv.Name),
 	}
 }
 
@@ -368,6 +380,14 @@ func (b *BackupRestoreNotSupported) CancelBackup(*storkapi.ApplicationBackup) er
 // DeleteBackup returns ErrNotSupported
 func (b *BackupRestoreNotSupported) DeleteBackup(*storkapi.ApplicationBackup) error {
 	return &errors.ErrNotSupported{}
+}
+
+// GetPreRestoreResources returns ErrNotSupported
+func (b *BackupRestoreNotSupported) GetPreRestoreResources(
+	*storkapi.ApplicationBackup,
+	[]runtime.Unstructured,
+) ([]runtime.Unstructured, error) {
+	return nil, &errors.ErrNotSupported{}
 }
 
 // StartRestore returns ErrNotSupported

@@ -1,66 +1,23 @@
-# Gopkg.toml example
-#
-# Refer to https://github.com/golang/dep/blob/master/docs/Gopkg.toml.md
-# for detailed Gopkg.toml documentation.
-#
-# required = ["github.com/user/thing/cmd/thing"]
-# ignored = ["github.com/user/project/pkgX", "bitbucket.org/user/project/pkgA/pkgY"]
-#
-# [[constraint]]
-#   name = "github.com/user/project"
-#   version = "1.0.0"
-#
-# [[constraint]]
-#   name = "github.com/user/project2"
-#   branch = "dev"
-#   source = "github.com/myfork/project2"
-#
-# [[override]]
-#   name = "github.com/x/y"
-#   version = "2.4.0"
-#
-# [prune]
-#   non-go = false
-#   go-tests = true
-#   unused-packages = true
-
+# Force dep to vendor the code generators, which aren't imported just used at dev time.
 required = [
+  "k8s.io/code-generator/cmd/defaulter-gen",
+  "k8s.io/code-generator/cmd/deepcopy-gen",
+  "k8s.io/code-generator/cmd/conversion-gen",
   "k8s.io/code-generator/cmd/client-gen",
+  "k8s.io/code-generator/cmd/lister-gen",
+  "k8s.io/code-generator/cmd/informer-gen",
+  "k8s.io/kube-openapi/cmd/openapi-gen",
   "k8s.io/gengo/args",
   "k8s.io/gengo/generator",
-  "k8s.io/gengo/examples/defaulter-gen/generators",
-  "k8s.io/code-generator/cmd/defaulter-gen/args",
-  "k8s.io/code-generator/cmd/deepcopy-gen/args",
 ]
 
-[[override]]
-  name = "github.com/kubernetes-incubator/external-storage"
-  source = "github.com/libopenstorage/external-storage"
-  branch = "openstorage-5.5"
-
-[[override]]
-  name = "github.com/libopenstorage/openstorage"
-  branch = "release-7.0"
-
-[[override]]
-  name = "github.com/portworx/sched-ops"
-  branch = "master"
-
 [[constraint]]
-  name = "github.com/portworx/torpedo"
-  branch = "master"
+  name = "k8s.io/code-generator"
+  version = "kubernetes-1.16.6"
 
 [[override]]
-  name = "github.com/libopenstorage/autopilot-api"
-  branch = "master"
-
-[[constraint]]
-  name = "github.com/heptio/ark"
-  version = "v1.0.0"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/skyrings/skyring-common"
+  name = "k8s.io/kubernetes"
+  version = "=v1.16.6"
 
 [[override]]
   name = "k8s.io/api"
@@ -79,45 +36,92 @@ required = [
   version = "kubernetes-1.16.6"
 
 [[override]]
-  name = "k8s.io/client-go"
+  name = "k8s.io/cli-runtime"
   version = "kubernetes-1.16.6"
 
 [[override]]
-  name = "k8s.io/kubernetes"
-  version = "=1.16.6"
+  name = "k8s.io/client-go"
+  version = "kubernetes-1.16.6"
 
 [[override]]
   name = "k8s.io/kubectl"
   version = "kubernetes-1.16.6"
 
 [[override]]
-  name = "k8s.io/cli-runtime"
-  version = "kubernetes-1.16.6"
-
-[[constraint]]
-  name = "k8s.io/code-generator"
-  version = "kubernetes-1.16.6"
+  name = "sigs.k8s.io/controller-runtime"
+  version = "=v0.5.0"
 
 [[override]]
-  name = "github.com/docker/distribution"
-  revision = "edc3ab29cdff8694dd6feb85cfeb4b5f1b38ed9c"
+  name = "github.com/operator-framework/operator-sdk"
+  version = "=v0.10.1" 
 
 [[override]]
-  name = "github.com/docker/docker"
-  revision = "4f3616fb1c112e206b88cb7a9922bf49067a7756"
+  name = "k8s.io/kube-openapi"
+  revision = "0cf8f7e6ed1d2e3d47d02e3b6e559369af24d803"
 
 [[override]]
-  name = "github.com/russross/blackfriday"
-  revision = "300106c228d52c8941d4b3de6054a6062a86dda3"
+  name = "github.com/go-openapi/spec"
+  branch = "master"
 
-[prune]
-  go-tests = true
-  unused-packages = true
+[[override]]
+  name = "github.com/coreos/prometheus-operator"
+  version = "=v0.29.0"
+
+[[override]]
+  name = "k8s.io/kube-state-metrics"
+  version = "v1.6.0"
 
 [[prune.project]]
   name = "k8s.io/code-generator"
   unused-packages = false
   go-tests = false
+
+## other packages
+
+[[override]]
+  name = "github.com/portworx/sched-ops"
+  branch = "master"
+
+[[override]]
+  name = "github.com/libopenstorage/autopilot-api"
+  branch = "master"
+
+[[override]]
+  name = "github.com/kubernetes-incubator/external-storage"
+  source = "github.com/libopenstorage/external-storage"
+  branch = "openstorage-5.5"
+
+[[override]]
+  name = "sigs.k8s.io/sig-storage-lib-external-provisioner" 
+  version = "v4.0.1"
+
+[[override]]
+  name = "github.com/libopenstorage/openstorage"
+  branch = "release-7.0"
+
+[[constraint]]
+  name = "github.com/portworx/torpedo"
+  branch = "master"
+
+[[constraint]]
+  name = "github.com/heptio/ark"
+  version = "v1.0.0"
+
+[[constraint]]
+  name = "github.com/skyrings/skyring-common"
+  branch = "master"
+
+[[override]]
+  name = "github.com/docker/distribution"
+  revision = "v2.7.0"
+
+[[override]]
+  name = "github.com/docker/docker"
+  revision = "v19.03.0"
+
+[[override]]
+  name = "github.com/russross/blackfriday"
+  revision = "v1.5.2"
 
 [[constraint]]
   name = "gocloud.dev"
@@ -134,4 +138,20 @@ required = [
 [[constraint]]
   name = "github.com/kubernetes-sigs/aws-ebs-csi-driver"
   branch = "master"
+
+[[override]]
+  name = "github.com/libopenstorage/secrets"
+  branch = "master"
+
+[[override]]
+  name = "github.com/openshift/api"
+  branch = "release-4.4"
+
+[[override]]
+  name = "github.com/openshift/client-go"
+  branch = "release-4.4"
+
+[prune]
+  go-tests = true
+  unused-packages = true
 

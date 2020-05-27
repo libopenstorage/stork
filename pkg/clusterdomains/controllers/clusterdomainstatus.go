@@ -9,10 +9,8 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/libopenstorage/stork/pkg/apis/stork"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/libopenstorage/stork/pkg/controller"
-	"github.com/operator-framework/operator-sdk/pkg/sdk"
+	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -21,14 +19,15 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
 	validateCRDInterval    time.Duration = 5 * time.Second
 	validateCRDTimeout     time.Duration = 1 * time.Minute
-	resyncPeriod                         = 1 * time.Minute
 	createCdsTimeout                     = 30 * time.Minute
 	createCdsRetryInterval               = 10 * time.Second
 )
@@ -37,78 +36,96 @@ var (
 	clusterIDRegex = regexp.MustCompile("[^a-zA-Z0-9-.]+")
 )
 
+// NewClusterDomainsStatus creates a new instance of ClusterDomainsStatusController.
+func NewClusterDomainsStatus(mgr manager.Manager, d volume.Driver, r record.EventRecorder) *ClusterDomainsStatusController {
+	return &ClusterDomainsStatusController{
+		client:    mgr.GetClient(),
+		volDriver: d,
+		Recorder:  r,
+	}
+}
+
 // ClusterDomainsStatusController clusterdomainsstatus controller
 type ClusterDomainsStatusController struct {
-	Driver   volume.Driver
-	Recorder record.EventRecorder
+	client runtimeclient.Client
+
+	volDriver volume.Driver
+	Recorder  record.EventRecorder
 }
 
 // Init initialize the clusterdomainsstatus controller
-func (c *ClusterDomainsStatusController) Init() error {
+func (c *ClusterDomainsStatusController) Init(mgr manager.Manager) error {
 	err := c.createCRD()
 	if err != nil {
 		return err
 	}
 
-	if err := controller.Register(
-		&schema.GroupVersionKind{
-			Group:   stork.GroupName,
-			Version: storkv1.SchemeGroupVersion.Version,
-			Kind:    reflect.TypeOf(storkv1.ClusterDomainsStatus{}).Name(),
-		},
-		"",
-		resyncPeriod,
-		c,
-	); err != nil {
-		return err
+	return controllers.RegisterTo(mgr, "clusters-domains-status-controller", c, &storkv1.ClusterDomainsStatus{})
+}
+
+// Reconcile updates the cluster about the changes in the ClusterDomainsStatus CRD.
+func (c *ClusterDomainsStatusController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	logrus.Tracef("Reconciling ClusterDomainsStatus %s/%s", request.Namespace, request.Name)
+
+	// Fetch the ApplicationBackup instance
+	apiClusterDomainsStatus := &storkv1.ClusterDomainsStatus{}
+	err := c.client.Get(context.TODO(), request.NamespacedName, apiClusterDomainsStatus)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return reconcile.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	go func() { c.createClusterDomainsStatusObject() }()
+	if err = c.handle(context.TODO(), apiClusterDomainsStatus); err != nil {
+		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(c), apiClusterDomainsStatus.Namespace, apiClusterDomainsStatus.Name, err)
+		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
+	}
 
-	return nil
+	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
 }
 
 // Handle updates the cluster about the changes in the ClusterDomainsStatus CRD
-func (c *ClusterDomainsStatusController) Handle(ctx context.Context, event sdk.Event) error {
-	switch obj := event.Object.(type) {
-	case *storkv1.ClusterDomainsStatus:
-		apiClusterDomainsStatus := obj
-		if event.Deleted {
-			go func() { c.createClusterDomainsStatusObject() }()
-		}
-		currentClusterDomains, err := c.Driver.GetClusterDomains()
-		updated := false
-		if err != nil {
-			c.Recorder.Event(
-				apiClusterDomainsStatus,
-				v1.EventTypeWarning,
-				err.Error(),
-				"Failed to update ClusterDomainsStatuses",
-			)
-			logrus.Errorf("Failed to get cluster domain info: %v", err)
-		} else {
+func (c *ClusterDomainsStatusController) handle(ctx context.Context, apiClusterDomainsStatus *storkv1.ClusterDomainsStatus) error {
+	if apiClusterDomainsStatus.DeletionTimestamp != nil {
+		go func() { c.createClusterDomainsStatusObject() }()
+	}
 
-			if currentClusterDomains.LocalDomain != apiClusterDomainsStatus.Status.LocalDomain {
-				updated = true
-			} else if len(currentClusterDomains.ClusterDomainInfos) != len(apiClusterDomainsStatus.Status.ClusterDomainInfos) {
-				updated = true
-			} else {
-				// check if the domain infos match
-				for _, apiDomainInfo := range apiClusterDomainsStatus.Status.ClusterDomainInfos {
-					if !c.doesClusterDomainInfoMatch(apiDomainInfo, currentClusterDomains.ClusterDomainInfos) {
-						updated = true
-						break
-					}
+	currentClusterDomains, err := c.volDriver.GetClusterDomains()
+	updated := false
+	if err != nil {
+		c.Recorder.Event(
+			apiClusterDomainsStatus,
+			v1.EventTypeWarning,
+			err.Error(),
+			"Failed to update ClusterDomainsStatuses",
+		)
+		logrus.Errorf("Failed to get cluster domain info: %v", err)
+	} else {
+
+		if currentClusterDomains.LocalDomain != apiClusterDomainsStatus.Status.LocalDomain {
+			updated = true
+		} else if len(currentClusterDomains.ClusterDomainInfos) != len(apiClusterDomainsStatus.Status.ClusterDomainInfos) {
+			updated = true
+		} else {
+			// check if the domain infos match
+			for _, apiDomainInfo := range apiClusterDomainsStatus.Status.ClusterDomainInfos {
+				if !c.doesClusterDomainInfoMatch(apiDomainInfo, currentClusterDomains.ClusterDomainInfos) {
+					updated = true
+					break
 				}
 			}
 		}
-		if updated {
-			apiClusterDomainsStatus.Status = *currentClusterDomains
-			if err := sdk.Update(apiClusterDomainsStatus); err != nil {
-				return err
-			}
-		}
 	}
+	if updated {
+		apiClusterDomainsStatus.Status = *currentClusterDomains
+		return c.client.Update(context.TODO(), apiClusterDomainsStatus)
+	}
+
 	return nil
 }
 
@@ -134,10 +151,10 @@ func (c *ClusterDomainsStatusController) doesClusterDomainInfoMatch(
 func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 	t := func() (interface{}, bool, error) {
 
-		clusterID, err := c.Driver.GetClusterID()
+		clusterID, err := c.volDriver.GetClusterID()
 		if err != nil {
 			return nil, true, fmt.Errorf("failed to create cluster "+
-				"domains status object for driver %v: %v", c.Driver.String(), err)
+				"domains status object for driver %v: %v", c.volDriver.String(), err)
 		}
 		clusterDomainStatus := &storkv1.ClusterDomainsStatus{
 			ObjectMeta: metav1.ObjectMeta{
@@ -146,7 +163,7 @@ func (c *ClusterDomainsStatusController) createClusterDomainsStatusObject() {
 		}
 		if _, err := storkops.Instance().CreateClusterDomainsStatus(clusterDomainStatus); err != nil && !errors.IsAlreadyExists(err) {
 			return nil, true, fmt.Errorf("failed to create cluster domain"+
-				" status object for driver %v: %v", c.Driver.String(), err)
+				" status object for driver %v: %v", c.volDriver.String(), err)
 		}
 		return nil, false, nil
 	}
@@ -162,7 +179,7 @@ func (c *ClusterDomainsStatusController) createCRD() error {
 	resource := apiextensions.CustomResource{
 		Name:       storkv1.ClusterDomainsStatusResourceName,
 		Plural:     storkv1.ClusterDomainsStatusPlural,
-		Group:      stork.GroupName,
+		Group:      storkv1.SchemeGroupVersion.Group,
 		Version:    storkv1.SchemeGroupVersion.Version,
 		Scope:      apiextensionsv1beta1.ClusterScoped,
 		Kind:       reflect.TypeOf(storkv1.ClusterDomainsStatus{}).Name(),
