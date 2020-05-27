@@ -226,7 +226,7 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 			snapshotInput := &ec2.CreateSnapshotInput{
 				VolumeId: aws_sdk.String(ebsName),
 				Description: aws_sdk.String(fmt.Sprintf("Created by stork for %v for PVC %v Namespace %v Volume: %v",
-					backup.Name, pvc.Name, pvc.Namespace, pv.Spec.AWSElasticBlockStore.VolumeID)),
+					backup.Name, pvc.Name, pvc.Namespace, ebsName)),
 				TagSpecifications: []*ec2.TagSpecification{
 					{
 						ResourceType: aws_sdk.String(ec2.ResourceTypeSnapshot),
