@@ -60,6 +60,8 @@ func (c *ClusterDomainsStatusController) Init(mgr manager.Manager) error {
 		return err
 	}
 
+	go func() { c.createClusterDomainsStatusObject() }()
+
 	return controllers.RegisterTo(mgr, "clusters-domains-status-controller", c, &storkv1.ClusterDomainsStatus{})
 }
 
