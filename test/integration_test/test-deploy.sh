@@ -113,6 +113,7 @@ done
 
 apk update
 apk add jq
+apt-get -y update 
 apt-get -y install jq
 
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
