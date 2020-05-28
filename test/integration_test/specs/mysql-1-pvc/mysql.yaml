@@ -1,3 +1,30 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: volume-secrets
+type: Opaque
+data:
+  mysql-secret: WW91IHNuZWFreSBsaXR0bGUgcGlnbGV0IQ==
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-enc
+   labels:
+     app: mysql
+   annotations:
+     px/secret-name: volume-secrets
+     px/secret-namespace: "{{NAMESPACE}}"
+     px/secret-key: mysql-secret
+     px/secure: "true"
+     volume.beta.kubernetes.io/storage-class: px-mysql-sc
+spec:
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+---
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -60,8 +87,13 @@ spec:
         volumeMounts:
         - name: mysql-persistent-storage
           mountPath: /var/lib/mysql
+        - name: mysql-dummy-storage
+          mountPath: /var/lib/dummy
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
           claimName: mysql-data
+      - name: mysql-dummy-storage
+        persistentVolumeClaim:
+          claimName: mysql-data-enc
 

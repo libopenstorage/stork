@@ -55,7 +55,7 @@ func singlePVCTest(t *testing.T) {
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
 	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 1, len(volumeNames), "Should only have one volume")
+	require.Equal(t, 2, len(volumeNames), "Should only have one volume")
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
@@ -121,7 +121,7 @@ func driverNodeErrorTest(t *testing.T) {
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
 	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+	require.Equal(t, 2, len(volumeNames), "Should have only one volume")
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
@@ -145,7 +145,7 @@ func driverNodeErrorTest(t *testing.T) {
 	require.NotEqual(t, stoppedNode.Name, scheduledNodes[0].Name, "Task restarted on stopped node")
 
 	volumeNames = getVolumeNames(t, ctxs[0])
-	require.Equal(t, 1, len(volumeNames), "Should have only one volume")
+	require.Equal(t, 2, len(volumeNames), "Should have only one volume")
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
