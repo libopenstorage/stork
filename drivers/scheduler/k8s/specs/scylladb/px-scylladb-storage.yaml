@@ -1,12 +1,16 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: scylla-ssd
+  name: scylla-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "2"
+  repl: "3"
+  fs: xfs
   io_profile: "db_remote"
+  priority_io: "high"
+  disable_io_profile_protection: "true"
   early_ack: "true"
+  queue_depth: "32"
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
 allowVolumeExpansion: true
@@ -14,7 +18,7 @@ allowVolumeExpansion: true
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: scylla
+  name: scylla-ready-probe
 data:
   ready-probe.sh: |
     #!/bin/bash
