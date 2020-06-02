@@ -41,7 +41,9 @@ import (
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
-	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+
+	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
 	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -227,7 +229,7 @@ func ValidateVolumes(ctx *scheduler.Context) {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
-			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
 			expect(err).NotTo(haveOccurred())
 		})
 
@@ -250,12 +252,92 @@ func ValidateVolumes(ctx *scheduler.Context) {
 	})
 }
 
+// GetVolumeParameters retuns volume parameters for all volumes for given context
+func GetVolumeParameters(ctx *scheduler.Context) map[string]map[string]string {
+	var vols map[string]map[string]string
+	var err error
+	Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+		vols, err = Inst().S.GetVolumeParameters(ctx)
+		expect(err).NotTo(haveOccurred())
+	})
+	return vols
+}
+
+// UpdateVolumeInVolumeParameters modifies volume parameters with correct PV name from PVC
+func UpdateVolumeInVolumeParameters(volParam map[string]map[string]string) map[string]map[string]string {
+	updatedVolumeParam := make(map[string]map[string]string)
+	for _, param := range volParam {
+		pvcName, pvcNamespace := param[k8s.PvcNameKey], param[k8s.PvcNamespaceKey]
+		PVName, err := Inst().S.GetVolumeDriverVolumeName(pvcName, pvcNamespace)
+		expect(err).NotTo(haveOccurred())
+		updatedVolumeParam[PVName] = param
+	}
+	return updatedVolumeParam
+}
+
+// ValidateVolumeParameters validates volume parameters using volume driver
+func ValidateVolumeParameters(volParam map[string]map[string]string) {
+	var err error
+	for vol, params := range volParam {
+		if Inst().ConfigMap != "" {
+			params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+			expect(err).NotTo(haveOccurred())
+		}
+		Step(fmt.Sprintf("get volume: %s inspected by the volume driver", vol), func() {
+			err = Inst().V.ValidateCreateVolume(vol, params)
+			expect(err).NotTo(haveOccurred())
+		})
+	}
+}
+
+// ValidateRestoredApplications validates applications restored by backup driver
+func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameters map[string]map[string]string) {
+	var updatedVolumeParams map[string]map[string]string
+	volOptsMap := make(map[string]bool)
+	volOptsMap[SkipClusterScopedObjects] = true
+
+	for _, ctx := range contexts {
+		ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+
+			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+				appScaleFactor := time.Duration(Inst().ScaleFactor)
+				volOpts := mapToVolumeOptions(volOptsMap)
+				err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, volOpts)
+				expect(err).NotTo(haveOccurred())
+			})
+
+			Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
+				appScaleFactor := time.Duration(Inst().ScaleFactor)
+				err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
+				expect(err).NotTo(haveOccurred())
+			})
+
+			updatedVolumeParams = UpdateVolumeInVolumeParameters(volumeParameters)
+			logrus.Infof("Updated parameter list: [%+v]\n", updatedVolumeParams)
+			ValidateVolumeParameters(updatedVolumeParams)
+
+			Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+				vols, err := Inst().S.GetVolumes(ctx)
+				logrus.Infof("List of volumes from scheduler driver :[%+v] \n for context : [%+v]\n", vols, ctx)
+				expect(err).NotTo(haveOccurred())
+
+				for _, vol := range vols {
+					Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
+						err := Inst().V.ValidateVolumeSetup(vol)
+						expect(err).NotTo(haveOccurred())
+					})
+				}
+			})
+		})
+	}
+}
+
 // TearDownContext is the ginkgo spec for tearing down a scheduled context
 func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 	context("For tearing down of an app context", func() {
 		var err error
 
-		options := mapToDeleteOptions(opts)
+		options := mapToVolumeOptions(opts)
 		vols := DeleteVolumes(ctx, options)
 
 		Step(fmt.Sprintf("start destroying %s app", ctx.App.Key), func() {
@@ -271,7 +353,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 }
 
 // DeleteVolumes deletes volumes of a given context
-func DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) []*volume.Volume {
+func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*volume.Volume {
 	var err error
 	var vols []*volume.Volume
 	Step(fmt.Sprintf("destroy the %s app's volumes", ctx.App.Key), func() {
@@ -293,7 +375,7 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) {
+func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) {
 	vols := DeleteVolumes(ctx, options)
 	ValidateVolumesDeleted(ctx.App.Key, vols)
 }
@@ -935,14 +1017,14 @@ func splitCsv(in string) ([]string, error) {
 	return records[0], err
 }
 
-func mapToDeleteOptions(options map[string]bool) *scheduler.DeleteVolumeOptions {
+func mapToVolumeOptions(options map[string]bool) *scheduler.VolumeOptions {
 	if val, ok := options[SkipClusterScopedObjects]; ok {
-		return &scheduler.DeleteVolumeOptions{
+		return &scheduler.VolumeOptions{
 			SkipClusterScopedObjects: val,
 		}
 	}
 
-	return &scheduler.DeleteVolumeOptions{
+	return &scheduler.VolumeOptions{
 		SkipClusterScopedObjects: false,
 	}
 }
