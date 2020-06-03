@@ -260,12 +260,14 @@ func (p *portworx) initPortworxClients() error {
 		return err
 	}
 
-	clnt, err := clusterclient.NewClusterClient(pxMgmtEndpoint, "v1")
+	p.endpoint = pxMgmtEndpoint
+	// Save the token if any was given
+	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
+	cm, err := p.getAdminClusterDriver()
 	if err != nil {
 		return err
 	}
-	p.clusterManager = clusterclient.ClusterManager(clnt)
-	p.endpoint = pxMgmtEndpoint
+	p.clusterManager = cm
 
 	// Setup gRPC clients
 	p.sdkConn = &portworxGrpcConnection{
@@ -282,9 +284,6 @@ func (p *portworx) initPortworxClients() error {
 	if err != nil {
 		return fmt.Errorf("failed to set secrets provider: %v", err)
 	}
-
-	// Save the token if any was given
-	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
 
 	// Create a unique identifier
 	p.id, err = os.Hostname()
@@ -693,40 +692,68 @@ func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.Volum
 
 }
 
+func (p *portworx) getAuthToken() (string, error) {
+	claims := &auth.Claims{
+		Issuer: "stork.openstorage.io",
+		Name:   "Stork",
+
+		// Unique id for stork
+		// this id must be unique across all accounts accessing the px system
+		Subject: "stork.openstorage.io." + p.id,
+
+		// Only allow certain calls
+		Roles: []string{"system.admin"},
+
+		// Be in all groups to have access to all resources
+		Groups: []string{"*"},
+	}
+
+	// This never returns an error, but just in case, check the value
+	signature, err := auth.NewSignatureSharedSecret(p.jwtSharedSecret)
+	if err != nil {
+		return "", err
+	}
+
+	// Set the token expiration
+	options := &auth.Options{
+		Expiration:  time.Now().Add(time.Hour).Unix(),
+		IATSubtract: 1 * time.Minute,
+	}
+
+	token, err := auth.Token(claims, signature, options)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+
+}
+
+func (p *portworx) getAdminClusterDriver() (cluster.Cluster, error) {
+	if len(p.jwtSharedSecret) != 0 {
+		token, err := p.getAuthToken()
+		if err != nil {
+			return nil, err
+		}
+		clnt, err := clusterclient.NewAuthClusterClient(p.endpoint, "v1", token, "")
+		if err != nil {
+			return nil, err
+		}
+		return clusterclient.ClusterManager(clnt), nil
+	}
+	clnt, err := clusterclient.NewClusterClient(p.endpoint, "v1")
+	if err != nil {
+		return nil, err
+	}
+	clusterclient.ClusterManager(clnt)
+	return nil, nil
+}
+
 func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
 	if len(p.jwtSharedSecret) != 0 {
-		claims := &auth.Claims{
-			Issuer: "stork.openstorage.io",
-			Name:   "Stork",
-
-			// Unique id for stork
-			// this id must be unique across all accounts accessing the px system
-			Subject: "stork.openstorage.io." + p.id,
-
-			// Only allow certain calls
-			Roles: []string{"system.user"},
-
-			// Be in all groups to have access to all resources
-			Groups: []string{"*"},
-		}
-
-		// This never returns an error, but just in case, check the value
-		signature, err := auth.NewSignatureSharedSecret(p.jwtSharedSecret)
+		token, err := p.getAuthToken()
 		if err != nil {
 			return nil, err
 		}
-
-		// Set the token expiration
-		options := &auth.Options{
-			Expiration:  time.Now().Add(time.Hour).Unix(),
-			IATSubtract: 1 * time.Minute,
-		}
-
-		token, err := auth.Token(claims, signature, options)
-		if err != nil {
-			return nil, err
-		}
-
 		clnt, err := p.getRestClientWithAuth(token)
 		if err != nil {
 			return nil, err
