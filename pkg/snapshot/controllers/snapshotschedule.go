@@ -300,6 +300,14 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 	snapshot.Metadata.Annotations[SnapshotScheduleNameAnnotation] = snapshotSchedule.Name
 	snapshot.Metadata.Annotations[SnapshotSchedulePolicyTypeAnnotation] = string(policyType)
 
+	options, err := schedule.GetOptions(snapshotSchedule.Spec.SchedulePolicyName, policyType)
+	if err != nil {
+		return err
+	}
+	for k, v := range options {
+		snapshot.Metadata.Annotations[k] = v
+	}
+
 	log.VolumeSnapshotScheduleLog(snapshotSchedule).Infof("Starting snapshot %v", snapshotName)
 	// If reclaim policy is set to Delete, this will delete the snapshots
 	// created by this snapshotschedule when the schedule object is deleted
