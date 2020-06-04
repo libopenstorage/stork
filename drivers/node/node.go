@@ -143,6 +143,12 @@ type Driver interface {
 
 	// GetASGClusterSize gets node count for an asg cluster
 	GetASGClusterSize() (int64, error)
+
+	// SetClusterVersion sets desired version for cluster and its node pools
+	SetClusterVersion(version string) error
+
+	// GetClusterVersion returns version of cluster and its node pools
+	GetClusterVersion() (clusterVersion string, nodePoolsVersion []string, err error)
 }
 
 // Register registers the given node driver
@@ -264,5 +270,21 @@ func (d *notSupportedDriver) DeleteNode(node Node, timeout time.Duration) error 
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeleteNode()",
+	}
+}
+
+func (d *notSupportedDriver) SetClusterVersion(version string) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SetClusterVersion()",
+	}
+}
+
+func (d *notSupportedDriver) GetClusterVersion() (clusterVersion string,
+	nodePoolsVersion []string,
+	err error) {
+	return "", []string{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetClusterVersion()",
 	}
 }
