@@ -329,8 +329,8 @@ func (p *portworx) initPortworxClients() error {
 		return err
 	}
 
-	logrus.Infof("Using %v:%v as endpoint for portworx REST endpoint", endpoint, p.restPort)
-	logrus.Infof("Using %v:%v as endpoint for portworx gRPC endpoint", endpoint, p.sdkPort)
+	logrus.Debugf("Using %v:%v as endpoint for portworx REST endpoint", endpoint, p.restPort)
+	logrus.Debugf("Using %v:%v as endpoint for portworx gRPC endpoint", endpoint, p.sdkPort)
 
 	// Setup REST clients
 	if isTLSEnabled() {
@@ -339,7 +339,7 @@ func (p *portworx) initPortworxClients() error {
 		scheme = "http"
 	}
 	p.endpoint = fmt.Sprintf("%s://%v:%v", scheme, endpoint, p.restPort)
-	logrus.Infof("Using %s as the endpoint", p.endpoint)
+	logrus.Debugf("Using %s as the endpoint", p.endpoint)
 	clnt, err := clusterclient.NewClusterClient(p.endpoint, "v1")
 	if err != nil {
 		return err
