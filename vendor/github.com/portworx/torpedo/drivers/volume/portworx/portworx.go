@@ -205,6 +205,7 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 			n.Status,
 		)
 	}
+	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {
 		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
@@ -934,6 +935,11 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 			if len(pxNode.Pools) == 0 {
 				d.updateNodeID(&n, d.getNodeManager())
 			}
+			return "", true, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("node %s status is up but px cluster is not ok. Expected: %v Actual: %v",
+					n.Name, api.Status_STATUS_OK, pxNode.Status),
+			}
 		default:
 			return "", true, &ErrFailedToWaitForPx{
 				Node: n,
@@ -1221,6 +1227,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 			Cause: fmt.Sprintf("Replication factor is not of type int64"),
 		}
 	}
+	logrus.Debugf("Replication factor for volume: %s is %d", vol.ID, replFactor)
 
 	return replFactor, nil
 }
@@ -1314,6 +1321,7 @@ func (d *portworx) GetAggregationLevel(vol *torpedovolume.Volume) (int64, error)
 			Cause: fmt.Sprintf("Aggregation level is not of type uint32"),
 		}
 	}
+	logrus.Debugf("Aggregation level for volume: %s is %d", vol.ID, aggrLevel)
 
 	return int64(aggrLevel), nil
 }
@@ -2346,5 +2354,5 @@ func getSDKContainerPort() (int32, error) {
 }
 
 func init() {
-	torpedovolume.Register(DriverName, &portworx{})
+	torpedovolume.Register(DriverName, provisioners, &portworx{})
 }

@@ -852,10 +852,9 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:898816691aa2e7611983b67cd71758acfc6831186a4b61324045766573e1af5b"
+  digest = "1:700db2bb099ba36465a3b8fce5bde60c2c21f147435584634fbef851a280e13e"
   name = "github.com/portworx/torpedo"
   packages = [
-    "drivers",
     "drivers/api",
     "drivers/node",
     "drivers/node/ssh",
@@ -874,7 +873,7 @@
     "pkg/units",
   ]
   pruneopts = "UT"
-  revision = "f27481c58078e3e55dab1bd1b3d8323840299ca9"
+  revision = "102f9f4a753cd378e8697c68fa5c3cb296056af1"
 
 [[projects]]
   branch = "master"
