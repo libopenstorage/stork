@@ -59,6 +59,7 @@ const (
 	remoteFilePath        = "/tmp/kubeconfig"
 	configMapSyncWaitTime = 3 * time.Second
 	defaultSchedulerName  = "default-scheduler"
+	defaultTestKey        = "mysql-1-pvc"
 
 	nodeScore   = 100
 	rackScore   = 50
@@ -77,6 +78,13 @@ const (
 	backupPathVar            = "BACKUP_LOCATION_PATH"
 )
 
+var (
+	testKeyVar          = defaultTestKey
+	appKeyVar           = appKey
+	appBackupKeyPrefix  = defaultTestKey
+	appRestoreKeyPrefix = restoreName
+)
+
 var nodeDriver node.Driver
 var schedulerDriver scheduler.Driver
 var volumeDriver volume.Driver
@@ -90,6 +98,22 @@ var authTokenConfigMap string
 var volumeDriverName string
 var schedulerName string
 var backupLocationPath string
+
+func setApp(appName string) {
+	testKeyVar = defaultTestKey
+	appKeyVar = appKey
+	appBackupKeyPrefix = defaultTestKey
+	appRestoreKeyPrefix = restoreName
+
+	// Set all vars used by tests to appName
+	// TODO(stgleb): Add more vars, when this feature used by another tets
+	if appName != "" {
+		appKeyVar = appName
+		testKeyVar = appName
+		appBackupKeyPrefix = appName
+		appRestoreKeyPrefix = appName
+	}
+}
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -522,10 +546,9 @@ func setMockTime(t *time.Time) error {
 	return nil
 }
 
-func createApp(t *testing.T, testID string) *scheduler.Context {
-
+func createApp(t *testing.T, testID, appKey string) *scheduler.Context {
 	ctxs, err := schedulerDriver.Schedule(testID,
-		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}, Scheduler: schedulerName})
+		scheduler.ScheduleOptions{AppKeys: []string{appKey}, Scheduler: schedulerName})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctxs), "Only one task should have started")
 

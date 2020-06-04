@@ -17,6 +17,8 @@ backup_location_path="test-restore-path"
 cloud_secret=""
 aws_id=""
 aws_key=""
+app_name=""
+
 for i in "$@"
 do
 case $i in
@@ -130,6 +132,13 @@ apk add jq
 apt-get -y update 
 apt-get -y install jq
 
+if [ -z "${APP_NAME}" ]; then
+  echo "Use default app name ", $app_name
+else
+  app_name="${APP_NAME}"
+  echo "Use provided app name ", $app_name
+fi
+
 KUBEVERSION=$(kubectl version -o json | jq ".serverVersion.gitVersion" -r)
 sed -i 's/<kube_version>/'"$KUBEVERSION"'/g' /specs/stork-scheduler.yaml
 sed -i 's|'openstorage/stork:.*'|'"$image_name"'|g'  /specs/stork-deployment.yaml
@@ -241,6 +250,8 @@ if [ "$volume_driver" != "" ] ; then
 	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml
 fi
 
+sed -i 's|'APP_NAME_PLACEHOLDER'|'"$app_name"'|g' /testspecs/stork-test-pod.yaml
+
 if [ "$remote_config_path" != "" ]; then
     kubectl create configmap remoteconfigmap --from-file=$remote_config_path -n kube-system
 fi
@@ -248,6 +259,7 @@ fi
 kubectl delete -f /testspecs/stork-test-pod.yaml
 kubectl create -f /testspecs/stork-test-pod.yaml
 
+cat /testspecs/stork-test-pod.yaml
 for i in $(seq 1 100) ; do
     test_status=$(kubectl get pod stork-test -n kube-system -o json | jq ".status.phase" -r)
     if [ "$test_status" == "Running" ] || [ "$test_status" == "Completed" ]; then

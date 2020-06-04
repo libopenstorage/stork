@@ -4,6 +4,7 @@ package integrationtest
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -21,7 +22,6 @@ import (
 )
 
 const (
-	testKey              = "mysql-1-pvc"
 	appKey               = "mysql"
 	restoreName          = "mysql-restore"
 	backupSyncAnnotation = "backupsync"
@@ -67,6 +67,8 @@ func TestScaleApplicationBackup(t *testing.T) {
 
 func triggerBackupRestoreTest(
 	t *testing.T,
+	testKey string,
+	appKey string,
 	appBackupKey []string,
 	additionalAppKeys []string,
 	appRestoreKey []string,
@@ -80,7 +82,7 @@ func triggerBackupRestoreTest(
 		var currBackupLocation *storkv1.BackupLocation
 		var err error
 		var ctxs []*scheduler.Context
-		ctx := createApp(t, appKey)
+		ctx := createApp(t, appKey, defaultTestKey)
 		ctxs = append(ctxs, ctx)
 		var restoreCtx = &scheduler.Context{
 			UID: ctx.UID,
@@ -205,7 +207,7 @@ func triggerScaleBackupRestoreTest(
 	var appRestores []*storkv1.ApplicationRestore
 
 	backuplocationPrefix := "backuplocation-"
-	appbackupPrefix := testKey + "-backup-scale-"
+	appbackupPrefix := defaultTestKey + "-backup-scale-"
 	restorePrefix := "mysql-restore-scale-"
 	for i := 0; i < backupScaleCount; i++ {
 		currCtx, err := schedulerDriver.Schedule("scale-"+strconv.Itoa(i),
@@ -379,11 +381,17 @@ func getBackupFromListWithAnnotations(backupList *storkv1.ApplicationBackupList,
 }
 
 func applicationBackupRestoreTest(t *testing.T) {
+	appName := os.Getenv("APP_NAME")
+	logrus.Infof("APP_NAME: %s", appName)
+	setApp(appName)
+
 	triggerBackupRestoreTest(
 		t,
-		[]string{testKey + "-backup"},
+		testKeyVar,
+		appKeyVar,
+		[]string{appBackupKeyPrefix + "-backup"},
 		[]string{},
-		[]string{restoreName},
+		[]string{appRestoreKeyPrefix},
 		allConfigMap,
 		true,
 		true,
@@ -394,7 +402,9 @@ func applicationBackupRestoreTest(t *testing.T) {
 func applicationBackupRestorePreExecRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
-		[]string{testKey + "-pre-exec-rule-backup"},
+		defaultTestKey,
+		appKey,
+		[]string{defaultTestKey + "-pre-exec-rule-backup"},
 		[]string{},
 		[]string{restoreName},
 		defaultConfigMap,
@@ -407,7 +417,9 @@ func applicationBackupRestorePreExecRuleTest(t *testing.T) {
 func applicationBackupRestorePostExecRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
-		[]string{testKey + "-post-exec-rule-backup"},
+		defaultTestKey,
+		appKey,
+		[]string{defaultTestKey + "-post-exec-rule-backup"},
 		[]string{},
 		[]string{restoreName},
 		defaultConfigMap,
@@ -420,7 +432,9 @@ func applicationBackupRestorePostExecRuleTest(t *testing.T) {
 func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
-		[]string{testKey + "-pre-exec-missing-rule-backup"},
+		defaultTestKey,
+		appKey,
+		[]string{defaultTestKey + "-pre-exec-missing-rule-backup"},
 		[]string{},
 		[]string{restoreName},
 		defaultConfigMap,
@@ -433,7 +447,9 @@ func applicationBackupRestorePreExecMissingRuleTest(t *testing.T) {
 func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
-		[]string{testKey + "-post-exec-missing-rule-backup"},
+		defaultTestKey,
+		appKey,
+		[]string{defaultTestKey + "-post-exec-missing-rule-backup"},
 		[]string{},
 		[]string{restoreName},
 		defaultConfigMap,
@@ -446,7 +462,9 @@ func applicationBackupRestorePostExecMissingRuleTest(t *testing.T) {
 func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
-		[]string{testKey + "-pre-exec-failing-rule-backup"},
+		defaultTestKey,
+		appKey,
+		[]string{defaultTestKey + "-pre-exec-failing-rule-backup"},
 		[]string{},
 		[]string{restoreName},
 		defaultConfigMap,
@@ -459,7 +477,9 @@ func applicationBackupRestorePreExecFailingRuleTest(t *testing.T) {
 func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
-		[]string{testKey + "-post-exec-failing-rule-backup"},
+		defaultTestKey,
+		appKey,
+		[]string{defaultTestKey + "-post-exec-failing-rule-backup"},
 		[]string{},
 		[]string{restoreName},
 		defaultConfigMap,
@@ -472,7 +492,9 @@ func applicationBackupRestorePostExecFailingRuleTest(t *testing.T) {
 func applicationBackupLabelSelectorTest(t *testing.T) {
 	triggerBackupRestoreTest(
 		t,
-		[]string{testKey + "-label-selector-backup"},
+		defaultTestKey,
+		appKey,
+		[]string{defaultTestKey + "-label-selector-backup"},
 		[]string{"cassandra"},
 		[]string{restoreName},
 		defaultConfigMap,
@@ -485,8 +507,8 @@ func applicationBackupLabelSelectorTest(t *testing.T) {
 func scaleApplicationBackupRestore(t *testing.T) {
 	triggerScaleBackupRestoreTest(
 		t,
-		[]string{"mysql-1-pvc"},
-		[]string{"mysql-1-pvc"},
+		[]string{defaultTestKey},
+		[]string{defaultTestKey},
 		[]string{restoreName},
 		defaultBackupLocation,
 		true,
@@ -525,7 +547,7 @@ func deletePolicyAndApplicationBackupSchedule(t *testing.T, namespace string, po
 func intervalApplicationBackupScheduleTest(t *testing.T) {
 	backupLocation := "backuplocation"
 
-	ctx := createApp(t, "interval-appbackup-sched-test")
+	ctx := createApp(t, "interval-appbackup-sched-test", defaultTestKey)
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
 	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), defaultBackupLocation, defaultSecretName)
@@ -587,7 +609,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 
 func dailyApplicationBackupScheduleTest(t *testing.T) {
 	backupLocation := "backuplocation"
-	ctx := createApp(t, "daily-backup-sched-test")
+	ctx := createApp(t, "daily-backup-sched-test", defaultTestKey)
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
 	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), defaultBackupLocation, defaultSecretName)
@@ -639,7 +661,7 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 
 func weeklyApplicationBackupScheduleTest(t *testing.T) {
 	backupLocation := "backuplocation"
-	ctx := createApp(t, "weekly-backup-sched-test")
+	ctx := createApp(t, "weekly-backup-sched-test", defaultTestKey)
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
 	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), defaultBackupLocation, defaultSecretName)
@@ -692,7 +714,7 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 
 func monthlyApplicationBackupScheduleTest(t *testing.T) {
 	backupLocation := "backuplocation"
-	ctx := createApp(t, "monthly-backup-sched-test")
+	ctx := createApp(t, "monthly-backup-sched-test", defaultTestKey)
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
 	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), defaultBackupLocation, defaultSecretName)
@@ -749,7 +771,7 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 
 func invalidPolicyApplicationBackupScheduleTest(t *testing.T) {
 	backupLocation := "backuplocation"
-	ctx := createApp(t, "invalid-backup-sched-test")
+	ctx := createApp(t, "invalid-backup-sched-test", defaultTestKey)
 
 	// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
 	_, err := createBackupLocation(t, backupLocation, ctx.GetID(), defaultBackupLocation, defaultSecretName)
@@ -868,7 +890,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	backupLocationName := appKey + "-backup-location-sync"
 
 	// Create myqsl app deployment
-	appCtx := createApp(t, appKey)
+	appCtx := createApp(t, appKey, defaultTestKey)
 
 	// Create backup location on first cluster
 	backupLocation, err := createBackupLocation(t, backupLocationName, appCtx.GetID(), defaultBackupLocation, defaultSecretName)
@@ -1035,7 +1057,7 @@ func waitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 
 func applicationBackupDelBackupLocation(t *testing.T) {
 	// Create myqsl app deployment
-	appCtx := createApp(t, appKey)
+	appCtx := createApp(t, appKey, defaultTestKey)
 
 	backupLocationName := appKey + "-backup-location"
 	// Create backup location on first cluster
@@ -1063,8 +1085,8 @@ func applicationBackupDelBackupLocation(t *testing.T) {
 }
 
 func applicationBackupMultiple(t *testing.T) {
-	// Create myqsl app deployment
-	appCtx := createApp(t, appKey)
+	// Create mysql app deployment
+	appCtx := createApp(t, appKey, defaultTestKey)
 
 	backupLocationName := appKey + "-backup-location"
 	// Create backup location

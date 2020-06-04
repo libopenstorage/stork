@@ -363,7 +363,7 @@ func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName 
 }
 
 func intervalSnapshotScheduleTest(t *testing.T) {
-	ctx := createApp(t, "interval-snap-sched-test")
+	ctx := createApp(t, "interval-snap-sched-test", defaultTestKey)
 	policyName := "intervalpolicy"
 	retain := 2
 	interval := 2
@@ -415,7 +415,7 @@ func intervalSnapshotScheduleTest(t *testing.T) {
 }
 
 func dailySnapshotScheduleTest(t *testing.T) {
-	ctx := createApp(t, "daily-snap-sched-test")
+	ctx := createApp(t, "daily-snap-sched-test", defaultTestKey)
 	policyName := "dailypolicy"
 	retain := 2
 	// Set first trigger 2 minutes from now
@@ -458,7 +458,7 @@ func dailySnapshotScheduleTest(t *testing.T) {
 }
 
 func weeklySnapshotScheduleTest(t *testing.T) {
-	ctx := createApp(t, "weekly-snap-sched-test")
+	ctx := createApp(t, "weekly-snap-sched-test", defaultTestKey)
 	policyName := "weeklypolicy"
 	retain := 2
 	// Set first trigger 2 minutes from now
@@ -502,7 +502,7 @@ func weeklySnapshotScheduleTest(t *testing.T) {
 }
 
 func monthlySnapshotScheduleTest(t *testing.T) {
-	ctx := createApp(t, "monthly-snap-sched-test")
+	ctx := createApp(t, "monthly-snap-sched-test", defaultTestKey)
 	policyName := "monthlypolicy"
 	retain := 2
 	// Set first trigger 2 minutes from now
@@ -601,7 +601,7 @@ func commonSnapshotScheduleTests(
 }
 
 func invalidPolicySnapshotScheduleTest(t *testing.T) {
-	ctx := createApp(t, "invalid-snap-sched-test")
+	ctx := createApp(t, "invalid-snap-sched-test", defaultTestKey)
 	policyName := "invalidpolicy"
 	scheduledTime := time.Now()
 	retain := 2

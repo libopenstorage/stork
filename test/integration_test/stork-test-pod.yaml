@@ -84,6 +84,8 @@ spec:
       value: aws_access_key_id
     - name: AWS_SECRET_ACCESS_KEY
       value: aws_secret_access_key
+    - name: APP_NAME
+      value: APP_NAME_PLACEHOLDER
   hostNetwork: false
   hostPID: false
   volumes:

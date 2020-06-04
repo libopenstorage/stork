@@ -61,10 +61,10 @@ func deploymentMigrationBackupTest(t *testing.T) {
 		require.NoError(t, err, "Error setting remote config")
 
 		// Backup app from the destination cluster to cloud
-		currBackupLocation, err := createBackupLocation(t, appKey+"-backup-location", testKey+"-mysql-migration", storkv1.BackupLocationType(location), secret)
+		currBackupLocation, err := createBackupLocation(t, appKey+"-backup-location", defaultTestKey+"-mysql-migration", storkv1.BackupLocationType(location), secret)
 		require.NoError(t, err, "Error creating backuplocation %s", currBackupLocation.Name)
 
-		currBackup, err := createApplicationBackupWithAnnotation(t, "dest-backup", testKey+"-mysql-migration", currBackupLocation)
+		currBackup, err := createApplicationBackupWithAnnotation(t, "dest-backup", defaultTestKey+"-mysql-migration", currBackupLocation)
 		require.NoError(t, err, "Error creating app backups")
 
 		err = waitForAppBackupCompletion(currBackup.Name, currBackup.Namespace, applicationBackupSyncRetryTimeout)
@@ -78,7 +78,7 @@ func deploymentMigrationBackupTest(t *testing.T) {
 		err = setRemoteConfig("")
 		require.NoError(t, err, "Error resetting remote config")
 
-		srcBackupLocation, err := createBackupLocation(t, appKey+"-backup-location", testKey+"-mysql-migration", storkv1.BackupLocationType(location), secret)
+		srcBackupLocation, err := createBackupLocation(t, appKey+"-backup-location", defaultTestKey+"-mysql-migration", storkv1.BackupLocationType(location), secret)
 		require.NoError(t, err, "Error creating backuplocation %s", currBackupLocation.Name)
 
 		// Set sync to true on first cluster so that backup from second cluster is available
