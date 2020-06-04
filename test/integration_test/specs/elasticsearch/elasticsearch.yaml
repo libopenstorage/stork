@@ -23,6 +23,19 @@ spec:
     port: 9300
     protocol: TCP
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-api
+spec:
+  selector:
+    component: elasticsearch
+    role: data
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -96,4 +109,34 @@ spec:
       resources:
         requests:
           storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: es-load
+  labels:
+    app: es-load
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: es-load
+  template:
+    metadata:
+      labels:
+        app: es-load
+    spec:
+      containers:
+        - name: es-load
+          image: portworx/torpedo-esload:1.1
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - /bin/bash
+            - -c
+            - "./esload.sh --es_address elasticsearch-data-0.elasticsearch-api.$POD_NAMESPACE.svc.cluster.local:9200 --indices 4 --documents 5 --seconds 120 --not-green --clients 1"
+      restartPolicy: Always
 
