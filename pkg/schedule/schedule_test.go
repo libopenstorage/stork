@@ -35,6 +35,7 @@ func TestSchedule(t *testing.T) {
 	t.Run("triggerMonthlyRequiredTest", triggerMonthlyRequiredTest)
 	t.Run("validateSchedulePolicyTest", validateSchedulePolicyTest)
 	t.Run("policyRetainTest", policyRetainTest)
+	t.Run("policyOptionsTest", policyOptionsTest)
 }
 
 func createDefaultPoliciesTest(t *testing.T) {
@@ -422,4 +423,55 @@ func policyRetainTest(t *testing.T) {
 	retain, err = GetRetain(policyName, stork_api.SchedulePolicyTypeMonthly)
 	require.NoError(t, err, "Error getting retain")
 	require.Equal(t, policy.Policy.Monthly.Retain, retain, "Wrong default retain for monthly policy")
+}
+
+func policyOptionsTest(t *testing.T) {
+	policyName := "options"
+	policy, err := storkops.Instance().CreateSchedulePolicy(&stork_api.SchedulePolicy{
+		ObjectMeta: meta.ObjectMeta{
+			Name: policyName,
+		},
+		Policy: stork_api.SchedulePolicyItem{
+			Interval: &stork_api.IntervalPolicy{
+				IntervalMinutes: 60,
+				Options: map[string]string{
+					"interval-option": "true",
+				},
+			},
+			Daily: &stork_api.DailyPolicy{
+				Time: "10:40PM",
+				Options: map[string]string{
+					"daily-option": "true",
+				},
+			},
+			Weekly: &stork_api.WeeklyPolicy{
+				Time: "10:40PM",
+				Day:  "Thur",
+				Options: map[string]string{
+					"weekly-option": "true",
+				},
+			},
+			Monthly: &stork_api.MonthlyPolicy{
+				Time: "10:40PM",
+				Date: 25,
+				Options: map[string]string{
+					"monthly-option": "true",
+				},
+			},
+		},
+	})
+	require.NoError(t, err, "Error creating schedule policy")
+
+	options, err := GetOptions(policyName, stork_api.SchedulePolicyTypeInterval)
+	require.NoError(t, err, "Error getting options")
+	require.Equal(t, policy.Policy.Interval.Options, options, "Options mismatch for interval policy")
+	options, err = GetOptions(policyName, stork_api.SchedulePolicyTypeDaily)
+	require.NoError(t, err, "Error getting options")
+	require.Equal(t, policy.Policy.Daily.Options, options, "Options mismatch for daily policy")
+	options, err = GetOptions(policyName, stork_api.SchedulePolicyTypeWeekly)
+	require.NoError(t, err, "Error getting options")
+	require.Equal(t, policy.Policy.Weekly.Options, options, "Options mismatch for weekly policy")
+	options, err = GetOptions(policyName, stork_api.SchedulePolicyTypeMonthly)
+	require.NoError(t, err, "Error getting options")
+	require.Equal(t, policy.Policy.Monthly.Options, options, "Options mismatch for monthly policy")
 }

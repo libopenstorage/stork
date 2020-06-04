@@ -296,6 +296,16 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 	}
 	backup.Annotations[ApplicationBackupScheduleNameAnnotation] = backupSchedule.Name
 	backup.Annotations[ApplicationBackupSchedulePolicyTypeAnnotation] = string(policyType)
+	options, err := schedule.GetOptions(backupSchedule.Spec.SchedulePolicyName, policyType)
+	if err != nil {
+		return err
+	}
+	if backup.Spec.Options == nil {
+		backup.Spec.Options = make(map[string]string)
+	}
+	for k, v := range options {
+		backup.Spec.Options[k] = v
+	}
 
 	log.ApplicationBackupScheduleLog(backupSchedule).Infof("Starting backup %v", backupName)
 	// If reclaim policy is set to Delete, this will delete the backups

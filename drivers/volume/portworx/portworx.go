@@ -152,6 +152,7 @@ const (
 	// Annotation to skip checking if the backup is being done to the same
 	// BackupLocationName
 	skipBackupLocationNameCheckAnnotation = "portworx.io/skip-backup-location-name-check"
+	incrementalCountAnnotation            = "portworx.io/cloudsnap-incremental-count"
 )
 
 type cloudSnapStatus struct {
@@ -842,7 +843,11 @@ func (p *portworx) addCloudsnapInfo(
 				// Use full backups for weekly and monthly snaps
 				if policyType == string(storkapi.SchedulePolicyTypeWeekly) ||
 					policyType == string(storkapi.SchedulePolicyTypeMonthly) {
-					request.Full = true
+					// Only set to full backup if the frequency isn't
+					// provided
+					if request.FullBackupFrequency == 0 {
+						request.Full = true
+					}
 				}
 				return
 			}
@@ -935,6 +940,19 @@ func (p *portworx) SnapshotCreate(
 		request.Labels = make(map[string]string)
 		request.Labels[cloudBackupOwnerLabel] = "stork"
 		p.addCloudsnapInfo(request, snap)
+
+		if value, present := snap.Metadata.Annotations[incrementalCountAnnotation]; present {
+			incrementalCount, err := strconv.ParseUint(value, 10, 32)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid cloudsnap-incremental-count specified %v: %v", p, err)
+			}
+			if incrementalCount <= 0 {
+				request.Full = true
+			} else {
+				request.FullBackupFrequency = uint32(incrementalCount)
+				request.Full = false
+			}
+		}
 
 		_, err = volDriver.CloudBackupCreate(request)
 		if err != nil {
@@ -2636,7 +2654,11 @@ func (p *portworx) addApplicationBackupCloudsnapInfo(
 				// Use full backups for weekly and monthly snaps
 				if policyType == string(storkapi.SchedulePolicyTypeWeekly) ||
 					policyType == string(storkapi.SchedulePolicyTypeMonthly) {
-					request.Full = true
+					// Only set to full backup if the frequency isn't
+					// provided
+					if request.FullBackupFrequency == 0 {
+						request.Full = true
+					}
 				}
 				return
 			}
@@ -2700,6 +2722,19 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		request.Labels[cloudBackupOwnerLabel] = "stork"
 		if val, ok := backup.Annotations[skipBackupLocationNameCheckAnnotation]; ok {
 			request.Labels[api.OptCloudBackupIgnoreCreds] = val
+		}
+
+		if value, present := backup.Spec.Options[incrementalCountAnnotation]; present {
+			incrementalCount, err := strconv.ParseUint(value, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("invalid cloudsnap-incremental-count specified %v: %v", p, err)
+			}
+			if incrementalCount <= 0 {
+				request.Full = true
+			} else {
+				request.FullBackupFrequency = uint32(incrementalCount)
+				request.Full = false
+			}
 		}
 		p.addApplicationBackupCloudsnapInfo(request, backup)
 
