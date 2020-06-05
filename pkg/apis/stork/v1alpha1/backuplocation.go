@@ -66,6 +66,9 @@ type S3Config struct {
 	// Disable SSL option if using with a non-AWS S3 objectstore which doesn't
 	// have SSL enabled
 	DisableSSL bool `json:"disableSSL"`
+	// The S3 Storage Class to use when uploading objects. Glacier storage
+	// classes are not supported
+	StorageClass string `json:"storageClass"`
 }
 
 // AzureConfig specifies the config required to connect to Azure Blob Storage
@@ -145,6 +148,9 @@ func (bl *BackupLocation) getMergedS3Config(client kubernetes.Interface) error {
 			if err != nil {
 				return fmt.Errorf("error parding disableSSL from Secret: %v", err)
 			}
+		}
+		if val, ok := secretConfig.Data["storageClass"]; ok && val != nil {
+			bl.Location.S3Config.StorageClass = strings.TrimSuffix(string(val), "\n")
 		}
 	}
 	return nil
