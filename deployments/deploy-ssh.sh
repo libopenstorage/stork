@@ -127,6 +127,11 @@ if [ -n "$AZURE_CLIENT_SECRET" ]; then
     AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
 fi
 
+SCHEDULER_UPGRADE_HOPS=""
+if [ -n "${SCHEDULER_UPGRADE_HOPS}" ]; then
+    SCHEDULER_UPGRADE_HOPS="--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS"
+fi
+
 for i in $@
 do
 case $i in
@@ -148,6 +153,7 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/drive_failure.test",
             "bin/volume_ops.test",
             "bin/sched.test",
+            "bin/scheduler_upgrade.test",
             "bin/node_decommission.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
@@ -379,7 +385,8 @@ spec:
             "--secret-type=$SECRET_TYPE",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
-            "$APP_DESTROY_TIMEOUT_ARG"
+            "$APP_DESTROY_TIMEOUT_ARG",
+            "$SCHEDULER_UPGRADE_HOPS"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]

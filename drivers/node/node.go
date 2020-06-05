@@ -145,7 +145,7 @@ type Driver interface {
 	GetASGClusterSize() (int64, error)
 
 	// SetClusterVersion sets desired version for cluster and its node pools
-	SetClusterVersion(version string) error
+	SetClusterVersion(version string, timeout time.Duration) error
 
 	// GetClusterVersion returns version of cluster and its node pools
 	GetClusterVersion() (clusterVersion string, nodePoolsVersion []string, err error)
@@ -273,7 +273,7 @@ func (d *notSupportedDriver) DeleteNode(node Node, timeout time.Duration) error 
 	}
 }
 
-func (d *notSupportedDriver) SetClusterVersion(version string) error {
+func (d *notSupportedDriver) SetClusterVersion(version string, timeout time.Duration) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SetClusterVersion()",

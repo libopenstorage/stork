@@ -67,6 +67,22 @@ func (g *gke) GetASGClusterSize() (int64, error) {
 	return nodeCount, nil
 }
 
+func (g *gke) SetClusterVersion(version string, timeout time.Duration) error {
+
+	err := g.ops.SetClusterVersion(version, timeout)
+	if err != nil {
+		logrus.Errorf("failed to set version for cluster. Error: %v", err)
+		return err
+	}
+
+	err = g.ops.SetInstanceGroupVersion(g.instanceGroup, version, timeout)
+	if err != nil {
+		logrus.Errorf("failed to set version for instance group %s. Error: %v", g.instanceGroup, err)
+		return err
+	}
+	return nil
+}
+
 func (g *gke) DeleteNode(node node.Node, timeout time.Duration) error {
 
 	err := g.ops.DeleteInstance(node.Name, node.Zone, timeout)
