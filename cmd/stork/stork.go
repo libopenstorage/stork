@@ -138,7 +138,7 @@ func main() {
 			Usage: "Start the controller to monitor PVC creation and deletions (default: true)",
 		},
 		cli.BoolTFlag{
-			Name:  "webhook",
+			Name:  "webhook-controller",
 			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: true)",
 		},
 	}
@@ -195,7 +195,7 @@ func run(c *cli.Context) {
 				log.Fatalf("Error starting scheduler extender: %v", err)
 			}
 		}
-		if c.Bool("webhook") {
+		if c.Bool("webhook-controller") {
 			webhook = &webhookadmission.Controller{
 				Driver:   d,
 				Recorder: recorder,
@@ -377,7 +377,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 			if err := d.Stop(); err != nil {
 				log.Warnf("Error stopping driver: %v", err)
 			}
-			if c.Bool("webhook") {
+			if c.Bool("webhook-controller") {
 				if err := webhook.Stop(); err != nil {
 					log.Warnf("error stopping webhook controller %v", err)
 				}
