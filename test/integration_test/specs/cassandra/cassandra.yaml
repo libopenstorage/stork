@@ -98,3 +98,21 @@ spec:
       resources:
         requests:
           storage: 8Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cassandra-stress
+  labels:
+    app: cassandra-stress
+spec:
+  template:
+    spec:
+      containers:
+        - name: cassandra-stress
+          image: chrisbelyea/cassandra-stress:latest
+          command:
+            - "/bin/bash"
+            - "-c"
+            - 'cassandra-stress write n=100000 cl=one -mode native cql3 -node cassandra-0.cassandra.$(POD_NAMESPACE).svc.cluster.local'
+      restartPolicy: Never
