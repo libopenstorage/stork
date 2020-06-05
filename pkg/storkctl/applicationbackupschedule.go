@@ -216,7 +216,7 @@ func getApplicationBackupSchedules(backupLocation string, args []string, namespa
 	var applicationBackupSchedules []*storkv1.ApplicationBackupSchedule
 	if len(backupLocation) == 0 {
 		if len(args) == 0 {
-			return nil, fmt.Errorf("at least one argument needs to be provided for applicationBackup schedule name if cluster pair isn't provided")
+			return nil, fmt.Errorf("at least one argument needs to be provided for applicationBackup schedule name if backupLocation isn't provided")
 		}
 		applicationBackupSchedule, err := storkops.Instance().GetApplicationBackupSchedule(args[0], namespace)
 		if err != nil {
