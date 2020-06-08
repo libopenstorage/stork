@@ -149,6 +149,9 @@ type Driver interface {
 
 	// GetClusterVersion returns version of cluster and its node pools
 	GetClusterVersion() (clusterVersion string, nodePoolsVersion []string, err error)
+
+	// GetZones returns list of zones in which ASG cluster is running
+	GetZones() ([]string, error)
 }
 
 // Register registers the given node driver
@@ -286,5 +289,12 @@ func (d *notSupportedDriver) GetClusterVersion() (clusterVersion string,
 	return "", []string{}, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetClusterVersion()",
+	}
+}
+
+func (d *notSupportedDriver) GetZones() ([]string, error) {
+	return []string{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetZones()",
 	}
 }

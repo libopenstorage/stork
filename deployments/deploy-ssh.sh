@@ -127,9 +127,14 @@ if [ -n "$AZURE_CLIENT_SECRET" ]; then
     AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
 fi
 
-SCHEDULER_UPGRADE_HOPS=""
+SCHEDULER_UPGRADE_HOPS_ARG=""
 if [ -n "${SCHEDULER_UPGRADE_HOPS}" ]; then
-    SCHEDULER_UPGRADE_HOPS="--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS"
+    SCHEDULER_UPGRADE_HOPS_ARG="--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS"
+fi
+
+MAX_STORAGE_NODES_PER_AZ_ARG=""
+if [ -n "${MAX_STORAGE_NODES_PER_AZ}" ]; then
+    MAX_STORAGE_NODES_PER_AZ_ARG="--max-storage-nodes-per-az=$MAX_STORAGE_NODES_PER_AZ"
 fi
 
 for i in $@
@@ -386,7 +391,8 @@ spec:
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "$APP_DESTROY_TIMEOUT_ARG",
-            "$SCHEDULER_UPGRADE_HOPS"
+            "$SCHEDULER_UPGRADE_HOPS_ARG",
+            "$MAX_STORAGE_NODES_PER_AZ_ARG"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
@@ -444,7 +450,7 @@ function describe_pod_then_exit {
   exit 1
 }
 
-for i in $(seq 1 600) ; do
+for i in $(seq 1 900) ; do
   printf .
   state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
   if [ "$state" == "Error" ]; then
