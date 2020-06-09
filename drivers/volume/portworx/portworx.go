@@ -189,7 +189,6 @@ var restoreStateCallBackoff = wait.Backoff{
 }
 
 type portworx struct {
-	clusterManager  cluster.Cluster
 	store           cache.Store
 	stopChannel     chan struct{}
 	sdkConn         *portworxGrpcConnection
@@ -243,10 +242,34 @@ func (p *portworx) getClusterDomainClient() (api.OpenStorageClusterDomainsClient
 	return api.NewOpenStorageClusterDomainsClient(conn), nil
 }
 
+// getClusterManagerClient returns cluster manager client with proper configuration and updated authorization token
+// if authorization is enabled
+func (p *portworx) getClusterManagerClient() (cluster.Cluster, error) {
+	token, err := p.tokenGenerator()
+	if err != nil {
+		return nil, err
+	}
+
+	clnt, err := clusterclient.NewAuthClusterClient(p.endpoint, "v1", token, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return clusterclient.ClusterManager(clnt), nil
+}
+
 func (p *portworx) initPortworxClients() error {
 	kubeOps := core.Instance()
 
-	paramsBuilder, err := pwx.NewConnectionParamsBuilder(kubeOps, pwx.NewConnectionParamsBuilderDefaultConfig())
+	pbc := pwx.NewConnectionParamsBuilderDefaultConfig()
+
+	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
+	if len(p.jwtSharedSecret) > 0 {
+		pbc.AuthTokenGenerator = p.tokenGenerator
+		pbc.AuthEnabled = true
+	}
+
+	paramsBuilder, err := pwx.NewConnectionParamsBuilder(kubeOps, pbc)
 	if err != nil {
 		return err
 	}
@@ -261,11 +284,6 @@ func (p *portworx) initPortworxClients() error {
 		return err
 	}
 
-	clnt, err := clusterclient.NewClusterClient(pxMgmtEndpoint, "v1")
-	if err != nil {
-		return err
-	}
-	p.clusterManager = clusterclient.ClusterManager(clnt)
 	p.endpoint = pxMgmtEndpoint
 
 	// Setup gRPC clients
@@ -284,9 +302,6 @@ func (p *portworx) initPortworxClients() error {
 		return fmt.Errorf("failed to set secrets provider: %v", err)
 	}
 
-	// Save the token if any was given
-	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
-
 	// Create a unique identifier
 	p.id, err = os.Hostname()
 	if err != nil {
@@ -295,6 +310,49 @@ func (p *portworx) initPortworxClients() error {
 
 	p.initDone = true
 	return err
+}
+
+// 	tokenGenerator generates authorization token for system.admin
+//	when shared secret is not configured authz token is empty string
+//	this let Openstorage API clients be bootstrapped with no authorization (by accepting empty token)
+func (p *portworx) tokenGenerator() (string, error) {
+	if len(p.jwtSharedSecret) == 0 {
+		return "", nil
+	}
+
+	claims := &auth.Claims{
+		Issuer: "stork.openstorage.io",
+		Name:   "Stork",
+
+		// Unique id for stork
+		// this id must be unique across all accounts accessing the px system
+		Subject: "stork.openstorage.io." + p.id,
+
+		// Only allow certain calls
+		Roles: []string{"system.admin"},
+
+		// Be in all groups to have access to all resources
+		Groups: []string{"*"},
+	}
+
+	// This never returns an error, but just in case, check the value
+	signature, err := auth.NewSignatureSharedSecret(p.jwtSharedSecret)
+	if err != nil {
+		return "", err
+	}
+
+	// Set the token expiration
+	options := &auth.Options{
+		Expiration:  time.Now().Add(time.Hour * 1).Unix(),
+		IATSubtract: 1 * time.Minute,
+	}
+
+	token, err := auth.Token(claims, signature, options)
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
 
 func (p *portworx) startNodeCache() error {
@@ -454,7 +512,13 @@ func (p *portworx) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 	if id == "" {
 		return nil, fmt.Errorf("invalid node id")
 	}
-	node, err := p.clusterManager.Inspect(id)
+
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	node, err := clusterManager.Inspect(id)
 	if err != nil {
 		return nil, &ErrFailedToGetNodes{
 			Cause: err.Error(),
@@ -476,7 +540,12 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 		}
 	}
 
-	cluster, err := p.clusterManager.Enumerate()
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	cluster, err := clusterManager.Enumerate()
 	if err != nil {
 		return nil, &ErrFailedToGetNodes{
 			Cause: err.Error(),
@@ -520,7 +589,12 @@ func (p *portworx) GetClusterID() (string, error) {
 		}
 	}
 
-	cluster, err := p.clusterManager.Enumerate()
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return "", fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	cluster, err := clusterManager.Enumerate()
 	if err != nil {
 		return "", &ErrFailedToGetClusterID{
 			Cause: err.Error(),
@@ -2015,7 +2089,12 @@ func (p *portworx) CreatePair(pair *storkapi.ClusterPair) (string, error) {
 		}
 	}
 
-	resp, err := p.clusterManager.CreatePair(&api.ClusterPairCreateRequest{
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return "", fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	resp, err := clusterManager.CreatePair(&api.ClusterPairCreateRequest{
 		RemoteClusterIp:    pair.Spec.Options["ip"],
 		RemoteClusterToken: pair.Spec.Options["token"],
 		RemoteClusterPort:  uint32(port),
@@ -2034,7 +2113,12 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 		}
 	}
 
-	return p.clusterManager.DeletePair(pair.Status.RemoteStorageID)
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	return clusterManager.DeletePair(pair.Status.RemoteStorageID)
 }
 
 func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
@@ -2325,8 +2409,13 @@ func (p *portworx) GetClusterDomains() (*storkapi.ClusterDomains, error) {
 		}
 	}
 
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
 	// get the cluster details
-	cluster, err := p.clusterManager.Enumerate()
+	cluster, err := clusterManager.Enumerate()
 	if err != nil {
 		return nil, err
 	}
@@ -2471,9 +2560,14 @@ func (p *portworx) DeactivateClusterDomain(cdu *storkapi.ClusterDomainUpdate) er
 }
 
 func (p *portworx) getNodesToDomainMap(nodes []api.Node) (map[string]string, error) {
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
 	nodeToDomainMap := make(map[string]string)
 	for _, node := range nodes {
-		nodeConfig, err := p.clusterManager.GetNodeConf(node.Id)
+		nodeConfig, err := clusterManager.GetNodeConf(node.Id)
 		if err != nil {
 			return nil, err
 		}
@@ -3217,7 +3311,12 @@ func (p *portworx) ensureNodesHaveMinVersion(minVersionStr string) (bool, string
 		return false, "", err
 	}
 
-	result, err := p.clusterManager.Enumerate()
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return false, "", fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	result, err := clusterManager.Enumerate()
 	if err != nil {
 		return false, "", err
 	}
