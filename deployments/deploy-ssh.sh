@@ -97,6 +97,11 @@ if [ -z "$DRIVER_START_TIMEOUT" ]; then
     echo "Using default timeout of ${DRIVER_START_TIMEOUT}"
 fi
 
+if [ -z "$SECRET_TYPE" ]; then
+    SECRET_TYPE="k8s"
+    echo "Using default secret type of ${SECRET_TYPE}"
+fi
+
 APP_DESTROY_TIMEOUT_ARG=""
 if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
     APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
@@ -371,6 +376,9 @@ spec:
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
+            "--secret-type=$SECRET_TYPE",
+            "--vault-addr=$VAULT_ADDR",
+            "--vault-token=$VAULT_TOKEN",
             "$APP_DESTROY_TIMEOUT_ARG"
     ]
     tty: true

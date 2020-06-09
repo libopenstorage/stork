@@ -24,6 +24,7 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.1.0
+	github.com/hashicorp/vault/api v1.0.4
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
 	github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
 	github.com/libopenstorage/cloudops v0.0.0-20200114171448-10fa10d97720

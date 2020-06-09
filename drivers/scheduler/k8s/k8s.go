@@ -16,6 +16,7 @@ import (
 	"text/template"
 	"time"
 
+	vaultapi "github.com/hashicorp/vault/api"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/units"
@@ -130,6 +131,9 @@ type K8s struct {
 	secretConfigMapName string
 	customConfig        map[string]scheduler.AppConfig
 	eventsStorage       map[string][]scheduler.Event
+	SecretType          string
+	VaultAddress        string
+	VaultToken          string
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -163,6 +167,9 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.VolDriverName = schedOpts.VolDriverName
 	k.secretConfigMapName = schedOpts.SecretConfigMapName
 	k.customConfig = schedOpts.CustomAppConfig
+	k.SecretType = schedOpts.SecretType
+	k.VaultAddress = schedOpts.VaultAddress
+	k.VaultToken = schedOpts.VaultToken
 	k.eventsStorage = make(map[string][]scheduler.Event)
 
 	nodes, err := k8sCore.GetNodes()
@@ -1087,6 +1094,11 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 
 	} else if obj, ok := spec.(*v1.Secret); ok {
 		obj.Namespace = ns.Name
+		if k.SecretType == scheduler.SecretVault {
+			if err := k.createVaultSecret(obj); err != nil {
+				return nil, err
+			}
+		}
 		secret, err := k8sCore.CreateSecret(obj)
 		if errors.IsAlreadyExists(err) {
 			if secret, err = k8sCore.GetSecret(obj.Name, obj.Namespace); err == nil {
@@ -1165,6 +1177,28 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 	}
 
 	return nil, nil
+}
+
+func (k *K8s) createVaultSecret(obj *v1.Secret) error {
+	client, err := vaultapi.NewClient(nil)
+	if err != nil {
+		return err
+	}
+	if err = client.SetAddress(k.VaultAddress); err != nil {
+		return err
+	}
+	client.SetToken(k.VaultToken)
+
+	c := client.Logical()
+	data := make(map[string]interface{})
+	for key, value := range obj.Data {
+		data[key] = string(value)
+	}
+
+	if _, err := c.Write(fmt.Sprintf("secret/%s", obj.Name), data); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spec.AppSpec) (interface{}, error) {

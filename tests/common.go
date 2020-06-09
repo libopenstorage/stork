@@ -140,6 +140,9 @@ func InitInstance() {
 		SecretConfigMapName: Inst().ConfigMap,
 		CustomAppConfig:     Inst().CustomAppConfig,
 		StorageProvisioner:  Inst().Provisioner,
+		SecretType:          Inst().SecretType,
+		VaultAddress:        Inst().VaultAddress,
+		VaultToken:          Inst().VaultToken,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -720,6 +723,9 @@ type Torpedo struct {
 	BundleLocation                      string
 	CustomAppConfig                     map[string]scheduler.AppConfig
 	Backup                              backup.Driver
+	SecretType                          string
+	VaultAddress                        string
+	VaultToken                          string
 }
 
 // ParseFlags parses command line flags
@@ -743,6 +749,9 @@ func ParseFlags() {
 	var customConfigPath string
 	var customAppConfig map[string]scheduler.AppConfig
 	var enableStorkUpgrade bool
+	var secretType string
+	var vaultAddress string
+	var vaultToken string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -769,7 +778,9 @@ func ParseFlags() {
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
 	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
-
+	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
+	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
+	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.Parse()
 
 	appList, err := splitCsv(appListCSV)
@@ -836,6 +847,9 @@ func ParseFlags() {
 				BundleLocation:                      bundleLocation,
 				CustomAppConfig:                     customAppConfig,
 				Backup:                              backupDriver,
+				SecretType:                          secretType,
+				VaultAddress:                        vaultAddress,
+				VaultToken:                          vaultToken,
 			}
 		})
 	}
