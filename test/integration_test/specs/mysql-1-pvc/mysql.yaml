@@ -60,6 +60,13 @@ spec:
         volumeMounts:
         - name: mysql-persistent-storage
           mountPath: /var/lib/mysql
+      - name: sysbench
+        image: portworx/torpedo-sysbench:latest
+        env:
+          - name: MYSQL_HOST
+            value: 127.0.0.1
+          - name: MYSQL_ROOT_PASSWORD
+            value: password
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
