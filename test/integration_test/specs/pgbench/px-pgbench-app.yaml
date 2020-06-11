@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbench
+  labels:
+    app: pgbench
+spec:
+  selector:
+    matchLabels:
+      app: pgbench
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: pgbench
+    spec:
+      containers:
+        - image: postgres:9.5
+          name: postgres
+          ports:
+          - containerPort: 5432
+          resources:
+            limits:
+              memory: "1024Mi"
+              cpu: "100m"
+          env:
+          - name: POSTGRES_USER
+            value: pgbench
+          - name: POSTGRES_PASSWORD
+            value: superpostgres
+          - name: PGBENCH_PASSWORD
+            value: superpostgres
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+          - mountPath: /var/lib/postgresql/data
+            name: pgbenchdb
+        - name: pgbench
+          image: portworx/torpedo-pgbench:latest
+          imagePullPolicy: "Always"
+          env:
+            - name: PG_HOST
+              value: 127.0.0.1
+            - name: PG_USER
+              value: pgbench
+            - name: SIZE
+              value: "10"
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "cat /pgbench/pgbench_state.file"]
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+          - mountPath: /var/lib/postgresql/data
+            name: pgbenchdb
+          - mountPath: /pgbench
+            name: pgbenchstate
+      volumes:
+      - name: pgbenchdb
+        persistentVolumeClaim:
+          claimName: pgbench-data
+      - name: pgbenchstate
+        persistentVolumeClaim:
+          claimName: pgbench-state

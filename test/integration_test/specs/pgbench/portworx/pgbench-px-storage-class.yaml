@@ -1,0 +1,9 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: pgbench-sc
+provisioner: pxd.portworx.com
+parameters:
+  repl: "1"
+  priority_io: "low"
+allowVolumeExpansion: true
