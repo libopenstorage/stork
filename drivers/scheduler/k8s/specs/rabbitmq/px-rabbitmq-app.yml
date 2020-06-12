@@ -1,7 +1,7 @@
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: endpoint-reader
+  name: rabbitmq-peer-discovery-rbac
 rules:
   - apiGroups: [""]
     resources: ["endpoints"]
@@ -10,37 +10,19 @@ rules:
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: endpoint-reader
+  name: rabbitmq-peer-discovery-rbac
 subjects:
   - kind: ServiceAccount
     name: rabbitmq
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: endpoint-reader
+  name: rabbitmq-peer-discovery-rbac
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: rabbitmq
----
-kind: Service
-apiVersion: v1
-metadata:
-  name: rabbitmq-internal
-  labels:
-    app: rabbitmq
-spec:
-  clusterIP: None
-  ports:
-    - name: http
-      protocol: TCP
-      port: 15672
-    - name: amqp
-      protocol: TCP
-      port: 5672
-  selector:
-    app: rabbitmq
 ---
 kind: Service
 apiVersion: v1
@@ -53,11 +35,11 @@ spec:
   selector:
     app: rabbitmq
   ports:
-    - name: rabbitmq-mgmt-port
+    - name: http
       protocol: TCP
       port: 15672
       targetPort: 15672
-    - name: rabbitmq-amqp-port
+    - name: amqp
       protocol: TCP
       port: 5672
       targetPort: 5672
@@ -79,7 +61,7 @@ data:
     ## Set to "hostname" to use pod hostnames.
     ## When this value is changed, so should the variable used to set the RABBITMQ_NODENAME
     ## environment variable.
-    cluster_formation.k8s.address_type = ip
+    cluster_formation.k8s.address_type = hostname
     ## How often should node cleanup checks run?
     cluster_formation.node_cleanup.interval = 30
     ## Set to false if automatic removal of unknown/absent nodes
@@ -90,16 +72,21 @@ data:
     cluster_partition_handling = autoheal
     ## See https://www.rabbitmq.com/ha.html#master-migration-data-locality
     queue_master_locator=min-masters
-    ## See https://www.rabbitmq.com/access-control.html#loopback-users
+    ## This is just an example.
+    ## This enables remote access for the default user with well known credentials.
+    ## Consider deleting the default user and creating a separate user with a set of generated
+    ## credentials instead.
+    ## Learn more at https://www.rabbitmq.com/access-control.html#loopback-users
     loopback_users.guest = false
 
 ---
 apiVersion: apps/v1
+# See the Prerequisites section of https://www.rabbitmq.com/cluster-formation.html#peer-discovery-k8s.
 kind: StatefulSet
 metadata:
   name: rabbitmq
 spec:
-  serviceName: rabbitmq-internal
+  serviceName: rabbitmq
   updateStrategy:
     type: RollingUpdate
   replicas: 3
@@ -115,12 +102,14 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: rabbitmq-k8s
-          image: rabbitmq
+          image: rabbitmq:3.8
           volumeMounts:
             - name: config-volume
               mountPath: /etc/rabbitmq
             - name: rabbitmq-data
               mountPath: /var/lib/rabbitmq
+          # Learn more about what ports various protocols use
+          # at https://www.rabbitmq.com/networking.html#ports
           ports:
             - name: http
               protocol: TCP
@@ -130,30 +119,51 @@ spec:
               containerPort: 5672
           livenessProbe:
             exec:
-              command: ["rabbitmqctl", "status"]
+              # This is just an example. There is no "one true health check" but rather
+              # several rabbitmq-diagnostics commands that can be combined to form increasingly comprehensive
+              # and intrusive health checks.
+              # Learn more at https://www.rabbitmq.com/monitoring.html#health-checks.
+              #
+              # Stage 2 check:
+              command: ["rabbitmq-diagnostics", "status"]
             initialDelaySeconds: 60
             # See https://www.rabbitmq.com/monitoring.html for monitoring frequency recommendations.
             periodSeconds: 60
             timeoutSeconds: 15
           readinessProbe:
             exec:
-              command: ["rabbitmqctl", "status"]
+              # This is just an example. There is no "one true health check" but rather
+              # several rabbitmq-diagnostics commands that can be combined to form increasingly comprehensive
+              # and intrusive health checks.
+              # Learn more at https://www.rabbitmq.com/monitoring.html#health-checks.
+              #
+              # Stage 2 check:
+              command: ["rabbitmq-diagnostics", "status"]
+              # To use a stage 4 check:
+              # command: ["rabbitmq-diagnostics", "check_port_connectivity"]
             initialDelaySeconds: 20
             periodSeconds: 60
             timeoutSeconds: 10
           imagePullPolicy: Always
           env:
-            - name: MY_POD_IP
+            - name: MY_POD_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: status.podIP
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: RABBITMQ_USE_LONGNAME
               value: "true"
             # See a note on cluster_formation.k8s.address_type in the config file section
-            - name: RABBITMQ_NODENAME
-              value: "rabbit@$(MY_POD_IP)"
             - name: K8S_SERVICE_NAME
-              value: "rabbitmq-internal"
+              value: rabbitmq
+            - name: RABBITMQ_NODENAME
+              value: rabbit@$(MY_POD_NAME).$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
+            - name: K8S_HOSTNAME_SUFFIX
+              value: .$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
             - name: RABBITMQ_ERLANG_COOKIE
               value: "mycookie"
       volumes:
@@ -181,23 +191,23 @@ kind: Deployment
 metadata:
   name: rabbitmq-io
   labels:
-    app: rabbitmq
+    app: rabbitmq-io
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: rabbitmq
+      app: rabbitmq-io
   template:
     metadata:
       labels:
-        app: rabbitmq
+        app: rabbitmq-io
     spec:
       serviceAccountName: rabbitmq
       initContainers:
         - name: wait-for-rabbitmq
           image: appropriate/curl
           command: [ "sh" ]
-          args: [ "-c", "sleep 60; until curl http://rabbitmq:15672/api/aliveness-test/%2F; do echo \"waiting for rabbitmq to become ready...\"; sleep 15;done" ]
+          args: [ "-c", "until curl http://rabbitmq:15672/api/aliveness-test/%2F; do echo \"waiting for rabbitmq to become ready...\"; sleep 15;done" ]
       containers:
         - name: rabbitmq-io
           image: pivotalrabbitmq/perf-test
@@ -205,6 +215,7 @@ spec:
             - "--uri=amqp://rabbitmq"
             - "--consumers=10"
             - "--producers=5"
-            - "--servers-startup-timeout=60"
             - "--slow-start"
             - "--autoack"
+            - "--disable-connection-recovery"
+            - "--shutdown-timeout=-1"
