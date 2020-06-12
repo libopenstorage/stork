@@ -96,6 +96,9 @@ type IntervalPolicy struct {
 	// Retain Number of objects to retain for interval policy. Defaults to
 	// @DefaultIntervalPolicyRetain
 	Retain Retain `json:"retain"`
+	// Options to be passed in to the driver. These will be passed in
+	// to the object being triggered
+	Options map[string]string `json:"options"`
 }
 
 // Validate validates an IntervalPolicy
@@ -118,6 +121,9 @@ type DailyPolicy struct {
 	// Retain Number of objects to retain for daily policy. Defaults to
 	// @DefaultDailyPolicyRetain
 	Retain Retain `json:"retain"`
+	// Options to be passed in to the driver. These will be passed in
+	// to the object being triggered
+	Options map[string]string `json:"options"`
 }
 
 // GetHourMinute parses and return the hour and minute specified in the policy
@@ -160,6 +166,9 @@ type WeeklyPolicy struct {
 	// Retain Number of objects to retain for weekly policy. Defaults to
 	// @DefaultWeeklyPolicyRetain
 	Retain Retain `json:"retain"`
+	// Options to be passed in to the driver. These will be passed in
+	// to the object being triggered
+	Options map[string]string `json:"options"`
 }
 
 // GetHourMinute parses and return the hour and minute specified in the policy
@@ -196,6 +205,9 @@ type MonthlyPolicy struct {
 	// Retain Number of objects to retain for monthly policy. Defaults to
 	// @DefaultMonthlyPolicyRetain
 	Retain Retain `json:"retain"`
+	// Options to be passed in to the driver. These will be passed in
+	// to the object being triggered
+	Options map[string]string `json:"options"`
 }
 
 // GetHourMinute parses and return the hour and minute specified in the policy

@@ -81,7 +81,6 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	// TODO: This log does not get reflected in stork pods, check other logger
 	arReq := admissionReview.Request
 	switch arReq.Kind.Kind {
 	case "StatefulSet":
@@ -89,10 +88,14 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		if err = json.Unmarshal(arReq.Object.Raw, &ss); err != nil {
 			log.Errorf("Could not unmarshal admission review object: %v", err)
 			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
+			http.Error(w, "Decode error", http.StatusBadRequest)
+			return
 		}
-		isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, ss.GetNamespace())
+		isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, arReq.Namespace)
 		if err != nil {
 			c.Recorder.Event(&ss, v1.EventTypeWarning, "Could not get volume owner info for ss: %v", err.Error())
+			http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
+			return
 		}
 		schedPath = appSchedPrefix + podSpecSchedPath
 	case "Deployment":
@@ -100,10 +103,14 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		if err := json.Unmarshal(arReq.Object.Raw, &deployment); err != nil {
 			log.Errorf("Could not unmarshal admission review object: %v", err)
 			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
+			http.Error(w, "Decode error", http.StatusBadRequest)
+			return
 		}
-		isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, deployment.GetNamespace())
+		isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, arReq.Namespace)
 		if err != nil {
 			c.Recorder.Event(&deployment, v1.EventTypeWarning, "Could not get volume owner info deployment: %v", err.Error())
+			http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
+			return
 		}
 		schedPath = appSchedPrefix + podSpecSchedPath
 	case "Pod":
@@ -111,10 +118,14 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		if err := json.Unmarshal(arReq.Object.Raw, &pod); err != nil {
 			log.Errorf("Could not unmarshal admission review object: %v", err)
 			c.Recorder.Event(webhookConfig, v1.EventTypeWarning, "could not unmarshal ar object", err.Error())
+			http.Error(w, "Decode error", http.StatusBadRequest)
+			return
 		}
-		isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, pod.GetNamespace())
+		isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, arReq.Namespace)
 		if err != nil {
 			c.Recorder.Event(&pod, v1.EventTypeWarning, "Could not get volume owner info for pod: %v", err.Error())
+			http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
+			return
 		}
 		schedPath = podSpecSchedPath
 	}

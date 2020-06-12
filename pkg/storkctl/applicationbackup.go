@@ -205,7 +205,11 @@ func applicationBackupPrinter(
 					elapsed = applicationBackup.Status.FinishTimestamp.Sub(applicationBackup.Status.TriggerTimestamp.Time).String()
 				}
 			} else {
-				elapsed = time.Since(applicationBackup.Status.TriggerTimestamp.Time).String()
+				if applicationBackup.Status.TriggerTimestamp.Time.IsZero() {
+					elapsed = "N/A"
+				} else {
+					elapsed = time.Since(applicationBackup.Status.TriggerTimestamp.Time).String()
+				}
 			}
 		}
 
