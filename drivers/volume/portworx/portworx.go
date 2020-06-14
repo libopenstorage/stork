@@ -130,6 +130,7 @@ const (
 	validateSnapshotRetryInterval = 10 * time.Second
 
 	clusterDomainsTimeout = 1 * time.Minute
+	cloudBackupTimeout    = 1 * time.Minute
 
 	pxSharedSecret = "PX_SHARED_SECRET"
 
@@ -151,6 +152,7 @@ type cloudSnapStatus struct {
 	bytesTotal     uint64
 	bytesDone      uint64
 	etaSeconds     int64
+	credentialID   string
 }
 
 // snapshot annotation constants
@@ -241,6 +243,14 @@ func (p *portworx) getClusterDomainClient() (api.OpenStorageClusterDomainsClient
 		return nil, err
 	}
 	return api.NewOpenStorageClusterDomainsClient(conn), nil
+}
+
+func (p *portworx) getCloudBackupClient() (api.OpenStorageCloudBackupClient, error) {
+	conn, err := p.sdkConn.getGrpcConn()
+	if err != nil {
+		return nil, err
+	}
+	return api.NewOpenStorageCloudBackupClient(conn), nil
 }
 
 func (p *portworx) initPortworxClients() error {
@@ -1777,6 +1787,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 			bytesDone:      csStatus.BytesDone,
 			status:         csStatus.Status,
 			cloudSnapID:    csStatus.ID,
+			credentialID:   csStatus.CredentialUUID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s did not succeed: %v",
 				op, csStatus.ID, taskID, csStatus.Info),
 		}
@@ -1790,6 +1801,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 			bytesDone:      csStatus.BytesDone,
 			etaSeconds:     csStatus.EtaSeconds,
 			cloudSnapID:    csStatus.ID,
+			credentialID:   csStatus.CredentialUUID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s has started and is active.",
 				op, csStatus.ID, taskID),
 		}
@@ -1803,6 +1815,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 			bytesDone:      csStatus.BytesDone,
 			etaSeconds:     csStatus.EtaSeconds,
 			cloudSnapID:    csStatus.ID,
+			credentialID:   csStatus.CredentialUUID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s queued. status: %s",
 				op, csStatus.ID, taskID, statusStr),
 		}
@@ -1816,6 +1829,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 		bytesDone:      csStatus.BytesDone,
 		etaSeconds:     csStatus.EtaSeconds,
 		cloudSnapID:    csStatus.ID,
+		credentialID:   csStatus.CredentialUUID,
 		msg:            fmt.Sprintf("cloudsnap %s id: %s for %s done.", op, csStatus.ID, taskID),
 	}
 }
@@ -2679,6 +2693,19 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 	if err != nil {
 		return nil, err
 	}
+
+	cloudBackupClient, err := p.getCloudBackupClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cloudBackupTimeout)
+	defer cancel()
+	// Get user token from secret if any
+	ctx, err = p.getUserContext(ctx, backup.Annotations)
+	if err != nil {
+		return nil, err
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
@@ -2698,6 +2725,17 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		} else {
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
+
+			req := &api.SdkCloudBackupSizeRequest{
+				BackupId:     csStatus.cloudSnapID,
+				CredentialId: csStatus.credentialID,
+			}
+			resp, err := cloudBackupClient.Size(ctx, req)
+			if err != nil {
+				logrus.Errorf("Failed to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
+				return nil, err
+			}
+			vInfo.Size = resp.GetSize()
 		}
 		vInfo.BackupID = csStatus.cloudSnapID
 		volumeInfos = append(volumeInfos, vInfo)
