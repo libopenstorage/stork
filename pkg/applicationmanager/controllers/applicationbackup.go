@@ -818,6 +818,11 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	backup.Status.LastUpdateTimestamp = metav1.Now()
+	// Only on success compute the total backup size
+	for _, vInfo := range backup.Status.Volumes {
+		backup.Status.Size += vInfo.Size
+	}
+
 	if err = a.client.Update(context.TODO(), backup); err != nil {
 		return err
 	}

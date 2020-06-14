@@ -57,6 +57,7 @@ type ApplicationBackupStatus struct {
 	TriggerTimestamp    metav1.Time                      `json:"triggerTimestamp"`
 	LastUpdateTimestamp metav1.Time                      `json:"lastUpdateTimestamp"`
 	FinishTimestamp     metav1.Time                      `json:"finishTimestamp"`
+	Size                uint64                           `json:"size"`
 }
 
 // ApplicationBackupResourceInfo is the info for the backup of a resource
@@ -77,6 +78,7 @@ type ApplicationBackupVolumeInfo struct {
 	Status                ApplicationBackupStatusType `json:"status"`
 	Reason                string                      `json:"reason"`
 	Options               map[string]string           `jons:"options"`
+	Size                  uint64                      `json:"size"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup

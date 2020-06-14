@@ -327,6 +327,7 @@ func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		case "READY":
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
+			vInfo.Size = uint64(snapshot.StorageBytes)
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
