@@ -746,8 +746,10 @@ func (a *ApplicationBackupController) backupResources(
 			}
 
 			resourceInfo := &stork_api.ApplicationBackupResourceInfo{
-				Name:      metadata.GetName(),
-				Namespace: metadata.GetNamespace(),
+				ObjectInfo: stork_api.ObjectInfo{
+					Name:      metadata.GetName(),
+					Namespace: metadata.GetNamespace(),
+				},
 			}
 			gvk := obj.GetObjectKind().GroupVersionKind()
 			resourceInfo.Kind = gvk.Kind

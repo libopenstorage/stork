@@ -509,6 +509,7 @@ func (a *ApplicationCloneController) prepareResources(
 		}
 		_, err = a.resourceCollector.PrepareResourceForApply(
 			o,
+			nil,
 			namespaceMapping,
 			pvNameMappings,
 			clone.Spec.IncludeOptionalResourceTypes)
