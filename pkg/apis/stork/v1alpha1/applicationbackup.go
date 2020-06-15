@@ -30,6 +30,8 @@ type ApplicationBackupSpec struct {
 	PreExecRule    string                             `json:"preExecRule"`
 	PostExecRule   string                             `json:"postExecRule"`
 	ReclaimPolicy  ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
+	// Options to be passed in to the driver
+	Options map[string]string `json:"options"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup

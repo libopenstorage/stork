@@ -83,6 +83,14 @@
   version = "v0.3.1"
 
 [[projects]]
+  digest = "1:d2d14a7f9cd015e00021495d5a4f9418982c94e8c9c26bafc53a07c072f500a9"
+  name = "github.com/GoogleCloudPlatform/k8s-cloud-provider"
+  packages = ["pkg/cloud/meta"]
+  pruneopts = "UT"
+  revision = "7bdc6cbb875a217ff33786dba2b08e6b855d393d"
+  version = "1.12.0"
+
+[[projects]]
   branch = "master"
   digest = "1:9831b48eaba66c6eee6b8bc698d5a669088313cfee3c94435056e3522e4a53fb"
   name = "github.com/MakeNowJust/heredoc"
@@ -346,26 +354,24 @@
   revision = "5b532d6fd5efaf7fa130d4e859a2fde0fc3a9e1b"
 
 [[projects]]
-  digest = "1:60bfcd256ec46ee9dc194a84b5c3851b91bf3edd6fbb9600d57b122e9fdb6cc6"
+  digest = "1:bdc329d5d1003c202506136254cd82195fb7fe4252e2ef2cd5e6bcca581baa82"
   name = "github.com/golang/protobuf"
   packages = [
+    "descriptor",
+    "internal/gengogrpc",
     "jsonpb",
     "proto",
     "protoc-gen-go",
     "protoc-gen-go/descriptor",
-    "protoc-gen-go/generator",
-    "protoc-gen-go/generator/internal/remap",
-    "protoc-gen-go/grpc",
-    "protoc-gen-go/plugin",
     "ptypes",
     "ptypes/any",
     "ptypes/duration",
-    "ptypes/struct",
     "ptypes/timestamp",
     "ptypes/wrappers",
   ]
   pruneopts = "UT"
-  revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
+  revision = "d04d7b157bb510b1e0c10132224b616ac0e26b17"
+  version = "v1.4.2"
 
 [[projects]]
   branch = "master"
@@ -472,7 +478,7 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:ec9b294ee624e9b87e31a8fa39a2a7724f90ce7af2055a9248100883d9956922"
+  digest = "1:fc3fede8bc426f7fe523c93b8c67caa8a2f240fbd70c0b12531d4d8196d6bd6e"
   name = "github.com/grpc-ecosystem/grpc-gateway"
   packages = [
     "internal",
@@ -480,8 +486,8 @@
     "utilities",
   ]
   pruneopts = "UT"
-  revision = "b7a5640779183161e8d6c3e51f60f0859b5559ba"
-  version = "v1.7.0"
+  revision = "3eb98bafc370794367256bc911e4ca575d08e211"
+  version = "v1.14.5"
 
 [[projects]]
   digest = "1:950caca7dfcf796419232ba996c9c3539d09f26af27ba848c4508e604c13efbb"
@@ -611,7 +617,7 @@
 
 [[projects]]
   branch = "release-7.0"
-  digest = "1:e98690e3989ae50dbdcda3041d02b7f51327146590e5a99eb9d0a0d63376a351"
+  digest = "1:9aa9298d16e4a4082adcabf6ff1e3ccc956b39c07ab52d08391def56ba206431"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -621,6 +627,7 @@
     "api/errors",
     "api/spec",
     "cluster",
+    "config",
     "objectstore",
     "osdconfig",
     "pkg/auth",
@@ -630,14 +637,16 @@
     "pkg/grpcserver",
     "pkg/parser",
     "pkg/sched",
+    "pkg/storagepool",
     "pkg/units",
     "pkg/util",
     "schedpolicy",
     "secrets",
     "volume",
+    "volume/drivers/pwx",
   ]
   pruneopts = "UT"
-  revision = "6f72c3de1e77ffdcb2c4b346c9fae061088c4711"
+  revision = "e8909c08089ee89809fdcb12f339dc696655d9de"
 
 [[projects]]
   branch = "master"
@@ -1201,24 +1210,28 @@
   version = "v2.0.1"
 
 [[projects]]
-  digest = "1:6afe0605a845fb2e7e8548e444a9e3e7f1ddd22fbfb1e31a1bf76d3ce2bb8b64"
+  digest = "1:7e588183a7b0786555aad1e1de1e3f46148482f561ea2abd3b0af8c75f321055"
   name = "google.golang.org/api"
   packages = [
+    "compute/v0.alpha",
+    "compute/v0.beta",
     "compute/v1",
-    "gensupport",
     "googleapi",
-    "googleapi/internal/uritemplates",
     "googleapi/transport",
     "internal",
+    "internal/gensupport",
+    "internal/third_party/uritemplates",
     "iterator",
     "option",
+    "option/internaloption",
     "storage/v1",
+    "transport/cert",
     "transport/http",
     "transport/http/internal/propagation",
   ]
   pruneopts = "UT"
-  revision = "067bed655e9cbc26f4dbac8f8897b30756d90990"
-  version = "v0.4.0"
+  revision = "8ecc69ffe2df19a1b579676c8b1e0e3b5690d5e7"
+  version = "v0.25.0"
 
 [[projects]]
   digest = "1:fa026a5c59bd2df343ec4a3538e6288dcf4e2ec5281d743ae82c120affe6926a"
@@ -1240,10 +1253,11 @@
   version = "v1.4.0"
 
 [[projects]]
-  digest = "1:8e6d8d611c9419926d80dbe1886c6bc8cf08a3c0bfe01014d883022a1379877f"
+  digest = "1:93c12b460d1c098932b89bcc1253d72a78e4584b2ff6a65d600a2b637530f8b7"
   name = "google.golang.org/genproto"
   packages = [
     "googleapis/api/annotations",
+    "googleapis/api/httpbody",
     "googleapis/iam/v1",
     "googleapis/rpc/code",
     "googleapis/rpc/status",
@@ -1253,10 +1267,12 @@
   revision = "383e8b2c3b9e36c4076b235b32537292176bae20"
 
 [[projects]]
-  digest = "1:468bc9b39a60a4ac6726976d60d32cb0fbcaf749fea4139be8cec53fdfbd82d5"
+  digest = "1:fc2940cae2f0e649fda7d6586c322e6f0f72678d572088d875d832849a66ab5c"
   name = "google.golang.org/grpc"
   packages = [
     ".",
+    "attributes",
+    "backoff",
     "balancer",
     "balancer/base",
     "balancer/roundrobin",
@@ -1270,11 +1286,18 @@
     "grpclog",
     "internal",
     "internal/backoff",
+    "internal/balancerload",
     "internal/binarylog",
+    "internal/buffer",
     "internal/channelz",
     "internal/envconfig",
+    "internal/grpclog",
     "internal/grpcrand",
     "internal/grpcsync",
+    "internal/grpcutil",
+    "internal/resolver/dns",
+    "internal/resolver/passthrough",
+    "internal/status",
     "internal/syscall",
     "internal/transport",
     "keepalive",
@@ -1284,15 +1307,62 @@
     "reflection",
     "reflection/grpc_reflection_v1alpha",
     "resolver",
-    "resolver/dns",
-    "resolver/passthrough",
+    "serviceconfig",
     "stats",
     "status",
     "tap",
   ]
   pruneopts = "UT"
-  revision = "a02b0774206b209466313a0b525d2c738fe407eb"
-  version = "v1.18.0"
+  revision = "754ee590a4f386d0910d887f3b8776354042260b"
+  version = "v1.29.1"
+
+[[projects]]
+  digest = "1:71a172248fe9732234daabfdff0cd062a682e8dc513c786a41a822d992146891"
+  name = "google.golang.org/protobuf"
+  packages = [
+    "cmd/protoc-gen-go/internal_gengo",
+    "compiler/protogen",
+    "encoding/protojson",
+    "encoding/prototext",
+    "encoding/protowire",
+    "internal/descfmt",
+    "internal/descopts",
+    "internal/detectknown",
+    "internal/detrand",
+    "internal/encoding/defval",
+    "internal/encoding/json",
+    "internal/encoding/messageset",
+    "internal/encoding/tag",
+    "internal/encoding/text",
+    "internal/errors",
+    "internal/fieldnum",
+    "internal/fieldsort",
+    "internal/filedesc",
+    "internal/filetype",
+    "internal/flags",
+    "internal/genname",
+    "internal/impl",
+    "internal/mapsort",
+    "internal/pragma",
+    "internal/set",
+    "internal/strs",
+    "internal/version",
+    "proto",
+    "reflect/protodesc",
+    "reflect/protoreflect",
+    "reflect/protoregistry",
+    "runtime/protoiface",
+    "runtime/protoimpl",
+    "types/descriptorpb",
+    "types/known/anypb",
+    "types/known/durationpb",
+    "types/known/timestamppb",
+    "types/known/wrapperspb",
+    "types/pluginpb",
+  ]
+  pruneopts = "UT"
+  revision = "d165be301fb1e13390ad453281ded24385fd8ebc"
+  version = "v1.23.0"
 
 [[projects]]
   digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
@@ -1934,6 +2004,14 @@
   version = "v0.5.0"
 
 [[projects]]
+  digest = "1:c31d786a05dc0da9cfe288a629c2b46ad6296906ba5da0e8cddc857e8a7f1fe2"
+  name = "sigs.k8s.io/gcp-compute-persistent-disk-csi-driver"
+  packages = ["pkg/common"]
+  pruneopts = "UT"
+  revision = "fb027ccc24ce530b0ac666b3e94d01405fccf746"
+  version = "v0.7.0"
+
+[[projects]]
   digest = "1:cb422c75bab66a8339a38b64e837f3b28f3d5a8c06abd7b9048f420363baa18a"
   name = "sigs.k8s.io/kustomize"
   packages = [
@@ -1994,6 +2072,7 @@
     "github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute",
     "github.com/Azure/azure-storage-blob-go/azblob",
     "github.com/Azure/go-autorest/autorest",
+    "github.com/Azure/go-autorest/autorest/azure",
     "github.com/Azure/go-autorest/autorest/azure/auth",
     "github.com/Azure/go-autorest/autorest/to",
     "github.com/aws/aws-sdk-go/aws",
@@ -2023,6 +2102,7 @@
     "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
+    "github.com/libopenstorage/openstorage/volume/drivers/pwx",
     "github.com/libopenstorage/secrets",
     "github.com/libopenstorage/secrets/k8s",
     "github.com/openshift/api/apps/v1",
@@ -2069,7 +2149,6 @@
     "google.golang.org/api/googleapi",
     "google.golang.org/api/option",
     "google.golang.org/grpc",
-    "google.golang.org/grpc/credentials",
     "gopkg.in/yaml.v2",
     "k8s.io/api/admission/v1beta1",
     "k8s.io/api/admissionregistration/v1beta1",
@@ -2148,6 +2227,7 @@
     "sigs.k8s.io/controller-runtime/pkg/manager",
     "sigs.k8s.io/controller-runtime/pkg/reconcile",
     "sigs.k8s.io/controller-runtime/pkg/source",
+    "sigs.k8s.io/gcp-compute-persistent-disk-csi-driver/pkg/common",
     "sigs.k8s.io/sig-storage-lib-external-provisioner/controller",
   ]
   solver-name = "gps-cdcl"

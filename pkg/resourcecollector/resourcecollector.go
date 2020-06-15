@@ -114,6 +114,9 @@ func resourceToBeCollected(resource metav1.APIResource, optionalResourceTypes []
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
 			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower)
 	default:
+		if strings.HasPrefix(resource.Kind, "Couchbase") {
+			return true
+		}
 		return false
 	}
 }
@@ -333,6 +336,9 @@ func (r *ResourceCollector) pruneOwnedResources(
 							collect = false
 							break
 						}
+						if objectType.GetKind() != "Deployment" && objectType.GetKind() != "StatefulSet" {
+							continue
+						}
 
 						// Skip object if we are already collecting its owner
 						if _, exists := resourceMap[owner.UID]; exists {
@@ -388,8 +394,12 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		}
 
 		content := o.UnstructuredContent()
-		// Status shouldn't be retained when collecting resources
-		delete(content, "status")
+		switch o.GetObjectKind().GroupVersionKind().Kind {
+		case "CouchbaseBackup", "CouchbaseBackupRestore":
+		default:
+			// Status shouldn't be retained when collecting resources
+			delete(content, "status")
+		}
 		metadataMap := content["metadata"].(map[string]interface{})
 		// Remove all metadata except some well-known ones
 		for key := range metadataMap {
@@ -436,9 +446,9 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	case "Job":
 		if slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
 			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower) {
-			return true, nil
+			return false, nil
 		}
-		return false, nil
+		return true, nil
 	case "PersistentVolume":
 		return r.preparePVResourceForApply(object, pvNameMappings)
 	case "PersistentVolumeClaim":

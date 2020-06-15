@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	"sigs.k8s.io/gcp-compute-persistent-disk-csi-driver/pkg/common"
 )
 
 const (
@@ -180,10 +181,21 @@ func (g *gcp) StartBackup(backup *storkapi.ApplicationBackup,
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
 		volume := pvc.Spec.VolumeName
-		pdName := pv.Spec.GCEPersistentDisk.PDName
+		var pdName string
+		if pv.Spec.GCEPersistentDisk != nil {
+			pdName = pv.Spec.GCEPersistentDisk.PDName
+		} else if pv.Spec.CSI != nil {
+			key, err := common.VolumeIDToKey(pv.Spec.CSI.VolumeHandle)
+			if err != nil {
+				return nil, err
+			}
+			pdName = key.Name
+		} else {
+			return nil, fmt.Errorf("GCE PD info not found in PV %v", pvName)
+		}
 		// Get the zone from the PV, fallback to the zone where stork is running
 		// if the label is empty
-		volumeInfo.Zones = g.getZones(pv.Labels[v1.LabelZoneFailureDomain])
+		volumeInfo.Zones = g.getZones(pv)
 		if len(volumeInfo.Zones) == 0 {
 			volumeInfo.Zones = []string{g.zone}
 		}
@@ -239,11 +251,25 @@ func (g *gcp) getFilterFromMap(labels map[string]string) string {
 	return strings.Join(filters, " AND ")
 }
 
-func (g *gcp) getZones(zone string) []string {
-	if g.isRegional(zone) {
-		return g.getRegionalZones(zone)
+func (g *gcp) getZones(pv *v1.PersistentVolume) []string {
+	if pv.Spec.GCEPersistentDisk != nil {
+		zone := pv.Labels[v1.LabelZoneFailureDomain]
+		if g.isRegional(zone) {
+			return g.getRegionalZones(zone)
+		}
+		return []string{zone}
 	}
-	return []string{zone}
+	if pv.Spec.NodeAffinity != nil &&
+		pv.Spec.NodeAffinity.Required != nil &&
+		len(pv.Spec.NodeAffinity.Required.NodeSelectorTerms) != 0 {
+		for _, selector := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms[0].MatchExpressions {
+			if selector.Key == common.TopologyKeyZone {
+				return selector.Values
+			}
+		}
+	}
+	return nil
+
 }
 
 func (g *gcp) getRegionalZones(zones string) []string {
@@ -336,7 +362,15 @@ func (g *gcp) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 ) (*v1.PersistentVolume, error) {
 	if pv.Spec.CSI != nil {
-		pv.Spec.CSI.VolumeHandle = pv.Name
+		key, err := common.VolumeIDToKey(pv.Spec.CSI.VolumeHandle)
+		if err != nil {
+			return nil, err
+		}
+		key.Name = pv.Name
+		pv.Spec.CSI.VolumeHandle, err = common.KeyToVolumeID(key, g.projectID)
+		if err != nil {
+			return nil, err
+		}
 		return pv, nil
 	}
 
