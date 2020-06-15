@@ -81,6 +81,12 @@ type Compute interface {
 	// GetClusterSizeForInstance returns current node count in given cluster
 	// This count is total node count across all availability zones
 	GetClusterSizeForInstance(instanceID string) (int64, error)
+	// SetClusterVersion sets desired version for the cluster
+	SetClusterVersion(version string, timeout time.Duration) error
+	// SetInstanceGroupVersion sets desired node group version
+	SetInstanceGroupVersion(instanceGroupID string,
+		version string,
+		timeout time.Duration) error
 }
 
 // Storage interface to manage storage operations.
@@ -89,9 +95,9 @@ type Storage interface {
 	Create(template interface{}, labels map[string]string) (interface{}, error)
 	// GetDeviceID returns ID/Name of the given device/disk or snapshot
 	GetDeviceID(template interface{}) (string, error)
-	// Attach volumeID.
+	// Attach volumeID, accepts attachoOptions as opaque data
 	// Return attach path.
-	Attach(volumeID string) (string, error)
+	Attach(volumeID string, options map[string]string) (string, error)
 	// Expand expands the provided device from the existing size to the new size
 	// It returns the new size of the device. It is a blocking API where it will
 	// only return once the requested size is validated with the cloud provider or

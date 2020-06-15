@@ -18,21 +18,12 @@ type vmsClient interface {
 }
 
 func newVMsClient(
-	scaleSetName string,
-	subscriptionID, resourceGroupName string,
+	config Config,
+	baseURI string,
 	authorizer autorest.Authorizer,
 ) vmsClient {
-	if scaleSetName == "" {
-		return newBaseVMsClient(
-			subscriptionID,
-			resourceGroupName,
-			authorizer,
-		)
+	if config.ScaleSetName == "" {
+		return newBaseVMsClient(config, baseURI, authorizer)
 	}
-	return newScaleSetVMsClient(
-		scaleSetName,
-		subscriptionID,
-		resourceGroupName,
-		authorizer,
-	)
+	return newScaleSetVMsClient(config, baseURI, authorizer)
 }

@@ -2,7 +2,10 @@ sudo: required
 dist: xenial
 language: go
 go:
-  - 1.11.2
+  - 1.13.x
+cache:
+  directories:
+    - $GOPATH/pkg/mod
 before_install:
   - sudo apt-get update -yq
 script:
