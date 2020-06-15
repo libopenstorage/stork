@@ -60,11 +60,16 @@ type ApplicationBackupStatus struct {
 	Size                uint64                           `json:"size"`
 }
 
-// ApplicationBackupResourceInfo is the info for the backup of a resource
-type ApplicationBackupResourceInfo struct {
+// ObjectInfo contains info about an object being backed up or restored
+type ObjectInfo struct {
 	Name                    string `json:"name"`
 	Namespace               string `json:"namespace"`
 	metav1.GroupVersionKind `json:",inline"`
+}
+
+// ApplicationBackupResourceInfo is the info for the backup of a resource
+type ApplicationBackupResourceInfo struct {
+	ObjectInfo `json:",inline"`
 }
 
 // ApplicationBackupVolumeInfo is the info for the backup of a volume
