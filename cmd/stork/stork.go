@@ -285,6 +285,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 	monitor := &monitor.Monitor{
 		Driver:      d,
 		IntervalSec: c.Int64("health-monitor-interval"),
+		Recorder:    recorder,
 	}
 	snapshot := &snapshot.Snapshot{
 		Driver:   d,
