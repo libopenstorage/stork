@@ -384,8 +384,6 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	switch status {
-	case api.Status_STATUS_NONE:
-		fallthrough
 	case api.Status_STATUS_INIT:
 		fallthrough
 	case api.Status_STATUS_OFFLINE:
@@ -401,6 +399,8 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	case api.Status_STATUS_NEEDS_REBOOT:
 		return storkvolume.NodeOffline
 
+	case api.Status_STATUS_NONE:
+		fallthrough
 	case api.Status_STATUS_OK:
 		fallthrough
 	case api.Status_STATUS_STORAGE_DOWN:
@@ -459,6 +459,7 @@ func (p *portworx) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 		SchedulerID: node.SchedulerNodeName,
 		Hostname:    strings.ToLower(node.Hostname),
 		Status:      p.mapNodeStatus(node.Status),
+		RawStatus:   node.Status.String(),
 	}, nil
 }
 
@@ -483,6 +484,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 			SchedulerID: n.SchedulerNodeName,
 			Hostname:    strings.ToLower(n.Hostname),
 			Status:      p.mapNodeStatus(n.Status),
+			RawStatus:   n.Status.String(),
 		}
 		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
 		nodeInfo.IPs = append(nodeInfo.IPs, n.DataIp)
