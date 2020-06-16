@@ -408,7 +408,7 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 		Name:           "*portworx-volume",
 	}
 
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		volDirList, _ := d.FindFiles(k8sPodsRootDir, n, listVolOpts)
 		nodeToPodsMap[n.Name] = separateFilePaths(volDirList)
 		nodeMap[n.Name] = n
