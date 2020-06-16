@@ -15,16 +15,17 @@ type scaleSetVMsClient struct {
 }
 
 func newScaleSetVMsClient(
-	scaleSetName, subscriptionID, resourceGroupName string,
+	config Config,
+	baseURI string,
 	authorizer autorest.Authorizer,
 ) vmsClient {
-	vmsClient := compute.NewVirtualMachineScaleSetVMsClient(subscriptionID)
+	vmsClient := compute.NewVirtualMachineScaleSetVMsClientWithBaseURI(baseURI, config.SubscriptionID)
 	vmsClient.Authorizer = authorizer
 	vmsClient.PollingDelay = clientPollingDelay
-	vmsClient.AddToUserAgent(userAgentExtension)
+	vmsClient.AddToUserAgent(config.UserAgent)
 	return &scaleSetVMsClient{
-		scaleSetName:      scaleSetName,
-		resourceGroupName: resourceGroupName,
+		scaleSetName:      config.ScaleSetName,
+		resourceGroupName: config.ResourceGroupName,
 		client:            &vmsClient,
 	}
 }

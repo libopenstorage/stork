@@ -97,6 +97,11 @@ if [ -z "$DRIVER_START_TIMEOUT" ]; then
     echo "Using default timeout of ${DRIVER_START_TIMEOUT}"
 fi
 
+if [ -z "$SECRET_TYPE" ]; then
+    SECRET_TYPE="k8s"
+    echo "Using default secret type of ${SECRET_TYPE}"
+fi
+
 APP_DESTROY_TIMEOUT_ARG=""
 if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
     APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
@@ -122,6 +127,16 @@ if [ -n "$AZURE_CLIENT_SECRET" ]; then
     AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
 fi
 
+SCHEDULER_UPGRADE_HOPS_ARG=""
+if [ -n "${SCHEDULER_UPGRADE_HOPS}" ]; then
+    SCHEDULER_UPGRADE_HOPS_ARG="--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS"
+fi
+
+MAX_STORAGE_NODES_PER_AZ_ARG=""
+if [ -n "${MAX_STORAGE_NODES_PER_AZ}" ]; then
+    MAX_STORAGE_NODES_PER_AZ_ARG="--max-storage-nodes-per-az=$MAX_STORAGE_NODES_PER_AZ"
+fi
+
 for i in $@
 do
 case $i in
@@ -143,6 +158,7 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/drive_failure.test",
             "bin/volume_ops.test",
             "bin/sched.test",
+            "bin/scheduler_upgrade.test",
             "bin/node_decommission.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
@@ -371,7 +387,12 @@ spec:
             "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
-            "$APP_DESTROY_TIMEOUT_ARG"
+            "--secret-type=$SECRET_TYPE",
+            "--vault-addr=$VAULT_ADDR",
+            "--vault-token=$VAULT_TOKEN",
+            "$APP_DESTROY_TIMEOUT_ARG",
+            "$SCHEDULER_UPGRADE_HOPS_ARG",
+            "$MAX_STORAGE_NODES_PER_AZ_ARG"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
@@ -429,7 +450,7 @@ function describe_pod_then_exit {
   exit 1
 }
 
-for i in $(seq 1 600) ; do
+for i in $(seq 1 900) ; do
   printf .
   state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
   if [ "$state" == "Error" ]; then

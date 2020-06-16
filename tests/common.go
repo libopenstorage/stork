@@ -118,6 +118,7 @@ var (
 	haveOccurred = gomega.HaveOccurred
 	beEmpty      = gomega.BeEmpty
 	beNil        = gomega.BeNil
+	equal        = gomega.Equal
 )
 
 // InitInstance is the ginkgo spec for initializing torpedo
@@ -140,6 +141,9 @@ func InitInstance() {
 		SecretConfigMapName: Inst().ConfigMap,
 		CustomAppConfig:     Inst().CustomAppConfig,
 		StorageProvisioner:  Inst().Provisioner,
+		SecretType:          Inst().SecretType,
+		VaultAddress:        Inst().VaultAddress,
+		VaultToken:          Inst().VaultToken,
 	})
 	expect(err).NotTo(haveOccurred())
 
@@ -477,6 +481,56 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 	})
 }
 
+// ValidateClusterSize validates number of storage nodes in given cluster
+// using total cluster size `count` and max_storage_nodes_per_zone
+func ValidateClusterSize(count int64) {
+	zones, err := Inst().N.GetZones()
+	logrus.Debugf("ASG is running in [%+v] zones\n", zones)
+	perZoneCount := count / int64(len(zones))
+
+	// Validate total node count
+	currentNodeCount, err := Inst().N.GetASGClusterSize()
+	expect(err).NotTo(haveOccurred())
+	expect(perZoneCount*int64(len(zones))).Should(equal(currentNodeCount),
+		"ASG cluster size is not as expected."+
+			" Current size is [%d]. Expected ASG size is [%d]",
+		currentNodeCount, perZoneCount*int64(len(zones)))
+
+	// Validate storage node count
+	var expectedStorageNodesPerZone int
+	if Inst().MaxStorageNodesPerAZ <= int(perZoneCount) {
+		expectedStorageNodesPerZone = Inst().MaxStorageNodesPerAZ
+	} else {
+		expectedStorageNodesPerZone = int(perZoneCount)
+	}
+	storageNodes, err := getStorageNodes()
+
+	expect(err).NotTo(haveOccurred())
+	expect(len(storageNodes)).Should(equal(expectedStorageNodesPerZone*len(zones)),
+		"Current number of storeage nodes [%d] does not match expected number of storage nodes [%d]."+
+			"List of storage nodes:[%v]",
+		len(storageNodes), expectedStorageNodesPerZone*len(zones), storageNodes)
+
+	logrus.Infof("Validated successfully that [%d] storage nodes are present", len(storageNodes))
+}
+
+func getStorageNodes() ([]node.Node, error) {
+
+	storageNodes := []node.Node{}
+	nodes := node.GetStorageDriverNodes()
+
+	for _, node := range nodes {
+		devices, err := Inst().V.GetStorageDevices(node)
+		if err != nil {
+			return nil, err
+		}
+		if len(devices) > 0 {
+			storageNodes = append(storageNodes, node)
+		}
+	}
+	return storageNodes, nil
+}
+
 // CollectSupport creates a support bundle
 func CollectSupport() {
 	context(fmt.Sprintf("generating support bundle..."), func() {
@@ -720,6 +774,10 @@ type Torpedo struct {
 	BundleLocation                      string
 	CustomAppConfig                     map[string]scheduler.AppConfig
 	Backup                              backup.Driver
+	SecretType                          string
+	VaultAddress                        string
+	VaultToken                          string
+	SchedUpgradeHops                    string
 }
 
 // ParseFlags parses command line flags
@@ -743,6 +801,10 @@ func ParseFlags() {
 	var customConfigPath string
 	var customAppConfig map[string]scheduler.AppConfig
 	var enableStorkUpgrade bool
+	var secretType string
+	var vaultAddress string
+	var vaultToken string
+	var schedUpgradeHops string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -769,6 +831,10 @@ func ParseFlags() {
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
 	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
+	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
+	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
+	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
+	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
 
 	flag.Parse()
 
@@ -836,6 +902,10 @@ func ParseFlags() {
 				BundleLocation:                      bundleLocation,
 				CustomAppConfig:                     customAppConfig,
 				Backup:                              backupDriver,
+				SecretType:                          secretType,
+				VaultAddress:                        vaultAddress,
+				VaultToken:                          vaultToken,
+				SchedUpgradeHops:                    schedUpgradeHops,
 			}
 		})
 	}

@@ -492,12 +492,9 @@ func isDirEmpty(path string, n node.Node, d node.Driver) bool {
 	return true
 }
 
+// GetServiceEndpoint get IP addr of portworx-service, preferable external IP
 func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
-	svc, err := k8sCore.GetService(PXServiceName, PXNamespace)
-	if err == nil {
-		return svc.Spec.ClusterIP, nil
-	}
-	return "", err
+	return k8sCore.GetServiceEndpoint(PXServiceName, PXNamespace)
 }
 
 func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {

@@ -23,6 +23,7 @@ import (
 	container "google.golang.org/api/container/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var notFoundRegex = regexp.MustCompile(`.*notFound`)
@@ -209,7 +210,7 @@ func (s *gceOps) InspectInstanceGroupForInstance(instanceID string) (*cloudops.I
 				s.inst.project, clusterLocation, gkeClusterName, labelValue)
 			nodePool, err := s.containerService.Projects.Locations.Clusters.NodePools.Get(nodePoolPath).Do()
 			if err != nil {
-				logrus.Errorf("failed to get node pool")
+				logrus.Errorf("failed to get node pool at path: %s", nodePoolPath)
 				return nil, err
 			}
 
@@ -295,7 +296,7 @@ func (s *gceOps) ApplyTags(
 	return s.waitForOpCompletion("disk.ApplyTags", s.inst.zone, operation)
 }
 
-func (s *gceOps) Attach(diskName string) (string, error) {
+func (s *gceOps) Attach(diskName string, options map[string]string) (string, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -624,10 +625,48 @@ func (s *gceOps) Expand(
 	volumeID string,
 	newSizeInGiB uint64,
 ) (uint64, error) {
-	// TODO
-	return 0, &cloudops.ErrNotSupported{
-		Operation: "Expand",
+
+	vol, err := s.computeService.Disks.Get(s.inst.project, s.inst.zone, volumeID).Do()
+	if err != nil {
+		return 0, err
 	}
+	currentSizeInGiB := uint64(vol.SizeGb)
+
+	if currentSizeInGiB >= newSizeInGiB {
+		return currentSizeInGiB, cloudops.NewStorageError(cloudops.ErrDiskGreaterOrEqualToExpandSize,
+			fmt.Sprintf("disk is already has a size: %d greater than or equal "+
+				"requested size: %d", currentSizeInGiB, newSizeInGiB), "")
+	}
+
+	op, err := s.computeService.Disks.Resize(s.inst.project, s.inst.zone, volumeID, &compute.DisksResizeRequest{
+		SizeGb:          int64(newSizeInGiB),
+		ForceSendFields: nil,
+		NullFields:      nil,
+	}).Do()
+	if err != nil {
+		return 0, err
+	}
+
+	// Taken from https://github.com/kubernetes/legacy-cloud-providers/blob/cebac2e3367faa71a39050bf5563fa7406006e76/gce/gce.go#L869
+	backoff := wait.Backoff{
+		// These values will add up to about a minute. See #56293 for background.
+		Duration: time.Second,
+		Factor:   1.4,
+		Steps:    10,
+	}
+
+	checkForResize := func() (bool, error) {
+		newOp, err := s.computeService.ZoneOperations.Get(s.inst.project, s.inst.zone, fmt.Sprintf("%d", op.Id)).Do()
+		if err != nil {
+			return false, err
+		}
+		if newOp.Status == doneStatus {
+			return true, nil
+		}
+		return false, nil
+	}
+	waitWithErr := wait.ExponentialBackoff(backoff, checkForResize)
+	return newSizeInGiB, waitWithErr
 }
 
 func (s *gceOps) Inspect(diskNames []*string) ([]interface{}, error) {
@@ -644,7 +683,6 @@ func (s *gceOps) Inspect(diskNames []*string) ([]interface{}, error) {
 			return nil, fmt.Errorf("disk %s not found", *id)
 		}
 	}
-
 	return disks, nil
 }
 
@@ -678,6 +716,81 @@ func (s *gceOps) RemoveTags(
 	return err
 }
 
+// SetClusterVersion sets desired version for the cluster
+func (s *gceOps) SetClusterVersion(version string, timeout time.Duration) error {
+	clusterPath := fmt.Sprintf("projects/%s/locations/%s/clusters/%s",
+		s.inst.project, s.inst.clusterLocation, s.inst.clusterName)
+
+	updateClusterRequest := &container.UpdateClusterRequest{
+		Name: clusterPath,
+		Update: &container.ClusterUpdate{
+			DesiredMasterVersion: version,
+		},
+	}
+
+	zonalCluster, err := isZonalCluster(s.inst.clusterLocation)
+	if err != nil {
+		return err
+	}
+
+	var operation *container.Operation
+	if zonalCluster {
+		operation, err = s.containerService.Projects.Zones.Clusters.Update(s.inst.project,
+			s.inst.clusterLocation,
+			s.inst.clusterName,
+			updateClusterRequest).Do()
+	} else {
+		operation, err = s.containerService.Projects.Locations.Clusters.Update(
+			clusterPath,
+			updateClusterRequest).Do()
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return s.WaitForOperationCompletion(operation, zonalCluster, timeout)
+}
+
+// SetInstanceGroupVersion sets desired version for the node group
+func (s *gceOps) SetInstanceGroupVersion(instanceGroupID string,
+	version string,
+	timeout time.Duration) error {
+	clusterPath := fmt.Sprintf("projects/%s/locations/%s/clusters/%s",
+		s.inst.project, s.inst.clusterLocation, s.inst.clusterName)
+
+	updateClusterRequest := &container.UpdateClusterRequest{
+		Name: clusterPath,
+		Update: &container.ClusterUpdate{
+			DesiredNodeVersion: version,
+			DesiredNodePoolId:  instanceGroupID,
+		},
+	}
+
+	zonalCluster, err := isZonalCluster(s.inst.clusterLocation)
+	if err != nil {
+		return err
+	}
+
+	var operation *container.Operation
+	if zonalCluster {
+		operation, err = s.containerService.Projects.Zones.Clusters.Update(s.inst.project,
+			s.inst.clusterLocation,
+			s.inst.clusterName,
+			updateClusterRequest).Do()
+	} else {
+		operation, err = s.containerService.Projects.Locations.Clusters.Update(
+			clusterPath,
+			updateClusterRequest).Do()
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return s.WaitForOperationCompletion(operation, zonalCluster, timeout)
+}
+
 // SetInstanceGroupSize sets node count for a instance group.
 // Count here is per availability zone
 func (s *gceOps) SetInstanceGroupSize(instanceGroupID string,
@@ -697,7 +810,6 @@ func (s *gceOps) SetInstanceGroupSize(instanceGroupID string,
 		return err
 	}
 
-	var cluster *container.Cluster
 	var operation *container.Operation
 	if zonalCluster {
 		operation, err = s.containerService.Projects.Zones.Clusters.NodePools.SetSize(
@@ -718,8 +830,17 @@ func (s *gceOps) SetInstanceGroupSize(instanceGroupID string,
 		return err
 	}
 
+	return s.WaitForOperationCompletion(operation, zonalCluster, timeout)
+}
+
+func (s *gceOps) WaitForOperationCompletion(operation *container.Operation,
+	zonalCluster bool,
+	timeout time.Duration) error {
+	var err error
 	operationPath := fmt.Sprintf("projects/%s/locations/%s/operations/%s",
 		s.inst.project, s.inst.clusterLocation, operation.Name)
+	clusterPath := fmt.Sprintf("projects/%s/locations/%s/clusters/%s",
+		s.inst.project, s.inst.clusterLocation, s.inst.clusterName)
 
 	if timeout > time.Nanosecond {
 		f := func() (interface{}, bool, error) {
@@ -756,7 +877,7 @@ func (s *gceOps) SetInstanceGroupSize(instanceGroupID string,
 			return err
 		}
 	}
-
+	var cluster *container.Cluster
 	if timeout > time.Nanosecond {
 		f := func() (interface{}, bool, error) {
 

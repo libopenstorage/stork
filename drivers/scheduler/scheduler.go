@@ -19,6 +19,8 @@ const (
 	OptionsWaitForDestroy = "WAIT_FOR_DESTROY"
 	// OptionsWaitForResourceLeak Wait for all the resources to be cleaned up after destroying
 	OptionsWaitForResourceLeakCleanup = "WAIT_FOR_RESOURCE_LEAK_CLEANUP"
+	SecretVault                       = "vault"
+	SecretK8S                         = "k8s"
 )
 
 // Context holds the execution context of a test task.
@@ -76,6 +78,12 @@ type InitOptions struct {
 	CustomAppConfig map[string]AppConfig
 	// StorageProvisioner name
 	StorageProvisioner string
+	// SecretType secret used for encryption keys
+	SecretType string
+	// VaultAddress vault api address
+	VaultAddress string
+	// VaultToken vault authentication token
+	VaultToken string
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled
