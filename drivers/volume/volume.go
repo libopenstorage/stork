@@ -223,6 +223,8 @@ type NodeInfo struct {
 	Region string
 	// Status of the node
 	Status NodeStatus
+	// RawStatus as returned by the driver
+	RawStatus string
 }
 
 var (
