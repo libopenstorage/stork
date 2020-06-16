@@ -593,6 +593,8 @@ func DeleteBucket(provider string, bucketName string) {
 		switch provider {
 		case drivers.ProviderAws:
 			DeleteS3Bucket(bucketName)
+		case drivers.ProviderAzure:
+			DeleteAzureBucket(bucketName)
 		}
 	})
 }
@@ -627,6 +629,26 @@ func DeleteS3Bucket(bucketName string) {
 		fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
 }
 
+func DeleteAzureBucket(bucketName string) {
+	// From the Azure portal, get your Storage account blob service URL endpoint.
+	_, _, _, _, accountName, accountKey := getAzureCredsFromEnv()
+
+	urlStr := fmt.Sprintf("https://%s.blob.core.windows.net/%s", accountName, bucketName)
+	logrus.Infof("Delete container url %s", urlStr)
+	// Create a ContainerURL object that wraps a soon-to-be-created container's URL and a default pipeline.
+	u, _ := url.Parse(urlStr)
+	credential, err := azblob.NewSharedKeyCredential(accountName, accountKey)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to create shared key credential [%v]", err))
+
+	containerURL := azblob.NewContainerURL(*u, azblob.NewPipeline(credential, azblob.PipelineOptions{}))
+	ctx := context.Background() // This example uses a never-expiring context
+
+	_, err = containerURL.Delete(ctx, azblob.ContainerAccessConditions{})
+
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to delete container. Error: [%v]", err))
+}
 // CreateCloudCredential creates cloud credetials
 func CreateCloudCredential(provider, name string, orgID string) {
 	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
