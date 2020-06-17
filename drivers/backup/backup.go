@@ -41,8 +41,11 @@ type Driver interface {
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
 
-	// WaitForRunning waits for application to start running.
-	WaitForRunning(ctx context.Context, req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error
+	// WaitForBackupRunning waits for backup to start running.
+	WaitForBackupRunning(ctx context.Context, req *api.BackupInspectRequest, timeout, retryInterval time.Duration) error
+
+	// WaitForRestoreRunning waits for restore to start running.
+	WaitForRestoreRunning(ctx context.Context, req *api.RestoreInspectRequest, timeout, retryInterval time.Duration) error
 
 	// String returns the name of this driver
 	String() string
@@ -150,6 +153,11 @@ type Backup interface {
 	// WaitForBackupDeletion waits for backup to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry
 	WaitForBackupDeletion(ctx context.Context, backupName string, orgID string,
+		timeout time.Duration, timeBeforeRetry time.Duration) error
+
+	// WaitForBackupDeletion waits for restore to be deleted successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry
+	WaitForRestoreDeletion(ctx context.Context, restoreName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
 
 	// WaitForDeletePending waits for the backup to transitioned to

@@ -178,7 +178,7 @@ type Driver interface {
 	RefreshNodeRegistry() error
 
 	// RescanSpecs specified in specDir
-	RescanSpecs(specDir string) error
+	RescanSpecs(specDir, storageDriver string) error
 
 	// EnableSchedulingOnNode enable apps to be scheduled to a given node
 	EnableSchedulingOnNode(n node.Node) error
