@@ -29,6 +29,8 @@ const (
 	s3SecretName         = "s3secret"
 	azureSecretName      = "azuresecret"
 	googleSecretName     = "googlesecret"
+	prepare              = "prepare"
+	verify               = "verify"
 
 	applicationBackupScheduleRetryInterval = 10 * time.Second
 	applicationBackupScheduleRetryTimeout  = 5 * time.Minute
@@ -107,6 +109,10 @@ func triggerBackupRestoreTest(
 		// Track contexts that will be destroyed before restore
 		preRestoreCtx := ctxs[0].DeepCopy()
 
+		// Add preparation pods after app context snapshot is ready
+		logrus.Infof("Prepare app %s for running", appKey)
+		prepareVerifyApp(t, ctxs, appKey, prepare)
+
 		logrus.Infof("All Apps created %v. Starting backup.", ctx.GetID())
 
 		// Create backuplocation here programatically using config-map that contains name of secrets to be used, passed from the CLI
@@ -157,6 +163,9 @@ func triggerBackupRestoreTest(
 		}
 
 		ctxs = append(ctxs, restoreCtx)
+		logrus.Infof("Verify app %s is running", appKey)
+		prepareVerifyApp(t, ctxs, appKey, verify)
+
 		if (backupAllAppsExpected && backupSuccessExpected) || !backupSuccessExpected {
 			destroyAndWait(t, ctxs)
 		} else if !backupAllAppsExpected && backupSuccessExpected {
@@ -167,6 +176,16 @@ func triggerBackupRestoreTest(
 		err = storkops.Instance().DeleteBackupLocation(currBackupLocation.Name, currBackupLocation.Namespace)
 		require.NoError(t, err, "Failed to delete backuplocation: %s for location %s.", currBackupLocation.Name, string(location), err)
 	}
+}
+
+func prepareVerifyApp(t *testing.T, ctxs []*scheduler.Context, appKey, action string) {
+	// Prepare application with data
+	err := schedulerDriver.AddTasks(ctxs[0],
+		scheduler.ScheduleOptions{AppKeys: []string{fmt.Sprintf("%s-%s", appKey, action)}, Scheduler: schedulerName})
+	require.NoError(t, err, "Error scheduling %s apps", action)
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for %s apps to get to running state", action)
 }
 
 func triggerScaleBackupRestoreTest(
