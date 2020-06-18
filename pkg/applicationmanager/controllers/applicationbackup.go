@@ -361,7 +361,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			channel <- true
 		}
 	}()
-
+	var err error
 	// Start backup of the volumes if we don't have any status stored
 	if backup.Status.Volumes == nil {
 		pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
@@ -462,7 +462,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	inProgress := false
 	// Skip checking status if no volumes are being backed up
 	if len(backup.Status.Volumes) != 0 {
-		var err error
 		drivers := a.getDriversForBackup(backup)
 
 		volumeInfos := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
@@ -480,12 +479,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			volumeInfos = append(volumeInfos, status...)
 		}
 		backup.Status.Volumes = volumeInfos
-		backup.Status.LastUpdateTimestamp = metav1.Now()
-		// Store the new status
-		err = a.client.Update(context.TODO(), backup)
-		if err != nil {
-			return err
-		}
 
 		// Now check if there is any failure or success
 		// TODO: On failure of one volume cancel other backups?
@@ -515,6 +508,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 	// Return if we have any volume backups still in progress
 	if inProgress {
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+		// Store the new status
+		err = a.client.Update(context.TODO(), backup)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -542,7 +541,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	}
 
 	backup.Status.LastUpdateTimestamp = metav1.Now()
-	err := a.client.Update(context.TODO(), backup)
+	err = a.client.Update(context.TODO(), backup)
 	if err != nil {
 		return err
 	}
@@ -724,6 +723,7 @@ func (a *ApplicationBackupController) uploadMetadata(
 func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
+	var err error
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	allObjects, err := a.resourceCollector.GetResources(
@@ -736,32 +736,38 @@ func (a *ApplicationBackupController) backupResources(
 		return err
 	}
 
-	// Save the collected resources infos in the status
-	resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
-	for _, obj := range allObjects {
-		metadata, err := meta.Accessor(obj)
+	if backup.Status.Resources == nil {
+		// Save the collected resources infos in the status
+		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
+		for _, obj := range allObjects {
+			metadata, err := meta.Accessor(obj)
+			if err != nil {
+				return err
+			}
+
+			resourceInfo := &stork_api.ApplicationBackupResourceInfo{
+				Name:      metadata.GetName(),
+				Namespace: metadata.GetNamespace(),
+			}
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			resourceInfo.Kind = gvk.Kind
+			resourceInfo.Group = gvk.Group
+			// core Group doesn't have a name, so override it
+			if resourceInfo.Group == "" {
+				resourceInfo.Group = "core"
+			}
+			resourceInfo.Version = gvk.Version
+
+			resourceInfos = append(resourceInfos, resourceInfo)
+		}
+		backup.Status.Resources = resourceInfos
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+		// Store the new status
+		err = a.client.Update(context.TODO(), backup)
 		if err != nil {
 			return err
 		}
-
-		resourceInfo := &stork_api.ApplicationBackupResourceInfo{
-			Name:      metadata.GetName(),
-			Namespace: metadata.GetNamespace(),
-		}
-		gvk := obj.GetObjectKind().GroupVersionKind()
-		resourceInfo.Kind = gvk.Kind
-		resourceInfo.Group = gvk.Group
-		// core Group doesn't have a name, so override it
-		if resourceInfo.Group == "" {
-			resourceInfo.Group = "core"
-		}
-		resourceInfo.Version = gvk.Version
-
-		resourceInfos = append(resourceInfos, resourceInfo)
-	}
-	backup.Status.Resources = resourceInfos
-	if err = a.client.Update(context.TODO(), backup); err != nil {
-		return err
+		return nil
 	}
 
 	// Do any additional preparation for the resources if required
