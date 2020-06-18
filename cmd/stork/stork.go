@@ -141,6 +141,10 @@ func main() {
 			Name:  "webhook-controller",
 			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: true)",
 		},
+		cli.StringFlag{
+			Name:  "webhook-skip-resources-annotation",
+			Usage: "Application annotation to be used to disable auto updating app scheduler as stork",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -197,8 +201,9 @@ func run(c *cli.Context) {
 		}
 		if c.Bool("webhook-controller") {
 			webhook = &webhookadmission.Controller{
-				Driver:   d,
-				Recorder: recorder,
+				Driver:       d,
+				Recorder:     recorder,
+				SkipResource: c.String("webhook-skip-resources-annotation"),
 			}
 			if err := webhook.Start(); err != nil {
 				log.Fatalf("error starting webhook controller: %v", err)
