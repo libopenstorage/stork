@@ -140,10 +140,12 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				updateStatefulSets(ns, true, ioStreams)
 				updateDeployments(ns, true, ioStreams)
 				updateDeploymentConfigs(ns, true, ioStreams)
-				updateObjects("IBPPeer", ns, true, ioStreams)
-				updateObjects("IBPCA", ns, true, ioStreams)
-				updateObjects("IBPOrderer", ns, true, ioStreams)
-				updateObjects("IBPConsole", ns, true, ioStreams)
+				updateIBPObjects("IBPPeer", ns, true, ioStreams)
+				updateIBPObjects("IBPCA", ns, true, ioStreams)
+				updateIBPObjects("IBPOrderer", ns, true, ioStreams)
+				updateIBPObjects("IBPConsole", ns, true, ioStreams)
+				updateCouchbaseObjects("couchbase.com/v1", "CouchbaseCluster", ns, true, ioStreams)
+				updateCouchbaseObjects("couchbase.com/v2", "CouchbaseCluster", ns, true, ioStreams)
 			}
 
 		},
@@ -180,10 +182,12 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				updateStatefulSets(ns, false, ioStreams)
 				updateDeployments(ns, false, ioStreams)
 				updateDeploymentConfigs(ns, false, ioStreams)
-				updateObjects("IBPPeer", ns, false, ioStreams)
-				updateObjects("IBPCA", ns, false, ioStreams)
-				updateObjects("IBPOrderer", ns, false, ioStreams)
-				updateObjects("IBPConsole", ns, false, ioStreams)
+				updateIBPObjects("IBPPeer", ns, false, ioStreams)
+				updateIBPObjects("IBPCA", ns, false, ioStreams)
+				updateIBPObjects("IBPOrderer", ns, false, ioStreams)
+				updateIBPObjects("IBPConsole", ns, false, ioStreams)
+				updateCouchbaseObjects("couchbase.com/v1", "CouchbaseCluster", ns, false, ioStreams)
+				updateCouchbaseObjects("couchbase.com/v2", "CouchbaseCluster", ns, false, ioStreams)
 			}
 
 		},
@@ -253,7 +257,52 @@ func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericc
 	}
 }
 
-func updateObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+func updateCouchbaseObjects(version string, kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+	objects, err := dynamic.Instance().ListObjects(
+		&metav1.ListOptions{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       kind,
+				APIVersion: version},
+		},
+		namespace)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			util.CheckErr(err)
+		}
+		return
+	}
+	for _, o := range objects.Items {
+		err := unstructured.SetNestedField(o.Object, !activate, "spec", "paused")
+		if err != nil {
+			printMsg(fmt.Sprintf("Error updating \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+			continue
+		}
+		_, err = dynamic.Instance().UpdateObject(&o)
+		if err != nil {
+			printMsg(fmt.Sprintf("Error updating \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+			continue
+		}
+		printMsg(fmt.Sprintf("Updated \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+		if !activate {
+			pods, found, err := unstructured.NestedStringSlice(o.Object, "status", "members", "ready")
+			if err != nil {
+				printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+				continue
+			}
+			if !found {
+				continue
+			}
+			for _, pod := range pods {
+				err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
+				printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+				continue
+			}
+		}
+
+	}
+
+}
+func updateIBPObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	objects, err := dynamic.Instance().ListObjects(
 		&metav1.ListOptions{
 			TypeMeta: metav1.TypeMeta{

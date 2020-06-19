@@ -137,6 +137,14 @@ func main() {
 			Name:  "pvc-watcher",
 			Usage: "Start the controller to monitor PVC creation and deletions (default: true)",
 		},
+		cli.BoolTFlag{
+			Name:  "webhook-controller",
+			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: true)",
+		},
+		cli.StringFlag{
+			Name:  "webhook-skip-resources-annotation",
+			Usage: "Application annotation to be used to disable auto updating app scheduler as stork",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -191,12 +199,15 @@ func run(c *cli.Context) {
 				log.Fatalf("Error starting scheduler extender: %v", err)
 			}
 		}
-		webhook = &webhookadmission.Controller{
-			Driver:   d,
-			Recorder: recorder,
-		}
-		if err := webhook.Start(); err != nil {
-			log.Fatalf("error starting webhook controller: %v", err)
+		if c.Bool("webhook-controller") {
+			webhook = &webhookadmission.Controller{
+				Driver:       d,
+				Recorder:     recorder,
+				SkipResource: c.String("webhook-skip-resources-annotation"),
+			}
+			if err := webhook.Start(); err != nil {
+				log.Fatalf("error starting webhook controller: %v", err)
+			}
 		}
 	}
 	// Create operator-sdk manager that will manage all controllers.
@@ -279,6 +290,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 	monitor := &monitor.Monitor{
 		Driver:      d,
 		IntervalSec: c.Int64("health-monitor-interval"),
+		Recorder:    recorder,
 	}
 	snapshot := &snapshot.Snapshot{
 		Driver:   d,
@@ -371,10 +383,11 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 			if err := d.Stop(); err != nil {
 				log.Warnf("Error stopping driver: %v", err)
 			}
-			if err := webhook.Stop(); err != nil {
-				log.Warnf("error stopping webhook controller %v", err)
+			if c.Bool("webhook-controller") {
+				if err := webhook.Stop(); err != nil {
+					log.Warnf("error stopping webhook controller %v", err)
+				}
 			}
-
 			stopCh <- struct{}{}
 		}
 	}()

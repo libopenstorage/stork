@@ -139,6 +139,7 @@ const (
 	// Annotation to skip checking if the backup is being done to the same
 	// BackupLocationName
 	skipBackupLocationNameCheckAnnotation = "portworx.io/skip-backup-location-name-check"
+	incrementalCountAnnotation            = "portworx.io/cloudsnap-incremental-count"
 )
 
 type cloudSnapStatus struct {
@@ -383,8 +384,6 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	switch status {
-	case api.Status_STATUS_NONE:
-		fallthrough
 	case api.Status_STATUS_INIT:
 		fallthrough
 	case api.Status_STATUS_OFFLINE:
@@ -400,6 +399,8 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	case api.Status_STATUS_NEEDS_REBOOT:
 		return storkvolume.NodeOffline
 
+	case api.Status_STATUS_NONE:
+		fallthrough
 	case api.Status_STATUS_OK:
 		fallthrough
 	case api.Status_STATUS_STORAGE_DOWN:
@@ -458,6 +459,7 @@ func (p *portworx) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 		SchedulerID: node.SchedulerNodeName,
 		Hostname:    strings.ToLower(node.Hostname),
 		Status:      p.mapNodeStatus(node.Status),
+		RawStatus:   node.Status.String(),
 	}, nil
 }
 
@@ -482,6 +484,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 			SchedulerID: n.SchedulerNodeName,
 			Hostname:    strings.ToLower(n.Hostname),
 			Status:      p.mapNodeStatus(n.Status),
+			RawStatus:   n.Status.String(),
 		}
 		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
 		nodeInfo.IPs = append(nodeInfo.IPs, n.DataIp)
@@ -760,7 +763,11 @@ func (p *portworx) addCloudsnapInfo(
 				// Use full backups for weekly and monthly snaps
 				if policyType == string(storkapi.SchedulePolicyTypeWeekly) ||
 					policyType == string(storkapi.SchedulePolicyTypeMonthly) {
-					request.Full = true
+					// Only set to full backup if the frequency isn't
+					// provided
+					if request.FullBackupFrequency == 0 {
+						request.Full = true
+					}
 				}
 				return
 			}
@@ -853,6 +860,19 @@ func (p *portworx) SnapshotCreate(
 		request.Labels = make(map[string]string)
 		request.Labels[cloudBackupOwnerLabel] = "stork"
 		p.addCloudsnapInfo(request, snap)
+
+		if value, present := snap.Metadata.Annotations[incrementalCountAnnotation]; present {
+			incrementalCount, err := strconv.ParseUint(value, 10, 32)
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid cloudsnap-incremental-count specified %v: %v", p, err)
+			}
+			if incrementalCount <= 0 {
+				request.Full = true
+			} else {
+				request.FullBackupFrequency = uint32(incrementalCount)
+				request.Full = false
+			}
+		}
 
 		_, err = volDriver.CloudBackupCreate(request)
 		if err != nil {
@@ -2554,7 +2574,11 @@ func (p *portworx) addApplicationBackupCloudsnapInfo(
 				// Use full backups for weekly and monthly snaps
 				if policyType == string(storkapi.SchedulePolicyTypeWeekly) ||
 					policyType == string(storkapi.SchedulePolicyTypeMonthly) {
-					request.Full = true
+					// Only set to full backup if the frequency isn't
+					// provided
+					if request.FullBackupFrequency == 0 {
+						request.Full = true
+					}
 				}
 				return
 			}
@@ -2618,6 +2642,19 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		request.Labels[cloudBackupOwnerLabel] = "stork"
 		if val, ok := backup.Annotations[skipBackupLocationNameCheckAnnotation]; ok {
 			request.Labels[api.OptCloudBackupIgnoreCreds] = val
+		}
+
+		if value, present := backup.Spec.Options[incrementalCountAnnotation]; present {
+			incrementalCount, err := strconv.ParseUint(value, 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("invalid cloudsnap-incremental-count specified %v: %v", p, err)
+			}
+			if incrementalCount <= 0 {
+				request.Full = true
+			} else {
+				request.FullBackupFrequency = uint32(incrementalCount)
+				request.Full = false
+			}
 		}
 		p.addApplicationBackupCloudsnapInfo(request, backup)
 

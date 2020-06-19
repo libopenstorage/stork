@@ -842,6 +842,12 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 			}
+		case "CouchbaseCluster":
+			err := m.prepareCouchbaseClusterResource(migration, o)
+			if err != nil {
+				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+			}
+
 		}
 	}
 	return nil
@@ -1010,6 +1016,17 @@ func (m *MigrationController) prepareApplicationResource(
 	}
 	annotations[StorkMigrationReplicasAnnotation] = strconv.FormatInt(replicas, 10)
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
+}
+
+func (m *MigrationController) prepareCouchbaseClusterResource(
+	migration *stork_api.Migration,
+	object runtime.Unstructured,
+) error {
+	if *migration.Spec.StartApplications {
+		return nil
+	}
+	content := object.UnstructuredContent()
+	return unstructured.SetNestedField(content, true, "spec", "paused")
 }
 
 func (m *MigrationController) getPrunedAnnotations(annotations map[string]string) map[string]string {

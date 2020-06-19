@@ -216,6 +216,26 @@ func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stor
 	return 1, nil
 }
 
+// GetOptions Returns the options set for a policy type
+func GetOptions(policyName string, policyType stork_api.SchedulePolicyType) (map[string]string, error) {
+	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+	if err != nil {
+		return nil, err
+	}
+	switch policyType {
+	case stork_api.SchedulePolicyTypeInterval:
+		return schedulePolicy.Policy.Interval.Options, nil
+	case stork_api.SchedulePolicyTypeDaily:
+		return schedulePolicy.Policy.Daily.Options, nil
+	case stork_api.SchedulePolicyTypeWeekly:
+		return schedulePolicy.Policy.Weekly.Options, nil
+	case stork_api.SchedulePolicyTypeMonthly:
+		return schedulePolicy.Policy.Monthly.Options, nil
+	default:
+		return nil, fmt.Errorf("invalid policy type: %v", policyType)
+	}
+}
+
 // Init initializes the schedule module
 func Init() error {
 	err := createCRD()
