@@ -42,6 +42,7 @@ const (
 	validateCRDTimeout  time.Duration = 1 * time.Minute
 
 	resourceObjectName = "resources.json"
+	resourceCRDName    = "crds.json"
 	metadataObjectName = "metadata.json"
 
 	backupCancelBackoffInitialDelay = 5 * time.Second
@@ -700,12 +701,42 @@ func (a *ApplicationBackupController) uploadResources(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
 ) error {
+	// upload CRD to backuplocation
+	if err := a.uploadCRDResources(backup); err != nil {
+		return err
+	}
 	jsonBytes, err := json.MarshalIndent(objects, "", " ")
 	if err != nil {
 		return err
 	}
 	// TODO: Encrypt if requested
 	return a.uploadObject(backup, resourceObjectName, jsonBytes)
+}
+
+func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.ApplicationBackup) error {
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	if err != nil {
+		return err
+	}
+	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			res, err := apiextensions.Instance().GetCRD(v.Group, metav1.GetOptions{ResourceVersion: v.Version})
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Unable to get customresourcedefination for %s, err: %v", v.Kind, err)
+				return err
+			}
+			crds = append(crds, res)
+		}
+	}
+	jsonBytes, err := json.MarshalIndent(crds, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := a.uploadObject(backup, resourceCRDName, jsonBytes); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Upload the backup object which should have all the required metadata
