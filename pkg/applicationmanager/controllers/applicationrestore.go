@@ -458,6 +458,10 @@ func (a *ApplicationRestoreController) downloadResources(
 	backupLocation string,
 	namespace string,
 ) ([]runtime.Unstructured, error) {
+	// create CRD resource first
+	if err := a.downloadCRD(backup, backupLocation, namespace); err != nil {
+		return nil, err
+	}
 	data, err := a.downloadObject(backup, backupLocation, namespace, resourceObjectName)
 	if err != nil {
 		return nil, err
@@ -472,6 +476,33 @@ func (a *ApplicationRestoreController) downloadResources(
 		runtimeObjects = append(runtimeObjects, o)
 	}
 	return runtimeObjects, nil
+}
+
+func (a *ApplicationRestoreController) downloadCRD(
+	backup *storkapi.ApplicationBackup,
+	backupLocation string,
+	namespace string,
+) error {
+	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+	crdData, err := a.downloadObject(backup, backupLocation, namespace, resourceCRDName)
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(crdData, &crds); err != nil {
+		return err
+	}
+	for _, crd := range crds {
+		crd.ResourceVersion = ""
+		if err := apiextensions.Instance().RegisterCRD(crd); err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRD(apiextensions.CustomResource{
+			Plural: crd.Spec.Names.Plural,
+			Group:  crd.Spec.Group}, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *ApplicationRestoreController) updateResourceStatus(
