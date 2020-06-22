@@ -905,6 +905,23 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 	ns *v1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
+	// Add security annotations if running with auth-enabled
+	configMapName := k.secretConfigMapName
+	if configMapName != "" {
+		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		if err != nil {
+			return nil, &scheduler.ErrFailedToGetConfigMap{
+				Name:  configMapName,
+				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+			}
+		}
+
+		err = k.addSecurityAnnotation(specObj, configMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
+		}
+
+	}
 
 	if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
 		obj.Namespace = ns.Name
