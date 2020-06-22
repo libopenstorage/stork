@@ -3,7 +3,6 @@ module github.com/portworx/torpedo
 go 1.12
 
 require (
-	cloud.google.com/go v0.38.0 // indirect
 	github.com/Azure/azure-sdk-for-go v38.2.0+incompatible // indirect
 	github.com/Azure/azure-storage-blob-go v0.0.0-20181022225951-5152f14ace1c
 	github.com/Azure/go-autorest/autorest v0.9.4 // indirect
@@ -23,7 +22,6 @@ require (
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/golang/protobuf v1.4.2
-	github.com/google/uuid v1.1.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6 // indirect
 	github.com/hashicorp/go-version v1.1.0
@@ -58,7 +56,6 @@ require (
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
-	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f // indirect
 )
 
 replace (
