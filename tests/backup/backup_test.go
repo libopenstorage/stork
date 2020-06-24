@@ -342,7 +342,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 // backup process.
 var _ = Describe("{MultiProviderBackupKillStork}", func() {
 	var (
-		kubeconfigs string
+		kubeconfigs    string
 		kubeconfigList []string
 	)
 
@@ -1169,6 +1169,7 @@ func DeleteAzureBucket(bucketName string) {
 	Expect(err).NotTo(HaveOccurred(),
 		fmt.Sprintf("Failed to delete container. Error: [%v]", err))
 }
+
 // CreateCloudCredential creates cloud credetials
 func CreateCloudCredential(provider, name string, orgID string) {
 	Step(fmt.Sprintf("Create cloud credential [%s] in org [%s]", name, orgID), func() {
