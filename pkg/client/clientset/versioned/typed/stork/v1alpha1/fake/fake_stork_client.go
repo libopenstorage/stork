@@ -40,6 +40,10 @@ func (c *FakeStorkV1alpha1) ApplicationClones(namespace string) v1alpha1.Applica
 	return &FakeApplicationClones{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) ApplicationRegistrations() v1alpha1.ApplicationRegistrationInterface {
+	return &FakeApplicationRegistrations{c}
+}
+
 func (c *FakeStorkV1alpha1) ApplicationRestores(namespace string) v1alpha1.ApplicationRestoreInterface {
 	return &FakeApplicationRestores{c, namespace}
 }

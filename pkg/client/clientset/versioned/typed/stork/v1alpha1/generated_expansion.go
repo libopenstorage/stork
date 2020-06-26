@@ -24,6 +24,8 @@ type ApplicationBackupScheduleExpansion interface{}
 
 type ApplicationCloneExpansion interface{}
 
+type ApplicationRegistrationExpansion interface{}
+
 type ApplicationRestoreExpansion interface{}
 
 type BackupLocationExpansion interface{}

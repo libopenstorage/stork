@@ -77,5 +77,20 @@ func (a *ApplicationManager) createCRD() error {
 		return err
 	}
 
-	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	if err := apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval); err != nil {
+		return err
+	}
+	appReg := apiextensions.CustomResource{
+		Name:    stork_api.ApplicationRegistrationResourceName,
+		Plural:  stork_api.ApplicationRegistrationResourcePlural,
+		Group:   stork_api.SchemeGroupVersion.Group,
+		Version: stork_api.SchemeGroupVersion.Version,
+		Scope:   apiextensionsv1beta1.NamespaceScoped,
+		Kind:    reflect.TypeOf(stork_api.ApplicationRegistration{}).Name(),
+	}
+	err = apiextensions.Instance().CreateCRD(appReg)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return apiextensions.Instance().ValidateCRD(appReg, validateCRDTimeout, validateCRDInterval)
 }
