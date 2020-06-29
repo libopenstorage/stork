@@ -141,14 +141,17 @@ type Driver interface {
 	// DeleteTasks deletes all tasks of the application (not the application). DeleteTasksOptions is optional.
 	DeleteTasks(*Context, *DeleteTasksOptions) error
 
+	// GetVolumeDriverVolumeName returns name of volume which is refered by volume driver
+	GetVolumeDriverVolumeName(name string, namespace string) (string, error)
+
 	// GetVolumeParameters Returns a maps, each item being a volume and it's options
 	GetVolumeParameters(*Context) (map[string]map[string]string, error)
 
 	// ValidateVolumes validates storage volumes in the provided context
-	ValidateVolumes(cc *Context, timeout, retryInterval time.Duration) error
+	ValidateVolumes(cc *Context, timeout, retryInterval time.Duration, options *VolumeOptions) error
 
 	// DeleteVolumes will delete all storage volumes for the given context
-	DeleteVolumes(*Context, *DeleteVolumeOptions) ([]*volume.Volume, error)
+	DeleteVolumes(*Context, *VolumeOptions) ([]*volume.Volume, error)
 
 	// GetVolumes returns all storage volumes for the given context
 	GetVolumes(*Context) ([]*volume.Volume, error)
@@ -244,9 +247,9 @@ type UpgradeAutopilotOptions struct {
 	api.TriggerOptions
 }
 
-// DeleteVolumeOptions are options supplied to the DeleteVolume API
-type DeleteVolumeOptions struct {
-	// SkipClusterScopedObjects skips deletion of cluster scoped objects like storage class
+// VolumeOptions are options supplied to the scheduler Volume APIs
+type VolumeOptions struct {
+	// SkipClusterScopedObjects skips volume operations on cluster scoped objects like storage class
 	SkipClusterScopedObjects bool
 }
 

@@ -162,6 +162,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 
 	labelSelectores := make(map[string]string)
 	namespaceMapping = make(map[string]string)
+	volumeParams := make(map[string]map[string]string)
 
 	It("has to connect and check the backup setup", func() {
 		Step("Setup backup", func() {
@@ -198,6 +199,11 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 			}
 
 			ValidateApplications(contexts)
+			for _, ctx := range contexts {
+				for vol, params := range GetVolumeParameters(ctx) {
+					volumeParams[vol] = params
+				}
+			}
 		})
 
 		logrus.Info("Wait for IO to proceed\n")
@@ -317,8 +323,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 				ctx.SkipClusterScopedObject = true
 				ctx.SkipVolumeValidation = true
 			}
-
-			ValidateApplications(contexts)
+			ValidateRestoredApplications(contexts, volumeParams)
 		})
 
 		Step("teardown all restored apps", func() {
@@ -848,6 +853,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 	var namespaceMapping map[string]string
 	taskNamePrefix := "backupcrashvoldriver"
 	labelSelectores := make(map[string]string)
+	volumeParams := make(map[string]map[string]string)
 
 	It("has to complete backup and restore", func() {
 		// Set cluster context to cluster where torpedo is running
@@ -872,6 +878,11 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 				ctx.ReadinessTimeout = appReadinessTimeout
 			}
 			ValidateApplications(contexts)
+			for _, ctx := range contexts {
+				for vol, params := range GetVolumeParameters(ctx) {
+					volumeParams[vol] = params
+				}
+			}
 		})
 
 		for _, ctx := range contexts {
@@ -973,7 +984,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 			}
 			// TODO: Restored PVCs are created by stork-snapshot StorageClass
 			// And not by respective app's StorageClass. Need to fix below function
-			// ValidateApplications(contexts)
+			ValidateRestoredApplications(contexts, volumeParams)
 		})
 
 		Step("teardown all restored apps", func() {

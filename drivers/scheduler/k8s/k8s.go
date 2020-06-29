@@ -101,6 +101,10 @@ const (
 	secretName         = "openstorage.io/auth-secret-name"
 	secretNamespace    = "openstorage.io/auth-secret-namespace"
 	storageClassKey    = "volume.beta.kubernetes.io/storage-class"
+	// PvcNameKey key used in volume param map to store PVC name
+	PvcNameKey = "pvc_name"
+	// PvcNamespaceKey key used in volume param map to store PVC namespace
+	PvcNamespaceKey = "pvc_namespace"
 )
 
 var (
@@ -1725,6 +1729,15 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 	return api.PerformTask(deleteTasks, &opts.TriggerOptions)
 }
 
+// GetVolumeDriverVolumeName returns name of volume which is refered by volume driver
+func (k *K8s) GetVolumeDriverVolumeName(name string, namespace string) (string, error) {
+	pvc, err := k8sCore.GetPersistentVolumeClaim(name, namespace)
+	if err != nil {
+		return "", fmt.Errorf("failed to get PVC: %v in namespace %v. Err: %v", name, namespace, err)
+	}
+	return pvc.Spec.VolumeName, nil
+}
+
 // GetVolumeParameters Get the volume parameters
 func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string]string, error) {
 	result := make(map[string]map[string]string)
@@ -1750,6 +1763,8 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 			for k, v := range pvc.Annotations {
 				params[k] = v
 			}
+			params[PvcNameKey] = pvc.GetName()
+			params[PvcNamespaceKey] = pvc.GetNamespace()
 
 			result[pvc.Spec.VolumeName] = params
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
@@ -1818,7 +1833,8 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 				for k, v := range pvc.Annotations {
 					params[k] = v
 				}
-
+				params[PvcNameKey] = pvc.GetName()
+				params[PvcNamespaceKey] = pvc.GetNamespace()
 				result[pvc.Spec.VolumeName] = params
 			}
 		}
@@ -1828,7 +1844,8 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 }
 
 // ValidateVolumes Validates the volumes
-func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration) error {
+func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration,
+	options *scheduler.VolumeOptions) error {
 	var err error
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
@@ -1837,9 +1854,13 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				continue
 			}
 			if _, err := k8sStorage.GetStorageClass(obj.Name); err != nil {
-				return &scheduler.ErrFailedToValidateStorage{
-					App:   ctx.App,
-					Cause: fmt.Sprintf("Failed to validate StorageClass: %v. Err: %v", obj.Name, err),
+				if options != nil && options.SkipClusterScopedObjects {
+					logrus.Warnf("[%v] Skipping validation of storage class: %v", ctx.App.Key, obj.Name)
+				} else {
+					return &scheduler.ErrFailedToValidateStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to validate StorageClass: %v. Err: %v", obj.Name, err),
+					}
 				}
 			}
 			logrus.Infof("[%v] Validated storage class: %v", ctx.App.Key, obj.Name)
@@ -1981,7 +2002,7 @@ func (k *K8s) isPVCShared(pvc *v1.PersistentVolumeClaim) bool {
 }
 
 // DeleteVolumes  delete the volumes
-func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVolumeOptions) ([]*volume.Volume, error) {
+func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
@@ -1998,8 +2019,12 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVol
 				logrus.Infof("[%v] Destroyed storage class: %v", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
+			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
+			if err != nil {
+				return nil, err
+			}
 			vols = append(vols, &volume.Volume{
-				ID:        string(obj.UID),
+				ID:        string(pvcObj.Spec.VolumeName),
 				Name:      obj.Name,
 				Namespace: obj.Namespace,
 				Shared:    k.isPVCShared(obj),
@@ -2047,8 +2072,12 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.DeleteVol
 			}
 
 			for _, pvc := range pvcList.Items {
+				pvcObj, err := k8sCore.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
+				if err != nil {
+					return nil, err
+				}
 				vols = append(vols, &volume.Volume{
-					ID:        string(pvc.UID),
+					ID:        string(pvcObj.Spec.VolumeName),
 					Name:      pvc.Name,
 					Namespace: pvc.Namespace,
 					Shared:    k.isPVCShared(&pvc),
@@ -2082,10 +2111,11 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			pvcSizeObj := pvcObj.Spec.Resources.Requests[v1.ResourceStorage]
 			pvcSize, _ := pvcSizeObj.AsInt64()
 			vol := &volume.Volume{
-				ID:          string(obj.UID),
+				ID:          string(pvcObj.Spec.VolumeName),
 				Name:        obj.Name,
 				Namespace:   obj.Namespace,
 				Shared:      k.isPVCShared(obj),
@@ -2116,7 +2146,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 			for _, pvc := range pvcList.Items {
 				vols = append(vols, &volume.Volume{
-					ID:        string(pvc.UID),
+					ID:        string(pvc.Spec.VolumeName),
 					Name:      pvc.Name,
 					Namespace: pvc.Namespace,
 					Shared:    k.isPVCShared(&pvc),
@@ -2207,7 +2237,7 @@ func (k *K8s) resizePVCBy1GB(ctx *scheduler.Context, pvc *v1.PersistentVolumeCla
 	}
 	sizeInt64, _ := storageSize.AsInt64()
 	vol := &volume.Volume{
-		ID:            string(pvc.UID),
+		ID:            string(pvc.Spec.VolumeName),
 		Name:          pvc.Name,
 		Namespace:     pvc.Namespace,
 		RequestedSize: uint64(sizeInt64),
