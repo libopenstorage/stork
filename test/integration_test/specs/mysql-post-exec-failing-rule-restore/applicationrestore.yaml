@@ -1,0 +1,10 @@
+apiVersion: stork.libopenstorage.org/v1alpha1
+kind: ApplicationRestore
+metadata:
+  name: mysql-post-exec-failing-rule-restore
+spec:
+  backupName: mysql-post-exec-failing-rule-backup
+  backupLocation: mysql-1-pvc-post-exec-failing-rule-backup-backup-location 
+  namespaceMapping:
+    mysql-1-pvc-mysql-1-pvc-post-exec-failing-rule-backup: mysql-1-pvc-mysql-1-pvc-post-exec-failing-rule-backup
+  replacePolicy: Delete   
