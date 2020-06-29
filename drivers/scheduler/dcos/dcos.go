@@ -529,7 +529,7 @@ func (d *dcos) StartSchedOnNode(node node.Node) error {
 		Operation: "StartSchedOnNode()",
 	}
 }
-func (d *dcos) RescanSpecs(specDir string) error {
+func (d *dcos) RescanSpecs(specDir, storageDriver string) error {
 	// TODO implement this method
 	return &errors.ErrNotSupported{
 		Type:      "Function",

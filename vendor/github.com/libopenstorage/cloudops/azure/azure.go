@@ -33,13 +33,15 @@ const (
 	envResourceGroupName  = "AZURE_RESOURCE_GROUP_NAME"
 	envManagedClusterName = "AZURE_MANAGED_CLUSTER_NAME"
 	envAgentPoolName      = "AZURE_AGENT_POOL_NAME"
-	metadataAPIEndpoint   = "http://169.254.169.254/metadata/instance"
+	envUserAgent          = "AZURE_HTTP_USER_AGENT"
+	metadataAPIEndpoint   = "http://169.254.169.254/metadata/instance/compute"
 	metadataAPIVersion    = "2019-03-11"
 	scaleSetNameKey       = "vmScaleSetName"
 	resourceGroupNameKey  = "resourceGroupName"
 	subscriptionIDKey     = "subscriptionId"
+	cloudEnvironmentKey   = "azEnvironment"
+	userAgentKey          = "useAgent"
 	vmIDKey               = "vmId"
-	computeMetadataKey    = "compute"
 )
 
 const (
@@ -69,42 +71,58 @@ type azureOps struct {
 	agentPoolsClient   *containerservice.AgentPoolsClient
 }
 
+// Config contains everything needed to create an Azure client.
+// Only instanceID, subscriptionID and resourceGroupName are required, others
+// are optional based on the required type of client.
+type Config struct {
+	InstanceID         string
+	ScaleSetName       string
+	SubscriptionID     string
+	ResourceGroupName  string
+	CloudEnvironment   string
+	ManagedClusterName string
+	AgentPoolName      string
+	UserAgent          string
+}
+
 // NewClientFromMetadata initializes cloudops driver for azure based on environment
 // variables or based on instance metadata info available inside Azure VM
 func NewClientFromMetadata() (cloudops.Ops, error) {
-
-	if onAzure, metadata, err := onAzure(); onAzure && err == nil {
+	if onAzure, computeMetadata, err := onAzure(); onAzure && err == nil {
 		logrus.Info("Running on Azure IaaS VM")
-		var vmID, scalesetName, subscriptionID, resourceGroupName, managedClusterName, agentPoolName string
-		var scalesetNametemp, vmIDtemp, subscriptionIDtemp interface{}
-		var exists bool
+		var config Config
 
-		if temp, ok := metadata[computeMetadataKey]; ok {
-			computeMetadata := temp.(map[string]interface{})
-
-			if resourceGroup, ok := computeMetadata[resourceGroupNameKey]; ok {
-				temp := resourceGroup.(string)
-				if len(strings.Split(temp, "_")) == 4 {
-					resourceGroupName = strings.Split(temp, "_")[1]
-					managedClusterName = strings.Split(temp, "_")[2]
-				}
-			}
-
-			if scalesetNametemp, exists = computeMetadata[scaleSetNameKey]; exists {
-				scalesetName = scalesetNametemp.(string)
-			}
-
-			if vmIDtemp, exists = computeMetadata[vmIDKey]; exists {
-				vmID = vmIDtemp.(string)
-			}
-
-			if subscriptionIDtemp, exists = computeMetadata[subscriptionIDKey]; exists {
-				subscriptionID = subscriptionIDtemp.(string)
+		if resourceGroup, ok := computeMetadata[resourceGroupNameKey]; ok {
+			temp := resourceGroup.(string)
+			if len(strings.Split(temp, "_")) == 4 {
+				config.ResourceGroupName = strings.Split(temp, "_")[1]
+				config.ManagedClusterName = strings.Split(temp, "_")[2]
 			}
 		}
 
-		return NewClientWithPoolName(vmID, scalesetName, subscriptionID, resourceGroupName, managedClusterName, agentPoolName)
+		if scalesetName, exists := computeMetadata[scaleSetNameKey]; exists {
+			config.ScaleSetName = scalesetName.(string)
+		}
+
+		if vmID, exists := computeMetadata[vmIDKey]; exists {
+			config.InstanceID = vmID.(string)
+		}
+
+		if subscriptionID, exists := computeMetadata[subscriptionIDKey]; exists {
+			config.SubscriptionID = subscriptionID.(string)
+		}
+
+		if userAgent, exists := computeMetadata[userAgentKey]; exists {
+			config.UserAgent = userAgent.(string)
+		}
+
+		if environment, exists := computeMetadata[cloudEnvironmentKey]; exists {
+			config.CloudEnvironment = environment.(string)
+		}
+
+		return NewClient(config)
 	}
+
 	logrus.Info("Not running on Azure IaaS VM")
 	return NewEnvClient()
 }
@@ -162,7 +180,7 @@ func NewEnvClient() (cloudops.Ops, error) {
 	if err != nil {
 		return nil, err
 	}
-	subscriptionID, err := cloudops.GetEnvValueStrict(envSubscriptionID)
+	subscriptionID, err := cloudops.GetEnvValueStrict(auth.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,57 +189,61 @@ func NewEnvClient() (cloudops.Ops, error) {
 		return nil, err
 	}
 
-	// For backward compatibility, optional new environment variables
-	scaleSetName := os.Getenv(envScaleSetName)
-	managedClusterName := os.Getenv(envManagedClusterName)
-	agentPoolName := os.Getenv(envAgentPoolName)
+	config := Config{
+		InstanceID:        instance,
+		SubscriptionID:    subscriptionID,
+		ResourceGroupName: resourceGroupName,
+		// For backward compatibility, optional new environment variables
+		CloudEnvironment:   os.Getenv(auth.EnvironmentName),
+		ScaleSetName:       os.Getenv(envScaleSetName),
+		ManagedClusterName: os.Getenv(envManagedClusterName),
+		AgentPoolName:      os.Getenv(envAgentPoolName),
+		UserAgent:          os.Getenv(envUserAgent),
+	}
 
-	return NewClientWithPoolName(instance, scaleSetName, subscriptionID, resourceGroupName,
-		managedClusterName, agentPoolName)
+	return NewClient(config)
 }
 
-// NewClient creates new client from specified parameters.
-func NewClient(
-	instance, scaleSetName, subscriptionID, resourceGroupName string,
-) (cloudops.Ops, error) {
-	return NewClientWithPoolName(instance, scaleSetName, subscriptionID, resourceGroupName, "", "")
-}
-
-// NewClientWithPoolName creates new client from specified parameters.
-func NewClientWithPoolName(
-	instance, scaleSetName, subscriptionID, resourceGroupName string,
-	managedClusterName, poolName string,
-) (cloudops.Ops, error) {
-
+// NewClient creates new client from specified config.
+func NewClient(config Config) (cloudops.Ops, error) {
 	authorizer, err := auth.NewAuthorizerFromEnvironment()
 	if err != nil {
 		return nil, err
 	}
 
-	disksClient := compute.NewDisksClient(subscriptionID)
+	baseURI, err := azureBaseURI(config.CloudEnvironment)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(config.UserAgent) == 0 {
+		config.UserAgent = userAgentExtension
+	}
+
+	disksClient := compute.NewDisksClientWithBaseURI(baseURI, config.SubscriptionID)
 	disksClient.Authorizer = authorizer
 	disksClient.PollingDelay = clientPollingDelay
-	disksClient.AddToUserAgent(userAgentExtension)
+	disksClient.AddToUserAgent(config.UserAgent)
 
-	vmsClient := newVMsClient(scaleSetName, subscriptionID, resourceGroupName, authorizer)
+	vmsClient := newVMsClient(config, baseURI, authorizer)
 
-	snapshotsClient := compute.NewSnapshotsClient(subscriptionID)
+	snapshotsClient := compute.NewSnapshotsClientWithBaseURI(baseURI, config.SubscriptionID)
 	snapshotsClient.Authorizer = authorizer
 	snapshotsClient.PollingDelay = clientPollingDelay
-	snapshotsClient.AddToUserAgent(userAgentExtension)
+	snapshotsClient.AddToUserAgent(config.UserAgent)
 
-	agentPoolsClient := containerservice.NewAgentPoolsClient(subscriptionID)
+	agentPoolsClient := containerservice.NewAgentPoolsClientWithBaseURI(baseURI, config.SubscriptionID)
 	agentPoolsClient.Authorizer = authorizer
 	agentPoolsClient.PollingDelay = clientPollingDelay
-	agentPoolsClient.AddToUserAgent(userAgentExtension)
+	agentPoolsClient.AddToUserAgent(config.UserAgent)
 
 	return backoff.NewExponentialBackoffOps(
 		&azureOps{
 			Compute:            unsupported.NewUnsupportedCompute(),
-			instance:           instance,
-			resourceGroupName:  resourceGroupName,
-			managedClusterName: managedClusterName,
-			agentPoolName:      poolName,
+			instance:           config.InstanceID,
+			resourceGroupName:  config.ResourceGroupName,
+			managedClusterName: config.ManagedClusterName,
+			agentPoolName:      config.AgentPoolName,
 			disksClient:        &disksClient,
 			vmsClient:          vmsClient,
 			snapshotsClient:    &snapshotsClient,
@@ -420,7 +442,7 @@ func (a *azureOps) GetDeviceID(disk interface{}) (string, error) {
 	)
 }
 
-func (a *azureOps) Attach(diskName string) (string, error) {
+func (a *azureOps) Attach(diskName string, options map[string]string) (string, error) {
 	disk, err := a.checkDiskAttachmentStatus(diskName)
 	if err == nil {
 		// Disk is already attached locally, return device path
@@ -1141,4 +1163,20 @@ func isExponentialError(err error) bool {
 		}
 	}
 	return false
+}
+
+func azureBaseURI(cloudEnvName string) (string, error) {
+	if value, ok := os.LookupEnv(auth.EnvironmentName); ok {
+		cloudEnvName = value
+	}
+
+	if cloudEnvName == "" {
+		return azure.PublicCloud.ResourceManagerEndpoint, nil
+	}
+
+	cloudEnv, err := azure.EnvironmentFromName(cloudEnvName)
+	if err != nil {
+		return "", err
+	}
+	return cloudEnv.ResourceManagerEndpoint, nil
 }

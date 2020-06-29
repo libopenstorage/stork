@@ -178,7 +178,7 @@ type Driver interface {
 	RefreshNodeRegistry() error
 
 	// RescanSpecs specified in specDir
-	RescanSpecs(specDir string) error
+	RescanSpecs(specDir, storageDriver string) error
 
 	// EnableSchedulingOnNode enable apps to be scheduled to a given node
 	EnableSchedulingOnNode(n node.Node) error
@@ -236,6 +236,11 @@ var (
 
 // DeleteTasksOptions are options supplied to the DeleteTasks API
 type DeleteTasksOptions struct {
+	api.TriggerOptions
+}
+
+// UpgradeAutopilotOptions are options supplied to the UpgradeAutopilot API
+type UpgradeAutopilotOptions struct {
 	api.TriggerOptions
 }
 

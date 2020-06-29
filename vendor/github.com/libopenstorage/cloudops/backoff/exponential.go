@@ -107,6 +107,40 @@ func (e *exponentialBackoff) SetInstanceGroupSize(instanceGroupID string,
 
 }
 
+func (e *exponentialBackoff) SetClusterVersion(version string, timeout time.Duration) error {
+	var (
+		origErr error
+	)
+	conditionFn := func() (bool, error) {
+		origErr = e.cloudOps.SetClusterVersion(version, timeout)
+		return e.handleError(origErr, fmt.Sprintf("Failed to set cluster version"))
+	}
+	expErr := wait.ExponentialBackoff(e.backoff, conditionFn)
+	if expErr == wait.ErrWaitTimeout {
+		return cloudops.NewStorageError(cloudops.ErrExponentialTimeout, origErr.Error(), "")
+	}
+	return origErr
+
+}
+
+func (e *exponentialBackoff) SetInstanceGroupVersion(instanceGroupID string,
+	version string,
+	timeout time.Duration) error {
+	var (
+		origErr error
+	)
+	conditionFn := func() (bool, error) {
+		origErr = e.cloudOps.SetInstanceGroupVersion(instanceGroupID, version, timeout)
+		return e.handleError(origErr, fmt.Sprintf("Failed to set instance group version"))
+	}
+	expErr := wait.ExponentialBackoff(e.backoff, conditionFn)
+	if expErr == wait.ErrWaitTimeout {
+		return cloudops.NewStorageError(cloudops.ErrExponentialTimeout, origErr.Error(), "")
+	}
+	return origErr
+
+}
+
 func (e *exponentialBackoff) GetInstanceGroupSize(instanceGroupID string) (int64, error) {
 	var (
 		count   int64
@@ -183,13 +217,13 @@ func (e *exponentialBackoff) GetDeviceID(template interface{}) (string, error) {
 
 // Attach volumeID.
 // Return attach path.
-func (e *exponentialBackoff) Attach(volumeID string) (string, error) {
+func (e *exponentialBackoff) Attach(volumeID string, options map[string]string) (string, error) {
 	var (
 		devPath string
 		origErr error
 	)
 	conditionFn := func() (bool, error) {
-		devPath, origErr = e.cloudOps.Attach(volumeID)
+		devPath, origErr = e.cloudOps.Attach(volumeID, options)
 		msg := fmt.Sprintf("Failed to attach drive (%v).", volumeID)
 		return e.handleError(origErr, msg)
 	}

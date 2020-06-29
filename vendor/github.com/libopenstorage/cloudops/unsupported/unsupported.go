@@ -55,6 +55,20 @@ func (u *unsupportedCompute) GetClusterSizeForInstance(instanceID string) (int64
 	}
 }
 
+func (u *unsupportedCompute) SetClusterVersion(version string, timeout time.Duration) error {
+	return &cloudops.ErrNotSupported{
+		Operation: "SetClusterVersion",
+	}
+}
+
+func (u *unsupportedCompute) SetInstanceGroupVersion(instanceGroupID string,
+	version string,
+	timeout time.Duration) error {
+	return &cloudops.ErrNotSupported{
+		Operation: "SetInstanceGroupVersion",
+	}
+}
+
 type unsupportedStorageManager struct {
 }
 

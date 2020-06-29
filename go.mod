@@ -3,7 +3,6 @@ module github.com/portworx/torpedo
 go 1.12
 
 require (
-	cloud.google.com/go v0.38.0 // indirect
 	github.com/Azure/azure-sdk-for-go v38.2.0+incompatible // indirect
 	github.com/Azure/azure-storage-blob-go v0.0.0-20181022225951-5152f14ace1c
 	github.com/Azure/go-autorest/autorest v0.9.4 // indirect
@@ -12,6 +11,7 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/aws/aws-sdk-go v1.30.6
+	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -21,13 +21,14 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
-	github.com/golang/protobuf v1.3.2
-	github.com/google/uuid v1.1.1 // indirect
+	github.com/golang/protobuf v1.4.2
+	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway v1.14.6 // indirect
 	github.com/hashicorp/go-version v1.1.0
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000
 	github.com/libopenstorage/autopilot-api v0.6.1-0.20200115200747-7383c6007283
-	github.com/libopenstorage/cloudops v0.0.0-20200114171448-10fa10d97720
+	github.com/libopenstorage/cloudops v0.0.0-20200604165016-9cc0977d745e
 	github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952 // indirect
 	github.com/libopenstorage/openstorage v8.0.1-0.20200129213931-ba5ed2ee0f18+incompatible
 	github.com/libopenstorage/stork v1.3.0-beta1.0.20191009210244-6a3497c42b2a
@@ -40,18 +41,21 @@ require (
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v0.0.0-20200427154119-bf6c416dd552
 	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
-	github.com/portworx/sched-ops v0.0.0-20200417162209-33e2d7134846
+	github.com/portworx/sched-ops v0.0.0-20200601132537-056e2af44551
 	github.com/sirupsen/logrus v1.5.0
 	github.com/stretchr/testify v1.5.1
 	go.opencensus.io v0.22.1 // indirect
-	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
-	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
-	google.golang.org/grpc v1.24.0
+	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
+	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
+	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
+	google.golang.org/appengine v1.6.6 // indirect
+	google.golang.org/genproto v0.0.0-20200604104852-0b0486081ffb // indirect
+	google.golang.org/grpc v1.29.1
+	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.2.4
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
-	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f // indirect
 )
 
 replace (

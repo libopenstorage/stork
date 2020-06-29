@@ -127,6 +127,16 @@ if [ -n "$AZURE_CLIENT_SECRET" ]; then
     AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
 fi
 
+SCHEDULER_UPGRADE_HOPS_ARG=""
+if [ -n "${SCHEDULER_UPGRADE_HOPS}" ]; then
+    SCHEDULER_UPGRADE_HOPS_ARG="--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS"
+fi
+
+MAX_STORAGE_NODES_PER_AZ_ARG=""
+if [ -n "${MAX_STORAGE_NODES_PER_AZ}" ]; then
+    MAX_STORAGE_NODES_PER_AZ_ARG="--max-storage-nodes-per-az=$MAX_STORAGE_NODES_PER_AZ"
+fi
+
 for i in $@
 do
 case $i in
@@ -148,12 +158,16 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/drive_failure.test",
             "bin/volume_ops.test",
             "bin/sched.test",
+            "bin/scheduler_upgrade.test",
             "bin/node_decommission.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi
 echo "Using list of test suite(s): ${TEST_SUITE}"
 
+if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
+    AUTOPILOT_UPGRADE_VERSION=""
+fi
 
 kubectl delete pod torpedo
 state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
@@ -199,6 +213,16 @@ VOLUMES="${TESTRESULTS_VOLUME}"
 if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUMES="${VOLUMES},${AWS_VOLUME}"
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
+fi
+
+if [ -n "${PROVIDERS}" ]; then
+  echo "Create configs for providers",${PROVIDERS}
+  for i in ${PROVIDERS//,/ };do
+     if [ "${i}" == "aws" ]; then
+      VOLUMES="${VOLUMES},${AWS_VOLUME}"
+      VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
+     fi
+  done
 fi
 
 if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
@@ -379,7 +403,10 @@ spec:
             "--secret-type=$SECRET_TYPE",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
-            "$APP_DESTROY_TIMEOUT_ARG"
+            "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
+            "$APP_DESTROY_TIMEOUT_ARG",
+            "$SCHEDULER_UPGRADE_HOPS_ARG",
+            "$MAX_STORAGE_NODES_PER_AZ_ARG"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
@@ -420,6 +447,8 @@ spec:
       value: "${S3_REGION}"
     - name: S3_DISABLE_SSL
       value: "${S3_DISABLE_SSL}"
+    - name: PROVIDERS
+      value: "${PROVIDERS}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
@@ -437,7 +466,7 @@ function describe_pod_then_exit {
   exit 1
 }
 
-for i in $(seq 1 600) ; do
+for i in $(seq 1 900) ; do
   printf .
   state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
   if [ "$state" == "Error" ]; then

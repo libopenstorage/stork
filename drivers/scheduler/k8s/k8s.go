@@ -90,12 +90,9 @@ const (
 	// DefaultTimeout default timeout
 	DefaultTimeout = 2 * time.Minute
 
-	defaultTriggerCheckInterval          = 5 * time.Second
-	defaultTriggerCheckTimeout           = 5 * time.Minute
-	resizeSupportedAnnotationKey         = "torpedo.io/resize-supported"
-	autopilotEnabledAnnotationKey        = "torpedo.io/autopilot-enabled"
-	deploymentAppEnvEnabledAnnotationKey = "torpedo.io/appenv-enabled"
-	specObjAppWorkloadSizeEnvVar         = "SIZE"
+	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
+	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
+	specObjAppWorkloadSizeEnvVar  = "SIZE"
 )
 
 const (
@@ -235,12 +232,11 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	return nil
 }
 
-// RescanSpecs Rescan the application spec file
-//
-func (k *K8s) RescanSpecs(specDir string) error {
+// RescanSpecs Rescan the application spec file for spei
+func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 	var err error
-	logrus.Infof("Rescanning specs for %v", specDir)
-	k.SpecFactory, err = spec.NewFactory(specDir, volume.GetStorageDriver(), k)
+	logrus.Infof("Rescanning specs for %v and driver %s", specDir, storageDriver)
+	k.SpecFactory, err = spec.NewFactory(specDir, storageDriver, k)
 	if err != nil {
 		return err
 	}
@@ -909,6 +905,23 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 	ns *v1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
+	// Add security annotations if running with auth-enabled
+	configMapName := k.secretConfigMapName
+	if configMapName != "" {
+		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		if err != nil {
+			return nil, &scheduler.ErrFailedToGetConfigMap{
+				Name:  configMapName,
+				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+			}
+		}
+
+		err = k.addSecurityAnnotation(specObj, configMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add annotations to storage object: %v", err)
+		}
+
+	}
 
 	if obj, ok := specObj.(*storkapi.VolumeSnapshotRestore); ok {
 		obj.Namespace = ns.Name

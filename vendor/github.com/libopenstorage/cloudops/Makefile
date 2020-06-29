@@ -2,7 +2,7 @@ DOCKER_HUB_CLOUDOPS_TAG ?= latest
 CLOUDOPS_IMG=$(DOCKER_HUB_REPO)/cloudops:$(DOCKER_HUB_CLOUDOPS_TAG)
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/cloudops/vendor' | grep -v versioned | grep -v 'pkg/apis/cloudops')
+PKGS := ./...
 endif
 
 ifeq ($(BUILD_TYPE),debug)
@@ -17,19 +17,31 @@ BIN         :=$(BASE_DIR)/bin
 LDFLAGS += "-s -w -X github.com/libopenstorage/cloudops/pkg/version.Version=$(VERSION)"
 BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
+HAS_GOMODULES := $(shell go help mod why 2> /dev/null)
+
+ifdef HAS_GOMODULES
+export GO111MODULE=on
+export GOFLAGS = -mod=vendor
+else
+$(error cloudops can only be built with go 1.11+ which supports go modules)
+endif
+
 .DEFAULT_GOAL=all
 .PHONY: test clean vendor vendor-update container deploy
 
 all: build vet lint
 
 vendor-update:
-	dep ensure -update
+	go mod download
+
+vendor-tidy:
+	go mod tidy
 
 vendor:
-	dep ensure
+	go mod vendor
 
 lint:
-	go get -v golang.org/x/lint/golint
+	(mkdir -p tools && cd tools && GO111MODULE=off && go get -v golang.org/x/lint/golint)
 	for file in $$(find . -name '*.go' | grep -v vendor | \
                                        grep -v '\.pb\.go' | \
                                        grep -v '\.pb\.gw\.go' | \
@@ -47,13 +59,13 @@ vet:
 	go vet $(PKGS)
 
 $(GOPATH)/bin/staticcheck:
-	go get -u honnef.co/go/tools/cmd/staticcheck
+	(mkdir -p tools && cd tools && GO111MODULE=off && go get -u honnef.co/go/tools/cmd/staticcheck)
 
 staticcheck: $(GOPATH)/bin/staticcheck
 	$(GOPATH)/bin/staticcheck $(PKGS)
 
 errcheck:
-	go get -v github.com/kisielk/errcheck
+	(mkdir -p tools && cd tools && GO111MODULE=off && go get -v github.com/kisielk/errcheck)
 	errcheck -verbose -blank $(PKGS)
 	errcheck -verbose -blank -tags unittest $(PKGS)
 

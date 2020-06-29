@@ -239,7 +239,7 @@ func (d *portworx) RefreshDriverEndpoints() error {
 }
 
 func (d *portworx) updateNodes(pxNodes []api.StorageNode) error {
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetNodes() {
 		if err := d.updateNode(&n, pxNodes); err != nil {
 			return err
 		}

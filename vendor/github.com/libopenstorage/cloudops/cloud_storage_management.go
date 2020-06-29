@@ -160,7 +160,7 @@ type StoragePoolUpdateResponse struct {
 type StorageManager interface {
 	// GetStorageDistribution returns the storage distribution for the provided request
 	GetStorageDistribution(request *StorageDistributionRequest) (*StorageDistributionResponse, error)
-	// RecommendStoragePoolUpdate returns the recomended storage configuration on
+	// RecommendStoragePoolUpdate returns the recommended storage configuration on
 	// the instance based on the given request
 	RecommendStoragePoolUpdate(request *StoragePoolUpdateRequest) (*StoragePoolUpdateResponse, error)
 }
@@ -309,7 +309,7 @@ func (dm *StorageDecisionMatrix) SortByIOPS() *StorageDecisionMatrix {
 
 // SortByPriority sorts the rows of the decision matrix by Priority.
 func (dm *StorageDecisionMatrix) SortByPriority() {
-	sort.Slice(dm.Rows, func(l, r int) bool {
+	sort.SliceStable(dm.Rows, func(l, r int) bool {
 		return dm.Rows[l].Priority < dm.Rows[r].Priority
 	})
 }
