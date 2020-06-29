@@ -1,10 +1,10 @@
 apiVersion: stork.libopenstorage.org/v1alpha1
 kind: ApplicationBackup
 metadata:
-  name: mysql-backup
+  name: mysql-post-exec-missing-rule-backup
   namespace: mysql-1-pvc-mysql
 spec:
-  backupLocation: mysql-backup-location
+  backupLocation: mysql-1-pvc-post-exec-missing-rule-backup-backup-location
   # namespaces to be backed up
   namespaces:
   - mysql-1-pvc-mysql 
