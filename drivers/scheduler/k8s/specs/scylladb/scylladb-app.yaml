@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: scylla
+  name: scylla
+spec:
+  ports:
+    - port: 9042
+      name: cql
+    - port: 7000
+      name: intra-node
+    - port: 7001
+      name: tls-intra-node
+    - port: 7199
+      name: jmx
+  selector:
+    app: scylla
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: scylla
+  labels:
+    app: scylla
+spec:
+  serviceName: scylla
+  replicas: 3
+  selector:
+    matchLabels:
+      app: scylla
+  template:
+    metadata:
+      labels:
+        app: scylla
+    spec:
+      schedulerName: stork
+      containers:
+        - name: scylladb
+          image: scylladb/scylla:3.2.1-202001270054
+          imagePullPolicy: IfNotPresent
+          args: ["--seeds", "scylla-0.scylla._NAMESPACE_.svc.cluster.local"]
+          ports:
+            - containerPort: 7000
+              name: intra-node
+            - containerPort: 7001
+              name: tls-intra-node
+            - containerPort: 7199
+              name: jmx
+            - containerPort: 9042
+              name: cql
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "PID=$(pidof scylla) && kill $PID && while ps -p $PID > /dev/null; do sleep 1; done"]
+          env:
+            - name: DEBUG
+              value: "true"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+
+          readinessProbe:
+            exec:
+              command:
+                - /opt/ready-probe.sh
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: scylla-data
+              mountPath: /var/lib/scylla
+            - name: scylla-ready-probe
+              mountPath: /opt/ready-probe.sh
+              subPath: ready-probe.sh 
+            - name: scylla-config
+              mountPath: /etc/scylla/scylla.yaml
+              subPath: scylla.yaml        
+      volumes:
+        - name: scylla-ready-probe
+          configMap:
+            name: scylla-ready-probe
+            defaultMode: 511
+        - name: scylla-config
+          configMap:
+            name: scylla-config
+            defaultMode: 511
+            items:
+              - key: scylla.yaml
+                path: scylla.yaml
+  volumeClaimTemplates:
+    - metadata:
+        name: scylla-data
+        annotations:
+          volume.beta.kubernetes.io/storage-class: scylla-sc
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 60Gi
