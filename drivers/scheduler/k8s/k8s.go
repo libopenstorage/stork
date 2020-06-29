@@ -1057,6 +1057,8 @@ func (k *K8s) createCoreObject(spec interface{}, ns *v1.Namespace, app *spec.App
 			}
 		}
 
+		obj.Spec.Template.Spec.Containers = k.substituteNamespaceInContainers(obj.Spec.Template.Spec.Containers, ns.Name)
+
 		obj.Namespace = ns.Name
 		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
 		if options.Scheduler != "" {
@@ -1316,6 +1318,19 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 
 	return pods, nil
 
+}
+
+func (k *K8s) substituteNamespaceInContainers(containers []v1.Container, ns string) []v1.Container {
+	var updatedContainers []v1.Container
+	for _, container := range containers {
+		var temp []string
+		for _, arg := range container.Args {
+			temp = append(temp, namespaceRegex.ReplaceAllString(arg, ns))
+		}
+		container.Args = temp
+		updatedContainers = append(updatedContainers, container)
+	}
+	return updatedContainers
 }
 
 func (k *K8s) substituteNamespaceInVolumes(volumes []v1.Volume, ns string) []v1.Volume {

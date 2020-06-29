@@ -1,0 +1,36 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: scylla-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  fs: xfs
+  io_profile: "db_remote"
+  priority_io: "high"
+  disable_io_profile_protection: "true"
+  early_ack: "true"
+  queue_depth: "32"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scylla-ready-probe
+data:
+  ready-probe.sh: |
+    #!/bin/bash
+    nodetool status
+    if [[ $(nodetool status | grep $POD_IP) == *"UN"* ]]; then
+      if [[ $DEBUG ]]; then
+        echo "UP";
+      fi
+      exit 0;
+    else
+      if [[ $DEBUG ]]; then
+        echo "Not Up";
+      fi
+      exit 1;
+    fi  

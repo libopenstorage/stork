@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cassandra-stress-readinessprobe
+data:
+  ready-probe.sh: |
+    #!/bin/bash
+    if [ `cat /root/cassandra-stress.log | grep total | wc -l` -ge 5 ]; then 
+      exit 0; 
+    else 
+      exit 1; 
+    fi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cassandra-stress-livenessprobe
+data:
+  live-probe.sh: |
+    #!/bin/bash
+    count1=`cat /root/cassandra-stress.log | grep total | wc -l`
+    sleep 4
+    count2=`cat /root/cassandra-stress.log | grep total | wc -l`
+    if [ $count2 -gt $count1 ]; then 
+      echo "New count ${count2} is more than old count ${count1}. Stress tools is healthy"
+      exit 0; 
+    else 
+      echo "New count ${count2} is NOT more than old count ${count1}. stress tool is NOT healthy"
+      exit 1; 
+    fi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scylla-cassandra-stress
+  labels:
+    app: mysscylla-cassandra-stressql
+spec:
+  selector:
+    matchLabels:
+      app: scylla-cassandra-stress
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: scylla-cassandra-stress
+    spec:
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - scylla
+              topologyKey: "kubernetes.io/hostname"
+        containers:
+        - name: scylla
+          image: scylladb/scylla:4.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["cassandra-stress"]
+          args: ["write", "duration=60m", "-rate", "threads=50",  "-node", "scylla", "-port", "native=9042", "-log", "file=/root/cassandra-stress.log" ]
+          readinessProbe:
+            exec:
+              command:
+                - /opt/ready-probe.sh
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 1
+          livenessProbe:
+            exec:
+              command:
+                - /opt/live-probe.sh
+            initialDelaySeconds: 75
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 1
+          volumeMounts:
+          - name: scylla-ready-probe
+            mountPath: /opt/ready-probe.sh
+            subPath: ready-probe.sh
+          - name: scylla-live-probe
+            mountPath: /opt/live-probe.sh
+            subPath: live-probe.sh
+        volumes:
+          - name: scylla-ready-probe
+            configMap:
+              name: cassandra-stress-readinessprobe
+              defaultMode: 511
+          - name: scylla-live-probe
+            configMap:
+              name: cassandra-stress-livenessprobe
+              defaultMode: 511
