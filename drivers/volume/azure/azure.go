@@ -533,6 +533,7 @@ func (a *azure) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*stork
 		default:
 			vInfo.Status = storkapi.ApplicationRestoreStatusInProgress
 			vInfo.Reason = fmt.Sprintf("Volume restore in progress: %v", disk.ProvisioningState)
+			vInfo.Size = uint64(*disk.DiskSizeBytes)
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
