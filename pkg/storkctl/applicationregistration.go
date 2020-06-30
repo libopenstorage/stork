@@ -21,10 +21,10 @@ func newGetapplicationRegistrationCommand(cmdFactory Factory, ioStreams genericc
 		Short:   "Get applicationRegistration resources",
 		Run: func(c *cobra.Command, args []string) {
 			var appRegList *storkv1.ApplicationRegistrationList
-			var err error
 
 			if len(args) > 0 {
 				for _, name := range args {
+					appRegList = new(storkv1.ApplicationRegistrationList)
 					reg, err := storkops.Instance().GetApplicationRegistration(name)
 					if err != nil {
 						util.CheckErr(err)
@@ -41,20 +41,14 @@ func newGetapplicationRegistrationCommand(cmdFactory Factory, ioStreams genericc
 				}
 				tmpAppReg.Items = append(tmpAppReg.Items, appRegs.Items...)
 				appRegList = &tmpAppReg
-
-			}
-			applicationRegistrations, err := storkops.Instance().ListApplicationRegistrations()
-			if err != nil {
-				util.CheckErr(err)
-				return
 			}
 
-			if len(applicationRegistrations.Items) == 0 {
+			if len(appRegList.Items) == 0 {
 				handleEmptyList(ioStreams.Out)
 				return
 			}
 
-			if err := printObjects(c, applicationRegistrations, cmdFactory, applicationRegistrationColumns, applicationRegistrationPrinter, ioStreams.Out); err != nil {
+			if err := printObjects(c, appRegList, cmdFactory, applicationRegistrationColumns, applicationRegistrationPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
 			}
