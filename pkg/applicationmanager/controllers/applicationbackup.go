@@ -42,7 +42,7 @@ const (
 	validateCRDTimeout  time.Duration = 1 * time.Minute
 
 	resourceObjectName = "resources.json"
-	resourceCRDName    = "crds.json"
+	crdObjectName      = "crds.json"
 	metadataObjectName = "metadata.json"
 
 	backupCancelBackoffInitialDelay = 5 * time.Second
@@ -733,7 +733,7 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 	if err != nil {
 		return err
 	}
-	if err := a.uploadObject(backup, resourceCRDName, jsonBytes); err != nil {
+	if err := a.uploadObject(backup, crdObjectName, jsonBytes); err != nil {
 		return err
 	}
 	return nil
