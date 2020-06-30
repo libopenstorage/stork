@@ -144,8 +144,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				updateIBPObjects("IBPCA", ns, true, ioStreams)
 				updateIBPObjects("IBPOrderer", ns, true, ioStreams)
 				updateIBPObjects("IBPConsole", ns, true, ioStreams)
-				updateCouchbaseObjects("couchbase.com/v1", "CouchbaseCluster", ns, true, ioStreams)
-				updateCouchbaseObjects("couchbase.com/v2", "CouchbaseCluster", ns, true, ioStreams)
+				updateCRDObjects(ns, true, ioStreams)
 			}
 
 		},
@@ -186,8 +185,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				updateIBPObjects("IBPCA", ns, false, ioStreams)
 				updateIBPObjects("IBPOrderer", ns, false, ioStreams)
 				updateIBPObjects("IBPConsole", ns, false, ioStreams)
-				updateCouchbaseObjects("couchbase.com/v1", "CouchbaseCluster", ns, false, ioStreams)
-				updateCouchbaseObjects("couchbase.com/v2", "CouchbaseCluster", ns, false, ioStreams)
+				updateCRDObjects(ns, false, ioStreams)
 			}
 
 		},
@@ -257,51 +255,79 @@ func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericc
 	}
 }
 
-func updateCouchbaseObjects(version string, kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	objects, err := dynamic.Instance().ListObjects(
-		&metav1.ListOptions{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       kind,
-				APIVersion: version},
-		},
-		namespace)
+func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOStreams) {
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			util.CheckErr(err)
-		}
+		util.CheckErr(err)
 		return
 	}
-	for _, o := range objects.Items {
-		err := unstructured.SetNestedField(o.Object, !activate, "spec", "paused")
-		if err != nil {
-			printMsg(fmt.Sprintf("Error updating \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
-			continue
-		}
-		_, err = dynamic.Instance().UpdateObject(&o)
-		if err != nil {
-			printMsg(fmt.Sprintf("Error updating \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
-			continue
-		}
-		printMsg(fmt.Sprintf("Updated \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
-		if !activate {
-			pods, found, err := unstructured.NestedStringSlice(o.Object, "status", "members", "ready")
+	for _, res := range crdList.Items {
+		for _, crd := range res.Resources {
+			objects, err := dynamic.Instance().ListObjects(
+				&metav1.ListOptions{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       crd.Kind,
+						APIVersion: crd.Version},
+				},
+				ns)
 			if err != nil {
-				printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-				continue
+				if errors.IsNotFound(err) {
+					continue
+				}
+				util.CheckErr(err)
+				return
 			}
-			if !found {
-				continue
+			for _, o := range objects.Items {
+				specPath := strings.Split(crd.SuspendOptions.Path, ".")
+				if len(specPath) > 1 {
+					var disableVersion interface{}
+					if crd.SuspendOptions.Type == "bool" {
+						disableVersion = !activate
+					} else if crd.SuspendOptions.Type == "int" {
+						replicas, _ := getUpdatedReplicaCount(o.GetAnnotations(), activate, ioStreams)
+						disableVersion = replicas
+					} else {
+						util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
+						return
+					}
+					err := unstructured.SetNestedField(o.Object, disableVersion, specPath[0], specPath[1])
+					if err != nil {
+						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+						continue
+					}
+					_, err = dynamic.Instance().UpdateObject(&o)
+					if err != nil {
+						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+						continue
+					}
+					printMsg(fmt.Sprintf("Updated \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+					if !activate {
+						if crd.PodsPath == "" {
+							continue
+						}
+						podpath := strings.Split(crd.PodsPath, ".")
+						pods, found, err := unstructured.NestedStringSlice(o.Object, podpath...)
+						if err != nil {
+							printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+							continue
+						}
+						if !found {
+							continue
+						}
+						for _, pod := range pods {
+							err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
+							printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+							continue
+						}
+					}
+				}
+
 			}
-			for _, pod := range pods {
-				err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
-				printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-				continue
-			}
+
 		}
-
 	}
-
 }
+
 func updateIBPObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	objects, err := dynamic.Instance().ListObjects(
 		&metav1.ListOptions{

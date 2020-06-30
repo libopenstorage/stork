@@ -25,28 +25,29 @@ func getSupportedCRD() map[string][]string {
 	// {kind, crdName, suspendPath,suspendType(bool/int)}
 	defCRD := make(map[string][]string)
 	// IBM CRD's
-	defCRD[IBMApp] = []string{"IBPCA,ibpcas.ibp.com",
-		"IBPConsole,ibpconsoles.ibp.com",
-		"IBPOrderer,ibporderers.ibp.com",
-		"IBPPeer,ibppeers.ibp.com",
+	defCRD[IBMApp] = []string{"IBPCA,ibpcas.ibp.com,ibp.com/v1alpha1",
+		"IBPConsole,ibpconsoles.ibp.com,ibp.com/v1alpha1",
+		"IBPOrderer,ibporderers.ibp.com,ibp.com/v1alpha1",
+		"IBPPeer,ibppeers.ibp.com,ibp.com/v1alpha1",
 	}
 	//CouchBase CRD's
-	defCRD[CouchBaseApp] = []string{"CouchbaseBucket,couchbasebuckets.couchbase.com",
-		"CouchbaseCluster,couchbaseclusters.couchbase.com,spec.suspend,true",
-		"CouchbaseEphemeralBucket,couchbaseephemeralbuckets.couchbase.com",
-		"CouchbaseMemcachedBucket,couchbasememcachedbuckets.couchbase.com",
-		"CouchbaseReplication,couchbasereplications.couchbase.com",
-		"CouchbaseUser,couchbaseusers.couchbase.com",
-		"CouchbaseGroup,couchbasegroups.couchbase.com",
-		"CouchbaseRoleBinding,couchbaserolebindings.couchbase.com",
-		"CouchbaseBackup,couchbasebackups.couchbase.com",
-		"CouchbaseBackupRestore,couchbasebackuprestores.couchbase.com",
+	defCRD[CouchBaseApp] = []string{"CouchbaseBucket,couchbasebuckets.couchbase.com,couchbase.com/v2",
+		"CouchbaseCluster,couchbaseclusters.couchbase.com,couchbase.com/v1,spec.suspend,true",
+		"CouchbaseCluster,couchbaseclusters.couchbase.com,couchbase.com/v2,spec.suspend,true",
+		"CouchbaseEphemeralBucket,couchbaseephemeralbuckets.couchbase.com,couchbase.com/v2",
+		"CouchbaseMemcachedBucket,couchbasememcachedbuckets.couchbase.com,couchbase.com/v2",
+		"CouchbaseReplication,couchbasereplications.couchbase.com,couchbase.com/v2",
+		"CouchbaseUser,couchbaseusers.couchbase.com,couchbase.com/v2",
+		"CouchbaseGroup,couchbasegroups.couchbase.com,couchbase.com/v2",
+		"CouchbaseRoleBinding,couchbaserolebindings.couchbase.com,couchbase.com/v2",
+		"CouchbaseBackup,couchbasebackups.couchbase.com,couchbase.com/v2",
+		"CouchbaseBackupRestore,couchbasebackuprestores.couchbase.com,couchbase.com/v2",
 	}
 	// datastax/Cassandra CRD's
-	defCRD[CassandraApp] = []string{"CassandraDatacenter,cassandradatacenters.cassandra.datastax.com,spec.stopped,bool"}
+	defCRD[CassandraApp] = []string{"CassandraDatacenter,cassandradatacenters.cassandra.datastax.com,cassandra.datastax.com/v1beta1,spec.stopped,bool"}
 	// redis cluster CRD's
-	defCRD[RedisClusterApp] = []string{"RedisEnterpriseCluster,redisenterpriseclusters.app.redislabs.com",
-		"RedisEnterpriseDatabase,redisenterprisedatabases.app.redislabs.com"}
+	defCRD[RedisClusterApp] = []string{"RedisEnterpriseCluster,redisenterpriseclusters.app.redislabs.com,app.redislabs.com/v1",
+		"RedisEnterpriseDatabase,redisenterprisedatabases.app.redislabs.com,app.redislabs.com/v1"}
 
 	return defCRD
 }
@@ -57,14 +58,15 @@ func RegisterDefaultCRDs() error {
 		var resources []stork_api.ApplicationResource
 		for _, reg := range res {
 			cr := strings.Split(reg, ",")
-			if len(cr) < 2 {
+			if len(cr) < 3 {
 				continue
 			}
 			var appReg stork_api.ApplicationResource
 			appReg.Kind = cr[0]
 			appReg.Group = cr[1]
-			if len(cr) == 4 {
-				appReg.SuspendOptions = stork_api.SuspendOptions{Path: cr[2], Type: cr[3]}
+			appReg.Version = cr[2]
+			if len(cr) == 5 {
+				appReg.SuspendOptions = stork_api.SuspendOptions{Path: cr[3], Type: cr[4]}
 			}
 			resources = append(resources, appReg)
 		}

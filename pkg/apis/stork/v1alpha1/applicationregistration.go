@@ -31,6 +31,8 @@ type ApplicationResource struct {
 	KeepStatus bool `json:"keepStatus"`
 	// SuspendOptions to disable CRD upon migration/restore/clone
 	SuspendOptions SuspendOptions `json:"suspendOptions"`
+	// PodsPath to help activate/deactivate crd upon migration
+	PodsPath string `json:"podsPath`
 }
 
 // SuspendOptions to disable CRD upon migration/restore/clone
