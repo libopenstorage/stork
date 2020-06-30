@@ -746,8 +746,10 @@ func (a *ApplicationBackupController) backupResources(
 			}
 
 			resourceInfo := &stork_api.ApplicationBackupResourceInfo{
-				Name:      metadata.GetName(),
-				Namespace: metadata.GetNamespace(),
+				ObjectInfo: stork_api.ObjectInfo{
+					Name:      metadata.GetName(),
+					Namespace: metadata.GetNamespace(),
+				},
 			}
 			gvk := obj.GetObjectKind().GroupVersionKind()
 			resourceInfo.Kind = gvk.Kind
@@ -811,7 +813,7 @@ func (a *ApplicationBackupController) backupResources(
 	backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 	backup.Status.FinishTimestamp = metav1.Now()
 	backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
-	backup.Status.Reason = "Volumes and resources were backed up successfuly"
+	backup.Status.Reason = "Volumes and resources were backed up successfully"
 
 	// Upload the metadata for the backup to the backup location
 	if err = a.uploadMetadata(backup); err != nil {

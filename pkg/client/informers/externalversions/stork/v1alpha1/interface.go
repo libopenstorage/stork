@@ -30,6 +30,8 @@ type Interface interface {
 	ApplicationBackupSchedules() ApplicationBackupScheduleInformer
 	// ApplicationClones returns a ApplicationCloneInformer.
 	ApplicationClones() ApplicationCloneInformer
+	// ApplicationRegistrations returns a ApplicationRegistrationInformer.
+	ApplicationRegistrations() ApplicationRegistrationInformer
 	// ApplicationRestores returns a ApplicationRestoreInformer.
 	ApplicationRestores() ApplicationRestoreInformer
 	// BackupLocations returns a BackupLocationInformer.
@@ -82,6 +84,11 @@ func (v *version) ApplicationBackupSchedules() ApplicationBackupScheduleInformer
 // ApplicationClones returns a ApplicationCloneInformer.
 func (v *version) ApplicationClones() ApplicationCloneInformer {
 	return &applicationCloneInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ApplicationRegistrations returns a ApplicationRegistrationInformer.
+func (v *version) ApplicationRegistrations() ApplicationRegistrationInformer {
+	return &applicationRegistrationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // ApplicationRestores returns a ApplicationRestoreInformer.

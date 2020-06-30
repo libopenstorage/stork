@@ -213,10 +213,6 @@ func (p *portworx) String() string {
 }
 
 func (p *portworx) Init(_ interface{}) error {
-	if err := p.initPortworxClients(); err != nil {
-		return err
-	}
-
 	p.stopChannel = make(chan struct{})
 	return p.startNodeCache()
 }

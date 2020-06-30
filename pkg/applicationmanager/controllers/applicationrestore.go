@@ -251,6 +251,15 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			return fmt.Errorf("error getting backup spec for restore: %v", err)
 		}
 		backupVolumeInfoMappings := make(map[string][]*storkapi.ApplicationBackupVolumeInfo)
+		objectMap := a.createObjectsMap(restore.Spec.IncludeResources)
+		info := storkapi.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "PersistentVolumeClaim",
+			},
+		}
+
 		for _, namespace := range backup.Spec.Namespaces {
 			if _, ok := restore.Spec.NamespaceMapping[namespace]; !ok {
 				continue
@@ -259,6 +268,16 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				if volumeBackup.Namespace != namespace {
 					continue
 				}
+				// If a list of resources was specified during restore check if
+				// this PVC was included
+				info.Name = volumeBackup.PersistentVolumeClaim
+				info.Namespace = volumeBackup.Namespace
+				if len(objectMap) != 0 {
+					if val, present := objectMap[info]; !present || !val {
+						continue
+					}
+				}
+
 				if volumeBackup.DriverName == "" {
 					volumeBackup.DriverName = volume.GetDefaultDriverName()
 				}
@@ -485,12 +504,14 @@ func (a *ApplicationRestoreController) updateResourceStatus(
 	}
 	if updatedResource == nil {
 		updatedResource = &storkapi.ApplicationRestoreResourceInfo{
-			Name:      metadata.GetName(),
-			Namespace: metadata.GetNamespace(),
-			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   gkv.Group,
-				Version: gkv.Version,
-				Kind:    gkv.Kind,
+			ObjectInfo: storkapi.ObjectInfo{
+				Name:      metadata.GetName(),
+				Namespace: metadata.GetNamespace(),
+				GroupVersionKind: metav1.GroupVersionKind{
+					Group:   gkv.Group,
+					Version: gkv.Version,
+					Kind:    gkv.Kind,
+				},
 			},
 		}
 		restore.Status.Resources = append(restore.Status.Resources, updatedResource)
@@ -528,6 +549,16 @@ func (a *ApplicationRestoreController) getPVNameMappings(
 	return pvNameMappings, nil
 }
 
+func (a *ApplicationRestoreController) createObjectsMap(
+	includeObjects []storkapi.ObjectInfo,
+) map[storkapi.ObjectInfo]bool {
+	objectsMap := make(map[storkapi.ObjectInfo]bool)
+	for i := 0; i < len(includeObjects); i++ {
+		objectsMap[includeObjects[i]] = true
+	}
+	return objectsMap
+}
+
 func (a *ApplicationRestoreController) applyResources(
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
@@ -537,10 +568,12 @@ func (a *ApplicationRestoreController) applyResources(
 		return err
 	}
 
+	objectMap := a.createObjectsMap(restore.Spec.IncludeResources)
 	tempObjects := make([]runtime.Unstructured, 0)
 	for _, o := range objects {
 		skip, err := a.resourceCollector.PrepareResourceForApply(
 			o,
+			objectMap,
 			restore.Spec.NamespaceMapping,
 			pvNameMappings,
 			restore.Spec.IncludeOptionalResourceTypes)
@@ -642,11 +675,11 @@ func (a *ApplicationRestoreController) restoreResources(
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
 	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
-	restore.Status.Reason = "Volumes and resources were restored up successfuly"
+	restore.Status.Reason = "Volumes and resources were restored up successfully"
 	for _, resource := range restore.Status.Resources {
 		if resource.Status != storkapi.ApplicationRestoreStatusSuccessful {
 			restore.Status.Status = storkapi.ApplicationRestoreStatusPartialSuccess
-			restore.Status.Reason = "Volumes were restored successfuly. Some existing resources were not replaced"
+			restore.Status.Reason = "Volumes were restored successfully. Some existing resources were not replaced"
 			break
 		}
 	}

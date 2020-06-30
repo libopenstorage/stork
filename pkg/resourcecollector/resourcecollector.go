@@ -9,6 +9,7 @@ import (
 	"github.com/go-openapi/inflect"
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/libopenstorage/stork/drivers/volume"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/sirupsen/logrus"
@@ -418,6 +419,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 // and ApplyResource
 func (r *ResourceCollector) PrepareResourceForApply(
 	object runtime.Unstructured,
+	includeObjects map[stork_api.ObjectInfo]bool,
 	namespaceMappings map[string]string,
 	pvNameMappings map[string]string,
 	optionalResourceTypes []string,
@@ -430,6 +432,23 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	metadata, err := meta.Accessor(object)
 	if err != nil {
 		return false, err
+	}
+
+	// Even if PV isn't specified need to check if the corresponding PV is, so
+	// skip the check here
+	if len(includeObjects) != 0 && objectType.GetKind() != "PersistentVolume" {
+		info := stork_api.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   object.GetObjectKind().GroupVersionKind().Group,
+				Version: object.GetObjectKind().GroupVersionKind().Version,
+				Kind:    object.GetObjectKind().GroupVersionKind().Kind,
+			},
+			Name:      metadata.GetName(),
+			Namespace: metadata.GetNamespace(),
+		}
+		if val, present := includeObjects[info]; !present || !val {
+			return true, nil
+		}
 	}
 	if metadata.GetNamespace() != "" {
 		var val string
