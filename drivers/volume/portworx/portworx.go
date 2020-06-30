@@ -45,6 +45,8 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -2803,6 +2805,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		}
 		taskID := p.getBackupRestoreTaskID(backup.UID, vInfo.Namespace, vInfo.PersistentVolumeClaim)
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudBackupOp, taskID)
+		vInfo.BackupID = csStatus.cloudSnapID
 		if isCloudsnapStatusActive(csStatus.status) {
 			vInfo.Status = storkapi.ApplicationBackupStatusInProgress
 			vInfo.Reason = fmt.Sprintf("Volume backup in progress. BytesDone: %v BytesTotal: %v ETA: %v seconds",
@@ -2815,19 +2818,24 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		} else {
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
-
 			req := &api.SdkCloudBackupSizeRequest{
 				BackupId:     csStatus.cloudSnapID,
 				CredentialId: csStatus.credentialID,
 			}
 			resp, err := cloudBackupClient.Size(ctx, req)
+			st, _ := status.FromError(err)
 			if err != nil {
+				if st.Code() == codes.Unimplemented {
+					// if using old porx version, return 0 size
+					vInfo.Size = 0
+					volumeInfos = append(volumeInfos, vInfo)
+					return volumeInfos, nil
+				}
 				logrus.Errorf("Failed to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
 				return nil, err
 			}
 			vInfo.Size = resp.GetSize()
 		}
-		vInfo.BackupID = csStatus.cloudSnapID
 		volumeInfos = append(volumeInfos, vInfo)
 	}
 
@@ -3031,6 +3039,7 @@ func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*st
 			vInfo.Status = storkapi.ApplicationRestoreStatusFailed
 			vInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
 		} else {
+			vInfo.Size = csStatus.bytesDone
 			vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 			vInfo.Reason = "Restore successful for volume"
 		}
