@@ -5,6 +5,7 @@ import (
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/stork"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -44,15 +45,16 @@ func getSupportedCRD() map[string][]string {
 	// datastax/Cassandra CRD's
 	defCRD[CassandraApp] = []string{"CassandraDatacenter,cassandradatacenters.cassandra.datastax.com,spec.stopped,bool"}
 	// redis cluster CRD's
-	defCRD[RedisClusterApp] = []string{"RedisEnterpriseCluster,redisenterpriseclusters.app.redislabs.com"}
+	defCRD[RedisClusterApp] = []string{"RedisEnterpriseCluster,redisenterpriseclusters.app.redislabs.com",
+		"RedisEnterpriseDatabase,redisenterprisedatabases.app.redislabs.com"}
 
 	return defCRD
 }
 
 // RegisterDefaultCRDs  registered already supported CRDs
 func RegisterDefaultCRDs() error {
-	var resources []stork_api.ApplicationResource
 	for name, res := range getSupportedCRD() {
+		var resources []stork_api.ApplicationResource
 		for _, reg := range res {
 			cr := strings.Split(reg, ",")
 			if len(cr) < 2 {
@@ -72,6 +74,7 @@ func RegisterDefaultCRDs() error {
 		}
 		appReg.Name = name
 		if _, err := stork.Instance().CreateApplicationRegistration(appReg); err != nil && !errors.IsAlreadyExists(err) {
+			logrus.Errorf("unable to register app %v, err: %v", appReg, err)
 			return err
 		}
 	}

@@ -723,6 +723,9 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 		for _, v := range crd.Resources {
 			res, err := apiextensions.Instance().GetCRD(v.Group, metav1.GetOptions{ResourceVersion: v.Version})
 			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					continue
+				}
 				log.ApplicationBackupLog(backup).Errorf("Unable to get customresourcedefination for %s, err: %v", v.Kind, err)
 				return err
 			}
