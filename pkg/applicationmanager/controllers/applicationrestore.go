@@ -489,7 +489,7 @@ func (a *ApplicationRestoreController) downloadCRD(
 	namespace string,
 ) error {
 	var crds []*apiextensionsv1beta1.CustomResourceDefinition
-	crdData, err := a.downloadObject(backup, backupLocation, namespace, resourceCRDName)
+	crdData, err := a.downloadObject(backup, backupLocation, namespace, crdObjectName)
 	if err != nil {
 		return err
 	}
