@@ -1097,6 +1097,9 @@ func (m *MigrationController) applyResources(
 		for _, v := range crd.Resources {
 			res, err := apiextensions.Instance().GetCRD(v.Group, metav1.GetOptions{ResourceVersion: v.Version})
 			if err != nil {
+				if errors.IsNotFound(err) {
+					continue
+				}
 				log.MigrationLog(migration).Errorf("unable to get customresourcedefination for %s, err: %v", v.Kind, err)
 				return err
 			}
