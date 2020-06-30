@@ -58,6 +58,7 @@ type ApplicationRestoreStatus struct {
 	Volumes             []*ApplicationRestoreVolumeInfo   `json:"volumes"`
 	FinishTimestamp     metav1.Time                       `json:"finishTimestamp"`
 	LastUpdateTimestamp metav1.Time                       `json:"lastUpdateTimestamp"`
+	Size                uint64                            `json:"size"`
 }
 
 // ApplicationRestoreResourceInfo is the info for the restore of a resource
@@ -79,6 +80,7 @@ type ApplicationRestoreVolumeInfo struct {
 	Zones                 []string                     `json:"zones"`
 	Status                ApplicationRestoreStatusType `json:"status"`
 	Reason                string                       `json:"reason"`
+	Size                  uint64                       `json:"size"`
 }
 
 // ApplicationRestoreStatusType is the status of the application restore
