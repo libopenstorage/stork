@@ -33,6 +33,7 @@ func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *c
 		newGetApplicationRestoreCommand(cmdFactory, ioStreams),
 		newGetApplicationCloneCommand(cmdFactory, ioStreams),
 		newGetBackupLocationCommand(cmdFactory, ioStreams),
+		newGetapplicationRegistrationCommand(cmdFactory, ioStreams),
 	)
 
 	return getCommands
