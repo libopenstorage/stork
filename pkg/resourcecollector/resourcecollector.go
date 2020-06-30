@@ -427,21 +427,6 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 							delete(metadataMap, key)
 						}
 					}
-					fields := strings.Split(kind.SuspendOptions.Path, ".")
-					if len(fields) > 1 {
-						var disableVersion interface{}
-						disableVersion = 0
-						if kind.SuspendOptions.Type == "bool" {
-							disableVersion = true
-						} else if kind.SuspendOptions.Type == "int" {
-							disableVersion = 0
-						} else {
-							return fmt.Errorf("invalid type %v to suspend cr", kind.SuspendOptions.Type)
-						}
-						if err := unstructured.SetNestedField(content, disableVersion, fields...); err != nil {
-							return err
-						}
-					}
 				}
 			}
 		}
