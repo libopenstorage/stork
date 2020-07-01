@@ -219,3 +219,7 @@ spec:
             - "--autoack"
             - "--disable-connection-recovery"
             - "--shutdown-timeout=-1"
+          resources:
+            limits:
+              cpu: "1"
+              memory: "500Mi"
