@@ -85,9 +85,10 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	return nil
 }
 
-func resourceToBeCollected(resource metav1.APIResource, crdKinds, optionalResourceTypes []string) bool {
-	for _, kind := range crdKinds {
-		if kind == resource.Kind {
+func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
+	for _, res := range crdKinds {
+		if res.Kind == resource.Kind &&
+			res.Group == grp.Group && res.Version == grp.Version {
 			return true
 		}
 	}
@@ -134,15 +135,14 @@ func (r *ResourceCollector) GetResources(
 
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
-
-	var crdResources []string
+	var crdResources []metav1.GroupVersionKind
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
 		return nil, err
 	}
 	for _, crd := range crdList.Items {
 		for _, kind := range crd.Resources {
-			crdResources = append(crdResources, kind.Kind)
+			crdResources = append(crdResources, kind.GroupVersionKind)
 		}
 	}
 
@@ -158,7 +158,7 @@ func (r *ResourceCollector) GetResources(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, crdResources, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
 				continue
 			}
 			for _, ns := range namespaces {
@@ -408,10 +408,11 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		if err != nil {
 			return err
 		}
-		resourceKind := o.GetObjectKind().GroupVersionKind().Kind
+		resourceKind := o.GetObjectKind().GroupVersionKind()
 		for _, crd := range crdList.Items {
 			for _, kind := range crd.Resources {
-				if kind.Kind == resourceKind {
+				if kind.Kind == resourceKind.Kind && kind.Group == resourceKind.Group &&
+					kind.Version == resourceKind.Version {
 					// remove status from crd
 					if !kind.KeepStatus {
 						delete(content, "status")

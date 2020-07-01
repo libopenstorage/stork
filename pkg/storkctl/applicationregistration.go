@@ -10,7 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/printers"
 )
 
-var applicationRegistrationColumns = []string{"NAME", "KIND", "CRD_NAME", "SUSPEND_OPTIONS", "KEEP_STATUS"}
+var applicationRegistrationColumns = []string{"NAME", "KIND", "CRD-NAME", "VERSION", "SUSPEND-OPTIONS", "KEEP-STATUS"}
 var applicationRegistrationSubcommand = "applicationregistrations"
 var applicationRegistrationAliases = []string{"applicationregistration", "appreg", "appregs"}
 
@@ -78,6 +78,7 @@ func applicationRegistrationPrinter(
 				[]interface{}{app.Name,
 					res.Kind,
 					res.Group,
+					res.Version,
 					suspendOptions,
 					res.KeepStatus},
 			)
