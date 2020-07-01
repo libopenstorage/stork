@@ -36,6 +36,7 @@ var (
 // Ops is an interface to perform kubernetes related operations on the core resources.
 type Ops interface {
 	ConfigMapOps
+	EndpointsOps
 	EventOps
 	RecorderOps
 	NamespaceOps
@@ -45,6 +46,7 @@ type Ops interface {
 	SecretOps
 	ServiceOps
 	ServiceAccountOps
+	LimitRangeOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)

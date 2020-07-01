@@ -243,6 +243,10 @@ func (c *Client) GetStatefulSetsUsingStorageClass(scName string) ([]appsv1.State
 
 // GetPVCsForStatefulSet returns all the PVCs for given stateful set
 func (c *Client) GetPVCsForStatefulSet(ss *appsv1.StatefulSet) (*corev1.PersistentVolumeClaimList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
 	listOptions, err := c.getListOptionsForStatefulSet(ss)
 	if err != nil {
 		return nil, err
