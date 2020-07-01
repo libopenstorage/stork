@@ -413,6 +413,12 @@ func (p *portworx) startNodeCache() error {
 }
 
 func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		return nil, err
