@@ -151,6 +151,9 @@ func (c *Client) GetPodsByNodeAndLabels(nodeName, namespace string, labels map[s
 
 // GetPodsByOwner returns pods for the given owner and namespace
 func (c *Client) GetPodsByOwner(ownerUID types.UID, namespace string) ([]corev1.Pod, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
 	return common.GetPodsByOwner(c.kubernetes.CoreV1(), ownerUID, namespace)
 }
 

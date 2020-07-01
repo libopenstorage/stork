@@ -11,6 +11,8 @@ type RuleOps interface {
 	GetRule(name, namespace string) (*storkv1alpha1.Rule, error)
 	// CreateRule creates the given stork rule
 	CreateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, error)
+	// UpdateRule updates the given stork rule
+	UpdateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, error)
 	// DeleteRule deletes the given stork rule
 	DeleteRule(name, namespace string) error
 }
@@ -29,6 +31,14 @@ func (c *Client) CreateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, erro
 		return nil, err
 	}
 	return c.stork.StorkV1alpha1().Rules(rule.GetNamespace()).Create(rule)
+}
+
+// UpdateRule updates the given stork rule
+func (c *Client) UpdateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.stork.StorkV1alpha1().Rules(rule.GetNamespace()).Update(rule)
 }
 
 // DeleteRule deletes the given stork rule
