@@ -729,7 +729,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 			return fmt.Errorf("scheduler in Admin Cluster pair is not ready. Status: %v", schedulerStatus)
 		}
 	}
-
+	resKinds := make(map[string]string)
 	allObjects, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
@@ -765,7 +765,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 			resourceInfo.Group = "core"
 		}
 		resourceInfo.Version = gvk.Version
-
+		resKinds[gvk.Kind] = gvk.Version
 		resourceInfos = append(resourceInfos, resourceInfo)
 	}
 	migration.Status.Resources = resourceInfos
@@ -783,7 +783,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
-	err = m.applyResources(migration, allObjects)
+	err = m.applyResources(migration, allObjects, resKinds)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -830,8 +830,8 @@ func (m *MigrationController) prepareResources(
 		if err != nil {
 			return err
 		}
-
-		switch o.GetObjectKind().GroupVersionKind().Kind {
+		resource := o.GetObjectKind().GroupVersionKind()
+		switch resource.Kind {
 		case "PersistentVolume":
 			err := m.preparePVResource(migration, o)
 			if err != nil {
@@ -842,13 +842,26 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 			}
-		case "CouchbaseCluster":
-			err := m.prepareCouchbaseClusterResource(migration, o)
-			if err != nil {
-				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
-			}
-
 		}
+
+		// prepare CR resources
+		crdList, err := storkops.Instance().ListApplicationRegistrations()
+		if err != nil {
+			return err
+		}
+		for _, crd := range crdList.Items {
+			for _, v := range crd.Resources {
+				if v.Kind == resource.Kind &&
+					v.Version == resource.Version &&
+					v.Group == resource.Group {
+					if err := m.prepareCRDClusterResource(migration, o, v.SuspendOptions); err != nil {
+						return fmt.Errorf("error preparing %v resource %v: %v",
+							o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+					}
+				}
+			}
+		}
+
 	}
 	return nil
 }
@@ -1018,15 +1031,31 @@ func (m *MigrationController) prepareApplicationResource(
 	return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 }
 
-func (m *MigrationController) prepareCouchbaseClusterResource(
+func (m *MigrationController) prepareCRDClusterResource(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
+	suspend stork_api.SuspendOptions,
 ) error {
 	if *migration.Spec.StartApplications {
 		return nil
 	}
 	content := object.UnstructuredContent()
-	return unstructured.SetNestedField(content, true, "spec", "paused")
+	fields := strings.Split(suspend.Path, ".")
+	if len(fields) > 1 {
+		var disableVersion interface{}
+		if suspend.Type == "bool" {
+			disableVersion = true
+		} else if suspend.Type == "int" {
+			disableVersion = 0
+		} else {
+			return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
+		}
+		if err := unstructured.SetNestedField(content, disableVersion, fields...); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (m *MigrationController) getPrunedAnnotations(annotations map[string]string) map[string]string {
@@ -1042,6 +1071,7 @@ func (m *MigrationController) getPrunedAnnotations(annotations map[string]string
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
+	resKinds map[string]string,
 ) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
@@ -1059,6 +1089,44 @@ func (m *MigrationController) applyResources(
 	adminClient, err := kubernetes.NewForConfig(remoteAdminConfig)
 	if err != nil {
 		return err
+	}
+	// create CRD on destination cluster
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	if err != nil {
+		logrus.Warnf("unable to list crd registrations: %v", err)
+		return err
+	}
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			// only create relevant crds on dest cluster
+			if _, ok := resKinds[v.Kind]; !ok {
+				continue
+			}
+			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
+			if err != nil {
+				if errors.IsNotFound(err) {
+					continue
+				}
+				log.MigrationLog(migration).Errorf("unable to get customresourcedefination for %s, err: %v", v.Kind, err)
+				return err
+			}
+			clnt, err := apiextensions.NewForConfig(remoteAdminConfig)
+			if err != nil {
+				return err
+			}
+			res.ResourceVersion = ""
+			if err := clnt.RegisterCRD(res); err != nil && !errors.IsAlreadyExists(err) {
+				log.MigrationLog(migration).Errorf("error registering CRD %s, %v", res.GetName(), err)
+				return err
+			}
+			if err := clnt.ValidateCRD(apiextensions.CustomResource{
+				Plural: res.Spec.Names.Plural,
+				Group:  res.Spec.Group}, validateCRDTimeout, validateCRDInterval); err != nil {
+				log.MigrationLog(migration).Errorf("error validating CRD %s, %v", res.GetName(), err)
+				return err
+			}
+		}
 	}
 
 	// First make sure all the namespaces are created on the
@@ -1137,6 +1205,7 @@ func (m *MigrationController) applyResources(
 		migrAnnot[StorkMigrationName] = migration.GetName()
 		migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 		unstructured.SetAnnotations(migrAnnot)
+		unstructured.SetResourceVersion("")
 		retries := 0
 		for {
 			_, err = dynamicClient.Create(unstructured, metav1.CreateOptions{})

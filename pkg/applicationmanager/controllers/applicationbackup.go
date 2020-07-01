@@ -7,8 +7,10 @@ import (
 	"math"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -42,6 +44,7 @@ const (
 	validateCRDTimeout  time.Duration = 1 * time.Minute
 
 	resourceObjectName = "resources.json"
+	crdObjectName      = "crds.json"
 	metadataObjectName = "metadata.json"
 
 	backupCancelBackoffInitialDelay = 5 * time.Second
@@ -700,12 +703,55 @@ func (a *ApplicationBackupController) uploadResources(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
 ) error {
+	resKinds := make(map[string]string)
+	for _, obj := range objects {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		resKinds[gvk.Kind] = gvk.Version
+	}
+	// upload CRD to backuplocation
+	if err := a.uploadCRDResources(backup, resKinds); err != nil {
+		return err
+	}
 	jsonBytes, err := json.MarshalIndent(objects, "", " ")
 	if err != nil {
 		return err
 	}
 	// TODO: Encrypt if requested
 	return a.uploadObject(backup, resourceObjectName, jsonBytes)
+}
+
+func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.ApplicationBackup, resKinds map[string]string) error {
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	if err != nil {
+		return err
+	}
+	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			if _, ok := resKinds[v.Kind]; !ok {
+				continue
+			}
+			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					continue
+				}
+				log.ApplicationBackupLog(backup).Errorf("Unable to get customresourcedefination for %s, err: %v", v.Kind, err)
+				return err
+			}
+			crds = append(crds, res)
+		}
+
+	}
+	jsonBytes, err := json.MarshalIndent(crds, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := a.uploadObject(backup, crdObjectName, jsonBytes); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Upload the backup object which should have all the required metadata
@@ -759,7 +805,6 @@ func (a *ApplicationBackupController) backupResources(
 				resourceInfo.Group = "core"
 			}
 			resourceInfo.Version = gvk.Version
-
 			resourceInfos = append(resourceInfos, resourceInfo)
 		}
 		backup.Status.Resources = resourceInfos

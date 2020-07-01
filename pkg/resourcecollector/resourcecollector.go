@@ -12,6 +12,7 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -85,7 +86,13 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	return nil
 }
 
-func resourceToBeCollected(resource metav1.APIResource, optionalResourceTypes []string) bool {
+func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
+	for _, res := range crdKinds {
+		if res.Kind == resource.Kind &&
+			res.Group == grp.Group && res.Version == grp.Version {
+			return true
+		}
+	}
 	switch resource.Kind {
 	case "PersistentVolumeClaim",
 		"PersistentVolume",
@@ -105,19 +112,12 @@ func resourceToBeCollected(resource metav1.APIResource, optionalResourceTypes []
 		"Ingress",
 		"Route",
 		"Template",
-		"IBPCA",
-		"IBPConsole",
-		"IBPPeer",
-		"IBPOrderer",
 		"CronJob":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
 			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower)
 	default:
-		if strings.HasPrefix(resource.Kind, "Couchbase") {
-			return true
-		}
 		return false
 	}
 }
@@ -136,6 +136,16 @@ func (r *ResourceCollector) GetResources(
 
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
+	var crdResources []metav1.GroupVersionKind
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	if err != nil {
+		return nil, err
+	}
+	for _, crd := range crdList.Items {
+		for _, kind := range crd.Resources {
+			crdResources = append(crdResources, kind.GroupVersionKind)
+		}
+	}
 
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
@@ -149,7 +159,7 @@ func (r *ResourceCollector) GetResources(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
 				continue
 			}
 			for _, ns := range namespaces {
@@ -395,19 +405,30 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		}
 
 		content := o.UnstructuredContent()
-		switch o.GetObjectKind().GroupVersionKind().Kind {
-		case "CouchbaseBackup", "CouchbaseBackupRestore":
-		default:
-			// Status shouldn't be retained when collecting resources
-			delete(content, "status")
+		crdList, err := storkops.Instance().ListApplicationRegistrations()
+		if err != nil {
+			return err
 		}
-		metadataMap := content["metadata"].(map[string]interface{})
-		// Remove all metadata except some well-known ones
-		for key := range metadataMap {
-			switch key {
-			case "name", "namespace", "labels", "annotations":
-			default:
-				delete(metadataMap, key)
+		resourceKind := o.GetObjectKind().GroupVersionKind()
+		for _, crd := range crdList.Items {
+			for _, kind := range crd.Resources {
+				if kind.Kind == resourceKind.Kind && kind.Group == resourceKind.Group &&
+					kind.Version == resourceKind.Version {
+					// remove status from crd
+					if !kind.KeepStatus {
+						delete(content, "status")
+					}
+					// remove metadata annotations
+					metadataMap := content["metadata"].(map[string]interface{})
+					// Remove all metadata except some well-known ones
+					for key := range metadataMap {
+						switch key {
+						case "name", "namespace", "labels", "annotations":
+						default:
+							delete(metadataMap, key)
+						}
+					}
+				}
 			}
 		}
 	}
