@@ -1,12 +1,11 @@
 package controllers
 
 import (
-	"strings"
-
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -20,33 +19,182 @@ const (
 	CassandraApp = "cassandra-app-reg"
 )
 
-func getSupportedCRD() map[string][]string {
-	// Default CRD registration of format,
-	// {kind, crdName, suspendPath,suspendType(bool/int)}
-	defCRD := make(map[string][]string)
+func getSupportedCRD() map[string][]stork_api.ApplicationResource {
+	// supported CRD registration
+	defCRD := make(map[string][]stork_api.ApplicationResource)
 	// IBM CRD's
-	defCRD[IBMApp] = []string{"IBPCA,ibpcas.ibp.com",
-		"IBPConsole,ibpconsoles.ibp.com",
-		"IBPOrderer,ibporderers.ibp.com",
-		"IBPPeer,ibppeers.ibp.com",
+	defCRD[IBMApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "IBPCA",
+				Group:   "ibp.com",
+				Version: "v1alpha1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.replicas",
+				Type: "int",
+			},
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "IBPConsole",
+				Group:   "ibp.com",
+				Version: "v1alpha1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.replicas",
+				Type: "int",
+			},
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "IBPOrderer",
+				Group:   "ibp.com",
+				Version: "v1alpha1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.replicas",
+				Type: "int",
+			},
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "IBPPeer",
+				Group:   "ibp.com",
+				Version: "v1alpha1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.replicas",
+				Type: "int",
+			},
+		},
 	}
 	//CouchBase CRD's
-	defCRD[CouchBaseApp] = []string{"CouchbaseBucket,couchbasebuckets.couchbase.com",
-		"CouchbaseCluster,couchbaseclusters.couchbase.com,spec.suspend,true",
-		"CouchbaseEphemeralBucket,couchbaseephemeralbuckets.couchbase.com",
-		"CouchbaseMemcachedBucket,couchbasememcachedbuckets.couchbase.com",
-		"CouchbaseReplication,couchbasereplications.couchbase.com",
-		"CouchbaseUser,couchbaseusers.couchbase.com",
-		"CouchbaseGroup,couchbasegroups.couchbase.com",
-		"CouchbaseRoleBinding,couchbaserolebindings.couchbase.com",
-		"CouchbaseBackup,couchbasebackups.couchbase.com",
-		"CouchbaseBackupRestore,couchbasebackuprestores.couchbase.com",
+	defCRD[CouchBaseApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseBucket",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseCluster",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.suspend",
+				Type: "bool",
+			},
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseEphemeralBucket",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseMemcachedBucket",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseReplication",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseUser",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseGroup",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseRoleBinding",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseBackup",
+				Group:   "couchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CouchbaseBackupRestore",
+				Group:   "ouchbase.com",
+				Version: "v2",
+			},
+			KeepStatus: false,
+		},
 	}
 	// datastax/Cassandra CRD's
-	defCRD[CassandraApp] = []string{"CassandraDatacenter,cassandradatacenters.cassandra.datastax.com,spec.stopped,bool"}
+	defCRD[CassandraApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "CassandraDatacenter",
+				Group:   "cassandra.datastax.com",
+				Version: "v1beta1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.stopped",
+				Type: "bool",
+			},
+		},
+	}
 	// redis cluster CRD's
-	defCRD[RedisClusterApp] = []string{"RedisEnterpriseCluster,redisenterpriseclusters.app.redislabs.com",
-		"RedisEnterpriseDatabase,redisenterprisedatabases.app.redislabs.com"}
+	defCRD[RedisClusterApp] =
+		[]stork_api.ApplicationResource{
+			{
+				GroupVersionKind: metav1.GroupVersionKind{
+					Kind:    "RedisEnterpriseCluster",
+					Group:   "app.redislabs.com",
+					Version: "v1",
+				},
+				KeepStatus: false,
+			},
+			{
+				GroupVersionKind: metav1.GroupVersionKind{
+					Kind:    "RedisEnterpriseDatabase",
+					Group:   "app.redislabs.com",
+					Version: "v1",
+				},
+				KeepStatus: false,
+			},
+		}
 
 	return defCRD
 }
@@ -54,23 +202,8 @@ func getSupportedCRD() map[string][]string {
 // RegisterDefaultCRDs  registered already supported CRDs
 func RegisterDefaultCRDs() error {
 	for name, res := range getSupportedCRD() {
-		var resources []stork_api.ApplicationResource
-		for _, reg := range res {
-			cr := strings.Split(reg, ",")
-			if len(cr) < 2 {
-				continue
-			}
-			var appReg stork_api.ApplicationResource
-			appReg.Kind = cr[0]
-			appReg.Group = cr[1]
-			if len(cr) == 4 {
-				appReg.SuspendOptions = stork_api.SuspendOptions{Path: cr[2], Type: cr[3]}
-			}
-			resources = append(resources, appReg)
-		}
-
 		appReg := &stork_api.ApplicationRegistration{
-			Resources: resources,
+			Resources: res,
 		}
 		appReg.Name = name
 		if _, err := stork.Instance().CreateApplicationRegistration(appReg); err != nil && !errors.IsAlreadyExists(err) {
