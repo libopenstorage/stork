@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fio
+spec:
+  serviceName: fio
+  replicas: 3 
+  selector:
+    matchLabels:
+      app: fio
+  template:
+    metadata:
+      labels:
+        app: fio
+    spec:
+      containers:
+      - name: fio
+        image: portworx/fio_drv
+        command: ["fio"]
+        args: ["/configs/fio.job", "--eta=never"]
+        volumeMounts:
+        - name: fio-config-vol
+          mountPath: /configs
+        - name: fio-data
+          mountPath: /scratch
+      volumes:
+      - name: fio-config-vol
+        configMap:
+          name: fio-job-config
+  volumeClaimTemplates:
+  - metadata:
+      name: fio-data
+    spec:
+      storageClassName: fio-sc
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 11Gi

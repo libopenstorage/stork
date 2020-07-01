@@ -27,9 +27,10 @@ const (
 type TestTrigger string
 
 const (
-	restartVolDriver TestTrigger = "restartVolDriver"
-	rebootNode                   = "rebootNode"
-	deleteApp                    = "deleteApp"
+	restartVolDriver = "restartVolDriver"
+	crashVolDriver   = "crashVolDriver"
+	rebootNode       = "rebootNode"
+	deleteApp        = "deleteApp"
 )
 
 var (
@@ -55,8 +56,10 @@ var _ = BeforeSuite(func() {
 var _ = Describe("{Longevity}", func() {
 	var contexts []*scheduler.Context
 	triggerFunctions := map[string]func([]*scheduler.Context){
-		rebootNode: TriggerRebootNodes,
-		deleteApp:  TriggerDeleteApps,
+		rebootNode:       TriggerRebootNodes,
+		deleteApp:        TriggerDeleteApps,
+		restartVolDriver: TriggerRestartVolDriver,
+		crashVolDriver:   TriggerCrashVolDriver,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		contexts = make([]*scheduler.Context, 0)
@@ -172,20 +175,36 @@ func populateIntervals() {
 	triggerIntervalMins = map[string]map[int]int{}
 	triggerIntervalMins[rebootNode] = map[int]int{}
 	triggerIntervalMins[deleteApp] = map[int]int{}
+	triggerIntervalMins[crashVolDriver] = map[int]int{}
+	triggerIntervalMins[restartVolDriver] = map[int]int{}
 
-	triggerIntervalMins[rebootNode][10] = 900 // Chaos leve 10 = 15 mins
-	triggerIntervalMins[rebootNode][9] = 1800 // Chaos level 9 = 30 mins
-	triggerIntervalMins[rebootNode][8] = 2700 // Chaos level 8 = 45 mins
-	triggerIntervalMins[rebootNode][7] = 3600
-	triggerIntervalMins[rebootNode][6] = 4500
-	triggerIntervalMins[rebootNode][5] = 5400 // Default global chaos level, 1.5 hrs
+	triggerIntervalMins[rebootNode][10] = 1800 // Chaos leve 10 = 30 mins
+	triggerIntervalMins[rebootNode][9] = 3600  // Chaos level 9 = 1 hr
+	triggerIntervalMins[rebootNode][8] = 5400  // Chaos level 8 = 1.5 hr
+	triggerIntervalMins[rebootNode][7] = 7200  // Chaos level 7 = 2 hrs
+	triggerIntervalMins[rebootNode][6] = 9000  // Chaos level 6 = 2.5 hrs
+	triggerIntervalMins[rebootNode][5] = 10800 // Default global chaos level, 3 hrs
 
-	triggerIntervalMins[deleteApp][10] = 900 // Chaos leve 10 = 15 mins
-	triggerIntervalMins[deleteApp][9] = 1800 // Chaos leve 9 = 30 mins
-	triggerIntervalMins[deleteApp][8] = 2700 // Chaos leve 8 = 45 mins
-	triggerIntervalMins[deleteApp][7] = 3600
-	triggerIntervalMins[deleteApp][6] = 4500
-	triggerIntervalMins[deleteApp][5] = 5400 // Default global chaos level, 1.5 hrs
+	triggerIntervalMins[deleteApp][10] = 1800 // Chaos leve 10 = 30 mins
+	triggerIntervalMins[deleteApp][9] = 3600  // Chaos level 9 = 1 hr
+	triggerIntervalMins[deleteApp][8] = 5400  // Chaos level 8 = 1.5 hr
+	triggerIntervalMins[deleteApp][7] = 7200  // Chaos level 7 = 2 hrs
+	triggerIntervalMins[deleteApp][6] = 9000  // Chaos level 6 = 2.5 hrs
+	triggerIntervalMins[deleteApp][5] = 10800 // Default global chaos level, 3 hrs
+
+	triggerIntervalMins[crashVolDriver][10] = 1800 // Chaos leve 10 = 30 mins
+	triggerIntervalMins[crashVolDriver][9] = 3600  // Chaos level 9 = 1 hr
+	triggerIntervalMins[crashVolDriver][8] = 5400  // Chaos level 8 = 1.5 hr
+	triggerIntervalMins[crashVolDriver][7] = 7200  // Chaos level 7 = 2 hrs
+	triggerIntervalMins[crashVolDriver][6] = 9000  // Chaos level 6 = 2.5 hrs
+	triggerIntervalMins[crashVolDriver][5] = 10800 // Default global chaos level, 3 hrs
+
+	triggerIntervalMins[restartVolDriver][10] = 1800 // Chaos leve 10 = 30 mins
+	triggerIntervalMins[restartVolDriver][9] = 3600  // Chaos level 9 = 1 hr
+	triggerIntervalMins[restartVolDriver][8] = 5400  // Chaos level 8 = 1.5 hr
+	triggerIntervalMins[restartVolDriver][7] = 7200  // Chaos level 7 = 2 hrs
+	triggerIntervalMins[restartVolDriver][6] = 9000  // Chaos level 6 = 2.5 hrs
+	triggerIntervalMins[restartVolDriver][5] = 10800 // Default global chaos level, 3 hrs
 
 	// Chaos Level of 0 means disable test trigger
 	triggerIntervalMins[deleteApp][0] = 0
