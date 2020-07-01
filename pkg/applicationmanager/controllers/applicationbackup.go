@@ -7,8 +7,10 @@ import (
 	"math"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -700,9 +702,10 @@ func (a *ApplicationBackupController) uploadObject(
 func (a *ApplicationBackupController) uploadResources(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
+	resKinds map[string]string,
 ) error {
 	// upload CRD to backuplocation
-	if err := a.uploadCRDResources(backup); err != nil {
+	if err := a.uploadCRDResources(backup, resKinds); err != nil {
 		return err
 	}
 	jsonBytes, err := json.MarshalIndent(objects, "", " ")
@@ -713,7 +716,7 @@ func (a *ApplicationBackupController) uploadResources(
 	return a.uploadObject(backup, resourceObjectName, jsonBytes)
 }
 
-func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.ApplicationBackup) error {
+func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.ApplicationBackup, resKinds map[string]string) error {
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
 		return err
@@ -721,7 +724,11 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 	var crds []*apiextensionsv1beta1.CustomResourceDefinition
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
-			res, err := apiextensions.Instance().GetCRD(v.Group, metav1.GetOptions{ResourceVersion: v.Version})
+			if _, ok := resKinds[v.Kind]; !ok {
+				continue
+			}
+			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
 			if err != nil {
 				if k8s_errors.IsNotFound(err) {
 					continue
@@ -731,6 +738,7 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 			}
 			crds = append(crds, res)
 		}
+
 	}
 	jsonBytes, err := json.MarshalIndent(crds, "", " ")
 	if err != nil {
@@ -758,6 +766,8 @@ func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
 	var err error
+	// resKinds map of kind/version
+	resKinds := make(map[string]string)
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	allObjects, err := a.resourceCollector.GetResources(
@@ -793,7 +803,7 @@ func (a *ApplicationBackupController) backupResources(
 				resourceInfo.Group = "core"
 			}
 			resourceInfo.Version = gvk.Version
-
+			resKinds[gvk.Kind] = gvk.Version
 			resourceInfos = append(resourceInfos, resourceInfo)
 		}
 		backup.Status.Resources = resourceInfos
@@ -826,7 +836,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	// Upload the resources to the backup location
-	if err = a.uploadResources(backup, allObjects); err != nil {
+	if err = a.uploadResources(backup, allObjects, resKinds); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v", err)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
