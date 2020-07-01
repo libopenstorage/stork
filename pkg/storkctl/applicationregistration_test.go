@@ -43,8 +43,8 @@ func TestGetApplicationRegistrations(t *testing.T) {
 	createApplicationRegistrationAndVerify(t, "cassandra-app-reg", "CassandraDatacenter",
 		"cassandradatacenters.cassandra.datastax.com", "", false, "spec.stopped", "bool")
 
-	expected := "NAME                KIND                  CRD_NAME                                      SUSPEND_OPTIONS     KEEP_STATUS\n" +
-		"cassandra-app-reg   CassandraDatacenter   cassandradatacenters.cassandra.datastax.com   spec.stopped,bool   false\n"
+	expected := "NAME                KIND                  CRD-NAME                                      VERSION   SUSPEND-OPTIONS     KEEP-STATUS\n" +
+		"cassandra-app-reg   CassandraDatacenter   cassandradatacenters.cassandra.datastax.com             spec.stopped,bool   false\n"
 	cmdArgs := []string{"get", "appreg", "cassandra-app-reg"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
@@ -55,11 +55,11 @@ func TestGetApplicationRegistrations(t *testing.T) {
 	createApplicationRegistrationAndVerify(t, "test-app-reg3", "TestCustomCRD3",
 		"CRD_NAME3", "Version", true, "spec.path", "spec.path.type")
 
-	expected = "NAME                KIND                  CRD_NAME                                      SUSPEND_OPTIONS            KEEP_STATUS\n" +
-		"cassandra-app-reg   CassandraDatacenter   cassandradatacenters.cassandra.datastax.com   spec.stopped,bool          false\n" +
-		"test-app-reg1       TestCustomCRD1        CRD_NAME1                                     spec.path,spec.path.type   true\n" +
-		"test-app-reg2       TestCustomCRD2        CRD_NAME2                                     spec.path,spec.path.type   true\n" +
-		"test-app-reg3       TestCustomCRD3        CRD_NAME3                                     spec.path,spec.path.type   true\n"
+	expected = "NAME                KIND                  CRD-NAME                                      VERSION   SUSPEND-OPTIONS            KEEP-STATUS\n" +
+		"cassandra-app-reg   CassandraDatacenter   cassandradatacenters.cassandra.datastax.com             spec.stopped,bool          false\n" +
+		"test-app-reg1       TestCustomCRD1        CRD_NAME1                                     Version   spec.path,spec.path.type   true\n" +
+		"test-app-reg2       TestCustomCRD2        CRD_NAME2                                     Version   spec.path,spec.path.type   true\n" +
+		"test-app-reg3       TestCustomCRD3        CRD_NAME3                                     Version   spec.path,spec.path.type   true\n"
 	cmdArgs = []string{"get", "appreg"}
 	testCommon(t, cmdArgs, nil, expected, false)
 

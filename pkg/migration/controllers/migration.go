@@ -729,7 +729,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 			return fmt.Errorf("scheduler in Admin Cluster pair is not ready. Status: %v", schedulerStatus)
 		}
 	}
-
+	resKinds := make(map[string]string)
 	allObjects, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
@@ -765,7 +765,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 			resourceInfo.Group = "core"
 		}
 		resourceInfo.Version = gvk.Version
-
+		resKinds[gvk.Kind] = gvk.Version
 		resourceInfos = append(resourceInfos, resourceInfo)
 	}
 	migration.Status.Resources = resourceInfos
@@ -783,7 +783,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
-	err = m.applyResources(migration, allObjects)
+	err = m.applyResources(migration, allObjects, resKinds)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -830,8 +830,8 @@ func (m *MigrationController) prepareResources(
 		if err != nil {
 			return err
 		}
-		resourceKind := o.GetObjectKind().GroupVersionKind().Kind
-		switch resourceKind {
+		resource := o.GetObjectKind().GroupVersionKind()
+		switch resource.Kind {
 		case "PersistentVolume":
 			err := m.preparePVResource(migration, o)
 			if err != nil {
@@ -851,7 +851,9 @@ func (m *MigrationController) prepareResources(
 		}
 		for _, crd := range crdList.Items {
 			for _, v := range crd.Resources {
-				if v.Kind == resourceKind {
+				if v.Kind == resource.Kind &&
+					v.Version == resource.Version &&
+					v.Group == resource.Group {
 					if err := m.prepareCRDClusterResource(migration, o, v.SuspendOptions); err != nil {
 						return fmt.Errorf("error preparing %v resource %v: %v",
 							o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
@@ -1069,6 +1071,7 @@ func (m *MigrationController) getPrunedAnnotations(annotations map[string]string
 func (m *MigrationController) applyResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
+	resKinds map[string]string,
 ) error {
 	remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
@@ -1095,7 +1098,12 @@ func (m *MigrationController) applyResources(
 	}
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
-			res, err := apiextensions.Instance().GetCRD(v.Group, metav1.GetOptions{ResourceVersion: v.Version})
+			// only create relevant crds on dest cluster
+			if _, ok := resKinds[v.Kind]; !ok {
+				continue
+			}
+			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
 			if err != nil {
 				if errors.IsNotFound(err) {
 					continue
