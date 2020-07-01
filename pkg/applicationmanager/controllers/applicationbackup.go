@@ -702,8 +702,12 @@ func (a *ApplicationBackupController) uploadObject(
 func (a *ApplicationBackupController) uploadResources(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
-	resKinds map[string]string,
 ) error {
+	resKinds := make(map[string]string)
+	for _, obj := range objects {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		resKinds[gvk.Kind] = gvk.Version
+	}
 	// upload CRD to backuplocation
 	if err := a.uploadCRDResources(backup, resKinds); err != nil {
 		return err
@@ -766,8 +770,6 @@ func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
 	var err error
-	// resKinds map of kind/version
-	resKinds := make(map[string]string)
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	allObjects, err := a.resourceCollector.GetResources(
@@ -803,7 +805,6 @@ func (a *ApplicationBackupController) backupResources(
 				resourceInfo.Group = "core"
 			}
 			resourceInfo.Version = gvk.Version
-			resKinds[gvk.Kind] = gvk.Version
 			resourceInfos = append(resourceInfos, resourceInfo)
 		}
 		backup.Status.Resources = resourceInfos
@@ -836,7 +837,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	// Upload the resources to the backup location
-	if err = a.uploadResources(backup, allObjects, resKinds); err != nil {
+	if err = a.uploadResources(backup, allObjects); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v", err)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal

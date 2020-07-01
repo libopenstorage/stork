@@ -94,6 +94,7 @@ func getSupportedCRD() map[string][]stork_api.ApplicationResource {
 				Path: "spec.suspend",
 				Type: "bool",
 			},
+			PodsPath: "status.members.ready",
 		},
 		{
 			GroupVersionKind: metav1.GroupVersionKind{
