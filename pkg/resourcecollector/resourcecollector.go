@@ -418,19 +418,20 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 					if !kind.KeepStatus {
 						delete(content, "status")
 					}
-					// remove metadata annotations
-					metadataMap := content["metadata"].(map[string]interface{})
-					// Remove all metadata except some well-known ones
-					for key := range metadataMap {
-						switch key {
-						case "name", "namespace", "labels", "annotations":
-						default:
-							delete(metadataMap, key)
-						}
-					}
 				}
 			}
 		}
+		// remove metadata annotations
+		metadataMap := content["metadata"].(map[string]interface{})
+		// Remove all metadata except some well-known ones
+		for key := range metadataMap {
+			switch key {
+			case "name", "namespace", "labels", "annotations":
+			default:
+				delete(metadataMap, key)
+			}
+		}
+
 	}
 	return nil
 }

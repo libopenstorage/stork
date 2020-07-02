@@ -10,13 +10,13 @@ import (
 
 const (
 	// IBMApp registration name
-	IBMApp = "ibm-app-reg"
+	IBMApp = "ibm"
 	// CouchBaseApp registration name
-	CouchBaseApp = "couchbase-app-reg"
+	CouchBaseApp = "couchbase"
 	// RedisClusterApp registration name
-	RedisClusterApp = "redis-app-reg"
+	RedisClusterApp = "redis"
 	// CassandraApp registration name
-	CassandraApp = "cassandra-app-reg"
+	CassandraApp = "cassandra"
 )
 
 func getSupportedCRD() map[string][]stork_api.ApplicationResource {
@@ -91,7 +91,7 @@ func getSupportedCRD() map[string][]stork_api.ApplicationResource {
 			},
 			KeepStatus: false,
 			SuspendOptions: stork_api.SuspendOptions{
-				Path: "spec.suspend",
+				Path: "spec.paused",
 				Type: "bool",
 			},
 			PodsPath: "status.members.ready",
@@ -155,7 +155,7 @@ func getSupportedCRD() map[string][]stork_api.ApplicationResource {
 		{
 			GroupVersionKind: metav1.GroupVersionKind{
 				Kind:    "CouchbaseBackupRestore",
-				Group:   "ouchbase.com",
+				Group:   "couchbase.com",
 				Version: "v2",
 			},
 			KeepStatus: false,
