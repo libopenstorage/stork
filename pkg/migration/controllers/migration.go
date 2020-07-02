@@ -1205,7 +1205,6 @@ func (m *MigrationController) applyResources(
 		migrAnnot[StorkMigrationName] = migration.GetName()
 		migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 		unstructured.SetAnnotations(migrAnnot)
-		unstructured.SetResourceVersion("")
 		retries := 0
 		for {
 			_, err = dynamicClient.Create(unstructured, metav1.CreateOptions{})
