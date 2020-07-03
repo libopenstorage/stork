@@ -151,7 +151,10 @@ required = [
   name = "github.com/openshift/client-go"
   branch = "release-4.4"
 
+[[override]]
+  name = "github.com/LINBIT/golinstor"
+  branch = "master"
+
 [prune]
   go-tests = true
   unused-packages = true
-

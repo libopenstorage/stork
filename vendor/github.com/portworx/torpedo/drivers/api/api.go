@@ -49,7 +49,7 @@ func PerformTask(userTask func() error, opts *TriggerOptions) error {
 			opts.TriggerCheckInterval = defaultTriggerCheckInterval
 		}
 
-		// perform trigger checks and then perform the actual deletion
+		// perform trigger checks and then perform the actual task
 		userTaskWithTriggerChecks := func() (interface{}, bool, error) {
 			triggered, err := opts.TriggerCb()
 			if err != nil {
