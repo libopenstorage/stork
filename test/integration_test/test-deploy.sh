@@ -179,7 +179,7 @@ for i in $(seq 1 100) ; do
     fi
 done
 
-if [ "$volume_driver" == "pxd" ] ; then
+if [ "$volume_driver" == "pxd" ] || [ "$volume_driver" == "linstor" ] ; then
 	echo "Creating stork scheduler"
 	kubectl apply -f /specs/stork-scheduler.yaml
 # Delete the pods to make sure we are waiting for the status from the
