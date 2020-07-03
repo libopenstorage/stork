@@ -11,6 +11,7 @@ import (
 // TriggerCrashVolDriver crashes vol driver
 func TriggerCrashVolDriver(contexts []*scheduler.Context) {
 	Step("crash volume driver in all nodes", func() {
+
 		for _, appNode := range node.GetStorageDriverNodes() {
 			Step(
 				fmt.Sprintf("crash volume driver %s on node: %v",
@@ -25,6 +26,7 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context) {
 // TriggerRestartVolDriver restarts volume driver and validates app
 func TriggerRestartVolDriver(contexts []*scheduler.Context) {
 	Step("get nodes bounce volume driver", func() {
+
 		for _, appNode := range node.GetStorageDriverNodes() {
 			Step(
 				fmt.Sprintf("stop volume driver %s on node: %s",
@@ -56,6 +58,7 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context) {
 // TriggerDeleteApps deletes app and verifies if those are rescheduled properly
 func TriggerDeleteApps(contexts []*scheduler.Context) {
 	Step("delete all application tasks", func() {
+
 		for _, ctx := range contexts {
 			Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
 				err := Inst().S.DeleteTasks(ctx, nil)

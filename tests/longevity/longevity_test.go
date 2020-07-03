@@ -37,7 +37,10 @@ var (
 	// Stores mapping between test trigger and its chaos level.
 	chaosMap map[string]int
 	// Stores mapping between chaos level and its freq. Values are hardcoded
-	triggerIntervalMins map[string]map[int]int
+	triggerIntervalSec map[string]map[int]int
+	// Stores which are disruptive triggers. When disruptive triggers are happening in test,
+	// other triggers are allowed to happen only after existing triggers are completed.
+	disruptiveTriggers map[string]bool
 )
 
 func TestLongevity(t *testing.T) {
@@ -51,10 +54,13 @@ func TestLongevity(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	InitInstance()
+	populateIntervals()
+	populateDisruptiveTriggers()
 })
 
 var _ = Describe("{Longevity}", func() {
 	var contexts []*scheduler.Context
+	var triggerLock sync.Mutex
 	triggerFunctions := map[string]func([]*scheduler.Context){
 		rebootNode:       TriggerRebootNodes,
 		deleteApp:        TriggerDeleteApps,
@@ -64,20 +70,26 @@ var _ = Describe("{Longevity}", func() {
 	It("has to schedule app and introduce test triggers", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		err := watchConfigMap()
-		Expect(err).NotTo(HaveOccurred())
+		Step(fmt.Sprintf("Start watch on K8S configMap [%s] in namespace [%s]",
+			testTriggersConfigMap, configMapNS), func() {
+			err := watchConfigMap()
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-		for i := 0; i < Inst().ScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("longevity-%d", i))...)
-		}
-
-		ValidateApplications(contexts)
+		Step("Deploy applications", func() {
+			for i := 0; i < Inst().ScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("longevity-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
 
 		var wg sync.WaitGroup
-		for triggerType, triggerFunc := range triggerFunctions {
-			go testTrigger(&wg, contexts, triggerType, triggerFunc)
-			wg.Add(1)
-		}
+		Step("Register test triggers", func() {
+			for triggerType, triggerFunc := range triggerFunctions {
+				go testTrigger(&wg, contexts, triggerType, triggerFunc, &triggerLock)
+				wg.Add(1)
+			}
+		})
 
 		wg.Wait()
 		Step("teardown all apps", func() {
@@ -94,7 +106,8 @@ var _ = Describe("{Longevity}", func() {
 func testTrigger(wg *sync.WaitGroup,
 	contexts []*scheduler.Context,
 	triggerType string,
-	triggerFunc func([]*scheduler.Context)) {
+	triggerFunc func([]*scheduler.Context),
+	triggerLoc *sync.Mutex) {
 	defer wg.Done()
 	defer GinkgoRecover()
 
@@ -110,27 +123,36 @@ func testTrigger(wg *sync.WaitGroup,
 			break
 		}
 
+		// Get next interval of when trigger should happen
+		// This intercal can dynamically change by editing configMap
 		waitTimeSec, err := getWaitTimeSec(triggerType)
 		Expect(err).NotTo(HaveOccurred())
 
 		logrus.Debugf("WaitTime for trigger [%s] is %d sec\n", triggerType, waitTimeSec)
 		if waitTimeSec != 0 {
+			// If trigger is not disabled
 			if int64(time.Since(lastInvocationTime).Seconds()) > int64(time.Duration(waitTimeSec)) {
+				// If its right time to trigger, check no other disruptive trigger is happening at same time
+				takeLock(triggerLoc, triggerType)
+
 				triggerFunc(contexts)
+
+				if isDisruptiveTrigger(triggerType) {
+					triggerLoc.Unlock()
+				}
+
 				lastInvocationTime = time.Now().Local()
 			}
-			time.Sleep(time.Second * 15)
 		} else {
 			// if waitTimeSec is 0, then testTrigger is disabled
 			logrus.Warnf("Skipping test trigger [%s], since its been disabled via configMap [%s] in namespace [%s]",
 				triggerType, testTriggersConfigMap, configMapNS)
-			time.Sleep(time.Second * 15)
 		}
+		time.Sleep(time.Second * 15)
 	}
 }
 
 func watchConfigMap() error {
-	populateIntervals()
 	chaosMap = map[string]int{}
 	cm, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
 	if err != nil {
@@ -160,6 +182,33 @@ func watchConfigMap() error {
 	return nil
 }
 
+func populateDisruptiveTriggers() {
+	disruptiveTriggers = map[string]bool{
+		restartVolDriver: false,
+		crashVolDriver:   false,
+		rebootNode:       true,
+		deleteApp:        false,
+	}
+}
+
+func isDisruptiveTrigger(triggerType string) bool {
+	return disruptiveTriggers[triggerType]
+}
+
+// takeLock takes lock only if no other disruptive trigger is happening at the same time.
+func takeLock(triggerLoc *sync.Mutex, triggerType string) {
+	if isDisruptiveTrigger(triggerType) {
+		// At a give point in time, only single disruptive trigger is allowed to run.
+		// No other disruptive or non-disruptive trigger can run at this time.
+		triggerLoc.Lock()
+	} else {
+		// If trigger is non-disruptive then just check if no other disruptive trigger is running or not
+		// and release the lock immidiately so that other non-disruptive triggers can happen.
+		triggerLoc.Lock()
+		triggerLoc.Unlock()
+	}
+}
+
 func populateTriggers(triggers map[string]string) error {
 	for triggerType, chaosLevel := range triggers {
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
@@ -172,43 +221,43 @@ func populateTriggers(triggers map[string]string) error {
 }
 
 func populateIntervals() {
-	triggerIntervalMins = map[string]map[int]int{}
-	triggerIntervalMins[rebootNode] = map[int]int{}
-	triggerIntervalMins[deleteApp] = map[int]int{}
-	triggerIntervalMins[crashVolDriver] = map[int]int{}
-	triggerIntervalMins[restartVolDriver] = map[int]int{}
+	triggerIntervalSec = map[string]map[int]int{}
+	triggerIntervalSec[rebootNode] = map[int]int{}
+	triggerIntervalSec[deleteApp] = map[int]int{}
+	triggerIntervalSec[crashVolDriver] = map[int]int{}
+	triggerIntervalSec[restartVolDriver] = map[int]int{}
 
-	triggerIntervalMins[rebootNode][10] = 1800 // Chaos leve 10 = 30 mins
-	triggerIntervalMins[rebootNode][9] = 3600  // Chaos level 9 = 1 hr
-	triggerIntervalMins[rebootNode][8] = 5400  // Chaos level 8 = 1.5 hr
-	triggerIntervalMins[rebootNode][7] = 7200  // Chaos level 7 = 2 hrs
-	triggerIntervalMins[rebootNode][6] = 9000  // Chaos level 6 = 2.5 hrs
-	triggerIntervalMins[rebootNode][5] = 10800 // Default global chaos level, 3 hrs
+	triggerIntervalSec[rebootNode][10] = 1800 // Chaos leve 10 = 30 mins
+	triggerIntervalSec[rebootNode][9] = 3600  // Chaos level 9 = 1 hr
+	triggerIntervalSec[rebootNode][8] = 5400  // Chaos level 8 = 1.5 hr
+	triggerIntervalSec[rebootNode][7] = 7200  // Chaos level 7 = 2 hrs
+	triggerIntervalSec[rebootNode][6] = 9000  // Chaos level 6 = 2.5 hrs
+	triggerIntervalSec[rebootNode][5] = 10800 // Default global chaos level, 3 hrs
 
-	triggerIntervalMins[deleteApp][10] = 1800 // Chaos leve 10 = 30 mins
-	triggerIntervalMins[deleteApp][9] = 3600  // Chaos level 9 = 1 hr
-	triggerIntervalMins[deleteApp][8] = 5400  // Chaos level 8 = 1.5 hr
-	triggerIntervalMins[deleteApp][7] = 7200  // Chaos level 7 = 2 hrs
-	triggerIntervalMins[deleteApp][6] = 9000  // Chaos level 6 = 2.5 hrs
-	triggerIntervalMins[deleteApp][5] = 10800 // Default global chaos level, 3 hrs
+	triggerIntervalSec[deleteApp][10] = 1800 // Chaos leve 10 = 30 mins
+	triggerIntervalSec[deleteApp][9] = 3600  // Chaos level 9 = 1 hr
+	triggerIntervalSec[deleteApp][8] = 5400  // Chaos level 8 = 1.5 hr
+	triggerIntervalSec[deleteApp][7] = 7200  // Chaos level 7 = 2 hrs
+	triggerIntervalSec[deleteApp][6] = 9000  // Chaos level 6 = 2.5 hrs
+	triggerIntervalSec[deleteApp][5] = 10800 // Default global chaos level, 3 hrs
 
-	triggerIntervalMins[crashVolDriver][10] = 1800 // Chaos leve 10 = 30 mins
-	triggerIntervalMins[crashVolDriver][9] = 3600  // Chaos level 9 = 1 hr
-	triggerIntervalMins[crashVolDriver][8] = 5400  // Chaos level 8 = 1.5 hr
-	triggerIntervalMins[crashVolDriver][7] = 7200  // Chaos level 7 = 2 hrs
-	triggerIntervalMins[crashVolDriver][6] = 9000  // Chaos level 6 = 2.5 hrs
-	triggerIntervalMins[crashVolDriver][5] = 10800 // Default global chaos level, 3 hrs
+	triggerIntervalSec[crashVolDriver][10] = 1800 // Chaos leve 10 = 30 mins
+	triggerIntervalSec[crashVolDriver][9] = 3600  // Chaos level 9 = 1 hr
+	triggerIntervalSec[crashVolDriver][8] = 5400  // Chaos level 8 = 1.5 hr
+	triggerIntervalSec[crashVolDriver][7] = 7200  // Chaos level 7 = 2 hrs
+	triggerIntervalSec[crashVolDriver][6] = 9000  // Chaos level 6 = 2.5 hrs
+	triggerIntervalSec[crashVolDriver][5] = 10800 // Default global chaos level, 3 hrs
 
-	triggerIntervalMins[restartVolDriver][10] = 1800 // Chaos leve 10 = 30 mins
-	triggerIntervalMins[restartVolDriver][9] = 3600  // Chaos level 9 = 1 hr
-	triggerIntervalMins[restartVolDriver][8] = 5400  // Chaos level 8 = 1.5 hr
-	triggerIntervalMins[restartVolDriver][7] = 7200  // Chaos level 7 = 2 hrs
-	triggerIntervalMins[restartVolDriver][6] = 9000  // Chaos level 6 = 2.5 hrs
-	triggerIntervalMins[restartVolDriver][5] = 10800 // Default global chaos level, 3 hrs
+	triggerIntervalSec[restartVolDriver][10] = 1800 // Chaos leve 10 = 30 mins
+	triggerIntervalSec[restartVolDriver][9] = 3600  // Chaos level 9 = 1 hr
+	triggerIntervalSec[restartVolDriver][8] = 5400  // Chaos level 8 = 1.5 hr
+	triggerIntervalSec[restartVolDriver][7] = 7200  // Chaos level 7 = 2 hrs
+	triggerIntervalSec[restartVolDriver][6] = 9000  // Chaos level 6 = 2.5 hrs
+	triggerIntervalSec[restartVolDriver][5] = 10800 // Default global chaos level, 3 hrs
 
 	// Chaos Level of 0 means disable test trigger
-	triggerIntervalMins[deleteApp][0] = 0
-	triggerIntervalMins[rebootNode][0] = 0
+	triggerIntervalSec[deleteApp][0] = 0
+	triggerIntervalSec[rebootNode][0] = 0
 }
 
 func getWaitTimeSec(triggerType string) (int, error) {
@@ -220,7 +269,7 @@ func getWaitTimeSec(triggerType string) (int, error) {
 		logrus.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
 			triggerType, Inst().ChaosLevel)
 	}
-	return (triggerIntervalMins[triggerType][chaosLevel]), nil
+	return (triggerIntervalSec[triggerType][chaosLevel]), nil
 }
 
 var _ = AfterSuite(func() {
