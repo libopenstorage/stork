@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -102,7 +103,55 @@ func (a *ApplicationRestoreController) verifyNamespaces(restore *storkapi.Applic
 	if !a.namespaceRestoreAllowed(restore) {
 		return fmt.Errorf("Spec.Namespaces should only contain the current namespace")
 	}
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("Error getting backup: %v", err)
+		return err
+	}
+	return a.createNamespaces(backup, restore.Spec.BackupLocation, restore)
+}
 
+func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.ApplicationBackup,
+	backupLocation string,
+	restore *storkapi.ApplicationRestore) error {
+	var namespaces []*v1.Namespace
+
+	// TODO: pass skip flag once pr merged
+	nsData, err := a.downloadObject(backup, backupLocation, restore.Namespace, nsObjectName)
+	if err != nil {
+		return err
+	}
+	if nsData != nil {
+		if err = json.Unmarshal(nsData, &namespaces); err != nil {
+			return err
+		}
+		for _, ns := range namespaces {
+			if restoreNS, ok := restore.Spec.NamespaceMapping[ns.Name]; ok {
+				ns.Name = restoreNS
+			}
+			// create mapped restore namespace with metadata of backed up
+			// namespace
+			config, err := rest.InClusterConfig()
+			if err != nil {
+				return err
+			}
+			adminClient, err := kubernetes.NewForConfig(config)
+			if err != nil {
+				return err
+			}
+			_, err = adminClient.CoreV1().Namespaces().Create(&v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        ns.Name,
+					Labels:      ns.Labels,
+					Annotations: ns.GetAnnotations(),
+				},
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	for _, ns := range restore.Spec.NamespaceMapping {
 		if _, err := core.Instance().GetNamespace(ns); err != nil {
 

@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -119,13 +120,27 @@ func (a *ApplicationCloneController) setDefaults(clone *stork_api.ApplicationClo
 // Make sure the source namespaces exists and create the destination
 // namespace if it doesn't exist
 func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.ApplicationClone) error {
-	_, err := core.Instance().GetNamespace(clone.Spec.SourceNamespace)
+	ns, err := core.Instance().GetNamespace(clone.Spec.SourceNamespace)
 	if err != nil {
 		return fmt.Errorf("error getting source namespace %v: %v", clone.Spec.SourceNamespace, err)
 	}
-	_, err = core.Instance().CreateNamespace(clone.Spec.DestinationNamespace, nil)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("error creating destination namespace %v: %v", clone.Spec.DestinationNamespace, err)
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return err
+	}
+	adminClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	_, err = adminClient.CoreV1().Namespaces().Create(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        ns.Name,
+			Labels:      ns.Labels,
+			Annotations: ns.GetAnnotations(),
+		},
+	})
+	if err != nil {
+		return err
 	}
 	return nil
 }
