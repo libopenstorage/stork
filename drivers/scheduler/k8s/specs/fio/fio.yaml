@@ -4,7 +4,7 @@ metadata:
   name: fio
 spec:
   serviceName: fio
-  replicas: 3 
+  replicas: 3
   selector:
     matchLabels:
       app: fio
@@ -17,7 +17,7 @@ spec:
       - name: fio
         image: portworx/fio_drv
         command: ["fio"]
-        args: ["/configs/fio.job", "--eta=never"]
+        args: ["/configs/fio.job", "--status-interval=1", "--eta=never"]
         volumeMounts:
         - name: fio-config-vol
           mountPath: /configs
@@ -36,4 +36,4 @@ spec:
       - ReadWriteOnce
       resources:
         requests:
-          storage: 11Gi
+          storage: 50Gi

@@ -5,6 +5,6 @@ metadata:
   name: fio-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "3"
+  repl: "1"
   priority_io: "high"
 allowVolumeExpansion: true

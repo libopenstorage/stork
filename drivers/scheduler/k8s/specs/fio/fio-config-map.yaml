@@ -7,15 +7,32 @@ data:
         [global]
         name=fio-rand-RW
         directory=/scratch/
-        rw=randrw
-        rwmixread=60
-        rwmixwrite=40
+        rw=write
+        randrepeat=1
         bs=4K
-        direct=0
-        numjobs=4
+        direct=1
+        do_verify=1
+        verify=crc32c
+        verify_pattern=0xdeadbeef
+        gtod_reduce=1
+        disable_lat=0
+        gtod_reduce=0
         time_based=1
         runtime=999999999
         [file1]
-        size=10G
+        size=8G
         ioengine=libaio
-        iodepth=16
+        iodepth=128
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fio-ready-probe
+data:
+  ready-probe.sh: |
+    #!/bin/bash
+    if [ `cat /root/fio.log | grep 'error\|bad magic header' | wc -l` -ge 1 ]; then 
+      exit 1; 
+    else 
+      exit 0; 
+    fi
