@@ -14,6 +14,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -36,6 +37,9 @@ const (
 	// SnapshotSchedulePolicyTypeAnnotation Annotation used to specify the type of the
 	// policy that triggered the snapshot
 	SnapshotSchedulePolicyTypeAnnotation = "stork.libopenstorage.org/snapshotSchedulePolicyType"
+	storkRuleAnnotationPrefix            = "stork.libopenstorage.org"
+	preSnapRuleAnnotationKey             = storkRuleAnnotationPrefix + "/pre-snapshot-rule"
+	postSnapRuleAnnotationKey            = storkRuleAnnotationPrefix + "/post-snapshot-rule"
 )
 
 // NewSnapshotScheduleController creates a new instance of SnapshotScheduleController.
@@ -299,6 +303,32 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 	}
 	snapshot.Metadata.Annotations[SnapshotScheduleNameAnnotation] = snapshotSchedule.Name
 	snapshot.Metadata.Annotations[SnapshotSchedulePolicyTypeAnnotation] = string(policyType)
+	if snapshotSchedule.Spec.PreExecRule != "" {
+		_, err := storkops.Instance().GetRule(snapshotSchedule.Spec.PreExecRule, snapshotSchedule.Namespace)
+		if err != nil {
+			msg := fmt.Sprintf("error retrieving pre-exec rule %v", err)
+			s.recorder.Event(snapshotSchedule,
+				v1.EventTypeWarning,
+				string(snapv1.VolumeSnapshotConditionError),
+				msg)
+			log.VolumeSnapshotScheduleLog(snapshotSchedule).Error(msg)
+			return err
+		}
+	}
+	snapshot.Metadata.Annotations[preSnapRuleAnnotationKey] = snapshotSchedule.Spec.PreExecRule
+	if snapshotSchedule.Spec.PostExecRule != "" {
+		_, err := storkops.Instance().GetRule(snapshotSchedule.Spec.PostExecRule, snapshotSchedule.Namespace)
+		if err != nil {
+			msg := fmt.Sprintf("error retrieving post-exec rule %v", err)
+			s.recorder.Event(snapshotSchedule,
+				v1.EventTypeWarning,
+				string(snapv1.VolumeSnapshotConditionError),
+				msg)
+			log.VolumeSnapshotScheduleLog(snapshotSchedule).Error(msg)
+			return err
+		}
+	}
+	snapshot.Metadata.Annotations[postSnapRuleAnnotationKey] = snapshotSchedule.Spec.PostExecRule
 
 	options, err := schedule.GetOptions(snapshotSchedule.Spec.SchedulePolicyName, policyType)
 	if err != nil {
