@@ -137,9 +137,9 @@ func main() {
 			Name:  "pvc-watcher",
 			Usage: "Start the controller to monitor PVC creation and deletions (default: true)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "webhook-controller",
-			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: true)",
+			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: false)",
 		},
 		cli.StringFlag{
 			Name:  "webhook-skip-resources-annotation",
