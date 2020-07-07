@@ -377,6 +377,10 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			}
 
 			for _, pvc := range pvcList.Items {
+				// Don't backup pending or deleting PVCs
+				if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
+					continue
+				}
 				driverName, err := volume.GetPVCDriver(&pvc)
 				if err != nil {
 					// Skip unsupported PVCs
@@ -393,6 +397,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				}
 			}
 		}
+
 		for driverName, pvcs := range pvcMappings {
 			driver, err := volume.Get(driverName)
 			if err != nil {
