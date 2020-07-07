@@ -410,6 +410,7 @@ func (a *ApplicationRestoreController) downloadObject(
 	backupLocation string,
 	namespace string,
 	objectName string,
+	skipIfNotPresent bool,
 ) ([]byte, error) {
 	restoreLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, namespace)
 	if err != nil {
@@ -421,6 +422,13 @@ func (a *ApplicationRestoreController) downloadObject(
 	}
 
 	objectPath := backup.Status.BackupPath
+	if skipIfNotPresent {
+		exists, err := bucket.Exists(context.TODO(), filepath.Join(objectPath, objectName))
+		if err != nil || !exists {
+			return nil, nil
+		}
+	}
+
 	data, err := bucket.ReadAll(context.TODO(), filepath.Join(objectPath, objectName))
 	if err != nil {
 		return nil, err
@@ -441,9 +449,9 @@ func (a *ApplicationRestoreController) downloadResources(
 ) ([]runtime.Unstructured, error) {
 	// create CRD resource first
 	if err := a.downloadCRD(backup, backupLocation, namespace); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error downloading CRDs: %v", err)
 	}
-	data, err := a.downloadObject(backup, backupLocation, namespace, resourceObjectName)
+	data, err := a.downloadObject(backup, backupLocation, namespace, resourceObjectName, false)
 	if err != nil {
 		return nil, err
 	}
@@ -465,9 +473,13 @@ func (a *ApplicationRestoreController) downloadCRD(
 	namespace string,
 ) error {
 	var crds []*apiextensionsv1beta1.CustomResourceDefinition
-	crdData, err := a.downloadObject(backup, backupLocation, namespace, crdObjectName)
+	crdData, err := a.downloadObject(backup, backupLocation, namespace, crdObjectName, true)
 	if err != nil {
 		return err
+	}
+	// No CRDs were uploaded
+	if crdData == nil {
+		return nil
 	}
 	if err = json.Unmarshal(crdData, &crds); err != nil {
 		return err
