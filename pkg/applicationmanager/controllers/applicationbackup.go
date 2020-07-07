@@ -45,6 +45,7 @@ const (
 
 	resourceObjectName = "resources.json"
 	crdObjectName      = "crds.json"
+	nsObjectName       = "namespaces.json"
 	metadataObjectName = "metadata.json"
 
 	backupCancelBackoffInitialDelay = 5 * time.Second
@@ -713,6 +714,9 @@ func (a *ApplicationBackupController) uploadResources(
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		resKinds[gvk.Kind] = gvk.Version
 	}
+	if err := a.uploadNamespaces(backup); err != nil {
+		return err
+	}
 	// upload CRD to backuplocation
 	if err := a.uploadCRDResources(backup, resKinds); err != nil {
 		return err
@@ -724,7 +728,25 @@ func (a *ApplicationBackupController) uploadResources(
 	// TODO: Encrypt if requested
 	return a.uploadObject(backup, resourceObjectName, jsonBytes)
 }
-
+func (a *ApplicationBackupController) uploadNamespaces(backup *stork_api.ApplicationBackup) error {
+	var namespaces []*v1.Namespace
+	for _, namespace := range backup.Spec.Namespaces {
+		ns, err := core.Instance().GetNamespace(namespace)
+		if err != nil {
+			return err
+		}
+		ns.ResourceVersion = ""
+		namespaces = append(namespaces, ns)
+	}
+	jsonBytes, err := json.MarshalIndent(namespaces, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := a.uploadObject(backup, nsObjectName, jsonBytes); err != nil {
+		return err
+	}
+	return nil
+}
 func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.ApplicationBackup, resKinds map[string]string) error {
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
