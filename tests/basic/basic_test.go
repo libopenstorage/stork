@@ -75,12 +75,6 @@ var _ = Describe("{VolumeDriverDown}", func() {
 						StopVolDriverAndWait([]node.Node{appNode})
 					})
 
-				waitBetweenDriverStopStart := time.Duration(Inst().ChaosLevel/2) * time.Minute
-				Step(fmt.Sprintf("wait for %v minutes before starting volume driver",
-					waitBetweenDriverStopStart), func() {
-					time.Sleep(waitBetweenDriverStopStart)
-				})
-
 				Step(
 					fmt.Sprintf("starting volume %s driver on node %s",
 						Inst().V.String(), appNode.Name),

@@ -3,6 +3,7 @@ package schedops
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -227,6 +228,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 
 	t := func() (interface{}, bool, error) {
 		pods, err := k8sCore.GetPodsUsingPV(pvName)
+		printStatus(pods...)
 		if err != nil {
 			return nil, true, err
 		}
@@ -269,7 +271,7 @@ PodLoop:
 			continue
 		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
-			logrus.Warnf("pod %s still not running. Status: %v", pod.Name, pod.Status.Phase)
+			printStatus(*pod)
 			continue
 		} else if err != nil {
 			return validatedMountPods, err
@@ -617,7 +619,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	}
 	for _, pod := range pxPods.Items {
 		if pod.Labels["name"] == PXDaemonSet && !k8sCore.IsPodReady(pod) {
-			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v, Conditions: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase, pod.Status.Conditions)
+			printStatus(pod)
 			return false
 		}
 	}
@@ -805,6 +807,34 @@ func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 		return nil, fmt.Errorf("Failed to get list of autopilotrules. Err: %v", err)
 	}
 	return listAutopilotRules, nil
+}
+
+func printStatus(pods ...corev1.Pod) {
+	for _, pod := range pods {
+		status := ""
+		ready := false
+		for _, st := range pod.Status.Conditions {
+			switch st.Type {
+			case corev1.PodScheduled:
+				status += fmt.Sprintf("Scheduled: %v ", st.Status)
+			case corev1.PodReady:
+				status += fmt.Sprintf("Ready: %v ", st.Status)
+				ready, _ = strconv.ParseBool(fmt.Sprintf("%v", st.Status))
+			case corev1.PodInitialized:
+				status += fmt.Sprintf("Initialized: %v ", st.Status)
+			}
+		}
+		if len(pod.Status.Reason) > 0 {
+			status += fmt.Sprintf("Phase: %v Reason: %s", pod.Status.Phase, pod.Status.Reason)
+		}
+		if ready {
+			logrus.Infof("Pod [%s] %s ready on node %s - %s", pod.Namespace, pod.Name, pod.Status.NominatedNodeName,
+				status)
+		} else {
+			logrus.Infof("Pod [%s] %s not ready on node %s - %s", pod.Namespace, pod.Name,
+				pod.Status.NominatedNodeName, status)
+		}
+	}
 }
 
 func init() {

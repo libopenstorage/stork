@@ -108,9 +108,11 @@ const (
 )
 
 const (
-	waitResourceCleanup  = 2 * time.Minute
-	defaultTimeout       = 5 * time.Minute
-	defaultRetryInterval = 10 * time.Second
+	waitResourceCleanup     = 2 * time.Minute
+	defaultTimeout          = 5 * time.Minute
+	defaultRetryInterval    = 10 * time.Second
+	defaultCmdTimeout       = 20 * time.Second
+	defaultCmdRetryInterval = 5 * time.Second
 )
 
 var (
@@ -617,49 +619,42 @@ func getStorageNodes() ([]node.Node, error) {
 // CollectSupport creates a support bundle
 func CollectSupport() {
 	context(fmt.Sprintf("generating support bundle..."), func() {
-		Step(fmt.Sprintf("save all useful logs on each node"), func() {
-			nodes := node.GetWorkerNodes()
-			expect(nodes).NotTo(beEmpty())
+		nodes := node.GetWorkerNodes()
+		expect(nodes).NotTo(beEmpty())
 
-			for _, n := range nodes {
-				if !n.IsStorageDriverInstalled {
-					continue
-				}
+		for _, n := range nodes {
+			if !n.IsStorageDriverInstalled {
+				continue
+			}
+			Step(fmt.Sprintf("save all useful logs on node %s", n.SchedulerNodeName), func() {
 
-				logrus.Infof("collecting diags from %s", n.Name)
 				Inst().V.CollectDiags(n)
 
 				journalCmd := fmt.Sprintf("journalctl -l > %s/all_journal_%v.log", Inst().BundleLocation, time.Now().Format(time.RFC3339))
-				logrus.Infof("saving journal output on %s", n.Name)
 				runCmd(journalCmd, n)
 
-				logrus.Infof("saving portworx journal output on %s", n.Name)
 				runCmd(fmt.Sprintf("journalctl -lu portworx* > %s/portworx.log", Inst().BundleLocation), n)
 
-				logrus.Infof("saving kubelet journal output on %s", n.Name)
 				Inst().S.SaveSchedulerLogsToFile(n, Inst().BundleLocation)
 
-				logrus.Infof("saving dmesg output on %s", n.Name)
 				runCmd(fmt.Sprintf("dmesg -T > %s/dmesg.log", Inst().BundleLocation), n)
 
-				logrus.Infof("saving disk list on %s", n.Name)
 				runCmd(fmt.Sprintf("lsblk > %s/lsblk.log", Inst().BundleLocation), n)
 
-				logrus.Infof("saving mount list on %s", n.Name)
 				runCmd(fmt.Sprintf("cat /proc/mounts > %s/mounts.log", Inst().BundleLocation), n)
 
 				// this is a small tweak especially for providers like openshift, aws where oci-mon saves this file
 				// with root read permissions only but collect support bundle is a non-root user
 				runCmd(fmt.Sprintf("chmod 755 %s/oci.log", Inst().BundleLocation), n)
-			}
-		})
+			})
+		}
 	})
 }
 
 func runCmd(cmd string, n node.Node) {
 	_, err := Inst().N.RunCommand(n, cmd, node.ConnectionOpts{
-		Timeout:         20 * time.Second,
-		TimeBeforeRetry: 5 * time.Second,
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
 		Sudo:            true,
 	})
 	if err != nil {

@@ -27,6 +27,8 @@ github.com/Azure/go-autorest/autorest/validation
 github.com/Azure/go-autorest/logger
 # github.com/Azure/go-autorest/tracing v0.5.0
 github.com/Azure/go-autorest/tracing
+# github.com/LINBIT/golinstor v0.27.0
+github.com/LINBIT/golinstor/client
 # github.com/Microsoft/go-winio v0.4.14
 github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/pkg/guid
@@ -268,6 +270,8 @@ github.com/modern-go/concurrent
 github.com/modern-go/reflect2
 # github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 github.com/mohae/deepcopy
+# github.com/moul/http2curl v1.0.0
+github.com/moul/http2curl
 # github.com/onsi/ginkgo v1.10.2
 github.com/onsi/ginkgo
 github.com/onsi/ginkgo/config

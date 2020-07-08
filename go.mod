@@ -9,6 +9,7 @@ require (
 	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2 // indirect
 	github.com/Azure/go-autorest/autorest/to v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
+	github.com/LINBIT/golinstor v0.27.0
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/aws/aws-sdk-go v1.30.6
 	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
