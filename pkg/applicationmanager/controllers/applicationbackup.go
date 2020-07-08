@@ -959,6 +959,14 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, metadataObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
 			return fmt.Errorf("error deleting metadata for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
+
+		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, crdObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+			return fmt.Errorf("error deleting resources for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+		}
+
+		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, nsObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+			return fmt.Errorf("error deleting resources for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+		}
 	}
 
 	return nil

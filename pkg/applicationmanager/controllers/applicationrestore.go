@@ -116,8 +116,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 	restore *storkapi.ApplicationRestore) error {
 	var namespaces []*v1.Namespace
 
-	// TODO: pass skip flag once pr merged
-	nsData, err := a.downloadObject(backup, backupLocation, restore.Namespace, nsObjectName)
+	nsData, err := a.downloadObject(backup, backupLocation, restore.Namespace, nsObjectName, true)
 	if err != nil {
 		return err
 	}
@@ -147,6 +146,17 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 				},
 			})
 			if err != nil {
+				if errors.IsAlreadyExists(err) {
+					// regardless of replace policy we should always update namespace is
+					// its already exist to keel latest annotations/labels
+					_, err = adminClient.CoreV1().Namespaces().Update(&v1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        ns.Name,
+							Labels:      ns.Labels,
+							Annotations: ns.GetAnnotations(),
+						},
+					})
+				}
 				return err
 			}
 		}
