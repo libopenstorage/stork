@@ -134,12 +134,26 @@ func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.Applicati
 	}
 	_, err = adminClient.CoreV1().Namespaces().Create(&v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        ns.Name,
+			Name:        clone.Spec.DestinationNamespace,
 			Labels:      ns.Labels,
 			Annotations: ns.GetAnnotations(),
 		},
 	})
+	log.ApplicationCloneLog(clone).Errorf("Creating dest namespace %v", ns.Name)
 	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			log.ApplicationCloneLog(clone).Errorf("replcaing dest namespace %v", ns.Name)
+			// regardless of replace policy we should always update namespace is
+			// its already exist to keel latest annotations/labels
+			_, err = adminClient.CoreV1().Namespaces().Update(&v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        clone.Spec.DestinationNamespace,
+					Labels:      ns.Labels,
+					Annotations: ns.GetAnnotations(),
+				},
+			})
+		}
+		log.ApplicationCloneLog(clone).Errorf("failed repl dest namespace %v", err)
 		return err
 	}
 	return nil
