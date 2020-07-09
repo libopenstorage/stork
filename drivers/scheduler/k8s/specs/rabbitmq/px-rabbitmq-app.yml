@@ -166,6 +166,10 @@ spec:
               value: .$(K8S_SERVICE_NAME).$(MY_POD_NAMESPACE).svc.cluster.local
             - name: RABBITMQ_ERLANG_COOKIE
               value: "mycookie"
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "500Mi"
       volumes:
         - name: config-volume
           configMap:
@@ -221,5 +225,5 @@ spec:
             - "--shutdown-timeout=-1"
           resources:
             limits:
-              cpu: "1"
+              cpu: "200m"
               memory: "500Mi"
