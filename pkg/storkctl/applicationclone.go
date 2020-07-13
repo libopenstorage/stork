@@ -74,7 +74,7 @@ func newCreateApplicationCloneCommand(cmdFactory Factory, ioStreams genericcliop
 			}
 		},
 	}
-	createApplicationCloneCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for applicationclone to complete")
+	createApplicationCloneCommand.Flags().BoolVarP(&waitForCompletion, "wait", "", false, "Wait for applicationclone to complete")
 	createApplicationCloneCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing applicationclone")
 	createApplicationCloneCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing applicationclone")
 	createApplicationCloneCommand.Flags().StringVarP(&sourceNamespace, "sourceNamespace", "", "", "The namespace from where applications should be cloned")
@@ -127,7 +127,13 @@ func newGetApplicationCloneCommand(cmdFactory Factory, ioStreams genericclioptio
 				handleEmptyList(ioStreams.Out)
 				return
 			}
-
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, applicationClones, cmdFactory, applicationCloneColumns, applicationClonePrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, applicationClones, cmdFactory, applicationCloneColumns, applicationClonePrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return

@@ -146,7 +146,13 @@ func newGetApplicationBackupScheduleCommand(cmdFactory Factory, ioStreams generi
 				handleEmptyList(ioStreams.Out)
 				return
 			}
-
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, applicationBackupSchedules, cmdFactory, applicationBackupScheduleColumns, applicationBackupSchedulePrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, applicationBackupSchedules, cmdFactory, applicationBackupScheduleColumns, applicationBackupSchedulePrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return

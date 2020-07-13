@@ -43,6 +43,13 @@ func newGetClusterDomainsStatusCommand(cmdFactory Factory, ioStreams genericclio
 				handleEmptyList(ioStreams.Out)
 				return
 			}
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, cdStatuses, cmdFactory, clusterDomainsStatusColumns, clusterDomainsStatusPrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, cdStatuses, cmdFactory, clusterDomainsStatusColumns, clusterDomainsStatusPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return

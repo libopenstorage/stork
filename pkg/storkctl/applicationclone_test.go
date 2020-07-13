@@ -182,7 +182,7 @@ func TestCreateApplicationCloneWaitSuccess(t *testing.T) {
 	dstNamespace := "dummy-dst-namespace"
 	name := "dummy-name"
 	cmdArgs := []string{"create", "clones", "-n", srcNamespace, "--sourceNamespace", srcNamespace,
-		"--destinationNamespace", dstNamespace, name, "-w"}
+		"--destinationNamespace", dstNamespace, name, "--wait"}
 
 	expected := "ApplicationClone dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +
@@ -201,7 +201,7 @@ func TestCreateApplicationCloneWaitFailed(t *testing.T) {
 	dstNamespace := "dummy-dst-namespace"
 	name := "dummy-name"
 	cmdArgs := []string{"create", "clones", "-n", srcNamespace, "--sourceNamespace", srcNamespace,
-		"--destinationNamespace", dstNamespace, name, "-w"}
+		"--destinationNamespace", dstNamespace, name, "--wait"}
 
 	expected := "ApplicationClone dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +
