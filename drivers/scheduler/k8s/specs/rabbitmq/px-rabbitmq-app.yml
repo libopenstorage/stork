@@ -85,6 +85,8 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: rabbitmq
+  annotations:
+    torpedo.io/delete-strategy: "rolling"
 spec:
   serviceName: rabbitmq
   updateStrategy:
