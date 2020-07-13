@@ -369,7 +369,7 @@ func TestCreateMigrationWaitSuccess(t *testing.T) {
 	namespace := "dummy-namespace"
 	name := "dummy-name"
 	clusterpair := "dummy-clusterpair"
-	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "-w"}
+	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "--wait"}
 
 	expected := "STAGE\t\tSTATUS              \n\t\t                    \nVolumes\t\tSuccessful          \nMigration dummy-name completed successfully\n"
 	go setMigrationStatus(name, namespace, false, t)
@@ -382,7 +382,7 @@ func TestCreateMigrationWaitFailed(t *testing.T) {
 	namespace := "dummy-namespace"
 	name := "dummy-name"
 	clusterpair := "dummy-clusterpair"
-	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "-w"}
+	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "--wait"}
 
 	expected := "STAGE\t\tSTATUS              \n\t\t                    \nVolumes\t\tFailed              \nMigration dummy-name failed\n"
 	go setMigrationStatus(name, namespace, true, t)

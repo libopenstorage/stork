@@ -189,7 +189,7 @@ func TestCreateApplicationBackupWaitSuccess(t *testing.T) {
 
 	namespace := "dummy-namespace"
 	name := "dummy-name"
-	cmdArgs := []string{"create", "backups", "-n", namespace, "--namespaces", namespace, name, "--backupLocation", "backuplocation", "-w"}
+	cmdArgs := []string{"create", "backups", "-n", namespace, "--namespaces", namespace, name, "--backupLocation", "backuplocation", "--wait"}
 
 	expected := "ApplicationBackup dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +
@@ -206,7 +206,7 @@ func TestCreateApplicationBackupWaitFailed(t *testing.T) {
 
 	namespace := "dummy-namespace"
 	name := "dummy-name"
-	cmdArgs := []string{"create", "applicationbackup", "-n", namespace, "--namespaces", namespace, name, "--backupLocation", "backuplocation", "-w"}
+	cmdArgs := []string{"create", "applicationbackup", "-n", namespace, "--namespaces", namespace, name, "--backupLocation", "backuplocation", "--wait"}
 
 	expected := "ApplicationBackup dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +

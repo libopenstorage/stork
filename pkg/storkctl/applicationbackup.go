@@ -81,7 +81,7 @@ func newCreateApplicationBackupCommand(cmdFactory Factory, ioStreams genericclio
 		},
 	}
 	createApplicationBackupCommand.Flags().StringSliceVarP(&namespaceList, "namespaces", "", nil, "Comma separated list of namespaces to backup")
-	createApplicationBackupCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for applicationbackup to complete")
+	createApplicationBackupCommand.Flags().BoolVarP(&waitForCompletion, "wait", "", false, "Wait for applicationbackup to complete")
 	createApplicationBackupCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing applicationbackup")
 	createApplicationBackupCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing applicationbackup")
 	createApplicationBackupCommand.Flags().StringVarP(&backupLocation, "backupLocation", "b", "", "BackupLocation to use for the backup")
@@ -130,6 +130,13 @@ func newGetApplicationBackupCommand(cmdFactory Factory, ioStreams genericcliopti
 
 			if len(applicationBackups.Items) == 0 {
 				handleEmptyList(ioStreams.Out)
+				return
+			}
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, applicationBackups, cmdFactory, applicationBackupColumns, applicationBackupPrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
 				return
 			}
 

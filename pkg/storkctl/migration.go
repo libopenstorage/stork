@@ -1,9 +1,12 @@
 package storkctl
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
@@ -30,6 +34,7 @@ const (
 	migrTimeout = 6 * time.Hour
 	stage       = "STAGE"
 	status      = "STATUS"
+	statusOk    = "Ok\n"
 )
 
 var (
@@ -49,13 +54,21 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	var preExecRule string
 	var postExecRule string
 	var includeVolumes bool
-	var waitForCompletion bool
+	var waitForCompletion, validate bool
+	var fileName string
 
 	createMigrationCommand := &cobra.Command{
 		Use:     migrationSubcommand,
 		Aliases: migrationAliases,
 		Short:   "Start a migration",
 		Run: func(c *cobra.Command, args []string) {
+			if fileName != "" {
+				if err := validateMigrationFromFile(fileName, cmdFactory.GetNamespace()); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for migration name"))
 				return
@@ -82,6 +95,13 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 			}
 			migration.Name = migrationName
 			migration.Namespace = cmdFactory.GetNamespace()
+			if validate {
+				if err := ValidateMigration(migration); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			_, err := storkops.Instance().CreateMigration(migration)
 			if err != nil {
 				util.CheckErr(err)
@@ -105,10 +125,12 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	createMigrationCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "ClusterPair name for migration")
 	createMigrationCommand.Flags().BoolVarP(&includeResources, "includeResources", "r", true, "Include resources in the migration")
 	createMigrationCommand.Flags().BoolVarP(&includeVolumes, "includeVolumes", "", true, "Include volumees in the migration")
-	createMigrationCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for migration to complete")
+	createMigrationCommand.Flags().BoolVarP(&waitForCompletion, "wait", "", false, "Wait for migration to complete")
+	createMigrationCommand.Flags().BoolVarP(&validate, "dry-run", "", false, "Validate migration params before starting migration")
 	createMigrationCommand.Flags().BoolVarP(&startApplications, "startApplications", "a", true, "Start applications on the destination cluster after migration")
 	createMigrationCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing migration")
 	createMigrationCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
+	createMigrationCommand.Flags().StringVarP(&fileName, "file", "f", "", "file to run migration")
 
 	return createMigrationCommand
 }
@@ -386,7 +408,6 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 		Run: func(c *cobra.Command, args []string) {
 			var migrations *storkv1.MigrationList
 			var err error
-
 			namespaces, err := cmdFactory.GetAllNamespaces()
 			if err != nil {
 				util.CheckErr(err)
@@ -433,7 +454,13 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 				handleEmptyList(ioStreams.Out)
 				return
 			}
-
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, migrations, cmdFactory, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, migrations, cmdFactory, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
@@ -595,4 +622,94 @@ func waitForMigration(name, namespace string, ioStreams genericclioptions.IOStre
 	}
 
 	return msg, err
+}
+
+func validateMigrationFromFile(migrSpec, namespace string) error {
+	if migrSpec == "" {
+		return fmt.Errorf("empty file path")
+
+	}
+	file, err := os.Open(migrSpec)
+	if err != nil {
+		return fmt.Errorf("error opening file %v: %v", migrSpec, err)
+	}
+	data, err := ioutil.ReadAll(bufio.NewReader(file))
+	if err != nil {
+		return fmt.Errorf("error reading file %v: %v", migrSpec, err)
+	}
+	migration := &storkv1.Migration{}
+	dec := yaml.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(data)), len(data))
+	if err := dec.Decode(&migration); err != nil {
+		return err
+	}
+	if namespace == "" {
+		return fmt.Errorf("empty namespace given")
+
+	}
+	if migration.Namespace == "" {
+		migration.Namespace = namespace
+	}
+
+	if err := ValidateMigration(migration); err != nil {
+		return err
+	}
+	return nil
+
+}
+
+// ValidateMigration of given name and namespace
+func ValidateMigration(migr *storkv1.Migration) error {
+	// check namespaces exists
+	status := statusOk
+	fmt.Printf("[Optional] Checking Migration Namespaces....")
+	for _, namespace := range migr.Spec.Namespaces {
+		_, err := core.Instance().GetNamespace(namespace)
+		if err != nil {
+			status = fmt.Sprintf("Missing namespace %v\n", namespace)
+		}
+	}
+	fmt.Print(status)
+	// check clusterpair
+	fmt.Printf("[Required] Checking ClusterPair Status....")
+	if migr.Spec.ClusterPair == "" {
+		status = "ClusterPair is empty\n"
+	}
+	cp, err := storkops.Instance().GetClusterPair(migr.Spec.ClusterPair, migr.Namespace)
+	if err != nil {
+		return err
+	}
+	if cp.Status.StorageStatus != storkv1.ClusterPairStatusReady ||
+		cp.Status.SchedulerStatus != storkv1.ClusterPairStatusReady {
+		status = "NotReady\n"
+	}
+	fmt.Print(status)
+
+	fmt.Printf("[Optional] Checking PreExec Rule....")
+	status = statusOk
+	if migr.Spec.PreExecRule == "" {
+		status = "NotConfigured\n"
+	} else {
+		if _, err := storkops.Instance().GetRule(migr.Spec.PreExecRule, migr.Namespace); err != nil && errors.IsNotFound(err) {
+			status = "NotFound\n"
+		} else if err != nil {
+			return err
+		}
+	}
+	fmt.Print(status)
+
+	fmt.Printf("[Optional] Checking PostExec Rule....")
+	status = statusOk
+	if migr.Spec.PostExecRule == "" {
+		status = "NotConfigured\n"
+	} else {
+		if _, err := storkops.Instance().GetRule(migr.Spec.PostExecRule, migr.Namespace); err != nil && errors.IsNotFound(err) {
+			status = "NotFound\n"
+		} else if err != nil {
+			return err
+		}
+	}
+	fmt.Print(status)
+
+	fmt.Printf("All Ready!!\n")
+	return nil
 }

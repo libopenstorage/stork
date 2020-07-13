@@ -107,7 +107,7 @@ func newActivateClusterDomainCommand(cmdFactory Factory, ioStreams genericcliopt
 		},
 	}
 	activateClusterDomainCommand.Flags().BoolVarP(&allClusterDomains, "all", "a", false, "Activate all inactive cluster domains")
-	activateClusterDomainCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for clusterdomain update to complete")
+	activateClusterDomainCommand.Flags().BoolVarP(&waitForCompletion, "wait", "", false, "Wait for clusterdomain update to complete")
 	activateClusterDomainCommand.Flags().StringVar(&nameClusterDomainUpdate, "name", "", "Name for the activate cluster domain action")
 
 	return activateClusterDomainCommand
@@ -162,7 +162,7 @@ func newDeactivateClusterDomainCommand(cmdFactory Factory, ioStreams genericclio
 		},
 	}
 	deactivateClusterDomainCommand.Flags().StringVar(&nameClusterDomainUpdate, "name", "", "Name for the deactivate cluster domain action")
-	deactivateClusterDomainCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for clusterdomain update to complete")
+	deactivateClusterDomainCommand.Flags().BoolVarP(&waitForCompletion, "wait", "", false, "Wait for clusterdomain update to complete")
 
 	return deactivateClusterDomainCommand
 }
