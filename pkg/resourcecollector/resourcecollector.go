@@ -111,7 +111,8 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 		"Ingress",
 		"Route",
 		"Template",
-		"CronJob":
+		"CronJob",
+		"ResourceQuota":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -617,8 +618,13 @@ func (r *ResourceCollector) getDynamicClient(
 	if err != nil {
 		return nil, err
 	}
+
+	// The default ruleset doesn't pluralize quotas correctly, so add that
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+
 	resource := &metav1.APIResource{
-		Name:       inflect.Pluralize(strings.ToLower(objectType.GetKind())),
+		Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,
 	}
 
