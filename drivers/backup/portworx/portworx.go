@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -390,7 +391,16 @@ func (p *portworx) GetVolumeBackupIDs(
 		}
 		logrus.Debugf("GetVolumeBackupIDs storkApplicationBackupCR: [%+v]\n", storkApplicationBackupCR)
 		if len(storkApplicationBackupCR.Status.Volumes) > 0 {
-			return false, false, nil
+			isComplete := true
+			for _, backupVolume := range storkApplicationBackupCR.Status.Volumes {
+				logrus.Debugf("Volume [%v] has backup ID: [%v]\n", backupVolume.Volume, backupVolume.BackupID)
+				if !strings.Contains(backupVolume.BackupID, "/") {
+					isComplete = false
+				}
+			}
+			if isComplete {
+				return false, false, nil
+			}
 		}
 
 		return false, true, fmt.Errorf("Volume backup has not started yet")
@@ -407,6 +417,7 @@ func (p *portworx) GetVolumeBackupIDs(
 	}
 
 	for _, backupVolume := range storkApplicationBackupCR.Status.Volumes {
+		logrus.Debugf("For backupVolume [%+v] with Status [%v] while getting backup id: [%+v]", backupVolume, backupVolume.Status, backupVolume.BackupID)
 		if backupVolume.Status == "InProgress" && backupVolume.BackupID != "" {
 			volumeBackupIDs = append(volumeBackupIDs, backupVolume.BackupID)
 		} else {
