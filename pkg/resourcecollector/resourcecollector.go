@@ -496,6 +496,8 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.preparePVCResourceForApply(object, pvNameMappings)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
+	case "RoleBinding":
+		return false, r.prepareRoleBindingForApply(object, namespaceMappings)
 	}
 	return false, nil
 }
