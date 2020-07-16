@@ -11,6 +11,8 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestOneGroupSnapshot(t *testing.T) {
@@ -107,7 +109,7 @@ func TestMultipleGroupSnapshots(t *testing.T) {
 	namespace := "default"
 	selectors := map[string]string{"app": "mysql"}
 
-	_, err := core.Instance().CreateNamespace(namespace, nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
 	require.NoError(t, err, "Error creating namespace")
 
 	createGroupSnapshotAndVerify(t, name1, namespace, selectors, "", "", nil, nil, 0)
@@ -125,7 +127,7 @@ func TestMultipleGroupSnapshots(t *testing.T) {
 
 	name3 := "test-group-snap-3"
 	customNamespace := "ns1"
-	_, err = core.Instance().CreateNamespace(customNamespace, nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: customNamespace}})
 	require.NoError(t, err, "Error creating namespace")
 
 	createGroupSnapshotAndVerify(t, name3, customNamespace, selectors, "", "", nil, nil, 0)

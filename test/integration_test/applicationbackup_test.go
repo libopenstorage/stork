@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -895,11 +896,15 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "Error setting remote config")
 
 	// Create namespace for the backuplocation on second cluster
-	ns, err := core.Instance().CreateNamespace(appCtx.GetID(),
-		map[string]string{
-			"creator": "stork-test",
-			"app":     appCtx.App.Key,
-		})
+	ns, err := core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta.ObjectMeta{
+			Name: appCtx.GetID(),
+			Labels: map[string]string{
+				"creator": "stork-test",
+				"app":     appCtx.App.Key,
+			},
+		},
+	})
 	require.NoError(t, err, "Failed to create namespace %s", appCtx.GetID())
 
 	backupLocation2, err := createBackupLocation(t, backupLocationName, ns.Name, defaultBackupLocation, defaultSecretName)

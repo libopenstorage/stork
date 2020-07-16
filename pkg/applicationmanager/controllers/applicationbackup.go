@@ -747,6 +747,7 @@ func (a *ApplicationBackupController) uploadNamespaces(backup *stork_api.Applica
 	}
 	return nil
 }
+
 func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.ApplicationBackup, resKinds map[string]string) error {
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
@@ -961,11 +962,11 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 		}
 
 		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, crdObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
-			return fmt.Errorf("error deleting resources for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+			return fmt.Errorf("error deleting crds for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
 
 		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, nsObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
-			return fmt.Errorf("error deleting resources for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+			return fmt.Errorf("error deleting namespaces for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
 	}
 
