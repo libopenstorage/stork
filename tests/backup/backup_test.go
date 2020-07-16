@@ -1602,6 +1602,7 @@ func GetNodesForBackup(backupName string, bkpNamespace string,
 	clusterInspectReq := &api.ClusterInspectRequest{
 		OrgId: orgID,
 		Name:  clusterName,
+		IncludeSecrets: true,
 	}
 	clusterInspectRes, err := backupDriver.InspectCluster(clusterInspectReq)
 	Expect(err).NotTo(HaveOccurred(),

@@ -40,7 +40,7 @@ require (
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pborman/uuid v0.0.0-20180906182336-adf5a7427709
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
-	github.com/portworx/px-backup-api v0.0.0-20200427154119-bf6c416dd552
+	github.com/portworx/px-backup-api v1.0.1-0.20200714061107-e88917fc5196
 	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
 	github.com/portworx/sched-ops v0.0.0-20200601132537-056e2af44551
 	github.com/sirupsen/logrus v1.5.0
