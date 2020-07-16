@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -57,9 +58,9 @@ func TestGetClusterPairNotFound(t *testing.T) {
 func TestGetClusterPair(t *testing.T) {
 	defer resetTest()
 
-	_, err := core.Instance().CreateNamespace("test", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test"}})
 	require.NoError(t, err, "Error creating test namespace")
-	_, err = core.Instance().CreateNamespace("test1", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test1"}})
 	require.NoError(t, err, "Error creating test1 namespace")
 
 	createClusterPairAndVerify(t, "getclusterpairtest", "test")

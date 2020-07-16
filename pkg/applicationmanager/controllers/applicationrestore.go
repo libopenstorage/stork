@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -130,26 +129,20 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 			}
 			// create mapped restore namespace with metadata of backed up
 			// namespace
-			config, err := rest.InClusterConfig()
-			if err != nil {
-				return err
-			}
-			adminClient, err := kubernetes.NewForConfig(config)
-			if err != nil {
-				return err
-			}
-			_, err = adminClient.CoreV1().Namespaces().Create(&v1.Namespace{
+			_, err := core.Instance().CreateNamespace(&v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        ns.Name,
 					Labels:      ns.Labels,
 					Annotations: ns.GetAnnotations(),
 				},
 			})
+			log.ApplicationRestoreLog(restore).Infof("Creating dest namespace %v", ns.Name)
 			if err != nil {
 				if errors.IsAlreadyExists(err) {
+					log.ApplicationRestoreLog(restore).Errorf("Updating dest namespace %v", ns.Name)
 					// regardless of replace policy we should always update namespace is
 					// its already exist to keel latest annotations/labels
-					_, err = adminClient.CoreV1().Namespaces().Update(&v1.Namespace{
+					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:        ns.Name,
 							Labels:      ns.Labels,
@@ -162,11 +155,16 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 		}
 		return nil
 	}
-	for _, ns := range restore.Spec.NamespaceMapping {
-		if _, err := core.Instance().GetNamespace(ns); err != nil {
-
+	for _, namespace := range restore.Spec.NamespaceMapping {
+		if ns, err := core.Instance().GetNamespace(namespace); err != nil {
 			if errors.IsNotFound(err) {
-				if _, err := core.Instance().CreateNamespace(ns, nil); err != nil {
+				if _, err := core.Instance().CreateNamespace(&v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        ns.Name,
+						Labels:      ns.Labels,
+						Annotations: ns.GetAnnotations(),
+					},
+				}); err != nil {
 					return err
 				}
 			}

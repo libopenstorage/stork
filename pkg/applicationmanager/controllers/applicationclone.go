@@ -23,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -124,28 +123,20 @@ func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.Applicati
 	if err != nil {
 		return fmt.Errorf("error getting source namespace %v: %v", clone.Spec.SourceNamespace, err)
 	}
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return err
-	}
-	adminClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-	_, err = adminClient.CoreV1().Namespaces().Create(&v1.Namespace{
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        clone.Spec.DestinationNamespace,
 			Labels:      ns.Labels,
 			Annotations: ns.GetAnnotations(),
 		},
 	})
-	log.ApplicationCloneLog(clone).Errorf("Creating dest namespace %v", ns.Name)
+	log.ApplicationCloneLog(clone).Infof("Creating dest namespace %v", ns.Name)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			log.ApplicationCloneLog(clone).Errorf("replcaing dest namespace %v", ns.Name)
+			log.ApplicationCloneLog(clone).Errorf("Updating dest namespace %v", ns.Name)
 			// regardless of replace policy we should always update namespace is
 			// its already exist to keel latest annotations/labels
-			_, err = adminClient.CoreV1().Namespaces().Update(&v1.Namespace{
+			_, err = core.Instance().UpdateNamespace(&v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        clone.Spec.DestinationNamespace,
 					Labels:      ns.Labels,
@@ -153,8 +144,8 @@ func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.Applicati
 				},
 			})
 		}
-		log.ApplicationCloneLog(clone).Errorf("failed repl dest namespace %v", err)
-		return err
+		log.ApplicationCloneLog(clone).Errorf("error creating destination namespace  %v: %v", clone.Spec.DestinationNamespace, err)
+		return fmt.Errorf("error creating destination namespace %v: %v", clone.Spec.DestinationNamespace, err)
 	}
 	return nil
 }

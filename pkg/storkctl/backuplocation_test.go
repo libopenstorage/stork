@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -167,7 +168,7 @@ func TestGoogleBackupLocation(t *testing.T) {
 }
 
 func TestAllBackupLocation(t *testing.T) {
-	_, err := core.Instance().CreateNamespace("s3", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: meta.ObjectMeta{Name: "s3"}})
 	require.NoError(t, err, "Error creating s3 namespace")
 
 	backupLocation := &storkv1.BackupLocation{
@@ -190,7 +191,7 @@ func TestAllBackupLocation(t *testing.T) {
 	_, err = storkops.Instance().CreateBackupLocation(backupLocation)
 	require.NoError(t, err, "Error creating backuplocation")
 
-	_, err = core.Instance().CreateNamespace("azure", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: meta.ObjectMeta{Name: "azure"}})
 	require.NoError(t, err, "Error creating azure namespace")
 
 	backupLocation = &storkv1.BackupLocation{
@@ -210,7 +211,7 @@ func TestAllBackupLocation(t *testing.T) {
 	_, err = storkops.Instance().CreateBackupLocation(backupLocation)
 	require.NoError(t, err, "Error creating backuplocation")
 
-	_, err = core.Instance().CreateNamespace("google", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: meta.ObjectMeta{Name: "google"}})
 	require.NoError(t, err, "Error creating google namespace")
 
 	backupLocation = &storkv1.BackupLocation{
