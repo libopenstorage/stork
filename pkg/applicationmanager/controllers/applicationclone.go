@@ -123,7 +123,7 @@ func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.Applicati
 	if err != nil {
 		return fmt.Errorf("error getting source namespace %v: %v", clone.Spec.SourceNamespace, err)
 	}
-	_, err = core.Instance().CreateNamespace(clone.Spec.DestinationNamespace, nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clone.Spec.DestinationNamespace}})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("error creating destination namespace %v: %v", clone.Spec.DestinationNamespace, err)
 	}

@@ -107,7 +107,7 @@ func (a *ApplicationRestoreController) verifyNamespaces(restore *storkapi.Applic
 		if _, err := core.Instance().GetNamespace(ns); err != nil {
 
 			if errors.IsNotFound(err) {
-				if _, err := core.Instance().CreateNamespace(ns, nil); err != nil {
+				if _, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}); err != nil {
 					return err
 				}
 			}
