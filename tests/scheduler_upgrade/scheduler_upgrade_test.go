@@ -87,6 +87,15 @@ var _ = Describe("{UpgradeScheduler}", func() {
 			PerformSystemCheck()
 		}
 	})
+	Step("teardown all apps", func() {
+		for _, ctx := range contexts {
+			TearDownContext(ctx, nil)
+		}
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
 })
 
 var _ = AfterSuite(func() {
