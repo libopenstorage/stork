@@ -53,8 +53,13 @@ const (
 	storkSnapshotNameKey = "stork-snap"
 	// pvcLabel is the label used on volume to identify the pvc name
 	pvcLabel = "pvc"
-	// PXEnabledLabelKey is label used to check whethere px installation is enabled/disabled on node
+	// PXEnabledLabelKey is the label used to check whether px installation is enabled/disabled on node
 	PXEnabledLabelKey = "px/enabled"
+	// k8sRoleNodeInfraLabelKey is the label used to check whether node has infra=true label on OpenShift Enterprise environment
+	k8sRoleNodeInfraLabelKey = "node-role.kubernetes.io/infra"
+	// k8sRoleNodeComputeLabelKey is the label used to check whether node has compute=true label on OpenShift Enterprise environment
+	k8sRoleNodeComputeLabelKey = "node-role.kubernetes.io/compute"
+
 	// nodeType is label used to check kubernetes node-type
 	dcosNodeType                = "kubernetes.dcos.io/node-type"
 	talismanServiceAccount      = "talisman-account"
@@ -390,7 +395,8 @@ func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[strin
 
 func (k *k8sSchedOps) GetVolumeName(vol *volume.Volume) string {
 	if vol != nil && vol.ID != "" {
-		return fmt.Sprintf("pvc-%s", vol.ID)
+		logrus.Infof("Returning vol name as : %s", vol.ID)
+		return vol.ID
 	}
 	return ""
 }
@@ -408,7 +414,7 @@ func (k *k8sSchedOps) ValidateVolumeCleanup(d node.Driver) error {
 		Name:           "*portworx-volume",
 	}
 
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetStorageDriverNodes() {
 		volDirList, _ := d.FindFiles(k8sPodsRootDir, n, listVolOpts)
 		nodeToPodsMap[n.Name] = separateFilePaths(volDirList)
 		nodeMap[n.Name] = n
@@ -492,12 +498,9 @@ func isDirEmpty(path string, n node.Node, d node.Driver) bool {
 	return true
 }
 
+// GetServiceEndpoint get IP addr of portworx-service, preferable external IP
 func (k *k8sSchedOps) GetServiceEndpoint() (string, error) {
-	svc, err := k8sCore.GetService(PXServiceName, PXNamespace)
-	if err == nil {
-		return svc.Spec.ClusterIP, nil
-	}
-	return "", err
+	return k8sCore.GetServiceEndpoint(PXServiceName, PXNamespace)
 }
 
 func (k *k8sSchedOps) UpgradePortworx(ociImage, ociTag, pxImage, pxTag string) error {
@@ -644,6 +647,18 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
 		logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 		return false, nil
+	}
+
+	// for OpenShift Enterprise if node has node-role.kubernetes.io/infra=true and
+	// it doesn't have node-role.kubernetes.io/compute=true then PX is disabled on node
+	if nodeLabelValue, hasKey := kubeNode.Labels[k8sRoleNodeInfraLabelKey]; hasKey {
+		if nodeLabelValue == "true" {
+			if _, hasKey := kubeNode.Labels[k8sRoleNodeComputeLabelKey]; !hasKey {
+				logrus.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+				return false, nil
+			}
+		}
+
 	}
 
 	logrus.Infof("PX is enabled on node %v.", n.Name)
