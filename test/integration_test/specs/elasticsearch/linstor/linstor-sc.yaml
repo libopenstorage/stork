@@ -1,0 +1,10 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: elasticdata-sc
+provisioner: linstor.csi.linbit.com
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  autoPlace: "3"
+  storagePool: sda

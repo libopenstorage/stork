@@ -112,7 +112,8 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 		"Ingress",
 		"Route",
 		"Template",
-		"CronJob":
+		"CronJob",
+		"ResourceQuota":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -418,19 +419,20 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 					if !kind.KeepStatus {
 						delete(content, "status")
 					}
-					// remove metadata annotations
-					metadataMap := content["metadata"].(map[string]interface{})
-					// Remove all metadata except some well-known ones
-					for key := range metadataMap {
-						switch key {
-						case "name", "namespace", "labels", "annotations":
-						default:
-							delete(metadataMap, key)
-						}
-					}
 				}
 			}
 		}
+		// remove metadata annotations
+		metadataMap := content["metadata"].(map[string]interface{})
+		// Remove all metadata except some well-known ones
+		for key := range metadataMap {
+			switch key {
+			case "name", "namespace", "labels", "annotations":
+			default:
+				delete(metadataMap, key)
+			}
+		}
+
 	}
 	return nil
 }
@@ -495,6 +497,8 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.preparePVCResourceForApply(object, pvNameMappings)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
+	case "RoleBinding":
+		return false, r.prepareRoleBindingForApply(object, namespaceMappings)
 	}
 	return false, nil
 }
@@ -633,8 +637,13 @@ func (r *ResourceCollector) getDynamicClient(
 	if err != nil {
 		return nil, err
 	}
+
+	// The default ruleset doesn't pluralize quotas correctly, so add that
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+
 	resource := &metav1.APIResource{
-		Name:       inflect.Pluralize(strings.ToLower(objectType.GetKind())),
+		Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,
 	}
 
