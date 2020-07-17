@@ -2831,16 +2831,19 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 			resp, err := cloudBackupClient.Size(ctx, req)
 			st, _ := status.FromError(err)
 			if err != nil {
+				// On error explicitly make the value to zero
+				vInfo.Size = 0
 				if st.Code() == codes.Unimplemented {
-					// if using old porx version, return 0 size
-					vInfo.Size = 0
-					volumeInfos = append(volumeInfos, vInfo)
-					return volumeInfos, nil
+					// if using old porx version which doesn't support this API, log an
+					// warning and continue to next vol if available
+					log.ApplicationBackupLog(backup).Warnf("Unsupported porx version to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
+				} else {
+					log.ApplicationBackupLog(backup).Errorf("Failed to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
+					return nil, err
 				}
-				logrus.Errorf("Failed to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
-				return nil, err
+			} else {
+				vInfo.Size = resp.GetSize()
 			}
-			vInfo.Size = resp.GetSize()
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
