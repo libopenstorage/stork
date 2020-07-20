@@ -791,6 +791,10 @@ func local_request_Cluster_Enumerate_0(ctx context.Context, marshaler runtime.Ma
 
 }
 
+var (
+	filter_Cluster_Inspect_0 = &utilities.DoubleArray{Encoding: map[string]int{"org_id": 0, "name": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+)
+
 func request_Cluster_Inspect_0(ctx context.Context, marshaler runtime.Marshaler, client ClusterClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq ClusterInspectRequest
 	var metadata runtime.ServerMetadata
@@ -822,6 +826,13 @@ func request_Cluster_Inspect_0(ctx context.Context, marshaler runtime.Marshaler,
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Cluster_Inspect_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := client.Inspect(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -860,6 +871,13 @@ func local_request_Cluster_Inspect_0(ctx context.Context, marshaler runtime.Mars
 
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Cluster_Inspect_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := server.Inspect(ctx, &protoReq)
@@ -2654,6 +2672,7 @@ func local_request_License_Inspect_0(ctx context.Context, marshaler runtime.Mars
 // RegisterHealthHandlerServer registers the http handlers for service Health to "mux".
 // UnaryRPC     :call HealthServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterHealthHandlerFromEndpoint instead.
 func RegisterHealthHandlerServer(ctx context.Context, mux *runtime.ServeMux, server HealthServer) error {
 
 	mux.Handle("GET", pattern_Health_Status_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -2682,6 +2701,7 @@ func RegisterHealthHandlerServer(ctx context.Context, mux *runtime.ServeMux, ser
 // RegisterSchedulePolicyHandlerServer registers the http handlers for service SchedulePolicy to "mux".
 // UnaryRPC     :call SchedulePolicyServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterSchedulePolicyHandlerFromEndpoint instead.
 func RegisterSchedulePolicyHandlerServer(ctx context.Context, mux *runtime.ServeMux, server SchedulePolicyServer) error {
 
 	mux.Handle("POST", pattern_SchedulePolicy_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -2790,6 +2810,7 @@ func RegisterSchedulePolicyHandlerServer(ctx context.Context, mux *runtime.Serve
 // RegisterBackupScheduleHandlerServer registers the http handlers for service BackupSchedule to "mux".
 // UnaryRPC     :call BackupScheduleServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterBackupScheduleHandlerFromEndpoint instead.
 func RegisterBackupScheduleHandlerServer(ctx context.Context, mux *runtime.ServeMux, server BackupScheduleServer) error {
 
 	mux.Handle("POST", pattern_BackupSchedule_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -2898,6 +2919,7 @@ func RegisterBackupScheduleHandlerServer(ctx context.Context, mux *runtime.Serve
 // RegisterClusterHandlerServer registers the http handlers for service Cluster to "mux".
 // UnaryRPC     :call ClusterServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterClusterHandlerFromEndpoint instead.
 func RegisterClusterHandlerServer(ctx context.Context, mux *runtime.ServeMux, server ClusterServer) error {
 
 	mux.Handle("POST", pattern_Cluster_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -3006,6 +3028,7 @@ func RegisterClusterHandlerServer(ctx context.Context, mux *runtime.ServeMux, se
 // RegisterCloudCredentialHandlerServer registers the http handlers for service CloudCredential to "mux".
 // UnaryRPC     :call CloudCredentialServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterCloudCredentialHandlerFromEndpoint instead.
 func RegisterCloudCredentialHandlerServer(ctx context.Context, mux *runtime.ServeMux, server CloudCredentialServer) error {
 
 	mux.Handle("POST", pattern_CloudCredential_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -3114,6 +3137,7 @@ func RegisterCloudCredentialHandlerServer(ctx context.Context, mux *runtime.Serv
 // RegisterBackupLocationHandlerServer registers the http handlers for service BackupLocation to "mux".
 // UnaryRPC     :call BackupLocationServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterBackupLocationHandlerFromEndpoint instead.
 func RegisterBackupLocationHandlerServer(ctx context.Context, mux *runtime.ServeMux, server BackupLocationServer) error {
 
 	mux.Handle("POST", pattern_BackupLocation_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -3222,6 +3246,7 @@ func RegisterBackupLocationHandlerServer(ctx context.Context, mux *runtime.Serve
 // RegisterBackupHandlerServer registers the http handlers for service Backup to "mux".
 // UnaryRPC     :call BackupServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterBackupHandlerFromEndpoint instead.
 func RegisterBackupHandlerServer(ctx context.Context, mux *runtime.ServeMux, server BackupServer) error {
 
 	mux.Handle("POST", pattern_Backup_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -3330,6 +3355,7 @@ func RegisterBackupHandlerServer(ctx context.Context, mux *runtime.ServeMux, ser
 // RegisterRestoreHandlerServer registers the http handlers for service Restore to "mux".
 // UnaryRPC     :call RestoreServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterRestoreHandlerFromEndpoint instead.
 func RegisterRestoreHandlerServer(ctx context.Context, mux *runtime.ServeMux, server RestoreServer) error {
 
 	mux.Handle("POST", pattern_Restore_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -3438,6 +3464,7 @@ func RegisterRestoreHandlerServer(ctx context.Context, mux *runtime.ServeMux, se
 // RegisterOrganizationHandlerServer registers the http handlers for service Organization to "mux".
 // UnaryRPC     :call OrganizationServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterOrganizationHandlerFromEndpoint instead.
 func RegisterOrganizationHandlerServer(ctx context.Context, mux *runtime.ServeMux, server OrganizationServer) error {
 
 	mux.Handle("POST", pattern_Organization_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -3506,6 +3533,7 @@ func RegisterOrganizationHandlerServer(ctx context.Context, mux *runtime.ServeMu
 // RegisterRulesHandlerServer registers the http handlers for service Rules to "mux".
 // UnaryRPC     :call RulesServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterRulesHandlerFromEndpoint instead.
 func RegisterRulesHandlerServer(ctx context.Context, mux *runtime.ServeMux, server RulesServer) error {
 
 	mux.Handle("POST", pattern_Rules_Create_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -3614,6 +3642,7 @@ func RegisterRulesHandlerServer(ctx context.Context, mux *runtime.ServeMux, serv
 // RegisterVersionHandlerServer registers the http handlers for service Version to "mux".
 // UnaryRPC     :call VersionServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterVersionHandlerFromEndpoint instead.
 func RegisterVersionHandlerServer(ctx context.Context, mux *runtime.ServeMux, server VersionServer) error {
 
 	mux.Handle("GET", pattern_Version_Get_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -3642,6 +3671,7 @@ func RegisterVersionHandlerServer(ctx context.Context, mux *runtime.ServeMux, se
 // RegisterLicenseHandlerServer registers the http handlers for service License to "mux".
 // UnaryRPC     :call LicenseServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
+// Note that using this registration option will cause many gRPC library features (such as grpc.SendHeader, etc) to stop working. Consider using RegisterLicenseHandlerFromEndpoint instead.
 func RegisterLicenseHandlerServer(ctx context.Context, mux *runtime.ServeMux, server LicenseServer) error {
 
 	mux.Handle("POST", pattern_License_Activate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {

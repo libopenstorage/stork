@@ -334,7 +334,7 @@ github.com/pmezard/go-difflib/difflib
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/px-backup-api v0.0.0-20200427154119-bf6c416dd552
+# github.com/portworx/px-backup-api v1.0.1-0.20200714061107-e88917fc5196
 github.com/portworx/px-backup-api/pkg/apis/v1
 # github.com/portworx/sched-ops v0.0.0-20200601132537-056e2af44551
 github.com/portworx/sched-ops/k8s/apps
