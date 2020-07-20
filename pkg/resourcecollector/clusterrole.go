@@ -125,16 +125,34 @@ func (r *ResourceCollector) prepareClusterRoleBindingForApply(
 	namespaceMappings map[string]string,
 ) error {
 	var crb rbacv1.ClusterRoleBinding
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &crb); err != nil {
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &crb)
+	if err != nil {
 		return err
 	}
+	crb.Subjects, err = r.updateSubjects(crb.Subjects, namespaceMappings)
+	if err != nil {
+		return err
+	}
+	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&crb)
+	if err != nil {
+		return err
+	}
+	object.SetUnstructuredContent(o)
+
+	return nil
+}
+
+func (r *ResourceCollector) updateSubjects(
+	subjects []rbacv1.Subject,
+	namespaceMappings map[string]string,
+) ([]rbacv1.Subject, error) {
 	subjectsToApply := make([]rbacv1.Subject, 0)
 	for sourceNamespace, destNamespace := range namespaceMappings {
 		// Check if there is a subject for the namespace which is requested
-		for _, subject := range crb.Subjects {
+		for _, subject := range subjects {
 			collect, err := r.subjectInNamespace(&subject, sourceNamespace)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if !collect {
 				continue
@@ -144,7 +162,7 @@ func (r *ResourceCollector) prepareClusterRoleBindingForApply(
 			case rbacv1.UserKind:
 				_, username, err := serviceaccount.SplitUsername(subject.Name)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				// Regnerate the Username for the destination namespace
 				subject.Name = serviceaccount.MakeUsername(destNamespace, username)
@@ -158,14 +176,7 @@ func (r *ResourceCollector) prepareClusterRoleBindingForApply(
 			subjectsToApply = append(subjectsToApply, subject)
 		}
 	}
-	crb.Subjects = subjectsToApply
-	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&crb)
-	if err != nil {
-		return err
-	}
-	object.SetUnstructuredContent(o)
-
-	return nil
+	return subjectsToApply, nil
 }
 
 func (r *ResourceCollector) mergeAndUpdateClusterRoleBinding(
