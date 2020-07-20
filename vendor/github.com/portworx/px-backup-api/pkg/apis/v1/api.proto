@@ -4,10 +4,11 @@
 // 'make proto' will run clang-format to fix formatiing
 syntax = "proto3";
 
-import "google/api/annotations.proto";
-import "google/protobuf/timestamp.proto";
 option go_package = "api";
 
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "pkg/apis/v1/common.proto";
 
@@ -66,6 +67,7 @@ message S3Config {
     string region = 2;
     bool disable_ssl = 3;
     bool disable_path_style = 4;
+    string storage_class = 5;
 }
 
 message AzureConfig {
@@ -129,6 +131,9 @@ message SchedulePolicyInfo {
         int64 minutes = 1;
         // Number of objects to retain for interval policy, default value is 10.
         int64 retain = 2;
+        // Number of incremental snapshots to take before taking a full
+        // snapshot.
+        google.protobuf.UInt32Value incremental_count = 3;
     }
 
     message DailyPolicy {
@@ -137,6 +142,9 @@ message SchedulePolicyInfo {
         string time = 1;
         // Number of objects to retain for daily policy, default value is 10.
         int64 retain = 2;
+        // Number of incremental snapshots to take before taking a full
+        // snapshot.
+        google.protobuf.UInt32Value incremental_count = 3;
     }
 
     message WeeklyPolicy {
@@ -148,6 +156,9 @@ message SchedulePolicyInfo {
         string time = 2;
         // Number of objects to retain for weekly policy, default value is 10.
         int64 retain = 3;
+        // Number of incremental snapshots to take before taking a full
+        // snapshot.
+        google.protobuf.UInt32Value incremental_count = 4;
     }
 
     message MonthlyPolicy {
@@ -164,6 +175,9 @@ message SchedulePolicyInfo {
         string time = 2;
         // Number of objects to retain for monthly policy, default value is 10.
         int64 retain = 3;
+        // Number of incremental snapshots to take before taking a full
+        // snapshot.
+        google.protobuf.UInt32Value incremental_count = 4;
     }
     IntervalPolicy interval = 1;
     DailyPolicy daily = 2;
@@ -278,6 +292,14 @@ message BackupLocationObject {
     BackupLocationInfo backup_location_info = 2 [ (gogoproto.embed) = true ];
 }
 
+message ResourceInfo {
+    string name = 1;
+    string namespace = 2;
+    string group = 3;
+    string kind = 4;
+    string version = 5;
+}
+
 message BackupInfo {
     // Name of BackupLocation
     string backup_location = 1;
@@ -288,7 +310,7 @@ message BackupInfo {
     // Label selectors to choose resources
     map<string, string> label_selectors = 4;
     StatusInfo status = 5;
-    repeated Resource resources = 6;
+    repeated ResourceInfo resources = 6;
     repeated Volume volumes = 7;
     string backup_path = 8;
     Stage stage = 9;
@@ -299,6 +321,7 @@ message BackupInfo {
     // Otherwise it will be empty.
     BackupSchedule backup_schedule = 12;
     string cr_name = 13;
+    uint64 size = 14;
 
     enum Stage {
         Invalid = 0;
@@ -315,13 +338,6 @@ message BackupInfo {
         string name = 2;
     }
 
-    message Resource {
-        string name = 1;
-        string namespace = 2;
-        string group = 3;
-        string kind = 4;
-        string version = 5;
-    }
     message Volume {
         string name = 1;
         string namespace = 2;
@@ -331,6 +347,7 @@ message BackupInfo {
         string driver_name = 6;
         repeated string zones = 7;
         map<string, string> options = 8;
+        uint64 size = 9;
     }
 
     // Message for maintaing status of the object.
@@ -346,6 +363,7 @@ message BackupInfo {
             Captured = 7;
             PartialSuccess = 8;
             DeletePending = 9;
+            CloudBackupMissing = 10;
         }
 
         Status status = 1;
@@ -366,11 +384,11 @@ message RulesInfo {
     message RuleItem {
         map<string, string> pod_selector = 1
             [ (gogoproto.moretags) = "yaml:\"podSelector\"" ];
-        repeated RuleAction actions = 2
+        repeated Action actions = 2
             [ (gogoproto.moretags) = "yaml:\"actions\"" ];
     }
 
-    message RuleAction {
+    message Action {
         bool background = 1 [ (gogoproto.moretags) = "yaml:\"background\"" ];
         bool run_in_single_pod = 2
             [ (gogoproto.moretags) = "yaml:\"runInSinglePod\"" ];
@@ -405,12 +423,15 @@ message RestoreInfo {
     ReplacePolicy.Type replace_policy = 5;
 
     StatusInfo status = 6;
-    repeated Resource resources = 7;
+    repeated RestoredResource resources = 7;
     repeated Volume volumes = 8;
     // Name of the cluster
     string cluster = 9;
+    repeated string include_optional_resource_types = 10;
+    uint64 size = 11;
+    repeated ResourceInfo include_resources = 12;
 
-    message Resource {
+    message RestoredResource {
         string name = 1;
         string namespace = 2;
         string group = 3;
@@ -428,6 +449,7 @@ message RestoreInfo {
         string driver_name = 6;
         repeated string zones = 7;
         map<string, string> options = 8;
+        uint64 size = 9;
     }
 
     // Message for maintaing status of the object.
@@ -766,6 +788,7 @@ message ClusterEnumerateRequest {
     string org_id = 1;
     // label selectors for the object for filtering
     map<string, string> labels = 2;
+    bool include_secrets = 3;
 }
 
 // Define ClusterEnumerateResponse struct
@@ -775,6 +798,7 @@ message ClusterEnumerateResponse { repeated ClusterObject clusters = 1; }
 message ClusterInspectRequest {
     string org_id = 1;
     string name = 2;
+    bool include_secrets = 3;
 }
 
 // Define ClusterInspectResponse struct
@@ -1137,6 +1161,10 @@ message RestoreCreateRequest {
     map<string, string> namespace_mapping = 4;
     // replace policy to use if the resource already exists
     ReplacePolicy.Type replace_policy = 5;
+    // optional resource types to be restored (eg Jobs)
+    repeated string include_optional_resource_types = 6;
+    // List of resources to restore (optional)
+    repeated ResourceInfo include_resources = 7;
 }
 
 // Define RestoreCreateResponse struct

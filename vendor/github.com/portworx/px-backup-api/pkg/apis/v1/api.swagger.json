@@ -841,6 +841,13 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "include_secrets",
+            "in": "query",
+            "required": false,
+            "type": "boolean",
+            "format": "boolean"
           }
         ],
         "tags": [
@@ -878,6 +885,13 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "include_secrets",
+            "in": "query",
+            "required": false,
+            "type": "boolean",
+            "format": "boolean"
           }
         ],
         "tags": [
@@ -1807,7 +1821,7 @@
         "resources": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/BackupInfoResource"
+            "$ref": "#/definitions/ResourceInfo"
           }
         },
         "volumes": {
@@ -1834,6 +1848,10 @@
         },
         "cr_name": {
           "type": "string"
+        },
+        "size": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -1844,26 +1862,6 @@
           "type": "string"
         },
         "name": {
-          "type": "string"
-        }
-      }
-    },
-    "BackupInfoResource": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
-        },
-        "group": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "version": {
           "type": "string"
         }
       }
@@ -1905,7 +1903,8 @@
         "Success",
         "Captured",
         "PartialSuccess",
-        "DeletePending"
+        "DeletePending",
+        "CloudBackupMissing"
       ],
       "default": "Invalid"
     },
@@ -1941,6 +1940,10 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "size": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -2831,6 +2834,26 @@
       ],
       "default": "Invalid"
     },
+    "ResourceInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
     "RestoreCreateRequest": {
       "type": "object",
       "properties": {
@@ -2855,6 +2878,20 @@
         "replace_policy": {
           "$ref": "#/definitions/ReplacePolicyType",
           "title": "replace policy to use if the resource already exists"
+        },
+        "include_optional_resource_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "optional resource types to be restored (eg Jobs)"
+        },
+        "include_resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceInfo"
+          },
+          "title": "List of resources to restore (optional)"
         }
       },
       "title": "Define RestoreCreateRequest struct"
@@ -2918,7 +2955,7 @@
         "resources": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/RestoreInfoResource"
+            "$ref": "#/definitions/RestoreInfoRestoredResource"
           }
         },
         "volumes": {
@@ -2930,11 +2967,27 @@
         "cluster": {
           "type": "string",
           "title": "Name of the cluster"
+        },
+        "include_optional_resource_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "size": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "include_resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceInfo"
+          }
         }
       },
       "title": "Message for restore info"
     },
-    "RestoreInfoResource": {
+    "RestoreInfoRestoredResource": {
       "type": "object",
       "properties": {
         "name": {
@@ -3016,6 +3069,10 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "size": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -3131,7 +3188,7 @@
       },
       "title": "Message for passing pre and post exec rules for backup"
     },
-    "RulesInfoRuleAction": {
+    "RulesInfoAction": {
       "type": "object",
       "properties": {
         "background": {
@@ -3159,7 +3216,7 @@
         "actions": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/RulesInfoRuleAction"
+            "$ref": "#/definitions/RulesInfoAction"
           }
         }
       }
@@ -3180,6 +3237,9 @@
         "disable_path_style": {
           "type": "boolean",
           "format": "boolean"
+        },
+        "storage_class": {
+          "type": "string"
         }
       }
     },
@@ -3250,6 +3310,11 @@
           "type": "string",
           "format": "int64",
           "description": "Number of objects to retain for daily policy, default value is 10."
+        },
+        "incremental_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Number of incremental snapshots to take before taking a full\nsnapshot."
         }
       }
     },
@@ -3265,6 +3330,11 @@
           "type": "string",
           "format": "int64",
           "description": "Number of objects to retain for interval policy, default value is 10."
+        },
+        "incremental_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Number of incremental snapshots to take before taking a full\nsnapshot."
         }
       }
     },
@@ -3284,6 +3354,11 @@
           "type": "string",
           "format": "int64",
           "description": "Number of objects to retain for monthly policy, default value is 10."
+        },
+        "incremental_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Number of incremental snapshots to take before taking a full\nsnapshot."
         }
       }
     },
@@ -3302,6 +3377,11 @@
           "type": "string",
           "format": "int64",
           "description": "Number of objects to retain for weekly policy, default value is 10."
+        },
+        "incremental_count": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Number of incremental snapshots to take before taking a full\nsnapshot."
         }
       }
     },
