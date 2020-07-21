@@ -11,6 +11,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
 	_ "github.com/libopenstorage/stork/drivers/volume/azure"
+	_ "github.com/libopenstorage/stork/drivers/volume/csi"
 	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
 	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
