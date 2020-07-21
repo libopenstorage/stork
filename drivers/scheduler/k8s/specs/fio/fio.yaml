@@ -17,16 +17,33 @@ spec:
       - name: fio
         image: portworx/fio_drv
         command: ["fio"]
-        args: ["/configs/fio.job", "--status-interval=1", "--eta=never"]
+        args: ["/configs/fio.job", "--status-interval=1", "--eta=never", "--output=/logs/fio.log"]
         volumeMounts:
         - name: fio-config-vol
           mountPath: /configs
         - name: fio-data
           mountPath: /scratch
+        - name: fio-log
+          mountPath: /logs/
+      - name: grok
+        image: pwxvin/grok-exporter:v1.0.0-RC4
+        imagePullPolicy: Always
+        ports:
+        - name: grok-port
+          containerPort: 9144
+          protocol: TCP
+        volumeMounts:
+        - name: grok-config-volume
+          mountPath: /etc/grok_exporter
+        - name: fio-log
+          mountPath: /logs/
       volumes:
       - name: fio-config-vol
         configMap:
           name: fio-job-config
+      - name: grok-config-volume
+        configMap:
+          name: grok-exporter
   volumeClaimTemplates:
   - metadata:
       name: fio-data
@@ -37,3 +54,25 @@ spec:
       resources:
         requests:
           storage: 50Gi
+  - metadata:
+      name: fio-log
+    spec:
+      storageClassName: fio-sharedv4
+      accessModes:
+      - ReadWriteMany
+      resources:
+        requests:
+          storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grok-exporter-svc
+spec:
+  clusterIP: None
+  selector: 
+    app: fio
+  ports:
+  - name: grok-port
+    port: 9144
+    targetPort: 9144

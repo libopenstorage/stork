@@ -8,3 +8,14 @@ parameters:
   repl: "1"
   priority_io: "high"
 allowVolumeExpansion: true
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-sharedv4
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "2"
+  priority_io: "high"
+  sharedv4: "true"
+allowVolumeExpansion: true
