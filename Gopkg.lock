@@ -673,6 +673,14 @@
   version = "v1.0.1"
 
 [[projects]]
+  digest = "1:d41926df07db87f102682b6fbf85f6dd70a137662baa126fc94a3103d24f7baf"
+  name = "github.com/kubernetes-csi/external-snapshotter"
+  packages = ["v2/pkg/apis/volumesnapshot/v1beta1"]
+  pruneopts = "T"
+  revision = "034c54581c37049e318fd982db2d3b6c8ea508a1"
+  version = "v2.1.1"
+
+[[projects]]
   branch = "openstorage-5.5"
   digest = "1:b5b8718d59df0b5b2bd3bd0d539a1cf7c04976c69d2ece64b06a33c9ffd7166b"
   name = "github.com/kubernetes-incubator/external-storage"
@@ -1654,7 +1662,7 @@
 
 [[projects]]
   digest = "1:aa29b60e553dad57a6081fd76ff5aa78406b809d77c9a1d981fd0c8e6fc93a0d"
-  name = "k8s.io/apimachinery"
+  name = ""
   packages = [
     "pkg/api/equality",
     "pkg/api/errors",
@@ -2243,6 +2251,7 @@
     "github.com/go-openapi/inflect",
     "github.com/hashicorp/go-version",
     "github.com/heptio/ark/pkg/discovery",
+    "github.com/kubernetes-csi/external-snapshotter/v2/pkg/apis/volumesnapshot/v1beta1",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller",
