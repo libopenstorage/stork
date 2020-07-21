@@ -719,9 +719,9 @@ func (a *ApplicationBackupController) prepareResources(
 	return nil
 }
 
-// Construct the full base path for a given backup
+// GetObjectPath construct the full base path for a given backup
 // The format is "namespace/backupName/backupUID" which will be unique for each backup
-func (a *ApplicationBackupController) getObjectPath(
+func GetObjectPath(
 	backup *stork_api.ApplicationBackup,
 ) string {
 	return filepath.Join(backup.Namespace, backup.Name, string(backup.UID))
@@ -748,7 +748,7 @@ func (a *ApplicationBackupController) uploadObject(
 		}
 	}
 
-	objectPath := a.getObjectPath(backup)
+	objectPath := GetObjectPath(backup)
 	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
 	if err != nil {
 		return err
@@ -950,7 +950,7 @@ func (a *ApplicationBackupController) backupResources(
 		log.ApplicationBackupLog(backup).Errorf(message)
 		return err
 	}
-	backup.Status.BackupPath = a.getObjectPath(backup)
+	backup.Status.BackupPath = GetObjectPath(backup)
 	backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 	backup.Status.FinishTimestamp = metav1.Now()
 	backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
