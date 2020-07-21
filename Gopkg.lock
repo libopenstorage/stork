@@ -673,6 +673,14 @@
   version = "v1.0.1"
 
 [[projects]]
+  digest = "1:d41926df07db87f102682b6fbf85f6dd70a137662baa126fc94a3103d24f7baf"
+  name = "github.com/kubernetes-csi/external-snapshotter"
+  packages = ["v2/pkg/apis/volumesnapshot/v1beta1"]
+  pruneopts = "T"
+  revision = "034c54581c37049e318fd982db2d3b6c8ea508a1"
+  version = "v2.1.1"
+
+[[projects]]
   branch = "openstorage-5.5"
   digest = "1:b5b8718d59df0b5b2bd3bd0d539a1cf7c04976c69d2ece64b06a33c9ffd7166b"
   name = "github.com/kubernetes-incubator/external-storage"
@@ -1653,7 +1661,7 @@
 
 [[projects]]
   digest = "1:aa29b60e553dad57a6081fd76ff5aa78406b809d77c9a1d981fd0c8e6fc93a0d"
-  name = "k8s.io/apimachinery"
+  name = ""
   packages = [
     "pkg/api/equality",
     "pkg/api/errors",
@@ -2241,6 +2249,7 @@
     "github.com/go-openapi/inflect",
     "github.com/hashicorp/go-version",
     "github.com/heptio/ark/pkg/discovery",
+    "github.com/kubernetes-csi/external-snapshotter/v2/pkg/apis/volumesnapshot/v1beta1",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client",
     "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller",
@@ -2319,24 +2328,24 @@
     "k8s.io/api/storage/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
-    "k8s.io/apimachinery/pkg/api/errors",
-    "k8s.io/apimachinery/pkg/api/meta",
-    "k8s.io/apimachinery/pkg/api/resource",
-    "k8s.io/apimachinery/pkg/api/validation",
-    "k8s.io/apimachinery/pkg/apis/meta/v1",
-    "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured",
-    "k8s.io/apimachinery/pkg/apis/meta/v1beta1",
-    "k8s.io/apimachinery/pkg/fields",
-    "k8s.io/apimachinery/pkg/labels",
-    "k8s.io/apimachinery/pkg/runtime",
-    "k8s.io/apimachinery/pkg/runtime/schema",
-    "k8s.io/apimachinery/pkg/runtime/serializer",
-    "k8s.io/apimachinery/pkg/types",
-    "k8s.io/apimachinery/pkg/util/runtime",
-    "k8s.io/apimachinery/pkg/util/sets",
-    "k8s.io/apimachinery/pkg/util/uuid",
-    "k8s.io/apimachinery/pkg/util/wait",
-    "k8s.io/apimachinery/pkg/watch",
+    "/pkg/api/errors",
+    "/pkg/api/meta",
+    "/pkg/api/resource",
+    "/pkg/api/validation",
+    "/pkg/apis/meta/v1",
+    "/pkg/apis/meta/v1/unstructured",
+    "/pkg/apis/meta/v1beta1",
+    "/pkg/fields",
+    "/pkg/labels",
+    "/pkg/runtime",
+    "/pkg/runtime/schema",
+    "/pkg/runtime/serializer",
+    "/pkg/types",
+    "/pkg/util/runtime",
+    "/pkg/util/sets",
+    "/pkg/util/uuid",
+    "/pkg/util/wait",
+    "/pkg/watch",
     "k8s.io/apiserver/pkg/authentication/serviceaccount",
     "k8s.io/cli-runtime/pkg/genericclioptions",
     "k8s.io/cli-runtime/pkg/resource",
