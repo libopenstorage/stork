@@ -742,7 +742,14 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 				metadata[k] = v
 			}
 		}
-		ns, err := k8sOps.CreateNamespace(namespace, metadata)
+
+		nsSpec := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   namespace,
+				Labels: metadata,
+			},
+		}
+		ns, err := k8sOps.CreateNamespace(nsSpec)
 
 		if errors.IsAlreadyExists(err) {
 			if ns, err = k8sOps.GetNamespace(namespace); err == nil {

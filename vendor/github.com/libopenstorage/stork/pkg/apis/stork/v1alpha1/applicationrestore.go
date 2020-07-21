@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,12 +24,12 @@ type ApplicationRestore struct {
 
 // ApplicationRestoreSpec is the spec used to restore applications
 type ApplicationRestoreSpec struct {
-	BackupName       string                              `json:"backupName"`
-	BackupLocation   string                              `json:"backupLocation"`
-	NamespaceMapping map[string]string                   `json:"namespaceMapping"`
-	Selectors        map[string]string                   `json:"selectors"`
-	EncryptionKey    *corev1.EnvVarSource                `json:"encryptionKey"`
-	ReplacePolicy    ApplicationRestoreReplacePolicyType `json:"replacePolicy"`
+	BackupName                   string                              `json:"backupName"`
+	BackupLocation               string                              `json:"backupLocation"`
+	NamespaceMapping             map[string]string                   `json:"namespaceMapping"`
+	ReplacePolicy                ApplicationRestoreReplacePolicyType `json:"replacePolicy"`
+	IncludeOptionalResourceTypes []string                            `json:"includeOptionalResourceTypes"`
+	IncludeResources             []ObjectInfo                        `json:"includeResources"`
 }
 
 // ApplicationRestoreReplacePolicyType is the replace policy for the application restore
@@ -50,20 +49,20 @@ const (
 
 // ApplicationRestoreStatus is the status of a application restore operation
 type ApplicationRestoreStatus struct {
-	Stage           ApplicationRestoreStageType       `json:"stage"`
-	Status          ApplicationRestoreStatusType      `json:"status"`
-	Resources       []*ApplicationRestoreResourceInfo `json:"resources"`
-	Volumes         []*ApplicationRestoreVolumeInfo   `json:"volumes"`
-	FinishTimestamp metav1.Time                       `json:"finishTimestamp"`
+	Stage               ApplicationRestoreStageType       `json:"stage"`
+	Status              ApplicationRestoreStatusType      `json:"status"`
+	Reason              string                            `json:"reason"`
+	Resources           []*ApplicationRestoreResourceInfo `json:"resources"`
+	Volumes             []*ApplicationRestoreVolumeInfo   `json:"volumes"`
+	FinishTimestamp     metav1.Time                       `json:"finishTimestamp"`
+	LastUpdateTimestamp metav1.Time                       `json:"lastUpdateTimestamp"`
 }
 
 // ApplicationRestoreResourceInfo is the info for the restore of a resource
 type ApplicationRestoreResourceInfo struct {
-	Name                    string `json:"name"`
-	Namespace               string `json:"namespace"`
-	metav1.GroupVersionKind `json:",inline"`
-	Status                  ApplicationRestoreStatusType `json:"status"`
-	Reason                  string                       `json:"reason"`
+	ObjectInfo `json:',inline"`
+	Status     ApplicationRestoreStatusType `json:"status"`
+	Reason     string                       `json:"reason"`
 }
 
 // ApplicationRestoreVolumeInfo is the info for the restore of a volume
@@ -72,6 +71,8 @@ type ApplicationRestoreVolumeInfo struct {
 	SourceNamespace       string                       `json:"sourceNamespace"`
 	SourceVolume          string                       `json:"sourceVolume"`
 	RestoreVolume         string                       `json:"restoreVolume"`
+	DriverName            string                       `json:"driverName"`
+	Zones                 []string                     `json:"zones"`
 	Status                ApplicationRestoreStatusType `json:"status"`
 	Reason                string                       `json:"reason"`
 }
