@@ -5,7 +5,7 @@ metadata:
    labels:
      app: mysql
    annotations:
-     volume.beta.kubernetes.io/storage-class: mysql-sc
+     volume.beta.kubernetes.io/storage-class: mysql-sc-repl-1
 spec:
    accessModes:
      - ReadWriteOnce
