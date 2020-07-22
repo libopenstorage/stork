@@ -52,13 +52,13 @@ spec:
             - name: PG_USER
               value: pgbench
             - name: SIZE
-              value: "4"
+              value: "8"
             - name: IO_PORTION
               value: "0.25"
           readinessProbe:
             exec:
               command: ["sh", "-c", "cat /pgbench/pgbench_state.file"]
-            initialDelaySeconds: 60
+            initialDelaySeconds: 180
             periodSeconds: 10
             timeoutSeconds: 5
           volumeMounts:

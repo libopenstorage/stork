@@ -49,7 +49,7 @@ const (
 	sestinationClusterName = "destination-cluster"
 
 	backupRestoreCompletionTimeoutMin = 20
-	retrySeconds                      = 30
+	retrySeconds                      = 10
 
 	storkDeploymentName      = "stork"
 	storkDeploymentNamespace = "kube-system"
