@@ -24,6 +24,8 @@ type ApplicationBackupScheduleExpansion interface{}
 
 type ApplicationCloneExpansion interface{}
 
+type ApplicationRegistrationExpansion interface{}
+
 type ApplicationRestoreExpansion interface{}
 
 type BackupLocationExpansion interface{}
@@ -33,6 +35,8 @@ type ClusterDomainUpdateExpansion interface{}
 type ClusterDomainsStatusExpansion interface{}
 
 type ClusterPairExpansion interface{}
+
+type DataExportExpansion interface{}
 
 type GroupVolumeSnapshotExpansion interface{}
 

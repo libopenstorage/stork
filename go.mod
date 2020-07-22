@@ -13,7 +13,6 @@ require (
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/aws/aws-sdk-go v1.30.6
 	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
-	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
@@ -32,17 +31,15 @@ require (
 	github.com/libopenstorage/cloudops v0.0.0-20200604165016-9cc0977d745e
 	github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952 // indirect
 	github.com/libopenstorage/openstorage v8.0.1-0.20200129213931-ba5ed2ee0f18+incompatible
-	github.com/libopenstorage/stork v1.3.0-beta1.0.20191009210244-6a3497c42b2a
+	github.com/libopenstorage/stork v1.3.0-beta1.0.20200630005842-9255e7a98775
 	github.com/mattn/go-isatty v0.0.10 // indirect
 	github.com/onsi/ginkgo v1.10.2
 	github.com/onsi/gomega v1.7.0
-	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
-	github.com/opencontainers/image-spec v1.0.1 // indirect
-	github.com/pborman/uuid v0.0.0-20180906182336-adf5a7427709
+	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v1.0.1-0.20200714061107-e88917fc5196
 	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
-	github.com/portworx/sched-ops v0.0.0-20200601132537-056e2af44551
+	github.com/portworx/sched-ops v0.0.0-20200715103618-e806a0f3b975
 	github.com/sirupsen/logrus v1.5.0
 	github.com/stretchr/testify v1.5.1
 	go.opencensus.io v0.22.1 // indirect
@@ -53,7 +50,7 @@ require (
 	google.golang.org/genproto v0.0.0-20200604104852-0b0486081ffb // indirect
 	google.golang.org/grpc v1.29.1
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
-	gopkg.in/yaml.v2 v2.2.4
+	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
@@ -63,11 +60,26 @@ replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
 	github.com/kubernetes-incubator/external-storage v0.0.0-00010101000000-000000000000 => github.com/libopenstorage/external-storage v5.1.1-0.20190919185747-9394ee8dd536+incompatible
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v1.8.2-0.20190424153033-d3245f150225
-	k8s.io/api => k8s.io/api v0.0.0-20190816222004-e3a6b8045b0b
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190918224502-6154570c2037
-	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190816221834-a9f1d8a9c101
-	k8s.io/apiserver => k8s.io/apiserver v0.0.0-20190820063401-c43cd040845a
-	k8s.io/client-go v2.0.0-alpha.0.0.20181121191925-a47917edff34+incompatible => k8s.io/client-go v2.0.0+incompatible
-	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.0.0-20190913091657-9745ba0e69cf
-	k8s.io/kubernetes => k8s.io/kubernetes v1.14.6
+	k8s.io/api => k8s.io/api v0.15.11
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.15.11
+	k8s.io/apimachinery => k8s.io/apimachinery v0.15.11
+	k8s.io/apiserver => k8s.io/apiserver v0.15.11
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.15.11
+	k8s.io/client-go => k8s.io/client-go v0.15.11
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.15.11
+	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.15.11
+	k8s.io/code-generator => k8s.io/code-generator v0.15.11
+	k8s.io/component-base => k8s.io/component-base v0.15.11
+	k8s.io/cri-api => k8s.io/cri-api v0.15.11
+	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.15.11
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.15.11
+	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.15.11
+	k8s.io/kube-proxy => k8s.io/kube-proxy v0.15.11
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.15.11
+	k8s.io/kubectl => k8s.io/kubectl v0.15.11
+	k8s.io/kubelet => k8s.io/kubelet v0.15.11
+	k8s.io/kubernetes => k8s.io/kubernetes v1.16.0
+	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.15.11
+	k8s.io/metrics => k8s.io/metrics v0.15.11
+	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.15.11
 )

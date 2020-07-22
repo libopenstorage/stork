@@ -7,7 +7,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/common"
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
-	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -253,8 +252,6 @@ func (c *Client) GetPVCsForStatefulSet(ss *appsv1.StatefulSet) (*corev1.Persiste
 		return nil, err
 	}
 
-	logrus.Debugf("=====List options for listing PVC from Statefulsets is : [%v]=========\n", listOptions)
-	logrus.Debugf("=====Statefuleset namespace is : [%v]============\n", ss.Namespace)
 	return c.core.PersistentVolumeClaims(ss.Namespace).List(listOptions)
 }
 

@@ -9,6 +9,7 @@ import (
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -85,6 +86,7 @@ var (
 	k8sBatch     = batch.Instance()
 	k8sRbac      = rbac.Instance()
 	k8sAutopilot = autopilot.Instance()
+	k8sApps      = apps.Instance()
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -239,9 +241,33 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		}
 		lenValidatedPods := len(resp)
 		lenExpectedPods := len(pods)
-		if lenExpectedPods > 0 && !vol.Shared {
-			lenExpectedPods = 1
+		// in case we have a Deployment/ReplicaSet or StatefulSet the expected pods are the same as set in
+		// .Spec.Replicas field
+		if lenExpectedPods > 0 {
+			for _, ownerref := range pods[0].OwnerReferences {
+				switch ownerref.Kind {
+				case "ReplicaSet":
+					rs, err := k8sApps.GetReplicaSet(ownerref.Name, pods[0].Namespace)
+					if err != nil {
+						logrus.Errorf("failed to get replicaset %s. cause: %v", ownerref.Name, err)
+						return nil, true, err
+					}
+					lenExpectedPods = int(*rs.Spec.Replicas)
+				case "StatefulSet":
+					st, err := k8sApps.GetStatefulSet(ownerref.Name, pods[0].Namespace)
+					if err != nil {
+						logrus.Errorf("failed to get statefulset %s. cause: %v", ownerref.Name, err)
+						return nil, true, err
+					}
+					lenExpectedPods = int(*st.Spec.Replicas)
+				}
+			}
+			// in case we have more pods for a non shared volume we expect only one of them to be ready
+			if !vol.Shared {
+				lenExpectedPods = 1
+			}
 		}
+
 		if lenValidatedPods == lenExpectedPods {
 			return nil, false, nil
 		}

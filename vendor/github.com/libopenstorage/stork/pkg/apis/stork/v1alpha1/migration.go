@@ -13,15 +13,17 @@ const (
 
 // MigrationSpec is the spec used to migrate apps between clusterpairs
 type MigrationSpec struct {
-	ClusterPair       string            `json:"clusterPair"`
-	AdminClusterPair  string            `json:"adminClusterPair"`
-	Namespaces        []string          `json:"namespaces"`
-	IncludeResources  *bool             `json:"includeResources"`
-	IncludeVolumes    *bool             `json:"includeVolumes"`
-	StartApplications *bool             `json:"startApplications"`
-	Selectors         map[string]string `json:"selectors"`
-	PreExecRule       string            `json:"preExecRule"`
-	PostExecRule      string            `json:"postExecRule"`
+	ClusterPair                  string            `json:"clusterPair"`
+	AdminClusterPair             string            `json:"adminClusterPair"`
+	Namespaces                   []string          `json:"namespaces"`
+	IncludeResources             *bool             `json:"includeResources"`
+	IncludeVolumes               *bool             `json:"includeVolumes"`
+	StartApplications            *bool             `json:"startApplications"`
+	PurgeDeletedResources        *bool             `json:"purgeDeletedResources"`
+	Selectors                    map[string]string `json:"selectors"`
+	PreExecRule                  string            `json:"preExecRule"`
+	PostExecRule                 string            `json:"postExecRule"`
+	IncludeOptionalResourceTypes []string          `json:"includeOptionalResourceTypes"`
 }
 
 // MigrationStatus is the status of a migration operation
@@ -70,8 +72,6 @@ const (
 	MigrationStatusInitial MigrationStatusType = ""
 	// MigrationStatusPending for when migration is still pending
 	MigrationStatusPending MigrationStatusType = "Pending"
-	// MigrationStatusCaptured for when migration specs have been captured
-	MigrationStatusCaptured MigrationStatusType = "Captured"
 	// MigrationStatusInProgress for when migration is in progress
 	MigrationStatusInProgress MigrationStatusType = "InProgress"
 	// MigrationStatusFailed for when migration has failed
@@ -80,6 +80,8 @@ const (
 	MigrationStatusPartialSuccess MigrationStatusType = "PartialSuccess"
 	// MigrationStatusSuccessful for when migration has completed successfully
 	MigrationStatusSuccessful MigrationStatusType = "Successful"
+	// MigrationStatusPurged for when migration objects has been deleted
+	MigrationStatusPurged MigrationStatusType = "Purged"
 )
 
 // MigrationStageType is the stage of the migration

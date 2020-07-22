@@ -13,7 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	. "github.com/portworx/torpedo/tests"
-	"time"
 )
 
 func TestVolOps(t *testing.T) {
@@ -126,10 +125,6 @@ var _ = Describe("{VolumeUpdate}", func() {
 					func() {
 						requestedVols, err = Inst().S.ResizeVolume(ctx, Inst().ConfigMap)
 						Expect(err).NotTo(HaveOccurred())
-						Step("wait for the volumes to be resized", func() {
-							time.Sleep(20 * time.Second)
-						})
-
 					})
 				Step(
 					fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",

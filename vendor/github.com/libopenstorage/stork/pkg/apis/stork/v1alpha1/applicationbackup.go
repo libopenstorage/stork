@@ -30,6 +30,8 @@ type ApplicationBackupSpec struct {
 	PreExecRule    string                             `json:"preExecRule"`
 	PostExecRule   string                             `json:"postExecRule"`
 	ReclaimPolicy  ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
+	// Options to be passed in to the driver
+	Options map[string]string `json:"options"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup
@@ -46,20 +48,28 @@ const (
 
 // ApplicationBackupStatus is the status of a application backup operation
 type ApplicationBackupStatus struct {
-	Stage            ApplicationBackupStageType       `json:"stage"`
-	Status           ApplicationBackupStatusType      `json:"status"`
-	Resources        []*ApplicationBackupResourceInfo `json:"resources"`
-	Volumes          []*ApplicationBackupVolumeInfo   `json:"volumes"`
-	BackupPath       string                           `json:"backupPath"`
-	TriggerTimestamp metav1.Time                      `json:"triggerTimestamp"`
-	FinishTimestamp  metav1.Time                      `json:"finishTimestamp"`
+	Stage               ApplicationBackupStageType       `json:"stage"`
+	Status              ApplicationBackupStatusType      `json:"status"`
+	Reason              string                           `json:"reason"`
+	Resources           []*ApplicationBackupResourceInfo `json:"resources"`
+	Volumes             []*ApplicationBackupVolumeInfo   `json:"volumes"`
+	BackupPath          string                           `json:"backupPath"`
+	TriggerTimestamp    metav1.Time                      `json:"triggerTimestamp"`
+	LastUpdateTimestamp metav1.Time                      `json:"lastUpdateTimestamp"`
+	FinishTimestamp     metav1.Time                      `json:"finishTimestamp"`
+	Size                uint64                           `json:"size"`
+}
+
+// ObjectInfo contains info about an object being backed up or restored
+type ObjectInfo struct {
+	Name                    string `json:"name"`
+	Namespace               string `json:"namespace"`
+	metav1.GroupVersionKind `json:",inline"`
 }
 
 // ApplicationBackupResourceInfo is the info for the backup of a resource
 type ApplicationBackupResourceInfo struct {
-	Name                    string `json:"name"`
-	Namespace               string `json:"namespace"`
-	metav1.GroupVersionKind `json:",inline"`
+	ObjectInfo `json:",inline"`
 }
 
 // ApplicationBackupVolumeInfo is the info for the backup of a volume
@@ -68,8 +78,12 @@ type ApplicationBackupVolumeInfo struct {
 	Namespace             string                      `json:"namespace"`
 	Volume                string                      `json:"volume"`
 	BackupID              string                      `json:"backupID"`
+	DriverName            string                      `json:"driverName"`
+	Zones                 []string                    `json:"zones"`
 	Status                ApplicationBackupStatusType `json:"status"`
 	Reason                string                      `json:"reason"`
+	Options               map[string]string           `jons:"options"`
+	Size                  uint64                      `json:"size"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup
@@ -80,8 +94,6 @@ const (
 	ApplicationBackupStatusInitial ApplicationBackupStatusType = ""
 	// ApplicationBackupStatusPending for when backup is still pending
 	ApplicationBackupStatusPending ApplicationBackupStatusType = "Pending"
-	// ApplicationBackupStatusCaptured for when backup specs have been captured
-	ApplicationBackupStatusCaptured ApplicationBackupStatusType = "Captured"
 	// ApplicationBackupStatusInProgress for when backup is in progress
 	ApplicationBackupStatusInProgress ApplicationBackupStatusType = "InProgress"
 	// ApplicationBackupStatusFailed for when backup has failed
