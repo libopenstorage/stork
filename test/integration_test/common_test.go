@@ -31,6 +31,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/portworx/torpedo/drivers/objectstore"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -84,6 +85,7 @@ var nodeDriver node.Driver
 var schedulerDriver scheduler.Driver
 var volumeDriver volume.Driver
 var storkVolumeDriver storkdriver.Driver
+var objectStoreDriver objectstore.Driver
 
 var snapshotScaleCount int
 var migrationScaleCount int
@@ -129,6 +131,10 @@ func setup() error {
 	}
 
 	if volumeDriver, err = volume.Get(volumeDriverName); err != nil {
+		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
+	}
+
+	if objectStoreDriver, err = objectstore.Get(); err != nil {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 

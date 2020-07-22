@@ -3,7 +3,7 @@ kind: ApplicationRestore
 metadata:
   name: mysql-label-selector-restore
 spec:
-  backupName: mysql-label-selector-backup
+  backupName: mysql-1-pvc-label-selector-backup
   backupLocation: mysql-1-pvc-label-selector-backup-backup-location
   namespaceMapping:
     mysql-1-pvc-mysql-1-pvc-label-selector-backup: mysql-1-pvc-mysql-1-pvc-label-selector-backup

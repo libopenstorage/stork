@@ -3,7 +3,7 @@ kind: ApplicationRestore
 metadata:
   name: mysql-post-exec-rule-restore
 spec:
-  backupName: mysql-post-exec-rule-backup
+  backupName: mysql-1-pvc-post-exec-rule-backup
   backupLocation: mysql-1-pvc-post-exec-rule-backup-backup-location 
   namespaceMapping:
     mysql-1-pvc-mysql-1-pvc-post-exec-rule-backup: mysql-1-pvc-mysql-1-pvc-post-exec-rule-backup

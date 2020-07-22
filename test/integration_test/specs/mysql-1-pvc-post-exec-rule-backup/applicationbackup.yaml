@@ -1,7 +1,7 @@
 apiVersion: stork.libopenstorage.org/v1alpha1
 kind: ApplicationBackup
 metadata:
-  name: mysql-post-exec-rule-backup
+  name: mysql-1-pvc-post-exec-rule-backup
   namespace: mysql-1-pvc-mysql-1-pvc-post-exec-rule-backup
 spec:
   backupLocation: mysql-1-pvc-post-exec-rule-backup-backup-location
