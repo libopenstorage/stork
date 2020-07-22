@@ -3,7 +3,7 @@ kind: ApplicationRestore
 metadata:
   name: mysql-pre-exec-missing-restore
 spec:
-  backupName: mysql-pre-exec-missing-rule-backup
+  backupName: mysql-1-pvc-pre-exec-missing-rule-backup
   backupLocation: mysql-1-pvc-pre-exec-missing-rule-backup-backup-location 
   namespaceMapping:
     mysql-1-pvc-pre-exec-missing-rule-backup: mysql-1-pvc-pre-exec-missing-rule-backup

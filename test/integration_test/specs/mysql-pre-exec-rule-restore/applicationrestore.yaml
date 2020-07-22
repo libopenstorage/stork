@@ -3,7 +3,7 @@ kind: ApplicationRestore
 metadata:
   name: mysql-pre-exec-rule-restore
 spec:
-  backupName: mysql-pvc-pre-exec-rule-backup
+  backupName: mysql-1-pvc-pre-exec-rule-backup
   backupLocation: mysql-1-pvc-pre-exec-rule-backup-backup-location
   namespaceMapping:
     mysql-1-pvc-mysql-1-pvc-pre-exec-rule-backup: mysql-1-pvc-mysql-1-pvc-pre-exec-rule-backup

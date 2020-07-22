@@ -41,6 +41,7 @@ const (
 var allConfigMap, defaultConfigMap map[string]string
 var defaultBackupLocation storkv1.BackupLocationType
 var defaultSecretName string
+var defaultsBackupSet bool
 
 func TestApplicationBackup(t *testing.T) {
 	setDefaultsForBackup(t)
@@ -63,6 +64,10 @@ func TestApplicationBackup(t *testing.T) {
 }
 
 func TestScaleApplicationBackup(t *testing.T) {
+
+	if !defaultsBackupSet {
+		setDefaultsForBackup(t)
+	}
 	t.Run("scaleApplicationBackupRestore", scaleApplicationBackupRestore)
 }
 
@@ -81,6 +86,7 @@ func triggerBackupRestoreTest(
 		var currBackupLocation *storkv1.BackupLocation
 		var err error
 		var ctxs []*scheduler.Context
+		var appBackup *storkv1.ApplicationBackup
 		ctx := createApp(t, appBackupKey[0])
 		ctxs = append(ctxs, ctx)
 		var restoreCtx = &scheduler.Context{
@@ -171,6 +177,10 @@ func triggerBackupRestoreTest(
 			//prepareVerifyApp(t, ctxs, appKey, verify)
 		}
 
+		// Get application backup object to be used for validation of cloud delete later
+		appBackup, err = storkops.Instance().GetApplicationBackup(appBackupKey[0], ctx.GetID())
+		require.NoError(t, err, "Failed to get application backup: %s in namespace: %s, for cloud deletion validation", appBackupKey[0], ctx.GetID())
+
 		if (backupAllAppsExpected && backupSuccessExpected) || !backupSuccessExpected {
 			destroyAndWait(t, ctxs)
 		} else if !backupAllAppsExpected && backupSuccessExpected {
@@ -178,8 +188,13 @@ func triggerBackupRestoreTest(
 			destroyAndWait(t, []*scheduler.Context{postRestoreCtx})
 
 		}
+		if backupSuccessExpected {
+			validateBackupDeletionFromObjectstore(t, currBackupLocation, appBackup.Status.BackupPath)
+		}
+
 		err = storkops.Instance().DeleteBackupLocation(currBackupLocation.Name, currBackupLocation.Namespace)
 		require.NoError(t, err, "Failed to delete backuplocation: %s for location %s.", currBackupLocation.Name, string(location), err)
+
 	}
 }
 
@@ -191,6 +206,14 @@ func prepareVerifyApp(t *testing.T, ctxs []*scheduler.Context, appKey, action st
 
 	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for %s apps to get to running state", action)
+
+}
+
+func validateBackupDeletionFromObjectstore(t *testing.T, backupLocation *storkv1.BackupLocation, backupPath string) {
+	err := objectStoreDriver.ValidateBackupsDeletedFromCloud(backupLocation, backupPath)
+	require.NoError(t, err, "Failed to validate deletion of backups in bucket for backup location %s in path %s", backupLocation.Name, backupPath)
+
+	logrus.Infof("Verified deletion of backup %s from cloud", backupPath)
 }
 
 func triggerScaleBackupRestoreTest(
@@ -266,11 +289,18 @@ func triggerScaleBackupRestoreTest(
 	}
 	// Cleanup
 	for idx, bkp := range appBkps {
-		err := storkops.Instance().DeleteBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
-		require.NoError(t, err, "Failed to delete  backup location %s in namespace %s: %v", "backuplocation-"+strconv.Itoa(idx), bkp.Namespace, err)
+		// Get backuplocation so it can be used in the invocation of the validateBackupDeletionFromObjectstore method
+		currBackupLocation, err := storkops.Instance().GetBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
+		require.NoError(t, err, "Failed to get backup location %s in namespace %s: %v prior to deletion", "backuplocation-"+strconv.Itoa(idx), bkp.Namespace, err)
 
 		err = deleteAndWaitForBackupDeletion(bkp.Namespace)
 		require.NoError(t, err, "All backups not deleted in namespace %s: %v", bkp.Namespace, err)
+
+		validateBackupDeletionFromObjectstore(t, currBackupLocation, bkp.Status.BackupPath)
+
+		err = storkops.Instance().DeleteBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
+		require.NoError(t, err, "Failed to delete  backup location %s in namespace %s: %v", "backuplocation-"+strconv.Itoa(idx), bkp.Namespace, err)
+
 	}
 
 	err := deleteApplicationRestoreList(appRestores)
@@ -314,7 +344,18 @@ func createBackupLocation(
 			SecretConfig: secretObj.Name,
 		},
 	}
-	return storkops.Instance().CreateBackupLocation(backupLocation)
+	backupLocation, err = storkops.Instance().CreateBackupLocation(backupLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	// Doing a "Get" on the backuplocation created to add any missing info from the secrets,
+	// that might be required to later get buckets from the cloud objectstore
+	backupLocation, err = storkops.Instance().GetBackupLocation(backupLocation.Name, backupLocation.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	return backupLocation, nil
 }
 
 func createApplicationRestore(
@@ -874,7 +915,7 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	backupLocationName := appKey + "-backup-location-sync"
 
 	// Create myqsl app deployment
-	appCtx := createApp(t, appKey)
+	appCtx := createApp(t, appKey+"-sync")
 
 	// Create backup location on first cluster
 	backupLocation, err := createBackupLocation(t, backupLocationName, appCtx.GetID(), defaultBackupLocation, defaultSecretName)
@@ -1045,7 +1086,7 @@ func waitForAppBackupToStart(name, namespace string, timeout time.Duration) erro
 
 func applicationBackupDelBackupLocation(t *testing.T) {
 	// Create myqsl app deployment
-	appCtx := createApp(t, appKey)
+	appCtx := createApp(t, appKey+"-delete-bkp")
 
 	backupLocationName := appKey + "-backup-location"
 	// Create backup location on first cluster
@@ -1074,7 +1115,7 @@ func applicationBackupDelBackupLocation(t *testing.T) {
 
 func applicationBackupMultiple(t *testing.T) {
 	// Create myqsl app deployment
-	appCtx := createApp(t, appKey)
+	appCtx := createApp(t, appKey+"-multiple-backup")
 
 	backupLocationName := appKey + "-backup-location"
 	// Create backup location
@@ -1099,11 +1140,24 @@ func applicationBackupMultiple(t *testing.T) {
 	err = waitForAppBackupCompletion(appBackupSecond.Name, appBackupSecond.Namespace, (applicationBackupScheduleRetryTimeout)*time.Duration(5))
 	require.NoError(t, err, "Application backup %s in namespace %s failed.", appBackupSecond.Name, appBackupSecond.Namespace)
 
+	// Get application backup object to be used for validation of cloud delete later
+	appBackup, err = storkops.Instance().GetApplicationBackup(appBackup.Name, appBackup.Namespace)
+	require.NoError(t, err, "Failed to get application backup: %s in namespace: %s, for cloud deletion validation", appBackup.Name, appBackup.Namespace, err)
+
+	appBackupSecond, err = storkops.Instance().GetApplicationBackup(appBackupSecond.Name, appBackupSecond.Namespace)
+	require.NoError(t, err, "Failed to get application backup: %s in namespace: %s, for cloud deletion validation", appBackupSecond.Name, appBackupSecond.Namespace, err)
+
+	firstBackupPath := appBackup.Status.BackupPath
+	secondBackupPath := appBackupSecond.Status.BackupPath
+
 	err = deleteAndWaitForBackupDeletion(appBackup.Namespace)
 	require.NoError(t, err, "Backups not deleted: %v", err)
 
 	err = storkops.Instance().DeleteBackupLocation(backupLocation.Name, backupLocation.Namespace)
 	require.NoError(t, err, "Failed to delete backuplocation: %s", backupLocation.Name, err)
+
+	validateBackupDeletionFromObjectstore(t, backupLocation, firstBackupPath)
+	validateBackupDeletionFromObjectstore(t, backupLocation, secondBackupPath)
 
 	destroyAndWait(t, []*scheduler.Context{appCtx})
 }
@@ -1238,6 +1292,9 @@ func setDefaultsForBackup(t *testing.T) {
 	// If running pxd driver backup to all locations
 	if volumeDriverName != "pxd" {
 		allConfigMap = defaultConfigMap
+	}
+	if !defaultsBackupSet {
+		defaultsBackupSet = true
 	}
 
 }

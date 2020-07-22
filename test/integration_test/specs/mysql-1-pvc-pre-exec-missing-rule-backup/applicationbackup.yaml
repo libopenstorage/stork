@@ -1,7 +1,7 @@
 apiVersion: stork.libopenstorage.org/v1alpha1
 kind: ApplicationBackup
 metadata:
-  name: mysql-pre-exec-missing-rule-backup
+  name: mysql-1-pvc-pre-exec-missing-rule-backup
   namespace: mysql-1-pvc-pre-exec-missing-rule-backup
 spec:
   backupLocation: mysql-1-pvc-pre-exec-missing-rule-backup-backup-location

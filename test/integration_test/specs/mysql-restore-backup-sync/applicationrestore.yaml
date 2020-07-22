@@ -6,5 +6,5 @@ spec:
   backupName: mysql-backup-sync
   backupLocation: mysql-backup-location-sync
   namespaceMapping:
-    mysql-1-pvc-mysql: mysql-1-pvc-mysql
+    mysql-1-pvc-mysql-sync: mysql-1-pvc-mysql-sync
   replacePolicy: Delete

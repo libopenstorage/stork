@@ -1,8 +1,8 @@
 apiVersion: stork.libopenstorage.org/v1alpha1
 kind: ApplicationBackup
 metadata:
-  name: mysql-pre-exec-failing-rule-backup
-  namespace: mysql-1-pvc-mysql
+  name: mysql-1-pvc-pre-exec-failing-rule-backup
+  namespace: mysql-1-pvc-mysql-1-pvc-pre-exec-failing-rule-backup
 spec:
   backupLocation: mysql-1-pvc-pre-exec-failing-rule-backup-backup-location
   # namespaces to be backed up
