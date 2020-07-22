@@ -215,7 +215,6 @@ func (r *ResourceCollector) GetResources(
 			}
 		}
 	}
-
 	allObjects, err = r.pruneOwnedResources(allObjects, resourceMap)
 	if err != nil {
 		return nil, err
@@ -348,10 +347,10 @@ func (r *ResourceCollector) pruneOwnedResources(
 							collect = false
 							break
 						}
-						if objectType.GetKind() != "Deployment" && objectType.GetKind() != "StatefulSet" {
+						if objectType.GetKind() != "Deployment" && objectType.GetKind() != "StatefulSet" &&
+							objectType.GetKind() != "Service" && objectType.GetKind() != "ConfigMap" {
 							continue
 						}
-
 						// Skip object if we are already collecting its owner
 						if _, exists := resourceMap[owner.UID]; exists {
 							collect = false
