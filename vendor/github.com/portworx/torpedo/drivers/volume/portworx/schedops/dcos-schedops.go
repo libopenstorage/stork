@@ -6,9 +6,14 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/errors"
+	"k8s.io/apimachinery/pkg/version"
 )
 
 type dcosSchedOps struct{}
+
+func (d *dcosSchedOps) GetKubernetesVersion() (*version.Info, error) {
+	return nil, nil
+}
 
 func (d *dcosSchedOps) StartPxOnNode(n node.Node) error {
 	return nil
@@ -16,6 +21,13 @@ func (d *dcosSchedOps) StartPxOnNode(n node.Node) error {
 
 func (d *dcosSchedOps) StopPxOnNode(n node.Node) error {
 	return nil
+}
+
+func (d *dcosSchedOps) RestartPxOnNode(n node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Portworx DCOS operation",
+		Operation: "RestartPxOnNode",
+	}
 }
 
 func (d *dcosSchedOps) ValidateOnNode(n node.Node) error {
