@@ -374,6 +374,14 @@
   version = "v1.4.2"
 
 [[projects]]
+  digest = "1:e4f5819333ac698d294fe04dbf640f84719658d5c7ce195b10060cc37292ce79"
+  name = "github.com/golang/snappy"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "2a8bb927dd31d8daada140a5d09578521ce5c36a"
+  version = "v0.0.1"
+
+[[projects]]
   branch = "master"
   digest = "1:0bfbe13936953a98ae3cfe8ed6670d396ad81edf069a806d2f6515d7bb6950df"
   name = "github.com/google/btree"
@@ -490,6 +498,54 @@
   version = "v1.14.5"
 
 [[projects]]
+  digest = "1:0ade334594e69404d80d9d323445d2297ff8161637f9b2d347cc6973d2d6f05b"
+  name = "github.com/hashicorp/errwrap"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "8a6fb523712970c966eefc6b39ed2c5e74880354"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:af105c7c5dc0b4ae41991f122cae860b9600f7d226072c2a83127048c991660c"
+  name = "github.com/hashicorp/go-cleanhttp"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "eda1e5db218aad1db63ca4642c8906b26bcf2744"
+  version = "v0.5.1"
+
+[[projects]]
+  digest = "1:8aa2b4301dac6d0e002849c008f0d017ef0f6b50813cb7ac3b0dbc04fc3fb8be"
+  name = "github.com/hashicorp/go-multierror"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "2004d9dba6b07a5b8d133209244f376680f9d472"
+  version = "v1.1.0"
+
+[[projects]]
+  digest = "1:73dc7f95eceea7f751427bd8e0e1a07f0428f85a1a3aa7f06a0e59a480e05d10"
+  name = "github.com/hashicorp/go-retryablehttp"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "dd1fc3518973fac02fd58865aad8972da9af6410"
+  version = "v0.6.6"
+
+[[projects]]
+  digest = "1:5c03dd01d17d6ed9aa1c490a2bfd270dab91d14e85b4640ebdb6511594a1accd"
+  name = "github.com/hashicorp/go-rootcerts"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "98fadc2a5ba2ad2a534a179b352ecdfd1f4259aa"
+  version = "v1.0.2"
+
+[[projects]]
+  digest = "1:8abc57884881876d02f467bb7d4ed7ce3a58dac3f8f7ba60579ce4ffc6afd7e1"
+  name = "github.com/hashicorp/go-sockaddr"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "c7188e74f6acae5a989bdc959aa779f8b9f42faf"
+  version = "v1.0.2"
+
+[[projects]]
   digest = "1:950caca7dfcf796419232ba996c9c3539d09f26af27ba848c4508e604c13efbb"
   name = "github.com/hashicorp/go-version"
   packages = ["."]
@@ -507,6 +563,40 @@
   pruneopts = "UT"
   revision = "20f1fb78b0740ba8c3cb143a61e86ba5c8669768"
   version = "v0.5.0"
+
+[[projects]]
+  digest = "1:ea40c24cdbacd054a6ae9de03e62c5f252479b96c716375aace5c120d68647c8"
+  name = "github.com/hashicorp/hcl"
+  packages = [
+    ".",
+    "hcl/ast",
+    "hcl/parser",
+    "hcl/scanner",
+    "hcl/strconv",
+    "hcl/token",
+    "json/parser",
+    "json/scanner",
+    "json/token",
+  ]
+  pruneopts = "UT"
+  revision = "8cb6e5b959231cc1119e43259c4a608f9c51a241"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:1b6d9a0fe2834e7466270296d5cab1144ca992789e923b95b41d363c7a719339"
+  name = "github.com/hashicorp/vault"
+  packages = [
+    "api",
+    "sdk/helper/compressutil",
+    "sdk/helper/consts",
+    "sdk/helper/hclutil",
+    "sdk/helper/jsonutil",
+    "sdk/helper/parseutil",
+    "sdk/helper/strutil",
+  ]
+  pruneopts = "UT"
+  revision = "340cc2fa263f6cbd2861b41518da8a62c153e2e7"
+  version = "v1.5.0"
 
 [[projects]]
   digest = "1:d80d74111a58220b8c19d593f08df320405885a8ad949c580a36a5bfce754aa8"
@@ -617,7 +707,7 @@
 
 [[projects]]
   branch = "release-7.0"
-  digest = "1:f49ae50438ba2c97f0a36e790731f34e973d2b46d3526bbd634c5fc306abe042"
+  digest = "1:e98690e3989ae50dbdcda3041d02b7f51327146590e5a99eb9d0a0d63376a351"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -635,6 +725,7 @@
     "pkg/dbg",
     "pkg/grpcserver",
     "pkg/parser",
+    "pkg/sched",
     "pkg/units",
     "pkg/util",
     "schedpolicy",
@@ -706,6 +797,14 @@
   pruneopts = "UT"
   revision = "9e67c67572bc5dd02aef930e2b0ae3c02a4b5a5c"
   version = "v1.0.0"
+
+[[projects]]
+  digest = "1:aff0e9185b5df855488a42e064cb479e994636d3cefa47d053495123d086add4"
+  name = "github.com/mitchellh/mapstructure"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "9e1e4717f8567d7ead72d070d064ad17d444a67e"
+  version = "v1.3.3"
 
 [[projects]]
   digest = "1:33422d238f147d247752996a26574ac48dcf472976eda7f5134015f06bf16563"
@@ -794,6 +893,17 @@
   version = "v2.0.1"
 
 [[projects]]
+  digest = "1:af52537e91171a58eed809011d85641ccd78dc5c088665f30805520f8b7778ee"
+  name = "github.com/pierrec/lz4"
+  packages = [
+    ".",
+    "internal/xxh32",
+  ]
+  pruneopts = "UT"
+  revision = "65e4285c566323a894d155441e5279ec4a9884f4"
+  version = "v2.5.2"
+
+[[projects]]
   digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
   name = "github.com/pkg/errors"
   packages = ["."]
@@ -823,7 +933,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:fcc1c93046854f177e9b52bf6148e29af3c6e3f177e4fd7491d74daf1bc4e352"
+  digest = "1:282827acad6f8f89b739a56f19b91cfe0ce4dcb4578cbb70ab695fda08342d31"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -836,6 +946,7 @@
     "k8s/dynamic",
     "k8s/errors",
     "k8s/externalstorage",
+    "k8s/networking",
     "k8s/openshift",
     "k8s/rbac",
     "k8s/storage",
@@ -843,13 +954,14 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "7b23c232a58f815546b86e2498091335fb6847b7"
+  revision = "257aba0944dc48fc2818af467937f14c62eb7c00"
 
 [[projects]]
   branch = "master"
-  digest = "1:658480db60137146afdb35c072f988d42298d0c7bc70b92a8d8452537c52e5f7"
+  digest = "1:c5fd37a68f5bcac81d6d1222842dabcdc2418bcf18b9101376f1b723f4991680"
   name = "github.com/portworx/torpedo"
   packages = [
+    "drivers/api",
     "drivers/node",
     "drivers/node/ssh",
     "drivers/scheduler",
@@ -863,10 +975,11 @@
     "drivers/volume/portworx/schedops",
     "pkg/aututils",
     "pkg/errors",
+    "pkg/osutils",
     "pkg/units",
   ]
   pruneopts = "UT"
-  revision = "157114f3d1a3f4b474b248fa5a1cdcc7c81ca35d"
+  revision = "7ddea58d8e04aa4e4f94521f106bf6667e9d3da7"
 
 [[projects]]
   branch = "master"
@@ -930,6 +1043,14 @@
   packages = ["."]
   pruneopts = "UT"
   revision = "v1.5.2"
+
+[[projects]]
+  digest = "1:6baa565fe16f8657cf93469b2b8a6c61a277827734400d27e44d589547297279"
+  name = "github.com/ryanuber/go-glob"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "51a8f68e6c24dc43f1e371749c89a267de4ebc53"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:87c2e02fb01c27060ccc5ba7c5a407cc91147726f8f40b70cceeedbc52b1f3a8"
@@ -1374,12 +1495,13 @@
   version = "v0.9.1"
 
 [[projects]]
-  digest = "1:377f8ccfbf9d7ff3997ea7454b894de46cd1d9fe6ec1e724c93ad59eb716c5c0"
+  digest = "1:a4cde1eec9a17eb2399a50c6e1a9fe3fde039994de058f9dbf6592d157bfe97b"
   name = "gopkg.in/square/go-jose.v2"
   packages = [
     ".",
     "cipher",
     "json",
+    "jwt",
   ]
   pruneopts = "UT"
   revision = "e94fb177d3668d35ab39c61cbb2f311550557e83"

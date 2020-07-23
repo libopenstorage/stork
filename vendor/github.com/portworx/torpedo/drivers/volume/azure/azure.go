@@ -29,8 +29,17 @@ func (d *azure) String() string {
 	return string(AzureStorage)
 }
 
+func (d *azure) ValidateVolumeCleanup() error {
+	return nil
+}
+
+func (d *azure) RefreshDriverEndpoints() error {
+	return nil
+}
+
 func (d *azure) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
 	logrus.Infof("Using the Azure volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {
 		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
@@ -39,11 +48,11 @@ func (d *azure) Init(sched string, nodeDriver string, token string, storageProvi
 			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, storageProvisioner)
 		}
 	} else {
-		return fmt.Errorf("Provisioner is empty for volume driver: %s", DriverName)
+		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
 	}
 	return nil
 }
 
 func init() {
-	torpedovolume.Register(DriverName, &azure{})
+	torpedovolume.Register(DriverName, provisioners, &azure{})
 }
