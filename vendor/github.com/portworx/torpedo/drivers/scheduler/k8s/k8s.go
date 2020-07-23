@@ -92,6 +92,7 @@ const (
 
 	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
+	deleteStrategyAnnotationKey   = "torpedo.io/delete-strategy"
 	specObjAppWorkloadSizeEnvVar  = "SIZE"
 )
 
@@ -741,7 +742,14 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 				metadata[k] = v
 			}
 		}
-		ns, err := k8sOps.CreateNamespace(namespace, metadata)
+
+		nsSpec := &v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   namespace,
+				Labels: metadata,
+			},
+		}
+		ns, err := k8sOps.CreateNamespace(nsSpec)
 
 		if errors.IsAlreadyExists(err) {
 			if ns, err = k8sOps.GetNamespace(namespace); err == nil {
@@ -1703,19 +1711,42 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 			}
 		}
 
-		if err := k8sOps.DeletePods(pods, false); err != nil {
-			return &scheduler.ErrFailedToDeleteTasks{
-				App:   ctx.App,
-				Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
-			}
-		}
+		if k.isRollingDeleteStrategyEnabled(ctx) {
+			for _, pod := range pods {
+				if err := k8sOps.DeletePod(pod.Name, pod.Namespace, false); err != nil {
+					return &scheduler.ErrFailedToDeleteTasks{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
+					}
+				}
+				if err := k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout); err != nil {
+					logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
+					return err
+				}
 
-		// Ensure the pods are deleted and removed from the system
-		for _, pod := range pods {
-			err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
-			if err != nil {
-				logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
-				return err
+				if err := k.WaitForRunning(ctx, DefaultTimeout, DefaultRetryInterval); err != nil {
+					return &scheduler.ErrFailedToValidatePod{
+						App: ctx.App,
+						Cause: fmt.Sprintf("Failed to validate Pod: [%s] %s. Err: Pod is not ready %v",
+							pod.Namespace, pod.Name, pod.Status),
+					}
+				}
+			}
+		} else {
+			if err := k8sOps.DeletePods(pods, false); err != nil {
+				return &scheduler.ErrFailedToDeleteTasks{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("failed to delete pods due to: %v", err),
+				}
+			}
+
+			// Ensure the pods are deleted and removed from the system
+			for _, pod := range pods {
+				err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
+				if err != nil {
+					logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
+					return err
+				}
 			}
 		}
 
@@ -3527,6 +3558,19 @@ func (k *K8s) UpdateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 // ListAutopilotRules lists AutopilotRules
 func (k *K8s) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	return k8sAutopilot.ListAutopilotRules()
+}
+
+func (k *K8s) isRollingDeleteStrategyEnabled(ctx *scheduler.Context) bool {
+	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*appsapi.StatefulSet); ok {
+			if rollDelStrategyAnnotationValue, ok := obj.Annotations[deleteStrategyAnnotationKey]; ok {
+				if rollDelStrategyAnnotationValue == "rolling" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func insertLineBreak(note string) string {
