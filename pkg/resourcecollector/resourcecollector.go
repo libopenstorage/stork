@@ -577,6 +577,7 @@ func (r *ResourceCollector) DeleteResources(
 	objects []runtime.Unstructured,
 ) error {
 	// First delete all the objects
+	deleteStart := metav1.Now()
 	for _, object := range objects {
 		// Don't delete objects that support merging
 		if r.mergeSupportedForResource(object) {
@@ -620,8 +621,14 @@ func (r *ResourceCollector) DeleteResources(
 
 		// Wait for up to 2 minutes for the object to be deleted
 		for i := 0; i < deletedMaxRetries; i++ {
-			_, err = dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
+			obj, err := dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
 			if err != nil && apierrors.IsNotFound(err) {
+				break
+			}
+			createTime := obj.GetCreationTimestamp()
+			if deleteStart.Before(&createTime) {
+				logrus.Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+					obj.GetName(), deleteStart, createTime)
 				break
 			}
 			logrus.Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
