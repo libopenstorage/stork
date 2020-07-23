@@ -145,14 +145,14 @@ func (r *ResourceCollector) GetResources(
 	var crdResources []metav1.GroupVersionKind
 	crdList, err := r.storkOps.ListApplicationRegistrations()
 	if err != nil {
-		return nil, err
-	}
-	for _, crd := range crdList.Items {
-		for _, kind := range crd.Resources {
-			crdResources = append(crdResources, kind.GroupVersionKind)
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	} else {
+		for _, crd := range crdList.Items {
+			for _, kind := range crd.Resources {
+				crdResources = append(crdResources, kind.GroupVersionKind)
+			}
 		}
 	}
-
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
 		return nil, err
@@ -413,16 +413,17 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		content := o.UnstructuredContent()
 		crdList, err := r.storkOps.ListApplicationRegistrations()
 		if err != nil {
-			return err
-		}
-		resourceKind := o.GetObjectKind().GroupVersionKind()
-		for _, crd := range crdList.Items {
-			for _, kind := range crd.Resources {
-				if kind.Kind == resourceKind.Kind && kind.Group == resourceKind.Group &&
-					kind.Version == resourceKind.Version {
-					// remove status from crd
-					if !kind.KeepStatus {
-						delete(content, "status")
+			logrus.Warnf("Unable to get registered crds, err %v", err)
+		} else {
+			resourceKind := o.GetObjectKind().GroupVersionKind()
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					if kind.Kind == resourceKind.Kind && kind.Group == resourceKind.Group &&
+						kind.Version == resourceKind.Version {
+						// remove status from crd
+						if !kind.KeepStatus {
+							delete(content, "status")
+						}
 					}
 				}
 			}
