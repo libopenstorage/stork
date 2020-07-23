@@ -61,6 +61,7 @@ const (
 	remoteFilePath        = "/tmp/kubeconfig"
 	configMapSyncWaitTime = 3 * time.Second
 	defaultSchedulerName  = "default-scheduler"
+	bucketPrefix          = "stork-test"
 
 	nodeScore   = 100
 	rackScore   = 50
@@ -106,7 +107,7 @@ func setup() error {
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	provisioner := os.Getenv(storageProvisioner)
-	backupLocationPath = os.Getenv(backupPathVar)
+	backupLocationPath = addTimestampSuffix(os.Getenv(backupPathVar))
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
 		return fmt.Errorf("Error getting stork volume driver %s: %v", volumeDriverName, err)
 	}
@@ -543,6 +544,12 @@ func createApp(t *testing.T, testID string) *scheduler.Context {
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 	return ctxs[0]
+}
+
+func addTimestampSuffix(path string) string {
+	t := time.Now()
+	timeStampSuffix := t.Format("20060102150405")
+	return fmt.Sprintf("%s-%s-%s", bucketPrefix, path, timeStampSuffix)
 }
 
 func TestMain(m *testing.M) {
