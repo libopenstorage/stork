@@ -3,11 +3,13 @@ package schedops
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -84,6 +86,7 @@ var (
 	k8sBatch     = batch.Instance()
 	k8sRbac      = rbac.Instance()
 	k8sAutopilot = autopilot.Instance()
+	k8sApps      = apps.Instance()
 )
 
 // errLabelPresent error type for a label being present on a node
@@ -227,6 +230,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 
 	t := func() (interface{}, bool, error) {
 		pods, err := k8sCore.GetPodsUsingPV(pvName)
+		printStatus(pods...)
 		if err != nil {
 			return nil, true, err
 		}
@@ -237,9 +241,33 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 		}
 		lenValidatedPods := len(resp)
 		lenExpectedPods := len(pods)
-		if lenExpectedPods > 0 && !vol.Shared {
-			lenExpectedPods = 1
+		// in case we have a Deployment/ReplicaSet or StatefulSet the expected pods are the same as set in
+		// .Spec.Replicas field
+		if lenExpectedPods > 0 {
+			for _, ownerref := range pods[0].OwnerReferences {
+				switch ownerref.Kind {
+				case "ReplicaSet":
+					rs, err := k8sApps.GetReplicaSet(ownerref.Name, pods[0].Namespace)
+					if err != nil {
+						logrus.Errorf("failed to get replicaset %s. cause: %v", ownerref.Name, err)
+						return nil, true, err
+					}
+					lenExpectedPods = int(*rs.Spec.Replicas)
+				case "StatefulSet":
+					st, err := k8sApps.GetStatefulSet(ownerref.Name, pods[0].Namespace)
+					if err != nil {
+						logrus.Errorf("failed to get statefulset %s. cause: %v", ownerref.Name, err)
+						return nil, true, err
+					}
+					lenExpectedPods = int(*st.Spec.Replicas)
+				}
+			}
+			// in case we have more pods for a non shared volume we expect only one of them to be ready
+			if !vol.Shared {
+				lenExpectedPods = 1
+			}
 		}
+
 		if lenValidatedPods == lenExpectedPods {
 			return nil, false, nil
 		}
@@ -269,7 +297,7 @@ PodLoop:
 			continue
 		} else if !k8sCore.IsPodReady(*pod) {
 			// if pod is not ready, delay the check
-			logrus.Warnf("pod %s still not running. Status: %v", pod.Name, pod.Status.Phase)
+			printStatus(*pod)
 			continue
 		} else if err != nil {
 			return validatedMountPods, err
@@ -617,7 +645,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 	}
 	for _, pod := range pxPods.Items {
 		if pod.Labels["name"] == PXDaemonSet && !k8sCore.IsPodReady(pod) {
-			logrus.Errorf("Error on %s Pod: %v is not up yet. Pod Status: %v, Conditions: %v", pod.Status.PodIP, pod.Name, pod.Status.Phase, pod.Status.Conditions)
+			printStatus(pod)
 			return false
 		}
 	}
@@ -805,6 +833,34 @@ func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 		return nil, fmt.Errorf("Failed to get list of autopilotrules. Err: %v", err)
 	}
 	return listAutopilotRules, nil
+}
+
+func printStatus(pods ...corev1.Pod) {
+	for _, pod := range pods {
+		status := ""
+		ready := false
+		for _, st := range pod.Status.Conditions {
+			switch st.Type {
+			case corev1.PodScheduled:
+				status += fmt.Sprintf("Scheduled: %v ", st.Status)
+			case corev1.PodReady:
+				status += fmt.Sprintf("Ready: %v ", st.Status)
+				ready, _ = strconv.ParseBool(fmt.Sprintf("%v", st.Status))
+			case corev1.PodInitialized:
+				status += fmt.Sprintf("Initialized: %v ", st.Status)
+			}
+		}
+		if len(pod.Status.Reason) > 0 {
+			status += fmt.Sprintf("Phase: %v Reason: %s", pod.Status.Phase, pod.Status.Reason)
+		}
+		if ready {
+			logrus.Infof("Pod [%s] %s ready on node %s - %s", pod.Namespace, pod.Name, pod.Status.NominatedNodeName,
+				status)
+		} else {
+			logrus.Infof("Pod [%s] %s not ready on node %s - %s", pod.Namespace, pod.Name,
+				pod.Status.NominatedNodeName, status)
+		}
+	}
 }
 
 func init() {
