@@ -25,6 +25,7 @@ type Ops interface {
 	DaemonSetOps
 	DeploymentOps
 	StatefulSetOps
+	ReplicaSetOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)

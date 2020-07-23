@@ -102,12 +102,69 @@ func (a *ApplicationRestoreController) verifyNamespaces(restore *storkapi.Applic
 	if !a.namespaceRestoreAllowed(restore) {
 		return fmt.Errorf("Spec.Namespaces should only contain the current namespace")
 	}
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("Error getting backup: %v", err)
+		return err
+	}
+	return a.createNamespaces(backup, restore.Spec.BackupLocation, restore)
+}
 
-	for _, ns := range restore.Spec.NamespaceMapping {
-		if _, err := core.Instance().GetNamespace(ns); err != nil {
+func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.ApplicationBackup,
+	backupLocation string,
+	restore *storkapi.ApplicationRestore) error {
+	var namespaces []*v1.Namespace
 
+	nsData, err := a.downloadObject(backup, backupLocation, restore.Namespace, nsObjectName, true)
+	if err != nil {
+		return err
+	}
+	if nsData != nil {
+		if err = json.Unmarshal(nsData, &namespaces); err != nil {
+			return err
+		}
+		for _, ns := range namespaces {
+			if restoreNS, ok := restore.Spec.NamespaceMapping[ns.Name]; ok {
+				ns.Name = restoreNS
+			}
+			// create mapped restore namespace with metadata of backed up
+			// namespace
+			_, err := core.Instance().CreateNamespace(&v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        ns.Name,
+					Labels:      ns.Labels,
+					Annotations: ns.GetAnnotations(),
+				},
+			})
+			log.ApplicationRestoreLog(restore).Infof("Creating dest namespace %v", ns.Name)
+			if err != nil {
+				if errors.IsAlreadyExists(err) {
+					log.ApplicationRestoreLog(restore).Errorf("Updating dest namespace %v", ns.Name)
+					// regardless of replace policy we should always update namespace is
+					// its already exist to keel latest annotations/labels
+					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        ns.Name,
+							Labels:      ns.Labels,
+							Annotations: ns.GetAnnotations(),
+						},
+					})
+				}
+				return err
+			}
+		}
+		return nil
+	}
+	for _, namespace := range restore.Spec.NamespaceMapping {
+		if ns, err := core.Instance().GetNamespace(namespace); err != nil {
 			if errors.IsNotFound(err) {
-				if _, err := core.Instance().CreateNamespace(ns, nil); err != nil {
+				if _, err := core.Instance().CreateNamespace(&v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        ns.Name,
+						Labels:      ns.Labels,
+						Annotations: ns.GetAnnotations(),
+					},
+				}); err != nil {
 					return err
 				}
 			}

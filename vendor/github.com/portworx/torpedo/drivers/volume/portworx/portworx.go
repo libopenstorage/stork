@@ -677,10 +677,21 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 		if err != nil {
 			return nil, true, err
 		}
-		return volumeInspectResponse.Volume, false, nil
+
+		respVol := volumeInspectResponse.Volume
+
+		// Size Update
+		if respVol.Spec.Size != vol.RequestedSize {
+			return nil, true, &ErrFailedToInspectVolume{
+				ID: volumeName,
+				Cause: fmt.Sprintf("Volume size differs. Expected:%v Actual:%v",
+					vol.RequestedSize, respVol.Spec.Size),
+			}
+		}
+		return nil, false, nil
 	}
 
-	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	_, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
 	if err != nil {
 		return &ErrFailedToInspectVolume{
 			ID:    volumeName,
@@ -688,16 +699,6 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 		}
 	}
 
-	respVol := out.(*api.Volume)
-
-	// Size Update
-	if respVol.Spec.Size != vol.RequestedSize {
-		return &ErrFailedToInspectVolume{
-			ID: volumeName,
-			Cause: fmt.Sprintf("Volume size differs. Expected:%v Actual:%v",
-				vol.RequestedSize, respVol.Spec.Size),
-		}
-	}
 	return nil
 }
 

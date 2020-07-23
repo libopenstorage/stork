@@ -46,6 +46,7 @@ type ResourceCollector struct {
 	dynamicInterface dynamic.Interface
 	coreOps          core.Ops
 	rbacOps          rbac.Ops
+	storkOps         storkops.Ops
 }
 
 // Init initializes the resource collector
@@ -80,6 +81,10 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 		return err
 	}
 	r.rbacOps, err = rbac.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	r.storkOps, err = storkops.NewForConfig(config)
 	if err != nil {
 		return err
 	}
@@ -138,16 +143,16 @@ func (r *ResourceCollector) GetResources(
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	crdList, err := r.storkOps.ListApplicationRegistrations()
 	if err != nil {
-		return nil, err
-	}
-	for _, crd := range crdList.Items {
-		for _, kind := range crd.Resources {
-			crdResources = append(crdResources, kind.GroupVersionKind)
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	} else {
+		for _, crd := range crdList.Items {
+			for _, kind := range crd.Resources {
+				crdResources = append(crdResources, kind.GroupVersionKind)
+			}
 		}
 	}
-
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
 		return nil, err
@@ -406,18 +411,19 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		}
 
 		content := o.UnstructuredContent()
-		crdList, err := storkops.Instance().ListApplicationRegistrations()
+		crdList, err := r.storkOps.ListApplicationRegistrations()
 		if err != nil {
-			return err
-		}
-		resourceKind := o.GetObjectKind().GroupVersionKind()
-		for _, crd := range crdList.Items {
-			for _, kind := range crd.Resources {
-				if kind.Kind == resourceKind.Kind && kind.Group == resourceKind.Group &&
-					kind.Version == resourceKind.Version {
-					// remove status from crd
-					if !kind.KeepStatus {
-						delete(content, "status")
+			logrus.Warnf("Unable to get registered crds, err %v", err)
+		} else {
+			resourceKind := o.GetObjectKind().GroupVersionKind()
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					if kind.Kind == resourceKind.Kind && kind.Group == resourceKind.Group &&
+						kind.Version == resourceKind.Version {
+						// remove status from crd
+						if !kind.KeepStatus {
+							delete(content, "status")
+						}
 					}
 				}
 			}
@@ -571,6 +577,7 @@ func (r *ResourceCollector) DeleteResources(
 	objects []runtime.Unstructured,
 ) error {
 	// First delete all the objects
+	deleteStart := metav1.Now()
 	for _, object := range objects {
 		// Don't delete objects that support merging
 		if r.mergeSupportedForResource(object) {
@@ -614,8 +621,14 @@ func (r *ResourceCollector) DeleteResources(
 
 		// Wait for up to 2 minutes for the object to be deleted
 		for i := 0; i < deletedMaxRetries; i++ {
-			_, err = dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
+			obj, err := dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
 			if err != nil && apierrors.IsNotFound(err) {
+				break
+			}
+			createTime := obj.GetCreationTimestamp()
+			if deleteStart.Before(&createTime) {
+				logrus.Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+					obj.GetName(), deleteStart, createTime)
 				break
 			}
 			logrus.Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)

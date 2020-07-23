@@ -963,7 +963,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:3e11dbea9e1e2cdeb11252efbda51144b208667b55b23b1a8be9fcfc7be47d86"
+  digest = "1:282827acad6f8f89b739a56f19b91cfe0ce4dcb4578cbb70ab695fda08342d31"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -984,11 +984,11 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "7b23c232a58f815546b86e2498091335fb6847b7"
+  revision = "257aba0944dc48fc2818af467937f14c62eb7c00"
 
 [[projects]]
   branch = "master"
-  digest = "1:884bfba4f1881fbee1119e9795d44d8bde8a2a1a2a93e18eb4fac9419df9e87f"
+  digest = "1:2e79cb3aa3df96dd4c7c86671b3e84efdcbae0d5aa63141592db2438a99f6185"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/api",
@@ -1010,7 +1010,7 @@
     "pkg/units",
   ]
   pruneopts = "UT"
-  revision = "f7bf998aa95aebe23d80b0a27680e0d7a8e663e6"
+  revision = "7ddea58d8e04aa4e4f94521f106bf6667e9d3da7"
 
 [[projects]]
   branch = "master"

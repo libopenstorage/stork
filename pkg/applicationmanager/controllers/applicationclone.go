@@ -119,12 +119,32 @@ func (a *ApplicationCloneController) setDefaults(clone *stork_api.ApplicationClo
 // Make sure the source namespaces exists and create the destination
 // namespace if it doesn't exist
 func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.ApplicationClone) error {
-	_, err := core.Instance().GetNamespace(clone.Spec.SourceNamespace)
+	ns, err := core.Instance().GetNamespace(clone.Spec.SourceNamespace)
 	if err != nil {
 		return fmt.Errorf("error getting source namespace %v: %v", clone.Spec.SourceNamespace, err)
 	}
-	_, err = core.Instance().CreateNamespace(clone.Spec.DestinationNamespace, nil)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        clone.Spec.DestinationNamespace,
+			Labels:      ns.Labels,
+			Annotations: ns.GetAnnotations(),
+		},
+	})
+	log.ApplicationCloneLog(clone).Infof("Creating dest namespace %v", ns.Name)
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			log.ApplicationCloneLog(clone).Errorf("Updating dest namespace %v", ns.Name)
+			// regardless of replace policy we should always update namespace is
+			// its already exist to keel latest annotations/labels
+			_, err = core.Instance().UpdateNamespace(&v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        clone.Spec.DestinationNamespace,
+					Labels:      ns.Labels,
+					Annotations: ns.GetAnnotations(),
+				},
+			})
+		}
+		log.ApplicationCloneLog(clone).Errorf("error creating destination namespace  %v: %v", clone.Spec.DestinationNamespace, err)
 		return fmt.Errorf("error creating destination namespace %v: %v", clone.Spec.DestinationNamespace, err)
 	}
 	return nil
