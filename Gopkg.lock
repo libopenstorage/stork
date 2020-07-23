@@ -933,7 +933,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:282827acad6f8f89b739a56f19b91cfe0ce4dcb4578cbb70ab695fda08342d31"
+  digest = "1:3fd95e2b0332a1965cfa4d759f2448e76a75470a74657f28b2699c873ee716e9"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -954,7 +954,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "257aba0944dc48fc2818af467937f14c62eb7c00"
+  revision = "7ba5af1a13e0bfffd9c8b3404d9a8c5bce152716"
 
 [[projects]]
   branch = "master"
