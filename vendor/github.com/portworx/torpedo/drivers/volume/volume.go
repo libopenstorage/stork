@@ -7,6 +7,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
+	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
@@ -69,10 +70,13 @@ type Driver interface {
 	ValidateVolumeSetup(vol *Volume) error
 
 	// StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
-	StopDriver(nodes []node.Node, force bool) error
+	StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error
 
 	// StartDriver must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
+
+	// RestartDriver must cause the volume driver to get restarted on a given node.
+	RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error
 
 	// WaitDriverUpOnNode must wait till the volume driver becomes usable on a given node
 	WaitDriverUpOnNode(n node.Node, timeout time.Duration) error
@@ -83,11 +87,14 @@ type Driver interface {
 	// GetNodeForVolume returns the node on which the volume is attached
 	GetNodeForVolume(vol *Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error)
 
+	// GetNodeForBackup returns the node on which cloudsnap backup is started
+	GetNodeForBackup(backupID string) (node.Node, error)
+
 	// ExtractVolumeInfo extracts the volume params from the given string
 	ExtractVolumeInfo(params string) (string, map[string]string, error)
 
 	// UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
-	UpgradeDriver(endpointURL string, endpointVersion string) error
+	UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
@@ -162,13 +169,21 @@ const (
 )
 
 var (
-	volDrivers = make(map[string]Driver)
+	volDrivers   = make(map[string]Driver)
+	provisioners = make([]string, 0)
+	// StorageDriver to be used to store name of the storage driver
+	StorageDriver string
 	// StorageProvisioner to be used to store name of the storage provisioner
 	StorageProvisioner StorageProvisionerType
 )
 
 // Register registers the given volume driver
-func Register(name string, d Driver) error {
+func Register(name string, driverProvisioners map[StorageProvisionerType]StorageProvisionerType, d Driver) error {
+	// Add provisioners supported by driver to slice
+	for provisioner := range driverProvisioners {
+		provisioners = append(provisioners, string(provisioner))
+	}
+
 	if _, ok := volDrivers[name]; !ok {
 		volDrivers[name] = d
 	} else {
@@ -196,6 +211,11 @@ func GetStorageProvisioner() string {
 	return string(StorageProvisioner)
 }
 
+// GetStorageDriver storage driver name to be used with Torpedo
+func GetStorageDriver() string {
+	return string(StorageDriver)
+}
+
 // GetVolumeDrivers returns list of supported volume drivers
 func GetVolumeDrivers() []string {
 	var voldrivers []string
@@ -203,6 +223,15 @@ func GetVolumeDrivers() []string {
 		voldrivers = append(voldrivers, v)
 	}
 	return voldrivers
+}
+
+// GetVolumeProvisioners returns list of supported volume provisioners
+func GetVolumeProvisioners() []string {
+	var volumeProvisioners []string
+	for _, v := range provisioners {
+		volumeProvisioners = append(volumeProvisioners, v)
+	}
+	return volumeProvisioners
 }
 
 func (v *Volume) String() string {

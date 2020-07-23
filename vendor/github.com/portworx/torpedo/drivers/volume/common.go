@@ -8,6 +8,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/pborman/uuid"
+	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
@@ -108,7 +109,7 @@ func (d *DefaultDriver) ValidateVolumeSetup(vol *Volume) error {
 }
 
 // StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
-func (d *DefaultDriver) StopDriver(nodes []node.Node, force bool) error {
+func (d *DefaultDriver) StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StopDriver()",
@@ -120,6 +121,15 @@ func (d *DefaultDriver) GetNodeForVolume(vol *Volume, timeout time.Duration, ret
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetNodeForVolume()",
+	}
+
+}
+
+// GetNodeForBackup returns the node on which the volume is attached
+func (d *DefaultDriver) GetNodeForBackup(backupID string) (node.Node, error) {
+	return node.Node{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodeForBackup()",
 	}
 
 }
@@ -200,7 +210,7 @@ func (d *DefaultDriver) StartDriver(n node.Node) error {
 }
 
 // UpgradeDriver upgrades the volume driver from the given link and checks if it was upgraded to endpointVersion
-func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string) error {
+func (d *DefaultDriver) UpgradeDriver(endpointURL string, endpointVersion string, enableStork bool) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "UpgradeDriver()",
@@ -312,5 +322,13 @@ func (d *DefaultDriver) EstimateVolumeExpand(apRule apapi.AutopilotRule, initial
 	return 0, 0, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "EstimateVolumeExpand()",
+	}
+}
+
+// RestartDriver must cause the volume driver to restart on a given node.
+func (d *DefaultDriver) RestartDriver(n node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RestartDriver()",
 	}
 }

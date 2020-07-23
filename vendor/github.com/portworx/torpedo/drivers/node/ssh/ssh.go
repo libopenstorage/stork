@@ -466,13 +466,11 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	err = session.Wait()
 	if resp, err1 := ioutil.ReadAll(stdout); err1 == nil {
 		out = string(resp)
-		logrus.Debugf("Command: %s result: %s", cmd, out)
 	} else {
 		return "", fmt.Errorf("fail to read stdout")
 	}
 	if resp, err1 := ioutil.ReadAll(stderr); err1 == nil {
 		sterr = string(resp)
-		logrus.Debugf("Command: %s errors: %s", cmd, sterr)
 	} else {
 		return "", fmt.Errorf("fail to read stderr")
 	}
@@ -480,7 +478,7 @@ func (s *SSH) doCmdSSH(n node.Node, options node.ConnectionOpts, cmd string, ign
 	if ignoreErr == false && err != nil {
 		return out, &node.ErrFailedToRunCommand{
 			Addr:  n.UsableAddr,
-			Cause: fmt.Sprintf("failed to run command due to: %v", err),
+			Cause: fmt.Sprintf("failed to run command due to: %v", sterr),
 		}
 	}
 	return out, nil
