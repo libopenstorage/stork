@@ -456,7 +456,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		return err
 	}
 
-	err = schedulerDriver.RescanSpecs(specDir)
+	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
 	if err != nil {
 		logrus.Errorf("Unable to parse spec dir: %v", err)
 		return err
