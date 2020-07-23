@@ -46,6 +46,7 @@ type ResourceCollector struct {
 	dynamicInterface dynamic.Interface
 	coreOps          core.Ops
 	rbacOps          rbac.Ops
+	storkOps         storkops.Ops
 }
 
 // Init initializes the resource collector
@@ -80,6 +81,10 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 		return err
 	}
 	r.rbacOps, err = rbac.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	r.storkOps, err = storkops.NewForConfig(config)
 	if err != nil {
 		return err
 	}
@@ -138,7 +143,7 @@ func (r *ResourceCollector) GetResources(
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
-	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	crdList, err := r.storkOps.ListApplicationRegistrations()
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +411,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		}
 
 		content := o.UnstructuredContent()
-		crdList, err := storkops.Instance().ListApplicationRegistrations()
+		crdList, err := r.storkOps.ListApplicationRegistrations()
 		if err != nil {
 			return err
 		}
