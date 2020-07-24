@@ -40,6 +40,8 @@ require (
 	github.com/portworx/px-backup-api v1.0.1-0.20200714061107-e88917fc5196
 	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
 	github.com/portworx/sched-ops v0.0.0-20200723032629-257aba0944dc
+	github.com/sendgrid/rest v2.6.0+incompatible // indirect
+	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.5.0
 	github.com/stretchr/testify v1.5.1
 	go.opencensus.io v0.22.1 // indirect

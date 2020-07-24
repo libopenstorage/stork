@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,8 +24,6 @@ const (
 	testTriggersConfigMap = "longevity-triggers"
 	configMapNS           = "default"
 )
-
-type TestTrigger string
 
 var (
 	// Stores mapping between test trigger and its chaos level.
@@ -84,7 +83,7 @@ var _ = Describe("{Longevity}", func() {
 				wg.Add(1)
 			}
 		})
-
+		CollectEventRecords(&triggerEventsChan)
 		wg.Wait()
 		Step("teardown all apps", func() {
 			for _, ctx := range contexts {
@@ -125,7 +124,8 @@ func testTrigger(wg *sync.WaitGroup,
 		if waitTime != 0 {
 			// If trigger is not disabled
 			if time.Since(lastInvocationTime) > time.Duration(waitTime) {
-				// If its right time to trigger, check no other disruptive trigger is happening at same time
+				// If its right time to trigger,
+				// check no other disruptive trigger is happening at same time
 				takeLock(triggerLoc, triggerType)
 
 				triggerFunc(contexts, triggerEventsChan)
@@ -147,26 +147,30 @@ func watchConfigMap() error {
 	if err != nil {
 		return fmt.Errorf("Error reading config map: %v", err)
 	}
-	populateTriggers(cm.Data)
+	err = populateDataFromConfigMap(&cm.Data)
+	if err != nil {
+		return err
+	}
 
-	if err == nil {
-		// Apply watch if configMap exists
-		fn := func(object runtime.Object) error {
-			cm, ok := object.(*v1.ConfigMap)
-			if !ok {
-				err := fmt.Errorf("invalid object type on configmap watch: %v", object)
+	// Apply watch if configMap exists
+	fn := func(object runtime.Object) error {
+		cm, ok := object.(*v1.ConfigMap)
+		if !ok {
+			err := fmt.Errorf("invalid object type on configmap watch: %v", object)
+			return err
+		}
+		if len(cm.Data) > 0 {
+			err = populateDataFromConfigMap(&cm.Data)
+			if err != nil {
 				return err
 			}
-			if len(cm.Data) > 0 {
-				populateTriggers(cm.Data)
-			}
-			return nil
 		}
+		return nil
+	}
 
-		err = core.Instance().WatchConfigMap(cm, fn)
-		if err != nil {
-			return fmt.Errorf("Failed to watch on config map: %s due to: %v", testTriggersConfigMap, err)
-		}
+	err = core.Instance().WatchConfigMap(cm, fn)
+	if err != nil {
+		return fmt.Errorf("Failed to watch on config map: %s due to: %v", testTriggersConfigMap, err)
 	}
 	return nil
 }
@@ -199,11 +203,49 @@ func takeLock(triggerLoc *sync.Mutex, triggerType string) {
 	}
 }
 
-func populateTriggers(triggers map[string]string) error {
-	for triggerType, chaosLevel := range triggers {
+func populateDataFromConfigMap(configData *map[string]string) error {
+	setEmailRecipients(configData)
+	err := setSendGridEmailAPIKey(configData)
+	if err != nil {
+		return err
+	}
+
+	err = populateTriggers(configData)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func setEmailRecipients(configData *map[string]string) {
+	// Get email recipients from configMap
+	if emailRecipients, ok := (*configData)[EmailRecipientsConfigMapField]; !ok {
+		logrus.Warnf("No [%s] field found in [%s] config-map in [%s] namespace."+
+			"Defaulting email recipients to [%s].\n",
+			EmailRecipientsConfigMapField, testTriggersConfigMap, configMapNS, DefaultEmailRecipient)
+		EmailRecipients = []string{DefaultEmailRecipient}
+	} else {
+		EmailRecipients = strings.Split(emailRecipients, ",")
+		delete(*configData, EmailRecipientsConfigMapField)
+	}
+}
+
+func setSendGridEmailAPIKey(configData *map[string]string) error {
+	if apiKey, ok := (*configData)[SendGridEmailAPIKeyField]; ok {
+		SendGridEmailAPIKey = apiKey
+		delete(*configData, SendGridEmailAPIKeyField)
+		return nil
+	}
+	return fmt.Errorf("Failed to find [%s] field in config-map [%s] in namespace [%s]",
+		SendGridEmailAPIKeyField, testTriggersConfigMap, configMapNS)
+}
+
+func populateTriggers(triggers *map[string]string) error {
+	for triggerType, chaosLevel := range *triggers {
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed to get chaos levels from configMap [%s] in [%s] namespace. Error:[%v]",
+				testTriggersConfigMap, configMapNS, err)
 		}
 		chaosMap[triggerType] = chaosLevelInt
 	}
@@ -247,8 +289,11 @@ func populateIntervals() {
 	triggerInterval[EmailReporter][7] = 4 * baseInterval
 	triggerInterval[EmailReporter][6] = 5 * baseInterval
 	triggerInterval[EmailReporter][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[EmailReporter][4] = 7 * baseInterval
+	triggerInterval[EmailReporter][3] = 8 * baseInterval
+	triggerInterval[EmailReporter][2] = 9 * baseInterval
+	triggerInterval[EmailReporter][1] = 10 * baseInterval
 
-	baseInterval = 15 * time.Minute
 	triggerInterval[HAUpdate][10] = 1 * baseInterval
 	triggerInterval[HAUpdate][9] = 2 * baseInterval
 	triggerInterval[HAUpdate][8] = 3 * baseInterval
@@ -281,7 +326,7 @@ func getWaitTime(triggerType string) (time.Duration, error) {
 		logrus.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
 			triggerType, Inst().ChaosLevel)
 	}
-	return (triggerInterval[triggerType][chaosLevel]), nil
+	return triggerInterval[triggerType][chaosLevel], nil
 }
 
 var _ = AfterSuite(func() {

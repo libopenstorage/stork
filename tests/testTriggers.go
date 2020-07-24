@@ -1,24 +1,54 @@
 package tests
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"os/exec"
+	"reflect"
 	"strings"
+	"text/template"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	"container/ring"
+
+	"github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/email"
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	subject = "Torpedo Longevity Report"
+	from    = "wilkins@portworx.com"
+
+	// EmailRecipientsConfigMapField is field in config map whos value is comma
+	// seperated list of email IDs which will recieve email notifications about logivity
+	EmailRecipientsConfigMapField = "emailRecipients"
+	// DefaultEmailRecipient is list of email IDs that will recieve email
+	// notifications when no EmailRecipientsConfigMapField field present in configMap
+	DefaultEmailRecipient = "test@portworx.com"
+	// SendGridEmailAPIKeyField is field in config map which stores the SendGrid Email API key
+	SendGridEmailAPIKeyField = "sendGridAPIKey"
+)
+
+// EmailRecipients list of email IDs to send email to
+var EmailRecipients []string
+
+// SendGridEmailAPIKey holds API key used to interact
+// with SendGrid Email APIs
+var SendGridEmailAPIKey string
+
+// Event describes type of test trigger
 type Event struct {
 	ID   string
 	Type string
 }
 
+// EventRecord recodes which event took
+// place at what time with what outcome
 type EventRecord struct {
 	Event   Event
 	Start   time.Time
@@ -26,10 +56,15 @@ type EventRecord struct {
 	Outcome []error
 }
 
-type EventRecords []*EventRecord
+// eventRing is circular buffer to store
+// events for sending email notifications
+var eventRing *ring.Ring
 
-var globalEventRec EventRecords
-var currHeadForGEventRec int
+// emailRecords stores events for rendering
+// email template
+type emailRecords struct {
+	Records []EventRecord
+}
 
 // GenerateUUID generates unique ID
 func GenerateUUID() string {
@@ -45,18 +80,24 @@ func UpdateOutcome(event *EventRecord, err error) {
 }
 
 const (
+	// HAUpdate performs HA increase and decrease
+	HAUpdate = "haUpdate"
+	// RestartVolDriver restart volume driver
 	RestartVolDriver = "restartVolDriver"
-	CrashVolDriver   = "crashVolDriver"
-	RebootNode       = "rebootNode"
-	DeleteApp        = "deleteApp"
-	EmailReporter    = "emailReporter"
-	HAUpdate         = "haUpdate"
+	// CrashVolDriver crashes volume driver
+	CrashVolDriver = "crashVolDriver"
+	// RebootNode reboots alll nodes one by one
+	RebootNode = "rebootNode"
+	// DeleteApp deletes application tasks
+	DeleteApp = "deleteApp"
+	// EmailReporter notifies via email outcome of past events
+	EmailReporter = "emailReporter"
 )
 
 // TriggerHAUpdate changes HA level of all volumes of given contexts
 func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
-	defer GinkgoRecover()
-	event := EventRecord{
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
 			Type: HAUpdate,
@@ -67,8 +108,7 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 
 	defer func() {
 		event.End = time.Now()
-		logrus.Infof("Sending event [%+v] on channel\n", event)
-		*recordChan <- &event
+		*recordChan <- event
 	}()
 
 	expReplMap := make(map[*volume.Volume]int64)
@@ -78,7 +118,7 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 			var err error
 			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
 				appVolumes, err = Inst().S.GetVolumes(ctx)
-				UpdateOutcome(&event, err)
+				UpdateOutcome(event, err)
 				expect(appVolumes).NotTo(beEmpty())
 			})
 			for _, v := range appVolumes {
@@ -91,7 +131,7 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 					func() {
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
-						UpdateOutcome(&event, err)
+						UpdateOutcome(event, err)
 						expect(err).NotTo(haveOccurred())
 
 						if currRep == MinRF {
@@ -100,11 +140,11 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 						expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
 						err = Inst().V.SetReplicationFactor(v, currRep-1)
 						if !errExpected {
-							UpdateOutcome(&event, err)
+							UpdateOutcome(event, err)
 							expect(err).NotTo(haveOccurred())
 						} else {
 							if !expect(err).To(haveOccurred()) {
-								UpdateOutcome(&event, fmt.Errorf("Expected HA reduce to fail since new repl factor is less than %v but it did not", MinRF))
+								UpdateOutcome(event, fmt.Errorf("Expected HA reduce to fail since new repl factor is less than %v but it did not", MinRF))
 							}
 						}
 
@@ -114,7 +154,7 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 						ctx.App.Key, v),
 					func() {
 						newRepl, err := Inst().V.GetReplicationFactor(v)
-						UpdateOutcome(&event, err)
+						UpdateOutcome(event, err)
 						expect(err).NotTo(haveOccurred())
 						expect(newRepl).To(equal(expReplMap[v]))
 					})
@@ -124,14 +164,14 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 					func() {
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
-						UpdateOutcome(&event, err)
+						UpdateOutcome(event, err)
 						expect(err).NotTo(haveOccurred())
 						// GetMaxReplicationFactory is hardcoded to 3
 						// if it increases repl 3 to an aggregated 2 volume, it will fail
 						// because it would require 6 worker nodes, since
 						// number of nodes required = aggregation level * replication factor
 						currAggr, err := Inst().V.GetAggregationLevel(v)
-						UpdateOutcome(&event, err)
+						UpdateOutcome(event, err)
 						expect(err).NotTo(haveOccurred())
 						if currAggr > 1 {
 							MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
@@ -142,7 +182,7 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 						expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
 						err = Inst().V.SetReplicationFactor(v, currRep+1)
 						if !errExpected {
-							UpdateOutcome(&event, err)
+							UpdateOutcome(event, err)
 							expect(err).NotTo(haveOccurred())
 						} else {
 							if !expect(err).To(haveOccurred()) {
@@ -155,10 +195,10 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 						ctx.App.Key, v),
 					func() {
 						newRepl, err := Inst().V.GetReplicationFactor(v)
-						UpdateOutcome(&event, err)
+						UpdateOutcome(event, err)
 						expect(err).NotTo(haveOccurred())
 						if !expect(newRepl).To(equal(expReplMap[v])) {
-							UpdateOutcome(&event, fmt.Errorf("Current repl count [%d] does not match with expected repl count [%d]", newRepl, expReplMap[v]))
+							UpdateOutcome(event, fmt.Errorf("Current repl count [%d] does not match with expected repl count [%d]", newRepl, expReplMap[v]))
 						}
 					})
 				Step("validate apps", func() {
@@ -173,7 +213,20 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 
 // TriggerCrashVolDriver crashes vol driver
 func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: HAUpdate,
+		},
+		Start:   time.Now(),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now()
+		*recordChan <- event
+	}()
 	Step("crash volume driver in all nodes", func() {
 		for _, appNode := range node.GetStorageDriverNodes() {
 			Step(
@@ -188,7 +241,20 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *Even
 
 // TriggerRestartVolDriver restarts volume driver and validates app
 func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: HAUpdate,
+		},
+		Start:   time.Now(),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now()
+		*recordChan <- event
+	}()
 	Step("get nodes bounce volume driver", func() {
 		for _, appNode := range node.GetStorageDriverNodes() {
 			Step(
@@ -220,7 +286,7 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 
 // TriggerDeleteApps deletes app and verifies if those are rescheduled properly
 func TriggerDeleteApps(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 	Step("delete all application tasks", func() {
 		for _, ctx := range contexts {
 			Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
@@ -234,9 +300,23 @@ func TriggerDeleteApps(contexts []*scheduler.Context, recordChan *chan *EventRec
 
 // TriggerRebootNodes reboots node on which apps are running
 func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: RebootNode,
+		},
+		Start:   time.Now(),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now()
+		*recordChan <- event
+	}()
+
 	Step("get all nodes and reboot one by one", func() {
-		/*nodesToReboot := node.GetWorkerNodes()
+		nodesToReboot := node.GetWorkerNodes()
 
 		// Reboot node and check driver status
 		Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
@@ -290,17 +370,136 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 				}
 			}
 		})
-		*/
 	})
+}
+
+// CollectEventRecords collects eventRecords from channel
+// and stores in buffer for future email notifications
+func CollectEventRecords(recordChan *chan *EventRecord) {
+	eventRing = ring.New(100)
+	for eventRecord := range *recordChan {
+		eventRing.Value = eventRecord
+		eventRing = eventRing.Next()
+	}
 }
 
 // TriggerEmailReporter sends email with all reported errors
 func TriggerEmailReporter(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
-	logrus.Infof("Going to read from chan with len: %d\n", len(*recordChan))
-	if eventRec, ok := <-*recordChan; ok {
-		logrus.Infof("Got record from chan : [%+v]", eventRec)
+	// emailRecords stores events to be notified
+	emailRecords := emailRecords{}
+	logrus.Infof("Generating email report: %v", time.Now())
+	for i := 0; i < eventRing.Len(); i++ {
+		record := eventRing.Value
+		if record != nil {
+			emailRecords.Records = append(emailRecords.Records, *record.(*EventRecord))
+			eventRing.Value = nil
+		}
+		eventRing = eventRing.Next()
 	}
-	for eventRecord := range *recordChan {
-		logrus.Errorf("record: [%+v]\n", eventRecord)
+
+	content, err := prepareEmailBody(emailRecords)
+	if err != nil {
+		logrus.Errorf("Failed to prepare email body. Error: [%v]", err)
+	}
+
+	emailDetails := &email.Email{
+		Subject:        subject,
+		Content:        content,
+		From:           from,
+		To:             EmailRecipients,
+		SendGridAPIKey: SendGridEmailAPIKey,
+	}
+
+	err = emailDetails.SendEmail()
+	if err != nil {
+		logrus.Errorf("Failed to send out email, because of Error: %q", err)
 	}
 }
+
+func prepareEmailBody(eventRecords emailRecords) (string, error) {
+	var err error
+	t := template.New("t").Funcs(templateFuncs)
+	t, err = t.Parse(htmlTemplate)
+	if err != nil {
+		logrus.Errorf("Cannot parse HTML template Err: %v", err)
+		return "", err
+	}
+	var buf []byte
+	buffer := bytes.NewBuffer(buf)
+	err = t.Execute(buffer, eventRecords)
+	if err != nil {
+		logrus.Errorf("Cannot generate body from values, Err: %v", err)
+		return "", err
+	}
+
+	return buffer.String(), nil
+}
+
+var templateFuncs = template.FuncMap{"rangeStruct": rangeStructer}
+
+func rangeStructer(args ...interface{}) []interface{} {
+	if len(args) == 0 {
+		return nil
+	}
+
+	v := reflect.ValueOf(args[0])
+	if v.Kind() != reflect.Struct {
+		return nil
+	}
+
+	out := make([]interface{}, v.NumField())
+	for i := 0; i < v.NumField(); i++ {
+		out[i] = v.Field(i).Interface()
+	}
+
+	return out
+}
+
+var htmlTemplate = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style>
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th {
+   background-color: #0ca1f0;
+   text-align: center;
+   padding: 3px;
+}
+td {
+  text-align: left;
+  padding: 3px;
+}
+tbody tr:nth-child(even) {
+	background-color: #bac5ca;
+}
+tbody tr:last-child {
+  background-color: #79ab78;
+}
+</style>
+</head>
+<body>
+<h1>Torpedo Longevity Report</h1>
+<hr/>
+<h3>Event Details</h3>
+<table border=1>
+<tr>
+   <td align="center"><h4>Event </h4></td>
+   <td align="center"><h4>Start Time </h4></td>
+   <td align="center"><h4>End Time </h4></td>
+   <td align="center"><h4>Errors </h4></td>
+ </tr>
+{{range .Records}}<tr>
+{{range rangeStruct .}}	<td>{{.}}</td>
+{{end}}</tr>
+{{end}}
+</table>
+<hr/>
+</table>
+</body>
+</html>
+`

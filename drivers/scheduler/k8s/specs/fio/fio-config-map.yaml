@@ -47,27 +47,27 @@ data:
           name: iops
           help: FIO IOPS Write Gauge Metrics
           match: '  write: %{GREEDYDATA}, iops=%{NUMBER:val1}%{GREEDYDATA:thsd}, %{GREEDYDATA}'
-          value: '{{if eq .thsd "k"}}{{multiply .val1 1000}}{{else}}{{.val1}}{{end}}'
+          value: '{{`{{if eq .thsd "k"}}{{multiply .val1 1000}}{{else}}{{.val1}}{{end}}`}}'
           labels:
-              iops_suffix: '{{.thsd}}'
+              iops_suffix: '{{`{{.thsd}}`}}'
           cumulative: false
           retention: 1s
         - type: gauge
           name: bandwidth
           help: FIO Bandwidth Write Gauge Metrics
-          match: '  write: io=%{GREEDYDATA}, bw=%{NUMBER:val2}%{GREEDYDATA:kibs} %{GREEDYDATA}'
-          value: '{{if eq .kibs "KiB/s"}}{{divide .val2 1024}}{{else}}{{.val2}}{{end}}'
+          match: '  write: io=%{GREEDYDATA}, bw=%{NUMBER:val2}%{GREEDYDATA:kbs}, %{GREEDYDATA}, %{GREEDYDATA}'
+          value: '{{`{{if eq .kbs "KB/s"}}{{divide .val2 1024}}{{else}}{{.val2}}{{end}}`}}'
           labels:
-              bw_unit: '{{.kibs}}'
+              bw_unit: '{{`{{.kbs}}`}}'
           cumulative: false
           retention: 1s
         - type: gauge
           name: avg_latency
           help: FIO AVG Latency Write Gauge Metrics
           match: '     lat (%{GREEDYDATA:nsec}): min=%{GREEDYDATA}, max=%{GREEDYDATA}, avg=%{NUMBER:val3}, stdev=%{GREEDYDATA}'
-          value: '{{if eq .nsec "(nsec)"}}{{divide .val3 1000}}{{else}}{{.val3}}{{end}}'
+          value: '{{`{{if eq .nsec "(usec)"}}{{divide .val3 1000}}{{else}}{{.val3}}{{end}}`}}'
           labels:
-              lat_unit: '{{.nsec}}'
+              lat_unit: '{{`{{.nsec}}`}}'
           cumulative: false
           retention: 1s
 ---

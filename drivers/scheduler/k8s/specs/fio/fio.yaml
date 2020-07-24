@@ -24,7 +24,7 @@ spec:
         - name: fio-data
           mountPath: /scratch
         - name: fio-log
-          mountPath: /logs/
+          mountPath: /logs
       - name: grok
         image: pwxvin/grok-exporter:v1.0.0-RC4
         imagePullPolicy: Always
@@ -36,7 +36,7 @@ spec:
         - name: grok-config-volume
           mountPath: /etc/grok_exporter
         - name: fio-log
-          mountPath: /logs/
+          mountPath: /logs
       volumes:
       - name: fio-config-vol
         configMap:
@@ -59,7 +59,7 @@ spec:
     spec:
       storageClassName: fio-sharedv4
       accessModes:
-      - ReadWriteMany
+      - ReadWriteOnce
       resources:
         requests:
           storage: 50Gi
@@ -68,6 +68,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: grok-exporter-svc
+  labels:
+      app: fio
 spec:
   clusterIP: None
   selector: 

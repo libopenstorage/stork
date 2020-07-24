@@ -353,6 +353,11 @@ github.com/pquerna/cachecontrol
 github.com/pquerna/cachecontrol/cacheobject
 # github.com/ryanuber/go-glob v1.0.0
 github.com/ryanuber/go-glob
+# github.com/sendgrid/rest v2.6.0+incompatible
+github.com/sendgrid/rest
+# github.com/sendgrid/sendgrid-go v3.6.0+incompatible
+github.com/sendgrid/sendgrid-go
+github.com/sendgrid/sendgrid-go/helpers/mail
 # github.com/sirupsen/logrus v1.5.0
 github.com/sirupsen/logrus
 # github.com/spf13/pflag v1.0.5
