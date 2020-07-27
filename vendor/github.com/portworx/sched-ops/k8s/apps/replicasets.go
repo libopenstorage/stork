@@ -9,7 +9,9 @@ import (
 	"github.com/portworx/sched-ops/task"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // ReplicaSetOps is an interface to perform k8s daemon set operations
@@ -181,7 +183,7 @@ func (c *Client) DeleteReplicaSet(name, namespace string) error {
 		&metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
 }
 
-// GetReplicaSetByDeployment get ReplicaSet for a Given Deployemnt
+// GetReplicaSetByDeployment get ReplicaSet for a Given Deployment
 func (c *Client) GetReplicaSetByDeployment(deployment *appsv1.Deployment) (*appsv1.ReplicaSet, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
@@ -198,5 +200,8 @@ func (c *Client) GetReplicaSetByDeployment(deployment *appsv1.Deployment) (*apps
 			}
 		}
 	}
-	return nil, nil
+	return nil, errors.NewNotFound(schema.GroupResource{
+		Group:    "apps",
+		Resource: "replicasets",
+	}, deployment.Name)
 }

@@ -211,6 +211,9 @@ func (c *Client) ValidateTerminatedDeployment(deployment *appsv1.Deployment, tim
 
 		pods, err := c.GetDeploymentPods(deployment)
 		if err != nil {
+			if errors.IsNotFound(err) {
+				return "", false, nil
+			}
 			return "", true, &schederrors.ErrAppNotTerminated{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
