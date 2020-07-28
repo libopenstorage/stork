@@ -1,7 +1,10 @@
 package csi
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/v2/pkg/apis/volumesnapshot/v1beta1"
 	kSnapshotClient "github.com/kubernetes-csi/external-snapshotter/v2/pkg/client/clientset/versioned"
@@ -10,8 +13,10 @@ import (
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -28,6 +33,11 @@ const (
 	snapshotPrefix = "snapshot-"
 	// snapshotClassNamePrefix is the prefix for snapshot classes per CSI driver
 	snapshotClassNamePrefix = "stork-csi-snapshot-class-"
+
+	// snapshotObjectName is the object stored for the volumesnapshot
+	snapshotObjectName = "volumesnapshot.json"
+	// snapshotContentObjectName is the object stored for the volumesnapshotcontent
+	snapshotContentObjectName = "volumesnapshotcontent.json"
 )
 
 type csi struct {
@@ -106,11 +116,18 @@ func (c *csi) createVolumeSnapshotClass(snapshotClassName, driverName string) (*
 	})
 }
 
+// Construct the full base path for a given backup
+// The format is "namespace/backupName/backupUID" which will be unique for each backup
+func (c *csi) getObjectPath(
+	backup *storkapi.ApplicationBackup,
+) string {
+	return filepath.Join(backup.Namespace, backup.Name, string(backup.UID))
+}
+
 func (c *csi) StartBackup(backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
 ) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-
 	snapshotClassCreatedForDriver := make(map[string]bool)
 	for _, pvc := range pvcs {
 		if pvc.DeletionTimestamp != nil {
@@ -166,6 +183,7 @@ func (c *csi) StartBackup(backup *storkapi.ApplicationBackup,
 		if err != nil {
 			return nil, err
 		}
+
 	}
 	return volumeInfos, nil
 }
@@ -182,6 +200,76 @@ func (c *csi) snapshotContentReady(vscontent *kSnapshotv1beta1.VolumeSnapshotCon
 	return vscontent.Status != nil && vscontent.Status.ReadyToUse != nil && *vscontent.Status.ReadyToUse
 }
 
+// uploadObject uploads the given data to the backup location specified in the backup object
+func (c *csi) uploadObject(
+	backup *storkapi.ApplicationBackup,
+	objectName string,
+	data []byte,
+) error {
+	backupLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, backup.Namespace)
+	if err != nil {
+		return err
+	}
+	bucket, err := objectstore.GetBucket(backupLocation)
+	if err != nil {
+		return err
+	}
+
+	if backupLocation.Location.EncryptionKey != "" {
+		if data, err = crypto.Encrypt(data, backupLocation.Location.EncryptionKey); err != nil {
+			return err
+		}
+	}
+
+	objectPath := c.getObjectPath(backup)
+	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write(data)
+	if err != nil {
+		closeErr := writer.Close()
+		if closeErr != nil {
+			log.ApplicationBackupLog(backup).Errorf("error closing writer for objectstore: %v", closeErr)
+		}
+		return err
+	}
+	err = writer.Close()
+	if err != nil {
+		log.ApplicationBackupLog(backup).Errorf("error closing writer for objectstore: %v", err)
+		return err
+	}
+	return nil
+}
+
+// uploadSnapshotAndContent issues an object upload for all VolumeSnapshots and VolumeSnapshotContents provided
+func (c *csi) uploadSnapshotAndContent(backup *storkapi.ApplicationBackup, vsList []*kSnapshotv1beta1.VolumeSnapshot, vscontentList []*kSnapshotv1beta1.VolumeSnapshotContent) error {
+	var vsBytes []byte
+	var vscBytes []byte
+
+	vsBytes, err := json.Marshal(vsList)
+	if err != nil {
+		return err
+	}
+	vscBytes, err = json.Marshal(vscontentList)
+	if err != nil {
+		return err
+	}
+
+	err = c.uploadObject(backup, snapshotObjectName, vsBytes)
+	if err != nil {
+		return err
+	}
+
+	err = c.uploadObject(backup, snapshotContentObjectName, vscBytes)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
 	if c.snapshotClient == nil {
 		if err := c.Init(nil); err != nil {
@@ -190,7 +278,9 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	}
 
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-
+	var inProgress bool
+	var vsList []*kSnapshotv1beta1.VolumeSnapshot
+	var vsContentList []*kSnapshotv1beta1.VolumeSnapshotContent
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
 			continue
@@ -205,8 +295,9 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		}
 		volumeSnapshotReady := c.snapshotReady(snapshot)
 		var volumeSnapshotContentReady bool
+		var snapshotContent *kSnapshotv1beta1.VolumeSnapshotContent
 		if volumeSnapshotReady && snapshot.Status.BoundVolumeSnapshotContentName != nil {
-			snapshotContent, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(*snapshot.Status.BoundVolumeSnapshotContentName, metav1.GetOptions{})
+			snapshotContent, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(*snapshot.Status.BoundVolumeSnapshotContentName, metav1.GetOptions{})
 			if err != nil {
 				return nil, err
 			}
@@ -220,15 +311,27 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			vInfo.Reason = "Backup successful for volume"
 			size, _ := snapshot.Status.RestoreSize.AsInt64()
 			vInfo.Size = uint64(size)
+
 		case snapshot.DeletionTimestamp != nil:
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
 			vInfo.Reason = "Backup failed for volume"
+			inProgress = true
 		default:
 			vInfo.Status = storkapi.ApplicationBackupStatusInProgress
 			vInfo.Reason = "Volume backup in progress"
+			inProgress = true
 		}
 
 		volumeInfos = append(volumeInfos, vInfo)
+	}
+
+	// if all have finished, add all VolumeSnapshot and VolumeSnapshotContent to objectstore
+	// in the case where no volumes are being backed up, skip uploading empty lists
+	if !inProgress && len(vsContentList) > 0 && len(vsList) > 0 {
+		err := c.uploadSnapshotAndContent(backup, vsList, vsContentList)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return volumeInfos, nil
