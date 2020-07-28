@@ -96,6 +96,11 @@ const (
 	// px annotation for secret namespace
 	pxSecretNamespaceAnnotation = "px/secret-namespace"
 
+	// auth issuer to use for px 2.6.0 and higher
+	pxJwtIssuerApps = "apps.portworx.io"
+	// deprecated issuer for px 2.5.x and earlier.
+	pxJwtIssuerStork = "stork.openstorage.io"
+
 	snapshotDataNamePrefix = "k8s-volume-snapshot"
 	readySnapshotMsg       = "Snapshot created successfully and it is ready"
 	pvNamePrefix           = "pvc-"
@@ -199,6 +204,7 @@ type portworx struct {
 	id              string
 	endpoint        string
 	jwtSharedSecret string
+	jwtIssuer       string
 	initDone        bool
 }
 
@@ -214,6 +220,16 @@ func (p *portworx) String() string {
 
 func (p *portworx) Init(_ interface{}) error {
 	p.stopChannel = make(chan struct{})
+	ok, _, err := p.ensureNodesHaveMinVersion("2.6.0")
+	if err != nil {
+		return err
+	}
+	if ok {
+		p.jwtIssuer = pxJwtIssuerApps
+	} else {
+		p.jwtIssuer = pxJwtIssuerStork
+	}
+
 	return p.startNodeCache()
 }
 
@@ -329,12 +345,12 @@ func (p *portworx) tokenGenerator() (string, error) {
 	}
 
 	claims := &auth.Claims{
-		Issuer: "stork.openstorage.io",
+		Issuer: p.jwtIssuer,
 		Name:   "Stork",
 
 		// Unique id for stork
 		// this id must be unique across all accounts accessing the px system
-		Subject: "stork.openstorage.io." + p.id,
+		Subject: p.jwtIssuer + "." + p.id,
 
 		// Only allow certain calls
 		Roles: []string{"system.admin"},
@@ -787,12 +803,12 @@ func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.Volum
 func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
 	if len(p.jwtSharedSecret) != 0 {
 		claims := &auth.Claims{
-			Issuer: "stork.openstorage.io",
+			Issuer: p.jwtIssuer,
 			Name:   "Stork",
 
 			// Unique id for stork
 			// this id must be unique across all accounts accessing the px system
-			Subject: "stork.openstorage.io." + p.id,
+			Subject: p.jwtIssuer + "." + p.id,
 
 			// Only allow certain calls
 			Roles: []string{"system.user"},
