@@ -98,7 +98,7 @@ const (
 
 	// auth issuer to use for px 2.6.0 and higher
 	pxJwtIssuerApps = "apps.portworx.io"
-	// deprecated issuer for px 2.5.x and earlier.
+	// [deprecated] auth issuer to use for below px 2.6.0
 	pxJwtIssuerStork = "stork.openstorage.io"
 
 	snapshotDataNamePrefix = "k8s-volume-snapshot"
@@ -140,6 +140,7 @@ const (
 	cloudBackupTimeout    = 1 * time.Minute
 
 	pxSharedSecret = "PX_SHARED_SECRET"
+	pxJwtIssuer    = "PX_JWT_ISSUER"
 
 	restoreNamePrefix = "in-place-restore-"
 	restoreTaskPrefix = "restore-"
@@ -220,14 +221,16 @@ func (p *portworx) String() string {
 
 func (p *portworx) Init(_ interface{}) error {
 	p.stopChannel = make(chan struct{})
-	ok, _, err := p.ensureNodesHaveMinVersion("2.6.0")
-	if err != nil {
-		return err
-	}
-	if ok {
-		p.jwtIssuer = pxJwtIssuerApps
-	} else {
+	switch os.Getenv(pxJwtIssuer) {
+	case pxJwtIssuerStork:
 		p.jwtIssuer = pxJwtIssuerStork
+	case pxJwtIssuerApps:
+		p.jwtIssuer = pxJwtIssuerApps
+	case "":
+		// default to stork issuer for older versions of PX and backwards compatibility
+		p.jwtIssuer = pxJwtIssuerStork
+	default:
+		return fmt.Errorf("invalid jwt issuer to authenticate with Portworx")
 	}
 
 	return p.startNodeCache()
