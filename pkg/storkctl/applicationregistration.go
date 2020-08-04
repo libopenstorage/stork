@@ -73,6 +73,9 @@ func applicationRegistrationPrinter(
 			suspendOptions := ""
 			if res.SuspendOptions.Path != "" {
 				suspendOptions = res.SuspendOptions.Path + "," + res.SuspendOptions.Type
+				if res.SuspendOptions.Value != "" {
+					suspendOptions = suspendOptions + "," + res.SuspendOptions.Value
+				}
 			}
 			row := getRow(&app,
 				[]interface{}{app.Name,

@@ -17,6 +17,8 @@ const (
 	RedisClusterApp = "redis"
 	// CassandraApp registration name
 	CassandraApp = "cassandra"
+	// WeblogicDomainApp registration name
+	WeblogicDomainApp = "weblogic"
 )
 
 func getSupportedCRD() map[string][]stork_api.ApplicationResource {
@@ -196,7 +198,22 @@ func getSupportedCRD() map[string][]stork_api.ApplicationResource {
 				KeepStatus: false,
 			},
 		}
-
+		// weblogic domain crds
+	defCRD[WeblogicDomainApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "Domain",
+				Group:   "weblogic.oracle",
+				Version: "v8",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path:  "spec.serverStartPolicy",
+				Type:  "string",
+				Value: "NEVER",
+			},
+		},
+	}
 	return defCRD
 }
 
