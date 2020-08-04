@@ -286,11 +286,18 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 					} else if crd.SuspendOptions.Type == "int" {
 						replicas, _ := getUpdatedReplicaCount(o.GetAnnotations(), activate, ioStreams)
 						disableVersion = replicas
+					} else if crd.SuspendOptions.Type == "string" {
+						suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, ioStreams)
+						if err != nil {
+							util.CheckErr(err)
+							return
+						}
+						disableVersion = suspend
 					} else {
 						util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
 						return
 					}
-					err := unstructured.SetNestedField(o.Object, disableVersion, specPath[0], specPath[1])
+					err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
 					if err != nil {
 						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
 						continue
@@ -356,6 +363,17 @@ func updateIBPObjects(kind string, namespace string, activate bool, ioStreams ge
 			printMsg(fmt.Sprintf("Updated replicas for %v %v/%v to %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), replicas), ioStreams.Out)
 		}
 	}
+}
+func getSuspendStringOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (string, error) {
+	crdOpts := migration.StorkMigrationCRDActivateAnnotation
+	if !activate {
+		crdOpts = migration.StorkMigrationCRDDeactivateAnnotation
+	}
+	suspend, present := annotations[crdOpts]
+	if !present {
+		return "", fmt.Errorf("required migration annotation not found %s", crdOpts)
+	}
+	return suspend, nil
 }
 
 func getUpdatedReplicaCount(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {

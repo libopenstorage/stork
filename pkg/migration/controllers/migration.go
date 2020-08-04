@@ -47,6 +47,12 @@ const (
 	StorkMigrationName = "stork.libopenstorage.org/migrationName"
 	// StorkMigrationTime is the annotation used to specify time of migration
 	StorkMigrationTime = "stork.libopenstorage.org/migrationTime"
+	// StorkMigrationCRDActivateAnnotation is the annotation used to keep track of
+	// the value to be set for activating crds
+	StorkMigrationCRDActivateAnnotation = "stork.libopenstorage.org/migrationCRDActivate"
+	// StorkMigrationCRDDeactivateAnnotation is the annotation used to keep track of
+	// the value to be set for deactivating crds
+	StorkMigrationCRDDeactivateAnnotation = "stork.libopenstorage.org/migrationCRDDeactivate"
 	// Max number of times to retry applying resources on the desination
 	maxApplyRetries   = 10
 	cattleAnnotations = "cattle.io"
@@ -1041,18 +1047,36 @@ func (m *MigrationController) prepareCRDClusterResource(
 	}
 	content := object.UnstructuredContent()
 	fields := strings.Split(suspend.Path, ".")
+	var currVal string
 	if len(fields) > 1 {
 		var disableVersion interface{}
 		if suspend.Type == "bool" {
 			disableVersion = true
 		} else if suspend.Type == "int" {
 			disableVersion = 0
+		} else if suspend.Type == "string" {
+			curr, found, err := unstructured.NestedString(content, fields...)
+			if err != nil || !found {
+				return fmt.Errorf("unable to find suspend path, err: %v", err)
+			}
+			disableVersion = suspend.Value
+			currVal = curr
 		} else {
 			return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
 		}
 		if err := unstructured.SetNestedField(content, disableVersion, fields...); err != nil {
 			return err
 		}
+		annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
+		if err != nil {
+			return err
+		}
+		if !found {
+			annotations = make(map[string]string)
+		}
+		annotations[StorkMigrationCRDDeactivateAnnotation] = suspend.Value
+		annotations[StorkMigrationCRDActivateAnnotation] = currVal
+		return unstructured.SetNestedStringMap(content, annotations, "metadata", "annotations")
 	}
 
 	return nil
