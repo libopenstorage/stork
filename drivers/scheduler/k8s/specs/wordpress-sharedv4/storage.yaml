@@ -7,7 +7,6 @@ parameters:
   repl: "3"
   priority_io: "high"
   sharedv4: "true"
-  nfs_v4: "true"
   io_profile: "cms"
 allowVolumeExpansion: true
 ---
