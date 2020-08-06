@@ -182,7 +182,7 @@ func TestCreateApplicationRestoreWaitSuccess(t *testing.T) {
 
 	namespace := "dummy-namespace"
 	name := "dummy-name"
-	cmdArgs := []string{"create", "apprestores", "-n", namespace, name, "--backupLocation", "backuplocation", "--backupName", "backupname", "-w"}
+	cmdArgs := []string{"create", "apprestores", "-n", namespace, name, "--backupLocation", "backuplocation", "--backupName", "backupname", "--wait"}
 
 	expected := "ApplicationRestore dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +
@@ -199,7 +199,7 @@ func TestCreateApplicationRestoreWaitFailed(t *testing.T) {
 
 	namespace := "dummy-namespace"
 	name := "dummy-name"
-	cmdArgs := []string{"create", "applicationrestore", "-n", namespace, name, "--backupLocation", "backuplocation", "--backupName", "backupname", "-w"}
+	cmdArgs := []string{"create", "applicationrestore", "-n", namespace, name, "--backupLocation", "backuplocation", "--backupName", "backupname", "--wait"}
 
 	expected := "ApplicationRestore dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +

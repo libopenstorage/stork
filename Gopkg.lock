@@ -963,7 +963,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:3fd95e2b0332a1965cfa4d759f2448e76a75470a74657f28b2699c873ee716e9"
+  digest = "1:c2ea25056c39407d8baa4869006c0e3e94c1d89a3095614502f844a8a78cc44e"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -984,7 +984,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "7ba5af1a13e0bfffd9c8b3404d9a8c5bce152716"
+  revision = "6f7e9d6fd9881a425d42af1d00345a7738dcbaee"
 
 [[projects]]
   branch = "master"
@@ -1748,7 +1748,7 @@
   version = "kubernetes-1.16.6"
 
 [[projects]]
-  digest = "1:ede0bcaf06a0254305041f6519eed27e8a24bd05414524af214d09dca0e722ae"
+  digest = "1:ab5e202034d8548ce2e6fc280a098bbf0866591dc22e03668dc19421d1872b35"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -1961,6 +1961,7 @@
     "tools/record/util",
     "tools/reference",
     "tools/remotecommand",
+    "tools/watch",
     "transport",
     "transport/spdy",
     "util/cert",
@@ -2336,6 +2337,7 @@
     "k8s.io/apimachinery/pkg/util/sets",
     "k8s.io/apimachinery/pkg/util/uuid",
     "k8s.io/apimachinery/pkg/util/wait",
+    "k8s.io/apimachinery/pkg/util/yaml",
     "k8s.io/apimachinery/pkg/watch",
     "k8s.io/apiserver/pkg/authentication/serviceaccount",
     "k8s.io/cli-runtime/pkg/genericclioptions",
@@ -2358,6 +2360,7 @@
     "k8s.io/client-go/tools/leaderelection",
     "k8s.io/client-go/tools/leaderelection/resourcelock",
     "k8s.io/client-go/tools/record",
+    "k8s.io/client-go/tools/watch",
     "k8s.io/client-go/util/flowcontrol",
     "k8s.io/code-generator/cmd/client-gen",
     "k8s.io/code-generator/cmd/conversion-gen",
@@ -2370,6 +2373,7 @@
     "k8s.io/kube-openapi/cmd/openapi-gen",
     "k8s.io/kubectl/pkg/cmd/testing",
     "k8s.io/kubectl/pkg/cmd/util",
+    "k8s.io/kubectl/pkg/util/interrupt",
     "k8s.io/kubernetes/pkg/api/legacyscheme",
     "k8s.io/kubernetes/pkg/apis/core",
     "k8s.io/kubernetes/pkg/apis/core/v1",

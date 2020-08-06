@@ -314,7 +314,13 @@ func newGetVolumeSnapshotRestoreCommand(cmdFactory Factory, ioStreams genericcli
 				handleEmptyList(ioStreams.Out)
 				return
 			}
-
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, snapRestoreList, cmdFactory, snapRestoreColumns, snapshotRestorePrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, snapRestoreList, cmdFactory, snapRestoreColumns, snapshotRestorePrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
