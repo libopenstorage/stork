@@ -72,10 +72,11 @@ type podErrorResponse struct {
 	err error
 }
 
-// CommandTask tracks pods where commands for a taskID might still be running
-type CommandTask struct {
-	TaskID string `json:"taskID"`
-	Pods   []Pod  `json:"pods"`
+// commandTask tracks pods where commands for a taskID might still be running
+type commandTask struct {
+	TaskID    string `json:"taskID"`
+	Pods      []Pod  `json:"pods"`
+	Container string `json:"container"`
 }
 
 var execCmdBackoff = wait.Backoff{
@@ -135,11 +136,11 @@ func ValidateRule(rule *stork_api.Rule, ruleType Type) error {
 }
 
 // terminateCommandInPods terminates a previously running background command on given pods for given task ID
-func terminateCommandInPods(owner runtime.Object, pods []v1.Pod, taskID string) error {
+func terminateCommandInPods(owner runtime.Object, pods []v1.Pod, container, taskID string) error {
 	killFile := fmt.Sprintf(cmdexecutor.KillFileFormat, taskID)
-	failedPods, err := runCommandOnPods(pods, fmt.Sprintf("touch %s", killFile), execPodStepsHigh, false)
+	failedPods, err := runCommandOnPods(pods, container, fmt.Sprintf("touch %s", killFile), execPodStepsHigh, false)
 
-	updateErr := updateRunningCommandPodListInOwner(owner, failedPods, taskID)
+	updateErr := updateRunningCommandPodListInOwner(owner, failedPods, container, taskID)
 	if updateErr != nil {
 		log.RuleLog(nil, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 	}
@@ -204,7 +205,7 @@ func PerformRuleRecovery(
 			backgroundPodList = append(backgroundPodList, *p)
 		}
 
-		err = terminateCommandInPods(owner, backgroundPodList, taskTracker.TaskID)
+		err = terminateCommandInPods(owner, backgroundPodList, taskTracker.Container, taskTracker.TaskID)
 		if err != nil {
 			return fmt.Errorf("failed to terminate running commands in pods due to: %v", err)
 		}
@@ -248,11 +249,13 @@ func ExecuteRule(
 		// terminate and also watch a signal channel that indicates when to terminate them
 		backgroundCommandTermChan := make(chan bool, 1)
 		backgroundPodListChan := make(chan v1.Pod)
-		go cmdTerminationWatcher(backgroundPodListChan, backgroundCommandTermChan, owner, taskID.String())
+		var container string
+		go cmdTerminationWatcher(backgroundPodListChan, &container, backgroundCommandTermChan, owner, taskID.String())
 
 		// backgroundActionPresent is used to track if there is atleast one background action
 		backgroundActionPresent := false
 		for _, item := range rule.Rules {
+			container = item.Container
 			filteredPods := make([]v1.Pod, 0)
 			// filter pods and only uses the ones that match this selector
 			for _, pod := range pods {
@@ -272,7 +275,7 @@ func ExecuteRule(
 				}
 
 				if action.Type == stork_api.RuleActionCommand {
-					err := executeCommandAction(filteredPods, rule, owner, action, backgroundPodListChan, rType, taskID)
+					err := executeCommandAction(filteredPods, item.Container, rule, owner, action, backgroundPodListChan, rType, taskID)
 					if err != nil {
 						// if any action fails, terminate all background jobs and don't depend on caller
 						// to clean them up
@@ -302,6 +305,7 @@ func ExecuteRule(
 // executeCommandAction executes the command type action on given pods:
 func executeCommandAction(
 	pods []v1.Pod,
+	container string,
 	rule *stork_api.Rule,
 	owner runtime.Object,
 	action stork_api.RuleAction,
@@ -365,17 +369,17 @@ func executeCommandAction(
 			podsForTrackerList = append(podsForTrackerList, pod)
 		}
 
-		updateErr := updateRunningCommandPodListInOwner(owner, podsForTrackerList, taskID.String())
+		updateErr := updateRunningCommandPodListInOwner(owner, podsForTrackerList, container, taskID.String())
 		if updateErr != nil {
 			log.RuleLog(rule, owner).Warnf("Failed to update list of pods with running command in owner due to: %v", updateErr)
 		}
 
-		err = runBackgroundCommandOnPods(podsForAction, action.Value, taskID.String(), cmdExecutorImage)
+		err = runBackgroundCommandOnPods(podsForAction, container, action.Value, taskID.String(), cmdExecutorImage)
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err := runCommandOnPods(podsForAction, action.Value, execPodStepLow, true)
+		_, err := runCommandOnPods(podsForAction, container, action.Value, execPodStepLow, true)
 		if err != nil {
 			return err
 		}
@@ -399,6 +403,7 @@ func podsToString(pods []v1.Pod) string {
 func updateRunningCommandPodListInOwner(
 	owner runtime.Object,
 	pods []v1.Pod,
+	container string,
 	taskID string,
 ) error {
 	podsWithNs := make([]Pod, 0)
@@ -408,9 +413,10 @@ func updateRunningCommandPodListInOwner(
 			UID:       string(p.GetUID())})
 	}
 
-	tracker := &CommandTask{
-		TaskID: taskID,
-		Pods:   podsWithNs,
+	tracker := &commandTask{
+		TaskID:    taskID,
+		Pods:      podsWithNs,
+		Container: container,
 	}
 
 	trackerBytes, err := json.Marshal(tracker)
@@ -454,7 +460,7 @@ func updateRunningCommandPodListInOwner(
 
 // runCommandOnPods runs cmd on given pods. If failFast is true, it will return on the first failure. It will
 // return a list of pods that failed.
-func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) ([]v1.Pod, error) {
+func runCommandOnPods(pods []v1.Pod, container string, cmd string, numRetries int, failFast bool) ([]v1.Pod, error) {
 	var wg sync.WaitGroup
 	backOff := wait.Backoff{
 		Duration: execPodCmdRetryInterval,
@@ -504,7 +510,7 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 					return false, nil
 				}
 
-				_, err = core.Instance().RunCommandInPod([]string{"sh", "-c", cmd}, name, "", ns)
+				_, err = core.Instance().RunCommandInPod([]string{"sh", "-c", cmd}, name, container, ns)
 				if err != nil {
 					logrus.Warnf("Failed to run command: %s on pod: [%s] %s due to: %v", cmd, ns, name, err)
 					return false, nil
@@ -556,7 +562,7 @@ func runCommandOnPods(pods []v1.Pod, cmd string, numRetries int, failFast bool) 
 
 // runBackgroundCommandOnPods will start the given "cmd" on all the given "pods". The taskID is given to
 // the executor pod so it can have unique status files in the target pods where it runs the actual commands
-func runBackgroundCommandOnPods(pods []v1.Pod, cmd, taskID, cmdExecutorImage string) error {
+func runBackgroundCommandOnPods(pods []v1.Pod, container, cmd, taskID, cmdExecutorImage string) error {
 	executorArgs := []string{
 		"/cmdexecutor",
 		"-timeout", strconv.FormatInt(perPodCommandExecTimeout, 10),
@@ -664,6 +670,7 @@ func waitForExecPodCompletion(pod *v1.Pod) error {
 // pods
 func cmdTerminationWatcher(
 	podListChan chan v1.Pod,
+	container *string,
 	terminationSignalChan chan bool,
 	owner runtime.Object,
 	id string) {
@@ -680,7 +687,7 @@ func cmdTerminationWatcher(
 					podList = append(podList, pod)
 				}
 
-				if err := terminateCommandInPods(owner, podList, id); err != nil {
+				if err := terminateCommandInPods(owner, podList, *container, id); err != nil {
 					log.RuleLog(nil, owner).Warnf("failed to terminate background command in pods due to: %v", err)
 				}
 			}
@@ -699,12 +706,12 @@ func hasSubset(set map[string]string, subset map[string]string) bool {
 	return true
 }
 
-func getPodsTrackerForOwner(owner runtime.Object) (*CommandTask, error) {
+func getPodsTrackerForOwner(owner runtime.Object) (*commandTask, error) {
 	metadata, err := meta.Accessor(owner)
 	if err != nil {
 		return nil, err
 	}
-	taskTracker := CommandTask{}
+	var taskTracker commandTask
 
 	annotations := metadata.GetAnnotations()
 	if annotations != nil {
