@@ -51,6 +51,8 @@ const (
 	backupCancelBackoffInitialDelay = 5 * time.Second
 	backupCancelBackoffFactor       = 1
 	backupCancelBackoffSteps        = math.MaxInt32
+
+	allNamespacesSpecifier = "*"
 )
 
 var (
@@ -156,13 +158,34 @@ func (a *ApplicationBackupController) performRuleRecovery() error {
 	return lastError
 }
 
-func (a *ApplicationBackupController) setDefaults(backup *stork_api.ApplicationBackup) {
+func (a *ApplicationBackupController) setDefaults(backup *stork_api.ApplicationBackup) bool {
+	updated := false
 	if backup.Spec.ReclaimPolicy == "" {
 		backup.Spec.ReclaimPolicy = stork_api.ApplicationBackupReclaimPolicyDelete
+		updated = true
 	}
 	if backup.Status.TriggerTimestamp.IsZero() {
 		backup.Status.TriggerTimestamp = backup.CreationTimestamp
+		updated = true
 	}
+	return updated
+}
+
+func (a *ApplicationBackupController) updateWithAllNamespaces(backup *stork_api.ApplicationBackup) error {
+	namespaces, err := core.Instance().ListNamespaces(nil)
+	if err != nil {
+		return fmt.Errorf("error updating with all namespaces for wildcard: %v", err)
+	}
+	namespacesToBackup := make([]string, 0)
+	for _, ns := range namespaces.Items {
+		namespacesToBackup = append(namespacesToBackup, ns.Name)
+	}
+	backup.Spec.Namespaces = namespacesToBackup
+	err = a.client.Update(context.TODO(), backup)
+	if err != nil {
+		return fmt.Errorf("error updating with all namespaces for wildcard: %v", err)
+	}
+	return nil
 }
 
 // Try to create the backup location path. Ignore errors since this is best
@@ -211,11 +234,29 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 	var terminationChannels []chan bool
 	var err error
 
-	a.setDefaults(backup)
+	if a.setDefaults(backup) {
+		err = a.client.Update(context.TODO(), backup)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf("Error updating with defaults: %v", err)
+		}
+		return nil
+	}
+
 	switch backup.Status.Stage {
 	case stork_api.ApplicationBackupStageInitial:
 		// Make sure the namespaces exist
 		for _, ns := range backup.Spec.Namespaces {
+			if ns == allNamespacesSpecifier {
+				err := a.updateWithAllNamespaces(backup)
+				if err != nil {
+					log.ApplicationBackupLog(backup).Errorf(err.Error())
+					a.recorder.Event(backup,
+						v1.EventTypeWarning,
+						string(stork_api.ApplicationBackupStatusFailed),
+						err.Error())
+				}
+				return nil
+			}
 			_, err := core.Instance().GetNamespace(ns)
 			if err != nil {
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
@@ -231,7 +272,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 					err.Error())
 				err = a.client.Update(context.TODO(), backup)
 				if err != nil {
-					log.ApplicationBackupLog(backup).Errorf("Error updating")
+					log.ApplicationBackupLog(backup).Errorf("Error updating: %v", err)
 				}
 				return nil
 			}
