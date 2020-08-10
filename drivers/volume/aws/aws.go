@@ -523,6 +523,15 @@ func (a *aws) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		}
 		ebsVolume, err := a.getEBSVolume(vInfo.RestoreVolume, nil)
 		if err != nil {
+			if awsErr, ok := err.(awserr.Error); ok {
+				if awsErr.Code() == "InvalidVolume.NotFound" {
+					vInfo.Status = storkapi.ApplicationRestoreStatusFailed
+					vInfo.Reason = "Restore failed for volume: NotFound"
+					volumeInfos = append(volumeInfos, vInfo)
+					continue
+				}
+			}
+
 			return nil, err
 		}
 		switch *ebsVolume.State {

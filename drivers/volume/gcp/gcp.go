@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"cloud.google.com/go/compute/metadata"
@@ -17,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -496,6 +498,14 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 			}
 			disk, err := g.service.RegionDisks.Get(g.projectID, region, vInfo.RestoreVolume).Do()
 			if err != nil {
+				if googleErr, ok := err.(*googleapi.Error); ok {
+					if googleErr.Code == http.StatusNotFound {
+						vInfo.Status = storkapi.ApplicationRestoreStatusFailed
+						vInfo.Reason = "Restore failed for volume: NotFound"
+						volumeInfos = append(volumeInfos, vInfo)
+						continue
+					}
+				}
 				return nil, err
 			}
 			status = disk.Status
@@ -506,6 +516,14 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		} else {
 			disk, err := g.service.Disks.Get(g.projectID, vInfo.Zones[0], vInfo.RestoreVolume).Do()
 			if err != nil {
+				if googleErr, ok := err.(*googleapi.Error); ok {
+					if googleErr.Code == http.StatusNotFound {
+						vInfo.Status = storkapi.ApplicationRestoreStatusFailed
+						vInfo.Reason = "Restore failed for volume: NotFound"
+						volumeInfos = append(volumeInfos, vInfo)
+						continue
+					}
+				}
 				return nil, err
 			}
 			status = disk.Status

@@ -521,6 +521,15 @@ func (a *azure) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*stork
 	for _, vInfo := range restore.Status.Volumes {
 		disk, err := a.diskClient.Get(context.TODO(), a.resourceGroup, vInfo.RestoreVolume)
 		if err != nil {
+			if azureErr, ok := err.(autorest.DetailedError); ok {
+				if azureErr.StatusCode == http.StatusNotFound {
+					vInfo.Status = storkapi.ApplicationRestoreStatusFailed
+					vInfo.Reason = "Restore failed for volume: NotFound"
+					volumeInfos = append(volumeInfos, vInfo)
+					continue
+				}
+			}
+
 			return nil, err
 		}
 		switch *disk.ProvisioningState {
