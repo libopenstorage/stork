@@ -369,6 +369,7 @@ func (a *aws) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		case "completed":
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
+			vInfo.Size = uint64(*snapshot.VolumeSize)
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
@@ -536,6 +537,7 @@ func (a *aws) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		case "available", "in-use":
 			vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 			vInfo.Reason = "Restore successful for volume"
+			vInfo.Size = uint64(*ebsVolume.Size)
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}

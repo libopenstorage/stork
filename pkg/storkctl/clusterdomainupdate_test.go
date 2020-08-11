@@ -227,7 +227,7 @@ func TestActivateClusterDomainWaitSuccess(t *testing.T) {
 
 	name := "testzone"
 	domainName := "zone2"
-	cmdArgs := []string{"activate", "clusterdomain", domainName, "--name", name, "-w"}
+	cmdArgs := []string{"activate", "clusterdomain", domainName, "--name", name, "--wait"}
 
 	expected := "Cluster Domain activate operation started successfully for zone2\nActivating..\n" +
 		"Cluster Domain zone2 updated successfully\n"
@@ -244,7 +244,7 @@ func TestActivateClusterDomainWaitFailed(t *testing.T) {
 
 	name := "testzone"
 	domainName := "zone2"
-	cmdArgs := []string{"activate", "clusterdomain", domainName, "--name", name, "-w"}
+	cmdArgs := []string{"activate", "clusterdomain", domainName, "--name", name, "--wait"}
 
 	expected := "Cluster Domain activate operation started successfully for zone2\n" +
 		"Activating..\nFailed to update ClusterDomain, Reason : Unavailable\n"
@@ -261,7 +261,7 @@ func TestDeactivateClusterDomainWaitSuccess(t *testing.T) {
 
 	name := "testzone"
 	domainName := "zone2"
-	cmdArgs := []string{"deactivate", "clusterdomain", domainName, "--name", name, "-w"}
+	cmdArgs := []string{"deactivate", "clusterdomain", domainName, "--name", name, "--wait"}
 
 	expected := "Cluster Domain deactivate operation started successfully for zone2\n" +
 		"Deactivating..\nCluster Domain zone2 updated successfully\n"
@@ -278,7 +278,7 @@ func TestDectivateClusterDomainWaitFailed(t *testing.T) {
 
 	name := "testzone"
 	domainName := "zone2"
-	cmdArgs := []string{"deactivate", "clusterdomain", domainName, "--name", name, "-w"}
+	cmdArgs := []string{"deactivate", "clusterdomain", domainName, "--name", name, "--wait"}
 
 	expected := "Cluster Domain deactivate operation started successfully for zone2\n" +
 		"Deactivating..\nFailed to update ClusterDomain, Reason : Unavailable\n"

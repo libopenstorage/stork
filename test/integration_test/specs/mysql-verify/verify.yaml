@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sysbench-verify
+  annotations:
+    stork.libopenstorage.org/skip-resource: "true"
+spec:
+  initContainers:
+    - name: init
+      image: arey/mysql-client
+      command: ["sh", "-c", "sh", "-c", "until mysql -h ${MYSQL_HOST} -u root -p${MYSQL_ROOT_PASSWORD} -e \"use sbtest ; \"; do echo waiting for mysql; sleep 2; done"]
+      env:
+        - name: MYSQL_HOST
+          value: mysql-service
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        - name: SIZE
+          value: "11"
+  containers:
+    - name: sysbench-verify
+      image: stgleb/sysbench-verify:latest
+      env:
+        - name: MYSQL_HOST
+          value: mysql-service
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        - name: SIZE
+          value: "11"
+        - name: TIMEOUT
+          value: "120"
+      command: ["sh", "-c", "sleep 120; table_count=$(mysql -h ${MYSQL_HOST} -u root -p${MYSQL_ROOT_PASSWORD} -e \"use sbtest;show tables;\"|grep sbtest|wc -l);if [ $table_count -lt $SIZE ]; then echo \"Table count of ${table_count} is less than ${SIZE} expected table count\"; exit 1; else echo \"Data has been verified successfully\"; exit 0; fi"]
+  restartPolicy: Never

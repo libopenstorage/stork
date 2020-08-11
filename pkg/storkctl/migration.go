@@ -1,9 +1,12 @@
 package storkctl
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
@@ -30,6 +34,7 @@ const (
 	migrTimeout = 6 * time.Hour
 	stage       = "STAGE"
 	status      = "STATUS"
+	statusOk    = "Ok\n"
 )
 
 var (
@@ -49,13 +54,21 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	var preExecRule string
 	var postExecRule string
 	var includeVolumes bool
-	var waitForCompletion bool
+	var waitForCompletion, validate bool
+	var fileName string
 
 	createMigrationCommand := &cobra.Command{
 		Use:     migrationSubcommand,
 		Aliases: migrationAliases,
 		Short:   "Start a migration",
 		Run: func(c *cobra.Command, args []string) {
+			if fileName != "" {
+				if err := validateMigrationFromFile(fileName, cmdFactory.GetNamespace()); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if len(args) != 1 {
 				util.CheckErr(fmt.Errorf("exactly one name needs to be provided for migration name"))
 				return
@@ -82,6 +95,13 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 			}
 			migration.Name = migrationName
 			migration.Namespace = cmdFactory.GetNamespace()
+			if validate {
+				if err := ValidateMigration(migration); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			_, err := storkops.Instance().CreateMigration(migration)
 			if err != nil {
 				util.CheckErr(err)
@@ -105,10 +125,12 @@ func newCreateMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.I
 	createMigrationCommand.Flags().StringVarP(&clusterPair, "clusterPair", "c", "", "ClusterPair name for migration")
 	createMigrationCommand.Flags().BoolVarP(&includeResources, "includeResources", "r", true, "Include resources in the migration")
 	createMigrationCommand.Flags().BoolVarP(&includeVolumes, "includeVolumes", "", true, "Include volumees in the migration")
-	createMigrationCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for migration to complete")
+	createMigrationCommand.Flags().BoolVarP(&waitForCompletion, "wait", "", false, "Wait for migration to complete")
+	createMigrationCommand.Flags().BoolVarP(&validate, "dry-run", "", false, "Validate migration params before starting migration")
 	createMigrationCommand.Flags().BoolVarP(&startApplications, "startApplications", "a", true, "Start applications on the destination cluster after migration")
 	createMigrationCommand.Flags().StringVarP(&preExecRule, "preExecRule", "", "", "Rule to run before executing migration")
 	createMigrationCommand.Flags().StringVarP(&postExecRule, "postExecRule", "", "", "Rule to run after executing migration")
+	createMigrationCommand.Flags().StringVarP(&fileName, "file", "f", "", "file to run migration")
 
 	return createMigrationCommand
 }
@@ -144,8 +166,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				updateIBPObjects("IBPCA", ns, true, ioStreams)
 				updateIBPObjects("IBPOrderer", ns, true, ioStreams)
 				updateIBPObjects("IBPConsole", ns, true, ioStreams)
-				updateCouchbaseObjects("couchbase.com/v1", "CouchbaseCluster", ns, true, ioStreams)
-				updateCouchbaseObjects("couchbase.com/v2", "CouchbaseCluster", ns, true, ioStreams)
+				updateCRDObjects(ns, true, ioStreams)
 			}
 
 		},
@@ -186,8 +207,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				updateIBPObjects("IBPCA", ns, false, ioStreams)
 				updateIBPObjects("IBPOrderer", ns, false, ioStreams)
 				updateIBPObjects("IBPConsole", ns, false, ioStreams)
-				updateCouchbaseObjects("couchbase.com/v1", "CouchbaseCluster", ns, false, ioStreams)
-				updateCouchbaseObjects("couchbase.com/v2", "CouchbaseCluster", ns, false, ioStreams)
+				updateCRDObjects(ns, false, ioStreams)
 			}
 
 		},
@@ -257,50 +277,84 @@ func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericc
 	}
 }
 
-func updateCouchbaseObjects(version string, kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	objects, err := dynamic.Instance().ListObjects(
-		&metav1.ListOptions{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       kind,
-				APIVersion: version},
-		},
-		namespace)
+func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOStreams) {
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			util.CheckErr(err)
-		}
+		util.CheckErr(err)
 		return
 	}
-	for _, o := range objects.Items {
-		err := unstructured.SetNestedField(o.Object, !activate, "spec", "paused")
-		if err != nil {
-			printMsg(fmt.Sprintf("Error updating \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
-			continue
-		}
-		_, err = dynamic.Instance().UpdateObject(&o)
-		if err != nil {
-			printMsg(fmt.Sprintf("Error updating \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
-			continue
-		}
-		printMsg(fmt.Sprintf("Updated \"spec.paused\" for %v %v/%v to %v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
-		if !activate {
-			pods, found, err := unstructured.NestedStringSlice(o.Object, "status", "members", "ready")
+	for _, res := range crdList.Items {
+		for _, crd := range res.Resources {
+			objects, err := dynamic.Instance().ListObjects(
+				&metav1.ListOptions{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       crd.Kind,
+						APIVersion: crd.Group + "/" + crd.Version},
+				},
+				ns)
 			if err != nil {
-				printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-				continue
+				if errors.IsNotFound(err) {
+					continue
+				}
+				util.CheckErr(err)
+				return
 			}
-			if !found {
-				continue
+			for _, o := range objects.Items {
+				specPath := strings.Split(crd.SuspendOptions.Path, ".")
+				if len(specPath) > 1 {
+					var disableVersion interface{}
+					if crd.SuspendOptions.Type == "bool" {
+						disableVersion = !activate
+					} else if crd.SuspendOptions.Type == "int" {
+						replicas, _ := getUpdatedReplicaCount(o.GetAnnotations(), activate, ioStreams)
+						disableVersion = replicas
+					} else if crd.SuspendOptions.Type == "string" {
+						suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, ioStreams)
+						if err != nil {
+							util.CheckErr(err)
+							return
+						}
+						disableVersion = suspend
+					} else {
+						util.CheckErr(fmt.Errorf("invalid type %v to suspend cr", crd.SuspendOptions.Type))
+						return
+					}
+					err := unstructured.SetNestedField(o.Object, disableVersion, specPath...)
+					if err != nil {
+						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+						continue
+					}
+					_, err = dynamic.Instance().UpdateObject(&o)
+					if err != nil {
+						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+						continue
+					}
+					printMsg(fmt.Sprintf("Updated \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
+					if !activate {
+						if crd.PodsPath == "" {
+							continue
+						}
+						podpath := strings.Split(crd.PodsPath, ".")
+						pods, found, err := unstructured.NestedStringSlice(o.Object, podpath...)
+						if err != nil {
+							printMsg(fmt.Sprintf("Error getting pods for %v %v/%v : %v", strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+							continue
+						}
+						if !found {
+							continue
+						}
+						for _, pod := range pods {
+							err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
+							printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
+							continue
+						}
+					}
+				}
+
 			}
-			for _, pod := range pods {
-				err = core.Instance().DeletePod(o.GetNamespace(), pod, true)
-				printMsg(fmt.Sprintf("Error deleting pod %v for %v %v/%v : %v", pod, strings.ToLower(kind), o.GetNamespace(), o.GetName(), err), ioStreams.ErrOut)
-				continue
-			}
+
 		}
-
 	}
-
 }
 func updateIBPObjects(kind string, namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
 	objects, err := dynamic.Instance().ListObjects(
@@ -332,6 +386,17 @@ func updateIBPObjects(kind string, namespace string, activate bool, ioStreams ge
 		}
 	}
 }
+func getSuspendStringOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (string, error) {
+	crdOpts := migration.StorkMigrationCRDActivateAnnotation
+	if !activate {
+		crdOpts = migration.StorkMigrationCRDDeactivateAnnotation
+	}
+	suspend, present := annotations[crdOpts]
+	if !present {
+		return "", fmt.Errorf("required migration annotation not found %s", crdOpts)
+	}
+	return suspend, nil
+}
 
 func getUpdatedReplicaCount(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {
 	if replicas, present := annotations[migration.StorkMigrationReplicasAnnotation]; present {
@@ -361,7 +426,6 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 		Run: func(c *cobra.Command, args []string) {
 			var migrations *storkv1.MigrationList
 			var err error
-
 			namespaces, err := cmdFactory.GetAllNamespaces()
 			if err != nil {
 				util.CheckErr(err)
@@ -408,7 +472,13 @@ func newGetMigrationCommand(cmdFactory Factory, ioStreams genericclioptions.IOSt
 				handleEmptyList(ioStreams.Out)
 				return
 			}
-
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, migrations, cmdFactory, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, migrations, cmdFactory, migrationColumns, migrationPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
@@ -570,4 +640,94 @@ func waitForMigration(name, namespace string, ioStreams genericclioptions.IOStre
 	}
 
 	return msg, err
+}
+
+func validateMigrationFromFile(migrSpec, namespace string) error {
+	if migrSpec == "" {
+		return fmt.Errorf("empty file path")
+
+	}
+	file, err := os.Open(migrSpec)
+	if err != nil {
+		return fmt.Errorf("error opening file %v: %v", migrSpec, err)
+	}
+	data, err := ioutil.ReadAll(bufio.NewReader(file))
+	if err != nil {
+		return fmt.Errorf("error reading file %v: %v", migrSpec, err)
+	}
+	migration := &storkv1.Migration{}
+	dec := yaml.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(data)), len(data))
+	if err := dec.Decode(&migration); err != nil {
+		return err
+	}
+	if namespace == "" {
+		return fmt.Errorf("empty namespace given")
+
+	}
+	if migration.Namespace == "" {
+		migration.Namespace = namespace
+	}
+
+	if err := ValidateMigration(migration); err != nil {
+		return err
+	}
+	return nil
+
+}
+
+// ValidateMigration of given name and namespace
+func ValidateMigration(migr *storkv1.Migration) error {
+	// check namespaces exists
+	status := statusOk
+	fmt.Printf("[Optional] Checking Migration Namespaces....")
+	for _, namespace := range migr.Spec.Namespaces {
+		_, err := core.Instance().GetNamespace(namespace)
+		if err != nil {
+			status = fmt.Sprintf("Missing namespace %v\n", namespace)
+		}
+	}
+	fmt.Print(status)
+	// check clusterpair
+	fmt.Printf("[Required] Checking ClusterPair Status....")
+	if migr.Spec.ClusterPair == "" {
+		status = "ClusterPair is empty\n"
+	}
+	cp, err := storkops.Instance().GetClusterPair(migr.Spec.ClusterPair, migr.Namespace)
+	if err != nil {
+		return err
+	}
+	if cp.Status.StorageStatus != storkv1.ClusterPairStatusReady ||
+		cp.Status.SchedulerStatus != storkv1.ClusterPairStatusReady {
+		status = "NotReady\n"
+	}
+	fmt.Print(status)
+
+	fmt.Printf("[Optional] Checking PreExec Rule....")
+	status = statusOk
+	if migr.Spec.PreExecRule == "" {
+		status = "NotConfigured\n"
+	} else {
+		if _, err := storkops.Instance().GetRule(migr.Spec.PreExecRule, migr.Namespace); err != nil && errors.IsNotFound(err) {
+			status = "NotFound\n"
+		} else if err != nil {
+			return err
+		}
+	}
+	fmt.Print(status)
+
+	fmt.Printf("[Optional] Checking PostExec Rule....")
+	status = statusOk
+	if migr.Spec.PostExecRule == "" {
+		status = "NotConfigured\n"
+	} else {
+		if _, err := storkops.Instance().GetRule(migr.Spec.PostExecRule, migr.Namespace); err != nil && errors.IsNotFound(err) {
+			status = "NotFound\n"
+		} else if err != nil {
+			return err
+		}
+	}
+	fmt.Print(status)
+
+	fmt.Printf("All Ready!!\n")
+	return nil
 }

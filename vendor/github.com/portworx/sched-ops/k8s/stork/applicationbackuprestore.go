@@ -171,13 +171,18 @@ func (c *Client) ValidateApplicationRestore(name, namespace string, timeout, ret
 			return "", true, err
 		}
 
-		if applicationrestore.Status.Status == storkv1alpha1.ApplicationRestoreStatusSuccessful {
+		if applicationrestore.Status.Status == storkv1alpha1.ApplicationRestoreStatusSuccessful ||
+			applicationrestore.Status.Status == storkv1alpha1.ApplicationRestoreStatusPartialSuccess {
 			return "", false, nil
 		}
 		return "", true, &errors.ErrFailedToValidateCustomSpec{
-			Name:  applicationrestore.Name,
-			Cause: fmt.Sprintf("Application restore failed . Error: %v .Expected status: %v Actual status: %v", err, storkv1alpha1.ApplicationRestoreStatusSuccessful, applicationrestore.Status.Status),
-			Type:  applicationrestore,
+			Name: applicationrestore.Name,
+			Cause: fmt.Sprintf("Application restore failed . Error: %v .Expected status: %v/%v Actual status: %v",
+				err,
+				storkv1alpha1.ApplicationRestoreStatusSuccessful,
+				storkv1alpha1.ApplicationRestoreStatusPartialSuccess,
+				applicationrestore.Status.Status),
+			Type: applicationrestore,
 		}
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {

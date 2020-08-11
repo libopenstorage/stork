@@ -24,8 +24,9 @@ func (r *ResourceCollector) pvcToBeCollected(
 	if err != nil {
 		return false, err
 	}
-	// Only collect Bound PVCs
-	if pvc.Status.Phase != v1.ClaimBound {
+
+	// Only collect Bound PVCs that aren't being deleted
+	if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
 		return false, nil
 	}
 

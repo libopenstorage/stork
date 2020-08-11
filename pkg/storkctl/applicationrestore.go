@@ -79,7 +79,7 @@ func newCreateApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcli
 			}
 		},
 	}
-	createApplicationRestoreCommand.Flags().BoolVarP(&waitForCompletion, "wait", "w", false, "Wait for applicationrestore to complete")
+	createApplicationRestoreCommand.Flags().BoolVarP(&waitForCompletion, "wait", "", false, "Wait for applicationrestore to complete")
 	createApplicationRestoreCommand.Flags().StringVarP(&backupLocation, "backupLocation", "l", "", "BackupLocation to use for the restore")
 	createApplicationRestoreCommand.Flags().StringVarP(&backupName, "backupName", "b", "", "Backup to restore from")
 	createApplicationRestoreCommand.Flags().StringVarP(&replacePolicy, "replacePolicy", "r", "Retain", "Policy to use if resources being restored already exist (Retain or Delete).")
@@ -130,7 +130,13 @@ func newGetApplicationRestoreCommand(cmdFactory Factory, ioStreams genericcliopt
 				handleEmptyList(ioStreams.Out)
 				return
 			}
-
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, applicationRestores, cmdFactory, applicationRestoreColumns, applicationRestorePrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, applicationRestores, cmdFactory, applicationRestoreColumns, applicationRestorePrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return

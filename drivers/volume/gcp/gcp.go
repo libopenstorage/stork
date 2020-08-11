@@ -327,6 +327,7 @@ func (g *gcp) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		case "READY":
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
+			vInfo.Size = uint64(snapshot.StorageBytes)
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
@@ -498,12 +499,18 @@ func (g *gcp) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 				return nil, err
 			}
 			status = disk.Status
+			// Returns size in GB to the nearest decimal, converting it into bytes
+			// to be consistent with other cloud providers
+			size := disk.SizeGb * 1024 * 1024
+			vInfo.Size = uint64(size)
 		} else {
 			disk, err := g.service.Disks.Get(g.projectID, vInfo.Zones[0], vInfo.RestoreVolume).Do()
 			if err != nil {
 				return nil, err
 			}
 			status = disk.Status
+			size := disk.SizeGb * 1024 * 1024
+			vInfo.Size = uint64(size)
 		}
 		switch status {
 		case "CREATING", "RESTORING":

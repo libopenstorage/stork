@@ -45,6 +45,8 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -94,6 +96,11 @@ const (
 	// px annotation for secret namespace
 	pxSecretNamespaceAnnotation = "px/secret-namespace"
 
+	// auth issuer to use for px 2.6.0 and higher
+	pxJwtIssuerApps = "apps.portworx.io"
+	// [deprecated] auth issuer to use for below px 2.6.0
+	pxJwtIssuerStork = "stork.openstorage.io"
+
 	snapshotDataNamePrefix = "k8s-volume-snapshot"
 	readySnapshotMsg       = "Snapshot created successfully and it is ready"
 	pvNamePrefix           = "pvc-"
@@ -130,8 +137,10 @@ const (
 	validateSnapshotRetryInterval = 10 * time.Second
 
 	clusterDomainsTimeout = 1 * time.Minute
+	cloudBackupTimeout    = 1 * time.Minute
 
 	pxSharedSecret = "PX_SHARED_SECRET"
+	pxJwtIssuer    = "PX_JWT_ISSUER"
 
 	restoreNamePrefix = "in-place-restore-"
 	restoreTaskPrefix = "restore-"
@@ -151,6 +160,7 @@ type cloudSnapStatus struct {
 	bytesTotal     uint64
 	bytesDone      uint64
 	etaSeconds     int64
+	credentialID   string
 }
 
 // snapshot annotation constants
@@ -189,13 +199,13 @@ var restoreStateCallBackoff = wait.Backoff{
 }
 
 type portworx struct {
-	clusterManager  cluster.Cluster
 	store           cache.Store
 	stopChannel     chan struct{}
 	sdkConn         *portworxGrpcConnection
 	id              string
 	endpoint        string
 	jwtSharedSecret string
+	jwtIssuer       string
 	initDone        bool
 }
 
@@ -210,11 +220,19 @@ func (p *portworx) String() string {
 }
 
 func (p *portworx) Init(_ interface{}) error {
-	if err := p.initPortworxClients(); err != nil {
-		return err
+	p.stopChannel = make(chan struct{})
+	switch os.Getenv(pxJwtIssuer) {
+	case pxJwtIssuerStork:
+		p.jwtIssuer = pxJwtIssuerStork
+	case pxJwtIssuerApps:
+		p.jwtIssuer = pxJwtIssuerApps
+	case "":
+		// default to stork issuer for older versions of PX and backwards compatibility
+		p.jwtIssuer = pxJwtIssuerStork
+	default:
+		return fmt.Errorf("invalid jwt issuer to authenticate with Portworx")
 	}
 
-	p.stopChannel = make(chan struct{})
 	return p.startNodeCache()
 }
 
@@ -243,10 +261,42 @@ func (p *portworx) getClusterDomainClient() (api.OpenStorageClusterDomainsClient
 	return api.NewOpenStorageClusterDomainsClient(conn), nil
 }
 
+func (p *portworx) getCloudBackupClient() (api.OpenStorageCloudBackupClient, error) {
+	conn, err := p.sdkConn.getGrpcConn()
+	if err != nil {
+		return nil, err
+	}
+	return api.NewOpenStorageCloudBackupClient(conn), nil
+}
+
+// getClusterManagerClient returns cluster manager client with proper configuration and updated authorization token
+// if authorization is enabled
+func (p *portworx) getClusterManagerClient() (cluster.Cluster, error) {
+	token, err := p.tokenGenerator()
+	if err != nil {
+		return nil, err
+	}
+
+	clnt, err := clusterclient.NewAuthClusterClient(p.endpoint, "v1", token, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return clusterclient.ClusterManager(clnt), nil
+}
+
 func (p *portworx) initPortworxClients() error {
 	kubeOps := core.Instance()
 
-	paramsBuilder, err := pwx.NewConnectionParamsBuilder(kubeOps, pwx.NewConnectionParamsBuilderDefaultConfig())
+	pbc := pwx.NewConnectionParamsBuilderDefaultConfig()
+
+	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
+	if len(p.jwtSharedSecret) > 0 {
+		pbc.AuthTokenGenerator = p.tokenGenerator
+		pbc.AuthEnabled = true
+	}
+
+	paramsBuilder, err := pwx.NewConnectionParamsBuilder(kubeOps, pbc)
 	if err != nil {
 		return err
 	}
@@ -261,11 +311,6 @@ func (p *portworx) initPortworxClients() error {
 		return err
 	}
 
-	clnt, err := clusterclient.NewClusterClient(pxMgmtEndpoint, "v1")
-	if err != nil {
-		return err
-	}
-	p.clusterManager = clusterclient.ClusterManager(clnt)
 	p.endpoint = pxMgmtEndpoint
 
 	// Setup gRPC clients
@@ -284,9 +329,6 @@ func (p *portworx) initPortworxClients() error {
 		return fmt.Errorf("failed to set secrets provider: %v", err)
 	}
 
-	// Save the token if any was given
-	p.jwtSharedSecret = os.Getenv(pxSharedSecret)
-
 	// Create a unique identifier
 	p.id, err = os.Hostname()
 	if err != nil {
@@ -295,6 +337,49 @@ func (p *portworx) initPortworxClients() error {
 
 	p.initDone = true
 	return err
+}
+
+// 	tokenGenerator generates authorization token for system.admin
+//	when shared secret is not configured authz token is empty string
+//	this let Openstorage API clients be bootstrapped with no authorization (by accepting empty token)
+func (p *portworx) tokenGenerator() (string, error) {
+	if len(p.jwtSharedSecret) == 0 {
+		return "", nil
+	}
+
+	claims := &auth.Claims{
+		Issuer: p.jwtIssuer,
+		Name:   "Stork",
+
+		// Unique id for stork
+		// this id must be unique across all accounts accessing the px system
+		Subject: p.jwtIssuer + "." + p.id,
+
+		// Only allow certain calls
+		Roles: []string{"system.admin"},
+
+		// Be in all groups to have access to all resources
+		Groups: []string{"*"},
+	}
+
+	// This never returns an error, but just in case, check the value
+	signature, err := auth.NewSignatureSharedSecret(p.jwtSharedSecret)
+	if err != nil {
+		return "", err
+	}
+
+	// Set the token expiration
+	options := &auth.Options{
+		Expiration:  time.Now().Add(time.Hour * 1).Unix(),
+		IATSubtract: 1 * time.Minute,
+	}
+
+	token, err := auth.Token(claims, signature, options)
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
 
 func (p *portworx) startNodeCache() error {
@@ -331,6 +416,12 @@ func (p *portworx) startNodeCache() error {
 }
 
 func (p *portworx) InspectVolume(volumeID string) (*storkvolume.Info, error) {
+	if !p.initDone {
+		if err := p.initPortworxClients(); err != nil {
+			return nil, err
+		}
+	}
+
 	volDriver, err := p.getAdminVolDriver()
 	if err != nil {
 		return nil, err
@@ -384,8 +475,6 @@ func (p *portworx) inspectVolume(volDriver volume.VolumeDriver, volumeID string)
 
 func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	switch status {
-	case api.Status_STATUS_NONE:
-		fallthrough
 	case api.Status_STATUS_INIT:
 		fallthrough
 	case api.Status_STATUS_OFFLINE:
@@ -401,6 +490,8 @@ func (p *portworx) mapNodeStatus(status api.Status) storkvolume.NodeStatus {
 	case api.Status_STATUS_NEEDS_REBOOT:
 		return storkvolume.NodeOffline
 
+	case api.Status_STATUS_NONE:
+		fallthrough
 	case api.Status_STATUS_OK:
 		fallthrough
 	case api.Status_STATUS_STORAGE_DOWN:
@@ -448,7 +539,13 @@ func (p *portworx) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 	if id == "" {
 		return nil, fmt.Errorf("invalid node id")
 	}
-	node, err := p.clusterManager.Inspect(id)
+
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	node, err := clusterManager.Inspect(id)
 	if err != nil {
 		return nil, &ErrFailedToGetNodes{
 			Cause: err.Error(),
@@ -459,6 +556,7 @@ func (p *portworx) InspectNode(id string) (*storkvolume.NodeInfo, error) {
 		SchedulerID: node.SchedulerNodeName,
 		Hostname:    strings.ToLower(node.Hostname),
 		Status:      p.mapNodeStatus(node.Status),
+		RawStatus:   node.Status.String(),
 	}, nil
 }
 
@@ -469,7 +567,12 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 		}
 	}
 
-	cluster, err := p.clusterManager.Enumerate()
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	cluster, err := clusterManager.Enumerate()
 	if err != nil {
 		return nil, &ErrFailedToGetNodes{
 			Cause: err.Error(),
@@ -483,6 +586,7 @@ func (p *portworx) GetNodes() ([]*storkvolume.NodeInfo, error) {
 			SchedulerID: n.SchedulerNodeName,
 			Hostname:    strings.ToLower(n.Hostname),
 			Status:      p.mapNodeStatus(n.Status),
+			RawStatus:   n.Status.String(),
 		}
 		nodeInfo.IPs = append(nodeInfo.IPs, n.MgmtIp)
 		nodeInfo.IPs = append(nodeInfo.IPs, n.DataIp)
@@ -512,7 +616,12 @@ func (p *portworx) GetClusterID() (string, error) {
 		}
 	}
 
-	cluster, err := p.clusterManager.Enumerate()
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return "", fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	cluster, err := clusterManager.Enumerate()
 	if err != nil {
 		return "", &ErrFailedToGetClusterID{
 			Cause: err.Error(),
@@ -697,12 +806,12 @@ func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.Volum
 func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
 	if len(p.jwtSharedSecret) != 0 {
 		claims := &auth.Claims{
-			Issuer: "stork.openstorage.io",
+			Issuer: p.jwtIssuer,
 			Name:   "Stork",
 
 			// Unique id for stork
 			// this id must be unique across all accounts accessing the px system
-			Subject: "stork.openstorage.io." + p.id,
+			Subject: p.jwtIssuer + "." + p.id,
 
 			// Only allow certain calls
 			Roles: []string{"system.user"},
@@ -1775,6 +1884,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 			bytesDone:      csStatus.BytesDone,
 			status:         csStatus.Status,
 			cloudSnapID:    csStatus.ID,
+			credentialID:   csStatus.CredentialUUID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s did not succeed: %v",
 				op, csStatus.ID, taskID, csStatus.Info),
 		}
@@ -1788,6 +1898,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 			bytesDone:      csStatus.BytesDone,
 			etaSeconds:     csStatus.EtaSeconds,
 			cloudSnapID:    csStatus.ID,
+			credentialID:   csStatus.CredentialUUID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s has started and is active.",
 				op, csStatus.ID, taskID),
 		}
@@ -1801,6 +1912,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 			bytesDone:      csStatus.BytesDone,
 			etaSeconds:     csStatus.EtaSeconds,
 			cloudSnapID:    csStatus.ID,
+			credentialID:   csStatus.CredentialUUID,
 			msg: fmt.Sprintf("cloudsnap %s id: %s for %s queued. status: %s",
 				op, csStatus.ID, taskID, statusStr),
 		}
@@ -1814,6 +1926,7 @@ func (p *portworx) getCloudSnapStatus(volDriver volume.VolumeDriver, op api.Clou
 		bytesDone:      csStatus.BytesDone,
 		etaSeconds:     csStatus.EtaSeconds,
 		cloudSnapID:    csStatus.ID,
+		credentialID:   csStatus.CredentialUUID,
 		msg:            fmt.Sprintf("cloudsnap %s id: %s for %s done.", op, csStatus.ID, taskID),
 	}
 }
@@ -2007,7 +2120,12 @@ func (p *portworx) CreatePair(pair *storkapi.ClusterPair) (string, error) {
 		}
 	}
 
-	resp, err := p.clusterManager.CreatePair(&api.ClusterPairCreateRequest{
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return "", fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	resp, err := clusterManager.CreatePair(&api.ClusterPairCreateRequest{
 		RemoteClusterIp:    pair.Spec.Options["ip"],
 		RemoteClusterToken: pair.Spec.Options["token"],
 		RemoteClusterPort:  uint32(port),
@@ -2026,7 +2144,12 @@ func (p *portworx) DeletePair(pair *storkapi.ClusterPair) error {
 		}
 	}
 
-	return p.clusterManager.DeletePair(pair.Status.RemoteStorageID)
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	return clusterManager.DeletePair(pair.Status.RemoteStorageID)
 }
 
 func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.MigrationVolumeInfo, error) {
@@ -2317,8 +2440,13 @@ func (p *portworx) GetClusterDomains() (*storkapi.ClusterDomains, error) {
 		}
 	}
 
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
 	// get the cluster details
-	cluster, err := p.clusterManager.Enumerate()
+	cluster, err := clusterManager.Enumerate()
 	if err != nil {
 		return nil, err
 	}
@@ -2463,9 +2591,14 @@ func (p *portworx) DeactivateClusterDomain(cdu *storkapi.ClusterDomainUpdate) er
 }
 
 func (p *portworx) getNodesToDomainMap(nodes []api.Node) (map[string]string, error) {
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
 	nodeToDomainMap := make(map[string]string)
 	for _, node := range nodes {
-		nodeConfig, err := p.clusterManager.GetNodeConf(node.Id)
+		nodeConfig, err := clusterManager.GetNodeConf(node.Id)
 		if err != nil {
 			return nil, err
 		}
@@ -2677,6 +2810,19 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 	if err != nil {
 		return nil, err
 	}
+
+	cloudBackupClient, err := p.getCloudBackupClient()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cloudBackupTimeout)
+	defer cancel()
+	// Get user token from secret if any
+	ctx, err = p.getUserContext(ctx, backup.Annotations)
+	if err != nil {
+		return nil, err
+	}
+
 	volumeInfos := make([]*storkapi.ApplicationBackupVolumeInfo, 0)
 	for _, vInfo := range backup.Status.Volumes {
 		if vInfo.DriverName != driverName {
@@ -2684,6 +2830,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		}
 		taskID := p.getBackupRestoreTaskID(backup.UID, vInfo.Namespace, vInfo.PersistentVolumeClaim)
 		csStatus := p.getCloudSnapStatus(volDriver, api.CloudBackupOp, taskID)
+		vInfo.BackupID = csStatus.cloudSnapID
 		if isCloudsnapStatusActive(csStatus.status) {
 			vInfo.Status = storkapi.ApplicationBackupStatusInProgress
 			vInfo.Reason = fmt.Sprintf("Volume backup in progress. BytesDone: %v BytesTotal: %v ETA: %v seconds",
@@ -2696,8 +2843,27 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		} else {
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
+			req := &api.SdkCloudBackupSizeRequest{
+				BackupId:     csStatus.cloudSnapID,
+				CredentialId: csStatus.credentialID,
+			}
+			resp, err := cloudBackupClient.Size(ctx, req)
+			st, _ := status.FromError(err)
+			if err != nil {
+				// On error explicitly make the value to zero
+				vInfo.Size = 0
+				if st.Code() == codes.Unimplemented {
+					// if using old porx version which doesn't support this API, log an
+					// warning and continue to next vol if available
+					log.ApplicationBackupLog(backup).Warnf("Unsupported porx version to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
+				} else {
+					log.ApplicationBackupLog(backup).Errorf("Failed to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
+					return nil, err
+				}
+			} else {
+				vInfo.Size = resp.GetSize()
+			}
 		}
-		vInfo.BackupID = csStatus.cloudSnapID
 		volumeInfos = append(volumeInfos, vInfo)
 	}
 
@@ -2901,6 +3067,7 @@ func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*st
 			vInfo.Status = storkapi.ApplicationRestoreStatusFailed
 			vInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
 		} else {
+			vInfo.Size = csStatus.bytesDone
 			vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 			vInfo.Reason = "Restore successful for volume"
 		}
@@ -3209,7 +3376,12 @@ func (p *portworx) ensureNodesHaveMinVersion(minVersionStr string) (bool, string
 		return false, "", err
 	}
 
-	result, err := p.clusterManager.Enumerate()
+	clusterManager, err := p.getClusterManagerClient()
+	if err != nil {
+		return false, "", fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
+	}
+
+	result, err := clusterManager.Enumerate()
 	if err != nil {
 		return false, "", err
 	}

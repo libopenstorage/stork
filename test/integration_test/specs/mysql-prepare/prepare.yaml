@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sysbench-prepare
+  annotations:
+    stork.libopenstorage.org/skip-resource: "true"
+spec:
+  initContainers:
+    - name: init
+      image: arey/mysql-client
+      command: ["sh", "-c", "until mysql -h ${MYSQL_HOST} -u root -p${MYSQL_ROOT_PASSWORD} -e \"CREATE SCHEMA IF NOT EXISTS sbtest ; GRANT ALL PRIVILEGES ON sbtest.* to root@'%';\"; do echo waiting for mysql; sleep 2; done"]
+      env:
+        - name: MYSQL_HOST
+          value: mysql-service
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        - name: SIZE
+          value: "11"
+  containers:
+    - name: sysbench-prepare
+      image: severalnines/sysbench
+      command:
+        - sysbench
+        - --db-driver=mysql
+        - --oltp-table-size=10000
+        - --oltp-tables-count=11
+        - --threads=1
+        - --mysql-host=mysql-service
+        - --mysql-port=3306
+        - --mysql-user=root
+        - --mysql-password=password
+        - /usr/share/sysbench/tests/include/oltp_legacy/parallel_prepare.lua
+        - run
+  restartPolicy: Never

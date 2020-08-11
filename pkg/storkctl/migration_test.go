@@ -16,6 +16,7 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
 	appv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -70,7 +71,7 @@ func TestGetMigrationsOneMigration(t *testing.T) {
 
 func TestGetMigrationsMultiple(t *testing.T) {
 	defer resetTest()
-	_, err := core.Instance().CreateNamespace("default", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
 	require.NoError(t, err, "Error creating default namespace")
 
 	createMigrationAndVerify(t, "getmigrationtest1", "default", "clusterpair1", []string{"namespace1"}, "", "")
@@ -92,7 +93,7 @@ func TestGetMigrationsMultiple(t *testing.T) {
 	cmdArgs = []string{"get", "migrations", "getmigrationtest1"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	_, err = core.Instance().CreateNamespace("ns1", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns1"}})
 	require.NoError(t, err, "Error creating ns1 namespace")
 	createMigrationAndVerify(t, "getmigrationtest21", "ns1", "clusterpair2", []string{"namespace1"}, "", "")
 	cmdArgs = []string{"get", "migrations", "--all-namespaces"}
@@ -257,7 +258,7 @@ func TestExclueResourcesForMigrations(t *testing.T) {
 
 func createMigratedDeployment(t *testing.T) {
 	replicas := int32(0)
-	_, err := core.Instance().CreateNamespace("dep", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "dep"}})
 	require.NoError(t, err, "Error creating dep namespace")
 
 	deployment := &appv1.Deployment{
@@ -278,7 +279,7 @@ func createMigratedDeployment(t *testing.T) {
 
 func createMigratedStatefulSet(t *testing.T) {
 	replicas := int32(0)
-	_, err := core.Instance().CreateNamespace("sts", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sts"}})
 	require.NoError(t, err, "Error creating sts namespace")
 
 	statefulSet := &appv1.StatefulSet{
@@ -300,7 +301,7 @@ func createMigratedStatefulSet(t *testing.T) {
 
 func createMigratedDeploymentConfig(t *testing.T) {
 	replicas := int32(0)
-	_, err := core.Instance().CreateNamespace("depconf", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "depconf"}})
 	require.NoError(t, err, "Error creating dep namespace")
 
 	deploymentConfig := &ocpv1.DeploymentConfig{
@@ -368,7 +369,7 @@ func TestCreateMigrationWaitSuccess(t *testing.T) {
 	namespace := "dummy-namespace"
 	name := "dummy-name"
 	clusterpair := "dummy-clusterpair"
-	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "-w"}
+	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "--wait"}
 
 	expected := "STAGE\t\tSTATUS              \n\t\t                    \nVolumes\t\tSuccessful          \nMigration dummy-name completed successfully\n"
 	go setMigrationStatus(name, namespace, false, t)
@@ -381,7 +382,7 @@ func TestCreateMigrationWaitFailed(t *testing.T) {
 	namespace := "dummy-namespace"
 	name := "dummy-name"
 	clusterpair := "dummy-clusterpair"
-	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "-w"}
+	cmdArgs := []string{"create", "migrations", "-n", namespace, "-c", clusterpair, "--namespaces", namespace, name, "--wait"}
 
 	expected := "STAGE\t\tSTATUS              \n\t\t                    \nVolumes\t\tFailed              \nMigration dummy-name failed\n"
 	go setMigrationStatus(name, namespace, true, t)

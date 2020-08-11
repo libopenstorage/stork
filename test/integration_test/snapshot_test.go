@@ -60,7 +60,7 @@ func cloudSnapshotTest(t *testing.T) {
 	require.NoError(t, err, "Error getting node for app")
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
-	err = schedulerDriver.ValidateVolumes(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	err = schedulerDriver.ValidateVolumes(ctxs[0], defaultWaitTimeout, defaultWaitInterval, nil)
 	require.NoError(t, err, "Error waiting for volumes")
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
@@ -219,7 +219,7 @@ func verifyGroupSnapshot(t *testing.T, ctx *scheduler.Context, waitTimeout time.
 	err := schedulerDriver.WaitForRunning(ctx, waitTimeout, defaultWaitInterval)
 	require.NoError(t, err, fmt.Sprintf("Error waiting for app to get to running state in context: %s-%s", ctx.App.Key, ctx.UID))
 
-	err = schedulerDriver.ValidateVolumes(ctx, waitTimeout, defaultWaitInterval)
+	err = schedulerDriver.ValidateVolumes(ctx, waitTimeout, defaultWaitInterval, nil)
 	require.NoError(t, err, fmt.Sprintf("Error validating storage components in context: %s-%s", ctx.App.Key, ctx.UID))
 }
 
@@ -267,7 +267,7 @@ func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest stri
 	require.NoError(t, err, "Error getting node for app")
 	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
 
-	err = schedulerDriver.ValidateVolumes(ctxs[0], waitTimeout, defaultWaitInterval)
+	err = schedulerDriver.ValidateVolumes(ctxs[0], waitTimeout, defaultWaitInterval, nil)
 	require.NoError(t, err, fmt.Sprintf("Error waiting for volumes in context: %s-%s", ctxs[0].App.Key, ctxs[0].UID))
 	volumeNames := getVolumeNames(t, ctxs[0])
 	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")

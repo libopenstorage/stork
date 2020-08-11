@@ -7,8 +7,10 @@ import (
 	"math"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -42,6 +44,8 @@ const (
 	validateCRDTimeout  time.Duration = 1 * time.Minute
 
 	resourceObjectName = "resources.json"
+	crdObjectName      = "crds.json"
+	nsObjectName       = "namespaces.json"
 	metadataObjectName = "metadata.json"
 
 	backupCancelBackoffInitialDelay = 5 * time.Second
@@ -361,7 +365,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			channel <- true
 		}
 	}()
-
+	var err error
 	// Start backup of the volumes if we don't have any status stored
 	if backup.Status.Volumes == nil {
 		pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
@@ -374,6 +378,10 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			}
 
 			for _, pvc := range pvcList.Items {
+				// Don't backup pending or deleting PVCs
+				if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
+					continue
+				}
 				driverName, err := volume.GetPVCDriver(&pvc)
 				if err != nil {
 					// Skip unsupported PVCs
@@ -390,6 +398,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				}
 			}
 		}
+
 		for driverName, pvcs := range pvcMappings {
 			driver, err := volume.Get(driverName)
 			if err != nil {
@@ -462,7 +471,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	inProgress := false
 	// Skip checking status if no volumes are being backed up
 	if len(backup.Status.Volumes) != 0 {
-		var err error
 		drivers := a.getDriversForBackup(backup)
 
 		volumeInfos := make([]*stork_api.ApplicationBackupVolumeInfo, 0)
@@ -480,12 +488,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			volumeInfos = append(volumeInfos, status...)
 		}
 		backup.Status.Volumes = volumeInfos
-		backup.Status.LastUpdateTimestamp = metav1.Now()
-		// Store the new status
-		err = a.client.Update(context.TODO(), backup)
-		if err != nil {
-			return err
-		}
 
 		// Now check if there is any failure or success
 		// TODO: On failure of one volume cancel other backups?
@@ -515,6 +517,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 	// Return if we have any volume backups still in progress
 	if inProgress {
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+		// Store the new status
+		err = a.client.Update(context.TODO(), backup)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -542,7 +550,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	}
 
 	backup.Status.LastUpdateTimestamp = metav1.Now()
-	err := a.client.Update(context.TODO(), backup)
+	err = a.client.Update(context.TODO(), backup)
 	if err != nil {
 		return err
 	}
@@ -701,12 +709,77 @@ func (a *ApplicationBackupController) uploadResources(
 	backup *stork_api.ApplicationBackup,
 	objects []runtime.Unstructured,
 ) error {
+	resKinds := make(map[string]string)
+	for _, obj := range objects {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		resKinds[gvk.Kind] = gvk.Version
+	}
+	if err := a.uploadNamespaces(backup); err != nil {
+		return err
+	}
+	// upload CRD to backuplocation
+	if err := a.uploadCRDResources(backup, resKinds); err != nil {
+		return err
+	}
 	jsonBytes, err := json.MarshalIndent(objects, "", " ")
 	if err != nil {
 		return err
 	}
 	// TODO: Encrypt if requested
 	return a.uploadObject(backup, resourceObjectName, jsonBytes)
+}
+func (a *ApplicationBackupController) uploadNamespaces(backup *stork_api.ApplicationBackup) error {
+	var namespaces []*v1.Namespace
+	for _, namespace := range backup.Spec.Namespaces {
+		ns, err := core.Instance().GetNamespace(namespace)
+		if err != nil {
+			return err
+		}
+		ns.ResourceVersion = ""
+		namespaces = append(namespaces, ns)
+	}
+	jsonBytes, err := json.MarshalIndent(namespaces, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := a.uploadObject(backup, nsObjectName, jsonBytes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.ApplicationBackup, resKinds map[string]string) error {
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	if err != nil {
+		return err
+	}
+	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+	for _, crd := range crdList.Items {
+		for _, v := range crd.Resources {
+			if _, ok := resKinds[v.Kind]; !ok {
+				continue
+			}
+			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					continue
+				}
+				log.ApplicationBackupLog(backup).Errorf("Unable to get customresourcedefination for %s, err: %v", v.Kind, err)
+				return err
+			}
+			crds = append(crds, res)
+		}
+
+	}
+	jsonBytes, err := json.MarshalIndent(crds, "", " ")
+	if err != nil {
+		return err
+	}
+	if err := a.uploadObject(backup, crdObjectName, jsonBytes); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Upload the backup object which should have all the required metadata
@@ -724,6 +797,7 @@ func (a *ApplicationBackupController) uploadMetadata(
 func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
+	var err error
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	allObjects, err := a.resourceCollector.GetResources(
@@ -736,32 +810,39 @@ func (a *ApplicationBackupController) backupResources(
 		return err
 	}
 
-	// Save the collected resources infos in the status
-	resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
-	for _, obj := range allObjects {
-		metadata, err := meta.Accessor(obj)
+	if backup.Status.Resources == nil {
+		// Save the collected resources infos in the status
+		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
+		for _, obj := range allObjects {
+			metadata, err := meta.Accessor(obj)
+			if err != nil {
+				return err
+			}
+
+			resourceInfo := &stork_api.ApplicationBackupResourceInfo{
+				ObjectInfo: stork_api.ObjectInfo{
+					Name:      metadata.GetName(),
+					Namespace: metadata.GetNamespace(),
+				},
+			}
+			gvk := obj.GetObjectKind().GroupVersionKind()
+			resourceInfo.Kind = gvk.Kind
+			resourceInfo.Group = gvk.Group
+			// core Group doesn't have a name, so override it
+			if resourceInfo.Group == "" {
+				resourceInfo.Group = "core"
+			}
+			resourceInfo.Version = gvk.Version
+			resourceInfos = append(resourceInfos, resourceInfo)
+		}
+		backup.Status.Resources = resourceInfos
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+		// Store the new status
+		err = a.client.Update(context.TODO(), backup)
 		if err != nil {
 			return err
 		}
-
-		resourceInfo := &stork_api.ApplicationBackupResourceInfo{
-			Name:      metadata.GetName(),
-			Namespace: metadata.GetNamespace(),
-		}
-		gvk := obj.GetObjectKind().GroupVersionKind()
-		resourceInfo.Kind = gvk.Kind
-		resourceInfo.Group = gvk.Group
-		// core Group doesn't have a name, so override it
-		if resourceInfo.Group == "" {
-			resourceInfo.Group = "core"
-		}
-		resourceInfo.Version = gvk.Version
-
-		resourceInfos = append(resourceInfos, resourceInfo)
-	}
-	backup.Status.Resources = resourceInfos
-	if err = a.client.Update(context.TODO(), backup); err != nil {
-		return err
+		return nil
 	}
 
 	// Do any additional preparation for the resources if required
@@ -805,7 +886,7 @@ func (a *ApplicationBackupController) backupResources(
 	backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 	backup.Status.FinishTimestamp = metav1.Now()
 	backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful
-	backup.Status.Reason = "Volumes and resources were backed up successfuly"
+	backup.Status.Reason = "Volumes and resources were backed up successfully"
 
 	// Upload the metadata for the backup to the backup location
 	if err = a.uploadMetadata(backup); err != nil {
@@ -818,6 +899,11 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	backup.Status.LastUpdateTimestamp = metav1.Now()
+	// Only on success compute the total backup size
+	for _, vInfo := range backup.Status.Volumes {
+		backup.Status.Size += vInfo.Size
+	}
+
 	if err = a.client.Update(context.TODO(), backup); err != nil {
 		return err
 	}
@@ -873,6 +959,14 @@ func (a *ApplicationBackupController) deleteBackup(backup *stork_api.Application
 
 		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, metadataObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
 			return fmt.Errorf("error deleting metadata for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+		}
+
+		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, crdObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+			return fmt.Errorf("error deleting crds for backup %v/%v: %v", backup.Namespace, backup.Name, err)
+		}
+
+		if err = bucket.Delete(context.TODO(), filepath.Join(objectPath, nsObjectName)); err != nil && gcerrors.Code(err) != gcerrors.NotFound {
+			return fmt.Errorf("error deleting namespaces for backup %v/%v: %v", backup.Namespace, backup.Name, err)
 		}
 	}
 

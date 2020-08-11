@@ -9,8 +9,10 @@ import (
 	"github.com/go-openapi/inflect"
 	"github.com/heptio/ark/pkg/discovery"
 	"github.com/libopenstorage/stork/drivers/volume"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -44,6 +46,7 @@ type ResourceCollector struct {
 	dynamicInterface dynamic.Interface
 	coreOps          core.Ops
 	rbacOps          rbac.Ops
+	storkOps         storkops.Ops
 }
 
 // Init initializes the resource collector
@@ -81,10 +84,20 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	if err != nil {
 		return err
 	}
+	r.storkOps, err = storkops.NewForConfig(config)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-func resourceToBeCollected(resource metav1.APIResource, optionalResourceTypes []string) bool {
+func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
+	for _, res := range crdKinds {
+		if res.Kind == resource.Kind &&
+			res.Group == grp.Group && res.Version == grp.Version {
+			return true
+		}
+	}
 	switch resource.Kind {
 	case "PersistentVolumeClaim",
 		"PersistentVolume",
@@ -104,19 +117,14 @@ func resourceToBeCollected(resource metav1.APIResource, optionalResourceTypes []
 		"Ingress",
 		"Route",
 		"Template",
-		"IBPCA",
-		"IBPConsole",
-		"IBPPeer",
-		"IBPOrderer",
-		"CronJob":
+		"CronJob",
+		"ResourceQuota",
+		"LimitRange":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
 			slice.ContainsString(optionalResourceTypes, "jobs", strings.ToLower)
 	default:
-		if strings.HasPrefix(resource.Kind, "Couchbase") {
-			return true
-		}
 		return false
 	}
 }
@@ -135,7 +143,17 @@ func (r *ResourceCollector) GetResources(
 
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
-
+	var crdResources []metav1.GroupVersionKind
+	crdList, err := r.storkOps.ListApplicationRegistrations()
+	if err != nil {
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	} else {
+		for _, crd := range crdList.Items {
+			for _, kind := range crd.Resources {
+				crdResources = append(crdResources, kind.GroupVersionKind)
+			}
+		}
+	}
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
 		return nil, err
@@ -148,7 +166,7 @@ func (r *ResourceCollector) GetResources(
 		}
 
 		for _, resource := range group.APIResources {
-			if !resourceToBeCollected(resource, optionalResourceTypes) {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
 				continue
 			}
 			for _, ns := range namespaces {
@@ -394,12 +412,24 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		}
 
 		content := o.UnstructuredContent()
-		switch o.GetObjectKind().GroupVersionKind().Kind {
-		case "CouchbaseBackup", "CouchbaseBackupRestore":
-		default:
-			// Status shouldn't be retained when collecting resources
-			delete(content, "status")
+		crdList, err := r.storkOps.ListApplicationRegistrations()
+		if err != nil {
+			logrus.Warnf("Unable to get registered crds, err %v", err)
+		} else {
+			resourceKind := o.GetObjectKind().GroupVersionKind()
+			for _, crd := range crdList.Items {
+				for _, kind := range crd.Resources {
+					if kind.Kind == resourceKind.Kind && kind.Group == resourceKind.Group &&
+						kind.Version == resourceKind.Version {
+						// remove status from crd
+						if !kind.KeepStatus {
+							delete(content, "status")
+						}
+					}
+				}
+			}
 		}
+		// remove metadata annotations
 		metadataMap := content["metadata"].(map[string]interface{})
 		// Remove all metadata except some well-known ones
 		for key := range metadataMap {
@@ -409,6 +439,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 				delete(metadataMap, key)
 			}
 		}
+
 	}
 	return nil
 }
@@ -418,6 +449,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 // and ApplyResource
 func (r *ResourceCollector) PrepareResourceForApply(
 	object runtime.Unstructured,
+	includeObjects map[stork_api.ObjectInfo]bool,
 	namespaceMappings map[string]string,
 	pvNameMappings map[string]string,
 	optionalResourceTypes []string,
@@ -430,6 +462,23 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	metadata, err := meta.Accessor(object)
 	if err != nil {
 		return false, err
+	}
+
+	// Even if PV isn't specified need to check if the corresponding PV is, so
+	// skip the check here
+	if len(includeObjects) != 0 && objectType.GetKind() != "PersistentVolume" {
+		info := stork_api.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   object.GetObjectKind().GroupVersionKind().Group,
+				Version: object.GetObjectKind().GroupVersionKind().Version,
+				Kind:    object.GetObjectKind().GroupVersionKind().Kind,
+			},
+			Name:      metadata.GetName(),
+			Namespace: metadata.GetNamespace(),
+		}
+		if val, present := includeObjects[info]; !present || !val {
+			return true, nil
+		}
 	}
 	if metadata.GetNamespace() != "" {
 		var val string
@@ -455,6 +504,8 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, r.preparePVCResourceForApply(object, pvNameMappings)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
+	case "RoleBinding":
+		return false, r.prepareRoleBindingForApply(object, namespaceMappings)
 	}
 	return false, nil
 }
@@ -527,6 +578,7 @@ func (r *ResourceCollector) DeleteResources(
 	objects []runtime.Unstructured,
 ) error {
 	// First delete all the objects
+	deleteStart := metav1.Now()
 	for _, object := range objects {
 		// Don't delete objects that support merging
 		if r.mergeSupportedForResource(object) {
@@ -570,8 +622,14 @@ func (r *ResourceCollector) DeleteResources(
 
 		// Wait for up to 2 minutes for the object to be deleted
 		for i := 0; i < deletedMaxRetries; i++ {
-			_, err = dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
+			obj, err := dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
 			if err != nil && apierrors.IsNotFound(err) {
+				break
+			}
+			createTime := obj.GetCreationTimestamp()
+			if deleteStart.Before(&createTime) {
+				logrus.Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+					obj.GetName(), deleteStart, createTime)
 				break
 			}
 			logrus.Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
@@ -593,8 +651,13 @@ func (r *ResourceCollector) getDynamicClient(
 	if err != nil {
 		return nil, err
 	}
+
+	// The default ruleset doesn't pluralize quotas correctly, so add that
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+
 	resource := &metav1.APIResource{
-		Name:       inflect.Pluralize(strings.ToLower(objectType.GetKind())),
+		Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,
 	}
 

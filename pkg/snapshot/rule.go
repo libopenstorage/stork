@@ -72,6 +72,9 @@ func ExecutePreSnapRule(snap *crdv1.VolumeSnapshot, pvcs []v1.PersistentVolumeCl
 				return nil, nil
 			}
 		}
+		if ruleName == "" {
+			return nil, nil
+		}
 		r, err := storkops.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 		if err != nil {
 			return nil, err
@@ -95,6 +98,9 @@ func ExecutePostSnapRule(pvcs []v1.PersistentVolumeClaim, snap *crdv1.VolumeSnap
 			if !present {
 				return nil
 			}
+		}
+		if ruleName == "" {
+			return nil
 		}
 		r, err := storkops.Instance().GetRule(ruleName, snap.Metadata.Namespace)
 		if err != nil {

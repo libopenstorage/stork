@@ -102,12 +102,69 @@ func (a *ApplicationRestoreController) verifyNamespaces(restore *storkapi.Applic
 	if !a.namespaceRestoreAllowed(restore) {
 		return fmt.Errorf("Spec.Namespaces should only contain the current namespace")
 	}
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("Error getting backup: %v", err)
+		return err
+	}
+	return a.createNamespaces(backup, restore.Spec.BackupLocation, restore)
+}
 
-	for _, ns := range restore.Spec.NamespaceMapping {
-		if _, err := core.Instance().GetNamespace(ns); err != nil {
+func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.ApplicationBackup,
+	backupLocation string,
+	restore *storkapi.ApplicationRestore) error {
+	var namespaces []*v1.Namespace
 
+	nsData, err := a.downloadObject(backup, backupLocation, restore.Namespace, nsObjectName, true)
+	if err != nil {
+		return err
+	}
+	if nsData != nil {
+		if err = json.Unmarshal(nsData, &namespaces); err != nil {
+			return err
+		}
+		for _, ns := range namespaces {
+			if restoreNS, ok := restore.Spec.NamespaceMapping[ns.Name]; ok {
+				ns.Name = restoreNS
+			}
+			// create mapped restore namespace with metadata of backed up
+			// namespace
+			_, err := core.Instance().CreateNamespace(&v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        ns.Name,
+					Labels:      ns.Labels,
+					Annotations: ns.GetAnnotations(),
+				},
+			})
+			log.ApplicationRestoreLog(restore).Infof("Creating dest namespace %v", ns.Name)
+			if err != nil {
+				if errors.IsAlreadyExists(err) {
+					log.ApplicationRestoreLog(restore).Errorf("Updating dest namespace %v", ns.Name)
+					// regardless of replace policy we should always update namespace is
+					// its already exist to keel latest annotations/labels
+					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        ns.Name,
+							Labels:      ns.Labels,
+							Annotations: ns.GetAnnotations(),
+						},
+					})
+				}
+				return err
+			}
+		}
+		return nil
+	}
+	for _, namespace := range restore.Spec.NamespaceMapping {
+		if ns, err := core.Instance().GetNamespace(namespace); err != nil {
 			if errors.IsNotFound(err) {
-				if _, err := core.Instance().CreateNamespace(ns, nil); err != nil {
+				if _, err := core.Instance().CreateNamespace(&v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        ns.Name,
+						Labels:      ns.Labels,
+						Annotations: ns.GetAnnotations(),
+					},
+				}); err != nil {
 					return err
 				}
 			}
@@ -251,6 +308,15 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			return fmt.Errorf("error getting backup spec for restore: %v", err)
 		}
 		backupVolumeInfoMappings := make(map[string][]*storkapi.ApplicationBackupVolumeInfo)
+		objectMap := a.createObjectsMap(restore.Spec.IncludeResources)
+		info := storkapi.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "PersistentVolumeClaim",
+			},
+		}
+
 		for _, namespace := range backup.Spec.Namespaces {
 			if _, ok := restore.Spec.NamespaceMapping[namespace]; !ok {
 				continue
@@ -259,6 +325,16 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				if volumeBackup.Namespace != namespace {
 					continue
 				}
+				// If a list of resources was specified during restore check if
+				// this PVC was included
+				info.Name = volumeBackup.PersistentVolumeClaim
+				info.Namespace = volumeBackup.Namespace
+				if len(objectMap) != 0 {
+					if val, present := objectMap[info]; !present || !val {
+						continue
+					}
+				}
+
 				if volumeBackup.DriverName == "" {
 					volumeBackup.DriverName = volume.GetDefaultDriverName()
 				}
@@ -398,6 +474,11 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	}
 
 	restore.Status.LastUpdateTimestamp = metav1.Now()
+	// Only on success compute the total restore size
+	for _, vInfo := range restore.Status.Volumes {
+		restore.Status.Size += vInfo.Size
+	}
+
 	err := a.client.Update(context.TODO(), restore)
 	if err != nil {
 		return err
@@ -410,6 +491,7 @@ func (a *ApplicationRestoreController) downloadObject(
 	backupLocation string,
 	namespace string,
 	objectName string,
+	skipIfNotPresent bool,
 ) ([]byte, error) {
 	restoreLocation, err := storkops.Instance().GetBackupLocation(backup.Spec.BackupLocation, namespace)
 	if err != nil {
@@ -421,6 +503,13 @@ func (a *ApplicationRestoreController) downloadObject(
 	}
 
 	objectPath := backup.Status.BackupPath
+	if skipIfNotPresent {
+		exists, err := bucket.Exists(context.TODO(), filepath.Join(objectPath, objectName))
+		if err != nil || !exists {
+			return nil, nil
+		}
+	}
+
 	data, err := bucket.ReadAll(context.TODO(), filepath.Join(objectPath, objectName))
 	if err != nil {
 		return nil, err
@@ -439,7 +528,11 @@ func (a *ApplicationRestoreController) downloadResources(
 	backupLocation string,
 	namespace string,
 ) ([]runtime.Unstructured, error) {
-	data, err := a.downloadObject(backup, backupLocation, namespace, resourceObjectName)
+	// create CRD resource first
+	if err := a.downloadCRD(backup, backupLocation, namespace); err != nil {
+		return nil, fmt.Errorf("error downloading CRDs: %v", err)
+	}
+	data, err := a.downloadObject(backup, backupLocation, namespace, resourceObjectName, false)
 	if err != nil {
 		return nil, err
 	}
@@ -453,6 +546,37 @@ func (a *ApplicationRestoreController) downloadResources(
 		runtimeObjects = append(runtimeObjects, o)
 	}
 	return runtimeObjects, nil
+}
+
+func (a *ApplicationRestoreController) downloadCRD(
+	backup *storkapi.ApplicationBackup,
+	backupLocation string,
+	namespace string,
+) error {
+	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+	crdData, err := a.downloadObject(backup, backupLocation, namespace, crdObjectName, true)
+	if err != nil {
+		return err
+	}
+	// No CRDs were uploaded
+	if crdData == nil {
+		return nil
+	}
+	if err = json.Unmarshal(crdData, &crds); err != nil {
+		return err
+	}
+	for _, crd := range crds {
+		crd.ResourceVersion = ""
+		if err := apiextensions.Instance().RegisterCRD(crd); err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRD(apiextensions.CustomResource{
+			Plural: crd.Spec.Names.Plural,
+			Group:  crd.Spec.Group}, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *ApplicationRestoreController) updateResourceStatus(
@@ -480,12 +604,14 @@ func (a *ApplicationRestoreController) updateResourceStatus(
 	}
 	if updatedResource == nil {
 		updatedResource = &storkapi.ApplicationRestoreResourceInfo{
-			Name:      metadata.GetName(),
-			Namespace: metadata.GetNamespace(),
-			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   gkv.Group,
-				Version: gkv.Version,
-				Kind:    gkv.Kind,
+			ObjectInfo: storkapi.ObjectInfo{
+				Name:      metadata.GetName(),
+				Namespace: metadata.GetNamespace(),
+				GroupVersionKind: metav1.GroupVersionKind{
+					Group:   gkv.Group,
+					Version: gkv.Version,
+					Kind:    gkv.Kind,
+				},
 			},
 		}
 		restore.Status.Resources = append(restore.Status.Resources, updatedResource)
@@ -523,6 +649,16 @@ func (a *ApplicationRestoreController) getPVNameMappings(
 	return pvNameMappings, nil
 }
 
+func (a *ApplicationRestoreController) createObjectsMap(
+	includeObjects []storkapi.ObjectInfo,
+) map[storkapi.ObjectInfo]bool {
+	objectsMap := make(map[storkapi.ObjectInfo]bool)
+	for i := 0; i < len(includeObjects); i++ {
+		objectsMap[includeObjects[i]] = true
+	}
+	return objectsMap
+}
+
 func (a *ApplicationRestoreController) applyResources(
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
@@ -532,10 +668,12 @@ func (a *ApplicationRestoreController) applyResources(
 		return err
 	}
 
+	objectMap := a.createObjectsMap(restore.Spec.IncludeResources)
 	tempObjects := make([]runtime.Unstructured, 0)
 	for _, o := range objects {
 		skip, err := a.resourceCollector.PrepareResourceForApply(
 			o,
+			objectMap,
 			restore.Spec.NamespaceMapping,
 			pvNameMappings,
 			restore.Spec.IncludeOptionalResourceTypes)
@@ -637,11 +775,11 @@ func (a *ApplicationRestoreController) restoreResources(
 	restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
 	restore.Status.FinishTimestamp = metav1.Now()
 	restore.Status.Status = storkapi.ApplicationRestoreStatusSuccessful
-	restore.Status.Reason = "Volumes and resources were restored up successfuly"
+	restore.Status.Reason = "Volumes and resources were restored up successfully"
 	for _, resource := range restore.Status.Resources {
 		if resource.Status != storkapi.ApplicationRestoreStatusSuccessful {
 			restore.Status.Status = storkapi.ApplicationRestoreStatusPartialSuccess
-			restore.Status.Reason = "Volumes were restored successfuly. Some existing resources were not replaced"
+			restore.Status.Reason = "Volumes were restored successfully. Some existing resources were not replaced"
 			break
 		}
 	}

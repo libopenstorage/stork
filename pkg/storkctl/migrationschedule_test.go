@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -103,9 +104,9 @@ func TestGetMigrationSchedulesMultiple(t *testing.T) {
 
 func TestGetMigrationSchedulesMultipleNamespaces(t *testing.T) {
 	defer resetTest()
-	_, err := core.Instance().CreateNamespace("test1", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test1"}})
 	require.NoError(t, err, "Error creating test1 namespace")
-	_, err = core.Instance().CreateNamespace("test2", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test2"}})
 	require.NoError(t, err, "Error creating test2 namespace")
 
 	createMigrationScheduleAndVerify(t, "getmigrationscheduletest1", "testpolicy", "test1", "clusterpair1", []string{"namespace1"}, "", "", true)

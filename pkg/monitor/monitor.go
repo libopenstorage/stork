@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/record"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
@@ -26,6 +27,8 @@ const (
 	initialNodeWaitDelay = 10 * time.Second
 	nodeWaitFactor       = 1
 	nodeWaitSteps        = 5
+
+	storageDriverOfflineReason = "StorageDriverOffline"
 )
 
 var nodeWaitCallBackoff = wait.Backoff{
@@ -38,6 +41,7 @@ var nodeWaitCallBackoff = wait.Backoff{
 type Monitor struct {
 	Driver      volume.Driver
 	IntervalSec int64
+	Recorder    record.EventRecorder
 	lock        sync.Mutex
 	wg          sync.WaitGroup
 	started     bool
@@ -136,7 +140,8 @@ func (m *Monitor) podMonitor() error {
 				return nil
 			}
 
-			storklog.PodLog(pod).Infof("Force deleting pod as it's in unknown state.")
+			msg := "Force deleting pod as it's in unknown state."
+			storklog.PodLog(pod).Infof(msg)
 
 			// delete volume attachments if the node is down for this pod
 			err = m.cleanupVolumeAttachmentsByPod(pod)
@@ -145,6 +150,7 @@ func (m *Monitor) podMonitor() error {
 			}
 
 			// force delete the pod
+			m.Recorder.Event(pod, v1.EventTypeWarning, node.NodeUnreachablePodReason, msg)
 			err = core.Instance().DeletePods([]v1.Pod{*pod}, true)
 			if err != nil {
 				if errors.IsNotFound(err) {
@@ -207,7 +213,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 			return false, nil
 		}
 		if n.Status != volume.NodeOnline {
-			log.Infof("Node is still offline %v , %v", n.Status, n.Hostname)
+			log.Infof("Volume driver on node %v (%v) is still offline (%v)", node.Hostname, node.StorageID, n.RawStatus)
 			return false, nil
 		}
 		return true, nil
@@ -233,7 +239,9 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 		}
 
 		if m.isSameNode(pod.Spec.NodeName, node) {
-			storklog.PodLog(&pod).Infof("Deleting Pod from Node: %v", pod.Spec.NodeName)
+			msg := fmt.Sprintf("Deleting Pod from Node %v due to volume driver status: %v (%v)", pod.Spec.NodeName, node.Status, node.RawStatus)
+			storklog.PodLog(&pod).Infof(msg)
+			m.Recorder.Event(&pod, v1.EventTypeWarning, storageDriverOfflineReason, msg)
 			err = core.Instance().DeletePods([]v1.Pod{pod}, true)
 			if err != nil {
 				storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)

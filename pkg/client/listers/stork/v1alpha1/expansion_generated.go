@@ -42,6 +42,10 @@ type ApplicationCloneListerExpansion interface{}
 // ApplicationCloneNamespaceLister.
 type ApplicationCloneNamespaceListerExpansion interface{}
 
+// ApplicationRegistrationListerExpansion allows custom methods to be added to
+// ApplicationRegistrationLister.
+type ApplicationRegistrationListerExpansion interface{}
+
 // ApplicationRestoreListerExpansion allows custom methods to be added to
 // ApplicationRestoreLister.
 type ApplicationRestoreListerExpansion interface{}

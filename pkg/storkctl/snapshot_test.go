@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -52,9 +53,9 @@ snap1   persistentVolumeClaimName   Pending                         Local
 
 func TestGetVolumeSnapshotsMultipleSnapshots(t *testing.T) {
 	var snapshots snapv1.VolumeSnapshotList
-	_, err := core.Instance().CreateNamespace("test1", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test1"}})
 	require.NoError(t, err, "Error creating test1 namespace")
-	_, err = core.Instance().CreateNamespace("test2", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test2"}})
 	require.NoError(t, err, "Error creating test2 namespace")
 
 	cmdArgs := []string{"get", "volumesnapshots", "--all-namespaces"}
@@ -153,9 +154,9 @@ func TestGetVolumeSnapshotRestoreNoRestores(t *testing.T) {
 
 func TestGetVolumeSnapshotRestoreAllRestores(t *testing.T) {
 
-	_, err := core.Instance().CreateNamespace("ns", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns"}})
 	require.NoError(t, err, "Error creating ns namespace")
-	_, err = core.Instance().CreateNamespace("default", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
 	require.NoError(t, err, "Error creating ns1 namespace")
 
 	cmdArgs := []string{"get", "volumesnapshotrestore", "--all-namespaces"}
