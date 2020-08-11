@@ -118,7 +118,8 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 		"Route",
 		"Template",
 		"CronJob",
-		"ResourceQuota":
+		"ResourceQuota",
+		"LimitRange":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
