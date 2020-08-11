@@ -503,6 +503,10 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params["refresh-endpoint"]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
 	volDriver := d.getVolDriver()
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})

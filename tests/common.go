@@ -246,6 +246,9 @@ func ValidateVolumes(ctx *scheduler.Context) {
 				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 				expect(err).NotTo(haveOccurred())
 			}
+			if ctx.RefreshStorageEndpoint {
+				params["refresh-endpoint"] = "true"
+			}
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				expect(err).NotTo(haveOccurred())
