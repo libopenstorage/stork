@@ -16,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
+
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/sirupsen/logrus"
 )
@@ -32,6 +33,10 @@ const (
 	DefaultEmailRecipient = "test@portworx.com"
 	// SendGridEmailAPIKeyField is field in config map which stores the SendGrid Email API key
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
+)
+const (
+	validateReplicationUpdateTimeout = 2 * time.Hour
+	errorChannelSize                 = 10
 )
 
 // EmailRecipients list of email IDs to send email to
@@ -121,6 +126,9 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 				UpdateOutcome(event, err)
 				expect(appVolumes).NotTo(beEmpty())
 			})
+			opts := volume.Options{
+				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+			}
 			for _, v := range appVolumes {
 				MaxRF := Inst().V.GetMaxReplicationFactor()
 				MinRF := Inst().V.GetMinReplicationFactor()
@@ -138,7 +146,8 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 							errExpected = true
 						}
 						expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
-						err = Inst().V.SetReplicationFactor(v, currRep-1)
+
+						err = Inst().V.SetReplicationFactor(v, currRep-1, opts)
 						if !errExpected {
 							UpdateOutcome(event, err)
 							expect(err).NotTo(haveOccurred())
@@ -156,6 +165,9 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 						newRepl, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
 						expect(err).NotTo(haveOccurred())
+						if newRepl != expReplMap[v] {
+							UpdateOutcome(event, fmt.Errorf("volume has invalid repl value. Expected:%d Actual:%d", expReplMap[v], newRepl))
+						}
 						expect(newRepl).To(equal(expReplMap[v]))
 					})
 				Step(
@@ -180,7 +192,7 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 							errExpected = true
 						}
 						expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-						err = Inst().V.SetReplicationFactor(v, currRep+1)
+						err = Inst().V.SetReplicationFactor(v, currRep+1, opts)
 						if !errExpected {
 							UpdateOutcome(event, err)
 							expect(err).NotTo(haveOccurred())
@@ -197,15 +209,12 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 						newRepl, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
 						expect(err).NotTo(haveOccurred())
-						if !expect(newRepl).To(equal(expReplMap[v])) {
-							UpdateOutcome(event, fmt.Errorf("Current repl count [%d] does not match with expected repl count [%d]", newRepl, expReplMap[v]))
+						if newRepl != expReplMap[v] {
+							err = fmt.Errorf("volume has invalid repl value. Expected:%d Actual:%d", expReplMap[v], newRepl)
+							UpdateOutcome(event, err)
 						}
+						expect(newRepl).To(equal(expReplMap[v]))
 					})
-				Step("validate apps", func() {
-					for _, ctx := range contexts {
-						ValidateContext(ctx)
-					}
-				})
 			}
 		}
 	})
@@ -234,13 +243,14 @@ func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRe
 			UpdateOutcome(event, err)
 			expect(err).NotTo(haveOccurred())
 		})
-		errorChan := make(chan error, 10)
 
-		ValidateContext(ctx, &errorChan)
-
-		for err := range errorChan {
-			UpdateOutcome(event, err)
-		}
+		Step(fmt.Sprintf("validating context after delete tasks for app: %s", ctx.App.Key), func() {
+			errorChan := make(chan error, errorChannelSize)
+			ValidateContext(ctx, &errorChan)
+			for err := range errorChan {
+				UpdateOutcome(event, err)
+			}
+		})
 	}
 }
 
@@ -250,7 +260,7 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *Even
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: HAUpdate,
+			Type: CrashVolDriver,
 		},
 		Start:   time.Now(),
 		Outcome: []error{},
@@ -278,7 +288,7 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: HAUpdate,
+			Type: RestartVolDriver,
 		},
 		Start:   time.Now(),
 		Outcome: []error{},
@@ -308,11 +318,15 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				time.Sleep(20 * time.Second)
 			})
 
-			Step("validate apps", func() {
-				for _, ctx := range contexts {
-					ValidateContext(ctx)
-				}
-			})
+			for _, ctx := range contexts {
+				Step(fmt.Sprintf("RestartVolDriver: validating app [%s]", ctx.App.Key), func() {
+					errorChan := make(chan error, errorChannelSize)
+					ValidateContext(ctx, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
+				})
+			}
 		}
 	})
 }
@@ -383,7 +397,13 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 
 					Step("validate apps", func() {
 						for _, ctx := range contexts {
-							ValidateContext(ctx)
+							Step(fmt.Sprintf("RebootNode: validating app [%s]", ctx.App.Key), func() {
+								errorChan := make(chan error, errorChannelSize)
+								ValidateContext(ctx, &errorChan)
+								for err := range errorChan {
+									UpdateOutcome(event, err)
+								}
+							})
 						}
 					})
 				}

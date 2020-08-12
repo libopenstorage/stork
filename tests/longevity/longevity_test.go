@@ -261,7 +261,7 @@ func populateIntervals() {
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 
-	baseInterval := 30 * time.Minute
+	baseInterval := 10 * time.Minute
 	triggerInterval[RebootNode][10] = 1 * baseInterval
 	triggerInterval[RebootNode][9] = 2 * baseInterval
 	triggerInterval[RebootNode][8] = 3 * baseInterval
@@ -301,7 +301,7 @@ func populateIntervals() {
 	triggerInterval[HAUpdate][6] = 5 * baseInterval
 	triggerInterval[HAUpdate][5] = 6 * baseInterval // Default global chaos level, 1.5 hrs
 
-	baseInterval = 10 * time.Minute
+	baseInterval = 3 * time.Minute
 	triggerInterval[AppTaskDown][10] = 1 * baseInterval
 	triggerInterval[AppTaskDown][9] = 2 * baseInterval
 	triggerInterval[AppTaskDown][8] = 3 * baseInterval

@@ -185,7 +185,7 @@ func ValidateCleanup() {
 }
 
 func updateChannel(err error, errChan ...*chan error) {
-	if len(errChan) > 0 {
+	if len(errChan) > 0 && err != nil {
 		*errChan[0] <- err
 	}
 }

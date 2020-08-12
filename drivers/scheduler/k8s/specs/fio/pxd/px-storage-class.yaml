@@ -5,7 +5,7 @@ metadata:
   name: fio-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "1"
+  repl: "2"
   priority_io: "high"
 allowVolumeExpansion: true
 ---
@@ -13,7 +13,7 @@ allowVolumeExpansion: true
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: fio-sharedv4
+  name: fio-log
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "2"

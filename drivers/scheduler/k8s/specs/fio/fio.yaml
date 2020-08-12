@@ -57,7 +57,7 @@ spec:
   - metadata:
       name: fio-log
     spec:
-      storageClassName: fio-sharedv4
+      storageClassName: fio-log
       accessModes:
       - ReadWriteOnce
       resources:
