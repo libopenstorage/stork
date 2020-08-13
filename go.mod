@@ -4,14 +4,11 @@ go 1.12
 
 require (
 	github.com/Azure/azure-sdk-for-go v38.2.0+incompatible // indirect
-	github.com/Azure/azure-storage-blob-go v0.0.0-20181022225951-5152f14ace1c
+	github.com/Azure/azure-storage-blob-go v0.9.0
 	github.com/Azure/go-autorest/autorest v0.9.4 // indirect
-	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2 // indirect
-	github.com/Azure/go-autorest/autorest/to v0.3.0 // indirect
-	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/Microsoft/go-winio v0.4.14 // indirect
-	github.com/aws/aws-sdk-go v1.30.6
+	github.com/aws/aws-sdk-go v1.31.13
 	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
 	github.com/docker/docker v1.4.2-0.20170731201938-4f3616fb1c11
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -20,7 +17,6 @@ require (
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
 	github.com/fatih/color v1.7.0
 	github.com/gambol99/go-marathon v0.7.1
-	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6 // indirect
@@ -42,12 +38,9 @@ require (
 	github.com/portworx/sched-ops v0.0.0-20200723032629-257aba0944dc
 	github.com/sirupsen/logrus v1.5.0
 	github.com/stretchr/testify v1.5.1
-	go.opencensus.io v0.22.1 // indirect
+	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
 	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
-	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
-	google.golang.org/appengine v1.6.6 // indirect
-	google.golang.org/genproto v0.0.0-20200604104852-0b0486081ffb // indirect
 	google.golang.org/grpc v1.29.1
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.2.8

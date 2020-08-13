@@ -3086,6 +3086,7 @@ func (k *K8s) destroyBackupObjects(
 			}
 		}
 		logrus.Infof("[%v] Destroyed ApplicationBackup: %v", app.Key, obj.Name)
+
 	} else if obj, ok := specObj.(*storkapi.ApplicationRestore); ok {
 		err := k8sOps.DeleteApplicationRestore(obj.Name, obj.Namespace)
 		if err != nil {
