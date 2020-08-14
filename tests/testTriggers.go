@@ -234,8 +234,13 @@ func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRe
 			UpdateOutcome(event, err)
 			expect(err).NotTo(haveOccurred())
 		})
+		errorChan := make(chan error, 10)
 
-		ValidateContext(ctx)
+		ValidateContext(ctx, &errorChan)
+
+		for err := range errorChan {
+			UpdateOutcome(event, err)
+		}
 	}
 }
 
