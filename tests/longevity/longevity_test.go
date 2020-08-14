@@ -56,11 +56,11 @@ var _ = Describe("{Longevity}", func() {
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions := map[string]func([]*scheduler.Context, *chan *EventRecord){
 		RebootNode:       TriggerRebootNodes,
-		DeleteApp:        TriggerDeleteApps,
 		RestartVolDriver: TriggerRestartVolDriver,
 		CrashVolDriver:   TriggerCrashVolDriver,
 		HAUpdate:         TriggerHAUpdate,
 		EmailReporter:    TriggerEmailReporter,
+		AppTaskDown:      TriggerAppTaskDown,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s] in namespace [%s]",
@@ -180,8 +180,8 @@ func populateDisruptiveTriggers() {
 		RestartVolDriver: false,
 		CrashVolDriver:   false,
 		RebootNode:       true,
-		DeleteApp:        false,
 		EmailReporter:    false,
+		AppTaskDown:      false,
 	}
 }
 
@@ -255,11 +255,11 @@ func populateTriggers(triggers *map[string]string) error {
 func populateIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[RebootNode] = map[int]time.Duration{}
-	triggerInterval[DeleteApp] = map[int]time.Duration{}
 	triggerInterval[CrashVolDriver] = map[int]time.Duration{}
 	triggerInterval[RestartVolDriver] = map[int]time.Duration{}
 	triggerInterval[HAUpdate] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
+	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 
 	baseInterval := 30 * time.Minute
 	triggerInterval[RebootNode][10] = 1 * baseInterval
@@ -301,20 +301,20 @@ func populateIntervals() {
 	triggerInterval[HAUpdate][6] = 5 * baseInterval
 	triggerInterval[HAUpdate][5] = 6 * baseInterval // Default global chaos level, 1.5 hrs
 
-	baseInterval = 5 * time.Minute
-	triggerInterval[DeleteApp][10] = 1 * baseInterval
-	triggerInterval[DeleteApp][9] = 2 * baseInterval
-	triggerInterval[DeleteApp][8] = 3 * baseInterval
-	triggerInterval[DeleteApp][7] = 4 * baseInterval
-	triggerInterval[DeleteApp][6] = 5 * baseInterval
-	triggerInterval[DeleteApp][5] = 6 * baseInterval // Default global chaos level, 30 mins
+	baseInterval = 10 * time.Minute
+	triggerInterval[AppTaskDown][10] = 1 * baseInterval
+	triggerInterval[AppTaskDown][9] = 2 * baseInterval
+	triggerInterval[AppTaskDown][8] = 3 * baseInterval
+	triggerInterval[AppTaskDown][7] = 4 * baseInterval
+	triggerInterval[AppTaskDown][6] = 5 * baseInterval
+	triggerInterval[AppTaskDown][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
 	// Chaos Level of 0 means disable test trigger
-	triggerInterval[DeleteApp][0] = 0
 	triggerInterval[RebootNode][0] = 0
 	triggerInterval[CrashVolDriver][0] = 0
 	triggerInterval[HAUpdate][0] = 0
 	triggerInterval[RestartVolDriver][0] = 0
+	triggerInterval[AppTaskDown][0] = 0
 }
 
 func getWaitTime(triggerType string) (time.Duration, error) {

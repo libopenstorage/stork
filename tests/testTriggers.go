@@ -82,14 +82,14 @@ func UpdateOutcome(event *EventRecord, err error) {
 const (
 	// HAUpdate performs HA increase and decrease
 	HAUpdate = "haUpdate"
+	// AppTaskDown deletes application task for all contexts
+	AppTaskDown = "appTaskDown"
 	// RestartVolDriver restart volume driver
 	RestartVolDriver = "restartVolDriver"
 	// CrashVolDriver crashes volume driver
 	CrashVolDriver = "crashVolDriver"
 	// RebootNode reboots alll nodes one by one
 	RebootNode = "rebootNode"
-	// DeleteApp deletes application tasks
-	DeleteApp = "deleteApp"
 	// EmailReporter notifies via email outcome of past events
 	EmailReporter = "emailReporter"
 )
@@ -211,6 +211,34 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 	})
 }
 
+// TriggerAppTaskDown deletes application task for all contexts
+func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AppTaskDown,
+		},
+		Start:   time.Now(),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now()
+		*recordChan <- event
+	}()
+
+	for _, ctx := range contexts {
+		Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
+			err := Inst().S.DeleteTasks(ctx, nil)
+			UpdateOutcome(event, err)
+			expect(err).NotTo(haveOccurred())
+		})
+
+		ValidateContext(ctx)
+	}
+}
+
 // TriggerCrashVolDriver crashes vol driver
 func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
@@ -280,20 +308,6 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 					ValidateContext(ctx)
 				}
 			})
-		}
-	})
-}
-
-// TriggerDeleteApps deletes app and verifies if those are rescheduled properly
-func TriggerDeleteApps(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
-	defer ginkgo.GinkgoRecover()
-	Step("delete all application tasks", func() {
-		for _, ctx := range contexts {
-			Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
-				err := Inst().S.DeleteTasks(ctx, nil)
-				expect(err).NotTo(haveOccurred())
-			})
-			ValidateContext(ctx)
 		}
 	})
 }
