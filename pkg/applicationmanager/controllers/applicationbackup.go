@@ -380,6 +380,11 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 }
 
 func (a *ApplicationBackupController) namespaceBackupAllowed(backup *stork_api.ApplicationBackup) bool {
+	// If the backup is completed it has probably been synced, don't perform
+	// check for those
+	if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+		return true
+	}
 	// Restrict backups to only the namespace that the object belongs to
 	// except for the namespace designated by the admin
 	if backup.Namespace != a.backupAdminNamespace {
