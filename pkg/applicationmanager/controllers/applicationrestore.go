@@ -311,7 +311,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		objectMap := a.createObjectsMap(restore.Spec.IncludeResources)
 		info := storkapi.ObjectInfo{
 			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   "",
+				Group:   "core",
 				Version: "v1",
 				Kind:    "PersistentVolumeClaim",
 			},
