@@ -340,10 +340,10 @@ func (a *azure) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi
 		case "Succeeded":
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
+			vInfo.Size = uint64(*snapshot.DiskSizeBytes)
 		default:
 			vInfo.Status = storkapi.ApplicationBackupStatusInProgress
 			vInfo.Reason = fmt.Sprintf("Volume backup in progress: %v", snapshot.ProvisioningState)
-			vInfo.Size = uint64(*snapshot.DiskSizeBytes)
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
@@ -539,10 +539,10 @@ func (a *azure) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*stork
 		case "Succeeded":
 			vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 			vInfo.Reason = "Restore successful for volume"
+			vInfo.Size = uint64(*disk.DiskSizeBytes)
 		default:
 			vInfo.Status = storkapi.ApplicationRestoreStatusInProgress
 			vInfo.Reason = fmt.Sprintf("Volume restore in progress: %v", disk.ProvisioningState)
-			vInfo.Size = uint64(*disk.DiskSizeBytes)
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
