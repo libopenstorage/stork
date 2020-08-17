@@ -936,7 +936,7 @@ func (a *ApplicationBackupController) backupResources(
 
 	// Only on success compute the total backup size
 	for _, vInfo := range backup.Status.Volumes {
-		backup.Status.Size += vInfo.Size
+		backup.Status.TotalSize += vInfo.TotalSize
 	}
 	// Upload the metadata for the backup to the backup location
 	if err = a.uploadMetadata(backup); err != nil {

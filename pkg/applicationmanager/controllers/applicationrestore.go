@@ -479,7 +479,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	restore.Status.LastUpdateTimestamp = metav1.Now()
 	// Only on success compute the total restore size
 	for _, vInfo := range restore.Status.Volumes {
-		restore.Status.Size += vInfo.Size
+		restore.Status.TotalSize += vInfo.TotalSize
 	}
 
 	err := a.client.Update(context.TODO(), restore)
