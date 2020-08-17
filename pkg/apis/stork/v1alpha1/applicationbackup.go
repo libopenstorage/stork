@@ -57,7 +57,7 @@ type ApplicationBackupStatus struct {
 	TriggerTimestamp    metav1.Time                      `json:"triggerTimestamp"`
 	LastUpdateTimestamp metav1.Time                      `json:"lastUpdateTimestamp"`
 	FinishTimestamp     metav1.Time                      `json:"finishTimestamp"`
-	Size                uint64                           `json:"size"`
+	TotalSize           uint64                           `json:"totalSize"`
 }
 
 // ObjectInfo contains info about an object being backed up or restored
@@ -83,7 +83,8 @@ type ApplicationBackupVolumeInfo struct {
 	Status                ApplicationBackupStatusType `json:"status"`
 	Reason                string                      `json:"reason"`
 	Options               map[string]string           `jons:"options"`
-	Size                  uint64                      `json:"size"`
+	TotalSize             uint64                      `json:"totalSize"`
+	ActualSize            uint64                      `json:"actualSize"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup

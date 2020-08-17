@@ -2843,6 +2843,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 		} else {
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
+			vInfo.ActualSize = csStatus.bytesDone
 			req := &api.SdkCloudBackupSizeRequest{
 				BackupId:     csStatus.cloudSnapID,
 				CredentialId: csStatus.credentialID,
@@ -2851,7 +2852,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 			st, _ := status.FromError(err)
 			if err != nil {
 				// On error explicitly make the value to zero
-				vInfo.Size = 0
+				vInfo.TotalSize = 0
 				if st.Code() == codes.Unimplemented {
 					// if using old porx version which doesn't support this API, log an
 					// warning and continue to next vol if available
@@ -2861,7 +2862,7 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 					return nil, err
 				}
 			} else {
-				vInfo.Size = resp.GetSize()
+				vInfo.TotalSize = resp.GetSize()
 			}
 		}
 		volumeInfos = append(volumeInfos, vInfo)
@@ -3067,7 +3068,7 @@ func (p *portworx) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*st
 			vInfo.Status = storkapi.ApplicationRestoreStatusFailed
 			vInfo.Reason = fmt.Sprintf("Restore failed for volume: %v", csStatus.msg)
 		} else {
-			vInfo.Size = csStatus.bytesDone
+			vInfo.TotalSize = csStatus.bytesDone
 			vInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 			vInfo.Reason = "Restore successful for volume"
 		}
