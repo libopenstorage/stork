@@ -126,6 +126,9 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 		for _, ns := range namespaces {
 			if restoreNS, ok := restore.Spec.NamespaceMapping[ns.Name]; ok {
 				ns.Name = restoreNS
+			} else {
+				// Skip namespaces we aren't restoring
+				continue
 			}
 			// create mapped restore namespace with metadata of backed up
 			// namespace
@@ -139,9 +142,9 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 			log.ApplicationRestoreLog(restore).Infof("Creating dest namespace %v", ns.Name)
 			if err != nil {
 				if errors.IsAlreadyExists(err) {
-					log.ApplicationRestoreLog(restore).Errorf("Updating dest namespace %v", ns.Name)
+					log.ApplicationRestoreLog(restore).Warnf("Namespace already exists, updating dest namespace %v", ns.Name)
 					// regardless of replace policy we should always update namespace is
-					// its already exist to keel latest annotations/labels
+					// its already exist to keep latest annotations/labels
 					_, err = core.Instance().UpdateNamespace(&v1.Namespace{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:        ns.Name,
@@ -311,7 +314,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		objectMap := a.createObjectsMap(restore.Spec.IncludeResources)
 		info := storkapi.ObjectInfo{
 			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   "",
+				Group:   "core",
 				Version: "v1",
 				Kind:    "PersistentVolumeClaim",
 			},

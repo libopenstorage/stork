@@ -118,7 +118,8 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 		"Route",
 		"Template",
 		"CronJob",
-		"ResourceQuota":
+		"ResourceQuota",
+		"LimitRange":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -463,7 +464,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, err
 	}
 
-	// Even if PV isn't specified need to check if the corresponding PV is, so
+	// Even if PV isn't specified need to check if the corresponding PVC is, so
 	// skip the check here
 	if len(includeObjects) != 0 && objectType.GetKind() != "PersistentVolume" {
 		info := stork_api.ObjectInfo{
@@ -474,6 +475,9 @@ func (r *ResourceCollector) PrepareResourceForApply(
 			},
 			Name:      metadata.GetName(),
 			Namespace: metadata.GetNamespace(),
+		}
+		if info.Group == "" {
+			info.Group = "core"
 		}
 		if val, present := includeObjects[info]; !present || !val {
 			return true, nil
