@@ -2126,7 +2126,7 @@ func (p *portworx) CreatePair(pair *storkapi.ClusterPair) (string, error) {
 	}
 
 	var credID string
-	if bkpl, ok := pair.Spec.Options["backuplocation"]; ok {
+	if bkpl, ok := pair.Spec.Options[storkapi.BackupLocationResourceName]; ok {
 		credID = p.getCredID(bkpl, pair.GetNamespace())
 	}
 	resp, err := clusterManager.CreatePair(&api.ClusterPairCreateRequest{
