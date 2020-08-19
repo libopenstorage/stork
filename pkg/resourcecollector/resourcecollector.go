@@ -49,6 +49,13 @@ type ResourceCollector struct {
 	storkOps         storkops.Ops
 }
 
+// Objects Collection of objects
+type Objects struct {
+	Items []runtime.Unstructured
+	// Map to prevent collection of duplicate objects
+	resourceMap map[types.UID]bool
+}
+
 // Init initializes the resource collector
 func (r *ResourceCollector) Init(config *restclient.Config) error {
 	var err error
@@ -129,21 +136,15 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 	}
 }
 
-// GetResources gets all the resources in the given list of namespaces which match the labelSelectors
-func (r *ResourceCollector) GetResources(
-	namespaces []string,
-	labelSelectors map[string]string,
-	includeObjects map[stork_api.ObjectInfo]bool,
+// GetResourceTypes returns all the supported resource types by the collector
+func (r *ResourceCollector) GetResourceTypes(
 	optionalResourceTypes []string,
-	allDrivers bool) ([]runtime.Unstructured, error) {
+	allDrivers bool) ([]metav1.APIResource, error) {
+	resourceTypes := make([]metav1.APIResource, 0)
 	err := r.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, err
 	}
-	allObjects := make([]runtime.Unstructured, 0)
-
-	// Map to prevent collection of duplicate objects
-	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
 	crdList, err := r.storkOps.ListApplicationRegistrations()
 	if err != nil {
@@ -155,11 +156,6 @@ func (r *ResourceCollector) GetResources(
 			}
 		}
 	}
-	crbs, err := r.rbacOps.ListClusterRoleBindings()
-	if err != nil {
-		return nil, err
-	}
-
 	for _, group := range r.discoveryHelper.Resources() {
 		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
@@ -170,75 +166,142 @@ func (r *ResourceCollector) GetResources(
 			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
 				continue
 			}
-			for _, ns := range namespaces {
-				var dynamicClient dynamic.ResourceInterface
-				if !resource.Namespaced {
-					dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name))
-				} else {
-					dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
-				}
+			resource.Group = groupVersion.Group
+			resource.Version = groupVersion.Version
+			//			logrus.Infof("Adding: %+v", resource)
+			resourceTypes = append(resourceTypes, resource)
+		}
+	}
+	return resourceTypes, nil
+}
 
-				var selectors string
-				// PVs don't get the labels from their PVCs, so don't use the label selector
-				// Also skip for some other resources that aren't necessarily tied to an application
-				switch resource.Kind {
-				case "PersistentVolume",
-					"ClusterRoleBinding",
-					"ClusterRole",
-					"ServiceAccount":
-				default:
-					selectors = labels.Set(labelSelectors).String()
-				}
-				objectsList, err := dynamicClient.List(metav1.ListOptions{
-					LabelSelector: selectors,
-				})
-				if err != nil {
-					if apierrors.IsForbidden(err) {
-						continue
-					}
-					return nil, err
-				}
-				objects, err := meta.ExtractList(objectsList)
-				if err != nil {
-					return nil, err
-				}
-				for _, o := range objects {
-					runtimeObject, ok := o.(runtime.Unstructured)
-					if !ok {
-						return nil, fmt.Errorf("error casting object: %v", o)
-					}
+// GetResourcesForType gets all the resources for the given type
+func (r *ResourceCollector) GetResourcesForType(
+	resource metav1.APIResource,
+	objects *Objects,
+	namespaces []string,
+	labelSelectors map[string]string,
+	includeObjects map[stork_api.ObjectInfo]bool,
+	allDrivers bool) (*Objects, error) {
 
-					collect, err := r.objectToBeCollected(includeObjects, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers)
-					if err != nil {
-						if apierrors.IsForbidden(err) {
-							continue
-						}
-						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
-					}
-					if !collect {
-						continue
-					}
-					metadata, err := meta.Accessor(runtimeObject)
-					if err != nil {
-						return nil, err
-					}
-					allObjects = append(allObjects, runtimeObject)
-					resourceMap[metadata.GetUID()] = true
-				}
-			}
+	//	logrus.Infof("Getting resources for type: %v", resource)
+	if objects == nil {
+		objects = &Objects{
+			Items: make([]runtime.Unstructured, 0),
+		}
+	}
+	if objects.resourceMap == nil {
+		objects.resourceMap = make(map[types.UID]bool)
+	}
+
+	crbs, err := r.rbacOps.ListClusterRoleBindings()
+	if err != nil {
+		if !apierrors.IsForbidden(err) {
+			return nil, err
 		}
 	}
 
-	allObjects, err = r.pruneOwnedResources(allObjects, resourceMap)
+	gvr := schema.GroupVersionResource{
+		Group:    resource.Group,
+		Version:  resource.Version,
+		Resource: resource.Name,
+	}
+
+	for _, ns := range namespaces {
+		var dynamicClient dynamic.ResourceInterface
+		if !resource.Namespaced {
+			dynamicClient = r.dynamicInterface.Resource(gvr)
+		} else {
+			dynamicClient = r.dynamicInterface.Resource(gvr).Namespace(ns)
+		}
+
+		var selectors string
+		// PVs don't get the labels from their PVCs, so don't use the label selector
+		// Also skip for some other resources that aren't necessarily tied to an application
+		switch resource.Kind {
+		case "PersistentVolume",
+			"ClusterRoleBinding",
+			"ClusterRole",
+			"ServiceAccount":
+		default:
+			selectors = labels.Set(labelSelectors).String()
+		}
+		objectsList, err := dynamicClient.List(metav1.ListOptions{
+			LabelSelector: selectors,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error listing objects for %v: %v", gvr, err)
+		}
+		resourceObjects, err := meta.ExtractList(objectsList)
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range resourceObjects {
+			runtimeObject, ok := o.(runtime.Unstructured)
+			if !ok {
+				return nil, fmt.Errorf("error casting object: %v", o)
+			}
+
+			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, crbs, ns, allDrivers)
+			if err != nil {
+				return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
+			}
+			if !collect {
+				continue
+			}
+			metadata, err := meta.Accessor(runtimeObject)
+			if err != nil {
+				return nil, err
+			}
+			objects.Items = append(objects.Items, runtimeObject)
+			objects.resourceMap[metadata.GetUID()] = true
+		}
+	}
+
+	objects, err = r.pruneOwnedResources(objects)
 	if err != nil {
 		return nil, err
 	}
 
-	err = r.prepareResourcesForCollection(allObjects, namespaces)
+	return objects, nil
+}
+
+// GetResources gets all the resources in the given list of namespaces which match the labelSelectors
+func (r *ResourceCollector) GetResources(
+	namespaces []string,
+	labelSelectors map[string]string,
+	includeObjects map[stork_api.ObjectInfo]bool,
+	optionalResourceTypes []string,
+	allDrivers bool) ([]runtime.Unstructured, error) {
+	err := r.discoveryHelper.Refresh()
 	if err != nil {
 		return nil, err
 	}
-	return allObjects, nil
+	objects := &Objects{
+		Items:       make([]runtime.Unstructured, 0),
+		resourceMap: make(map[types.UID]bool),
+	}
+	resources, err := r.GetResourceTypes(optionalResourceTypes, allDrivers)
+	if err != nil {
+		return nil, err
+	}
+	for _, resource := range resources {
+		objects, err = r.GetResourcesForType(resource, objects, namespaces, labelSelectors, includeObjects, allDrivers)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	objects, err = r.pruneOwnedResources(objects)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.prepareResourcesForCollection(objects.Items, namespaces)
+	if err != nil {
+		return nil, err
+	}
+	return objects.Items, nil
 }
 
 // SkipResource returns whether the annotations of the object require it to be
@@ -338,11 +401,13 @@ func (r *ResourceCollector) objectToBeCollected(
 // remove the ownerRef so that the object doesn't get automatically deleted
 // when created
 func (r *ResourceCollector) pruneOwnedResources(
-	objects []runtime.Unstructured,
-	resourceMap map[types.UID]bool,
-) ([]runtime.Unstructured, error) {
-	updatedObjects := make([]runtime.Unstructured, 0)
-	for _, o := range objects {
+	objects *Objects,
+) (*Objects, error) {
+	updatedObjects := &Objects{
+		Items:       make([]runtime.Unstructured, 0),
+		resourceMap: objects.resourceMap,
+	}
+	for _, o := range objects.Items {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
 			return nil, err
@@ -373,7 +438,7 @@ func (r *ResourceCollector) pruneOwnedResources(
 						}
 
 						// Skip object if we are already collecting its owner
-						if _, exists := resourceMap[owner.UID]; exists {
+						if _, exists := objects.resourceMap[owner.UID]; exists {
 							collect = false
 							break
 						}
@@ -384,7 +449,7 @@ func (r *ResourceCollector) pruneOwnedResources(
 			}
 		}
 		if collect {
-			updatedObjects = append(updatedObjects, o)
+			updatedObjects.Items = append(updatedObjects.Items, o)
 		}
 	}
 
