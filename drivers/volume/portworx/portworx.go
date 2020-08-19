@@ -2125,11 +2125,16 @@ func (p *portworx) CreatePair(pair *storkapi.ClusterPair) (string, error) {
 		return "", fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
 	}
 
+	var credID string
+	if bkpl, ok := pair.Spec.Options["backuplocation"]; ok {
+		credID = p.getCredID(bkpl, pair.GetNamespace())
+	}
 	resp, err := clusterManager.CreatePair(&api.ClusterPairCreateRequest{
 		RemoteClusterIp:    pair.Spec.Options["ip"],
 		RemoteClusterToken: pair.Spec.Options["token"],
 		RemoteClusterPort:  uint32(port),
 		Mode:               mode,
+		CredentialId:       credID,
 	})
 	if err != nil {
 		return "", err
@@ -2590,7 +2595,7 @@ func (p *portworx) DeactivateClusterDomain(cdu *storkapi.ClusterDomainUpdate) er
 	return err
 }
 
-func (p *portworx) getNodesToDomainMap(nodes []api.Node) (map[string]string, error) {
+func (p *portworx) getNodesToDomainMap(nodes []*api.Node) (map[string]string, error) {
 	clusterManager, err := p.getClusterManagerClient()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
@@ -3027,6 +3032,7 @@ func (p *portworx) StartRestore(
 			RestoreVolumeName: volumeInfo.RestoreVolume,
 			CredentialUUID:    credID,
 			Name:              taskID,
+			Spec:              &api.RestoreVolumeSpec{IoProfileBkupSrc: true},
 		}
 
 		_, err = volDriver.CloudBackupRestore(request)
