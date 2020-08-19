@@ -12,7 +12,7 @@ spec:
       tier: frontend
   replicas: 3
   strategy:
-    type: Recreate
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -20,9 +20,11 @@ spec:
         tier: frontend
     spec:
       containers:
-      - image: wordpress:4.8-apache
+      - image: wordpress:5.5.0-php7.2-apache
         name: wordpress
         env:
+        - name: WORDPRESS_DEBUG
+          value: "1"
         - name: WORDPRESS_DB_HOST
           value: wordpress-mysql
         - name: WORDPRESS_DB_PASSWORD
@@ -39,13 +41,26 @@ spec:
           subPath: html
         livenessProbe:
           httpGet:
-            path: /
+            path: /wp-admin/install.php
             port: 80
-          initialDelaySeconds: 15
+          initialDelaySeconds: 120
+          periodSeconds: 10
           timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /wp-login.php
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+          successThreshold: 1
         resources:
           requests:
-            memory: "2Gi"
+            memory: "512Mi"
+            cpu: "300m"
       volumes:
       - name: wordpress-persistent-storage
         persistentVolumeClaim:
