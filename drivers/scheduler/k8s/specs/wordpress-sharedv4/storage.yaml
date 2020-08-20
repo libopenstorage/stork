@@ -7,7 +7,7 @@ parameters:
   repl: "3"
   priority_io: "high"
   sharedv4: "true"
-  nfs_v4: "true"
+  io_profile: "cms"
 allowVolumeExpansion: true
 ---
 apiVersion: storage.k8s.io/v1
@@ -34,7 +34,7 @@ spec:
     - ReadWriteMany
   resources:
     requests:
-      storage: 10Gi
+      storage: 1Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -47,4 +47,4 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 8Gi
+      storage: 1Gi
