@@ -156,7 +156,7 @@ func (c *ClusterPairController) handle(ctx context.Context, clusterPair *stork_a
 				err.Error())
 			return c.client.Update(context.TODO(), clusterPair)
 		}
-		if err := createBackupLocationOnRemote(remoteConfig, clusterPair); err != nil {
+		if err := c.createBackupLocationOnRemote(remoteConfig, clusterPair); err != nil {
 			c.recorder.Event(clusterPair,
 				v1.EventTypeWarning,
 				string(clusterPair.Status.SchedulerStatus),
@@ -231,7 +231,7 @@ func (c *ClusterPairController) createCRD() error {
 	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
 }
 
-func createBackupLocationOnRemote(remoteConfig *restclient.Config, clusterPair *stork_api.ClusterPair) error {
+func (c *ClusterPairController) createBackupLocationOnRemote(remoteConfig *restclient.Config, clusterPair *stork_api.ClusterPair) error {
 	if bkpl, ok := clusterPair.Spec.Options[stork_api.BackupLocationResourceName]; ok {
 		remoteClient, err := storkops.NewForConfig(remoteConfig)
 		if err != nil {

@@ -2127,6 +2127,18 @@ func (p *portworx) CreatePair(pair *storkapi.ClusterPair) (string, error) {
 
 	var credID string
 	if bkpl, ok := pair.Spec.Options[storkapi.BackupLocationResourceName]; ok {
+		supported, msg, err := p.ensureNodesHaveMinVersion("2.6.0")
+		if err != nil {
+			return "", err
+		}
+
+		if !supported {
+			err = &errors.ErrNotSupported{
+				Feature: "Migration Using Backuplocation CR",
+				Reason:  "Only supported on PX version 2.6.0 onwards: " + msg,
+			}
+			return "", err
+		}
 		credID = p.getCredID(bkpl, pair.GetNamespace())
 	}
 	resp, err := clusterManager.CreatePair(&api.ClusterPairCreateRequest{
