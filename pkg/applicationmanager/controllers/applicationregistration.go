@@ -1,7 +1,10 @@
 package controllers
 
 import (
+	"strings"
+
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -217,9 +220,60 @@ func getSupportedCRD() map[string][]stork_api.ApplicationResource {
 	return defCRD
 }
 
+func getRegisteredCRD() (map[string][]stork_api.ApplicationResource, error) {
+	// skipCrds grp:version map
+	skipCrds := map[string]string{
+		"autopilot.libopenstorage.org":           "",
+		"core.libopenstorage.org":                "",
+		"volumesnapshot.external-storage.k8s.io": "",
+		"stork.libopenstorage.org":               "",
+	}
+	regCRD := make(map[string][]stork_api.ApplicationResource)
+	crds, err := apiextensions.Instance().ListCRD()
+	if err != nil {
+		return regCRD, err
+	}
+
+	for _, crd := range crds.Items {
+		// skip stork/volumesnap crd registration
+		if _, ok := skipCrds[crd.Spec.Group]; ok {
+			continue
+		}
+		var appList []stork_api.ApplicationResource
+		for _, version := range crd.Spec.Versions {
+			appRes := stork_api.ApplicationResource{
+				GroupVersionKind: metav1.GroupVersionKind{
+					Group:   crd.Spec.Group,
+					Version: version.Name,
+					Kind:    crd.Spec.Names.Kind,
+				},
+			}
+			appList = append(appList, appRes)
+		}
+		regCRD[strings.ToLower(crd.Spec.Names.Kind)] = appList
+	}
+	return regCRD, nil
+}
+
 // RegisterDefaultCRDs  registered already supported CRDs
 func RegisterDefaultCRDs() error {
 	for name, res := range getSupportedCRD() {
+		appReg := &stork_api.ApplicationRegistration{
+			Resources: res,
+		}
+		appReg.Name = name
+		if _, err := stork.Instance().CreateApplicationRegistration(appReg); err != nil && !errors.IsAlreadyExists(err) {
+			logrus.Errorf("unable to register app %v, err: %v", appReg, err)
+			return err
+		}
+	}
+
+	regCrds, err := getRegisteredCRD()
+	if err != nil {
+		return err
+	}
+	// register all crds on found on k8s server
+	for name, res := range regCrds {
 		appReg := &stork_api.ApplicationRegistration{
 			Resources: res,
 		}
