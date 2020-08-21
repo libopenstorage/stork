@@ -311,7 +311,7 @@ func (p *portworx) WaitForBackupLocationDeletion(
 		inspectBlResp, err := p.backupLocationManager.Inspect(ctx, req)
 		if err == nil {
 			// Object still exsts, just retry
-			currentStatus := inspectBlResp.GetBackupLocation().GetStatus().GetStatus()
+			currentStatus := inspectBlResp.GetBackupLocation().GetBackupLocationInfo().GetStatus().GetStatus()
 			return nil, true, fmt.Errorf("backup location [%v] is in [%s] state",
 				req.GetName(), currentStatus)
 		}
@@ -319,7 +319,7 @@ func (p *portworx) WaitForBackupLocationDeletion(
 		if inspectBlResp == nil {
 			return nil, false, nil
 		}
-		currentStatus := inspectBlResp.GetBackupLocation().GetStatus().GetStatus()
+		currentStatus := inspectBlResp.GetBackupLocation().GetBackupLocationInfo().GetStatus().GetStatus()
 		if currentStatus == api.BackupLocationInfo_StatusInfo_Invalid {
 			logrus.Infof("in invalid state")
 			blError = fmt.Errorf("backup location is [%v] is in [%s] state",
