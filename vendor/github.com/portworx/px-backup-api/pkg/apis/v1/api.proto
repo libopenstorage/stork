@@ -12,6 +12,12 @@ import "google/protobuf/wrappers.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "pkg/apis/v1/common.proto";
 
+/*
+// option (gogoproto.compare_all) = true;
+*/
+option (gogoproto.populate_all) = true;
+option (gogoproto.equal_all) = true;
+option (gogoproto.testgen_all) = true;
 message OrganizationObject {
     Metadata metadata = 1 [ (gogoproto.embed) = true ];
 }
@@ -122,7 +128,7 @@ message CloudCredentialInfo {
 message CloudCredentialObject {
     Metadata metadata = 1
         [ (gogoproto.jsontag) = "metadata", (gogoproto.embed) = true ];
-    CloudCredentialInfo cloud_credential_info = 2 [ (gogoproto.embed) = true ];
+    CloudCredentialInfo cloud_credential_info = 2;
 }
 
 message SchedulePolicyInfo {
@@ -272,6 +278,7 @@ message BackupLocationInfo {
     string cloud_credential = 4;
     StatusInfo status = 5;
     bool delete_backups = 6;
+    bool validate_cloud_credential = 7;
     oneof config { S3Config s3_config = 100; }
     // Message for maintaing status of the object.
     message StatusInfo {
@@ -289,7 +296,7 @@ message BackupLocationInfo {
 message BackupLocationObject {
     Metadata metadata = 1
         [ (gogoproto.jsontag) = "metadata", (gogoproto.embed) = true ];
-    BackupLocationInfo backup_location_info = 2 [ (gogoproto.embed) = true ];
+    BackupLocationInfo backup_location_info = 2;
 }
 
 message ResourceInfo {
@@ -321,7 +328,9 @@ message BackupInfo {
     // Otherwise it will be empty.
     BackupSchedule backup_schedule = 12;
     string cr_name = 13;
-    uint64 size = 14;
+    uint64 total_size = 14;
+    // Reference to cloud credential object used for backup
+    string cloud_credential = 15;
 
     enum Stage {
         Invalid = 0;
@@ -347,7 +356,10 @@ message BackupInfo {
         string driver_name = 6;
         repeated string zones = 7;
         map<string, string> options = 8;
-        uint64 size = 9;
+        uint64 total_size = 9;
+        // actual size of the backup
+        // incase of invremental, it's the incremental backup size
+        uint64 actual_size = 10;
     }
 
     // Message for maintaing status of the object.
@@ -386,6 +398,7 @@ message RulesInfo {
             [ (gogoproto.moretags) = "yaml:\"podSelector\"" ];
         repeated Action actions = 2
             [ (gogoproto.moretags) = "yaml:\"actions\"" ];
+        string container = 3;
     }
 
     message Action {
@@ -428,7 +441,7 @@ message RestoreInfo {
     // Name of the cluster
     string cluster = 9;
     repeated string include_optional_resource_types = 10;
-    uint64 size = 11;
+    uint64 total_size = 11;
     repeated ResourceInfo include_resources = 12;
 
     message RestoredResource {
@@ -449,7 +462,7 @@ message RestoreInfo {
         string driver_name = 6;
         repeated string zones = 7;
         map<string, string> options = 8;
-        uint64 size = 9;
+        uint64 total_size = 9;
     }
 
     // Message for maintaing status of the object.
@@ -955,6 +968,15 @@ service BackupLocation {
             delete : "/v1/backuplocation/{org_id}/{name}"
         };
     }
+
+    // Verify if a backup location is valid
+    rpc Validate(BackupLocationValidateRequest)
+        returns (BackupLocationValidateResponse) {
+        option (google.api.http) = {
+            post : "/v1/backuplocation/validate"
+            body : "*"
+        };
+    }
 }
 
 // Define BackupLocationCreateRequest struct
@@ -1007,8 +1029,17 @@ message BackupLocationDeleteRequest {
     bool delete_backups = 3;
 }
 
-// Define BackupLocationInspectResponse struct
+// Define BackupLocationDeleteResponse struct
 message BackupLocationDeleteResponse {}
+
+// Define BackupLocationValidateRequest struct
+message BackupLocationValidateRequest {
+    string org_id = 1;
+    string name = 2;
+}
+
+// Define BackupLocationValidateResponse struct
+message BackupLocationValidateResponse {}
 
 service Backup {
     // Create creates a new backup object
@@ -1072,6 +1103,8 @@ message BackupCreateResponse {}
 // Define BackupUpdateRequest struct
 message BackupUpdateRequest {
     CreateMetadata metadata = 1 [ (gogoproto.embed) = true ];
+    // Reference to cloud credential object used for backup
+    string cloud_credential = 2;
 }
 
 // Define BackupUpdateResponse struct

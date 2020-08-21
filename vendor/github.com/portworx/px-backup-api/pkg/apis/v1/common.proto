@@ -5,7 +5,13 @@
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
 option go_package = "api";
+
+option (gogoproto.populate_all) = true;
+option (gogoproto.equal_all) = true;
+option (gogoproto.testgen_all) = true;
 
 message Metadata {
     // name of the object

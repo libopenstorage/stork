@@ -17,6 +17,7 @@ require (
 	github.com/donovanhide/eventsource v0.0.0-20171031113327-3ed64d21fb0b // indirect
 	github.com/fatih/color v1.7.0
 	github.com/gambol99/go-marathon v0.7.1
+	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.14.6 // indirect
@@ -33,8 +34,7 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
-	github.com/portworx/px-backup-api v1.0.1-0.20200714061107-e88917fc5196
-	// github.com/portworx/px-backup-api v0.0.0-20200205061835-5dc42f2a6d0f
+	github.com/portworx/px-backup-api v1.0.1-0.20200821003202-b927067c1043
 	github.com/portworx/sched-ops v0.0.0-20200723032629-257aba0944dc
 	github.com/sirupsen/logrus v1.5.0
 	github.com/stretchr/testify v1.5.1
