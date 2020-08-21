@@ -25,6 +25,8 @@ type CRDOps interface {
 	ValidateCRD(resource CustomResource, timeout, retryInterval time.Duration) error
 	// DeleteCRD deletes the CRD for the given complete name (plural.group)
 	DeleteCRD(fullName string) error
+	// ListCRD list all crds on system
+	ListCRD() (*apiextensionsv1beta1.CustomResourceDefinitionList, error)
 }
 
 // CustomResource is for creating a Kubernetes TPR/CRD
@@ -147,4 +149,15 @@ func (c *Client) DeleteCRD(fullName string) error {
 	return c.extension.ApiextensionsV1beta1().
 		CustomResourceDefinitions().
 		Delete(fullName, &metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
+}
+
+// ListCRD deletes the CRD for the given complete name (plural.group)
+func (c *Client) ListCRD() (*apiextensionsv1beta1.CustomResourceDefinitionList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.extension.ApiextensionsV1beta1().
+		CustomResourceDefinitions().
+		List(metav1.ListOptions{})
 }
