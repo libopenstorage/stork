@@ -88,6 +88,7 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	}
 
 	arReq := admissionReview.Request
+	resourceName := ""
 	switch arReq.Kind.Kind {
 	case "StatefulSet":
 		var ss appv1.StatefulSet
@@ -97,6 +98,8 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			http.Error(w, "Decode error", http.StatusBadRequest)
 			return
 		}
+		resourceName = ss.GetName()
+		log.Debugf("Received admission review request for sts %s,%s", resourceName, arReq.Namespace)
 		if !skipSchedulerUpdate(skipHookAnnotation, ss.ObjectMeta.Annotations) {
 			isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, arReq.Namespace)
 			if err != nil {
@@ -114,6 +117,8 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			http.Error(w, "Decode error", http.StatusBadRequest)
 			return
 		}
+		resourceName = deployment.GetName()
+		log.Debugf("Received admission review request for deployment %s,%s", resourceName, arReq.Namespace)
 		if !skipSchedulerUpdate(skipHookAnnotation, deployment.ObjectMeta.Annotations) {
 			isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, arReq.Namespace)
 			if err != nil {
@@ -131,6 +136,8 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			http.Error(w, "Decode error", http.StatusBadRequest)
 			return
 		}
+		resourceName = pod.GetName()
+		log.Debugf("Received admission review request for pod %s,%s", resourceName, arReq.Namespace)
 		if !skipSchedulerUpdate(skipHookAnnotation, pod.ObjectMeta.Annotations) {
 			isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, arReq.Namespace)
 			if err != nil {
@@ -152,6 +159,7 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		}
 	} else {
 		// create patch
+		log.Debugf("Updating scheduler to stork for Resource:%s, Name: %s, Namespace:%s", arReq.Kind.Kind, resourceName, arReq.Namespace)
 		patch := createPatch(schedPath)
 		admissionResponse = &v1beta1.AdmissionResponse{
 			Result: &metav1.Status{
