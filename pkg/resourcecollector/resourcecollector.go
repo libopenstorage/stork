@@ -133,6 +133,7 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 func (r *ResourceCollector) GetResources(
 	namespaces []string,
 	labelSelectors map[string]string,
+	includeObjects map[stork_api.ObjectInfo]bool,
 	optionalResourceTypes []string,
 	allDrivers bool) ([]runtime.Unstructured, error) {
 	err := r.discoveryHelper.Refresh()
@@ -204,7 +205,7 @@ func (r *ResourceCollector) GetResources(
 						return nil, fmt.Errorf("error casting object: %v", o)
 					}
 
-					collect, err := r.objectToBeCollected(labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers)
+					collect, err := r.objectToBeCollected(includeObjects, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers)
 					if err != nil {
 						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 					}
@@ -266,6 +267,7 @@ func skipOwnerRefCheck(annotations map[string]string) bool {
 // Returns whether an object should be collected or not for the requested
 // namespace
 func (r *ResourceCollector) objectToBeCollected(
+	includeObjects map[stork_api.ObjectInfo]bool,
 	labelSelectors map[string]string,
 	resourceMap map[types.UID]bool,
 	object runtime.Unstructured,
@@ -292,13 +294,19 @@ func (r *ResourceCollector) objectToBeCollected(
 		return false, err
 	}
 
+	if include, err := r.includeObject(object, includeObjects); err != nil {
+		return false, err
+	} else if !include {
+		return false, nil
+	}
+
 	switch objectType.GetKind() {
 	case "Service":
 		return r.serviceToBeCollected(object)
 	case "PersistentVolumeClaim":
 		return r.pvcToBeCollected(object, namespace, allDrivers)
 	case "PersistentVolume":
-		return r.pvToBeCollected(labelSelectors, object, namespace, allDrivers)
+		return r.pvToBeCollected(includeObjects, labelSelectors, object, namespace, allDrivers)
 	case "ClusterRoleBinding":
 		return r.clusterRoleBindingToBeCollected(labelSelectors, object, namespace)
 	case "ClusterRole":
@@ -444,6 +452,46 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 	return nil
 }
 
+func (r *ResourceCollector) includeObject(
+	object runtime.Unstructured,
+	includeObjects map[stork_api.ObjectInfo]bool,
+) (bool, error) {
+	if len(includeObjects) == 0 {
+		return true, nil
+	}
+
+	objectType, err := meta.TypeAccessor(object)
+	if err != nil {
+		return false, err
+	}
+
+	metadata, err := meta.Accessor(object)
+	if err != nil {
+		return false, err
+	}
+
+	// Even if PV isn't specified need to check if the corresponding PVC is, so
+	// skip the check here
+	if objectType.GetKind() != "PersistentVolume" {
+		info := stork_api.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   object.GetObjectKind().GroupVersionKind().Group,
+				Version: object.GetObjectKind().GroupVersionKind().Version,
+				Kind:    object.GetObjectKind().GroupVersionKind().Kind,
+			},
+			Name:      metadata.GetName(),
+			Namespace: metadata.GetNamespace(),
+		}
+		if info.Group == "" {
+			info.Group = "core"
+		}
+		if val, present := includeObjects[info]; !present || !val {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // PrepareResourceForApply prepares the resource for apply including update
 // namespace and any PV name updates. Should be called before DeleteResources
 // and ApplyResource
@@ -464,25 +512,12 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, err
 	}
 
-	// Even if PV isn't specified need to check if the corresponding PVC is, so
-	// skip the check here
-	if len(includeObjects) != 0 && objectType.GetKind() != "PersistentVolume" {
-		info := stork_api.ObjectInfo{
-			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   object.GetObjectKind().GroupVersionKind().Group,
-				Version: object.GetObjectKind().GroupVersionKind().Version,
-				Kind:    object.GetObjectKind().GroupVersionKind().Kind,
-			},
-			Name:      metadata.GetName(),
-			Namespace: metadata.GetNamespace(),
-		}
-		if info.Group == "" {
-			info.Group = "core"
-		}
-		if val, present := includeObjects[info]; !present || !val {
-			return true, nil
-		}
+	if include, err := r.includeObject(object, includeObjects); err != nil {
+		return true, err
+	} else if !include {
+		return true, nil
 	}
+
 	if metadata.GetNamespace() != "" {
 		var val string
 		var present bool

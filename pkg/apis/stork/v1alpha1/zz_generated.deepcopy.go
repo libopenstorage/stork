@@ -246,6 +246,11 @@ func (in *ApplicationBackupSpec) DeepCopyInto(out *ApplicationBackupSpec) {
 			(*out)[key] = val
 		}
 	}
+	if in.IncludeResources != nil {
+		in, out := &in.IncludeResources, &out.IncludeResources
+		*out = make([]ObjectInfo, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
