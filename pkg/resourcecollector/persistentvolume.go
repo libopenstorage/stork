@@ -4,13 +4,16 @@ import (
 	"fmt"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func (r *ResourceCollector) pvToBeCollected(
+	includeObjects map[stork_api.ObjectInfo]bool,
 	labelSelectors map[string]string,
 	object runtime.Unstructured,
 	namespace string,
@@ -40,6 +43,21 @@ func (r *ResourceCollector) pvToBeCollected(
 		pvc, err := r.coreOps.GetPersistentVolumeClaim(pvcName, pvcNamespace)
 		if err != nil {
 			return false, err
+		}
+
+		if len(includeObjects) > 0 {
+			info := stork_api.ObjectInfo{
+				GroupVersionKind: metav1.GroupVersionKind{
+					Group:   "core",
+					Version: "v1",
+					Kind:    "PersistentVolumeClaim",
+				},
+				Name:      pvc.Name,
+				Namespace: pvc.Namespace,
+			}
+			if val, present := includeObjects[info]; !present || !val {
+				return false, nil
+			}
 		}
 
 		// Don't collect PVCs not owned by the driver if collecting for a specific

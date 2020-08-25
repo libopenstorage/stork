@@ -371,6 +371,7 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 	destObjects, err := rc.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false)
 	if err != nil {
@@ -384,6 +385,7 @@ func (m *MigrationController) purgeMigratedResources(migration *stork_api.Migrat
 	srcObjects, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false)
 	if err != nil {
@@ -739,6 +741,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 	allObjects, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
+		nil,
 		migration.Spec.IncludeOptionalResourceTypes,
 		false)
 	if err != nil {

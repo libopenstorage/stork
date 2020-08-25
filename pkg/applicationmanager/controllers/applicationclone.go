@@ -717,6 +717,7 @@ func (a *ApplicationCloneController) cloneResources(
 	allObjects, err := a.resourceCollector.GetResources(
 		[]string{clone.Spec.SourceNamespace},
 		clone.Spec.Selectors,
+		nil,
 		clone.Spec.IncludeOptionalResourceTypes,
 		false)
 	if err != nil {
