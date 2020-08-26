@@ -27,7 +27,7 @@ func (d *DefaultDriver) ValidateBackupsDeletedFromCloud(backupLocation *stork_ap
 			return "", false, fmt.Errorf("failed to get bucket %s in namespace: %s.Bucket: %v is present", backupLocation.Location.Path, backupLocation.Namespace, bucket)
 		}
 		iterator := bucket.List(&blob.ListOptions{
-			Prefix:    backupLocation.Namespace + "/" + backupPath,
+			Prefix:    backupPath,
 			Delimiter: "/",
 		})
 		backups := make(map[string]bool)
