@@ -726,7 +726,7 @@
 
 [[projects]]
   branch = "release-7.0"
-  digest = "1:83e6d95b3b08f96ad5de538253605497ed8dd4bbf4a213b81940484763ea3c4b"
+  digest = "1:920846ef3caf6e206f79dbc520d9049192de6fcb3b29c053f504bc58a3f09feb"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -755,7 +755,7 @@
     "volume/drivers/pwx",
   ]
   pruneopts = "UT"
-  revision = "f761d7be689e4b672c5a7b6135e5927ee317414f"
+  revision = "e9d87f8adef3f39de6312ca289fda2d9040211d4"
 
 [[projects]]
   branch = "master"
