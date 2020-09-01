@@ -141,6 +141,9 @@ func CreateObjectsMap(
 ) map[ObjectInfo]bool {
 	objectsMap := make(map[ObjectInfo]bool)
 	for i := 0; i < len(includeObjects); i++ {
+		if includeObjects[i].Group == "" {
+			includeObjects[i].Group = "core"
+		}
 		objectsMap[includeObjects[i]] = true
 	}
 	return objectsMap
