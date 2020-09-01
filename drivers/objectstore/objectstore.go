@@ -15,7 +15,7 @@ var (
 )
 
 const (
-	driverName           = "torpedo_objectstore"
+	driverName           = "objectstore"
 	defaultRetryInterval = 10 * time.Second
 	defaultTimeout       = 2 * time.Minute
 )
@@ -34,8 +34,8 @@ type objstore struct {
 }
 
 // Get returns the objecstore drive
-func Get(name string) (Driver, error) {
-	d, ok := objectstoredriver[name]
+func Get() (Driver, error) {
+	d, ok := objectstoredriver[driverName]
 	if ok {
 		return d, nil
 	}
