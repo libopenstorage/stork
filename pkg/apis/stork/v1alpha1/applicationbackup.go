@@ -31,7 +31,8 @@ type ApplicationBackupSpec struct {
 	PostExecRule   string                             `json:"postExecRule"`
 	ReclaimPolicy  ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
 	// Options to be passed in to the driver
-	Options map[string]string `json:"options"`
+	Options          map[string]string `json:"options"`
+	IncludeResources []ObjectInfo      `json:"includeResources"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup
@@ -131,4 +132,16 @@ type ApplicationBackupList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []ApplicationBackup `json:"items"`
+}
+
+// CreateObjectsMap create a map of objects that are to be included in an
+// operation. Allows quick lookup of objects
+func CreateObjectsMap(
+	includeObjects []ObjectInfo,
+) map[ObjectInfo]bool {
+	objectsMap := make(map[ObjectInfo]bool)
+	for i := 0; i < len(includeObjects); i++ {
+		objectsMap[includeObjects[i]] = true
+	}
+	return objectsMap
 }

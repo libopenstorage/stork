@@ -417,6 +417,16 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
 		backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
 		backup.Status.Volumes = make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+
+		objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
+		info := stork_api.ObjectInfo{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Group:   "core",
+				Version: "v1",
+				Kind:    "PersistentVolumeClaim",
+			},
+		}
+
 		for _, namespace := range backup.Spec.Namespaces {
 			pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, backup.Spec.Selectors)
 			if err != nil {
@@ -424,6 +434,16 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			}
 
 			for _, pvc := range pvcList.Items {
+				// If a list of resources was specified during backup check if
+				// this PVC was included
+				info.Name = pvc.Name
+				info.Namespace = pvc.Namespace
+				if len(objectMap) != 0 {
+					if val, present := objectMap[info]; !present || !val {
+						continue
+					}
+				}
+
 				// Don't backup pending or deleting PVCs
 				if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
 					continue
@@ -846,9 +866,11 @@ func (a *ApplicationBackupController) backupResources(
 	var err error
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
+	objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
 	allObjects, err := a.resourceCollector.GetResources(
 		backup.Spec.Namespaces,
 		backup.Spec.Selectors,
+		objectMap,
 		optionalBackupResources,
 		true)
 	if err != nil {

@@ -311,7 +311,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			return fmt.Errorf("error getting backup spec for restore: %v", err)
 		}
 		backupVolumeInfoMappings := make(map[string][]*storkapi.ApplicationBackupVolumeInfo)
-		objectMap := a.createObjectsMap(restore.Spec.IncludeResources)
+		objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 		info := storkapi.ObjectInfo{
 			GroupVersionKind: metav1.GroupVersionKind{
 				Group:   "core",
@@ -652,16 +652,6 @@ func (a *ApplicationRestoreController) getPVNameMappings(
 	return pvNameMappings, nil
 }
 
-func (a *ApplicationRestoreController) createObjectsMap(
-	includeObjects []storkapi.ObjectInfo,
-) map[storkapi.ObjectInfo]bool {
-	objectsMap := make(map[storkapi.ObjectInfo]bool)
-	for i := 0; i < len(includeObjects); i++ {
-		objectsMap[includeObjects[i]] = true
-	}
-	return objectsMap
-}
-
 func (a *ApplicationRestoreController) applyResources(
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
@@ -671,7 +661,7 @@ func (a *ApplicationRestoreController) applyResources(
 		return err
 	}
 
-	objectMap := a.createObjectsMap(restore.Spec.IncludeResources)
+	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
 	tempObjects := make([]runtime.Unstructured, 0)
 	for _, o := range objects {
 		skip, err := a.resourceCollector.PrepareResourceForApply(
