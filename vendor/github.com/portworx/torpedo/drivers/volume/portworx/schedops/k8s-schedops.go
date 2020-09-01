@@ -854,11 +854,11 @@ func printStatus(pods ...corev1.Pod) {
 			status += fmt.Sprintf("Phase: %v Reason: %s", pod.Status.Phase, pod.Status.Reason)
 		}
 		if ready {
-			logrus.Infof("Pod [%s] %s ready on node %s - %s", pod.Namespace, pod.Name, pod.Status.NominatedNodeName,
+			logrus.Infof("Pod [%s] %s ready on node %s - %s", pod.Namespace, pod.Name, pod.Spec.NodeName,
 				status)
 		} else {
 			logrus.Infof("Pod [%s] %s not ready on node %s - %s", pod.Namespace, pod.Name,
-				pod.Status.NominatedNodeName, status)
+				pod.Spec.NodeName, status)
 		}
 	}
 }
