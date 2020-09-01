@@ -704,7 +704,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:a1d86c69145fd5e4c64255f9188abb78a7e7b75f2add39cdb5d0f457ecb7361e"
+  digest = "1:46eaf36fb0eae185ad0da77e8577ee32cbd3cb24e8074118a858e3861a46090f"
   name = "github.com/libopenstorage/autopilot-api"
   packages = [
     "pkg/apis/autopilot",
@@ -714,7 +714,7 @@
     "pkg/client/clientset/versioned/typed/autopilot/v1alpha1",
   ]
   pruneopts = "UT"
-  revision = "7383c6007283e00fad4d338036889a2902596f0b"
+  revision = "278e199fe12b62873d9fad6a83259c060160cbef"
 
 [[projects]]
   branch = "master"
@@ -963,7 +963,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:c2ea25056c39407d8baa4869006c0e3e94c1d89a3095614502f844a8a78cc44e"
+  digest = "1:7c430e70ba5ccc22b5005def7682dd42969809c3cc4a64f45a5fcf0f575f7e52"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -984,16 +984,17 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "6f7e9d6fd9881a425d42af1d00345a7738dcbaee"
+  revision = "3e8010dc70561546b4880ab67a51006afb5ce6b0"
 
 [[projects]]
   branch = "master"
-  digest = "1:2e79cb3aa3df96dd4c7c86671b3e84efdcbae0d5aa63141592db2438a99f6185"
+  digest = "1:b5a70e85109879cc6676a2e879111365192cd5a49cecc1566df0ac98bac4e609"
   name = "github.com/portworx/torpedo"
   packages = [
     "drivers/api",
     "drivers/node",
     "drivers/node/ssh",
+    "drivers/objectstore",
     "drivers/scheduler",
     "drivers/scheduler/k8s",
     "drivers/scheduler/spec",
@@ -1010,7 +1011,7 @@
     "pkg/units",
   ]
   pruneopts = "UT"
-  revision = "7ddea58d8e04aa4e4f94521f106bf6667e9d3da7"
+  revision = "2168bb208c08ba14e542239c85c27bd492c83239"
 
 [[projects]]
   branch = "master"
@@ -2279,6 +2280,7 @@
     "github.com/portworx/sched-ops/task",
     "github.com/portworx/torpedo/drivers/node",
     "github.com/portworx/torpedo/drivers/node/ssh",
+    "github.com/portworx/torpedo/drivers/objectstore",
     "github.com/portworx/torpedo/drivers/scheduler",
     "github.com/portworx/torpedo/drivers/scheduler/k8s",
     "github.com/portworx/torpedo/drivers/scheduler/spec",

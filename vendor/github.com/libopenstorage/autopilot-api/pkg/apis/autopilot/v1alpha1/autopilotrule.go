@@ -4,8 +4,10 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// LabelSelectorOperator is the set of operators that can be used in a selector requirement.
-type LabelSelectorOperator string
+type (
+	// LabelSelectorOperator is the set of operators that can be used in a selector requirement.
+	LabelSelectorOperator string
+)
 
 const (
 	// AutopilotRuleResourceName is the name of the singular AutopilotRule objects
@@ -38,6 +40,14 @@ const (
 	LabelSelectorOpLt LabelSelectorOperator = "Lt"
 	// LabelSelectorOpLtEq is operator where the key must be less than or equal to the values
 	LabelSelectorOpLtEq LabelSelectorOperator = "LtEq"
+	// LabelSelectorOpNotInRange will compare if the value is not in the range given by first 2 values
+	LabelSelectorOpNotInRange LabelSelectorOperator = "NotInRange"
+	// LabelSelectorOpInRange will compare if the value is in the range given by first 2 values
+	LabelSelectorOpInRange LabelSelectorOperator = "InRange"
+	// RuleNameLabelKey is the key to use in the label for storing the autopilot rule name
+	RuleNameLabelKey = "rule"
+	// RuleObjectNameLabel is an label key name to use for storing the name of an object affected by a rule
+	RuleObjectNameLabel = "object"
 )
 
 // LabelSelectorRequirement is a selector that contains values, a key, and an operator that
@@ -46,7 +56,10 @@ type LabelSelectorRequirement struct {
 	// key is the label key that the selector applies to.
 	// +patchMergeKey=key
 	// +patchStrategy=merge
-	Key string `json:"key"`
+	Key string `json:"key,omitempty"`
+	// KeyAlias is an alias known to autopilot that can be used instead of supplying the key
+	// To view supported aliases, refer to documentation at https://docs.portworx.com/portworx-install-with-kubernetes/autopilot/
+	KeyAlias string `json:"keyAlias,omitempty"`
 	// operator represents a key's relationship to a set of values.
 	// Valid operators are In, NotIn, Exists, DoesNotExist, Lt and Gt.
 	Operator LabelSelectorOperator `json:"operator"`
@@ -88,7 +101,7 @@ type AutopilotRuleSpec struct {
 	// PollInterval defined the interval in seconds at which the conditions for the
 	// rule are queried from the monitoring provider
 	PollInterval int64 `json:"pollInterval,omitempty"`
-	// Enforcement specifies the enforcement type for rule. Can take values: required or preferred.
+	// Enforcement specifies the enforcement type for rule
 	// (optional)
 	Enforcement EnforcementType `json:"enforcement,omitempty"`
 	// Selector allows to select the objects that are relevant with this rule using label selection
@@ -105,11 +118,9 @@ type AutopilotRuleSpec struct {
 }
 
 // +genclient
-// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// AutopilotRuleObject represents a particular object that is being monitored by autopilot. This is primarily used
-// for status purposes
+// AutopilotRuleObject represents a particular object that is being monitored by autopilot.
 type AutopilotRuleObject struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
@@ -154,6 +165,8 @@ const (
 	RuleStateNormal RuleState = "Normal"
 	// RuleStateTriggered is when the rule has it's conditions met
 	RuleStateTriggered RuleState = "Triggered"
+	// RuleStateActionAwaitingApproval is when a rule is waiting approval from a user to proceed with it's actions
+	RuleStateActionAwaitingApproval RuleState = "ActionAwaitingApproval"
 	// RuleStateActiveActionsPending is when the rule has it's conditions met but the actions are
 	// not being performed yet.
 	RuleStateActiveActionsPending RuleState = "ActiveActionsPending"
@@ -182,6 +195,9 @@ type RuleConditions struct {
 	Expressions []*LabelSelectorRequirement `json:"expressions,omitempty"`
 	// For is the duration in seconds for which the conditions must hold true
 	For int64 `json:"for,omitempty"`
+	// RequiredMatches is the number of expressions above that should match for the RuleCondition to be considered
+	// as triggered. Default is 0, which means all expressions need to match
+	RequiredMatches uint64 `json:"requiredMatches,omitempty"`
 	// Type is the condition type
 	// If not provided, the controller for the CRD will pick the default type
 	Type AutopilotRuleConditionType `json:"type,omitempty"`
@@ -221,5 +237,6 @@ const (
 )
 
 func init() {
-	SchemeBuilder.Register(&AutopilotRule{}, &AutopilotRuleObject{}, &AutopilotRuleList{}, &AutopilotRuleObjectList{})
+	SchemeBuilder.Register(&AutopilotRule{}, &AutopilotRuleObject{}, &ActionApproval{},
+		&AutopilotRuleList{}, &AutopilotRuleObjectList{}, &ActionApprovalList{})
 }

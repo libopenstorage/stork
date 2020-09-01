@@ -32,7 +32,7 @@ import (
 // AutopilotRuleObjectsGetter has a method to return a AutopilotRuleObjectInterface.
 // A group's client should implement this interface.
 type AutopilotRuleObjectsGetter interface {
-	AutopilotRuleObjects() AutopilotRuleObjectInterface
+	AutopilotRuleObjects(namespace string) AutopilotRuleObjectInterface
 }
 
 // AutopilotRuleObjectInterface has methods to work with AutopilotRuleObject resources.
@@ -52,12 +52,14 @@ type AutopilotRuleObjectInterface interface {
 // autopilotRuleObjects implements AutopilotRuleObjectInterface
 type autopilotRuleObjects struct {
 	client rest.Interface
+	ns     string
 }
 
 // newAutopilotRuleObjects returns a AutopilotRuleObjects
-func newAutopilotRuleObjects(c *AutopilotV1alpha1Client) *autopilotRuleObjects {
+func newAutopilotRuleObjects(c *AutopilotV1alpha1Client, namespace string) *autopilotRuleObjects {
 	return &autopilotRuleObjects{
 		client: c.RESTClient(),
+		ns:     namespace,
 	}
 }
 
@@ -65,6 +67,7 @@ func newAutopilotRuleObjects(c *AutopilotV1alpha1Client) *autopilotRuleObjects {
 func (c *autopilotRuleObjects) Get(name string, options v1.GetOptions) (result *v1alpha1.AutopilotRuleObject, err error) {
 	result = &v1alpha1.AutopilotRuleObject{}
 	err = c.client.Get().
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -81,6 +84,7 @@ func (c *autopilotRuleObjects) List(opts v1.ListOptions) (result *v1alpha1.Autop
 	}
 	result = &v1alpha1.AutopilotRuleObjectList{}
 	err = c.client.Get().
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -97,6 +101,7 @@ func (c *autopilotRuleObjects) Watch(opts v1.ListOptions) (watch.Interface, erro
 	}
 	opts.Watch = true
 	return c.client.Get().
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -107,6 +112,7 @@ func (c *autopilotRuleObjects) Watch(opts v1.ListOptions) (watch.Interface, erro
 func (c *autopilotRuleObjects) Create(autopilotRuleObject *v1alpha1.AutopilotRuleObject) (result *v1alpha1.AutopilotRuleObject, err error) {
 	result = &v1alpha1.AutopilotRuleObject{}
 	err = c.client.Post().
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		Body(autopilotRuleObject).
 		Do().
@@ -118,6 +124,7 @@ func (c *autopilotRuleObjects) Create(autopilotRuleObject *v1alpha1.AutopilotRul
 func (c *autopilotRuleObjects) Update(autopilotRuleObject *v1alpha1.AutopilotRuleObject) (result *v1alpha1.AutopilotRuleObject, err error) {
 	result = &v1alpha1.AutopilotRuleObject{}
 	err = c.client.Put().
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		Name(autopilotRuleObject.Name).
 		Body(autopilotRuleObject).
@@ -132,6 +139,7 @@ func (c *autopilotRuleObjects) Update(autopilotRuleObject *v1alpha1.AutopilotRul
 func (c *autopilotRuleObjects) UpdateStatus(autopilotRuleObject *v1alpha1.AutopilotRuleObject) (result *v1alpha1.AutopilotRuleObject, err error) {
 	result = &v1alpha1.AutopilotRuleObject{}
 	err = c.client.Put().
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		Name(autopilotRuleObject.Name).
 		SubResource("status").
@@ -144,6 +152,7 @@ func (c *autopilotRuleObjects) UpdateStatus(autopilotRuleObject *v1alpha1.Autopi
 // Delete takes name of the autopilotRuleObject and deletes it. Returns an error if one occurs.
 func (c *autopilotRuleObjects) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		Name(name).
 		Body(options).
@@ -158,6 +167,7 @@ func (c *autopilotRuleObjects) DeleteCollection(options *v1.DeleteOptions, listO
 		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -170,6 +180,7 @@ func (c *autopilotRuleObjects) DeleteCollection(options *v1.DeleteOptions, listO
 func (c *autopilotRuleObjects) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.AutopilotRuleObject, err error) {
 	result = &v1alpha1.AutopilotRuleObject{}
 	err = c.client.Patch(pt).
+		Namespace(c.ns).
 		Resource("autopilotruleobjects").
 		SubResource(subresources...).
 		Name(name).
