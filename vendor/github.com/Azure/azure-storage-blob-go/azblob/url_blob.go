@@ -29,6 +29,10 @@ func (b BlobURL) String() string {
 	return u.String()
 }
 
+func (b BlobURL) GetAccountInfo(ctx context.Context) (*BlobGetAccountInfoResponse, error) {
+	return b.blobClient.GetAccountInfo(ctx)
+}
+
 // WithPipeline creates a new BlobURL object identical to the source but with the specified request policy pipeline.
 func (b BlobURL) WithPipeline(p pipeline.Pipeline) BlobURL {
 	return NewBlobURL(b.blobClient.URL(), p)

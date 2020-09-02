@@ -44,6 +44,10 @@ func (pb PageBlobURL) WithSnapshot(snapshot string) PageBlobURL {
 	return NewPageBlobURL(p.URL(), pb.blobClient.Pipeline())
 }
 
+func (pb PageBlobURL) GetAccountInfo(ctx context.Context) (*BlobGetAccountInfoResponse, error) {
+	return pb.blobClient.GetAccountInfo(ctx)
+}
+
 // Create creates a page blob of the specified length. Call PutPage to upload data data to a page blob.
 // For more information, see https://docs.microsoft.com/rest/api/storageservices/put-blob.
 func (pb PageBlobURL) Create(ctx context.Context, size int64, sequenceNumber int64, h BlobHTTPHeaders, metadata Metadata, ac BlobAccessConditions) (*PageBlobCreateResponse, error) {
@@ -70,6 +74,21 @@ func (pb PageBlobURL) UploadPages(ctx context.Context, offset int64, body io.Rea
 		ac.LeaseAccessConditions.pointers(),
 		ifSequenceNumberLessThanOrEqual, ifSequenceNumberLessThan, ifSequenceNumberEqual,
 		ifModifiedSince, ifUnmodifiedSince, ifMatchETag, ifNoneMatchETag, nil)
+}
+
+// UploadPagesFromURL copies 1 or more pages from a source URL to the page blob.
+// The sourceOffset specifies the start offset of source data to copy from.
+// The destOffset specifies the start offset of data in page blob will be written to.
+// The count must be a multiple of 512 bytes.
+// For more information, see https://docs.microsoft.com/rest/api/storageservices/put-page-from-url.
+func (pb PageBlobURL) UploadPagesFromURL(ctx context.Context, sourceURL url.URL, sourceOffset int64, destOffset int64, count int64, transactionalMD5 []byte, destinationAccessConditions PageBlobAccessConditions, sourceAccessConditions ModifiedAccessConditions) (*PageBlobUploadPagesFromURLResponse, error) {
+	ifModifiedSince, ifUnmodifiedSince, ifMatchETag, ifNoneMatchETag := destinationAccessConditions.ModifiedAccessConditions.pointers()
+	sourceIfModifiedSince, sourceIfUnmodifiedSince, sourceIfMatchETag, sourceIfNoneMatchETag := sourceAccessConditions.pointers()
+	ifSequenceNumberLessThanOrEqual, ifSequenceNumberLessThan, ifSequenceNumberEqual := destinationAccessConditions.SequenceNumberAccessConditions.pointers()
+	return pb.pbClient.UploadPagesFromURL(ctx, sourceURL.String(), *PageRange{Start: sourceOffset, End: sourceOffset + count - 1}.pointers(), 0,
+		*PageRange{Start: destOffset, End: destOffset + count - 1}.pointers(), transactionalMD5, nil, destinationAccessConditions.LeaseAccessConditions.pointers(),
+		ifSequenceNumberLessThanOrEqual, ifSequenceNumberLessThan, ifSequenceNumberEqual,
+		ifModifiedSince, ifUnmodifiedSince, ifMatchETag, ifNoneMatchETag, sourceIfModifiedSince, sourceIfUnmodifiedSince, sourceIfMatchETag, sourceIfNoneMatchETag, nil)
 }
 
 // ClearPages frees the specified pages from the page blob.

@@ -4,8 +4,12 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// LabelSelectorOperator is the set of operators that can be used in a selector requirement.
-type LabelSelectorOperator string
+type (
+	// LabelSelectorOperator is the set of operators that can be used in a selector requirement.
+	LabelSelectorOperator string
+	// ActionApprovalState is the enum for approval states that an object can take for it's actions
+	ActionApprovalState string
+)
 
 const (
 	// AutopilotRuleResourceName is the name of the singular AutopilotRule objects
@@ -38,6 +42,16 @@ const (
 	LabelSelectorOpLt LabelSelectorOperator = "Lt"
 	// LabelSelectorOpLtEq is operator where the key must be less than or equal to the values
 	LabelSelectorOpLtEq LabelSelectorOperator = "LtEq"
+	// LabelSelectorOpNotInRange will compare if the value is not in the range given by first 2 values
+	LabelSelectorOpNotInRange LabelSelectorOperator = "NotInRange"
+	// LabelSelectorOpInRange will compare if the value is in the range given by first 2 values
+	LabelSelectorOpInRange LabelSelectorOperator = "InRange"
+	// ApprovalStatePending means the action has not been yet approved
+	ApprovalStatePending ActionApprovalState = "pending"
+	// ApprovalStateApproved means the action has been approved
+	ApprovalStateApproved ActionApprovalState = "approved"
+	// ApprovalStateDeclined  means the action has been declined
+	ApprovalStateDeclined ActionApprovalState = "declined"
 )
 
 // LabelSelectorRequirement is a selector that contains values, a key, and an operator that
@@ -46,7 +60,10 @@ type LabelSelectorRequirement struct {
 	// key is the label key that the selector applies to.
 	// +patchMergeKey=key
 	// +patchStrategy=merge
-	Key string `json:"key"`
+	Key string `json:"key,omitempty"`
+	// KeyAlias is an alias known to autopilot that can be used instead of supplying the key
+	// To view supported aliases, refer to documentation at https://docs.portworx.com/portworx-install-with-kubernetes/autopilot/
+	KeyAlias string `json:"keyAlias,omitempty"`
 	// operator represents a key's relationship to a set of values.
 	// Valid operators are In, NotIn, Exists, DoesNotExist, Lt and Gt.
 	Operator LabelSelectorOperator `json:"operator"`
@@ -108,11 +125,12 @@ type AutopilotRuleSpec struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// AutopilotRuleObject represents a particular object that is being monitored by autopilot. This is primarily used
-// for status purposes
+// AutopilotRuleObject represents a particular object that is being monitored by autopilot.
 type AutopilotRuleObject struct {
 	meta.TypeMeta   `json:",inline"`
 	meta.ObjectMeta `json:"metadata,omitempty"`
+	// Spec is the spec of the autopilot rule object
+	Spec AutopilotRuleObjectSpec `json:"spec,omitempty"`
 	// Status is the status of an object monitored by an autopilot rule
 	Status AutopilotRuleObjectStatus `json:"status,omitempty"`
 }
@@ -125,6 +143,38 @@ type AutopilotRuleObjectList struct {
 	meta.ListMeta `json:"metadata,omitempty"`
 
 	Items []AutopilotRuleObject `json:"items"`
+}
+
+// AutopilotRuleObjectSpec represents the spec of the autopilot object
+type AutopilotRuleObjectSpec struct {
+	// ActionApprovals allows users to set the approval states for actions pending for the object
+	ActionApprovals []*AutopilotActionApproval `json:"actionApprovals,omitempty"`
+}
+
+// AutopilotActionApproval stores the state related to approval of an action
+type AutopilotActionApproval struct {
+	// Annotations are annotation for the action approval
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// State is the current approval state of the action approval
+	State ActionApprovalState `json:"state,omitempty"`
+	// Action is the action that needs/needed approval
+	Action AutopilotActionPreview `json:"action,omitempty"`
+}
+
+// AutopilotActionPreview is a preview of an action and the expected result of it before it gets executed
+type AutopilotActionPreview struct {
+	// ObjectMetadata is the metadata for the object on which the action will be performed
+	ObjectMetadata ActionPreviewObjectMetadata `json:"objectMetadata,omitempty"`
+	RuleAction
+	// ExpectedResult is a user friendly description of the outcome of executing the action
+	ExpectedResult string `json:"expectedResult,omitempty"`
+}
+
+// ActionPreviewObjectMetadata is metadata for an object inside an action preview
+type ActionPreviewObjectMetadata struct {
+	meta.ObjectMeta
+	// Type is the object type
+	Type string `json:"type,omitempty"`
 }
 
 // AutopilotRuleObjectStatus represents the status of an autopilot object
@@ -154,6 +204,8 @@ const (
 	RuleStateNormal RuleState = "Normal"
 	// RuleStateTriggered is when the rule has it's conditions met
 	RuleStateTriggered RuleState = "Triggered"
+	// RuleStateActionAwaitingApproval is when a rule is waiting approval from a user to proceed with it's actions
+	RuleStateActionAwaitingApproval RuleState = "ActionAwaitingApproval"
 	// RuleStateActiveActionsPending is when the rule has it's conditions met but the actions are
 	// not being performed yet.
 	RuleStateActiveActionsPending RuleState = "ActiveActionsPending"
@@ -182,6 +234,9 @@ type RuleConditions struct {
 	Expressions []*LabelSelectorRequirement `json:"expressions,omitempty"`
 	// For is the duration in seconds for which the conditions must hold true
 	For int64 `json:"for,omitempty"`
+	// RequiredMatches is the number of expressions above that should match for the RuleCondition to be considered
+	// as triggered. Default is 0, which means all expressions need to match
+	RequiredMatches uint64 `json:"requiredMatches,omitempty"`
 	// Type is the condition type
 	// If not provided, the controller for the CRD will pick the default type
 	Type AutopilotRuleConditionType `json:"type,omitempty"`
