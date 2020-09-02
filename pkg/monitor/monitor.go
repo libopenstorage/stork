@@ -7,6 +7,7 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/metrics"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	log "github.com/sirupsen/logrus"
@@ -160,6 +161,7 @@ func (m *Monitor) podMonitor() error {
 				storklog.PodLog(pod).Errorf("Error deleting pod: %v", err)
 				return err
 			}
+			metrics.HealthCounter.Inc()
 		}
 
 		return nil
@@ -247,6 +249,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 				storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
 				continue
 			}
+			metrics.HealthCounter.Inc()
 		}
 	}
 }
