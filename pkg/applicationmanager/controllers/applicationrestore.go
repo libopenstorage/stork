@@ -152,6 +152,10 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 							Annotations: ns.GetAnnotations(),
 						},
 					})
+					if err != nil {
+						return err
+					}
+					continue
 				}
 				return err
 			}
