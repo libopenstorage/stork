@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  namespace: kube-system
+  name: stork-prometheus-sm
+  labels:
+    name: stork-prometheus-sm
+spec:
+  selector:
+    matchLabels:
+      name: stork
+  namespaceSelector:
+    any: true
+  endpoints:
+    - port: extender
+      targetPort: 8099

@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: stork-prometheus
+  namespace: kube-system
+spec:
+  replicas: 2
+  logLevel: debug
+  serviceAccountName: prometheus
+  alerting:
+    alertmanagers:
+      - namespace: kube-system
+        name: alertmanager-stork
+        port: web
+  serviceMonitorSelector:
+    matchLabels:
+      name: stork-prometheus-sm
+  additionalScrapeConfigs:
+      name: additional-scrape-configs
+      key: scape_cfg.yaml
+  ruleSelector:
+    matchLabels:
+      role: prometheus-stork-rulefiles
+      prometheus: stork
