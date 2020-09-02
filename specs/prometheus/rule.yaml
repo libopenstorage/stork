@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: stork
+    role: prometheus-stork-rulefiles
+  name: prometheus-stork-rules-stork.rules.yaml
+  namespace: kube-system
+spec:
+  groups:
+  - name: stork-rules
+    rules:
+    - alert: StorkNonHyperConvergedPod
+      annotations:
+        message: Application pod {{ $labels.exported_pod }} in namespace {{ $labels.exported_namespace
+          }} is not hyperconverged
+        summary: Application pod {{$labels.exported_pod}} in namespace {{$labels.exported_namespace}}
+          is not hyperconverged
+      expr: non_hyperconverged_pods_total >= 1
+      for: 5m
+      labels:
+        issue: Application pod {{$labels.exported_pod}} in namespace {{$labels.exported_namespace}}
+          is not hyperconverged
+        severity: warning
