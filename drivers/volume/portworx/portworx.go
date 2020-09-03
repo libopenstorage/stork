@@ -2559,7 +2559,7 @@ func (p *portworx) DeactivateClusterDomain(cdu *storkapi.ClusterDomainUpdate) er
 	return err
 }
 
-func (p *portworx) getNodesToDomainMap(nodes []api.Node) (map[string]string, error) {
+func (p *portworx) getNodesToDomainMap(nodes []*api.Node) (map[string]string, error) {
 	clusterManager, err := p.getClusterManagerClient()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get cluster manager, err: %s", err.Error())
