@@ -707,7 +707,7 @@
 
 [[projects]]
   branch = "release-7.0"
-  digest = "1:e98690e3989ae50dbdcda3041d02b7f51327146590e5a99eb9d0a0d63376a351"
+  digest = "1:1f57635d7cb789cce152914dcc5a4372dd3b788e0693a71b6feb20ff850a3c49"
   name = "github.com/libopenstorage/openstorage"
   packages = [
     "api",
@@ -717,6 +717,7 @@
     "api/errors",
     "api/spec",
     "cluster",
+    "config",
     "objectstore",
     "osdconfig",
     "pkg/auth",
@@ -726,14 +727,16 @@
     "pkg/grpcserver",
     "pkg/parser",
     "pkg/sched",
+    "pkg/storagepool",
     "pkg/units",
     "pkg/util",
     "schedpolicy",
     "secrets",
     "volume",
+    "volume/drivers/pwx",
   ]
   pruneopts = "UT"
-  revision = "6f72c3de1e77ffdcb2c4b346c9fae061088c4711"
+  revision = "0f84adfd326fef83d5d39b7be3fadbea23bbcbd0"
 
 [[projects]]
   branch = "master"
@@ -933,7 +936,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:3fd95e2b0332a1965cfa4d759f2448e76a75470a74657f28b2699c873ee716e9"
+  digest = "1:7c430e70ba5ccc22b5005def7682dd42969809c3cc4a64f45a5fcf0f575f7e52"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -954,7 +957,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "7ba5af1a13e0bfffd9c8b3404d9a8c5bce152716"
+  revision = "3e8010dc70561546b4880ab67a51006afb5ce6b0"
 
 [[projects]]
   branch = "master"
@@ -2216,6 +2219,7 @@
     "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
     "github.com/libopenstorage/openstorage/volume",
+    "github.com/libopenstorage/openstorage/volume/drivers/pwx",
     "github.com/libopenstorage/secrets",
     "github.com/libopenstorage/secrets/k8s",
     "github.com/openshift/api/apps/v1",
@@ -2262,7 +2266,6 @@
     "google.golang.org/api/googleapi",
     "google.golang.org/api/option",
     "google.golang.org/grpc",
-    "google.golang.org/grpc/credentials",
     "gopkg.in/yaml.v2",
     "k8s.io/api/admission/v1beta1",
     "k8s.io/api/admissionregistration/v1beta1",
