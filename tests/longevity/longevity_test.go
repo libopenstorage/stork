@@ -23,6 +23,7 @@ import (
 const (
 	testTriggersConfigMap = "longevity-triggers"
 	configMapNS           = "default"
+	controllLoopSleepTime = time.Second * 15
 )
 
 var (
@@ -31,7 +32,7 @@ var (
 	// Stores mapping between chaos level and its freq. Values are hardcoded
 	triggerInterval map[string]map[int]time.Duration
 	// Stores which are disruptive triggers. When disruptive triggers are happening in test,
-	// other triggers are allowed to happen only after existing triggers are completed.
+	// other triggers are allowed to happen only after existing triggers are complete.
 	disruptiveTriggers map[string]bool
 )
 
@@ -63,8 +64,8 @@ var _ = Describe("{Longevity}", func() {
 		AppTaskDown:      TriggerAppTaskDown,
 	}
 	It("has to schedule app and introduce test triggers", func() {
-		Step(fmt.Sprintf("Start watch on K8S configMap [%s] in namespace [%s]",
-			testTriggersConfigMap, configMapNS), func() {
+		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
+			configMapNS, testTriggersConfigMap), func() {
 			err := watchConfigMap()
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -117,27 +118,34 @@ func testTrigger(wg *sync.WaitGroup,
 		}
 
 		// Get next interval of when trigger should happen
-		// This intercal can dynamically change by editing configMap
-		waitTime, err := getWaitTime(triggerType)
-		Expect(err).NotTo(HaveOccurred())
+		// This interval can dynamically change by editing configMap
+		waitTime, isTriggerEnabled := isTriggerEnabled(triggerType)
 
-		if waitTime != 0 {
-			// If trigger is not disabled
-			if time.Since(lastInvocationTime) > time.Duration(waitTime) {
-				// If its right time to trigger,
-				// check no other disruptive trigger is happening at same time
-				takeLock(triggerLoc, triggerType)
+		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
+			// If trigger is not disabled and its right time to trigger,
 
-				triggerFunc(contexts, triggerEventsChan)
-
-				if isDisruptiveTrigger(triggerType) {
-					triggerLoc.Unlock()
-				}
-
-				lastInvocationTime = time.Now().Local()
+			// check no other disruptive trigger is happening at same time
+			if isDisruptiveTrigger(triggerType) {
+				// At a give point in time, only single disruptive trigger is allowed to run.
+				// No other disruptive or non-disruptive trigger can run at this time.
+				triggerLoc.Lock()
+			} else {
+				// If trigger is non-disruptive then just check if no other disruptive trigger is running or not
+				// and release the lock immidiately so that other non-disruptive triggers can happen.
+				triggerLoc.Lock()
+				triggerLoc.Unlock()
 			}
+
+			triggerFunc(contexts, triggerEventsChan)
+
+			if isDisruptiveTrigger(triggerType) {
+				triggerLoc.Unlock()
+			}
+
+			lastInvocationTime = time.Now().Local()
+
 		}
-		time.Sleep(time.Second * 15)
+		time.Sleep(controllLoopSleepTime)
 	}
 }
 
@@ -187,20 +195,6 @@ func populateDisruptiveTriggers() {
 
 func isDisruptiveTrigger(triggerType string) bool {
 	return disruptiveTriggers[triggerType]
-}
-
-// takeLock takes lock only if no other disruptive trigger is happening at the same time.
-func takeLock(triggerLoc *sync.Mutex, triggerType string) {
-	if isDisruptiveTrigger(triggerType) {
-		// At a give point in time, only single disruptive trigger is allowed to run.
-		// No other disruptive or non-disruptive trigger can run at this time.
-		triggerLoc.Lock()
-	} else {
-		// If trigger is non-disruptive then just check if no other disruptive trigger is running or not
-		// and release the lock immidiately so that other non-disruptive triggers can happen.
-		triggerLoc.Lock()
-		triggerLoc.Unlock()
-	}
 }
 
 func populateDataFromConfigMap(configData *map[string]string) error {
@@ -283,17 +277,6 @@ func populateIntervals() {
 	triggerInterval[RestartVolDriver][6] = 5 * baseInterval
 	triggerInterval[RestartVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
 
-	triggerInterval[EmailReporter][10] = 1 * baseInterval
-	triggerInterval[EmailReporter][9] = 2 * baseInterval
-	triggerInterval[EmailReporter][8] = 3 * baseInterval
-	triggerInterval[EmailReporter][7] = 4 * baseInterval
-	triggerInterval[EmailReporter][6] = 5 * baseInterval
-	triggerInterval[EmailReporter][5] = 6 * baseInterval // Default global chaos level, 3 hrs
-	triggerInterval[EmailReporter][4] = 7 * baseInterval
-	triggerInterval[EmailReporter][3] = 8 * baseInterval
-	triggerInterval[EmailReporter][2] = 9 * baseInterval
-	triggerInterval[EmailReporter][1] = 10 * baseInterval
-
 	triggerInterval[HAUpdate][10] = 1 * baseInterval
 	triggerInterval[HAUpdate][9] = 2 * baseInterval
 	triggerInterval[HAUpdate][8] = 3 * baseInterval
@@ -309,6 +292,18 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown][6] = 5 * baseInterval
 	triggerInterval[AppTaskDown][5] = 6 * baseInterval // Default global chaos level, 1 hr
 
+	baseInterval = 30 * time.Minute
+	triggerInterval[EmailReporter][10] = 1 * baseInterval
+	triggerInterval[EmailReporter][9] = 2 * baseInterval
+	triggerInterval[EmailReporter][8] = 3 * baseInterval
+	triggerInterval[EmailReporter][7] = 4 * baseInterval
+	triggerInterval[EmailReporter][6] = 5 * baseInterval
+	triggerInterval[EmailReporter][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[EmailReporter][4] = 7 * baseInterval
+	triggerInterval[EmailReporter][3] = 8 * baseInterval
+	triggerInterval[EmailReporter][2] = 9 * baseInterval
+	triggerInterval[EmailReporter][1] = 10 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[RebootNode][0] = 0
 	triggerInterval[CrashVolDriver][0] = 0
@@ -317,7 +312,7 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown][0] = 0
 }
 
-func getWaitTime(triggerType string) (time.Duration, error) {
+func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 	var chaosLevel int
 	var ok bool
 	chaosLevel, ok = chaosMap[triggerType]
@@ -326,7 +321,10 @@ func getWaitTime(triggerType string) (time.Duration, error) {
 		logrus.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
 			triggerType, Inst().ChaosLevel)
 	}
-	return triggerInterval[triggerType][chaosLevel], nil
+	if triggerInterval[triggerType][chaosLevel] != 0 {
+		return triggerInterval[triggerType][chaosLevel], true
+	}
+	return triggerInterval[triggerType][chaosLevel], false
 }
 
 var _ = AfterSuite(func() {

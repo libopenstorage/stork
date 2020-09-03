@@ -1722,7 +1722,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 				}
 				if err := k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout); err != nil {
 					logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
-					return err
+					return fmt.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				}
 
 				if err := k.WaitForRunning(ctx, DefaultTimeout, DefaultRetryInterval); err != nil {
@@ -1746,7 +1746,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 				err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
 				if err != nil {
 					logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
-					return err
+					return fmt.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				}
 			}
 		}

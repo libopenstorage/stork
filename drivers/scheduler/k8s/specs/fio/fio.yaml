@@ -4,7 +4,10 @@ metadata:
   name: fio
 spec:
   serviceName: fio
-  replicas: 3
+  {{ if .Replicas }}
+  replicas: {{ .Replicas }}
+  {{ else }}
+  replicas: 6{{ end }}
   selector:
     matchLabels:
       app: fio
@@ -53,7 +56,10 @@ spec:
       - ReadWriteOnce
       resources:
         requests:
-          storage: 50Gi
+        {{ if .VolumeSize }}
+          storage: {{ .VolumeSize }}
+        {{ else }}
+          storage: 20Gi{{ end }}
   - metadata:
       name: fio-log
     spec:

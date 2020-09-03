@@ -1,0 +1,3 @@
+fio:
+    replicas: 6
+    volume_size: 20Gi

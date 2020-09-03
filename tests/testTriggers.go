@@ -56,8 +56,8 @@ type Event struct {
 // place at what time with what outcome
 type EventRecord struct {
 	Event   Event
-	Start   time.Time
-	End     time.Time
+	Start   string
+	End     string
 	Outcome []error
 }
 
@@ -107,12 +107,12 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 			ID:   GenerateUUID(),
 			Type: HAUpdate,
 		},
-		Start:   time.Now(),
+		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
 
 	defer func() {
-		event.End = time.Now()
+		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
 
@@ -228,12 +228,12 @@ func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRe
 			ID:   GenerateUUID(),
 			Type: AppTaskDown,
 		},
-		Start:   time.Now(),
+		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
 
 	defer func() {
-		event.End = time.Now()
+		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
 
@@ -262,12 +262,12 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *Even
 			ID:   GenerateUUID(),
 			Type: CrashVolDriver,
 		},
-		Start:   time.Now(),
+		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
 
 	defer func() {
-		event.End = time.Now()
+		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
 	Step("crash volume driver in all nodes", func() {
@@ -290,12 +290,12 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 			ID:   GenerateUUID(),
 			Type: RestartVolDriver,
 		},
-		Start:   time.Now(),
+		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
 
 	defer func() {
-		event.End = time.Now()
+		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
 	Step("get nodes bounce volume driver", func() {
@@ -339,12 +339,12 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 			ID:   GenerateUUID(),
 			Type: RebootNode,
 		},
-		Start:   time.Now(),
+		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
 
 	defer func() {
-		event.End = time.Now()
+		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
 
@@ -426,7 +426,7 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 func TriggerEmailReporter(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
 	// emailRecords stores events to be notified
 	emailRecords := emailRecords{}
-	logrus.Infof("Generating email report: %v", time.Now())
+	logrus.Infof("Generating email report: %s", time.Now().Format(time.RFC1123))
 	for i := 0; i < eventRing.Len(); i++ {
 		record := eventRing.Value
 		if record != nil {

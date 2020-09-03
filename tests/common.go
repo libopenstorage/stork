@@ -184,6 +184,11 @@ func ValidateCleanup() {
 	})
 }
 
+func processError(err error, errChan ...*chan error) {
+	updateChannel(err, errChan...)
+	expect(err).NotTo(haveOccurred())
+}
+
 func updateChannel(err error, errChan ...*chan error) {
 	if len(errChan) > 0 && err != nil {
 		*errChan[0] <- err
@@ -215,8 +220,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
-			updateChannel(err, errChan...)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 		})
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
@@ -225,14 +229,12 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 
 			vols, err := Inst().S.GetVolumes(ctx)
-			updateChannel(err, errChan...)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 
 			for _, vol := range vols {
 				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
 					err := Inst().V.ValidateVolumeSetup(vol)
-					updateChannel(err, errChan...)
-					expect(err).NotTo(haveOccurred())
+					processError(err, errChan...)
 				})
 			}
 		})
@@ -246,30 +248,26 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
-			updateChannel(err, errChan...)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 		})
 
 		var vols map[string]map[string]string
 		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
 			vols, err = Inst().S.GetVolumeParameters(ctx)
-			updateChannel(err, errChan...)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 		})
 
 		for vol, params := range vols {
 			if Inst().ConfigMap != "" {
 				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-				updateChannel(err, errChan...)
-				expect(err).NotTo(haveOccurred())
+				processError(err, errChan...)
 			}
 			if ctx.RefreshStorageEndpoint {
 				params["refresh-endpoint"] = "true"
 			}
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
-				updateChannel(err, errChan...)
-				expect(err).NotTo(haveOccurred())
+				processError(err, errChan...)
 			})
 		}
 	})

@@ -7,20 +7,20 @@ data:
         [global]
         name=fio-rand-RW
         directory=/scratch/
-        rw=write
+        rw=randwrite
+        rwmixread=75
         randrepeat=1
-        bs=4K
+        blocksize_range=4k-512k
         direct=1
         do_verify=1
         verify=crc32c
         verify_pattern=0xdeadbeef
-        gtod_reduce=1
         disable_lat=0
-        gtod_reduce=0
         time_based=1
-        runtime=999999999
+        runtime=99999999
         [file1]
-        size=8G
+        filesize=1M-10M
+        nrfiles=1000
         ioengine=libaio
         iodepth=128
 ---
