@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
@@ -37,11 +38,15 @@ import (
 func GetTlsDialOptions(caCertData []byte) ([]grpc.DialOption, error) {
 	// Read the provided CA cert from the user
 	capool, err := x509.SystemCertPool()
+	if err != nil || capool == nil {
+		logrus.Warnf("cannot load system root certificates: %v", err)
+		capool = x509.NewCertPool()
+	}
 
 	// If user provided CA cert, then append it to systemCertPool.
 	if len(caCertData) != 0 {
-		if !capool.AppendCertsFromPEM([]byte(caCertData)) {
-			return nil, err
+		if !capool.AppendCertsFromPEM(caCertData) {
+			return nil, fmt.Errorf("cannot parse CA certificate")
 		}
 	}
 
@@ -95,4 +100,24 @@ func AddMetadataToContext(ctx context.Context, k, v string) context.Context {
 
 func GetMetadataValueFromKey(ctx context.Context, k string) string {
 	return metautils.ExtractIncoming(ctx).Get(k)
+}
+
+// GetMethodInformation returns the service and API of a gRPC fullmethod string.
+// For example, if the full method is:
+//   /openstorage.api.OpenStorage<service>/<method>
+// Then, to extract the service and api we would call it as follows:
+//   s, a := GetMethodInformation("openstorage.api.OpenStorage", info.FullMethod)
+//      where info.FullMethod comes from the gRPC interceptor
+func GetMethodInformation(constPath, fullmethod string) (service, api string) {
+	parts := strings.Split(fullmethod, "/")
+
+	if len(parts) > 1 {
+		service = strings.TrimPrefix(strings.ToLower(parts[1]), strings.ToLower(constPath))
+	}
+
+	if len(parts) > 2 {
+		api = strings.ToLower(parts[2])
+	}
+
+	return service, api
 }
