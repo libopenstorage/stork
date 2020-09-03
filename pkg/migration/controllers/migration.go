@@ -214,33 +214,35 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			err.Error())
 		return nil
 	}
-
 	var terminationChannels []chan bool
 	var err error
 	var clusterDomains *stork_api.ClusterDomains
-	for i := 0; i < domainsMaxRetries; i++ {
-		clusterDomains, err = m.volDriver.GetClusterDomains()
-		if err == nil {
-			break
+	if !*migration.Spec.IncludeVolumes {
+		for i := 0; i < domainsMaxRetries; i++ {
+			clusterDomains, err = m.volDriver.GetClusterDomains()
+			if err == nil {
+
+				break
+			}
+			time.Sleep(domainsRetryInterval)
 		}
-		time.Sleep(domainsRetryInterval)
-	}
-	// Fail the migration if the current domain is inactive
-	// Ignore errors
-	if err == nil {
-		for _, domainInfo := range clusterDomains.ClusterDomainInfos {
-			if domainInfo.Name == clusterDomains.LocalDomain &&
-				domainInfo.State == stork_api.ClusterDomainInactive {
-				migration.Status.Status = stork_api.MigrationStatusFailed
-				migration.Status.Stage = stork_api.MigrationStageFinal
-				migration.Status.FinishTimestamp = metav1.Now()
-				msg := "Failing migration since local clusterdomain is inactive"
-				m.recorder.Event(migration,
-					v1.EventTypeWarning,
-					string(stork_api.MigrationStatusFailed),
-					msg)
-				log.MigrationLog(migration).Warn(msg)
-				return m.client.Update(context.TODO(), migration)
+		// Fail the migration if the current domain is inactive
+		// Ignore errors
+		if err == nil {
+			for _, domainInfo := range clusterDomains.ClusterDomainInfos {
+				if domainInfo.Name == clusterDomains.LocalDomain &&
+					domainInfo.State == stork_api.ClusterDomainInactive {
+					migration.Status.Status = stork_api.MigrationStatusFailed
+					migration.Status.Stage = stork_api.MigrationStageFinal
+					migration.Status.FinishTimestamp = metav1.Now()
+					msg := "Failing migration since local clusterdomain is inactive"
+					m.recorder.Event(migration,
+						v1.EventTypeWarning,
+						string(stork_api.MigrationStatusFailed),
+						msg)
+					log.MigrationLog(migration).Warn(msg)
+					return m.client.Update(context.TODO(), migration)
+				}
 			}
 		}
 	}
