@@ -193,6 +193,9 @@ func (r *ResourceCollector) GetResources(
 					LabelSelector: selectors,
 				})
 				if err != nil {
+					if apierrors.IsForbidden(err) {
+						continue
+					}
 					return nil, err
 				}
 				objects, err := meta.ExtractList(objectsList)
