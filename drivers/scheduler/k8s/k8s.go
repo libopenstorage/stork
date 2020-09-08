@@ -42,6 +42,7 @@ import (
 	appsapi "k8s.io/api/apps/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
@@ -1721,7 +1722,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 				}
 				if err := k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout); err != nil {
 					logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
-					return err
+					return fmt.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				}
 
 				if err := k.WaitForRunning(ctx, DefaultTimeout, DefaultRetryInterval); err != nil {
@@ -1745,7 +1746,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 				err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
 				if err != nil {
 					logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
-					return err
+					return fmt.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				}
 			}
 		}
@@ -1894,8 +1895,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					}
 				}
 			}
-			logrus.Infof("[%v] Validated storage class: %v", ctx.App.Key, obj.Name)
-		} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
 			if err := k8sCore.ValidatePersistentVolumeClaim(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,

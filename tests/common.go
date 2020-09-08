@@ -184,8 +184,24 @@ func ValidateCleanup() {
 	})
 }
 
+func processError(err error, errChan ...*chan error) {
+	updateChannel(err, errChan...)
+	expect(err).NotTo(haveOccurred())
+}
+
+func updateChannel(err error, errChan ...*chan error) {
+	if len(errChan) > 0 && err != nil {
+		*errChan[0] <- err
+	}
+}
+
 // ValidateContext is the ginkgo spec for validating a scheduled context
-func ValidateContext(ctx *scheduler.Context) {
+func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		appScaleFactor := time.Duration(Inst().ScaleFactor)
@@ -199,12 +215,12 @@ func ValidateContext(ctx *scheduler.Context) {
 			if ctx.SkipVolumeValidation {
 				return
 			}
-			ValidateVolumes(ctx)
+			ValidateVolumes(ctx, errChan...)
 		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 		})
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
@@ -213,12 +229,12 @@ func ValidateContext(ctx *scheduler.Context) {
 			}
 
 			vols, err := Inst().S.GetVolumes(ctx)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 
 			for _, vol := range vols {
 				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
 					err := Inst().V.ValidateVolumeSetup(vol)
-					expect(err).NotTo(haveOccurred())
+					processError(err, errChan...)
 				})
 			}
 		})
@@ -226,32 +242,32 @@ func ValidateContext(ctx *scheduler.Context) {
 }
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
-func ValidateVolumes(ctx *scheduler.Context) {
+func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().ScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 		})
 
 		var vols map[string]map[string]string
 		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
 			vols, err = Inst().S.GetVolumeParameters(ctx)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 		})
 
 		for vol, params := range vols {
 			if Inst().ConfigMap != "" {
 				params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-				expect(err).NotTo(haveOccurred())
+				processError(err, errChan...)
 			}
 			if ctx.RefreshStorageEndpoint {
 				params["refresh-endpoint"] = "true"
 			}
 			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateVolume(vol, params)
-				expect(err).NotTo(haveOccurred())
+				processError(err, errChan...)
 			})
 		}
 	})

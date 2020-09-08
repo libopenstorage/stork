@@ -35,6 +35,8 @@ require (
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v1.0.1-0.20200821003202-b927067c1043
 	github.com/portworx/sched-ops v0.0.0-20200723032629-257aba0944dc
+	github.com/sendgrid/rest v2.6.0+incompatible // indirect
+	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.5.0
 	github.com/stretchr/testify v1.5.1
 	gocloud.dev v0.20.0
