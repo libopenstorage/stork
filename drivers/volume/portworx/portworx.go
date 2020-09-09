@@ -803,17 +803,6 @@ func (p *portworx) getUserVolDriver(annotations map[string]string) (volume.Volum
 
 }
 
-func (p *portworx) updateVolumeLabelsWithAuthInformationFromAnnotations(labels, annotations map[string]string) map[string]string {
-	if name, ok := annotations[auth_secrets.SecretNameKey]; ok {
-		labels[auth_secrets.SecretNameKey] = name
-	}
-	if namespace, ok := annotations[auth_secrets.SecretNamespaceKey]; ok {
-		labels[auth_secrets.SecretNamespaceKey] = namespace
-	}
-
-	return labels
-}
-
 func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
 	if len(p.jwtSharedSecret) != 0 {
 		claims := &auth.Claims{
@@ -1027,7 +1016,6 @@ func (p *portworx) SnapshotCreate(
 				namespaceLabel:     (*tags)[snapshotter.CloudSnapshotCreatedForVolumeSnapshotNamespaceTag],
 			},
 		}
-		locator.VolumeLabels = p.updateVolumeLabelsWithAuthInformationFromAnnotations(locator.VolumeLabels, snap.Metadata.Annotations)
 		snapshotID, err = volDriver.Snapshot(volumeID, true, locator, true)
 		if err != nil {
 			// Check already exists error and return existing snapshot if found
@@ -1635,7 +1623,6 @@ func (p *portworx) SnapshotRestore(
 				namespaceLabel: pvc.Namespace,
 			},
 		}
-		locator.VolumeLabels = p.updateVolumeLabelsWithAuthInformationFromAnnotations(locator.VolumeLabels, pvc.ObjectMeta.GetAnnotations())
 		restoreVolumeID, err = volDriver.Snapshot(snapID, false, locator, true)
 		if err != nil {
 			return nil, nil, err
@@ -3149,7 +3136,6 @@ func (p *portworx) CreateVolumeClones(clone *storkapi.ApplicationClone) error {
 				namespaceLabel: clone.Spec.DestinationNamespace,
 			},
 		}
-		locator.VolumeLabels = p.updateVolumeLabelsWithAuthInformationFromAnnotations(locator.VolumeLabels, clone.Annotations)
 		_, err := volDriver.Snapshot(vInfo.Volume, false, locator, true)
 		if err != nil {
 			// Mark this clone for deletion too if it already existed, so that
@@ -3181,9 +3167,7 @@ func (p *portworx) createGroupLocalSnapFromPVCs(groupSnap *storkapi.GroupVolumeS
 	if err != nil {
 		return nil, err
 	}
-	labels := make(map[string]string)
-	labels = p.updateVolumeLabelsWithAuthInformationFromAnnotations(labels, groupSnap.GetAnnotations())
-	resp, err := volDriver.SnapshotGroup("", labels, volNames, true)
+	resp, err := volDriver.SnapshotGroup("", nil, volNames, true)
 	if err != nil {
 		return nil, err
 	}
