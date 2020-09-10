@@ -149,6 +149,7 @@ const (
 	// BackupLocationName
 	skipBackupLocationNameCheckAnnotation = "portworx.io/skip-backup-location-name-check"
 	incrementalCountAnnotation            = "portworx.io/cloudsnap-incremental-count"
+	deleteLocalSnapAnnotation             = "portworx.io/cloudsnap-delete-local-snap"
 )
 
 type cloudSnapStatus struct {
@@ -978,6 +979,18 @@ func (p *portworx) SnapshotCreate(
 			} else {
 				request.FullBackupFrequency = uint32(incrementalCount)
 				request.Full = false
+			}
+		}
+		if val, ok := snap.Metadata.Annotations[deleteLocalSnapAnnotation]; ok {
+			skip, err := strconv.ParseBool(val)
+			if err != nil {
+				msg := fmt.Errorf("invalid value for delete local snapshot annotation, %v", err.Error())
+				log.SnapshotLog(snap).Errorf(msg.Error())
+				return nil, nil, msg
+			}
+			if skip {
+				log.SnapshotLog(snap).Warnf("setting delete-local-snap to true")
+				request.DeleteLocal = true
 			}
 		}
 
@@ -2791,7 +2804,18 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		if val, ok := backup.Annotations[skipBackupLocationNameCheckAnnotation]; ok {
 			request.Labels[api.OptCloudBackupIgnoreCreds] = val
 		}
-
+		if val, ok := backup.Spec.Options[deleteLocalSnapAnnotation]; ok {
+			skip, err := strconv.ParseBool(val)
+			if err != nil {
+				msg := fmt.Errorf("invalid value for delete local snapshot specified, %v", err.Error())
+				log.ApplicationBackupLog(backup).Errorf(msg.Error())
+				return nil, msg
+			}
+			if skip {
+				log.ApplicationBackupLog(backup).Warnf("setting delete-local-snap to true")
+				request.DeleteLocal = true
+			}
+		}
 		if value, present := backup.Spec.Options[incrementalCountAnnotation]; present {
 			incrementalCount, err := strconv.ParseUint(value, 10, 32)
 			if err != nil {
@@ -2799,11 +2823,13 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 			}
 			if incrementalCount <= 0 {
 				request.Full = true
+				request.DeleteLocal = true
 			} else {
 				request.FullBackupFrequency = uint32(incrementalCount)
 				request.Full = false
 			}
 		}
+
 		p.addApplicationBackupCloudsnapInfo(request, backup)
 
 		_, err = volDriver.CloudBackupCreate(request)
