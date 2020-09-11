@@ -210,6 +210,9 @@ func (r *ResourceCollector) GetResources(
 
 					collect, err := r.objectToBeCollected(includeObjects, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers)
 					if err != nil {
+						if apierrors.IsForbidden(err) {
+							continue
+						}
 						return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
 					}
 					if !collect {
