@@ -30,6 +30,10 @@ const (
 	s3SecretName         = "s3secret"
 	azureSecretName      = "azuresecret"
 	googleSecretName     = "googlesecret"
+	secretNameKey        = "secret_name"
+	secretNamespaceKey   = "secret_namespace"
+	secretName           = "openstorage.io/auth-secret-name"
+	secretNamespace      = "openstorage.io/auth-secret-namespace"
 
 	applicationBackupScheduleRetryInterval = 10 * time.Second
 	applicationBackupScheduleRetryTimeout  = 5 * time.Minute
@@ -291,6 +295,14 @@ func createBackupLocation(
 			SecretConfig: secretObj.Name,
 		},
 	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(backupLocation)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return storkops.Instance().CreateBackupLocation(backupLocation)
 }
 
@@ -314,6 +326,14 @@ func createApplicationRestore(
 			NamespaceMapping: namespaceMapping,
 		},
 	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(appRestore)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return storkops.Instance().CreateApplicationRestore(appRestore)
 }
 
@@ -335,6 +355,14 @@ func createApplicationBackupWithAnnotation(
 			BackupLocation: backupLocation.Name,
 		},
 	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(appBackup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return storkops.Instance().CreateApplicationBackup(appBackup)
 }
 
@@ -517,7 +545,7 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 	policyName := "intervalpolicy-appbackup"
 	retain := 2
 	interval := 2
-	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -526,13 +554,20 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 				Retain:          storkv1.Retain(retain),
 				IntervalMinutes: interval,
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error creating interval schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating interval schedule policy")
 	logrus.Infof("Created schedulepolicy %v with %v minute interval and retain at %v", policyName, interval, retain)
 
 	scheduleName := "intervalscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	appBackupSched := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -547,7 +582,14 @@ func intervalApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(appBackupSched)
+		require.NoError(t, err, "Error creating interval applicationBackup schedule")
+	}
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(appBackupSched)
 	require.NoError(t, err, "Error creating interval applicationBackup schedule")
 	sleepTime := time.Duration((retain+1)*interval) * time.Minute
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v, sleeping for %v for schedule to trigger",
@@ -581,7 +623,7 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 	// Set first trigger 2 minutes from now
 	scheduledTime := time.Now().Add(2 * time.Minute)
 	nextScheduledTime := scheduledTime.AddDate(0, 0, 1)
-	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -590,14 +632,21 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 				Retain: storkv1.Retain(retain),
 				Time:   scheduledTime.Format(time.Kitchen),
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error creating daily schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating daily schedule policy")
 	logrus.Infof("Created schedulepolicy %v at time %v and retain at %v",
 		policyName, scheduledTime.Format(time.Kitchen), retain)
 
 	scheduleName := "dailyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	appBackupSched := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -612,7 +661,14 @@ func dailyApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(appBackupSched)
+		require.NoError(t, err, "Error creating daily applicationBackup schedule")
+	}
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(appBackupSched)
 	require.NoError(t, err, "Error creating daily applicationBackup schedule")
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v",
 		scheduleName, namespace)
@@ -633,7 +689,7 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 	// Set first trigger 2 minutes from now
 	scheduledTime := time.Now().Add(2 * time.Minute)
 	nextScheduledTime := scheduledTime.AddDate(0, 0, 7)
-	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -643,14 +699,21 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 				Day:    scheduledTime.Weekday().String(),
 				Time:   scheduledTime.Format(time.Kitchen),
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error creating weekly schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating weekly schedule policy")
 	logrus.Infof("Created schedulepolicy %v at time %v on day %v and retain at %v",
 		policyName, scheduledTime.Format(time.Kitchen), scheduledTime.Weekday().String(), retain)
 
 	scheduleName := "weeklyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	appBackupSched := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -665,7 +728,14 @@ func weeklyApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(appBackupSched)
+		require.NoError(t, err, "Error creating weekly applicationBackup schedule")
+	}
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(appBackupSched)
 	require.NoError(t, err, "Error creating weekly applicationBackup schedule")
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v",
 		scheduleName, namespace)
@@ -690,7 +760,7 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 	if nextScheduledTime.Day() != scheduledTime.Day() {
 		nextScheduledTime = time.Time{}
 	}
-	_, err = storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: meta.ObjectMeta{
 			Name: policyName,
 		},
@@ -700,14 +770,21 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 				Date:   scheduledTime.Day(),
 				Time:   scheduledTime.Format(time.Kitchen),
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error creating monthly schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating monthly schedule policy")
 	logrus.Infof("Created schedulepolicy %v at time %v on date %v and retain at %v",
 		policyName, scheduledTime.Format(time.Kitchen), scheduledTime.Day(), retain)
 
 	scheduleName := "monthlyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateApplicationBackupSchedule(&storkv1.ApplicationBackupSchedule{
+	appBackupSched := &storkv1.ApplicationBackupSchedule{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -722,7 +799,14 @@ func monthlyApplicationBackupScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(appBackupSched)
+		require.NoError(t, err, "Error creating monthly applicationBackup schedule")
+	}
+
+	_, err = storkops.Instance().CreateApplicationBackupSchedule(appBackupSched)
 	require.NoError(t, err, "Error creating monthly applicationBackup schedule")
 	logrus.Infof("Created applicationBackupschedule %v in namespace %v",
 		scheduleName, namespace)
