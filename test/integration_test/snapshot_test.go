@@ -197,6 +197,14 @@ func createRestorePvcForSnap(snapName, snapNamespace string) (*v1.PersistentVolu
 			StorageClassName: &storkStorageClass,
 		},
 	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(restorePvc)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	pvc, err := core.Instance().CreatePersistentVolumeClaim(restorePvc)
 	return pvc, err
 }
@@ -367,7 +375,7 @@ func intervalSnapshotScheduleTest(t *testing.T) {
 	policyName := "intervalpolicy"
 	retain := 2
 	interval := 2
-	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -376,13 +384,20 @@ func intervalSnapshotScheduleTest(t *testing.T) {
 				Retain:          storkv1.Retain(retain),
 				IntervalMinutes: interval,
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err := storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating interval schedule policy")
 	logrus.Infof("Created schedulepolicy %v with %v minute interval and retain at %v", policyName, interval, retain)
 
 	scheduleName := "intervalscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+	snapSched := &storkv1.VolumeSnapshotSchedule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -394,7 +409,14 @@ func intervalSnapshotScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(snapSched)
+		require.NoError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
 	require.NoError(t, err, "Error creating interval snapshot schedule")
 	sleepTime := time.Duration((retain+1)*interval) * time.Minute
 	logrus.Infof("Created snapshotschedule %v in namespace %v, sleeping for %v for schedule to trigger",
@@ -421,7 +443,7 @@ func dailySnapshotScheduleTest(t *testing.T) {
 	// Set first trigger 2 minutes from now
 	scheduledTime := time.Now().Add(2 * time.Minute)
 	nextScheduledTime := scheduledTime.AddDate(0, 0, 1)
-	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -430,14 +452,21 @@ func dailySnapshotScheduleTest(t *testing.T) {
 				Retain: storkv1.Retain(retain),
 				Time:   scheduledTime.Format(time.Kitchen),
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error adding annotations to interval schedule policy")
+	}
+
+	_, err := storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating daily schedule policy")
 	logrus.Infof("Created schedulepolicy %v at time %v and retain at %v",
 		policyName, scheduledTime.Format(time.Kitchen), retain)
 
 	scheduleName := "dailyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+	snapSched := &storkv1.VolumeSnapshotSchedule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -449,7 +478,14 @@ func dailySnapshotScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(snapSched)
+		require.NoError(t, err, "Error adding annotations to daily snapshot schedule")
+	}
+
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
 	require.NoError(t, err, "Error creating daily snapshot schedule")
 	logrus.Infof("Created snapshotschedule %v in namespace %v",
 		scheduleName, namespace)
@@ -464,7 +500,7 @@ func weeklySnapshotScheduleTest(t *testing.T) {
 	// Set first trigger 2 minutes from now
 	scheduledTime := time.Now().Add(2 * time.Minute)
 	nextScheduledTime := scheduledTime.AddDate(0, 0, 7)
-	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -474,14 +510,21 @@ func weeklySnapshotScheduleTest(t *testing.T) {
 				Day:    scheduledTime.Weekday().String(),
 				Time:   scheduledTime.Format(time.Kitchen),
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error adding annotations to weekly schedule policy")
+	}
+
+	_, err := storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating weekly schedule policy")
 	logrus.Infof("Created schedulepolicy %v at time %v on day %v and retain at %v",
 		policyName, scheduledTime.Format(time.Kitchen), scheduledTime.Weekday().String(), retain)
 
 	scheduleName := "weeklyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+	snapSched := &storkv1.VolumeSnapshotSchedule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -493,7 +536,14 @@ func weeklySnapshotScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(snapSched)
+		require.NoError(t, err, "Error adding annotations to weekly snapshot schedule")
+	}
+
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
 	require.NoError(t, err, "Error creating weekly snapshot schedule")
 	logrus.Infof("Created snapshotschedule %v in namespace %v",
 		scheduleName, namespace)
@@ -512,7 +562,7 @@ func monthlySnapshotScheduleTest(t *testing.T) {
 	if nextScheduledTime.Day() != scheduledTime.Day() {
 		nextScheduledTime = time.Time{}
 	}
-	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -522,14 +572,21 @@ func monthlySnapshotScheduleTest(t *testing.T) {
 				Date:   scheduledTime.Day(),
 				Time:   scheduledTime.Format(time.Kitchen),
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error adding annotations to monthly schedule policy")
+	}
+
+	_, err := storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating monthly schedule policy")
 	logrus.Infof("Created schedulepolicy %v at time %v on date %v and retain at %v",
 		policyName, scheduledTime.Format(time.Kitchen), scheduledTime.Day(), retain)
 
 	scheduleName := "monthlyscheduletest"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+	snapSched := &storkv1.VolumeSnapshotSchedule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -541,7 +598,14 @@ func monthlySnapshotScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(snapSched)
+		require.NoError(t, err, "Error adding annotations to monthly snapshot schedule")
+	}
+
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
 	require.NoError(t, err, "Error creating monthly snapshot schedule")
 	logrus.Infof("Created snapshotschedule %v in namespace %v",
 		scheduleName, namespace)
@@ -605,7 +669,7 @@ func invalidPolicySnapshotScheduleTest(t *testing.T) {
 	policyName := "invalidpolicy"
 	scheduledTime := time.Now()
 	retain := 2
-	_, err := storkops.Instance().CreateSchedulePolicy(&storkv1.SchedulePolicy{
+	schedPolicy := &storkv1.SchedulePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: policyName,
 		},
@@ -615,14 +679,21 @@ func invalidPolicySnapshotScheduleTest(t *testing.T) {
 				Date:   scheduledTime.Day(),
 				Time:   "13:50PM",
 			},
-		}})
+		}}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(schedPolicy)
+		require.NoError(t, err, "Error adding annotations to invalid schedule policy")
+	}
+
+	_, err := storkops.Instance().CreateSchedulePolicy(schedPolicy)
 	require.NoError(t, err, "Error creating invalid schedule policy")
 	logrus.Infof("Created schedulepolicy %v at time %v on date %v and retain at %v",
 		policyName, scheduledTime.Format(time.Kitchen), scheduledTime.Day(), retain)
 
 	scheduleName := "invalidpolicyschedule"
 	namespace := ctx.GetID()
-	_, err = storkops.Instance().CreateSnapshotSchedule(&storkv1.VolumeSnapshotSchedule{
+	snapSched := &storkv1.VolumeSnapshotSchedule{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scheduleName,
 			Namespace: namespace,
@@ -634,7 +705,14 @@ func invalidPolicySnapshotScheduleTest(t *testing.T) {
 			},
 			SchedulePolicyName: policyName,
 		},
-	})
+	}
+
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(snapSched)
+		require.NoError(t, err, "Error adding annotations to invalid snapshot schedule")
+	}
+
+	_, err = storkops.Instance().CreateSnapshotSchedule(snapSched)
 	require.NoError(t, err, "Error creating snapshot schedule with invalid policy")
 	logrus.Infof("Created snapshotschedule %v in namespace %v",
 		scheduleName, namespace)

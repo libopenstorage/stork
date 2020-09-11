@@ -13,12 +13,14 @@ import (
 	"testing"
 	"time"
 
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
 	_ "github.com/libopenstorage/stork/drivers/volume/azure"
 	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
 	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -43,7 +45,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
 	"github.com/stretchr/testify/require"
+	appsapi "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -556,6 +560,107 @@ func addTimestampSuffix(path string) string {
 	t := time.Now()
 	timeStampSuffix := t.Format("20060102150405")
 	return fmt.Sprintf("%s-%s-%s", bucketPrefix, path, timeStampSuffix)
+}
+
+func addSecurityAnnotation(spec interface{}) error {
+	// Adds annotations required for auth enabled runs
+	configMap, err := core.Instance().GetConfigMap(authTokenConfigMap, "default")
+	if err != nil {
+		logrus.Errorf("Error reading config map: %v", err)
+		return err
+	}
+	logrus.Debugf("Config Map details: %v", configMap.Data)
+	if _, ok := configMap.Data[secretNameKey]; !ok {
+		return fmt.Errorf("failed to get secret name from config map")
+	}
+	if _, ok := configMap.Data[secretNamespaceKey]; !ok {
+		return fmt.Errorf("failed to get secret namespace from config map")
+	}
+	if obj, ok := spec.(*storageapi.StorageClass); ok {
+		if obj.Parameters == nil {
+			obj.Parameters = make(map[string]string)
+		}
+		obj.Parameters[secretName] = configMap.Data[secretNameKey]
+		obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*v1.PersistentVolumeClaim); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*snapv1.VolumeSnapshot); ok {
+		if obj.Metadata.Annotations == nil {
+			obj.Metadata.Annotations = make(map[string]string)
+		}
+		obj.Metadata.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Metadata.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*appsapi.StatefulSet); ok {
+		var pvcList []v1.PersistentVolumeClaim
+		for _, pvc := range obj.Spec.VolumeClaimTemplates {
+			if pvc.Annotations == nil {
+				pvc.Annotations = make(map[string]string)
+			}
+			pvc.Annotations[secretName] = configMap.Data[secretNameKey]
+			pvc.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+			pvcList = append(pvcList, pvc)
+		}
+		obj.Spec.VolumeClaimTemplates = pvcList
+	} else if obj, ok := spec.(*storkv1.ApplicationBackup); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkv1.ApplicationClone); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkv1.ApplicationRestore); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkv1.Migration); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkv1.VolumeSnapshotRestore); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkv1.GroupVolumeSnapshot); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkv1.ApplicationBackupSchedule); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkv1.SchedulePolicy); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkv1.VolumeSnapshotSchedule); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	}
+	return nil
 }
 
 func TestMain(m *testing.M) {
