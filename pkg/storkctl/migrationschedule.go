@@ -245,7 +245,8 @@ func getMigrationSchedules(clusterPair string, args []string, namespace string) 
 		}
 		for _, migrationSchedule := range migrationScheduleList.Items {
 			if migrationSchedule.Spec.Template.Spec.ClusterPair == clusterPair {
-				migrationSchedules = append(migrationSchedules, &migrationSchedule)
+				migrSched := migrationSchedule
+				migrationSchedules = append(migrationSchedules, &migrSched)
 			}
 		}
 	}
