@@ -960,7 +960,13 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 	if _, ok := configMap.Data[secretNamespaceKey]; !ok {
 		return fmt.Errorf("failed to get secret namespace from config map")
 	}
-	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+	if obj, ok := spec.(*storageapi.StorageClass); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Parameters[secretName] = configMap.Data[secretNameKey]
+		obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
