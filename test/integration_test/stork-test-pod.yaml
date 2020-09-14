@@ -70,6 +70,8 @@ spec:
       value: username
     - name: TORPEDO_SSH_PASSWORD
       value: password
+    - name: LS_CONTROLLERS
+      value: http://linstor-op-cs.default:3370/
     - name: ENABLE_CLUSTER_DOMAIN_TESTS
       value: enable_cluster_domain 
     - name: STORAGE_PROVISIONER 

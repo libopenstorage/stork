@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -66,7 +67,7 @@ func TestGetApplicationBackupsOneApplicationBackup(t *testing.T) {
 
 func TestGetApplicationBackupsMultiple(t *testing.T) {
 	defer resetTest()
-	_, err := core.Instance().CreateNamespace("default", nil)
+	_, err := core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}})
 	require.NoError(t, err, "Error creating default namespace")
 
 	createApplicationBackupAndVerify(t, "getbackuptest1", "default", []string{"namespace1"}, "backuplocation", "", "")
@@ -89,7 +90,7 @@ func TestGetApplicationBackupsMultiple(t *testing.T) {
 	cmdArgs = []string{"get", "backups", "getbackuptest1"}
 	testCommon(t, cmdArgs, nil, expected, false)
 
-	_, err = core.Instance().CreateNamespace("ns1", nil)
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ns1"}})
 	require.NoError(t, err, "Error creating ns1 namespace")
 	createApplicationBackupAndVerify(t, "getbackuptest21", "ns1", []string{"namespace1"}, "backuplocation", "", "")
 	cmdArgs = []string{"get", "backups", "--all-namespaces"}
@@ -188,7 +189,7 @@ func TestCreateApplicationBackupWaitSuccess(t *testing.T) {
 
 	namespace := "dummy-namespace"
 	name := "dummy-name"
-	cmdArgs := []string{"create", "backups", "-n", namespace, "--namespaces", namespace, name, "--backupLocation", "backuplocation", "-w"}
+	cmdArgs := []string{"create", "backups", "-n", namespace, "--namespaces", namespace, name, "--backupLocation", "backuplocation", "--wait"}
 
 	expected := "ApplicationBackup dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +
@@ -205,7 +206,7 @@ func TestCreateApplicationBackupWaitFailed(t *testing.T) {
 
 	namespace := "dummy-namespace"
 	name := "dummy-name"
-	cmdArgs := []string{"create", "applicationbackup", "-n", namespace, "--namespaces", namespace, name, "--backupLocation", "backuplocation", "-w"}
+	cmdArgs := []string{"create", "applicationbackup", "-n", namespace, "--namespaces", namespace, name, "--backupLocation", "backuplocation", "--wait"}
 
 	expected := "ApplicationBackup dummy-name started successfully\n" +
 		"STAGE\t\tSTATUS              \n" +

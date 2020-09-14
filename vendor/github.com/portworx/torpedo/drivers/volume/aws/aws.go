@@ -29,14 +29,23 @@ func (d *aws) String() string {
 	return string(AwsStorage)
 }
 
+func (d *aws) ValidateVolumeCleanup() error {
+	return nil
+}
+
+func (d *aws) RefreshDriverEndpoints() error {
+	return nil
+}
+
 func (d *aws) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
 	logrus.Infof("Using the AWS EBS volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {
 		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
 			torpedovolume.StorageProvisioner = p
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", DriverName, storageProvisioner)
+			torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
 		}
 	} else {
 		return fmt.Errorf("Provisioner is empty for volume driver: %s", DriverName)
@@ -45,5 +54,5 @@ func (d *aws) Init(sched string, nodeDriver string, token string, storageProvisi
 }
 
 func init() {
-	torpedovolume.Register(DriverName, &aws{})
+	torpedovolume.Register(DriverName, provisioners, &aws{})
 }

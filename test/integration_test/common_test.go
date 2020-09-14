@@ -17,6 +17,7 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
 	_ "github.com/libopenstorage/stork/drivers/volume/azure"
 	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
+	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
@@ -30,12 +31,14 @@ import (
 	"github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/torpedo/drivers/node"
 	_ "github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/portworx/torpedo/drivers/objectstore"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	_ "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
 	_ "github.com/portworx/torpedo/drivers/volume/gce"
+	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/sirupsen/logrus"
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -59,6 +62,7 @@ const (
 	remoteFilePath        = "/tmp/kubeconfig"
 	configMapSyncWaitTime = 3 * time.Second
 	defaultSchedulerName  = "default-scheduler"
+	bucketPrefix          = "stork-test"
 
 	nodeScore   = 100
 	rackScore   = 50
@@ -81,6 +85,7 @@ var nodeDriver node.Driver
 var schedulerDriver scheduler.Driver
 var volumeDriver volume.Driver
 var storkVolumeDriver storkdriver.Driver
+var objectStoreDriver objectstore.Driver
 
 var snapshotScaleCount int
 var migrationScaleCount int
@@ -104,7 +109,7 @@ func setup() error {
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	provisioner := os.Getenv(storageProvisioner)
-	backupLocationPath = os.Getenv(backupPathVar)
+	backupLocationPath = addTimestampSuffix(os.Getenv(backupPathVar))
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
 		return fmt.Errorf("Error getting stork volume driver %s: %v", volumeDriverName, err)
 	}
@@ -126,6 +131,10 @@ func setup() error {
 	}
 
 	if volumeDriver, err = volume.Get(volumeDriverName); err != nil {
+		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
+	}
+
+	if objectStoreDriver, err = objectstore.Get(); err != nil {
 		return fmt.Errorf("Error getting volume driver %v: %v", volumeDriverName, err)
 	}
 
@@ -456,7 +465,7 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 		return err
 	}
 
-	err = schedulerDriver.RescanSpecs(specDir)
+	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
 	if err != nil {
 		logrus.Errorf("Unable to parse spec dir: %v", err)
 		return err
@@ -541,6 +550,12 @@ func createApp(t *testing.T, testID string) *scheduler.Context {
 
 	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 	return ctxs[0]
+}
+
+func addTimestampSuffix(path string) string {
+	t := time.Now()
+	timeStampSuffix := t.Format("20060102150405")
+	return fmt.Sprintf("%s-%s-%s", bucketPrefix, path, timeStampSuffix)
 }
 
 func TestMain(m *testing.M) {

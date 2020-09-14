@@ -1,13 +1,13 @@
 apiVersion: stork.libopenstorage.org/v1alpha1
 kind: ApplicationBackup
 metadata:
-  name: mysql-backup
-  namespace: mysql-1-pvc-mysql
+  name: mysql-1-pvc-pre-exec-missing-rule-backup
+  namespace: mysql-1-pvc-pre-exec-missing-rule-backup
 spec:
-  backupLocation: mysql-backup-location
+  backupLocation: mysql-1-pvc-pre-exec-missing-rule-backup-backup-location
   # namespaces to be backed up
   namespaces:
-  - mysql-1-pvc-mysql 
+  - mysql-1-pvc-pre-exec-missing-rule-backup 
   # What to do with the data in the objectstore when the backup object in k8s is deleted. Valid options are Delete and Retain
   reclaimPolicy: Delete
   # List of label selectors to choose specific objects and volumes to backup

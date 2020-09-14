@@ -71,7 +71,13 @@ func newGetClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IO
 				handleEmptyList(ioStreams.Out)
 				return
 			}
-
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, clusterPairs, cmdFactory, clusterPairColumns, clusterPairPrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, clusterPairs, cmdFactory, clusterPairColumns, clusterPairPrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return
@@ -127,6 +133,7 @@ func getByteData(fileName string) ([]byte, error) {
 }
 
 func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
+	var storageOptions string
 	generateClusterPairCommand := &cobra.Command{
 		Use:   clusterPairSubcommand,
 		Short: "Generate a spec to be used for cluster pairing from a remote cluster",
@@ -141,7 +148,6 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 				util.CheckErr(err)
 				return
 			}
-
 			if errors := validation.NameIsDNSSubdomain(clusterPairName, false); len(errors) != 0 {
 				err := fmt.Errorf("the Name \"%v\" is not valid: %v", clusterPairName, errors)
 				util.CheckErr(err)
@@ -152,7 +158,24 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 				util.CheckErr(err)
 				return
 			}
-
+			opts := make(map[string]string)
+			if storageOptions == "" {
+				opts["insert_storage_options_here"] = ""
+			} else {
+				stOpts := strings.Split(storageOptions, ",")
+				if len(stOpts) == 0 {
+					util.CheckErr(fmt.Errorf("invalid storage options"))
+					return
+				}
+				for _, v := range stOpts {
+					s := strings.Split(v, "=")
+					if len(s) != 2 {
+						util.CheckErr(fmt.Errorf("invalid storage options"))
+						return
+					}
+					opts[s[0]] = s[1]
+				}
+			}
 			// Prune out all but the current-context and related
 			// info
 			currentContext := config.CurrentContext
@@ -235,10 +258,8 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 					},
 
 					Spec: storkv1.ClusterPairSpec{
-						Config: config,
-						Options: map[string]string{
-							"<insert_storage_options_here>": "",
-						},
+						Config:  config,
+						Options: opts,
 					},
 				}
 				if err = printEncoded(c, clusterPair, "yaml", ioStreams.Out); err != nil {
@@ -249,5 +270,6 @@ func newGenerateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptio
 		},
 	}
 
+	generateClusterPairCommand.Flags().StringVarP(&storageOptions, "storageoptions", "s", "", "comma seperated key-value pair storage options")
 	return generateClusterPairCommand
 }

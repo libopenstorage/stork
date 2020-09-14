@@ -211,6 +211,9 @@ func (c *Client) ValidateTerminatedDeployment(deployment *appsv1.Deployment, tim
 
 		pods, err := c.GetDeploymentPods(deployment)
 		if err != nil {
+			if errors.IsNotFound(err) {
+				return "", false, nil
+			}
 			return "", true, &schederrors.ErrAppNotTerminated{
 				ID:    dep.Name,
 				Cause: fmt.Sprintf("Failed to get pods for deployment. Err: %v", err),
@@ -248,20 +251,11 @@ func (c *Client) GetDeploymentPods(deployment *appsv1.Deployment) ([]corev1.Pod,
 		return nil, err
 	}
 
-	rSets, err := c.apps.ReplicaSets(deployment.Namespace).List(metav1.ListOptions{})
+	rSet, err := c.GetReplicaSetByDeployment(deployment)
 	if err != nil {
 		return nil, err
 	}
-
-	for _, rSet := range rSets.Items {
-		for _, owner := range rSet.OwnerReferences {
-			if owner.Name == deployment.Name {
-				return common.GetPodsByOwner(c.core, rSet.UID, rSet.Namespace)
-			}
-		}
-	}
-
-	return nil, nil
+	return c.GetReplicaSetPods(rSet)
 }
 
 // GetDeploymentsUsingStorageClass returns all deployments using the given storage class

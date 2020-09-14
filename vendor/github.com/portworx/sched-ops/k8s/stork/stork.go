@@ -6,8 +6,11 @@ import (
 	"sync"
 
 	snapclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -33,9 +36,12 @@ type Ops interface {
 	ApplicationBackupRestoreOps
 	ApplicationCloneOps
 	VolumeSnapshotRestoreOps
+	ApplicationRegistrationOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
+	// WatchStorkResources sets up and return resource watch
+	WatchStorkResources(string, runtime.Object) (watch.Interface, error)
 }
 
 // Instance returns a singleton instance of the client.
@@ -180,4 +186,45 @@ func (c *Client) loadClient() error {
 	}
 
 	return nil
+}
+
+// WatchStorkResources sets up and return resource watch
+func (c *Client) WatchStorkResources(namespace string, object runtime.Object) (watch.Interface, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	listOptions := metav1.ListOptions{
+		Watch: true,
+	}
+	var watchInterface watch.Interface
+
+	var err error
+	if _, ok := object.(*storkv1.ApplicationBackupList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().ApplicationBackups(namespace).Watch(listOptions)
+	} else if _, ok := object.(*storkv1.ApplicationBackupScheduleList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).Watch(listOptions)
+	} else if _, ok := object.(*storkv1.ApplicationRestoreList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().ApplicationRestores(namespace).Watch(listOptions)
+	} else if _, ok := object.(*storkv1.ApplicationCloneList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().ApplicationClones(namespace).Watch(listOptions)
+	} else if _, ok := object.(*storkv1.ClusterPairList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().ClusterPairs(namespace).Watch(listOptions)
+	} else if _, ok := object.(*storkv1.ClusterDomainsStatusList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().ClusterDomainsStatuses().Watch(listOptions)
+	} else if _, ok := object.(*storkv1.ApplicationBackupList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().ApplicationBackups(namespace).Watch(listOptions)
+	} else if _, ok := object.(*storkv1.MigrationList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().Migrations(namespace).Watch(listOptions)
+	} else if _, ok := object.(*storkv1.MigrationScheduleList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().MigrationSchedules(namespace).Watch(listOptions)
+	} else if _, ok := object.(*storkv1.VolumeSnapshotRestoreList); ok {
+		watchInterface, err = c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).Watch(listOptions)
+	} else {
+		return nil, fmt.Errorf("unsupported object, %v", object)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return watchInterface, nil
 }

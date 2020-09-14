@@ -12,6 +12,7 @@ import (
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
 	_ "github.com/libopenstorage/stork/drivers/volume/azure"
 	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
+	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
 	"github.com/libopenstorage/stork/pkg/apis"
 	"github.com/libopenstorage/stork/pkg/applicationmanager"
@@ -137,9 +138,13 @@ func main() {
 			Name:  "pvc-watcher",
 			Usage: "Start the controller to monitor PVC creation and deletions (default: true)",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:  "webhook-controller",
-			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: true)",
+			Usage: "Enable webhook controller to start driver apps with scheduler as stork (default: false)",
+		},
+		cli.StringFlag{
+			Name:  "webhook-skip-resources-annotation",
+			Usage: "Application annotation to be used to disable auto updating app scheduler as stork",
 		},
 	}
 
@@ -197,8 +202,9 @@ func run(c *cli.Context) {
 		}
 		if c.Bool("webhook-controller") {
 			webhook = &webhookadmission.Controller{
-				Driver:   d,
-				Recorder: recorder,
+				Driver:       d,
+				Recorder:     recorder,
+				SkipResource: c.String("webhook-skip-resources-annotation"),
 			}
 			if err := webhook.Start(); err != nil {
 				log.Fatalf("error starting webhook controller: %v", err)
@@ -285,6 +291,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 	monitor := &monitor.Monitor{
 		Driver:      d,
 		IntervalSec: c.Int64("health-monitor-interval"),
+		Recorder:    recorder,
 	}
 	snapshot := &snapshot.Snapshot{
 		Driver:   d,

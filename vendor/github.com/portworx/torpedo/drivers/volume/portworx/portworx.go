@@ -61,28 +61,29 @@ const (
 )
 
 const (
-	defaultTimeout                   = 2 * time.Minute
-	defaultRetryInterval             = 10 * time.Second
-	maintenanceOpTimeout             = 1 * time.Minute
-	maintenanceWaitTimeout           = 2 * time.Minute
-	inspectVolumeTimeout             = 30 * time.Second
-	inspectVolumeRetryInterval       = 2 * time.Second
-	validateDeleteVolumeTimeout      = 3 * time.Minute
-	validateReplicationUpdateTimeout = 10 * time.Minute
-	validateClusterStartTimeout      = 2 * time.Minute
-	validatePXStartTimeout           = 5 * time.Minute
-	validateNodeStopTimeout          = 5 * time.Minute
-	validateStoragePoolSizeTimeout   = 3 * time.Hour
-	validateStoragePoolSizeInterval  = 30 * time.Second
-	getNodeTimeout                   = 3 * time.Minute
-	getNodeRetryInterval             = 5 * time.Second
-	stopDriverTimeout                = 5 * time.Minute
-	crashDriverTimeout               = 2 * time.Minute
-	startDriverTimeout               = 2 * time.Minute
-	upgradeTimeout                   = 10 * time.Minute
-	upgradeRetryInterval             = 30 * time.Second
-	upgradePerNodeTimeout            = 15 * time.Minute
-	waitVolDriverToCrash             = 1 * time.Minute
+	defaultTimeout                    = 2 * time.Minute
+	defaultRetryInterval              = 10 * time.Second
+	maintenanceOpTimeout              = 1 * time.Minute
+	maintenanceWaitTimeout            = 2 * time.Minute
+	inspectVolumeTimeout              = 30 * time.Second
+	inspectVolumeRetryInterval        = 2 * time.Second
+	validateDeleteVolumeTimeout       = 3 * time.Minute
+	validateReplicationUpdateTimeout  = 10 * time.Minute
+	validateClusterStartTimeout       = 2 * time.Minute
+	validatePXStartTimeout            = 5 * time.Minute
+	validateNodeStopTimeout           = 5 * time.Minute
+	validateStoragePoolSizeTimeout    = 3 * time.Hour
+	validateStoragePoolSizeInterval   = 30 * time.Second
+	getNodeTimeout                    = 3 * time.Minute
+	getNodeRetryInterval              = 5 * time.Second
+	stopDriverTimeout                 = 5 * time.Minute
+	crashDriverTimeout                = 2 * time.Minute
+	startDriverTimeout                = 2 * time.Minute
+	upgradeTimeout                    = 10 * time.Minute
+	upgradeRetryInterval              = 30 * time.Second
+	upgradePerNodeTimeout             = 15 * time.Minute
+	waitVolDriverToCrash              = 1 * time.Minute
+	waitDriverDownOnNodeRetryInterval = 2 * time.Second
 )
 
 const (
@@ -96,7 +97,7 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 	PortworxCsi:     "pxd.portworx.com",
 }
 
-var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io"}
+var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io", "pvc_name", "pvc_namespace"}
 var k8sCore = core.Instance()
 
 type portworx struct {
@@ -205,6 +206,7 @@ func (d *portworx) Init(sched string, nodeDriver string, token string, storagePr
 			n.Status,
 		)
 	}
+	torpedovolume.StorageDriver = DriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {
 		if p, ok := provisioners[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
@@ -238,7 +240,7 @@ func (d *portworx) RefreshDriverEndpoints() error {
 }
 
 func (d *portworx) updateNodes(pxNodes []api.StorageNode) error {
-	for _, n := range node.GetWorkerNodes() {
+	for _, n := range node.GetNodes() {
 		if err := d.updateNode(&n, pxNodes); err != nil {
 			return err
 		}
@@ -501,6 +503,10 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params["refresh-endpoint"]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
 	volDriver := d.getVolDriver()
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
@@ -675,10 +681,21 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 		if err != nil {
 			return nil, true, err
 		}
-		return volumeInspectResponse.Volume, false, nil
+
+		respVol := volumeInspectResponse.Volume
+
+		// Size Update
+		if respVol.Spec.Size != vol.RequestedSize {
+			return nil, true, &ErrFailedToInspectVolume{
+				ID: volumeName,
+				Cause: fmt.Sprintf("Volume size differs. Expected:%v Actual:%v",
+					vol.RequestedSize, respVol.Spec.Size),
+			}
+		}
+		return nil, false, nil
 	}
 
-	out, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
+	_, err := task.DoRetryWithTimeout(t, inspectVolumeTimeout, inspectVolumeRetryInterval)
 	if err != nil {
 		return &ErrFailedToInspectVolume{
 			ID:    volumeName,
@@ -686,16 +703,6 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 		}
 	}
 
-	respVol := out.(*api.Volume)
-
-	// Size Update
-	if respVol.Spec.Size != vol.RequestedSize {
-		return &ErrFailedToInspectVolume{
-			ID: volumeName,
-			Cause: fmt.Sprintf("Volume size differs. Expected:%v Actual:%v",
-				vol.RequestedSize, respVol.Spec.Size),
-		}
-	}
 	return nil
 }
 
@@ -918,7 +925,17 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
 		logrus.Debugf("Getting node info: %s", n.Name)
-		pxNode, err := d.getPxNode(&n)
+		for _, addr := range n.Addresses {
+			err := d.testAndSetEndpointUsingNodeIP(addr)
+			if err != nil {
+				return "", true, &ErrFailedToWaitForPx{
+					Node:  n,
+					Cause: fmt.Sprintf("failed to get node info [%s]. Err: %v", n.Name, err),
+				}
+			}
+		}
+		nodeInspectResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
+
 		if err != nil {
 			return "", true, &ErrFailedToWaitForPx{
 				Node:  n,
@@ -927,12 +944,18 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		}
 
 		logrus.Debugf("checking PX status on node: %s", n.Name)
+		pxNode := nodeInspectResponse.Node
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION, api.Status_STATUS_OK: // do nothing
 		case api.Status_STATUS_OFFLINE:
 			// in case node is offline and it is a storageless node, the id might have changed so update it
 			if len(pxNode.Pools) == 0 {
 				d.updateNodeID(&n, d.getNodeManager())
+			}
+			return "", true, &ErrFailedToWaitForPx{
+				Node: n,
+				Cause: fmt.Sprintf("node %s status is up but px cluster is not ok. Expected: %v Actual: %v",
+					n.Name, api.Status_STATUS_OK, pxNode.Status),
 			}
 		default:
 			return "", true, &ErrFailedToWaitForPx{
@@ -946,7 +969,6 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 
 		return "", false, nil
 	}
-
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
 		return err
 	}
@@ -973,26 +995,14 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 
 func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	t := func() (interface{}, bool, error) {
-		// to avoid getting the same node which driver has brought down
-		nManager, err := d.pickAlternateClusterManager(n)
-		if err != nil {
-			return "", true, &ErrFailedToWaitForPx{
-				Node:  n,
-				Cause: err.Error(),
-			}
-		}
-		nodeInspectResponse, err := nManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
-		if err != nil {
-			return "", true, &ErrFailedToWaitForPx{
-				Node:  n,
-				Cause: err.Error(),
-			}
-		}
-		if nodeInspectResponse.Node.Status != api.Status_STATUS_OFFLINE {
-			return "", true, &ErrFailedToWaitForPx{
-				Node: n,
-				Cause: fmt.Sprintf("px is not yet down on node. Expected: %v Actual: %v",
-					api.Status_STATUS_OFFLINE, nodeInspectResponse.Node.Status),
+
+		for _, addr := range n.Addresses {
+			err := d.testAndSetEndpointUsingNodeIP(addr)
+			if !strings.Contains(err.Error(), "connect: connection refused") {
+				return "", true, &ErrFailedToWaitForPx{
+					Node:  n,
+					Cause: fmt.Sprintf("px is not yet down on node"),
+				}
 			}
 		}
 
@@ -1000,7 +1010,7 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 		return "", false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validateNodeStopTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, validateNodeStopTimeout, waitDriverDownOnNodeRetryInterval); err != nil {
 		return err
 	}
 
@@ -1221,6 +1231,7 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 			Cause: fmt.Sprintf("Replication factor is not of type int64"),
 		}
 	}
+	logrus.Debugf("Replication factor for volume: %s is %d", vol.ID, replFactor)
 
 	return replFactor, nil
 }
@@ -1314,6 +1325,7 @@ func (d *portworx) GetAggregationLevel(vol *torpedovolume.Volume) (int64, error)
 			Cause: fmt.Sprintf("Aggregation level is not of type uint32"),
 		}
 	}
+	logrus.Debugf("Aggregation level for volume: %s is %d", vol.ID, aggrLevel)
 
 	return int64(aggrLevel), nil
 }
@@ -2346,5 +2358,5 @@ func getSDKContainerPort() (int32, error) {
 }
 
 func init() {
-	torpedovolume.Register(DriverName, &portworx{})
+	torpedovolume.Register(DriverName, provisioners, &portworx{})
 }

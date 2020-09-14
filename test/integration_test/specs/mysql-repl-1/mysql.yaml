@@ -2,8 +2,10 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
    name: mysql-data
+   labels:
+     app: mysql
    annotations:
-     volume.beta.kubernetes.io/storage-class: px-mysql-sc-repl1
+     volume.beta.kubernetes.io/storage-class: mysql-sc-repl-1
 spec:
    accessModes:
      - ReadWriteOnce
@@ -11,18 +13,12 @@ spec:
      requests:
        storage: 2Gi
 ---
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-    name: px-mysql-sc-repl1
-provisioner: kubernetes.io/portworx-volume
-parameters:
-   repl: "1"
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
+  labels:
+    app: mysql
 spec:
   strategy:
     rollingUpdate:

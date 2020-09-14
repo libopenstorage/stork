@@ -27,6 +27,7 @@ type factory struct {
 	kubeconfig    string
 	context       string
 	outputFormat  string
+	watch         bool
 }
 
 // Factory to be used for command line
@@ -54,6 +55,8 @@ type Factory interface {
 	setOutputFormat(string)
 	// setNamespace Set the namespace
 	setNamespace(string)
+	// IsWatchSet return true if -w/watch is passed
+	IsWatchSet() bool
 }
 
 // NewFactory Return a new factory interface that can be used by commands
@@ -66,6 +69,7 @@ func (f *factory) BindFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&f.kubeconfig, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests")
 	flags.StringVar(&f.context, "context", "", "The name of the kubeconfig context to use")
 	flags.StringVarP(&f.outputFormat, "output", "o", outputFormatTable, "Output format. One of: table|json|yaml")
+	flags.BoolVarP(&f.watch, "watch", "w", false, "watch stork resourrces")
 }
 
 func (f *factory) BindGetFlags(flags *pflag.FlagSet) {
@@ -109,6 +113,10 @@ func (f *factory) getKubeconfig() clientcmd.ClientConfig {
 
 func (f *factory) GetConfig() (*rest.Config, error) {
 	return f.getKubeconfig().ClientConfig()
+}
+
+func (f *factory) IsWatchSet() bool {
+	return f.watch
 }
 
 func (f *factory) UpdateConfig() error {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,17 +34,19 @@ const (
 	secretName               = "servercert-secret"
 	privKey                  = "privKey"
 	privCert                 = "privCert"
+	defaultSkipAnnotation    = "stork.libopenstorage.org/disable-admission-controller"
 )
 
 // Controller for admission mutating webhook to initialise resources
 // with stork as scheduler, if given resources are using driver supported
 // by stork
 type Controller struct {
-	Recorder record.EventRecorder
-	Driver   volume.Driver
-	server   *http.Server
-	lock     sync.Mutex
-	started  bool
+	Recorder     record.EventRecorder
+	Driver       volume.Driver
+	server       *http.Server
+	lock         sync.Mutex
+	started      bool
+	SkipResource string
 }
 
 // Serve method for webhook server
@@ -61,7 +64,10 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	var schedPath string
 	admissionReview := v1beta1.AdmissionReview{}
 	isStorkResource := false
-
+	skipHookAnnotation := defaultSkipAnnotation
+	if c.SkipResource != "" {
+		skipHookAnnotation = c.SkipResource
+	}
 	webhookConfig := &admissionv1beta1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: storkAdmissionController,
@@ -82,6 +88,7 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 	}
 
 	arReq := admissionReview.Request
+	resourceName := ""
 	switch arReq.Kind.Kind {
 	case "StatefulSet":
 		var ss appv1.StatefulSet
@@ -91,13 +98,17 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			http.Error(w, "Decode error", http.StatusBadRequest)
 			return
 		}
-		isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, arReq.Namespace)
-		if err != nil {
-			c.Recorder.Event(&ss, v1.EventTypeWarning, "Could not get volume owner info for ss: %v", err.Error())
-			http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
-			return
+		resourceName = ss.GetName()
+		log.Debugf("Received admission review request for sts %s,%s", resourceName, arReq.Namespace)
+		if !skipSchedulerUpdate(skipHookAnnotation, ss.ObjectMeta.Annotations) {
+			isStorkResource, err = c.checkVolumeOwner(ss.Spec.Template.Spec.Volumes, arReq.Namespace)
+			if err != nil {
+				c.Recorder.Event(&ss, v1.EventTypeWarning, "Could not get volume owner info for ss: %v", err.Error())
+				http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
+				return
+			}
+			schedPath = appSchedPrefix + podSpecSchedPath
 		}
-		schedPath = appSchedPrefix + podSpecSchedPath
 	case "Deployment":
 		var deployment appv1.Deployment
 		if err := json.Unmarshal(arReq.Object.Raw, &deployment); err != nil {
@@ -106,13 +117,17 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			http.Error(w, "Decode error", http.StatusBadRequest)
 			return
 		}
-		isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, arReq.Namespace)
-		if err != nil {
-			c.Recorder.Event(&deployment, v1.EventTypeWarning, "Could not get volume owner info deployment: %v", err.Error())
-			http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
-			return
+		resourceName = deployment.GetName()
+		log.Debugf("Received admission review request for deployment %s,%s", resourceName, arReq.Namespace)
+		if !skipSchedulerUpdate(skipHookAnnotation, deployment.ObjectMeta.Annotations) {
+			isStorkResource, err = c.checkVolumeOwner(deployment.Spec.Template.Spec.Volumes, arReq.Namespace)
+			if err != nil {
+				c.Recorder.Event(&deployment, v1.EventTypeWarning, "Could not get volume owner info deployment: %v", err.Error())
+				http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
+				return
+			}
+			schedPath = appSchedPrefix + podSpecSchedPath
 		}
-		schedPath = appSchedPrefix + podSpecSchedPath
 	case "Pod":
 		var pod v1.Pod
 		if err := json.Unmarshal(arReq.Object.Raw, &pod); err != nil {
@@ -121,13 +136,17 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 			http.Error(w, "Decode error", http.StatusBadRequest)
 			return
 		}
-		isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, arReq.Namespace)
-		if err != nil {
-			c.Recorder.Event(&pod, v1.EventTypeWarning, "Could not get volume owner info for pod: %v", err.Error())
-			http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
-			return
+		resourceName = pod.GetName()
+		log.Debugf("Received admission review request for pod %s,%s", resourceName, arReq.Namespace)
+		if !skipSchedulerUpdate(skipHookAnnotation, pod.ObjectMeta.Annotations) {
+			isStorkResource, err = c.checkVolumeOwner(pod.Spec.Volumes, arReq.Namespace)
+			if err != nil {
+				c.Recorder.Event(&pod, v1.EventTypeWarning, "Could not get volume owner info for pod: %v", err.Error())
+				http.Error(w, "Could not get volume owner info", http.StatusInternalServerError)
+				return
+			}
+			schedPath = podSpecSchedPath
 		}
-		schedPath = podSpecSchedPath
 	}
 
 	if !isStorkResource {
@@ -140,6 +159,7 @@ func (c *Controller) processMutateRequest(w http.ResponseWriter, req *http.Reque
 		}
 	} else {
 		// create patch
+		log.Debugf("Updating scheduler to stork for Resource:%s, Name: %s, Namespace:%s", arReq.Kind.Kind, resourceName, arReq.Namespace)
 		patch := createPatch(schedPath)
 		admissionResponse = &v1beta1.AdmissionResponse{
 			Result: &metav1.Status{
@@ -283,4 +303,15 @@ func createPatch(schedpath string) []byte {
 		log.Errorf("could not marshal patch: %v", err)
 	}
 	return b
+}
+
+func skipSchedulerUpdate(skipHookAnnotation string, annotations map[string]string) bool {
+	if annotations != nil {
+		if value, ok := annotations[skipHookAnnotation]; ok {
+			if skip, err := strconv.ParseBool(value); err == nil && skip {
+				return true
+			}
+		}
+	}
+	return false
 }

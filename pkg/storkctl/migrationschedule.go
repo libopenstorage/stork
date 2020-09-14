@@ -155,7 +155,13 @@ func newGetMigrationScheduleCommand(cmdFactory Factory, ioStreams genericcliopti
 				handleEmptyList(ioStreams.Out)
 				return
 			}
-
+			if cmdFactory.IsWatchSet() {
+				if err := printObjectsWithWatch(c, migrationSchedules, cmdFactory, migrationScheduleColumns, migrationSchedulePrinter, ioStreams.Out); err != nil {
+					util.CheckErr(err)
+					return
+				}
+				return
+			}
 			if err := printObjects(c, migrationSchedules, cmdFactory, migrationScheduleColumns, migrationSchedulePrinter, ioStreams.Out); err != nil {
 				util.CheckErr(err)
 				return

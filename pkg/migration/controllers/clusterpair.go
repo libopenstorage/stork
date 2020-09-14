@@ -10,11 +10,13 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -137,6 +139,7 @@ func (c *ClusterPairController) handle(ctx context.Context, clusterPair *stork_a
 		}
 	}
 	if clusterPair.Status.SchedulerStatus != stork_api.ClusterPairStatusReady {
+		clusterPair.Status.SchedulerStatus = stork_api.ClusterPairStatusError
 		remoteConfig, err := getClusterPairSchedulerConfig(clusterPair.Name, clusterPair.Namespace)
 		if err != nil {
 			return err
@@ -147,18 +150,25 @@ func (c *ClusterPairController) handle(ctx context.Context, clusterPair *stork_a
 			return err
 		}
 		if _, err = client.ServerVersion(); err != nil {
-			clusterPair.Status.SchedulerStatus = stork_api.ClusterPairStatusError
 			c.recorder.Event(clusterPair,
 				v1.EventTypeWarning,
 				string(clusterPair.Status.SchedulerStatus),
 				err.Error())
-		} else {
-			clusterPair.Status.SchedulerStatus = stork_api.ClusterPairStatusReady
-			c.recorder.Event(clusterPair,
-				v1.EventTypeNormal,
-				string(clusterPair.Status.SchedulerStatus),
-				"Scheduler successfully paired")
+			return c.client.Update(context.TODO(), clusterPair)
 		}
+		if err := c.createBackupLocationOnRemote(remoteConfig, clusterPair); err != nil {
+			c.recorder.Event(clusterPair,
+				v1.EventTypeWarning,
+				string(clusterPair.Status.SchedulerStatus),
+				err.Error())
+			return c.client.Update(context.TODO(), clusterPair)
+		}
+		clusterPair.Status.SchedulerStatus = stork_api.ClusterPairStatusReady
+		c.recorder.Event(clusterPair,
+			v1.EventTypeNormal,
+			string(clusterPair.Status.SchedulerStatus),
+			"Scheduler successfully paired")
+
 		err = c.client.Update(context.TODO(), clusterPair)
 		if err != nil {
 			return err
@@ -219,4 +229,46 @@ func (c *ClusterPairController) createCRD() error {
 	}
 
 	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+}
+
+func (c *ClusterPairController) createBackupLocationOnRemote(remoteConfig *restclient.Config, clusterPair *stork_api.ClusterPair) error {
+	if bkpl, ok := clusterPair.Spec.Options[stork_api.BackupLocationResourceName]; ok {
+		remoteClient, err := storkops.NewForConfig(remoteConfig)
+		if err != nil {
+			return err
+		}
+		client, err := kubernetes.NewForConfig(remoteConfig)
+		if err != nil {
+			return err
+		}
+		ns, err := core.Instance().GetNamespace(clusterPair.Namespace)
+		if err != nil {
+			return err
+		}
+		// Don't create if the namespace already exists on the remote cluster
+		_, err = client.CoreV1().Namespaces().Get(clusterPair.Namespace, metav1.GetOptions{})
+		if err != nil {
+			// create namespace on destination cluster
+			_, err = client.CoreV1().Namespaces().Create(&v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        ns.Name,
+					Labels:      ns.Labels,
+					Annotations: ns.Annotations,
+				},
+			})
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
+		}
+		// create backuplocation on destination cluster
+		resp, err := storkops.Instance().GetBackupLocation(bkpl, clusterPair.GetNamespace())
+		if err != nil {
+			return err
+		}
+		resp.ResourceVersion = ""
+		if _, err := remoteClient.CreateBackupLocation(resp); err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+	return nil
 }
