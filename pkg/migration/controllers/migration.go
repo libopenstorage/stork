@@ -54,8 +54,10 @@ const (
 	// the value to be set for deactivating crds
 	StorkMigrationCRDDeactivateAnnotation = "stork.libopenstorage.org/migrationCRDDeactivate"
 	// Max number of times to retry applying resources on the desination
-	maxApplyRetries   = 10
-	cattleAnnotations = "cattle.io"
+	maxApplyRetries      = 10
+	cattleAnnotations    = "cattle.io"
+	deletedMaxRetries    = 12
+	deletedRetryInterval = 10 * time.Second
 )
 
 // NewMigration creates a new instance of MigrationController.
@@ -1253,13 +1255,29 @@ func (m *MigrationController) applyResources(
 				default:
 					// Delete the resource if it already exists on the destination
 					// cluster and try creating again
+					deleteStart := metav1.Now()
 					err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
-					if err == nil {
-						_, err = dynamicClient.Create(unstructured, metav1.CreateOptions{})
-					} else {
+					if err != nil {
 						log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
+					} else {
+						// wait for resources to get deleted
+						// 2 mins
+						for i := 0; i < deletedMaxRetries; i++ {
+							obj, err := dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
+							if err != nil && errors.IsNotFound(err) {
+								break
+							}
+							createTime := obj.GetCreationTimestamp()
+							if deleteStart.Before(&createTime) {
+								logrus.Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+									obj.GetName(), deleteStart, createTime)
+								break
+							}
+							logrus.Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
+							time.Sleep(deletedRetryInterval)
+						}
+						_, err = dynamicClient.Create(unstructured, metav1.CreateOptions{})
 					}
-
 				}
 			}
 			// Retry a few times for Unauthorized errors
