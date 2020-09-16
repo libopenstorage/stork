@@ -307,6 +307,7 @@ func TestDefaultMigrationSchedulePolicy(t *testing.T) {
 
 func TestSuspendResumeMigrationSchedule(t *testing.T) {
 	name := "testmigrationschedule"
+	name1 := "testmigrationschedule-2"
 	namespace := "default"
 	defer resetTest()
 	createMigrationScheduleAndVerify(t, name, "testpolicy", namespace, "clusterpair1", []string{"namespace1"}, "", "", false)
@@ -349,5 +350,15 @@ func TestSuspendResumeMigrationSchedule(t *testing.T) {
 
 	cmdArgs = []string{"resume", "migrationschedules", "invalidschedule"}
 	testCommon(t, cmdArgs, nil, expected, true)
+
+	// test multiple suspend/resume using same clusterpair
+	createMigrationScheduleAndVerify(t, name1, "testpolicy", namespace, "clusterpair1", []string{"namespace1"}, "", "", false)
+	cmdArgs = []string{"suspend", "migrationschedules", "-c", "clusterpair1"}
+	expected = "MigrationSchedule " + name + " suspended successfully\nMigrationSchedule " + name1 + " suspended successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
+
+	cmdArgs = []string{"resume", "migrationschedules", "-c", "clusterpair1"}
+	expected = "MigrationSchedule " + name + " resumed successfully\nMigrationSchedule " + name1 + " resumed successfully\n"
+	testCommon(t, cmdArgs, nil, expected, false)
 
 }
