@@ -14,12 +14,18 @@
     "/v1/backup": {
       "post": {
         "summary": "Create creates a new backup object",
-        "operationId": "Create",
+        "operationId": "Backup_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -39,12 +45,18 @@
       },
       "put": {
         "summary": "Update given backup details",
-        "operationId": "Update",
+        "operationId": "Backup_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -66,12 +78,18 @@
     "/v1/backup/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of objects",
-        "operationId": "Enumerate",
+        "operationId": "Backup_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -84,19 +102,12 @@
             "type": "string"
           },
           {
-            "name": "enumerate_options.page_size",
+            "name": "enumerate_options.max_objects",
             "description": "max objects to fetch.",
             "in": "query",
             "required": false,
             "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "enumerate_options.continuation_token",
-            "description": "continuation token.",
-            "in": "query",
-            "required": false,
-            "type": "string"
+            "format": "uint64"
           },
           {
             "name": "enumerate_options.time_range.start_time",
@@ -125,6 +136,13 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.object_index",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
           }
         ],
         "tags": [
@@ -135,12 +153,18 @@
     "/v1/backup/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detail information about a specified object",
-        "operationId": "Inspect",
+        "operationId": "Backup_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -164,12 +188,18 @@
       },
       "delete": {
         "summary": "Delete triggers delete of a backup",
-        "operationId": "Delete",
+        "operationId": "Backup_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -195,12 +225,18 @@
     "/v1/backuplocation": {
       "post": {
         "summary": "Create creates new backup location",
-        "operationId": "Create",
+        "operationId": "BackupLocation_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupLocationCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -220,12 +256,18 @@
       },
       "put": {
         "summary": "Update given backup location details",
-        "operationId": "Update",
+        "operationId": "BackupLocation_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupLocationUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -247,12 +289,18 @@
     "/v1/backuplocation/validate": {
       "post": {
         "summary": "Verify if a backup location is valid",
-        "operationId": "Validate",
+        "operationId": "BackupLocation_Validate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupLocationValidateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -274,12 +322,18 @@
     "/v1/backuplocation/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of backup locations",
-        "operationId": "Enumerate",
+        "operationId": "BackupLocation_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupLocationEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -299,12 +353,18 @@
     "/v1/backuplocation/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about a specified backup location",
-        "operationId": "Inspect",
+        "operationId": "BackupLocation_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupLocationInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -328,12 +388,18 @@
       },
       "delete": {
         "summary": "Delete removes a backup location",
-        "operationId": "Delete",
+        "operationId": "BackupLocation_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupLocationDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -355,8 +421,7 @@
             "description": "delete_backups indicates whether the cloud backup files need to\nbe deleted or retained.",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -367,12 +432,18 @@
     "/v1/backupschedule": {
       "post": {
         "summary": "Create creates new backup schedule",
-        "operationId": "Create",
+        "operationId": "BackupSchedule_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupScheduleCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -392,12 +463,18 @@
       },
       "put": {
         "summary": "Update updates a backup schedule",
-        "operationId": "Update",
+        "operationId": "BackupSchedule_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupScheduleUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -419,12 +496,18 @@
     "/v1/backupschedule/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of backup schedule",
-        "operationId": "Enumerate",
+        "operationId": "BackupSchedule_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupScheduleEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -444,12 +527,18 @@
     "/v1/backupschedule/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detail information about a specified backup schedule",
-        "operationId": "Inspect",
+        "operationId": "BackupSchedule_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupScheduleInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -473,12 +562,18 @@
       },
       "delete": {
         "summary": "Delete removes a backup schedule",
-        "operationId": "Delete",
+        "operationId": "BackupSchedule_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/BackupScheduleDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -500,8 +595,7 @@
             "description": "delete_backups indicates whether the cloud backup files need to\nbe deleted or retained.",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -512,12 +606,18 @@
     "/v1/cloudcredential": {
       "post": {
         "summary": "Create creates new cloud credential",
-        "operationId": "Create",
+        "operationId": "CloudCredential_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/CloudCredentialCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -537,12 +637,18 @@
       },
       "put": {
         "summary": "Update given cloud credential details",
-        "operationId": "Update",
+        "operationId": "CloudCredential_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/CloudCredentialUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -564,12 +670,18 @@
     "/v1/cloudcredential/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of cloud credentials",
-        "operationId": "Enumerate",
+        "operationId": "CloudCredential_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/CloudCredentialEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -584,8 +696,7 @@
             "name": "include_secrets",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -596,12 +707,18 @@
     "/v1/cloudcredential/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about the specified cloud credential",
-        "operationId": "Inspect",
+        "operationId": "CloudCredential_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/CloudCredentialInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -622,8 +739,7 @@
             "name": "include_secrets",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -632,12 +748,18 @@
       },
       "delete": {
         "summary": "Delete removes a cloud credential",
-        "operationId": "Delete",
+        "operationId": "CloudCredential_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/CloudCredentialDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -663,12 +785,18 @@
     "/v1/cluster": {
       "post": {
         "summary": "Create creates a new cluster",
-        "operationId": "Create",
+        "operationId": "Cluster_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/ClusterCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -688,12 +816,18 @@
       },
       "put": {
         "summary": "Update given cluster details",
-        "operationId": "Update",
+        "operationId": "Cluster_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/ClusterUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -715,12 +849,18 @@
     "/v1/cluster/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of clusters",
-        "operationId": "Enumerate",
+        "operationId": "Cluster_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/ClusterEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -735,8 +875,7 @@
             "name": "include_secrets",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -747,12 +886,18 @@
     "/v1/cluster/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detail information about a specified cluster",
-        "operationId": "Inspect",
+        "operationId": "Cluster_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/ClusterInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -773,8 +918,7 @@
             "name": "include_secrets",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -783,12 +927,18 @@
       },
       "delete": {
         "summary": "Delete removes a cluster",
-        "operationId": "Delete",
+        "operationId": "Cluster_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/ClusterDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -810,16 +960,14 @@
             "description": "delete_backups indicates whether the backup related to cluster need to\nbe deleted or retained.",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           },
           {
             "name": "delete_restores",
             "description": "delete_restores indicates whether the restore related to cluster  need to\nbe deleted or retained.",
             "in": "query",
             "required": false,
-            "type": "boolean",
-            "format": "boolean"
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -830,12 +978,18 @@
     "/v1/health": {
       "get": {
         "summary": "Status checks the health of the server",
-        "operationId": "Status",
+        "operationId": "Health_Status",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/HealthStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -847,12 +1001,18 @@
     "/v1/license": {
       "post": {
         "summary": "Activate activate a new license",
-        "operationId": "Activate",
+        "operationId": "License_Activate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/LicenseActivateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -874,12 +1034,18 @@
     "/v1/license/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of license for given cluster",
-        "operationId": "Inspect",
+        "operationId": "License_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/LicenseInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -896,15 +1062,51 @@
         ]
       }
     },
+    "/v1/metrics/{org_id}": {
+      "get": {
+        "operationId": "Metrics_Inspect",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/MetricsInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Metrics"
+        ]
+      }
+    },
     "/v1/organization": {
       "get": {
         "summary": "Enumerate returns a list of organization object",
-        "operationId": "Enumerate",
+        "operationId": "Organization_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/OrganizationEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -914,12 +1116,18 @@
       },
       "post": {
         "summary": "Create creates new organization object in datastore",
-        "operationId": "Create",
+        "operationId": "Organization_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/OrganizationCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -941,12 +1149,18 @@
     "/v1/organization/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about specified organization object",
-        "operationId": "Inspect",
+        "operationId": "Organization_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/OrganizationInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -966,12 +1180,18 @@
     "/v1/restore": {
       "post": {
         "summary": "Create creates new restore object in datastore\nIt will also trigger a restore operation on the target cluster",
-        "operationId": "Create",
+        "operationId": "Restore_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RestoreCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -991,12 +1211,18 @@
       },
       "put": {
         "summary": "Update given restore details",
-        "operationId": "Update",
+        "operationId": "Restore_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RestoreUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1018,12 +1244,18 @@
     "/v1/restore/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of restore objects",
-        "operationId": "Enumerate",
+        "operationId": "Restore_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RestoreEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1036,19 +1268,12 @@
             "type": "string"
           },
           {
-            "name": "enumerate_options.page_size",
+            "name": "enumerate_options.max_objects",
             "description": "max objects to fetch.",
             "in": "query",
             "required": false,
             "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "enumerate_options.continuation_token",
-            "description": "continuation token.",
-            "in": "query",
-            "required": false,
-            "type": "string"
+            "format": "uint64"
           },
           {
             "name": "enumerate_options.time_range.start_time",
@@ -1077,6 +1302,13 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "enumerate_options.object_index",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
           }
         ],
         "tags": [
@@ -1087,12 +1319,18 @@
     "/v1/restore/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about specified restore object",
-        "operationId": "Inspect",
+        "operationId": "Restore_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RestoreInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1116,12 +1354,18 @@
       },
       "delete": {
         "summary": "Delete removes a restore object",
-        "operationId": "Delete",
+        "operationId": "Restore_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RestoreDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1147,12 +1391,18 @@
     "/v1/rule": {
       "post": {
         "summary": "Create creates new rule",
-        "operationId": "Create",
+        "operationId": "Rules_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RuleCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1172,12 +1422,18 @@
       },
       "put": {
         "summary": "Update given rule details",
-        "operationId": "Update",
+        "operationId": "Rules_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RuleUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1199,12 +1455,18 @@
     "/v1/rule/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of rules",
-        "operationId": "Enumerate",
+        "operationId": "Rules_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RuleEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1224,12 +1486,18 @@
     "/v1/rule/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detailed information about the specified rule",
-        "operationId": "Inspect",
+        "operationId": "Rules_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RuleInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1253,12 +1521,18 @@
       },
       "delete": {
         "summary": "Delete removes rule from px-backup",
-        "operationId": "Delete",
+        "operationId": "Rules_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/RuleDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1284,12 +1558,18 @@
     "/v1/schedulepolicy": {
       "post": {
         "summary": "Create creates new schedule policy.",
-        "operationId": "Create",
+        "operationId": "SchedulePolicy_Create",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/SchedulePolicyCreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1309,12 +1589,18 @@
       },
       "put": {
         "summary": "Update given schedule policy details",
-        "operationId": "Update",
+        "operationId": "SchedulePolicy_Update",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/SchedulePolicyUpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1336,12 +1622,18 @@
     "/v1/schedulepolicy/{org_id}": {
       "get": {
         "summary": "Enumerate returns a list of schedule policy",
-        "operationId": "Enumerate",
+        "operationId": "SchedulePolicy_Enumerate",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/SchedulePolicyEnumerateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1361,12 +1653,18 @@
     "/v1/schedulepolicy/{org_id}/{name}": {
       "get": {
         "summary": "Inspect returns detail information about a specified schedule policy",
-        "operationId": "Inspect",
+        "operationId": "SchedulePolicy_Inspect",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/SchedulePolicyInspectResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1390,12 +1688,18 @@
       },
       "delete": {
         "summary": "Delete removes a schedule policy",
-        "operationId": "Delete",
+        "operationId": "SchedulePolicy_Delete",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/SchedulePolicyDeleteResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1421,12 +1725,18 @@
     "/v1/version": {
       "get": {
         "summary": "Get gets the version of the server",
-        "operationId": "Get",
+        "operationId": "Version_Get",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/VersionGetResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
             }
           }
         },
@@ -1507,6 +1817,13 @@
         "post_exec_rule": {
           "type": "string",
           "title": "Post check rule to run after backup is completed"
+        },
+        "include_resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceInfo"
+          },
+          "title": "List of resources to backup (optional)"
         }
       },
       "title": "Request message structure for backup create"
@@ -1528,9 +1845,12 @@
             "$ref": "#/definitions/BackupObject"
           }
         },
-        "continuation_token": {
+        "total_count": {
           "type": "string",
-          "title": "continuation token"
+          "format": "uint64"
+        },
+        "complete": {
+          "type": "boolean"
         }
       },
       "title": "Response message structure for enumerate create"
@@ -1601,6 +1921,12 @@
         "cloud_credential": {
           "type": "string",
           "title": "Reference to cloud credential object used for backup"
+        },
+        "include_resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceInfo"
+          }
         }
       }
     },
@@ -1761,12 +2087,10 @@
           "$ref": "#/definitions/BackupLocationInfoStatusInfo"
         },
         "delete_backups": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
         },
         "validate_cloud_credential": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
         },
         "s3_config": {
           "$ref": "#/definitions/S3Config"
@@ -1907,6 +2231,13 @@
         },
         "post_exec_rule": {
           "type": "string"
+        },
+        "include_resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceInfo"
+          },
+          "title": "List of resources to backup (optional)"
         }
       },
       "title": "Define BackupScheduleCreateRequest struct"
@@ -1938,8 +2269,7 @@
           "type": "string"
         },
         "suspend": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
         },
         "reclaim_policy": {
           "$ref": "#/definitions/BackupScheduleInfoReclaimPolicyType"
@@ -1979,14 +2309,19 @@
           "type": "string"
         },
         "delete_backups": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
         },
         "status": {
           "$ref": "#/definitions/BackupScheduleInfoStatusInfo"
         },
         "suspended_by": {
           "$ref": "#/definitions/BackupScheduleInfoSuspendedBy"
+        },
+        "include_resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceInfo"
+          }
         }
       }
     },
@@ -2118,8 +2453,14 @@
           "type": "string"
         },
         "suspend": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
+        },
+        "include_resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceInfo"
+          },
+          "title": "List of resources to backup (optional)"
         }
       },
       "title": "Define BackupScheduleUpdateRequest struct"
@@ -2295,12 +2636,10 @@
         },
         "delete_backups": {
           "type": "boolean",
-          "format": "boolean",
           "description": "delete_backups will determine whether the backups\nbelong to given cluster needs to be deleted or not."
         },
         "delete_restores": {
           "type": "boolean",
-          "format": "boolean",
           "description": "delete_restores will determine whether the restore\nbelong to given cluster needs to be deleted or not."
         }
       }
@@ -2403,14 +2742,10 @@
           },
           "title": "label selectors for the object for filtering"
         },
-        "page_size": {
+        "max_objects": {
           "type": "string",
-          "format": "int64",
+          "format": "uint64",
           "title": "max objects to fetch"
-        },
-        "continuation_token": {
-          "type": "string",
-          "title": "continuation token"
         },
         "time_range": {
           "$ref": "#/definitions/TimeRange",
@@ -2423,6 +2758,10 @@
         "cluster_name_filter": {
           "type": "string",
           "title": "Filter to use for cluster name of objects. Any object that contains the\nfilter will be returned"
+        },
+        "object_index": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -2550,6 +2889,37 @@
             "type": "string"
           },
           "title": "label selectors for the object for filtering"
+        }
+      }
+    },
+    "MetricsInspectResponse": {
+      "type": "object",
+      "properties": {
+        "stats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MetricsInspectResponseStats"
+          }
+        }
+      }
+    },
+    "MetricsInspectResponseStats": {
+      "type": "object",
+      "properties": {
+        "cluster": {
+          "type": "string"
+        },
+        "num_namespaces": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "total_backup_size": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "num_schedules": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -2691,9 +3061,12 @@
             "$ref": "#/definitions/RestoreObject"
           }
         },
-        "continuation_token": {
+        "total_count": {
           "type": "string",
-          "title": "continuation token"
+          "format": "uint64"
+        },
+        "complete": {
+          "type": "boolean"
         }
       },
       "title": "Define RestoreEnumerateResponse struct"
@@ -2970,12 +3343,10 @@
       "type": "object",
       "properties": {
         "background": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
         },
         "run_in_single_pod": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
         },
         "value": {
           "type": "string"
@@ -3012,12 +3383,10 @@
           "type": "string"
         },
         "disable_ssl": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
         },
         "disable_path_style": {
-          "type": "boolean",
-          "format": "boolean"
+          "type": "boolean"
         },
         "storage_class": {
           "type": "string"
@@ -3093,9 +3462,17 @@
           "description": "Number of objects to retain for daily policy, default value is 10."
         },
         "incremental_count": {
-          "type": "integer",
-          "format": "int64",
+          "$ref": "#/definitions/SchedulePolicyInfoIncrementalCount",
           "description": "Number of incremental snapshots to take before taking a full\nsnapshot."
+        }
+      }
+    },
+    "SchedulePolicyInfoIncrementalCount": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },
@@ -3113,8 +3490,7 @@
           "description": "Number of objects to retain for interval policy, default value is 10."
         },
         "incremental_count": {
-          "type": "integer",
-          "format": "int64",
+          "$ref": "#/definitions/SchedulePolicyInfoIncrementalCount",
           "description": "Number of incremental snapshots to take before taking a full\nsnapshot."
         }
       }
@@ -3137,8 +3513,7 @@
           "description": "Number of objects to retain for monthly policy, default value is 10."
         },
         "incremental_count": {
-          "type": "integer",
-          "format": "int64",
+          "$ref": "#/definitions/SchedulePolicyInfoIncrementalCount",
           "description": "Number of incremental snapshots to take before taking a full\nsnapshot."
         }
       }
@@ -3160,8 +3535,7 @@
           "description": "Number of objects to retain for weekly policy, default value is 10."
         },
         "incremental_count": {
-          "type": "integer",
-          "format": "int64",
+          "$ref": "#/definitions/SchedulePolicyInfoIncrementalCount",
           "description": "Number of incremental snapshots to take before taking a full\nsnapshot."
         }
       }
@@ -3250,6 +3624,39 @@
         },
         "build_date": {
           "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "type_url": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "runtimeError": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
         }
       }
     }

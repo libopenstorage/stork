@@ -322,7 +322,7 @@ github.com/gregjones/httpcache
 github.com/gregjones/httpcache/diskcache
 # github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 github.com/grpc-ecosystem/go-grpc-middleware/util/metautils
-# github.com/grpc-ecosystem/grpc-gateway v1.14.6
+# github.com/grpc-ecosystem/grpc-gateway v1.14.8
 github.com/grpc-ecosystem/grpc-gateway/internal
 github.com/grpc-ecosystem/grpc-gateway/runtime
 github.com/grpc-ecosystem/grpc-gateway/utilities
@@ -526,7 +526,7 @@ github.com/pmezard/go-difflib/difflib
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/px-backup-api v1.0.1-0.20200821003202-b927067c1043
+# github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
 github.com/portworx/px-backup-api/pkg/apis/v1
 # github.com/portworx/sched-ops v0.0.0-20200723032629-257aba0944dc
 github.com/portworx/sched-ops/k8s/apps
@@ -767,7 +767,7 @@ google.golang.org/genproto/googleapis/rpc/code
 google.golang.org/genproto/googleapis/rpc/status
 google.golang.org/genproto/googleapis/type/expr
 google.golang.org/genproto/protobuf/field_mask
-# google.golang.org/grpc v1.29.1
+# google.golang.org/grpc v1.31.1
 google.golang.org/grpc
 google.golang.org/grpc/attributes
 google.golang.org/grpc/backoff
@@ -775,6 +775,7 @@ google.golang.org/grpc/balancer
 google.golang.org/grpc/balancer/base
 google.golang.org/grpc/balancer/grpclb
 google.golang.org/grpc/balancer/grpclb/grpc_lb_v1
+google.golang.org/grpc/balancer/grpclb/state
 google.golang.org/grpc/balancer/roundrobin
 google.golang.org/grpc/binarylog/grpc_binarylog_v1
 google.golang.org/grpc/codes
@@ -799,6 +800,7 @@ google.golang.org/grpc/internal/balancerload
 google.golang.org/grpc/internal/binarylog
 google.golang.org/grpc/internal/buffer
 google.golang.org/grpc/internal/channelz
+google.golang.org/grpc/internal/credentials
 google.golang.org/grpc/internal/envconfig
 google.golang.org/grpc/internal/grpclog
 google.golang.org/grpc/internal/grpcrand
@@ -806,12 +808,12 @@ google.golang.org/grpc/internal/grpcsync
 google.golang.org/grpc/internal/grpcutil
 google.golang.org/grpc/internal/resolver/dns
 google.golang.org/grpc/internal/resolver/passthrough
+google.golang.org/grpc/internal/serviceconfig
 google.golang.org/grpc/internal/status
 google.golang.org/grpc/internal/syscall
 google.golang.org/grpc/internal/transport
 google.golang.org/grpc/keepalive
 google.golang.org/grpc/metadata
-google.golang.org/grpc/naming
 google.golang.org/grpc/peer
 google.golang.org/grpc/resolver
 google.golang.org/grpc/serviceconfig
@@ -902,6 +904,7 @@ honnef.co/go/tools/staticcheck
 honnef.co/go/tools/stylecheck
 honnef.co/go/tools/unused
 honnef.co/go/tools/version
+# k8s.io/api v0.17.2 => k8s.io/api v0.16.4
 # helm.sh/helm/v3 v3.0.0-00010101000000-000000000000 => helm.sh/helm/v3 v3.0.0
 helm.sh/helm/v3/internal/experimental/registry
 helm.sh/helm/v3/internal/ignore
@@ -1141,6 +1144,7 @@ k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
 k8s.io/kube-openapi/pkg/common
 k8s.io/kube-openapi/pkg/util/proto
+# k8s.io/utils v0.0.0-20191010214722-8d271d903fe4
 k8s.io/kube-openapi/pkg/util/proto/validation
 # k8s.io/kubectl v0.0.0 => k8s.io/kubectl v0.16.4
 k8s.io/kubectl/pkg/cmd/util

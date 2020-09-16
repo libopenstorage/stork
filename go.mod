@@ -17,7 +17,7 @@ require (
 	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway v1.14.6 // indirect
+	github.com/grpc-ecosystem/grpc-gateway v1.14.8 // indirect
 	github.com/hashicorp/go-version v1.1.0
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/vault/api v1.0.4
@@ -33,7 +33,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240 // indirect
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
-	github.com/portworx/px-backup-api v1.0.1-0.20200821003202-b927067c1043
+	github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
 	github.com/portworx/sched-ops v0.0.0-20200723032629-257aba0944dc
 	github.com/sendgrid/rest v2.6.0+incompatible // indirect
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
@@ -42,7 +42,7 @@ require (
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
 	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
-	google.golang.org/grpc v1.29.1
+	google.golang.org/grpc v1.31.1
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.2.8
 	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000

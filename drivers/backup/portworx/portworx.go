@@ -745,6 +745,9 @@ func (p *portworx) BackupScheduleWaitForNBackupsCompletion(
 	req := &api.BackupEnumerateRequest{
 		OrgId: orgID,
 	}
+	req.EnumerateOptions = &api.EnumerateOptions{
+		MaxObjects: uint64(count),
+	}
 	f := func() (interface{}, bool, error) {
 		var backups []*api.BackupObject
 		// Get backup list
@@ -800,6 +803,7 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 		OrgId: orgID,
 	}
 	f := func() (interface{}, bool, error) {
+		enumerateBatchSize := 10
 		inspectBackupScheduleResp, err := p.backupScheduleManager.Inspect(ctx, req)
 		if err == nil {
 			// Object still exists, just retry
@@ -816,12 +820,22 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 		req := &api.BackupEnumerateRequest{
 			OrgId: orgID,
 		}
-		// Get backup list
-		resp, err := p.backupManager.Enumerate(ctx, req)
-		if err != nil {
-			return nil, true, err
+		req.EnumerateOptions = &api.EnumerateOptions{
+			MaxObjects: uint64(enumerateBatchSize),
 		}
-		backups = append(backups, resp.GetBackups()...)
+		// Get backup list
+		for true {
+			resp, err := p.backupManager.Enumerate(ctx, req)
+			if err != nil {
+				return nil, true, err
+			}
+			backups = append(backups, resp.GetBackups()...)
+			if resp.GetComplete() {
+				break
+			} else {
+				req.EnumerateOptions.ObjectIndex += uint64(len(resp.GetBackups()))
+			}
+		}
 		// retry again, if backup objects remained undeleted.
 		if len(backups) != 0 {
 			return nil,
