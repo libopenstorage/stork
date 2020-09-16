@@ -180,12 +180,8 @@ func (r *ResourceCollector) GetResources(
 
 				var selectors string
 				// PVs don't get the labels from their PVCs, so don't use the label selector
-				// Also skip for some other resources that aren't necessarily tied to an application
 				switch resource.Kind {
-				case "PersistentVolume",
-					"ClusterRoleBinding",
-					"ClusterRole",
-					"ServiceAccount":
+				case "PersistentVolume":
 				default:
 					selectors = labels.Set(labelSelectors).String()
 				}
