@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/drivers/volume/mock"
@@ -19,6 +20,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/openshift"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -303,6 +305,7 @@ func TestExtender(t *testing.T) {
 	t.Run("noReplicasTest", noReplicasTest)
 	t.Run("restorePVCTest", restorePVCTest)
 	t.Run("preferLocalNodeTest", preferLocalNodeTest)
+	t.Run("extenderMetricsTest", extenderMetricsTest)
 	t.Run("teardown", teardown)
 }
 
@@ -951,4 +954,67 @@ func preferLocalNodeTest(t *testing.T) {
 	pod.Annotations[preferLocalNodeOnlyAnnotation] = "true"
 	_, err = sendFilterRequest(pod, requestNodes)
 	require.Error(t, err, "Expected error since local node was not sent in filter request")
+}
+
+// stork extender prom-metrics test
+func extenderMetricsTest(t *testing.T) {
+	nodes := &v1.NodeList{}
+	nodes.Items = append(nodes.Items, *newNode("node1.domain", "node1.domain", "192.168.0.1", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node2.domain", "node2.domain", "192.168.0.2", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node3.domain", "node3.domain", "192.168.0.3", "rack1", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node4.domain", "node4.domain", "192.168.0.4", "rack2", "", ""))
+	nodes.Items = append(nodes.Items, *newNode("node5.domain", "node5.domain", "192.168.0.5", "rack3", "", ""))
+
+	provNodes := []int{0, 1}
+	if err := driver.CreateCluster(5, nodes); err != nil {
+		t.Fatalf("Error creating cluster: %v", err)
+	}
+	// check if pod is hyper-Converged
+	if err := driver.ProvisionVolume("metric-vol-1", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	pod := newPod("HyperPodTest", []string{"metric-vol-1"})
+	pod.Spec.NodeName = "node1"
+	pod.Status.Conditions = make([]v1.PodCondition, 1)
+	pod.Status.Conditions[0].Type = v1.PodReady
+	pod.Status.Conditions[0].Status = v1.ConditionTrue
+	_, err := core.Instance().CreatePod(pod)
+	require.NoError(t, err, "failed to create pod")
+
+	time.Sleep(3 * time.Second)
+	require.Equal(t, testutil.ToFloat64(HyperConvergedPodsCounter), float64(1), "hyperconverged_pods_total not matched")
+
+	// Semi-Hyper converged pod metrics
+	if err := driver.ProvisionVolume("metric-vol-2", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	provNodes2 := []int{1, 2}
+	if err := driver.ProvisionVolume("metric-vol-3", provNodes2, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	semiHyperPod := newPod("SemiPodTest", []string{"metric-vol-2", "metric-vol-3"})
+	semiHyperPod.Spec.NodeName = "node1"
+	semiHyperPod.Status.Conditions = make([]v1.PodCondition, 1)
+	semiHyperPod.Status.Conditions[0].Type = v1.PodReady
+	semiHyperPod.Status.Conditions[0].Status = v1.ConditionTrue
+	_, err = core.Instance().CreatePod(semiHyperPod)
+	require.NoError(t, err, "failed to create pod")
+
+	time.Sleep(3 * time.Second)
+	require.Equal(t, testutil.ToFloat64(SemiHyperConvergePodsCounter), float64(1), "semi_hyperconverged_pods_total not matched")
+
+	// non-hyper converged pod metrics
+	if err := driver.ProvisionVolume("non-metric-vol", provNodes, 1); err != nil {
+		t.Fatalf("Error provisioning volume: %v", err)
+	}
+	nonHyperPod := newPod("NonHyperPodTest", []string{"non-metric-vol"})
+	nonHyperPod.Spec.NodeName = "node5"
+	nonHyperPod.Status.Conditions = make([]v1.PodCondition, 1)
+	nonHyperPod.Status.Conditions[0].Type = v1.PodReady
+	nonHyperPod.Status.Conditions[0].Status = v1.ConditionTrue
+	_, err = core.Instance().CreatePod(nonHyperPod)
+	require.NoError(t, err, "failed to create pod")
+
+	time.Sleep(3 * time.Second)
+	require.Equal(t, testutil.ToFloat64(NonHyperConvergePodsCounter), float64(1), "non_hyperconverged_pods_total not matched")
 }

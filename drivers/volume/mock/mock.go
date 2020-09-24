@@ -67,9 +67,10 @@ func (m *Driver) CreateCluster(numNodes int, nodes *v1.NodeList) error {
 	}
 	for i := 0; i < numNodes; i++ {
 		node := &storkvolume.NodeInfo{
-			StorageID: "node" + strconv.Itoa(i+1),
-			Hostname:  "node" + strconv.Itoa(i+1),
-			Status:    storkvolume.NodeOnline,
+			StorageID:   "node" + strconv.Itoa(i+1),
+			Hostname:    "node" + strconv.Itoa(i+1),
+			SchedulerID: "node" + strconv.Itoa(i+1),
+			Status:      storkvolume.NodeOnline,
 		}
 		node.IPs = append(node.IPs, "192.168.0."+strconv.Itoa(i+1))
 		for _, n := range nodes.Items {
