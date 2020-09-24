@@ -1013,6 +1013,12 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		}
 		obj.Annotations[secretName] = configMap.Data[secretNameKey]
 		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkapi.MigrationSchedule); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 	} else if obj, ok := spec.(*storkapi.VolumeSnapshotRestore); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
@@ -2799,6 +2805,23 @@ func (k *K8s) createMigrationObjects(
 	app *spec.AppSpec,
 ) (interface{}, error) {
 	k8sOps := k8sStork
+	// Add security annotations if running with auth-enabled
+	configMapName := k.secretConfigMapName
+	if configMapName != "" {
+		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		if err != nil {
+			return nil, &scheduler.ErrFailedToGetConfigMap{
+				Name:  configMapName,
+				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+			}
+		}
+		err = k.addSecurityAnnotation(specObj, configMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add annotations to migration object: %v", err)
+		}
+
+	}
+
 	if obj, ok := specObj.(*storkapi.ClusterPair); ok {
 		obj.Namespace = ns.Name
 		clusterPair, err := k8sOps.CreateClusterPair(obj)
