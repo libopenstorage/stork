@@ -1033,12 +1033,13 @@
   revision = "1555304b9b35fdd2b425bccf1a5613677705e7d0"
 
 [[projects]]
-  digest = "1:93a746f1060a8acbcf69344862b2ceced80f854170e1caae089b2834c5fbf7f4"
+  digest = "1:b658f1af994f893629b83334c60240d40b02bf9f5df1979e50c9cdc1b6d06335"
   name = "github.com/prometheus/client_golang"
   packages = [
     "prometheus",
     "prometheus/internal",
     "prometheus/promhttp",
+    "prometheus/testutil",
   ]
   pruneopts = "UT"
   revision = "505eaef017263e299324067d40ca2c48f6a2cf50"
@@ -2299,6 +2300,9 @@
     "github.com/portworx/torpedo/drivers/volume/gce",
     "github.com/portworx/torpedo/drivers/volume/linstor",
     "github.com/portworx/torpedo/drivers/volume/portworx",
+    "github.com/prometheus/client_golang/prometheus",
+    "github.com/prometheus/client_golang/prometheus/promhttp",
+    "github.com/prometheus/client_golang/prometheus/testutil",
     "github.com/sirupsen/logrus",
     "github.com/skyrings/skyring-common/tools/uuid",
     "github.com/spf13/cobra",
