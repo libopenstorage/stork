@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -476,4 +477,6 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	_, err = core.Instance().GetPodByName(unknownPodDetached.Name, "")
 	require.Error(t, err, "expected error from get pod as pod should be deleted")
 
+	// total pods rescheduled during UT's
+	require.Equal(t, testutil.ToFloat64(HealthCounter), float64(8), "pods_reschduled_total not matched")
 }
