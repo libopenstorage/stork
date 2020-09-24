@@ -12,11 +12,9 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	storklog "github.com/libopenstorage/stork/pkg/log"
-	"github.com/libopenstorage/stork/pkg/metrics"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,6 +44,27 @@ const (
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
 )
 
+var (
+	// HyperConvergedPodsCounter for pods hyper-converged by stork scheduler i.e scheduled on
+	// node where replicas for all pod volumes exists
+	HyperConvergedPodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "hyperconverged_pods_total",
+		Help: "The total number of pods hyper-converged by stork scheduler",
+	}, []string{"pod", "namespace"})
+	// NonHyperConvergePodsCounter for pods which are placed on driver node but not on node
+	// where pod volume replicas exists
+	NonHyperConvergePodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "non_hyperconverged_pods_total",
+		Help: "The total number of pods that are not hyper-converged by stork scheduler",
+	}, []string{"pod", "namespace"})
+	// SemiHyperConvergePodsCounter for pods which scheduled on node where replicas for all
+	// volumes does not exists
+	SemiHyperConvergePodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "semi_hyperconverged_pods_total",
+		Help: "The total number of pods that are partially hyper-converged by stork scheduler",
+	}, []string{"pod", "namespace"})
+)
+
 // Extender Scheduler extender
 type Extender struct {
 	Recorder record.EventRecorder
@@ -63,19 +82,19 @@ func (e *Extender) Start() error {
 	if e.started {
 		return fmt.Errorf("Extender has already been started")
 	}
-
 	// TODO: Make the listen port configurable
 	e.server = &http.Server{Addr: ":8099"}
-
 	http.HandleFunc("/", e.serveHTTP)
-	http.Handle("/metrics", promhttp.Handler())
 	go func() {
 		if err := e.server.ListenAndServe(); err != http.ErrServerClosed {
 			log.Panicf("Error starting extender server: %v", err)
 		}
 	}()
 
-	if err := e.isNodeHyperConverged(); err != nil {
+	prometheus.MustRegister(HyperConvergedPodsCounter)
+	prometheus.MustRegister(NonHyperConvergePodsCounter)
+	prometheus.MustRegister(SemiHyperConvergePodsCounter)
+	if err := e.collectExtenderMetrics(); err != nil {
 		return err
 	}
 
@@ -276,7 +295,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	}
 }
 
-func (e *Extender) isNodeHyperConverged() error {
+func (e *Extender) collectExtenderMetrics() error {
 	fn := func(object runtime.Object) error {
 		pod, ok := object.(*v1.Pod)
 		if !ok {
@@ -288,9 +307,9 @@ func (e *Extender) isNodeHyperConverged() error {
 		labels["namespace"] = pod.GetNamespace()
 
 		if pod.DeletionTimestamp != nil {
-			metrics.HyperConvergedPodsCounter.Delete(labels)
-			metrics.SemiHyperConvergePodsCounter.Delete(labels)
-			metrics.NonHyperConvergePodsCounter.Delete(labels)
+			HyperConvergedPodsCounter.Delete(labels)
+			SemiHyperConvergePodsCounter.Delete(labels)
+			NonHyperConvergePodsCounter.Delete(labels)
 			return nil
 		}
 		// check only if pods in ready state
@@ -343,12 +362,12 @@ func (e *Extender) isNodeHyperConverged() error {
 		}
 		if val, ok := nodeMap[storageID]; ok {
 			if large == val {
-				metrics.HyperConvergedPodsCounter.With(labels).Set(1)
+				HyperConvergedPodsCounter.With(labels).Set(1)
 			} else {
-				metrics.SemiHyperConvergePodsCounter.With(labels).Set(1)
+				SemiHyperConvergePodsCounter.With(labels).Set(1)
 			}
 		} else {
-			metrics.NonHyperConvergePodsCounter.With(labels).Set(1)
+			NonHyperConvergePodsCounter.With(labels).Set(1)
 		}
 
 		return nil
