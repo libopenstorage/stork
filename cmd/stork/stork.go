@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,6 +30,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/libopenstorage/stork/pkg/webhookadmission"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	api_v1 "k8s.io/api/core/v1"
@@ -146,6 +148,10 @@ func main() {
 			Name:  "webhook-skip-resources-annotation",
 			Usage: "Application annotation to be used to disable auto updating app scheduler as stork",
 		},
+		cli.BoolTFlag{
+			Name:  "stork-metrics",
+			Usage: "Enable stork metrics collection for stork resources (default: true)",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -188,6 +194,10 @@ func run(c *cli.Context) {
 
 		if err = d.Init(nil); err != nil {
 			log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
+		}
+
+		if c.Bool("stork-metrics") {
+			http.Handle("/metrics", promhttp.Handler())
 		}
 
 		if c.Bool("extender") {

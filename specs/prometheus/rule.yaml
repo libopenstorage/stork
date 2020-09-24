@@ -12,13 +12,13 @@ spec:
     rules:
     - alert: StorkNonHyperConvergedPod
       annotations:
-        message: Application pod {{ $labels.exported_pod }} in namespace {{ $labels.exported_namespace
+        message: Application pod {{ $labels.pod }} in namespace {{ $labels.namespace
           }} is not hyperconverged
-        summary: Application pod {{$labels.exported_pod}} in namespace {{$labels.exported_namespace}}
+        summary: Application pod {{$labels.pod}} in namespace {{$labels.namespace}}
           is not hyperconverged
       expr: non_hyperconverged_pods_total >= 1
       for: 5m
       labels:
-        issue: Application pod {{$labels.exported_pod}} in namespace {{$labels.exported_namespace}}
+        issue: Application pod {{$labels.exported_pod}} in namespace {{$labels.namespace}}
           is not hyperconverged
         severity: warning
