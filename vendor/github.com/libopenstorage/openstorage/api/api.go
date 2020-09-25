@@ -60,6 +60,15 @@ const (
 	SpecExportProtocolCustom = "custom"
 	SpecExportOptions        = "export_options"
 	SpecExportOptionsEmpty   = "empty_export_options"
+	SpecMountOptions         = "mount_options"
+	SpecSharedv4MountOptions = "sharedv4_mount_options"
+	SpecProxyProtocolS3      = "s3"
+	SpecProxyProtocolPXD     = "pxd"
+	SpecProxyProtocolNFS     = "nfs"
+	SpecProxyEndpoint        = "proxy_endpoint"
+	SpecProxyNFSSubPath      = "proxy_nfs_subpath"
+	SpecProxyNFSExportPath   = "proxy_nfs_exportpath"
+	SpecProxyS3Bucket        = "proxy_s3_bucket"
 	// SpecBestEffortLocationProvisioning default is false. If set provisioning request will succeed
 	// even if specified data location parameters could not be satisfied.
 	SpecBestEffortLocationProvisioning = "best_effort_location_provisioning"
@@ -67,8 +76,17 @@ const (
 	// the VolumeSpec.force_unsupported_fs_type. When set to true it asks
 	// the driver to use an unsupported value of VolumeSpec.format if possible
 	SpecForceUnsupportedFsType = "force_unsupported_fs_type"
-	SpecNodiscard              = "nodiscard"
-	StoragePolicy              = "storagepolicy"
+	// SpecMatchSrcVolProvision defaults to false. Applicable to cloudbackup restores only.
+	// If set to "true", cloudbackup restore volume gets provisioned on same pools as
+	// backup, allowing for inplace restore after.
+	SpecMatchSrcVolProvision = "match_src_vol_provision"
+	SpecNodiscard            = "nodiscard"
+	StoragePolicy            = "storagepolicy"
+	SpecCowOnDemand          = "cow_ondemand"
+	SpecDirectIo             = "direct_io"
+	SpecScanPolicyTrigger    = "scan_policy_trigger"
+	SpecScanPolicyAction     = "scan_policy_action"
+	SpecProxyWrite           = "proxy_write"
 )
 
 // OptionKey specifies a set of recognized query params.
@@ -103,6 +121,9 @@ const (
 	OptCredDisableSSL = "CredDisableSSL"
 	// OptCredDisablePathStyle does not enforce path style for s3
 	OptCredDisablePathStyle = "CredDisablePathStyle"
+	// OptCredStorageClass indicates the storage class to be used for puts
+	// allowed values are STANDARD and STANDARD_IA
+	OptCredStorageClass = "CredStorageClass"
 	// OptCredEndpoint indicate the cloud endpoint
 	OptCredEndpoint = "CredEndpoint"
 	// OptCredAccKey for s3
@@ -125,8 +146,12 @@ const (
 	OptCredOwnership = "CredOwnership"
 	// OptCredProxy proxy key in params
 	OptCredProxy = "CredProxy"
+	// OptCredIAMPolicy if "true", indicates IAM creds to be used
+	OptCredIAMPolicy = "CredIAMPolicy"
 	// OptCloudBackupID is the backID in the cloud
 	OptCloudBackupID = "CloudBackID"
+	// OptCloudBackupIgnoreCreds ignores credentials for incr backups
+	OptCloudBackupIgnoreCreds = "CloudBackupIgnoreCreds"
 	// OptSrcVolID is the source volume ID of the backup
 	OptSrcVolID = "SrcVolID"
 	// OptBkupOpState is the desired operational state
@@ -158,6 +183,24 @@ const (
 const (
 	// AutoAggregation value indicates driver to select aggregation level.
 	AutoAggregation = math.MaxUint32
+)
+
+// The main goal of the following label keys is for the Kubernetes intree middleware
+// to keep track of the source location of the PVC with labels that cannot be modified
+// by the owner of the volume, but only by the storage administrator.
+const (
+	// KubernetesPvcNameKey is a label on the openstorage volume
+	// which tracks the source PVC for the volume.
+	KubernetesPvcNameKey = "openstorage.io/pvc-name"
+
+	// KubernetesPvcNamespaceKey is a label on the openstorage volume
+	// which tracks the source PVC namespace for the volume
+	KubernetesPvcNamespaceKey = "openstorage.io/pvc-namespace"
+)
+
+const (
+	// gRPC root path used to extract service and API information
+	SdkRootPath = "openstorage.api.OpenStorage"
 )
 
 // Node describes the state of a node.
@@ -233,7 +276,7 @@ type Cluster struct {
 	NodeId string
 
 	// array of all the nodes in the cluster.
-	Nodes []Node
+	Nodes []*Node
 
 	// Management url for the cluster
 	ManagementURL string
@@ -286,6 +329,9 @@ type CloudBackupCreateRequest struct {
 	// manual/user triggerred backups and not applicable for scheduled backups.
 	// Value of 0 retains the default behavior.
 	FullBackupFrequency uint32
+	// DeleteLocal indicates if local snap must be deleted after the
+	// backup is complete
+	DeleteLocal bool
 }
 
 type CloudBackupCreateResponse struct {
@@ -306,6 +352,9 @@ type CloudBackupGroupCreateRequest struct {
 	CredentialUUID string
 	// Full indicates if full backup is desired even though incremental is possible
 	Full bool
+	// DeleteLocal indicates if local snap must be deleted after the
+	// backup is complete
+	DeleteLocal bool
 }
 
 type CloudBackupRestoreRequest struct {
@@ -322,6 +371,13 @@ type CloudBackupRestoreRequest struct {
 	// Name is optional unique id to be used for this restore op
 	// restore creates this by default
 	Name string
+	// Optional RestoreVolumeSpec allows some of the restoreVolume fields to be modified.
+	// These fields default to the volume spec stored with cloudbackup.
+	// The request fails if both RestoreVolSpec and NodeID are specified.
+	Spec *RestoreVolumeSpec
+	// Optional Locator for restoreVolume. Request fails if both Name and
+	// locator are specified
+	Locator *VolumeLocator
 }
 
 type CloudBackupGroupCreateResponse struct {
@@ -424,6 +480,12 @@ type CloudBackupOpType string
 const (
 	CloudBackupOp  = CloudBackupOpType("Backup")
 	CloudRestoreOp = CloudBackupOpType("Restore")
+)
+
+// Allowed storage classes s3
+const (
+	S3StorageClassStandard   = "STANDARD"
+	S3StorageClassStandardIa = "STANDARD_IA"
 )
 
 type CloudBackupStatusType string
@@ -719,6 +781,28 @@ func simpleString(typeString string, nameMap map[int32]string, v int32) string {
 		return strconv.Itoa(int(v))
 	}
 	return strings.TrimPrefix(strings.ToLower(s), fmt.Sprintf("%s_", strings.ToLower(typeString)))
+}
+
+// ScanPolicyTriggerValueof returns value of string
+func ScanPolicy_ScanTriggerSimpleValueOf(s string) (ScanPolicy_ScanTrigger, error) {
+	obj, err := simpleValueOf("scan_trigger", ScanPolicy_ScanTrigger_value, s)
+	return ScanPolicy_ScanTrigger(obj), err
+}
+
+// SimpleString returns the string format of ScanPolicy_ScanTrigger
+func (x ScanPolicy_ScanTrigger) SimpleString() string {
+	return simpleString("scan_trigger", ScanPolicy_ScanTrigger_name, int32(x))
+}
+
+// ScanPolicyActioinValueof returns value of string
+func ScanPolicy_ScanActionSimpleValueOf(s string) (ScanPolicy_ScanAction, error) {
+	obj, err := simpleValueOf("scan_action", ScanPolicy_ScanAction_value, s)
+	return ScanPolicy_ScanAction(obj), err
+}
+
+// SimpleString returns the string format of ScanPolicy_ScanAction
+func (x ScanPolicy_ScanAction) SimpleString() string {
+	return simpleString("scan_action", ScanPolicy_ScanAction_name, int32(x))
 }
 
 func toSec(ms uint64) uint64 {
@@ -1188,4 +1272,30 @@ func (v *Volume) IsAttached() bool {
 type TokenSecretContext struct {
 	SecretName      string
 	SecretNamespace string
+	PvcName         string
+	PvcNamespace    string
+}
+
+// ParseProxyEndpoint parses the proxy endpoint and returns the
+// proxy protocol and the endpoint
+func ParseProxyEndpoint(proxyEndpoint string) (ProxyProtocol, string) {
+	if len(proxyEndpoint) == 0 {
+		return ProxyProtocol_PROXY_PROTOCOL_INVALID, ""
+	}
+	tokens := strings.Split(proxyEndpoint, "://")
+	if len(tokens) == 1 {
+		return ProxyProtocol_PROXY_PROTOCOL_INVALID, tokens[0]
+	} else if len(tokens) == 2 {
+		switch tokens[0] {
+		case SpecProxyProtocolS3:
+			return ProxyProtocol_PROXY_PROTOCOL_S3, tokens[1]
+		case SpecProxyProtocolNFS:
+			return ProxyProtocol_PROXY_PROTOCOL_NFS, tokens[1]
+		case SpecProxyProtocolPXD:
+			return ProxyProtocol_PROXY_PROTOCOL_PXD, tokens[1]
+		default:
+			return ProxyProtocol_PROXY_PROTOCOL_INVALID, tokens[1]
+		}
+	}
+	return ProxyProtocol_PROXY_PROTOCOL_INVALID, ""
 }
