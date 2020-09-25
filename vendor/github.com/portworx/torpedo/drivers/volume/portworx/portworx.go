@@ -503,6 +503,10 @@ func (d *portworx) RecoverDriver(n node.Node) error {
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
+	if val, hasKey := params["refresh-endpoint"]; hasKey {
+		refreshEndpoint, _ := strconv.ParseBool(val)
+		d.refreshEndpoint = refreshEndpoint
+	}
 	volDriver := d.getVolDriver()
 	t := func() (interface{}, bool, error) {
 		volumeInspectResponse, err := volDriver.Inspect(d.getContextWithToken(context.Background(), token), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
@@ -1232,8 +1236,16 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 	return replFactor, nil
 }
 
-func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64) error {
+func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, opts ...torpedovolume.Options) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
+	var replicationUpdateTimeout time.Duration
+	if len(opts) > 0 {
+		replicationUpdateTimeout = opts[0].ValidateReplicationUpdateTimeout
+	} else {
+		replicationUpdateTimeout = validateReplicationUpdateTimeout
+	}
+	logrus.Infof("Setting ReplicationUpdateTimeout to %s-%v\n", replicationUpdateTimeout, replicationUpdateTimeout)
+
 	t := func() (interface{}, bool, error) {
 		volDriver := d.getVolDriver()
 		volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
@@ -1256,7 +1268,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			return nil, false, err
 		}
 		quitFlag := false
-		wdt := time.After(validateReplicationUpdateTimeout)
+		wdt := time.After(replicationUpdateTimeout)
 		for !quitFlag && !(areRepSetsFinal(volumeInspectResponse.Volume, replFactor) && isClean(volumeInspectResponse.Volume)) {
 			select {
 			case <-wdt:
@@ -1277,7 +1289,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		return 0, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, replicationUpdateTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToSetReplicationFactor{
 			ID:    volumeName,
 			Cause: err.Error(),
