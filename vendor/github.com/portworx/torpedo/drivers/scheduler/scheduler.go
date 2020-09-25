@@ -35,6 +35,8 @@ type Context struct {
 	SkipVolumeValidation bool
 	// SkipClusterScopedObject for cases of multi-cluster backup when Storage class does not restored
 	SkipClusterScopedObject bool
+	// RefreshStorageEndpoint force refresh the storage driver endpoint
+	RefreshStorageEndpoint bool
 	// ReadinessTimeout time within which context is expected to be up
 	ReadinessTimeout time.Duration
 }

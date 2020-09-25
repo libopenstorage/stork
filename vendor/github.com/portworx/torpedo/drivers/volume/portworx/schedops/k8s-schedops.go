@@ -423,7 +423,6 @@ func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[strin
 
 func (k *k8sSchedOps) GetVolumeName(vol *volume.Volume) string {
 	if vol != nil && vol.ID != "" {
-		logrus.Infof("Returning vol name as : %s", vol.ID)
 		return vol.ID
 	}
 	return ""
@@ -854,11 +853,11 @@ func printStatus(pods ...corev1.Pod) {
 			status += fmt.Sprintf("Phase: %v Reason: %s", pod.Status.Phase, pod.Status.Reason)
 		}
 		if ready {
-			logrus.Infof("Pod [%s] %s ready on node %s - %s", pod.Namespace, pod.Name, pod.Status.NominatedNodeName,
+			logrus.Infof("Pod [%s] %s ready on node %s - %s", pod.Namespace, pod.Name, pod.Spec.NodeName,
 				status)
 		} else {
 			logrus.Infof("Pod [%s] %s not ready on node %s - %s", pod.Namespace, pod.Name,
-				pod.Status.NominatedNodeName, status)
+				pod.Spec.NodeName, status)
 		}
 	}
 }
