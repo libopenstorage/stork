@@ -181,6 +181,15 @@ func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 						expect(newRepl).To(equal(expReplMap[v]))
 					})
 			}
+			Step(fmt.Sprintf("validating context after increasing HA for app: %s",
+				ctx.App.Key), func() {
+				errorChan := make(chan error, errorChannelSize)
+				ctx.SkipVolumeValidation = false
+				ValidateContext(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			})
 		}
 	})
 }
@@ -256,6 +265,15 @@ func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 						expect(newRepl).To(equal(expReplMap[v]))
 					})
 			}
+			Step(fmt.Sprintf("validating context after reducing HA for app: %s",
+				ctx.App.Key), func() {
+				errorChan := make(chan error, errorChannelSize)
+				ctx.SkipVolumeValidation = false
+				ValidateContext(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			})
 		}
 	})
 }
@@ -278,14 +296,16 @@ func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRe
 	}()
 
 	for _, ctx := range contexts {
-		Step(fmt.Sprintf("delete tasks for app:"), func() {
+		Step(fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key), func() {
 			err := Inst().S.DeleteTasks(ctx, nil)
 			UpdateOutcome(event, err)
 			expect(err).NotTo(haveOccurred())
 		})
 
-		Step(fmt.Sprintf("validating context after delete tasks for app: "), func() {
+		Step(fmt.Sprintf("validating context after delete tasks for app: [%s]",
+			ctx.App.Key), func() {
 			errorChan := make(chan error, errorChannelSize)
+			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
 				UpdateOutcome(event, err)

@@ -125,28 +125,28 @@ func testTrigger(wg *sync.WaitGroup,
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
-			// check no other disruptive trigger is happening at same time
-			//if isDisruptiveTrigger(triggerType) {
-			// At a give point in time, only single disruptive trigger is allowed to run.
-			// No other disruptive or non-disruptive trigger can run at this time.
-			logrus.Infof("===Taking lock for [%s]\n", triggerType)
+			logrus.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 			triggerLoc.Lock()
-			logrus.Infof("===Successfully taken lock for [%s]\n", triggerType)
-			//} else {
-			// If trigger is non-disruptive then just check if no other disruptive trigger is running or not
-			// and release the lock immidiately so that other non-disruptive triggers can happen.
-			/*
-					triggerLoc.Lock()
-					logrus.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
-					triggerLoc.Unlock()
-					logrus.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
-				}
-			*/
+			logrus.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			/* PTX-2667: check no other disruptive trigger is happening at same time
+			if isDisruptiveTrigger(triggerType) {
+			   // At a give point in time, only single disruptive trigger is allowed to run.
+			   // No other disruptive or non-disruptive trigger can run at this time.
+			   triggerLoc.Lock()
+			} else {
+			   // If trigger is non-disruptive then just check if no other disruptive trigger is running or not
+			   // and release the lock immidiately so that other non-disruptive triggers can happen.
+				triggerLoc.Lock()
+				logrus.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
+				triggerLoc.Unlock()
+				logrus.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
+			}*/
+
 			triggerFunc(contexts, triggerEventsChan)
 
 			//if isDisruptiveTrigger(triggerType) {
 			triggerLoc.Unlock()
-			logrus.Infof("===Successfully released lock for [%s]", triggerType)
+			logrus.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 			//}
 
 			lastInvocationTime = time.Now().Local()
