@@ -15,6 +15,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -214,6 +215,10 @@ func (a *ApplicationRestoreController) Reconcile(request reconcile.Request) (rec
 
 // Handle updates for ApplicationRestore objects
 func (a *ApplicationRestoreController) handle(ctx context.Context, restore *storkapi.ApplicationRestore) error {
+	if _, ok := restore.Annotations[storkVersion]; !ok {
+		restore.Annotations[storkVersion] = version.Version
+	}
+
 	if restore.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(restore, controllers.FinalizerCleanup) {
 			if err := a.cleanupRestore(restore); err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/schedule"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
@@ -89,6 +90,10 @@ func (s *ApplicationBackupScheduleController) Reconcile(request reconcile.Reques
 
 // Handle updates for ApplicationBackupSchedule objects
 func (s *ApplicationBackupScheduleController) handle(ctx context.Context, backupSchedule *stork_api.ApplicationBackupSchedule) error {
+	if _, ok := backupSchedule.Annotations[storkVersion]; !ok {
+		backupSchedule.Annotations[storkVersion] = version.Version
+	}
+
 	if backupSchedule.DeletionTimestamp != nil {
 		return nil
 	}
