@@ -59,7 +59,8 @@ var _ = Describe("{Longevity}", func() {
 		RebootNode:       TriggerRebootNodes,
 		RestartVolDriver: TriggerRestartVolDriver,
 		CrashVolDriver:   TriggerCrashVolDriver,
-		HAUpdate:         TriggerHAUpdate,
+		HAIncrease:       TriggerHAIncrease,
+		HADecrease:       TriggerHADecrease,
 		EmailReporter:    TriggerEmailReporter,
 		AppTaskDown:      TriggerAppTaskDown,
 	}
@@ -124,23 +125,29 @@ func testTrigger(wg *sync.WaitGroup,
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
-			// check no other disruptive trigger is happening at same time
+			logrus.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			triggerLoc.Lock()
+			logrus.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			/* PTX-2667: check no other disruptive trigger is happening at same time
 			if isDisruptiveTrigger(triggerType) {
-				// At a give point in time, only single disruptive trigger is allowed to run.
-				// No other disruptive or non-disruptive trigger can run at this time.
-				triggerLoc.Lock()
+			   // At a give point in time, only single disruptive trigger is allowed to run.
+			   // No other disruptive or non-disruptive trigger can run at this time.
+			   triggerLoc.Lock()
 			} else {
-				// If trigger is non-disruptive then just check if no other disruptive trigger is running or not
-				// and release the lock immidiately so that other non-disruptive triggers can happen.
+			   // If trigger is non-disruptive then just check if no other disruptive trigger is running or not
+			   // and release the lock immidiately so that other non-disruptive triggers can happen.
 				triggerLoc.Lock()
+				logrus.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
 				triggerLoc.Unlock()
-			}
+				logrus.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
+			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
 
-			if isDisruptiveTrigger(triggerType) {
-				triggerLoc.Unlock()
-			}
+			//if isDisruptiveTrigger(triggerType) {
+			triggerLoc.Unlock()
+			logrus.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+			//}
 
 			lastInvocationTime = time.Now().Local()
 
@@ -185,6 +192,8 @@ func watchConfigMap() error {
 
 func populateDisruptiveTriggers() {
 	disruptiveTriggers = map[string]bool{
+		HAIncrease:       true,
+		HADecrease:       false,
 		RestartVolDriver: false,
 		CrashVolDriver:   false,
 		RebootNode:       true,
@@ -251,7 +260,8 @@ func populateIntervals() {
 	triggerInterval[RebootNode] = map[int]time.Duration{}
 	triggerInterval[CrashVolDriver] = map[int]time.Duration{}
 	triggerInterval[RestartVolDriver] = map[int]time.Duration{}
-	triggerInterval[HAUpdate] = map[int]time.Duration{}
+	triggerInterval[HAIncrease] = map[int]time.Duration{}
+	triggerInterval[HADecrease] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 
@@ -277,14 +287,6 @@ func populateIntervals() {
 	triggerInterval[RestartVolDriver][6] = 5 * baseInterval
 	triggerInterval[RestartVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
 
-	triggerInterval[HAUpdate][10] = 1 * baseInterval
-	triggerInterval[HAUpdate][9] = 2 * baseInterval
-	triggerInterval[HAUpdate][8] = 3 * baseInterval
-	triggerInterval[HAUpdate][7] = 4 * baseInterval
-	triggerInterval[HAUpdate][6] = 5 * baseInterval
-	triggerInterval[HAUpdate][5] = 6 * baseInterval // Default global chaos level, 1.5 hrs
-
-	baseInterval = 3 * time.Minute
 	triggerInterval[AppTaskDown][10] = 1 * baseInterval
 	triggerInterval[AppTaskDown][9] = 2 * baseInterval
 	triggerInterval[AppTaskDown][8] = 3 * baseInterval
@@ -304,10 +306,33 @@ func populateIntervals() {
 	triggerInterval[EmailReporter][2] = 9 * baseInterval
 	triggerInterval[EmailReporter][1] = 10 * baseInterval
 
+	triggerInterval[HAIncrease][10] = 1 * baseInterval
+	triggerInterval[HAIncrease][9] = 2 * baseInterval
+	triggerInterval[HAIncrease][8] = 3 * baseInterval
+	triggerInterval[HAIncrease][7] = 4 * baseInterval
+	triggerInterval[HAIncrease][6] = 5 * baseInterval
+	triggerInterval[HAIncrease][5] = 6 * baseInterval // Default global chaos level, 1.5 hrs
+	triggerInterval[HAIncrease][4] = 7 * baseInterval
+	triggerInterval[HAIncrease][3] = 8 * baseInterval
+	triggerInterval[HAIncrease][2] = 9 * baseInterval
+	triggerInterval[HAIncrease][1] = 10 * baseInterval
+
+	triggerInterval[HADecrease][10] = 1 * baseInterval
+	triggerInterval[HADecrease][9] = 2 * baseInterval
+	triggerInterval[HADecrease][8] = 3 * baseInterval
+	triggerInterval[HADecrease][7] = 4 * baseInterval
+	triggerInterval[HADecrease][6] = 5 * baseInterval
+	triggerInterval[HADecrease][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[HADecrease][4] = 7 * baseInterval
+	triggerInterval[HADecrease][3] = 8 * baseInterval
+	triggerInterval[HADecrease][2] = 9 * baseInterval
+	triggerInterval[HADecrease][1] = 10 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[RebootNode][0] = 0
 	triggerInterval[CrashVolDriver][0] = 0
-	triggerInterval[HAUpdate][0] = 0
+	triggerInterval[HAIncrease][0] = 0
+	triggerInterval[HADecrease][0] = 0
 	triggerInterval[RestartVolDriver][0] = 0
 	triggerInterval[AppTaskDown][0] = 0
 }

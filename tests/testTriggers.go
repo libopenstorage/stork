@@ -85,8 +85,10 @@ func UpdateOutcome(event *EventRecord, err error) {
 }
 
 const (
-	// HAUpdate performs HA increase and decrease
-	HAUpdate = "haUpdate"
+	// HAIncrease performs repl-add
+	HAIncrease = "haIncrease"
+	// HADecrease performs repl-reduce
+	HADecrease = "haDecrease"
 	// AppTaskDown deletes application task for all contexts
 	AppTaskDown = "appTaskDown"
 	// RestartVolDriver restart volume driver
@@ -99,13 +101,13 @@ const (
 	EmailReporter = "emailReporter"
 )
 
-// TriggerHAUpdate changes HA level of all volumes of given contexts
-func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerHAIncrease peforms repl-add on all volumes of given contexts
+func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: HAUpdate,
+			Type: HAIncrease,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -117,7 +119,8 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 	}()
 
 	expReplMap := make(map[*volume.Volume]int64)
-	Step("get volumes for all apps in test and update replication factor", func() {
+	Step("get volumes for all apps in test and increase replication factor", func() {
+		time.Sleep(10 * time.Minute)
 		for _, ctx := range contexts {
 			var appVolumes []*volume.Volume
 			var err error
@@ -131,6 +134,97 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 			}
 			for _, v := range appVolumes {
 				MaxRF := Inst().V.GetMaxReplicationFactor()
+
+				Step(
+					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+						Inst().V.String(), ctx.App.Key, v),
+					func() {
+						errExpected := false
+						currRep, err := Inst().V.GetReplicationFactor(v)
+						UpdateOutcome(event, err)
+						expect(err).NotTo(haveOccurred())
+						// GetMaxReplicationFactory is hardcoded to 3
+						// if it increases repl 3 to an aggregated 2 volume, it will fail
+						// because it would require 6 worker nodes, since
+						// number of nodes required = aggregation level * replication factor
+						currAggr, err := Inst().V.GetAggregationLevel(v)
+						UpdateOutcome(event, err)
+						expect(err).NotTo(haveOccurred())
+						if currAggr > 1 {
+							MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
+						}
+						if currRep == MaxRF {
+							errExpected = true
+						}
+						expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
+						err = Inst().V.SetReplicationFactor(v, currRep+1, opts)
+						if !errExpected {
+							UpdateOutcome(event, err)
+							expect(err).NotTo(haveOccurred())
+						} else {
+							if !expect(err).To(haveOccurred()) {
+								UpdateOutcome(event, fmt.Errorf("Expected HA increase to fail since new repl factor is greater than %v but it did not", MaxRF))
+							}
+						}
+					})
+				Step(
+					fmt.Sprintf("validate successful repl increase on app %s's volume: %v",
+						ctx.App.Key, v),
+					func() {
+						newRepl, err := Inst().V.GetReplicationFactor(v)
+						UpdateOutcome(event, err)
+						expect(err).NotTo(haveOccurred())
+						if newRepl != expReplMap[v] {
+							err = fmt.Errorf("volume has invalid repl value. Expected:%d Actual:%d", expReplMap[v], newRepl)
+							UpdateOutcome(event, err)
+						}
+						expect(newRepl).To(equal(expReplMap[v]))
+					})
+			}
+			Step(fmt.Sprintf("validating context after increasing HA for app: %s",
+				ctx.App.Key), func() {
+				errorChan := make(chan error, errorChannelSize)
+				ctx.SkipVolumeValidation = false
+				ValidateContext(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			})
+		}
+	})
+}
+
+// TriggerHADecrease performs repl-reduce on all volumes of given contexts
+func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: HADecrease,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	expReplMap := make(map[*volume.Volume]int64)
+	Step("get volumes for all apps in test and decrease replication factor", func() {
+		for _, ctx := range contexts {
+			var appVolumes []*volume.Volume
+			var err error
+			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
+				appVolumes, err = Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				expect(appVolumes).NotTo(beEmpty())
+			})
+			opts := volume.Options{
+				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+			}
+			for _, v := range appVolumes {
 				MinRF := Inst().V.GetMinReplicationFactor()
 
 				Step(
@@ -170,52 +264,16 @@ func TriggerHAUpdate(contexts []*scheduler.Context, recordChan *chan *EventRecor
 						}
 						expect(newRepl).To(equal(expReplMap[v]))
 					})
-				Step(
-					fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
-						Inst().V.String(), ctx.App.Key, v),
-					func() {
-						errExpected := false
-						currRep, err := Inst().V.GetReplicationFactor(v)
-						UpdateOutcome(event, err)
-						expect(err).NotTo(haveOccurred())
-						// GetMaxReplicationFactory is hardcoded to 3
-						// if it increases repl 3 to an aggregated 2 volume, it will fail
-						// because it would require 6 worker nodes, since
-						// number of nodes required = aggregation level * replication factor
-						currAggr, err := Inst().V.GetAggregationLevel(v)
-						UpdateOutcome(event, err)
-						expect(err).NotTo(haveOccurred())
-						if currAggr > 1 {
-							MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
-						}
-						if currRep == MaxRF {
-							errExpected = true
-						}
-						expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
-						err = Inst().V.SetReplicationFactor(v, currRep+1, opts)
-						if !errExpected {
-							UpdateOutcome(event, err)
-							expect(err).NotTo(haveOccurred())
-						} else {
-							if !expect(err).To(haveOccurred()) {
-								event.Outcome = append(event.Outcome, fmt.Errorf("Expected HA increase to fail since new repl factor is greater than %v but it did not", MaxRF))
-							}
-						}
-					})
-				Step(
-					fmt.Sprintf("validate successful repl increase on app %s's volume: %v",
-						ctx.App.Key, v),
-					func() {
-						newRepl, err := Inst().V.GetReplicationFactor(v)
-						UpdateOutcome(event, err)
-						expect(err).NotTo(haveOccurred())
-						if newRepl != expReplMap[v] {
-							err = fmt.Errorf("volume has invalid repl value. Expected:%d Actual:%d", expReplMap[v], newRepl)
-							UpdateOutcome(event, err)
-						}
-						expect(newRepl).To(equal(expReplMap[v]))
-					})
 			}
+			Step(fmt.Sprintf("validating context after reducing HA for app: %s",
+				ctx.App.Key), func() {
+				errorChan := make(chan error, errorChannelSize)
+				ctx.SkipVolumeValidation = false
+				ValidateContext(ctx, &errorChan)
+				for err := range errorChan {
+					UpdateOutcome(event, err)
+				}
+			})
 		}
 	})
 }
@@ -238,14 +296,16 @@ func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRe
 	}()
 
 	for _, ctx := range contexts {
-		Step(fmt.Sprintf("delete tasks for app: %s", ctx.App.Key), func() {
+		Step(fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key), func() {
 			err := Inst().S.DeleteTasks(ctx, nil)
 			UpdateOutcome(event, err)
 			expect(err).NotTo(haveOccurred())
 		})
 
-		Step(fmt.Sprintf("validating context after delete tasks for app: %s", ctx.App.Key), func() {
+		Step(fmt.Sprintf("validating context after delete tasks for app: [%s]",
+			ctx.App.Key), func() {
 			errorChan := make(chan error, errorChannelSize)
+			ctx.SkipVolumeValidation = false
 			ValidateContext(ctx, &errorChan)
 			for err := range errorChan {
 				UpdateOutcome(event, err)
