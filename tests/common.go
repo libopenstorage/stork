@@ -211,16 +211,15 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
 
+		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateVolumes(ctx, errChan...)
+			}
+		})
+
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 			processError(err, errChan...)
-		})
-
-		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
-			if ctx.SkipVolumeValidation {
-				return
-			}
-			ValidateVolumes(ctx, errChan...)
 		})
 
 		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
