@@ -66,7 +66,8 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 	}
 	pv, err := getCSIPV(&pvc, allObjects)
 	if err != nil {
-		return false, fmt.Errorf("failed to get CSI PV for a given PVC %s: %v", pvc.Name, err)
+		// if not a CSI PVC, this may fail. Do not return error to allow for non-CSI PVCs
+		return false, nil
 	}
 	isCSIPVC, err := isCSIPersistentVolume(pv)
 	if err != nil {
