@@ -24,6 +24,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
+	torpedok8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
@@ -97,7 +98,22 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 	PortworxCsi:     "pxd.portworx.com",
 }
 
-var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io", "pvc_name", "pvc_namespace"}
+var deleteVolumeLabelList = []string{
+	"auth-token",
+	"pv.kubernetes.io",
+	"volume.beta.kubernetes.io",
+	"kubectl.kubernetes.io",
+	"volume.kubernetes.io",
+	"pvc_name",
+	"pvc_namespace",
+	torpedok8s.CsiProvisionerSecretName,
+	torpedok8s.CsiProvisionerSecretNamespace,
+	torpedok8s.CsiNodePublishSecretName,
+	torpedok8s.CsiNodePublishSecretNamespace,
+	torpedok8s.CsiControllerExpandSecretName,
+	torpedok8s.CsiControllerExpandSecretNamespace,
+}
+
 var k8sCore = core.Instance()
 
 type portworx struct {
