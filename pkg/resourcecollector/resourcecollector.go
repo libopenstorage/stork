@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/rbac"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -454,6 +455,44 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 	return nil
 }
 
+func isCSIPersistentVolume(pv *v1.PersistentVolume) (bool, error) {
+	driverName, err := volume.GetPVDriver(pv)
+	if err != nil {
+		return false, err
+	}
+	logrus.Infof("isCSIPersistentVolume driver name - %s", driverName)
+	if driverName == "csi" {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func getCSIPV(pvc *v1.PersistentVolumeClaim, allObjects []runtime.Unstructured) (*v1.PersistentVolume, error) {
+	for _, o := range allObjects {
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return nil, err
+		}
+
+		// If a PV, check if it's the PV name associated with this PVC
+		if objectType.GetKind() == "PersistentVolume" {
+			pv := v1.PersistentVolume{}
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pv); err != nil {
+				return nil, fmt.Errorf("error converting to persistent volume claim: %v", err)
+			}
+
+			if pv.Name == pvc.Spec.VolumeName {
+				return &pv, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("failed to find PV %s for PVC %s", pvc.Spec.VolumeName, pvc.Name)
+}
+
+// includeObject determines whether to include an object or not
+// based on the object kind
 func (r *ResourceCollector) includeObject(
 	object runtime.Unstructured,
 	includeObjects map[stork_api.ObjectInfo]bool,
@@ -499,11 +538,13 @@ func (r *ResourceCollector) includeObject(
 // and ApplyResource
 func (r *ResourceCollector) PrepareResourceForApply(
 	object runtime.Unstructured,
+	allObjects []runtime.Unstructured,
 	includeObjects map[stork_api.ObjectInfo]bool,
 	namespaceMappings map[string]string,
 	pvNameMappings map[string]string,
 	optionalResourceTypes []string,
 ) (bool, error) {
+
 	objectType, err := meta.TypeAccessor(object)
 	if err != nil {
 		return false, err
@@ -541,7 +582,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 	case "PersistentVolume":
 		return r.preparePVResourceForApply(object, pvNameMappings)
 	case "PersistentVolumeClaim":
-		return false, r.preparePVCResourceForApply(object, pvNameMappings)
+		return r.preparePVCResourceForApply(object, allObjects, pvNameMappings)
 	case "ClusterRoleBinding":
 		return false, r.prepareClusterRoleBindingForApply(object, namespaceMappings)
 	case "RoleBinding":

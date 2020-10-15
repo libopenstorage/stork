@@ -670,6 +670,7 @@ func (a *ApplicationRestoreController) applyResources(
 	for _, o := range objects {
 		skip, err := a.resourceCollector.PrepareResourceForApply(
 			o,
+			objects,
 			objectMap,
 			restore.Spec.NamespaceMapping,
 			pvNameMappings,
@@ -682,7 +683,6 @@ func (a *ApplicationRestoreController) applyResources(
 		}
 	}
 	objects = tempObjects
-
 	// First delete the existing objects if they exist and replace policy is set
 	// to Delete
 	if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
