@@ -10,7 +10,7 @@ data:
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: px-nginx-pvc
+  name: px-nginx-pvc-legacy-shared
 spec:
   storageClassName: nginx-sc
   accessModes:
@@ -22,7 +22,7 @@ spec:
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: px-nginx-pvc-enc
+  name: px-nginx-pvc-enc-legacy-shared
   annotations:
     px/secret-name: volume-secrets
     px/secret-namespace: "_NAMESPACE_"

@@ -57,4 +57,4 @@ spec:
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: mysql-pvc-1
+          claimName: mysql-pvc-1-sharedv4

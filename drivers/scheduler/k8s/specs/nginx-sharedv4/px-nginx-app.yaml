@@ -41,7 +41,7 @@ spec:
       volumes:
       - name: nginx-persistent-storage
         persistentVolumeClaim:
-          claimName: px-nginx-pvc
+          claimName: px-nginx-pvc-sharedv4
       - name: nginx-persistent-storage-enc
         persistentVolumeClaim:
-          claimName: px-nginx-pvc-enc
+          claimName: px-nginx-pvc-enc-sharedv4

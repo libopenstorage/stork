@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: wp-pv-claim
+  name: wp-pv-claim-legacy-shared
   labels:
     app: wordpress
 spec:
-  storageClassName: wordpress-sc-shared
+  storageClassName: wordpress-sc-legacy-shared
   accessModes:
     - ReadWriteMany
   resources:

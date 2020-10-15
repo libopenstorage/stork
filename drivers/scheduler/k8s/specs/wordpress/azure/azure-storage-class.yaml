@@ -13,7 +13,7 @@ parameters:
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: wordpress-sc-shared
+  name: wordpress-sc-legacy-shared
 provisioner: kubernetes.io/azure-file
 mountOptions:
   - dir_mode=0777
