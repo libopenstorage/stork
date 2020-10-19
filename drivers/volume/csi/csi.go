@@ -1149,6 +1149,7 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	var anyInProgress bool
+	var anyFailed bool
 
 	for _, vrInfo := range restore.Status.Volumes {
 		pvc, err := core.Instance().GetPersistentVolumeClaim(vrInfo.PersistentVolumeClaim, restore.Namespace)
@@ -1164,6 +1165,7 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		case v1.ClaimLost:
 			vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
 			vrInfo.Reason = fmt.Sprintf("Volume restore failed: PVC %s is lost", pvc.Name)
+			anyFailed = true
 		case v1.ClaimPending:
 			vrInfo.Status = storkapi.ApplicationRestoreStatusInProgress
 			vrInfo.Reason = fmt.Sprintf("Volume restore in progress: PVC %s is pending", pvc.Name)
@@ -1184,6 +1186,23 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// if a failure occurred with any snapshot, make sure to clean up all snapshots
+	if anyFailed {
+		csiBackupObject, err := c.getCSIBackupObject(restore.Spec.BackupName, restore.Namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		// cleanup all snapshots after a failure
+		err = c.cleanupSnapshots(restore.Namespace, csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
+		if err != nil {
+			return nil, err
+		}
+		log.ApplicationRestoreLog(restore).Debugf("cleaned up %v snapshots after a restore failure", len(csiBackupObject.VolumeSnapshots))
+
+		return nil, nil
 	}
 
 	return volumeInfos, nil
