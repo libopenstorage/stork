@@ -205,6 +205,18 @@ func PVCLog(pvc *v1.PersistentVolumeClaim) *logrus.Entry {
 	return logrus.WithFields(logrus.Fields{})
 }
 
+// PVLog formats a log message with pv information
+func PVLog(pv *v1.PersistentVolume) *logrus.Entry {
+	if pv != nil {
+		return logrus.WithFields(logrus.Fields{
+			"PVName":    pv.Name,
+			"Namespace": pv.Namespace,
+		})
+	}
+
+	return logrus.WithFields(logrus.Fields{})
+}
+
 // ApplicationBackupLog formats a log message with applicationbackup information
 func ApplicationBackupLog(backup *storkv1.ApplicationBackup) *logrus.Entry {
 	if backup != nil {

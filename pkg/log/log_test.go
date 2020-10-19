@@ -24,6 +24,7 @@ func TestLog(t *testing.T) {
 	t.Run("migrationScheduleLogTest", migrationScheduleLogTest)
 	t.Run("ruleLogTest", ruleLogTest)
 	t.Run("pvcLogTest", pvcLogTest)
+	t.Run("pvLogTest", pvLogTest)
 	t.Run("clusterDomainUpdateLogTest", clusterDomainUpdateLogTest)
 	t.Run("applicationBackupLogTest", applicationBackupLogTest)
 	t.Run("applicationRestoreLogTest", applicationRestoreLogTest)
@@ -185,6 +186,18 @@ func pvcLogTest(t *testing.T) {
 	}
 	PVCLog(pvc).Infof("pvc log")
 	PVCLog(nil).Infof("pvc nil log")
+}
+
+func pvLogTest(t *testing.T) {
+	metadata := metav1.ObjectMeta{
+		Name:      "testpv",
+		Namespace: "testnamespace",
+	}
+	pv := &v1.PersistentVolume{
+		ObjectMeta: metadata,
+	}
+	PVLog(pv).Infof("pv log")
+	PVLog(nil).Infof("pv nil log")
 }
 
 func clusterDomainUpdateLogTest(t *testing.T) {

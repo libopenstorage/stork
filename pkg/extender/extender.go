@@ -14,8 +14,11 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	restore "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
@@ -41,6 +44,27 @@ const (
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
 )
 
+var (
+	// HyperConvergedPodsCounter for pods hyper-converged by stork scheduler i.e scheduled on
+	// node where replicas for all pod volumes exists
+	HyperConvergedPodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "hyperconverged_pods_total",
+		Help: "The total number of pods hyper-converged by stork scheduler",
+	}, []string{"pod", "namespace"})
+	// NonHyperConvergePodsCounter for pods which are placed on driver node but not on node
+	// where pod volume replicas exists
+	NonHyperConvergePodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "non_hyperconverged_pods_total",
+		Help: "The total number of pods that are not hyper-converged by stork scheduler",
+	}, []string{"pod", "namespace"})
+	// SemiHyperConvergePodsCounter for pods which scheduled on node where replicas for all
+	// volumes does not exists
+	SemiHyperConvergePodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "semi_hyperconverged_pods_total",
+		Help: "The total number of pods that are partially hyper-converged by stork scheduler",
+	}, []string{"pod", "namespace"})
+)
+
 // Extender Scheduler extender
 type Extender struct {
 	Recorder record.EventRecorder
@@ -58,16 +82,22 @@ func (e *Extender) Start() error {
 	if e.started {
 		return fmt.Errorf("Extender has already been started")
 	}
-
 	// TODO: Make the listen port configurable
 	e.server = &http.Server{Addr: ":8099"}
-
 	http.HandleFunc("/", e.serveHTTP)
 	go func() {
 		if err := e.server.ListenAndServe(); err != http.ErrServerClosed {
 			log.Panicf("Error starting extender server: %v", err)
 		}
 	}()
+
+	prometheus.MustRegister(HyperConvergedPodsCounter)
+	prometheus.MustRegister(NonHyperConvergePodsCounter)
+	prometheus.MustRegister(SemiHyperConvergePodsCounter)
+	if err := e.collectExtenderMetrics(); err != nil {
+		return err
+	}
+
 	e.started = true
 	return nil
 }
@@ -263,6 +293,91 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	if err := encoder.Encode(response); err != nil {
 		storklog.PodLog(pod).Errorf("Error encoding filter response: %+v : %v", response, err)
 	}
+}
+
+func (e *Extender) collectExtenderMetrics() error {
+	fn := func(object runtime.Object) error {
+		pod, ok := object.(*v1.Pod)
+		if !ok {
+			err := fmt.Errorf("invalid object type on pod watch: %v", object)
+			return err
+		}
+		labels := make(prometheus.Labels)
+		labels["pod"] = pod.GetName()
+		labels["namespace"] = pod.GetNamespace()
+
+		if pod.DeletionTimestamp != nil {
+			HyperConvergedPodsCounter.Delete(labels)
+			SemiHyperConvergePodsCounter.Delete(labels)
+			NonHyperConvergePodsCounter.Delete(labels)
+			return nil
+		}
+		// check only if pods in ready state
+		isPodReady := false
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == v1.PodReady && cond.Status == v1.ConditionTrue {
+				isPodReady = true
+			}
+		}
+		if !isPodReady {
+			return nil
+		}
+
+		driverVolumes, err := e.Driver.GetPodVolumes(&pod.Spec, pod.Namespace)
+		if err != nil {
+			msg := fmt.Sprintf("Metric: Error getting volumes for Pod for driver: %v", err)
+			storklog.PodLog(pod).Warnf(msg)
+			return err
+		}
+		if len(driverVolumes) == 0 {
+			// pods not using any stork supported driver volumes
+			return nil
+		}
+		driverNodes, err := e.Driver.GetNodes()
+		if err != nil {
+			return err
+		}
+		// find driver name id
+		var storageID string
+		for _, dnode := range driverNodes {
+			if dnode.SchedulerID == pod.Spec.NodeName {
+				storageID = dnode.StorageID
+				break
+			}
+		}
+		// find ideal hyperconverge node candidate
+		nodeMap := make(map[string]int)
+		for _, dvol := range driverVolumes {
+			for _, dataIP := range dvol.DataNodes {
+				// assign score to node
+				nodeMap[dataIP]++
+			}
+		}
+		// find driver node with highest core
+		large := 0
+		for _, v := range nodeMap {
+			if v > large {
+				large = v
+			}
+		}
+		if val, ok := nodeMap[storageID]; ok {
+			if large == val {
+				HyperConvergedPodsCounter.With(labels).Set(1)
+			} else {
+				SemiHyperConvergePodsCounter.With(labels).Set(1)
+			}
+		} else {
+			NonHyperConvergePodsCounter.With(labels).Set(1)
+		}
+
+		return nil
+	}
+
+	if err := core.Instance().WatchPods("", fn, metav1.ListOptions{}); err != nil {
+		log.Errorf("failed to watch pods due to: %v", err)
+		return err
+	}
+	return nil
 }
 
 func (e *Extender) getNodeScore(

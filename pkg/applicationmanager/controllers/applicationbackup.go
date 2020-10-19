@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,6 +54,9 @@ const (
 	backupCancelBackoffSteps        = math.MaxInt32
 
 	allNamespacesSpecifier = "*"
+	backupVolumeBatchCount = 10
+	maxRetry               = 10
+	retrySleep             = 10 * time.Second
 )
 
 var (
@@ -120,7 +124,6 @@ func (a *ApplicationBackupController) Reconcile(request reconcile.Request) (reco
 		controllers.SetFinalizer(backup, controllers.FinalizerCleanup)
 		return reconcile.Result{Requeue: true}, a.client.Update(context.TODO(), backup)
 	}
-
 	if err = a.handle(context.TODO(), backup); err != nil {
 		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(a), backup.Namespace, backup.Name, err)
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
@@ -405,6 +408,49 @@ func (a *ApplicationBackupController) getDriversForBackup(backup *stork_api.Appl
 	return drivers
 }
 
+func min(x, y int) int {
+	if x <= y {
+		return x
+	}
+	return y
+}
+
+func (a *ApplicationBackupController) updateBackupCRWithRetry(
+	namespacedName types.NamespacedName,
+	status stork_api.ApplicationBackupStatusType,
+	stage stork_api.ApplicationBackupStageType,
+	reason string,
+	volumeInfos []*stork_api.ApplicationBackupVolumeInfo,
+) (*stork_api.ApplicationBackup, error) {
+	backup := &stork_api.ApplicationBackup{}
+	var err error
+	for i := 0; i < maxRetry; i++ {
+		err := a.client.Get(context.TODO(), namespacedName, backup)
+		if err != nil {
+			time.Sleep(retrySleep)
+			continue
+		}
+		backup.Status.Status = status
+		backup.Status.Stage = stage
+		backup.Status.Reason = reason
+		backup.Status.LastUpdateTimestamp = metav1.Now()
+		if volumeInfos != nil {
+			backup.Status.Volumes = append(backup.Status.Volumes, volumeInfos...)
+		}
+		err = a.client.Update(context.TODO(), backup)
+		if err != nil {
+			time.Sleep(retrySleep)
+			continue
+		} else {
+			break
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return backup, nil
+}
+
 func (a *ApplicationBackupController) backupVolumes(backup *stork_api.ApplicationBackup, terminationChannels []chan bool) error {
 	defer func() {
 		for _, channel := range terminationChannels {
@@ -413,94 +459,108 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	}()
 	var err error
 	// Start backup of the volumes if we don't have any status stored
-	if backup.Status.Volumes == nil {
-		pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
-		backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
-		backup.Status.Volumes = make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+	pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
+	backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
 
-		objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
-		info := stork_api.ObjectInfo{
-			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   "core",
-				Version: "v1",
-				Kind:    "PersistentVolumeClaim",
-			},
+	objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
+	info := stork_api.ObjectInfo{
+		GroupVersionKind: metav1.GroupVersionKind{
+			Group:   "core",
+			Version: "v1",
+			Kind:    "PersistentVolumeClaim",
+		},
+	}
+
+	var pvcCount int
+	for _, namespace := range backup.Spec.Namespaces {
+		pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, backup.Spec.Selectors)
+		if err != nil {
+			return fmt.Errorf("error getting list of volumes to migrate: %v", err)
 		}
 
-		for _, namespace := range backup.Spec.Namespaces {
-			pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, backup.Spec.Selectors)
-			if err != nil {
-				return fmt.Errorf("error getting list of volumes to migrate: %v", err)
-			}
-
-			for _, pvc := range pvcList.Items {
-				// If a list of resources was specified during backup check if
-				// this PVC was included
-				info.Name = pvc.Name
-				info.Namespace = pvc.Namespace
-				if len(objectMap) != 0 {
-					if val, present := objectMap[info]; !present || !val {
-						continue
-					}
-				}
-
-				// Don't backup pending or deleting PVCs
-				if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
+		for _, pvc := range pvcList.Items {
+			// If a list of resources was specified during backup check if
+			// this PVC was included
+			info.Name = pvc.Name
+			info.Namespace = pvc.Namespace
+			if len(objectMap) != 0 {
+				if val, present := objectMap[info]; !present || !val {
 					continue
 				}
-				driverName, err := volume.GetPVCDriver(&pvc)
-				if err != nil {
-					// Skip unsupported PVCs
-					if _, ok := err.(*errors.ErrNotSupported); ok {
-						continue
-					}
-					return err
+			}
+
+			// Don't backup pending or deleting PVCs
+			if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
+				continue
+			}
+			driverName, err := volume.GetPVCDriver(&pvc)
+			if err != nil {
+				// Skip unsupported PVCs
+				if _, ok := err.(*errors.ErrNotSupported); ok {
+					continue
 				}
-				if driverName != "" {
-					if pvcMappings[driverName] == nil {
-						pvcMappings[driverName] = make([]v1.PersistentVolumeClaim, 0)
-					}
-					pvcMappings[driverName] = append(pvcMappings[driverName], pvc)
+				return err
+			}
+			if driverName != "" {
+				if pvcMappings[driverName] == nil {
+					pvcMappings[driverName] = make([]v1.PersistentVolumeClaim, 0)
 				}
+				pvcCount++
+				pvcMappings[driverName] = append(pvcMappings[driverName], pvc)
 			}
 		}
+	}
+	if backup.Status.Volumes == nil ||
+		(backup.Status.Volumes != nil && len(backup.Status.Volumes) != pvcCount) {
+		backup.Status.Volumes = make([]*stork_api.ApplicationBackupVolumeInfo, 0)
+	}
+
+	namespacedName := types.NamespacedName{}
+	namespacedName.Namespace = backup.Namespace
+	namespacedName.Name = backup.Name
+	if len(backup.Status.Volumes) != pvcCount {
 
 		for driverName, pvcs := range pvcMappings {
 			driver, err := volume.Get(driverName)
 			if err != nil {
 				return err
 			}
-
-			volumeInfos, err := driver.StartBackup(backup, pvcs)
-			if err != nil {
-				// TODO: If starting backup for a drive fails mark the entire backup
-				// as Cancelling, cancel any other started backups and then mark
-				// it as failed
-				message := fmt.Sprintf("Error starting ApplicationBackup for volumes: %v", err)
-				log.ApplicationBackupLog(backup).Errorf(message)
-				a.recorder.Event(backup,
-					v1.EventTypeWarning,
-					string(stork_api.ApplicationBackupStatusFailed),
-					message)
-				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
-				backup.Status.Stage = stork_api.ApplicationBackupStageFinal
-				backup.Status.Reason = message
-				backup.Status.LastUpdateTimestamp = metav1.Now()
-				err = a.client.Update(context.TODO(), backup)
+			for i := 0; i < len(pvcs); i += backupVolumeBatchCount {
+				batch := pvcs[i:min(i+backupVolumeBatchCount, len(pvcs))]
+				volumeInfos, err := driver.StartBackup(backup, batch)
+				if err != nil {
+					// TODO: If starting backup for a drive fails mark the entire backup
+					// as Cancelling, cancel any other started backups and then mark
+					// it as failed
+					message := fmt.Sprintf("Error starting ApplicationBackup for volumes: %v", err)
+					log.ApplicationBackupLog(backup).Errorf(message)
+					a.recorder.Event(backup,
+						v1.EventTypeWarning,
+						string(stork_api.ApplicationBackupStatusFailed),
+						message)
+					_, err = a.updateBackupCRWithRetry(
+						namespacedName,
+						stork_api.ApplicationBackupStatusFailed,
+						stork_api.ApplicationBackupStageFinal,
+						message,
+						nil,
+					)
+					if err != nil {
+						return err
+					}
+					return nil
+				}
+				backup, err = a.updateBackupCRWithRetry(
+					namespacedName,
+					stork_api.ApplicationBackupStatusInProgress,
+					backup.Status.Stage,
+					"Volume backups are in progress",
+					volumeInfos,
+				)
 				if err != nil {
 					return err
 				}
-				return nil
 			}
-
-			backup.Status.Volumes = append(backup.Status.Volumes, volumeInfos...)
-		}
-		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
-		backup.Status.Reason = "Volume backups are in progress"
-		backup.Status.LastUpdateTimestamp = metav1.Now()
-		err := a.client.Update(context.TODO(), backup)
-		if err != nil {
-			return err
 		}
 
 		// Terminate any background rules that were started
@@ -719,9 +779,9 @@ func (a *ApplicationBackupController) prepareResources(
 	return nil
 }
 
-// Construct the full base path for a given backup
+// GetObjectPath construct the full base path for a given backup
 // The format is "namespace/backupName/backupUID" which will be unique for each backup
-func (a *ApplicationBackupController) getObjectPath(
+func GetObjectPath(
 	backup *stork_api.ApplicationBackup,
 ) string {
 	return filepath.Join(backup.Namespace, backup.Name, string(backup.UID))
@@ -748,7 +808,7 @@ func (a *ApplicationBackupController) uploadObject(
 		}
 	}
 
-	objectPath := a.getObjectPath(backup)
+	objectPath := GetObjectPath(backup)
 	writer, err := bucket.NewWriter(context.TODO(), filepath.Join(objectPath, objectName), nil)
 	if err != nil {
 		return err
@@ -950,7 +1010,7 @@ func (a *ApplicationBackupController) backupResources(
 		log.ApplicationBackupLog(backup).Errorf(message)
 		return err
 	}
-	backup.Status.BackupPath = a.getObjectPath(backup)
+	backup.Status.BackupPath = GetObjectPath(backup)
 	backup.Status.Stage = stork_api.ApplicationBackupStageFinal
 	backup.Status.FinishTimestamp = metav1.Now()
 	backup.Status.Status = stork_api.ApplicationBackupStatusSuccessful

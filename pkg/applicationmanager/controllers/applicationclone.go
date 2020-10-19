@@ -529,6 +529,7 @@ func (a *ApplicationCloneController) prepareResources(
 		}
 		_, err = a.resourceCollector.PrepareResourceForApply(
 			o,
+			objects,
 			nil,
 			namespaceMapping,
 			pvNameMappings,

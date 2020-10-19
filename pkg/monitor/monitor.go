@@ -9,6 +9,7 @@ import (
 	storklog "github.com/libopenstorage/stork/pkg/log"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -29,6 +30,14 @@ const (
 	nodeWaitSteps        = 5
 
 	storageDriverOfflineReason = "StorageDriverOffline"
+)
+
+var (
+	// HealthCounter for pods which are rescheduled by stork monitor
+	HealthCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "pods_reschduled_total",
+		Help: "The total number of pods reschduler by stork pod monitor",
+	})
 )
 
 var nodeWaitCallBackoff = wait.Backoff{
@@ -67,6 +76,7 @@ func (m *Monitor) Start() error {
 	m.stopChannel = make(chan int)
 	m.done = make(chan int)
 
+	prometheus.MustRegister(HealthCounter)
 	if err := m.podMonitor(); err != nil {
 		return err
 	}
@@ -160,6 +170,7 @@ func (m *Monitor) podMonitor() error {
 				storklog.PodLog(pod).Errorf("Error deleting pod: %v", err)
 				return err
 			}
+			HealthCounter.Inc()
 		}
 
 		return nil
@@ -247,6 +258,7 @@ func (m *Monitor) cleanupDriverNodePods(node *volume.NodeInfo) {
 				storklog.PodLog(&pod).Errorf("Error deleting pod: %v", err)
 				continue
 			}
+			HealthCounter.Inc()
 		}
 	}
 }
