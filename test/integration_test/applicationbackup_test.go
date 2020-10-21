@@ -44,6 +44,9 @@ func TestApplicationBackup(t *testing.T) {
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
 
+	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
+	logrus.Infof("Backup path being used: %s", backupLocationPath)
+
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
 	t.Run("preExecRuleTest", applicationBackupRestorePreExecRuleTest)
 	t.Run("postExecRuleTest", applicationBackupRestorePostExecRuleTest)
@@ -282,7 +285,7 @@ func createBackupLocation(
 		},
 		Location: storkv1.BackupLocationItem{
 			Type:         backupType,
-			Path:         "test-restore-path",
+			Path:         backupLocationPath,
 			SecretConfig: secretObj.Name,
 		},
 	}

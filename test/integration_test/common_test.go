@@ -84,6 +84,7 @@ func setup() error {
 	var err error
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
+	backupLocationPath = os.Getenv(backupPathVar)
 	if storkVolumeDriver, err = storkdriver.Get(volumeDriverName); err != nil {
 		return fmt.Errorf("Error getting stork volume driver %s: %v", volumeDriverName, err)
 	}
