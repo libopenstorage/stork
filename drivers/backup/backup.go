@@ -123,6 +123,9 @@ type BLocation interface {
 	// DeleteBackupLocation deletes backup location objects
 	DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error)
 
+	// ValidateBackupLocation validates the backuplocation object
+	ValidateBackupLocation(req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error)
+
 	// WaitForBackupLocationDeletion watis for backup location to be deleted
 	WaitForBackupLocationDeletion(ctx context.Context, backupLocationName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error

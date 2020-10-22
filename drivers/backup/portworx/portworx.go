@@ -293,6 +293,10 @@ func (p *portworx) DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*
 	return p.backupLocationManager.Delete(context.Background(), req)
 }
 
+func (p *portworx) ValidateBackupLocation(req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error) {
+	return p.backupLocationManager.Validate(context.Background(), req)
+}
+
 // WaitForBackupLocationDeletion waits for backup location to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForBackupLocationDeletion(
