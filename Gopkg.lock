@@ -976,7 +976,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:7c430e70ba5ccc22b5005def7682dd42969809c3cc4a64f45a5fcf0f575f7e52"
+  digest = "1:790ca389064f3f49e6660bf442561c1386870dd9d9fa2ad862d5001ce525f077"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -997,7 +997,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "3e8010dc70561546b4880ab67a51006afb5ce6b0"
+  revision = "b13b1fcf2c6ef369ed1b60b5b9f65fdf83559f60"
 
 [[projects]]
   branch = "master"
@@ -2275,6 +2275,7 @@
     "github.com/libopenstorage/openstorage/pkg/auth",
     "github.com/libopenstorage/openstorage/pkg/auth/secrets",
     "github.com/libopenstorage/openstorage/pkg/grpcserver",
+    "github.com/libopenstorage/openstorage/pkg/units",
     "github.com/libopenstorage/openstorage/volume",
     "github.com/libopenstorage/openstorage/volume/drivers/pwx",
     "github.com/libopenstorage/secrets",
@@ -2286,6 +2287,7 @@
     "github.com/portworx/sched-ops/k8s/admissionregistration",
     "github.com/portworx/sched-ops/k8s/apiextensions",
     "github.com/portworx/sched-ops/k8s/apps",
+    "github.com/portworx/sched-ops/k8s/batch",
     "github.com/portworx/sched-ops/k8s/core",
     "github.com/portworx/sched-ops/k8s/dynamic",
     "github.com/portworx/sched-ops/k8s/errors",
