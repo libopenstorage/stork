@@ -855,6 +855,11 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
 			}
+		case "CronJob":
+			err := m.prepareJobResource(migration, o)
+			if err != nil {
+				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
+			}
 		}
 
 		// prepare CR resources
@@ -1008,6 +1013,20 @@ func (m *MigrationController) preparePVResource(
 	object.SetUnstructuredContent(o)
 
 	return nil
+}
+
+// this method can be used for k8s object where we will need to set resource to true/false to disable them
+// on migration
+func (m *MigrationController) prepareJobResource(
+	migration *stork_api.Migration,
+	object runtime.Unstructured,
+) error {
+	if *migration.Spec.StartApplications {
+		return nil
+	}
+	content := object.UnstructuredContent()
+	// set suspend to true to disable Cronjobs
+	return unstructured.SetNestedField(content, true, "spec", "suspend")
 }
 
 func (m *MigrationController) prepareApplicationResource(

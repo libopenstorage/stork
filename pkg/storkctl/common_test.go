@@ -14,6 +14,7 @@ import (
 	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
 	fakeocpsecurityclient "github.com/openshift/client-go/security/clientset/versioned/fake"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
@@ -76,6 +77,7 @@ func resetTest() {
 	externalstorage.SetInstance(externalstorage.New(fakeRestClient))
 	openshift.SetInstance(openshift.New(fakeKubeClient, fakeOCPClient, fakeOCPSecurityClient))
 	apps.SetInstance(apps.New(fakeKubeClient.AppsV1(), fakeKubeClient.CoreV1()))
+	batch.SetInstance(batch.New(fakeKubeClient.BatchV1(), fakeKubeClient.BatchV1beta1()))
 	dynamic.SetInstance(dynamic.New(fakeDynamicClient))
 }
 

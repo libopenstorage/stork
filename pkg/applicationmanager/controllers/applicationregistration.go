@@ -229,7 +229,7 @@ func getRegisteredCRD() (map[string][]stork_api.ApplicationResource, error) {
 		"stork.libopenstorage.org":               "",
 	}
 	regCRD := make(map[string][]stork_api.ApplicationResource)
-	crds, err := apiextensions.Instance().ListCRD()
+	crds, err := apiextensions.Instance().ListCRDs()
 	if err != nil {
 		return regCRD, err
 	}

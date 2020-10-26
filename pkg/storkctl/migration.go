@@ -14,6 +14,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
 	"github.com/portworx/sched-ops/k8s/openshift"
@@ -167,6 +168,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				updateIBPObjects("IBPOrderer", ns, true, ioStreams)
 				updateIBPObjects("IBPConsole", ns, true, ioStreams)
 				updateCRDObjects(ns, true, ioStreams)
+				updateCronJobObjects(ns, true, ioStreams)
 			}
 
 		},
@@ -208,6 +210,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				updateIBPObjects("IBPOrderer", ns, false, ioStreams)
 				updateIBPObjects("IBPConsole", ns, false, ioStreams)
 				updateCRDObjects(ns, false, ioStreams)
+				updateCronJobObjects(ns, false, ioStreams)
 			}
 
 		},
@@ -385,6 +388,25 @@ func updateIBPObjects(kind string, namespace string, activate bool, ioStreams ge
 			printMsg(fmt.Sprintf("Updated replicas for %v %v/%v to %v", strings.ToLower(kind), o.GetNamespace(), o.GetName(), replicas), ioStreams.Out)
 		}
 	}
+}
+
+func updateCronJobObjects(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
+	cronJobs, err := batch.Instance().ListCronJobs(namespace)
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
+
+	for _, cronJob := range cronJobs.Items {
+		*cronJob.Spec.Suspend = !activate
+		_, err = batch.Instance().UpdateCronJob(&cronJob)
+		if err != nil {
+			printMsg(fmt.Sprintf("Error updating suspend option for cronJob %v/%v : %v", cronJob.Namespace, cronJob.Name, err), ioStreams.ErrOut)
+			continue
+		}
+		printMsg(fmt.Sprintf("Updated suspend option for cronjob %v/%v to %v", cronJob.Namespace, cronJob.Name, !activate), ioStreams.Out)
+	}
+
 }
 func getSuspendStringOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (string, error) {
 	crdOpts := migration.StorkMigrationCRDActivateAnnotation
