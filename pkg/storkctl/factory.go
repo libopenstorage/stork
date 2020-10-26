@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	appsops "github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	dynamicops "github.com/portworx/sched-ops/k8s/dynamic"
 	externalstorageops "github.com/portworx/sched-ops/k8s/externalstorage"
@@ -126,6 +127,7 @@ func (f *factory) UpdateConfig() error {
 	}
 	core.Instance().SetConfig(config)
 	storkops.Instance().SetConfig(config)
+	batch.Instance().SetConfig(config)
 	ocpops.Instance().SetConfig(config)
 	appsops.Instance().SetConfig(config)
 	dynamicops.Instance().SetConfig(config)
