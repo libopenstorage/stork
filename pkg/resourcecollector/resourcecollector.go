@@ -94,7 +94,7 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
 	for _, res := range crdKinds {
 		if res.Kind == resource.Kind &&
-			res.Group == grp.Group && res.Version == grp.Version {
+			res.Group == grp.Group && res.Version == grp.Version && resource.Namespaced {
 			return true
 		}
 	}
@@ -424,7 +424,6 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 
 		content := o.UnstructuredContent()
 		if crdList != nil {
-			fmt.Printf("Checking app reg")
 			resourceKind := o.GetObjectKind().GroupVersionKind()
 			for _, crd := range crdList.Items {
 				for _, kind := range crd.Resources {
