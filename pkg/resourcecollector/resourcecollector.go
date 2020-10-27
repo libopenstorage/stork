@@ -389,6 +389,10 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 	objects []runtime.Unstructured,
 	namespaces []string,
 ) error {
+	crdList, err := r.storkOps.ListApplicationRegistrations()
+	if err != nil {
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	}
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -419,10 +423,8 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 		}
 
 		content := o.UnstructuredContent()
-		crdList, err := r.storkOps.ListApplicationRegistrations()
-		if err != nil {
-			logrus.Warnf("Unable to get registered crds, err %v", err)
-		} else {
+		if crdList != nil {
+			fmt.Printf("Checking app reg")
 			resourceKind := o.GetObjectKind().GroupVersionKind()
 			for _, crd := range crdList.Items {
 				for _, kind := range crd.Resources {
