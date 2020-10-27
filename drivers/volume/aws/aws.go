@@ -15,6 +15,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/kubernetes-sigs/aws-ebs-csi-driver/pkg/cloud"
+	"github.com/libopenstorage/openstorage/pkg/units"
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
@@ -369,8 +370,9 @@ func (a *aws) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		case "completed":
 			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
 			vInfo.Reason = "Backup successful for volume"
-			vInfo.TotalSize = uint64(*snapshot.VolumeSize)
-			vInfo.ActualSize = uint64(*snapshot.VolumeSize)
+			// converting to bytes
+			vInfo.TotalSize = uint64(*snapshot.VolumeSize) * units.GiB
+			vInfo.ActualSize = uint64(*snapshot.VolumeSize) * units.GiB
 		}
 		volumeInfos = append(volumeInfos, vInfo)
 	}
