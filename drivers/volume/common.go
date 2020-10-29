@@ -22,7 +22,7 @@ func (d *DefaultDriver) String() string {
 }
 
 // Init initializes the volume driver under the given scheduler
-func (d *DefaultDriver) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
+func (d *DefaultDriver) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	StorageProvisioner = DefaultStorageProvisioner
 	return nil
 }

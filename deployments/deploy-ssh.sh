@@ -137,6 +137,11 @@ if [ -n "${MAX_STORAGE_NODES_PER_AZ}" ]; then
     MAX_STORAGE_NODES_PER_AZ_ARG="--max-storage-nodes-per-az=$MAX_STORAGE_NODES_PER_AZ"
 fi
 
+CSI_GENERIC_CONFIGMAP=""
+if [ -n "${CSI_GENERIC_DRIVER_CONFIGMAP}" ]; then
+    CSI_GENERIC_CONFIGMAP="${CSI_GENERIC_DRIVER_CONFIGMAP}"
+fi
+
 for i in $@
 do
 case $i in
@@ -404,6 +409,7 @@ spec:
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
+            "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "$APP_DESTROY_TIMEOUT_ARG",
             "$SCHEDULER_UPGRADE_HOPS_ARG",
             "$MAX_STORAGE_NODES_PER_AZ_ARG"

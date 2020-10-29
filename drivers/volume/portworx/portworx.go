@@ -176,7 +176,7 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
-func (d *portworx) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
+func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	logrus.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
 

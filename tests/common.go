@@ -56,6 +56,8 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
 	// import azure driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
+	// import generic csi driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	"github.com/portworx/torpedo/pkg/log"
 
 	yaml "gopkg.in/yaml.v2"
@@ -87,6 +89,7 @@ const (
 	configMapFlag                        = "config-map"
 	enableStorkUpgradeFlag               = "enable-stork-upgrade"
 	autopilotUpgradeImageCliFlag         = "autopilot-upgrade-version"
+	csiGenericDriverConfigMapFlag        = "csi-generic-driver-config-map"
 )
 
 const (
@@ -155,7 +158,7 @@ func InitInstance() {
 	err = Inst().N.Init()
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner)
+	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
 	expect(err).NotTo(haveOccurred())
 
 	if Inst().Backup != nil {
@@ -897,6 +900,7 @@ type Torpedo struct {
 	VaultToken                          string
 	SchedUpgradeHops                    string
 	AutopilotUpgradeImage               string
+	CsiGenericDriverConfigMap           string
 }
 
 // ParseFlags parses command line flags
@@ -925,6 +929,7 @@ func ParseFlags() {
 	var vaultToken string
 	var schedUpgradeHops string
 	var autopilotUpgradeImage string
+	var csiGenericDriverConfigMapName string
 
 	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
@@ -956,6 +961,7 @@ func ParseFlags() {
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
 	flag.StringVar(&autopilotUpgradeImage, autopilotUpgradeImageCliFlag, "", "Autopilot version which will be used for checking version after upgrade autopilot")
+	flag.StringVar(&csiGenericDriverConfigMapName, csiGenericDriverConfigMapFlag, "", "Name of config map that stores provisioner details when CSI generic driver is being used")
 	flag.Parse()
 
 	appList, err := splitCsv(appListCSV)
@@ -1027,6 +1033,7 @@ func ParseFlags() {
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,
 				AutopilotUpgradeImage:               autopilotUpgradeImage,
+				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
 			}
 		})
 	}

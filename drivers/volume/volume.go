@@ -48,7 +48,7 @@ type Options struct {
 // of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string, token string, storageProvisioner string) error
+	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string) error
 
 	// String returns the string name of this driver.
 	String() string
