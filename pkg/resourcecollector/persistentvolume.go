@@ -110,7 +110,7 @@ func (r *ResourceCollector) preparePVResourceForApply(
 		return false, fmt.Errorf("error converting to persistent volume: %v", err)
 	}
 
-	isCSIPV, err := isCSIPersistentVolume(&pv)
+	isCSIPV, err := isGenericCSIPersistentVolume(&pv)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if PV was provisioned by a CSI driver: %v", err)
 	}
