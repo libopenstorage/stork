@@ -8,6 +8,7 @@ import (
 	"path"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 const (
 	fnameFmt       = "2006-01-02T15:04:05.999999-0700MST"
 	stackTraceSize = 5120 * 1024 // 5MB
+	logLevelFile   = "/tmp/loglevel"
 )
 
 // Init Initializes the debug handlers
@@ -34,6 +36,7 @@ func installSignalHandlers(name string, dir string) {
 			dumpGoMemoryTrace()
 			dumpHeap(generateFilename(name, dir, ".heap"))
 			dumpGoProfile(generateFilename(name, dir, ".stack"))
+			changeLogLevel()
 		}
 	}()
 	signal.Notify(cpuProfChannel, syscall.SIGUSR2)
@@ -54,6 +57,30 @@ func installSignalHandlers(name string, dir string) {
 
 func generateFilename(name string, dir string, suffix string) string {
 	return path.Join(dir, name+"."+time.Now().Format(fnameFmt)+suffix)
+}
+
+func changeLogLevel() {
+	var level string
+	data, err := ioutil.ReadFile(logLevelFile)
+	if err != nil {
+		level = "info"
+	} else {
+		level = strings.ToLower(string(data))
+	}
+	switch {
+	case strings.Contains(level, "debug"):
+		logrus.SetLevel(logrus.DebugLevel)
+	case strings.Contains(level, "trace"):
+		logrus.SetLevel(logrus.TraceLevel)
+	case strings.Contains(level, "info"):
+		logrus.SetLevel(logrus.InfoLevel)
+	case strings.Contains(level, "warn"):
+		logrus.SetLevel(logrus.WarnLevel)
+	case strings.Contains(level, "error"):
+		logrus.SetLevel(logrus.ErrorLevel)
+	default:
+		logrus.SetLevel(logrus.InfoLevel)
+	}
 }
 
 func startCPUProfileDump(filename string) bool {
