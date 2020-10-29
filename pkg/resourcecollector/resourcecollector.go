@@ -456,12 +456,11 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 	return nil
 }
 
-func isCSIPersistentVolume(pv *v1.PersistentVolume) (bool, error) {
+func isGenericCSIPersistentVolume(pv *v1.PersistentVolume) (bool, error) {
 	driverName, err := volume.GetPVDriver(pv)
 	if err != nil {
 		return false, err
 	}
-	logrus.Infof("isCSIPersistentVolume driver name - %s", driverName)
 	if driverName == "csi" {
 		return true, nil
 	}
@@ -469,7 +468,7 @@ func isCSIPersistentVolume(pv *v1.PersistentVolume) (bool, error) {
 	return false, nil
 }
 
-func getCSIPV(pvc *v1.PersistentVolumeClaim, allObjects []runtime.Unstructured) (*v1.PersistentVolume, error) {
+func getPVForPVC(pvc *v1.PersistentVolumeClaim, allObjects []runtime.Unstructured) (*v1.PersistentVolume, error) {
 	for _, o := range allObjects {
 		objectType, err := meta.TypeAccessor(o)
 		if err != nil {
