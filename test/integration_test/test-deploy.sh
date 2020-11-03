@@ -17,6 +17,7 @@ backup_location_path="test-restore-path"
 cloud_secret=""
 aws_id=""
 aws_key=""
+generic_csi_configmap_name=""
 for i in "$@"
 do
 case $i in
@@ -119,6 +120,12 @@ case $i in
     --aws_key)
         echo "AWS key for API access: $2"
         aws_key=$2
+        shift
+        shift
+        ;;
+    --generic_csi_configmap)
+        echo "Config map that contains csi generic driver storage class: $2"
+        generic_csi_configmap_name=$2
         shift
         shift
         ;;
@@ -245,6 +252,9 @@ if [ "$remote_config_path" != "" ]; then
     kubectl create configmap remoteconfigmap --from-file=$remote_config_path -n kube-system
 fi
 
+if [ "$generic_csi_configmap_name" != "" ] ; then
+	sed -i 's/- -generic-csi-config=csi_config_map_name/- -generic-csi-config='"$generic_csi_configmap_name"'/g' /testspecs/stork-test-pod.yaml
+fi
 kubectl delete -f /testspecs/stork-test-pod.yaml
 kubectl create -f /testspecs/stork-test-pod.yaml
 
