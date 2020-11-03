@@ -17,6 +17,7 @@ import (
 	storkdriver "github.com/libopenstorage/stork/drivers/volume"
 	_ "github.com/libopenstorage/stork/drivers/volume/aws"
 	_ "github.com/libopenstorage/stork/drivers/volume/azure"
+	_ "github.com/libopenstorage/stork/drivers/volume/csi"
 	_ "github.com/libopenstorage/stork/drivers/volume/gcp"
 	_ "github.com/libopenstorage/stork/drivers/volume/linstor"
 	_ "github.com/libopenstorage/stork/drivers/volume/portworx"
@@ -40,6 +41,7 @@ import (
 	_ "github.com/portworx/torpedo/drivers/volume/aws"
 	_ "github.com/portworx/torpedo/drivers/volume/azure"
 	_ "github.com/portworx/torpedo/drivers/volume/gce"
+	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
 	_ "github.com/portworx/torpedo/drivers/volume/linstor"
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/sirupsen/logrus"
@@ -99,6 +101,7 @@ var authTokenConfigMap string
 var volumeDriverName string
 var schedulerName string
 var backupLocationPath string
+var genericCsiConfigMap string
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -165,7 +168,7 @@ func setup() error {
 		return fmt.Errorf("Error initializing scheduler driver %v: %v", schedulerDriverName, err)
 	}
 
-	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, authToken, provisioner); err != nil {
+	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, authToken, provisioner, genericCsiConfigMap); err != nil {
 		return fmt.Errorf("Error initializing volume driver %v: %v", volumeDriverName, err)
 	}
 
@@ -680,6 +683,11 @@ func TestMain(m *testing.M) {
 		"volume-driver",
 		"pxd",
 		"Stork volume driver to be used for stork integration tests")
+	flag.StringVar(&genericCsiConfigMap,
+		"generic-csi-config",
+		"",
+		"Config map name that contains details of csi driver to be used for provisioning")
+	flag.Parse()
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)
