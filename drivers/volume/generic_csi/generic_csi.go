@@ -11,7 +11,7 @@ import (
 
 const (
 	// DriverName is the name of the aws driver implementation
-	DriverName = "generic_csi"
+	DriverName = "csi"
 	// CsiStorage CSI storage driver name
 	CsiStorage torpedovolume.StorageProvisionerType = "generic_csi"
 	// CsiStorageClassKey CSI Generic driver config map key name
@@ -20,7 +20,7 @@ const (
 
 // Provisioners types of supported provisioners
 var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	CsiStorage: "",
+	CsiStorage: "csi",
 }
 
 type genericCsi struct {
