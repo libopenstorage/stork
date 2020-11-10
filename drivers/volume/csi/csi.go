@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
 	kSnapshotv1beta1 "github.com/kubernetes-csi/external-snapshotter/v2/pkg/apis/volumesnapshot/v1beta1"
@@ -59,6 +58,8 @@ const (
 
 	// annSnapshotClassStorkOwned is an option for providing a snapshot class name
 	annSnapshotClassStorkOwned = annotationPrefix + "csi-snapshot-class-owned"
+	annPVBindCompleted         = "pv.kubernetes.io/bind-completed"
+	annPVBoundByController     = "pv.kubernetes.io/bound-by-controller"
 
 	// snapshotTimeout represents the duration to wait before timing out on snapshot completion
 	snapshotTimeout = time.Minute * 5
@@ -918,17 +919,11 @@ func (c *csi) cleanK8sPVCAnnotations(pvc *v1.PersistentVolumeClaim) *v1.Persiste
 	if pvc.Annotations != nil {
 		newAnnotations := make(map[string]string)
 
-		// we will remove all Kubernetes-added PVC annotations:
-		// format for kubernetes PVC annotations: subdomain.kubernetes.io/resource
-		var isKubernetesAnnotation bool
+		// we will remove the following annotations to prevent controller confusion:
+		// - pv.kubernetes.io/bind-completed
+		// - pv.kubernetes.io/bound-by-controller
 		for key, val := range pvc.Annotations {
-			isKubernetesAnnotation = false
-			parts := strings.Split(key, "/")
-			if len(parts) > 0 {
-				// if not a kubernetes.io annotation key, add to annotations.
-				isKubernetesAnnotation = strings.Contains(parts[0], "kubernetes.io")
-			}
-			if !isKubernetesAnnotation {
+			if key != annPVBindCompleted && key != annPVBoundByController {
 				newAnnotations[key] = val
 			}
 		}
