@@ -52,6 +52,8 @@ const (
 	optCSIDriverName = "csi-driver-name"
 	// optCSISnapshotClassName is an option for providing a snapshot class name
 	optCSISnapshotClassName = "stork.libopenstorage.org/csi-snapshot-class-name"
+	// optVolumeSnapshotContentName is used for recording which vsc to check has been deleted
+	optVolumeSnapshotContentName = "volumesnapshotcontent-name"
 
 	// annotationPrefix is the prefix used for all Stork annotations
 	annotationPrefix = "stork.libopenstorage.org/"
@@ -487,10 +489,47 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		if vInfo.DriverName != storkCSIDriverName {
 			continue
 		}
+
 		pvc, err := core.Instance().GetPersistentVolumeClaim(vInfo.PersistentVolumeClaim, vInfo.Namespace)
 		if err != nil {
 			return nil, err
 		}
+
+		// Once we're in ApplicationBackupStatusInCleanup, we only check if cleanup has finished.
+		if backup.Status.Status == storkapi.ApplicationBackupStatusInCleanup {
+			var snapshotDeleted, snapshotContentDeleted bool
+			_, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(c.getSnapshotName(string(pvc.GetUID())), metav1.GetOptions{})
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					snapshotDeleted = true
+				} else {
+					return nil, err
+				}
+			}
+
+			vscName, ok := vInfo.Options[optVolumeSnapshotContentName]
+			if !ok {
+				log.ApplicationBackupLog(backup).Debugf("failed to find volume snapshot content name for cleanup check: %v", vInfo.Options)
+			}
+			_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(vscName, metav1.GetOptions{})
+			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					snapshotContentDeleted = true
+				} else {
+					return nil, err
+				}
+			}
+
+			if snapshotDeleted && snapshotContentDeleted {
+				vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
+				vInfo.Reason = "Backup successful for volume"
+			}
+
+			volumeInfos = append(volumeInfos, vInfo)
+			continue
+		}
+
+		// Not in cleanup, continue to wait for Backup finish
 		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(c.getSnapshotName(string(pvc.GetUID())), metav1.GetOptions{})
 		if err != nil {
 			return nil, err
@@ -521,16 +560,12 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 
 		switch {
 		case volumeSnapshotReady && volumeSnapshotContentReady:
-			vInfo.Status = storkapi.ApplicationBackupStatusSuccessful
-			vInfo.Reason = "Backup successful for volume"
+			vInfo.Status = storkapi.ApplicationBackupStatusInCleanup
+			vInfo.Reason = "Backup uploaded, cleaning up snapshot objects"
 			size, _ := snapshot.Status.RestoreSize.AsInt64()
 			vInfo.ActualSize = uint64(size)
 			vInfo.TotalSize = uint64(size)
-
-		case snapshot.DeletionTimestamp != nil:
-			vInfo.Status = storkapi.ApplicationBackupStatusFailed
-			vInfo.Reason = "Backup failed for volume"
-			anyFailed = true
+			vInfo.Options[optVolumeSnapshotContentName] = snapshotContent.Name
 
 		case time.Now().After(snapshot.CreationTimestamp.Add(snapshotTimeout)):
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
@@ -555,23 +590,27 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		}
 		log.ApplicationBackupLog(backup).Debugf("cleaned up %v snapshots after a backup failure", len(vsMap))
 
-		return nil, nil
+		// enter cleanup phase upon any failures
+		backup.Status.Status = storkapi.ApplicationBackupStatusInCleanup
+		return volumeInfos, nil
 	}
 
 	// if all have finished, add all VolumeSnapshot and VolumeSnapshotContent to objectstore
 	// in the case where no volumes are being backed up, skip uploading empty lists
-	if !anyInProgress && len(vsContentMap) > 0 && len(vsMap) > 0 {
+	if !anyInProgress && len(vsContentMap) > 0 && len(vsMap) > 0 && backup.Status.Status != storkapi.ApplicationBackupStatusInCleanup {
 		err := c.uploadCSIBackupObject(backup, vsMap, vsContentMap, vsClassMap)
 		if err != nil {
 			return nil, err
 		}
 		log.ApplicationBackupLog(backup).Debugf("finished and uploaded %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
 
+		// enter cleanup phase after a successful object upload
+		backup.Status.Status = storkapi.ApplicationBackupStatusInCleanup
 		err = c.cleanupSnapshots(backup.Namespace, vsMap, vsContentMap, vsClassMap, true)
 		if err != nil {
 			return nil, err
 		}
-		log.ApplicationBackupLog(backup).Debugf("cleaned up %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
+		log.ApplicationBackupLog(backup).Debugf("started clean up of %v snapshots and %v snapshotcontents", len(vsMap), len(vsContentMap))
 	}
 
 	return volumeInfos, nil
@@ -935,6 +974,7 @@ func (c *csi) cleanK8sPVCAnnotations(pvc *v1.PersistentVolumeClaim) *v1.Persiste
 
 func (c *csi) restoreVolumeSnapshotClass(vsClass *kSnapshotv1beta1.VolumeSnapshotClass) (*kSnapshotv1beta1.VolumeSnapshotClass, error) {
 	vsClass.ResourceVersion = ""
+	vsClass.UID = ""
 	newVSClass, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(vsClass)
 	if err != nil {
 		if k8s_errors.IsAlreadyExists(err) {
