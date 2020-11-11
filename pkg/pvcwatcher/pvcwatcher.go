@@ -111,7 +111,7 @@ func (p *PVCWatcher) handleSnapshotScheduleUpdates(pvc *corev1.PersistentVolumeC
 	}
 
 	// Do nothing if the driver doesn't own the PVC or if it isn't bound yet
-	if !p.volDriver.OwnsPVC(pvc) || pvc.Status.Phase != corev1.ClaimBound {
+	if !p.volDriver.OwnsPVC(core.Instance(), pvc) || pvc.Status.Phase != corev1.ClaimBound {
 		return nil
 	}
 

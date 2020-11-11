@@ -317,7 +317,7 @@ func (a *ApplicationCloneController) generateCloneVolumeNames(clone *stork_api.A
 
 	volumeInfos := make([]*stork_api.ApplicationCloneVolumeInfo, 0)
 	for _, pvc := range pvcList.Items {
-		if !a.volDriver.OwnsPVC(&pvc) {
+		if !a.volDriver.OwnsPVC(core.Instance(), &pvc) {
 			continue
 		}
 		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)

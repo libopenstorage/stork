@@ -262,7 +262,7 @@ func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stork
 				return nil, err
 			}
 
-			if !l.OwnsPVC(pvc) {
+			if !l.OwnsPVC(core.Instance(), pvc) {
 				continue
 			}
 
@@ -291,14 +291,14 @@ func (l *linstor) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stork
 func (l *linstor) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim) ([]v1.PersistentVolumeClaim, error) {
 	var linstorTemplates []v1.PersistentVolumeClaim
 	for _, t := range templates {
-		if l.OwnsPVC(&t) {
+		if l.OwnsPVC(core.Instance(), &t) {
 			linstorTemplates = append(linstorTemplates, t)
 		}
 	}
 	return linstorTemplates, nil
 }
 
-func (l *linstor) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
+func (l *linstor) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	provisioner := ""
 	// Check for the provisioner in the PVC annotation. If not populated
 	// try getting the provisioner from the Storage class.
@@ -318,7 +318,7 @@ func (l *linstor) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 
 	if provisioner == "" {
 		// Try to get info from the PV since storage class could be deleted
-		pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
+		pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)
 		if err != nil {
 			logrus.Warnf("Error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 			return false

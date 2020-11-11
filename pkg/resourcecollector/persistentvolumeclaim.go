@@ -33,11 +33,11 @@ func (r *ResourceCollector) pvcToBeCollected(
 
 	// Don't collect PVCs not owned by the driver if collecting for a specific
 	// driver
-	if !allDrivers && !r.Driver.OwnsPVC(pvc) {
+	if !allDrivers && !r.Driver.OwnsPVC(r.coreOps, pvc) {
 		return false, nil
 	}
 	// Else collect PVCs for all supported drivers
-	_, err = volume.GetPVCDriver(pvc)
+	_, err = volume.GetPVCDriver(r.coreOps, pvc)
 	if err != nil {
 		return false, nil
 	}
