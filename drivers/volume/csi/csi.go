@@ -37,7 +37,7 @@ const (
 	// not to be confused with a CSI Driver Name
 	storkCSIDriverName = "csi"
 	// snapshotPrefix is appended to CSI backup snapshot
-	snapshotPrefix = "snapshot-"
+	snapshotPrefix = "snapshot"
 	// snapshotClassNamePrefix is the prefix for snapshot classes per CSI driver
 	snapshotClassNamePrefix = "stork-csi-snapshot-class-"
 
@@ -287,9 +287,10 @@ func (c *csi) StartBackup(
 		}
 
 		// Create CSI volume snapshot
+		vsName := c.getSnapshotName(&pvc, backup)
 		vs := &kSnapshotv1beta1.VolumeSnapshot{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      c.getSnapshotName(string(pvc.GetUID())),
+				Name:      vsName,
 				Namespace: pvc.Namespace,
 			},
 			Spec: kSnapshotv1beta1.VolumeSnapshotSpec{
@@ -299,12 +300,12 @@ func (c *csi) StartBackup(
 				},
 			},
 		}
-		log.ApplicationBackupLog(backup).Debugf("creating volumesnapshot: %v", vs.Name)
-		vs, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(pvc.Namespace).Create(vs)
+		log.ApplicationBackupLog(backup).Debugf("creating volumesnapshot: %v", vsName)
+		_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(pvc.Namespace).Create(vs)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create volumesnapshot %s: %v", vsName, err)
 		}
-		volumeInfo.BackupID = string(vs.Name)
+		volumeInfo.BackupID = string(vsName)
 
 		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
 		if err != nil {
@@ -330,8 +331,8 @@ func (c *csi) StartBackup(
 	return volumeInfos, nil
 }
 
-func (c *csi) getSnapshotName(pvcUUID string) string {
-	return fmt.Sprintf(snapshotPrefix + pvcUUID)
+func (c *csi) getSnapshotName(pvc *v1.PersistentVolumeClaim, backup *storkapi.ApplicationBackup) string {
+	return fmt.Sprintf("%s-%s-%s", snapshotPrefix, string(pvc.UID), string(backup.UID))
 }
 
 func (c *csi) snapshotReady(vs *kSnapshotv1beta1.VolumeSnapshot) bool {
@@ -498,7 +499,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		// Once we're in ApplicationBackupStatusInCleanup, we only check if cleanup has finished.
 		if backup.Status.Status == storkapi.ApplicationBackupStatusInCleanup {
 			var snapshotDeleted, snapshotContentDeleted bool
-			_, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(c.getSnapshotName(string(pvc.GetUID())), metav1.GetOptions{})
+			_, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(c.getSnapshotName(pvc, backup), metav1.GetOptions{})
 			if err != nil {
 				if k8s_errors.IsNotFound(err) {
 					snapshotDeleted = true
@@ -530,10 +531,11 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		}
 
 		// Not in cleanup, continue to wait for Backup finish
-		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(c.getSnapshotName(string(pvc.GetUID())), metav1.GetOptions{})
+		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(c.getSnapshotName(pvc, backup), metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
+		vsMap[vInfo.BackupID] = snapshot
 
 		var snapshotClassName string
 		if snapshot.Spec.VolumeSnapshotClassName != nil {
@@ -551,7 +553,6 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			if err != nil {
 				return nil, err
 			}
-			vsMap[vInfo.BackupID] = snapshot
 			vsContentMap[vInfo.BackupID] = snapshotContent
 			// Only backup one instance of VSClass
 			vsClassMap[snapshotClass.Name] = snapshotClass
