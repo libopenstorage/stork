@@ -352,7 +352,8 @@ func (m *MigrationScheduleController) pruneMigrations(migrationSchedule *stork_a
 		if numMigrations > 1 {
 			// Start from the end and find the last successful migration
 			for i := range policyMigration {
-				if policyMigration[(numMigrations-i-1)].Status == stork_api.MigrationStatusSuccessful {
+				if policyMigration[(numMigrations-i-1)].Status == stork_api.MigrationStatusSuccessful ||
+					policyMigration[(numMigrations-i-1)].Status == stork_api.MigrationStatusPartialSuccess {
 					deleteBefore = numMigrations - i - 1
 					break
 				}
