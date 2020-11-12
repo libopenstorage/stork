@@ -244,6 +244,15 @@ func (c *csi) backupStorageClasses(storageClasses []*storagev1.StorageClass, bac
 	return nil
 }
 
+func (c *csi) cancelBackupDuringStartFailure(backup *storkapi.ApplicationBackup, volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo) {
+	backup.Status.Volumes = volumeBackupInfos
+	err := c.CancelBackup(backup)
+	if err != nil {
+		log.ApplicationBackupLog(backup).Warnf("failed to cleanup backup %s after StartBackup failed: %v", backup.Name, err)
+	}
+	log.ApplicationBackupLog(backup).Warnf("successfully cancelled backup %s after StartBackup failed", backup.Name)
+}
+
 func (c *csi) StartBackup(
 	backup *storkapi.ApplicationBackup,
 	pvcs []v1.PersistentVolumeClaim,
@@ -269,11 +278,13 @@ func (c *csi) StartBackup(
 		// get snapshotclass name based on pv provisioner
 		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
+			c.cancelBackupDuringStartFailure(backup, volumeInfos)
 			return nil, fmt.Errorf("error getting PV name for PVC (%v/%v): %v", pvc.Namespace, pvc.Name, err)
 		}
 		volumeInfo.Volume = pvName
 		pv, err := core.Instance().GetPersistentVolume(pvName)
 		if err != nil {
+			c.cancelBackupDuringStartFailure(backup, volumeInfos)
 			return nil, fmt.Errorf("error getting pv %v: %v", pvName, err)
 		}
 		csiDriverName := pv.Spec.CSI.Driver
@@ -283,7 +294,8 @@ func (c *csi) StartBackup(
 		// ensure volumesnapshotclass is created for this driver
 		snapshotClassCreatedForDriver, err = c.ensureVolumeSnapshotClassCreated(snapshotClassCreatedForDriver, csiDriverName, snapshotClassName)
 		if err != nil {
-			return nil, err
+			c.cancelBackupDuringStartFailure(backup, volumeInfos)
+			return nil, fmt.Errorf("failed to ensure volumesnapshotclass was created: %v", err)
 		}
 
 		// Create CSI volume snapshot
@@ -303,13 +315,15 @@ func (c *csi) StartBackup(
 		log.ApplicationBackupLog(backup).Debugf("creating volumesnapshot: %v", vsName)
 		_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(pvc.Namespace).Create(vs)
 		if err != nil {
+			c.cancelBackupDuringStartFailure(backup, volumeInfos)
 			return nil, fmt.Errorf("failed to create volumesnapshot %s: %v", vsName, err)
 		}
 		volumeInfo.BackupID = string(vsName)
 
 		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
 		if err != nil {
-			return nil, err
+			c.cancelBackupDuringStartFailure(backup, volumeInfos)
+			return nil, fmt.Errorf("failed to get storage class for PVC %s: %v", pvc.Name, err)
 		}
 
 		// only add one instance of a storageclass
@@ -325,7 +339,8 @@ func (c *csi) StartBackup(
 	// Backup the storage class
 	err := c.backupStorageClasses(storageClasses, backup)
 	if err != nil {
-		return nil, err
+		c.cancelBackupDuringStartFailure(backup, volumeInfos)
+		return nil, fmt.Errorf("failed to backup storage classes: %v", err)
 	}
 
 	return volumeInfos, nil
@@ -584,15 +599,13 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 
 	// if a failure occurred with any snapshot, make sure to clean up all snapshots
 	if anyFailed {
-		// cleanup all snapshots after a failure
-		err := c.cleanupSnapshots(backup.Namespace, vsMap, vsContentMap, vsClassMap, false)
+		// Delete all snapshots after a failure
+		err := c.CancelBackup(backup)
 		if err != nil {
 			return nil, err
 		}
-		log.ApplicationBackupLog(backup).Debugf("cleaned up %v snapshots after a backup failure", len(vsMap))
+		log.ApplicationBackupLog(backup).Debugf("cleaned up all snapshots after a backup failure")
 
-		// enter cleanup phase upon any failures
-		backup.Status.Status = storkapi.ApplicationBackupStatusInCleanup
 		return volumeInfos, nil
 	}
 
@@ -692,6 +705,11 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 			snapshotName := vInfo.BackupID
 			snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(backup.Namespace).Get(snapshotName, metav1.GetOptions{})
 			if err != nil {
+				if k8s_errors.IsNotFound(err) {
+					// already deleted or failed to create
+					log.ApplicationBackupLog(backup).Debugf("snapshot already deleted or does not exist during backup cancel: %s", snapshotName)
+					continue
+				}
 				return err
 			}
 
@@ -699,34 +717,47 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 			if snapshot.Status != nil && snapshot.Status.BoundVolumeSnapshotContentName != nil {
 				snapshotContent, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Get(*snapshot.Status.BoundVolumeSnapshotContentName, metav1.GetOptions{})
 				if err != nil {
-					return err
+					// continue deleting snapshot, as the content may have been manually deleted
+					log.ApplicationBackupLog(backup).Debugf("Cancel Backup failed to find snapshotcontent: %s", *snapshot.Status.BoundVolumeSnapshotContentName)
 				}
 
-				snapshotContent.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
-				_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Update(snapshotContent)
-				if err != nil {
-					return err
+				// update snapshot content if we found one
+				if snapshotContent != nil {
+					snapshotContent.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
+					_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Update(snapshotContent)
+					if err != nil {
+						return fmt.Errorf("failed to update VolumeSnapshotContent %v with deletion policy", snapshotContent.Name)
+					}
 				}
 			}
 
 			err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(backup.Namespace).Delete(snapshotName, &metav1.DeleteOptions{})
 			if err != nil {
-				return err
+				log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshot %s: %v", snapshotName, err)
 			}
 
 			snapshotClassName := *snapshot.Spec.VolumeSnapshotClassName
 			snapshotClass, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(snapshotClassName, metav1.GetOptions{})
 			if err != nil {
-				return err
+				if k8s_errors.IsNotFound(err) {
+					continue
+				}
+
+				return fmt.Errorf("failed to get snapshotClass %s: %v", snapshotClassName, err)
 			}
 
 			// only delete snapshot classes we've created and not deleted yet
 			if c.isSnapshotClassStorkCreated(snapshotClass) && !vsClassDeleted[snapshotClassName] {
 				err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Delete(snapshotClassName, &metav1.DeleteOptions{})
-				if err != nil {
-					return err
+				if k8s_errors.IsNotFound(err) {
+					vsClassDeleted[snapshotClassName] = true
+					continue
+				} else if err != nil {
+					log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshotclass %s: %v", snapshotName, err)
+				} else {
+					vsClassDeleted[snapshotClassName] = true
+
 				}
-				vsClassDeleted[snapshotClassName] = true
 			}
 		}
 	}
