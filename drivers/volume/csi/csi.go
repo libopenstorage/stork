@@ -146,9 +146,9 @@ func (c *csi) Stop() error {
 	return nil
 }
 
-func (c *csi) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
+func (c *csi) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	// Try to get info from the PV since storage class could be deleted
-	pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
+	pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)
 	if err != nil {
 		log.PVCLog(pvc).Warnf("error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 		return false

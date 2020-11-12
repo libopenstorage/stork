@@ -493,7 +493,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
 				continue
 			}
-			driverName, err := volume.GetPVCDriver(&pvc)
+			driverName, err := volume.GetPVCDriver(core.Instance(), &pvc)
 			if err != nil {
 				// Skip unsupported PVCs
 				if _, ok := err.(*errors.ErrNotSupported); ok {

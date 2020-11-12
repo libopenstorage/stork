@@ -291,7 +291,7 @@ func (m *Monitor) doesDriverOwnVolumeAttachment(va *storagev1.VolumeAttachment) 
 		return false, err
 	}
 
-	return m.Driver.OwnsPVC(pvc), nil
+	return m.Driver.OwnsPVC(core.Instance(), pvc), nil
 }
 
 func (m *Monitor) cleanupVolumeAttachmentsByPod(pod *v1.Pod) error {

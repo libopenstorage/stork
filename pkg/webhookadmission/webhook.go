@@ -195,7 +195,7 @@ func (c *Controller) checkVolumeOwner(volumes []v1.Volume, namespace string) (bo
 		if err != nil {
 			return false, err
 		}
-		if c.Driver.OwnsPVC(pvc) {
+		if c.Driver.OwnsPVC(core.Instance(), pvc) {
 			return true, nil
 		}
 	}
