@@ -493,7 +493,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			if pvc.Status.Phase != v1.ClaimBound || pvc.DeletionTimestamp != nil {
 				continue
 			}
-			driverName, err := volume.GetPVCDriver(&pvc)
+			driverName, err := volume.GetPVCDriver(core.Instance(), &pvc)
 			if err != nil {
 				// Skip unsupported PVCs
 				if _, ok := err.(*errors.ErrNotSupported); ok {
@@ -619,7 +619,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// TODO: On failure of one volume cancel other backups?
 		for _, vInfo := range volumeInfos {
 			if vInfo.Status == stork_api.ApplicationBackupStatusInProgress || vInfo.Status == stork_api.ApplicationBackupStatusInitial ||
-				vInfo.Status == stork_api.ApplicationBackupStatusPending {
+				vInfo.Status == stork_api.ApplicationBackupStatusPending || vInfo.Status == stork_api.ApplicationBackupStatusInCleanup {
 				log.ApplicationBackupLog(backup).Infof("Volume backup still in progress: %v", vInfo.Volume)
 				inProgress = true
 			} else if vInfo.Status == stork_api.ApplicationBackupStatusFailed {

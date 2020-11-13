@@ -89,7 +89,7 @@ func (g *gcp) Stop() error {
 	return nil
 }
 
-func (g *gcp) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
+func (g *gcp) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 
 	provisioner := ""
 	// Check for the provisioner in the PVC annotation. If not populated
@@ -110,7 +110,7 @@ func (g *gcp) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 
 	if provisioner == "" {
 		// Try to get info from the PV since storage class could be deleted
-		pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
+		pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)
 		if err != nil {
 			logrus.Warnf("Error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 			return false

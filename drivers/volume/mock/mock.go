@@ -10,6 +10,7 @@ import (
 	storkvolume "github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/errors"
 	"github.com/pborman/uuid"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	k8shelper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
@@ -253,7 +254,7 @@ func (m Driver) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*storkvo
 }
 
 // OwnsPVC returns true because it owns all PVCs created by tests
-func (m *Driver) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
+func (m *Driver) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 	return true
 }
 

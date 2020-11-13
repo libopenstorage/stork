@@ -9,6 +9,7 @@ import (
 	snapshotVolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,7 +48,7 @@ type Driver interface {
 	GetVolumeClaimTemplates([]v1.PersistentVolumeClaim) ([]v1.PersistentVolumeClaim, error)
 
 	// OwnsPVC returns true if the PVC is owned by the driver
-	OwnsPVC(pvc *v1.PersistentVolumeClaim) bool
+	OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool
 
 	// OwnsPV returns true if the PV is owned by the driver
 	OwnsPV(pvc *v1.PersistentVolume) bool
@@ -258,9 +259,9 @@ func Get(name string) (Driver, error) {
 
 // GetPVCDriver gets the driver associated with a PVC. Returns ErrNotFound if the PVC is
 // not owned by any available driver
-func GetPVCDriver(pvc *v1.PersistentVolumeClaim) (string, error) {
+func GetPVCDriver(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) (string, error) {
 	for driverName, d := range volDrivers {
-		if d.OwnsPVC(pvc) {
+		if d.OwnsPVC(coreOps, pvc) {
 			return driverName, nil
 		}
 	}

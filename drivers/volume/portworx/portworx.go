@@ -636,7 +636,7 @@ func (p *portworx) GetClusterID() (string, error) {
 	return cluster.Id, nil
 }
 
-func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
+func (p *portworx) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 
 	provisioner := ""
 	// Check for the provisioner in the PVC annotation. If not populated
@@ -657,7 +657,7 @@ func (p *portworx) OwnsPVC(pvc *v1.PersistentVolumeClaim) bool {
 
 	if provisioner == "" {
 		// Try to get info from the PV since storage class could be deleted
-		pv, err := core.Instance().GetPersistentVolume(pvc.Spec.VolumeName)
+		pv, err := coreOps.GetPersistentVolume(pvc.Spec.VolumeName)
 		if err != nil {
 			logrus.Warnf("Error getting pv %v for pvc %v: %v", pvc.Spec.VolumeName, pvc.Name, err)
 			return false
@@ -706,7 +706,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 				return nil, err
 			}
 
-			if !p.OwnsPVC(pvc) {
+			if !p.OwnsPVC(core.Instance(), pvc) {
 				continue
 			}
 
@@ -738,7 +738,7 @@ func (p *portworx) GetVolumeClaimTemplates(templates []v1.PersistentVolumeClaim)
 	[]v1.PersistentVolumeClaim, error) {
 	var pxTemplates []v1.PersistentVolumeClaim
 	for _, t := range templates {
-		if p.OwnsPVC(&t) {
+		if p.OwnsPVC(core.Instance(), &t) {
 			pxTemplates = append(pxTemplates, t)
 		}
 	}
@@ -2221,7 +2221,7 @@ func (p *portworx) StartMigration(migration *storkapi.Migration) ([]*storkapi.Mi
 			return nil, fmt.Errorf("error getting list of volumes to migrate: %v", err)
 		}
 		for _, pvc := range pvcList.Items {
-			if !p.OwnsPVC(&pvc) {
+			if !p.OwnsPVC(core.Instance(), &pvc) {
 				continue
 			}
 			if resourcecollector.SkipResource(pvc.Annotations) {
