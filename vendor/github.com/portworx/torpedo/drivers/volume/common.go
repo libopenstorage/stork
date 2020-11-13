@@ -22,7 +22,7 @@ func (d *DefaultDriver) String() string {
 }
 
 // Init initializes the volume driver under the given scheduler
-func (d *DefaultDriver) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
+func (d *DefaultDriver) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	StorageProvisioner = DefaultStorageProvisioner
 	return nil
 }
@@ -176,7 +176,7 @@ func (d *DefaultDriver) GetReplicationFactor(vol *Volume) (int64, error) {
 }
 
 // SetReplicationFactor sets the volume's replication factor to the passed param rf.
-func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64) error {
+func (d *DefaultDriver) SetReplicationFactor(vol *Volume, replFactor int64, opts ...Options) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "SetReplicationFactor()",

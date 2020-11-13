@@ -42,6 +42,7 @@ import (
 	appsapi "k8s.io/api/apps/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
@@ -99,9 +100,25 @@ const (
 const (
 	secretNameKey      = "secret_name"
 	secretNamespaceKey = "secret_namespace"
-	secretName         = "openstorage.io/auth-secret-name"
-	secretNamespace    = "openstorage.io/auth-secret-namespace"
-	storageClassKey    = "volume.beta.kubernetes.io/storage-class"
+
+	// In-Tree Auth annotations
+	secretName      = "openstorage.io/auth-secret-name"
+	secretNamespace = "openstorage.io/auth-secret-namespace"
+
+	// CsiProvisionerSecretName is required for CSI with Auth enabled
+	CsiProvisionerSecretName = "csi.storage.k8s.io/provisioner-secret-name"
+	// CsiProvisionerSecretNamespace is required for CSI with Auth enabled
+	CsiProvisionerSecretNamespace = "csi.storage.k8s.io/provisioner-secret-namespace"
+	// CsiNodePublishSecretName is required for CSI with Auth enabled
+	CsiNodePublishSecretName = "csi.storage.k8s.io/node-publish-secret-name"
+	// CsiNodePublishSecretNamespace is required for CSI with Auth enabled
+	CsiNodePublishSecretNamespace = "csi.storage.k8s.io/node-publish-secret-namespace"
+	// CsiControllerExpandSecretName is required for CSI with Auth enabled
+	CsiControllerExpandSecretName = "csi.storage.k8s.io/controller-expand-secret-name"
+	// CsiControllerExpandSecretNamespace is required for CSI with Auth enabled
+	CsiControllerExpandSecretNamespace = "csi.storage.k8s.io/controller-expand-secret-namespace"
+
+	storageClassKey = "volume.beta.kubernetes.io/storage-class"
 	// PvcNameKey key used in volume param map to store PVC name
 	PvcNameKey = "pvc_name"
 	// PvcNamespaceKey key used in volume param map to store PVC namespace
@@ -799,10 +816,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
-			logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
-			obj.Provisioner = volume.GetStorageProvisioner()
-		}
+		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
+		obj.Provisioner = volume.GetStorageProvisioner()
 
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if errors.IsAlreadyExists(err) {
@@ -959,7 +974,23 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 	if _, ok := configMap.Data[secretNamespaceKey]; !ok {
 		return fmt.Errorf("failed to get secret namespace from config map")
 	}
-	if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
+
+	if obj, ok := spec.(*storageapi.StorageClass); ok {
+		if obj.Parameters == nil {
+			obj.Parameters = make(map[string]string)
+		}
+		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
+			obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+			obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+			obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+			obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+		} else {
+			obj.Parameters[secretName] = configMap.Data[secretNameKey]
+			obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
+	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
@@ -1001,6 +1032,12 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		obj.Annotations[secretName] = configMap.Data[secretNameKey]
 		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 	} else if obj, ok := spec.(*storkapi.Migration); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkapi.MigrationSchedule); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
@@ -1721,7 +1758,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 				}
 				if err := k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout); err != nil {
 					logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
-					return err
+					return fmt.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				}
 
 				if err := k.WaitForRunning(ctx, DefaultTimeout, DefaultRetryInterval); err != nil {
@@ -1745,7 +1782,7 @@ func (k *K8s) DeleteTasks(ctx *scheduler.Context, opts *scheduler.DeleteTasksOpt
 				err = k8sOps.WaitForPodDeletion(pod.UID, pod.Namespace, deleteTasksWaitTimeout)
 				if err != nil {
 					logrus.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
-					return err
+					return fmt.Errorf("k8s %s failed to wait for pod: [%s] %s to terminate. err: %v", fn, pod.Namespace, pod.Name, err)
 				}
 			}
 		}
@@ -1894,8 +1931,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					}
 				}
 			}
-			logrus.Infof("[%v] Validated storage class: %v", ctx.App.Key, obj.Name)
-		} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
 			if err := k8sCore.ValidatePersistentVolumeClaim(obj, timeout, retryInterval); err != nil {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
@@ -2034,15 +2070,18 @@ func (k *K8s) isPVCShared(pvc *corev1.PersistentVolumeClaim) bool {
 // DeleteVolumes  delete the volumes
 func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
+
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			if options != nil && !options.SkipClusterScopedObjects {
 				if err := k8sStorage.DeleteStorageClass(obj.Name); err != nil {
-					if !errors.IsNotFound(err) {
-						return nil, &scheduler.ErrFailedToDestroyStorage{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
-						}
+					if errors.IsNotFound(err) {
+						logrus.Infof("[%v] Storage class is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+						continue
+					}
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy storage class: %v. Err: %v", obj.Name, err),
 					}
 				}
 
@@ -2051,8 +2090,16 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 		} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
-				return nil, err
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("[%s] Failed to get PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
+				}
 			}
+
 			vols = append(vols, &volume.Volume{
 				ID:        string(pvcObj.Spec.VolumeName),
 				Name:      obj.Name,
@@ -2061,33 +2108,39 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			})
 
 			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
-				if !errors.IsNotFound(err) {
-					return nil, &scheduler.ErrFailedToDestroyStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", obj.Name, err),
-					}
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("[%s] Failed to destroy PVC: %v. Err: %v", ctx.App.Key, obj.Name, err),
 				}
 			}
 
 			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
-				if !errors.IsNotFound(err) {
-					return nil, &scheduler.ErrFailedToDestroyStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to destroy Snapshot: %v. Err: %v", obj.Metadata.Name, err),
-					}
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] Snapshot is not found: %v, skipping deletion", ctx.App.Key, obj.Metadata.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to destroy snapshot: %v. Err: %v", obj.Metadata.Name, err),
 				}
 			}
 
-			logrus.Infof("[%v] Destroyed snapshot: %v", ctx.App.Key, obj.Metadata.Name)
+			logrus.Infof("[%v] Destroyed Snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
 			if err := k8sStork.DeleteGroupSnapshot(obj.Name, obj.Namespace); err != nil {
-				if !errors.IsNotFound(err) {
-					return nil, &scheduler.ErrFailedToDestroyStorage{
-						App:   ctx.App,
-						Cause: fmt.Sprintf("Failed to destroy group snapshot: %v. Err: %v", obj.Name, err),
-					}
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] Group snapshot is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("Failed to destroy group snapshot: %v. Err: %v", obj.Name, err),
 				}
 			}
 
@@ -2095,6 +2148,10 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			pvcList, err := k8sApps.GetPVCsForStatefulSet(obj)
 			if err != nil || pvcList == nil {
+				if errors.IsNotFound(err) {
+					logrus.Infof("[%v] PVCs for StatefulSet not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
 				return nil, &scheduler.ErrFailedToDestroyStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to get PVCs for StatefulSet: %v. Err: %v", obj.Name, err),
@@ -2104,7 +2161,14 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			for _, pvc := range pvcList.Items {
 				pvcObj, err := k8sCore.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
 				if err != nil {
-					return nil, err
+					if errors.IsNotFound(err) {
+						logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+						continue
+					}
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to get PVC: %v. Err: %v", pvc.Name, err),
+					}
 				}
 				vols = append(vols, &volume.Volume{
 					ID:        string(pvcObj.Spec.VolumeName),
@@ -2114,11 +2178,13 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 				})
 
 				if err := k8sCore.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
-					if !errors.IsNotFound(err) {
-						return nil, &scheduler.ErrFailedToDestroyStorage{
-							App:   ctx.App,
-							Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", pvc.Name, err),
-						}
+					if errors.IsNotFound(err) {
+						logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+						continue
+					}
+					return nil, &scheduler.ErrFailedToDestroyStorage{
+						App:   ctx.App,
+						Cause: fmt.Sprintf("Failed to destroy PVC: %v. Err: %v", pvc.Name, err),
 					}
 				}
 			}
@@ -2793,6 +2859,23 @@ func (k *K8s) createMigrationObjects(
 	app *spec.AppSpec,
 ) (interface{}, error) {
 	k8sOps := k8sStork
+	// Add security annotations if running with auth-enabled
+	configMapName := k.secretConfigMapName
+	if configMapName != "" {
+		configMap, err := k8sCore.GetConfigMap(configMapName, "default")
+		if err != nil {
+			return nil, &scheduler.ErrFailedToGetConfigMap{
+				Name:  configMapName,
+				Cause: fmt.Sprintf("Failed to get config map: Err: %v", err),
+			}
+		}
+		err = k.addSecurityAnnotation(specObj, configMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add annotations to migration object: %v", err)
+		}
+
+	}
+
 	if obj, ok := specObj.(*storkapi.ClusterPair); ok {
 		obj.Namespace = ns.Name
 		clusterPair, err := k8sOps.CreateClusterPair(obj)

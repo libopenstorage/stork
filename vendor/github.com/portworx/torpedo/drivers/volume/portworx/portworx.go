@@ -24,6 +24,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
+	torpedok8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
@@ -97,7 +98,22 @@ var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.Storag
 	PortworxCsi:     "pxd.portworx.com",
 }
 
-var deleteVolumeLabelList = []string{"auth-token", "pv.kubernetes.io", "volume.beta.kubernetes.io", "kubectl.kubernetes.io", "volume.kubernetes.io", "pvc_name", "pvc_namespace"}
+var deleteVolumeLabelList = []string{
+	"auth-token",
+	"pv.kubernetes.io",
+	"volume.beta.kubernetes.io",
+	"kubectl.kubernetes.io",
+	"volume.kubernetes.io",
+	"pvc_name",
+	"pvc_namespace",
+	torpedok8s.CsiProvisionerSecretName,
+	torpedok8s.CsiProvisionerSecretNamespace,
+	torpedok8s.CsiNodePublishSecretName,
+	torpedok8s.CsiNodePublishSecretNamespace,
+	torpedok8s.CsiControllerExpandSecretName,
+	torpedok8s.CsiControllerExpandSecretNamespace,
+}
+
 var k8sCore = core.Instance()
 
 type portworx struct {
@@ -160,7 +176,7 @@ func (d *portworx) String() string {
 	return DriverName
 }
 
-func (d *portworx) Init(sched string, nodeDriver string, token string, storageProvisioner string) error {
+func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	logrus.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
 
@@ -1236,8 +1252,16 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 	return replFactor, nil
 }
 
-func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64) error {
+func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, opts ...torpedovolume.Options) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
+	var replicationUpdateTimeout time.Duration
+	if len(opts) > 0 {
+		replicationUpdateTimeout = opts[0].ValidateReplicationUpdateTimeout
+	} else {
+		replicationUpdateTimeout = validateReplicationUpdateTimeout
+	}
+	logrus.Infof("Setting ReplicationUpdateTimeout to %s-%v\n", replicationUpdateTimeout, replicationUpdateTimeout)
+
 	t := func() (interface{}, bool, error) {
 		volDriver := d.getVolDriver()
 		volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
@@ -1260,7 +1284,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			return nil, false, err
 		}
 		quitFlag := false
-		wdt := time.After(validateReplicationUpdateTimeout)
+		wdt := time.After(replicationUpdateTimeout)
 		for !quitFlag && !(areRepSetsFinal(volumeInspectResponse.Volume, replFactor) && isClean(volumeInspectResponse.Volume)) {
 			select {
 			case <-wdt:
@@ -1281,7 +1305,7 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		return 0, false, nil
 	}
 
-	if _, err := task.DoRetryWithTimeout(t, validateReplicationUpdateTimeout, defaultRetryInterval); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, replicationUpdateTimeout, defaultRetryInterval); err != nil {
 		return &ErrFailedToSetReplicationFactor{
 			ID:    volumeName,
 			Cause: err.Error(),

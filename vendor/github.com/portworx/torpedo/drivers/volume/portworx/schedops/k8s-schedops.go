@@ -423,7 +423,6 @@ func (k *k8sSchedOps) validateStorkSnapshot(parent *api.Volume, params map[strin
 
 func (k *k8sSchedOps) GetVolumeName(vol *volume.Volume) string {
 	if vol != nil && vol.ID != "" {
-		logrus.Infof("Returning vol name as : %s", vol.ID)
 		return vol.ID
 	}
 	return ""
