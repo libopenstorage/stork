@@ -511,6 +511,11 @@ func (r *ResourceCollector) includeObject(
 		return false, err
 	}
 
+	// Skip VolumeSnapshot objects
+	if objectType.GetKind() == "VolumeSnapshot" {
+		return false, nil
+	}
+
 	// Even if PV isn't specified need to check if the corresponding PVC is, so
 	// skip the check here
 	if objectType.GetKind() != "PersistentVolume" {

@@ -65,6 +65,8 @@ const (
 
 	// snapshotTimeout represents the duration to wait before timing out on snapshot completion
 	snapshotTimeout = time.Minute * 5
+	// restoreTimeout is the duration to wait before timing out the restore
+	restoreTimeout = time.Minute * 5
 )
 
 // csiBackupObject represents a backup of a series of CSI objects
@@ -430,7 +432,6 @@ func (c *csi) uploadCSIBackupObject(
 }
 
 func (c *csi) cleanupSnapshots(
-	namespace string,
 	vsMap map[string]*kSnapshotv1beta1.VolumeSnapshot,
 	vsContentMap map[string]*kSnapshotv1beta1.VolumeSnapshotContent,
 	vsClassMap map[string]*kSnapshotv1beta1.VolumeSnapshotClass,
@@ -454,7 +455,7 @@ func (c *csi) cleanupSnapshots(
 
 	// delete all vs & vscontent
 	for _, vs := range vsMap {
-		err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Delete(vs.Name, &metav1.DeleteOptions{})
+		err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vs.Namespace).Delete(vs.Name, &metav1.DeleteOptions{})
 		if k8s_errors.IsNotFound(err) {
 			continue
 		} else if err != nil {
@@ -620,7 +621,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 
 		// enter cleanup phase after a successful object upload
 		backup.Status.Status = storkapi.ApplicationBackupStatusInCleanup
-		err = c.cleanupSnapshots(backup.Namespace, vsMap, vsContentMap, vsClassMap, true)
+		err = c.cleanupSnapshots(vsMap, vsContentMap, vsClassMap, true)
 		if err != nil {
 			return nil, err
 		}
@@ -837,7 +838,7 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 		vsContentMap[vInfo.BackupID] = snapshotContent
 		vsClassMap[vInfo.BackupID] = snapshotClass
 	}
-	err = c.cleanupSnapshots(backup.Namespace, vsMap, vsContentMap, vsClassMap, false)
+	err = c.cleanupSnapshots(vsMap, vsContentMap, vsClassMap, false)
 	if err != nil {
 		return err
 	}
@@ -1053,13 +1054,48 @@ func (c *csi) restoreVolumeSnapshotContent(namespace string, vs *kSnapshotv1beta
 	return vsc, nil
 }
 
-func (c *csi) restorePVC(namespace string, pvc *v1.PersistentVolumeClaim, snapshotID string) (*v1.PersistentVolumeClaim, error) {
+func (c *csi) restorePVC(
+	restore *storkapi.ApplicationRestore,
+	vrInfo *storkapi.ApplicationRestoreVolumeInfo,
+	pvc *v1.PersistentVolumeClaim,
+	snapshotID string,
+) (*v1.PersistentVolumeClaim, error) {
 	var err error
 	pvc = c.cleanK8sPVCAnnotations(pvc)
 
+	// handle namespace mapping
+	destNamespace := c.getDestinationNamespace(restore, pvc.Namespace)
+	pvc.Namespace = destNamespace
+
+	if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
+		existingPVC, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, destNamespace)
+		if err != nil {
+			if !k8s_errors.IsNotFound(err) {
+				return nil, fmt.Errorf("failed to get PVC for replace policy check: %v", err)
+			}
+			// Continue if PVC is not found, as it has been deleted or does not exist
+		} else {
+			// PVC is still in terminating state. Mark as such for GetRestoreStatus to handle.
+			if existingPVC.ObjectMeta.DeletionTimestamp != nil {
+				// retry restore later once PVC terminated
+				log.ApplicationRestoreLog(restore).Debugf("PVC %s/%s is still being deleted. Will begin PVC restore once deletion has completed", pvc.Name, destNamespace)
+				vrInfo.Status = storkapi.ApplicationRestoreStatusDeletingPrevious
+				vrInfo.Reason = fmt.Sprintf(
+					"PVC %s/%s is still being deleted. Will begin PVC restore once deletion has completed",
+					existingPVC.Namespace,
+					existingPVC.Name,
+				)
+
+				return existingPVC, nil
+			}
+
+			return nil, fmt.Errorf("replace policy is delete, but existing PVC %v is not being deleted", pvc.Name)
+		}
+	}
+
 	// Create new PVC
 	pvc.ResourceVersion = ""
-	pvc.Namespace = namespace
+	pvc.Namespace = destNamespace
 	pvc.Spec.VolumeName = ""
 	pvc.Spec.DataSource = &v1.TypedLocalObjectReference{
 		APIGroup: stringPtr("snapshot.storage.k8s.io"),
@@ -1073,6 +1109,7 @@ func (c *csi) restorePVC(namespace string, pvc *v1.PersistentVolumeClaim, snapsh
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PVC %s: %s", pvc.Name, err.Error())
 	}
+	log.ApplicationRestoreLog(restore).Debugf("created pvc: %s", pvc.Name)
 
 	return pvc, nil
 }
@@ -1122,14 +1159,15 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		log.ApplicationRestoreLog(restore).Debugf("created vsClass: %s", vsClass.Name)
 
 		// Create VS, bound to VSC
-		vs, err = c.restoreVolumeSnapshot(restore.Namespace, vs, vsc)
+		destNamespace := c.getDestinationNamespace(restore, vs.Namespace)
+		vs, err = c.restoreVolumeSnapshot(destNamespace, vs, vsc)
 		if err != nil {
 			return nil, err
 		}
 		log.ApplicationRestoreLog(restore).Debugf("created vs: %s", vs.Name)
 
 		// Create VSC
-		vsc, err = c.restoreVolumeSnapshotContent(restore.Namespace, vs, vsc)
+		vsc, err = c.restoreVolumeSnapshotContent(destNamespace, vs, vsc)
 		if err != nil {
 			return nil, err
 		}
@@ -1142,23 +1180,44 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		}
 
 		// Update PVC to restore from snapshot
-		pvc, err = c.restorePVC(restore.Namespace, pvc, vbInfo.BackupID)
+		pvc, err = c.restorePVC(restore, vrInfo, pvc, vbInfo.BackupID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restore pvc %s: %v", vbInfo.PersistentVolumeClaim, err.Error())
 		}
-		log.ApplicationRestoreLog(restore).Debugf("created pvc: %s", pvc.Name)
 
 		// Populate volumeRestoreInfo
 		vrInfo.DriverName = storkCSIDriverName
 		vrInfo.PersistentVolumeClaim = pvc.Name
 		vrInfo.SourceNamespace = vbInfo.Namespace
 		vrInfo.SourceVolume = vbInfo.Volume
-		vrInfo.Status = storkapi.ApplicationRestoreStatusInitial
 		vrInfo.TotalSize = vbInfo.TotalSize
+		vrInfo.SnapshotID = snapshotID
+
+		// If restore failed due to the previous PVC still being deleted,
+		// we leave the status as ApplicationRestoreStatusDeletingPrevious.
+		if vrInfo.Status != storkapi.ApplicationRestoreStatusDeletingPrevious {
+			vrInfo.Status = storkapi.ApplicationRestoreStatusInitial
+		}
+
 		volumeRestoreInfos = append(volumeRestoreInfos, vrInfo)
 	}
 
 	return volumeRestoreInfos, nil
+}
+
+func (c *csi) deleteExistingPVCs(
+	restore *storkapi.ApplicationRestore,
+	volumeBackupInfos []*storkapi.ApplicationBackupVolumeInfo,
+) error {
+	for _, vol := range volumeBackupInfos {
+		destNamespace := c.getDestinationNamespace(restore, vol.Namespace)
+		err := core.Instance().DeletePersistentVolumeClaim(vol.PersistentVolumeClaim, destNamespace)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (c *csi) StartRestore(
@@ -1171,6 +1230,14 @@ func (c *csi) StartRestore(
 		}
 	}
 	log.ApplicationRestoreLog(restore).Debugf("started CSI restore %s", restore.UID)
+
+	// Delete existing PVCs for replacement policy delete
+	if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
+		err := c.deleteExistingPVCs(restore, volumeBackupInfos)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete existing PVCs with replacement policy delete: %v", err)
+		}
+	}
 
 	// Get volumesnapshots.json and volumesnapshotcontents.json
 	csiBackupObject, err := c.getCSIBackupObject(restore.Spec.BackupName, restore.Namespace)
@@ -1193,7 +1260,8 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 
 		// Only clean up dangling PVC if it's restore did not succeed
 		if !pvcRestoreSucceeded {
-			err := core.Instance().DeletePersistentVolumeClaim(vrInfo.PersistentVolumeClaim, restore.Namespace)
+			destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
+			err := core.Instance().DeletePersistentVolumeClaim(vrInfo.PersistentVolumeClaim, destNamespace)
 			if err != nil {
 				return err
 			}
@@ -1205,7 +1273,7 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 		return err
 	}
 
-	err = c.cleanupSnapshots(restore.Namespace, csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
+	err = c.cleanupSnapshots(csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
 	if err != nil {
 		return err
 	}
@@ -1216,26 +1284,77 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkapi.ApplicationRestoreVolumeInfo, error) {
 	volumeInfos := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
 	var anyInProgress bool
+	var resources []runtime.Unstructured
 
 	for _, vrInfo := range restore.Status.Volumes {
-		pvc, err := core.Instance().GetPersistentVolumeClaim(vrInfo.PersistentVolumeClaim, restore.Namespace)
-		if err != nil {
-			return nil, err
+		// Handle namespace mapping
+		destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
+
+		// If previous PVC was in terminating state but no longer, then start restoring the new PVC.
+		if vrInfo.Status == storkapi.ApplicationRestoreStatusDeletingPrevious {
+			pvc, err := core.Instance().GetPersistentVolumeClaim(vrInfo.PersistentVolumeClaim, destNamespace)
+			if err == nil {
+				log.ApplicationRestoreLog(restore).Warnf("Previous PVC %s to replace still in terminating state", vrInfo.PersistentVolumeClaim)
+				if time.Now().After(pvc.DeletionTimestamp.Add(restoreTimeout)) {
+					vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
+					vrInfo.Reason = fmt.Sprintf("PVC replace timeout out after %s", restoreTimeout.String())
+				}
+			} else if k8s_errors.IsNotFound(err) {
+				// only get resources once as it's expensive
+				if len(resources) == 0 {
+					// Get all backed up resources to find PVC spec
+					resources, err = c.getBackupResources(restore)
+					if err != nil {
+						return nil, fmt.Errorf("failed to get backup resources for restore: %s", err.Error())
+					}
+				}
+
+				// start new PVC restore as previous one has been terminated
+				pvc, err = c.findPVCInResources(resources, vrInfo.PersistentVolumeClaim, destNamespace)
+				if err != nil {
+					return nil, fmt.Errorf("failed to find PVC %s in backup resources: %v", vrInfo.PersistentVolumeClaim, err)
+				}
+				volumeName := pvc.Name
+				_, err = c.restorePVC(restore, vrInfo, pvc, vrInfo.SnapshotID)
+				if err != nil {
+					return nil, fmt.Errorf("failed to restore PVC %s to check if finished deleting: %v", vrInfo.PersistentVolumeClaim, err)
+				}
+				vrInfo.Status = storkapi.ApplicationRestoreStatusInProgress
+
+				// Need to set RestoreVolume until new one is created, or controller will complain
+				vrInfo.RestoreVolume = volumeName
+			} else {
+				return nil, fmt.Errorf("failed to get previous PVC %s to check if finished deleting: %v", vrInfo.PersistentVolumeClaim, err)
+			}
 		}
 
-		switch pvc.Status.Phase {
-		case v1.ClaimBound:
-			vrInfo.RestoreVolume = pvc.Spec.VolumeName
-			vrInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
-			vrInfo.Reason = fmt.Sprintf("Volume restore successful: PVC %s is bound", pvc.Name)
-		case v1.ClaimLost:
-			vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
-			vrInfo.Reason = fmt.Sprintf("Volume restore failed: PVC %s is lost", pvc.Name)
-		case v1.ClaimPending:
-			vrInfo.Status = storkapi.ApplicationRestoreStatusInProgress
-			vrInfo.Reason = fmt.Sprintf("Volume restore in progress: PVC %s is pending", pvc.Name)
-			anyInProgress = true
+		// Only check on PVC status if done deleting previous PVC
+		if vrInfo.Status != storkapi.ApplicationRestoreStatusDeletingPrevious {
+			// Check on PVC status
+			pvc, err := core.Instance().GetPersistentVolumeClaim(vrInfo.PersistentVolumeClaim, destNamespace)
+			if err != nil {
+				return nil, err
+			}
+			switch pvc.Status.Phase {
+			case v1.ClaimBound:
+				vrInfo.RestoreVolume = pvc.Spec.VolumeName
+				vrInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
+				vrInfo.Reason = fmt.Sprintf("Volume restore successful: PVC %s is bound", pvc.Name)
+			case v1.ClaimLost:
+				vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
+				vrInfo.Reason = fmt.Sprintf("Volume restore failed: PVC %s is lost", pvc.Name)
+			case v1.ClaimPending:
+				vrInfo.Status = storkapi.ApplicationRestoreStatusInProgress
+				vrInfo.Reason = fmt.Sprintf("Volume restore in progress: PVC %s is pending", pvc.Name)
+				anyInProgress = true
+			}
+
+			if time.Now().After(pvc.CreationTimestamp.Add(restoreTimeout)) {
+				vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
+				vrInfo.Reason = fmt.Sprintf("PVC restore timeout out after %s", restoreTimeout.String())
+			}
 		}
+
 		volumeInfos = append(volumeInfos, vrInfo)
 	}
 
@@ -1243,17 +1362,28 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 	if !anyInProgress {
 		csiBackupObject, err := c.getCSIBackupObject(restore.Spec.BackupName, restore.Namespace)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get CSI backup object: %v", err)
 		}
 
 		// cleanupSnapshots with DeletionPolicy as retain
-		err = c.cleanupSnapshots(restore.Namespace, csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
+		err = c.cleanupSnapshots(csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to clean CSI snapshots: %v", err)
 		}
+
+		return volumeInfos, nil
 	}
 
 	return volumeInfos, nil
+}
+
+func (c *csi) getDestinationNamespace(restore *storkapi.ApplicationRestore, ns string) string {
+	destNamespace, ok := restore.Spec.NamespaceMapping[ns]
+	if !ok {
+		destNamespace = restore.Namespace
+	}
+
+	return destNamespace
 }
 
 func (c *csi) InspectVolume(volumeID string) (*storkvolume.Info, error) {

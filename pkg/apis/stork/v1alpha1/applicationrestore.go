@@ -72,6 +72,7 @@ type ApplicationRestoreVolumeInfo struct {
 	SourceNamespace       string                       `json:"sourceNamespace"`
 	SourceVolume          string                       `json:"sourceVolume"`
 	RestoreVolume         string                       `json:"restoreVolume"`
+	SnapshotID            string                       `json:"restoreSnapshotID"`
 	DriverName            string                       `json:"driverName"`
 	Zones                 []string                     `json:"zones"`
 	Status                ApplicationRestoreStatusType `json:"status"`
@@ -95,6 +96,8 @@ const (
 	ApplicationRestoreStatusPartialSuccess ApplicationRestoreStatusType = "PartialSuccess"
 	// ApplicationRestoreStatusRetained for when restore was skipped to retain an already existing resource
 	ApplicationRestoreStatusRetained ApplicationRestoreStatusType = "Retained"
+	// ApplicationRestoreStatusDeletingPrevious for when a volume is being deleted prior to restore
+	ApplicationRestoreStatusDeletingPrevious ApplicationRestoreStatusType = "DeletingPrevious"
 	// ApplicationRestoreStatusSuccessful for when restore has completed successfully
 	ApplicationRestoreStatusSuccessful ApplicationRestoreStatusType = "Successful"
 )
