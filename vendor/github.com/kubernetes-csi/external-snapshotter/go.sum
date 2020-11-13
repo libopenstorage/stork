@@ -319,7 +319,6 @@ k8s.io/apimachinery v0.17.1-beta.0 h1:0Wl/KpAiFOMe9to5h8x2Y6JnjV+BEWJiTcUk1Vx7zd
 k8s.io/apimachinery v0.17.1-beta.0/go.mod h1:b9qmWdKlLuU9EBh+06BtLcSf/Mu89rWL33naRxs1uZg=
 k8s.io/client-go v0.17.0 h1:8QOGvUGdqDMFrm9sD6IUFl256BcffynGoe80sxgTEDg=
 k8s.io/client-go v0.17.0/go.mod h1:TYgR6EUHs6k45hb6KWjVD6jFZvJV4gHDikv/It0xz+k=
-k8s.io/client-go v11.0.0+incompatible h1:LBbX2+lOwY9flffWlJM7f1Ct8V2SRNiMRDFeiwnJo9o=
 k8s.io/code-generator v0.17.1-beta.0 h1:+N1QZb8UfGSZUN3e38sZHc4Np6eAwWlXPZHm8TWYpmU=
 k8s.io/code-generator v0.17.1-beta.0/go.mod h1:DVmfPQgxQENqDIzVR2ddLXMH34qeszkKSdH/N+s+38s=
 k8s.io/component-base v0.17.0 h1:BnDFcmBDq+RPpxXjmuYnZXb59XNN9CaFrX8ba9+3xrA=

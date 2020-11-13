@@ -37,13 +37,18 @@ type Image struct {
 	Version string
 }
 
+// Options to pass to APIs
+type Options struct {
+	ValidateReplicationUpdateTimeout time.Duration
+}
+
 // Driver defines an external volume driver interface that must be implemented
 // by any external storage provider that wants to qualify their product with
 // Torpedo.  The functions defined here are meant to be destructive and illustrative
 // of failure scenarious that can happen with an external storage provider.
 type Driver interface {
 	// Init initializes the volume driver under the given scheduler
-	Init(sched string, nodeDriver string, token string, storageProvisioner string) error
+	Init(sched string, nodeDriver string, token string, storageProvisioner string, csiGenericConfigMap string) error
 
 	// String returns the string name of this driver.
 	String() string
@@ -114,7 +119,7 @@ type Driver interface {
 	GetReplicationFactor(vol *Volume) (int64, error)
 
 	// SetReplicationFactor sets the volume's replication factor to the passed param rf.
-	SetReplicationFactor(vol *Volume, rf int64) error
+	SetReplicationFactor(vol *Volume, rf int64, opts ...Options) error
 
 	// GetMaxReplicationFactor returns the max supported repl factor of a volume
 	GetMaxReplicationFactor() int64
