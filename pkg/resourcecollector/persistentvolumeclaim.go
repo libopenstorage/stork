@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/libopenstorage/stork/drivers/volume"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -65,32 +64,10 @@ func (r *ResourceCollector) preparePVCResourceForApply(
 		return false, fmt.Errorf("error converting PVC object: %v: %v", object, err)
 	}
 
-	// Find the matching PV for this PVC.
-	pv, err := getPVForPVC(&pvc, allObjects)
-	if err != nil {
-		// if not a generic CSI PVC, this call may fail. Do not return error to allow for non-CSI PVCs.
-		logrus.Debugf("did not find PV for PVC %s in backup resources for generic CSI restore: %v", pvc.Name, err)
-	}
-
-	// We have found a PV for this PVC. Check if it is a generic CSI PV
-	// that we do not already have native volume driver support for.
-	if pv != nil {
-		isGenericCSIPVC, err := isGenericCSIPersistentVolume(pv)
-		if err != nil {
-			logrus.Debugf("failed to check if PVC %s is for a CSI driver: %v", pvc.Name, err)
+	if pvNameMappings != nil {
+		if updatedName, present = pvNameMappings[pvc.Spec.VolumeName]; !present {
+			return false, fmt.Errorf("PV name mapping not found for %v", metadata.GetName())
 		}
-
-		// If we have a generic CSI PVC, we should return true to indicate
-		// that the resourcecollector should not restore the PVC.
-		// Instead, PVC creation is handled by the CSI volume driver.
-		if isGenericCSIPVC {
-			logrus.Debugf("skipping CSI PVC in pre-restore: %s", metadata.GetName())
-			return true, nil
-		}
-	}
-
-	if updatedName, present = pvNameMappings[pvc.Spec.VolumeName]; !present {
-		return false, fmt.Errorf("PV name mapping not found for %v", metadata.GetName())
 	}
 	pvc.Spec.VolumeName = updatedName
 	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
