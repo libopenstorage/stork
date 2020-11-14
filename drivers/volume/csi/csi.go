@@ -813,21 +813,34 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 func (c *csi) UpdateMigratedPersistentVolumeSpec(
 	pv *v1.PersistentVolume,
 ) (*v1.PersistentVolume, error) {
-	return nil, &errors.ErrNotSupported{}
+	return pv, nil
 }
 
 func (c *csi) getRestoreStorageClasses(backup *storkapi.ApplicationBackup, resources []runtime.Unstructured) ([]runtime.Unstructured, error) {
+	storageClasses := make([]storagev1.StorageClass, 0)
 	storageClassesBytes, err := c.downloadObject(backup, backup.Spec.BackupLocation, backup.Namespace, storageClassesObjectName)
 	if err != nil {
 		return nil, err
 	}
 
-	err = json.Unmarshal(storageClassesBytes, &resources)
+	err = json.Unmarshal(storageClassesBytes, &storageClasses)
 	if err != nil {
 		return nil, err
 	}
 
-	return resources, nil
+	restoreObjects := make([]runtime.Unstructured, 0)
+	for _, sc := range storageClasses {
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&sc)
+		if err != nil {
+			return nil, fmt.Errorf("error converting from StorageClass to runtime.Unstructured: %v", err)
+		}
+		obj := &unstructured.Unstructured{}
+		obj.SetUnstructuredContent(content)
+
+		restoreObjects = append(restoreObjects, runtime.Unstructured(obj))
+	}
+
+	return restoreObjects, nil
 }
 
 // GetPreRestoreResources gets all storage classes needed
@@ -1000,6 +1013,7 @@ func (c *csi) restoreVolumeSnapshotContent(namespace string, vs *kSnapshotv1beta
 	vsc.Spec.VolumeSnapshotRef.Name = vs.Name
 	vsc.Spec.VolumeSnapshotRef.Namespace = namespace
 	vsc.Spec.VolumeSnapshotRef.UID = vs.UID
+	vsc.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentRetain
 	vsc, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Create(vsc)
 	if err != nil {
 		if k8s_errors.IsAlreadyExists(err) {
@@ -1198,12 +1212,23 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 		switch pvc.Status.Phase {
 		case v1.ClaimBound:
 			vrInfo.RestoreVolume = pvc.Spec.VolumeName
-			vrInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
-			vrInfo.Reason = fmt.Sprintf("Volume restore successful: PVC %s is bound", pvc.Name)
+			size := int64(0)
+			reqSize, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+			if !ok {
+				log.ApplicationRestoreLog(restore).Errorf("failed to get PVC size from spec: %s", pvc.Name)
+			} else {
+				size, ok = reqSize.AsInt64()
+				if !ok {
+					log.ApplicationRestoreLog(restore).Errorf("failed to convert PVC size: %s", pvc.Name)
+				}
+			}
+
+			vrInfo.TotalSize = uint64(size)
 		case v1.ClaimLost:
 			vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
 			vrInfo.Reason = fmt.Sprintf("Volume restore failed: PVC %s is lost", pvc.Name)
 		case v1.ClaimPending:
+			vrInfo.TotalSize = uint64(pvc.Spec.Resources.Size())
 			vrInfo.Status = storkapi.ApplicationRestoreStatusInProgress
 			vrInfo.Reason = fmt.Sprintf("Volume restore in progress: PVC %s is pending", pvc.Name)
 			anyInProgress = true
@@ -1224,10 +1249,15 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 			return nil, fmt.Errorf("failed to get CSI backup object: %v", err)
 		}
 
-		// cleanupSnapshots with DeletionPolicy as retain
 		err = c.cleanupSnapshots(csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to clean CSI snapshots: %v", err)
+		}
+
+		// Mark complete once cleanup has started
+		for _, vrInfo := range restore.Status.Volumes {
+			vrInfo.Reason = fmt.Sprintf("Volume restore successful: PVC %s is bound", vrInfo.PersistentVolumeClaim)
+			vrInfo.Status = storkapi.ApplicationRestoreStatusSuccessful
 		}
 
 		return volumeInfos, nil

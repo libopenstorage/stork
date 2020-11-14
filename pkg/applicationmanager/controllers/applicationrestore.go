@@ -307,6 +307,32 @@ func (a *ApplicationRestoreController) getDriversForRestore(restore *storkapi.Ap
 	return drivers
 }
 
+func (a *ApplicationRestoreController) getNamespacedObjectsToDelete(restore *storkapi.ApplicationRestore, objects []runtime.Unstructured) ([]runtime.Unstructured, error) {
+	tempObjects := make([]runtime.Unstructured, 0)
+	for _, o := range objects {
+		metadata, err := meta.Accessor(o)
+		if err != nil {
+			return nil, err
+		}
+
+		if metadata.GetNamespace() != "" {
+			var val string
+			var present bool
+			// Skip the object if it isn't in the namespace mapping
+			if val, present = restore.Spec.NamespaceMapping[metadata.GetNamespace()]; !present {
+				continue
+			}
+
+			// Update the namespace of the object, will be no-op for clustered resources
+			metadata.SetNamespace(val)
+		}
+
+		tempObjects = append(tempObjects, o)
+	}
+
+	return tempObjects, nil
+}
+
 func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.ApplicationRestore) error {
 	restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
 	if restore.Status.Volumes == nil || len(restore.Status.Volumes) == 0 {
@@ -373,6 +399,20 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			}
 			if err := a.applyResources(restore, preRestoreObjects); err != nil {
 				return err
+			}
+
+			// Pre-delete resources for CSI driver
+			if driverName == "csi" && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
+				tempObjects, err := a.getNamespacedObjectsToDelete(restore, objects)
+				if err != nil {
+					return err
+				}
+				err = a.resourceCollector.DeleteResources(
+					a.dynamicInterface,
+					tempObjects)
+				if err != nil {
+					return err
+				}
 			}
 
 			restoreVolumeInfos, err := driver.StartRestore(restore, vInfos)
@@ -656,6 +696,145 @@ func (a *ApplicationRestoreController) getPVNameMappings(
 	return pvNameMappings, nil
 }
 
+func getNamespacedPVCLocation(pvc *v1.PersistentVolumeClaim) string {
+	return fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
+}
+
+// getPVCToPVMapping constructs a mapping of PVC name/namespace to PV objects
+func getPVCToPVMapping(allObjects []runtime.Unstructured) (map[string]*v1.PersistentVolume, error) {
+
+	// Get mapping of PVC name to PV name
+	pvNameToPVCName := make(map[string]string)
+	for _, o := range allObjects {
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return nil, err
+		}
+
+		// If a PV, assign it to the mapping based on the claimRef UID
+		if objectType.GetKind() == "PersistentVolumeClaim" {
+			pvc := &v1.PersistentVolumeClaim{}
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), pvc); err != nil {
+				return nil, fmt.Errorf("error converting to persistent volume: %v", err)
+			}
+
+			pvNameToPVCName[pvc.Spec.VolumeName] = getNamespacedPVCLocation(pvc)
+		}
+	}
+
+	// Get actual mapping of PVC name to PV object
+	pvcNameToPV := make(map[string]*v1.PersistentVolume)
+	for _, o := range allObjects {
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return nil, err
+		}
+
+		// If a PV, assign it to the mapping based on the claimRef UID
+		if objectType.GetKind() == "PersistentVolume" {
+			pv := &v1.PersistentVolume{}
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), pv); err != nil {
+				return nil, fmt.Errorf("error converting to persistent volume: %v", err)
+			}
+
+			pvcName := pvNameToPVCName[pv.Name]
+
+			// add this PVC name/PV obj mapping
+			pvcNameToPV[pvcName] = pv
+		}
+	}
+
+	return pvcNameToPV, nil
+}
+
+func isGenericCSIPersistentVolume(pv *v1.PersistentVolume) (bool, error) {
+	driverName, err := volume.GetPVDriver(pv)
+	if err != nil {
+		return false, err
+	}
+	if driverName == "csi" {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (a *ApplicationRestoreController) removeCSIVolumesBeforeApply(
+	restore *storkapi.ApplicationRestore,
+	objects []runtime.Unstructured,
+) ([]runtime.Unstructured, error) {
+	tempObjects := make([]runtime.Unstructured, 0)
+
+	// Get PVC to PV mapping first for checking if a PVC is bound to a generic CSI PV
+	pvcToPVMapping, err := getPVCToPVMapping(objects)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PVC to PV mapping: %v", err)
+	}
+	for _, o := range objects {
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return nil, err
+		}
+
+		switch objectType.GetKind() {
+		case "PersistentVolume":
+			// check if this PV is a generic CSI one
+			var pv v1.PersistentVolume
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pv); err != nil {
+				return nil, fmt.Errorf("error converting to persistent volume: %v", err)
+			}
+
+			// Check if this PV is a generic CSI one
+			isGenericCSIPVC, err := isGenericCSIPersistentVolume(&pv)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check if PV was provisioned by a CSI driver: %v", err)
+			}
+
+			// Only add this object if it's not a generic CSI PV
+			if !isGenericCSIPVC {
+				tempObjects = append(tempObjects, o)
+			} else {
+				log.ApplicationRestoreLog(restore).Debugf("skipping CSI PV in restore: %s", pv.Name)
+			}
+
+		case "PersistentVolumeClaim":
+			// check if this PVC is a generic CSI one
+			var pvc v1.PersistentVolumeClaim
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pvc); err != nil {
+				return nil, fmt.Errorf("error converting PVC object: %v: %v", o, err)
+			}
+
+			// Find the matching PV for this PVC
+			pv, ok := pvcToPVMapping[getNamespacedPVCLocation(&pvc)]
+			if !ok {
+				log.ApplicationRestoreLog(restore).Debugf("failed to find PV for PVC %s during CSI volume skip. Will not skip volume", pvc.Name)
+				tempObjects = append(tempObjects, o)
+				continue
+			}
+
+			// We have found a PV for this PVC. Check if it is a generic CSI PV
+			// that we do not already have native volume driver support for.
+			isGenericCSIPVC, err := isGenericCSIPersistentVolume(pv)
+			if err != nil {
+				return nil, err
+			}
+
+			// Only add this object if it's not a generic CSI PVC
+			if !isGenericCSIPVC {
+				tempObjects = append(tempObjects, o)
+			} else {
+				log.ApplicationRestoreLog(restore).Debugf("skipping CSI PVC in restore: %s", pvc.Name)
+			}
+
+		default:
+			// add all other objects
+			tempObjects = append(tempObjects, o)
+		}
+	}
+
+	return tempObjects, nil
+}
+
 func (a *ApplicationRestoreController) applyResources(
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
@@ -692,6 +871,12 @@ func (a *ApplicationRestoreController) applyResources(
 		if err != nil {
 			return err
 		}
+	}
+
+	// skip CSI PV/PVCs before applying
+	objects, err = a.removeCSIVolumesBeforeApply(restore, objects)
+	if err != nil {
+		return err
 	}
 
 	for _, o := range objects {
@@ -762,6 +947,12 @@ func (a *ApplicationRestoreController) restoreResources(
 	objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
 	if err != nil {
 		log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
+		return err
+	}
+
+	// skip CSI PV/PVCs before applying
+	objects, err = a.removeCSIVolumesBeforeApply(restore, objects)
+	if err != nil {
 		return err
 	}
 

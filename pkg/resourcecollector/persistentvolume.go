@@ -5,7 +5,6 @@ import (
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -110,18 +109,11 @@ func (r *ResourceCollector) preparePVResourceForApply(
 		return false, fmt.Errorf("error converting to persistent volume: %v", err)
 	}
 
-	isCSIPV, err := isGenericCSIPersistentVolume(&pv)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if PV was provisioned by a CSI driver: %v", err)
-	}
-	if isCSIPV {
-		logrus.Debugf("skipping CSI PV in pre-restore: %s", pv.Name)
-		return true, nil
-	}
-
 	// Skip the PV if it isn't bound to a PVC that needs to be restored
-	if updatedName, present = pvNameMappings[pv.Name]; !present {
-		return true, nil
+	if pvNameMappings != nil {
+		if updatedName, present = pvNameMappings[pv.Name]; !present {
+			return true, nil
+		}
 	}
 	pv.Name = updatedName
 	driverName, err := volume.GetPVDriver(&pv)

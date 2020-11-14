@@ -14,7 +14,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/rbac"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -93,10 +92,13 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 }
 
 func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
+	// Ignore CSI Snapshot object
+	if resource.Kind == "VolumeSnapshot" && resource.Group == "snapshot.storage.k8s.io" {
+		return false
+	}
+
+	// Include all namespaced CRDs
 	for _, res := range crdKinds {
-		if res.Kind == "VolumeSnapshot" {
-			return false
-		}
 		if res.Kind == resource.Kind &&
 			res.Group == grp.Group && res.Version == grp.Version && resource.Namespaced {
 			return true
@@ -457,41 +459,6 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 
 	}
 	return nil
-}
-
-func isGenericCSIPersistentVolume(pv *v1.PersistentVolume) (bool, error) {
-	driverName, err := volume.GetPVDriver(pv)
-	if err != nil {
-		return false, err
-	}
-	if driverName == "csi" {
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func getPVForPVC(pvc *v1.PersistentVolumeClaim, allObjects []runtime.Unstructured) (*v1.PersistentVolume, error) {
-	for _, o := range allObjects {
-		objectType, err := meta.TypeAccessor(o)
-		if err != nil {
-			return nil, err
-		}
-
-		// If a PV, check if it's the PV name associated with this PVC
-		if objectType.GetKind() == "PersistentVolume" {
-			pv := v1.PersistentVolume{}
-			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(o.UnstructuredContent(), &pv); err != nil {
-				return nil, fmt.Errorf("error converting to persistent volume claim: %v", err)
-			}
-
-			if pv.Name == pvc.Spec.VolumeName {
-				return &pv, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("failed to find PV %s for PVC %s", pvc.Spec.VolumeName, pvc.Name)
 }
 
 // includeObject determines whether to include an object or not
