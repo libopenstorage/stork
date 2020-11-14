@@ -55,16 +55,14 @@ const (
 	// optVolumeSnapshotContentName is used for recording which vsc to check has been deleted
 	optVolumeSnapshotContentName = "volumesnapshotcontent-name"
 
-	// annotationPrefix is the prefix used for all Stork annotations
-	annotationPrefix = "stork.libopenstorage.org/"
-
 	// annSnapshotClassStorkOwned is an option for providing a snapshot class name
-	annSnapshotClassStorkOwned = annotationPrefix + "csi-snapshot-class-owned"
-	annPVBindCompleted         = "pv.kubernetes.io/bind-completed"
-	annPVBoundByController     = "pv.kubernetes.io/bound-by-controller"
+	annPVBindCompleted     = "pv.kubernetes.io/bind-completed"
+	annPVBoundByController = "pv.kubernetes.io/bound-by-controller"
 
 	// snapshotTimeout represents the duration to wait before timing out on snapshot completion
 	snapshotTimeout = time.Minute * 5
+	// restoreTimeout is the duration to wait before timing out the restore
+	restoreTimeout = time.Minute * 5
 )
 
 // csiBackupObject represents a backup of a series of CSI objects
@@ -198,9 +196,6 @@ func (c *csi) createVolumeSnapshotClass(snapshotClassName, driverName string) (*
 	return c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Create(&kSnapshotv1beta1.VolumeSnapshotClass{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: snapshotClassName,
-			Annotations: map[string]string{
-				annSnapshotClassStorkOwned: "true",
-			},
 		},
 		Driver:         driverName,
 		DeletionPolicy: kSnapshotv1beta1.VolumeSnapshotContentRetain,
@@ -213,7 +208,7 @@ func (c *csi) getVolumeCSIDriver(info *storkapi.ApplicationBackupVolumeInfo) str
 
 func (c *csi) ensureVolumeSnapshotClassCreated(snapshotClassCreatedForDriver map[string]bool, csiDriverName, snapshotClassName string) (map[string]bool, error) {
 	if !snapshotClassCreatedForDriver[csiDriverName] {
-		_, err := c.getVolumeSnapshotClass(snapshotClassName)
+		vsClass, err := c.getVolumeSnapshotClass(snapshotClassName)
 		if k8s_errors.IsNotFound(err) {
 			_, err = c.createVolumeSnapshotClass(snapshotClassName, csiDriverName)
 			if err != nil {
@@ -223,6 +218,18 @@ func (c *csi) ensureVolumeSnapshotClassCreated(snapshotClassCreatedForDriver map
 		} else if err != nil {
 			return nil, err
 		}
+
+		// If we've found a vsClass, but it doesn't have a RetainPolicy, update to Retain.
+		// This is essential for the storage backend to not delete the snapshot.
+		// Some CSI drivers require specific VolumeSnapshotClass parameters, so we will leave those as is.
+		if vsClass.DeletionPolicy == kSnapshotv1beta1.VolumeSnapshotContentDelete {
+			vsClass.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentRetain
+			_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Update(vsClass)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		snapshotClassCreatedForDriver[snapshotClassName] = true
 	}
 
@@ -430,7 +437,6 @@ func (c *csi) uploadCSIBackupObject(
 }
 
 func (c *csi) cleanupSnapshots(
-	namespace string,
 	vsMap map[string]*kSnapshotv1beta1.VolumeSnapshot,
 	vsContentMap map[string]*kSnapshotv1beta1.VolumeSnapshotContent,
 	vsClassMap map[string]*kSnapshotv1beta1.VolumeSnapshotClass,
@@ -444,6 +450,7 @@ func (c *csi) cleanupSnapshots(
 	// ensure all vscontent have the desired delete policy
 	for _, vsc := range vsContentMap {
 		if vsc.Spec.DeletionPolicy != desiredRetainPolicy {
+			vsc.UID = ""
 			vsc.Spec.DeletionPolicy = desiredRetainPolicy
 			_, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Update(vsc)
 			if err != nil {
@@ -454,7 +461,7 @@ func (c *csi) cleanupSnapshots(
 
 	// delete all vs & vscontent
 	for _, vs := range vsMap {
-		err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(namespace).Delete(vs.Name, &metav1.DeleteOptions{})
+		err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vs.Namespace).Delete(vs.Name, &metav1.DeleteOptions{})
 		if k8s_errors.IsNotFound(err) {
 			continue
 		} else if err != nil {
@@ -467,21 +474,6 @@ func (c *csi) cleanupSnapshots(
 			continue
 		} else if err != nil {
 			return err
-		}
-	}
-
-	// Maintain a set of deleted classes to avoid double delete calls
-	vsClassDeleted := make(map[string]bool)
-	for _, vsClass := range vsClassMap {
-		snapshotClassName := vsClass.Name
-
-		// only delete snapshot classes we've created and not deleted yet
-		if c.isSnapshotClassStorkCreated(vsClass) && !vsClassDeleted[snapshotClassName] {
-			err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Delete(snapshotClassName, &metav1.DeleteOptions{})
-			if err != nil {
-				return err
-			}
-			vsClassDeleted[snapshotClassName] = true
 		}
 	}
 
@@ -620,7 +612,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 
 		// enter cleanup phase after a successful object upload
 		backup.Status.Status = storkapi.ApplicationBackupStatusInCleanup
-		err = c.cleanupSnapshots(backup.Namespace, vsMap, vsContentMap, vsClassMap, true)
+		err = c.cleanupSnapshots(vsMap, vsContentMap, vsClassMap, true)
 		if err != nil {
 			return nil, err
 		}
@@ -687,20 +679,9 @@ func (c *csi) recreateSnapshotForDeletion(
 	return nil
 }
 
-func (c *csi) isSnapshotClassStorkCreated(vsClass *kSnapshotv1beta1.VolumeSnapshotClass) bool {
-	if val, ok := vsClass.Annotations[annSnapshotClassStorkOwned]; ok {
-		if val == "true" {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 	if backup.Status.Status == storkapi.ApplicationBackupStatusInProgress {
 		// set of all snapshot classes deleted
-		vsClassDeleted := make(map[string]bool)
 		for _, vInfo := range backup.Status.Volumes {
 			snapshotName := vInfo.BackupID
 			snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(backup.Namespace).Get(snapshotName, metav1.GetOptions{})
@@ -723,6 +704,7 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 
 				// update snapshot content if we found one
 				if snapshotContent != nil {
+					snapshotContent.UID = ""
 					snapshotContent.Spec.DeletionPolicy = kSnapshotv1beta1.VolumeSnapshotContentDelete
 					_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotContents().Update(snapshotContent)
 					if err != nil {
@@ -734,30 +716,6 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 			err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(backup.Namespace).Delete(snapshotName, &metav1.DeleteOptions{})
 			if err != nil {
 				log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshot %s: %v", snapshotName, err)
-			}
-
-			snapshotClassName := *snapshot.Spec.VolumeSnapshotClassName
-			snapshotClass, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Get(snapshotClassName, metav1.GetOptions{})
-			if err != nil {
-				if k8s_errors.IsNotFound(err) {
-					continue
-				}
-
-				return fmt.Errorf("failed to get snapshotClass %s: %v", snapshotClassName, err)
-			}
-
-			// only delete snapshot classes we've created and not deleted yet
-			if c.isSnapshotClassStorkCreated(snapshotClass) && !vsClassDeleted[snapshotClassName] {
-				err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Delete(snapshotClassName, &metav1.DeleteOptions{})
-				if k8s_errors.IsNotFound(err) {
-					vsClassDeleted[snapshotClassName] = true
-					continue
-				} else if err != nil {
-					log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshotclass %s: %v", snapshotName, err)
-				} else {
-					vsClassDeleted[snapshotClassName] = true
-
-				}
 			}
 		}
 	}
@@ -837,7 +795,7 @@ func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
 		vsContentMap[vInfo.BackupID] = snapshotContent
 		vsClassMap[vInfo.BackupID] = snapshotClass
 	}
-	err = c.cleanupSnapshots(backup.Namespace, vsMap, vsContentMap, vsClassMap, false)
+	err = c.cleanupSnapshots(vsMap, vsContentMap, vsClassMap, false)
 	if err != nil {
 		return err
 	}
@@ -1053,13 +1011,21 @@ func (c *csi) restoreVolumeSnapshotContent(namespace string, vs *kSnapshotv1beta
 	return vsc, nil
 }
 
-func (c *csi) restorePVC(namespace string, pvc *v1.PersistentVolumeClaim, snapshotID string) (*v1.PersistentVolumeClaim, error) {
+func (c *csi) restorePVC(
+	restore *storkapi.ApplicationRestore,
+	pvc *v1.PersistentVolumeClaim,
+	snapshotID string,
+) (*v1.PersistentVolumeClaim, error) {
 	var err error
 	pvc = c.cleanK8sPVCAnnotations(pvc)
 
+	// handle namespace mapping
+	destNamespace := c.getDestinationNamespace(restore, pvc.Namespace)
+	pvc.Namespace = destNamespace
+
 	// Create new PVC
 	pvc.ResourceVersion = ""
-	pvc.Namespace = namespace
+	pvc.Namespace = destNamespace
 	pvc.Spec.VolumeName = ""
 	pvc.Spec.DataSource = &v1.TypedLocalObjectReference{
 		APIGroup: stringPtr("snapshot.storage.k8s.io"),
@@ -1073,6 +1039,7 @@ func (c *csi) restorePVC(namespace string, pvc *v1.PersistentVolumeClaim, snapsh
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PVC %s: %s", pvc.Name, err.Error())
 	}
+	log.ApplicationRestoreLog(restore).Debugf("created pvc: %s", pvc.Name)
 
 	return pvc, nil
 }
@@ -1122,14 +1089,15 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		log.ApplicationRestoreLog(restore).Debugf("created vsClass: %s", vsClass.Name)
 
 		// Create VS, bound to VSC
-		vs, err = c.restoreVolumeSnapshot(restore.Namespace, vs, vsc)
+		destNamespace := c.getDestinationNamespace(restore, vs.Namespace)
+		vs, err = c.restoreVolumeSnapshot(destNamespace, vs, vsc)
 		if err != nil {
 			return nil, err
 		}
 		log.ApplicationRestoreLog(restore).Debugf("created vs: %s", vs.Name)
 
 		// Create VSC
-		vsc, err = c.restoreVolumeSnapshotContent(restore.Namespace, vs, vsc)
+		vsc, err = c.restoreVolumeSnapshotContent(destNamespace, vs, vsc)
 		if err != nil {
 			return nil, err
 		}
@@ -1142,7 +1110,7 @@ func (c *csi) createRestoreSnapshotsAndPVCs(
 		}
 
 		// Update PVC to restore from snapshot
-		pvc, err = c.restorePVC(restore.Namespace, pvc, vbInfo.BackupID)
+		pvc, err = c.restorePVC(restore, pvc, vbInfo.BackupID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restore pvc %s: %v", vbInfo.PersistentVolumeClaim, err.Error())
 		}
@@ -1193,7 +1161,8 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 
 		// Only clean up dangling PVC if it's restore did not succeed
 		if !pvcRestoreSucceeded {
-			err := core.Instance().DeletePersistentVolumeClaim(vrInfo.PersistentVolumeClaim, restore.Namespace)
+			destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
+			err := core.Instance().DeletePersistentVolumeClaim(vrInfo.PersistentVolumeClaim, destNamespace)
 			if err != nil {
 				return err
 			}
@@ -1205,7 +1174,7 @@ func (c *csi) CancelRestore(restore *storkapi.ApplicationRestore) error {
 		return err
 	}
 
-	err = c.cleanupSnapshots(restore.Namespace, csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
+	err = c.cleanupSnapshots(csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
 	if err != nil {
 		return err
 	}
@@ -1218,11 +1187,14 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 	var anyInProgress bool
 
 	for _, vrInfo := range restore.Status.Volumes {
-		pvc, err := core.Instance().GetPersistentVolumeClaim(vrInfo.PersistentVolumeClaim, restore.Namespace)
+		// Handle namespace mapping
+		destNamespace := c.getDestinationNamespace(restore, vrInfo.SourceNamespace)
+
+		// Check on PVC status
+		pvc, err := core.Instance().GetPersistentVolumeClaim(vrInfo.PersistentVolumeClaim, destNamespace)
 		if err != nil {
 			return nil, err
 		}
-
 		switch pvc.Status.Phase {
 		case v1.ClaimBound:
 			vrInfo.RestoreVolume = pvc.Spec.VolumeName
@@ -1236,6 +1208,12 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 			vrInfo.Reason = fmt.Sprintf("Volume restore in progress: PVC %s is pending", pvc.Name)
 			anyInProgress = true
 		}
+
+		if time.Now().After(pvc.CreationTimestamp.Add(restoreTimeout)) {
+			vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
+			vrInfo.Reason = fmt.Sprintf("PVC restore timeout out after %s", restoreTimeout.String())
+		}
+
 		volumeInfos = append(volumeInfos, vrInfo)
 	}
 
@@ -1243,17 +1221,28 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 	if !anyInProgress {
 		csiBackupObject, err := c.getCSIBackupObject(restore.Spec.BackupName, restore.Namespace)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get CSI backup object: %v", err)
 		}
 
 		// cleanupSnapshots with DeletionPolicy as retain
-		err = c.cleanupSnapshots(restore.Namespace, csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
+		err = c.cleanupSnapshots(csiBackupObject.VolumeSnapshots, csiBackupObject.VolumeSnapshotContents, csiBackupObject.VolumeSnapshotClasses, true)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to clean CSI snapshots: %v", err)
 		}
+
+		return volumeInfos, nil
 	}
 
 	return volumeInfos, nil
+}
+
+func (c *csi) getDestinationNamespace(restore *storkapi.ApplicationRestore, ns string) string {
+	destNamespace, ok := restore.Spec.NamespaceMapping[ns]
+	if !ok {
+		destNamespace = restore.Namespace
+	}
+
+	return destNamespace
 }
 
 func (c *csi) InspectVolume(volumeID string) (*storkvolume.Info, error) {
