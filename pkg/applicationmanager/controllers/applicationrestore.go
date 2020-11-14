@@ -352,6 +352,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			}
 		}
 
+		hasCSIDriverVolume := false
 		for driverName, vInfos := range backupVolumeInfoMappings {
 			driver, err := volume.Get(driverName)
 			if err != nil {
@@ -375,6 +376,10 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				return err
 			}
 
+			if driver.String() == "csi" {
+				hasCSIDriverVolume = true
+			}
+
 			restoreVolumeInfos, err := driver.StartRestore(restore, vInfos)
 			if err != nil {
 				message := fmt.Sprintf("Error starting Application Restore for volumes: %v", err)
@@ -395,6 +400,14 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			}
 			restore.Status.Volumes = append(restore.Status.Volumes, restoreVolumeInfos...)
 		}
+
+		if hasCSIDriverVolume && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
+			err := a.csiPreDeleteResources(restore)
+			if err != nil {
+				return fmt.Errorf("error pre-deleting resources for CSI restore: %v", err)
+			}
+		}
+
 		restore.Status.Status = storkapi.ApplicationRestoreStatusInProgress
 		restore.Status.LastUpdateTimestamp = metav1.Now()
 		err = a.client.Update(context.TODO(), restore)
@@ -435,7 +448,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		// TODO: On failure of one volume cancel other restores?
 		for _, vInfo := range volumeInfos {
 			if vInfo.Status == storkapi.ApplicationRestoreStatusInProgress || vInfo.Status == storkapi.ApplicationRestoreStatusInitial ||
-				vInfo.Status == storkapi.ApplicationRestoreStatusPending {
+				vInfo.Status == storkapi.ApplicationRestoreStatusPending || vInfo.Status == storkapi.ApplicationRestoreStatusDeletingPrevious {
 				log.ApplicationRestoreLog(restore).Infof("Volume restore still in progress: %v->%v", vInfo.SourceVolume, vInfo.RestoreVolume)
 				inProgress = true
 			} else if vInfo.Status == storkapi.ApplicationRestoreStatusFailed {
@@ -656,10 +669,56 @@ func (a *ApplicationRestoreController) getPVNameMappings(
 	return pvNameMappings, nil
 }
 
+// csiPreDeleteResources must delete resources prior to creating volumes
+func (a *ApplicationRestoreController) csiPreDeleteResources(restore *storkapi.ApplicationRestore) error {
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("Error getting backup: %v", err)
+		return err
+	}
+
+	objects, err := a.downloadResources(backup, restore.Spec.BackupLocation, restore.Namespace)
+	if err != nil {
+		log.ApplicationRestoreLog(restore).Errorf("Error downloading resources: %v", err)
+		return err
+	}
+
+	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
+	tempObjects := make([]runtime.Unstructured, 0)
+	emptyPVMapping := make(map[string]string)
+	for _, o := range objects {
+		skip, err := a.resourceCollector.PrepareResourceForApply(
+			o,
+			objects,
+			objectMap,
+			restore.Spec.NamespaceMapping,
+			emptyPVMapping,
+			restore.Spec.IncludeOptionalResourceTypes)
+		if err != nil {
+			return err
+		}
+		if !skip {
+			tempObjects = append(tempObjects, o)
+		}
+	}
+	objects = tempObjects
+
+	// Delete the existing objects
+	err = a.resourceCollector.DeleteResources(
+		a.dynamicInterface,
+		objects)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (a *ApplicationRestoreController) applyResources(
 	restore *storkapi.ApplicationRestore,
 	objects []runtime.Unstructured,
 ) error {
+	// select resources to apply
 	pvNameMappings, err := a.getPVNameMappings(restore, objects)
 	if err != nil {
 		return err
@@ -683,6 +742,7 @@ func (a *ApplicationRestoreController) applyResources(
 		}
 	}
 	objects = tempObjects
+
 	// First delete the existing objects if they exist and replace policy is set
 	// to Delete
 	if restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {

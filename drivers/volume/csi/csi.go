@@ -479,7 +479,9 @@ func (c *csi) cleanupSnapshots(
 		// only delete snapshot classes we've created and not deleted yet
 		if c.isSnapshotClassStorkCreated(vsClass) && !vsClassDeleted[snapshotClassName] {
 			err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshotClasses().Delete(snapshotClassName, &metav1.DeleteOptions{})
-			if err != nil {
+			if k8s_errors.IsNotFound(err) {
+				continue
+			} else if err != nil {
 				return err
 			}
 			vsClassDeleted[snapshotClassName] = true
@@ -1299,6 +1301,8 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 					vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
 					vrInfo.Reason = fmt.Sprintf("PVC replace timeout out after %s", restoreTimeout.String())
 				}
+				// Need to set RestoreVolume until new one is created, or controller will complain
+				vrInfo.RestoreVolume = pvc.Spec.VolumeName
 			} else if k8s_errors.IsNotFound(err) {
 				// only get resources once as it's expensive
 				if len(resources) == 0 {
@@ -1314,15 +1318,11 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 				if err != nil {
 					return nil, fmt.Errorf("failed to find PVC %s in backup resources: %v", vrInfo.PersistentVolumeClaim, err)
 				}
-				volumeName := pvc.Name
 				_, err = c.restorePVC(restore, vrInfo, pvc, vrInfo.SnapshotID)
 				if err != nil {
 					return nil, fmt.Errorf("failed to restore PVC %s to check if finished deleting: %v", vrInfo.PersistentVolumeClaim, err)
 				}
 				vrInfo.Status = storkapi.ApplicationRestoreStatusInProgress
-
-				// Need to set RestoreVolume until new one is created, or controller will complain
-				vrInfo.RestoreVolume = volumeName
 			} else {
 				return nil, fmt.Errorf("failed to get previous PVC %s to check if finished deleting: %v", vrInfo.PersistentVolumeClaim, err)
 			}
