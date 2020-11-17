@@ -94,6 +94,9 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 
 func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
 	for _, res := range crdKinds {
+		if res.Kind == "VolumeSnapshot" {
+			return false
+		}
 		if res.Kind == resource.Kind &&
 			res.Group == grp.Group && res.Version == grp.Version && resource.Namespaced {
 			return true
