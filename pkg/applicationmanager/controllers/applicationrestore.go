@@ -327,7 +327,15 @@ func (a *ApplicationRestoreController) getNamespacedObjectsToDelete(restore *sto
 			metadata.SetNamespace(val)
 		}
 
-		tempObjects = append(tempObjects, o)
+		objectType, err := meta.TypeAccessor(o)
+		if err != nil {
+			return nil, err
+		}
+
+		// Skip PVs, we will let the PVC handle PV deletion where needed
+		if objectType.GetKind() != "PersistentVolume" {
+			tempObjects = append(tempObjects, o)
+		}
 	}
 
 	return tempObjects, nil

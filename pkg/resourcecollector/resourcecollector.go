@@ -93,7 +93,7 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 
 func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion, crdKinds []metav1.GroupVersionKind, optionalResourceTypes []string) bool {
 	// Ignore CSI Snapshot object
-	if resource.Kind == "VolumeSnapshot" && resource.Group == "snapshot.storage.k8s.io" {
+	if resource.Kind == "VolumeSnapshot" {
 		return false
 	}
 
