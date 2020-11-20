@@ -127,6 +127,11 @@ const (
 	volumeRestoreFactor       = 1
 	volumeRestoreSteps        = 5
 
+	// cloudBackupCreateAPI, if fails, retry with 5 sec delay for 10 times
+	cloudBackupCreateInitialDelay = 5 * time.Second
+	cloudBackupCreateFactor       = 1
+	cloudBackupCreateSteps        = 10
+
 	// volumesnapshotRestoreState, since volume restore is async & take time to complete
 	// we check restore completion for 30 times with 10 second delay
 	volumeRestoreStateInitialDelay = 10 * time.Second
@@ -193,6 +198,13 @@ var restoreAPICallBackoff = wait.Backoff{
 	Factor:   volumeRestoreFactor,
 	Steps:    volumeRestoreSteps,
 }
+
+var cloudBackupCreateBackoff = wait.Backoff{
+	Duration: cloudBackupCreateInitialDelay,
+	Factor:   cloudBackupCreateFactor,
+	Steps:    cloudBackupCreateSteps,
+}
+
 var restoreStateCallBackoff = wait.Backoff{
 	Duration: volumeRestoreStateInitialDelay,
 	Factor:   volumeRestoreStateFactor,
@@ -2831,13 +2843,21 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		}
 
 		p.addApplicationBackupCloudsnapInfo(request, backup)
-
-		_, err = volDriver.CloudBackupCreate(request)
-		if err != nil {
-			if _, ok := err.(*ost_errors.ErrExists); !ok {
-				return nil, fmt.Errorf("failed to start backup for %v (%v/%v): %v", volume, pvc.Namespace, pvc.Name, err)
+		var cloudBackupCreateErr error
+		err = wait.ExponentialBackoff(cloudBackupCreateBackoff, func() (bool, error) {
+			_, cloudBackupCreateErr = volDriver.CloudBackupCreate(request)
+			if cloudBackupCreateErr != nil {
+				if _, ok := err.(*ost_errors.ErrExists); !ok {
+					return false, nil
+				}
 			}
+			return true, nil
+		})
+		if err != nil || cloudBackupCreateErr != nil {
+			return nil, fmt.Errorf("failed to start backup for %v (%v/%v): %v",
+				volume, pvc.Namespace, pvc.Name, cloudBackupCreateErr)
 		}
+
 	}
 	return volumeInfos, nil
 }
