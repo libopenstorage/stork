@@ -360,7 +360,7 @@ func (c *csi) StartBackup(
 }
 
 func (c *csi) getBackupSnapshotName(pvc *v1.PersistentVolumeClaim, backup *storkapi.ApplicationBackup) string {
-	return fmt.Sprintf("%s-%s-%s", snapshotBackupPrefix, getUIDLastSection(pvc.UID), getUIDLastSection(backup.UID))
+	return fmt.Sprintf("%s-%s-%s", snapshotBackupPrefix, getUIDLastSection(backup.UID), getUIDLastSection(pvc.UID))
 }
 
 func (c *csi) snapshotReady(vs *kSnapshotv1beta1.VolumeSnapshot) bool {
