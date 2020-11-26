@@ -174,6 +174,7 @@ if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
     AUTOPILOT_UPGRADE_VERSION=""
 fi
 
+kubectl delete secret torpedo
 kubectl delete pod torpedo
 state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
 timeout=0
@@ -246,6 +247,10 @@ fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
+fi
+
+if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
+    TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
@@ -455,12 +460,39 @@ spec:
       value: "${S3_DISABLE_SSL}"
     - name: PROVIDERS
       value: "${PROVIDERS}"
+    - name: INTERNAL_DOCKER_REGISTRY
+      value: "$INTERNAL_DOCKER_REGISTRY"
+    - name: IMAGE_PULL_SERVER
+      value: "$IMAGE_PULL_SERVER"
+    - name: IMAGE_PULL_USERNAME
+      value: "$IMAGE_PULL_USERNAME"
+    - name: IMAGE_PULL_PASSWORD
+      value: "$IMAGE_PULL_PASSWORD"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
 EOF
 
+if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
+  echo "Adding Docker registry secret ..."
+  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
+  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
+  cat >> torpedo.yaml <<EOF
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: torpedo
+type: docker-registry
+data:
+  .dockerconfigjson: $secret
+
+EOF
+  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
+fi
+
 cat torpedo.yaml
+
 echo "Deploying torpedo pod..."
 kubectl apply -f torpedo.yaml
 
