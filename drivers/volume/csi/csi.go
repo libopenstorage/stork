@@ -633,6 +633,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
 			vInfo.Reason = fmt.Sprintf("Snapshot %s lost during backup: %v", snapshotName, err)
 			anyFailed = true
+			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
 		vsMap[vInfo.BackupID] = snapshot
@@ -646,6 +647,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
 			vInfo.Reason = fmt.Sprintf("Snapshot class %s lost during backup: %v", snapshotClassName, err)
 			anyFailed = true
+			volumeInfos = append(volumeInfos, vInfo)
 			continue
 		}
 		volumeSnapshotReady := c.snapshotReady(snapshot)
@@ -660,6 +662,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 				vInfo.Status = storkapi.ApplicationBackupStatusFailed
 				vInfo.Reason = fmt.Sprintf("Snapshot content %s lost during backup: %v", snapshotClassName, err)
 				anyFailed = true
+				volumeInfos = append(volumeInfos, vInfo)
 				continue
 			}
 			vsContentMap[vInfo.BackupID] = snapshotContent
