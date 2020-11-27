@@ -643,11 +643,31 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 	// Return if we have any volume backups still in progress
 	if inProgress {
+		// temporarily store the volume status, So that it will be used during retry.
+		volumeInfos := backup.Status.Volumes
 		backup.Status.LastUpdateTimestamp = metav1.Now()
 		// Store the new status
 		err = a.client.Update(context.TODO(), backup)
 		if err != nil {
-			return err
+			for i := 0; i < maxRetry; i++ {
+				err = a.client.Get(context.TODO(), namespacedName, backup)
+				if err != nil {
+					time.Sleep(retrySleep)
+					continue
+				}
+				backup.Status.Volumes = volumeInfos
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				err = a.client.Update(context.TODO(), backup)
+				if err != nil {
+					time.Sleep(retrySleep)
+					continue
+				} else {
+					break
+				}
+			}
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}
