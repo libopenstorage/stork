@@ -411,7 +411,31 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 
 			// Pre-delete resources for CSI driver
 			if driverName == "csi" && restore.Spec.ReplacePolicy == storkapi.ApplicationRestoreReplacePolicyDelete {
-				tempObjects, err := a.getNamespacedObjectsToDelete(restore, objects)
+				objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
+				objectBasedOnIncludeResources := make([]runtime.Unstructured, 0)
+				for _, o := range objects {
+					skip, err := a.resourceCollector.PrepareResourceForApply(
+						o,
+						objects,
+						objectMap,
+						restore.Spec.NamespaceMapping,
+						nil,
+						restore.Spec.IncludeOptionalResourceTypes,
+					)
+					if err != nil {
+						return err
+					}
+					if !skip {
+						objectBasedOnIncludeResources = append(
+							objectBasedOnIncludeResources,
+							o,
+						)
+					}
+				}
+				tempObjects, err := a.getNamespacedObjectsToDelete(
+					restore,
+					objectBasedOnIncludeResources,
+				)
 				if err != nil {
 					return err
 				}
