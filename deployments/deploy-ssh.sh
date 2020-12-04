@@ -249,7 +249,9 @@ if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
 fi
 
+BUSYBOX_IMG="busybox"
 if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
+    BUSYBOX_IMG="${INTERNAL_DOCKER_REGISTRY}/busybox"
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
@@ -373,7 +375,7 @@ spec:
             ${K8S_VENDOR_VALUE}
   initContainers:
   - name: init-sysctl
-    image: busybox
+    image: ${BUSYBOX_IMG}
     imagePullPolicy: IfNotPresent
     securityContext:
       privileged: true
