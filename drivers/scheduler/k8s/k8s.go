@@ -3695,6 +3695,10 @@ func (k *K8s) isRollingDeleteStrategyEnabled(ctx *scheduler.Context) bool {
 func substituteImageWithInternalRegistry(spec interface{}) {
 	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
 	if internalDockerRegistry != "" {
+		if obj, ok := spec.(*appsapi.DaemonSet); ok {
+			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
+			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
+		}
 		if obj, ok := spec.(*appsapi.Deployment); ok {
 			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
 			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
