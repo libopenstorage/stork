@@ -7,6 +7,7 @@ import (
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -40,6 +41,8 @@ type MigrationOps interface {
 	// The caller is expected to validate if the returned map has all migrations expected at that point of time
 	ValidateMigrationSchedule(string, string, time.Duration, time.Duration) (
 		map[storkv1alpha1.SchedulePolicyType][]*storkv1alpha1.ScheduledMigrationStatus, error)
+	// WatchMigration watch the Migration object
+	WatchMigration(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 }
 
 // GetMigration gets the Migration
@@ -245,4 +248,22 @@ func (c *Client) ValidateMigrationSchedule(name string, namespace string, timeou
 	}
 
 	return migrations, nil
+}
+
+// WatchMigration sets up a watcher that listens for changes on migration objects
+func (c *Client) WatchMigration(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.stork.StorkV1alpha1().Migrations(namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for migration")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &storkv1alpha1.Migration{}, "", fn, listOptions)
+	return nil
 }
