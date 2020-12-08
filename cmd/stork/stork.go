@@ -22,6 +22,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
+	"github.com/libopenstorage/stork/pkg/metrics"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/pvcwatcher"
@@ -199,6 +200,9 @@ func run(c *cli.Context) {
 
 		if c.Bool("stork-metrics") {
 			http.Handle("/metrics", promhttp.Handler())
+			if err = metrics.StartMetrics(); err != nil {
+				log.Fatalf("Error starting prometheus metrics for stork: %v", err)
+			}
 		}
 
 		if c.Bool("extender") {
