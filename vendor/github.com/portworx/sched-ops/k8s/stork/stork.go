@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	snapclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkclientset "github.com/libopenstorage/stork/pkg/client/clientset/versioned"
+	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -227,4 +230,54 @@ func (c *Client) WatchStorkResources(namespace string, object runtime.Object) (w
 		return nil, err
 	}
 	return watchInterface, nil
+}
+
+// WatchFunc is a callback provided to the Watch functions
+// which is invoked when the given object is changed.
+type WatchFunc func(object runtime.Object) error
+
+// handleWatch is internal function that handles the watch.  On channel shutdown (ie. stop watch),
+// it'll attempt to reestablish its watch function.
+func (c *Client) handleWatch(
+	watchInterface watch.Interface,
+	object runtime.Object,
+	namespace string,
+	fn WatchFunc,
+	listOptions metav1.ListOptions) {
+	defer watchInterface.Stop()
+	for {
+		select {
+		case event, more := <-watchInterface.ResultChan():
+			if !more {
+				logrus.Debug("Kubernetes watch closed (attempting to re-establish)")
+
+				t := func() (interface{}, bool, error) {
+					var err error
+					if _, ok := object.(*storkv1.ApplicationBackup); ok {
+						err = c.WatchApplicationBackup(namespace, fn, listOptions)
+					} else if _, ok := object.(*storkv1.ApplicationRestore); ok {
+						err = c.WatchApplicationRestore(namespace, fn, listOptions)
+					} else if _, ok := object.(*storkv1.ApplicationClone); ok {
+						err = c.WatchApplicationClone(namespace, fn, listOptions)
+					} else if _, ok := object.(*storkv1.ClusterPair); ok {
+						err = c.WatchClusterPair(namespace, fn, listOptions)
+					} else if _, ok := object.(*storkv1.Migration); ok {
+						err = c.WatchMigration(namespace, fn, listOptions)
+					} else {
+						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
+					}
+					return "", true, err
+				}
+
+				if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+					logrus.WithError(err).Error("Could not re-establish the watch")
+				} else {
+					logrus.Debug("watch re-established")
+				}
+				return
+			}
+
+			fn(event.Object)
+		}
+	}
 }

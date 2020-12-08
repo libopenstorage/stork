@@ -175,14 +175,14 @@ func (c *Client) ValidateClusterDomainUpdate(name string, timeout, retryInterval
 		} else if resp.Status.Status == storkv1alpha1.ClusterDomainUpdateStatusFailed {
 			return "", false, &errors.ErrFailedToValidateCustomSpec{
 				Name:  name,
-				Cause: fmt.Sprintf("ClusterDomainUpdate Status %v", resp.Status.Status),
+				Cause: fmt.Sprintf("ClusterDomainUpdate Status %v, Reason: %v", resp.Status.Status, resp.Status.Reason),
 				Type:  resp,
 			}
 		}
 
 		return "", true, &errors.ErrFailedToValidateCustomSpec{
 			Name:  name,
-			Cause: fmt.Sprintf("ClusterDomainUpdate Status %v", resp.Status.Status),
+			Cause: fmt.Sprintf("ClusterDomainUpdate Status %v, Reason: %v", resp.Status.Status, resp.Status.Reason),
 			Type:  resp,
 		}
 	}

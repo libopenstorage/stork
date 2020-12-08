@@ -152,5 +152,6 @@ func (c *Client) loadClient() error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

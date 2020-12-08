@@ -7,6 +7,7 @@ import (
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,6 +25,8 @@ type ApplicationCloneOps interface {
 	DeleteApplicationClone(string, string) error
 	// ValidateApplicationClone validates the ApplicationClone
 	ValidateApplicationClone(string, string, time.Duration, time.Duration) error
+	// WatchApplicationClone watch the ApplicationClone
+	WatchApplicationClone(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 }
 
 // CreateApplicationClone creates the ApplicationClone
@@ -91,5 +94,23 @@ func (c *Client) ValidateApplicationClone(name, namespace string, timeout, retry
 	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
 		return err
 	}
+	return nil
+}
+
+// WatchApplicationClone sets up a watcher that listens for changes on application backups
+func (c *Client) WatchApplicationClone(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.stork.StorkV1alpha1().ApplicationClones(namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for application clones")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &storkv1alpha1.ApplicationClone{}, "", fn, listOptions)
 	return nil
 }
