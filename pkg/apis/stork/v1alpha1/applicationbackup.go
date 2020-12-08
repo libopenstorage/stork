@@ -98,8 +98,6 @@ const (
 	ApplicationBackupStatusPending ApplicationBackupStatusType = "Pending"
 	// ApplicationBackupStatusInProgress for when backup is in progress
 	ApplicationBackupStatusInProgress ApplicationBackupStatusType = "InProgress"
-	// ApplicationBackupStatusInCleanup for when backup is cleaning up resources
-	ApplicationBackupStatusInCleanup ApplicationBackupStatusType = "InCleanup"
 	// ApplicationBackupStatusFailed for when backup has failed
 	ApplicationBackupStatusFailed ApplicationBackupStatusType = "Failed"
 	// ApplicationBackupStatusPartialSuccess for when backup was partially successful
