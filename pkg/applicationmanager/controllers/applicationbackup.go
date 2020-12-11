@@ -625,7 +625,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// TODO: On failure of one volume cancel other backups?
 		for _, vInfo := range volumeInfos {
 			if vInfo.Status == stork_api.ApplicationBackupStatusInProgress || vInfo.Status == stork_api.ApplicationBackupStatusInitial ||
-				vInfo.Status == stork_api.ApplicationBackupStatusPending || vInfo.Status == stork_api.ApplicationBackupStatusInCleanup {
+				vInfo.Status == stork_api.ApplicationBackupStatusPending {
 				log.ApplicationBackupLog(backup).Infof("Volume backup still in progress: %v", vInfo.Volume)
 				inProgress = true
 			} else if vInfo.Status == stork_api.ApplicationBackupStatusFailed {
@@ -649,11 +649,31 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 
 	// Return if we have any volume backups still in progress
 	if inProgress {
+		// temporarily store the volume status, So that it will be used during retry.
+		volumeInfos := backup.Status.Volumes
 		backup.Status.LastUpdateTimestamp = metav1.Now()
 		// Store the new status
 		err = a.client.Update(context.TODO(), backup)
 		if err != nil {
-			return err
+			for i := 0; i < maxRetry; i++ {
+				err = a.client.Get(context.TODO(), namespacedName, backup)
+				if err != nil {
+					time.Sleep(retrySleep)
+					continue
+				}
+				backup.Status.Volumes = volumeInfos
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				err = a.client.Update(context.TODO(), backup)
+				if err != nil {
+					time.Sleep(retrySleep)
+					continue
+				} else {
+					break
+				}
+			}
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}
