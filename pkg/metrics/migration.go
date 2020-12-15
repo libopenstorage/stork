@@ -13,22 +13,22 @@ var (
 	migrationStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "migration_status",
 		Help: "Status of migration",
-	}, []string{MetricName, MetricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, MetricSchedule})
 	// migrationStageCounter for migration CR stages on server
 	migrationStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "migration_stage",
 		Help: "Stage of migration",
-	}, []string{MetricName, MetricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, MetricSchedule})
 	// migrationDurationCounter for time taken by migration to complete
 	migrationDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "migration_duration",
 		Help: "Duration of migrations",
-	}, []string{MetricName, MetricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, MetricSchedule})
 )
 
 var (
-	// MigrationStatus map of application migration status to enum
-	MigrationStatus = map[stork_api.MigrationStatusType]float64{
+	// migrationStatus map of application migration status to enum
+	migrationStatus = map[stork_api.MigrationStatusType]float64{
 		stork_api.MigrationStatusInitial:        0,
 		stork_api.MigrationStatusPending:        1,
 		stork_api.MigrationStatusInProgress:     2,
@@ -38,8 +38,8 @@ var (
 		stork_api.MigrationStatusPurged:         6,
 	}
 
-	// MigrationStage map of application migration stage to enum
-	MigrationStage = map[stork_api.MigrationStageType]float64{
+	// migrationStage map of application migration stage to enum
+	migrationStage = map[stork_api.MigrationStageType]float64{
 		stork_api.MigrationStageInitial:      0,
 		stork_api.MigrationStagePreExecRule:  1,
 		stork_api.MigrationStagePostExecRule: 2,
@@ -56,8 +56,8 @@ func watchmigrationCR(object runtime.Object) error {
 		return err
 	}
 	labels := make(prometheus.Labels)
-	labels[MetricName] = migration.Name
-	labels[MetricNamespace] = migration.Namespace
+	labels[metricName] = migration.Name
+	labels[metricNamespace] = migration.Namespace
 	sched := ""
 	for _, v := range migration.OwnerReferences {
 		sched = v.Name
@@ -71,9 +71,9 @@ func watchmigrationCR(object runtime.Object) error {
 		return nil
 	}
 	// Set migration Status counter
-	migrationStatusCounter.With(labels).Set(MigrationStatus[migration.Status.Status])
+	migrationStatusCounter.With(labels).Set(migrationStatus[migration.Status.Status])
 	// Set migration Stage Counter
-	migrationStageCounter.With(labels).Set(MigrationStage[migration.Status.Stage])
+	migrationStageCounter.With(labels).Set(migrationStage[migration.Status.Stage])
 	if migration.Status.Stage == stork_api.MigrationStageFinal && (migration.Status.Status == stork_api.MigrationStatusSuccessful ||
 		migration.Status.Status == stork_api.MigrationStatusPartialSuccess ||
 		migration.Status.Status == stork_api.MigrationStatusFailed) {

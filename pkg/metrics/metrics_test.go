@@ -49,5 +49,8 @@ func resetTest() {
 	fakeKubeClient := kubernetes.NewSimpleClientset()
 
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, fakeRestClient))
-	StartMetrics()
+	if err := StartMetrics(); err != nil {
+		fmt.Printf("Error starting metrics: %v", err)
+		os.Exit(1)
+	}
 }

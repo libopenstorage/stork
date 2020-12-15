@@ -13,27 +13,27 @@ var (
 	restoreStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_restore_status",
 		Help: "Status of application restores",
-	}, []string{MetricName, MetricNamespace})
+	}, []string{metricName, metricNamespace})
 	// RestoreStageCounter for application restore CR stages on server
 	restoreStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_restore_stage",
 		Help: "Stage of application restore",
-	}, []string{MetricName, MetricNamespace})
+	}, []string{metricName, metricNamespace})
 	// RestoreDurationCounter for time taken by application restore to complete
 	restoreDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_restore_duration",
 		Help: "Duration of application restores",
-	}, []string{MetricName, MetricNamespace})
+	}, []string{metricName, metricNamespace})
 	// RestoreSizeCounter for application restore size
 	restoreSizeCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_restore_size",
 		Help: "Size of application restores",
-	}, []string{MetricName, MetricNamespace})
+	}, []string{metricName, metricNamespace})
 )
 
 var (
-	// RestoreStatus map of application restore status to enum
-	RestoreStatus = map[stork_api.ApplicationRestoreStatusType]float64{
+	// restoreStatus map of application restore status to enum
+	restoreStatus = map[stork_api.ApplicationRestoreStatusType]float64{
 		stork_api.ApplicationRestoreStatusInitial:        0,
 		stork_api.ApplicationRestoreStatusPending:        1,
 		stork_api.ApplicationRestoreStatusInProgress:     2,
@@ -43,8 +43,8 @@ var (
 		stork_api.ApplicationRestoreStatusSuccessful:     6,
 	}
 
-	// RestoreStage map of application restore stage to enum
-	RestoreStage = map[stork_api.ApplicationRestoreStageType]float64{
+	// restoreStage map of application restore stage to enum
+	restoreStage = map[stork_api.ApplicationRestoreStageType]float64{
 		stork_api.ApplicationRestoreStageInitial:      0,
 		stork_api.ApplicationRestoreStageVolumes:      1,
 		stork_api.ApplicationRestoreStageApplications: 2,
@@ -59,8 +59,8 @@ func watchRestoreCR(object runtime.Object) error {
 		return err
 	}
 	labels := make(prometheus.Labels)
-	labels[MetricName] = restore.Name
-	labels[MetricNamespace] = restore.Namespace
+	labels[metricName] = restore.Name
+	labels[metricNamespace] = restore.Namespace
 	if restore.DeletionTimestamp != nil {
 		restoreStatusCounter.Delete(labels)
 		restoreStageCounter.Delete(labels)
@@ -69,9 +69,9 @@ func watchRestoreCR(object runtime.Object) error {
 		return nil
 	}
 	// Set Restore Status counter
-	restoreStatusCounter.With(labels).Set(RestoreStatus[restore.Status.Status])
+	restoreStatusCounter.With(labels).Set(restoreStatus[restore.Status.Status])
 	// Set Restore Stage Counter
-	restoreStageCounter.With(labels).Set(RestoreStage[restore.Status.Stage])
+	restoreStageCounter.With(labels).Set(restoreStage[restore.Status.Stage])
 	if restore.Status.Stage == stork_api.ApplicationRestoreStageFinal && (restore.Status.Status == stork_api.ApplicationRestoreStatusSuccessful ||
 		restore.Status.Status == stork_api.ApplicationRestoreStatusPartialSuccess ||
 		restore.Status.Status == stork_api.ApplicationRestoreStatusFailed) {

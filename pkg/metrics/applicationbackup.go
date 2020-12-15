@@ -14,27 +14,27 @@ var (
 	backupStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_status",
 		Help: "Status of application backups",
-	}, []string{MetricName, MetricNamespace, MetricSchedule}) // annotation to figure out schedule
+	}, []string{metricName, metricNamespace, MetricSchedule}) // annotation to figure out schedule
 	// BackupStageCounter for application backup CR stages on server
 	backupStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_stage",
 		Help: "Stage of application backups",
-	}, []string{MetricName, MetricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, MetricSchedule})
 	// BackupDurationCounter for time taken by application backup to complete
 	backupDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_duration",
 		Help: "Duration of application backups",
-	}, []string{MetricName, MetricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, MetricSchedule})
 	// BackupSizeCounter for application backup size
 	backupSizeCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_size",
 		Help: "Size of application backups",
-	}, []string{MetricName, MetricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, MetricSchedule})
 )
 
 var (
-	// BackupStatus map of application backup status to enum
-	BackupStatus = map[stork_api.ApplicationBackupStatusType]float64{
+	// backupStatus map of application backup status to enum
+	backupStatus = map[stork_api.ApplicationBackupStatusType]float64{
 		stork_api.ApplicationBackupStatusInitial:        0,
 		stork_api.ApplicationBackupStatusPending:        1,
 		stork_api.ApplicationBackupStatusInProgress:     2,
@@ -42,8 +42,8 @@ var (
 		stork_api.ApplicationBackupStatusPartialSuccess: 4,
 		stork_api.ApplicationBackupStatusSuccessful:     5,
 	}
-	// BackupStage map of application backup stage to enum
-	BackupStage = map[stork_api.ApplicationBackupStageType]float64{
+	// backupStage map of application backup stage to enum
+	backupStage = map[stork_api.ApplicationBackupStageType]float64{
 		stork_api.ApplicationBackupStageInitial:      0,
 		stork_api.ApplicationBackupStagePreExecRule:  1,
 		stork_api.ApplicationBackupStagePostExecRule: 2,
@@ -60,8 +60,8 @@ func watchBackupCR(object runtime.Object) error {
 		return err
 	}
 	labels := make(prometheus.Labels)
-	labels[MetricName] = backup.Name
-	labels[MetricNamespace] = backup.Namespace
+	labels[metricName] = backup.Name
+	labels[metricNamespace] = backup.Namespace
 	labels[MetricSchedule] = backup.Annotations[app_backup.ApplicationBackupScheduleNameAnnotation]
 	if backup.DeletionTimestamp != nil {
 		backupStatusCounter.Delete(labels)
@@ -71,9 +71,9 @@ func watchBackupCR(object runtime.Object) error {
 		return nil
 	}
 	// Set Backup Status counter
-	backupStatusCounter.With(labels).Set(BackupStatus[backup.Status.Status])
+	backupStatusCounter.With(labels).Set(backupStatus[backup.Status.Status])
 	// Set Backup Stage Counter
-	backupStageCounter.With(labels).Set(BackupStage[backup.Status.Stage])
+	backupStageCounter.With(labels).Set(backupStage[backup.Status.Stage])
 	if backup.Status.Stage == stork_api.ApplicationBackupStageFinal && (backup.Status.Status == stork_api.ApplicationBackupStatusSuccessful ||
 		backup.Status.Status == stork_api.ApplicationBackupStatusPartialSuccess ||
 		backup.Status.Status == stork_api.ApplicationBackupStatusFailed) {
