@@ -45,9 +45,9 @@ func TestCloneSuccessMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// InProgress
-	require.Equal(t, float64(CloneStatus[storkv1.ApplicationCloneStatusInProgress]), testutil.ToFloat64(cloneStatusCounter), "application_clone_status does not matched")
+	require.Equal(t, float64(cloneStatus[storkv1.ApplicationCloneStatusInProgress]), testutil.ToFloat64(cloneStatusCounter), "application_clone_status does not matched")
 	// Volume
-	require.Equal(t, float64(CloneStage[storkv1.ApplicationCloneStageVolumes]), testutil.ToFloat64(cloneStageCounter), "application_clone_stage does not matched")
+	require.Equal(t, float64(cloneStage[storkv1.ApplicationCloneStageVolumes]), testutil.ToFloat64(cloneStageCounter), "application_clone_stage does not matched")
 
 	resp.Status.Stage = storkv1.ApplicationCloneStageFinal
 	resp.Status.Status = storkv1.ApplicationCloneStatusSuccessful
@@ -55,9 +55,9 @@ func TestCloneSuccessMetrics(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(3 * time.Second)
 	// Successful
-	require.Equal(t, float64(CloneStatus[storkv1.ApplicationCloneStatusSuccessful]), testutil.ToFloat64(cloneStatusCounter), "application_clone_status does not matched")
+	require.Equal(t, float64(cloneStatus[storkv1.ApplicationCloneStatusSuccessful]), testutil.ToFloat64(cloneStatusCounter), "application_clone_status does not matched")
 	// Final
-	require.Equal(t, float64(CloneStage[storkv1.ApplicationCloneStageFinal]), testutil.ToFloat64(cloneStageCounter), "application_clone_stage does not matched")
+	require.Equal(t, float64(cloneStage[storkv1.ApplicationCloneStageFinal]), testutil.ToFloat64(cloneStageCounter), "application_clone_stage does not matched")
 
 	err = stork.Instance().DeleteApplicationClone("test", "test")
 	require.NoError(t, err)
@@ -70,11 +70,11 @@ func TestCloneFailureMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	labels := make(prometheus.Labels)
-	labels[MetricName] = "test"
-	labels[MetricNamespace] = "test-fail"
+	labels[metricName] = "test"
+	labels[metricNamespace] = "test-fail"
 
 	// Failure
-	require.Equal(t, float64(CloneStatus[storkv1.ApplicationCloneStatusFailed]), testutil.ToFloat64(cloneStatusCounter.With(labels)), "application_clone_status does not matched")
+	require.Equal(t, float64(cloneStatus[storkv1.ApplicationCloneStatusFailed]), testutil.ToFloat64(cloneStatusCounter.With(labels)), "application_clone_status does not matched")
 	// Initial
-	require.Equal(t, float64(CloneStage[storkv1.ApplicationCloneStageInitial]), testutil.ToFloat64(cloneStageCounter.With(labels)), "application_clone_stage does not matched")
+	require.Equal(t, float64(cloneStage[storkv1.ApplicationCloneStageInitial]), testutil.ToFloat64(cloneStageCounter.With(labels)), "application_clone_stage does not matched")
 }

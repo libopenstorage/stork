@@ -45,9 +45,9 @@ func TestMigrationSuccessMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// InProgress
-	require.Equal(t, float64(MigrationStatus[storkv1.MigrationStatusInProgress]), testutil.ToFloat64(migrationStatusCounter), "migration_status does not matched")
+	require.Equal(t, float64(migrationStatus[storkv1.MigrationStatusInProgress]), testutil.ToFloat64(migrationStatusCounter), "migration_status does not matched")
 	// Volume
-	require.Equal(t, float64(MigrationStage[storkv1.MigrationStageVolumes]), testutil.ToFloat64(migrationStageCounter), "migration_stage does not matched")
+	require.Equal(t, float64(migrationStage[storkv1.MigrationStageVolumes]), testutil.ToFloat64(migrationStageCounter), "migration_stage does not matched")
 
 	resp.Status.Stage = storkv1.MigrationStageFinal
 	resp.Status.Status = storkv1.MigrationStatusSuccessful
@@ -55,9 +55,9 @@ func TestMigrationSuccessMetrics(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(3 * time.Second)
 	// Successful
-	require.Equal(t, float64(MigrationStatus[storkv1.MigrationStatusSuccessful]), testutil.ToFloat64(migrationStatusCounter), "migration_status does not matched")
+	require.Equal(t, float64(migrationStatus[storkv1.MigrationStatusSuccessful]), testutil.ToFloat64(migrationStatusCounter), "migration_status does not matched")
 	// Final
-	require.Equal(t, float64(MigrationStage[storkv1.MigrationStageFinal]), testutil.ToFloat64(migrationStageCounter), "migration_stage does not matched")
+	require.Equal(t, float64(migrationStage[storkv1.MigrationStageFinal]), testutil.ToFloat64(migrationStageCounter), "migration_stage does not matched")
 
 	err = stork.Instance().DeleteMigration("test", "test")
 	require.NoError(t, err)
@@ -70,12 +70,12 @@ func TestMigrationFailureMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	labels := make(prometheus.Labels)
-	labels[MetricName] = "test"
-	labels[MetricNamespace] = "test-fail"
+	labels[metricName] = "test"
+	labels[metricNamespace] = "test-fail"
 	labels[MetricSchedule] = ""
 
 	// Failure
-	require.Equal(t, float64(MigrationStatus[storkv1.MigrationStatusFailed]), testutil.ToFloat64(migrationStatusCounter.With(labels)), "migration_status does not matched")
+	require.Equal(t, float64(migrationStatus[storkv1.MigrationStatusFailed]), testutil.ToFloat64(migrationStatusCounter.With(labels)), "migration_status does not matched")
 	// Initial
-	require.Equal(t, float64(MigrationStage[storkv1.MigrationStageInitial]), testutil.ToFloat64(migrationStageCounter.With(labels)), "migration_stage does not matched")
+	require.Equal(t, float64(migrationStage[storkv1.MigrationStageInitial]), testutil.ToFloat64(migrationStageCounter.With(labels)), "migration_stage does not matched")
 }

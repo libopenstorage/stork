@@ -36,8 +36,8 @@ func TestClusterPairSuccessMetrics(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(3 * time.Second)
 
-	require.Equal(t, float64(ClusterpairStatus[storkv1.ClusterPairStatusReady]), testutil.ToFloat64(clusterpairSchedStatusCounter), "clusterpair_sched_status does not matched")
-	require.Equal(t, float64(ClusterpairStatus[storkv1.ClusterPairStatusReady]), testutil.ToFloat64(clusterpairStorageStatusCounter), "clusterpair_storage_status does not matched")
+	require.Equal(t, float64(clusterpairStatus[storkv1.ClusterPairStatusReady]), testutil.ToFloat64(clusterpairSchedStatusCounter), "clusterpair_sched_status does not matched")
+	require.Equal(t, float64(clusterpairStatus[storkv1.ClusterPairStatusReady]), testutil.ToFloat64(clusterpairStorageStatusCounter), "clusterpair_storage_status does not matched")
 
 	err = stork.Instance().DeleteClusterPair("test", "test")
 	require.NoError(t, err)
@@ -50,10 +50,10 @@ func TestClusterPairFailureMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	labels := make(prometheus.Labels)
-	labels[MetricName] = "test"
-	labels[MetricNamespace] = "test-fail"
-	require.Equal(t, float64(ClusterpairStatus[storkv1.ClusterPairStatusError]), testutil.ToFloat64(clusterpairSchedStatusCounter.With(labels)), "clusterpair_sched_status does not matched")
-	require.Equal(t, float64(ClusterpairStatus[storkv1.ClusterPairStatusDegraded]), testutil.ToFloat64(clusterpairStorageStatusCounter.With(labels)), "clusterpair_storage_status does not matched")
+	labels[metricName] = "test"
+	labels[metricNamespace] = "test-fail"
+	require.Equal(t, float64(clusterpairStatus[storkv1.ClusterPairStatusError]), testutil.ToFloat64(clusterpairSchedStatusCounter.With(labels)), "clusterpair_sched_status does not matched")
+	require.Equal(t, float64(clusterpairStatus[storkv1.ClusterPairStatusDegraded]), testutil.ToFloat64(clusterpairStorageStatusCounter.With(labels)), "clusterpair_storage_status does not matched")
 
 	err = stork.Instance().DeleteClusterPair("test", "test-fail")
 	require.NoError(t, err)

@@ -7,14 +7,15 @@ import (
 )
 
 const (
-	// MetricName for stork prometheus metrics
-	MetricName = "name"
-	// MetricNamespace for stork prometheus metrics
-	MetricNamespace = "namespace"
+	// metricName for stork prometheus metrics
+	metricName = "name"
+	// metricNamespace for stork prometheus metrics
+	metricNamespace = "namespace"
 	// MetricSchedule for stork prometheus metrics
 	MetricSchedule = "schedule"
 )
 
+// StartMetrics watch over stork controllers to collect metrics
 func StartMetrics() error {
 	if err := storkops.Instance().WatchApplicationBackup("", watchBackupCR, metav1.ListOptions{}); err != nil {
 		logrus.Errorf("failed to watch applicationbackups due to: %v", err)

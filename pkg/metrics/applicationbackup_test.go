@@ -45,9 +45,9 @@ func TestBackupSuccessMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// InProgress
-	require.Equal(t, float64(BackupStatus[storkv1.ApplicationBackupStatusInProgress]), testutil.ToFloat64(backupStatusCounter), "application_backup_status does not matched")
+	require.Equal(t, float64(backupStatus[storkv1.ApplicationBackupStatusInProgress]), testutil.ToFloat64(backupStatusCounter), "application_backup_status does not matched")
 	// Volume
-	require.Equal(t, float64(BackupStage[storkv1.ApplicationBackupStageVolumes]), testutil.ToFloat64(backupStageCounter), "application_backup_stage does not matched")
+	require.Equal(t, float64(backupStage[storkv1.ApplicationBackupStageVolumes]), testutil.ToFloat64(backupStageCounter), "application_backup_stage does not matched")
 
 	resp.Status.Stage = storkv1.ApplicationBackupStageFinal
 	resp.Status.Status = storkv1.ApplicationBackupStatusSuccessful
@@ -56,9 +56,9 @@ func TestBackupSuccessMetrics(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(3 * time.Second)
 	// Successful
-	require.Equal(t, float64(BackupStatus[storkv1.ApplicationBackupStatusSuccessful]), testutil.ToFloat64(backupStatusCounter), "application_backup_status does not matched")
+	require.Equal(t, float64(backupStatus[storkv1.ApplicationBackupStatusSuccessful]), testutil.ToFloat64(backupStatusCounter), "application_backup_status does not matched")
 	// Final
-	require.Equal(t, float64(BackupStage[storkv1.ApplicationBackupStageFinal]), testutil.ToFloat64(backupStageCounter), "application_backup_stage does not matched")
+	require.Equal(t, float64(backupStage[storkv1.ApplicationBackupStageFinal]), testutil.ToFloat64(backupStageCounter), "application_backup_stage does not matched")
 	// Size
 	require.Equal(t, float64(1024), testutil.ToFloat64(backupSizeCounter), "application_backup_size does not matched")
 
@@ -73,12 +73,12 @@ func TestBackupFailureMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	labels := make(prometheus.Labels)
-	labels[MetricName] = "test"
-	labels[MetricNamespace] = "test-fail"
+	labels[metricName] = "test"
+	labels[metricNamespace] = "test-fail"
 	labels[MetricSchedule] = ""
 
 	// Failure
-	require.Equal(t, float64(BackupStatus[storkv1.ApplicationBackupStatusFailed]), testutil.ToFloat64(backupStatusCounter.With(labels)), "application_backup_status does not matched")
+	require.Equal(t, float64(backupStatus[storkv1.ApplicationBackupStatusFailed]), testutil.ToFloat64(backupStatusCounter.With(labels)), "application_backup_status does not matched")
 	// Initial
-	require.Equal(t, float64(BackupStage[storkv1.ApplicationBackupStageInitial]), testutil.ToFloat64(backupStageCounter.With(labels)), "application_backup_stage does not matched")
+	require.Equal(t, float64(backupStage[storkv1.ApplicationBackupStageInitial]), testutil.ToFloat64(backupStageCounter.With(labels)), "application_backup_stage does not matched")
 }
