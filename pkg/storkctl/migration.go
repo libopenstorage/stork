@@ -309,7 +309,7 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 					if crd.SuspendOptions.Type == "bool" {
 						disableVersion = !activate
 					} else if crd.SuspendOptions.Type == "int" {
-						replicas, _ := getUpdatedReplicaCount(o.GetAnnotations(), activate, ioStreams)
+						replicas, _ := getSuspendIntOpts(o.GetAnnotations(), activate, ioStreams)
 						disableVersion = replicas
 					} else if crd.SuspendOptions.Type == "string" {
 						suspend, err := getSuspendStringOpts(o.GetAnnotations(), activate, ioStreams)
@@ -418,6 +418,25 @@ func getSuspendStringOpts(annotations map[string]string, activate bool, ioStream
 		return "", fmt.Errorf("required migration annotation not found %s", crdOpts)
 	}
 	return suspend, nil
+}
+
+func getSuspendIntOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {
+	if intOpts, present := annotations[migration.StorkMigrationCRDActivateAnnotation]; present {
+		var replicas int32
+		if activate {
+			parsedReplicas, err := strconv.Atoi(intOpts)
+			if err != nil {
+				printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
+				return 0, false
+			}
+			replicas = int32(parsedReplicas)
+		} else {
+			replicas = 0
+		}
+		return replicas, true
+	}
+
+	return 0, false
 }
 
 func getUpdatedReplicaCount(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {
