@@ -12,17 +12,17 @@ var (
 	// clusterpairStatusCounter for clusterpair status
 	clusterpairSchedStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "clusterpair_scheduler_status",
-		Help: "Status of clusterpair",
-	}, []string{MetricName, MetricNamespace})
+		Help: "Status of scheduler clusterpair",
+	}, []string{metricName, metricNamespace})
 	clusterpairStorageStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "clusterpair_storage_status",
-		Help: "Status of clusterpair",
-	}, []string{MetricName, MetricNamespace})
+		Help: "Status of storage clusterpair",
+	}, []string{metricName, metricNamespace})
 )
 
 var (
-	// ClusterpairStatus map of clusterpair status
-	ClusterpairStatus = map[stork_api.ClusterPairStatusType]float64{
+	// clusterpairStatus map of clusterpair status
+	clusterpairStatus = map[stork_api.ClusterPairStatusType]float64{
 		stork_api.ClusterPairStatusInitial:     0,
 		stork_api.ClusterPairStatusPending:     1,
 		stork_api.ClusterPairStatusReady:       2,
@@ -40,16 +40,16 @@ func watchclusterpairCR(object runtime.Object) error {
 		return err
 	}
 	labels := make(prometheus.Labels)
-	labels[MetricName] = clusterpair.Name
-	labels[MetricNamespace] = clusterpair.Namespace
+	labels[metricName] = clusterpair.Name
+	labels[metricNamespace] = clusterpair.Namespace
 	if clusterpair.DeletionTimestamp != nil {
 		clusterpairSchedStatusCounter.Delete(labels)
 		clusterpairStorageStatusCounter.Delete(labels)
 		return nil
 	}
 	// Set clusterpair Status counter
-	clusterpairSchedStatusCounter.With(labels).Set(ClusterpairStatus[clusterpair.Status.SchedulerStatus])
-	clusterpairStorageStatusCounter.With(labels).Set(ClusterpairStatus[clusterpair.Status.StorageStatus])
+	clusterpairSchedStatusCounter.With(labels).Set(clusterpairStatus[clusterpair.Status.SchedulerStatus])
+	clusterpairStorageStatusCounter.With(labels).Set(clusterpairStatus[clusterpair.Status.StorageStatus])
 	return nil
 }
 

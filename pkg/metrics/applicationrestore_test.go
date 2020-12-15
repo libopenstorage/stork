@@ -45,9 +45,9 @@ func TestRestoreSuccessMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	// InProgress
-	require.Equal(t, float64(RestoreStatus[storkv1.ApplicationRestoreStatusInProgress]), testutil.ToFloat64(restoreStatusCounter), "application_restore_status does not matched")
+	require.Equal(t, float64(restoreStatus[storkv1.ApplicationRestoreStatusInProgress]), testutil.ToFloat64(restoreStatusCounter), "application_restore_status does not matched")
 	// Volume
-	require.Equal(t, float64(RestoreStage[storkv1.ApplicationRestoreStageVolumes]), testutil.ToFloat64(restoreStageCounter), "application_restore_stage does not matched")
+	require.Equal(t, float64(restoreStage[storkv1.ApplicationRestoreStageVolumes]), testutil.ToFloat64(restoreStageCounter), "application_restore_stage does not matched")
 
 	resp.Status.Stage = storkv1.ApplicationRestoreStageFinal
 	resp.Status.Status = storkv1.ApplicationRestoreStatusSuccessful
@@ -56,9 +56,9 @@ func TestRestoreSuccessMetrics(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(3 * time.Second)
 	// Successful
-	require.Equal(t, float64(RestoreStatus[storkv1.ApplicationRestoreStatusSuccessful]), testutil.ToFloat64(restoreStatusCounter), "application_restore_status does not matched")
+	require.Equal(t, float64(restoreStatus[storkv1.ApplicationRestoreStatusSuccessful]), testutil.ToFloat64(restoreStatusCounter), "application_restore_status does not matched")
 	// Final
-	require.Equal(t, float64(RestoreStage[storkv1.ApplicationRestoreStageFinal]), testutil.ToFloat64(restoreStageCounter), "application_restore_stage does not matched")
+	require.Equal(t, float64(restoreStage[storkv1.ApplicationRestoreStageFinal]), testutil.ToFloat64(restoreStageCounter), "application_restore_stage does not matched")
 	// Size
 	require.Equal(t, float64(1024), testutil.ToFloat64(restoreSizeCounter), "application_restore_size does not matched")
 
@@ -73,11 +73,11 @@ func TestRestoreFailureMetrics(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	labels := make(prometheus.Labels)
-	labels[MetricName] = "test"
-	labels[MetricNamespace] = "test-fail"
+	labels[metricName] = "test"
+	labels[metricNamespace] = "test-fail"
 
 	// Failure
-	require.Equal(t, float64(RestoreStatus[storkv1.ApplicationRestoreStatusFailed]), testutil.ToFloat64(restoreStatusCounter.With(labels)), "application_restore_status does not matched")
+	require.Equal(t, float64(restoreStatus[storkv1.ApplicationRestoreStatusFailed]), testutil.ToFloat64(restoreStatusCounter.With(labels)), "application_restore_status does not matched")
 	// Initial
-	require.Equal(t, float64(RestoreStage[storkv1.ApplicationRestoreStageInitial]), testutil.ToFloat64(restoreStageCounter.With(labels)), "application_restore_stage does not matched")
+	require.Equal(t, float64(restoreStage[storkv1.ApplicationRestoreStageInitial]), testutil.ToFloat64(restoreStageCounter.With(labels)), "application_restore_stage does not matched")
 }
