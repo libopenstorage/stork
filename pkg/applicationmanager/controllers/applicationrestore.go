@@ -12,6 +12,7 @@ import (
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/crypto"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
@@ -20,7 +21,9 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -634,6 +637,7 @@ func (a *ApplicationRestoreController) downloadCRD(
 	namespace string,
 ) error {
 	var crds []*apiextensionsv1beta1.CustomResourceDefinition
+	var crdsV1 []*apiextensionsv1.CustomResourceDefinition
 	crdData, err := a.downloadObject(backup, backupLocation, namespace, crdObjectName, true)
 	if err != nil {
 		return err
@@ -645,17 +649,66 @@ func (a *ApplicationRestoreController) downloadCRD(
 	if err = json.Unmarshal(crdData, &crds); err != nil {
 		return err
 	}
+	if err = json.Unmarshal(crdData, &crdsV1); err != nil {
+		return err
+	}
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("error getting cluster config: %v", err)
+	}
+
+	client, err := apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	regCrd := make(map[string]bool)
 	for _, crd := range crds {
 		crd.ResourceVersion = ""
-		if err := apiextensions.Instance().RegisterCRD(crd); err != nil && !errors.IsAlreadyExists(err) {
-			return err
+		regCrd[crd.GetName()] = false
+		if _, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil && !errors.IsAlreadyExists(err) {
+			regCrd[crd.GetName()] = true
+			logrus.Warnf("error registering crds %v,%v", crd.GetName(), err)
+			continue
 		}
-		if err := apiextensions.Instance().ValidateCRD(apiextensions.CustomResource{
-			Plural: crd.Spec.Names.Plural,
-			Group:  crd.Spec.Group}, validateCRDTimeout, validateCRDInterval); err != nil {
-			return err
+		// wait for crd to be ready
+		if err := k8sutils.ValidateCRD(client, crd.GetName()); err != nil {
+			logrus.Warnf("Unable to validate crds %v,%v", crd.GetName(), err)
 		}
 	}
+
+	for _, crd := range crdsV1 {
+		if val, ok := regCrd[crd.GetName()]; ok && val {
+			crd.ResourceVersion = ""
+			var updatedVersions []apiextensionsv1.CustomResourceDefinitionVersion
+			if crd.Spec.PreserveUnknownFields {
+				crd.Spec.PreserveUnknownFields = false
+				for _, version := range crd.Spec.Versions {
+					isTrue := true
+					if version.Schema == nil {
+						openAPISchema := &apiextensionsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{XPreserveUnknownFields: &isTrue},
+						}
+						version.Schema = openAPISchema
+					} else {
+						version.Schema.OpenAPIV3Schema.XPreserveUnknownFields = &isTrue
+					}
+					updatedVersions = append(updatedVersions, version)
+				}
+				crd.Spec.Versions = updatedVersions
+			}
+			if _, err := client.ApiextensionsV1().CustomResourceDefinitions().Create(crd); err != nil && !errors.IsAlreadyExists(err) {
+				logrus.Warnf("error registering crds %v,%v", crd.GetName(), err)
+				continue
+			}
+			// wait for crd to be ready
+			if err := k8sutils.ValidateCRDV1(client, crd.GetName()); err != nil {
+				logrus.Warnf("Unable to validate crds %v,%v", crd.GetName(), err)
+			}
+
+		}
+	}
+
 	return nil
 }
 
