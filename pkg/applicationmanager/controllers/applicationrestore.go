@@ -668,12 +668,12 @@ func (a *ApplicationRestoreController) downloadCRD(
 		regCrd[crd.GetName()] = false
 		if _, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil && !errors.IsAlreadyExists(err) {
 			regCrd[crd.GetName()] = true
-			logrus.Warnf("error registering crds %v,%v", crd.GetName(), err)
+			logrus.Warnf("error registering crds v1beta1 %v,%v", crd.GetName(), err)
 			continue
 		}
 		// wait for crd to be ready
 		if err := k8sutils.ValidateCRD(client, crd.GetName()); err != nil {
-			logrus.Warnf("Unable to validate crds %v,%v", crd.GetName(), err)
+			logrus.Warnf("Unable to validate crds v1beta1 %v,%v", crd.GetName(), err)
 		}
 	}
 
@@ -681,29 +681,35 @@ func (a *ApplicationRestoreController) downloadCRD(
 		if val, ok := regCrd[crd.GetName()]; ok && val {
 			crd.ResourceVersion = ""
 			var updatedVersions []apiextensionsv1.CustomResourceDefinitionVersion
-			if crd.Spec.PreserveUnknownFields {
-				crd.Spec.PreserveUnknownFields = false
-				for _, version := range crd.Spec.Versions {
-					isTrue := true
-					if version.Schema == nil {
-						openAPISchema := &apiextensionsv1.CustomResourceValidation{
-							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{XPreserveUnknownFields: &isTrue},
-						}
-						version.Schema = openAPISchema
-					} else {
-						version.Schema.OpenAPIV3Schema.XPreserveUnknownFields = &isTrue
-					}
-					updatedVersions = append(updatedVersions, version)
-				}
-				crd.Spec.Versions = updatedVersions
+			// try to apply as v1 crd
+			var err error
+			if _, err = client.ApiextensionsV1().CustomResourceDefinitions().Create(crd); err == nil || errors.IsAlreadyExists(err) {
+				logrus.Infof("registered v1 crds %v,", crd.GetName())
+				continue
 			}
+			// updated fields
+			crd.Spec.PreserveUnknownFields = false
+			for _, version := range crd.Spec.Versions {
+				isTrue := true
+				if version.Schema == nil {
+					openAPISchema := &apiextensionsv1.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{XPreserveUnknownFields: &isTrue},
+					}
+					version.Schema = openAPISchema
+				} else {
+					version.Schema.OpenAPIV3Schema.XPreserveUnknownFields = &isTrue
+				}
+				updatedVersions = append(updatedVersions, version)
+			}
+			crd.Spec.Versions = updatedVersions
+
 			if _, err := client.ApiextensionsV1().CustomResourceDefinitions().Create(crd); err != nil && !errors.IsAlreadyExists(err) {
-				logrus.Warnf("error registering crds %v,%v", crd.GetName(), err)
+				logrus.Warnf("error registering crdsv1 %v,%v", crd.GetName(), err)
 				continue
 			}
 			// wait for crd to be ready
 			if err := k8sutils.ValidateCRDV1(client, crd.GetName()); err != nil {
-				logrus.Warnf("Unable to validate crds %v,%v", crd.GetName(), err)
+				logrus.Warnf("Unable to validate crdsv1 %v,%v", crd.GetName(), err)
 			}
 
 		}
