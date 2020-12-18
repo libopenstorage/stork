@@ -1176,19 +1176,19 @@ func (m *MigrationController) applyResources(
 				return err
 			}
 			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
-			crdvbeta1, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crd.GetName(), metav1.GetOptions{})
+			crdvbeta1, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
 			if err == nil {
 				crdvbeta1.ResourceVersion = ""
 				if _, regErr := destClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crdvbeta1); regErr != nil && !errors.IsAlreadyExists(regErr) {
-					log.MigrationLog(migration).Warnf("error registering CRD %s, %v", crdvbeta1.GetName(), err)
+					log.MigrationLog(migration).Warnf("error registering crds %s, %v", crdvbeta1.GetName(), err)
 				} else if regErr == nil {
-					if err := k8sutils.ValidateCRD(destClnt, crd.GetName()); err != nil {
-						logrus.Warnf("Unable to validate crds %v,%v", crdvbeta1.GetName(), err)
+					if err := k8sutils.ValidateCRD(destClnt, crdName); err != nil {
+						log.MigrationLog(migration).Errorf("Unable to validate crds %v,%v", crdvbeta1.GetName(), err)
 					}
 					continue
 				}
 			}
-			res, err := srcClnt.ApiextensionsV1().CustomResourceDefinitions().Get(crd.GetName(), metav1.GetOptions{})
+			res, err := srcClnt.ApiextensionsV1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
 			if err != nil {
 				if errors.IsNotFound(err) {
 					log.MigrationLog(migration).Warnf("CRDV1 not found %v for kind %v", crdName, v.Kind)
@@ -1223,12 +1223,15 @@ func (m *MigrationController) applyResources(
 				}
 				res.Spec.Versions = updatedVersions
 			}
-			if _, err := destClnt.ApiextensionsV1().CustomResourceDefinitions().Create(res); err != nil && !errors.IsAlreadyExists(err) {
-				log.MigrationLog(migration).Errorf("error registering CRD %s, %v", res.GetName(), err)
+			var regErr error
+			if _, regErr = destClnt.ApiextensionsV1().CustomResourceDefinitions().Create(res); regErr != nil && !errors.IsAlreadyExists(regErr) {
+				log.MigrationLog(migration).Errorf("error registering crds v1 %s, %v", res.GetName(), err)
 			}
-			// wait for crd to be ready
-			if err := k8sutils.ValidateCRDV1(destClnt, res.GetName()); err != nil {
-				logrus.Warnf("Unable to validate crds %v,%v", res.GetName(), err)
+			if regErr == nil {
+				// wait for crd to be ready
+				if err := k8sutils.ValidateCRDV1(destClnt, res.GetName()); err != nil {
+					log.MigrationLog(migration).Errorf("Unable to validate crds v1 %v,%v", res.GetName(), err)
+				}
 			}
 		}
 	}
