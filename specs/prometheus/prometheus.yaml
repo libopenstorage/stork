@@ -6,7 +6,7 @@ metadata:
 spec:
   replicas: 2
   logLevel: debug
-  serviceAccountName: prometheus
+  serviceAccountName: stork-prometheus
   alerting:
     alertmanagers:
       - namespace: kube-system
@@ -15,9 +15,6 @@ spec:
   serviceMonitorSelector:
     matchLabels:
       name: stork-prometheus-sm
-  additionalScrapeConfigs:
-      name: additional-scrape-configs
-      key: scape_cfg.yaml
   ruleSelector:
     matchLabels:
       role: prometheus-stork-rulefiles

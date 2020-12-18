@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+  selector:
+    app: grafana
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+       fsGroup: 2000
+      containers:
+        - image: grafana/grafana:6.1.6
+          name: grafana
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 3000
+          volumeMounts:
+            - name: grafana
+              mountPath: /etc/grafana/provisioning/dashboard
+              readOnly: false
+            - name: grafana-dash
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: false
+            - name: grafana-source-cfg
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: false
+            - name: grafana-plugins
+              mountPath: /var/lib/grafana/plugins
+              readOnly: false
+      volumes:
+      - name: grafana
+        persistentVolumeClaim:
+          claimName: grafana-data
+      - name: grafana-dash
+        persistentVolumeClaim:
+          claimName: grafana-dashboard
+      - name: grafana-source-cfg
+        persistentVolumeClaim:
+          claimName: grafana-source-config
+      - name: grafana-plugins
+        persistentVolumeClaim:
+          claimName: grafana-extensions

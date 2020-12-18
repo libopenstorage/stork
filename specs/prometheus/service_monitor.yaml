@@ -8,7 +8,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      name: stork
+      name: stork #Note: stork service should have this label applied
   namespaceSelector:
     any: true
   endpoints:
