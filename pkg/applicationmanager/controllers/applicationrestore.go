@@ -314,23 +314,6 @@ func (a *ApplicationRestoreController) getDriversForRestore(restore *storkapi.Ap
 func (a *ApplicationRestoreController) getNamespacedObjectsToDelete(restore *storkapi.ApplicationRestore, objects []runtime.Unstructured) ([]runtime.Unstructured, error) {
 	tempObjects := make([]runtime.Unstructured, 0)
 	for _, o := range objects {
-		metadata, err := meta.Accessor(o)
-		if err != nil {
-			return nil, err
-		}
-
-		if metadata.GetNamespace() != "" {
-			var val string
-			var present bool
-			// Skip the object if it isn't in the namespace mapping
-			if val, present = restore.Spec.NamespaceMapping[metadata.GetNamespace()]; !present {
-				continue
-			}
-
-			// Update the namespace of the object, will be no-op for clustered resources
-			metadata.SetNamespace(val)
-		}
-
 		objectType, err := meta.TypeAccessor(o)
 		if err != nil {
 			return nil, err
