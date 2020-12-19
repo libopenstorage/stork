@@ -443,6 +443,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 				if err != nil {
 					return err
 				}
+				fmt.Printf("Deleting objects: %+v", tempObjects)
 				err = a.resourceCollector.DeleteResources(
 					a.dynamicInterface,
 					tempObjects)
