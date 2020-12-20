@@ -72,7 +72,7 @@ func TestMigrationFailureMetrics(t *testing.T) {
 	labels := make(prometheus.Labels)
 	labels[metricName] = "test"
 	labels[metricNamespace] = "test-fail"
-	labels[MetricSchedule] = ""
+	labels[metricSchedule] = ""
 
 	// Failure
 	require.Equal(t, float64(migrationStatus[storkv1.MigrationStatusFailed]), testutil.ToFloat64(migrationStatusCounter.With(labels)), "migration_status does not matched")
