@@ -297,10 +297,13 @@ func triggerScaleBackupRestoreTest(
 		currBackupLocation, err := storkops.Instance().GetBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
 		require.NoError(t, err, "Failed to get backup location %s in namespace %s: %v prior to deletion", "backuplocation-"+strconv.Itoa(idx), bkp.Namespace, err)
 
+		bkpUpdated, err := storkops.Instance().GetApplicationBackup(bkp.Name, bkp.Namespace)
+		require.NoError(t, err, "Failed to get application backup: %s in namespace: %s, for cloud deletion validation", bkp.Name, bkp.Namespace)
+
 		err = deleteAndWaitForBackupDeletion(bkp.Namespace)
 		require.NoError(t, err, "All backups not deleted in namespace %s: %v", bkp.Namespace, err)
 
-		validateBackupDeletionFromObjectstore(t, currBackupLocation, bkp.Status.BackupPath)
+		validateBackupDeletionFromObjectstore(t, currBackupLocation, bkpUpdated.Status.BackupPath)
 
 		err = storkops.Instance().DeleteBackupLocation("backuplocation-"+strconv.Itoa(idx), bkp.Namespace)
 		require.NoError(t, err, "Failed to delete  backup location %s in namespace %s: %v", "backuplocation-"+strconv.Itoa(idx), bkp.Namespace, err)
