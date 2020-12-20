@@ -1651,16 +1651,19 @@
   version = "kubernetes-1.16.6"
 
 [[projects]]
-  digest = "1:ab7660a925f23c4b99075204c905e55b676e9251db3f6422944add8c8e472f62"
+  digest = "1:07f6a231f0221973f3f51c267a6ba4280b604d616915eb485fd0d672ef8741df"
   name = "k8s.io/apiextensions-apiserver"
   packages = [
     "pkg/apis/apiextensions",
     "pkg/apis/apiextensions/v1",
     "pkg/apis/apiextensions/v1beta1",
     "pkg/client/clientset/clientset",
+    "pkg/client/clientset/clientset/fake",
     "pkg/client/clientset/clientset/scheme",
     "pkg/client/clientset/clientset/typed/apiextensions/v1",
+    "pkg/client/clientset/clientset/typed/apiextensions/v1/fake",
     "pkg/client/clientset/clientset/typed/apiextensions/v1beta1",
+    "pkg/client/clientset/clientset/typed/apiextensions/v1beta1/fake",
     "pkg/features",
   ]
   pruneopts = "UT"
@@ -2343,8 +2346,10 @@
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
+    "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
+    "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/api/meta",
     "k8s.io/apimachinery/pkg/api/resource",
