@@ -13,17 +13,17 @@ var (
 	migrationStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "migration_status",
 		Help: "Status of migration",
-	}, []string{metricName, metricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, metricSchedule})
 	// migrationStageCounter for migration CR stages on server
 	migrationStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "migration_stage",
 		Help: "Stage of migration",
-	}, []string{metricName, metricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, metricSchedule})
 	// migrationDurationCounter for time taken by migration to complete
 	migrationDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "migration_duration",
 		Help: "Duration of migrations",
-	}, []string{metricName, metricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, metricSchedule})
 )
 
 var (
@@ -62,7 +62,7 @@ func watchmigrationCR(object runtime.Object) error {
 	for _, v := range migration.OwnerReferences {
 		sched = v.Name
 	}
-	labels[MetricSchedule] = sched
+	labels[metricSchedule] = sched
 
 	if migration.DeletionTimestamp != nil {
 		migrationStatusCounter.Delete(labels)
