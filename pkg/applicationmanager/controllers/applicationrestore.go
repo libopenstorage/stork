@@ -219,8 +219,14 @@ func (a *ApplicationRestoreController) Reconcile(request reconcile.Request) (rec
 
 // Handle updates for ApplicationRestore objects
 func (a *ApplicationRestoreController) handle(ctx context.Context, restore *storkapi.ApplicationRestore) error {
-	if _, ok := restore.Annotations[storkVersion]; !ok {
-		restore.Annotations[storkVersion] = version.Version
+
+	// update the stork verison only for the in-progress restore CR.
+	if restore.Status.Status == storkapi.ApplicationRestoreStatusInProgress ||
+		restore.Status.Status == storkapi.ApplicationRestoreStatusInitial ||
+		restore.Status.Status == storkapi.ApplicationRestoreStatusPending {
+		if _, ok := restore.Annotations[storkVersion]; !ok {
+			restore.Annotations[storkVersion] = version.Version
+		}
 	}
 
 	if restore.DeletionTimestamp != nil {
