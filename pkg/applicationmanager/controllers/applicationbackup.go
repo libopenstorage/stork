@@ -21,6 +21,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -57,6 +58,7 @@ const (
 	backupVolumeBatchCount = 10
 	maxRetry               = 10
 	retrySleep             = 10 * time.Second
+	storkVersion           = annotationPrefix + "storkVersion"
 )
 
 var (
@@ -206,6 +208,15 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 
 // handle updates for ApplicationBackup objects
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
+	// update the stork verison only for the in-progress backup CR.
+	if backup.Status.Status == stork_api.ApplicationBackupStatusInProgress ||
+		backup.Status.Status == stork_api.ApplicationBackupStatusInitial ||
+		backup.Status.Status == stork_api.ApplicationBackupStatusPending {
+		if _, ok := backup.Annotations[storkVersion]; !ok {
+			backup.Annotations[storkVersion] = version.Version
+		}
+	}
+
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
 			if err := a.deleteBackup(backup); err != nil {
