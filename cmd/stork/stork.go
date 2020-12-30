@@ -22,6 +22,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/dbg"
 	"github.com/libopenstorage/stork/pkg/extender"
 	"github.com/libopenstorage/stork/pkg/groupsnapshot"
+	"github.com/libopenstorage/stork/pkg/metrics"
 	"github.com/libopenstorage/stork/pkg/migration"
 	"github.com/libopenstorage/stork/pkg/monitor"
 	"github.com/libopenstorage/stork/pkg/pvcwatcher"
@@ -150,7 +151,7 @@ func main() {
 			Usage: "Application annotation to be used to disable auto updating app scheduler as stork",
 		},
 		cli.BoolTFlag{
-			Name:  "stork-metrics",
+			Name:  "enable-metrics",
 			Usage: "Enable stork metrics collection for stork resources (default: true)",
 		},
 	}
@@ -197,8 +198,19 @@ func run(c *cli.Context) {
 			log.Fatalf("Error initializing Stork Driver %v: %v", driverName, err)
 		}
 
-		if c.Bool("stork-metrics") {
+		if c.Bool("enable-metrics") {
 			http.Handle("/metrics", promhttp.Handler())
+			enableAppController := false
+			enableMigrController := false
+			if c.Bool("application-controller") {
+				enableAppController = true
+			}
+			if c.Bool("migration-controller") {
+				enableMigrController = true
+			}
+			if err = metrics.StartMetrics(enableAppController, enableMigrController); err != nil {
+				log.Fatalf("Error starting prometheus metrics for stork: %v", err)
+			}
 		}
 
 		if c.Bool("extender") {

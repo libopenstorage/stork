@@ -2,9 +2,21 @@ package k8sutils
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	v1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+)
+
+const (
+	crdTimeout    = 1 * time.Minute
+	retryInterval = 5 * time.Second
 )
 
 // GetPVCsForGroupSnapshot returns all PVCs in given namespace that match the given matchLabels. All PVCs need to be bound.
@@ -48,4 +60,54 @@ func GetVolumeNamesFromLabelSelector(namespace string, labels map[string]string)
 	}
 
 	return volNames, nil
+}
+
+// ValidateCRD validate crd with apiversion v1beta1
+func ValidateCRD(client *clientset.Clientset, crdName string) error {
+	return wait.PollImmediate(retryInterval, crdTimeout, func() (bool, error) {
+		crd, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+		if errors.IsNotFound(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+		for _, cond := range crd.Status.Conditions {
+			switch cond.Type {
+			case apiextensionsv1beta1.Established:
+				if cond.Status == apiextensionsv1beta1.ConditionTrue {
+					return true, nil
+				}
+			case apiextensionsv1beta1.NamesAccepted:
+				if cond.Status == apiextensionsv1beta1.ConditionFalse {
+					return false, fmt.Errorf("name conflict: %v", cond.Reason)
+				}
+			}
+		}
+		return false, nil
+	})
+}
+
+// ValidateCRDV1 validate crd with apiversion v1
+func ValidateCRDV1(client *clientset.Clientset, crdName string) error {
+	return wait.PollImmediate(retryInterval, crdTimeout, func() (bool, error) {
+		crd, err := client.ApiextensionsV1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+		if errors.IsNotFound(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+		for _, cond := range crd.Status.Conditions {
+			switch cond.Type {
+			case apiextensionsv1.Established:
+				if cond.Status == apiextensionsv1.ConditionTrue {
+					return true, nil
+				}
+			case apiextensionsv1.NamesAccepted:
+				if cond.Status == apiextensionsv1.ConditionFalse {
+					return false, fmt.Errorf("name conflict: %v", cond.Reason)
+				}
+			}
+		}
+		return false, nil
+	})
 }

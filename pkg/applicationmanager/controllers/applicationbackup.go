@@ -687,8 +687,29 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		// Update the current state and then move on to backing up resources
 		err := a.client.Update(context.TODO(), backup)
 		if err != nil {
-			return err
+			for i := 0; i < maxRetry; i++ {
+				err = a.client.Get(context.TODO(), namespacedName, backup)
+				if err != nil {
+					time.Sleep(retrySleep)
+					continue
+				}
+				backup.Status.Stage = stork_api.ApplicationBackupStageApplications
+				backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
+				backup.Status.Reason = "Application resources backup is in progress"
+				backup.Status.LastUpdateTimestamp = metav1.Now()
+				err = a.client.Update(context.TODO(), backup)
+				if err != nil {
+					time.Sleep(retrySleep)
+					continue
+				} else {
+					break
+				}
+			}
+			if err != nil {
+				return err
+			}
 		}
+
 		err = a.backupResources(backup)
 		if err != nil {
 			message := fmt.Sprintf("Error backing up resources: %v", err)

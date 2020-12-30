@@ -12,6 +12,7 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
@@ -20,7 +21,9 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -1079,7 +1083,12 @@ func (m *MigrationController) prepareCRDClusterResource(
 		if suspend.Type == "bool" {
 			disableVersion = true
 		} else if suspend.Type == "int" {
-			disableVersion = 0
+			curr, found, err := unstructured.NestedInt64(content, fields...)
+			if err != nil || !found {
+				return fmt.Errorf("unable to find suspend path, err: %v", err)
+			}
+			disableVersion = int64(0)
+			currVal = fmt.Sprintf("%v", curr)
 		} else if suspend.Type == "string" {
 			curr, found, err := unstructured.NestedString(content, fields...)
 			if err != nil || !found {
@@ -1090,6 +1099,7 @@ func (m *MigrationController) prepareCRDClusterResource(
 		} else {
 			return fmt.Errorf("invalid type %v to suspend cr", suspend.Type)
 		}
+
 		if err := unstructured.SetNestedField(content, disableVersion, fields...); err != nil {
 			return err
 		}
@@ -1152,29 +1162,76 @@ func (m *MigrationController) applyResources(
 			if _, ok := resKinds[v.Kind]; !ok {
 				continue
 			}
-			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
-			res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
+			config, err := rest.InClusterConfig()
 			if err != nil {
-				if errors.IsNotFound(err) {
+				return fmt.Errorf("error getting cluster config: %v", err)
+			}
+
+			srcClnt, err := apiextensionsclient.NewForConfig(config)
+			if err != nil {
+				return err
+			}
+			destClnt, err := apiextensionsclient.NewForConfig(remoteAdminConfig)
+			if err != nil {
+				return err
+			}
+			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			crdvbeta1, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+			if err == nil {
+				crdvbeta1.ResourceVersion = ""
+				if _, regErr := destClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crdvbeta1); regErr != nil && !errors.IsAlreadyExists(regErr) {
+					log.MigrationLog(migration).Warnf("error registering crds %s, %v", crdvbeta1.GetName(), err)
+				} else if regErr == nil {
+					if err := k8sutils.ValidateCRD(destClnt, crdName); err != nil {
+						log.MigrationLog(migration).Errorf("Unable to validate crds %v,%v", crdvbeta1.GetName(), err)
+					}
 					continue
 				}
-				log.MigrationLog(migration).Errorf("unable to get customresourcedefination for %s, err: %v", v.Kind, err)
-				return err
 			}
-			clnt, err := apiextensions.NewForConfig(remoteAdminConfig)
+			res, err := srcClnt.ApiextensionsV1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
 			if err != nil {
+				if errors.IsNotFound(err) {
+					log.MigrationLog(migration).Warnf("CRDV1 not found %v for kind %v", crdName, v.Kind)
+					continue
+				}
+				log.MigrationLog(migration).Errorf("unable to get customresourcedefination for %s, err: %v", crdName, err)
 				return err
 			}
+
 			res.ResourceVersion = ""
-			if err := clnt.RegisterCRD(res); err != nil && !errors.IsAlreadyExists(err) {
-				log.MigrationLog(migration).Errorf("error registering CRD %s, %v", res.GetName(), err)
-				return err
+			// if crds is applied as v1beta on k8s version 1.16+ it will have
+			// preservedUnkownField set and api version converted to v1 ,
+			// which cause issue while applying it on dest cluster,
+			// since we will be applying v1 crds with non-valid schema
+
+			// this converts `preserveUnknownFiels`(deprecated) to spec.Versions[*].xPreservedUnknown
+			// equivalent
+			var updatedVersions []apiextensionsv1.CustomResourceDefinitionVersion
+			if res.Spec.PreserveUnknownFields {
+				res.Spec.PreserveUnknownFields = false
+				for _, version := range res.Spec.Versions {
+					isTrue := true
+					if version.Schema == nil {
+						openAPISchema := &apiextensionsv1.CustomResourceValidation{
+							OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{XPreserveUnknownFields: &isTrue},
+						}
+						version.Schema = openAPISchema
+					} else {
+						version.Schema.OpenAPIV3Schema.XPreserveUnknownFields = &isTrue
+					}
+					updatedVersions = append(updatedVersions, version)
+				}
+				res.Spec.Versions = updatedVersions
 			}
-			if err := clnt.ValidateCRD(apiextensions.CustomResource{
-				Plural: res.Spec.Names.Plural,
-				Group:  res.Spec.Group}, validateCRDTimeout, validateCRDInterval); err != nil {
-				log.MigrationLog(migration).Errorf("error validating CRD %s, %v", res.GetName(), err)
-				return err
+			var regErr error
+			if _, regErr = destClnt.ApiextensionsV1().CustomResourceDefinitions().Create(res); regErr != nil && !errors.IsAlreadyExists(regErr) {
+				log.MigrationLog(migration).Errorf("error registering crds v1 %s, %v", res.GetName(), err)
+			}
+			if regErr == nil {
+				// wait for crd to be ready
+				if err := k8sutils.ValidateCRDV1(destClnt, res.GetName()); err != nil {
+					log.MigrationLog(migration).Errorf("Unable to validate crds v1 %v,%v", res.GetName(), err)
+				}
 			}
 		}
 	}

@@ -976,7 +976,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:790ca389064f3f49e6660bf442561c1386870dd9d9fa2ad862d5001ce525f077"
+  digest = "1:99cf0a5a9e92bf48b811bdab9bdfd075fdf311d9ac1342e22e7679c584bc8014"
   name = "github.com/portworx/sched-ops"
   packages = [
     "k8s/admissionregistration",
@@ -997,7 +997,7 @@
     "task",
   ]
   pruneopts = "UT"
-  revision = "b13b1fcf2c6ef369ed1b60b5b9f65fdf83559f60"
+  revision = "3c4158808ca2c7dfa692b45b195cc298cddd63da"
 
 [[projects]]
   branch = "master"
@@ -1651,16 +1651,19 @@
   version = "kubernetes-1.16.6"
 
 [[projects]]
-  digest = "1:ab7660a925f23c4b99075204c905e55b676e9251db3f6422944add8c8e472f62"
+  digest = "1:07f6a231f0221973f3f51c267a6ba4280b604d616915eb485fd0d672ef8741df"
   name = "k8s.io/apiextensions-apiserver"
   packages = [
     "pkg/apis/apiextensions",
     "pkg/apis/apiextensions/v1",
     "pkg/apis/apiextensions/v1beta1",
     "pkg/client/clientset/clientset",
+    "pkg/client/clientset/clientset/fake",
     "pkg/client/clientset/clientset/scheme",
     "pkg/client/clientset/clientset/typed/apiextensions/v1",
+    "pkg/client/clientset/clientset/typed/apiextensions/v1/fake",
     "pkg/client/clientset/clientset/typed/apiextensions/v1beta1",
+    "pkg/client/clientset/clientset/typed/apiextensions/v1beta1/fake",
     "pkg/features",
   ]
   pruneopts = "UT"
@@ -2343,8 +2346,10 @@
     "k8s.io/api/core/v1",
     "k8s.io/api/rbac/v1",
     "k8s.io/api/storage/v1",
+    "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
+    "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/api/meta",
     "k8s.io/apimachinery/pkg/api/resource",

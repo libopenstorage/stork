@@ -7,6 +7,7 @@ import (
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,6 +25,8 @@ type ClusterPairOps interface {
 	DeleteClusterPair(string, string) error
 	// ValidateClusterPair validates clusterpair status
 	ValidateClusterPair(string, string, time.Duration, time.Duration) error
+	// WatchClusterPair watch the ClusterPair object
+	WatchClusterPair(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 }
 
 // CreateClusterPair creates the ClusterPair
@@ -103,5 +106,23 @@ func (c *Client) ValidateClusterPair(name string, namespace string, timeout, ret
 		return err
 	}
 
+	return nil
+}
+
+// WatchClusterPair sets up a watcher that listens for changes on cluster pair objects
+func (c *Client) WatchClusterPair(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.stork.StorkV1alpha1().ClusterPairs(namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for cluster pair")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &storkv1alpha1.ClusterPair{}, "", fn, listOptions)
 	return nil
 }
