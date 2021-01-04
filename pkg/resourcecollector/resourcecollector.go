@@ -554,7 +554,7 @@ func (r *ResourceCollector) pruneOwnedResources(
 							collect = false
 							break
 						}
-						if objectType.GetKind() != "Deployment" && objectType.GetKind() != "StatefulSet" {
+						if objectType.GetKind() != "Deployment" && objectType.GetKind() != "StatefulSet" && objectType.GetKind() != "ReplicaSet" {
 							continue
 						}
 
