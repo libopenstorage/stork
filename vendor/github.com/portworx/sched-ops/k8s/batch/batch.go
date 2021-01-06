@@ -44,9 +44,10 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new batch client.
-func New(client batchv1client.BatchV1Interface) *Client {
+func New(client batchv1client.BatchV1Interface, batchv1beta1 batchv1beta1client.BatchV1beta1Interface) *Client {
 	return &Client{
-		batch: client,
+		batch:        client,
+		batchv1beta1: batchv1beta1,
 	}
 }
 
@@ -84,11 +85,12 @@ type Client struct {
 func (c *Client) SetConfig(cfg *rest.Config) {
 	c.config = cfg
 	c.batch = nil
+	c.batchv1beta1 = nil
 }
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.batch != nil {
+	if c.batch != nil && c.batchv1beta1 != nil {
 		return nil
 	}
 
@@ -143,6 +145,10 @@ func (c *Client) loadClient() error {
 	var err error
 
 	c.batch, err = batchv1client.NewForConfig(c.config)
+	if err != nil {
+		return err
+	}
+	c.batchv1beta1, err = batchv1beta1client.NewForConfig(c.config)
 	if err != nil {
 		return err
 	}

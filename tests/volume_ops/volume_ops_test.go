@@ -37,7 +37,7 @@ var _ = Describe("{VolumeUpdate}", func() {
 		contexts = make([]*scheduler.Context, 0)
 		expReplMap := make(map[*volume.Volume]int64)
 
-		for i := 0; i < Inst().ScaleFactor; i++ {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdate-%d", i))...)
 		}
 

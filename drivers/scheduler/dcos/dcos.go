@@ -632,7 +632,15 @@ func (d *dcos) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.Autopilot
 	}
 }
 
-func (d *dcos) UpdateAutopilotRule(apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
+func (d *dcos) GetAutopilotRule(name string) (*apapi.AutopilotRule, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutopilotRule()",
+	}
+}
+
+func (d *dcos) UpdateAutopilotRule(*apapi.AutopilotRule) (*apapi.AutopilotRule, error) {
 	// TODO implement this method
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
@@ -645,6 +653,46 @@ func (d *dcos) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ListAutopilotRules()",
+	}
+}
+
+func (d *dcos) DeleteAutopilotRule(name string) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteAutopilotRule()",
+	}
+}
+
+func (d *dcos) GetActionApproval(namespace, name string) (*apapi.ActionApproval, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetActionApproval()",
+	}
+}
+
+func (d *dcos) UpdateActionApproval(namespace string, actionApproval *apapi.ActionApproval) (*apapi.ActionApproval, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpdateActionApproval()",
+	}
+}
+
+func (d *dcos) DeleteActionApproval(namespace, name string) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteActionApproval()",
+	}
+}
+
+func (d *dcos) ListActionApprovals(namespace string) (*apapi.ActionApprovalList, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ListActionApprovals()",
 	}
 }
 

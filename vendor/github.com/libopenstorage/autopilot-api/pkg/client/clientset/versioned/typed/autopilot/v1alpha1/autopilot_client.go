@@ -26,6 +26,7 @@ import (
 
 type AutopilotV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ActionApprovalsGetter
 	AutopilotRulesGetter
 	AutopilotRuleObjectsGetter
 }
@@ -35,12 +36,16 @@ type AutopilotV1alpha1Client struct {
 	restClient rest.Interface
 }
 
+func (c *AutopilotV1alpha1Client) ActionApprovals(namespace string) ActionApprovalInterface {
+	return newActionApprovals(c, namespace)
+}
+
 func (c *AutopilotV1alpha1Client) AutopilotRules() AutopilotRuleInterface {
 	return newAutopilotRules(c)
 }
 
-func (c *AutopilotV1alpha1Client) AutopilotRuleObjects() AutopilotRuleObjectInterface {
-	return newAutopilotRuleObjects(c)
+func (c *AutopilotV1alpha1Client) AutopilotRuleObjects(namespace string) AutopilotRuleObjectInterface {
+	return newAutopilotRuleObjects(c, namespace)
 }
 
 // NewForConfig creates a new AutopilotV1alpha1Client for the given config.

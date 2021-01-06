@@ -205,9 +205,11 @@ func (c *Client) getPodsUsingPVWithListOptions(pvName string, opts metav1.ListOp
 		return nil, err
 	}
 
-	if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
-		return c.getPodsUsingPVCWithListOptions(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, opts)
-	}
+	if pv.Status.Phase == corev1.VolumeBound {
+		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Kind == "PersistentVolumeClaim" {
+			return c.getPodsUsingPVCWithListOptions(pv.Spec.ClaimRef.Name, pv.Spec.ClaimRef.Namespace, opts)
+		}
+	} // else the volume is not bound so cannot rely on stale claim ref objects
 
 	return nil, nil
 }

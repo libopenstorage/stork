@@ -21,6 +21,8 @@ type CronOps interface {
 	DeleteCronJob(name, namespace string) error
 	// ValidateCronJob validates the given cronJob
 	ValidateCronJob(cronJob *v1beta1.CronJob, timeout, retryInterval time.Duration) error
+	// ListCronJobs list cronjobs in given namespace
+	ListCronJobs(namespace string) (*v1beta1.CronJobList, error)
 }
 
 var NamespaceDefault = "default"
@@ -83,4 +85,13 @@ func (c *Client) ValidateCronJob(cronJob *v1beta1.CronJob, timeout, retryInterva
 		}
 	}
 	return nil
+}
+
+// ListCronJobs returns the cronJobs in given namespace
+func (c *Client) ListCronJobs(namespace string) (*v1beta1.CronJobList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.batchv1beta1.CronJobs(namespace).List(metav1.ListOptions{})
 }

@@ -209,7 +209,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
-		appScaleFactor := time.Duration(Inst().ScaleFactor)
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
@@ -250,7 +250,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			appScaleFactor := time.Duration(Inst().ScaleFactor)
+			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 			err = Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, nil)
 			processError(err, errChan...)
 		})
@@ -325,14 +325,14 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 		ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-				appScaleFactor := time.Duration(Inst().ScaleFactor)
+				appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 				volOpts := mapToVolumeOptions(volOptsMap)
 				err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval, volOpts)
 				expect(err).NotTo(haveOccurred())
 			})
 
 			Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
-				appScaleFactor := time.Duration(Inst().ScaleFactor)
+				appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 				err := Inst().S.WaitForRunning(ctx, appScaleFactor*defaultTimeout, defaultRetryInterval)
 				expect(err).NotTo(haveOccurred())
 			})
@@ -882,7 +882,7 @@ type Torpedo struct {
 	AppList                             []string
 	LogLoc                              string
 	LogLevel                            string
-	ScaleFactor                         int
+	GlobalScaleFactor                   int
 	StorageDriverUpgradeEndpointURL     string
 	StorageDriverUpgradeEndpointVersion string
 	EnableStorkUpgrade                  bool
@@ -1014,7 +1014,7 @@ func ParseFlags() {
 				SpecDir:                             specDir,
 				LogLoc:                              logLoc,
 				LogLevel:                            logLevel,
-				ScaleFactor:                         appScaleFactor,
+				GlobalScaleFactor:                   appScaleFactor,
 				MinRunTimeMins:                      minRunTimeMins,
 				ChaosLevel:                          chaosLevel,
 				StorageDriverUpgradeEndpointURL:     volUpgradeEndpointURL,

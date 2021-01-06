@@ -109,7 +109,7 @@ func SetupBackup(testName string) {
 
 func TearDownBackupRestore(contexts []*scheduler.Context, taskNamePrefix string) {
 	for _, ctx := range contexts {
-		for i := 0; i < Inst().ScaleFactor; i++ {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			bkpNamespace := GetAppNamespace(ctx, taskName)
 			BackupName := fmt.Sprintf("%s-%s", backupNamePrefix, bkpNamespace)
@@ -180,7 +180,7 @@ var _ = Describe("{BackupCreateKillStorkRestore}", func() {
 		Step("Deploy applications", func() {
 			contexts = make([]*scheduler.Context, 0)
 			bkpNamespaces = make([]string, 0)
-			for i := 0; i < Inst().ScaleFactor; i++ {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 				logrus.Infof("Task name %s\n", taskName)
 				appContexts := ScheduleApplications(taskName)
@@ -413,7 +413,7 @@ var _ = Describe("{MultiProviderBackupKillStork}", func() {
 							Inst().SpecDir, provider, err))
 
 					logrus.Infof("Start deploy applications for provider %s", provider)
-					for i := 0; i < Inst().ScaleFactor; i++ {
+					for i := 0; i < Inst().GlobalScaleFactor; i++ {
 						taskName := fmt.Sprintf("%s-%s-%d", taskNamePrefix, provider, i)
 						logrus.Infof("Task name %s\n", taskName)
 						appContexts := ScheduleApplications(taskName)
@@ -868,7 +868,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 
 		Step("Deploy applications", func() {
 			contexts = make([]*scheduler.Context, 0)
-			for i := 0; i < Inst().ScaleFactor; i++ {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 				appContexts := ScheduleApplications(taskName)
 				contexts = append(contexts, appContexts...)
@@ -886,7 +886,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 		})
 
 		for _, ctx := range contexts {
-			for i := 0; i < Inst().ScaleFactor; i++ {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 				bkpNamespace := GetAppNamespace(ctx, taskName)
 				BackupName := fmt.Sprintf("%s-%s", backupNamePrefix, bkpNamespace)
@@ -940,7 +940,7 @@ var _ = Describe("{BackupCrashVolDriver}", func() {
 		}
 
 		for _, ctx := range contexts {
-			for i := 0; i < Inst().ScaleFactor; i++ {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 				bkpNamespace := GetAppNamespace(ctx, taskName)
 				BackupName := fmt.Sprintf("%s-%s", backupNamePrefix, bkpNamespace)

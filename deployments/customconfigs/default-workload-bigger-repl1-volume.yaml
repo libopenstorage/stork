@@ -1,0 +1,4 @@
+aut-postgres:
+  workload_size: 10
+  volume_size: 20Gi
+  replicas: 1

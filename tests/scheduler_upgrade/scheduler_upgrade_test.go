@@ -47,7 +47,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 		logrus.Infof("Validating cluster size before upgrade. Initial Node Count: [%v]", intitialNodeCount)
 		ValidateClusterSize(intitialNodeCount)
 
-		for i := 0; i < Inst().ScaleFactor; i++ {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradescheduler-%d", i))...)
 		}
 

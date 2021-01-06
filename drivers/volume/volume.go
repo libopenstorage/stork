@@ -155,6 +155,9 @@ type Driver interface {
 	// ValidateStoragePools validates all the storage pools
 	ValidateStoragePools() error
 
+	// ValidateRebalanceJobs validates rebalance jobs
+	ValidateRebalanceJobs() error
+
 	// IsStorageExpansionEnabled returns true if storage expansion enabled
 	IsStorageExpansionEnabled() (bool, error)
 

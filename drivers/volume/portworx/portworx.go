@@ -75,6 +75,8 @@ const (
 	validateNodeStopTimeout           = 5 * time.Minute
 	validateStoragePoolSizeTimeout    = 3 * time.Hour
 	validateStoragePoolSizeInterval   = 30 * time.Second
+	validateRebalanceJobsTimeout      = 30 * time.Minute
+	validateRebalanceJobsInterval     = 30 * time.Second
 	getNodeTimeout                    = 3 * time.Minute
 	getNodeRetryInterval              = 5 * time.Second
 	stopDriverTimeout                 = 5 * time.Minute
@@ -125,6 +127,7 @@ type portworx struct {
 	clusterPairManager   api.OpenStorageClusterPairClient
 	alertsManager        api.OpenStorageAlertsClient
 	csbackupManager      api.OpenStorageCloudBackupClient
+	storagePoolManager   api.OpenStoragePoolClient
 	schedOps             schedops.Driver
 	nodeDriver           node.Driver
 	refreshEndpoint      bool
@@ -611,7 +614,14 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	for k, v := range params {
 		switch k {
 		case api.SpecNodes:
-			if !reflect.DeepEqual(v, vol.Spec.ReplicaSet.Nodes) {
+			contains := false
+			for _, sn := range vol.Spec.ReplicaSet.Nodes {
+				if sn == v {
+					contains = true
+					break
+				}
+			}
+			if !contains {
 				return errFailedToInspectVolume(volumeName, k, v, vol.Spec.ReplicaSet.Nodes)
 			}
 		case api.SpecParent:
@@ -1090,6 +1100,27 @@ func (d *portworx) ValidateStoragePools() error {
 	return nil
 }
 
+func (d *portworx) ValidateRebalanceJobs() error {
+
+	// start a task to check if all rebalance jobs are done
+	t := func() (interface{}, bool, error) {
+		jobListResp, err := d.storagePoolManager.EnumerateRebalanceJobs(d.getContext(), &api.SdkEnumerateRebalanceJobsRequest{})
+		if err != nil {
+			return nil, true, err
+		}
+		for _, job := range jobListResp.Jobs {
+			if job.State != api.StorageRebalanceJobState_DONE {
+				return "", true, fmt.Errorf("rebalance job is not done. Job ID: %s, State: %s", job.Id, job.State.String())
+			}
+		}
+		return nil, false, nil
+	}
+	if _, err := task.DoRetryWithTimeout(t, validateRebalanceJobsTimeout, validateRebalanceJobsInterval); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (d *portworx) getExpectedPoolSizes(listApRules *apapi.AutopilotRuleList) (map[string]uint64, error) {
 	fn := "getExpectedPoolSizes"
 	var (
@@ -1452,6 +1483,7 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	}
 
 	d.volDriver = api.NewOpenStorageVolumeClient(conn)
+	d.storagePoolManager = api.NewOpenStoragePoolClient(conn)
 	d.nodeManager = api.NewOpenStorageNodeClient(conn)
 	d.mountAttachManager = api.NewOpenStorageMountAttachClient(conn)
 	d.clusterPairManager = api.NewOpenStorageClusterPairClient(conn)

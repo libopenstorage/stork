@@ -72,7 +72,7 @@ var _ = Describe("{Longevity}", func() {
 		})
 
 		Step("Deploy applications", func() {
-			for i := 0; i < Inst().ScaleFactor; i++ {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("longevity-%d", i))...)
 			}
 			ValidateApplications(contexts)

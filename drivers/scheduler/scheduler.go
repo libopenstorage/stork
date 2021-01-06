@@ -104,6 +104,10 @@ type ScheduleOptions struct {
 	Scheduler string
 	// Labels is a map of {key,value} pairs for labeling spec objects
 	Labels map[string]string
+	// PvcNodesAnnotation is a map of {key,value} pairs for pvc annotations
+	PvcNodesAnnotation string
+	// PvcSize is the size of PVC
+	PvcSize int64
 }
 
 // Driver must be implemented to provide test support to various schedulers.
@@ -216,11 +220,29 @@ type Driver interface {
 	// CreateAutopilotRule creates the AutopilotRule object
 	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)
 
+	// GetAutopilotRule gets the AutopilotRule for the provided name
+	GetAutopilotRule(name string) (*apapi.AutopilotRule, error)
+
 	// UpdateAutopilotRule updates the AutopilotRule
-	UpdateAutopilotRule(apapi.AutopilotRule) (*apapi.AutopilotRule, error)
+	UpdateAutopilotRule(*apapi.AutopilotRule) (*apapi.AutopilotRule, error)
 
 	// ListAutopilotRules lists AutopilotRules
 	ListAutopilotRules() (*apapi.AutopilotRuleList, error)
+
+	// DeleteAutopilotRules deletes AutopilotRule
+	DeleteAutopilotRule(name string) error
+
+	// GetActionApproval gets the ActionApproval for the provided name
+	GetActionApproval(namespace, name string) (*apapi.ActionApproval, error)
+
+	// UpdateActionApproval updates the ActionApproval
+	UpdateActionApproval(namespace string, actionApproval *apapi.ActionApproval) (*apapi.ActionApproval, error)
+
+	// DeleteActionApproval deletes the ActionApproval of the given name
+	DeleteActionApproval(namespace, name string) error
+
+	// ListActionApprovals lists ActionApproval
+	ListActionApprovals(namespace string) (*apapi.ActionApprovalList, error)
 
 	// GetEvents should return all the events from the scheduler since the time torpedo started
 	GetEvents() map[string][]Event

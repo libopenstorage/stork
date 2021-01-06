@@ -7,6 +7,7 @@ import (
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,6 +26,8 @@ type ApplicationBackupRestoreOps interface {
 	DeleteApplicationBackup(string, string) error
 	// ValidateApplicationBackup validates the ApplicationBackup
 	ValidateApplicationBackup(string, string, time.Duration, time.Duration) error
+	// WatchApplicationBackup watch the ApplicationBackup
+	WatchApplicationBackup(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 	// CreateApplicationRestore creates the ApplicationRestore
 	CreateApplicationRestore(*storkv1alpha1.ApplicationRestore) (*storkv1alpha1.ApplicationRestore, error)
 	// GetApplicationRestore gets the ApplicationRestore
@@ -37,6 +40,8 @@ type ApplicationBackupRestoreOps interface {
 	DeleteApplicationRestore(string, string) error
 	// ValidateApplicationRestore validates the ApplicationRestore
 	ValidateApplicationRestore(string, string, time.Duration, time.Duration) error
+	// WatchApplicationRestore watch the ApplicationRestore
+	WatchApplicationRestore(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 	// GetApplicationBackupSchedule gets the ApplicationBackupSchedule
 	GetApplicationBackupSchedule(string, string) (*storkv1alpha1.ApplicationBackupSchedule, error)
 	// CreateApplicationBackupSchedule creates an ApplicationBackupSchedule
@@ -171,13 +176,18 @@ func (c *Client) ValidateApplicationRestore(name, namespace string, timeout, ret
 			return "", true, err
 		}
 
-		if applicationrestore.Status.Status == storkv1alpha1.ApplicationRestoreStatusSuccessful {
+		if applicationrestore.Status.Status == storkv1alpha1.ApplicationRestoreStatusSuccessful ||
+			applicationrestore.Status.Status == storkv1alpha1.ApplicationRestoreStatusPartialSuccess {
 			return "", false, nil
 		}
 		return "", true, &errors.ErrFailedToValidateCustomSpec{
-			Name:  applicationrestore.Name,
-			Cause: fmt.Sprintf("Application restore failed . Error: %v .Expected status: %v Actual status: %v", err, storkv1alpha1.ApplicationRestoreStatusSuccessful, applicationrestore.Status.Status),
-			Type:  applicationrestore,
+			Name: applicationrestore.Name,
+			Cause: fmt.Sprintf("Application restore failed . Error: %v .Expected status: %v/%v Actual status: %v",
+				err,
+				storkv1alpha1.ApplicationRestoreStatusSuccessful,
+				storkv1alpha1.ApplicationRestoreStatusPartialSuccess,
+				applicationrestore.Status.Status),
+			Type: applicationrestore,
 		}
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, retryInterval); err != nil {
@@ -326,4 +336,40 @@ func (c *Client) ValidateApplicationBackupSchedule(name string, namespace string
 	}
 
 	return backups, nil
+}
+
+// WatchApplicationBackup sets up a watcher that listens for changes on application backups
+func (c *Client) WatchApplicationBackup(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.stork.StorkV1alpha1().ApplicationBackups(namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for application backups")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &storkv1alpha1.ApplicationBackup{}, "", fn, listOptions)
+	return nil
+}
+
+// WatchApplicationRestore sets up a watcher that listens for changes on application restores
+func (c *Client) WatchApplicationRestore(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.stork.StorkV1alpha1().ApplicationRestores(namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for application restores")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &storkv1alpha1.ApplicationRestore{}, "", fn, listOptions)
+	return nil
 }

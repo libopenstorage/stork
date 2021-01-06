@@ -43,7 +43,7 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 	It("has to validate that storage nodes are not lost during asg scaledown", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		for i := 0; i < Inst().ScaleFactor; i++ {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgscaleupdown-%d", i))...)
 		}
 
@@ -117,7 +117,7 @@ var _ = Describe("{ASGKillRandomNodes}", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Step("Ensure apps are deployed", func() {
-			for i := 0; i < Inst().ScaleFactor; i++ {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("asgchaos-%d", i))...)
 			}
 		})

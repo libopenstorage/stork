@@ -287,6 +287,14 @@ func (d *DefaultDriver) ValidateStoragePools() error {
 	}
 }
 
+// ValidateRebalanceJobs validates rebalance jobs
+func (d *DefaultDriver) ValidateRebalanceJobs() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateRebalanceJobs()",
+	}
+}
+
 // CreateAutopilotRules creates autopilot rules
 func (d *DefaultDriver) CreateAutopilotRules([]apapi.AutopilotRule) error {
 	return &errors.ErrNotSupported{

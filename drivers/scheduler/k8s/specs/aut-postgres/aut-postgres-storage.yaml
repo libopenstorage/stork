@@ -5,7 +5,10 @@ metadata:
    name: px-postgres-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  repl: "3"
+  {{ if .Replicas }}
+  repl: "{{ .Replicas }}"
+  {{ else }}
+  repl: "3"{{ end }}
   priority_io: "high"
 allowVolumeExpansion: true
 ---
@@ -19,6 +22,8 @@ metadata:
   annotations:
     volume.beta.kubernetes.io/storage-class: px-postgres-sc
     torpedo.io/autopilot-enabled: "true"
+    torpedo.io/pvclabels-enabled: "true"
+    torpedo.io/pvcnodes-enabled: "true"
 spec:
   accessModes:
     - ReadWriteOnce

@@ -34,7 +34,7 @@ var _ = Describe("{StopScheduler}", func() {
 	It("has to stop scheduler service and check if applications are fine", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		for i := 0; i < Inst().ScaleFactor; i++ {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
 

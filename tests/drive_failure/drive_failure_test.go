@@ -41,7 +41,7 @@ var _ = Describe("{DriveFailure}", func() {
 		var err error
 		contexts = make([]*scheduler.Context, 0)
 
-		for i := 0; i < Inst().ScaleFactor; i++ {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", testName, i))...)
 		}
 
