@@ -21,12 +21,18 @@ const (
 )
 
 func TestExtender(t *testing.T) {
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	t.Run("pvcOwnershipTest", pvcOwnershipTest)
 	t.Run("noPVCTest", noPVCTest)
 	t.Run("singlePVCTest", singlePVCTest)
 	t.Run("statefulsetTest", statefulsetTest)
 	t.Run("multiplePVCTest", multiplePVCTest)
 	t.Run("driverNodeErrorTest", driverNodeErrorTest)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func noPVCTest(t *testing.T) {
@@ -76,13 +82,13 @@ func statefulsetTest(t *testing.T) {
 	require.Equal(t, 3, len(scheduledNodes), "App should be scheduled on one node")
 
 	// TODO: torpedo doesn't return correct volumes here
-	//volumeNames := getVolumeNames(t, ctxs[0])
-	//require.Equal(t, 3, len(volumeNames), "Should have 3 volumes")
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 3, len(volumeNames), "Should have 3 volumes")
 
 	// TODO: Add verification for node where it was scheduled
 	// torpedo doesn't return the pod->pvc mapping, so we can't validate that it
 	// got scheduled on a prioritized node
-	//verifyScheduledNode(t, scheduledNodes[0], volumeNames)
+	verifyScheduledNode(t, scheduledNodes[0], volumeNames)
 
 	destroyAndWait(t, ctxs)
 }
