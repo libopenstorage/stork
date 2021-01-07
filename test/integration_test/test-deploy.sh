@@ -5,7 +5,8 @@ migration_scale=10
 backup_scale=10
 image_name="openstorage/stork:master"
 test_image_name="openstorage/stork_test:latest"
-remote_config_path=""
+src_config_path=""
+dest_config_path=""
 run_cluster_domain_test=false
 environment_variables=""
 storage_provisioner="portworx"
@@ -18,6 +19,7 @@ cloud_secret=""
 aws_id=""
 aws_key=""
 generic_csi_configmap_name=""
+external_test_pod=false
 for i in "$@"
 do
 case $i in
@@ -51,9 +53,15 @@ case $i in
         shift
         shift
         ;;
-    --remote-config-path)
+    --src-config-path)
         echo "Remote kubeconfig path to use for test: $2"
-        remote_config_path=$2
+        src_config_path=$2
+        shift
+        shift
+        ;;
+    --dest-config-path)
+        echo "Remote kubeconfig path to use for test: $2"
+        dest_config_path=$2
         shift
         shift
         ;;
@@ -129,6 +137,12 @@ case $i in
         shift
         shift
         ;;
+    --external_test_pod)
+        echo "Flag for three cluster test config: $2"
+        external_test_pod=true
+        shift
+        shift
+        ;;
 esac
 done
 
@@ -151,7 +165,7 @@ kubectl delete cm stork-mock-time  -n kube-system || true
 kubectl create cm stork-mock-time  -n kube-system --from-literal=time=""
 
 echo "Creating stork deployment"
-kubectl apply -f /specs/stork-deployment.yaml
+#kubectl apply -f /specs/stork-deployment.yaml
 
 # Turn on test mode
 kubectl set env deploy/stork -n kube-system TEST_MODE="true"
@@ -191,7 +205,7 @@ if [ "$volume_driver" == "pxd" ] || [ "$volume_driver" == "linstor" ] ; then
 	kubectl apply -f /specs/stork-scheduler.yaml
 # Delete the pods to make sure we are waiting for the status from the
 # new pods
-	kubectl delete pods -n kube-system -l name=stork-scheduler
+kubectl delete pods -n kube-system -l name=stork-scheduler
 
 	echo "Waiting for stork-scheduler to be in running state"
 	for i in $(seq 1 100) ; do
@@ -248,13 +262,23 @@ if [ "$volume_driver" != "" ] ; then
 	sed -i 's/- -volume-driver=pxd/- -volume-driver='"$volume_driver"'/g' /testspecs/stork-test-pod.yaml
 fi
 
-if [ "$remote_config_path" != "" ]; then
-    kubectl create configmap remoteconfigmap --from-file=$remote_config_path -n kube-system
+if [ "$src_config_path" != "" ]; then
+    kubectl create configmap sourceconfigmap --from-file=$src_config_path -n kube-system
+fi
+if [ "$dest_config_path" != "" ]; then
+    kubectl create configmap destinationconfigmap --from-file=$dest_config_path -n kube-system
 fi
 
 if [ "$generic_csi_configmap_name" != "" ] ; then
 	sed -i 's/- -generic-csi-config=csi_config_map_name/- -generic-csi-config='"$generic_csi_configmap_name"'/g' /testspecs/stork-test-pod.yaml
 fi
+
+if [ "$external_test_pod" == "true" ] ; then
+	sed -i 's/'external_test_cluster'/'\""true"\"'/g' /testspecs/stork-test-pod.yaml
+else 
+	sed -i 's/'external_test_cluster'/'\"\"'/g' /testspecs/stork-test-pod.yaml
+fi
+
 kubectl delete -f /testspecs/stork-test-pod.yaml
 kubectl create -f /testspecs/stork-test-pod.yaml
 

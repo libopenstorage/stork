@@ -32,6 +32,9 @@ const (
 )
 
 func testSnapshot(t *testing.T) {
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 	t.Run("snapshotScaleTest", snapshotScaleTest)
@@ -42,6 +45,9 @@ func testSnapshot(t *testing.T) {
 	if authTokenConfigMap == "" {
 		t.Run("storageclassTests", storageclassTests)
 	}
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func simpleSnapshotTest(t *testing.T) {
@@ -285,6 +291,11 @@ func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest stri
 	snaps, err := schedulerDriver.GetSnapshots(ctxs[0])
 	require.NoError(t, err, "failed to get snapshots")
 	require.Len(t, snaps, 1, "should have received exactly one snapshot")
+
+	if externalTest {
+		// TODO: Figure out a way to communicate with PX nodes from other cluster
+		return
+	}
 
 	for _, snap := range snaps {
 		s, err := k8sextops.Instance().GetSnapshot(snap.Name, snap.Namespace)

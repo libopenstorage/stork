@@ -11,12 +11,18 @@ import (
 )
 
 func testSnapshotRestore(t *testing.T) {
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	t.Run("simpleSnapshotRestoreTest", simpleSnapshotRestoreTest)
 	t.Run("groupSnapshotRestoreTest", groupSnapshotRestoreTest)
 	if !testing.Short() {
 		t.Run("cloudSnapshotRestoreTest", cloudSnapshotRestoreTest)
 		t.Run("groupCloudSnapshotRestoreTest", groupCloudSnapshotRestoreTest)
 	}
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func createInPlaceRestore(t *testing.T, namespace string, appKeys []string) []*scheduler.Context {

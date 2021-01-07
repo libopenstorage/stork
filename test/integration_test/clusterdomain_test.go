@@ -108,6 +108,7 @@ func failoverAndFailbackClusterDomainTest(t *testing.T) {
 		true,
 		true,
 		false,
+		false,
 	)
 
 	// validate the following

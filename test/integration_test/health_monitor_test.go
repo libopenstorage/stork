@@ -16,9 +16,15 @@ import (
 )
 
 func TestHealthMonitor(t *testing.T) {
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	t.Run("stopDriverTest", stopDriverTest)
 	t.Run("stopKubeletTest", stopKubeletTest)
 	t.Run("healthCheckFixTest", healthCheckFixTest)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func stopDriverTest(t *testing.T) {
