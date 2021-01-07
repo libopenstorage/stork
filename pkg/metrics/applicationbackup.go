@@ -10,26 +10,31 @@ import (
 )
 
 var (
-	// BackupStatusCounter for application backup CR status on server
+	// backupStatusCounter for application backup CR status on server
 	backupStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_status",
 		Help: "Status of application backups",
-	}, []string{metricName, metricNamespace, metricSchedule}) // annotation to figure out schedule
-	// BackupStageCounter for application backup CR stages on server
+	}, []string{metricName, metricNamespace, metricSchedule})
+	// backupStageCounter for application backup CR stages on server
 	backupStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_stage",
 		Help: "Stage of application backups",
 	}, []string{metricName, metricNamespace, metricSchedule})
-	// BackupDurationCounter for time taken by application backup to complete
+	// backupDurationCounter for time taken by application backup to complete
 	backupDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_duration",
 		Help: "Duration of application backups",
 	}, []string{metricName, metricNamespace, metricSchedule})
-	// BackupSizeCounter for application backup size
+	// backupSizeCounter for application backup size
 	backupSizeCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_size",
 		Help: "Size of application backups",
 	}, []string{metricName, metricNamespace, metricSchedule})
+	// backupScheduleStatusCounter for application backup schedule CR status on server
+	backupScheduleStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "application_backup__schedule_status",
+		Help: "Status of application backup Schedules",
+	}, []string{metricName, metricNamespace})
 )
 
 var (
@@ -62,7 +67,11 @@ func watchBackupCR(object runtime.Object) error {
 	labels := make(prometheus.Labels)
 	labels[metricName] = backup.Name
 	labels[metricNamespace] = backup.Namespace
-	labels[metricSchedule] = backup.Annotations[app_backup.ApplicationBackupScheduleNameAnnotation]
+	sched := ""
+	if backup.Annotations != nil {
+		sched = backup.Annotations[app_backup.ApplicationBackupScheduleNameAnnotation]
+	}
+	labels[metricSchedule] = sched
 	if backup.DeletionTimestamp != nil {
 		backupStatusCounter.Delete(labels)
 		backupStageCounter.Delete(labels)
@@ -88,9 +97,28 @@ func watchBackupCR(object runtime.Object) error {
 	return nil
 }
 
+func watchBackupScheduleCR(object runtime.Object) error {
+	bkpSched, ok := object.(*stork_api.ApplicationBackupSchedule)
+	if !ok {
+		err := fmt.Errorf("invalid object type on backup schedule watch: %v", object)
+		return err
+	}
+	labels := make(prometheus.Labels)
+	labels[metricName] = bkpSched.Name
+	labels[metricNamespace] = bkpSched.Namespace
+	if bkpSched.DeletionTimestamp != nil {
+		backupScheduleStatusCounter.Delete(labels)
+		return nil
+	}
+	// Set Backup Schedule Status counter
+	backupScheduleStatusCounter.With(labels).Set(float64(len(bkpSched.Status.Items)))
+	return nil
+}
+
 func init() {
 	prometheus.MustRegister(backupStatusCounter)
 	prometheus.MustRegister(backupStageCounter)
 	prometheus.MustRegister(backupDurationCounter)
 	prometheus.MustRegister(backupSizeCounter)
+	prometheus.MustRegister(backupScheduleStatusCounter)
 }

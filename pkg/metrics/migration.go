@@ -24,6 +24,11 @@ var (
 		Name: "migration_duration",
 		Help: "Duration of migrations",
 	}, []string{metricName, metricNamespace, metricSchedule})
+	// migrationScheduleCounter for migration schedule status
+	migrationScheduleCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "migration_schedule_status",
+		Help: "Status of migration schedules",
+	}, []string{metricName, metricNamespace})
 )
 
 var (
@@ -86,8 +91,29 @@ func watchmigrationCR(object runtime.Object) error {
 	return nil
 }
 
+func watchmigrationScheduleCR(object runtime.Object) error {
+	migrSched, ok := object.(*stork_api.MigrationSchedule)
+	if !ok {
+		err := fmt.Errorf("invalid object type on migration schedule watch: %v", object)
+		return err
+	}
+	labels := make(prometheus.Labels)
+	labels[metricName] = migrSched.Name
+	labels[metricNamespace] = migrSched.Namespace
+
+	if migrSched.DeletionTimestamp != nil {
+		migrationScheduleCounter.Delete(labels)
+		return nil
+	}
+	// Set migration schedule counter
+	// TODO: should we set status of migration schedule here suspend/resume here ?
+	migrationScheduleCounter.With(labels).Set(float64(len(migrSched.Status.Items)))
+	return nil
+}
+
 func init() {
 	prometheus.MustRegister(migrationStatusCounter)
 	prometheus.MustRegister(migrationStageCounter)
 	prometheus.MustRegister(migrationDurationCounter)
+	prometheus.MustRegister(migrationScheduleCounter)
 }
