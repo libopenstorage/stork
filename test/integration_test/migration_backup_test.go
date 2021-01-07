@@ -30,11 +30,9 @@ func deploymentMigrationBackupTest(t *testing.T) {
 	for location, secret := range allConfigMap {
 		logrus.Infof("Backing up to cloud: %v using secret %v", location, secret)
 		var err error
-		// Reset config in case of error
-		defer func() {
-			err = setRemoteConfig("")
-			require.NoError(t, err, "Error resetting remote config")
-		}()
+
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 		// Trigger migration to backup app from source cluster to destination cluster
 		ctxs, preMigrationCtx := triggerMigration(
@@ -46,6 +44,7 @@ func deploymentMigrationBackupTest(t *testing.T) {
 			true,
 			false,
 			true,
+			false,
 		)
 
 		// Cleanup up source
@@ -54,11 +53,8 @@ func deploymentMigrationBackupTest(t *testing.T) {
 		logrus.Infoln("Completed migration of apps from source to destination, will now start backup on second cluster")
 
 		// Change kubeconfig to destination cluster
-		err = dumpRemoteKubeConfig(remoteConfig)
-		require.NoErrorf(t, err, "Unable to write clusterconfig: %v", err)
-
-		err = setRemoteConfig(remoteFilePath)
-		require.NoError(t, err, "Error setting remote config")
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 		// Backup app from the destination cluster to cloud
 		currBackupLocation, err := createBackupLocation(t, appKey+"-backup-location", testKey+"-mysql-migration", storkv1.BackupLocationType(location), secret)
@@ -75,8 +71,8 @@ func deploymentMigrationBackupTest(t *testing.T) {
 		logrus.Infoln("Completed backup of apps destination cluster")
 
 		// Switch kubeconfig to source cluster for restore
-		err = setRemoteConfig("")
-		require.NoError(t, err, "Error resetting remote config")
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 		srcBackupLocation, err := createBackupLocation(t, appKey+"-backup-location", testKey+"-mysql-migration", storkv1.BackupLocationType(location), secret)
 		require.NoError(t, err, "Error creating backuplocation %s", currBackupLocation.Name)
@@ -88,6 +84,7 @@ func deploymentMigrationBackupTest(t *testing.T) {
 
 		backupToRestore, err := getSyncedBackupWithAnnotation(currBackup, backupSyncAnnotation)
 		require.NotNil(t, backupToRestore, "Backup sync failed. Backup not found on the second cluster")
+		require.NoError(t, err, "Error getting synced backup-location")
 
 		appRestoreForBackup, err := createApplicationRestore(t, "restore-from-dest-backup", srcBackupLocation.Namespace, backupToRestore, srcBackupLocation)
 		require.Nil(t, err, "failure to create restore object in namespace %s", currBackup.Namespace)
@@ -121,11 +118,9 @@ func deploymentMigrationBackupTest(t *testing.T) {
 		logrus.Infoln("Completed cleanup on source cluster")
 
 		// Change kubeconfig to second cluster
-		err = dumpRemoteKubeConfig(remoteConfig)
-		require.NoErrorf(t, err, "Unable to write clusterconfig: %v", err)
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
-		err = setRemoteConfig(remoteFilePath)
-		require.NoError(t, err, "Error setting remote config")
 		err = deleteAndWaitForBackupDeletion(currBackup.Namespace)
 		require.NoError(t, err, "All backups not deleted on the source cluster post migration-backup-restore: %v.", err)
 

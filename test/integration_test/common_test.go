@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"testing"
 	"time"
 
@@ -61,7 +62,8 @@ const (
 	nodeDriverName        = "ssh"
 	schedulerDriverName   = "k8s"
 	remotePairName        = "remoteclusterpair"
-	remoteConfig          = "remoteconfigmap"
+	srcConfig             = "sourceconfigmap"
+	destConfig            = "destinationconfigmap"
 	specDir               = "./specs"
 	defaultClusterPairDir = "cluster-pair"
 	pairFileName          = "cluster-pair.yaml"
@@ -70,12 +72,13 @@ const (
 	defaultSchedulerName  = "default-scheduler"
 	bucketPrefix          = "stork-test"
 
+	// TODO: Figure out a way to communicate with PX nodes from other cluster
 	nodeScore   = 100
 	rackScore   = 50
 	zoneScore   = 25
 	regionScore = 10
 
-	defaultWaitTimeout       time.Duration = 5 * time.Minute
+	defaultWaitTimeout       time.Duration = 10 * time.Minute
 	clusterDomainWaitTimeout time.Duration = 10 * time.Minute
 	groupSnapshotWaitTimeout time.Duration = 15 * time.Minute
 	defaultWaitInterval      time.Duration = 10 * time.Second
@@ -85,11 +88,13 @@ const (
 	storageProvisioner       = "STORAGE_PROVISIONER"
 	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
 	backupPathVar            = "BACKUP_LOCATION_PATH"
+	externalTestCluster      = "EXTERNAL_TEST_CLUSTER"
 )
 
 var nodeDriver node.Driver
 var schedulerDriver scheduler.Driver
 var volumeDriver volume.Driver
+
 var storkVolumeDriver storkdriver.Driver
 var objectStoreDriver objectstore.Driver
 
@@ -102,6 +107,7 @@ var volumeDriverName string
 var schedulerName string
 var backupLocationPath string
 var genericCsiConfigMap string
+var externalTest bool
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -113,6 +119,16 @@ func TestSnapshotMigration(t *testing.T) {
 // TODO: Parse storageclass specs based on driver name
 func setup() error {
 	var err error
+
+	externalTest, err = strconv.ParseBool(os.Getenv(externalTestCluster))
+	if err == nil {
+		logrus.Infof("Three cluster config mode has been activated for test: %t", externalTest)
+	}
+
+	err = setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("setting kubeconfig to source failed in setup: %v", err)
+	}
 
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	provisioner := os.Getenv(storageProvisioner)
@@ -206,6 +222,10 @@ func getVolumeNames(t *testing.T, ctx *scheduler.Context) []string {
 }
 
 func verifyScheduledNode(t *testing.T, appNode node.Node, volumes []string) {
+	if externalTest {
+		// TODO: Figure out a way to communicate with PX nodes from other cluster
+		return
+	}
 	if schedulerName == defaultSchedulerName {
 		return
 	}
@@ -355,6 +375,46 @@ func setRemoteConfig(kubeConfig string) error {
 	return nil
 }
 
+func setSourceKubeConfig() error {
+	// setting kubeconfig to default cluster first since all configmaps are created there
+	err := setRemoteConfig("")
+	if err != nil {
+		return fmt.Errorf("setting kubeconfig to default failed: %v", err)
+	}
+
+	// Change kubeconfig to source cluster
+	err = dumpRemoteKubeConfig(srcConfig)
+	if err != nil {
+		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
+	}
+
+	err = setRemoteConfig(remoteFilePath)
+	if err != nil {
+		return fmt.Errorf("unable to set source config: %v", err)
+	}
+	return nil
+}
+
+func setDestinationKubeConfig() error {
+	// setting kubeconfig to default cluster first since all configmaps are created there
+	err := setRemoteConfig("")
+	if err != nil {
+		return fmt.Errorf("unable to set source config: %v", err)
+	}
+
+	// Change kubeconfig to source cluster
+	err = dumpRemoteKubeConfig(destConfig)
+	if err != nil {
+		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
+	}
+
+	err = setRemoteConfig(remoteFilePath)
+	if err != nil {
+		return fmt.Errorf("unable to set source config: %v", err)
+	}
+	return nil
+}
+
 func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool, clusterPairDir string) error {
 	err := os.MkdirAll(path.Join(specDir, clusterPairDir), 0777)
 	if err != nil {
@@ -391,24 +451,17 @@ func createClusterPair(pairInfo map[string]string, skipStorage, resetConfig bool
 	}
 
 	if resetConfig {
-		// stokctl generate command sets sched-ops to remoteclusterconfig
-		err = setRemoteConfig("")
+		// stokctl generate command sets sched-ops to source cluster config
+		err = setSourceKubeConfig()
 		if err != nil {
-			logrus.Errorf("setting kubeconfig to default failed %v", err)
+			logrus.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
 			return err
 		}
 	} else {
-		// Change kubeconfig to second cluster
-		err = dumpRemoteKubeConfig(remoteConfig)
+		// Change kubeconfig to destination cluster config
+		err = setDestinationKubeConfig()
 		if err != nil {
-			logrus.Errorf("unable to dump remote config: %v", err)
-			return err
-		}
-
-		// Change kubeconfig to destination
-		err = setRemoteConfig(remoteFilePath)
-		if err != nil {
-			logrus.Errorf("unable to set remote config: %v", err)
+			logrus.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
 			return err
 		}
 	}
@@ -454,12 +507,19 @@ func addStorageOptions(pairInfo map[string]string, clusterPairFileName string) e
 	return nil
 }
 
-func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string) error {
-	err := dumpRemoteKubeConfig(remoteConfig)
-	if err != nil {
-		logrus.Errorf("Unable to write clusterconfig: %v", err)
-		return err
+func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, clusterPairDir string, reverse bool) error {
+	if reverse {
+		err := setSourceKubeConfig()
+		if err != nil {
+			return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+		}
+	} else {
+		err := setDestinationKubeConfig()
+		if err != nil {
+			return fmt.Errorf("during cluster pair setting kubeconfig to destination failed %v", err)
+		}
 	}
+
 	info, err := volumeDriver.GetClusterPairingInfo()
 	if err != nil {
 		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
@@ -687,7 +747,6 @@ func TestMain(m *testing.M) {
 		"generic-csi-config",
 		"",
 		"Config map name that contains details of csi driver to be used for provisioning")
-	flag.Parse()
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)
