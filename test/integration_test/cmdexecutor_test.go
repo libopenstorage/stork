@@ -17,6 +17,10 @@ import (
 )
 
 func TestCommandExecutor(t *testing.T) {
+
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	id, err := uuid.New()
 	require.NoError(t, err, "failed to get uuid")
 
@@ -75,6 +79,9 @@ func TestCommandExecutor(t *testing.T) {
 	}
 
 	destroyAndWait(t, ctxs)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func startCommandInPods(t *testing.T, command string, pods []v1.Pod) []cmdexecutor.Executor {

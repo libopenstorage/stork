@@ -34,6 +34,9 @@ func testMigration(t *testing.T) {
 	err := setMockTime(nil)
 	require.NoError(t, err, "Error resetting mock time")
 
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	t.Run("deploymentTest", deploymentMigrationTest)
 	t.Run("deploymentMigrationReverseTest", deploymentMigrationReverseTest)
 	t.Run("statefulsetTest", statefulsetMigrationTest)
@@ -55,6 +58,9 @@ func testMigration(t *testing.T) {
 		t.Run("intervalScheduleCleanupTest", intervalScheduleCleanupTest)
 	}
 	t.Run("scaleTest", migrationScaleTest)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func triggerMigrationTest(
@@ -70,11 +76,11 @@ func triggerMigrationTest(
 	var err error
 	// Reset config in case of error
 	defer func() {
-		err = setRemoteConfig("")
-		require.NoError(t, err, "Error resetting remote config")
+		err = setSourceKubeConfig()
+		require.NoError(t, err, "Error resetting source config")
 	}()
 
-	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration)
+	ctxs, preMigrationCtx := triggerMigration(t, instanceID, appKey, additionalAppKeys, []string{migrationAppKey}, migrateAllAppsExpected, false, startAppsOnMigration, false)
 
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, migrationSuccessExpected, startAppsOnMigration, migrateAllAppsExpected, false, false)
 }
@@ -88,6 +94,7 @@ func triggerMigration(
 	migrateAllAppsExpected bool,
 	skipStoragePair bool,
 	startAppsOnMigration bool,
+	pairReverse bool,
 ) ([]*scheduler.Context, *scheduler.Context) {
 	// schedule the app on cluster 1
 	ctxs, err := schedulerDriver.Schedule(instanceID,
@@ -112,7 +119,7 @@ func triggerMigration(
 		preMigrationCtx = ctxs[0].DeepCopy()
 	}
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir)
+	err = scheduleClusterPair(ctxs[0], skipStoragePair, true, defaultClusterPairDir, pairReverse)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
@@ -146,8 +153,8 @@ func validateAndDestroyMigration(
 		require.NoError(t, err, "Error waiting for migration to get to Ready state")
 
 		// wait on cluster 2 for the app to be running
-		err = setRemoteConfig(remoteFilePath)
-		require.NoError(t, err, "Error setting remote config")
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 		if startAppsOnMigration {
 			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
@@ -177,8 +184,9 @@ func validateAndDestroyMigration(
 
 	if !skipAppDeletion {
 		// destroy app on cluster 1
-		err = setRemoteConfig("")
-		require.NoError(t, err, "Error resetting remote config")
+		err := setSourceKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 		destroyAndWait(t, ctxs)
 	}
 }
@@ -198,11 +206,6 @@ func deploymentMigrationTest(t *testing.T) {
 
 func deploymentMigrationReverseTest(t *testing.T) {
 	var err error
-	// Reset config in case of error
-	defer func() {
-		err = setRemoteConfig("")
-		require.NoError(t, err, "Error resetting remote config")
-	}()
 
 	ctxs, preMigrationCtx := triggerMigration(
 		t,
@@ -213,18 +216,15 @@ func deploymentMigrationReverseTest(t *testing.T) {
 		true,
 		false,
 		true,
+		false,
 	)
 
 	// Cleanup up source
 	validateAndDestroyMigration(t, ctxs, preMigrationCtx, true, true, true, false, false)
 
-	// Change kubeconfig to second cluster
-	err = dumpRemoteKubeConfig(remoteConfig)
-	require.NoErrorf(t, err, "Unable to write clusterconfig: %v", err)
-
 	// Change kubeconfig to destination
-	err = setRemoteConfig(remoteFilePath)
-	require.NoError(t, err, "Error setting remote config")
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	ctxsReverse, err := schedulerDriver.Schedule("mysql-migration",
 		scheduler.ScheduleOptions{AppKeys: []string{"mysql-1-pvc"}})
@@ -237,7 +237,7 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	postMigrationCtx := ctxsReverse[0].DeepCopy()
 
 	// create, apply and validate cluster pair specs
-	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse")
+	err = scheduleClusterPair(ctxsReverse[0], false, false, "cluster-pair-reverse", true)
 	require.NoError(t, err, "Error scheduling cluster pair")
 
 	// apply migration specs
@@ -251,8 +251,8 @@ func deploymentMigrationReverseTest(t *testing.T) {
 	destroyAndWait(t, ctxsReverse)
 
 	// Cleanup up source
-	err = setRemoteConfig("")
-	require.NoError(t, err, "Error resetting remote config")
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	err = schedulerDriver.WaitForRunning(postMigrationCtx, defaultWaitTimeout, defaultWaitInterval)
 	require.NoError(t, err, "Error waiting for migration to complete")
@@ -384,7 +384,7 @@ func migrationIntervalScheduleTest(t *testing.T) {
 	var err error
 	// Reset config in case of error
 	defer func() {
-		err = setRemoteConfig("")
+		err = setSourceKubeConfig()
 		require.NoError(t, err, "Error resetting remote config")
 	}()
 
@@ -396,6 +396,7 @@ func migrationIntervalScheduleTest(t *testing.T) {
 		nil,
 		[]string{"mysql-migration-schedule-interval"},
 		true,
+		false,
 		false,
 		false,
 	)
@@ -417,7 +418,7 @@ func intervalScheduleCleanupTest(t *testing.T) {
 	var pvcs *v1.PersistentVolumeClaimList
 	// Reset config in case of error
 	defer func() {
-		err = setRemoteConfig("")
+		err = setSourceKubeConfig()
 		require.NoError(t, err, "Error resetting remote config")
 	}()
 	err = setMockTime(nil)
@@ -430,6 +431,7 @@ func intervalScheduleCleanupTest(t *testing.T) {
 		[]string{"cassandra"},
 		[]string{"mysql-migration-schedule-interval"},
 		true,
+		false,
 		false,
 		false,
 	)
@@ -481,8 +483,8 @@ func intervalScheduleCleanupTest(t *testing.T) {
 
 func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.PersistentVolumeClaimList) {
 	// validate if statefulset got deleted on cluster2
-	err := setRemoteConfig(remoteFilePath)
-	require.NoError(t, err, "Error setting remote config")
+	err := setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 	// Verify if statefulset get delete
 	_, err = apps.Instance().GetStatefulSet(name, namespace)
@@ -493,9 +495,8 @@ func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.Per
 		require.Error(t, err, "expected pvc:%v error not found", pvc.Name)
 	}
 
-	// reset config
-	err = setRemoteConfig("")
-	require.NoError(t, err, "Error setting remote config")
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "Error resetting remote config")
 }
 
 func validateMigration(t *testing.T, name, namespace string) {
@@ -538,6 +539,7 @@ func migrationScheduleInvalidTest(t *testing.T) {
 		nil,
 		migrationSchedules,
 		true,
+		false,
 		false,
 		false,
 	)
@@ -586,7 +588,7 @@ func migrationScheduleTest(
 	var err error
 	// Reset config in case of error
 	defer func() {
-		err = setRemoteConfig("")
+		err = setSourceKubeConfig()
 		require.NoError(t, err, "Error resetting remote config")
 	}()
 
@@ -634,6 +636,7 @@ func migrationScheduleTest(
 		nil,
 		[]string{migrationScheduleName},
 		true,
+		false,
 		false,
 		false,
 	)
@@ -792,7 +795,7 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 		appCtxs = append(appCtxs, preMigrationCtx)
 
 		// create, apply and validate cluster pair specs
-		err = scheduleClusterPair(currCtxs[0], false, true, defaultClusterPairDir)
+		err = scheduleClusterPair(currCtxs[0], false, true, defaultClusterPairDir, false)
 		require.NoError(t, err, "Error scheduling cluster pair")
 		ctxs = append(ctxs, currCtxs...)
 
@@ -808,8 +811,8 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 	// Validate apps on destination
 	if startApplicationsFlag {
 		// wait on cluster 2 for the app to be running
-		err = setRemoteConfig(remoteFilePath)
-		require.NoError(t, err, "Error setting remote config")
+		err = setDestinationKubeConfig()
+		require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
 
 		for _, ctx := range appCtxs {
 			err = schedulerDriver.WaitForRunning(ctx, defaultWaitTimeout, defaultWaitInterval)
@@ -819,8 +822,8 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 		destroyAndWait(t, appCtxs)
 	}
 
-	err = setRemoteConfig("")
-	require.NoError(t, err, "Error resetting remote config")
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// Delete all apps and cluster pairs on source cluster
 	destroyAndWait(t, ctxs)
