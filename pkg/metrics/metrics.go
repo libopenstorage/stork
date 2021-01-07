@@ -59,6 +59,9 @@ func StartMetrics(enableApplicationController, enableMigrationController bool) e
 			if err := storkops.Instance().WatchApplicationClone("", watchCloneCR, metav1.ListOptions{}); err != nil {
 				logrus.Errorf("failed to watch applicationclones due to: %v", err)
 			}
+			if err := storkops.Instance().WatchApplicationBackupSchedule("", watchBackupScheduleCR, metav1.ListOptions{}); err != nil {
+				logrus.Errorf("failed to watch applicationbackup scheduless due to: %v", err)
+			}
 			logrus.Infof("started metrics collection for applicationcontrollers")
 		}
 		if enableMigrationController {
@@ -85,6 +88,9 @@ func StartMetrics(enableApplicationController, enableMigrationController bool) e
 			}
 			if err := storkops.Instance().WatchMigration("", watchmigrationCR, metav1.ListOptions{}); err != nil {
 				logrus.Errorf("failed to watch migration due to: %v", err)
+			}
+			if err := storkops.Instance().WatchMigrationSchedule("", watchmigrationScheduleCR, metav1.ListOptions{}); err != nil {
+				logrus.Errorf("failed to watch migration schedules due to: %v", err)
 			}
 			logrus.Infof("started metrics collection for migrations")
 		}
