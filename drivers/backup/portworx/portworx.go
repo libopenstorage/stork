@@ -34,7 +34,7 @@ const (
 	schedulerDriverName   = "k8s"
 	nodeDriverName        = "ssh"
 	volumeDriverName      = "pxd"
-	licFeatureName        = "ClusterCount"
+	licFeatureName        = "BackupNodeCount"
 )
 
 type portworx struct {
