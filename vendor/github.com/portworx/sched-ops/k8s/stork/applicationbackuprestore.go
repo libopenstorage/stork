@@ -58,6 +58,8 @@ type ApplicationBackupRestoreOps interface {
 	// The caller is expected to validate if the returned map has all backups expected at that point of time
 	ValidateApplicationBackupSchedule(string, string, int, time.Duration, time.Duration) (
 		map[storkv1alpha1.SchedulePolicyType][]*storkv1alpha1.ScheduledApplicationBackupStatus, error)
+	// WatchApplicationBackupSchedule watch the ApplicationBackupSchedule objects
+	WatchApplicationBackupSchedule(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 }
 
 // CreateApplicationBackup creates the ApplicationBackup
@@ -371,5 +373,23 @@ func (c *Client) WatchApplicationRestore(namespace string, fn WatchFunc, listOpt
 
 	// fire off watch function
 	go c.handleWatch(watchInterface, &storkv1alpha1.ApplicationRestore{}, "", fn, listOptions)
+	return nil
+}
+
+// WatchApplicationBackupSchedule sets up a watcher that listens for changes on applicationbackup schedules
+func (c *Client) WatchApplicationBackupSchedule(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for application backup schedules")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &storkv1alpha1.ApplicationBackupSchedule{}, "", fn, listOptions)
 	return nil
 }

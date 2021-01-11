@@ -259,10 +259,14 @@ func (c *Client) handleWatch(
 						err = c.WatchApplicationRestore(namespace, fn, listOptions)
 					} else if _, ok := object.(*storkv1.ApplicationClone); ok {
 						err = c.WatchApplicationClone(namespace, fn, listOptions)
+					} else if _, ok := object.(*storkv1.ApplicationBackupSchedule); ok {
+						err = c.WatchApplicationBackupSchedule(namespace, fn, listOptions)
 					} else if _, ok := object.(*storkv1.ClusterPair); ok {
 						err = c.WatchClusterPair(namespace, fn, listOptions)
 					} else if _, ok := object.(*storkv1.Migration); ok {
 						err = c.WatchMigration(namespace, fn, listOptions)
+					} else if _, ok := object.(*storkv1.MigrationSchedule); ok {
+						err = c.WatchMigrationSchedule(namespace, fn, listOptions)
 					} else {
 						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
 					}

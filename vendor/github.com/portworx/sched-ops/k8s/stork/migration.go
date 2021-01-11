@@ -43,6 +43,8 @@ type MigrationOps interface {
 		map[storkv1alpha1.SchedulePolicyType][]*storkv1alpha1.ScheduledMigrationStatus, error)
 	// WatchMigration watch the Migration object
 	WatchMigration(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
+	// WatchMigrationSchedule watch the MigrationSchedule object
+	WatchMigrationSchedule(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 }
 
 // GetMigration gets the Migration
@@ -265,5 +267,23 @@ func (c *Client) WatchMigration(namespace string, fn WatchFunc, listOptions meta
 
 	// fire off watch function
 	go c.handleWatch(watchInterface, &storkv1alpha1.Migration{}, "", fn, listOptions)
+	return nil
+}
+
+// WatchMigrationSchedule sets up a watcher that listens for changes on migration schedule objects
+func (c *Client) WatchMigrationSchedule(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.stork.StorkV1alpha1().MigrationSchedules(namespace).Watch(listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for migrationschedules")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &storkv1alpha1.MigrationSchedule{}, "", fn, listOptions)
 	return nil
 }
