@@ -679,6 +679,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
 		backup.Status.Reason = "Application resources backup is in progress"
 		backup.Status.LastUpdateTimestamp = metav1.Now()
+		// temporarily store the volume status, So that it will be used during retry.
+		volumeInfos := backup.Status.Volumes
 		// Update the current state and then move on to backing up resources
 		err := a.client.Update(context.TODO(), backup)
 		if err != nil {
@@ -692,6 +694,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
 				backup.Status.Reason = "Application resources backup is in progress"
 				backup.Status.LastUpdateTimestamp = metav1.Now()
+				backup.Status.Volumes = volumeInfos
 				err = a.client.Update(context.TODO(), backup)
 				if err != nil {
 					time.Sleep(retrySleep)
