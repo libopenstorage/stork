@@ -1,0 +1,10 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1beta1
+metadata:
+  name: mongo-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  io_profile: "db"
+  io_priority: "high"
+  snap_schedule: "periodic=60,5"

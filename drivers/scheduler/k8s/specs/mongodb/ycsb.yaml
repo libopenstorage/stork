@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ycsb
+  labels:
+    app: ycsb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ycsb
+  template:
+    metadata:
+      labels:
+        app: ycsb
+    spec:
+      initContainers:
+      - name: ycsb-load
+        image: alvarobrandon/ycsb:latest
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        args: [ "load",
+              "mongodb",
+              "-s",
+              "-P",
+              "ycsb-0.12.0/workloads/workloada",
+              "-p", 
+              "recordcount=100000000",
+              "-p", 
+              "mongodb.url=mongodb://px-mongo-mongodb.$(POD_NAMESPACE).svc.cluster.local:27017/ycsb?w=0",
+        ]
+      containers:
+      - name: ycsb
+        image: alvarobrandon/ycsb:latest
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        args: [ "run",
+              "mongodb",
+              "-s",
+              "-P",
+              "ycsb-0.12.0/workloads/workloada",
+              "-p", 
+              "recordcount=100000000",
+              "-p", 
+              "mongodb.url=mongodb://px-mongo-mongodb.$(POD_NAMESPACE).svc.cluster.local:27017/ycsb?w=0",
+        ]
+      restartPolicy: Always

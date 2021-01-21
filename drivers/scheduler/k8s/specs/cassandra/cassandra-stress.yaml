@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cassandra-stress-readinessprobe
+data:
+  ready-probe.sh: |
+    #!/bin/bash
+    if [ `cat /cassandra-stress.load.data | grep total | wc -l` -ge 5 ]; then 
+      exit 0; 
+    else 
+      exit 1; 
+    fi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cassandra-stress-livenessprobe
+data:
+  live-probe.sh: |
+    #!/bin/bash
+    count1=`cat /cassandra-stress.load.data | grep total | wc -l`
+    sleep 4
+    count2=`cat /cassandra-stress.load.data | grep total | wc -l`
+    if [ $count2 -gt $count1 ]; then 
+      echo "New count ${count2} is more than old count ${count1}. Stress tools is healthy"
+      exit 0; 
+    else 
+      echo "New count ${count2} is NOT more than old count ${count1}. stress tool is NOT healthy"
+      exit 1; 
+    fi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cassandra-stress
+  labels:
+    app: cassandra-stress
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cassandra-stress
+  template:
+    metadata:
+      labels:
+        app: cassandra-stress
+    spec:
+      containers:
+      - name: cassandra-stress
+        image: scylladb/scylla:4.1.11
+        readinessProbe:
+            exec:
+              command:
+                - /opt/ready-probe.sh
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 1
+        livenessProbe:
+            exec:
+              command:
+                - /opt/live-probe.sh
+            initialDelaySeconds: 75
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 1
+        volumeMounts:
+          - name: scylla-ready-probe
+            mountPath: /opt/ready-probe.sh
+            subPath: ready-probe.sh
+          - name: scylla-live-probe
+            mountPath: /opt/live-probe.sh
+            subPath: live-probe.sh
+        command:
+          - /bin/bash
+          - -c
+          - "cassandra-stress write no-warmup n=1000000 cl=ONE -mode native cql3 -col n=FIXED\\(5\\) size=FIXED\\(64\\)  -pop seq=1..1000000 -node cassandra -port native=9042 -rate auto -log file=/cassandra-stress.load.data -schema \"replication(factor=1)\" -errors ignore; cat /cassandra-stress.load.data"
+      restartPolicy: Always
+      volumes:
+          - name: scylla-ready-probe
+            configMap:
+              name: cassandra-stress-readinessprobe
+              defaultMode: 511
+          - name: scylla-live-probe
+            configMap:
+              name: cassandra-stress-livenessprobe
+              defaultMode: 511

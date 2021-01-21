@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: px-mongo-mongodb
+  labels:
+    app: mongodb
+spec:
+  type: ClusterIP
+  ports:
+  - name: mongodb
+    port: 27017
+    targetPort: mongodb
+  selector:
+    app: mongodb
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: px-mongo-mongodb
+  labels:
+    app: mongodb
+spec:
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      securityContext:
+        fsGroup: 1001
+      initContainers:
+      containers:
+      - name: px-mongo-mongodb
+        image: docker.io/bitnami/mongodb:4.2.4-debian-10-r0
+        imagePullPolicy: "IfNotPresent"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+        env:
+        - name: MONGODB_SYSTEM_LOG_VERBOSITY
+          value: "0"
+        - name: MONGODB_DISABLE_SYSTEM_LOG
+          value: "no"
+        - name: MONGODB_ENABLE_IPV6
+          value: "no"
+        - name: MONGODB_ENABLE_DIRECTORY_PER_DB
+          value: "no"
+        ports:
+        - name: mongodb
+          containerPort: 27017
+        livenessProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 6
+        readinessProbe:
+          exec:
+            command:
+            - mongo
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 6
+        volumeMounts:
+        - name: data
+          mountPath: /bitnami/mongodb
+          subPath:
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: px-mongo-mongodb
