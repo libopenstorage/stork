@@ -2922,7 +2922,9 @@ func (p *portworx) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*stork
 					log.ApplicationBackupLog(backup).Warnf("Unsupported porx version to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
 				} else {
 					log.ApplicationBackupLog(backup).Errorf("Failed to fetch backup size for backup ID %v: %v", csStatus.cloudSnapID, err)
-					return nil, err
+					// TODO: Temporarily not returning error due to porx timing out to fetch size having more backups
+					// Will be fixed once porx fixes the same
+					// return nil, err
 				}
 			} else {
 				vInfo.TotalSize = resp.GetSize()
