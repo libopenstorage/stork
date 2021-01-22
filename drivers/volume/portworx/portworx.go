@@ -2847,15 +2847,19 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		err = wait.ExponentialBackoff(cloudBackupCreateBackoff, func() (bool, error) {
 			_, cloudBackupCreateErr = volDriver.CloudBackupCreate(request)
 			if cloudBackupCreateErr != nil {
-				if _, ok := err.(*ost_errors.ErrExists); !ok {
+				if _, ok := cloudBackupCreateErr.(*ost_errors.ErrExists); !ok {
+					logrus.Warnf("failed to start backup for %v (%v/%v): %v, retrying again",
+						volume, pvc.Namespace, pvc.Name, cloudBackupCreateErr)
 					return false, nil
 				}
 			}
 			return true, nil
 		})
 		if err != nil || cloudBackupCreateErr != nil {
-			return nil, fmt.Errorf("failed to start backup for %v (%v/%v): %v",
-				volume, pvc.Namespace, pvc.Name, cloudBackupCreateErr)
+			if _, ok := cloudBackupCreateErr.(*ost_errors.ErrExists); !ok {
+				return nil, fmt.Errorf("failed to start backup for %v (%v/%v): %v",
+					volume, pvc.Namespace, pvc.Name, cloudBackupCreateErr)
+			}
 		}
 
 	}
