@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: es-rally
+  namespace: default
+  labels:
+    app: es-rally
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: es-rally
+  template:
+    metadata:
+      labels:
+        app: es-rally
+    spec:
+      containers:
+      - name: es-rally
+        image: disrani/es-rally:latest
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        command: [ "esrally" ]
+        args: [ "--target-hosts",
+                "elasticsearch-api",
+                "--track",
+                "eventdata",
+                "--track-repository",
+                "eventdata",
+                "--challenge",
+                "elasticlogs-continuous-index-and-query",
+                "--pipeline",
+                "benchmark-only",
+                "--track-params",
+                "index_name:'index2',index_alias:'index2'"
+        ]
+      restartPolicy: Always

@@ -28,7 +28,7 @@ spec:
               "-P",
               "ycsb-0.12.0/workloads/workloada",
               "-p", 
-              "recordcount=100000000",
+              "recordcount=100000",
               "-p", 
               "mongodb.url=mongodb://px-mongo-mongodb.$(POD_NAMESPACE).svc.cluster.local:27017/ycsb?w=0",
         ]
@@ -46,7 +46,7 @@ spec:
               "-P",
               "ycsb-0.12.0/workloads/workloada",
               "-p", 
-              "recordcount=100000000",
+              "recordcount=100000",
               "-p", 
               "mongodb.url=mongodb://px-mongo-mongodb.$(POD_NAMESPACE).svc.cluster.local:27017/ycsb?w=0",
         ]
