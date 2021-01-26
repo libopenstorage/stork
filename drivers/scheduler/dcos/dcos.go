@@ -88,6 +88,13 @@ func (d *dcos) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 	}
 }
 
+// ValidateAutopilotRuleObjects validates autopilot rule objects
+func (d *dcos) ValidateAutopilotRuleObjects() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateAutopilotRuleObjects()",
+	}
+}
 func (d *dcos) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, error) {
 	fileList := []string{}
 	if err := filepath.Walk(specDir, func(path string, f os.FileInfo, err error) error {
@@ -600,6 +607,14 @@ func (d *dcos) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
 	}
 }
 
+func (d *dcos) RemoveLabelOnNode(n node.Node, lKey string) error {
+	// TODO implement this method
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RemoveLabelOnNode()",
+	}
+}
+
 func (d *dcos) IsAutopilotEnabledForVolume(*volume.Volume) bool {
 	// TODO implement this method
 	return false
@@ -622,6 +637,14 @@ func (d *dcos) SaveSchedulerLogsToFile(n node.Node, location string) error {
 func (d *dcos) GetWorkloadSizeFromAppSpec(ctx *scheduler.Context) (uint64, error) {
 	// TODO: not implemented
 	return 0, nil
+}
+
+func (d *dcos) GetAutopilotNamespace() (string, error) {
+	// TODO implement this method
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutopilotNamespace()",
+	}
 }
 
 func (d *dcos) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error) {

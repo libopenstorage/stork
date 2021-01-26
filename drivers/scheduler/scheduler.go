@@ -104,8 +104,8 @@ type ScheduleOptions struct {
 	Scheduler string
 	// Labels is a map of {key,value} pairs for labeling spec objects
 	Labels map[string]string
-	// PvcNodesAnnotation is a map of {key,value} pairs for pvc annotations
-	PvcNodesAnnotation string
+	// PvcNodesAnnotation is a comma separated Node ID's  to use for replication sets of the volume
+	PvcNodesAnnotation []string
 	// PvcSize is the size of PVC
 	PvcSize int64
 }
@@ -208,14 +208,20 @@ type Driver interface {
 	// GetTokenFromConfigMap gets token for a volume
 	GetTokenFromConfigMap(string) (string, error)
 
-	// AddLabelOnNode adds key value labels on the node
+	// AddLabelOnNode adds key value label on the node
 	AddLabelOnNode(node.Node, string, string) error
+
+	// RemoveLabelOnNode removes label on the node
+	RemoveLabelOnNode(node.Node, string) error
 
 	// IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
 	IsAutopilotEnabledForVolume(*volume.Volume) bool
 
 	// SaveSchedulerLogsToFile gathers all scheduler logs into a file
 	SaveSchedulerLogsToFile(node.Node, string) error
+
+	// GetAutopilotNamespace gets the Autopilot namespace
+	GetAutopilotNamespace() (string, error)
 
 	// CreateAutopilotRule creates the AutopilotRule object
 	CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotRule, error)
@@ -249,6 +255,9 @@ type Driver interface {
 
 	// ValidateAutopilotEvents validates events for PVCs injected by autopilot
 	ValidateAutopilotEvents(ctx *Context) error
+
+	// ValidateAutopilotRuleObject validates Autopilot rule object
+	ValidateAutopilotRuleObjects() error
 
 	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
 	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)

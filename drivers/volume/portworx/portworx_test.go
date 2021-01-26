@@ -62,6 +62,18 @@ func TestCalculateAutopilotObjectSize(t *testing.T) {
 			expectedSize: 50 * units.GiB,
 		},
 		{
+			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(31, "1Gi", aututils.RuleScaleTypeResizeDisk, nil),
+			pool:         getTestPool(30, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(30, 3, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 33 * units.GiB,
+		},
+		{
+			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(650, "23Gi", aututils.RuleScaleTypeResizeDisk, nil),
+			pool:         getTestPool(640, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			node:         getTestNode(640, 5, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
+			expectedSize: 755 * units.GiB,
+		},
+		{
 			rule:         aututils.PoolRuleFixedScaleSizeByTotalSize(11, "5Gi", aututils.RuleScaleTypeAddDisk, nil),
 			pool:         getTestPool(10, 2, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),
 			node:         getTestNode(10, 1, api.StorageMedium_STORAGE_MEDIUM_MAGNETIC),

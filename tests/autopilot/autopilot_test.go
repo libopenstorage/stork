@@ -210,10 +210,13 @@ var _ = Describe(fmt.Sprintf("{%sVolumeDriverDown}", testSuiteName), func() {
 
 var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 	It("has to start IO workloads, create rules that resize pools based on capacity, restart autopilot and validate pools have been resized once", func() {
-		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilot", testSuiteName))
+		var contexts []*scheduler.Context
 
+		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilot", testSuiteName))
+		poolLabel := map[string]string{"autopilot": "adddisk"}
+		storageNodes := node.GetStorageDriverNodes()
 		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByTotalSize((getTheSmallestPoolSize()/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, nil),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
 
 		// setup task to delete autopilot pods as soon as it starts doing expansions
@@ -225,7 +228,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				for _, ruleEvent := range ruleEvents.Items {
-					if strings.Contains(ruleEvent.Message, string(apapi.RuleStateActiveActionsInProgress)) {
+					if strings.Contains(ruleEvent.Message, aututils.ActiveActionsPendingToActiveActionsInProgress) {
 						return true, nil
 					}
 				}
@@ -263,7 +266,11 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 
 		defer sched.Instance().Cancel(id)
 
-		contexts := scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
+		Step("schedule apps with autopilot rules", func() {
+			err := AddLabelsOnNode(storageNodes[0], poolLabel)
+			Expect(err).NotTo(HaveOccurred())
+			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
+		})
 
 		// schedule deletion of autopilot once the pool expansion starts
 		Step("wait until workload completes on volume", func() {
@@ -283,6 +290,14 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, opts)
 			}
+			for _, apRule := range apRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			for _, storageNode := range storageNodes {
+				for k := range poolLabel {
+					Inst().S.RemoveLabelOnNode(storageNode, k)
+				}
+			}
 		})
 	})
 })
@@ -291,15 +306,18 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilot}", testSuiteName), func() {
 var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 	It("has to start IO workloads, create rules that resize pools based on capacity, upgrade autopilot and validate pools have been resized once", func() {
 		var err error
+		var contexts []*scheduler.Context
+
 		if Inst().AutopilotUpgradeImage == "" {
 			err = fmt.Errorf("no image supplied for upgrading autopilot")
 		}
 		Expect(err).NotTo(HaveOccurred())
 
 		testName := strings.ToLower(fmt.Sprintf("%sUpgradeAutopilot", testSuiteName))
-
+		poolLabel := map[string]string{"autopilot": "adddisk"}
+		storageNodes := node.GetStorageDriverNodes()
 		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByTotalSize((getTheSmallestPoolSize()/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, nil),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
 
 		// setup task to upgrade autopilot pod as soon as it starts doing expansions
@@ -311,10 +329,7 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				for _, ruleEvent := range ruleEvents.Items {
-					if strings.Contains(ruleEvent.Message,
-						fmt.Sprintf("transition from %s => %s",
-							string(apapi.RuleStateActiveActionsPending),
-							string(apapi.RuleStateActiveActionsInProgress))) {
+					if strings.Contains(ruleEvent.Message, aututils.ActiveActionsPendingToActiveActionsInProgress) {
 						return true, nil
 					}
 				}
@@ -341,7 +356,11 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 
 		defer sched.Instance().Cancel(id)
 
-		contexts := scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
+		Step("schedule apps with autopilot rules", func() {
+			err := AddLabelsOnNode(storageNodes[0], poolLabel)
+			Expect(err).NotTo(HaveOccurred())
+			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
+		})
 
 		// schedule deletion of autopilot once the pool expansion starts
 		Step("wait until workload completes on volume", func() {
@@ -361,6 +380,14 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 			for _, ctx := range contexts {
 				TearDownContext(ctx, opts)
 			}
+			for _, apRule := range apRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			for _, storageNode := range storageNodes {
+				for k := range poolLabel {
+					Inst().S.RemoveLabelOnNode(storageNode, k)
+				}
+			}
 		})
 	})
 })
@@ -368,98 +395,70 @@ var _ = Describe(fmt.Sprintf("{%sUpgradeAutopilot}", testSuiteName), func() {
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // sizes of storage pools by adding new disks to the nodes where volumes reside
-var _ = Describe(fmt.Sprintf("{%sPoolExpandAddDisk}", testSuiteName), func() {
+var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
-		var err error
+		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandAddDisk", testSuiteName))
-		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByAvailableCapacity(70, 50, aututils.RuleScaleTypeAddDisk),
-		}
-		contexts := scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
 
-		Step("wait until workload completes on volume", func() {
-			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+		type testCase struct {
+			workerNode    node.Node
+			labelSelector map[string]string
+			apRule        apapi.AutopilotRule
+		}
+
+		poolExpandLabels := map[string]map[string]string{
+			"addDiskLabel":          map[string]string{"autopilot": "adddisk"},
+			"addDiskFixedSizeLabel": map[string]string{"autopilot": "adddiskfixedsize"},
+			"resizeDiskLabel":       map[string]string{"autopilot": "resizedisk"},
+			"resizeFixedSizeLabel":  map[string]string{"autopilot": "resizefixedsize"},
+		}
+
+		storageNodes := node.GetStorageDriverNodes()
+
+		testCases := []testCase{
+			{
+				workerNode:    storageNodes[0],
+				labelSelector: poolExpandLabels["addDiskLabel"],
+				apRule: aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50,
+					aututils.RuleScaleTypeAddDisk, poolExpandLabels["addDiskLabel"]),
+			},
+			{
+				workerNode:    storageNodes[1],
+				labelSelector: poolExpandLabels["addDiskFixedSizeLabel"],
+				apRule: aututils.PoolRuleFixedScaleSizeByTotalSize((getTotalPoolSize(storageNodes[1])*120/100)/units.GiB, "16Gi",
+					aututils.RuleScaleTypeAddDisk, poolExpandLabels["addDiskFixedSizeLabel"]),
+			},
+			{
+				workerNode:    storageNodes[2],
+				labelSelector: poolExpandLabels["resizeDiskLabel"],
+				apRule: aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[2])*120/100)/units.GiB, 50,
+					aututils.RuleScaleTypeResizeDisk, poolExpandLabels["resizeDiskLabel"]),
+			},
+			{
+				workerNode:    storageNodes[3],
+				labelSelector: poolExpandLabels["resizeFixedSizeLabel"],
+				apRule: aututils.PoolRuleFixedScaleSizeByTotalSize((getTotalPoolSize(storageNodes[3])*120/100)/units.GiB, "32Gi",
+					aututils.RuleScaleTypeResizeDisk, poolExpandLabels["resizeFixedSizeLabel"]),
+			},
+		}
+
+		// check if we have enough storage drive nodes to be able to run all test cases
+		Expect(len(testCases)).Should(BeNumerically("<=", len(storageNodes)))
+
+		var apRules []apapi.AutopilotRule
+		Step("schedule apps with autopilot rules", func() {
+			// adding labels to worker nodes
+			for _, tc := range testCases {
+				err := AddLabelsOnNode(tc.workerNode, tc.labelSelector)
 				Expect(err).NotTo(HaveOccurred())
+				apRules = append(apRules, tc.apRule)
 			}
 		})
 
-		Step("validating and verifying size of storage pools", func() {
-			ValidateStoragePools(contexts)
+		Step("schedule apps with autopilot rules", func() {
+			contexts = scheduleAppsWithAutopilot(testName, 2, apRules, scheduler.ScheduleOptions{})
 		})
 
-		Step(fmt.Sprintf("wait for unscheduled resize of storage pool (%s)", unscheduledResizeTimeout), func() {
-			time.Sleep(unscheduledResizeTimeout)
-		})
-
-		Step("validating and verifying size of storage pools", func() {
-			ValidateStoragePools(contexts)
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
-
-	})
-})
-
-// This testsuite is used for performing basic scenarios with Autopilot rules where it
-// schedules apps and wait until workload is completed on the volumes and then validates
-// sizes of storage pools by adding new disks with fixed size to the nodes where volumes reside
-var _ = Describe(fmt.Sprintf("{%sPoolExpandFixedSizeAddDisk}", testSuiteName), func() {
-	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
-		var err error
-		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandFixedSizeAddDisk", testSuiteName))
-		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleFixedScaleSizeByAvailableCapacity(70, "32Gi", aututils.RuleScaleTypeAddDisk),
-		}
-		contexts := scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
-
-		Step("wait until workload completes on volume", func() {
-			for _, ctx := range contexts {
-				err = Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
-				Expect(err).NotTo(HaveOccurred())
-			}
-		})
-
-		Step("validating and verifying size of storage pools", func() {
-			ValidateStoragePools(contexts)
-		})
-
-		Step(fmt.Sprintf("wait for unscheduled resize of storage pool (%s)", unscheduledResizeTimeout), func() {
-			time.Sleep(unscheduledResizeTimeout)
-		})
-
-		Step("validating and verifying size of storage pools", func() {
-			ValidateStoragePools(contexts)
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
-
-	})
-})
-
-// This testsuite is used for performing basic scenarios with Autopilot rules where it
-// schedules apps and wait until workload is completed on the volumes and then validates
-// sizes of storage pools by resizing existing disks on the nodes where volumes reside
-var _ = Describe(fmt.Sprintf("{%sPoolExpandResizeDisk}", testSuiteName), func() {
-	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
-		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandResizeDisk", testSuiteName))
-		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByAvailableCapacity(70, 50, aututils.RuleScaleTypeResizeDisk),
-		}
-
-		contexts := scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
 		Step("wait until workload completes on volume", func() {
 			for _, ctx := range contexts {
 				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
@@ -485,46 +484,15 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpandResizeDisk}", testSuiteName), func() 
 			for _, ctx := range contexts {
 				TearDownContext(ctx, opts)
 			}
-		})
-
-	})
-})
-
-// This testsuite is used for performing basic scenarios with Autopilot rules where it
-// schedules apps and wait until workload is completed on the volumes and then validates
-// sizes of storage pools by resizing existing disks with fixed size on the nodes where volumes reside
-var _ = Describe(fmt.Sprintf("{%sPoolExpandFixedSizeResizeDisk}", testSuiteName), func() {
-	It("has to fill up the volume completely, resize the storage pool(s), validate and teardown apps", func() {
-		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandFixedSizeResizeDisk", testSuiteName))
-		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleFixedScaleSizeByAvailableCapacity(70, "16Gi", aututils.RuleScaleTypeResizeDisk),
-		}
-
-		contexts := scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
-		Step("wait until workload completes on volume", func() {
-			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
-				Expect(err).NotTo(HaveOccurred())
+			for _, apRule := range apRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
 			}
-		})
-
-		Step("validating and verifying size of storage pools", func() {
-			ValidateStoragePools(contexts)
-		})
-
-		Step(fmt.Sprintf("wait for unscheduled resize of storage pool (%s)", unscheduledResizeTimeout), func() {
-			time.Sleep(unscheduledResizeTimeout)
-		})
-
-		Step("validating and verifying size of storage pools", func() {
-			ValidateStoragePools(contexts)
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
+			for _, storageNode := range storageNodes {
+				for key := range poolExpandLabels {
+					for k := range poolExpandLabels[key] {
+						Inst().S.RemoveLabelOnNode(storageNode, k)
+					}
+				}
 			}
 		})
 
@@ -539,52 +507,40 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 		var contexts []*scheduler.Context
 
 		testName := strings.ToLower(fmt.Sprintf("%sPvcAndPoolExpand", testSuiteName))
+		poolLabel := map[string]string{"autopilot": "adddisk"}
+		pvcLabel := map[string]string{"autopilot": "pvc-expand"}
+		storageNodes := node.GetStorageDriverNodes()
 		pvcApRules := []apapi.AutopilotRule{
-			aututils.PVCRuleByUsageCapacity(50, 50, ""),
+			//aututils.PVCRuleByUsageCapacity(50, 50, ""),
+			aututils.PVCRuleByTotalSize(10, 100, ""),
 		}
 		poolApRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByAvailableCapacity(70, 50, aututils.RuleScaleTypeResizeDisk),
-		}
-		storagePoolsLabels := map[string]string{
-			"autopilot": testName,
-		}
-		// adding labels to autopilot rule objects
-		for idx := range poolApRules {
-			poolApRules[idx].Spec.Selector.MatchLabels = storagePoolsLabels
-		}
-		// adding labels to worker nodes
-		for _, workerNode := range node.GetWorkerNodes() {
-			err := AddLabelsOnNode(workerNode, storagePoolsLabels)
-			Expect(err).NotTo(HaveOccurred())
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
 
-		Step("schedule applications", func() {
+		Step("schedule apps with autopilot rules for pool expand", func() {
+			err := AddLabelsOnNode(storageNodes[0], poolLabel)
+			Expect(err).NotTo(HaveOccurred())
+			contexts = scheduleAppsWithAutopilot(testName, 1, poolApRules, scheduler.ScheduleOptions{PvcSize: 20 * units.GiB})
+		})
+
+		Step("schedule applications for PVC expand", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				for id, apRule := range pvcApRules {
 					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
 					apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
-					labels := map[string]string{
-						"autopilot": apRule.Name,
-					}
 					apRule.Spec.ActionsCoolDownPeriod = int64(60)
 					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
 						StorageProvisioner: Inst().Provisioner,
 						AutopilotRule:      apRule,
-						Labels:             labels,
+						Labels:             pvcLabel,
 					})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(context).NotTo(BeEmpty())
 					contexts = append(contexts, context...)
 				}
 			}
-		})
-		Step("apply autopilot rules for storage pools", func() {
-			for _, apRule := range poolApRules {
-				_, err := Inst().S.CreateAutopilotRule(apRule)
-				Expect(err).NotTo(HaveOccurred())
-			}
-
 		})
 
 		Step("wait until workload completes on volume", func() {
@@ -623,6 +579,15 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 			for _, ctx := range contexts {
 				TearDownContext(ctx, opts)
+			}
+			for _, apRule := range poolApRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			for _, apRule := range pvcApRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			for k := range poolLabel {
+				Inst().S.RemoveLabelOnNode(storageNodes[0], k)
 			}
 		})
 	})
@@ -678,31 +643,49 @@ var _ = Describe(fmt.Sprintf("{%sPvcExpand}", testSuiteName), func() {
 
 var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 	It("create rules with incorrect scale percentage value, wait for failed event, update incorrect value and validate pools", func() {
-		testName := strings.ToLower(fmt.Sprintf("%sPoolResizeFailure", testSuiteName))
+		var contexts []*scheduler.Context
 
+		testName := strings.ToLower(fmt.Sprintf("%sPoolResizeFailure", testSuiteName))
+		poolLabel := map[string]string{"autopilot": "adddisk"}
+		storageNodes := node.GetStorageDriverNodes()
 		// below rule will lead to the failure of resizing the pool due to large scale
 		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByTotalSize((getTheSmallestPoolSize()/units.GiB)+1, 100*16, aututils.RuleScaleTypeAddDisk, nil),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 100*16, aututils.RuleScaleTypeAddDisk, poolLabel),
 		}
 
-		contexts := scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{})
-
-		for _, apRule := range apRules {
-			err := aututils.WaitForAutopilotEvent(apRule, "FailedAction",
-				[]string{"failed to execute Action for rule"})
+		Step("schedule apps with autopilot rules for pool expand", func() {
+			err := AddLabelsOnNode(storageNodes[0], poolLabel)
 			Expect(err).NotTo(HaveOccurred())
-		}
+			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{PvcSize: 20 * units.GiB})
+		})
+
+		Step("wait for failed autopilot event", func() {
+			err := aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = aututils.WaitForAutopilotEvent(apRules[0], "FailedAction", []string{aututils.FailedToExecuteActionEvent})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
 		Step("updating autopilot rules with correct values", func() {
-			for _, apRule := range apRules {
-				aRule, err := Inst().S.GetAutopilotRule(apRule.Name)
+			aRule, err := Inst().S.GetAutopilotRule(apRules[0].Name)
+			Expect(err).NotTo(HaveOccurred())
+			for i := range aRule.Spec.Actions {
+				aRule.Spec.Actions[i].Params[aututils.RuleActionsScalePercentage] = "50"
+				_, err := Inst().S.UpdateAutopilotRule(aRule)
 				Expect(err).NotTo(HaveOccurred())
-				for i := range aRule.Spec.Actions {
-					aRule.Spec.Actions[i].Params[aututils.RuleActionsScalePercentage] = "50"
-					_, err := Inst().S.UpdateAutopilotRule(aRule)
-					Expect(err).NotTo(HaveOccurred())
-				}
 			}
+		})
+
+		Step("wait for autopilot to trigger an action after update an autopilot rule", func() {
+			err := aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsInProgressToActiveActionsPending})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsInProgressToActiveActionsTaken})
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Step("validating and verifying size of storage pools", func() {
@@ -718,14 +701,17 @@ var _ = Describe(fmt.Sprintf("{%sPoolResizeFailure}", testSuiteName), func() {
 			for _, apRule := range apRules {
 				Inst().S.DeleteAutopilotRule(apRule.Name)
 			}
+			for k := range poolLabel {
+				Inst().S.RemoveLabelOnNode(storageNodes[0], k)
+			}
 		})
 	})
 })
 
 var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 	It("has to create couple volumes on the same pool, run rebalance, validate rebalance and teardown apps", func() {
+		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sRebalanceProvMean", testSuiteName))
-
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-20", "20"}, false),
 		}
@@ -733,31 +719,40 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
 		}
 
-		workerNode := node.GetWorkerNodes()[0]
+		// pick up the first storage node and schedule all volumes to the node's pool
+		storageNode := node.GetStorageDriverNodes()[0]
 		numberOfVolumes := 3
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
-		volumeSize := getVolumeSizeByProvisionedPercentage(workerNode, numberOfVolumes, 0.35)
+		volumeSize := getVolumeSizeByProvisionedPercentage(storageNode, numberOfVolumes, 0.35)
 
-		contexts := scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
-			scheduler.ScheduleOptions{
-				PvcNodesAnnotation: workerNode.Id,
-				PvcSize:            volumeSize,
-			},
-		)
+		Step("schedule apps with autopilot rules", func() {
+			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
+				scheduler.ScheduleOptions{
+					PvcNodesAnnotation: []string{storageNode.Id},
+					PvcSize:            volumeSize,
+				},
+			)
+		})
 
-		for _, apRule := range apRules {
-			err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.NormalToTriggeredEvent})
-			Expect(err).NotTo(HaveOccurred())
+		Step("validating rebalance jobs", func() {
+			for _, apRule := range apRules {
+				err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.AnyToTriggeredEvent})
+				Expect(err).NotTo(HaveOccurred())
 
-			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.PendingToInProgressEvent})
-			Expect(err).NotTo(HaveOccurred())
+				err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+				Expect(err).NotTo(HaveOccurred())
 
-			err = Inst().V.ValidateRebalanceJobs()
-			Expect(err).NotTo(HaveOccurred())
+				err = Inst().V.ValidateRebalanceJobs()
+				Expect(err).NotTo(HaveOccurred())
 
-			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
-			Expect(err).NotTo(HaveOccurred())
-		}
+				err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
+				Expect(err).NotTo(HaveOccurred())
+
+				err = Inst().S.ValidateAutopilotRuleObjects()
+				Expect(err).NotTo(HaveOccurred())
+
+			}
+		})
 
 		Step("validating volumes and verifying size of volumes", func() {
 			for _, ctx := range contexts {
@@ -780,8 +775,8 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMean}", testSuiteName), func() {
 
 var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
 	It("has to create couple volumes on the same pool, run rebalance, validate rebalance and teardown apps", func() {
+		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sRebalanceUsageMean", testSuiteName))
-
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleRebalanceByUsageMean([]string{"-25", "25"}, false),
 		}
@@ -789,25 +784,33 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
 			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
 		}
 
-		workerNode := node.GetWorkerNodes()[0]
+		storageNode := node.GetStorageDriverNodes()[0]
 		numberOfVolumes := 3
 
-		contexts := scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
-			scheduler.ScheduleOptions{PvcNodesAnnotation: workerNode.Id})
+		Step("schedule apps with autopilot rules", func() {
+			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
+				scheduler.ScheduleOptions{PvcNodesAnnotation: []string{storageNode.Id}, PvcSize: 10737418240})
+		})
 
-		for _, apRule := range apRules {
-			err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.NormalToTriggeredEvent})
-			Expect(err).NotTo(HaveOccurred())
+		Step("validating rebalance jobs", func() {
+			for _, apRule := range apRules {
+				err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.NormalToTriggeredEvent})
+				Expect(err).NotTo(HaveOccurred())
 
-			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.PendingToInProgressEvent})
-			Expect(err).NotTo(HaveOccurred())
+				err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+				Expect(err).NotTo(HaveOccurred())
 
-			err = Inst().V.ValidateRebalanceJobs()
-			Expect(err).NotTo(HaveOccurred())
+				err = Inst().V.ValidateRebalanceJobs()
+				Expect(err).NotTo(HaveOccurred())
 
-			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
-			Expect(err).NotTo(HaveOccurred())
-		}
+				err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
+				Expect(err).NotTo(HaveOccurred())
+
+				err = Inst().S.ValidateAutopilotRuleObjects()
+				Expect(err).NotTo(HaveOccurred())
+
+			}
+		})
 
 		Step("validating volumes and verifying size of volumes", func() {
 			for _, ctx := range contexts {
@@ -830,8 +833,8 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUsageMean}", testSuiteName), func() {
 
 var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), func() {
 	It("has to start IO workloads, create rules that rebalance pools, restart autopilot and validate pools have been rebalanced", func() {
+		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sRestartAutopilotRebalance", testSuiteName))
-
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-20", "20"}, false),
 		}
@@ -886,26 +889,31 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), fu
 
 		defer sched.Instance().Cancel(id)
 
-		workerNode := node.GetWorkerNodes()[0]
+		storageNode := node.GetStorageDriverNodes()[0]
 		numberOfVolumes := 3
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
-		volumeSize := getVolumeSizeByProvisionedPercentage(workerNode, numberOfVolumes, 0.35)
+		volumeSize := getVolumeSizeByProvisionedPercentage(storageNode, numberOfVolumes, 0.35)
 
-		contexts := scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
-			scheduler.ScheduleOptions{
-				PvcNodesAnnotation: workerNode.Id,
-				PvcSize:            volumeSize,
-			},
-		)
+		Step("schedule apps with autopilot rules", func() {
+			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
+				scheduler.ScheduleOptions{
+					PvcNodesAnnotation: []string{storageNode.Id},
+					PvcSize:            volumeSize,
+				},
+			)
+		})
 
-		for _, apRule := range apRules {
-
-			err := Inst().V.ValidateRebalanceJobs()
+		Step("validating rebalance jobs", func() {
+			err = Inst().V.ValidateRebalanceJobs()
 			Expect(err).NotTo(HaveOccurred())
 
-			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionTakenToNormalEvent})
 			Expect(err).NotTo(HaveOccurred())
-		}
+
+			err = Inst().S.ValidateAutopilotRuleObjects()
+			Expect(err).NotTo(HaveOccurred())
+
+		})
 
 		Step("validating volumes and verifying size of volumes", func() {
 			for _, ctx := range contexts {
@@ -928,6 +936,7 @@ var _ = Describe(fmt.Sprintf("{%sRestartAutopilotRebalance}", testSuiteName), fu
 
 var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func() {
 	It("has to run rebalance and resize PVC at the same time, validate rebalance, PVC sizes and teardown apps", func() {
+		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sRebalanceProvsMeanAndPvc", testSuiteName))
 
 		rebalanceApRules := []apapi.AutopilotRule{
@@ -947,14 +956,16 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
 		volumeSize := getVolumeSizeByProvisionedPercentage(workerNode, numberOfVolumes, 0.35)
 
-		contexts := scheduleAppsWithAutopilot(testName, numberOfVolumes, rebalanceApRules,
-			scheduler.ScheduleOptions{
-				PvcNodesAnnotation: workerNode.Id,
-				PvcSize:            volumeSize,
-			},
-		)
+		Step("schedule apps with autopilot rules for ppol expand", func() {
+			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, rebalanceApRules,
+				scheduler.ScheduleOptions{
+					PvcNodesAnnotation: []string{workerNode.Id},
+					PvcSize:            volumeSize,
+				},
+			)
+		})
 
-		Step("schedule applications for PVC resize", func() {
+		Step("schedule applications for PVC expand", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				for id, apRule := range pvcApRules {
 					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
@@ -968,7 +979,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 						StorageProvisioner: Inst().Provisioner,
 						AutopilotRule:      apRule,
 						Labels:             labels,
-						PvcNodesAnnotation: workerNode.Id,
+						PvcNodesAnnotation: []string{workerNode.Id},
 						PvcSize:            7516192768, // 7Gb
 					})
 					Expect(err).NotTo(HaveOccurred())
@@ -984,13 +995,16 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 				err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.NormalToTriggeredEvent})
 				Expect(err).NotTo(HaveOccurred())
 
-				err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.PendingToInProgressEvent})
+				err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
 				Expect(err).NotTo(HaveOccurred())
 
 				err = Inst().V.ValidateRebalanceJobs()
 				Expect(err).NotTo(HaveOccurred())
 
 				err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
+				Expect(err).NotTo(HaveOccurred())
+
+				err = Inst().S.ValidateAutopilotRuleObjects()
 				Expect(err).NotTo(HaveOccurred())
 
 			}
@@ -1017,6 +1031,90 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPvc}", testSuiteName), func
 	})
 })
 
+// This testsuite is used for performing rebalance scenarios and pool resize with Autopilot rules where it
+// schedules apps on one of the node, waits until workload is completed on the volumes and then validates
+// rebalalnce and sizes of storage pools
+// NOTE: this test is using volumes with replicaset is 3 and make sure that you have at least 4 nodes to do rebalance
+var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName), func() {
+	It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
+		var contexts []*scheduler.Context
+		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
+		poolLabel := map[string]string{"autopilot": "adddisk"}
+		storageNodes := node.GetStorageDriverNodes()
+		// check if we have enough storage nodes to run the test
+		Expect(len(storageNodes)).Should(BeNumerically(">=", 4))
+
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-50", "20"}, false),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50, aututils.RuleScaleTypeAddDisk, poolLabel),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[1])*120/100)/units.GiB, 50, aututils.RuleScaleTypeAddDisk, poolLabel),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[2])*120/100)/units.GiB, 50, aututils.RuleScaleTypeAddDisk, poolLabel),
+		}
+
+		for i := range apRules {
+			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
+		}
+
+		storageNodeIds := []string{}
+		// take first 3 (default replicaset for volumes is 3) storage node IDs, label and schedule volumes onto them
+		for _, n := range storageNodes[0:3] {
+			for k, v := range poolLabel {
+				Inst().S.AddLabelOnNode(n, k, v)
+			}
+			storageNodeIds = append(storageNodeIds, n.Id)
+		}
+
+		numberOfVolumes := 3
+		// 0.35 value is the 35% of total provisioned size which will trigger rebalance for above autopilot rule
+		volumeSize := getVolumeSizeByProvisionedPercentage(storageNodes[0], numberOfVolumes, 0.35)
+
+		Step("schedule apps with autopilot rules", func() {
+			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
+				scheduler.ScheduleOptions{PvcNodesAnnotation: storageNodeIds, PvcSize: volumeSize})
+		})
+
+		Step("validate rebalance jobs", func() {
+			apRule := apRules[0]
+
+			err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.NormalToTriggeredEvent})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = Inst().V.ValidateRebalanceJobs()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = Inst().S.ValidateAutopilotRuleObjects()
+			Expect(err).NotTo(HaveOccurred())
+
+		})
+
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+			for _, apRule := range apRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			for _, storageNode := range storageNodes {
+				for key := range poolLabel {
+					Inst().S.RemoveLabelOnNode(storageNode, key)
+				}
+			}
+		})
+	})
+})
+
 var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), func() {
 	It("has to create couple volumes on the same pool, update and delete autopilot rule, run rebalance, validate rebalance and teardown apps", func() {
 		testName := strings.ToLower(fmt.Sprintf("%sRebalanceUpdateDelete", testSuiteName))
@@ -1036,7 +1134,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceUpdateDelete}", testSuiteName), func()
 
 			contexts = scheduleAppsWithAutopilot(testName, numberOfVolumes, apRules,
 				scheduler.ScheduleOptions{
-					PvcNodesAnnotation: workerNode.Id,
+					PvcNodesAnnotation: []string{workerNode.Id},
 					PvcSize:            volumeSize,
 				},
 			)
@@ -1100,7 +1198,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), func()
 
 		contexts := scheduleAppsWithAutopilot(testName, numberOfVolumes, []apapi.AutopilotRule{apRule},
 			scheduler.ScheduleOptions{
-				PvcNodesAnnotation: workerNode.Id,
+				PvcNodesAnnotation: []string{workerNode.Id},
 				PvcSize:            volumeSize,
 			},
 		)
@@ -1184,6 +1282,9 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), func()
 			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
 			Expect(err).NotTo(HaveOccurred())
 
+			err = Inst().S.ValidateAutopilotRuleObjects()
+			Expect(err).NotTo(HaveOccurred())
+
 		})
 
 		Step("destroy apps", func() {
@@ -1200,20 +1301,6 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceWithApproval}", testSuiteName), func()
 
 func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []apapi.AutopilotRule, options scheduler.ScheduleOptions) []*scheduler.Context {
 	var contexts []*scheduler.Context
-	labels := map[string]string{
-		"autopilot": testName,
-	}
-	// adding labels to autopilot rule objects
-	for idx := range apRules {
-		apRules[idx].Spec.Selector.MatchLabels = labels
-	}
-
-	// adding labels to worker nodes
-	workerNodes := node.GetWorkerNodes()
-	for _, workerNode := range workerNodes {
-		err := AddLabelsOnNode(workerNode, labels)
-		Expect(err).NotTo(HaveOccurred())
-	}
 
 	Step("schedule applications", func() {
 		for iGsf := 0; iGsf < Inst().GlobalScaleFactor; iGsf++ {
@@ -1270,7 +1357,7 @@ func getTotalPoolSize(node node.Node) uint64 {
 	// calculate total storage pools size on the given node
 	var totalPoolSize uint64
 	for _, p := range node.StoragePools {
-		totalPoolSize = +p.TotalSize
+		totalPoolSize += p.TotalSize
 	}
 	return totalPoolSize
 }

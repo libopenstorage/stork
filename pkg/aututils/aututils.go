@@ -63,12 +63,14 @@ var (
 	ActionAwaitingApprovalToActiveActionsPending = fmt.Sprintf("%s => %s", apapi.RuleStateActionAwaitingApproval, apapi.RuleStateActiveActionsPending)
 	// ActiveActionsPendingToActiveActionsInProgress is an event which contains "ActiveActionsPending => ActiveActionsInProgress" message
 	ActiveActionsPendingToActiveActionsInProgress = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsPending, apapi.RuleStateActiveActionsInProgress)
+	// ActiveActionsInProgressToActiveActionsPending is an event which contains "ActiveActionsInProgress => ActiveActionsPending" message
+	ActiveActionsInProgressToActiveActionsPending = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsInProgress, apapi.RuleStateActiveActionsPending)
 	// ActiveActionsInProgressToActiveActionsTaken is an event which contains "ActiveActionsInProgress => ActiveActionsTaken" message
 	ActiveActionsInProgressToActiveActionsTaken = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsInProgress, apapi.RuleStateActiveActionsTaken)
-	// PendingToInProgressEvent is an event which contains "Pending => InProgress" message
-	PendingToInProgressEvent = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsPending, apapi.RuleStateActiveActionsInProgress)
 	// ActiveActionTakenToNormalEvent is an event which contains "ActiveActionTaken => Normal" message
 	ActiveActionTakenToNormalEvent = fmt.Sprintf("%s => %s", apapi.RuleStateActiveActionsTaken, apapi.RuleStateNormal)
+	// FailedToExecuteActionEvent is an event for failed action
+	FailedToExecuteActionEvent = "failed to execute Action for rule"
 )
 
 // PoolRuleByTotalSize returns an autopilot pool expand rule that uses total pool size
@@ -107,7 +109,7 @@ func PoolRuleByTotalSize(total, scalePercentage uint64, expandType string, label
 
 // PoolRuleFixedScaleSizeByTotalSize returns an autopilot pool expand rule that
 // uses total pool size and fixed scale size action
-func PoolRuleFixedScaleSizeByTotalSize(total int, scaleSize, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
+func PoolRuleFixedScaleSizeByTotalSize(total uint64, scaleSize, expandType string, labelSelector map[string]string) apapi.AutopilotRule {
 	return apapi.AutopilotRule{
 		ObjectMeta: meta_v1.ObjectMeta{
 			Name: fmt.Sprintf("pool-%s-fixedsize-%s-total-%d", expandType, strings.ToLower(scaleSize), total),
@@ -341,8 +343,8 @@ func WaitForAutopilotEvent(apRule apapi.AutopilotRule, reason string, messages [
 		}
 
 		for _, ruleEvent := range ruleEvents.Items {
-			// skip old events and verify only events which were in last 10 seconds
-			if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-10 {
+			// skip old events and verify only events which were in last 20 seconds
+			if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-20 {
 				continue
 			}
 			ruleReasonFound := false

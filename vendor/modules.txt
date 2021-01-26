@@ -369,7 +369,7 @@ github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
 # github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v0.0.0-20210129165423-2b83087e7388
+# github.com/portworx/sched-ops v0.0.0-20210202202336-6d3053100643
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
 github.com/portworx/sched-ops/k8s/batch

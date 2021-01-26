@@ -342,6 +342,20 @@ func (e *ErrFailedToAddLabelOnNode) Error() string {
 	return fmt.Sprintf("Failed to add label: %s=%s on node %v due to err: %v", e.Key, e.Value, e.Node, e.Cause)
 }
 
+// ErrFailedToRemoveLabelOnNode error type for failing to remove label on node
+type ErrFailedToRemoveLabelOnNode struct {
+	// Key is the label key
+	Key string
+	// Node is the node where label should be added
+	Node node.Node
+	// Cause is the underlying cause of the error
+	Cause string
+}
+
+func (e *ErrFailedToRemoveLabelOnNode) Error() string {
+	return fmt.Sprintf("Failed to remove label: %s on node: %v due to err: %v", e.Key, e.Node, e.Cause)
+}
+
 // ErrFailedToGetCustomSpec error type for failing to get config map
 type ErrFailedToGetCustomSpec struct {
 	// Name of config map

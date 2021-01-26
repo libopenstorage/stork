@@ -95,6 +95,8 @@ const (
 	// DefaultTimeout default timeout
 	DefaultTimeout = 2 * time.Minute
 
+	autopilotServiceName          = "autopilot"
+	autopilotDefaultNamespace     = "kube-system"
 	resizeSupportedAnnotationKey  = "torpedo.io/resize-supported"
 	autopilotEnabledAnnotationKey = "torpedo.io/autopilot-enabled"
 	pvcLabelsAnnotationKey        = "torpedo.io/pvclabels-enabled"
@@ -857,7 +859,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			pvcNodesEnabled, _ := strconv.ParseBool(pvcNodesAnnotationValue)
 			if pvcNodesEnabled {
 				if len(options.PvcNodesAnnotation) > 0 {
-					k.addAnnotationsToPVC(obj, map[string]string{"nodes": options.PvcNodesAnnotation})
+					k.addAnnotationsToPVC(obj, map[string]string{"nodes": strings.Join(options.PvcNodesAnnotation, ",")})
 				}
 			}
 		}
@@ -3489,6 +3491,49 @@ func (k *K8s) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 	return nil
 }
 
+// ValidateAutopilotRuleObjects validates autopilot rule objects
+func (k *K8s) ValidateAutopilotRuleObjects() error {
+
+	// TODO: Implement ARO validation for specific pool if autopilot rule has pool LabelSelector
+	namespace, err := k.GetAutopilotNamespace()
+	if err != nil {
+		return err
+	}
+
+	expectedAroStates := []apapi.RuleState{
+		apapi.RuleStateInit,
+		apapi.RuleStateNormal,
+		apapi.RuleStateTriggered,
+		apapi.RuleStateActiveActionsPending,
+		apapi.RuleStateActiveActionsInProgress,
+		apapi.RuleStateActiveActionsTaken,
+		apapi.RuleStateNormal,
+	}
+
+	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
+	if err != nil {
+		return err
+	}
+	if len(listAutopilotRuleObjects.Items) == 0 {
+		logrus.Warnf("the list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+		return nil
+	}
+	for _, aro := range listAutopilotRuleObjects.Items {
+		var aroStates []apapi.RuleState
+		for _, aroStatusItem := range aro.Status.Items {
+			aroStates = append(aroStates, aroStatusItem.State)
+		}
+		if reflect.DeepEqual(aroStates, expectedAroStates) {
+			logrus.Debugf("autopilot rule object: %s has all expected states", aro.Name)
+			return nil
+		}
+		logrus.Debugf("autopilot rule object: %s doesn't have all expected states", aro.Name)
+	}
+
+	formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
+	return fmt.Errorf("none of the autopilot rule objects have all expected states\n autopilot rule objects items: %s", string(formattedObject))
+}
+
 func validateEvents(objName string, events map[string]int32, count int32) error {
 	logrus.Debugf("expected %d resized in events validation", count)
 	if count == 0 {
@@ -3644,6 +3689,21 @@ func (k *K8s) AddLabelOnNode(n node.Node, lKey string, lValue string) error {
 	return nil
 }
 
+// RemoveLabelOnNode adds label for a given node
+func (k *K8s) RemoveLabelOnNode(n node.Node, lKey string) error {
+	k8sOps := k8sCore
+
+	if err := k8sOps.RemoveLabelOnNode(n.Name, lKey); err != nil {
+		return &scheduler.ErrFailedToRemoveLabelOnNode{
+			Key:   lKey,
+			Node:  n,
+			Cause: fmt.Sprintf("Failed to remove label on node. Err: %v", err),
+		}
+	}
+	logrus.Infof("Removed label: %s on node: %s", lKey, n.Name)
+	return nil
+}
+
 // IsAutopilotEnabledForVolume checks if autopilot enabled for a given volume
 func (k *K8s) IsAutopilotEnabledForVolume(vol *volume.Volume) bool {
 	autopilotEnabled := false
@@ -3681,6 +3741,20 @@ func (k *K8s) addAnnotationsToPVC(pvc *corev1.PersistentVolumeClaim, annotations
 	for k, v := range annotations {
 		pvc.Annotations[k] = v
 	}
+}
+
+// GetAutopilotNamespace returns the autopilot namespace
+func (k *K8s) GetAutopilotNamespace() (string, error) {
+	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return "", err
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == autopilotServiceName {
+			return svc.Namespace, nil
+		}
+	}
+	return autopilotDefaultNamespace, nil
 }
 
 // CreateAutopilotRule creates the AutopilotRule object

@@ -35,7 +35,7 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/portworx/kvdb v0.0.0-20191223203141-f42097b1fcd8 // indirect
 	github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
-	github.com/portworx/sched-ops v0.0.0-20210129165423-2b83087e7388
+	github.com/portworx/sched-ops v0.0.0-20210202202336-6d3053100643
 	github.com/sendgrid/rest v2.6.0+incompatible // indirect
 	github.com/sendgrid/sendgrid-go v3.6.0+incompatible
 	github.com/sirupsen/logrus v1.5.0
