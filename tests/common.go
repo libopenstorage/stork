@@ -34,6 +34,8 @@ import (
 	_ "github.com/portworx/torpedo/drivers/node/aws"
 	// import gke driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/gke"
+	// import vsphere driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/node/vsphere"
 
 	// import ssh driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/ssh"

@@ -274,7 +274,9 @@ fi
 K8S_VENDOR_KEY=""
 K8S_VENDOR_VALUE=""
 K8S_VENDOR_OPERATOR="Exists"
-NODE_DRIVER="ssh"
+if [ -z "${NODE_DRIVER}" ]; then
+    NODE_DRIVER="ssh"
+fi
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
         kubernetes)
@@ -470,6 +472,12 @@ spec:
       value: "$IMAGE_PULL_USERNAME"
     - name: IMAGE_PULL_PASSWORD
       value: "$IMAGE_PULL_PASSWORD"
+    - name: VSPHERE_USER
+      value: "${VSPHERE_USER}"
+    - name: VSPHERE_PWD
+      value: "${VSPHERE_PWD}"
+    - name: VSPHERE_HOST_IP
+      value: "${VSPHERE_HOST_IP}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
