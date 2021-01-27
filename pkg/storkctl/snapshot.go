@@ -224,7 +224,10 @@ func getSnapshotStatusAndTime(snap *snapv1.VolumeSnapshot) (string, string) {
 			if condition.Status == v1.ConditionTrue {
 				return string(snapv1.VolumeSnapshotConditionReady), toTimeString(condition.LastTransitionTime.Time)
 			}
-			return string(snapv1.VolumeSnapshotConditionPending), toTimeString(time.Time{})
+		} else if condition.Type == snapv1.VolumeSnapshotConditionError {
+			if condition.Status == v1.ConditionTrue {
+				return string(snapv1.VolumeSnapshotConditionError), toTimeString(condition.LastTransitionTime.Time)
+			}
 		}
 	}
 	return string(snapv1.VolumeSnapshotConditionPending), toTimeString(time.Time{})
