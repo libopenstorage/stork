@@ -90,7 +90,7 @@ test:
 
 integration-test:
 	@echo "Building stork integration tests"
-	@cd test/integration_test && go test -tags integrationtest -v -c -o stork.test
+	@cd test/integration_test && GOOS=linux go test -tags integrationtest -v -c -o stork.test
 
 integration-test-container:
 	@echo "Building container: docker build --tag $(STORK_TEST_IMG) -f Dockerfile ."
@@ -105,11 +105,11 @@ codegen:
 
 stork:
 	@echo "Building the stork binary"
-	@cd cmd/stork && CGO_ENABLED=0 go build $(BUILD_OPTIONS) -o $(BIN)/stork
+	@cd cmd/stork && CGO_ENABLED=0 GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/stork
 
 cmdexecutor:
 	@echo "Building command executor binary"
-	@cd cmd/cmdexecutor && go build $(BUILD_OPTIONS) -o $(BIN)/cmdexecutor
+	@cd cmd/cmdexecutor && GOOS=linux go build $(BUILD_OPTIONS) -o $(BIN)/cmdexecutor
 
 storkctl:
 	@echo "Building storkctl"
