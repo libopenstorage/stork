@@ -687,7 +687,7 @@
 
 [[projects]]
   branch = "openstorage-5.5"
-  digest = "1:b5b8718d59df0b5b2bd3bd0d539a1cf7c04976c69d2ece64b06a33c9ffd7166b"
+  digest = "1:688acf15c1f1c01f2fa96b245f092358e5da295f66629b36df91f565b1d01c29"
   name = "github.com/kubernetes-incubator/external-storage"
   packages = [
     "snapshot/pkg/apis/crd/v1",
@@ -700,7 +700,7 @@
     "snapshot/pkg/volume",
   ]
   pruneopts = "UT"
-  revision = "d2b33d4448eab9682a0ef41647f2b29d74c6340c"
+  revision = "697cbc8b5661d1d0bc2a39592340c757b2e07e16"
   source = "github.com/libopenstorage/external-storage"
 
 [[projects]]

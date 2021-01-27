@@ -427,9 +427,17 @@ func (vs *volumeSnapshotter) updateSnapshotIfExists(uniqueSnapshotName string, s
 // syncSnapshot is the main controller method to decide what to do to create a snapshot.
 func (vs *volumeSnapshotter) syncSnapshot(uniqueSnapshotName string, snapshot *crdv1.VolumeSnapshot) func() error {
 	return func() error {
-		snapshotObj := snapshot
-		status := vs.getSimplifiedSnapshotStatus(snapshot.Status.Conditions)
-		var err error
+		snapshotObj := snapshot.DeepCopy()
+		err := vs.restClient.Get().
+			Name(snapshot.Metadata.Name).
+			Resource(crdv1.VolumeSnapshotResourcePlural).
+			Namespace(snapshot.Metadata.Namespace).
+			Do().Into(snapshotObj)
+		if err != nil {
+			return fmt.Errorf("Error retrieving VolumeSnapshot %s from API server: %v", snapshot.Metadata.Name, err)
+		}
+		status := vs.getSimplifiedSnapshotStatus(snapshotObj.Status.Conditions)
+
 		// When the condition is new, it is still possible that snapshot is already triggered but has not yet updated the condition.
 		// Check the metadata and available VolumeSnapshotData objects and update the snapshot accordingly
 		if status == statusNew {
