@@ -23,6 +23,7 @@ func newCreateCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams)
 		newCreateApplicationBackupScheduleCommand(cmdFactory, ioStreams),
 		newCreateApplicationRestoreCommand(cmdFactory, ioStreams),
 		newCreateApplicationCloneCommand(cmdFactory, ioStreams),
+		newCreateClusterPairCommand(cmdFactory, ioStreams),
 	)
 
 	return createCommands
