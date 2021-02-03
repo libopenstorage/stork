@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,11 +55,12 @@ const (
 	backupCancelBackoffFactor       = 1
 	backupCancelBackoffSteps        = math.MaxInt32
 
-	allNamespacesSpecifier    = "*"
-	backupVolumeBatchCount    = 10
-	backupResourcesBatchCount = 15
-	maxRetry                  = 10
-	retrySleep                = 10 * time.Second
+	allNamespacesSpecifier        = "*"
+	backupVolumeBatchCountEnvVar  = "BACKUP-VOLUME-BATCH-COUNT"
+	defaultBackupVolumeBatchCount = 3
+	backupResourcesBatchCount     = 15
+	maxRetry                      = 10
+	retrySleep                    = 10 * time.Second
 )
 
 var (
@@ -526,8 +529,15 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			if err != nil {
 				return err
 			}
-			for i := 0; i < len(pvcs); i += backupVolumeBatchCount {
-				batch := pvcs[i:min(i+backupVolumeBatchCount, len(pvcs))]
+			batchCount := defaultBackupVolumeBatchCount
+			if len(os.Getenv(backupVolumeBatchCountEnvVar)) != 0 {
+				batchCount, err = strconv.Atoi(os.Getenv(backupVolumeBatchCountEnvVar))
+				if err != nil {
+					batchCount = defaultBackupVolumeBatchCount
+				}
+			}
+			for i := 0; i < len(pvcs); i += batchCount {
+				batch := pvcs[i:min(i+batchCount, len(pvcs))]
 				volumeInfos, err := driver.StartBackup(backup, batch)
 				if err != nil {
 					// TODO: If starting backup for a drive fails mark the entire backup
