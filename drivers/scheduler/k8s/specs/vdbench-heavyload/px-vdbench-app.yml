@@ -1,0 +1,42 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vdbench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vdbench
+  template:
+    metadata:
+      labels:
+        app: vdbench
+    spec:
+      containers:
+        - name: vdbench
+          image: openebs/tests-vdbench
+          command: ["./bench_runner.sh"]
+          args: ["Writes", "21600"]
+          volumeMounts:
+            - name: vdbench-persistent-storage
+              mountPath: /datadir1
+            - name: vdbench-config-vol
+              mountPath: /templates/Writes
+      volumes:
+        - name: vdbench-config-vol
+          configMap:
+            name: vdbench-config
+        - name: vdbench-persistent-storage
+          persistentVolumeClaim:
+            claimName: vdbench-pvc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vdbench-config
+data:
+    File-Writes: |
+        fsd=fsd-datadir1,anchor=/datadir1,depth=1,width=1,files=1000,size=100M
+        fwd=fwd1,fsd=fsd*,rdpct=0,xfersize=(4k,100),fileio=random,threads=4,fileselect=random
+        rd=rd1,fwd=fwd*,elapsed=21600,interval=1,fwdrate=max,format=yes

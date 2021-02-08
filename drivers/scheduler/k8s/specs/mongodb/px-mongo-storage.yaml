@@ -1,13 +1,13 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  labels:
-    app: mongodb
-  name: px-mongo-mongodb
+  name: px-mongo-pvc
+  annotations:
+    volume.beta.kubernetes.io/storage-class: px-ha-sc
 spec:
-  storageClassName: mongo-sc
+  storageClassName: px-ha-sc
   accessModes:
-    - "ReadWriteOnce"
+    - ReadWriteOnce
   resources:
     requests:
-      storage: 500Gi
+      storage: 10Gi

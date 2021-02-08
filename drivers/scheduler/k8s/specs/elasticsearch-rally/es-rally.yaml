@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: es-rally
-  namespace: default
   labels:
     app: es-rally
 spec:
@@ -31,7 +30,7 @@ spec:
                 "--track-repository",
                 "eventdata",
                 "--challenge",
-                "elasticlogs-continuous-index-and-query",
+                "elasticlogs-1bn-load",
                 "--pipeline",
                 "benchmark-only",
                 "--track-params",

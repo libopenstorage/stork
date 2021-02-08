@@ -42,11 +42,11 @@ spec:
           name: cql
         resources:
           limits:
-            cpu: "500m"
-            memory: 1Gi
+            cpu: "2000m"
+            memory: 4Gi
           requests:
-            cpu: "500m"
-            memory: 1Gi
+            cpu: "1000m"
+            memory: 4Gi
         securityContext:
           capabilities:
             add:
@@ -57,9 +57,9 @@ spec:
               command: ["/bin/sh", "-c", "PID=$(pidof java) && kill $PID && while ps -p $PID > /dev/null; do sleep 1; done"]
         env:
           - name: MAX_HEAP_SIZE
-            value: 512M
+            value: 2G
           - name: HEAP_NEWSIZE
-            value: 100M
+            value: 500M
           - name: POD_NAMESPACE
             valueFrom:
               fieldRef:
