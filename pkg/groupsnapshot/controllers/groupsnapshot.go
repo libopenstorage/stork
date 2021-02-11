@@ -689,7 +689,13 @@ func (m *GroupSnapshotController) handleFinal(groupSnap *stork_api.GroupVolumeSn
 	childSnapshots := groupSnap.Status.VolumeSnapshots
 	if len(childSnapshots) > 0 {
 		currentRestoreNamespaces := ""
-		latestRestoreNamespacesInCSV := strings.Join(groupSnap.Spec.RestoreNamespaces, ",")
+		latestRestoreNamespacesInCSV := ""
+		if groupSnap.GetAnnotations() != nil {
+			if val, ok := groupSnap.GetAnnotations()[snapshotcontrollers.StorkSnapshotRestoreNamespacesAnnotation]; ok {
+				latestRestoreNamespacesInCSV = val
+			}
+		}
+		latestRestoreNamespacesInCSV += strings.Join(groupSnap.Spec.RestoreNamespaces, ",")
 
 		vsObject, err := k8sextops.Instance().GetSnapshot(childSnapshots[0].VolumeSnapshotName, groupSnap.GetNamespace())
 		if err != nil {
