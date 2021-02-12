@@ -858,6 +858,11 @@ func (m *MigrationController) prepareResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
 ) error {
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	if err != nil {
+		return err
+	}
+
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -883,10 +888,6 @@ func (m *MigrationController) prepareResources(
 		}
 
 		// prepare CR resources
-		crdList, err := storkops.Instance().ListApplicationRegistrations()
-		if err != nil {
-			return err
-		}
 		for _, crd := range crdList.Items {
 			for _, v := range crd.Resources {
 				if v.Kind == resource.Kind &&
