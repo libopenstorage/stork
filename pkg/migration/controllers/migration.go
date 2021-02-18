@@ -209,7 +209,49 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 		return nil
 	}
 
+	// TODO: verify if appActivated flags need to be set as default
 	migration.Spec = setDefaults(migration.Spec)
+
+	if migration.GetAnnotations() != nil {
+		remoteConfig, err := getClusterPairSchedulerConfig(migration.Spec.ClusterPair, migration.Namespace)
+		if err != nil {
+			return err
+		}
+		remoteOps, err := storkops.NewForConfig(remoteConfig)
+		if err != nil {
+			m.recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				err.Error())
+			return nil
+		}
+		// get remote cluster migration schedule object
+		migrSched, err := remoteOps.GetMigrationSchedule(migration.GetAnnotations()[StorkMigrationName], migration.Namespace)
+		if err != nil {
+			m.recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				err.Error())
+			return nil
+		}
+		// check status of migrated app on remote cluster
+		if migrSched.Status.ApplicationActivated {
+			migration.Status.Status = stork_api.MigrationStatusFailed
+			migration.Status.Stage = stork_api.MigrationStageFinal
+			migration.Status.FinishTimestamp = metav1.Now()
+			err = fmt.Errorf("migrated applications are active on remote cluster")
+			log.MigrationLog(migration).Errorf(err.Error())
+			m.recorder.Event(migration,
+				v1.EventTypeWarning,
+				string(stork_api.MigrationStatusFailed),
+				err.Error())
+			err = m.client.Update(context.Background(), migration)
+			if err != nil {
+				log.MigrationLog(migration).Errorf("Error updating")
+			}
+			return nil
+		}
+	}
 
 	if migration.Spec.ClusterPair == "" {
 		err := fmt.Errorf("clusterPair to migrate to cannot be empty")
@@ -1148,6 +1190,17 @@ func (m *MigrationController) prepareApplicationResource(
 		return err
 	}
 
+	labels, found, err := unstructured.NestedStringMap(content, "metadata", "labels")
+	if err != nil {
+		return err
+	}
+	if !found {
+		labels = make(map[string]string)
+	}
+	labels[StorkMigrationAnnotation] = "true"
+	if err := unstructured.SetNestedStringMap(content, labels, "metadata", "labels"); err != nil {
+		return err
+	}
 	annotations, found, err := unstructured.NestedStringMap(content, "metadata", "annotations")
 	if err != nil {
 		return err
