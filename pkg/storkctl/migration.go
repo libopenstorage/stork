@@ -168,7 +168,22 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 			} else {
 				activationNamespaces = append(activationNamespaces, cmdFactory.GetNamespace())
 			}
-
+			for _, ns := range activationNamespaces {
+				migrSched, err := storkops.Instance().ListMigrationSchedules(ns)
+				if err != nil {
+					util.CheckErr(err)
+					return
+				}
+				for _, migr := range migrSched.Items {
+					migr.Status.ApplicationActivated = true
+					_, err := storkops.Instance().UpdateMigrationSchedule(&migr)
+					if err != nil {
+						util.CheckErr(err)
+						return
+					}
+					printMsg(fmt.Sprintf("Updated migrationschedule status for %v/%v to activated", migr.Namespace, migr.Name), ioStreams.Out)
+				}
+			}
 			for _, ns := range activationNamespaces {
 				updateStatefulSets(ns, true, ioStreams)
 				updateDeployments(ns, true, ioStreams)
@@ -236,7 +251,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 }
 
 func updateStatefulSets(namespace string, activate bool, ioStreams genericclioptions.IOStreams) {
-	statefulSets, err := apps.Instance().ListStatefulSets(namespace)
+	statefulSets, err := apps.Instance().ListStatefulSets(namespace, metav1.ListOptions{})
 	if err != nil {
 		util.CheckErr(err)
 		return
