@@ -14,22 +14,22 @@ var (
 	backupStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_status",
 		Help: "Status of application backups",
-	}, []string{metricName, metricNamespace, MetricSchedule}) // annotation to figure out schedule
+	}, []string{metricName, metricNamespace, metricSchedule}) // annotation to figure out schedule
 	// BackupStageCounter for application backup CR stages on server
 	backupStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_stage",
 		Help: "Stage of application backups",
-	}, []string{metricName, metricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, metricSchedule})
 	// BackupDurationCounter for time taken by application backup to complete
 	backupDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_duration",
 		Help: "Duration of application backups",
-	}, []string{metricName, metricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, metricSchedule})
 	// BackupSizeCounter for application backup size
 	backupSizeCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "application_backup_size",
 		Help: "Size of application backups",
-	}, []string{metricName, metricNamespace, MetricSchedule})
+	}, []string{metricName, metricNamespace, metricSchedule})
 )
 
 var (
@@ -62,7 +62,7 @@ func watchBackupCR(object runtime.Object) error {
 	labels := make(prometheus.Labels)
 	labels[metricName] = backup.Name
 	labels[metricNamespace] = backup.Namespace
-	labels[MetricSchedule] = backup.Annotations[app_backup.ApplicationBackupScheduleNameAnnotation]
+	labels[metricSchedule] = backup.Annotations[app_backup.ApplicationBackupScheduleNameAnnotation]
 	if backup.DeletionTimestamp != nil {
 		backupStatusCounter.Delete(labels)
 		backupStageCounter.Delete(labels)

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,10 +55,12 @@ const (
 	backupCancelBackoffFactor       = 1
 	backupCancelBackoffSteps        = math.MaxInt32
 
-	allNamespacesSpecifier = "*"
-	backupVolumeBatchCount = 10
-	maxRetry               = 10
-	retrySleep             = 10 * time.Second
+	allNamespacesSpecifier        = "*"
+	backupVolumeBatchCountEnvVar  = "BACKUP-VOLUME-BATCH-COUNT"
+	defaultBackupVolumeBatchCount = 3
+	backupResourcesBatchCount     = 15
+	maxRetry                      = 10
+	retrySleep                    = 10 * time.Second
 )
 
 var (
@@ -525,8 +529,15 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			if err != nil {
 				return err
 			}
-			for i := 0; i < len(pvcs); i += backupVolumeBatchCount {
-				batch := pvcs[i:min(i+backupVolumeBatchCount, len(pvcs))]
+			batchCount := defaultBackupVolumeBatchCount
+			if len(os.Getenv(backupVolumeBatchCountEnvVar)) != 0 {
+				batchCount, err = strconv.Atoi(os.Getenv(backupVolumeBatchCountEnvVar))
+				if err != nil {
+					batchCount = defaultBackupVolumeBatchCount
+				}
+			}
+			for i := 0; i < len(pvcs); i += batchCount {
+				batch := pvcs[i:min(i+batchCount, len(pvcs))]
 				volumeInfos, err := driver.StartBackup(backup, batch)
 				if err != nil {
 					// TODO: If starting backup for a drive fails mark the entire backup
@@ -678,6 +689,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
 		backup.Status.Reason = "Application resources backup is in progress"
 		backup.Status.LastUpdateTimestamp = metav1.Now()
+		// temporarily store the volume status, So that it will be used during retry.
+		volumeInfos := backup.Status.Volumes
 		// Update the current state and then move on to backing up resources
 		err := a.client.Update(context.TODO(), backup)
 		if err != nil {
@@ -691,6 +704,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
 				backup.Status.Reason = "Application resources backup is in progress"
 				backup.Status.LastUpdateTimestamp = metav1.Now()
+				backup.Status.Volumes = volumeInfos
 				err = a.client.Update(context.TODO(), backup)
 				if err != nil {
 					time.Sleep(retrySleep)
@@ -968,21 +982,62 @@ func (a *ApplicationBackupController) backupResources(
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
-	allObjects, err := a.resourceCollector.GetResources(
-		backup.Spec.Namespaces,
-		backup.Spec.Selectors,
-		objectMap,
-		optionalBackupResources,
-		true)
-	if err != nil {
-		log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
-		return err
+	namespacelist := backup.Spec.Namespaces
+	// GetResources takes more time, if we have more number of namespaces
+	// So, submitting it in batches and in between each batch,
+	// updating the LastUpdateTimestamp to show that backup is progressing
+	allObjects := make([]runtime.Unstructured, 0)
+	for i := 0; i < len(namespacelist); i += backupResourcesBatchCount {
+		batch := namespacelist[i:min(i+backupResourcesBatchCount, len(namespacelist))]
+		objects, err := a.resourceCollector.GetResources(
+			batch,
+			backup.Spec.Selectors,
+			objectMap,
+			optionalBackupResources,
+			true)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
+			return err
+		}
+		allObjects = append(allObjects, objects...)
+		// Do a dummy update to the backup CR to update only the last update timestamp
+		namespacedName := types.NamespacedName{}
+		namespacedName.Namespace = backup.Namespace
+		namespacedName.Name = backup.Name
+		for i := 0; i < maxRetry; i++ {
+			err = a.client.Get(context.TODO(), namespacedName, backup)
+			if err != nil {
+				time.Sleep(retrySleep)
+				continue
+			}
+			backup.Status.LastUpdateTimestamp = metav1.Now()
+			err = a.client.Update(context.TODO(), backup)
+			if err != nil {
+				time.Sleep(retrySleep)
+				continue
+			} else {
+				break
+			}
+		}
+	}
+	updatedAllObjects := make([]runtime.Unstructured, 0)
+	for _, obj := range allObjects {
+		resourceMap := make(map[types.UID]bool)
+		metadata, err := meta.Accessor(obj)
+		if err != nil {
+			return err
+		}
+		if _, ok := resourceMap[metadata.GetUID()]; ok {
+			continue
+		}
+		resourceMap[metadata.GetUID()] = true
+		updatedAllObjects = append(updatedAllObjects, obj)
 	}
 
 	if backup.Status.Resources == nil {
 		// Save the collected resources infos in the status
 		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
-		for _, obj := range allObjects {
+		for _, obj := range updatedAllObjects {
 			metadata, err := meta.Accessor(obj)
 			if err != nil {
 				return err
@@ -1015,7 +1070,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	// Do any additional preparation for the resources if required
-	if err = a.prepareResources(backup, allObjects); err != nil {
+	if err = a.prepareResources(backup, updatedAllObjects); err != nil {
 		message := fmt.Sprintf("Error preparing resources for backup: %v", err)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
@@ -1034,7 +1089,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	// Upload the resources to the backup location
-	if err = a.uploadResources(backup, allObjects); err != nil {
+	if err = a.uploadResources(backup, updatedAllObjects); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v", err)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal

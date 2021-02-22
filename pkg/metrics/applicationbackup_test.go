@@ -75,7 +75,7 @@ func TestBackupFailureMetrics(t *testing.T) {
 	labels := make(prometheus.Labels)
 	labels[metricName] = "test"
 	labels[metricNamespace] = "test-fail"
-	labels[MetricSchedule] = ""
+	labels[metricSchedule] = ""
 
 	// Failure
 	require.Equal(t, float64(backupStatus[storkv1.ApplicationBackupStatusFailed]), testutil.ToFloat64(backupStatusCounter.With(labels)), "application_backup_status does not matched")

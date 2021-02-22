@@ -687,7 +687,7 @@
 
 [[projects]]
   branch = "openstorage-5.5"
-  digest = "1:b5b8718d59df0b5b2bd3bd0d539a1cf7c04976c69d2ece64b06a33c9ffd7166b"
+  digest = "1:688acf15c1f1c01f2fa96b245f092358e5da295f66629b36df91f565b1d01c29"
   name = "github.com/kubernetes-incubator/external-storage"
   packages = [
     "snapshot/pkg/apis/crd/v1",
@@ -700,7 +700,7 @@
     "snapshot/pkg/volume",
   ]
   pruneopts = "UT"
-  revision = "d2b33d4448eab9682a0ef41647f2b29d74c6340c"
+  revision = "697cbc8b5661d1d0bc2a39592340c757b2e07e16"
   source = "github.com/libopenstorage/external-storage"
 
 [[projects]]
@@ -1651,16 +1651,19 @@
   version = "kubernetes-1.16.6"
 
 [[projects]]
-  digest = "1:ab7660a925f23c4b99075204c905e55b676e9251db3f6422944add8c8e472f62"
+  digest = "1:07f6a231f0221973f3f51c267a6ba4280b604d616915eb485fd0d672ef8741df"
   name = "k8s.io/apiextensions-apiserver"
   packages = [
     "pkg/apis/apiextensions",
     "pkg/apis/apiextensions/v1",
     "pkg/apis/apiextensions/v1beta1",
     "pkg/client/clientset/clientset",
+    "pkg/client/clientset/clientset/fake",
     "pkg/client/clientset/clientset/scheme",
     "pkg/client/clientset/clientset/typed/apiextensions/v1",
+    "pkg/client/clientset/clientset/typed/apiextensions/v1/fake",
     "pkg/client/clientset/clientset/typed/apiextensions/v1beta1",
+    "pkg/client/clientset/clientset/typed/apiextensions/v1beta1/fake",
     "pkg/features",
   ]
   pruneopts = "UT"
@@ -2346,6 +2349,7 @@
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset",
+    "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/api/meta",
     "k8s.io/apimachinery/pkg/api/resource",
