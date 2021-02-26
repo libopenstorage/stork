@@ -340,7 +340,7 @@ func (m *MigrationController) handle(ctx context.Context, migration *stork_api.M
 			}
 		}
 	case stork_api.MigrationStageApplications:
-		err := m.migrateResources(migration)
+		err := m.migrateResources(migration, false)
 		if err != nil {
 			message := fmt.Sprintf("Error migrating resources: %v", err)
 			log.MigrationLog(migration).Errorf(message)
@@ -643,12 +643,17 @@ func (m *MigrationController) migrateVolumes(migration *stork_api.Migration, ter
 			if err != nil {
 				return err
 			}
-			err = m.migrateResources(migration)
+			err = m.migrateResources(migration, false)
 			if err != nil {
 				log.MigrationLog(migration).Errorf("Error migrating resources: %v", err)
 				return err
 			}
 		} else {
+			err := m.migrateResources(migration, true)
+			if err != nil {
+				log.MigrationLog(migration).Errorf("Error migrating resources: %v", err)
+				return err
+			}
 			migration.Status.Stage = stork_api.MigrationStageFinal
 			migration.Status.FinishTimestamp = metav1.Now()
 			migration.Status.Status = stork_api.MigrationStatusSuccessful
@@ -726,7 +731,7 @@ func (m *MigrationController) runPostExecRule(migration *stork_api.Migration) er
 	return nil
 }
 
-func (m *MigrationController) migrateResources(migration *stork_api.Migration) error {
+func (m *MigrationController) migrateResources(migration *stork_api.Migration, volumesOnly bool) error {
 	schedulerStatus, err := getClusterPairSchedulerStatus(migration.Spec.ClusterPair, migration.Namespace)
 	if err != nil {
 		return err
@@ -746,6 +751,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		}
 	}
 	resKinds := make(map[string]string)
+	var updateObjects []runtime.Unstructured
 	allObjects, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
@@ -768,13 +774,21 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		if err != nil {
 			return err
 		}
-
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if volumesOnly {
+			switch gvk.Kind {
+			case "PersistentVolume":
+			case "PersistentVolumeClaim":
+			default:
+				continue
+			}
+		}
 		resourceInfo := &stork_api.MigrationResourceInfo{
 			Name:      metadata.GetName(),
 			Namespace: metadata.GetNamespace(),
 			Status:    stork_api.MigrationStatusInProgress,
 		}
-		gvk := obj.GetObjectKind().GroupVersionKind()
+
 		resourceInfo.Kind = gvk.Kind
 		resourceInfo.Group = gvk.Group
 		// core Group doesn't have a name, so override it
@@ -784,14 +798,16 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		resourceInfo.Version = gvk.Version
 		resKinds[gvk.Kind] = gvk.Version
 		resourceInfos = append(resourceInfos, resourceInfo)
+		updateObjects = append(updateObjects, obj)
 	}
+
 	migration.Status.Resources = resourceInfos
 	err = m.client.Update(context.TODO(), migration)
 	if err != nil {
 		return err
 	}
 
-	err = m.prepareResources(migration, allObjects)
+	err = m.prepareResources(migration, updateObjects)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -800,7 +816,7 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration) e
 		log.MigrationLog(migration).Errorf("Error preparing resources: %v", err)
 		return err
 	}
-	err = m.applyResources(migration, allObjects, resKinds)
+	err = m.applyResources(migration, updateObjects, resKinds)
 	if err != nil {
 		m.recorder.Event(migration,
 			v1.EventTypeWarning,
@@ -842,6 +858,11 @@ func (m *MigrationController) prepareResources(
 	migration *stork_api.Migration,
 	objects []runtime.Unstructured,
 ) error {
+	crdList, err := storkops.Instance().ListApplicationRegistrations()
+	if err != nil {
+		return err
+	}
+
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -867,10 +888,6 @@ func (m *MigrationController) prepareResources(
 		}
 
 		// prepare CR resources
-		crdList, err := storkops.Instance().ListApplicationRegistrations()
-		if err != nil {
-			return err
-		}
 		for _, crd := range crdList.Items {
 			for _, v := range crd.Resources {
 				if v.Kind == resource.Kind &&
