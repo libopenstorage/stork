@@ -126,7 +126,8 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 		"CronJob",
 		"ResourceQuota",
 		"ReplicaSet",
-		"LimitRange":
+		"LimitRange",
+		"GlobalNetworkPolicy":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -330,6 +331,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.roleBindingToBeCollected(object)
 	case "Ingress":
 		return r.ingressToBeCollected(object)
+	case "GlobalNetworkPolicy":
+		return r.globalNetworkPolicyToBeCollected(object, namespace)
 	}
 
 	return true, nil
