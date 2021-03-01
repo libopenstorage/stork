@@ -1039,6 +1039,26 @@
   revision = "1555304b9b35fdd2b425bccf1a5613677705e7d0"
 
 [[projects]]
+  digest = "1:9fee9b54c707e9ea0c75fe1920feeda9e80fc6154ef043b8823620484972bf81"
+  name = "github.com/projectcalico/libcalico-go"
+  packages = [
+    "lib/apis/v1",
+    "lib/apis/v1/unversioned",
+    "lib/apis/v3",
+    "lib/backend/encap",
+    "lib/hash",
+    "lib/net",
+    "lib/numorstring",
+    "lib/scope",
+    "lib/selector",
+    "lib/selector/parser",
+    "lib/selector/tokenizer",
+  ]
+  pruneopts = "UT"
+  revision = "3d85c5968bd031dd6f0bfbefe753f22d1f0ef250"
+  version = "v3.19.0-0.dev"
+
+[[projects]]
   digest = "1:b658f1af994f893629b83334c60240d40b02bf9f5df1979e50c9cdc1b6d06335"
   name = "github.com/prometheus/client_golang"
   packages = [
@@ -2313,6 +2333,7 @@
     "github.com/portworx/torpedo/drivers/volume/generic_csi",
     "github.com/portworx/torpedo/drivers/volume/linstor",
     "github.com/portworx/torpedo/drivers/volume/portworx",
+    "github.com/projectcalico/libcalico-go/lib/apis/v3",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
     "github.com/prometheus/client_golang/prometheus/testutil",
