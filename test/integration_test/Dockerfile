@@ -4,9 +4,9 @@ FROM golang:1.15.1
 RUN apt-get update && \ 
     /usr/local/go/bin/go get -u gotest.tools/gotestsum
 
-RUN apt-get update && apt-get install -y python-pip
+RUN apt-get update && apt-get install -y python3-pip
 
-RUN pip install --upgrade pip 
+RUN pip3 install --upgrade pip
 
 ARG GCLOUD_SDK=google-cloud-sdk-269.0.0-linux-x86_64.tar.gz
 # Remove the test directories
@@ -19,7 +19,7 @@ RUN wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$GCLOUD_SDK 
         /google-cloud-sdk/platform/gsutil/third_party/rsa/tests \
         /google-cloud-sdk/platform/gsutil/third_party/httplib2/python2/httplib2/test \
         /google-cloud-sdk/platform/gsutil && \
-    pip install pyyaml>=5.1 rsa>=4.0 urllib3>=1.24.2 --upgrade -t /google-cloud-sdk/lib/third_party
+    python3 -m pip install pyyaml>=5.1 rsa>=4.0 urllib3>=1.24.2 --upgrade -t /google-cloud-sdk/lib/third_party
 
 RUN wget -O /usr/local/bin/aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.10.3/2018-07-26/bin/linux/amd64/aws-iam-authenticator && \
     chmod +x /usr/local/bin/aws-iam-authenticator
