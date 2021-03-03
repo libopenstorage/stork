@@ -31,12 +31,15 @@ type ApplicationResource struct {
 	KeepStatus bool `json:"keepStatus"`
 	// SuspendOptions to disable CRD upon migration/restore/clone
 	SuspendOptions SuspendOptions `json:"suspendOptions"`
+	// PodsPath to help activate/deactivate crd upon migration
+	PodsPath string `json:"podsPath"`
 }
 
 // SuspendOptions to disable CRD upon migration/restore/clone
 type SuspendOptions struct {
-	Path string `json:"path"`
-	Type string `json:"type"`
+	Path  string `json:"path"`
+	Type  string `json:"type"`
+	Value string `json:"value"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

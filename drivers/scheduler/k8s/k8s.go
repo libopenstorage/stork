@@ -3,6 +3,7 @@ package k8s
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -1122,7 +1123,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if secret != nil {
 			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
-		dep, err := k8sApps.CreateDeployment(obj)
+		dep, err := k8sApps.CreateDeployment(obj, metav1.CreateOptions{})
 		if errors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
@@ -1185,7 +1186,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if secret != nil {
 			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
-		ss, err := k8sApps.CreateStatefulSet(obj)
+		ss, err := k8sApps.CreateStatefulSet(obj, metav1.CreateOptions{})
 		if errors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
@@ -3602,7 +3603,7 @@ func (k *K8s) collectEvents() error {
 		return err
 	}
 
-	iface, err := clientset.CoreV1().Events(namespace).Watch(metav1.ListOptions{})
+	iface, err := clientset.CoreV1().Events(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

@@ -19,14 +19,14 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"time"
-
+	"context"
 	v1alpha1 "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	scheme "github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
+	"time"
 )
 
 // AutopilotRulesGetter has a method to return a AutopilotRuleInterface.
@@ -67,7 +67,7 @@ func (c *autopilotRules) Get(name string, options v1.GetOptions) (result *v1alph
 		Resource("autopilotrules").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -83,7 +83,7 @@ func (c *autopilotRules) List(opts v1.ListOptions) (result *v1alpha1.AutopilotRu
 		Resource("autopilotrules").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -99,7 +99,7 @@ func (c *autopilotRules) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("autopilotrules").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a autopilotRule and creates it.  Returns the server's representation of the autopilotRule, and an error, if there is any.
@@ -108,7 +108,7 @@ func (c *autopilotRules) Create(autopilotRule *v1alpha1.AutopilotRule) (result *
 	err = c.client.Post().
 		Resource("autopilotrules").
 		Body(autopilotRule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -120,7 +120,7 @@ func (c *autopilotRules) Update(autopilotRule *v1alpha1.AutopilotRule) (result *
 		Resource("autopilotrules").
 		Name(autopilotRule.Name).
 		Body(autopilotRule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -131,7 +131,7 @@ func (c *autopilotRules) Delete(name string, options *v1.DeleteOptions) error {
 		Resource("autopilotrules").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -146,7 +146,7 @@ func (c *autopilotRules) DeleteCollection(options *v1.DeleteOptions, listOptions
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -158,7 +158,7 @@ func (c *autopilotRules) Patch(name string, pt types.PatchType, data []byte, sub
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

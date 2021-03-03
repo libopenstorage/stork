@@ -1,6 +1,7 @@
 package externalstorage
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -49,7 +50,7 @@ func (c *Client) CreateSnapshot(snap *snapv1.VolumeSnapshot) (*snapv1.VolumeSnap
 		Resource(snapv1.VolumeSnapshotResourcePlural).
 		Namespace(snap.Metadata.Namespace).
 		Body(snap).
-		Do().Into(&result); err != nil {
+		Do(context.TODO()).Into(&result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -67,7 +68,7 @@ func (c *Client) UpdateSnapshot(snap *snapv1.VolumeSnapshot) (*snapv1.VolumeSnap
 		Resource(snapv1.VolumeSnapshotResourcePlural).
 		Namespace(snap.Metadata.Namespace).
 		Body(snap).
-		Do().Into(&result); err != nil {
+		Do(context.TODO()).Into(&result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -82,7 +83,7 @@ func (c *Client) DeleteSnapshot(name string, namespace string) error {
 		Name(name).
 		Resource(snapv1.VolumeSnapshotResourcePlural).
 		Namespace(namespace).
-		Do().Error()
+		Do(context.TODO()).Error()
 }
 
 // ValidateSnapshot validates the given snapshot.
@@ -191,7 +192,7 @@ func (c *Client) GetSnapshot(name string, namespace string) (*snapv1.VolumeSnaps
 		Name(name).
 		Resource(snapv1.VolumeSnapshotResourcePlural).
 		Namespace(namespace).
-		Do().Into(&result); err != nil {
+		Do(context.TODO()).Into(&result); err != nil {
 		return nil, err
 	}
 
@@ -208,7 +209,7 @@ func (c *Client) ListSnapshots(namespace string) (*snapv1.VolumeSnapshotList, er
 	if err := c.snap.Get().
 		Resource(snapv1.VolumeSnapshotResourcePlural).
 		Namespace(namespace).
-		Do().Into(&result); err != nil {
+		Do(context.TODO()).Into(&result); err != nil {
 		return nil, err
 	}
 
@@ -235,7 +236,7 @@ func (c *Client) GetSnapshotData(name string) (*snapv1.VolumeSnapshotData, error
 	if err := c.snap.Get().
 		Name(name).
 		Resource(snapv1.VolumeSnapshotDataResourcePlural).
-		Do().Into(&result); err != nil {
+		Do(context.TODO()).Into(&result); err != nil {
 		return nil, err
 	}
 
@@ -253,7 +254,7 @@ func (c *Client) CreateSnapshotData(snapData *snapv1.VolumeSnapshotData) (*snapv
 		Name(snapData.Metadata.Name).
 		Resource(snapv1.VolumeSnapshotDataResourcePlural).
 		Body(snapData).
-		Do().Into(&result); err != nil {
+		Do(context.TODO()).Into(&result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -267,5 +268,5 @@ func (c *Client) DeleteSnapshotData(name string) error {
 	return c.snap.Delete().
 		Name(name).
 		Resource(snapv1.VolumeSnapshotDataResourcePlural).
-		Do().Error()
+		Do(context.TODO()).Error()
 }

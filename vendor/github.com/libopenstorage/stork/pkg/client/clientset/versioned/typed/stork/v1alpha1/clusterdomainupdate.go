@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -68,7 +69,7 @@ func (c *clusterDomainUpdates) Get(name string, options v1.GetOptions) (result *
 		Resource("clusterdomainupdates").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -84,7 +85,7 @@ func (c *clusterDomainUpdates) List(opts v1.ListOptions) (result *v1alpha1.Clust
 		Resource("clusterdomainupdates").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -100,7 +101,7 @@ func (c *clusterDomainUpdates) Watch(opts v1.ListOptions) (watch.Interface, erro
 		Resource("clusterdomainupdates").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a clusterDomainUpdate and creates it.  Returns the server's representation of the clusterDomainUpdate, and an error, if there is any.
@@ -109,7 +110,7 @@ func (c *clusterDomainUpdates) Create(clusterDomainUpdate *v1alpha1.ClusterDomai
 	err = c.client.Post().
 		Resource("clusterdomainupdates").
 		Body(clusterDomainUpdate).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -121,7 +122,7 @@ func (c *clusterDomainUpdates) Update(clusterDomainUpdate *v1alpha1.ClusterDomai
 		Resource("clusterdomainupdates").
 		Name(clusterDomainUpdate.Name).
 		Body(clusterDomainUpdate).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -136,7 +137,7 @@ func (c *clusterDomainUpdates) UpdateStatus(clusterDomainUpdate *v1alpha1.Cluste
 		Name(clusterDomainUpdate.Name).
 		SubResource("status").
 		Body(clusterDomainUpdate).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -147,7 +148,7 @@ func (c *clusterDomainUpdates) Delete(name string, options *v1.DeleteOptions) er
 		Resource("clusterdomainupdates").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -162,7 +163,7 @@ func (c *clusterDomainUpdates) DeleteCollection(options *v1.DeleteOptions, listO
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -174,7 +175,7 @@ func (c *clusterDomainUpdates) Patch(name string, pt types.PatchType, data []byt
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

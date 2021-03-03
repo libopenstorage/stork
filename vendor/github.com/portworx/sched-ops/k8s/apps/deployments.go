@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -20,7 +21,7 @@ type DeploymentOps interface {
 	// GetDeployment returns a deployment for the give name and namespace
 	GetDeployment(name, namespace string) (*appsv1.Deployment, error)
 	// CreateDeployment creates the given deployment
-	CreateDeployment(*appsv1.Deployment) (*appsv1.Deployment, error)
+	CreateDeployment(*appsv1.Deployment, metav1.CreateOptions) (*appsv1.Deployment, error)
 	// UpdateDeployment updates the given deployment
 	UpdateDeployment(*appsv1.Deployment) (*appsv1.Deployment, error)
 	// DeleteDeployment deletes the given deployment
@@ -43,7 +44,7 @@ func (c *Client) ListDeployments(namespace string, options metav1.ListOptions) (
 		return nil, err
 	}
 
-	return c.apps.Deployments(namespace).List(options)
+	return c.apps.Deployments(namespace).List(context.TODO(), options)
 }
 
 // GetDeployment returns a deployment for the give name and namespace
@@ -52,11 +53,11 @@ func (c *Client) GetDeployment(name, namespace string) (*appsv1.Deployment, erro
 		return nil, err
 	}
 
-	return c.apps.Deployments(namespace).Get(name, metav1.GetOptions{})
+	return c.apps.Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateDeployment creates the given deployment
-func (c *Client) CreateDeployment(deployment *appsv1.Deployment) (*appsv1.Deployment, error) {
+func (c *Client) CreateDeployment(deployment *appsv1.Deployment, opts metav1.CreateOptions) (*appsv1.Deployment, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -66,7 +67,7 @@ func (c *Client) CreateDeployment(deployment *appsv1.Deployment) (*appsv1.Deploy
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.apps.Deployments(ns).Create(deployment)
+	return c.apps.Deployments(ns).Create(context.TODO(), deployment, opts)
 }
 
 // DeleteDeployment deletes the given deployment
@@ -75,7 +76,7 @@ func (c *Client) DeleteDeployment(name, namespace string) error {
 		return err
 	}
 
-	return c.apps.Deployments(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.apps.Deployments(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -94,7 +95,7 @@ func (c *Client) UpdateDeployment(deployment *appsv1.Deployment) (*appsv1.Deploy
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.apps.Deployments(deployment.Namespace).Update(deployment)
+	return c.apps.Deployments(deployment.Namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 }
 
 // ValidateDeployment validates the given deployment if it's running and healthy
@@ -115,7 +116,7 @@ func (c *Client) ValidateDeployment(deployment *appsv1.Deployment, timeout, retr
 					foundPVC = true
 
 					pvcName := vol.PersistentVolumeClaim.ClaimName
-					claim, err := c.core.PersistentVolumeClaims(dep.Namespace).Get(pvcName, metav1.GetOptions{})
+					claim, err := c.core.PersistentVolumeClaims(dep.Namespace).Get(context.TODO(), pvcName, metav1.GetOptions{})
 					if err != nil {
 						return "", true, err
 					}
@@ -132,7 +133,7 @@ func (c *Client) ValidateDeployment(deployment *appsv1.Deployment, timeout, retr
 			}
 		}
 
-		pods, err := c.GetDeploymentPods(deployment)
+		pods, err := c.GetDeploymentPods(dep)
 		if err != nil || pods == nil {
 			return "", true, &schederrors.ErrAppNotReady{
 				ID:    dep.Name,
@@ -209,7 +210,7 @@ func (c *Client) ValidateTerminatedDeployment(deployment *appsv1.Deployment, tim
 			return "", true, err
 		}
 
-		pods, err := c.GetDeploymentPods(deployment)
+		pods, err := c.GetDeploymentPods(dep)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return "", false, nil
@@ -264,7 +265,7 @@ func (c *Client) GetDeploymentsUsingStorageClass(scName string) ([]appsv1.Deploy
 		return nil, err
 	}
 
-	deps, err := c.apps.Deployments("").List(metav1.ListOptions{})
+	deps, err := c.apps.Deployments("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +278,7 @@ func (c *Client) GetDeploymentsUsingStorageClass(scName string) ([]appsv1.Deploy
 			}
 
 			pvcName := v.PersistentVolumeClaim.ClaimName
-			pvc, err := c.core.PersistentVolumeClaims(dep.Namespace).Get(pvcName, metav1.GetOptions{})
+			pvc, err := c.core.PersistentVolumeClaims(dep.Namespace).Get(context.TODO(), pvcName, metav1.GetOptions{})
 			if err != nil {
 				continue // don't let one bad pvc stop processing
 			}

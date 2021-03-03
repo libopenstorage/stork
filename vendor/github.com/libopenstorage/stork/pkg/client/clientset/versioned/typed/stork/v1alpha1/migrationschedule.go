@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -71,7 +72,7 @@ func (c *migrationSchedules) Get(name string, options v1.GetOptions) (result *v1
 		Resource("migrationschedules").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -88,7 +89,7 @@ func (c *migrationSchedules) List(opts v1.ListOptions) (result *v1alpha1.Migrati
 		Resource("migrationschedules").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -105,7 +106,7 @@ func (c *migrationSchedules) Watch(opts v1.ListOptions) (watch.Interface, error)
 		Resource("migrationschedules").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a migrationSchedule and creates it.  Returns the server's representation of the migrationSchedule, and an error, if there is any.
@@ -115,7 +116,7 @@ func (c *migrationSchedules) Create(migrationSchedule *v1alpha1.MigrationSchedul
 		Namespace(c.ns).
 		Resource("migrationschedules").
 		Body(migrationSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -128,7 +129,7 @@ func (c *migrationSchedules) Update(migrationSchedule *v1alpha1.MigrationSchedul
 		Resource("migrationschedules").
 		Name(migrationSchedule.Name).
 		Body(migrationSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -144,7 +145,7 @@ func (c *migrationSchedules) UpdateStatus(migrationSchedule *v1alpha1.MigrationS
 		Name(migrationSchedule.Name).
 		SubResource("status").
 		Body(migrationSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -156,7 +157,7 @@ func (c *migrationSchedules) Delete(name string, options *v1.DeleteOptions) erro
 		Resource("migrationschedules").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -172,7 +173,7 @@ func (c *migrationSchedules) DeleteCollection(options *v1.DeleteOptions, listOpt
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -185,7 +186,7 @@ func (c *migrationSchedules) Patch(name string, pt types.PatchType, data []byte,
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

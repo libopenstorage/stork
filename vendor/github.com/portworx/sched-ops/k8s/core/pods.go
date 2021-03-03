@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
@@ -92,7 +93,7 @@ func (c *Client) DeletePod(name string, ns string, force bool) error {
 		deleteOptions.GracePeriodSeconds = &gracePeriodSec
 	}
 
-	return c.kubernetes.CoreV1().Pods(ns).Delete(name, &deleteOptions)
+	return c.kubernetes.CoreV1().Pods(ns).Delete(context.TODO(), name, deleteOptions)
 }
 
 // CreatePod creates the given pod.
@@ -101,7 +102,7 @@ func (c *Client) CreatePod(pod *corev1.Pod) (*corev1.Pod, error) {
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().Pods(pod.Namespace).Create(pod)
+	return c.kubernetes.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 }
 
 // UpdatePod updates the given pod
@@ -110,7 +111,7 @@ func (c *Client) UpdatePod(pod *corev1.Pod) (*corev1.Pod, error) {
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().Pods(pod.Namespace).Update(pod)
+	return c.kubernetes.CoreV1().Pods(pod.Namespace).Update(context.TODO(), pod, metav1.UpdateOptions{})
 }
 
 // GetPods returns pods for the given namespace
@@ -196,7 +197,7 @@ func (c *Client) getPodsWithListOptions(namespace string, opts metav1.ListOption
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().Pods(namespace).List(opts)
+	return c.kubernetes.CoreV1().Pods(namespace).List(context.TODO(), opts)
 }
 
 func (c *Client) getPodsUsingPVWithListOptions(pvName string, opts metav1.ListOptions) ([]corev1.Pod, error) {
@@ -251,7 +252,7 @@ func (c *Client) listPluginPodsWithOptions(opts metav1.ListOptions, plugin strin
 		return nil, err
 	}
 
-	nodePods, err := c.kubernetes.CoreV1().Pods("").List(opts)
+	nodePods, err := c.kubernetes.CoreV1().Pods("").List(context.TODO(), opts)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +272,7 @@ func (c *Client) GetPodByName(podName string, namespace string) (*corev1.Pod, er
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	pod, err := c.kubernetes.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+	pod, err := c.kubernetes.CoreV1().Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
 	if err != nil {
 		return nil, schederrors.ErrPodsNotFound
 	}
@@ -355,7 +356,7 @@ func (c *Client) WatchPods(namespace string, fn WatchFunc, listOptions metav1.Li
 	}
 
 	listOptions.Watch = true
-	watchInterface, err := c.kubernetes.CoreV1().Pods(namespace).Watch(listOptions)
+	watchInterface, err := c.kubernetes.CoreV1().Pods(namespace).Watch(context.TODO(), listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for pods")
 		return err
@@ -414,7 +415,7 @@ func (c *Client) RunCommandInPod(cmds []string, podName, containerName, namespac
 		execErr bytes.Buffer
 	)
 
-	pod, err := c.kubernetes.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+	pod, err := c.kubernetes.CoreV1().Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}

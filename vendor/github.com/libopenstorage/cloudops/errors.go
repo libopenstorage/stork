@@ -23,6 +23,18 @@ const (
 	ErrDiskGreaterOrEqualToExpandSize
 )
 
+// ErrNotFound is error type when an object of Type with ID is not found
+type ErrNotFound struct {
+	// Type is the type of the object
+	Type string
+	// ID is the unique identifer of the object
+	ID string
+}
+
+func (e *ErrNotFound) Error() string {
+	return fmt.Sprintf("%s with ID %s was not found", e.Type, e.ID)
+}
+
 // ErrNotSupported is the error type for unsupported operations
 type ErrNotSupported struct {
 	// Operation is the operation not being supported
