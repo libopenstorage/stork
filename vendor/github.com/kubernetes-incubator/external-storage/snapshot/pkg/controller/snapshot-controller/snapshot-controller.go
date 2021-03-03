@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/golang/glog"
@@ -24,17 +25,18 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	apiv1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	kcache "k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
-
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/cache"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/reconciler"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshotter"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
+	apiv1 "k8s.io/api/core/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	clientcache "k8s.io/client-go/tools/cache"
+	kcache "k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
 
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/populator"
 )
@@ -161,14 +163,29 @@ func NewSnapshotController(client *rest.RESTClient,
 	return sc
 }
 
+// WaitForCacheSync is a wrapper around cache.WaitForCacheSync that generates log messages
+// indicating that the controller identified by controllerName is waiting for syncs, followed by
+// either a successful or failed sync.
+// Taken from k8s 1.12
+func WaitForCacheSync(controllerName string, stopCh <-chan struct{}, cacheSyncs ...kcache.InformerSynced) bool {
+	glog.Infof("Waiting for caches to sync for %s controller", controllerName)
+
+	if !clientcache.WaitForCacheSync(stopCh, cacheSyncs...) {
+		utilruntime.HandleError(fmt.Errorf("Unable to sync caches for %s controller", controllerName))
+		return false
+	}
+
+	glog.Infof("Caches are synced for %s controller", controllerName)
+	return true
+}
+
 // Run starts an Snapshot resource controller
 func (c *snapshotController) Run(ctx <-chan struct{}) {
 	glog.Infof("Starting snapshot controller")
 
-	c.snapshotter.Run(ctx)
 	go c.snapshotController.Run(ctx)
 
-	if !kcache.WaitForCacheSync(ctx, c.snapshotController.HasSynced) {
+	if !WaitForCacheSync("snapshot-controller", ctx, c.snapshotController.HasSynced) {
 		return
 	}
 
@@ -207,12 +224,12 @@ func (c *snapshotController) onSnapshotDelete(obj interface{}) {
 		// DeletedFinalStateUnkown is an expected data type here
 		deletedState, isState := obj.(kcache.DeletedFinalStateUnknown)
 		if !isState {
-			glog.Errorf("Error: unknown type passed as snapshot for deletion: %T", obj)
+			glog.Errorf("Error: unkown type passed as snapshot for deletion: %T", obj)
 			return
 		}
 		deletedSnapshot, ok = deletedState.Obj.(*crdv1.VolumeSnapshot)
 		if !ok {
-			glog.Errorf("Error: unknown data type in DeletedState: %T", deletedState.Obj)
+			glog.Errorf("Error: unkown data type in DeletedState: %T", deletedState.Obj)
 			return
 		}
 	}

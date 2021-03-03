@@ -203,6 +203,28 @@ var AllServices = []*ServiceInfo{
 		Object:      "Firewall",
 		Service:     "Firewalls",
 		Resource:    "firewalls",
+		version:     VersionAlpha,
+		keyType:     Global,
+		serviceType: reflect.TypeOf(&alpha.FirewallsService{}),
+		additionalMethods: []string{
+			"Update",
+		},
+	},
+	{
+		Object:      "Firewall",
+		Service:     "Firewalls",
+		Resource:    "firewalls",
+		version:     VersionBeta,
+		keyType:     Global,
+		serviceType: reflect.TypeOf(&beta.FirewallsService{}),
+		additionalMethods: []string{
+			"Update",
+		},
+	},
+	{
+		Object:      "Firewall",
+		Service:     "Firewalls",
+		Resource:    "firewalls",
 		keyType:     Global,
 		serviceType: reflect.TypeOf(&ga.FirewallsService{}),
 		additionalMethods: []string{
@@ -566,7 +588,7 @@ var AllServices = []*ServiceInfo{
 		Resource:    "sslPolicies",
 		keyType:     Global,
 		serviceType: reflect.TypeOf(&ga.SslPoliciesService{}),
-		options: NoList, // List() naming convention is different in GCE API for this resource
+		options:     NoList, // List() naming convention is different in GCE API for this resource
 	},
 	{
 		Object:      "Subnetwork",

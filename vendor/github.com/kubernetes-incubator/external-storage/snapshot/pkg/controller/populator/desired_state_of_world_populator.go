@@ -19,12 +19,13 @@ limitations under the License.
 package populator
 
 import (
+	"time"
+
 	"github.com/golang/glog"
 	crdv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/cache"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8scache "k8s.io/client-go/tools/cache"
-	"time"
 )
 
 // DesiredStateOfWorldPopulator periodically verifies that the snapshot in the

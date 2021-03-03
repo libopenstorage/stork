@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -37,7 +38,7 @@ func (c *Client) CreateIngress(ingress *v1beta1.Ingress) (*v1beta1.Ingress, erro
 		ns = NamespaceDefault
 	}
 
-	return c.networking.Ingresses(ns).Create(ingress)
+	return c.networking.Ingresses(ns).Create(context.TODO(), ingress, metav1.CreateOptions{})
 }
 
 // UpdateIngress creates the given ingress
@@ -46,7 +47,7 @@ func (c *Client) UpdateIngress(ingress *v1beta1.Ingress) (*v1beta1.Ingress, erro
 		return nil, err
 	}
 
-	return c.networking.Ingresses(ingress.Namespace).Update(ingress)
+	return c.networking.Ingresses(ingress.Namespace).Update(context.TODO(), ingress, metav1.UpdateOptions{})
 }
 
 // GetIngress returns the ingress given name and namespace
@@ -55,7 +56,7 @@ func (c *Client) GetIngress(name, namespace string) (*v1beta1.Ingress, error) {
 		return nil, err
 	}
 
-	return c.networking.Ingresses(namespace).Get(name, metav1.GetOptions{})
+	return c.networking.Ingresses(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteIngress deletes the given ingress
@@ -64,7 +65,7 @@ func (c *Client) DeleteIngress(name, namespace string) error {
 		return err
 	}
 
-	return c.networking.Ingresses(namespace).Delete(name, &metav1.DeleteOptions{})
+	return c.networking.Ingresses(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // ValidateIngress validates the given ingress
@@ -74,7 +75,7 @@ func (c *Client) ValidateIngress(ingress *v1beta1.Ingress, timeout, retryInterva
 			return "", true, err
 		}
 
-		result, err := c.networking.Ingresses(ingress.Namespace).Get(ingress.Name, metav1.GetOptions{})
+		result, err := c.networking.Ingresses(ingress.Namespace).Get(context.TODO(), ingress.Name, metav1.GetOptions{})
 		if result == nil {
 			return "", true, err
 		}

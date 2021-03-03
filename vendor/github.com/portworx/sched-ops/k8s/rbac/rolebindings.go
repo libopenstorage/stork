@@ -1,6 +1,8 @@
 package rbac
 
 import (
+	"context"
+
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -23,7 +25,7 @@ func (c *Client) CreateRoleBinding(binding *rbacv1.RoleBinding) (*rbacv1.RoleBin
 		return nil, err
 	}
 
-	return c.rbac.RoleBindings(binding.Namespace).Create(binding)
+	return c.rbac.RoleBindings(binding.Namespace).Create(context.TODO(), binding, metav1.CreateOptions{})
 }
 
 // UpdateRoleBinding updates the given role binding
@@ -32,7 +34,7 @@ func (c *Client) UpdateRoleBinding(binding *rbacv1.RoleBinding) (*rbacv1.RoleBin
 		return nil, err
 	}
 
-	return c.rbac.RoleBindings(binding.Namespace).Update(binding)
+	return c.rbac.RoleBindings(binding.Namespace).Update(context.TODO(), binding, metav1.UpdateOptions{})
 }
 
 // GetRoleBinding gets the given role binding
@@ -41,7 +43,7 @@ func (c *Client) GetRoleBinding(name, namespace string) (*rbacv1.RoleBinding, er
 		return nil, err
 	}
 
-	return c.rbac.RoleBindings(namespace).Get(name, metav1.GetOptions{})
+	return c.rbac.RoleBindings(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteRoleBinding deletes the given role binding
@@ -50,7 +52,7 @@ func (c *Client) DeleteRoleBinding(name, namespace string) error {
 		return err
 	}
 
-	return c.rbac.RoleBindings(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.rbac.RoleBindings(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
