@@ -28,7 +28,7 @@ import (
 const (
 	annotationPrefix   = "stork.libopenstorage.org/"
 	storkSchedulerName = "stork"
-	// RestoreAnnotation for pvc which has in-place resotre in progress
+	// RestoreAnnotation for pvc which has in-place restore in progress
 	RestoreAnnotation            = annotationPrefix + "restore-in-progress"
 	validateSnapshotTimeout      = 1 * time.Minute
 	validateSnapshotRetryTimeout = 5 * time.Second
@@ -62,7 +62,7 @@ func (c *SnapshotRestoreController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile manages SnapShot resources.
-func (c *SnapshotRestoreController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (c *SnapshotRestoreController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling VolumeSnapshotRestore %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
