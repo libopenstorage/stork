@@ -115,13 +115,13 @@ func TestGetClusterPairsWithStatus(t *testing.T) {
 func TestGenerateClusterPairInvalidName(t *testing.T) {
 	cmdArgs := []string{"generate", "clusterpair", "pair_test", "-n", "test"}
 
-	expected := "error: the Name \"pair_test\" is not valid: [a DNS-1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')]"
+	expected := "error: the Name \"pair_test\" is not valid: [a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')]"
 	testCommon(t, cmdArgs, nil, expected, true)
 }
 
 func TestGenerateClusterPairInvalidNamespace(t *testing.T) {
 	cmdArgs := []string{"generate", "clusterpair", "pair1", "-n", "test_namespace"}
 
-	expected := "error: the Namespace \"test_namespace\" is not valid: [a DNS-1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"
+	expected := "error: the Namespace \"test_namespace\" is not valid: [a lowercase RFC 1123 label must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?')]"
 	testCommon(t, cmdArgs, nil, expected, true)
 }

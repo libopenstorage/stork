@@ -186,7 +186,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 }
 
 // Reconcile updates for ApplicationRestore objects.
-func (a *ApplicationRestoreController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ApplicationRestore %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
@@ -649,7 +649,7 @@ func (a *ApplicationRestoreController) downloadCRD(
 	for _, crd := range crds {
 		crd.ResourceVersion = ""
 		regCrd[crd.GetName()] = false
-		if _, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd); err != nil && !errors.IsAlreadyExists(err) {
+		if _, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 			regCrd[crd.GetName()] = true
 			logrus.Warnf("error registering crds v1beta1 %v,%v", crd.GetName(), err)
 			continue
@@ -666,7 +666,7 @@ func (a *ApplicationRestoreController) downloadCRD(
 			var updatedVersions []apiextensionsv1.CustomResourceDefinitionVersion
 			// try to apply as v1 crd
 			var err error
-			if _, err = client.ApiextensionsV1().CustomResourceDefinitions().Create(crd); err == nil || errors.IsAlreadyExists(err) {
+			if _, err = client.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err == nil || errors.IsAlreadyExists(err) {
 				logrus.Infof("registered v1 crds %v,", crd.GetName())
 				continue
 			}
@@ -686,7 +686,7 @@ func (a *ApplicationRestoreController) downloadCRD(
 			}
 			crd.Spec.Versions = updatedVersions
 
-			if _, err := client.ApiextensionsV1().CustomResourceDefinitions().Create(crd); err != nil && !errors.IsAlreadyExists(err) {
+			if _, err := client.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 				logrus.Warnf("error registering crdsv1 %v,%v", crd.GetName(), err)
 				continue
 			}

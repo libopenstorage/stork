@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -67,7 +68,7 @@ func (c *applicationRegistrations) Get(name string, options v1.GetOptions) (resu
 		Resource("applicationregistrations").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -83,7 +84,7 @@ func (c *applicationRegistrations) List(opts v1.ListOptions) (result *v1alpha1.A
 		Resource("applicationregistrations").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -99,7 +100,7 @@ func (c *applicationRegistrations) Watch(opts v1.ListOptions) (watch.Interface, 
 		Resource("applicationregistrations").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a applicationRegistration and creates it.  Returns the server's representation of the applicationRegistration, and an error, if there is any.
@@ -108,7 +109,7 @@ func (c *applicationRegistrations) Create(applicationRegistration *v1alpha1.Appl
 	err = c.client.Post().
 		Resource("applicationregistrations").
 		Body(applicationRegistration).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -120,7 +121,7 @@ func (c *applicationRegistrations) Update(applicationRegistration *v1alpha1.Appl
 		Resource("applicationregistrations").
 		Name(applicationRegistration.Name).
 		Body(applicationRegistration).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -131,7 +132,7 @@ func (c *applicationRegistrations) Delete(name string, options *v1.DeleteOptions
 		Resource("applicationregistrations").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -146,7 +147,7 @@ func (c *applicationRegistrations) DeleteCollection(options *v1.DeleteOptions, l
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -158,7 +159,7 @@ func (c *applicationRegistrations) Patch(name string, pt types.PatchType, data [
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

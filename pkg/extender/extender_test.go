@@ -29,13 +29,13 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/record"
+	schedulerapi "k8s.io/kube-scheduler/extender/v1"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
 
 const (
 	mockDriverName   = "MockDriver"
-	defaultNamespace = "testNamespace"
+	defaultNamespace = "default"
 )
 
 var driver *mock.Driver
@@ -92,7 +92,7 @@ func teardown(t *testing.T) {
 
 func newPod(podName string, volumes map[string]bool) *v1.Pod {
 	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: podName},
+		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: defaultNamespace},
 	}
 	for volume, skipLabel := range volumes {
 		pvc := driver.NewPVC(volume)
@@ -273,7 +273,7 @@ func verifyPrioritizeResponse(
 			if address.Type == v1.NodeHostName {
 				for _, respNode := range *response {
 					if address.Address == respNode.Host {
-						if expectedScores[i] != respNode.Score {
+						if int64(expectedScores[i]) != respNode.Score {
 							match = false
 							goto done
 						}
@@ -936,7 +936,8 @@ func restorePVCTest(t *testing.T) {
 	podVolume := v1.Volume{}
 	// Create PVC Claim with annotation
 	pvcClaim := &v1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Name: "restorePVC",
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "restorePVC",
 			Annotations: restoreAnnotation,
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
@@ -958,7 +959,7 @@ func restorePVCTest(t *testing.T) {
 
 	// restore annotation
 	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "restorePod"},
+		ObjectMeta: metav1.ObjectMeta{Name: "restorePod", Namespace: defaultNamespace},
 	}
 	validPVCSpec := &v1.PersistentVolumeClaimVolumeSource{
 		ClaimName: pvc.Name,

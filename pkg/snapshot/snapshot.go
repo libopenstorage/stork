@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -14,7 +15,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/sig-storage-lib-external-provisioner/controller"
+	"sigs.k8s.io/sig-storage-lib-external-provisioner/v6/controller"
 )
 
 const (
@@ -26,6 +27,7 @@ const (
 type Snapshot struct {
 	lock                       sync.Mutex
 	stopChannel                chan struct{}
+	stopContext                context.Context
 	started                    bool
 	snapshotController         *controllers.Snapshotter
 	snapshotScheduleController *controllers.SnapshotScheduleController
@@ -49,6 +51,7 @@ func (s *Snapshot) Start(mgr manager.Manager) error {
 		return fmt.Errorf("Snapshot controllers have already been started")
 	}
 	s.stopChannel = make(chan struct{})
+	s.stopContext = context.Background()
 
 	// Start the snapshot controller first so that the CRD gets registered
 	s.snapshotController = &controllers.Snapshotter{
@@ -105,7 +108,7 @@ func (s *Snapshot) Start(mgr manager.Manager) error {
 		return err
 	}
 
-	go s.provisioner.Run(s.stopChannel)
+	go s.provisioner.Run(s.stopContext)
 
 	// Start the snapshot schedule controller
 	s.snapshotScheduleController = controllers.NewSnapshotScheduleController(mgr, s.Recorder)
@@ -133,6 +136,7 @@ func (s *Snapshot) Stop() error {
 	}
 
 	close(s.stopChannel)
+	s.stopContext.Done()
 
 	s.started = false
 	return nil

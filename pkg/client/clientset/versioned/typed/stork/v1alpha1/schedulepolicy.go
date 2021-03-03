@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -67,7 +68,7 @@ func (c *schedulePolicies) Get(name string, options v1.GetOptions) (result *v1al
 		Resource("schedulepolicies").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -83,7 +84,7 @@ func (c *schedulePolicies) List(opts v1.ListOptions) (result *v1alpha1.ScheduleP
 		Resource("schedulepolicies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -99,7 +100,7 @@ func (c *schedulePolicies) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("schedulepolicies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a schedulePolicy and creates it.  Returns the server's representation of the schedulePolicy, and an error, if there is any.
@@ -108,7 +109,7 @@ func (c *schedulePolicies) Create(schedulePolicy *v1alpha1.SchedulePolicy) (resu
 	err = c.client.Post().
 		Resource("schedulepolicies").
 		Body(schedulePolicy).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -120,7 +121,7 @@ func (c *schedulePolicies) Update(schedulePolicy *v1alpha1.SchedulePolicy) (resu
 		Resource("schedulepolicies").
 		Name(schedulePolicy.Name).
 		Body(schedulePolicy).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -131,7 +132,7 @@ func (c *schedulePolicies) Delete(name string, options *v1.DeleteOptions) error 
 		Resource("schedulepolicies").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -146,7 +147,7 @@ func (c *schedulePolicies) DeleteCollection(options *v1.DeleteOptions, listOptio
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -158,7 +159,7 @@ func (c *schedulePolicies) Patch(name string, pt types.PatchType, data []byte, s
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

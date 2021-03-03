@@ -3,6 +3,7 @@
 package monitor
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -24,13 +25,13 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
 const (
-	mockDriverName = "MockDriver"
-	nodeForPod     = "node1.domain"
+	mockDriverName   = "MockDriver"
+	nodeForPod       = "node1.domain"
+	defaultNamespace = "default"
 )
 
 var (
@@ -199,7 +200,7 @@ func testLostPod(
 		require.NoError(t, err, "failed to get node for pod")
 		node.Spec.Taints = []v1.Taint{
 			{
-				Key:    schedulerapi.TaintNodeUnreachable,
+				Key:    v1.TaintNodeUnreachable,
 				Effect: v1.TaintEffectNoExecute,
 			},
 		}
@@ -341,7 +342,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 		_, err := core.Instance().CreatePersistentVolumeClaim(&v1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      volumeName,
-				Namespace: "",
+				Namespace: defaultNamespace,
 			},
 		})
 		require.NoError(t, err, "failed to create pv for %s", volumeName)
@@ -353,7 +354,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 			Spec: v1.PersistentVolumeSpec{
 				ClaimRef: &v1.ObjectReference{
 					Name:      volumeName,
-					Namespace: "",
+					Namespace: defaultNamespace,
 				},
 			},
 		})
@@ -450,6 +451,7 @@ func testVolumeAttachmentCleanup(t *testing.T) {
 	time.Sleep(95 * time.Second)
 
 	vaList, err := storage.Instance().ListVolumeAttachments()
+	fmt.Println("va list: ", vaList)
 	require.NoError(t, err, "expected no error from list vol attachments")
 
 	// There should be exactly one attachment left - the healthy one.

@@ -60,7 +60,7 @@ func (p *PVCWatcher) Start(mgr manager.Manager) error {
 }
 
 // Reconcile handles snapshot schedule updates for persistent volume claims.
-func (p *PVCWatcher) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (p *PVCWatcher) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling PVC %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance

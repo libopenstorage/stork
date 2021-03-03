@@ -101,7 +101,7 @@ func (m *MigrationController) Init(mgr manager.Manager, migrationAdminNamespace 
 }
 
 // Reconcile manages Migration resources.
-func (m *MigrationController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (m *MigrationController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling Migration %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
@@ -975,10 +975,10 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 
 	if sourceSA.GetName() != "default" {
 		// delete and recreate service account
-		if err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Delete(sourceSA.GetName(), &metav1.DeleteOptions{}); err != nil {
+		if err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Delete(context.TODO(), sourceSA.GetName(), metav1.DeleteOptions{}); err != nil {
 			return err
 		}
-		if _, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Create(&sourceSA); err != nil {
+		if _, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Create(context.TODO(), &sourceSA, metav1.CreateOptions{}); err != nil {
 			return err
 		}
 		return nil
@@ -986,7 +986,7 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 
 	log.MigrationLog(migration).Infof("Updating default service account(namespace : %v) with image pull secrets", sourceSA.GetNamespace())
 	// merge service account resource for default namespaces
-	destSA, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Get(sourceSA.GetName(), metav1.GetOptions{})
+	destSA, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Get(context.TODO(), sourceSA.GetName(), metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -1003,7 +1003,7 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 			destSA.ImagePullSecrets = append(destSA.ImagePullSecrets, s)
 		}
 	}
-	_, err = adminClient.CoreV1().ServiceAccounts(destSA.GetNamespace()).Update(destSA)
+	_, err = adminClient.CoreV1().ServiceAccounts(destSA.GetNamespace()).Update(context.TODO(), destSA, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
@@ -1193,10 +1193,10 @@ func (m *MigrationController) applyResources(
 				return err
 			}
 			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
-			crdvbeta1, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+			crdvbeta1, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 			if err == nil {
 				crdvbeta1.ResourceVersion = ""
-				if _, regErr := destClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crdvbeta1); regErr != nil && !errors.IsAlreadyExists(regErr) {
+				if _, regErr := destClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Create(context.TODO(), crdvbeta1, metav1.CreateOptions{}); regErr != nil && !errors.IsAlreadyExists(regErr) {
 					log.MigrationLog(migration).Warnf("error registering crds %s, %v", crdvbeta1.GetName(), err)
 				} else if regErr == nil {
 					if err := k8sutils.ValidateCRD(destClnt, crdName); err != nil {
@@ -1205,7 +1205,7 @@ func (m *MigrationController) applyResources(
 					continue
 				}
 			}
-			res, err := srcClnt.ApiextensionsV1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+			res, err := srcClnt.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 			if err != nil {
 				if errors.IsNotFound(err) {
 					log.MigrationLog(migration).Warnf("CRDV1 not found %v for kind %v", crdName, v.Kind)
@@ -1241,7 +1241,7 @@ func (m *MigrationController) applyResources(
 				res.Spec.Versions = updatedVersions
 			}
 			var regErr error
-			if _, regErr = destClnt.ApiextensionsV1().CustomResourceDefinitions().Create(res); regErr != nil && !errors.IsAlreadyExists(regErr) {
+			if _, regErr = destClnt.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), res, metav1.CreateOptions{}); regErr != nil && !errors.IsAlreadyExists(regErr) {
 				log.MigrationLog(migration).Errorf("error registering crds v1 %s, %v", res.GetName(), err)
 			}
 			if regErr == nil {
@@ -1262,19 +1262,19 @@ func (m *MigrationController) applyResources(
 		}
 
 		// Don't create if the namespace already exists on the remote cluster
-		_, err = adminClient.CoreV1().Namespaces().Get(namespace.Name, metav1.GetOptions{})
+		_, err = adminClient.CoreV1().Namespaces().Get(context.TODO(), namespace.Name, metav1.GetOptions{})
 		if err == nil {
 			continue
 		}
 
 		annotations := m.getPrunedAnnotations(namespace.Annotations)
-		_, err = adminClient.CoreV1().Namespaces().Create(&v1.Namespace{
+		_, err = adminClient.CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        namespace.Name,
 				Labels:      namespace.Labels,
 				Annotations: annotations,
 			},
-		})
+		}, metav1.CreateOptions{})
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
@@ -1335,7 +1335,7 @@ func (m *MigrationController) applyResources(
 		unstructured.SetAnnotations(migrAnnot)
 		retries := 0
 		for {
-			_, err = dynamicClient.Create(unstructured, metav1.CreateOptions{})
+			_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
 			if err != nil && (errors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error())) {
 				switch objectType.GetKind() {
 				// Don't want to delete the Volume resources
@@ -1345,7 +1345,7 @@ func (m *MigrationController) applyResources(
 					if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
 						err = nil
 					} else {
-						_, err = dynamicClient.Update(unstructured, metav1.UpdateOptions{})
+						_, err = dynamicClient.Update(context.TODO(), unstructured, metav1.UpdateOptions{})
 					}
 				case "ServiceAccount":
 					err = m.checkAndUpdateDefaultSA(migration, o)
@@ -1353,14 +1353,14 @@ func (m *MigrationController) applyResources(
 					// Delete the resource if it already exists on the destination
 					// cluster and try creating again
 					deleteStart := metav1.Now()
-					err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
+					err = dynamicClient.Delete(context.TODO(), metadata.GetName(), metav1.DeleteOptions{})
 					if err != nil {
 						log.MigrationLog(migration).Errorf("Error deleting %v %v during migrate: %v", objectType.GetKind(), metadata.GetName(), err)
 					} else {
 						// wait for resources to get deleted
 						// 2 mins
 						for i := 0; i < deletedMaxRetries; i++ {
-							obj, err := dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
+							obj, err := dynamicClient.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
 							if err != nil && errors.IsNotFound(err) {
 								break
 							}
@@ -1373,7 +1373,7 @@ func (m *MigrationController) applyResources(
 							logrus.Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
 							time.Sleep(deletedRetryInterval)
 						}
-						_, err = dynamicClient.Create(unstructured, metav1.CreateOptions{})
+						_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
 					}
 				}
 			}

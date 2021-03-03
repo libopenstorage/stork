@@ -20,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
+	schedulerapi "k8s.io/kube-scheduler/extender/v1"
 )
 
 const (
@@ -573,7 +573,7 @@ sendResponse:
 		if !ok || score == 0 {
 			score = defaultScore
 		}
-		hostPriority := schedulerapi.HostPriority{Host: node.Name, Score: score}
+		hostPriority := schedulerapi.HostPriority{Host: node.Name, Score: int64(score)}
 		respList = append(respList, hostPriority)
 	}
 
