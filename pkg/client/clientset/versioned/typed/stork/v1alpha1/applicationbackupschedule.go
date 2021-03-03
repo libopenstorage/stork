@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -71,7 +72,7 @@ func (c *applicationBackupSchedules) Get(name string, options v1.GetOptions) (re
 		Resource("applicationbackupschedules").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -88,7 +89,7 @@ func (c *applicationBackupSchedules) List(opts v1.ListOptions) (result *v1alpha1
 		Resource("applicationbackupschedules").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -105,7 +106,7 @@ func (c *applicationBackupSchedules) Watch(opts v1.ListOptions) (watch.Interface
 		Resource("applicationbackupschedules").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a applicationBackupSchedule and creates it.  Returns the server's representation of the applicationBackupSchedule, and an error, if there is any.
@@ -115,7 +116,7 @@ func (c *applicationBackupSchedules) Create(applicationBackupSchedule *v1alpha1.
 		Namespace(c.ns).
 		Resource("applicationbackupschedules").
 		Body(applicationBackupSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -128,7 +129,7 @@ func (c *applicationBackupSchedules) Update(applicationBackupSchedule *v1alpha1.
 		Resource("applicationbackupschedules").
 		Name(applicationBackupSchedule.Name).
 		Body(applicationBackupSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -144,7 +145,7 @@ func (c *applicationBackupSchedules) UpdateStatus(applicationBackupSchedule *v1a
 		Name(applicationBackupSchedule.Name).
 		SubResource("status").
 		Body(applicationBackupSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -156,7 +157,7 @@ func (c *applicationBackupSchedules) Delete(name string, options *v1.DeleteOptio
 		Resource("applicationbackupschedules").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -172,7 +173,7 @@ func (c *applicationBackupSchedules) DeleteCollection(options *v1.DeleteOptions,
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -185,7 +186,7 @@ func (c *applicationBackupSchedules) Patch(name string, pt types.PatchType, data
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

@@ -9,7 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/kubernetes/pkg/printers"
+	"k8s.io/cli-runtime/pkg/printers"
+	kprinters "k8s.io/kubernetes/pkg/printers"
 )
 
 func newGetCommand(cmdFactory Factory, ioStreams genericclioptions.IOStreams) *cobra.Command {
@@ -63,12 +64,12 @@ func printTable(
 			Name: c,
 		})
 	}
-	generator := printers.NewTableGenerator()
+	generator := kprinters.NewTableGenerator()
 	err := generator.TableHandler(columnDefinitions, printerFunc)
 	if err != nil {
 		return err
 	}
-	table, err := generator.GenerateTable(object, printers.GenerateOptions{
+	table, err := generator.GenerateTable(object, kprinters.GenerateOptions{
 		NoHeaders: true,
 	})
 	if err != nil {

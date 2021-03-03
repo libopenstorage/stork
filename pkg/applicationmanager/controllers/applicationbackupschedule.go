@@ -62,7 +62,7 @@ func (s *ApplicationBackupScheduleController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile updates for ApplicationBackupSchedule objects.
-func (s *ApplicationBackupScheduleController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (s *ApplicationBackupScheduleController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ApplicationBackupSchedule %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance

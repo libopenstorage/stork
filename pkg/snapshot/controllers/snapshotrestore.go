@@ -62,7 +62,7 @@ func (c *SnapshotRestoreController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile manages SnapShot resources.
-func (c *SnapshotRestoreController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (c *SnapshotRestoreController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling VolumeSnapshotRestore %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance

@@ -29,8 +29,8 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/record"
+	schedulerapi "k8s.io/kube-scheduler/extender/v1"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 )
 
 const (
@@ -269,7 +269,7 @@ func verifyPrioritizeResponse(
 			if address.Type == v1.NodeHostName {
 				for _, respNode := range *response {
 					if address.Address == respNode.Host {
-						if expectedScores[i] != respNode.Score {
+						if int64(expectedScores[i]) != respNode.Score {
 							match = false
 							goto done
 						}

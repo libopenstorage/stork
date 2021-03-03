@@ -32,16 +32,17 @@ BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 all: stork storkctl cmdexecutor pretest
 
+vendor-tidy:
+	go mod tidy
+
 vendor-update:
-	dep ensure -update
-	./hack/update-deprecated-apis.sh
+	go mod download
 
 vendor:
-	dep ensure
-	./hack/update-deprecated-apis.sh
+	go mod vendor
 
 lint:
-	go get -u golang.org/x/lint/golint
+	GO111MODULE=off go get -u golang.org/x/lint/golint
 	for file in $(GO_FILES); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
@@ -55,14 +56,14 @@ vet:
 	go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
 staticcheck:
-	go get -u honnef.co/go/tools/cmd/staticcheck
+	GO111MODULE=off go get -u honnef.co/go/tools/cmd/staticcheck
 	staticcheck $(PKGS)
 	staticcheck -tags integrationtest test/integration_test/*.go
 	staticcheck -tags unittest $(PKGS)
 
 errcheck:
-	go get -u github.com/kisielk/errcheck
-	errcheck -verbose -blank $(PKGS)
+	GO111MODULE=off go get -u github.com/kisielk/errcheck
+	errcheck -verbose -blank $(PKGS) 
 	errcheck -verbose -blank -tags unittest $(PKGS)
 	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
@@ -73,7 +74,7 @@ do-fmt:
 	 gofmt -s -w $(GO_FILES)
 
 gocyclo:
-	go get -u github.com/fzipp/gocyclo
+	GO111MODULE=off go get -u github.com/fzipp/gocyclo
 	gocyclo -over 15 $(GO_FILES)
 
 pretest: check-fmt lint vet errcheck staticcheck

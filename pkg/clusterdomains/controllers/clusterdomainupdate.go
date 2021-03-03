@@ -49,7 +49,7 @@ func (c *ClusterDomainUpdateController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile updates ClusterDomainUpdate resources.
-func (c *ClusterDomainUpdateController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (c *ClusterDomainUpdateController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ClusterDomainUpdate %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance

@@ -24,7 +24,6 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	"k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -199,7 +198,7 @@ func testLostPod(
 		require.NoError(t, err, "failed to get node for pod")
 		node.Spec.Taints = []v1.Taint{
 			{
-				Key:    schedulerapi.TaintNodeUnreachable,
+				Key:    v1.TaintNodeUnreachable,
 				Effect: v1.TaintEffectNoExecute,
 			},
 		}
