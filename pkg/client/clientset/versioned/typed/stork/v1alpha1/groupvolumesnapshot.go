@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -70,7 +71,7 @@ func (c *groupVolumeSnapshots) Get(name string, options v1.GetOptions) (result *
 		Resource("groupvolumesnapshots").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -87,7 +88,7 @@ func (c *groupVolumeSnapshots) List(opts v1.ListOptions) (result *v1alpha1.Group
 		Resource("groupvolumesnapshots").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -104,7 +105,7 @@ func (c *groupVolumeSnapshots) Watch(opts v1.ListOptions) (watch.Interface, erro
 		Resource("groupvolumesnapshots").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a groupVolumeSnapshot and creates it.  Returns the server's representation of the groupVolumeSnapshot, and an error, if there is any.
@@ -114,7 +115,7 @@ func (c *groupVolumeSnapshots) Create(groupVolumeSnapshot *v1alpha1.GroupVolumeS
 		Namespace(c.ns).
 		Resource("groupvolumesnapshots").
 		Body(groupVolumeSnapshot).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -127,7 +128,7 @@ func (c *groupVolumeSnapshots) Update(groupVolumeSnapshot *v1alpha1.GroupVolumeS
 		Resource("groupvolumesnapshots").
 		Name(groupVolumeSnapshot.Name).
 		Body(groupVolumeSnapshot).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -139,7 +140,7 @@ func (c *groupVolumeSnapshots) Delete(name string, options *v1.DeleteOptions) er
 		Resource("groupvolumesnapshots").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -155,7 +156,7 @@ func (c *groupVolumeSnapshots) DeleteCollection(options *v1.DeleteOptions, listO
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -168,7 +169,7 @@ func (c *groupVolumeSnapshots) Patch(name string, pt types.PatchType, data []byt
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

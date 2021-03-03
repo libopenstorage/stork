@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -71,7 +72,7 @@ func (c *applicationClones) Get(name string, options v1.GetOptions) (result *v1a
 		Resource("applicationclones").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -88,7 +89,7 @@ func (c *applicationClones) List(opts v1.ListOptions) (result *v1alpha1.Applicat
 		Resource("applicationclones").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -105,7 +106,7 @@ func (c *applicationClones) Watch(opts v1.ListOptions) (watch.Interface, error) 
 		Resource("applicationclones").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a applicationClone and creates it.  Returns the server's representation of the applicationClone, and an error, if there is any.
@@ -115,7 +116,7 @@ func (c *applicationClones) Create(applicationClone *v1alpha1.ApplicationClone) 
 		Namespace(c.ns).
 		Resource("applicationclones").
 		Body(applicationClone).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -128,7 +129,7 @@ func (c *applicationClones) Update(applicationClone *v1alpha1.ApplicationClone) 
 		Resource("applicationclones").
 		Name(applicationClone.Name).
 		Body(applicationClone).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -144,7 +145,7 @@ func (c *applicationClones) UpdateStatus(applicationClone *v1alpha1.ApplicationC
 		Name(applicationClone.Name).
 		SubResource("status").
 		Body(applicationClone).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -156,7 +157,7 @@ func (c *applicationClones) Delete(name string, options *v1.DeleteOptions) error
 		Resource("applicationclones").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -172,7 +173,7 @@ func (c *applicationClones) DeleteCollection(options *v1.DeleteOptions, listOpti
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -185,7 +186,7 @@ func (c *applicationClones) Patch(name string, pt types.PatchType, data []byte, 
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
