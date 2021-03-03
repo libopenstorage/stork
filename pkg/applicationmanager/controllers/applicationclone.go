@@ -151,7 +151,7 @@ func (a *ApplicationCloneController) verifyNamespaces(clone *stork_api.Applicati
 }
 
 // Reconcile updates for ApplicationClone objects.
-func (a *ApplicationCloneController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (a *ApplicationCloneController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ApplicationClone %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance

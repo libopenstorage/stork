@@ -68,7 +68,7 @@ func (s *SnapshotScheduleController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile manages SnapshotSchedule resources.
-func (s *SnapshotScheduleController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (s *SnapshotScheduleController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling VolumeSnapshotSchedule %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance

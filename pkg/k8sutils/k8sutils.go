@@ -1,6 +1,7 @@
 package k8sutils
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -65,7 +66,7 @@ func GetVolumeNamesFromLabelSelector(namespace string, labels map[string]string)
 // ValidateCRD validate crd with apiversion v1beta1
 func ValidateCRD(client *clientset.Clientset, crdName string) error {
 	return wait.PollImmediate(retryInterval, crdTimeout, func() (bool, error) {
-		crd, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+		crd, err := client.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else if err != nil {
@@ -90,7 +91,7 @@ func ValidateCRD(client *clientset.Clientset, crdName string) error {
 // ValidateCRDV1 validate crd with apiversion v1
 func ValidateCRDV1(client *clientset.Clientset, crdName string) error {
 	return wait.PollImmediate(retryInterval, crdTimeout, func() (bool, error) {
-		crd, err := client.ApiextensionsV1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+		crd, err := client.ApiextensionsV1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else if err != nil {

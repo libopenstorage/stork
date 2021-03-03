@@ -351,14 +351,14 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 
 	cmdArgs = []string{"activate", "migrations", "-a"}
 	expected = "Updated replicas for deployment dep/migratedDeployment to 1\n"
-	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 3\n"
 	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 1\n"
+	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 3\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"deactivate", "migrations", "-a"}
 	expected = "Updated replicas for deployment dep/migratedDeployment to 0\n"
-	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
 	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 0\n"
+	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 
