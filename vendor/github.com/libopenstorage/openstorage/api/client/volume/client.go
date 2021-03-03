@@ -34,7 +34,7 @@ func newVolumeClient(c *client.Client) volume.VolumeDriver {
 		IODriver:              volume.IONotSupported,
 		FilesystemTrimDriver:  volume.FilesystemTrimNotSupported,
 		FilesystemCheckDriver: volume.FilesystemCheckNotSupported,
-		c: c}
+		c:                     c}
 }
 
 // String description of this driver.
@@ -288,6 +288,14 @@ func (v *volumeClient) CapacityUsage(
 	}
 
 	return requests, nil
+}
+
+func (v *volumeClient) VolumeUsageByNode(
+	nodeID string,
+) (*api.VolumeUsageByNode, error) {
+
+	return nil, volume.ErrNotSupported
+
 }
 
 // Shutdown and cleanup.

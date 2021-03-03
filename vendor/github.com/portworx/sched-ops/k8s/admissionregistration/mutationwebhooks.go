@@ -1,6 +1,8 @@
 package admissionregistration
 
 import (
+	"context"
+
 	hook "k8s.io/api/admissionregistration/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -22,7 +24,7 @@ func (c *Client) GetMutatingWebhookConfiguration(name string) (*hook.MutatingWeb
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.admission.MutatingWebhookConfigurations().Get(name, metav1.GetOptions{})
+	return c.admission.MutatingWebhookConfigurations().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateMutatingWebhookConfiguration creates given MutatingWebhookConfiguration
@@ -30,7 +32,7 @@ func (c *Client) CreateMutatingWebhookConfiguration(cfg *hook.MutatingWebhookCon
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.admission.MutatingWebhookConfigurations().Create(cfg)
+	return c.admission.MutatingWebhookConfigurations().Create(context.TODO(), cfg, metav1.CreateOptions{})
 }
 
 // UpdateMutatingWebhookConfiguration updates given MutatingWebhookConfiguration
@@ -38,7 +40,7 @@ func (c *Client) UpdateMutatingWebhookConfiguration(cfg *hook.MutatingWebhookCon
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.admission.MutatingWebhookConfigurations().Update(cfg)
+	return c.admission.MutatingWebhookConfigurations().Update(context.TODO(), cfg, metav1.UpdateOptions{})
 }
 
 // DeleteMutatingWebhookConfiguration deletes given MutatingWebhookConfiguration
@@ -46,5 +48,5 @@ func (c *Client) DeleteMutatingWebhookConfiguration(name string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.admission.MutatingWebhookConfigurations().Delete(name, &metav1.DeleteOptions{})
+	return c.admission.MutatingWebhookConfigurations().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }

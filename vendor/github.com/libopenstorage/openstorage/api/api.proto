@@ -310,6 +310,8 @@ message IoStrategy {
   bool async_io = 1;
   // EarlyAck enables acks for async I/O at the source.
   bool early_ack = 2;
+  // Enable direct I/O on the backing datastore
+  bool direct_io = 3;
 }
 
 // Xattr defines implementation specific volume attribute
@@ -423,6 +425,7 @@ enum FastpathProtocol {
     FASTPATH_PROTO_UNKNOWN = 0;
     FASTPATH_PROTO_NVMEOF_TCP = 1;
     FASTPATH_PROTO_ISCSI = 2;
+    FASTPATH_PROTO_LOCAL = 3;
 }
 
 message FastpathReplState {
@@ -453,6 +456,8 @@ message FastpathConfig {
   FastpathStatus status = 3;
   // Fastpath replica state for each replica in replica set
   repeated FastpathReplState replicas = 4;
+  // Dirty flag on volume - was attached in userspace
+  bool dirty = 5;
 }
 
 // ScanPolicy defines when a filesystem check is triggered and what action to take
@@ -561,6 +566,8 @@ message VolumeSpec {
   // Sharedv4MountOptions defines the options that will be used while mounting a sharedv4 volume
   // from a node where the volume replica does not exist
   MountOptions sharedv4_mount_options = 39;
+  // Proxy_write if true, per volume proxy write replication enabled
+  bool proxy_write = 40;
   // ProxySpec indicates that this volume is used for proxying an external data source
   ProxySpec proxy_spec = 41;
 }
@@ -620,6 +627,8 @@ message VolumeSpecUpdate {
   oneof mount_opt { MountOptions mount_opt_spec = 33;}
   // sharedv4_mount_opt provides the client side mount time options for a sharedv4 volume
   oneof sharedv4_mount_opt { MountOptions sharedv4_mount_opt_spec = 34;}
+  // Proxy_write is true if proxy write replication is enabled for the volume
+  oneof proxy_write_opt { bool proxy_write = 35; }
   // proxy_spec_opt provides the spec for a proxy volume
   oneof proxy_spec_opt { ProxySpec proxy_spec = 36;}
 }
@@ -697,6 +706,8 @@ message VolumeSpecPolicy {
   oneof mount_opt { MountOptions mount_opt_spec = 58;}
   // sharedv4_mount_opt provides the client side mount time options for a sharedv4 volume
   oneof sharedv4_mount_opt { MountOptions sharedv4_mount_opt_spec = 59;}
+  // Proxy_write is true if proxy write replication is enabled for the volume
+  oneof proxy_write_opt { bool proxy_write = 60; }
   // proxy_spec_opt provides the spec for a proxy volume.
   oneof proxy_spec_opt { ProxySpec proxy_spec = 61; }
 }
@@ -877,6 +888,31 @@ message CapacityUsageInfo {
   int64 shared_bytes = 2;
   // TotalBytes used by this volume
   int64 total_bytes = 3;
+}
+
+// Provides volume's exclusive bytes and its total usage. This cannot be 
+// retrieved individually and is obtained as part node's usage for a given
+// node.
+message VolumeUsage {
+   // id for the volume/snapshot
+  string volume_id = 1;
+  // name of the volume/snapshot
+  string volume_name = 2;
+  // uuid of the pool that this volume belongs to
+  string pool_uuid = 3;
+  // size in bytes exclusively used by the volume/snapshot
+  uint64 exclusive_bytes = 4;
+  //  size in bytes by the volume/snapshot
+  uint64 total_bytes = 5;
+  // set to true if this volume is snapshot created by cloudbackups
+  bool local_cloud_snapshot = 6;
+}
+
+// Provides capacity usage of a node in terms of volumes. Returns VolumeUsage for
+// all the volume/snapshot(s) in the node.
+message VolumeUsageByNode {
+  // VolumeUsage returns list of VolumeUsage for given node
+  repeated VolumeUsage volume_usage= 1;
 }
 
 // A SdkStoragePolicy represents minimum set of volume specs to be
@@ -1775,6 +1811,14 @@ service OpenStorageNode {
         get: "/v1/nodes/filters"
       };
     }
+
+	// Returns capacity usage of all volumes/snaps for a give node
+	rpc VolumeUsageByNode(SdkNodeVolumeUsageByNodeRequest)
+	returns (SdkNodeVolumeUsageByNodeResponse) {
+        option(google.api.http) = {
+          get: "/v1/nodes/usage/{node_id}"
+		};
+	}
 }
 
 // OpenStorageVolume is a service used to manage the volumes of a storage system
@@ -2049,7 +2093,8 @@ service OpenStorageMigrate {
       };
     }
 
-  // Inspect the status of migration operation
+// Status for migration operation.
+// If status request is empty, status for all migration operation will be returned.
   rpc Status(SdkCloudMigrateStatusRequest)
     returns (SdkCloudMigrateStatusResponse) {
       option(google.api.http) = {
@@ -3156,6 +3201,19 @@ message SdkVolumeSnapshotScheduleUpdateResponse {
 }
 
 
+// Defines request to retrieve all volumes/snapshots capacity usage details
+// for a given node
+message SdkNodeVolumeUsageByNodeRequest {
+  // Id of the node to get snapshot/volumes capacity usage details
+  string node_id = 1;
+}
+
+// Defines response containing Node's volumes/snapshot capacity usage details
+message SdkNodeVolumeUsageByNodeResponse {
+  // VolumeUsageByNode details
+  VolumeUsageByNode volume_usage_info = 1;
+}
+
 // Empty request
 message SdkClusterDomainsEnumerateRequest {
 }
@@ -3974,9 +4032,6 @@ message SdkCloudBackupSizeResponse{
 //
 // Values can also be set to `*`, or start or end with `*` to allow multiple matches in services or apis.
 //
-// Services and APIs can also be denied by prefixing the value with a `!`. Note that on rule conflicts,
-// denial will always be chosen.
-//
 // ### Examples
 //
 // * Allow any call:
@@ -4307,9 +4362,9 @@ message SdkVersion {
     // SDK version major value of this specification
     Major = 0;
     // SDK version minor value of this specification
-    Minor = 69;
+    Minor = 99;
     // SDK version patch value of this specification
-    Patch = 25;
+    Patch = 0;
   }
 
   // The following cannot be set to use the enum Version because the REST
@@ -4880,6 +4935,8 @@ message RestoreVolumeSpec {
   // Sharedv4MountOptions defines the options that will be used while mounting a sharedv4 volume
   // from a node where the volume replica does not exist
   MountOptions sharedv4_mount_options = 23;
+  // Proxy_write is true if proxy write replication is enabled for the volume
+  RestoreParamBoolType proxy_write = 24;
   // IoProfileBkupSrc indicates to inherit IoProfile from cloudbackup
   bool io_profile_bkup_src = 25;
   // ProxySpec indicates that this volume is used for proxying an external data source

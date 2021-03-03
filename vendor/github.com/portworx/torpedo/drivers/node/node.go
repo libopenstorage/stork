@@ -152,6 +152,12 @@ type Driver interface {
 
 	// GetZones returns list of zones in which ASG cluster is running
 	GetZones() ([]string, error)
+
+	// PowerOnVM powers VM
+	PowerOnVM(node Node) error
+
+	// PowerOffVM powers VM
+	PowerOffVM(node Node) error
 }
 
 // Register registers the given node driver
@@ -296,5 +302,26 @@ func (d *notSupportedDriver) GetZones() ([]string, error) {
 	return []string{}, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetZones()",
+	}
+}
+
+func (d *notSupportedDriver) PowerOnVM(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "PowerOnVM()",
+	}
+}
+
+func (d *notSupportedDriver) PowerOffVM(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "PowerOffVM()",
+	}
+}
+
+func (d *notSupportedDriver) RebootVM(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RebootVM()",
 	}
 }

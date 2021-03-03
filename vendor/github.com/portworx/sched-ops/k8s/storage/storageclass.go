@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"context"
+
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -30,7 +32,7 @@ func (c *Client) GetStorageClasses(labelSelector map[string]string) (*storagev1.
 		return nil, err
 	}
 
-	return c.storage.StorageClasses().List(metav1.ListOptions{
+	return c.storage.StorageClasses().List(context.TODO(), metav1.ListOptions{
 		LabelSelector: labels.FormatLabels(labelSelector),
 	})
 }
@@ -41,7 +43,7 @@ func (c *Client) GetStorageClass(name string) (*storagev1.StorageClass, error) {
 		return nil, err
 	}
 
-	return c.storage.StorageClasses().Get(name, metav1.GetOptions{})
+	return c.storage.StorageClasses().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateStorageClass creates the given storage class
@@ -50,7 +52,7 @@ func (c *Client) CreateStorageClass(sc *storagev1.StorageClass) (*storagev1.Stor
 		return nil, err
 	}
 
-	return c.storage.StorageClasses().Create(sc)
+	return c.storage.StorageClasses().Create(context.TODO(), sc, metav1.CreateOptions{})
 }
 
 // DeleteStorageClass deletes the given storage class
@@ -59,7 +61,7 @@ func (c *Client) DeleteStorageClass(name string) error {
 		return err
 	}
 
-	return c.storage.StorageClasses().Delete(name, &metav1.DeleteOptions{})
+	return c.storage.StorageClasses().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // GetStorageClassParams returns the parameters of the given sc in the native map format

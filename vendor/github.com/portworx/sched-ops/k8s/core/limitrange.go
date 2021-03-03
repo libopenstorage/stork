@@ -1,6 +1,8 @@
 package core
 
 import (
+	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -28,7 +30,7 @@ func (c *Client) GetLimitRange(name string, namespace string) (*corev1.LimitRang
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().LimitRanges(namespace).Get(name, metav1.GetOptions{})
+	return c.kubernetes.CoreV1().LimitRanges(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateLimitRange creates the given limitrange
@@ -37,7 +39,7 @@ func (c *Client) CreateLimitRange(limitrange *corev1.LimitRange) (*corev1.LimitR
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().LimitRanges(limitrange.Namespace).Create(limitrange)
+	return c.kubernetes.CoreV1().LimitRanges(limitrange.Namespace).Create(context.TODO(), limitrange, metav1.CreateOptions{})
 }
 
 // ListLimitRange creates the given limitrange
@@ -46,7 +48,7 @@ func (c *Client) ListLimitRange(namespace string, opts metav1.ListOptions) (*cor
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().LimitRanges(namespace).List(opts)
+	return c.kubernetes.CoreV1().LimitRanges(namespace).List(context.TODO(), opts)
 }
 
 // UpdateLimitRange updates the given limitrange
@@ -55,7 +57,7 @@ func (c *Client) UpdateLimitRange(limitrange *corev1.LimitRange) (*corev1.LimitR
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().LimitRanges(limitrange.Namespace).Update(limitrange)
+	return c.kubernetes.CoreV1().LimitRanges(limitrange.Namespace).Update(context.TODO(), limitrange, metav1.UpdateOptions{})
 }
 
 // DeleteLimitRange deletes the given limitrange
@@ -64,7 +66,7 @@ func (c *Client) DeleteLimitRange(name, namespace string) error {
 		return err
 	}
 
-	return c.kubernetes.CoreV1().LimitRanges(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.kubernetes.CoreV1().LimitRanges(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -79,7 +81,7 @@ func (c *Client) WatchLimitRange(limitrange *corev1.LimitRange, fn WatchFunc) er
 		Watch:         true,
 	}
 
-	watchInterface, err := c.kubernetes.CoreV1().LimitRanges(limitrange.Namespace).Watch(listOptions)
+	watchInterface, err := c.kubernetes.CoreV1().LimitRanges(limitrange.Namespace).Watch(context.TODO(), listOptions)
 	if err != nil {
 		return err
 	}

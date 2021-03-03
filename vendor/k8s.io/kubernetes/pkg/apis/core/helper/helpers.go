@@ -267,7 +267,10 @@ func IsIntegerResourceName(str string) bool {
 // IsServiceIPSet aims to check if the service's ClusterIP is set or not
 // the objective is not to perform validation here
 func IsServiceIPSet(service *core.Service) bool {
-	return service.Spec.ClusterIP != core.ClusterIPNone && service.Spec.ClusterIP != ""
+	// This function assumes that the service is semantically validated
+	// it does not test if the IP is valid, just makes sure that it is set.
+	return len(service.Spec.ClusterIP) > 0 &&
+		service.Spec.ClusterIP != core.ClusterIPNone
 }
 
 var standardFinalizers = sets.NewString(
@@ -279,34 +282,6 @@ var standardFinalizers = sets.NewString(
 // IsStandardFinalizerName checks if the input string is a standard finalizer name
 func IsStandardFinalizerName(str string) bool {
 	return standardFinalizers.Has(str)
-}
-
-// LoadBalancerStatusEqual checks if the status of the load balancer is equal to the target status
-// TODO: make method on LoadBalancerStatus?
-func LoadBalancerStatusEqual(l, r *core.LoadBalancerStatus) bool {
-	return ingressSliceEqual(l.Ingress, r.Ingress)
-}
-
-func ingressSliceEqual(lhs, rhs []core.LoadBalancerIngress) bool {
-	if len(lhs) != len(rhs) {
-		return false
-	}
-	for i := range lhs {
-		if !ingressEqual(&lhs[i], &rhs[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func ingressEqual(lhs, rhs *core.LoadBalancerIngress) bool {
-	if lhs.IP != rhs.IP {
-		return false
-	}
-	if lhs.Hostname != rhs.Hostname {
-		return false
-	}
-	return true
 }
 
 // GetAccessModesAsString returns a string representation of an array of access modes.
@@ -521,4 +496,39 @@ func PersistentVolumeClaimHasClass(claim *core.PersistentVolumeClaim) bool {
 	}
 
 	return false
+}
+
+func toResourceNames(resources core.ResourceList) []core.ResourceName {
+	result := []core.ResourceName{}
+	for resourceName := range resources {
+		result = append(result, resourceName)
+	}
+	return result
+}
+
+func toSet(resourceNames []core.ResourceName) sets.String {
+	result := sets.NewString()
+	for _, resourceName := range resourceNames {
+		result.Insert(string(resourceName))
+	}
+	return result
+}
+
+// toContainerResourcesSet returns a set of resources names in container resource requirements
+func toContainerResourcesSet(ctr *core.Container) sets.String {
+	resourceNames := toResourceNames(ctr.Resources.Requests)
+	resourceNames = append(resourceNames, toResourceNames(ctr.Resources.Limits)...)
+	return toSet(resourceNames)
+}
+
+// ToPodResourcesSet returns a set of resource names in all containers in a pod.
+func ToPodResourcesSet(podSpec *core.PodSpec) sets.String {
+	result := sets.NewString()
+	for i := range podSpec.InitContainers {
+		result = result.Union(toContainerResourcesSet(&podSpec.InitContainers[i]))
+	}
+	for i := range podSpec.Containers {
+		result = result.Union(toContainerResourcesSet(&podSpec.Containers[i]))
+	}
+	return result
 }
