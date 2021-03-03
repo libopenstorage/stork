@@ -19,14 +19,14 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"time"
-
+	"context"
 	v1alpha1 "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	scheme "github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
+	"time"
 )
 
 // ActionApprovalsGetter has a method to return a ActionApprovalInterface.
@@ -71,7 +71,7 @@ func (c *actionApprovals) Get(name string, options v1.GetOptions) (result *v1alp
 		Resource("actionapprovals").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -88,7 +88,7 @@ func (c *actionApprovals) List(opts v1.ListOptions) (result *v1alpha1.ActionAppr
 		Resource("actionapprovals").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -105,7 +105,7 @@ func (c *actionApprovals) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("actionapprovals").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a actionApproval and creates it.  Returns the server's representation of the actionApproval, and an error, if there is any.
@@ -115,7 +115,7 @@ func (c *actionApprovals) Create(actionApproval *v1alpha1.ActionApproval) (resul
 		Namespace(c.ns).
 		Resource("actionapprovals").
 		Body(actionApproval).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -128,7 +128,7 @@ func (c *actionApprovals) Update(actionApproval *v1alpha1.ActionApproval) (resul
 		Resource("actionapprovals").
 		Name(actionApproval.Name).
 		Body(actionApproval).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -144,7 +144,7 @@ func (c *actionApprovals) UpdateStatus(actionApproval *v1alpha1.ActionApproval) 
 		Name(actionApproval.Name).
 		SubResource("status").
 		Body(actionApproval).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -156,7 +156,7 @@ func (c *actionApprovals) Delete(name string, options *v1.DeleteOptions) error {
 		Resource("actionapprovals").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -172,7 +172,7 @@ func (c *actionApprovals) DeleteCollection(options *v1.DeleteOptions, listOption
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -185,7 +185,7 @@ func (c *actionApprovals) Patch(name string, pt types.PatchType, data []byte, su
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

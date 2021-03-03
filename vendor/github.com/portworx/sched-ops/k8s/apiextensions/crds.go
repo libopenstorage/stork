@@ -1,6 +1,7 @@
 package apiextensions
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -72,7 +73,7 @@ func (c *Client) CreateCRD(resource CustomResource) error {
 		},
 	}
 
-	_, err := c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	_, err := c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -86,7 +87,7 @@ func (c *Client) RegisterCRD(crd *apiextensionsv1beta1.CustomResourceDefinition)
 		return err
 	}
 
-	_, err := c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+	_, err := c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -99,7 +100,7 @@ func (c *Client) UpdateCRD(crd *apiextensionsv1beta1.CustomResourceDefinition) (
 		return nil, err
 	}
 
-	return c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Update(crd)
+	return c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Update(context.TODO(), crd, metav1.UpdateOptions{})
 }
 
 // GetCRD returns a crd by name
@@ -107,7 +108,7 @@ func (c *Client) GetCRD(name string, options metav1.GetOptions) (*apiextensionsv
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Get(name, options)
+	return c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), name, options)
 }
 
 // ValidateCRD checks if the given CRD is registered
@@ -118,7 +119,7 @@ func (c *Client) ValidateCRD(resource CustomResource, timeout, retryInterval tim
 
 	crdName := fmt.Sprintf("%s.%s", resource.Plural, resource.Group)
 	return wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		crd, err := c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Get(crdName, metav1.GetOptions{})
+		crd, err := c.extension.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else if err != nil {
@@ -148,7 +149,7 @@ func (c *Client) DeleteCRD(fullName string) error {
 
 	return c.extension.ApiextensionsV1beta1().
 		CustomResourceDefinitions().
-		Delete(fullName, &metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
+		Delete(context.TODO(), fullName, metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
 }
 
 // ListCRDs list all CRD resources
@@ -159,5 +160,5 @@ func (c *Client) ListCRDs() (*apiextensionsv1beta1.CustomResourceDefinitionList,
 
 	return c.extension.ApiextensionsV1beta1().
 		CustomResourceDefinitions().
-		List(metav1.ListOptions{})
+		List(context.TODO(), metav1.ListOptions{})
 }

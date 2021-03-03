@@ -74,22 +74,8 @@ type clientError string
 
 func (e clientError) Error() string { return string(e) }
 
-const (
-	// NotFoundError is the error type returned in case of a 404 error. This is required to test for this kind of error.
-	NotFoundError = clientError("404 Not Found")
-	// Name of the environment variable that stores the certificate used for TLS client authentication
-	UserCertEnv = "LS_USER_CERTIFICATE"
-	// Name of the environment variable that stores the key used for TLS client authentication
-	UserKeyEnv = "LS_USER_KEY"
-	// Name of the environment variable that stores the certificate authority for the LINSTOR HTTPS API
-	RootCAEnv = "LS_ROOT_CA"
-	// Name of the environment variable that holds the URL(s) of LINSTOR controllers
-	ControllerUrlEnv = "LS_CONTROLLERS"
-	// Name of the environment variable that holds the username for authentication
-	UsernameEnv = "LS_USERNAME"
-	// Name of the environment variable that holds the password for authentication
-	PasswordEnv = "LS_PASSWORD"
-)
+// NotFoundError is the error type returned in case of a 404 error. This is required to test for this kind of error.
+const NotFoundError = clientError("404 Not Found")
 
 // For example:
 // u, _ := url.Parse("http://somehost:3370")
@@ -154,67 +140,31 @@ func Limit(r rate.Limit, b int) Option {
 // If none or not all of the environment variables are passed, the default
 // client is used as a fallback.
 func buildHttpClient() (*http.Client, error) {
-	certPEM, cert := os.LookupEnv(UserCertEnv)
-	keyPEM, key := os.LookupEnv(UserKeyEnv)
-	caPEM, ca := os.LookupEnv(RootCAEnv)
-
-	if key != cert {
-		return nil, fmt.Errorf("'%s', '%s': specify both or none", UserKeyEnv, UserCertEnv)
-	}
-
-	if !cert && !key && !ca {
-		// Non of the special variables was set -> if TLS is used, default configuration can be used
+	certPEM, cert := os.LookupEnv("LS_USER_CERTIFICATE")
+	keyPEM, key := os.LookupEnv("LS_USER_KEY")
+	caPEM, ca := os.LookupEnv("LS_ROOT_CA")
+	if !(cert && key && ca) {
+		// not all environment variables found: fall back to default client
 		return http.DefaultClient, nil
 	}
 
-	tlsConfig := &tls.Config{}
-
-	if ca {
-		caPool := x509.NewCertPool()
-		ok := caPool.AppendCertsFromPEM([]byte(caPEM))
-		if !ok {
-			return nil, fmt.Errorf("failed to get a valid certificate from '%s'", RootCAEnv)
-		}
-		tlsConfig.RootCAs = caPool
+	keyPair, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load keys: %w", err)
 	}
-
-	if key && cert {
-		keyPair, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
-		if err != nil {
-			return nil, fmt.Errorf("failed to load keys: %w", err)
-		}
-		tlsConfig.Certificates = append(tlsConfig.Certificates, keyPair)
+	caPool := x509.NewCertPool()
+	ok := caPool.AppendCertsFromPEM([]byte(caPEM))
+	if !ok {
+		return nil, fmt.Errorf("failed to get a valid certificate from LS_ROOT_CA")
 	}
-
 	return &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
+			TLSClientConfig: &tls.Config{
+				Certificates: []tls.Certificate{keyPair},
+				RootCAs:      caPool,
+			},
 		},
 	}, nil
-}
-
-// Return the default scheme to access linstor
-// If one of the HTTPS environment variables is set, will return "https".
-// If not, will return "http"
-func defaultScheme() string {
-	_, ca := os.LookupEnv(RootCAEnv)
-	_, cert := os.LookupEnv(UserCertEnv)
-	_, key := os.LookupEnv(UserKeyEnv)
-	if ca || cert || key {
-		return "https"
-	}
-	return "http"
-}
-
-// Return the default port to access linstor.
-// Defaults are:
-// "https": 3371
-// "http":  3370
-func defaultPort(scheme string) string {
-	if scheme == "https" {
-		return "3371"
-	}
-	return "3370"
 }
 
 // NewClient takes an arbitrary number of options and returns a Client or an error.
@@ -238,39 +188,28 @@ func NewClient(options ...Option) (*Client, error) {
 		return nil, fmt.Errorf("failed to build http client: %w", err)
 	}
 
-	controllers := os.Getenv(ControllerUrlEnv)
-	if controllers == "" {
-		controllers = "localhost"
+	hostPort := "localhost:3370"
+	controllers := os.Getenv("LS_CONTROLLERS")
+	// we could ping them, for now use the first if possible
+	if controllers != "" {
+		hostPort = strings.Split(controllers, ",")[0]
+
+		lsPrefix := "linstor://"
+		if strings.HasPrefix(hostPort, lsPrefix) {
+			hostPort = strings.TrimPrefix(hostPort, lsPrefix)
+		}
 	}
 
-	// only use the first entry
-	urlString := strings.Split(controllers, ",")[0]
-
-	// Check scheme
-	urlSplit := strings.Split(urlString, "://")
-
-	if len(urlSplit) == 1 {
-		urlSplit = []string{defaultScheme(), urlSplit[0]}
-	}
-	if len(urlSplit) != 2 {
-		return nil, fmt.Errorf("URL with multiple scheme separators. parts: %v", urlSplit)
-	}
-	scheme, endpoint := urlSplit[0], urlSplit[1]
-	if scheme == "linstor" {
-		scheme = defaultScheme()
+	if !strings.Contains(hostPort, ":") {
+		hostPort += ":3370"
 	}
 
-	// Check port
-	endpointSplit := strings.Split(endpoint, ":")
-	if len(endpointSplit) == 1 {
-		endpointSplit = []string{endpointSplit[0], defaultPort(scheme)}
+	u := hostPort
+	if !strings.HasPrefix(hostPort, "http://") {
+		u = "http://" + hostPort
 	}
-	if len(endpointSplit) != 2 {
-		return nil, fmt.Errorf("URL with multiple port separators. parts: %v", endpointSplit)
-	}
-	host, port := endpointSplit[0], endpointSplit[1]
 
-	baseURL, err := url.Parse(fmt.Sprintf("%s://%s:%s", scheme, host, port))
+	baseURL, err := url.Parse(u)
 	if err != nil {
 		return nil, err
 	}
@@ -279,8 +218,8 @@ func NewClient(options ...Option) (*Client, error) {
 		httpClient: httpClient,
 		baseURL:    baseURL,
 		basicAuth: &BasicAuthCfg{
-			Username: os.Getenv(UsernameEnv),
-			Password: os.Getenv(PasswordEnv),
+			Username: os.Getenv("LS_USERNAME"),
+			Password: os.Getenv("LS_PASSWORD"),
 		},
 		lim: rate.NewLimiter(rate.Inf, 0),
 		log: log.New(os.Stdout, "", 0),

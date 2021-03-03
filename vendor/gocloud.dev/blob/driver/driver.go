@@ -12,21 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package driver defines a set of interfaces that the blob package uses to interact
-// with the underlying blob services.
+// Package driver defines interfaces to be implemented by blob drivers, which
+// will be used by the blob package to interact with the underlying services.
+// Application code should use package blob.
 package driver // import "gocloud.dev/blob/driver"
 
 import (
 	"context"
+	"errors"
 	"io"
+	"strings"
 	"time"
 
 	"gocloud.dev/gcerrors"
 )
 
 // ReaderOptions controls Reader behaviors.
-// It is provided for future extensibility.
-type ReaderOptions struct{}
+type ReaderOptions struct {
+	// BeforeRead is a callback that must be called exactly once before
+	// any data is read, unless NewRangeReader returns an error before then, in
+	// which case it should not be called at all.
+	// asFunc allows drivers to expose driver-specific types;
+	// see Bucket.As for more details.
+	BeforeRead func(asFunc func(interface{}) bool) error
+}
 
 // Reader reads an object from the blob.
 type Reader interface {
@@ -36,7 +45,7 @@ type Reader interface {
 	// The portable type will not modify the returned ReaderAttributes.
 	Attributes() *ReaderAttributes
 
-	// As allows providers to expose provider-specific types;
+	// As allows drivers to expose driver-specific types;
 	// see Bucket.As for more details.
 	As(interface{}) bool
 }
@@ -52,7 +61,7 @@ type WriterOptions struct {
 	// write in a single request, if supported. Larger objects will be split into
 	// multiple requests.
 	BufferSize int
-	// CacheControl specifies caching attributes that providers may use
+	// CacheControl specifies caching attributes that services may use
 	// when serving the blob.
 	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
 	CacheControl string
@@ -79,7 +88,7 @@ type WriterOptions struct {
 	// BeforeWrite is a callback that must be called exactly once before
 	// any data is written, unless NewTypedWriter returns an error, in
 	// which case it should not be called.
-	// asFunc allows providers to expose provider-specific types;
+	// asFunc allows drivers to expose driver-specific types;
 	// see Bucket.As for more details.
 	BeforeWrite func(asFunc func(interface{}) bool) error
 }
@@ -87,7 +96,7 @@ type WriterOptions struct {
 // CopyOptions controls options for Copy.
 type CopyOptions struct {
 	// BeforeCopy is a callback that must be called before initiating the Copy.
-	// asFunc allows providers to expose provider-specific types;
+	// asFunc allows drivers to expose driver-specific types;
 	// see Bucket.As for more details.
 	BeforeCopy func(asFunc func(interface{}) bool) error
 }
@@ -106,7 +115,7 @@ type ReaderAttributes struct {
 
 // Attributes contains attributes about a blob.
 type Attributes struct {
-	// CacheControl specifies caching attributes that providers may use
+	// CacheControl specifies caching attributes that services may use
 	// when serving the blob.
 	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
 	CacheControl string
@@ -135,9 +144,9 @@ type Attributes struct {
 	Size int64
 	// MD5 is an MD5 hash of the blob contents or nil if not available.
 	MD5 []byte
-	// AsFunc allows providers to expose provider-specific types;
+	// AsFunc allows drivers to expose driver-specific types;
 	// see Bucket.As for more details.
-	// If not set, no provider-specific types are supported.
+	// If not set, no driver-specific types are supported.
 	AsFunc func(interface{}) bool
 }
 
@@ -166,8 +175,8 @@ type ListOptions struct {
 	// ListPaged call.
 	PageToken []byte
 	// BeforeList is a callback that must be called exactly once during ListPaged,
-	// before the underlying provider's list is executed.
-	// asFunc allows providers to expose provider-specific types;
+	// before the underlying service's list is executed.
+	// asFunc allows drivers to expose driver-specific types;
 	// see Bucket.As for more details.
 	BeforeList func(asFunc func(interface{}) bool) error
 }
@@ -187,9 +196,9 @@ type ListObject struct {
 	// passed as ListOptions.Prefix to list items in the "directory".
 	// Fields other than Key and IsDir will not be set if IsDir is true.
 	IsDir bool
-	// AsFunc allows providers to expose provider-specific types;
+	// AsFunc allows drivers to expose driver-specific types;
 	// see Bucket.As for more details.
-	// If not set, no provider-specific types are supported.
+	// If not set, no driver-specific types are supported.
 	AsFunc func(interface{}) bool
 }
 
@@ -217,13 +226,13 @@ type Bucket interface {
 	// one of the other methods in this interface.
 	ErrorCode(error) gcerrors.ErrorCode
 
-	// As converts i to provider-specific types.
-	// See https://godoc.org/gocloud.dev#hdr-As for background information.
+	// As converts i to driver-specific types.
+	// See https://gocloud.dev/concepts/as/ for background information.
 	As(i interface{}) bool
 
-	// ErrorAs allows providers to expose provider-specific types for returned
+	// ErrorAs allows drivers to expose driver-specific types for returned
 	// errors.
-	// See https://godoc.org/gocloud.dev#hdr-As for background information.
+	// See https://gocloud.dev/concepts/as/ for background information.
 	ErrorAs(error, interface{}) bool
 
 	// Attributes returns attributes for the blob. If the specified object does
@@ -234,7 +243,7 @@ type Bucket interface {
 
 	// ListPaged lists objects in the bucket, in lexicographical order by
 	// UTF-8-encoded key, returning pages of objects at a time.
-	// Providers are only required to be eventually consistent with respect
+	// Services are only required to be eventually consistent with respect
 	// to recently written or deleted objects. That is to say, there is no
 	// guarantee that an object that's been written will immediately be returned
 	// from ListPaged.
@@ -297,4 +306,81 @@ type Bucket interface {
 type SignedURLOptions struct {
 	// Expiry sets how long the returned URL is valid for. It is guaranteed to be > 0.
 	Expiry time.Duration
+
+	// Method is the HTTP method that can be used on the URL; one of "GET", "PUT",
+	// or "DELETE". Drivers must implement all 3.
+	Method string
+
+	// ContentType specifies the Content-Type HTTP header the user agent is
+	// permitted to use in the PUT request. It must match exactly. See
+	// EnforceAbsentContentType for behavior when ContentType is the empty string.
+	// If this field is not empty and the bucket cannot enforce the Content-Type
+	// header, it must return an Unimplemented error.
+	//
+	// This field will not be set for any non-PUT requests.
+	ContentType string
+
+	// If EnforceAbsentContentType is true and ContentType is the empty string,
+	// then PUTing to the signed URL must fail if the Content-Type header is
+	// present or the implementation must return an error if it cannot enforce
+	// this. If EnforceAbsentContentType is false and ContentType is the empty
+	// string, implementations should validate the Content-Type header if possible.
+	// If EnforceAbsentContentType is true and the bucket cannot enforce the
+	// Content-Type header, it must return an Unimplemented error.
+	//
+	// This field will always be false for non-PUT requests.
+	EnforceAbsentContentType bool
 }
+
+// prefixedBucket implements Bucket by prepending prefix to all keys.
+type prefixedBucket struct {
+	base   Bucket
+	prefix string
+}
+
+// NewPrefixedBucket returns a Bucket based on b with all keys modified to have
+// prefix.
+func NewPrefixedBucket(b Bucket, prefix string) Bucket {
+	return &prefixedBucket{base: b, prefix: prefix}
+}
+
+func (b *prefixedBucket) ErrorCode(err error) gcerrors.ErrorCode { return b.base.ErrorCode(err) }
+func (b *prefixedBucket) As(i interface{}) bool                  { return b.base.As(i) }
+func (b *prefixedBucket) ErrorAs(err error, i interface{}) bool  { return b.base.ErrorAs(err, i) }
+func (b *prefixedBucket) Attributes(ctx context.Context, key string) (*Attributes, error) {
+	return b.base.Attributes(ctx, b.prefix+key)
+}
+func (b *prefixedBucket) ListPaged(ctx context.Context, opts *ListOptions) (*ListPage, error) {
+	var myopts ListOptions
+	if opts != nil {
+		myopts = *opts
+	}
+	myopts.Prefix = b.prefix + myopts.Prefix
+	page, err := b.base.ListPaged(ctx, &myopts)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range page.Objects {
+		p.Key = strings.TrimPrefix(p.Key, b.prefix)
+	}
+	return page, nil
+}
+func (b *prefixedBucket) NewRangeReader(ctx context.Context, key string, offset, length int64, opts *ReaderOptions) (Reader, error) {
+	return b.base.NewRangeReader(ctx, b.prefix+key, offset, length, opts)
+}
+func (b *prefixedBucket) NewTypedWriter(ctx context.Context, key, contentType string, opts *WriterOptions) (Writer, error) {
+	if key == "" {
+		return nil, errors.New("invalid key (empty string)")
+	}
+	return b.base.NewTypedWriter(ctx, b.prefix+key, contentType, opts)
+}
+func (b *prefixedBucket) Copy(ctx context.Context, dstKey, srcKey string, opts *CopyOptions) error {
+	return b.base.Copy(ctx, b.prefix+dstKey, b.prefix+srcKey, opts)
+}
+func (b *prefixedBucket) Delete(ctx context.Context, key string) error {
+	return b.base.Delete(ctx, b.prefix+key)
+}
+func (b *prefixedBucket) SignedURL(ctx context.Context, key string, opts *SignedURLOptions) (string, error) {
+	return b.base.SignedURL(ctx, b.prefix+key, opts)
+}
+func (b *prefixedBucket) Close() error { return b.base.Close() }

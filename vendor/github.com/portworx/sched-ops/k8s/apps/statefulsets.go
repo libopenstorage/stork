@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -48,7 +49,7 @@ func (c *Client) ListStatefulSets(namespace string) (*appsv1.StatefulSetList, er
 		return nil, err
 	}
 
-	return c.apps.StatefulSets(namespace).List(metav1.ListOptions{})
+	return c.apps.StatefulSets(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // GetStatefulSet returns a statefulset for given name and namespace
@@ -57,7 +58,7 @@ func (c *Client) GetStatefulSet(name, namespace string) (*appsv1.StatefulSet, er
 		return nil, err
 	}
 
-	return c.apps.StatefulSets(namespace).Get(name, metav1.GetOptions{})
+	return c.apps.StatefulSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateStatefulSet creates the given statefulset
@@ -71,7 +72,7 @@ func (c *Client) CreateStatefulSet(statefulset *appsv1.StatefulSet) (*appsv1.Sta
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.apps.StatefulSets(ns).Create(statefulset)
+	return c.apps.StatefulSets(ns).Create(context.TODO(), statefulset, metav1.CreateOptions{})
 }
 
 // DeleteStatefulSet deletes the given statefulset
@@ -80,7 +81,7 @@ func (c *Client) DeleteStatefulSet(name, namespace string) error {
 		return err
 	}
 
-	return c.apps.StatefulSets(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.apps.StatefulSets(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -100,7 +101,7 @@ func (c *Client) UpdateStatefulSet(statefulset *appsv1.StatefulSet) (*appsv1.Sta
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.apps.StatefulSets(statefulset.Namespace).Update(statefulset)
+	return c.apps.StatefulSets(statefulset.Namespace).Update(context.TODO(), statefulset, metav1.UpdateOptions{})
 }
 
 // ValidateStatefulSet validates the given statefulset if it's running and healthy within the given timeout
@@ -218,7 +219,7 @@ func (c *Client) GetStatefulSetsUsingStorageClass(scName string) ([]appsv1.State
 		return nil, err
 	}
 
-	ss, err := c.apps.StatefulSets("").List(metav1.ListOptions{})
+	ss, err := c.apps.StatefulSets("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +253,7 @@ func (c *Client) GetPVCsForStatefulSet(ss *appsv1.StatefulSet) (*corev1.Persiste
 		return nil, err
 	}
 
-	return c.core.PersistentVolumeClaims(ss.Namespace).List(listOptions)
+	return c.core.PersistentVolumeClaims(ss.Namespace).List(context.TODO(), listOptions)
 }
 
 // ValidatePVCsForStatefulSet validates the PVCs for the given stateful set
@@ -263,7 +264,7 @@ func (c *Client) ValidatePVCsForStatefulSet(ss *appsv1.StatefulSet, timeout, ret
 	}
 
 	t := func() (interface{}, bool, error) {
-		pvcList, err := c.core.PersistentVolumeClaims(ss.Namespace).List(listOptions)
+		pvcList, err := c.core.PersistentVolumeClaims(ss.Namespace).List(context.TODO(), listOptions)
 		if err != nil {
 			return nil, true, err
 		}
@@ -307,7 +308,7 @@ func (c *Client) validatePersistentVolumeClaim(pvc *corev1.PersistentVolumeClaim
 			return "", true, err
 		}
 
-		result, err := c.core.PersistentVolumeClaims(pvc.Namespace).Get(pvc.Name, metav1.GetOptions{})
+		result, err := c.core.PersistentVolumeClaims(pvc.Namespace).Get(context.TODO(), pvc.Name, metav1.GetOptions{})
 		if err != nil {
 			return "", true, err
 		}

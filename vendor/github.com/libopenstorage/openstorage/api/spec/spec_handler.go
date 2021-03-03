@@ -133,6 +133,8 @@ var (
 	mountOptionsRegex           = regexp.MustCompile(api.SpecMountOptions + `=([A-Za-z0-9:;@=#]+),?`)
 	sharedv4MountOptionsRegex   = regexp.MustCompile(api.SpecSharedv4MountOptions + `=([A-Za-z0-9:;@=#]+),?`)
 	cowOnDemandRegex            = regexp.MustCompile(api.SpecCowOnDemand + "=([A-Za-z]+),?")
+	directIoRegex               = regexp.MustCompile(api.SpecDirectIo + "=([A-Za-z]+),?")
+	ProxyWriteRegex             = regexp.MustCompile(api.SpecProxyWrite + "=([A-Za-z]+),?")
 )
 
 type specHandler struct {
@@ -173,9 +175,8 @@ func (d *specHandler) getVal(r *regexp.Regexp, str string) (bool, string) {
 
 func (d *specHandler) DefaultSpec() *api.VolumeSpec {
 	return &api.VolumeSpec{
-		Format:    api.FSType_FS_TYPE_EXT4,
-		HaLevel:   1,
-		IoProfile: api.IoProfile_IO_PROFILE_AUTO,
+		Format:  api.FSType_FS_TYPE_EXT4,
+		HaLevel: 1,
 	}
 }
 
@@ -461,6 +462,15 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 					spec.Xattr = api.Xattr_COW_ON_DEMAND
 				}
 			}
+		case api.SpecDirectIo:
+			if directIo, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				if spec.IoStrategy == nil {
+					spec.IoStrategy = &api.IoStrategy{}
+				}
+				spec.IoStrategy.DirectIo = directIo
+			}
 		case api.SpecScanPolicyTrigger:
 			if spec.ScanPolicy == nil {
 				spec.ScanPolicy = &api.ScanPolicy{}
@@ -478,6 +488,12 @@ func (d *specHandler) UpdateSpecFromOpts(opts map[string]string, spec *api.Volum
 				return nil, nil, nil, err
 			} else {
 				spec.ScanPolicy.Action = scanAction
+			}
+		case api.SpecProxyWrite:
+			if proxyWrite, err := strconv.ParseBool(v); err != nil {
+				return nil, nil, nil, err
+			} else {
+				spec.ProxyWrite = proxyWrite
 			}
 
 		default:
@@ -655,6 +671,12 @@ func (d *specHandler) SpecOptsFromString(
 	}
 	if ok, cowOnDemand := d.getVal(cowOnDemandRegex, str); ok {
 		opts[api.SpecCowOnDemand] = cowOnDemand
+	}
+	if ok, directIo := d.getVal(directIoRegex, str); ok {
+		opts[api.SpecDirectIo] = directIo
+	}
+	if ok, proxyWrite := d.getVal(ProxyWriteRegex, str); ok {
+		opts[api.SpecProxyWrite] = proxyWrite
 	}
 
 	return true, opts, name

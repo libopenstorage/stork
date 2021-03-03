@@ -1,6 +1,8 @@
 package openshift
 
 import (
+	"context"
+
 	ocpsecurityv1api "github.com/openshift/api/security/v1"
 	ocpsecurityv1client "github.com/openshift/client-go/security/clientset/versioned/typed/security/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,7 +27,7 @@ func (c *Client) ListSecurityContextConstraints() (result *ocpsecurityv1api.Secu
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.getOcpSecurityClient().SecurityContextConstraints().List(metav1.ListOptions{})
+	return c.getOcpSecurityClient().SecurityContextConstraints().List(context.TODO(), metav1.ListOptions{})
 }
 
 // GetSecurityContextConstraints takes name of the securityContextConstraints and returns the corresponding securityContextConstraints object, and an error if there is any.
@@ -33,7 +35,7 @@ func (c *Client) GetSecurityContextConstraints(name string) (result *ocpsecurity
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.getOcpSecurityClient().SecurityContextConstraints().Get(name, metav1.GetOptions{})
+	return c.getOcpSecurityClient().SecurityContextConstraints().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // UpdateSecurityContextConstraints takes the representation of a securityContextConstraints and updates it. Returns the server's representation of the securityContextConstraints, and an error, if there is any.
@@ -41,5 +43,5 @@ func (c *Client) UpdateSecurityContextConstraints(securityContextConstraints *oc
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.getOcpSecurityClient().SecurityContextConstraints().Update(securityContextConstraints)
+	return c.getOcpSecurityClient().SecurityContextConstraints().Update(context.TODO(), securityContextConstraints, metav1.UpdateOptions{})
 }
