@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -40,7 +41,7 @@ func (c *Client) CreateReplicaSet(rs *appsv1.ReplicaSet) (*appsv1.ReplicaSet, er
 		return nil, err
 	}
 
-	return c.apps.ReplicaSets(rs.Namespace).Create(rs)
+	return c.apps.ReplicaSets(rs.Namespace).Create(context.TODO(), rs, metav1.CreateOptions{})
 }
 
 // ListReplicaSets lists all ReplicaSets in given namespace
@@ -49,7 +50,7 @@ func (c *Client) ListReplicaSets(namespace string, listOpts metav1.ListOptions) 
 		return nil, err
 	}
 
-	rsList, err := c.apps.ReplicaSets(namespace).List(listOpts)
+	rsList, err := c.apps.ReplicaSets(namespace).List(context.TODO(), listOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,7 @@ func (c *Client) GetReplicaSet(name, namespace string) (*appsv1.ReplicaSet, erro
 		namespace = corev1.NamespaceDefault
 	}
 
-	rs, err := c.apps.ReplicaSets(namespace).Get(name, metav1.GetOptions{})
+	rs, err := c.apps.ReplicaSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +170,7 @@ func (c *Client) UpdateReplicaSet(rs *appsv1.ReplicaSet) (*appsv1.ReplicaSet, er
 		return nil, err
 	}
 
-	return c.apps.ReplicaSets(rs.Namespace).Update(rs)
+	return c.apps.ReplicaSets(rs.Namespace).Update(context.TODO(), rs, metav1.UpdateOptions{})
 }
 
 // DeleteReplicaSet deletes the given ReplicaSet
@@ -178,9 +179,9 @@ func (c *Client) DeleteReplicaSet(name, namespace string) error {
 		return err
 	}
 
-	return c.apps.ReplicaSets(namespace).Delete(
+	return c.apps.ReplicaSets(namespace).Delete(context.TODO(),
 		name,
-		&metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
+		metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
 }
 
 // GetReplicaSetByDeployment get ReplicaSet for a Given Deployment
@@ -188,14 +189,15 @@ func (c *Client) GetReplicaSetByDeployment(deployment *appsv1.Deployment) (*apps
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	rsets, err := c.apps.ReplicaSets(deployment.Namespace).List(metav1.ListOptions{})
+	rsets, err := c.apps.ReplicaSets(deployment.Namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
+	revisionAnnotation := "deployment.kubernetes.io/revision"
 	for _, rs := range rsets.Items {
 		for _, ownerReference := range rs.OwnerReferences {
-			if ownerReference.Name == deployment.Name {
+			if ownerReference.Name == deployment.Name && deployment.Annotations[revisionAnnotation] == rs.Annotations[revisionAnnotation] {
 				return &rs, nil
 			}
 		}

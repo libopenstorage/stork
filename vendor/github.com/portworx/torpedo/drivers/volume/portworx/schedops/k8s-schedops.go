@@ -71,7 +71,7 @@ const (
 
 const (
 	defaultRetryInterval = 5 * time.Second
-	defaultTimeout       = 2 * time.Minute
+	defaultTimeout       = 10 * time.Minute
 )
 
 var (
