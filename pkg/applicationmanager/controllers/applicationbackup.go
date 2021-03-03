@@ -107,7 +107,7 @@ func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNames
 }
 
 // Reconcile updates for ApplicationBackup objects.
-func (a *ApplicationBackupController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (a *ApplicationBackupController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ApplicationBackup %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
@@ -331,7 +331,7 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationBackupStatusFailed),
 				message)
-			key, err := runtimeclient.ObjectKeyFromObject(backup)
+			key := runtimeclient.ObjectKeyFromObject(backup)
 			if err != nil {
 				return err
 			}
@@ -762,7 +762,7 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 	}
 	// Get the latest object so that the rules engine can update annotations if
 	// required
-	key, err := runtimeclient.ObjectKeyFromObject(backup)
+	key := runtimeclient.ObjectKeyFromObject(backup)
 	if err != nil {
 		return nil, false, err
 	}
@@ -795,7 +795,7 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 
 	// Get the latest object again since the rules engine could have updated
 	// annotations
-	key, err = runtimeclient.ObjectKeyFromObject(backup)
+	key = runtimeclient.ObjectKeyFromObject(backup)
 	if err != nil {
 		for _, channel := range terminationChannels {
 			channel <- true
