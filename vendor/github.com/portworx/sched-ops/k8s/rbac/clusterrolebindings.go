@@ -1,6 +1,8 @@
 package rbac
 
 import (
+	"context"
+
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -25,7 +27,7 @@ func (c *Client) GetClusterRoleBinding(name string) (*rbacv1.ClusterRoleBinding,
 		return nil, err
 	}
 
-	return c.rbac.ClusterRoleBindings().Get(name, metav1.GetOptions{})
+	return c.rbac.ClusterRoleBindings().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListClusterRoleBindings lists the cluster role bindings
@@ -34,7 +36,7 @@ func (c *Client) ListClusterRoleBindings() (*rbacv1.ClusterRoleBindingList, erro
 		return nil, err
 	}
 
-	return c.rbac.ClusterRoleBindings().List(metav1.ListOptions{})
+	return c.rbac.ClusterRoleBindings().List(context.TODO(), metav1.ListOptions{})
 }
 
 // CreateClusterRoleBinding creates the given cluster role binding
@@ -43,7 +45,7 @@ func (c *Client) CreateClusterRoleBinding(binding *rbacv1.ClusterRoleBinding) (*
 		return nil, err
 	}
 
-	return c.rbac.ClusterRoleBindings().Create(binding)
+	return c.rbac.ClusterRoleBindings().Create(context.TODO(), binding, metav1.CreateOptions{})
 }
 
 // UpdateClusterRoleBinding updates the given cluster role binding
@@ -52,7 +54,7 @@ func (c *Client) UpdateClusterRoleBinding(binding *rbacv1.ClusterRoleBinding) (*
 		return nil, err
 	}
 
-	return c.rbac.ClusterRoleBindings().Update(binding)
+	return c.rbac.ClusterRoleBindings().Update(context.TODO(), binding, metav1.UpdateOptions{})
 }
 
 // DeleteClusterRoleBinding deletes the given cluster role binding
@@ -61,7 +63,7 @@ func (c *Client) DeleteClusterRoleBinding(bindingName string) error {
 		return err
 	}
 
-	return c.rbac.ClusterRoleBindings().Delete(bindingName, &metav1.DeleteOptions{
+	return c.rbac.ClusterRoleBindings().Delete(context.TODO(), bindingName, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

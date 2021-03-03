@@ -1,6 +1,7 @@
 package stork
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -182,7 +183,7 @@ func (c *Client) getSnapshot(name string, namespace string) (*snapv1.VolumeSnaps
 		Name(name).
 		Resource(snapv1.VolumeSnapshotResourcePlural).
 		Namespace(namespace).
-		Do().Into(&result); err != nil {
+		Do(context.TODO()).Into(&result); err != nil {
 		return nil, err
 	}
 

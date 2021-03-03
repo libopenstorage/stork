@@ -83,8 +83,10 @@ const (
 	SpecNodiscard            = "nodiscard"
 	StoragePolicy            = "storagepolicy"
 	SpecCowOnDemand          = "cow_ondemand"
+	SpecDirectIo             = "direct_io"
 	SpecScanPolicyTrigger    = "scan_policy_trigger"
 	SpecScanPolicyAction     = "scan_policy_action"
+	SpecProxyWrite           = "proxy_write"
 )
 
 // OptionKey specifies a set of recognized query params.

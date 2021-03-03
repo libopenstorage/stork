@@ -23,11 +23,11 @@
 // for more details.
 // To customize the URL opener, or for more details on the URL format,
 // see URLOpener.
-// See https://godoc.org/gocloud.dev#hdr-URLs for background information.
+// See https://gocloud.dev/concepts/urls/ for background information.
 //
 // Escaping
 //
-// Go CDK supports all UTF-8 strings; to make this work with providers lacking
+// Go CDK supports all UTF-8 strings; to make this work with services lacking
 // full UTF-8 support, strings must be escaped (during writes) and unescaped
 // (during reads). The following escapes are performed for s3blob:
 //  - Blob keys: ASCII characters 0-31 are escaped to "__0x<hex>__".
@@ -47,6 +47,7 @@
 //  - ListOptions.BeforeList: *s3.ListObjectsV2Input, or *s3.ListObjectsInput
 //      when Options.UseLegacyList == true.
 //  - Reader: s3.GetObjectOutput
+//  - ReaderOptions.BeforeRead: *s3.GetObjectInput
 //  - Attributes: s3.HeadObjectOutput
 //  - CopyOptions.BeforeCopy: *s3.CopyObjectInput
 //  - WriterOptions.BeforeWrite: *s3manager.UploadInput
@@ -69,7 +70,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/client"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/google/wire"
@@ -88,8 +88,7 @@ func init() {
 
 // Set holds Wire providers for this package.
 var Set = wire.NewSet(
-	Options{},
-	URLOpener{},
+	wire.Struct(new(URLOpener), "ConfigProvider"),
 )
 
 // lazySessionOpener obtains the AWS session from the environment on the first
@@ -102,7 +101,7 @@ type lazySessionOpener struct {
 
 func (o *lazySessionOpener) OpenBucketURL(ctx context.Context, u *url.URL) (*blob.Bucket, error) {
 	o.init.Do(func() {
-		sess, err := session.NewSessionWithOptions(session.Options{SharedConfigState: session.SharedConfigEnable})
+		sess, err := gcaws.NewDefaultSession()
 		if err != nil {
 			o.err = err
 			return
@@ -151,7 +150,7 @@ func (o *URLOpener) OpenBucketURL(ctx context.Context, u *url.URL) (*blob.Bucket
 // Options sets options for constructing a *blob.Bucket backed by fileblob.
 type Options struct {
 	// UseLegacyList forces the use of ListObjects instead of ListObjectsV2.
-	// Some S3-compatible providers (like CEPH) do not currently support
+	// Some S3-compatible services (like CEPH) do not currently support
 	// ListObjectsV2.
 	UseLegacyList bool
 }
@@ -275,9 +274,9 @@ func (w *writer) open(pr *io.PipeReader) error {
 	return nil
 }
 
-// Close completes the writer and close it. Any error occuring during write will
-// be returned. If a writer is closed before any Write is called, Close will
-// create an empty file at the given key.
+// Close completes the writer and closes it. Any error occurring during write
+// will be returned. If a writer is closed before any Write is called, Close
+// will create an empty file at the given key.
 func (w *writer) Close() error {
 	if w.w == nil {
 		// We never got any bytes written. We'll write an http.NoBody.
@@ -343,6 +342,7 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 	if n := len(resp.Contents) + len(resp.CommonPrefixes); n > 0 {
 		page.Objects = make([]*driver.ListObject, n)
 		for i, obj := range resp.Contents {
+			obj := obj
 			page.Objects[i] = &driver.ListObject{
 				Key:     unescapeKey(aws.StringValue(obj.Key)),
 				ModTime: *obj.LastModified,
@@ -359,6 +359,7 @@ func (b *bucket) ListPaged(ctx context.Context, opts *driver.ListOptions) (*driv
 			}
 		}
 		for i, prefix := range resp.CommonPrefixes {
+			prefix := prefix
 			page.Objects[i+len(resp.Contents)] = &driver.ListObject{
 				Key:   unescapeKey(aws.StringValue(prefix.Prefix)),
 				IsDir: true,
@@ -517,6 +518,18 @@ func (b *bucket) NewRangeReader(ctx context.Context, key string, offset, length 
 		in.Range = aws.String(fmt.Sprintf("bytes=%d-%d", offset, offset))
 	} else if length >= 0 {
 		in.Range = aws.String(fmt.Sprintf("bytes=%d-%d", offset, offset+length-1))
+	}
+	if opts.BeforeRead != nil {
+		asFunc := func(i interface{}) bool {
+			if p, ok := i.(**s3.GetObjectInput); ok {
+				*p = in
+				return true
+			}
+			return false
+		}
+		if err := opts.BeforeRead(asFunc); err != nil {
+			return nil, err
+		}
 	}
 	resp, err := b.client.GetObjectWithContext(ctx, in)
 	if err != nil {
@@ -709,10 +722,30 @@ func (b *bucket) Delete(ctx context.Context, key string) error {
 
 func (b *bucket) SignedURL(ctx context.Context, key string, opts *driver.SignedURLOptions) (string, error) {
 	key = escapeKey(key)
-	in := &s3.GetObjectInput{
-		Bucket: aws.String(b.name),
-		Key:    aws.String(key),
+	switch opts.Method {
+	case http.MethodGet:
+		in := &s3.GetObjectInput{
+			Bucket: aws.String(b.name),
+			Key:    aws.String(key),
+		}
+		req, _ := b.client.GetObjectRequest(in)
+		return req.Presign(opts.Expiry)
+	case http.MethodPut:
+		in := &s3.PutObjectInput{
+			Bucket:      aws.String(b.name),
+			Key:         aws.String(key),
+			ContentType: aws.String(opts.ContentType),
+		}
+		req, _ := b.client.PutObjectRequest(in)
+		return req.Presign(opts.Expiry)
+	case http.MethodDelete:
+		in := &s3.DeleteObjectInput{
+			Bucket: aws.String(b.name),
+			Key:    aws.String(key),
+		}
+		req, _ := b.client.DeleteObjectRequest(in)
+		return req.Presign(opts.Expiry)
+	default:
+		return "", fmt.Errorf("unsupported Method %q", opts.Method)
 	}
-	req, _ := b.client.GetObjectRequest(in)
-	return req.Presign(opts.Expiry)
 }

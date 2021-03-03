@@ -18,7 +18,8 @@ var (
 // Ops provides an interface to Autopilot operations.
 type Ops interface {
 	RuleOps
-
+	RuleObjectOps
+	ActionApprovalInterface
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
 }
