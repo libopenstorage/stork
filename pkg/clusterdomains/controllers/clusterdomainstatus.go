@@ -66,7 +66,7 @@ func (c *ClusterDomainsStatusController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile updates the cluster about the changes in the ClusterDomainsStatus CRD.
-func (c *ClusterDomainsStatusController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (c *ClusterDomainsStatusController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ClusterDomainsStatus %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance

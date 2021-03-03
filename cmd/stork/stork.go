@@ -389,7 +389,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 		}
 	}
 
-	stopCh := make(chan struct{}, 1)
+	ctx := context.Background()
 
 	go func() {
 		for {
@@ -418,11 +418,11 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 					log.Warnf("error stopping webhook controller %v", err)
 				}
 			}
-			stopCh <- struct{}{}
+			ctx.Done()
 		}
 	}()
 
-	if err := mgr.Start(stopCh); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		log.Fatalf("Controller manager: %v", err)
 	}
 	os.Exit(0)

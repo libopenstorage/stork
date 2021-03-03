@@ -76,7 +76,9 @@ func (r *ResourceCollector) pvToBeCollected(
 			return false, nil
 		}
 
-		if !labels.AreLabelsInWhiteList(labels.Set(labelSelectors),
+		// labels.AreLabelsInWhiteList removed in k8s 1.20. It has been replaced with isSubset:
+		// https://github.com/kubernetes/kubernetes/commit/c9051308befb12f66c3e222de6df9d29f3f2f77d
+		if !isSubset(labels.Set(labelSelectors),
 			labels.Set(pvc.Labels)) {
 			return false, nil
 		}
@@ -135,4 +137,21 @@ func (r *ResourceCollector) preparePVResourceForApply(
 	object.SetUnstructuredContent(o)
 
 	return false, err
+}
+
+func isSubset(subSet, superSet labels.Set) bool {
+	if len(superSet) == 0 {
+		return true
+	}
+
+	for k, v := range subSet {
+		value, ok := superSet[k]
+		if !ok {
+			return false
+		}
+		if value != v {
+			return false
+		}
+	}
+	return true
 }

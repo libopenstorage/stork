@@ -59,7 +59,7 @@ func (c *ClusterPairController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile manages ClusterPair resources.
-func (c *ClusterPairController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (c *ClusterPairController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling ClusterPair %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
@@ -246,16 +246,16 @@ func (c *ClusterPairController) createBackupLocationOnRemote(remoteConfig *restc
 			return err
 		}
 		// Don't create if the namespace already exists on the remote cluster
-		_, err = client.CoreV1().Namespaces().Get(clusterPair.Namespace, metav1.GetOptions{})
+		_, err = client.CoreV1().Namespaces().Get(context.TODO(), clusterPair.Namespace, metav1.GetOptions{})
 		if err != nil {
 			// create namespace on destination cluster
-			_, err = client.CoreV1().Namespaces().Create(&v1.Namespace{
+			_, err = client.CoreV1().Namespaces().Create(context.TODO(), &v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        ns.Name,
 					Labels:      ns.Labels,
 					Annotations: ns.Annotations,
 				},
-			})
+			}, metav1.CreateOptions{})
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return err
 			}

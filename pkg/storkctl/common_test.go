@@ -10,6 +10,7 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/appregistration"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
 	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
 	fakeocpsecurityclient "github.com/openshift/client-go/security/clientset/versioned/fake"
@@ -57,7 +58,7 @@ func resetTest() {
 	fakeStorkClient := fakeclient.NewSimpleClientset()
 	fakeOCPClient := fakeocpclient.NewSimpleClientset()
 	fakeOCPSecurityClient := fakeocpsecurityclient.NewSimpleClientset()
-	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClient(scheme)
+	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, appregistration.GetSupportedGVR())
 
 	if testFactory != nil {
 		testFactory.TestFactory.WithNamespace("test").Cleanup()

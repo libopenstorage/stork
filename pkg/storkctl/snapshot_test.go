@@ -165,8 +165,8 @@ func TestGetVolumeSnapshotRestoreAllRestores(t *testing.T) {
 
 	var snapshots storkv1.VolumeSnapshotRestoreList
 	expected := "NAMESPACE   NAME    SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS   VOLUMES   CREATED\n" +
-		"ns          test3   sourceSnapName3   ns                                   2         \n" +
-		"default     test2   sourceSnapName2   default                              1         \n"
+		"default     test2   sourceSnapName2   default                              1         \n" +
+		"ns          test3   sourceSnapName3   ns                                   2         \n"
 	testCommon(t, cmdArgs, &snapshots, expected, false)
 }
 
@@ -190,10 +190,10 @@ func TestGetVolumeSnapshotMultipleRestore(t *testing.T) {
 	createSnapshotRestoreAndVerify(t, crdRestore2, namespace, "sourceName2", "sourceNamespace2", false, 1)
 
 	expected := "NAME               SOURCE-SNAPSHOT   SOURCE-SNAPSHOT-NAMESPACE   STATUS   VOLUMES   CREATED\n" +
-		"test2              sourceSnapName2   default                              1         \n" +
 		"crd-restore-test   sourceSnapName    sourceSnapnamespace                  1         \n" +
 		"crd-restore1       sourceName1       sourceNamespace1                     1         \n" +
-		"crd-restore2       sourceName2       sourceNamespace2                     1         \n"
+		"crd-restore2       sourceName2       sourceNamespace2                     1         \n" +
+		"test2              sourceSnapName2   default                              1         \n"
 
 	cmdArgs := []string{"get", "volumesnapshotrestore"}
 	testCommon(t, cmdArgs, nil, expected, false)
