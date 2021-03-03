@@ -1,26 +1,26 @@
 package autopilot
 
 import (
-	autv1alpaha1 "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	autv1alpha1 "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // RuleOps is an interface to perform k8s AutopilotRule operations
 type RuleOps interface {
 	// CreateAutopilotRule creates the AutopilotRule object
-	CreateAutopilotRule(*autv1alpaha1.AutopilotRule) (*autv1alpaha1.AutopilotRule, error)
+	CreateAutopilotRule(*autv1alpha1.AutopilotRule) (*autv1alpha1.AutopilotRule, error)
 	// GetAutopilotRule gets the AutopilotRule for the provided name
-	GetAutopilotRule(string) (*autv1alpaha1.AutopilotRule, error)
+	GetAutopilotRule(string) (*autv1alpha1.AutopilotRule, error)
 	// UpdateAutopilotRule updates the AutopilotRule
-	UpdateAutopilotRule(*autv1alpaha1.AutopilotRule) (*autv1alpaha1.AutopilotRule, error)
+	UpdateAutopilotRule(*autv1alpha1.AutopilotRule) (*autv1alpha1.AutopilotRule, error)
 	// DeleteAutopilotRule deletes the AutopilotRule of the given name
 	DeleteAutopilotRule(string) error
 	// ListAutopilotRules lists AutopilotRules
-	ListAutopilotRules() (*autv1alpaha1.AutopilotRuleList, error)
+	ListAutopilotRules() (*autv1alpha1.AutopilotRuleList, error)
 }
 
 // CreateAutopilotRule creates the AutopilotRule object
-func (c *Client) CreateAutopilotRule(rule *autv1alpaha1.AutopilotRule) (*autv1alpaha1.AutopilotRule, error) {
+func (c *Client) CreateAutopilotRule(rule *autv1alpha1.AutopilotRule) (*autv1alpha1.AutopilotRule, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (c *Client) CreateAutopilotRule(rule *autv1alpaha1.AutopilotRule) (*autv1al
 }
 
 // GetAutopilotRule gets the AutopilotRule for the provided name
-func (c *Client) GetAutopilotRule(name string) (*autv1alpaha1.AutopilotRule, error) {
+func (c *Client) GetAutopilotRule(name string) (*autv1alpha1.AutopilotRule, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (c *Client) GetAutopilotRule(name string) (*autv1alpaha1.AutopilotRule, err
 }
 
 // UpdateAutopilotRule updates the AutopilotRule
-func (c *Client) UpdateAutopilotRule(rule *autv1alpaha1.AutopilotRule) (*autv1alpaha1.AutopilotRule, error) {
+func (c *Client) UpdateAutopilotRule(rule *autv1alpha1.AutopilotRule) (*autv1alpha1.AutopilotRule, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (c *Client) DeleteAutopilotRule(name string) error {
 }
 
 // ListAutopilotRules lists AutopilotRules
-func (c *Client) ListAutopilotRules() (*autv1alpaha1.AutopilotRuleList, error) {
+func (c *Client) ListAutopilotRules() (*autv1alpha1.AutopilotRuleList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}

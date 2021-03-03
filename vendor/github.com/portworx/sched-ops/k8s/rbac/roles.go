@@ -1,6 +1,8 @@
 package rbac
 
 import (
+	"context"
+
 	rbac_v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -23,7 +25,7 @@ func (c *Client) CreateRole(role *rbac_v1.Role) (*rbac_v1.Role, error) {
 		return nil, err
 	}
 
-	return c.rbac.Roles(role.Namespace).Create(role)
+	return c.rbac.Roles(role.Namespace).Create(context.TODO(), role, metav1.CreateOptions{})
 }
 
 // UpdateRole updates the given role
@@ -32,7 +34,7 @@ func (c *Client) UpdateRole(role *rbac_v1.Role) (*rbac_v1.Role, error) {
 		return nil, err
 	}
 
-	return c.rbac.Roles(role.Namespace).Update(role)
+	return c.rbac.Roles(role.Namespace).Update(context.TODO(), role, metav1.UpdateOptions{})
 }
 
 // GetRole gets the given role
@@ -41,7 +43,7 @@ func (c *Client) GetRole(name, namespace string) (*rbac_v1.Role, error) {
 		return nil, err
 	}
 
-	return c.rbac.Roles(namespace).Get(name, metav1.GetOptions{})
+	return c.rbac.Roles(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteRole deletes the given role
@@ -50,7 +52,7 @@ func (c *Client) DeleteRole(name, namespace string) error {
 		return err
 	}
 
-	return c.rbac.Roles(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.rbac.Roles(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
