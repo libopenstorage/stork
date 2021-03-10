@@ -49,6 +49,13 @@ type ResourceCollector struct {
 	storkOps         storkops.Ops
 }
 
+// Objects Collection of objects
+type Objects struct {
+	Items []runtime.Unstructured
+	// Map to prevent collection of duplicate objects
+	resourceMap map[types.UID]bool
+}
+
 // Init initializes the resource collector
 func (r *ResourceCollector) Init(config *restclient.Config) error {
 	var err error
@@ -134,6 +141,134 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 	default:
 		return false
 	}
+}
+
+// GetResourceTypes returns all the supported resource types by the collector
+func (r *ResourceCollector) GetResourceTypes(
+	optionalResourceTypes []string,
+	allDrivers bool) ([]metav1.APIResource, error) {
+	resourceTypes := make([]metav1.APIResource, 0)
+	err := r.discoveryHelper.Refresh()
+	if err != nil {
+		return nil, err
+	}
+	var crdResources []metav1.GroupVersionKind
+	crdList, err := r.storkOps.ListApplicationRegistrations()
+	if err != nil {
+		logrus.Warnf("Unable to get registered crds, err %v", err)
+	} else {
+		for _, crd := range crdList.Items {
+			for _, kind := range crd.Resources {
+				crdResources = append(crdResources, kind.GroupVersionKind)
+			}
+		}
+	}
+	for _, group := range r.discoveryHelper.Resources() {
+		groupVersion, err := schema.ParseGroupVersion(group.GroupVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, resource := range group.APIResources {
+			if !resourceToBeCollected(resource, groupVersion, crdResources, optionalResourceTypes) {
+				continue
+			}
+			resource.Group = groupVersion.Group
+			resource.Version = groupVersion.Version
+			resourceTypes = append(resourceTypes, resource)
+		}
+	}
+	return resourceTypes, nil
+}
+
+// GetResourcesForType gets all the resources for the given type
+func (r *ResourceCollector) GetResourcesForType(
+	resource metav1.APIResource,
+	objects *Objects,
+	namespaces []string,
+	labelSelectors map[string]string,
+	includeObjects map[stork_api.ObjectInfo]bool,
+	allDrivers bool) (*Objects, error) {
+
+	if objects == nil {
+		objects = &Objects{
+			Items: make([]runtime.Unstructured, 0),
+		}
+	}
+	if objects.resourceMap == nil {
+		objects.resourceMap = make(map[types.UID]bool)
+	}
+
+	crbs, err := r.rbacOps.ListClusterRoleBindings()
+	if err != nil {
+		if !apierrors.IsForbidden(err) {
+			return nil, err
+		}
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    resource.Group,
+		Version:  resource.Version,
+		Resource: resource.Name,
+	}
+
+	for _, ns := range namespaces {
+		var dynamicClient dynamic.ResourceInterface
+		if !resource.Namespaced {
+			dynamicClient = r.dynamicInterface.Resource(gvr)
+		} else {
+			dynamicClient = r.dynamicInterface.Resource(gvr).Namespace(ns)
+		}
+
+		var selectors string
+		// PVs don't get the labels from their PVCs, so don't use the label selector
+		switch resource.Kind {
+		case "PersistentVolume":
+		default:
+			selectors = labels.Set(labelSelectors).String()
+		}
+		objectsList, err := dynamicClient.List(metav1.ListOptions{
+			LabelSelector: selectors,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error listing objects for %v: %v", gvr, err)
+		}
+		resourceObjects, err := meta.ExtractList(objectsList)
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range resourceObjects {
+			runtimeObject, ok := o.(runtime.Unstructured)
+			if !ok {
+				return nil, fmt.Errorf("error casting object: %v", o)
+			}
+
+			collect, err := r.objectToBeCollected(includeObjects, labelSelectors, objects.resourceMap, runtimeObject, crbs, ns, allDrivers)
+			if err != nil {
+				return nil, fmt.Errorf("error processing object %v: %v", runtimeObject, err)
+			}
+			if !collect {
+				continue
+			}
+			metadata, err := meta.Accessor(runtimeObject)
+			if err != nil {
+				return nil, err
+			}
+			objects.Items = append(objects.Items, runtimeObject)
+			objects.resourceMap[metadata.GetUID()] = true
+		}
+	}
+
+	modObjects, err := r.pruneOwnedResources(objects.Items, objects.resourceMap)
+	if err != nil {
+		return nil, err
+	}
+	err = r.prepareResourcesForCollection(modObjects, namespaces)
+	if err != nil {
+		return nil, err
+	}
+	objects.Items = modObjects
+	return objects, nil
 }
 
 // GetResources gets all the resources in the given list of namespaces which match the labelSelectors
