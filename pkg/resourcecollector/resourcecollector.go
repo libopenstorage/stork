@@ -329,6 +329,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.roleBindingToBeCollected(object)
 	case "Ingress":
 		return r.ingressToBeCollected(object)
+	case "ConfigMap":
+		return r.configmapToBeCollected(object)
 	}
 
 	return true, nil
