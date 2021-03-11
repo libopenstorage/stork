@@ -38,7 +38,11 @@ func (r *ResourceCollector) prepareServiceResourceForCollection(
 			return err
 		}
 	}
-
+	// Reset the clusterIps to nil
+	err := unstructured.SetNestedField(object.UnstructuredContent(), nil, "spec", "clusterIPs")
+	if err != nil {
+		return err
+	}
 	// Reset the loadBalancerIP
 	return unstructured.SetNestedField(object.UnstructuredContent(), "", "spec", "loadBalancerIP")
 }
