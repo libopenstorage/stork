@@ -44,13 +44,16 @@ func testMigration(t *testing.T) {
 	t.Run("disallowedNamespaceTest", migrationDisallowedNamespaceTest)
 	t.Run("failingPreExecRuleTest", migrationFailingPreExecRuleTest)
 	t.Run("failingPostExecRuleTest", migrationFailingPostExecRuleTest)
-	t.Run("labelSelectorTest", migrationLabelSelectorTest)
-	t.Run("intervalScheduleTest", migrationIntervalScheduleTest)
-	t.Run("dailyScheduleTest", migrationDailyScheduleTest)
-	t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
-	t.Run("monthlyScheduleTest", migrationMonthlyScheduleTest)
-	t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
-	t.Run("intervalScheduleCleanupTest", intervalScheduleCleanupTest)
+	// TODO: waiting for https://portworx.atlassian.net/browse/STOR-281 to be resolved
+	if authTokenConfigMap == "" {
+		t.Run("labelSelectorTest", migrationLabelSelectorTest)
+		t.Run("intervalScheduleTest", migrationIntervalScheduleTest)
+		t.Run("dailyScheduleTest", migrationDailyScheduleTest)
+		t.Run("weeklyScheduleTest", migrationWeeklyScheduleTest)
+		t.Run("monthlyScheduleTest", migrationMonthlyScheduleTest)
+		t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
+		t.Run("intervalScheduleCleanupTest", intervalScheduleCleanupTest)
+	}
 	t.Run("scaleTest", migrationScaleTest)
 }
 
@@ -849,7 +852,15 @@ func createMigration(
 			Namespaces:        []string{migrationNamespace},
 		},
 	}
-	return storkops.Instance().CreateMigration(migration)
+	if authTokenConfigMap != "" {
+		err := addSecurityAnnotation(migration)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	mig, err := storkops.Instance().CreateMigration(migration)
+	return mig, err
 }
 
 func deleteMigrations(migrations []*v1alpha1.Migration) error {
