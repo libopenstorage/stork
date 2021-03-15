@@ -38,7 +38,10 @@ func testSnapshot(t *testing.T) {
 	t.Run("groupSnapshotTest", groupSnapshotTest)
 	t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
 	t.Run("scheduleTests", snapshotScheduleTests)
-	t.Run("storageclassTests", storageclassTests)
+	// TODO: waiting for https://portworx.atlassian.net/browse/STOR-281 to be resolved
+	if authTokenConfigMap == "" {
+		t.Run("storageclassTests", storageclassTests)
+	}
 }
 
 func simpleSnapshotTest(t *testing.T) {
