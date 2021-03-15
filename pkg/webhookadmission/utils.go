@@ -31,6 +31,9 @@ const (
 // CreateMutateWebhook create new webhookconfig for stork if not exist already
 func CreateMutateWebhook(caBundle []byte, ns string) error {
 	path := "/mutate"
+	// We make best efforts to change incoming apps scheduler to stork, if application is
+	// using stork supported storage drivers.
+	sideEffect := admissionv1beta1.SideEffectClassNoneOnDryRun
 	webhook := admissionv1beta1.MutatingWebhook{
 		Name: webhookName,
 		ClientConfig: admissionv1beta1.WebhookClientConfig{
@@ -51,6 +54,7 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 				},
 			},
 		},
+		SideEffects: &sideEffect,
 	}
 	req := &admissionv1beta1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -58,12 +62,20 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 		},
 		Webhooks: []admissionv1beta1.MutatingWebhook{webhook},
 	}
-	_, err := admissionregistration.Instance().CreateMutatingWebhookConfiguration(req)
-	if !k8serr.IsAlreadyExists(err) && err != nil {
-		log.Errorf("unable to create mutate webhook: %v", err)
+
+	resp, err := admissionregistration.Instance().GetMutatingWebhookConfiguration(storkAdmissionController)
+	if err != nil {
+		if k8serr.IsNotFound(err) {
+			_, err = admissionregistration.Instance().CreateMutatingWebhookConfiguration(req)
+		}
 		return err
 	}
-	log.Debugf("Created mutating webhook configuration: %v", webhookName)
+	req.ResourceVersion = resp.ResourceVersion
+	if _, err := admissionregistration.Instance().UpdateMutatingWebhookConfiguration(req); err != nil {
+		log.Errorf("unable to update webhook configuration: %v", err)
+		return err
+	}
+	log.Debugf("stork webhook configured: %v", webhookName)
 	return nil
 }
 
