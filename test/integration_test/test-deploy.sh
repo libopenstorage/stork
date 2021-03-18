@@ -54,13 +54,13 @@ case $i in
         shift
         ;;
     --src-config-path)
-        echo "Remote kubeconfig path to use for test: $2"
+        echo "Source kubeconfig path to use for test: $2"
         src_config_path=$2
         shift
         shift
         ;;
     --dest-config-path)
-        echo "Remote kubeconfig path to use for test: $2"
+        echo "Destination kubeconfig path to use for test: $2"
         dest_config_path=$2
         shift
         shift
@@ -165,7 +165,7 @@ kubectl delete cm stork-mock-time  -n kube-system || true
 kubectl create cm stork-mock-time  -n kube-system --from-literal=time=""
 
 echo "Creating stork deployment"
-#kubectl apply -f /specs/stork-deployment.yaml
+kubectl apply -f /specs/stork-deployment.yaml
 
 # Turn on test mode
 kubectl set env deploy/stork -n kube-system TEST_MODE="true"
