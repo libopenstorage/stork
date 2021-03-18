@@ -33,6 +33,7 @@ type ApplicationBackupSpec struct {
 	// Options to be passed in to the driver
 	Options          map[string]string `json:"options"`
 	IncludeResources []ObjectInfo      `json:"includeResources"`
+	ResourceTypes    []string          `json:"resourceTypes"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup

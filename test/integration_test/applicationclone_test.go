@@ -10,6 +10,9 @@ import (
 )
 
 func TestApplicationClone(t *testing.T) {
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	t.Run("deploymentTest", deploymentApplicationCloneTest)
 	t.Run("statefulsetTest", statefulsetApplicationCloneTest)
 	t.Run("statefulsetRuleTest", statefulsetApplicationCloneRuleTest)
@@ -20,6 +23,8 @@ func TestApplicationClone(t *testing.T) {
 	t.Run("failingPostExecRuleTest", applicationCloneFailingPostExecRuleTest)
 	t.Run("labelSelectorTest", applicationCloneLabelSelectorTest)
 
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func triggerApplicationCloneTest(

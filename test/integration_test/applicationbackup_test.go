@@ -53,6 +53,9 @@ func TestApplicationBackup(t *testing.T) {
 	logrus.Infof("Using stork volume driver: %s", volumeDriverName)
 	logrus.Infof("Backup path being used: %s", backupLocationPath)
 
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
 	t.Run("applicationBackupRestoreTest", applicationBackupRestoreTest)
 	t.Run("applicationBackupDelBackupLocation", applicationBackupDelBackupLocation)
 	t.Run("applicationBackupMultiple", applicationBackupMultiple)
@@ -65,6 +68,9 @@ func TestApplicationBackup(t *testing.T) {
 	t.Run("labelSelector", applicationBackupLabelSelectorTest)
 	t.Run("scheduleTests", applicationBackupScheduleTests)
 	t.Run("backupSyncController", applicationBackupSyncControllerTest)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func TestScaleApplicationBackup(t *testing.T) {
@@ -72,7 +78,13 @@ func TestScaleApplicationBackup(t *testing.T) {
 	if !defaultsBackupSet {
 		setDefaultsForBackup(t)
 	}
+	err := setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster for scale tests: %v", err)
+
 	t.Run("scaleApplicationBackupRestore", scaleApplicationBackupRestore)
+
+	err = setRemoteConfig("")
+	require.NoError(t, err, "setting kubeconfig to default failed")
 }
 
 func triggerBackupRestoreTest(
@@ -91,6 +103,7 @@ func triggerBackupRestoreTest(
 		var err error
 		var ctxs []*scheduler.Context
 		var appBackup *storkv1.ApplicationBackup
+
 		ctx := createApp(t, appBackupKey[0])
 		ctxs = append(ctxs, ctx)
 		var restoreCtx = &scheduler.Context{
@@ -198,7 +211,6 @@ func triggerBackupRestoreTest(
 
 		err = storkops.Instance().DeleteBackupLocation(currBackupLocation.Name, currBackupLocation.Namespace)
 		require.NoError(t, err, "Failed to delete backuplocation: %s for location %s.", currBackupLocation.Name, string(location), err)
-
 	}
 }
 
@@ -1018,11 +1030,8 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "Application backup %s failed.", firstBackup)
 
 	// Create backup location on second cluster
-	err = dumpRemoteKubeConfig(remoteConfig)
-	require.NoErrorf(t, err, "Unable to write clusterconfig: %v", err)
-
-	err = setRemoteConfig(remoteFilePath)
-	require.NoError(t, err, "Error setting remote config")
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	// Create namespace for the backuplocation on second cluster
 	ns, err := core.Instance().CreateNamespace(&v1.Namespace{
@@ -1065,9 +1074,10 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 	require.NoError(t, err, "Failed to delete backup post-restore on second cluster.")
 
 	// Destroy app on first cluster
-	err = setRemoteConfig("")
 	logrus.Infof("Destroy apps  on first cluster: %v.", appCtx.App.Key)
-	require.NoError(t, err, "Error resetting remote config")
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster when trying to delete app: %v", err)
+
 	destroyAndWait(t, []*scheduler.Context{appCtx})
 
 	// Restore application on first cluster
@@ -1120,11 +1130,9 @@ func applicationBackupSyncControllerTest(t *testing.T) {
 
 	destroyAndWait(t, []*scheduler.Context{appCtx})
 
-	err = dumpRemoteKubeConfig(remoteConfig)
-	require.NoErrorf(t, err, "Unable to write clusterconfig: %v", err)
-
-	err = setRemoteConfig(remoteFilePath)
-	require.NoError(t, err, "Error setting remote config")
+	// Clean up destination cluster
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	err = deleteAndWaitForBackupDeletion(ns.Name)
 	require.NoError(t, err, "All backups not deleted on the second cluster: %v.", err)
@@ -1201,6 +1209,7 @@ func applicationBackupDelBackupLocation(t *testing.T) {
 }
 
 func applicationBackupMultiple(t *testing.T) {
+
 	// Create myqsl app deployment
 	appCtx := createApp(t, appKey+"-multiple-backup")
 
