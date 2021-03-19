@@ -22,3 +22,134 @@ spec:
         issue: Application pod {{$labels.exported_pod}} in namespace {{$labels.namespace}}
           is not hyperconverged
         severity: warning
+    - alert: ApplicationBackupFailed
+      annotations:
+        message: Unable to backup resources in {{ $labels.namespace
+          }} namespace using application backup {{ $labels.name }}
+        summary: Application backup {{$labels.name}} in namespace {{$labels.namespace}}
+          has failed
+      expr: application_backup_status == 3
+      for: 5m
+      labels:
+        issue: Application backup {{$labels.name}} in namespace {{$labels.namespace}}
+          has failed
+        severity: warning
+    - alert: ApplicationCloneFailed
+      annotations:
+        message: Application clone {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has failed
+        summary: Application clone {{$labels.name}} in namespace {{$labels.namespace}}
+          has failed
+      expr: application_clone_status == 3
+      for: 5m
+      labels:
+        issue: Application clone {{$labels.name}} in namespace {{$labels.namespace}}
+          has failed
+        severity: warning
+    - alert: ApplicationRestoreFailed
+      annotations:
+        message: Application restore {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has failed
+        summary: Application restore {{$labels.name}} in namespace {{$labels.namespace}}
+          has failed
+      expr: application_restore_status == 3
+      for: 5m
+      labels:
+        issue: Application restore {{$labels.name}} in namespace {{$labels.namespace}}
+          has failed
+        severity: warning
+    - alert: ApplicationRestorePartialSuccessful
+      annotations:
+        message: Error while appliying k8s resources for application restore {{ $labels.name }} in namespace {{$labels.namespace}}
+        summary: Application restore {{$labels.name}} in namespace {{$labels.namespace}}
+          has partially succeeded
+      expr: application_restore_status == 3
+      for: 5m
+      labels:
+        issue: Application restore {{$labels.name}} in namespace {{$labels.namespace}}
+          has failed
+        severity: warning
+    - alert: ApplicationRestoreRetain
+      annotations:
+        message: Restore of application resources are skipped for applicationrestore {{ $labels.name }}, namespace {{ $labels.namespace
+          }} since the replace policy was set to retain.
+        summary: Application restore {{$labels.name}} in namespace {{$labels.namespace}}
+          has partially succeeded.
+      expr: application_restore_status == 5
+      for: 5m
+      labels:
+        issue: Application restore {{$labels.name}} in namespace {{$labels.namespace}}
+          has partially succeeded.
+        severity: warning
+    - alert: ClusterPairSchedulerError
+      annotations:
+        message: Scheduler pairing for Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has failed
+        summary: Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is not ready
+      expr: clusterpair_scheduler_status == 3
+      for: 5m
+      labels:
+        issue: Scheduler pairing for Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has failed
+        severity: warning
+    - alert: ClusterPairSchedulerDegraded
+      annotations:
+        message: Scheduler pairing for Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is degraded
+        summary: Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is not ready
+      expr: clusterpair_scheduler_status == 4
+      for: 5m
+      labels:
+        issue: Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is not ready
+        severity: warning
+    - alert: ClusterPairStorageError
+      annotations:
+        message: Storage pairing for Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has failed
+        summary: Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is not ready
+      expr: clusterpair_storage_status == 3
+      for: 5m
+      labels:
+        issue: Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is not ready
+        severity: warning
+    - alert: ClusterPairStorageDegraded
+      annotations:
+        message: Storage pairing for Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is in degraded state
+        summary: Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is not ready
+      expr: clusterpair_storage_status == 4
+      for: 5m
+      labels:
+        issue:  Cluster Pair {{ $labels.name }} in namespace {{ $labels.namespace
+          }} is not ready
+        severity: warning
+    - alert: MigrationFailed
+      annotations:
+        message: Migration {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has failed
+        summary: Migration {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has failed
+      expr: migration_status  == 3
+      for: 5m
+      labels:
+        issue: Migration {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has failed
+        severity: warning
+    - alert: MigrationPartialSuccess
+      annotations:
+        message: Unable to migrate all resources for migration {{ $labels.name }} in namespace {{ $labels.namespace
+          }}
+        summary: Migration {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has partially succeeded.
+      expr: migration_status  == 4
+      for: 5m
+      labels:
+        issue: Migration {{ $labels.name }} in namespace {{ $labels.namespace
+          }} has partially succeeded.
+        severity: warning
