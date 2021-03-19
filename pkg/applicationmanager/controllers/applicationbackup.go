@@ -979,6 +979,17 @@ func (a *ApplicationBackupController) backupResources(
 	backup *stork_api.ApplicationBackup,
 ) error {
 	var err error
+	var resourceTypes []metav1.APIResource
+	// Listing all resource types
+	if len(backup.Spec.ResourceTypes) != 0 {
+		optionalResourceTypes := []string{}
+		resourceTypes, err = a.resourceCollector.GetResourceTypes(optionalResourceTypes, true)
+		if err != nil {
+			log.ApplicationBackupLog(backup).Errorf("Error getting resource types: %v", err)
+			return err
+		}
+	}
+
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)
@@ -989,17 +1000,32 @@ func (a *ApplicationBackupController) backupResources(
 	allObjects := make([]runtime.Unstructured, 0)
 	for i := 0; i < len(namespacelist); i += backupResourcesBatchCount {
 		batch := namespacelist[i:min(i+backupResourcesBatchCount, len(namespacelist))]
-		objects, err := a.resourceCollector.GetResources(
-			batch,
-			backup.Spec.Selectors,
-			objectMap,
-			optionalBackupResources,
-			true)
-		if err != nil {
-			log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
-			return err
+		if len(backup.Spec.ResourceTypes) == 0 {
+			objects, err := a.resourceCollector.GetResources(
+				batch,
+				backup.Spec.Selectors,
+				objectMap,
+				optionalBackupResources,
+				true)
+			if err != nil {
+				log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
+				return err
+			}
+			allObjects = append(allObjects, objects...)
+		} else {
+			for _, backupResourceType := range backup.Spec.ResourceTypes {
+				for _, resource := range resourceTypes {
+					if resource.Kind == backupResourceType {
+						objects, err := a.resourceCollector.GetResourcesForType(resource, nil, batch, backup.Spec.Selectors, nil, true)
+						if err != nil {
+							log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
+							return err
+						}
+						allObjects = append(allObjects, objects.Items...)
+					}
+				}
+			}
 		}
-		allObjects = append(allObjects, objects...)
 		// Do a dummy update to the backup CR to update only the last update timestamp
 		namespacedName := types.NamespacedName{}
 		namespacedName.Namespace = backup.Namespace

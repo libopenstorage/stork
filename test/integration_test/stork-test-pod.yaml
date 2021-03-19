@@ -87,6 +87,8 @@ spec:
       value: aws_access_key_id
     - name: AWS_SECRET_ACCESS_KEY
       value: aws_secret_access_key
+    - name: EXTERNAL_TEST_CLUSTER 
+      value: external_test_cluster
   hostNetwork: false
   hostPID: false
   volumes:

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
+	"github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/core"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/admission/v1beta1"
@@ -266,7 +267,6 @@ func (c *Controller) Start() error {
 	}()
 	c.started = true
 	log.Debugf("Webhook server started")
-
 	return CreateMutateWebhook(caBundle, ns)
 }
 
@@ -278,7 +278,10 @@ func (c *Controller) Stop() error {
 	if !c.started {
 		return fmt.Errorf("webhook server has not been started")
 	}
-
+	if err := admissionregistration.Instance().DeleteMutatingWebhookConfiguration(storkAdmissionController); err != nil {
+		log.Errorf("unable to delete webhook configuration, %v", err)
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
