@@ -17,6 +17,16 @@ const (
 	CassandraApp = "cassandra"
 	// WeblogicDomainApp registration name
 	WeblogicDomainApp = "weblogic"
+	// RabbitMQApp registration name
+	RabbitMQApp = "rabbitmq"
+	// PerconaDBApp registration name
+	PerconaDBApp = "perconadb"
+	// PrometheusApp registration name
+	PrometheusApp = "prometheus"
+	// KafkaApp registration name
+	KafkaApp = "kafka"
+	// PostgressApp registration name
+	PostgressApp = "postgress"
 )
 
 // GetSupportedCRD returns the list of supported CRDs.
@@ -212,6 +222,83 @@ func GetSupportedCRD() map[string][]stork_api.ApplicationResource {
 				Path:  "spec.serverStartPolicy",
 				Type:  "string",
 				Value: "NEVER",
+			},
+		},
+	}
+	// rabbitmq app crds
+	defCRD[RabbitMQApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "RabbitmqCluster",
+				Group:   "rabbitmq.com",
+				Version: "v1beta1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.replicas",
+				Type: "int",
+			},
+		},
+	}
+
+	// perconadb app crds
+	defCRD[PerconaDBApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "PerconaXtraDBCluster",
+				Group:   "pxc.percona.com",
+				Version: "v1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.pxc.size",
+				Type: "int",
+			},
+		},
+	}
+	// prometheus app crds
+	defCRD[PrometheusApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "Prometheus",
+				Group:   "monitoring.coreos.com",
+				Version: "v1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.replicas",
+				Type: "int",
+			},
+		},
+	}
+
+	// kafka app crds
+	defCRD[KafkaApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "Kafka",
+				Group:   "kafka.strimzi.io",
+				Version: "v1beta2",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.kafka.replicas",
+				Type: "int",
+			},
+		},
+	}
+	// postgress app crds
+	defCRD[PostgressApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "postgresql",
+				Group:   "acid.zalan.do",
+				Version: "v1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.numberOfInstances",
+				Type: "int",
 			},
 		},
 	}
