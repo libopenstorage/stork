@@ -15,6 +15,7 @@ import (
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	apps_api "k8s.io/api/apps/v1"
@@ -57,6 +58,7 @@ func testMigration(t *testing.T) {
 		t.Run("scheduleInvalidTest", migrationScheduleInvalidTest)
 		t.Run("intervalScheduleCleanupTest", intervalScheduleCleanupTest)
 	}
+	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
 	t.Run("scaleTest", migrationScaleTest)
 
 	err = setRemoteConfig("")
@@ -831,6 +833,93 @@ func triggerMigrationScaleTest(t *testing.T, migrationKey string, migrationAppKe
 	// Delete migrations
 	err = deleteMigrations(allMigrations)
 	require.NoError(t, err, "error in deleting migrations.")
+}
+
+func clusterPairFailuresTest(t *testing.T) {
+	ctxs, err := schedulerDriver.Schedule("cluster-pair-failures",
+		scheduler.ScheduleOptions{AppKeys: []string{testKey}})
+	require.NoError(t, err, "Error scheduling task")
+	require.Equal(t, 1, len(ctxs), "Only one task should have started")
+
+	err = schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for app to get to running state")
+
+	var clusterPairCtx = &scheduler.Context{
+		UID: ctxs[0].UID,
+		App: &spec.AppSpec{
+			Key:      ctxs[0].App.Key,
+			SpecList: []interface{}{},
+		}}
+
+	// create, apply and validate cluster pair specs
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "during cluster pair setting kubeconfig to destination failed %v")
+
+	badTokenInfo, errPairing := volumeDriver.GetClusterPairingInfo()
+	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
+
+	// Change token value to an incorrect token
+	badTokenInfo[tokenKey] = "randomtoken"
+
+	err = createClusterPair(badTokenInfo, false, true, defaultClusterPairDir)
+	require.NoError(t, err, "Error creating cluster Spec: %v")
+
+	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
+	require.NoError(t, err, "Unable to parse spec dir: %v")
+
+	err = schedulerDriver.AddTasks(clusterPairCtx,
+		scheduler.ScheduleOptions{AppKeys: []string{defaultClusterPairDir}})
+	require.NoError(t, err, "Failed to schedule Cluster Pair Specs: %v")
+
+	// We would like to exit early in case of negative tests
+	err = schedulerDriver.WaitForRunning(clusterPairCtx, defaultWaitTimeout/10, defaultWaitInterval)
+	require.Error(t, err, "Cluster pairing should have failed due to incorrect token")
+
+	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
+
+	badIPInfo, errPairing := volumeDriver.GetClusterPairingInfo()
+	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
+
+	badIPInfo[clusterIP] = "0.0.0.0"
+
+	err = createClusterPair(badIPInfo, false, true, defaultClusterPairDir)
+	require.NoError(t, err, "Error creating cluster Spec: %v")
+
+	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
+	require.NoError(t, err, "Unable to parse spec dir: %v")
+
+	err = schedulerDriver.AddTasks(clusterPairCtx,
+		scheduler.ScheduleOptions{AppKeys: []string{defaultClusterPairDir}})
+	require.NoError(t, err, "Failed to schedule Cluster Pair Specs: %v")
+
+	// We would like to exit early in case of negative tests
+	err = schedulerDriver.WaitForRunning(clusterPairCtx, defaultWaitTimeout/10, defaultWaitInterval)
+	require.Error(t, err, "Cluster pairing should have failed due to incorrect IP")
+
+	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
+
+	badPortInfo, errPairing := volumeDriver.GetClusterPairingInfo()
+	require.NoError(t, errPairing, "Error writing to clusterpair.yml: %v")
+
+	badPortInfo[clusterPort] = "0000"
+
+	err = createClusterPair(badPortInfo, false, true, defaultClusterPairDir)
+	require.NoError(t, err, "Error creating cluster Spec: %v")
+
+	err = schedulerDriver.RescanSpecs(specDir, volumeDriverName)
+	require.NoError(t, err, "Unable to parse spec dir: %v")
+
+	err = schedulerDriver.AddTasks(clusterPairCtx,
+		scheduler.ScheduleOptions{AppKeys: []string{defaultClusterPairDir}})
+	require.NoError(t, err, "Failed to schedule Cluster Pair Specs")
+
+	// We would like to exit early in case of negative tests
+	err = schedulerDriver.WaitForRunning(clusterPairCtx, defaultWaitTimeout/10, defaultWaitInterval)
+	require.Error(t, err, "Cluster pairing should have failed due to incorrect port")
+
+	destroyAndWait(t, []*scheduler.Context{clusterPairCtx})
+	destroyAndWait(t, ctxs)
+
 }
 
 func createMigration(
