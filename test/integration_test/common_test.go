@@ -89,6 +89,10 @@ const (
 	authSecretConfigMap      = "AUTH_SECRET_CONFIGMAP"
 	backupPathVar            = "BACKUP_LOCATION_PATH"
 	externalTestCluster      = "EXTERNAL_TEST_CLUSTER"
+
+	tokenKey    = "token"
+	clusterIP   = "ip"
+	clusterPort = "port"
 )
 
 var nodeDriver node.Driver
