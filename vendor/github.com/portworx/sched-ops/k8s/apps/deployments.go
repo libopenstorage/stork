@@ -21,7 +21,7 @@ type DeploymentOps interface {
 	// GetDeployment returns a deployment for the give name and namespace
 	GetDeployment(name, namespace string) (*appsv1.Deployment, error)
 	// CreateDeployment creates the given deployment
-	CreateDeployment(*appsv1.Deployment) (*appsv1.Deployment, error)
+	CreateDeployment(*appsv1.Deployment, metav1.CreateOptions) (*appsv1.Deployment, error)
 	// UpdateDeployment updates the given deployment
 	UpdateDeployment(*appsv1.Deployment) (*appsv1.Deployment, error)
 	// DeleteDeployment deletes the given deployment
@@ -57,7 +57,7 @@ func (c *Client) GetDeployment(name, namespace string) (*appsv1.Deployment, erro
 }
 
 // CreateDeployment creates the given deployment
-func (c *Client) CreateDeployment(deployment *appsv1.Deployment) (*appsv1.Deployment, error) {
+func (c *Client) CreateDeployment(deployment *appsv1.Deployment, opts metav1.CreateOptions) (*appsv1.Deployment, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (c *Client) CreateDeployment(deployment *appsv1.Deployment) (*appsv1.Deploy
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.apps.Deployments(ns).Create(context.TODO(), deployment, metav1.CreateOptions{})
+	return c.apps.Deployments(ns).Create(context.TODO(), deployment, opts)
 }
 
 // DeleteDeployment deletes the given deployment

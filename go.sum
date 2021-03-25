@@ -872,9 +872,15 @@ github.com/portworx/kvdb v0.0.0-20200311180812-b2c72382d652/go.mod h1:Q8YyrNDvPp
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/sched-ops v0.20.4-openstorage-rc3 h1:tXnHsjZT2wZ2BCXf8avDoya7zGyCgLNUC8Upt+WEQrY=
 github.com/portworx/sched-ops v0.20.4-openstorage-rc3/go.mod h1:DpRDDqXWQrReFJ5SHWWrURuZdzVKjrh2OxbAfwnrAyk=
+github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7 h1:E/ZYLCbNezKg4bT1CmZXWgi2vY6PuPHwdVBZOdQDmfM=
+github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7/go.mod h1:DpRDDqXWQrReFJ5SHWWrURuZdzVKjrh2OxbAfwnrAyk=
+github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325160501-71c13c330a2e h1:sPC3suNQQtGG2tNE7lOvVchMt7GKp+gg0T/10NQu5po=
+github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325160501-71c13c330a2e/go.mod h1:DpRDDqXWQrReFJ5SHWWrURuZdzVKjrh2OxbAfwnrAyk=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224/go.mod h1:OjpMH9Uh5o9ntVGktm4FbjLNwubJ3ITih2OfYrAeWtA=
 github.com/portworx/torpedo v0.20.4-rc1 h1:iI6J8IgMfZdqYpFQ2jNDNet7RbMOcuBmvh8T+B3NJF0=
 github.com/portworx/torpedo v0.20.4-rc1/go.mod h1:4m4ORL/hpBOP2DUaIK6CzRkYiEn3AT8WP65wZHmO8MI=
+github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 h1:J5D0JPZWueVAK8/Dr5s84I7/tCfin6NjIGbKKCSyyJ0=
+github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145/go.mod h1:CkLAs/ojTzSu3SPyeDxc3qhsbRU78H5Xz1qJlj1Ap1U=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
 github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021/go.mod h1:prYjPmNq4d1NPVmpShWobRqXY3q7Vp+80DqgxxUrUIA=
 github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 h1:J9b7z+QKAmPf4YLrFg6oQUotqHQeUNWwkvo7jZp1GLU=
