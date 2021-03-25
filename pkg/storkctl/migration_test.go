@@ -273,7 +273,7 @@ func createMigratedDeployment(t *testing.T) {
 			Replicas: &replicas,
 		},
 	}
-	_, err = apps.Instance().CreateDeployment(deployment)
+	_, err = apps.Instance().CreateDeployment(deployment, metav1.CreateOptions{})
 	require.NoError(t, err, "Error creating deployment")
 }
 
@@ -294,7 +294,7 @@ func createMigratedStatefulSet(t *testing.T) {
 			Replicas: &replicas,
 		},
 	}
-	_, err = apps.Instance().CreateStatefulSet(statefulSet)
+	_, err = apps.Instance().CreateStatefulSet(statefulSet, metav1.CreateOptions{})
 	require.NoError(t, err, "Error creating statefulset")
 
 }

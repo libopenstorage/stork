@@ -113,6 +113,7 @@ func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
 	t.Run("testSnapshotRestore", testSnapshotRestore)
 	t.Run("testMigration", testMigration)
+	t.Run("testWebhook", testWebhook)
 }
 
 // TODO: Take driver name from input
