@@ -20,6 +20,7 @@ import (
 	ssh_pkg "golang.org/x/crypto/ssh"
 	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -132,7 +133,7 @@ func (s *SSH) initExecPod() error {
 		if err != nil {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
-		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet))
+		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
 		}

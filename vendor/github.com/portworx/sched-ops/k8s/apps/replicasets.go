@@ -18,7 +18,7 @@ import (
 // ReplicaSetOps is an interface to perform k8s daemon set operations
 type ReplicaSetOps interface {
 	// CreateReplicaSet creates the given ReplicaSet
-	CreateReplicaSet(rs *appsv1.ReplicaSet) (*appsv1.ReplicaSet, error)
+	CreateReplicaSet(rs *appsv1.ReplicaSet, opts metav1.CreateOptions) (*appsv1.ReplicaSet, error)
 	// ListReplicaSets lists all ReplicaSets in given namespace
 	ListReplicaSets(namespace string, listOpts metav1.ListOptions) ([]appsv1.ReplicaSet, error)
 	// GetReplicaSet gets the the daemon set with given name
@@ -36,12 +36,12 @@ type ReplicaSetOps interface {
 }
 
 // CreateReplicaSet creates the given ReplicaSet
-func (c *Client) CreateReplicaSet(rs *appsv1.ReplicaSet) (*appsv1.ReplicaSet, error) {
+func (c *Client) CreateReplicaSet(rs *appsv1.ReplicaSet, opts metav1.CreateOptions) (*appsv1.ReplicaSet, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
 
-	return c.apps.ReplicaSets(rs.Namespace).Create(context.TODO(), rs, metav1.CreateOptions{})
+	return c.apps.ReplicaSets(rs.Namespace).Create(context.TODO(), rs, opts)
 }
 
 // ListReplicaSets lists all ReplicaSets in given namespace

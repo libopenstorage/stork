@@ -22,7 +22,7 @@ type StatefulSetOps interface {
 	// GetStatefulSet returns a statefulset for given name and namespace
 	GetStatefulSet(name, namespace string) (*appsv1.StatefulSet, error)
 	// CreateStatefulSet creates the given statefulset
-	CreateStatefulSet(ss *appsv1.StatefulSet) (*appsv1.StatefulSet, error)
+	CreateStatefulSet(ss *appsv1.StatefulSet, opts metav1.CreateOptions) (*appsv1.StatefulSet, error)
 	// UpdateStatefulSet creates the given statefulset
 	UpdateStatefulSet(ss *appsv1.StatefulSet) (*appsv1.StatefulSet, error)
 	// DeleteStatefulSet deletes the given statefulset
@@ -62,7 +62,7 @@ func (c *Client) GetStatefulSet(name, namespace string) (*appsv1.StatefulSet, er
 }
 
 // CreateStatefulSet creates the given statefulset
-func (c *Client) CreateStatefulSet(statefulset *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
+func (c *Client) CreateStatefulSet(statefulset *appsv1.StatefulSet, opts metav1.CreateOptions) (*appsv1.StatefulSet, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (c *Client) CreateStatefulSet(statefulset *appsv1.StatefulSet) (*appsv1.Sta
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.apps.StatefulSets(ns).Create(context.TODO(), statefulset, metav1.CreateOptions{})
+	return c.apps.StatefulSets(ns).Create(context.TODO(), statefulset, opts)
 }
 
 // DeleteStatefulSet deletes the given statefulset
