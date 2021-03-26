@@ -499,6 +499,64 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 	})
 })
 
+// Restart Volume driver during resize pool with add-disk option
+var _ = Describe(fmt.Sprintf("{%sPoolExpandRestartVolumeDriver}", testSuiteName), func() {
+	It("has to restart portworx during resize pool with add-disk , validate and teardown apps", func() {
+		var contexts []*scheduler.Context
+		testName := strings.ToLower(fmt.Sprintf("%sPoolExpandRestartVolDriver", testSuiteName))
+		poolLabel := map[string]string{"autopilot": "adddisk"}
+		storageNode := node.GetStorageDriverNodes()[2]
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNode)/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
+		}
+
+		Step("schedule apps with autopilot rules for pool expand", func() {
+			err := AddLabelsOnNode(storageNode, poolLabel)
+			Expect(err).NotTo(HaveOccurred())
+			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{PvcSize: 20 * units.GiB})
+		})
+
+		Step("restart Volume driver when resize of pool is triggered", func() {
+			err := aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
+			Expect(err).NotTo(HaveOccurred())
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			Expect(err).NotTo(HaveOccurred())
+			err = Inst().V.RestartDriver(storageNode, nil)
+			Expect(err).NotTo(HaveOccurred())
+			err = Inst().V.WaitDriverDownOnNode(storageNode)
+			Expect(err).NotTo(HaveOccurred())
+			err = Inst().V.WaitDriverUpOnNode(storageNode, Inst().DriverStartTimeout)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Step("wait until workload completes on volume", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("validating and verifying size of storage pools", func() {
+			ValidateStoragePools(contexts)
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+			for _, apRule := range apRules {
+				Inst().S.DeleteAutopilotRule(apRule.Name)
+			}
+			for key := range poolLabel {
+				Inst().S.RemoveLabelOnNode(storageNode, key)
+			}
+		})
+
+	})
+})
+
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes and then validates
 // PVC sizes of the volumes and sizes of storage pools
