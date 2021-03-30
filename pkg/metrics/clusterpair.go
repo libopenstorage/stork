@@ -11,11 +11,11 @@ import (
 var (
 	// clusterpairStatusCounter for clusterpair status
 	clusterpairSchedStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "clusterpair_scheduler_status",
+		Name: "stork_clusterpair_scheduler_status",
 		Help: "Status of scheduler clusterpair",
 	}, []string{metricName, metricNamespace})
 	clusterpairStorageStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "clusterpair_storage_status",
+		Name: "stork_clusterpair_storage_status",
 		Help: "Status of storage clusterpair",
 	}, []string{metricName, metricNamespace})
 )

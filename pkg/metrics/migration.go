@@ -11,22 +11,22 @@ import (
 var (
 	// migrationStatusCounter for migration status
 	migrationStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "migration_status",
+		Name: "stork_migration_status",
 		Help: "Status of migration",
 	}, []string{metricName, metricNamespace, metricSchedule})
 	// migrationStageCounter for migration CR stages on server
 	migrationStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "migration_stage",
+		Name: "stork_migration_stage",
 		Help: "Stage of migration",
 	}, []string{metricName, metricNamespace, metricSchedule})
 	// migrationDurationCounter for time taken by migration to complete
 	migrationDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "migration_duration",
+		Name: "stork_migration_duration",
 		Help: "Duration of migrations",
 	}, []string{metricName, metricNamespace, metricSchedule})
 	// migrationScheduleCounter for migration schedule status
 	migrationScheduleCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "migration_schedule_status",
+		Name: "stork_migration_schedule_status",
 		Help: "Status of migration schedules",
 	}, []string{metricName, metricNamespace})
 )
