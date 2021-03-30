@@ -48,19 +48,19 @@ var (
 	// HyperConvergedPodsCounter for pods hyper-converged by stork scheduler i.e scheduled on
 	// node where replicas for all pod volumes exists
 	HyperConvergedPodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "hyperconverged_pods_total",
+		Name: "stork_hyperconverged_pods_total",
 		Help: "The total number of pods hyper-converged by stork scheduler",
 	}, []string{"pod", "namespace"})
 	// NonHyperConvergePodsCounter for pods which are placed on driver node but not on node
 	// where pod volume replicas exists
 	NonHyperConvergePodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "non_hyperconverged_pods_total",
+		Name: "stork_non_hyperconverged_pods_total",
 		Help: "The total number of pods that are not hyper-converged by stork scheduler",
 	}, []string{"pod", "namespace"})
 	// SemiHyperConvergePodsCounter for pods which scheduled on node where replicas for all
 	// volumes does not exists
 	SemiHyperConvergePodsCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "semi_hyperconverged_pods_total",
+		Name: "stork_semi_hyperconverged_pods_total",
 		Help: "The total number of pods that are partially hyper-converged by stork scheduler",
 	}, []string{"pod", "namespace"})
 )

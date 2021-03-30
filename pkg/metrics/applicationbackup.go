@@ -12,27 +12,27 @@ import (
 var (
 	// backupStatusCounter for application backup CR status on server
 	backupStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_backup_status",
+		Name: "stork_application_backup_status",
 		Help: "Status of application backups",
 	}, []string{metricName, metricNamespace, metricSchedule})
 	// backupStageCounter for application backup CR stages on server
 	backupStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_backup_stage",
+		Name: "stork_application_backup_stage",
 		Help: "Stage of application backups",
 	}, []string{metricName, metricNamespace, metricSchedule})
 	// backupDurationCounter for time taken by application backup to complete
 	backupDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_backup_duration",
+		Name: "stork_application_backup_duration",
 		Help: "Duration of application backups",
 	}, []string{metricName, metricNamespace, metricSchedule})
 	// backupSizeCounter for application backup size
 	backupSizeCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_backup_size",
+		Name: "stork_application_backup_size",
 		Help: "Size of application backups",
 	}, []string{metricName, metricNamespace, metricSchedule})
 	// backupScheduleStatusCounter for application backup schedule CR status on server
 	backupScheduleStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_backup__schedule_status",
+		Name: "stork_application_backup_schedule_status",
 		Help: "Status of application backup Schedules",
 	}, []string{metricName, metricNamespace})
 )

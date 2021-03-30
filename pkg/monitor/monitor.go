@@ -34,7 +34,7 @@ const (
 var (
 	// HealthCounter for pods which are rescheduled by stork monitor
 	HealthCounter = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "pods_reschduled_total",
+		Name: "stork_pods_rescheduled_total",
 		Help: "The total number of pods reschduler by stork pod monitor",
 	})
 )

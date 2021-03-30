@@ -11,17 +11,17 @@ import (
 var (
 	// CloneStatusCounter for application clone CR status on server
 	cloneStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_clone_status",
+		Name: "stork_application_clone_status",
 		Help: "Status of application clones",
 	}, []string{metricName, metricNamespace})
 	// CloneStageCounter for application clone CR stages on server
 	cloneStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_clone_stage",
+		Name: "stork_application_clone_stage",
 		Help: "Stage of application clones",
 	}, []string{metricName, metricNamespace})
 	// CloneDurationCounter for time taken by application clone to complete
 	cloneDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_clone_duration",
+		Name: "stork_application_clone_duration",
 		Help: "Duration of application clones",
 	}, []string{metricName, metricNamespace})
 )

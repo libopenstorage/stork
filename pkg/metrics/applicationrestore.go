@@ -11,22 +11,22 @@ import (
 var (
 	// RestoreStatusCounter for application restore CR status on server
 	restoreStatusCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_restore_status",
+		Name: "stork_application_restore_status",
 		Help: "Status of application restores",
 	}, []string{metricName, metricNamespace})
 	// RestoreStageCounter for application restore CR stages on server
 	restoreStageCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_restore_stage",
+		Name: "stork_application_restore_stage",
 		Help: "Stage of application restore",
 	}, []string{metricName, metricNamespace})
 	// RestoreDurationCounter for time taken by application restore to complete
 	restoreDurationCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_restore_duration",
+		Name: "stork_application_restore_duration",
 		Help: "Duration of application restores",
 	}, []string{metricName, metricNamespace})
 	// RestoreSizeCounter for application restore size
 	restoreSizeCounter = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "application_restore_size",
+		Name: "stork_application_restore_size",
 		Help: "Size of application restores",
 	}, []string{metricName, metricNamespace})
 )
