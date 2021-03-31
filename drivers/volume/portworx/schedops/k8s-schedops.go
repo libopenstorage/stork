@@ -305,32 +305,37 @@ PodLoop:
 
 		containerPaths := getContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
-		for containerName, path := range containerPaths {
-			pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s.+", path))
-			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
-			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
-				// if pod is not found or in completed state so delay the check and move to next pod
-				logrus.Warnf("Failed to execute command in pod. Cause %v", err)
-				continue PodLoop
-			} else if err != nil {
-				return validatedMountPods, err
-			}
-			mounts := strings.Split(output, "\n")
-			pxMountFound := false
-			for _, line := range mounts {
-				pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
-				if len(pxMounts) > 0 {
-					logrus.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
-					pxMountFound = true
-					// in case there are two pods running with non shared volume, one of them will be in read-only
-					skipHostMountCheck = isMountReadOnly(line)
-					break
+		for containerName, paths := range containerPaths {
+			for _, path := range paths {
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s ", path))
+				output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
+				if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
+					// if pod is not found or in completed state so delay the check and move to next pod
+					logrus.Warnf("Failed to execute command in pod. Cause %v", err)
+					continue PodLoop
+				} else if err != nil {
+					return validatedMountPods, err
+				}
+				mounts := strings.Split(output, "\n")
+				pxMountFound := false
+
+				for _, line := range mounts {
+					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
+
+					if len(pxMounts) > 0 {
+						logrus.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
+						pxMountFound = true
+						// in case there are two pods running with non shared volume, one of them will be in read-only
+						skipHostMountCheck = isMountReadOnly(line)
+						break
+					}
+				}
+
+				if !pxMountFound {
+					return validatedMountPods, fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", pod.Namespace, pod.Name, mounts)
 				}
 			}
 
-			if !pxMountFound {
-				return validatedMountPods, fmt.Errorf("pod: [%s] %s does not have PX mount. Mounts are: %v", pod.Namespace, pod.Name, mounts)
-			}
 		}
 
 		if skipHostMountCheck {
@@ -725,8 +730,8 @@ func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, erro
 
 // getContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
-func getContainerPVCMountMap(pod corev1.Pod) map[string]string {
-	containerPaths := make(map[string]string)
+func getContainerPVCMountMap(pod corev1.Pod) map[string][]string {
+	containerPaths := make(map[string][]string)
 
 	// Each pvc in a pod spec has a associated name (which is different from the actual PVC name).
 	// These names get referenced by containers in a pod. So first let's get a map of these names.
@@ -746,7 +751,7 @@ func getContainerPVCMountMap(pod corev1.Pod) map[string]string {
 	for _, c := range pod.Spec.Containers {
 		for _, cMount := range c.VolumeMounts {
 			if _, ok := pvcNamesInSpec[cMount.Name]; ok {
-				containerPaths[c.Name] = cMount.MountPath
+				containerPaths[c.Name] = append(containerPaths[c.Name], cMount.MountPath)
 			}
 		}
 	}
