@@ -165,7 +165,7 @@ kubectl delete cm stork-mock-time  -n kube-system || true
 kubectl create cm stork-mock-time  -n kube-system --from-literal=time=""
 
 echo "Creating stork deployment"
-#kubectl apply -f /specs/stork-deployment.yaml
+kubectl apply -f /specs/stork-deployment.yaml
 
 # Turn on test mode
 kubectl set env deploy/stork -n kube-system TEST_MODE="true"
