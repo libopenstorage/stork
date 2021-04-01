@@ -843,7 +843,7 @@ func (r *ResourceCollector) getDynamicClient(
 	// The default ruleset doesn't pluralize quotas correctly, so add that
 	ruleset := inflect.NewDefaultRuleset()
 	ruleset.AddPlural("quota", "quotas")
-
+	ruleset.AddPlural("prometheus", "prometheuses")
 	resource := &metav1.APIResource{
 		Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
 		Namespaced: len(metadata.GetNamespace()) > 0,
