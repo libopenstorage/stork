@@ -1,6 +1,7 @@
 package batch
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -38,7 +39,7 @@ func (c *Client) CreateCronJob(cronJob *v1beta1.CronJob) (*v1beta1.CronJob, erro
 		ns = NamespaceDefault
 	}
 
-	return c.batchv1beta1.CronJobs(ns).Create(cronJob)
+	return c.batchv1beta1.CronJobs(ns).Create(context.TODO(), cronJob, metav1.CreateOptions{})
 }
 
 // UpdateCronJob creates the given cronJob
@@ -47,7 +48,7 @@ func (c *Client) UpdateCronJob(cronJob *v1beta1.CronJob) (*v1beta1.CronJob, erro
 		return nil, err
 	}
 
-	return c.batchv1beta1.CronJobs(cronJob.Namespace).Update(cronJob)
+	return c.batchv1beta1.CronJobs(cronJob.Namespace).Update(context.TODO(), cronJob, metav1.UpdateOptions{})
 }
 
 // GetCronJob returns the cronJob given name and namespace
@@ -56,7 +57,7 @@ func (c *Client) GetCronJob(name, namespace string) (*v1beta1.CronJob, error) {
 		return nil, err
 	}
 
-	return c.batchv1beta1.CronJobs(namespace).Get(name, metav1.GetOptions{})
+	return c.batchv1beta1.CronJobs(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteCronJob deletes the given cronJob
@@ -65,7 +66,7 @@ func (c *Client) DeleteCronJob(name, namespace string) error {
 		return err
 	}
 
-	return c.batchv1beta1.CronJobs(namespace).Delete(name, &metav1.DeleteOptions{})
+	return c.batchv1beta1.CronJobs(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // ValidateCronJob validates the given cronJob
@@ -74,7 +75,7 @@ func (c *Client) ValidateCronJob(cronJob *v1beta1.CronJob, timeout, retryInterva
 		return err
 	}
 
-	result, err := c.batchv1beta1.CronJobs(cronJob.Namespace).Get(cronJob.Name, metav1.GetOptions{})
+	result, err := c.batchv1beta1.CronJobs(cronJob.Namespace).Get(context.TODO(), cronJob.Name, metav1.GetOptions{})
 	if result == nil {
 		return err
 	}
@@ -93,5 +94,5 @@ func (c *Client) ListCronJobs(namespace string) (*v1beta1.CronJobList, error) {
 		return nil, err
 	}
 
-	return c.batchv1beta1.CronJobs(namespace).List(metav1.ListOptions{})
+	return c.batchv1beta1.CronJobs(namespace).List(context.TODO(), metav1.ListOptions{})
 }

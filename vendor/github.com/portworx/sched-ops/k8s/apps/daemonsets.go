@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 // DaemonSetOps is an interface to perform k8s daemon set operations
 type DaemonSetOps interface {
 	// CreateDaemonSet creates the given daemonset
-	CreateDaemonSet(ds *appsv1.DaemonSet) (*appsv1.DaemonSet, error)
+	CreateDaemonSet(ds *appsv1.DaemonSet, opts metav1.CreateOptions) (*appsv1.DaemonSet, error)
 	// ListDaemonSets lists all daemonsets in given namespace
 	ListDaemonSets(namespace string, listOpts metav1.ListOptions) ([]appsv1.DaemonSet, error)
 	// GetDaemonSet gets the the daemon set with given name
@@ -31,12 +32,12 @@ type DaemonSetOps interface {
 }
 
 // CreateDaemonSet creates the given daemonset
-func (c *Client) CreateDaemonSet(ds *appsv1.DaemonSet) (*appsv1.DaemonSet, error) {
+func (c *Client) CreateDaemonSet(ds *appsv1.DaemonSet, opts metav1.CreateOptions) (*appsv1.DaemonSet, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
 
-	return c.apps.DaemonSets(ds.Namespace).Create(ds)
+	return c.apps.DaemonSets(ds.Namespace).Create(context.TODO(), ds, opts)
 }
 
 // ListDaemonSets lists all daemonsets in given namespace
@@ -45,7 +46,7 @@ func (c *Client) ListDaemonSets(namespace string, listOpts metav1.ListOptions) (
 		return nil, err
 	}
 
-	dsList, err := c.apps.DaemonSets(namespace).List(listOpts)
+	dsList, err := c.apps.DaemonSets(namespace).List(context.TODO(), listOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func (c *Client) GetDaemonSet(name, namespace string) (*appsv1.DaemonSet, error)
 		namespace = corev1.NamespaceDefault
 	}
 
-	ds, err := c.apps.DaemonSets(namespace).Get(name, metav1.GetOptions{})
+	ds, err := c.apps.DaemonSets(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +165,7 @@ func (c *Client) UpdateDaemonSet(ds *appsv1.DaemonSet) (*appsv1.DaemonSet, error
 		return nil, err
 	}
 
-	return c.apps.DaemonSets(ds.Namespace).Update(ds)
+	return c.apps.DaemonSets(ds.Namespace).Update(context.TODO(), ds, metav1.UpdateOptions{})
 }
 
 // DeleteDaemonSet deletes the given daemonset
@@ -173,7 +174,7 @@ func (c *Client) DeleteDaemonSet(name, namespace string) error {
 		return err
 	}
 
-	return c.apps.DaemonSets(namespace).Delete(
+	return c.apps.DaemonSets(namespace).Delete(context.TODO(),
 		name,
-		&metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
+		metav1.DeleteOptions{PropagationPolicy: &deleteForegroundPolicy})
 }

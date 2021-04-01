@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -71,7 +72,7 @@ func (c *volumeSnapshotRestores) Get(name string, options v1.GetOptions) (result
 		Resource("volumesnapshotrestores").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -88,7 +89,7 @@ func (c *volumeSnapshotRestores) List(opts v1.ListOptions) (result *v1alpha1.Vol
 		Resource("volumesnapshotrestores").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -105,7 +106,7 @@ func (c *volumeSnapshotRestores) Watch(opts v1.ListOptions) (watch.Interface, er
 		Resource("volumesnapshotrestores").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a volumeSnapshotRestore and creates it.  Returns the server's representation of the volumeSnapshotRestore, and an error, if there is any.
@@ -115,7 +116,7 @@ func (c *volumeSnapshotRestores) Create(volumeSnapshotRestore *v1alpha1.VolumeSn
 		Namespace(c.ns).
 		Resource("volumesnapshotrestores").
 		Body(volumeSnapshotRestore).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -128,7 +129,7 @@ func (c *volumeSnapshotRestores) Update(volumeSnapshotRestore *v1alpha1.VolumeSn
 		Resource("volumesnapshotrestores").
 		Name(volumeSnapshotRestore.Name).
 		Body(volumeSnapshotRestore).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -144,7 +145,7 @@ func (c *volumeSnapshotRestores) UpdateStatus(volumeSnapshotRestore *v1alpha1.Vo
 		Name(volumeSnapshotRestore.Name).
 		SubResource("status").
 		Body(volumeSnapshotRestore).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -156,7 +157,7 @@ func (c *volumeSnapshotRestores) Delete(name string, options *v1.DeleteOptions) 
 		Resource("volumesnapshotrestores").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -172,7 +173,7 @@ func (c *volumeSnapshotRestores) DeleteCollection(options *v1.DeleteOptions, lis
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -185,7 +186,7 @@ func (c *volumeSnapshotRestores) Patch(name string, pt types.PatchType, data []b
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
