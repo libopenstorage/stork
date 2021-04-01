@@ -1291,7 +1291,11 @@ func (m *MigrationController) applyResources(
 			return err
 		}
 	}
-
+	// TODO: we should use k8s code generator logic to pluralize
+	// crd resources instead of depending on inflect lib
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+	ruleset.AddPlural("prometheus", "prometheuses")
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
 		if err != nil {
@@ -1302,7 +1306,7 @@ func (m *MigrationController) applyResources(
 			return err
 		}
 		resource := &metav1.APIResource{
-			Name:       inflect.Pluralize(strings.ToLower(objectType.GetKind())),
+			Name:       ruleset.Pluralize(strings.ToLower(objectType.GetKind())),
 			Namespaced: len(metadata.GetNamespace()) > 0,
 		}
 		var dynamicClient dynamic.ResourceInterface
