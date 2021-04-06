@@ -83,7 +83,7 @@ type Manager interface {
 	// If LeaderElection is used, the binary must be exited immediately after this returns,
 	// otherwise components that need leader election might continue to run after the leader
 	// lock was lost.
-	Start(ctx context.Context) error
+	//Start(ctx context.Context) error
 
 	// GetWebhookServer returns a webhook.Server
 	GetWebhookServer() *webhook.Server
