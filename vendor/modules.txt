@@ -430,7 +430,7 @@ github.com/pmezard/go-difflib/difflib
 github.com/portworx/kvdb
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7 => github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325160501-71c13c330a2e
+# github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c202335f7 => github.com/portworx/sched-ops v0.0.0-20210401071253-c9846fa7a34b
 ## explicit
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -448,7 +448,7 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/task
-# github.com/portworx/torpedo v0.0.0-20210302010102-e291f3361bd7 => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
+# github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145 => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 ## explicit
 github.com/portworx/torpedo/drivers/api
 github.com/portworx/torpedo/drivers/node
@@ -1299,7 +1299,7 @@ sigs.k8s.io/yaml
 # github.com/kubernetes-csi/external-snapshotter/client/v4 => github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 # github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 # github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
-# github.com/portworx/sched-ops => github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325160501-71c13c330a2e
+# github.com/portworx/sched-ops => github.com/portworx/sched-ops v0.0.0-20210401071253-c9846fa7a34b
 # github.com/portworx/torpedo => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
 # gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 # helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
