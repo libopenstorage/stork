@@ -3476,7 +3476,9 @@ func (k *K8s) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 						coolDownPeriod = 5 // default autopilot cool down period
 					}
 					// sleep to wait until all events are published
-					time.Sleep(time.Second*time.Duration(coolDownPeriod) + 10)
+					sleepTime := time.Second*time.Duration(coolDownPeriod+10)
+					logrus.Infof("sleep %s until all events are published", sleepTime)
+					time.Sleep(sleepTime)
 
 					objectToValidateName := fmt.Sprintf("%s:pvc-%s", rule.Name, obj.UID)
 					logrus.Infof("[%s] Validating events", objectToValidateName)
@@ -3778,7 +3780,8 @@ func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 	if err != nil {
 		return nil, err
 	}
-	logrus.Infof("Created autopilot rule: %+v", apRuleObj)
+	apRuleObjString, _ := json.MarshalIndent(apRuleObj, "", "\t")
+	logrus.Infof("Created autopilot rule: %s", apRuleObjString)
 
 	return apRuleObj.(*apapi.AutopilotRule), nil
 }
