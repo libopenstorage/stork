@@ -956,15 +956,6 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	logrus.Debugf("waiting for PX node to be up: %s", n.Name)
 	t := func() (interface{}, bool, error) {
 		logrus.Debugf("Getting node info: %s", n.Name)
-		for _, addr := range n.Addresses {
-			err := d.testAndSetEndpointUsingNodeIP(addr)
-			if err != nil {
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: fmt.Sprintf("failed to get node info [%s]. Err: %v", n.Name, err),
-				}
-			}
-		}
 		nodeInspectResponse, err := d.getNodeManager().Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n.VolDriverNodeID})
 
 		if err != nil {

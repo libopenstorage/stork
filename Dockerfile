@@ -4,11 +4,7 @@ LABEL maintainer="harsh@portworx.com"
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install setup dependencies
-RUN apk update && \
-    apk add git gcc  musl-dev && \
-    apk add make && \
-    apk add curl && \
-    apk add openssh-client
+RUN apk update && apk add --no-cache git gcc  musl-dev make curl openssh-client
 
 # No need to copy *everything*. This keeps the cache useful
 COPY deployments deployments
@@ -37,7 +33,7 @@ RUN curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/
 # Build a fresh container with just the binaries
 FROM alpine
 
-RUN apk add ca-certificates 
+RUN apk add --no-cache ca-certificates curl jq libc6-compat
 
 # Install kubectl from Docker Hub.
 COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl

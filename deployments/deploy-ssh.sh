@@ -135,11 +135,6 @@ if [ -n "$AZURE_CLIENT_SECRET" ]; then
     AZURE_CLIENTSECRET="${AZURE_CLIENT_SECRET}"
 fi
 
-SCHEDULER_UPGRADE_HOPS_ARG=""
-if [ -n "${SCHEDULER_UPGRADE_HOPS}" ]; then
-    SCHEDULER_UPGRADE_HOPS_ARG="--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS"
-fi
-
 CSI_GENERIC_CONFIGMAP=""
 if [ -n "${CSI_GENERIC_DRIVER_CONFIGMAP}" ]; then
     CSI_GENERIC_CONFIGMAP="${CSI_GENERIC_DRIVER_CONFIGMAP}"
@@ -167,7 +162,8 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/volume_ops.test",
             "bin/sched.test",
             "bin/scheduler_upgrade.test",
-            "bin/node_decommission.test",'
+            "bin/node_decommission.test",
+            "bin/upgrade_cluster.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","
 fi
@@ -424,8 +420,8 @@ spec:
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
-            "$APP_DESTROY_TIMEOUT_ARG",
-            "$SCHEDULER_UPGRADE_HOPS_ARG"
+            "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
+            "$APP_DESTROY_TIMEOUT_ARG"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]

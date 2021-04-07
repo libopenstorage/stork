@@ -719,6 +719,14 @@ func (d *dcos) ListActionApprovals(namespace string) (*apapi.ActionApprovalList,
 	}
 }
 
+func (d *dcos) UpgradeScheduler(version string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpgradeScheduler()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

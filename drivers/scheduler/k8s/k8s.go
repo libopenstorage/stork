@@ -42,6 +42,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
+	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -51,7 +52,7 @@ import (
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -778,7 +779,7 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 		}
 		ns, err := k8sOps.CreateNamespace(nsSpec)
 
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if ns, err = k8sOps.GetNamespace(namespace); err == nil {
 				return ns, false, nil
 			}
@@ -868,7 +869,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
 		obj.Provisioner = volume.GetStorageProvisioner()
 		sc, err := k8sStorage.CreateStorageClass(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
 				logrus.Infof("[%v] Found existing storage class: %v", app.Key, sc.Name)
 				return sc, nil
@@ -925,7 +926,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			}
 		}
 		pvc, err := k8sCore.CreatePersistentVolumeClaim(newPvcObj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if pvc, err = k8sCore.GetPersistentVolumeClaim(newPvcObj.Name, newPvcObj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing PVC: %v", app.Key, pvc.Name)
 				return pvc, nil
@@ -963,7 +964,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	} else if obj, ok := spec.(*snapv1.VolumeSnapshot); ok {
 		obj.Metadata.Namespace = ns.Name
 		snap, err := k8sExternalStorage.CreateSnapshot(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if snap, err = k8sExternalStorage.GetSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing snapshot: %v", app.Key, snap.Metadata.Name)
 				return snap, nil
@@ -981,7 +982,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	} else if obj, ok := spec.(*storkapi.GroupVolumeSnapshot); ok {
 		obj.Namespace = ns.Name
 		snap, err := k8sStork.CreateGroupSnapshot(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if snap, err = k8sStork.GetGroupSnapshot(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing group snapshot: %v", app.Key, snap.Name)
 				return snap, nil
@@ -1165,7 +1166,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
 		dep, err := k8sApps.CreateDeployment(obj, metav1.CreateOptions{})
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
 				return dep, nil
@@ -1228,7 +1229,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
 		ss, err := k8sApps.CreateStatefulSet(obj, metav1.CreateOptions{})
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
 				return ss, nil
@@ -1247,7 +1248,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 	} else if obj, ok := spec.(*corev1.Service); ok {
 		obj.Namespace = ns.Name
 		svc, err := k8sCore.CreateService(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if svc, err = k8sCore.GetService(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Service: %v", app.Key, svc.Name)
 				return svc, nil
@@ -1271,7 +1272,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			}
 		}
 		secret, err := k8sCore.CreateSecret(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if secret, err = k8sCore.GetSecret(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Secret: %v", app.Key, secret.Name)
 				return secret, nil
@@ -1291,7 +1292,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 			obj.Namespace = ns.Name
 		}
 		rule, err := k8sStork.CreateRule(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if rule, err = k8sStork.GetRule(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Rule: %v", app.Key, rule.GetName())
 				return rule, nil
@@ -1323,7 +1324,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 
 		pod, err := k8sCore.CreatePod(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if pod, err := k8sCore.GetPodByName(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Pods: %v", app.Key, pod.Name)
 				return pod, nil
@@ -1341,7 +1342,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 	} else if obj, ok := spec.(*corev1.ConfigMap); ok {
 		obj.Namespace = ns.Name
 		configMap, err := k8sCore.CreateConfigMap(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if configMap, err = k8sCore.GetConfigMap(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Config Maps: %v", app.Key, configMap.Name)
 				return configMap, nil
@@ -2192,7 +2193,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			if options != nil && !options.SkipClusterScopedObjects {
 				if err := k8sStorage.DeleteStorageClass(obj.Name); err != nil {
-					if errors.IsNotFound(err) {
+					if k8serrors.IsNotFound(err) {
 						logrus.Infof("[%v] Storage class is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 						continue
 					}
@@ -2207,7 +2208,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 		} else if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
-				if errors.IsNotFound(err) {
+				if k8serrors.IsNotFound(err) {
 					logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 					continue
 				}
@@ -2225,7 +2226,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			})
 
 			if err := k8sCore.DeletePersistentVolumeClaim(obj.Name, obj.Namespace); err != nil {
-				if errors.IsNotFound(err) {
+				if k8serrors.IsNotFound(err) {
 					logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 					continue
 				}
@@ -2238,7 +2239,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			logrus.Infof("[%v] Destroyed PVC: %v", ctx.App.Key, obj.Name)
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.DeleteSnapshot(obj.Metadata.Name, obj.Metadata.Namespace); err != nil {
-				if errors.IsNotFound(err) {
+				if k8serrors.IsNotFound(err) {
 					logrus.Infof("[%v] Snapshot is not found: %v, skipping deletion", ctx.App.Key, obj.Metadata.Name)
 					continue
 				}
@@ -2251,7 +2252,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			logrus.Infof("[%v] Destroyed Snapshot: %v", ctx.App.Key, obj.Metadata.Name)
 		} else if obj, ok := specObj.(*storkapi.GroupVolumeSnapshot); ok {
 			if err := k8sStork.DeleteGroupSnapshot(obj.Name, obj.Namespace); err != nil {
-				if errors.IsNotFound(err) {
+				if k8serrors.IsNotFound(err) {
 					logrus.Infof("[%v] Group snapshot is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 					continue
 				}
@@ -2265,7 +2266,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			pvcList, err := k8sApps.GetPVCsForStatefulSet(obj)
 			if err != nil || pvcList == nil {
-				if errors.IsNotFound(err) {
+				if k8serrors.IsNotFound(err) {
 					logrus.Infof("[%v] PVCs for StatefulSet not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 					continue
 				}
@@ -2278,7 +2279,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			for _, pvc := range pvcList.Items {
 				pvcObj, err := k8sCore.GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
 				if err != nil {
-					if errors.IsNotFound(err) {
+					if k8serrors.IsNotFound(err) {
 						logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 						continue
 					}
@@ -2295,7 +2296,7 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 				})
 
 				if err := k8sCore.DeletePersistentVolumeClaim(pvc.Name, pvc.Namespace); err != nil {
-					if errors.IsNotFound(err) {
+					if k8serrors.IsNotFound(err) {
 						logrus.Infof("[%v] PVC is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
 						continue
 					}
@@ -3028,7 +3029,7 @@ func (k *K8s) createMigrationObjects(
 		return migrationSchedule, nil
 	} else if obj, ok := specObj.(*storkapi.SchedulePolicy); ok {
 		schedPolicy, err := k8sOps.CreateSchedulePolicy(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if schedPolicy, err = k8sOps.GetSchedulePolicy(obj.Name); err == nil {
 				logrus.Infof("[%v] Found existing schedule policy: %v", app.Key, schedPolicy.Name)
 				return schedPolicy, nil
@@ -3317,7 +3318,7 @@ func (k *K8s) createRbacObjects(
 	if obj, ok := spec.(*rbacv1.Role); ok {
 		obj.Namespace = ns.Name
 		role, err := k8sRbac.CreateRole(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if role, err = k8sRbac.GetRole(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Role: %v", app.Key, role.Name)
 				return role, nil
@@ -3335,7 +3336,7 @@ func (k *K8s) createRbacObjects(
 	} else if obj, ok := spec.(*rbacv1.RoleBinding); ok {
 		obj.Namespace = ns.Name
 		rolebinding, err := k8sRbac.CreateRoleBinding(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if rolebinding, err = k8sRbac.GetRoleBinding(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Role Binding: %v", app.Key, rolebinding.Name)
 				return rolebinding, nil
@@ -3353,7 +3354,7 @@ func (k *K8s) createRbacObjects(
 	} else if obj, ok := spec.(*rbacv1.ClusterRole); ok {
 		obj.Namespace = ns.Name
 		clusterrole, err := k8sRbac.CreateClusterRole(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if clusterrole, err = k8sRbac.GetClusterRole(obj.Name); err == nil {
 				logrus.Infof("[%v] Found existing Role Binding: %v", app.Key, clusterrole.Name)
 				return clusterrole, nil
@@ -3371,7 +3372,7 @@ func (k *K8s) createRbacObjects(
 	} else if obj, ok := spec.(*rbacv1.ClusterRoleBinding); ok {
 		obj.Namespace = ns.Name
 		clusterrolebinding, err := k8sRbac.CreateClusterRoleBinding(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if clusterrolebinding, err = k8sRbac.GetClusterRoleBinding(obj.Name); err == nil {
 				logrus.Infof("[%v] Found existing Cluster Role Binding: %v", app.Key, clusterrolebinding.Name)
 				return clusterrolebinding, nil
@@ -3389,7 +3390,7 @@ func (k *K8s) createRbacObjects(
 	} else if obj, ok := spec.(*corev1.ServiceAccount); ok {
 		obj.Namespace = ns.Name
 		serviceaccount, err := k8sCore.CreateServiceAccount(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if serviceaccount, err = k8sCore.GetServiceAccount(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Service Account: %v", app.Key, serviceaccount.Name)
 				return serviceaccount, nil
@@ -3417,7 +3418,7 @@ func (k *K8s) createNetworkingObjects(
 	if obj, ok := spec.(*networkingv1beta1.Ingress); ok {
 		obj.Namespace = ns.Name
 		ingress, err := k8sNetworking.CreateIngress(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if ingress, err = k8sNetworking.GetIngress(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing Ingress: %v", app.Key, ingress.Name)
 				return ingress, nil
@@ -3444,7 +3445,7 @@ func (k *K8s) createBatchObjects(
 	if obj, ok := spec.(*batchv1beta1.CronJob); ok {
 		obj.Namespace = ns.Name
 		cronjob, err := k8sBatch.CreateCronJob(obj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if cronjob, err = k8sBatch.GetCronJob(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing CronJob: %v", app.Key, cronjob.Name)
 				return cronjob, nil
@@ -3807,7 +3808,7 @@ func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 	t := func() (interface{}, bool, error) {
 		apRule.Labels = defaultTorpedoLabel
 		aRule, err := k8sAutopilot.CreateAutopilotRule(&apRule)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if rule, err := k8sAutopilot.GetAutopilotRule(apRule.Name); err == nil {
 				logrus.Infof("Using existing AutopilotRule: %v", rule.Name)
 				return aRule, false, nil
@@ -3881,6 +3882,15 @@ func (k *K8s) isRollingDeleteStrategyEnabled(ctx *scheduler.Context) bool {
 	return false
 }
 
+// UpgradeScheduler upgrades the scheduler on the cluster to the specified version
+func (k *K8s) UpgradeScheduler(version string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "UpgradeScheduler()",
+	}
+}
+
 func substituteImageWithInternalRegistry(spec interface{}) {
 	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
 	if internalDockerRegistry != "" {
@@ -3943,7 +3953,7 @@ func createDockerRegistrySecret(secretName, secretNamespace string) (*v1.Secret,
 			Data: map[string][]byte{".dockerconfigjson": authConfigsEnc},
 		}
 		secret, err := k8sCore.CreateSecret(secretObj)
-		if errors.IsAlreadyExists(err) {
+		if k8serrors.IsAlreadyExists(err) {
 			if secret, err = k8sCore.GetSecret(secretName, secretNamespace); err == nil {
 				logrus.Infof("Using existing Docker regisrty secret: %v", secret.Name)
 				return secret, nil
