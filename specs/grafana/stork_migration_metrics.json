@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 2,
-  "iteration": 1608315386443,
+  "iteration": 1617863531578,
   "links": [],
   "panels": [
     {
@@ -99,7 +99,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "count(clusterpair_scheduler_status{namespace=~\"$Namespace\"})",
+          "expr": "count(stork_clusterpair_scheduler_status{namespace=~\"$Namespace\"})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -197,7 +197,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "count(migration_status{namespace=~\"$Namespace\",name=~\"$Name\"})",
+          "expr": "count(stork_migration_status{namespace=~\"$Namespace\",name=~\"$Name\"})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -296,7 +296,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "avg(migration_duration{namespace=~\"$Namespace\", name=~\"$Name\"} )",
+          "expr": "avg(stork_migration_duration{namespace=~\"$Namespace\", name=~\"$Name\"} )",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -372,7 +372,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count(clusterpair_scheduler_status{namespace=~\"$Namespace\"} == 2 and clusterpair_storage_status{namespace=~\"$Namespace\"} == 2)",
+          "expr": "count(stork_clusterpair_scheduler_status{namespace=~\"$Namespace\"} == 2 and stork_clusterpair_storage_status{namespace=~\"$Namespace\"} == 2)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -380,7 +380,7 @@
           "refId": "A"
         },
         {
-          "expr": "count(clusterpair_storage_status{namespace=~\"$Namespace\"} == 1 or clusterpair_storage_status{namespace=~\"$Namespace\"} == 1)",
+          "expr": "count(stork_clusterpair_storage_status{namespace=~\"$Namespace\"} == 1 or stork_clusterpair_storage_status{namespace=~\"$Namespace\"} == 1)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -388,7 +388,7 @@
           "refId": "C"
         },
         {
-          "expr": "count(clusterpair_storage_status{namespace=~\"$Namespace\"} == 3 or clusterpair_storage_status{namespace=~\"$Namespace\"} == 3)",
+          "expr": "count(stork_clusterpair_storage_status{namespace=~\"$Namespace\"} == 3 or stork_clusterpair_storage_status{namespace=~\"$Namespace\"} == 3)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -492,7 +492,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count(migration_status{namespace=~\"$Namespace\", name=~\"$Name\"} == 5 and migration_stage{namespace=~\"$Namespace\", name=~\"$Name\"} == 5)",
+          "expr": "count(stork_migration_status{namespace=~\"$Namespace\", name=~\"$Name\"} == 5 and stork_migration_stage{namespace=~\"$Namespace\", name=~\"$Name\"} == 5)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -500,7 +500,7 @@
           "refId": "A"
         },
         {
-          "expr": "count(migration_status{namespace=~\"$Namespace\", name=~\"$Name\"} == 2)",
+          "expr": "count(stork_migration_status{namespace=~\"$Namespace\", name=~\"$Name\"} == 2)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -508,7 +508,7 @@
           "refId": "C"
         },
         {
-          "expr": "count(migration_status{namespace=~\"$Namespace\", name=~\"$Name\"} == 4)",
+          "expr": "count(stork_migration_status{namespace=~\"$Namespace\", name=~\"$Name\"} == 4)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -516,7 +516,7 @@
           "refId": "D"
         },
         {
-          "expr": "count(migration_status{namespace=~\"$Namespace\", name=~\"$Name\"} == 3)",
+          "expr": "count(stork_migration_status{namespace=~\"$Namespace\", name=~\"$Name\"} == 3)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -579,38 +579,21 @@
       {
         "allValue": ".*",
         "current": {
-          "tags": [],
           "text": "All",
           "value": [
             "$__all"
           ]
         },
         "datasource": "stork",
-        "definition": "migration_status",
+        "definition": "stork_migration_status",
         "hide": 0,
         "includeAll": true,
         "label": "Namespace",
         "multi": true,
         "name": "Namespace",
-        "options": [
-          {
-            "selected": true,
-            "text": "All",
-            "value": "$__all"
-          },
-          {
-            "selected": false,
-            "text": "kube-system",
-            "value": "kube-system"
-          },
-          {
-            "selected": false,
-            "text": "crdtest",
-            "value": "crdtest"
-          }
-        ],
-        "query": "migration_status",
-        "refresh": 0,
+        "options": [],
+        "query": "stork_migration_status",
+        "refresh": 1,
         "regex": "/.*namespace=\"([^\"]*).*/",
         "skipUrlSync": false,
         "sort": 0,
@@ -629,14 +612,14 @@
           ]
         },
         "datasource": "stork",
-        "definition": "migration_status",
+        "definition": "stork_migration_status",
         "hide": 0,
         "includeAll": true,
         "label": "Name",
         "multi": true,
         "name": "Name",
         "options": [],
-        "query": "migration_status",
+        "query": "stork_migration_status",
         "refresh": 1,
         "regex": "/.*name=\"([^\"]*).*/",
         "skipUrlSync": false,
@@ -681,5 +664,5 @@
   "timezone": "",
   "title": "Stork Migration Metrics",
   "uid": "vBjsS3JMz",
-  "version": 16
+  "version": 11
 }
