@@ -16,7 +16,7 @@
   "gnetId": 9186,
   "graphTooltip": 0,
   "id": 1,
-  "iteration": 1608315347272,
+  "iteration": 1617864121727,
   "links": [],
   "panels": [
     {
@@ -99,7 +99,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "count(application_backup_status{namespace=~\"$Namespace\"})",
+          "expr": "count(stork_application_backup_status{namespace=~\"$Namespace\"})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -197,7 +197,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "count(application_restore_status{namespace=~\"$Namespace\"})",
+          "expr": "count(stork_application_restore_status{namespace=~\"$Namespace\"})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -295,7 +295,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "count(application_clone_status{namespace=~\"$Namespace\"})",
+          "expr": "count(stork_application_clone_status{namespace=~\"$Namespace\"})",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -388,7 +388,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(application_backup_size{namespace=~\"$Namespace\"})/ (1024 * 1024)",
+          "expr": "sum(stork_application_backup_size{namespace=~\"$Namespace\"})/ (1024 * 1024)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -490,7 +490,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count(application_backup_status{namespace=~\"$Namespace\"} == 5 and application_backup_stage{namespace=~\"$Namespace\"} == 5)",
+          "expr": "count(stork_application_backup_status{namespace=~\"$Namespace\"} == 5 and stork_application_backup_stage{namespace=~\"$Namespace\"} == 5)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -498,7 +498,7 @@
           "refId": "A"
         },
         {
-          "expr": "count(application_backup_status{namespace=~\"$Namespace\"} == 2)",
+          "expr": "count(stork_application_backup_status{namespace=~\"$Namespace\"} == 2)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -506,7 +506,7 @@
           "refId": "C"
         },
         {
-          "expr": "count(application_backup_status{namespace=~\"$Namespace\"} == 4)",
+          "expr": "count(stork_application_backup_status{namespace=~\"$Namespace\"} == 4)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -514,7 +514,7 @@
           "refId": "D"
         },
         {
-          "expr": "count(application_backup_status{namespace=~\"$Namespace\"} == 3)",
+          "expr": "count(stork_application_backup_status{namespace=~\"$Namespace\"} == 3)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -635,7 +635,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "avg(application_backup_size{namespace=~\"$Namespace\"}!=0)/(1024*1024)",
+          "expr": "avg(stork_application_backup_size{namespace=~\"$Namespace\"}!=0)/(1024*1024)",
           "format": "time_series",
           "hide": false,
           "interval": "",
@@ -725,7 +725,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "avg(application_backup_duration{namespace=~\"$Namespace\"})",
+          "expr": "avg(stork_application_backup_duration{namespace=~\"$Namespace\"})",
           "format": "time_series",
           "hide": false,
           "interval": "",
@@ -795,7 +795,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(application_restore_size{namespace=~\"$Namespace\"})/ (1024 * 1024)",
+          "expr": "sum(stork_application_restore_size{namespace=~\"$Namespace\"})/ (1024 * 1024)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -897,7 +897,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count(application_restore_status{namespace=~\"$Namespace\"}==6 and application_restore_stage{namespace=~\"$Namespace\"}==3)",
+          "expr": "count(stork_application_restore_status{namespace=~\"$Namespace\"}==6 and application_restore_stage{namespace=~\"$Namespace\"}==3)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -905,7 +905,7 @@
           "refId": "A"
         },
         {
-          "expr": "count(application_restore_status{namespace=~\"$Namespace\"}==2)",
+          "expr": "count(stork_application_restore_status{namespace=~\"$Namespace\"}==2)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -913,7 +913,7 @@
           "refId": "C"
         },
         {
-          "expr": "count(application_restore_status{namespace=~\"$Namespace\"}==4)",
+          "expr": "count(stork_application_restore_status{namespace=~\"$Namespace\"}==4)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -921,7 +921,7 @@
           "refId": "D"
         },
         {
-          "expr": "count(application_restore_status{namespace=~\"$Namespace\"}==3)",
+          "expr": "count(stork_application_restore_status{namespace=~\"$Namespace\"}==3)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1042,7 +1042,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "avg(application_restore_size{namespace=~\"$Namespace\"}!=0)/(1024*1024)",
+          "expr": "avg(stork_application_restore_size{namespace=~\"$Namespace\"}!=0)/(1024*1024)",
           "format": "time_series",
           "hide": false,
           "interval": "",
@@ -1132,7 +1132,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "avg(application_restore_duration{namespace=~\"$Namespace\"})",
+          "expr": "avg(stork_application_restore_duration{namespace=~\"$Namespace\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1208,7 +1208,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "count(application_clone_status{namespace=~\"$Namespace\"} == 4 and application_clone_stage{namespace=~\"$Namespace\"} == 5)",
+          "expr": "count(stork_application_clone_status{namespace=~\"$Namespace\"} == 4 and stork_application_clone_stage{namespace=~\"$Namespace\"} == 5)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1216,7 +1216,7 @@
           "refId": "A"
         },
         {
-          "expr": "count(application_clone_status{namespace=~\"$Namespace\"} == 2)",
+          "expr": "count(stork_application_clone_status{namespace=~\"$Namespace\"} == 2)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1224,7 +1224,7 @@
           "refId": "C"
         },
         {
-          "expr": "count(application_clone_status{namespace=~\"$Namespace\"} == 6)",
+          "expr": "count(stork_application_clone_status{namespace=~\"$Namespace\"} == 6)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -1232,7 +1232,7 @@
           "refId": "D"
         },
         {
-          "expr": "count(application_clone_status{namespace=~\"$Namespace\"} == 3)",
+          "expr": "count(stork_application_clone_status{namespace=~\"$Namespace\"} == 3)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1353,7 +1353,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "avg(application_clone_duration{namespace=~\"$Namespace\"})",
+          "expr": "avg(stork_application_clone_duration{namespace=~\"$Namespace\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1392,7 +1392,7 @@
           ]
         },
         "datasource": "stork",
-        "definition": "application_backup_status",
+        "definition": "stork_application_backup_status",
         "error": null,
         "hide": 0,
         "includeAll": true,
@@ -1400,7 +1400,7 @@
         "multi": true,
         "name": "Namespace",
         "options": [],
-        "query": "application_backup_status",
+        "query": "stork_application_backup_status",
         "refresh": 1,
         "regex": "/.*namespace=\"([^\"]*).*/",
         "skipUrlSync": false,
@@ -1445,5 +1445,5 @@
   "timezone": "",
   "title": "Stork Application Metrics",
   "uid": "pxBackup",
-  "version": 4
+  "version": 20
 }
