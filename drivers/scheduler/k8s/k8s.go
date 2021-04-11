@@ -3504,8 +3504,6 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	}
 
 	expectedAroStates := []apapi.RuleState{
-		apapi.RuleStateInit,
-		apapi.RuleStateNormal,
 		apapi.RuleStateTriggered,
 		apapi.RuleStateActiveActionsPending,
 		apapi.RuleStateActiveActionsInProgress,
@@ -3524,17 +3522,20 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	for _, aro := range listAutopilotRuleObjects.Items {
 		var aroStates []apapi.RuleState
 		for _, aroStatusItem := range aro.Status.Items {
+			if aroStatusItem.State == "" {
+				continue
+			}
 			aroStates = append(aroStates, aroStatusItem.State)
 		}
 		if reflect.DeepEqual(aroStates, expectedAroStates) {
 			logrus.Debugf("autopilot rule object: %s has all expected states", aro.Name)
-			return nil
+		} else {
+			formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
+			logrus.Debugf("autopilot rule objects items: %s", string(formattedObject))
+			return fmt.Errorf("autopilot rule object: %s doesn't have all expected states", aro.Name)
 		}
-		logrus.Debugf("autopilot rule object: %s doesn't have all expected states", aro.Name)
 	}
-
-	formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
-	return fmt.Errorf("none of the autopilot rule objects have all expected states\n autopilot rule objects items: %s", string(formattedObject))
+	return nil
 }
 
 func validateEvents(objName string, events map[string]int32, count int32) error {
