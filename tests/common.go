@@ -615,6 +615,7 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
 	zones, err := Inst().N.GetZones()
+	expect(err).NotTo(haveOccurred())
 	logrus.Debugf("ASG is running in [%+v] zones\n", zones)
 	perZoneCount := count / int64(len(zones))
 
