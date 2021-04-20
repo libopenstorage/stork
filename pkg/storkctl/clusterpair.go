@@ -278,10 +278,10 @@ func newCreateClusterPairCommand(cmdFactory Factory, ioStreams genericclioptions
 	}
 
 	createClusterPairCommand.Flags().StringVarP(&sIP, "src-ip", "", "", "ip of storage node from source cluster")
-	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "9001", "port of storage node from source cluster")
+	createClusterPairCommand.Flags().StringVarP(&sPort, "src-port", "", "9023", "port of storage node from source cluster")
 	createClusterPairCommand.Flags().StringVarP(&sFile, "src-kube-file", "", "", "kube-config of source cluster")
 	createClusterPairCommand.Flags().StringVarP(&dIP, "dest-ip", "", "", "kube-config of destination cluster")
-	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9001", "port of storage node from destination cluster")
+	createClusterPairCommand.Flags().StringVarP(&dPort, "dest-port", "", "9023", "port of storage node from destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&dFile, "dest-kube-file", "", "", "kube-config of destination cluster")
 	createClusterPairCommand.Flags().StringVarP(&srcToken, "src-token", "", "", "source cluster token for cluster pairing")
 	createClusterPairCommand.Flags().StringVarP(&destToken, "dest-token", "", "", "destination cluster token for cluster pairing")
