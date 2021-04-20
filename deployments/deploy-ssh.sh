@@ -399,6 +399,7 @@ spec:
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
+            "$MAX_STORAGE_NODES_PER_AZ_ARG",
             "--backup-driver", "$BACKUP_DRIVER",
             "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
@@ -420,8 +421,7 @@ spec:
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "$APP_DESTROY_TIMEOUT_ARG",
-            "$SCHEDULER_UPGRADE_HOPS_ARG",
-            "$MAX_STORAGE_NODES_PER_AZ_ARG"
+            "$SCHEDULER_UPGRADE_HOPS_ARG"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
