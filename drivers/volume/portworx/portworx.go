@@ -2,6 +2,7 @@ package portworx
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -72,7 +73,7 @@ import (
 const (
 
 	// default API port
-	defaultAPIPort = 9001
+	defaultAPIPort = 9023
 
 	// provisioner names for portworx volumes
 	provisionerName = "kubernetes.io/portworx-volume"
@@ -238,6 +239,7 @@ type portworx struct {
 	sdkConn         *portworxGrpcConnection
 	id              string
 	endpoint        string
+	tlsConfig       *tls.Config
 	jwtSharedSecret string
 	jwtIssuer       string
 	initDone        bool
@@ -317,7 +319,9 @@ func (p *portworx) getClusterManagerClient() (cluster.Cluster, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	if p.tlsConfig != nil {
+		clnt.SetTLS(p.tlsConfig)
+	}
 	return clusterclient.ClusterManager(clnt), nil
 }
 
@@ -342,12 +346,16 @@ func (p *portworx) initPortworxClients() error {
 		return err
 	}
 
-	sdkDialOps, err := paramsBuilder.BuildDialOps()
+	p.endpoint = pxMgmtEndpoint
+	p.tlsConfig, err = paramsBuilder.BuildTlsConfig()
 	if err != nil {
 		return err
 	}
 
-	p.endpoint = pxMgmtEndpoint
+	sdkDialOps, err := paramsBuilder.BuildDialOps()
+	if err != nil {
+		return err
+	}
 
 	// Setup gRPC clients
 	p.sdkConn = &portworxGrpcConnection{
@@ -1046,11 +1054,19 @@ func (p *portworx) getAdminVolDriver() (volume.VolumeDriver, error) {
 }
 
 func (p *portworx) getRestClientWithAuth(token string) (*apiclient.Client, error) {
-	return volumeclient.NewAuthDriverClient(p.endpoint, storkvolume.PortworxDriverName, "", token, "", "stork")
+	restClient, err := volumeclient.NewAuthDriverClient(p.endpoint, storkvolume.PortworxDriverName, "", token, "", "stork")
+	if err == nil && p.tlsConfig != nil {
+		restClient.SetTLS(p.tlsConfig)
+	}
+	return restClient, err
 }
 
 func (p *portworx) getRestClient() (*apiclient.Client, error) {
-	return volumeclient.NewDriverClient(p.endpoint, storkvolume.PortworxDriverName, "", "stork")
+	restClient, err := volumeclient.NewDriverClient(p.endpoint, storkvolume.PortworxDriverName, "", "stork")
+	if err == nil && p.tlsConfig != nil {
+		restClient.SetTLS(p.tlsConfig)
+	}
+	return restClient, err
 }
 
 func (p *portworx) addCloudsnapInfo(
