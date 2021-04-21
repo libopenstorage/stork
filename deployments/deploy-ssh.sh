@@ -73,6 +73,10 @@ if [ -z "${STORAGE_DRIVER}" ]; then
     STORAGE_DRIVER="pxd"
 fi
 
+if [ -z "${MAX_STORAGE_NODES_PER_AZ}" ]; then
+    MAX_STORAGE_NODES_PER_AZ="2"
+fi
+
 if [ -z "${PROVISIONER}" ]; then
     PROVISIONER="portworx"
 fi
@@ -130,11 +134,6 @@ fi
 SCHEDULER_UPGRADE_HOPS_ARG=""
 if [ -n "${SCHEDULER_UPGRADE_HOPS}" ]; then
     SCHEDULER_UPGRADE_HOPS_ARG="--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS"
-fi
-
-MAX_STORAGE_NODES_PER_AZ_ARG=""
-if [ -n "${MAX_STORAGE_NODES_PER_AZ}" ]; then
-    MAX_STORAGE_NODES_PER_AZ_ARG="--max-storage-nodes-per-az=$MAX_STORAGE_NODES_PER_AZ"
 fi
 
 CSI_GENERIC_CONFIGMAP=""
@@ -399,7 +398,7 @@ spec:
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
-            "$MAX_STORAGE_NODES_PER_AZ_ARG",
+            "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
             "--backup-driver", "$BACKUP_DRIVER",
             "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
