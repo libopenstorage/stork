@@ -99,10 +99,17 @@ var (
 	nodeDrivers = make(map[string]Driver)
 )
 
+// InitOptions initialization options
+type InitOptions struct {
+
+	// SpecDir app spec directory
+	SpecDir string
+}
+
 // Driver provides the node driver interface
 type Driver interface {
 	// Init initializes the node driver under the given scheduler
-	Init() error
+	Init(nodeOpts InitOptions) error
 
 	// DeleteNode deletes the given node
 	DeleteNode(node Node, timeout time.Duration) error
@@ -187,7 +194,7 @@ type notSupportedDriver struct{}
 // NotSupportedDriver provides the default driver with none of the operations supported
 var NotSupportedDriver = &notSupportedDriver{}
 
-func (d *notSupportedDriver) Init() error {
+func (d *notSupportedDriver) Init(nodeOpts InitOptions) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "Init()",

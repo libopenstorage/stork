@@ -58,9 +58,8 @@ func (v *vsphere) String() string {
 }
 
 // InitVsphere initializes the vsphere driver for ssh
-func (v *vsphere) Init() error {
+func (v *vsphere) Init(nodeOpts node.InitOptions) error {
 	logrus.Infof("Using the vsphere node driver")
-	v.SSH.Init()
 
 	v.vsphereUsername = DefaultUsername
 	username := os.Getenv(vsphereUname)
@@ -81,7 +80,7 @@ func (v *vsphere) Init() error {
 	if err != nil {
 		return err
 	}
-	err = v.SSH.Init()
+	err = v.SSH.Init(nodeOpts)
 	if err != nil {
 		return err
 	}
