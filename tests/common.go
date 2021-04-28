@@ -157,7 +157,9 @@ func InitInstance() {
 	})
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().N.Init()
+	err = Inst().N.Init(node.InitOptions{
+		SpecDir: Inst().SpecDir,
+	})
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
