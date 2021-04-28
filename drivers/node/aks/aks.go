@@ -14,8 +14,6 @@ import (
 const (
 	// DriverName is the name of the aks driver
 	DriverName = "aks"
-	// ZoneCount number of zones in autoscaling group
-	ZoneCount = 3
 )
 
 type aks struct {
@@ -49,8 +47,12 @@ func (a *aks) Init(nodeOpts node.InitOptions) error {
 
 func (a *aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
 	// Azure SDK requires total cluster size
-	totalClusterSize := perZoneCount * ZoneCount
-	err := a.ops.SetInstanceGroupSize(a.instanceGroup, totalClusterSize, timeout)
+	zones, err := a.GetZones()
+	if err != nil {
+		return err
+	}
+	totalClusterSize := perZoneCount * int64(len(zones))
+	err = a.ops.SetInstanceGroupSize(a.instanceGroup, totalClusterSize, timeout)
 	if err != nil {
 		logrus.Errorf("failed to set size of node pool %s. Error: %v", a.instanceGroup, err)
 		return err
@@ -67,6 +69,12 @@ func (a *aks) GetASGClusterSize() (int64, error) {
 	}
 
 	return nodeCount, nil
+}
+
+func (a *aks) GetZones() ([]string, error) {
+	// For both Azure VMSS scalesets and availability sets,
+	// PX treats them as single zone.
+	return []string{""}, nil
 }
 
 func init() {

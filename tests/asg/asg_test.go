@@ -210,9 +210,12 @@ func TestMain(m *testing.M) {
 
 func Scale(count int64) {
 	// In multi-zone ASG cluster, node count is per zone
-	perZoneCount := count / 3
+	zones, err := Inst().N.GetZones()
+	Expect(err).NotTo(HaveOccurred())
 
-	err := Inst().N.SetASGClusterSize(perZoneCount, scaleTimeout)
+	perZoneCount := count / int64(len(zones))
+
+	err = Inst().N.SetASGClusterSize(perZoneCount, scaleTimeout)
 	Expect(err).NotTo(HaveOccurred())
 }
 
