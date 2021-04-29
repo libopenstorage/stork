@@ -4,6 +4,7 @@ package integrationtest
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -38,6 +39,7 @@ func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 	t.Run("snapshotScaleTest", snapshotScaleTest)
+	t.Run("cloudSnapshotScaleTest", cloudSnapshotScaleTest)
 	t.Run("groupSnapshotTest", groupSnapshotTest)
 	t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
 	t.Run("scheduleTests", snapshotScheduleTests)
@@ -51,7 +53,7 @@ func testSnapshot(t *testing.T) {
 }
 
 func simpleSnapshotTest(t *testing.T) {
-	ctx := createSnapshot(t, []string{"mysql-snap-restore"})
+	ctx := createSnapshot(t, []string{"mysql-snap-restore"}, "simple-snap-restore")
 	verifySnapshot(t, ctx, "mysql-data", defaultWaitTimeout)
 	destroyAndWait(t, ctx)
 }
@@ -263,8 +265,8 @@ func parseDataVolumes(
 	return dataVolumesNames, dataVolumesInUse
 }
 
-func createSnapshot(t *testing.T, appKeys []string) []*scheduler.Context {
-	ctx, err := schedulerDriver.Schedule(generateInstanceID(t, ""),
+func createSnapshot(t *testing.T, appKeys []string, nsKey string) []*scheduler.Context {
+	ctx, err := schedulerDriver.Schedule(nsKey,
 		scheduler.ScheduleOptions{AppKeys: appKeys})
 	require.NoError(t, err, "Error scheduling task")
 	require.Equal(t, 1, len(ctx), "Only one task should have started")
@@ -341,10 +343,48 @@ func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest stri
 	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
 }
 
+func verifyCloudSnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest string, waitTimeout time.Duration) {
+	err := schedulerDriver.WaitForRunning(ctxs[0], defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "Error waiting for pod to get to running state")
+
+	scheduledNodes, err := schedulerDriver.GetNodesForApp(ctxs[0])
+	require.NoError(t, err, "Error getting node for app")
+	require.Equal(t, 1, len(scheduledNodes), "App should be scheduled on one node")
+
+	err = schedulerDriver.ValidateVolumes(ctxs[0], defaultWaitTimeout, defaultWaitInterval, nil)
+	require.NoError(t, err, "Error waiting for volumes")
+	volumeNames := getVolumeNames(t, ctxs[0])
+	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
+
+	dataVolumesNames, dataVolumesInUse := parseDataVolumes(t, "mysql-data", ctxs[0])
+	require.Len(t, dataVolumesNames, 2, "should have only 2 data volumes")
+
+	snaps, err := schedulerDriver.GetSnapshots(ctxs[0])
+	require.NoError(t, err, "failed to get snapshots")
+	require.Len(t, snaps, 1, "should have received exactly one snapshot")
+
+	for _, snap := range snaps {
+		s, err := k8sextops.Instance().GetSnapshot(snap.Name, snap.Namespace)
+		require.NoError(t, err, "failed to query snapshot object")
+		require.NotNil(t, s, "got nil snapshot object from k8s api")
+
+		require.NotEmpty(t, s.Spec.SnapshotDataName, "snapshot object has empty snapshot data field")
+
+		sData, err := k8sextops.Instance().GetSnapshotData(s.Spec.SnapshotDataName)
+		require.NoError(t, err, "failed to query snapshot data object")
+
+		snapType := sData.Spec.PortworxSnapshot.SnapshotType
+		require.Equal(t, snapType, crdv1.PortworxSnapshotTypeCloud)
+	}
+
+	fmt.Printf("checking dataVolumesInUse: %v\n", dataVolumesInUse)
+	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
+}
+
 func snapshotScaleTest(t *testing.T) {
 	ctxs := make([][]*scheduler.Context, snapshotScaleCount)
 	for i := 0; i < snapshotScaleCount; i++ {
-		ctxs[i] = createSnapshot(t, []string{"mysql-snap-restore"})
+		ctxs[i] = createSnapshot(t, []string{"mysql-snap-restore"}, "snap-scale-"+strconv.Itoa(i))
 	}
 
 	timeout := defaultWaitTimeout
@@ -370,6 +410,26 @@ func snapshotScheduleTests(t *testing.T) {
 	t.Run("invalidPolicyTest", invalidPolicySnapshotScheduleTest)
 }
 
+func cloudSnapshotScaleTest(t *testing.T) {
+	ctxs := make([][]*scheduler.Context, snapshotScaleCount)
+	for i := 0; i < snapshotScaleCount; i++ {
+		ctxs[i] = createSnapshot(t, []string{"mysql-cloudsnap-restore"}, "scale-"+strconv.Itoa(i))
+	}
+
+	timeout := defaultWaitTimeout
+	// Increase the timeout if scale is more than 10
+	if snapshotScaleCount > 10 {
+		timeout *= time.Duration((snapshotScaleCount / 10) + 1)
+	}
+
+	for i := 0; i < snapshotScaleCount; i++ {
+		verifyCloudSnapshot(t, ctxs[i], "mysql-data", timeout)
+	}
+
+	for i := 0; i < snapshotScaleCount; i++ {
+		destroyAndWait(t, ctxs[i])
+	}
+}
 func deletePolicyAndSnapshotSchedule(t *testing.T, namespace string, policyName string, snapshotScheduleName string) {
 	err := storkops.Instance().DeleteSchedulePolicy(policyName)
 	require.NoError(t, err, fmt.Sprintf("Error deleting schedule policy %v", policyName))
