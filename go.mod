@@ -31,7 +31,7 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc2
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0
-	github.com/libopenstorage/openstorage v8.0.1-0.20200914191223-6fb8d163a67c+incompatible
+	github.com/libopenstorage/openstorage v8.0.1-0.20210507161733-09689ea179f3+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/mitchellh/mapstructure v1.3.2 // indirect

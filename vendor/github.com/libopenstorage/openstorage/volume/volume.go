@@ -43,6 +43,8 @@ var (
 	// ErrFsResizeFailed returned when Filesystem resize failed because of filesystem
 	// errors
 	ErrFsResizeFailed = errors.New("Filesystem Resize failed due to filesystem errors")
+	// ErrNoVolumeUpdate is returned when a volume update has no changes requested
+	ErrNoVolumeUpdate = errors.New("No change requested")
 )
 
 // Constants used by the VolumeDriver
@@ -64,6 +66,8 @@ const (
 	LocationConstraint = "LocationConstraint"
 	// LocalNode is an alias for this node - similar to localhost.
 	LocalNode = "LocalNode"
+	// FromTrashCan is a label that specified a volume being in the TrashCan
+	FromTrashCan = "FromTrashCan"
 )
 
 // Store defines the interface for basic volume store operations
@@ -310,6 +314,8 @@ type CredsDriver interface {
 	CredsDelete(credUUID string) error
 	// CredsValidate validates the credential associated credUUID
 	CredsValidate(credUUID string) error
+	// CredsDeleteReferences delets any  with the creds
+	CredsDeleteReferences(credUUID string) error
 }
 
 // VolumeDriverProvider provides VolumeDrivers.
