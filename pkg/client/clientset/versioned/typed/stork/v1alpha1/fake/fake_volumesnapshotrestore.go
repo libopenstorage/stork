@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var volumesnapshotrestoresResource = schema.GroupVersionResource{Group: "stork.l
 var volumesnapshotrestoresKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "VolumeSnapshotRestore"}
 
 // Get takes name of the volumeSnapshotRestore, and returns the corresponding volumeSnapshotRestore object, and an error if there is any.
-func (c *FakeVolumeSnapshotRestores) Get(name string, options v1.GetOptions) (result *v1alpha1.VolumeSnapshotRestore, err error) {
+func (c *FakeVolumeSnapshotRestores) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.VolumeSnapshotRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(volumesnapshotrestoresResource, c.ns, name), &v1alpha1.VolumeSnapshotRestore{})
 
@@ -50,7 +52,7 @@ func (c *FakeVolumeSnapshotRestores) Get(name string, options v1.GetOptions) (re
 }
 
 // List takes label and field selectors, and returns the list of VolumeSnapshotRestores that match those selectors.
-func (c *FakeVolumeSnapshotRestores) List(opts v1.ListOptions) (result *v1alpha1.VolumeSnapshotRestoreList, err error) {
+func (c *FakeVolumeSnapshotRestores) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.VolumeSnapshotRestoreList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(volumesnapshotrestoresResource, volumesnapshotrestoresKind, c.ns, opts), &v1alpha1.VolumeSnapshotRestoreList{})
 
@@ -72,14 +74,14 @@ func (c *FakeVolumeSnapshotRestores) List(opts v1.ListOptions) (result *v1alpha1
 }
 
 // Watch returns a watch.Interface that watches the requested volumeSnapshotRestores.
-func (c *FakeVolumeSnapshotRestores) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeVolumeSnapshotRestores) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(volumesnapshotrestoresResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a volumeSnapshotRestore and creates it.  Returns the server's representation of the volumeSnapshotRestore, and an error, if there is any.
-func (c *FakeVolumeSnapshotRestores) Create(volumeSnapshotRestore *v1alpha1.VolumeSnapshotRestore) (result *v1alpha1.VolumeSnapshotRestore, err error) {
+func (c *FakeVolumeSnapshotRestores) Create(ctx context.Context, volumeSnapshotRestore *v1alpha1.VolumeSnapshotRestore, opts v1.CreateOptions) (result *v1alpha1.VolumeSnapshotRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(volumesnapshotrestoresResource, c.ns, volumeSnapshotRestore), &v1alpha1.VolumeSnapshotRestore{})
 
@@ -90,7 +92,7 @@ func (c *FakeVolumeSnapshotRestores) Create(volumeSnapshotRestore *v1alpha1.Volu
 }
 
 // Update takes the representation of a volumeSnapshotRestore and updates it. Returns the server's representation of the volumeSnapshotRestore, and an error, if there is any.
-func (c *FakeVolumeSnapshotRestores) Update(volumeSnapshotRestore *v1alpha1.VolumeSnapshotRestore) (result *v1alpha1.VolumeSnapshotRestore, err error) {
+func (c *FakeVolumeSnapshotRestores) Update(ctx context.Context, volumeSnapshotRestore *v1alpha1.VolumeSnapshotRestore, opts v1.UpdateOptions) (result *v1alpha1.VolumeSnapshotRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(volumesnapshotrestoresResource, c.ns, volumeSnapshotRestore), &v1alpha1.VolumeSnapshotRestore{})
 
@@ -102,7 +104,7 @@ func (c *FakeVolumeSnapshotRestores) Update(volumeSnapshotRestore *v1alpha1.Volu
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeVolumeSnapshotRestores) UpdateStatus(volumeSnapshotRestore *v1alpha1.VolumeSnapshotRestore) (*v1alpha1.VolumeSnapshotRestore, error) {
+func (c *FakeVolumeSnapshotRestores) UpdateStatus(ctx context.Context, volumeSnapshotRestore *v1alpha1.VolumeSnapshotRestore, opts v1.UpdateOptions) (*v1alpha1.VolumeSnapshotRestore, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateSubresourceAction(volumesnapshotrestoresResource, "status", c.ns, volumeSnapshotRestore), &v1alpha1.VolumeSnapshotRestore{})
 
@@ -113,7 +115,7 @@ func (c *FakeVolumeSnapshotRestores) UpdateStatus(volumeSnapshotRestore *v1alpha
 }
 
 // Delete takes name of the volumeSnapshotRestore and deletes it. Returns an error if one occurs.
-func (c *FakeVolumeSnapshotRestores) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeVolumeSnapshotRestores) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(volumesnapshotrestoresResource, c.ns, name), &v1alpha1.VolumeSnapshotRestore{})
 
@@ -121,15 +123,15 @@ func (c *FakeVolumeSnapshotRestores) Delete(name string, options *v1.DeleteOptio
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeVolumeSnapshotRestores) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(volumesnapshotrestoresResource, c.ns, listOptions)
+func (c *FakeVolumeSnapshotRestores) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(volumesnapshotrestoresResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.VolumeSnapshotRestoreList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched volumeSnapshotRestore.
-func (c *FakeVolumeSnapshotRestores) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.VolumeSnapshotRestore, err error) {
+func (c *FakeVolumeSnapshotRestores) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.VolumeSnapshotRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(volumesnapshotrestoresResource, c.ns, name, pt, data, subresources...), &v1alpha1.VolumeSnapshotRestore{})
 

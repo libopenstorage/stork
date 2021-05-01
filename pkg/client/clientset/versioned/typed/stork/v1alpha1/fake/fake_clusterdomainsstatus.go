@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -38,7 +40,7 @@ var clusterdomainsstatusesResource = schema.GroupVersionResource{Group: "stork.l
 var clusterdomainsstatusesKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "ClusterDomainsStatus"}
 
 // Get takes name of the clusterDomainsStatus, and returns the corresponding clusterDomainsStatus object, and an error if there is any.
-func (c *FakeClusterDomainsStatuses) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *FakeClusterDomainsStatuses) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(clusterdomainsstatusesResource, name), &v1alpha1.ClusterDomainsStatus{})
 	if obj == nil {
@@ -48,7 +50,7 @@ func (c *FakeClusterDomainsStatuses) Get(name string, options v1.GetOptions) (re
 }
 
 // List takes label and field selectors, and returns the list of ClusterDomainsStatuses that match those selectors.
-func (c *FakeClusterDomainsStatuses) List(opts v1.ListOptions) (result *v1alpha1.ClusterDomainsStatusList, err error) {
+func (c *FakeClusterDomainsStatuses) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ClusterDomainsStatusList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootListAction(clusterdomainsstatusesResource, clusterdomainsstatusesKind, opts), &v1alpha1.ClusterDomainsStatusList{})
 	if obj == nil {
@@ -69,13 +71,13 @@ func (c *FakeClusterDomainsStatuses) List(opts v1.ListOptions) (result *v1alpha1
 }
 
 // Watch returns a watch.Interface that watches the requested clusterDomainsStatuses.
-func (c *FakeClusterDomainsStatuses) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeClusterDomainsStatuses) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(clusterdomainsstatusesResource, opts))
 }
 
 // Create takes the representation of a clusterDomainsStatus and creates it.  Returns the server's representation of the clusterDomainsStatus, and an error, if there is any.
-func (c *FakeClusterDomainsStatuses) Create(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *FakeClusterDomainsStatuses) Create(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.CreateOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootCreateAction(clusterdomainsstatusesResource, clusterDomainsStatus), &v1alpha1.ClusterDomainsStatus{})
 	if obj == nil {
@@ -85,7 +87,7 @@ func (c *FakeClusterDomainsStatuses) Create(clusterDomainsStatus *v1alpha1.Clust
 }
 
 // Update takes the representation of a clusterDomainsStatus and updates it. Returns the server's representation of the clusterDomainsStatus, and an error, if there is any.
-func (c *FakeClusterDomainsStatuses) Update(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *FakeClusterDomainsStatuses) Update(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.UpdateOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateAction(clusterdomainsstatusesResource, clusterDomainsStatus), &v1alpha1.ClusterDomainsStatus{})
 	if obj == nil {
@@ -96,7 +98,7 @@ func (c *FakeClusterDomainsStatuses) Update(clusterDomainsStatus *v1alpha1.Clust
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeClusterDomainsStatuses) UpdateStatus(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (*v1alpha1.ClusterDomainsStatus, error) {
+func (c *FakeClusterDomainsStatuses) UpdateStatus(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.UpdateOptions) (*v1alpha1.ClusterDomainsStatus, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateSubresourceAction(clusterdomainsstatusesResource, "status", clusterDomainsStatus), &v1alpha1.ClusterDomainsStatus{})
 	if obj == nil {
@@ -106,22 +108,22 @@ func (c *FakeClusterDomainsStatuses) UpdateStatus(clusterDomainsStatus *v1alpha1
 }
 
 // Delete takes name of the clusterDomainsStatus and deletes it. Returns an error if one occurs.
-func (c *FakeClusterDomainsStatuses) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeClusterDomainsStatuses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewRootDeleteAction(clusterdomainsstatusesResource, name), &v1alpha1.ClusterDomainsStatus{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeClusterDomainsStatuses) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(clusterdomainsstatusesResource, listOptions)
+func (c *FakeClusterDomainsStatuses) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewRootDeleteCollectionAction(clusterdomainsstatusesResource, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ClusterDomainsStatusList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched clusterDomainsStatus.
-func (c *FakeClusterDomainsStatuses) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *FakeClusterDomainsStatuses) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootPatchSubresourceAction(clusterdomainsstatusesResource, name, pt, data, subresources...), &v1alpha1.ClusterDomainsStatus{})
 	if obj == nil {

@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	time "time"
 
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -61,13 +62,13 @@ func NewFilteredApplicationCloneInformer(client versioned.Interface, namespace s
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().ApplicationClones(namespace).List(options)
+				return client.StorkV1alpha1().ApplicationClones(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().ApplicationClones(namespace).Watch(options)
+				return client.StorkV1alpha1().ApplicationClones(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&storkv1alpha1.ApplicationClone{},
