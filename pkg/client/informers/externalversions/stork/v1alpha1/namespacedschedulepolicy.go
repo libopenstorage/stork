@@ -32,59 +32,59 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// GroupVolumeSnapshotInformer provides access to a shared informer and lister for
-// GroupVolumeSnapshots.
-type GroupVolumeSnapshotInformer interface {
+// NamespacedSchedulePolicyInformer provides access to a shared informer and lister for
+// NamespacedSchedulePolicies.
+type NamespacedSchedulePolicyInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.GroupVolumeSnapshotLister
+	Lister() v1alpha1.NamespacedSchedulePolicyLister
 }
 
-type groupVolumeSnapshotInformer struct {
+type namespacedSchedulePolicyInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewGroupVolumeSnapshotInformer constructs a new informer for GroupVolumeSnapshot type.
+// NewNamespacedSchedulePolicyInformer constructs a new informer for NamespacedSchedulePolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewGroupVolumeSnapshotInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredGroupVolumeSnapshotInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewNamespacedSchedulePolicyInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredNamespacedSchedulePolicyInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredGroupVolumeSnapshotInformer constructs a new informer for GroupVolumeSnapshot type.
+// NewFilteredNamespacedSchedulePolicyInformer constructs a new informer for NamespacedSchedulePolicy type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredGroupVolumeSnapshotInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredNamespacedSchedulePolicyInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().GroupVolumeSnapshots(namespace).List(context.TODO(), options)
+				return client.StorkV1alpha1().NamespacedSchedulePolicies(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.StorkV1alpha1().GroupVolumeSnapshots(namespace).Watch(context.TODO(), options)
+				return client.StorkV1alpha1().NamespacedSchedulePolicies(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&storkv1alpha1.GroupVolumeSnapshot{},
+		&storkv1alpha1.NamespacedSchedulePolicy{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *groupVolumeSnapshotInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredGroupVolumeSnapshotInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *namespacedSchedulePolicyInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredNamespacedSchedulePolicyInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *groupVolumeSnapshotInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&storkv1alpha1.GroupVolumeSnapshot{}, f.defaultInformer)
+func (f *namespacedSchedulePolicyInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&storkv1alpha1.NamespacedSchedulePolicy{}, f.defaultInformer)
 }
 
-func (f *groupVolumeSnapshotInformer) Lister() v1alpha1.GroupVolumeSnapshotLister {
-	return v1alpha1.NewGroupVolumeSnapshotLister(f.Informer().GetIndexer())
+func (f *namespacedSchedulePolicyInformer) Lister() v1alpha1.NamespacedSchedulePolicyLister {
+	return v1alpha1.NewNamespacedSchedulePolicyLister(f.Informer().GetIndexer())
 }

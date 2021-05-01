@@ -26,8 +26,10 @@ import (
 )
 
 // DataExportLister helps list DataExports.
+// All objects returned here must be treated as read-only.
 type DataExportLister interface {
 	// List lists all DataExports in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.DataExport, err error)
 	// DataExports returns an object that can list and get DataExports.
 	DataExports(namespace string) DataExportNamespaceLister
@@ -58,10 +60,13 @@ func (s *dataExportLister) DataExports(namespace string) DataExportNamespaceList
 }
 
 // DataExportNamespaceLister helps list and get DataExports.
+// All objects returned here must be treated as read-only.
 type DataExportNamespaceLister interface {
 	// List lists all DataExports in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.DataExport, err error)
 	// Get retrieves the DataExport from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.DataExport, error)
 	DataExportNamespaceListerExpansion
 }

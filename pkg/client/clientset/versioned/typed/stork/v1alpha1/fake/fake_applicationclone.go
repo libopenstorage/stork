@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var applicationclonesResource = schema.GroupVersionResource{Group: "stork.libope
 var applicationclonesKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "ApplicationClone"}
 
 // Get takes name of the applicationClone, and returns the corresponding applicationClone object, and an error if there is any.
-func (c *FakeApplicationClones) Get(name string, options v1.GetOptions) (result *v1alpha1.ApplicationClone, err error) {
+func (c *FakeApplicationClones) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ApplicationClone, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(applicationclonesResource, c.ns, name), &v1alpha1.ApplicationClone{})
 
@@ -50,7 +52,7 @@ func (c *FakeApplicationClones) Get(name string, options v1.GetOptions) (result 
 }
 
 // List takes label and field selectors, and returns the list of ApplicationClones that match those selectors.
-func (c *FakeApplicationClones) List(opts v1.ListOptions) (result *v1alpha1.ApplicationCloneList, err error) {
+func (c *FakeApplicationClones) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ApplicationCloneList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(applicationclonesResource, applicationclonesKind, c.ns, opts), &v1alpha1.ApplicationCloneList{})
 
@@ -72,14 +74,14 @@ func (c *FakeApplicationClones) List(opts v1.ListOptions) (result *v1alpha1.Appl
 }
 
 // Watch returns a watch.Interface that watches the requested applicationClones.
-func (c *FakeApplicationClones) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeApplicationClones) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(applicationclonesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a applicationClone and creates it.  Returns the server's representation of the applicationClone, and an error, if there is any.
-func (c *FakeApplicationClones) Create(applicationClone *v1alpha1.ApplicationClone) (result *v1alpha1.ApplicationClone, err error) {
+func (c *FakeApplicationClones) Create(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.CreateOptions) (result *v1alpha1.ApplicationClone, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(applicationclonesResource, c.ns, applicationClone), &v1alpha1.ApplicationClone{})
 
@@ -90,7 +92,7 @@ func (c *FakeApplicationClones) Create(applicationClone *v1alpha1.ApplicationClo
 }
 
 // Update takes the representation of a applicationClone and updates it. Returns the server's representation of the applicationClone, and an error, if there is any.
-func (c *FakeApplicationClones) Update(applicationClone *v1alpha1.ApplicationClone) (result *v1alpha1.ApplicationClone, err error) {
+func (c *FakeApplicationClones) Update(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.UpdateOptions) (result *v1alpha1.ApplicationClone, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(applicationclonesResource, c.ns, applicationClone), &v1alpha1.ApplicationClone{})
 
@@ -102,7 +104,7 @@ func (c *FakeApplicationClones) Update(applicationClone *v1alpha1.ApplicationClo
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeApplicationClones) UpdateStatus(applicationClone *v1alpha1.ApplicationClone) (*v1alpha1.ApplicationClone, error) {
+func (c *FakeApplicationClones) UpdateStatus(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.UpdateOptions) (*v1alpha1.ApplicationClone, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateSubresourceAction(applicationclonesResource, "status", c.ns, applicationClone), &v1alpha1.ApplicationClone{})
 
@@ -113,7 +115,7 @@ func (c *FakeApplicationClones) UpdateStatus(applicationClone *v1alpha1.Applicat
 }
 
 // Delete takes name of the applicationClone and deletes it. Returns an error if one occurs.
-func (c *FakeApplicationClones) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeApplicationClones) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(applicationclonesResource, c.ns, name), &v1alpha1.ApplicationClone{})
 
@@ -121,15 +123,15 @@ func (c *FakeApplicationClones) Delete(name string, options *v1.DeleteOptions) e
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeApplicationClones) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(applicationclonesResource, c.ns, listOptions)
+func (c *FakeApplicationClones) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(applicationclonesResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ApplicationCloneList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched applicationClone.
-func (c *FakeApplicationClones) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationClone, err error) {
+func (c *FakeApplicationClones) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationClone, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(applicationclonesResource, c.ns, name, pt, data, subresources...), &v1alpha1.ApplicationClone{})
 

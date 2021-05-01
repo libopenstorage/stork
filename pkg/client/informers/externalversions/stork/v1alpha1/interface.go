@@ -50,6 +50,8 @@ type Interface interface {
 	Migrations() MigrationInformer
 	// MigrationSchedules returns a MigrationScheduleInformer.
 	MigrationSchedules() MigrationScheduleInformer
+	// NamespacedSchedulePolicies returns a NamespacedSchedulePolicyInformer.
+	NamespacedSchedulePolicies() NamespacedSchedulePolicyInformer
 	// Rules returns a RuleInformer.
 	Rules() RuleInformer
 	// SchedulePolicies returns a SchedulePolicyInformer.
@@ -134,6 +136,11 @@ func (v *version) Migrations() MigrationInformer {
 // MigrationSchedules returns a MigrationScheduleInformer.
 func (v *version) MigrationSchedules() MigrationScheduleInformer {
 	return &migrationScheduleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// NamespacedSchedulePolicies returns a NamespacedSchedulePolicyInformer.
+func (v *version) NamespacedSchedulePolicies() NamespacedSchedulePolicyInformer {
+	return &namespacedSchedulePolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Rules returns a RuleInformer.
