@@ -26,10 +26,13 @@ import (
 )
 
 // ApplicationRegistrationLister helps list ApplicationRegistrations.
+// All objects returned here must be treated as read-only.
 type ApplicationRegistrationLister interface {
 	// List lists all ApplicationRegistrations in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ApplicationRegistration, err error)
 	// Get retrieves the ApplicationRegistration from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ApplicationRegistration, error)
 	ApplicationRegistrationListerExpansion
 }

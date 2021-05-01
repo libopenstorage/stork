@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var groupvolumesnapshotsResource = schema.GroupVersionResource{Group: "stork.lib
 var groupvolumesnapshotsKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "GroupVolumeSnapshot"}
 
 // Get takes name of the groupVolumeSnapshot, and returns the corresponding groupVolumeSnapshot object, and an error if there is any.
-func (c *FakeGroupVolumeSnapshots) Get(name string, options v1.GetOptions) (result *v1alpha1.GroupVolumeSnapshot, err error) {
+func (c *FakeGroupVolumeSnapshots) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.GroupVolumeSnapshot, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(groupvolumesnapshotsResource, c.ns, name), &v1alpha1.GroupVolumeSnapshot{})
 
@@ -50,7 +52,7 @@ func (c *FakeGroupVolumeSnapshots) Get(name string, options v1.GetOptions) (resu
 }
 
 // List takes label and field selectors, and returns the list of GroupVolumeSnapshots that match those selectors.
-func (c *FakeGroupVolumeSnapshots) List(opts v1.ListOptions) (result *v1alpha1.GroupVolumeSnapshotList, err error) {
+func (c *FakeGroupVolumeSnapshots) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.GroupVolumeSnapshotList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(groupvolumesnapshotsResource, groupvolumesnapshotsKind, c.ns, opts), &v1alpha1.GroupVolumeSnapshotList{})
 
@@ -72,14 +74,14 @@ func (c *FakeGroupVolumeSnapshots) List(opts v1.ListOptions) (result *v1alpha1.G
 }
 
 // Watch returns a watch.Interface that watches the requested groupVolumeSnapshots.
-func (c *FakeGroupVolumeSnapshots) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeGroupVolumeSnapshots) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(groupvolumesnapshotsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a groupVolumeSnapshot and creates it.  Returns the server's representation of the groupVolumeSnapshot, and an error, if there is any.
-func (c *FakeGroupVolumeSnapshots) Create(groupVolumeSnapshot *v1alpha1.GroupVolumeSnapshot) (result *v1alpha1.GroupVolumeSnapshot, err error) {
+func (c *FakeGroupVolumeSnapshots) Create(ctx context.Context, groupVolumeSnapshot *v1alpha1.GroupVolumeSnapshot, opts v1.CreateOptions) (result *v1alpha1.GroupVolumeSnapshot, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(groupvolumesnapshotsResource, c.ns, groupVolumeSnapshot), &v1alpha1.GroupVolumeSnapshot{})
 
@@ -90,7 +92,7 @@ func (c *FakeGroupVolumeSnapshots) Create(groupVolumeSnapshot *v1alpha1.GroupVol
 }
 
 // Update takes the representation of a groupVolumeSnapshot and updates it. Returns the server's representation of the groupVolumeSnapshot, and an error, if there is any.
-func (c *FakeGroupVolumeSnapshots) Update(groupVolumeSnapshot *v1alpha1.GroupVolumeSnapshot) (result *v1alpha1.GroupVolumeSnapshot, err error) {
+func (c *FakeGroupVolumeSnapshots) Update(ctx context.Context, groupVolumeSnapshot *v1alpha1.GroupVolumeSnapshot, opts v1.UpdateOptions) (result *v1alpha1.GroupVolumeSnapshot, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(groupvolumesnapshotsResource, c.ns, groupVolumeSnapshot), &v1alpha1.GroupVolumeSnapshot{})
 
@@ -101,7 +103,7 @@ func (c *FakeGroupVolumeSnapshots) Update(groupVolumeSnapshot *v1alpha1.GroupVol
 }
 
 // Delete takes name of the groupVolumeSnapshot and deletes it. Returns an error if one occurs.
-func (c *FakeGroupVolumeSnapshots) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeGroupVolumeSnapshots) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(groupvolumesnapshotsResource, c.ns, name), &v1alpha1.GroupVolumeSnapshot{})
 
@@ -109,15 +111,15 @@ func (c *FakeGroupVolumeSnapshots) Delete(name string, options *v1.DeleteOptions
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeGroupVolumeSnapshots) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(groupvolumesnapshotsResource, c.ns, listOptions)
+func (c *FakeGroupVolumeSnapshots) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(groupvolumesnapshotsResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.GroupVolumeSnapshotList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched groupVolumeSnapshot.
-func (c *FakeGroupVolumeSnapshots) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.GroupVolumeSnapshot, err error) {
+func (c *FakeGroupVolumeSnapshots) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.GroupVolumeSnapshot, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(groupvolumesnapshotsResource, c.ns, name, pt, data, subresources...), &v1alpha1.GroupVolumeSnapshot{})
 
