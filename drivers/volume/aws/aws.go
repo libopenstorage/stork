@@ -3,6 +3,7 @@ package aws
 import (
 	"fmt"
 	"regexp"
+	"runtime/debug"
 	"time"
 
 	aws_sdk "github.com/aws/aws-sdk-go/aws"
@@ -385,6 +386,8 @@ func (a *aws) CancelBackup(backup *storkapi.ApplicationBackup) error {
 }
 
 func (a *aws) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+	logrus.Infof("Entering aws DeleteBackup %+v", backup)
+	debug.PrintStack()
 	if a.client == nil {
 		if err := a.Init(nil); err != nil {
 			return err

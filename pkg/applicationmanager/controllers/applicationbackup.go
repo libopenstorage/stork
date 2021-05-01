@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -210,6 +211,7 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 
 // handle updates for ApplicationBackup objects
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
+	logrus.Infof("sivakumar --- Entering handle with backup CR dump %+v", backup)
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
 			if err := a.deleteBackup(backup); err != nil {
@@ -716,6 +718,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			if err != nil {
 				return err
 			}
+			logrus.Infof("sivakumar --> backupCR: %v - Updated CR with ApplicationBackupStageApplications and ApplicationBackupStatusInProgress", backup.Name)
 		}
 
 		err = a.backupResources(backup)
@@ -1157,6 +1160,7 @@ func (a *ApplicationBackupController) backupResources(
 	if err = a.client.Update(context.TODO(), backup); err != nil {
 		return err
 	}
+	logrus.Infof("sivakumar - backup CR : %v - Update cr with ApplicationBackupStageFinal and ApplicationBackupStatusSuccessful", backup.Name)
 
 	return nil
 }
@@ -1164,6 +1168,8 @@ func (a *ApplicationBackupController) backupResources(
 func (a *ApplicationBackupController) deleteBackup(backup *stork_api.ApplicationBackup) error {
 	// Only delete the backup from the backupLocation if the ReclaimPolicy is
 	// set to Delete or if it is not successful
+	logrus.Infof("Entering deleteBackup -- backup CR %+v", backup)
+	debug.PrintStack()
 	if backup.Spec.ReclaimPolicy != stork_api.ApplicationBackupReclaimPolicyDelete &&
 		backup.Status.Status == stork_api.ApplicationBackupStatusSuccessful {
 		return nil
