@@ -26,10 +26,13 @@ import (
 )
 
 // SchedulePolicyLister helps list SchedulePolicies.
+// All objects returned here must be treated as read-only.
 type SchedulePolicyLister interface {
 	// List lists all SchedulePolicies in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.SchedulePolicy, err error)
 	// Get retrieves the SchedulePolicy from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.SchedulePolicy, error)
 	SchedulePolicyListerExpansion
 }

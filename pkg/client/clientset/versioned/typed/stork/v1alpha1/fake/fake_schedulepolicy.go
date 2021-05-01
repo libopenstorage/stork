@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -38,7 +40,7 @@ var schedulepoliciesResource = schema.GroupVersionResource{Group: "stork.libopen
 var schedulepoliciesKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "SchedulePolicy"}
 
 // Get takes name of the schedulePolicy, and returns the corresponding schedulePolicy object, and an error if there is any.
-func (c *FakeSchedulePolicies) Get(name string, options v1.GetOptions) (result *v1alpha1.SchedulePolicy, err error) {
+func (c *FakeSchedulePolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.SchedulePolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(schedulepoliciesResource, name), &v1alpha1.SchedulePolicy{})
 	if obj == nil {
@@ -48,7 +50,7 @@ func (c *FakeSchedulePolicies) Get(name string, options v1.GetOptions) (result *
 }
 
 // List takes label and field selectors, and returns the list of SchedulePolicies that match those selectors.
-func (c *FakeSchedulePolicies) List(opts v1.ListOptions) (result *v1alpha1.SchedulePolicyList, err error) {
+func (c *FakeSchedulePolicies) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.SchedulePolicyList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootListAction(schedulepoliciesResource, schedulepoliciesKind, opts), &v1alpha1.SchedulePolicyList{})
 	if obj == nil {
@@ -69,13 +71,13 @@ func (c *FakeSchedulePolicies) List(opts v1.ListOptions) (result *v1alpha1.Sched
 }
 
 // Watch returns a watch.Interface that watches the requested schedulePolicies.
-func (c *FakeSchedulePolicies) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeSchedulePolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(schedulepoliciesResource, opts))
 }
 
 // Create takes the representation of a schedulePolicy and creates it.  Returns the server's representation of the schedulePolicy, and an error, if there is any.
-func (c *FakeSchedulePolicies) Create(schedulePolicy *v1alpha1.SchedulePolicy) (result *v1alpha1.SchedulePolicy, err error) {
+func (c *FakeSchedulePolicies) Create(ctx context.Context, schedulePolicy *v1alpha1.SchedulePolicy, opts v1.CreateOptions) (result *v1alpha1.SchedulePolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootCreateAction(schedulepoliciesResource, schedulePolicy), &v1alpha1.SchedulePolicy{})
 	if obj == nil {
@@ -85,7 +87,7 @@ func (c *FakeSchedulePolicies) Create(schedulePolicy *v1alpha1.SchedulePolicy) (
 }
 
 // Update takes the representation of a schedulePolicy and updates it. Returns the server's representation of the schedulePolicy, and an error, if there is any.
-func (c *FakeSchedulePolicies) Update(schedulePolicy *v1alpha1.SchedulePolicy) (result *v1alpha1.SchedulePolicy, err error) {
+func (c *FakeSchedulePolicies) Update(ctx context.Context, schedulePolicy *v1alpha1.SchedulePolicy, opts v1.UpdateOptions) (result *v1alpha1.SchedulePolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateAction(schedulepoliciesResource, schedulePolicy), &v1alpha1.SchedulePolicy{})
 	if obj == nil {
@@ -95,22 +97,22 @@ func (c *FakeSchedulePolicies) Update(schedulePolicy *v1alpha1.SchedulePolicy) (
 }
 
 // Delete takes name of the schedulePolicy and deletes it. Returns an error if one occurs.
-func (c *FakeSchedulePolicies) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeSchedulePolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewRootDeleteAction(schedulepoliciesResource, name), &v1alpha1.SchedulePolicy{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeSchedulePolicies) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(schedulepoliciesResource, listOptions)
+func (c *FakeSchedulePolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewRootDeleteCollectionAction(schedulepoliciesResource, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.SchedulePolicyList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched schedulePolicy.
-func (c *FakeSchedulePolicies) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.SchedulePolicy, err error) {
+func (c *FakeSchedulePolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.SchedulePolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootPatchSubresourceAction(schedulepoliciesResource, name, pt, data, subresources...), &v1alpha1.SchedulePolicy{})
 	if obj == nil {

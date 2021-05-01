@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var backuplocationsResource = schema.GroupVersionResource{Group: "stork.libopens
 var backuplocationsKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "BackupLocation"}
 
 // Get takes name of the backupLocation, and returns the corresponding backupLocation object, and an error if there is any.
-func (c *FakeBackupLocations) Get(name string, options v1.GetOptions) (result *v1alpha1.BackupLocation, err error) {
+func (c *FakeBackupLocations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.BackupLocation, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(backuplocationsResource, c.ns, name), &v1alpha1.BackupLocation{})
 
@@ -50,7 +52,7 @@ func (c *FakeBackupLocations) Get(name string, options v1.GetOptions) (result *v
 }
 
 // List takes label and field selectors, and returns the list of BackupLocations that match those selectors.
-func (c *FakeBackupLocations) List(opts v1.ListOptions) (result *v1alpha1.BackupLocationList, err error) {
+func (c *FakeBackupLocations) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.BackupLocationList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(backuplocationsResource, backuplocationsKind, c.ns, opts), &v1alpha1.BackupLocationList{})
 
@@ -72,14 +74,14 @@ func (c *FakeBackupLocations) List(opts v1.ListOptions) (result *v1alpha1.Backup
 }
 
 // Watch returns a watch.Interface that watches the requested backupLocations.
-func (c *FakeBackupLocations) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeBackupLocations) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(backuplocationsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a backupLocation and creates it.  Returns the server's representation of the backupLocation, and an error, if there is any.
-func (c *FakeBackupLocations) Create(backupLocation *v1alpha1.BackupLocation) (result *v1alpha1.BackupLocation, err error) {
+func (c *FakeBackupLocations) Create(ctx context.Context, backupLocation *v1alpha1.BackupLocation, opts v1.CreateOptions) (result *v1alpha1.BackupLocation, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(backuplocationsResource, c.ns, backupLocation), &v1alpha1.BackupLocation{})
 
@@ -90,7 +92,7 @@ func (c *FakeBackupLocations) Create(backupLocation *v1alpha1.BackupLocation) (r
 }
 
 // Update takes the representation of a backupLocation and updates it. Returns the server's representation of the backupLocation, and an error, if there is any.
-func (c *FakeBackupLocations) Update(backupLocation *v1alpha1.BackupLocation) (result *v1alpha1.BackupLocation, err error) {
+func (c *FakeBackupLocations) Update(ctx context.Context, backupLocation *v1alpha1.BackupLocation, opts v1.UpdateOptions) (result *v1alpha1.BackupLocation, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(backuplocationsResource, c.ns, backupLocation), &v1alpha1.BackupLocation{})
 
@@ -101,7 +103,7 @@ func (c *FakeBackupLocations) Update(backupLocation *v1alpha1.BackupLocation) (r
 }
 
 // Delete takes name of the backupLocation and deletes it. Returns an error if one occurs.
-func (c *FakeBackupLocations) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeBackupLocations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(backuplocationsResource, c.ns, name), &v1alpha1.BackupLocation{})
 
@@ -109,15 +111,15 @@ func (c *FakeBackupLocations) Delete(name string, options *v1.DeleteOptions) err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeBackupLocations) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(backuplocationsResource, c.ns, listOptions)
+func (c *FakeBackupLocations) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(backuplocationsResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.BackupLocationList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched backupLocation.
-func (c *FakeBackupLocations) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.BackupLocation, err error) {
+func (c *FakeBackupLocations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.BackupLocation, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(backuplocationsResource, c.ns, name, pt, data, subresources...), &v1alpha1.BackupLocation{})
 

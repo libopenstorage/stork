@@ -26,8 +26,10 @@ import (
 )
 
 // ApplicationRestoreLister helps list ApplicationRestores.
+// All objects returned here must be treated as read-only.
 type ApplicationRestoreLister interface {
 	// List lists all ApplicationRestores in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ApplicationRestore, err error)
 	// ApplicationRestores returns an object that can list and get ApplicationRestores.
 	ApplicationRestores(namespace string) ApplicationRestoreNamespaceLister
@@ -58,10 +60,13 @@ func (s *applicationRestoreLister) ApplicationRestores(namespace string) Applica
 }
 
 // ApplicationRestoreNamespaceLister helps list and get ApplicationRestores.
+// All objects returned here must be treated as read-only.
 type ApplicationRestoreNamespaceLister interface {
 	// List lists all ApplicationRestores in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ApplicationRestore, err error)
 	// Get retrieves the ApplicationRestore from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ApplicationRestore, error)
 	ApplicationRestoreNamespaceListerExpansion
 }
