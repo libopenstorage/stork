@@ -1,6 +1,7 @@
 package stork
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -67,7 +68,7 @@ func (c *Client) CreateApplicationBackup(backup *storkv1alpha1.ApplicationBackup
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackups(backup.Namespace).Create(backup)
+	return c.stork.StorkV1alpha1().ApplicationBackups(backup.Namespace).Create(context.TODO(), backup, metav1.CreateOptions{})
 }
 
 // GetApplicationBackup gets the ApplicationBackup
@@ -75,7 +76,7 @@ func (c *Client) GetApplicationBackup(name string, namespace string) (*storkv1al
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackups(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ApplicationBackups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListApplicationBackups lists all the ApplicationBackups
@@ -83,7 +84,7 @@ func (c *Client) ListApplicationBackups(namespace string) (*storkv1alpha1.Applic
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackups(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ApplicationBackups(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // DeleteApplicationBackup deletes the ApplicationBackup
@@ -91,7 +92,7 @@ func (c *Client) DeleteApplicationBackup(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackups(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ApplicationBackups(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -101,7 +102,7 @@ func (c *Client) UpdateApplicationBackup(backup *storkv1alpha1.ApplicationBackup
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackups(backup.Namespace).Update(backup)
+	return c.stork.StorkV1alpha1().ApplicationBackups(backup.Namespace).Update(context.TODO(), backup, metav1.UpdateOptions{})
 }
 
 // ValidateApplicationBackup validates the ApplicationBackup
@@ -138,7 +139,7 @@ func (c *Client) GetApplicationRestore(name string, namespace string) (*storkv1a
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRestores(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ApplicationRestores(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListApplicationRestores lists all the ApplicationRestores
@@ -146,7 +147,7 @@ func (c *Client) ListApplicationRestores(namespace string) (*storkv1alpha1.Appli
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRestores(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ApplicationRestores(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // CreateApplicationRestore creates the ApplicationRestore
@@ -154,7 +155,7 @@ func (c *Client) CreateApplicationRestore(restore *storkv1alpha1.ApplicationRest
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRestores(restore.Namespace).Create(restore)
+	return c.stork.StorkV1alpha1().ApplicationRestores(restore.Namespace).Create(context.TODO(), restore, metav1.CreateOptions{})
 }
 
 // DeleteApplicationRestore deletes the ApplicationRestore
@@ -162,7 +163,7 @@ func (c *Client) DeleteApplicationRestore(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRestores(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ApplicationRestores(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -173,7 +174,7 @@ func (c *Client) ValidateApplicationRestore(name, namespace string, timeout, ret
 		return err
 	}
 	t := func() (interface{}, bool, error) {
-		applicationrestore, err := c.stork.StorkV1alpha1().ApplicationRestores(namespace).Get(name, metav1.GetOptions{})
+		applicationrestore, err := c.stork.StorkV1alpha1().ApplicationRestores(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return "", true, err
 		}
@@ -203,7 +204,7 @@ func (c *Client) UpdateApplicationRestore(restore *storkv1alpha1.ApplicationRest
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRestores(restore.Namespace).Update(restore)
+	return c.stork.StorkV1alpha1().ApplicationRestores(restore.Namespace).Update(context.TODO(), restore, metav1.UpdateOptions{})
 }
 
 // GetApplicationBackupSchedule gets the ApplicationBackupSchedule
@@ -211,7 +212,7 @@ func (c *Client) GetApplicationBackupSchedule(name string, namespace string) (*s
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListApplicationBackupSchedules lists all the ApplicationBackupSchedules
@@ -219,7 +220,7 @@ func (c *Client) ListApplicationBackupSchedules(namespace string) (*storkv1alpha
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // CreateApplicationBackupSchedule creates an ApplicationBackupSchedule
@@ -227,7 +228,7 @@ func (c *Client) CreateApplicationBackupSchedule(applicationBackupSchedule *stor
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(applicationBackupSchedule.Namespace).Create(applicationBackupSchedule)
+	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(applicationBackupSchedule.Namespace).Create(context.TODO(), applicationBackupSchedule, metav1.CreateOptions{})
 }
 
 // UpdateApplicationBackupSchedule updates the ApplicationBackupSchedule
@@ -235,7 +236,7 @@ func (c *Client) UpdateApplicationBackupSchedule(applicationBackupSchedule *stor
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(applicationBackupSchedule.Namespace).Update(applicationBackupSchedule)
+	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(applicationBackupSchedule.Namespace).Update(context.TODO(), applicationBackupSchedule, metav1.UpdateOptions{})
 }
 
 // DeleteApplicationBackupSchedule deletes the ApplicationBackupSchedule
@@ -243,7 +244,7 @@ func (c *Client) DeleteApplicationBackupSchedule(name string, namespace string) 
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -347,7 +348,7 @@ func (c *Client) WatchApplicationBackup(namespace string, fn WatchFunc, listOpti
 	}
 
 	listOptions.Watch = true
-	watchInterface, err := c.stork.StorkV1alpha1().ApplicationBackups(namespace).Watch(listOptions)
+	watchInterface, err := c.stork.StorkV1alpha1().ApplicationBackups(namespace).Watch(context.TODO(), listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for application backups")
 		return err
@@ -365,7 +366,7 @@ func (c *Client) WatchApplicationRestore(namespace string, fn WatchFunc, listOpt
 	}
 
 	listOptions.Watch = true
-	watchInterface, err := c.stork.StorkV1alpha1().ApplicationRestores(namespace).Watch(listOptions)
+	watchInterface, err := c.stork.StorkV1alpha1().ApplicationRestores(namespace).Watch(context.TODO(), listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for application restores")
 		return err
@@ -383,7 +384,7 @@ func (c *Client) WatchApplicationBackupSchedule(namespace string, fn WatchFunc, 
 	}
 
 	listOptions.Watch = true
-	watchInterface, err := c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).Watch(listOptions)
+	watchInterface, err := c.stork.StorkV1alpha1().ApplicationBackupSchedules(namespace).Watch(context.TODO(), listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for application backup schedules")
 		return err
