@@ -102,7 +102,7 @@ integration-test-deploy:
 
 codegen:
 	@echo "Generating CRD"
-	@hack/update-codegen.sh
+	(GOFLAGS="" hack/update-codegen.sh)
 
 stork:
 	@echo "Building the stork binary"
