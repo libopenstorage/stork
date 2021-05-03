@@ -72,7 +72,7 @@ func setup(t *testing.T) {
 
 	core.SetInstance(core.New(fakeKubeClient))
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, nil))
-	openshift.SetInstance(openshift.New(fakeKubeClient, fakeOCPClient, nil))
+	openshift.SetInstance(openshift.New(fakeKubeClient, fakeOCPClient, nil, nil))
 
 	extender = &Extender{
 		Driver:   storkdriver,

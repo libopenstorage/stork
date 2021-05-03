@@ -50,10 +50,11 @@ func GetCurrentTime() time.Time {
 // trigger time
 func TriggerRequired(
 	policyName string,
+	namespace string,
 	policyType stork_api.SchedulePolicyType,
 	lastTrigger meta.Time,
 ) (bool, error) {
-	schedulePolicy, err := getSchedulePolicy(policyName)
+	schedulePolicy, err := getSchedulePolicy(policyName, namespace)
 	if err != nil {
 		return false, err
 	}
@@ -175,8 +176,8 @@ func ValidateSchedulePolicy(policy *stork_api.SchedulePolicy) error {
 
 // GetRetain Returns the retain value for the specified policy. Returns the
 // default for the policy if none is specified
-func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stork_api.Retain, error) {
-	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+func GetRetain(policyName string, namespace string, policyType stork_api.SchedulePolicyType) (stork_api.Retain, error) {
+	schedulePolicy, err := getSchedulePolicy(policyName, namespace)
 	if err != nil {
 		return 0, err
 	}
@@ -217,8 +218,8 @@ func GetRetain(policyName string, policyType stork_api.SchedulePolicyType) (stor
 }
 
 // GetOptions Returns the options set for a policy type
-func GetOptions(policyName string, policyType stork_api.SchedulePolicyType) (map[string]string, error) {
-	schedulePolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+func GetOptions(policyName string, namespace string, policyType stork_api.SchedulePolicyType) (map[string]string, error) {
+	schedulePolicy, err := getSchedulePolicy(policyName, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -398,6 +399,23 @@ func createCRD() error {
 		Kind:    reflect.TypeOf(stork_api.SchedulePolicy{}).Name(),
 	}
 	err := apiextensions.Instance().CreateCRD(resource)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	err = apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	if err != nil {
+		return err
+	}
+	resource = apiextensions.CustomResource{
+		Name:    stork_api.NamespacedSchedulePolicyResourceName,
+		Plural:  stork_api.NamespacedSchedulePolicyResourcePlural,
+		Group:   stork_api.SchemeGroupVersion.Group,
+		Version: stork_api.SchemeGroupVersion.Version,
+		Scope:   apiextensionsv1beta1.NamespaceScoped,
+		Kind:    reflect.TypeOf(stork_api.NamespacedSchedulePolicy{}).Name(),
+	}
+	err = apiextensions.Instance().CreateCRD(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
