@@ -278,6 +278,7 @@ func (m *MigrationScheduleController) shouldStartMigration(
 		}
 		trigger, err := schedule.TriggerRequired(
 			migrationSchedule.Spec.SchedulePolicyName,
+			migrationSchedule.Namespace,
 			policyType,
 			latestMigrationTimestamp,
 		)
