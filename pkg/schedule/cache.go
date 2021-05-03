@@ -17,7 +17,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-var store cache.Store
+var schedulePolicyStore cache.Store
+var namespacedSchedulePolicyStore cache.Store
 var controller cache.Controller
 
 func startSchedulePolicyCache() error {
@@ -44,28 +45,53 @@ func startSchedulePolicyCache() error {
 			return watchlist.Watch(options)
 		},
 	}
-	store, controller = cache.NewInformer(lw, &stork_api.SchedulePolicy{}, resyncPeriod,
+	schedulePolicyStore, controller = cache.NewInformer(lw, &stork_api.SchedulePolicy{}, resyncPeriod,
 		cache.ResourceEventHandlerFuncs{},
 	)
+	go controller.Run(wait.NeverStop)
 
+	watchlist = cache.NewListWatchFromClient(restClient, stork_api.NamespacedSchedulePolicyResourcePlural, v1.NamespaceAll, fields.Everything())
+	lw = &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			return watchlist.List(options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return watchlist.Watch(options)
+		},
+	}
+	namespacedSchedulePolicyStore, controller = cache.NewInformer(lw, &stork_api.NamespacedSchedulePolicy{}, resyncPeriod,
+		cache.ResourceEventHandlerFuncs{},
+	)
 	go controller.Run(wait.NeverStop)
 	return nil
 }
 
 // getSchedulePolicy gets the schedule policy from a cached store
-func getSchedulePolicy(name string) (*stork_api.SchedulePolicy, error) {
+func getSchedulePolicy(name string, namespace string) (*stork_api.SchedulePolicy, error) {
 	// Won't enable for UTs since ListWatcher doesn't work with fake client
 	// https://github.com/kubernetes/client-go/issues/352
-	if store == nil {
-		return storkops.Instance().GetSchedulePolicy(name)
+	if schedulePolicyStore == nil {
+		policy, err := storkops.Instance().GetNamespacedSchedulePolicy(name, namespace)
+		if err != nil {
+			return storkops.Instance().GetSchedulePolicy(name)
+		}
+		return policy.SchedulePolicy, nil
 	}
 
-	obj, exists, err := store.GetByKey(name)
+	// First check for namespaced policy
+	obj, exists, err := namespacedSchedulePolicyStore.GetByKey(namespace + "/" + name)
 	if err != nil {
 		return nil, err
 	}
+
 	if !exists {
-		return nil, fmt.Errorf("schedulepolicy %v not found in cache", name)
+		obj, exists, err = schedulePolicyStore.GetByKey(name)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("schedulepolicy %v not found in cache", name)
+		}
 	}
 	return obj.(*stork_api.SchedulePolicy), nil
 }

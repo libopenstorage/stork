@@ -13,6 +13,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/appregistration"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
 	fakeocpclient "github.com/openshift/client-go/apps/clientset/versioned/fake"
+	fakeocpconfigclient "github.com/openshift/client-go/config/clientset/versioned/fake"
 	fakeocpsecurityclient "github.com/openshift/client-go/security/clientset/versioned/fake"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -58,6 +59,7 @@ func resetTest() {
 	fakeStorkClient := fakeclient.NewSimpleClientset()
 	fakeOCPClient := fakeocpclient.NewSimpleClientset()
 	fakeOCPSecurityClient := fakeocpsecurityclient.NewSimpleClientset()
+	fakeOCPConfigClient := fakeocpconfigclient.NewSimpleClientset()
 	fakeDynamicClient := fakedynamicclient.NewSimpleDynamicClientWithCustomListKinds(scheme, appregistration.GetSupportedGVR())
 
 	if testFactory != nil {
@@ -76,7 +78,7 @@ func resetTest() {
 	core.SetInstance(core.New(fakeKubeClient))
 	storkops.SetInstance(storkops.New(fakeKubeClient, fakeStorkClient, fakeRestClient))
 	externalstorage.SetInstance(externalstorage.New(fakeRestClient))
-	openshift.SetInstance(openshift.New(fakeKubeClient, fakeOCPClient, fakeOCPSecurityClient))
+	openshift.SetInstance(openshift.New(fakeKubeClient, fakeOCPClient, fakeOCPSecurityClient, fakeOCPConfigClient))
 	apps.SetInstance(apps.New(fakeKubeClient.AppsV1(), fakeKubeClient.CoreV1()))
 	batch.SetInstance(batch.New(fakeKubeClient.BatchV1(), fakeKubeClient.BatchV1beta1()))
 	dynamic.SetInstance(dynamic.New(fakeDynamicClient))
