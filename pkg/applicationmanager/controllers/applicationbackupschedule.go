@@ -246,6 +246,7 @@ func (s *ApplicationBackupScheduleController) shouldStartApplicationBackup(backu
 		}
 		trigger, err := schedule.TriggerRequired(
 			backupSchedule.Spec.SchedulePolicyName,
+			backupSchedule.Namespace,
 			policyType,
 			latestApplicationBackupTimestamp,
 		)
@@ -296,7 +297,7 @@ func (s *ApplicationBackupScheduleController) startApplicationBackup(backupSched
 	}
 	backup.Annotations[ApplicationBackupScheduleNameAnnotation] = backupSchedule.Name
 	backup.Annotations[ApplicationBackupSchedulePolicyTypeAnnotation] = string(policyType)
-	options, err := schedule.GetOptions(backupSchedule.Spec.SchedulePolicyName, policyType)
+	options, err := schedule.GetOptions(backupSchedule.Spec.SchedulePolicyName, backupSchedule.Namespace, policyType)
 	if err != nil {
 		return err
 	}
@@ -328,7 +329,7 @@ func (s *ApplicationBackupScheduleController) pruneApplicationBackups(backupSche
 	for policyType, policyApplicationBackup := range backupSchedule.Status.Items {
 		numApplicationBackups := len(policyApplicationBackup)
 		deleteBefore := 0
-		retainNum, err := schedule.GetRetain(backupSchedule.Spec.SchedulePolicyName, policyType)
+		retainNum, err := schedule.GetRetain(backupSchedule.Spec.SchedulePolicyName, backupSchedule.Namespace, policyType)
 		if err != nil {
 			return err
 		}
