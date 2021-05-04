@@ -307,7 +307,7 @@ PodLoop:
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
 			for _, path := range paths {
-				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+) %s ", path))
+				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s ", path))
 				output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
 				if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 					// if pod is not found or in completed state so delay the check and move to next pod
@@ -355,7 +355,7 @@ PodLoop:
 		}
 
 		volMount, _ := d.RunCommand(currentNode,
-			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop)' | grep %s", pvName), connOpts)
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_)' | grep %s", pvName), connOpts)
 		if len(volMount) == 0 {
 			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
 		}

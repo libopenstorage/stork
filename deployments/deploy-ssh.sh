@@ -65,6 +65,10 @@ if [ -z "${ENABLE_STORK_UPGRADE}" ]; then
     ENABLE_STORK_UPGRADE=false
 fi
 
+if [ -z "${IS_PURE_VOLUMES}" ]; then
+    IS_PURE_VOLUMES=false
+fi
+
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
@@ -415,6 +419,7 @@ spec:
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
+            "--pure-volumes=$IS_PURE_VOLUMES",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",

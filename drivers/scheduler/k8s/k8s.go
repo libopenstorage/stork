@@ -162,6 +162,7 @@ type K8s struct {
 	SecretType          string
 	VaultAddress        string
 	VaultToken          string
+	PureVolumes         bool
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -198,6 +199,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.VaultAddress = schedOpts.VaultAddress
 	k.VaultToken = schedOpts.VaultToken
 	k.eventsStorage = make(map[string][]scheduler.Event)
+	k.PureVolumes = schedOpts.PureVolumes
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -800,6 +802,39 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 	return nsObj.(*corev1.Namespace), nil
 }
 
+func convertStorageClassToPure(scParameters map[string]string) map[string]string {
+	if len(scParameters["shared"]) > 0 || len(scParameters["sharedv4"]) > 0 {
+		scParameters["backend"] = "pure_file" // This is needed to create volumes via Pure FB backend
+
+		// These are the parameters that are not supported by Pure FB
+		if _, found := scParameters["shared"]; found {
+			delete(scParameters, "shared")
+		}
+		if _, found := scParameters["sharedv4"]; found {
+			delete(scParameters, "sharedv4")
+		}
+		if _, found := scParameters["secure"]; found {
+			delete(scParameters, "secure")
+		}
+		if _, found := scParameters["repl"]; found {
+			delete(scParameters, "repl")
+		}
+		if _, found := scParameters["scale"]; found {
+			delete(scParameters, "scale")
+		}
+		if _, found := scParameters["aggregation_level"]; found {
+			delete(scParameters, "aggregation_level")
+		}
+		if _, found := scParameters["io_profile"]; found {
+			delete(scParameters, "io_profile")
+		}
+		if _, found := scParameters["priority_io"]; found {
+			delete(scParameters, "priority_io")
+		}
+	}
+	return scParameters
+}
+
 func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *spec.AppSpec,
 	options scheduler.ScheduleOptions) (interface{}, error) {
 
@@ -823,6 +858,12 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
+
+		// If Pure FB backend is enabled, we will modify StorageClass parameters here
+		if k.PureVolumes {
+			newStorageClassParameters := convertStorageClassToPure(obj.Parameters)
+			obj.Parameters = newStorageClassParameters
+		}
 
 		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
 		obj.Provisioner = volume.GetStorageProvisioner()
@@ -3476,7 +3517,7 @@ func (k *K8s) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 						coolDownPeriod = 5 // default autopilot cool down period
 					}
 					// sleep to wait until all events are published
-					sleepTime := time.Second*time.Duration(coolDownPeriod+10)
+					sleepTime := time.Second * time.Duration(coolDownPeriod+10)
 					logrus.Infof("sleep %s until all events are published", sleepTime)
 					time.Sleep(sleepTime)
 
