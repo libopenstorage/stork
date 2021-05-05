@@ -1,6 +1,7 @@
 package batch
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -28,7 +29,7 @@ func (c *Client) CreateJob(job *batchv1.Job) (*batchv1.Job, error) {
 		return nil, err
 	}
 
-	return c.batch.Jobs(job.Namespace).Create(job)
+	return c.batch.Jobs(job.Namespace).Create(context.TODO(), job, metav1.CreateOptions{})
 }
 
 // GetJob returns the job from given namespace and name
@@ -37,7 +38,7 @@ func (c *Client) GetJob(name, namespace string) (*batchv1.Job, error) {
 		return nil, err
 	}
 
-	return c.batch.Jobs(namespace).Get(name, metav1.GetOptions{})
+	return c.batch.Jobs(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteJob deletes the job with given namespace and name
@@ -46,7 +47,7 @@ func (c *Client) DeleteJob(name, namespace string) error {
 		return err
 	}
 
-	return c.batch.Jobs(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.batch.Jobs(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

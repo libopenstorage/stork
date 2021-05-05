@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2018-06-01/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-12-01/compute"
 	"github.com/Azure/azure-sdk-for-go/services/containerservice/mgmt/2019-02-01/containerservice"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -346,7 +346,8 @@ func (a *azureOps) SetInstanceGroupSize(instanceGroupID string,
 
 	instanceGroupSize := int32(count)
 	agentPoolProperties := containerservice.ManagedClusterAgentPoolProfileProperties{
-		Count: &instanceGroupSize,
+		Count:  &instanceGroupSize,
+		OsType: containerservice.Linux,
 	}
 
 	agentPool := containerservice.AgentPool{
@@ -410,9 +411,11 @@ func (a *azureOps) Create(
 				CreationData: &compute.CreationData{
 					CreateOption: compute.Empty,
 				},
-				DiskSizeGB:        d.DiskProperties.DiskSizeGB,
-				DiskIOPSReadWrite: d.DiskProperties.DiskIOPSReadWrite,
-				DiskMBpsReadWrite: d.DiskProperties.DiskMBpsReadWrite,
+				DiskSizeGB:                   d.DiskProperties.DiskSizeGB,
+				DiskIOPSReadWrite:            d.DiskProperties.DiskIOPSReadWrite,
+				DiskMBpsReadWrite:            d.DiskProperties.DiskMBpsReadWrite,
+				EncryptionSettingsCollection: d.DiskProperties.EncryptionSettingsCollection,
+				Encryption:                   d.DiskProperties.Encryption,
 			},
 		},
 	)

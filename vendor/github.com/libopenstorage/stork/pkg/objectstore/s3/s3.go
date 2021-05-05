@@ -14,8 +14,15 @@ import (
 )
 
 func getSession(backupLocation *stork_api.BackupLocation) (*session.Session, error) {
+	// AWS SDK fetches the correct endpoint based on region provided if endpoint is passed empty
+	var endpoint string
+	if backupLocation.Location.S3Config.Endpoint == "s3.amazonaws.com" {
+		endpoint = ""
+	} else {
+		endpoint = backupLocation.Location.S3Config.Endpoint
+	}
 	return session.NewSession(&aws.Config{
-		Endpoint: aws.String(backupLocation.Location.S3Config.Endpoint),
+		Endpoint: aws.String(endpoint),
 		Credentials: credentials.NewStaticCredentials(backupLocation.Location.S3Config.AccessKeyID,
 			backupLocation.Location.S3Config.SecretAccessKey, ""),
 		Region:           aws.String(backupLocation.Location.S3Config.Region),

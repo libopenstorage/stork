@@ -1,0 +1,48 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: wordpress-sc-fb-nfs4
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  backend: "pure_file"
+mountOptions:
+- nfsvers=4.1
+- tcp
+allowVolumeExpansion: true
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: worpress-sc-fb
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  io_profile: "db"
+  priority_io: "high"
+allowVolumeExpansion: true
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wp-pvc-fb-nfs4
+  labels:
+    app: wordpress
+spec:
+  storageClassName: wordpress-sc-fb-nfs4
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc-fb
+spec:
+  storageClassName: worpress-sc-fb
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -86,6 +86,8 @@ type InitOptions struct {
 	VaultAddress string
 	// VaultToken vault authentication token
 	VaultToken string
+	// PureVolumes identifies if this setup is using Pure backend
+	PureVolumes bool
 }
 
 // ScheduleOptions are options that callers to pass to influence the apps that get schduled

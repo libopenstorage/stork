@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -71,7 +72,7 @@ func (c *volumeSnapshotSchedules) Get(name string, options v1.GetOptions) (resul
 		Resource("volumesnapshotschedules").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -88,7 +89,7 @@ func (c *volumeSnapshotSchedules) List(opts v1.ListOptions) (result *v1alpha1.Vo
 		Resource("volumesnapshotschedules").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -105,7 +106,7 @@ func (c *volumeSnapshotSchedules) Watch(opts v1.ListOptions) (watch.Interface, e
 		Resource("volumesnapshotschedules").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a volumeSnapshotSchedule and creates it.  Returns the server's representation of the volumeSnapshotSchedule, and an error, if there is any.
@@ -115,7 +116,7 @@ func (c *volumeSnapshotSchedules) Create(volumeSnapshotSchedule *v1alpha1.Volume
 		Namespace(c.ns).
 		Resource("volumesnapshotschedules").
 		Body(volumeSnapshotSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -128,7 +129,7 @@ func (c *volumeSnapshotSchedules) Update(volumeSnapshotSchedule *v1alpha1.Volume
 		Resource("volumesnapshotschedules").
 		Name(volumeSnapshotSchedule.Name).
 		Body(volumeSnapshotSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -144,7 +145,7 @@ func (c *volumeSnapshotSchedules) UpdateStatus(volumeSnapshotSchedule *v1alpha1.
 		Name(volumeSnapshotSchedule.Name).
 		SubResource("status").
 		Body(volumeSnapshotSchedule).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -156,7 +157,7 @@ func (c *volumeSnapshotSchedules) Delete(name string, options *v1.DeleteOptions)
 		Resource("volumesnapshotschedules").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -172,7 +173,7 @@ func (c *volumeSnapshotSchedules) DeleteCollection(options *v1.DeleteOptions, li
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -185,7 +186,7 @@ func (c *volumeSnapshotSchedules) Patch(name string, pt types.PatchType, data []
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

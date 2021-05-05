@@ -3,6 +3,7 @@ package k8s
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -161,6 +162,7 @@ type K8s struct {
 	SecretType          string
 	VaultAddress        string
 	VaultToken          string
+	PureVolumes         bool
 }
 
 // IsNodeReady  Check whether the cluster node is ready
@@ -197,6 +199,7 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 	k.VaultAddress = schedOpts.VaultAddress
 	k.VaultToken = schedOpts.VaultToken
 	k.eventsStorage = make(map[string][]scheduler.Event)
+	k.PureVolumes = schedOpts.PureVolumes
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -799,6 +802,39 @@ func (k *K8s) createNamespace(app *spec.AppSpec, namespace string, options sched
 	return nsObj.(*corev1.Namespace), nil
 }
 
+func convertStorageClassToPure(scParameters map[string]string) map[string]string {
+	if len(scParameters["shared"]) > 0 || len(scParameters["sharedv4"]) > 0 {
+		scParameters["backend"] = "pure_file" // This is needed to create volumes via Pure FB backend
+
+		// These are the parameters that are not supported by Pure FB
+		if _, found := scParameters["shared"]; found {
+			delete(scParameters, "shared")
+		}
+		if _, found := scParameters["sharedv4"]; found {
+			delete(scParameters, "sharedv4")
+		}
+		if _, found := scParameters["secure"]; found {
+			delete(scParameters, "secure")
+		}
+		if _, found := scParameters["repl"]; found {
+			delete(scParameters, "repl")
+		}
+		if _, found := scParameters["scale"]; found {
+			delete(scParameters, "scale")
+		}
+		if _, found := scParameters["aggregation_level"]; found {
+			delete(scParameters, "aggregation_level")
+		}
+		if _, found := scParameters["io_profile"]; found {
+			delete(scParameters, "io_profile")
+		}
+		if _, found := scParameters["priority_io"]; found {
+			delete(scParameters, "priority_io")
+		}
+	}
+	return scParameters
+}
+
 func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *spec.AppSpec,
 	options scheduler.ScheduleOptions) (interface{}, error) {
 
@@ -822,6 +858,12 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
+
+		// If Pure FB backend is enabled, we will modify StorageClass parameters here
+		if k.PureVolumes {
+			newStorageClassParameters := convertStorageClassToPure(obj.Parameters)
+			obj.Parameters = newStorageClassParameters
+		}
 
 		logrus.Infof("Setting provisioner of %v to %v", obj.Name, volume.GetStorageProvisioner())
 		obj.Provisioner = volume.GetStorageProvisioner()
@@ -1122,7 +1164,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if secret != nil {
 			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
-		dep, err := k8sApps.CreateDeployment(obj)
+		dep, err := k8sApps.CreateDeployment(obj, metav1.CreateOptions{})
 		if errors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
@@ -1185,7 +1227,7 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if secret != nil {
 			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
 		}
-		ss, err := k8sApps.CreateStatefulSet(obj)
+		ss, err := k8sApps.CreateStatefulSet(obj, metav1.CreateOptions{})
 		if errors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
@@ -3475,7 +3517,9 @@ func (k *K8s) ValidateAutopilotEvents(ctx *scheduler.Context) error {
 						coolDownPeriod = 5 // default autopilot cool down period
 					}
 					// sleep to wait until all events are published
-					time.Sleep(time.Second*time.Duration(coolDownPeriod) + 10)
+					sleepTime := time.Second * time.Duration(coolDownPeriod+10)
+					logrus.Infof("sleep %s until all events are published", sleepTime)
+					time.Sleep(sleepTime)
 
 					objectToValidateName := fmt.Sprintf("%s:pvc-%s", rule.Name, obj.UID)
 					logrus.Infof("[%s] Validating events", objectToValidateName)
@@ -3501,8 +3545,6 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	}
 
 	expectedAroStates := []apapi.RuleState{
-		apapi.RuleStateInit,
-		apapi.RuleStateNormal,
 		apapi.RuleStateTriggered,
 		apapi.RuleStateActiveActionsPending,
 		apapi.RuleStateActiveActionsInProgress,
@@ -3521,17 +3563,20 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	for _, aro := range listAutopilotRuleObjects.Items {
 		var aroStates []apapi.RuleState
 		for _, aroStatusItem := range aro.Status.Items {
+			if aroStatusItem.State == "" {
+				continue
+			}
 			aroStates = append(aroStates, aroStatusItem.State)
 		}
 		if reflect.DeepEqual(aroStates, expectedAroStates) {
 			logrus.Debugf("autopilot rule object: %s has all expected states", aro.Name)
-			return nil
+		} else {
+			formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
+			logrus.Debugf("autopilot rule objects items: %s", string(formattedObject))
+			return fmt.Errorf("autopilot rule object: %s doesn't have all expected states", aro.Name)
 		}
-		logrus.Debugf("autopilot rule object: %s doesn't have all expected states", aro.Name)
 	}
-
-	formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
-	return fmt.Errorf("none of the autopilot rule objects have all expected states\n autopilot rule objects items: %s", string(formattedObject))
+	return nil
 }
 
 func validateEvents(objName string, events map[string]int32, count int32) error {
@@ -3602,7 +3647,7 @@ func (k *K8s) collectEvents() error {
 		return err
 	}
 
-	iface, err := clientset.CoreV1().Events(namespace).Watch(metav1.ListOptions{})
+	iface, err := clientset.CoreV1().Events(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -3777,7 +3822,8 @@ func (k *K8s) CreateAutopilotRule(apRule apapi.AutopilotRule) (*apapi.AutopilotR
 	if err != nil {
 		return nil, err
 	}
-	logrus.Infof("Created autopilot rule: %+v", apRuleObj)
+	apRuleObjString, _ := json.MarshalIndent(apRuleObj, "", "\t")
+	logrus.Infof("Created autopilot rule: %s", apRuleObjString)
 
 	return apRuleObj.(*apapi.AutopilotRule), nil
 }

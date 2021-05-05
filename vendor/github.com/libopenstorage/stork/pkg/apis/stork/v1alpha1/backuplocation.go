@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -96,7 +97,7 @@ type BackupLocationList struct {
 // UpdateFromSecret updated the config information from the secret if not provided inline
 func (bl *BackupLocation) UpdateFromSecret(client kubernetes.Interface) error {
 	if bl.Location.SecretConfig != "" {
-		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(bl.Location.SecretConfig, metav1.GetOptions{})
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(context.TODO(), bl.Location.SecretConfig, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}
@@ -127,7 +128,7 @@ func (bl *BackupLocation) getMergedS3Config(client kubernetes.Interface) error {
 		bl.Location.S3Config.DisableSSL = false
 	}
 	if bl.Location.SecretConfig != "" {
-		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(bl.Location.SecretConfig, metav1.GetOptions{})
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(context.TODO(), bl.Location.SecretConfig, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}
@@ -161,7 +162,7 @@ func (bl *BackupLocation) getMergedAzureConfig(client kubernetes.Interface) erro
 		bl.Location.AzureConfig = &AzureConfig{}
 	}
 	if bl.Location.SecretConfig != "" {
-		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(bl.Location.SecretConfig, metav1.GetOptions{})
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(context.TODO(), bl.Location.SecretConfig, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}
@@ -180,7 +181,7 @@ func (bl *BackupLocation) getMergedGoogleConfig(client kubernetes.Interface) err
 		bl.Location.GoogleConfig = &GoogleConfig{}
 	}
 	if bl.Location.SecretConfig != "" {
-		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(bl.Location.SecretConfig, metav1.GetOptions{})
+		secretConfig, err := client.CoreV1().Secrets(bl.Namespace).Get(context.TODO(), bl.Location.SecretConfig, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("error getting secretConfig for backupLocation: %v", err)
 		}

@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -71,7 +72,7 @@ func (c *applicationBackups) Get(name string, options v1.GetOptions) (result *v1
 		Resource("applicationbackups").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -88,7 +89,7 @@ func (c *applicationBackups) List(opts v1.ListOptions) (result *v1alpha1.Applica
 		Resource("applicationbackups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -105,7 +106,7 @@ func (c *applicationBackups) Watch(opts v1.ListOptions) (watch.Interface, error)
 		Resource("applicationbackups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a applicationBackup and creates it.  Returns the server's representation of the applicationBackup, and an error, if there is any.
@@ -115,7 +116,7 @@ func (c *applicationBackups) Create(applicationBackup *v1alpha1.ApplicationBacku
 		Namespace(c.ns).
 		Resource("applicationbackups").
 		Body(applicationBackup).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -128,7 +129,7 @@ func (c *applicationBackups) Update(applicationBackup *v1alpha1.ApplicationBacku
 		Resource("applicationbackups").
 		Name(applicationBackup.Name).
 		Body(applicationBackup).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -144,7 +145,7 @@ func (c *applicationBackups) UpdateStatus(applicationBackup *v1alpha1.Applicatio
 		Name(applicationBackup.Name).
 		SubResource("status").
 		Body(applicationBackup).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -156,7 +157,7 @@ func (c *applicationBackups) Delete(name string, options *v1.DeleteOptions) erro
 		Resource("applicationbackups").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -172,7 +173,7 @@ func (c *applicationBackups) DeleteCollection(options *v1.DeleteOptions, listOpt
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -185,7 +186,7 @@ func (c *applicationBackups) Patch(name string, pt types.PatchType, data []byte,
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

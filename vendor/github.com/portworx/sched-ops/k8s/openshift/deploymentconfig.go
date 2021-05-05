@@ -1,6 +1,7 @@
 package openshift
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -42,7 +43,7 @@ func (c *Client) ListDeploymentConfigs(namespace string) (*ocpappsv1api.Deployme
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.ocpClient.AppsV1().DeploymentConfigs(namespace).List(metav1.ListOptions{})
+	return c.ocpClient.AppsV1().DeploymentConfigs(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // GetDeploymentConfig returns a deployment for the give name and namespace
@@ -50,7 +51,7 @@ func (c *Client) GetDeploymentConfig(name, namespace string) (*ocpappsv1api.Depl
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.ocpClient.AppsV1().DeploymentConfigs(namespace).Get(name, metav1.GetOptions{})
+	return c.ocpClient.AppsV1().DeploymentConfigs(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateDeploymentConfig creates the given deployment
@@ -64,7 +65,7 @@ func (c *Client) CreateDeploymentConfig(deployment *ocpappsv1api.DeploymentConfi
 		ns = corev1.NamespaceDefault
 	}
 
-	return c.ocpClient.AppsV1().DeploymentConfigs(ns).Create(deployment)
+	return c.ocpClient.AppsV1().DeploymentConfigs(ns).Create(context.TODO(), deployment, metav1.CreateOptions{})
 }
 
 // DeleteDeploymentConfig deletes the given deployment
@@ -72,7 +73,7 @@ func (c *Client) DeleteDeploymentConfig(name, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.ocpClient.AppsV1().DeploymentConfigs(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.ocpClient.AppsV1().DeploymentConfigs(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -94,7 +95,7 @@ func (c *Client) UpdateDeploymentConfig(deployment *ocpappsv1api.DeploymentConfi
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.ocpClient.AppsV1().DeploymentConfigs(deployment.Namespace).Update(deployment)
+	return c.ocpClient.AppsV1().DeploymentConfigs(deployment.Namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 }
 
 // ValidateDeploymentConfig validates the given deployment if it's running and healthy
@@ -119,7 +120,7 @@ func (c *Client) ValidateDeploymentConfig(deployment *ocpappsv1api.DeploymentCon
 
 					claim, err := c.kube.CoreV1().
 						PersistentVolumeClaims(dep.Namespace).
-						Get(vol.PersistentVolumeClaim.ClaimName, metav1.GetOptions{})
+						Get(context.TODO(), vol.PersistentVolumeClaim.ClaimName, metav1.GetOptions{})
 					if err != nil {
 						return "", true, err
 					}
@@ -249,7 +250,7 @@ func (c *Client) GetDeploymentConfigPods(deployment *ocpappsv1api.DeploymentConf
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	rSets, err := c.kube.AppsV1().ReplicaSets(deployment.Namespace).List(metav1.ListOptions{})
+	rSets, err := c.kube.AppsV1().ReplicaSets(deployment.Namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +271,7 @@ func (c *Client) GetDeploymentConfigsUsingStorageClass(scName string) ([]ocpapps
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	deps, err := c.ocpClient.AppsV1().DeploymentConfigs("").List(metav1.ListOptions{})
+	deps, err := c.ocpClient.AppsV1().DeploymentConfigs("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +284,7 @@ func (c *Client) GetDeploymentConfigsUsingStorageClass(scName string) ([]ocpapps
 			}
 
 			pvcName := v.PersistentVolumeClaim.ClaimName
-			pvc, err := c.kube.CoreV1().PersistentVolumeClaims(dep.Namespace).Get(pvcName, metav1.GetOptions{})
+			pvc, err := c.kube.CoreV1().PersistentVolumeClaims(dep.Namespace).Get(context.TODO(), pvcName, metav1.GetOptions{})
 			if err != nil {
 				continue // don't let one bad pvc stop processing
 			}

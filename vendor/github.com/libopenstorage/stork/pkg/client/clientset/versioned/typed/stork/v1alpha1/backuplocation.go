@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -70,7 +71,7 @@ func (c *backupLocations) Get(name string, options v1.GetOptions) (result *v1alp
 		Resource("backuplocations").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -87,7 +88,7 @@ func (c *backupLocations) List(opts v1.ListOptions) (result *v1alpha1.BackupLoca
 		Resource("backuplocations").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -104,7 +105,7 @@ func (c *backupLocations) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		Resource("backuplocations").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(context.TODO())
 }
 
 // Create takes the representation of a backupLocation and creates it.  Returns the server's representation of the backupLocation, and an error, if there is any.
@@ -114,7 +115,7 @@ func (c *backupLocations) Create(backupLocation *v1alpha1.BackupLocation) (resul
 		Namespace(c.ns).
 		Resource("backuplocations").
 		Body(backupLocation).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -127,7 +128,7 @@ func (c *backupLocations) Update(backupLocation *v1alpha1.BackupLocation) (resul
 		Resource("backuplocations").
 		Name(backupLocation.Name).
 		Body(backupLocation).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }
@@ -139,7 +140,7 @@ func (c *backupLocations) Delete(name string, options *v1.DeleteOptions) error {
 		Resource("backuplocations").
 		Name(name).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -155,7 +156,7 @@ func (c *backupLocations) DeleteCollection(options *v1.DeleteOptions, listOption
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(context.TODO()).
 		Error()
 }
 
@@ -168,7 +169,7 @@ func (c *backupLocations) Patch(name string, pt types.PatchType, data []byte, su
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(context.TODO()).
 		Into(result)
 	return
 }

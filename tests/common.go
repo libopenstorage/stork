@@ -154,10 +154,13 @@ func InitInstance() {
 		SecretType:          Inst().SecretType,
 		VaultAddress:        Inst().VaultAddress,
 		VaultToken:          Inst().VaultToken,
+		PureVolumes:         Inst().PureVolumes,
 	})
 	expect(err).NotTo(haveOccurred())
 
-	err = Inst().N.Init()
+	err = Inst().N.Init(node.InitOptions{
+		SpecDir: Inst().SpecDir,
+	})
 	expect(err).NotTo(haveOccurred())
 
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
@@ -615,6 +618,7 @@ func DescribeNamespace(contexts []*scheduler.Context) {
 // using total cluster size `count` and max_storage_nodes_per_zone
 func ValidateClusterSize(count int64) {
 	zones, err := Inst().N.GetZones()
+	expect(err).NotTo(haveOccurred())
 	logrus.Debugf("ASG is running in [%+v] zones\n", zones)
 	perZoneCount := count / int64(len(zones))
 
@@ -898,6 +902,7 @@ type Torpedo struct {
 	CustomAppConfig                     map[string]scheduler.AppConfig
 	Backup                              backup.Driver
 	SecretType                          string
+	PureVolumes                         bool
 	VaultAddress                        string
 	VaultToken                          string
 	SchedUpgradeHops                    string
@@ -927,6 +932,7 @@ func ParseFlags() {
 	var customAppConfig map[string]scheduler.AppConfig
 	var enableStorkUpgrade bool
 	var secretType string
+	var pureVolumes bool
 	var vaultAddress string
 	var vaultToken string
 	var schedUpgradeHops string
@@ -959,6 +965,7 @@ func ParseFlags() {
 	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
 	flag.StringVar(&secretType, "secret-type", scheduler.SecretK8S, "Path to custom configuration files")
+	flag.BoolVar(&pureVolumes, "pure-volumes", false, "To enable using Pure backend for shared volumes")
 	flag.StringVar(&vaultAddress, "vault-addr", "", "Path to custom configuration files")
 	flag.StringVar(&vaultToken, "vault-token", "", "Path to custom configuration files")
 	flag.StringVar(&schedUpgradeHops, "sched-upgrade-hops", "", "Comma separated list of versions scheduler upgrade to take hops")
@@ -1031,6 +1038,7 @@ func ParseFlags() {
 				CustomAppConfig:                     customAppConfig,
 				Backup:                              backupDriver,
 				SecretType:                          secretType,
+				PureVolumes:                         pureVolumes,
 				VaultAddress:                        vaultAddress,
 				VaultToken:                          vaultToken,
 				SchedUpgradeHops:                    schedUpgradeHops,

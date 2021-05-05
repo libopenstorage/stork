@@ -1,6 +1,8 @@
 package core
 
 import (
+	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -25,7 +27,7 @@ func (c *Client) ListNamespaces(labelSelector map[string]string) (*corev1.Namesp
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().Namespaces().List(metav1.ListOptions{
+	return c.kubernetes.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{
 		LabelSelector: mapToCSV(labelSelector),
 	})
 }
@@ -36,7 +38,7 @@ func (c *Client) GetNamespace(name string) (*corev1.Namespace, error) {
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+	return c.kubernetes.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateNamespace creates a namespace with given name and metadata
@@ -45,7 +47,7 @@ func (c *Client) CreateNamespace(namespace *corev1.Namespace) (*corev1.Namespace
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().Namespaces().Create(namespace)
+	return c.kubernetes.CoreV1().Namespaces().Create(context.TODO(), namespace, metav1.CreateOptions{})
 }
 
 // DeleteNamespace deletes a namespace with given name
@@ -54,7 +56,7 @@ func (c *Client) DeleteNamespace(name string) error {
 		return err
 	}
 
-	return c.kubernetes.CoreV1().Namespaces().Delete(name, &metav1.DeleteOptions{})
+	return c.kubernetes.CoreV1().Namespaces().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // UpdateNamespace updates a namespace with given metadata
@@ -63,5 +65,5 @@ func (c *Client) UpdateNamespace(namespace *corev1.Namespace) (*corev1.Namespace
 		return nil, err
 	}
 
-	return c.kubernetes.CoreV1().Namespaces().Update(namespace)
+	return c.kubernetes.CoreV1().Namespaces().Update(context.TODO(), namespace, metav1.UpdateOptions{})
 }

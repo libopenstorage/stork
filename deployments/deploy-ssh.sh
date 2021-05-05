@@ -65,12 +65,20 @@ if [ -z "${ENABLE_STORK_UPGRADE}" ]; then
     ENABLE_STORK_UPGRADE=false
 fi
 
+if [ -z "${IS_PURE_VOLUMES}" ]; then
+    IS_PURE_VOLUMES=false
+fi
+
 if [ -n "${PROVISIONER}" ]; then
     PROVISIONER="$PROVISIONER"
 fi
 
 if [ -z "${STORAGE_DRIVER}" ]; then
     STORAGE_DRIVER="pxd"
+fi
+
+if [ -z "${MAX_STORAGE_NODES_PER_AZ}" ]; then
+    MAX_STORAGE_NODES_PER_AZ="2"
 fi
 
 if [ -z "${PROVISIONER}" ]; then
@@ -130,11 +138,6 @@ fi
 SCHEDULER_UPGRADE_HOPS_ARG=""
 if [ -n "${SCHEDULER_UPGRADE_HOPS}" ]; then
     SCHEDULER_UPGRADE_HOPS_ARG="--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS"
-fi
-
-MAX_STORAGE_NODES_PER_AZ_ARG=""
-if [ -n "${MAX_STORAGE_NODES_PER_AZ}" ]; then
-    MAX_STORAGE_NODES_PER_AZ_ARG="--max-storage-nodes-per-az=$MAX_STORAGE_NODES_PER_AZ"
 fi
 
 CSI_GENERIC_CONFIGMAP=""
@@ -399,6 +402,7 @@ spec:
             "--spec-dir", $SPEC_DIR,
             "--app-list", "$APP_LIST",
             "--scheduler", "$SCHEDULER",
+            "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
             "--backup-driver", "$BACKUP_DRIVER",
             "--log-level", "$LOGLEVEL",
             "--node-driver", "$NODE_DRIVER",
@@ -415,13 +419,13 @@ spec:
             "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
             "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
             "--secret-type=$SECRET_TYPE",
+            "--pure-volumes=$IS_PURE_VOLUMES",
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "$APP_DESTROY_TIMEOUT_ARG",
-            "$SCHEDULER_UPGRADE_HOPS_ARG",
-            "$MAX_STORAGE_NODES_PER_AZ_ARG"
+            "$SCHEDULER_UPGRADE_HOPS_ARG"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]

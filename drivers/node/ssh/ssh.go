@@ -20,6 +20,7 @@ import (
 	ssh_pkg "golang.org/x/crypto/ssh"
 	appsv1_api "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -36,7 +37,6 @@ const (
 const (
 	execPodDaemonSetLabel   = "debug"
 	execPodDefaultNamespace = "kube-system"
-	defaultSpecsRoot        = "../drivers/scheduler/k8s/specs"
 )
 
 const (
@@ -51,6 +51,7 @@ type SSH struct {
 	password  string
 	keyPath   string
 	sshConfig *ssh_pkg.ClientConfig
+	specDir   string
 	// TODO keyPath-based ssh
 }
 
@@ -87,7 +88,8 @@ func useSSH() bool {
 }
 
 // Init initializes SSH node driver
-func (s *SSH) Init() error {
+func (s *SSH) Init(nodeOpts node.InitOptions) error {
+	s.specDir = nodeOpts.SpecDir
 
 	nodes := node.GetWorkerNodes()
 	var err error
@@ -123,8 +125,8 @@ func (s *SSH) initExecPod() error {
 	var ds *appsv1_api.DaemonSet
 	var err error
 	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, execPodDefaultNamespace); ds == nil {
-		s, err := scheduler.Get(k8s_driver.SchedName)
-		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", defaultSpecsRoot, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), s)
+		d, err := scheduler.Get(k8s_driver.SchedName)
+		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", s.specDir, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), d)
 		if err != nil {
 			return fmt.Errorf("Error while loading debug daemonset spec file. Err: %s", err)
 		}
@@ -132,7 +134,7 @@ func (s *SSH) initExecPod() error {
 		if err != nil {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
-		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet))
+		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)
 		}
