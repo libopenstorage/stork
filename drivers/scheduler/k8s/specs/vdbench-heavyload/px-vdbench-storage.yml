@@ -1,0 +1,22 @@
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: vdbench-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  shared: "true"
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc
+spec:
+  storageClassName: vdbench-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 200Gi

@@ -1,0 +1,10 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: sysbench-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  priority_io: "high"
+  io_profile: "db"
+allowVolumeExpansion: true

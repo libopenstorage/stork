@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sysbench
+  labels:
+    app: sysbench
+spec:
+  selector:
+    matchLabels:
+      app: sysbench
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: sysbench
+    spec:
+      schedulerName: stork
+      containers:
+        - image: mysql:5.7
+          name: mysql
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin -u root -p$MYSQL_ROOT_PASSWORD ping"]
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "mysql -u root -p$MYSQL_ROOT_PASSWORD -e \"select 1\""]
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+        - name: sysbench
+          image: portworx/torpedo-sysbench:new
+          env:
+            - name: MYSQL_HOST
+              value: 127.0.0.1
+            - name: MYSQL_ROOT_PASSWORD
+              value: password
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim:
+            claimName: sysbench-mysql-data

@@ -20,7 +20,7 @@ data:
         runtime=99999999
         [file1]
         filesize=1M-10M
-        nrfiles=1000
+        nrfiles=10000
         ioengine=libaio
         iodepth=128
 ---

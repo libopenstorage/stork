@@ -75,11 +75,11 @@ kind: Deployment
 metadata:
   name: mysqlslap
   labels:
-    app: mysql
+    app: mysqlslap
 spec:
   selector:
     matchLabels:
-      app: mysql
+      app: mysqlslap
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -89,7 +89,7 @@ spec:
   template:
     metadata:
       labels:
-        app: mysql
+        app: mysqlslap
     spec:
       containers:
       - name: mysqlslap
