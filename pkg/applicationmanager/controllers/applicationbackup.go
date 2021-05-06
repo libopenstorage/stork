@@ -210,6 +210,7 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 
 // handle updates for ApplicationBackup objects
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
+	logrus.Infof("sivakumar --- Entering handle with backup CR dump %+v", backup)
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
 			if err := a.deleteBackup(backup); err != nil {
@@ -596,10 +597,13 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				backup.Status.LastUpdateTimestamp = metav1.Now()
 				backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 				backup.Status.Reason = message
+				logrus.Infof("updating sdk with CR %+v", backup)
 				err = a.client.Update(context.TODO(), backup)
 				if err != nil {
+					logrus.Errorf("failed updating sdk with CR %+v, err: %v", backup, err)
 					return err
 				}
+				logrus.Infof("updating sdk")
 				return fmt.Errorf("%v", message)
 			}
 		}
@@ -716,6 +720,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 			if err != nil {
 				return err
 			}
+			logrus.Infof("sivakumar --> backupCR: %v - Updated CR with ApplicationBackupStageApplications and ApplicationBackupStatusInProgress", backup.Name)
+
 		}
 
 		err = a.backupResources(backup)
@@ -1153,10 +1159,12 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	backup.Status.LastUpdateTimestamp = metav1.Now()
-
+	logrus.Infof("updating CR backup stage final: %v", backup)
 	if err = a.client.Update(context.TODO(), backup); err != nil {
+		logrus.Infof("updating CR backup failed %v, err :%v", backup, err)
 		return err
 	}
+	logrus.Infof("sivakumar - backup CR : %v - Update cr with ApplicationBackupStageFinal and ApplicationBackupStatusSuccessful", backup.Name)
 
 	return nil
 }

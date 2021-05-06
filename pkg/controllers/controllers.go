@@ -16,10 +16,10 @@ const (
 	FinalizerCleanup = "stork.libopenstorage.org/finalizer-cleanup"
 
 	// DefaultRequeue is a reconcile period for a resource on success.
-	DefaultRequeue = 10 * time.Second
+	DefaultRequeue = 20 * time.Second
 
 	// DefaultRequeueError is a reconcile period for a resource on error.
-	DefaultRequeueError = 2 * time.Second
+	DefaultRequeueError = 5 * time.Second
 )
 
 // RegisterTo creates a new controller for a provided config and registers it to the controller manager.
