@@ -88,10 +88,11 @@ type ApplicationBackupController struct {
 	recorder             record.EventRecorder
 	resourceCollector    resourcecollector.ResourceCollector
 	backupAdminNamespace string
+	reconcileTime        time.Duration
 }
 
 // Init Initialize the application backup controller
-func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNamespace string) error {
+func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNamespace string, syncTime int64) error {
 	err := a.createCRD()
 	if err != nil {
 		return err
@@ -102,7 +103,7 @@ func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNames
 		logrus.Errorf("Failed to perform recovery for backup rules: %v", err)
 		return err
 	}
-
+	a.reconcileTime = time.Duration(syncTime) * time.Second
 	return controllers.RegisterTo(mgr, "application-backup-controller", a, &stork_api.ApplicationBackup{})
 }
 
@@ -133,7 +134,7 @@ func (a *ApplicationBackupController) Reconcile(request reconcile.Request) (reco
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
+	return reconcile.Result{RequeueAfter: a.reconcileTime}, nil
 }
 
 func setKind(snap *stork_api.ApplicationBackup) {
@@ -434,6 +435,9 @@ func (a *ApplicationBackupController) updateBackupCRWithRetry(
 			time.Sleep(retrySleep)
 			continue
 		}
+		if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+			return backup, nil
+		}
 		backup.Status.Status = status
 		backup.Status.Stage = stage
 		backup.Status.Reason = reason
@@ -666,6 +670,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					time.Sleep(retrySleep)
 					continue
 				}
+				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+					return nil
+				}
 				backup.Status.Volumes = volumeInfos
 				backup.Status.LastUpdateTimestamp = metav1.Now()
 				err = a.client.Update(context.TODO(), backup)
@@ -699,6 +706,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 				if err != nil {
 					time.Sleep(retrySleep)
 					continue
+				}
+				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+					return nil
 				}
 				backup.Status.Stage = stork_api.ApplicationBackupStageApplications
 				backup.Status.Status = stork_api.ApplicationBackupStatusInProgress
@@ -1035,6 +1045,9 @@ func (a *ApplicationBackupController) backupResources(
 			if err != nil {
 				time.Sleep(retrySleep)
 				continue
+			}
+			if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+				return nil
 			}
 			backup.Status.LastUpdateTimestamp = metav1.Now()
 			err = a.client.Update(context.TODO(), backup)
