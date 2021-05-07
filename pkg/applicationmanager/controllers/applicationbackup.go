@@ -88,10 +88,11 @@ type ApplicationBackupController struct {
 	recorder             record.EventRecorder
 	resourceCollector    resourcecollector.ResourceCollector
 	backupAdminNamespace string
+	reconcileTime        time.Duration
 }
 
 // Init Initialize the application backup controller
-func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNamespace string) error {
+func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNamespace string, syncTime int64) error {
 	err := a.createCRD()
 	if err != nil {
 		return err
@@ -102,7 +103,7 @@ func (a *ApplicationBackupController) Init(mgr manager.Manager, backupAdminNames
 		logrus.Errorf("Failed to perform recovery for backup rules: %v", err)
 		return err
 	}
-
+	a.reconcileTime = time.Duration(syncTime) * time.Second
 	return controllers.RegisterTo(mgr, "application-backup-controller", a, &stork_api.ApplicationBackup{})
 }
 
@@ -133,7 +134,7 @@ func (a *ApplicationBackupController) Reconcile(ctx context.Context, request rec
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
-	return reconcile.Result{RequeueAfter: controllers.DefaultRequeue}, nil
+	return reconcile.Result{RequeueAfter: a.reconcileTime}, nil
 }
 
 func setKind(snap *stork_api.ApplicationBackup) {

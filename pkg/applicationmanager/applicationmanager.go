@@ -27,15 +27,20 @@ type ApplicationManager struct {
 	Driver            volume.Driver
 	Recorder          record.EventRecorder
 	ResourceCollector resourcecollector.ResourceCollector
+	SyncInterval      int64
 }
 
 // Init Initializes the ApplicationManager and any children controller
-func (a *ApplicationManager) Init(mgr manager.Manager, adminNamespace string, stopChannel chan os.Signal) error {
+func (a *ApplicationManager) Init(
+	mgr manager.Manager,
+	adminNamespace string,
+	stopChannel chan os.Signal,
+	syncTime int64) error {
 	if err := a.createCRD(); err != nil {
 		return err
 	}
 	backupController := controllers.NewApplicationBackup(mgr, a.Recorder, a.ResourceCollector)
-	if err := backupController.Init(mgr, adminNamespace); err != nil {
+	if err := backupController.Init(mgr, adminNamespace, a.SyncInterval); err != nil {
 		return err
 	}
 

@@ -154,6 +154,11 @@ func main() {
 			Name:  "enable-metrics",
 			Usage: "Enable stork metrics collection for stork resources (default: true)",
 		},
+		cli.Int64Flag{
+			Name:  "sync-interval",
+			Value: 10,
+			Usage: "The interval in seconds to sync reconcilers (default: 10 seconds)",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -378,7 +383,7 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 			Recorder:          recorder,
 			ResourceCollector: resourceCollector,
 		}
-		if err := appManager.Init(mgr, adminNamespace, signalChan); err != nil {
+		if err := appManager.Init(mgr, adminNamespace, signalChan, c.Int64("sync-interval")); err != nil {
 			log.Fatalf("Error initializing application manager: %v", err)
 		}
 	}
