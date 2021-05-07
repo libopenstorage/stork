@@ -27,6 +27,7 @@ type ApplicationManager struct {
 	Driver            volume.Driver
 	Recorder          record.EventRecorder
 	ResourceCollector resourcecollector.ResourceCollector
+	RsyncTime         int64
 }
 
 // Init Initializes the ApplicationManager and any children controller
@@ -35,7 +36,7 @@ func (a *ApplicationManager) Init(mgr manager.Manager, adminNamespace string, st
 		return err
 	}
 	backupController := controllers.NewApplicationBackup(mgr, a.Recorder, a.ResourceCollector)
-	if err := backupController.Init(mgr, adminNamespace); err != nil {
+	if err := backupController.Init(mgr, adminNamespace, a.RsyncTime); err != nil {
 		return err
 	}
 
