@@ -5,12 +5,16 @@ import (
 	"errors"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/diags"
+
 	"github.com/libopenstorage/gossip/types"
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/objectstore"
 	"github.com/libopenstorage/openstorage/osdconfig"
 	"github.com/libopenstorage/openstorage/pkg/auth"
 	"github.com/libopenstorage/openstorage/pkg/clusterdomain"
+	"github.com/libopenstorage/openstorage/pkg/job"
+	"github.com/libopenstorage/openstorage/pkg/nodedrain"
 	sched "github.com/libopenstorage/openstorage/schedpolicy"
 	"github.com/libopenstorage/openstorage/secrets"
 	"github.com/portworx/kvdb"
@@ -49,6 +53,12 @@ type ClusterServerConfiguration struct {
 	ConfigClusterDomainProvider clusterdomain.ClusterDomainProvider
 	// holds implementation to the OpenStoragePoolServer interface
 	ConfigStoragePoolProvider api.OpenStoragePoolServer
+	// holds implementation to the JobProvider interface
+	ConfigJobProvider job.Provider
+	// holds implementation to the NodeDrainProvider interface
+	ConfigNodeDrainProvider nodedrain.Provider
+	// holds the actual implementation to the SDK OpenStorageDiags interface
+	ConfigDiagsProvider diags.Provider
 }
 
 // NodeEntry is used to discover other nodes in the cluster
@@ -68,6 +78,9 @@ type NodeEntry struct {
 	GossipPort        string
 	ClusterDomain     string
 	HWType            api.HardwareType
+
+	// Determine if the node is secure with authentication and authorization
+	SecurityStatus api.StorageNode_SecurityStatus
 }
 
 // ClusterInfo is the basic info about the cluster and its nodes
@@ -381,6 +394,9 @@ type Cluster interface {
 	sched.SchedulePolicyProvider
 	objectstore.ObjectStore
 	api.OpenStoragePoolServer
+	job.Provider
+	nodedrain.Provider
+	diags.Provider
 }
 
 // NullClusterListener is a NULL implementation of ClusterListener functions
