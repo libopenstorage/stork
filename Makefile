@@ -17,7 +17,7 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
-RELEASE_VER := 2.6.3
+RELEASE_VER := 2.6.4
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
 BIN         :=$(BASE_DIR)/bin
@@ -140,4 +140,3 @@ clean:
 	@echo "Deleting image "$(CMD_EXECUTOR_IMG)
 	-sudo docker rmi -f $(CMD_EXECUTOR_IMG)
 	go clean -i $(PKGS)
-
