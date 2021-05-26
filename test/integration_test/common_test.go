@@ -59,18 +59,19 @@ import (
 )
 
 const (
-	nodeDriverName        = "ssh"
-	schedulerDriverName   = "k8s"
-	remotePairName        = "remoteclusterpair"
-	srcConfig             = "sourceconfigmap"
-	destConfig            = "destinationconfigmap"
-	specDir               = "./specs"
-	defaultClusterPairDir = "cluster-pair"
-	pairFileName          = "cluster-pair.yaml"
-	remoteFilePath        = "/tmp/kubeconfig"
-	configMapSyncWaitTime = 3 * time.Second
-	defaultSchedulerName  = "default-scheduler"
-	bucketPrefix          = "stork-test"
+	nodeDriverName              = "ssh"
+	schedulerDriverName         = "k8s"
+	remotePairName              = "remoteclusterpair"
+	srcConfig                   = "sourceconfigmap"
+	destConfig                  = "destinationconfigmap"
+	specDir                     = "./specs"
+	defaultClusterPairDir       = "cluster-pair"
+	bidirectionalClusterPairDir = "bidirectional-cluster-pair"
+	pairFileName                = "cluster-pair.yaml"
+	remoteFilePath              = "/tmp/kubeconfig"
+	configMapSyncWaitTime       = 3 * time.Second
+	defaultSchedulerName        = "default-scheduler"
+	bucketPrefix                = "stork-test"
 
 	// TODO: Figure out a way to communicate with PX nodes from other cluster
 	nodeScore   = 100
@@ -340,6 +341,21 @@ func dumpRemoteKubeConfig(configObject string) error {
 	return ioutil.WriteFile(remoteFilePath, []byte(config), 0644)
 }
 
+func dumpKubeConfigPath(configObject string, path string) error {
+	cm, err := core.Instance().GetConfigMap(configObject, "kube-system")
+	if err != nil {
+		logrus.Errorf("Error reading config map: %v", err)
+		return err
+	}
+	config := cm.Data["kubeconfig"]
+	if len(config) == 0 {
+		configErr := "Error reading kubeconfig: found empty remoteConfig in config map"
+		return fmt.Errorf(configErr)
+	}
+	// dump to remoteFilePath
+	return ioutil.WriteFile(path, []byte(config), 0644)
+}
+
 func setRemoteConfig(kubeConfig string) error {
 
 	var config *rest.Config
@@ -559,6 +575,127 @@ func scheduleClusterPair(ctx *scheduler.Context, skipStorage, resetConfig bool, 
 	return nil
 }
 
+// Create a cluster pair from source to destination and another cluster pair from destination to source
+func scheduleBidirectionalClusterPair(cpName, cpNamespace string) error {
+	// Setting kubeconfig to source because we will create bidirectional cluster pair based on source as reference
+	err := setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+	}
+
+	// Create namespace for the cluster pair on source cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to create namespace %s on source cluster", cpNamespace)
+	}
+
+	// Create directory to store kubeconfig files
+	err = os.MkdirAll(path.Join(specDir, bidirectionalClusterPairDir), 0777)
+	if err != nil {
+		logrus.Errorf("Unable to make directory (%v) for cluster pair spec: %v", specDir+"/"+bidirectionalClusterPairDir, err)
+		return err
+	}
+	srcKubeconfigPath := path.Join(specDir, bidirectionalClusterPairDir, "src_kubeconfig")
+	srcKubeConfig, err := os.Create(srcKubeconfigPath)
+	if err != nil {
+		logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+		return err
+	}
+
+	defer func() {
+		err := srcKubeConfig.Close()
+		if err != nil {
+			logrus.Errorf("Error closing source kubeconfig file: %v", err)
+		}
+	}()
+
+	// Dump source config to the directory created before
+	err = dumpKubeConfigPath(srcConfig, srcKubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("unable to dump remote config while setting source config: %v", err)
+	}
+
+	// Get cluster pair details for source cluster
+	srcInfo, err := volumeDriver.GetClusterPairingInfo()
+	if err != nil {
+		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
+		return err
+	}
+
+	destKubeconfigPath := path.Join(specDir, bidirectionalClusterPairDir, "dest_kubeconfig")
+	destKubeConfig, err := os.Create(destKubeconfigPath)
+	if err != nil {
+		logrus.Errorf("Unable to write source kubeconfig file: %v", err)
+		return err
+	}
+
+	defer func() {
+		err := destKubeConfig.Close()
+		if err != nil {
+			logrus.Errorf("Error closing destination kubeconfig file: %v", err)
+		}
+	}()
+
+	// Dump destination config to the directory created before
+	err = dumpKubeConfigPath(destConfig, destKubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("unable to dump remote config while setting destination config: %v", err)
+	}
+
+	err = setDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+	}
+
+	// Get cluster pair details for destination cluster
+	destInfo, err := volumeDriver.GetClusterPairingInfo()
+	if err != nil {
+		logrus.Errorf("Error writing to clusterpair.yml: %v", err)
+		return err
+	}
+
+	// Create namespace for the cluster pair on destination cluster
+	_, err = core.Instance().CreateNamespace(&v1.Namespace{
+		ObjectMeta: meta_v1.ObjectMeta{
+			Name: cpNamespace,
+			Labels: map[string]string{
+				"creator": "stork-test",
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to create namespace %s on destination cluster", cpNamespace)
+	}
+
+	err = setSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("during cluster pair setting kubeconfig to source failed %v", err)
+	}
+
+	// Create source --> destination and destination --> cluster pairs using storkctl
+	factory := storkctl.NewFactory()
+	cmd := storkctl.NewCommand(factory, os.Stdin, os.Stdout, os.Stderr)
+	cmd.SetArgs([]string{"create", "clusterpair", "-n", cpNamespace, cpName,
+		"--src-kube-file", srcKubeconfigPath,
+		"--src-ip", srcInfo[clusterIP],
+		"--src-token", srcInfo[tokenKey],
+		"--dest-kube-file", destKubeconfigPath,
+		"--dest-ip", destInfo[clusterIP],
+		"--dest-token", destInfo[tokenKey],
+	})
+
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("Creation of bidirectional cluster pair using storkctl failed: %v", err)
+	}
+	return nil
+}
 func setMockTime(t *time.Time) error {
 	timeString := ""
 	if t != nil {

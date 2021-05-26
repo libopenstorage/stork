@@ -60,6 +60,7 @@ func testMigration(t *testing.T) {
 	}
 	t.Run("clusterPairFailuresTest", clusterPairFailuresTest)
 	t.Run("scaleTest", migrationScaleTest)
+	t.Run("bidirectionalClusterPairTest", bidirectionalClusterPairTest)
 
 	err = setRemoteConfig("")
 	require.NoError(t, err, "setting kubeconfig to default failed")
@@ -922,6 +923,52 @@ func clusterPairFailuresTest(t *testing.T) {
 
 }
 
+func bidirectionalClusterPairTest(t *testing.T) {
+	clusterPairName := "birectional-cluster-pair"
+	clusterPairNamespace := "bidirectional-clusterpair-ns"
+
+	// Scheduler cluster pairs: source cluster --> destination cluster and destination cluster --> source cluster
+	err := scheduleBidirectionalClusterPair(clusterPairName, clusterPairNamespace)
+	require.NoError(t, err, "failed to set bidirectional cluster pair: %v", err)
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+	_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+	require.NoError(t, err, "failed to get bidirectional cluster pair on source: %v", err)
+
+	err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "failed to validate bidirectional cluster pair on source: %v", err)
+
+	logrus.Infof("Successfully validated cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+
+	// Clean up on source cluster
+	err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
+	require.NoError(t, err, "Error deleting clusterpair on source cluster")
+
+	logrus.Infof("Successfully deleted cluster pair %s in namespace %s on source cluster", clusterPairName, clusterPairNamespace)
+
+	err = setDestinationKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to destination cluster: %v", err)
+
+	_, err = storkops.Instance().GetClusterPair(clusterPairName, clusterPairNamespace)
+	require.NoError(t, err, "failed to get bidirectional cluster pair on destination: %v", err)
+
+	err = storkops.Instance().ValidateClusterPair(clusterPairName, clusterPairNamespace, defaultWaitTimeout, defaultWaitInterval)
+	require.NoError(t, err, "failed to validate bidirectional cluster pair on destination: %v", err)
+
+	logrus.Infof("Successfully validated cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
+
+	// Clean up on destination cluster
+	err = storkops.Instance().DeleteClusterPair(clusterPairName, clusterPairNamespace)
+	require.NoError(t, err, "Error deleting clusterpair on destination cluster")
+
+	logrus.Infof("Successfully deleted cluster pair %s in namespace %s on destination cluster", clusterPairName, clusterPairNamespace)
+
+	err = setSourceKubeConfig()
+	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
+
+}
 func createMigration(
 	t *testing.T,
 	name string,
