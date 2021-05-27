@@ -782,15 +782,16 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 	}
 
 	terminationChannels := make([]chan bool, 0)
-	for _, ns := range backup.Spec.Namespaces {
-		r, err := storkops.Instance().GetRule(backup.Spec.PreExecRule, ns)
-		if err != nil {
-			for _, channel := range terminationChannels {
-				channel <- true
-			}
-			return nil, false, err
+	r, err := storkops.Instance().GetRule(backup.Spec.PreExecRule, backup.Namespace)
+	if err != nil {
+		// TODO: For now keep this as is from the existing code, not sure the use of this for loop
+		// as it currently doesn't get executed
+		for _, channel := range terminationChannels {
+			channel <- true
 		}
-
+		return nil, false, err
+	}
+	for _, ns := range backup.Spec.Namespaces {
 		ch, err := rule.ExecuteRule(r, rule.PreExecRule, backup, ns)
 		if err != nil {
 			for _, channel := range terminationChannels {
@@ -823,12 +824,11 @@ func (a *ApplicationBackupController) runPreExecRule(backup *stork_api.Applicati
 }
 
 func (a *ApplicationBackupController) runPostExecRule(backup *stork_api.ApplicationBackup) error {
+	r, err := storkops.Instance().GetRule(backup.Spec.PostExecRule, backup.Namespace)
+	if err != nil {
+		return err
+	}
 	for _, ns := range backup.Spec.Namespaces {
-		r, err := storkops.Instance().GetRule(backup.Spec.PostExecRule, ns)
-		if err != nil {
-			return err
-		}
-
 		_, err = rule.ExecuteRule(r, rule.PostExecRule, backup, ns)
 		if err != nil {
 			return fmt.Errorf("error executing PreExecRule for namespace %v: %v", ns, err)
