@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	ocpclientset "github.com/openshift/client-go/apps/clientset/versioned"
+	ocpconfigclientset "github.com/openshift/client-go/config/clientset/versioned"
 	ocpsecurityclientset "github.com/openshift/client-go/security/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -24,7 +25,7 @@ var (
 type Ops interface {
 	DeploymentConfigOps
 	SecurityContextConstraintsOps
-
+	ConfigOps
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
 }
@@ -45,11 +46,13 @@ func SetInstance(i Ops) {
 }
 
 // New builds a new client.
-func New(kube kubernetes.Interface, ocp ocpclientset.Interface, ocpsecurity ocpsecurityclientset.Interface) *Client {
+func New(kube kubernetes.Interface, ocp ocpclientset.Interface, ocpsecurity ocpsecurityclientset.Interface,
+	ocpConfigClient ocpconfigclientset.Interface) *Client {
 	return &Client{
 		kube:              kube,
 		ocpClient:         ocp,
 		ocpSecurityClient: ocpsecurity,
+		ocpConfigClient:   ocpConfigClient,
 	}
 }
 
@@ -70,10 +73,16 @@ func NewForConfig(c *rest.Config) (*Client, error) {
 		return nil, err
 	}
 
+	ocpConfigClient, err := ocpconfigclientset.NewForConfig(c)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Client{
 		kube:              kube,
 		ocpClient:         ocpClient,
 		ocpSecurityClient: ocpSecurityClient,
+		ocpConfigClient:   ocpConfigClient,
 	}, nil
 }
 
@@ -94,6 +103,7 @@ type Client struct {
 
 	kube              kubernetes.Interface
 	ocpClient         ocpclientset.Interface
+	ocpConfigClient   ocpconfigclientset.Interface
 	ocpSecurityClient ocpsecurityclientset.Interface
 }
 
@@ -104,11 +114,12 @@ func (c *Client) SetConfig(cfg *rest.Config) {
 	c.kube = nil
 	c.ocpClient = nil
 	c.ocpSecurityClient = nil
+	c.ocpConfigClient = nil
 }
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
-	if c.kube != nil && c.ocpClient != nil && c.ocpSecurityClient != nil {
+	if c.kube != nil && c.ocpClient != nil && c.ocpSecurityClient != nil && c.ocpConfigClient != nil {
 		return nil
 	}
 
@@ -173,6 +184,11 @@ func (c *Client) loadClient() error {
 	}
 
 	c.ocpSecurityClient, err = ocpsecurityclientset.NewForConfig(c.config)
+	if err != nil {
+		return err
+	}
+
+	c.ocpConfigClient, err = ocpconfigclientset.NewForConfig(c.config)
 	if err != nil {
 		return err
 	}

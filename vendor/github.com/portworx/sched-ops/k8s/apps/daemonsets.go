@@ -16,7 +16,7 @@ import (
 // DaemonSetOps is an interface to perform k8s daemon set operations
 type DaemonSetOps interface {
 	// CreateDaemonSet creates the given daemonset
-	CreateDaemonSet(ds *appsv1.DaemonSet) (*appsv1.DaemonSet, error)
+	CreateDaemonSet(ds *appsv1.DaemonSet, opts metav1.CreateOptions) (*appsv1.DaemonSet, error)
 	// ListDaemonSets lists all daemonsets in given namespace
 	ListDaemonSets(namespace string, listOpts metav1.ListOptions) ([]appsv1.DaemonSet, error)
 	// GetDaemonSet gets the the daemon set with given name
@@ -32,12 +32,12 @@ type DaemonSetOps interface {
 }
 
 // CreateDaemonSet creates the given daemonset
-func (c *Client) CreateDaemonSet(ds *appsv1.DaemonSet) (*appsv1.DaemonSet, error) {
+func (c *Client) CreateDaemonSet(ds *appsv1.DaemonSet, opts metav1.CreateOptions) (*appsv1.DaemonSet, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
 
-	return c.apps.DaemonSets(ds.Namespace).Create(context.TODO(), ds, metav1.CreateOptions{})
+	return c.apps.DaemonSets(ds.Namespace).Create(context.TODO(), ds, opts)
 }
 
 // ListDaemonSets lists all daemonsets in given namespace

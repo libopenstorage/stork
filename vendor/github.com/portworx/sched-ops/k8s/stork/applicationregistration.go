@@ -1,6 +1,7 @@
 package stork
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -27,11 +28,11 @@ type ApplicationRegistrationOps interface {
 }
 
 // CreateApplicationRegistration creates the ApplicationRegistration
-func (c *Client) CreateApplicationRegistration(ApplicationRegistration *storkv1alpha1.ApplicationRegistration) (*storkv1alpha1.ApplicationRegistration, error) {
+func (c *Client) CreateApplicationRegistration(applicationRegistration *storkv1alpha1.ApplicationRegistration) (*storkv1alpha1.ApplicationRegistration, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRegistrations().Create(ApplicationRegistration)
+	return c.stork.StorkV1alpha1().ApplicationRegistrations().Create(context.TODO(), applicationRegistration, metav1.CreateOptions{})
 }
 
 // GetApplicationRegistration gets the ApplicationRegistration
@@ -39,7 +40,7 @@ func (c *Client) GetApplicationRegistration(name string) (*storkv1alpha1.Applica
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRegistrations().Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ApplicationRegistrations().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListApplicationRegistrations lists all the ApplicationRegistrations
@@ -47,16 +48,16 @@ func (c *Client) ListApplicationRegistrations() (*storkv1alpha1.ApplicationRegis
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRegistrations().List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ApplicationRegistrations().List(context.TODO(), metav1.ListOptions{})
 
 }
 
 // UpdateApplicationRegistration updates the ApplicationRegistration
-func (c *Client) UpdateApplicationRegistration(ApplicationRegistration *storkv1alpha1.ApplicationRegistration) (*storkv1alpha1.ApplicationRegistration, error) {
+func (c *Client) UpdateApplicationRegistration(applicationRegistration *storkv1alpha1.ApplicationRegistration) (*storkv1alpha1.ApplicationRegistration, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRegistrations().Update(ApplicationRegistration)
+	return c.stork.StorkV1alpha1().ApplicationRegistrations().Update(context.TODO(), applicationRegistration, metav1.UpdateOptions{})
 }
 
 // DeleteApplicationRegistration deletes the ApplicationRegistration
@@ -64,7 +65,7 @@ func (c *Client) DeleteApplicationRegistration(name string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().ApplicationRegistrations().Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ApplicationRegistrations().Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

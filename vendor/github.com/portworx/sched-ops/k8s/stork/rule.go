@@ -1,6 +1,8 @@
 package stork
 
 import (
+	"context"
+
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -22,7 +24,7 @@ func (c *Client) GetRule(name, namespace string) (*storkv1alpha1.Rule, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().Rules(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().Rules(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // CreateRule creates the given stork rule
@@ -30,7 +32,7 @@ func (c *Client) CreateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, erro
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().Rules(rule.GetNamespace()).Create(rule)
+	return c.stork.StorkV1alpha1().Rules(rule.GetNamespace()).Create(context.TODO(), rule, metav1.CreateOptions{})
 }
 
 // UpdateRule updates the given stork rule
@@ -38,7 +40,7 @@ func (c *Client) UpdateRule(rule *storkv1alpha1.Rule) (*storkv1alpha1.Rule, erro
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().Rules(rule.GetNamespace()).Update(rule)
+	return c.stork.StorkV1alpha1().Rules(rule.GetNamespace()).Update(context.TODO(), rule, metav1.UpdateOptions{})
 }
 
 // DeleteRule deletes the given stork rule
@@ -46,7 +48,7 @@ func (c *Client) DeleteRule(name, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().Rules(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().Rules(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

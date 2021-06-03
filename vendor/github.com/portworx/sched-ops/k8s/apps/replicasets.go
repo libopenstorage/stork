@@ -18,7 +18,7 @@ import (
 // ReplicaSetOps is an interface to perform k8s daemon set operations
 type ReplicaSetOps interface {
 	// CreateReplicaSet creates the given ReplicaSet
-	CreateReplicaSet(rs *appsv1.ReplicaSet) (*appsv1.ReplicaSet, error)
+	CreateReplicaSet(rs *appsv1.ReplicaSet, opts metav1.CreateOptions) (*appsv1.ReplicaSet, error)
 	// ListReplicaSets lists all ReplicaSets in given namespace
 	ListReplicaSets(namespace string, listOpts metav1.ListOptions) ([]appsv1.ReplicaSet, error)
 	// GetReplicaSet gets the the daemon set with given name
@@ -36,12 +36,12 @@ type ReplicaSetOps interface {
 }
 
 // CreateReplicaSet creates the given ReplicaSet
-func (c *Client) CreateReplicaSet(rs *appsv1.ReplicaSet) (*appsv1.ReplicaSet, error) {
+func (c *Client) CreateReplicaSet(rs *appsv1.ReplicaSet, opts metav1.CreateOptions) (*appsv1.ReplicaSet, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
 
-	return c.apps.ReplicaSets(rs.Namespace).Create(context.TODO(), rs, metav1.CreateOptions{})
+	return c.apps.ReplicaSets(rs.Namespace).Create(context.TODO(), rs, opts)
 }
 
 // ListReplicaSets lists all ReplicaSets in given namespace
@@ -186,10 +186,14 @@ func (c *Client) DeleteReplicaSet(name, namespace string) error {
 
 // GetReplicaSetByDeployment get ReplicaSet for a Given Deployment
 func (c *Client) GetReplicaSetByDeployment(deployment *appsv1.Deployment) (*appsv1.ReplicaSet, error) {
+	dep, err := c.GetDeployment(deployment.Name, deployment.Namespace)
+	if err != nil {
+		return nil, err
+	}
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	rsets, err := c.apps.ReplicaSets(deployment.Namespace).List(context.TODO(), metav1.ListOptions{})
+	rsets, err := c.apps.ReplicaSets(dep.Namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +201,7 @@ func (c *Client) GetReplicaSetByDeployment(deployment *appsv1.Deployment) (*apps
 	revisionAnnotation := "deployment.kubernetes.io/revision"
 	for _, rs := range rsets.Items {
 		for _, ownerReference := range rs.OwnerReferences {
-			if ownerReference.Name == deployment.Name && deployment.Annotations[revisionAnnotation] == rs.Annotations[revisionAnnotation] {
+			if ownerReference.Name == dep.Name && dep.Annotations[revisionAnnotation] == rs.Annotations[revisionAnnotation] {
 				return &rs, nil
 			}
 		}

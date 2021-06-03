@@ -1,6 +1,7 @@
 package stork
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -34,7 +35,7 @@ func (c *Client) CreateApplicationClone(clone *storkv1alpha1.ApplicationClone) (
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationClones(clone.Namespace).Create(clone)
+	return c.stork.StorkV1alpha1().ApplicationClones(clone.Namespace).Create(context.TODO(), clone, metav1.CreateOptions{})
 }
 
 // GetApplicationClone gets the ApplicationClone
@@ -42,7 +43,7 @@ func (c *Client) GetApplicationClone(name string, namespace string) (*storkv1alp
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationClones(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ApplicationClones(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListApplicationClones lists all the ApplicationClones
@@ -50,7 +51,7 @@ func (c *Client) ListApplicationClones(namespace string) (*storkv1alpha1.Applica
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationClones(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ApplicationClones(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // DeleteApplicationClone deletes the ApplicationClone
@@ -58,7 +59,7 @@ func (c *Client) DeleteApplicationClone(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().ApplicationClones(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ApplicationClones(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -68,7 +69,7 @@ func (c *Client) UpdateApplicationClone(clone *storkv1alpha1.ApplicationClone) (
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ApplicationClones(clone.Namespace).Update(clone)
+	return c.stork.StorkV1alpha1().ApplicationClones(clone.Namespace).Update(context.TODO(), clone, metav1.UpdateOptions{})
 }
 
 // ValidateApplicationClone validates the ApplicationClone
@@ -77,7 +78,7 @@ func (c *Client) ValidateApplicationClone(name, namespace string, timeout, retry
 		return err
 	}
 	t := func() (interface{}, bool, error) {
-		applicationclone, err := c.stork.StorkV1alpha1().ApplicationClones(namespace).Get(name, metav1.GetOptions{})
+		applicationclone, err := c.stork.StorkV1alpha1().ApplicationClones(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return "", true, err
 		}
@@ -104,7 +105,7 @@ func (c *Client) WatchApplicationClone(namespace string, fn WatchFunc, listOptio
 	}
 
 	listOptions.Watch = true
-	watchInterface, err := c.stork.StorkV1alpha1().ApplicationClones(namespace).Watch(listOptions)
+	watchInterface, err := c.stork.StorkV1alpha1().ApplicationClones(namespace).Watch(context.TODO(), listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for application clones")
 		return err
