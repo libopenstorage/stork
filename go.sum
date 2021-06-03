@@ -815,6 +815,8 @@ github.com/libopenstorage/openstorage v8.0.1-0.20190926212733-daaed777713e+incom
 github.com/libopenstorage/openstorage v8.0.1-0.20200730032300-bef55ec5700c+incompatible/go.mod h1:Sp1sIObHjat1BeXhfMqLZ14wnOzEhNx2YQedreMcUyc=
 github.com/libopenstorage/openstorage v8.0.1-0.20200914191223-6fb8d163a67c+incompatible h1:bfqlyUfB2AhjS/dXM2DKliaG6w6j0efMow2cR7rU/cE=
 github.com/libopenstorage/openstorage v8.0.1-0.20200914191223-6fb8d163a67c+incompatible/go.mod h1:Sp1sIObHjat1BeXhfMqLZ14wnOzEhNx2YQedreMcUyc=
+github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible h1:/WHzMLA5HXNKrZa3gLb8rNDBDGgVSEeeFQ1p4ndKHvM=
+github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible/go.mod h1:Sp1sIObHjat1BeXhfMqLZ14wnOzEhNx2YQedreMcUyc=
 github.com/libopenstorage/operator v0.0.0-20191009190641-8642de5d0812/go.mod h1:Qh+VXOB6hj60VmlgsmY+R1w+dFuHK246UueM4SAqZG0=
 github.com/libopenstorage/operator v0.0.0-20200725001727-48d03e197117/go.mod h1:Qh+VXOB6hj60VmlgsmY+R1w+dFuHK246UueM4SAqZG0=
 github.com/libopenstorage/operator v0.0.0-20210303221358-0bb211a9908c/go.mod h1:+83bY859mKGwHmWW8TPNYGrXAgt/hXOX2Ia7EytK17I=

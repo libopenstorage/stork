@@ -29,19 +29,26 @@ func init() {
 
 // swagger:model
 type ClusterConfig struct {
-	ClusterId          string
-	ClusterUuid        string
-	NodeId             string
-	SchedulerNodeName  string
-	MgtIface           string
-	DataIface          string
-	DefaultDriver      string
-	MgmtIp             string
-	DataIp             string
-	ManagementURL      string
-	FluentDHost        string
-	SystemSharedSecret string
-	HWType             api.HardwareType
+	ClusterId            string
+	ClusterUuid          string
+	NodeId               string
+	SchedulerNodeName    string
+	MgtIface             string
+	DataIface            string
+	DefaultDriver        string
+	MgmtIp               string
+	DataIp               string
+	ManagementURL        string
+	FluentDHost          string
+	SystemSharedSecret   string
+	AllowSecurityRemoval bool
+	HWType               api.HardwareType
+	// QuorumTimeoutInSeconds configures time after which an
+	// out of quorum node will restart
+	QuorumTimeoutInSeconds int
+	// SnapLockTryDurationInMinutes is the time for which
+	// the cluster manager will try acquiring a lock for cluster snapshot
+	SnapLockTryDurationInMinutes int
 }
 
 // swagger:model
