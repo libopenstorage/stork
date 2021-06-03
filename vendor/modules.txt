@@ -329,7 +329,7 @@ github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/scheme
 github.com/libopenstorage/autopilot-api/pkg/client/clientset/versioned/typed/autopilot/v1alpha1
 # github.com/libopenstorage/gossip v0.0.0-20190507031959-c26073a01952
 github.com/libopenstorage/gossip/types
-# github.com/libopenstorage/openstorage v8.0.1-0.20200914191223-6fb8d163a67c+incompatible
+# github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
 ## explicit
 github.com/libopenstorage/openstorage/api
 github.com/libopenstorage/openstorage/api/client
@@ -345,12 +345,16 @@ github.com/libopenstorage/openstorage/pkg/auth
 github.com/libopenstorage/openstorage/pkg/auth/secrets
 github.com/libopenstorage/openstorage/pkg/clusterdomain
 github.com/libopenstorage/openstorage/pkg/dbg
+github.com/libopenstorage/openstorage/pkg/defaultcontext
+github.com/libopenstorage/openstorage/pkg/diags
 github.com/libopenstorage/openstorage/pkg/grpcserver
+github.com/libopenstorage/openstorage/pkg/grpcutil
+github.com/libopenstorage/openstorage/pkg/job
+github.com/libopenstorage/openstorage/pkg/nodedrain
 github.com/libopenstorage/openstorage/pkg/parser
 github.com/libopenstorage/openstorage/pkg/sched
 github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
-github.com/libopenstorage/openstorage/pkg/util
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
 github.com/libopenstorage/openstorage/volume
