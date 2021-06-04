@@ -14,7 +14,7 @@ allowVolumeExpansion: true
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: portworx-sc-db-repl3
+  name: portworx-sc-db-repl3-wp
 provisioner: kubernetes.io/portworx-volume
 parameters:
   repl: "3"
@@ -42,7 +42,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: mysql-pvc-1-wordpress
   annotations:
-    volume.beta.kubernetes.io/storage-class: portworx-sc-db-repl3
+    volume.beta.kubernetes.io/storage-class: portworx-sc-db-repl3-wp
 spec:
   accessModes:
     - ReadWriteOnce
