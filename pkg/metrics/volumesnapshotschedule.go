@@ -48,9 +48,9 @@ func watchVolumeSnapshotScheduleCR(object runtime.Object) error {
 		return nil
 	}
 	if *suspend {
-		volumeSnapshotScheduleStatusCounter.With(labels).Set(0)
-	} else {
 		volumeSnapshotScheduleStatusCounter.With(labels).Set(1)
+	} else {
+		volumeSnapshotScheduleStatusCounter.With(labels).Set(0)
 	}
 	return nil
 }
