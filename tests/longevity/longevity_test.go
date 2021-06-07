@@ -56,6 +56,7 @@ var _ = Describe("{Longevity}", func() {
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions := map[string]func([]*scheduler.Context, *chan *EventRecord){
+		DeployApps:       TriggerDeployNewApps,
 		RebootNode:       TriggerRebootNodes,
 		RestartVolDriver: TriggerRestartVolDriver,
 		CrashVolDriver:   TriggerCrashVolDriver,
@@ -71,12 +72,7 @@ var _ = Describe("{Longevity}", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		Step("Deploy applications", func() {
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("longevity-%d", i))...)
-			}
-			ValidateApplications(contexts)
-		})
+		TriggerDeployNewApps([]*scheduler.Context{}, &triggerEventsChan)
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
@@ -328,7 +324,19 @@ func populateIntervals() {
 	triggerInterval[HADecrease][2] = 9 * baseInterval
 	triggerInterval[HADecrease][1] = 10 * baseInterval
 
+	triggerInterval[DeployApps][10] = 1 * baseInterval
+	triggerInterval[DeployApps][9] = 2 * baseInterval
+	triggerInterval[DeployApps][8] = 3 * baseInterval
+	triggerInterval[DeployApps][7] = 4 * baseInterval
+	triggerInterval[DeployApps][6] = 5 * baseInterval
+	triggerInterval[DeployApps][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[DeployApps][4] = 7 * baseInterval
+	triggerInterval[DeployApps][3] = 8 * baseInterval
+	triggerInterval[DeployApps][2] = 9 * baseInterval
+	triggerInterval[DeployApps][1] = 10 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
+	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
 	triggerInterval[CrashVolDriver][0] = 0
 	triggerInterval[HAIncrease][0] = 0
