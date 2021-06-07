@@ -50,13 +50,13 @@ func startSchedulePolicyCache() error {
 	)
 	go controller.Run(wait.NeverStop)
 
-	watchlist = cache.NewListWatchFromClient(restClient, stork_api.NamespacedSchedulePolicyResourcePlural, v1.NamespaceAll, fields.Everything())
+	nswatchlist := cache.NewListWatchFromClient(restClient, stork_api.NamespacedSchedulePolicyResourcePlural, v1.NamespaceAll, fields.Everything())
 	lw = &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			return watchlist.List(options)
+			return nswatchlist.List(options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			return watchlist.Watch(options)
+			return nswatchlist.Watch(options)
 		},
 	}
 	namespacedSchedulePolicyStore, controller = cache.NewInformer(lw, &stork_api.NamespacedSchedulePolicy{}, resyncPeriod,
