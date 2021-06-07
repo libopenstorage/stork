@@ -68,8 +68,12 @@ spec:
       containers:
       - name: elasticsearch
         resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
           requests:
-            memory: 1Gi
+            cpu: "1"
+            memory: 4Gi
         securityContext:
           privileged: true
           runAsUser: 1000

@@ -21,6 +21,13 @@ spec:
       - name: fio
         image: portworx/fio_drv
         command: ["fio"]
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
         args: ["/configs/fio.job", "--status-interval=1", "--eta=never", "--output=/logs/fio.log"]
         volumeMounts:
         - name: fio-config-vol

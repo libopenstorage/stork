@@ -17,6 +17,13 @@ spec:
       containers:
       - name: es-rally
         image: disrani/es-rally:latest
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
         env:
         - name: POD_NAMESPACE
           valueFrom:

@@ -260,6 +260,7 @@ func populateIntervals() {
 	triggerInterval[HADecrease] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
+	triggerInterval[DeployApps] = map[int]time.Duration{}
 
 	baseInterval := 10 * time.Minute
 	triggerInterval[RebootNode][10] = 1 * baseInterval
