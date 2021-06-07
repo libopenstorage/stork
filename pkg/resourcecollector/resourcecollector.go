@@ -468,6 +468,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.ingressToBeCollected(object)
 	case "ConfigMap":
 		return r.configmapToBeCollected(object)
+	case "ResourceQuota":
+		return r.resourceQuotaToBeCollected(object)
 	}
 
 	return true, nil
