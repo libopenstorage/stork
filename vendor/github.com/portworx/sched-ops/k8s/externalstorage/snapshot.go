@@ -8,8 +8,15 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
+
+// WatchFunc is a callback provided to the Watch functions
+// which is invoked when the given object is changed.
+type WatchFunc func(object runtime.Object) error
 
 // SnapshotOps is an interface to perform k8s VolumeSnapshot operations
 type SnapshotOps interface {
@@ -37,6 +44,8 @@ type SnapshotOps interface {
 	DeleteSnapshotData(name string) error
 	// ValidateSnapshotData validates the given snapshot data object
 	ValidateSnapshotData(name string, retry bool, timeout, retryInterval time.Duration) error
+	// sets up a watcher that listens for changes on volume snapshots
+	WatchVolumeSnapshot(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 }
 
 // CreateSnapshot creates the given snapshot
@@ -269,4 +278,23 @@ func (c *Client) DeleteSnapshotData(name string) error {
 		Name(name).
 		Resource(snapv1.VolumeSnapshotDataResourcePlural).
 		Do(context.TODO()).Error()
+}
+
+func (c *Client) WatchVolumeSnapshot(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+
+	watchInterface, err := c.snap.Get().Resource(snapv1.VolumeSnapshotResourcePlural).Namespace(namespace).Watch(context.TODO())
+
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for snapshot schedules")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &snapv1.VolumeSnapshot{}, "", fn, listOptions)
+	return nil
 }

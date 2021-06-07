@@ -7,6 +7,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	k8sextops "github.com/portworx/sched-ops/k8s/externalstorage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +20,8 @@ const (
 	metricNamespace = "namespace"
 	// metricSchedule for stork prometheus metrics
 	metricSchedule = "schedule"
+	// metricPolicy for stork prometheus metrics
+	metricPolicy = "policy"
 	// waitInterval to wait for crd registration
 	waitInterval = 5 * time.Second
 )
@@ -60,7 +63,13 @@ func StartMetrics(enableApplicationController, enableMigrationController bool) e
 				logrus.Errorf("failed to watch applicationclones due to: %v", err)
 			}
 			if err := storkops.Instance().WatchApplicationBackupSchedule("", watchBackupScheduleCR, metav1.ListOptions{}); err != nil {
-				logrus.Errorf("failed to watch applicationbackup scheduless due to: %v", err)
+				logrus.Errorf("failed to watch applicationbackup schedules due to: %v", err)
+			}
+			if err := storkops.Instance().WatchVolumeSnapshotSchedule("", watchVolumeSnapshotScheduleCR, metav1.ListOptions{}); err != nil {
+				logrus.Errorf("failed to watch volume snapshot schedules due to: %v", err)
+			}
+			if err := k8sextops.Instance().WatchVolumeSnapshot("", watchVolumeSnapshotCR, metav1.ListOptions{}); err != nil {
+				logrus.Errorf("failed to watch volume snapshot due to: %v", err)
 			}
 			logrus.Infof("started metrics collection for applicationcontrollers")
 		}

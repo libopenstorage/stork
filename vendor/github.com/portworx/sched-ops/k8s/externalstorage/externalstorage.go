@@ -4,8 +4,15 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	snapclient "github.com/kubernetes-incubator/external-storage/snapshot/pkg/client"
+	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -42,6 +49,40 @@ func SetInstance(i Ops) {
 func New(client rest.Interface) *Client {
 	return &Client{
 		snap: client,
+	}
+}
+
+func (c *Client) handleWatch(
+	watchInterface watch.Interface,
+	object runtime.Object,
+	namespace string,
+	fn WatchFunc,
+	listOptions metav1.ListOptions) {
+	defer watchInterface.Stop()
+	for {
+		select {
+		case event, more := <-watchInterface.ResultChan():
+			if !more {
+				logrus.Debug("Kubernetes watch closed (attempting to re-establish)")
+				t := func() (interface{}, bool, error) {
+					var err error
+					if _, ok := object.(*snapv1.VolumeSnapshot); ok {
+						err = c.WatchVolumeSnapshot(namespace, fn, listOptions)
+					} else {
+						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
+					}
+					return "", true, err
+				}
+
+				if _, err := task.DoRetryWithTimeout(t, 10*time.Minute, 10*time.Second); err != nil {
+					logrus.WithError(err).Error("Could not re-establish the watch")
+				} else {
+					logrus.Debug("watch re-established")
+				}
+				return
+			}
+			fn(event.Object)
+		}
 	}
 }
 
