@@ -46,6 +46,13 @@ spec:
         - name: pgbench
           image: portworx/torpedo-pgbench:ioportion
           imagePullPolicy: "Always"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 4Gi
+            requests:
+              cpu: "500m"
+              memory: 1Gi
           env:
             - name: PG_HOST
               value: 127.0.0.1

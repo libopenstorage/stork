@@ -41,6 +41,6 @@ spec:
                 "--pipeline",
                 "benchmark-only",
                 "--track-params",
-                "index_name:'index2',index_alias:'index2'"
+                "index_name:'index2',index_alias:'index2',clients:10"
         ]
       restartPolicy: Always

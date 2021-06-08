@@ -195,6 +195,7 @@ func populateDisruptiveTriggers() {
 		RebootNode:       true,
 		EmailReporter:    false,
 		AppTaskDown:      false,
+		DeployApps:       false,
 	}
 }
 
@@ -262,36 +263,74 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 	triggerInterval[DeployApps] = map[int]time.Duration{}
 
-	baseInterval := 10 * time.Minute
+	baseInterval := 60 * time.Minute
 	triggerInterval[RebootNode][10] = 1 * baseInterval
-	triggerInterval[RebootNode][9] = 2 * baseInterval
-	triggerInterval[RebootNode][8] = 3 * baseInterval
-	triggerInterval[RebootNode][7] = 4 * baseInterval
-	triggerInterval[RebootNode][6] = 5 * baseInterval
-	triggerInterval[RebootNode][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RebootNode][9] = 3 * baseInterval
+	triggerInterval[RebootNode][8] = 6 * baseInterval
+	triggerInterval[RebootNode][7] = 9 * baseInterval
+	triggerInterval[RebootNode][6] = 12 * baseInterval
+	triggerInterval[RebootNode][5] = 15 * baseInterval
+	triggerInterval[RebootNode][4] = 18 * baseInterval
+	triggerInterval[RebootNode][3] = 21 * baseInterval
+	triggerInterval[RebootNode][2] = 24 * baseInterval
+	triggerInterval[RebootNode][1] = 27 * baseInterval
 
 	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
-	triggerInterval[CrashVolDriver][9] = 2 * baseInterval
-	triggerInterval[CrashVolDriver][8] = 3 * baseInterval
-	triggerInterval[CrashVolDriver][7] = 4 * baseInterval
-	triggerInterval[CrashVolDriver][6] = 5 * baseInterval
-	triggerInterval[CrashVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CrashVolDriver][9] = 3 * baseInterval
+	triggerInterval[CrashVolDriver][8] = 6 * baseInterval
+	triggerInterval[CrashVolDriver][7] = 9 * baseInterval
+	triggerInterval[CrashVolDriver][6] = 12 * baseInterval
+	triggerInterval[CrashVolDriver][5] = 15 * baseInterval
+	triggerInterval[CrashVolDriver][4] = 18 * baseInterval
+	triggerInterval[CrashVolDriver][3] = 21 * baseInterval
+	triggerInterval[CrashVolDriver][2] = 24 * baseInterval
+	triggerInterval[CrashVolDriver][1] = 27 * baseInterval
 
 	triggerInterval[RestartVolDriver][10] = 1 * baseInterval
-	triggerInterval[RestartVolDriver][9] = 2 * baseInterval
-	triggerInterval[RestartVolDriver][8] = 3 * baseInterval
-	triggerInterval[RestartVolDriver][7] = 4 * baseInterval
-	triggerInterval[RestartVolDriver][6] = 5 * baseInterval
-	triggerInterval[RestartVolDriver][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RestartVolDriver][9] = 3 * baseInterval
+	triggerInterval[RestartVolDriver][8] = 6 * baseInterval
+	triggerInterval[RestartVolDriver][7] = 9 * baseInterval
+	triggerInterval[RestartVolDriver][6] = 12 * baseInterval
+	triggerInterval[RestartVolDriver][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[RestartVolDriver][4] = 18 * baseInterval
+	triggerInterval[RestartVolDriver][3] = 21 * baseInterval
+	triggerInterval[RestartVolDriver][2] = 24 * baseInterval
+	triggerInterval[RestartVolDriver][1] = 27 * baseInterval
 
 	triggerInterval[AppTaskDown][10] = 1 * baseInterval
-	triggerInterval[AppTaskDown][9] = 2 * baseInterval
-	triggerInterval[AppTaskDown][8] = 3 * baseInterval
-	triggerInterval[AppTaskDown][7] = 4 * baseInterval
-	triggerInterval[AppTaskDown][6] = 5 * baseInterval
-	triggerInterval[AppTaskDown][5] = 6 * baseInterval // Default global chaos level, 1 hr
+	triggerInterval[AppTaskDown][9] = 3 * baseInterval
+	triggerInterval[AppTaskDown][8] = 6 * baseInterval
+	triggerInterval[AppTaskDown][7] = 9 * baseInterval
+	triggerInterval[AppTaskDown][6] = 12 * baseInterval
+	triggerInterval[AppTaskDown][5] = 15 * baseInterval // Default global chaos level, 1 hr
+	triggerInterval[AppTaskDown][4] = 18 * baseInterval
+	triggerInterval[AppTaskDown][3] = 21 * baseInterval
+	triggerInterval[AppTaskDown][2] = 24 * baseInterval
+	triggerInterval[AppTaskDown][1] = 27 * baseInterval
 
-	baseInterval = 30 * time.Minute
+	triggerInterval[HAIncrease][10] = 1 * baseInterval
+	triggerInterval[HAIncrease][9] = 3 * baseInterval
+	triggerInterval[HAIncrease][8] = 6 * baseInterval
+	triggerInterval[HAIncrease][7] = 9 * baseInterval
+	triggerInterval[HAIncrease][6] = 12 * baseInterval
+	triggerInterval[HAIncrease][5] = 15 * baseInterval // Default global chaos level, 1.5 hrs
+	triggerInterval[HAIncrease][4] = 18 * baseInterval
+	triggerInterval[HAIncrease][3] = 21 * baseInterval
+	triggerInterval[HAIncrease][2] = 24 * baseInterval
+	triggerInterval[HAIncrease][1] = 27 * baseInterval
+
+	triggerInterval[HADecrease][10] = 1 * baseInterval
+	triggerInterval[HADecrease][9] = 3 * baseInterval
+	triggerInterval[HADecrease][8] = 6 * baseInterval
+	triggerInterval[HADecrease][7] = 9 * baseInterval
+	triggerInterval[HADecrease][6] = 12 * baseInterval
+	triggerInterval[HADecrease][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[HADecrease][4] = 18 * baseInterval
+	triggerInterval[HADecrease][3] = 21 * baseInterval
+	triggerInterval[HADecrease][2] = 24 * baseInterval
+	triggerInterval[HADecrease][1] = 27 * baseInterval
+
+	baseInterval = 6 * time.Hour
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
 	triggerInterval[EmailReporter][8] = 3 * baseInterval
@@ -302,28 +341,6 @@ func populateIntervals() {
 	triggerInterval[EmailReporter][3] = 8 * baseInterval
 	triggerInterval[EmailReporter][2] = 9 * baseInterval
 	triggerInterval[EmailReporter][1] = 10 * baseInterval
-
-	triggerInterval[HAIncrease][10] = 1 * baseInterval
-	triggerInterval[HAIncrease][9] = 2 * baseInterval
-	triggerInterval[HAIncrease][8] = 3 * baseInterval
-	triggerInterval[HAIncrease][7] = 4 * baseInterval
-	triggerInterval[HAIncrease][6] = 5 * baseInterval
-	triggerInterval[HAIncrease][5] = 6 * baseInterval // Default global chaos level, 1.5 hrs
-	triggerInterval[HAIncrease][4] = 7 * baseInterval
-	triggerInterval[HAIncrease][3] = 8 * baseInterval
-	triggerInterval[HAIncrease][2] = 9 * baseInterval
-	triggerInterval[HAIncrease][1] = 10 * baseInterval
-
-	triggerInterval[HADecrease][10] = 1 * baseInterval
-	triggerInterval[HADecrease][9] = 2 * baseInterval
-	triggerInterval[HADecrease][8] = 3 * baseInterval
-	triggerInterval[HADecrease][7] = 4 * baseInterval
-	triggerInterval[HADecrease][6] = 5 * baseInterval
-	triggerInterval[HADecrease][5] = 6 * baseInterval // Default global chaos level, 3 hrs
-	triggerInterval[HADecrease][4] = 7 * baseInterval
-	triggerInterval[HADecrease][3] = 8 * baseInterval
-	triggerInterval[HADecrease][2] = 9 * baseInterval
-	triggerInterval[HADecrease][1] = 10 * baseInterval
 
 	triggerInterval[DeployApps][10] = 1 * baseInterval
 	triggerInterval[DeployApps][9] = 2 * baseInterval
