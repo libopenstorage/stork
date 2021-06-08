@@ -1000,6 +1000,14 @@ func (a *ApplicationBackupController) backupResources(
 		}
 	}
 
+	// Don't modify resources if mentioned explicitly in specs
+	if backup.Spec.SkipServiceUpdate {
+		if a.resourceCollector.Opts == nil {
+			a.resourceCollector.Opts = make(map[string]string)
+		}
+		a.resourceCollector.Opts[resourcecollector.ServiceKind] = "true"
+	}
+
 	// Always backup optional resources. When restorting they need to be
 	// explicitly added to the spec
 	objectMap := stork_api.CreateObjectsMap(backup.Spec.IncludeResources)

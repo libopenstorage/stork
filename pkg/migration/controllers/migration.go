@@ -757,6 +757,14 @@ func (m *MigrationController) migrateResources(migration *stork_api.Migration, v
 	}
 	resKinds := make(map[string]string)
 	var updateObjects []runtime.Unstructured
+
+	// Don't modify resources if mentioned explicitly in specs
+	if *migration.Spec.SkipServiceUpdate {
+		if m.resourceCollector.Opts == nil {
+			m.resourceCollector.Opts = make(map[string]string)
+		}
+		m.resourceCollector.Opts[resourcecollector.ServiceKind] = "true"
+	}
 	allObjects, err := m.resourceCollector.GetResources(
 		migration.Spec.Namespaces,
 		migration.Spec.Selectors,
