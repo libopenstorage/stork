@@ -36,6 +36,8 @@ const (
 	skipResourceAnnotationDeprecated = "stork.libopenstorage.org/skipresource"
 	skipResourceAnnotation           = "stork.libopenstorage.org/skip-resource"
 	skipOwnerRefCheckAnnotation      = "stork.libopenstorage.org/skip-owner-ref-check"
+	skipModifyResources              = "stork.libopenstorage.org/skip-modify-resource"
+	ServiceKind                      = "Service"
 	deletedMaxRetries                = 12
 	deletedRetryInterval             = 10 * time.Second
 )
@@ -48,6 +50,7 @@ type ResourceCollector struct {
 	coreOps          core.Ops
 	rbacOps          rbac.Ops
 	storkOps         storkops.Ops
+	Opts             map[string]string
 }
 
 // Objects Collection of objects
@@ -562,9 +565,11 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
 		case "Service":
-			err := r.prepareServiceResourceForCollection(o)
-			if err != nil {
-				return fmt.Errorf("error preparing Service resource %v/%v: %v", metadata.GetNamespace(), metadata.GetName(), err)
+			if _, ok := r.Opts[ServiceKind]; !ok {
+				err := r.prepareServiceResourceForCollection(o)
+				if err != nil {
+					return fmt.Errorf("error preparing Service resource %v/%v: %v", metadata.GetNamespace(), metadata.GetName(), err)
+				}
 			}
 		case "ClusterRoleBinding":
 			err := r.prepareClusterRoleBindingForCollection(o, namespaces)

@@ -31,6 +31,14 @@ func (r *ResourceCollector) prepareServiceResourceForCollection(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &service); err != nil {
 		return fmt.Errorf("error converting to service: %v", err)
 	}
+	if service.Annotations != nil {
+		if _, ok := service.Annotations[skipModifyResources]; ok {
+			// Skip Modify annotation set don't modify specs for resource
+			// Note: some metadata annotation resource will be deleted latet like
+			// resourceVersion, UID
+			return nil
+		}
+	}
 	// Reset the clusterIP if it is set
 	if service.Spec.ClusterIP != "None" {
 		err := unstructured.SetNestedField(object.UnstructuredContent(), "", "spec", "clusterIP")

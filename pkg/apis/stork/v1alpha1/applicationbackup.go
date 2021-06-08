@@ -24,12 +24,13 @@ type ApplicationBackup struct {
 
 // ApplicationBackupSpec is the spec used to backup applications
 type ApplicationBackupSpec struct {
-	Namespaces     []string                           `json:"namespaces"`
-	BackupLocation string                             `json:"backupLocation"`
-	Selectors      map[string]string                  `json:"selectors"`
-	PreExecRule    string                             `json:"preExecRule"`
-	PostExecRule   string                             `json:"postExecRule"`
-	ReclaimPolicy  ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
+	Namespaces        []string                           `json:"namespaces"`
+	BackupLocation    string                             `json:"backupLocation"`
+	Selectors         map[string]string                  `json:"selectors"`
+	PreExecRule       string                             `json:"preExecRule"`
+	PostExecRule      string                             `json:"postExecRule"`
+	ReclaimPolicy     ApplicationBackupReclaimPolicyType `json:"reclaimPolicy"`
+	SkipServiceUpdate bool                               `json:"skipServiceUpdate"`
 	// Options to be passed in to the driver
 	Options          map[string]string `json:"options"`
 	IncludeResources []ObjectInfo      `json:"includeResources"`
