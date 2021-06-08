@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -37,15 +38,15 @@ type ApplicationClonesGetter interface {
 
 // ApplicationCloneInterface has methods to work with ApplicationClone resources.
 type ApplicationCloneInterface interface {
-	Create(*v1alpha1.ApplicationClone) (*v1alpha1.ApplicationClone, error)
-	Update(*v1alpha1.ApplicationClone) (*v1alpha1.ApplicationClone, error)
-	UpdateStatus(*v1alpha1.ApplicationClone) (*v1alpha1.ApplicationClone, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string, options v1.GetOptions) (*v1alpha1.ApplicationClone, error)
-	List(opts v1.ListOptions) (*v1alpha1.ApplicationCloneList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationClone, err error)
+	Create(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.CreateOptions) (*v1alpha1.ApplicationClone, error)
+	Update(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.UpdateOptions) (*v1alpha1.ApplicationClone, error)
+	UpdateStatus(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.UpdateOptions) (*v1alpha1.ApplicationClone, error)
+	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ApplicationClone, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ApplicationCloneList, error)
+	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationClone, err error)
 	ApplicationCloneExpansion
 }
 
@@ -64,20 +65,20 @@ func newApplicationClones(c *StorkV1alpha1Client, namespace string) *application
 }
 
 // Get takes name of the applicationClone, and returns the corresponding applicationClone object, and an error if there is any.
-func (c *applicationClones) Get(name string, options v1.GetOptions) (result *v1alpha1.ApplicationClone, err error) {
+func (c *applicationClones) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ApplicationClone, err error) {
 	result = &v1alpha1.ApplicationClone{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("applicationclones").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of ApplicationClones that match those selectors.
-func (c *applicationClones) List(opts v1.ListOptions) (result *v1alpha1.ApplicationCloneList, err error) {
+func (c *applicationClones) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ApplicationCloneList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -88,13 +89,13 @@ func (c *applicationClones) List(opts v1.ListOptions) (result *v1alpha1.Applicat
 		Resource("applicationclones").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested applicationClones.
-func (c *applicationClones) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *applicationClones) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -105,87 +106,90 @@ func (c *applicationClones) Watch(opts v1.ListOptions) (watch.Interface, error) 
 		Resource("applicationclones").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
 
 // Create takes the representation of a applicationClone and creates it.  Returns the server's representation of the applicationClone, and an error, if there is any.
-func (c *applicationClones) Create(applicationClone *v1alpha1.ApplicationClone) (result *v1alpha1.ApplicationClone, err error) {
+func (c *applicationClones) Create(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.CreateOptions) (result *v1alpha1.ApplicationClone, err error) {
 	result = &v1alpha1.ApplicationClone{}
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("applicationclones").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationClone).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Update takes the representation of a applicationClone and updates it. Returns the server's representation of the applicationClone, and an error, if there is any.
-func (c *applicationClones) Update(applicationClone *v1alpha1.ApplicationClone) (result *v1alpha1.ApplicationClone, err error) {
+func (c *applicationClones) Update(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.UpdateOptions) (result *v1alpha1.ApplicationClone, err error) {
 	result = &v1alpha1.ApplicationClone{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("applicationclones").
 		Name(applicationClone.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationClone).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-
-func (c *applicationClones) UpdateStatus(applicationClone *v1alpha1.ApplicationClone) (result *v1alpha1.ApplicationClone, err error) {
+func (c *applicationClones) UpdateStatus(ctx context.Context, applicationClone *v1alpha1.ApplicationClone, opts v1.UpdateOptions) (result *v1alpha1.ApplicationClone, err error) {
 	result = &v1alpha1.ApplicationClone{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("applicationclones").
 		Name(applicationClone.Name).
 		SubResource("status").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationClone).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the applicationClone and deletes it. Returns an error if one occurs.
-func (c *applicationClones) Delete(name string, options *v1.DeleteOptions) error {
+func (c *applicationClones) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("applicationclones").
 		Name(name).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *applicationClones) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+func (c *applicationClones) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("applicationclones").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched applicationClone.
-func (c *applicationClones) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationClone, err error) {
+func (c *applicationClones) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationClone, err error) {
 	result = &v1alpha1.ApplicationClone{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
 		Resource("applicationclones").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }

@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -37,15 +38,15 @@ type ApplicationBackupsGetter interface {
 
 // ApplicationBackupInterface has methods to work with ApplicationBackup resources.
 type ApplicationBackupInterface interface {
-	Create(*v1alpha1.ApplicationBackup) (*v1alpha1.ApplicationBackup, error)
-	Update(*v1alpha1.ApplicationBackup) (*v1alpha1.ApplicationBackup, error)
-	UpdateStatus(*v1alpha1.ApplicationBackup) (*v1alpha1.ApplicationBackup, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string, options v1.GetOptions) (*v1alpha1.ApplicationBackup, error)
-	List(opts v1.ListOptions) (*v1alpha1.ApplicationBackupList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationBackup, err error)
+	Create(ctx context.Context, applicationBackup *v1alpha1.ApplicationBackup, opts v1.CreateOptions) (*v1alpha1.ApplicationBackup, error)
+	Update(ctx context.Context, applicationBackup *v1alpha1.ApplicationBackup, opts v1.UpdateOptions) (*v1alpha1.ApplicationBackup, error)
+	UpdateStatus(ctx context.Context, applicationBackup *v1alpha1.ApplicationBackup, opts v1.UpdateOptions) (*v1alpha1.ApplicationBackup, error)
+	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ApplicationBackup, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ApplicationBackupList, error)
+	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationBackup, err error)
 	ApplicationBackupExpansion
 }
 
@@ -64,20 +65,20 @@ func newApplicationBackups(c *StorkV1alpha1Client, namespace string) *applicatio
 }
 
 // Get takes name of the applicationBackup, and returns the corresponding applicationBackup object, and an error if there is any.
-func (c *applicationBackups) Get(name string, options v1.GetOptions) (result *v1alpha1.ApplicationBackup, err error) {
+func (c *applicationBackups) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ApplicationBackup, err error) {
 	result = &v1alpha1.ApplicationBackup{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("applicationbackups").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of ApplicationBackups that match those selectors.
-func (c *applicationBackups) List(opts v1.ListOptions) (result *v1alpha1.ApplicationBackupList, err error) {
+func (c *applicationBackups) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ApplicationBackupList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -88,13 +89,13 @@ func (c *applicationBackups) List(opts v1.ListOptions) (result *v1alpha1.Applica
 		Resource("applicationbackups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested applicationBackups.
-func (c *applicationBackups) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *applicationBackups) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -105,87 +106,90 @@ func (c *applicationBackups) Watch(opts v1.ListOptions) (watch.Interface, error)
 		Resource("applicationbackups").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
 
 // Create takes the representation of a applicationBackup and creates it.  Returns the server's representation of the applicationBackup, and an error, if there is any.
-func (c *applicationBackups) Create(applicationBackup *v1alpha1.ApplicationBackup) (result *v1alpha1.ApplicationBackup, err error) {
+func (c *applicationBackups) Create(ctx context.Context, applicationBackup *v1alpha1.ApplicationBackup, opts v1.CreateOptions) (result *v1alpha1.ApplicationBackup, err error) {
 	result = &v1alpha1.ApplicationBackup{}
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("applicationbackups").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationBackup).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Update takes the representation of a applicationBackup and updates it. Returns the server's representation of the applicationBackup, and an error, if there is any.
-func (c *applicationBackups) Update(applicationBackup *v1alpha1.ApplicationBackup) (result *v1alpha1.ApplicationBackup, err error) {
+func (c *applicationBackups) Update(ctx context.Context, applicationBackup *v1alpha1.ApplicationBackup, opts v1.UpdateOptions) (result *v1alpha1.ApplicationBackup, err error) {
 	result = &v1alpha1.ApplicationBackup{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("applicationbackups").
 		Name(applicationBackup.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationBackup).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-
-func (c *applicationBackups) UpdateStatus(applicationBackup *v1alpha1.ApplicationBackup) (result *v1alpha1.ApplicationBackup, err error) {
+func (c *applicationBackups) UpdateStatus(ctx context.Context, applicationBackup *v1alpha1.ApplicationBackup, opts v1.UpdateOptions) (result *v1alpha1.ApplicationBackup, err error) {
 	result = &v1alpha1.ApplicationBackup{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("applicationbackups").
 		Name(applicationBackup.Name).
 		SubResource("status").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationBackup).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the applicationBackup and deletes it. Returns an error if one occurs.
-func (c *applicationBackups) Delete(name string, options *v1.DeleteOptions) error {
+func (c *applicationBackups) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("applicationbackups").
 		Name(name).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *applicationBackups) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+func (c *applicationBackups) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("applicationbackups").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched applicationBackup.
-func (c *applicationBackups) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationBackup, err error) {
+func (c *applicationBackups) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationBackup, err error) {
 	result = &v1alpha1.ApplicationBackup{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
 		Resource("applicationbackups").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }

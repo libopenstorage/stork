@@ -2,7 +2,8 @@
 
 [![Build Status](https://travis-ci.com/google/wire.svg?branch=master)][travis]
 [![godoc](https://godoc.org/github.com/google/wire?status.svg)][godoc]
-[![Coverage Status](https://coveralls.io/repos/github/google/wire/badge.svg?branch=master)](https://coveralls.io/github/google/wire?branch=master)
+[![Coverage](https://codecov.io/gh/google/wire/branch/master/graph/badge.svg)](https://codecov.io/gh/google/wire)
+
 
 Wire is a code generation tool that automates connecting components using
 [dependency injection][]. Dependencies between components are represented in
@@ -42,9 +43,12 @@ and ensuring that `$GOPATH/bin` is added to your `$PATH`.
 
 ## Project status
 
-**This project is in alpha and is not yet suitable for production.**
+As of version v0.3.0, Wire is *beta* and is considered feature complete. It
+works well for the tasks it was designed to perform, and we prefer to keep it
+as simple as possible.
 
-While in alpha, the API is subject to breaking changes.
+We'll not be accepting new features at this time, but will gladly accept bug
+reports and fixes.
 
 ## Community
 

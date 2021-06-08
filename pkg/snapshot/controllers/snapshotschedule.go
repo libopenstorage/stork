@@ -68,7 +68,7 @@ func (s *SnapshotScheduleController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile manages SnapshotSchedule resources.
-func (s *SnapshotScheduleController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (s *SnapshotScheduleController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling VolumeSnapshotSchedule %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
@@ -253,6 +253,7 @@ func (s *SnapshotScheduleController) shouldStartVolumeSnapshot(snapshotSchedule 
 		}
 		trigger, err := schedule.TriggerRequired(
 			snapshotSchedule.Spec.SchedulePolicyName,
+			snapshotSchedule.Namespace,
 			policyType,
 			latestVolumeSnapshotTimestamp,
 		)
@@ -330,7 +331,7 @@ func (s *SnapshotScheduleController) startVolumeSnapshot(snapshotSchedule *stork
 	}
 	snapshot.Metadata.Annotations[postSnapRuleAnnotationKey] = snapshotSchedule.Spec.PostExecRule
 
-	options, err := schedule.GetOptions(snapshotSchedule.Spec.SchedulePolicyName, policyType)
+	options, err := schedule.GetOptions(snapshotSchedule.Spec.SchedulePolicyName, snapshotSchedule.Namespace, policyType)
 	if err != nil {
 		return err
 	}
@@ -359,7 +360,7 @@ func (s *SnapshotScheduleController) pruneVolumeSnapshots(snapshotSchedule *stor
 	for policyType, policyVolumeSnapshot := range snapshotSchedule.Status.Items {
 		numVolumeSnapshots := len(policyVolumeSnapshot)
 		deleteBefore := 0
-		retainNum, err := schedule.GetRetain(snapshotSchedule.Spec.SchedulePolicyName, policyType)
+		retainNum, err := schedule.GetRetain(snapshotSchedule.Spec.SchedulePolicyName, snapshotSchedule.Namespace, policyType)
 		if err != nil {
 			return err
 		}

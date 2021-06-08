@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"time"
 
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -37,14 +38,14 @@ type ApplicationRegistrationsGetter interface {
 
 // ApplicationRegistrationInterface has methods to work with ApplicationRegistration resources.
 type ApplicationRegistrationInterface interface {
-	Create(*v1alpha1.ApplicationRegistration) (*v1alpha1.ApplicationRegistration, error)
-	Update(*v1alpha1.ApplicationRegistration) (*v1alpha1.ApplicationRegistration, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string, options v1.GetOptions) (*v1alpha1.ApplicationRegistration, error)
-	List(opts v1.ListOptions) (*v1alpha1.ApplicationRegistrationList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationRegistration, err error)
+	Create(ctx context.Context, applicationRegistration *v1alpha1.ApplicationRegistration, opts v1.CreateOptions) (*v1alpha1.ApplicationRegistration, error)
+	Update(ctx context.Context, applicationRegistration *v1alpha1.ApplicationRegistration, opts v1.UpdateOptions) (*v1alpha1.ApplicationRegistration, error)
+	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ApplicationRegistration, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ApplicationRegistrationList, error)
+	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationRegistration, err error)
 	ApplicationRegistrationExpansion
 }
 
@@ -61,19 +62,19 @@ func newApplicationRegistrations(c *StorkV1alpha1Client) *applicationRegistratio
 }
 
 // Get takes name of the applicationRegistration, and returns the corresponding applicationRegistration object, and an error if there is any.
-func (c *applicationRegistrations) Get(name string, options v1.GetOptions) (result *v1alpha1.ApplicationRegistration, err error) {
+func (c *applicationRegistrations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ApplicationRegistration, err error) {
 	result = &v1alpha1.ApplicationRegistration{}
 	err = c.client.Get().
 		Resource("applicationregistrations").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of ApplicationRegistrations that match those selectors.
-func (c *applicationRegistrations) List(opts v1.ListOptions) (result *v1alpha1.ApplicationRegistrationList, err error) {
+func (c *applicationRegistrations) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ApplicationRegistrationList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -83,13 +84,13 @@ func (c *applicationRegistrations) List(opts v1.ListOptions) (result *v1alpha1.A
 		Resource("applicationregistrations").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested applicationRegistrations.
-func (c *applicationRegistrations) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *applicationRegistrations) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -99,66 +100,69 @@ func (c *applicationRegistrations) Watch(opts v1.ListOptions) (watch.Interface, 
 		Resource("applicationregistrations").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
 
 // Create takes the representation of a applicationRegistration and creates it.  Returns the server's representation of the applicationRegistration, and an error, if there is any.
-func (c *applicationRegistrations) Create(applicationRegistration *v1alpha1.ApplicationRegistration) (result *v1alpha1.ApplicationRegistration, err error) {
+func (c *applicationRegistrations) Create(ctx context.Context, applicationRegistration *v1alpha1.ApplicationRegistration, opts v1.CreateOptions) (result *v1alpha1.ApplicationRegistration, err error) {
 	result = &v1alpha1.ApplicationRegistration{}
 	err = c.client.Post().
 		Resource("applicationregistrations").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationRegistration).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Update takes the representation of a applicationRegistration and updates it. Returns the server's representation of the applicationRegistration, and an error, if there is any.
-func (c *applicationRegistrations) Update(applicationRegistration *v1alpha1.ApplicationRegistration) (result *v1alpha1.ApplicationRegistration, err error) {
+func (c *applicationRegistrations) Update(ctx context.Context, applicationRegistration *v1alpha1.ApplicationRegistration, opts v1.UpdateOptions) (result *v1alpha1.ApplicationRegistration, err error) {
 	result = &v1alpha1.ApplicationRegistration{}
 	err = c.client.Put().
 		Resource("applicationregistrations").
 		Name(applicationRegistration.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationRegistration).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the applicationRegistration and deletes it. Returns an error if one occurs.
-func (c *applicationRegistrations) Delete(name string, options *v1.DeleteOptions) error {
+func (c *applicationRegistrations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Resource("applicationregistrations").
 		Name(name).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *applicationRegistrations) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+func (c *applicationRegistrations) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Resource("applicationregistrations").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched applicationRegistration.
-func (c *applicationRegistrations) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationRegistration, err error) {
+func (c *applicationRegistrations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationRegistration, err error) {
 	result = &v1alpha1.ApplicationRegistration{}
 	err = c.client.Patch(pt).
 		Resource("applicationregistrations").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }

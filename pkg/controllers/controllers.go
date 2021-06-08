@@ -3,7 +3,7 @@ package controllers
 import (
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -23,7 +23,7 @@ const (
 )
 
 // RegisterTo creates a new controller for a provided config and registers it to the controller manager.
-func RegisterTo(mgr manager.Manager, name string, r reconcile.Reconciler, watchedObjects ...runtime.Object) error {
+func RegisterTo(mgr manager.Manager, name string, r reconcile.Reconciler, watchedObjects ...client.Object) error {
 	// Create a new controller
 	c, err := controller.New(name, mgr, controller.Options{
 		Reconciler:              r,

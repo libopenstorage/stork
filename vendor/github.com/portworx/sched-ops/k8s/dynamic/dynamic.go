@@ -1,6 +1,7 @@
 package dynamic
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -107,7 +108,7 @@ func (c *Client) GetObject(object runtime.Object) (runtime.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.Get(metadata.GetName(), metav1.GetOptions{}, "")
+	return client.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{}, "")
 }
 
 // UpdateObject updates a generic Object
@@ -126,7 +127,7 @@ func (c *Client) UpdateObject(object runtime.Object) (runtime.Object, error) {
 		return nil, err
 	}
 
-	return client.Update(unstructured, metav1.UpdateOptions{}, "")
+	return client.Update(context.TODO(), unstructured, metav1.UpdateOptions{}, "")
 }
 
 // ListObjects returns a list of generic Objects using the options
@@ -145,7 +146,7 @@ func (c *Client) ListObjects(options *metav1.ListOptions, namespace string) (*un
 		client = resourceInterface
 	}
 
-	return client.List(*options)
+	return client.List(context.TODO(), *options)
 }
 
 func (c *Client) getDynamicClient(object runtime.Object) (dynamic.ResourceInterface, error) {

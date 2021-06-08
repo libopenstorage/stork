@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -38,7 +40,7 @@ var applicationregistrationsResource = schema.GroupVersionResource{Group: "stork
 var applicationregistrationsKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "ApplicationRegistration"}
 
 // Get takes name of the applicationRegistration, and returns the corresponding applicationRegistration object, and an error if there is any.
-func (c *FakeApplicationRegistrations) Get(name string, options v1.GetOptions) (result *v1alpha1.ApplicationRegistration, err error) {
+func (c *FakeApplicationRegistrations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ApplicationRegistration, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootGetAction(applicationregistrationsResource, name), &v1alpha1.ApplicationRegistration{})
 	if obj == nil {
@@ -48,7 +50,7 @@ func (c *FakeApplicationRegistrations) Get(name string, options v1.GetOptions) (
 }
 
 // List takes label and field selectors, and returns the list of ApplicationRegistrations that match those selectors.
-func (c *FakeApplicationRegistrations) List(opts v1.ListOptions) (result *v1alpha1.ApplicationRegistrationList, err error) {
+func (c *FakeApplicationRegistrations) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ApplicationRegistrationList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootListAction(applicationregistrationsResource, applicationregistrationsKind, opts), &v1alpha1.ApplicationRegistrationList{})
 	if obj == nil {
@@ -69,13 +71,13 @@ func (c *FakeApplicationRegistrations) List(opts v1.ListOptions) (result *v1alph
 }
 
 // Watch returns a watch.Interface that watches the requested applicationRegistrations.
-func (c *FakeApplicationRegistrations) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeApplicationRegistrations) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(applicationregistrationsResource, opts))
 }
 
 // Create takes the representation of a applicationRegistration and creates it.  Returns the server's representation of the applicationRegistration, and an error, if there is any.
-func (c *FakeApplicationRegistrations) Create(applicationRegistration *v1alpha1.ApplicationRegistration) (result *v1alpha1.ApplicationRegistration, err error) {
+func (c *FakeApplicationRegistrations) Create(ctx context.Context, applicationRegistration *v1alpha1.ApplicationRegistration, opts v1.CreateOptions) (result *v1alpha1.ApplicationRegistration, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootCreateAction(applicationregistrationsResource, applicationRegistration), &v1alpha1.ApplicationRegistration{})
 	if obj == nil {
@@ -85,7 +87,7 @@ func (c *FakeApplicationRegistrations) Create(applicationRegistration *v1alpha1.
 }
 
 // Update takes the representation of a applicationRegistration and updates it. Returns the server's representation of the applicationRegistration, and an error, if there is any.
-func (c *FakeApplicationRegistrations) Update(applicationRegistration *v1alpha1.ApplicationRegistration) (result *v1alpha1.ApplicationRegistration, err error) {
+func (c *FakeApplicationRegistrations) Update(ctx context.Context, applicationRegistration *v1alpha1.ApplicationRegistration, opts v1.UpdateOptions) (result *v1alpha1.ApplicationRegistration, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootUpdateAction(applicationregistrationsResource, applicationRegistration), &v1alpha1.ApplicationRegistration{})
 	if obj == nil {
@@ -95,22 +97,22 @@ func (c *FakeApplicationRegistrations) Update(applicationRegistration *v1alpha1.
 }
 
 // Delete takes name of the applicationRegistration and deletes it. Returns an error if one occurs.
-func (c *FakeApplicationRegistrations) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeApplicationRegistrations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewRootDeleteAction(applicationregistrationsResource, name), &v1alpha1.ApplicationRegistration{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeApplicationRegistrations) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(applicationregistrationsResource, listOptions)
+func (c *FakeApplicationRegistrations) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewRootDeleteCollectionAction(applicationregistrationsResource, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ApplicationRegistrationList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched applicationRegistration.
-func (c *FakeApplicationRegistrations) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationRegistration, err error) {
+func (c *FakeApplicationRegistrations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationRegistration, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewRootPatchSubresourceAction(applicationregistrationsResource, name, pt, data, subresources...), &v1alpha1.ApplicationRegistration{})
 	if obj == nil {

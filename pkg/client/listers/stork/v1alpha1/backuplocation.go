@@ -26,8 +26,10 @@ import (
 )
 
 // BackupLocationLister helps list BackupLocations.
+// All objects returned here must be treated as read-only.
 type BackupLocationLister interface {
 	// List lists all BackupLocations in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.BackupLocation, err error)
 	// BackupLocations returns an object that can list and get BackupLocations.
 	BackupLocations(namespace string) BackupLocationNamespaceLister
@@ -58,10 +60,13 @@ func (s *backupLocationLister) BackupLocations(namespace string) BackupLocationN
 }
 
 // BackupLocationNamespaceLister helps list and get BackupLocations.
+// All objects returned here must be treated as read-only.
 type BackupLocationNamespaceLister interface {
 	// List lists all BackupLocations in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.BackupLocation, err error)
 	// Get retrieves the BackupLocation from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.BackupLocation, error)
 	BackupLocationNamespaceListerExpansion
 }

@@ -59,7 +59,7 @@ func (m *MigrationScheduleController) Init(mgr manager.Manager) error {
 }
 
 // Reconcile manages MigrationSchedule resources.
-func (m *MigrationScheduleController) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (m *MigrationScheduleController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	logrus.Tracef("Reconciling MigrationSchedule %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
@@ -278,6 +278,7 @@ func (m *MigrationScheduleController) shouldStartMigration(
 		}
 		trigger, err := schedule.TriggerRequired(
 			migrationSchedule.Spec.SchedulePolicyName,
+			migrationSchedule.Namespace,
 			policyType,
 			latestMigrationTimestamp,
 		)

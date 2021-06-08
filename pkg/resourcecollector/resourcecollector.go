@@ -1,6 +1,7 @@
 package resourcecollector
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -226,7 +227,7 @@ func (r *ResourceCollector) GetResourcesForType(
 		default:
 			selectors = labels.Set(labelSelectors).String()
 		}
-		objectsList, err := dynamicClient.List(metav1.ListOptions{
+		objectsList, err := dynamicClient.List(context.TODO(), metav1.ListOptions{
 			LabelSelector: selectors,
 		})
 		if err != nil {
@@ -326,7 +327,7 @@ func (r *ResourceCollector) GetResources(
 				default:
 					selectors = labels.Set(labelSelectors).String()
 				}
-				objectsList, err := dynamicClient.List(metav1.ListOptions{
+				objectsList, err := dynamicClient.List(context.TODO(), metav1.ListOptions{
 					LabelSelector: selectors,
 				})
 				if err != nil {
@@ -466,6 +467,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.ingressToBeCollected(object)
 	case "ConfigMap":
 		return r.configmapToBeCollected(object)
+	case "ResourceQuota":
+		return r.resourceQuotaToBeCollected(object)
 	}
 
 	return true, nil
@@ -739,7 +742,7 @@ func (r *ResourceCollector) ApplyResource(
 	if err != nil {
 		return err
 	}
-	_, err = dynamicClient.Create(object.(*unstructured.Unstructured), metav1.CreateOptions{})
+	_, err = dynamicClient.Create(context.TODO(), object.(*unstructured.Unstructured), metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) || strings.Contains(err.Error(), portallocator.ErrAllocated.Error()) {
 			if r.mergeSupportedForResource(object) {
@@ -752,7 +755,7 @@ func (r *ResourceCollector) ApplyResource(
 			} else {
 				return err
 			}
-			_, err = dynamicClient.Create(object.(*unstructured.Unstructured), metav1.CreateOptions{})
+			_, err = dynamicClient.Create(context.TODO(), object.(*unstructured.Unstructured), metav1.CreateOptions{})
 			return err
 		}
 	}
@@ -785,7 +788,7 @@ func (r *ResourceCollector) DeleteResources(
 
 		// Delete the resource if it already exists on the destination
 		// cluster and try creating again
-		err = dynamicClient.Delete(metadata.GetName(), &metav1.DeleteOptions{})
+		err = dynamicClient.Delete(context.TODO(), metadata.GetName(), metav1.DeleteOptions{})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
@@ -810,7 +813,7 @@ func (r *ResourceCollector) DeleteResources(
 
 		// Wait for up to 2 minutes for the object to be deleted
 		for i := 0; i < deletedMaxRetries; i++ {
-			obj, err := dynamicClient.Get(metadata.GetName(), metav1.GetOptions{})
+			obj, err := dynamicClient.Get(context.TODO(), metadata.GetName(), metav1.GetOptions{})
 			if err != nil && apierrors.IsNotFound(err) {
 				break
 			}

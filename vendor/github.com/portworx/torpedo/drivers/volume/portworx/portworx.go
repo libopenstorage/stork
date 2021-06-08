@@ -266,6 +266,7 @@ func (d *portworx) updateNodes(pxNodes []api.StorageNode) error {
 }
 
 func (d *portworx) updateNode(n *node.Node, pxNodes []api.StorageNode) error {
+	logrus.Infof("Updating node: %+v", *n)
 	isPX, err := d.schedOps.IsPXEnabled(*n)
 	if err != nil {
 		return err
@@ -278,6 +279,7 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []api.StorageNode) error {
 
 	for _, address := range n.Addresses {
 		for _, pxNode := range pxNodes {
+			logrus.Infof("Checking PX node %+v for address %s", pxNode, address)
 			if address == pxNode.DataIp || address == pxNode.MgmtIp || n.Name == pxNode.SchedulerNodeName {
 				if len(pxNode.Id) > 0 {
 					n.StorageNode = pxNode
@@ -1014,10 +1016,12 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 
 		for _, addr := range n.Addresses {
 			err := d.testAndSetEndpointUsingNodeIP(addr)
-			if !strings.Contains(err.Error(), "connect: connection refused") {
-				return "", true, &ErrFailedToWaitForPx{
-					Node:  n,
-					Cause: fmt.Sprintf("px is not yet down on node"),
+			if err != nil {
+				if !strings.Contains(err.Error(), "connect: connection refused") {
+					return "", true, &ErrFailedToWaitForPx{
+						Node:  n,
+						Cause: fmt.Sprintf("px is not yet down on node"),
+					}
 				}
 			}
 		}

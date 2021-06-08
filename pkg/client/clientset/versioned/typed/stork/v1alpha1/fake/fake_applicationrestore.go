@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var applicationrestoresResource = schema.GroupVersionResource{Group: "stork.libo
 var applicationrestoresKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "ApplicationRestore"}
 
 // Get takes name of the applicationRestore, and returns the corresponding applicationRestore object, and an error if there is any.
-func (c *FakeApplicationRestores) Get(name string, options v1.GetOptions) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *FakeApplicationRestores) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ApplicationRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(applicationrestoresResource, c.ns, name), &v1alpha1.ApplicationRestore{})
 
@@ -50,7 +52,7 @@ func (c *FakeApplicationRestores) Get(name string, options v1.GetOptions) (resul
 }
 
 // List takes label and field selectors, and returns the list of ApplicationRestores that match those selectors.
-func (c *FakeApplicationRestores) List(opts v1.ListOptions) (result *v1alpha1.ApplicationRestoreList, err error) {
+func (c *FakeApplicationRestores) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ApplicationRestoreList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(applicationrestoresResource, applicationrestoresKind, c.ns, opts), &v1alpha1.ApplicationRestoreList{})
 
@@ -72,14 +74,14 @@ func (c *FakeApplicationRestores) List(opts v1.ListOptions) (result *v1alpha1.Ap
 }
 
 // Watch returns a watch.Interface that watches the requested applicationRestores.
-func (c *FakeApplicationRestores) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeApplicationRestores) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(applicationrestoresResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a applicationRestore and creates it.  Returns the server's representation of the applicationRestore, and an error, if there is any.
-func (c *FakeApplicationRestores) Create(applicationRestore *v1alpha1.ApplicationRestore) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *FakeApplicationRestores) Create(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.CreateOptions) (result *v1alpha1.ApplicationRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(applicationrestoresResource, c.ns, applicationRestore), &v1alpha1.ApplicationRestore{})
 
@@ -90,7 +92,7 @@ func (c *FakeApplicationRestores) Create(applicationRestore *v1alpha1.Applicatio
 }
 
 // Update takes the representation of a applicationRestore and updates it. Returns the server's representation of the applicationRestore, and an error, if there is any.
-func (c *FakeApplicationRestores) Update(applicationRestore *v1alpha1.ApplicationRestore) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *FakeApplicationRestores) Update(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.UpdateOptions) (result *v1alpha1.ApplicationRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(applicationrestoresResource, c.ns, applicationRestore), &v1alpha1.ApplicationRestore{})
 
@@ -102,7 +104,7 @@ func (c *FakeApplicationRestores) Update(applicationRestore *v1alpha1.Applicatio
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeApplicationRestores) UpdateStatus(applicationRestore *v1alpha1.ApplicationRestore) (*v1alpha1.ApplicationRestore, error) {
+func (c *FakeApplicationRestores) UpdateStatus(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.UpdateOptions) (*v1alpha1.ApplicationRestore, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateSubresourceAction(applicationrestoresResource, "status", c.ns, applicationRestore), &v1alpha1.ApplicationRestore{})
 
@@ -113,7 +115,7 @@ func (c *FakeApplicationRestores) UpdateStatus(applicationRestore *v1alpha1.Appl
 }
 
 // Delete takes name of the applicationRestore and deletes it. Returns an error if one occurs.
-func (c *FakeApplicationRestores) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeApplicationRestores) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(applicationrestoresResource, c.ns, name), &v1alpha1.ApplicationRestore{})
 
@@ -121,15 +123,15 @@ func (c *FakeApplicationRestores) Delete(name string, options *v1.DeleteOptions)
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeApplicationRestores) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(applicationrestoresResource, c.ns, listOptions)
+func (c *FakeApplicationRestores) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(applicationrestoresResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ApplicationRestoreList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched applicationRestore.
-func (c *FakeApplicationRestores) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *FakeApplicationRestores) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(applicationrestoresResource, c.ns, name, pt, data, subresources...), &v1alpha1.ApplicationRestore{})
 

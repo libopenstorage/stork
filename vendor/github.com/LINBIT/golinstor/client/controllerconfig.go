@@ -55,13 +55,9 @@ type ControllerConfigHttp struct {
 }
 
 type ControllerConfigHttps struct {
-	Enabled            bool   `json:"enabled,omitempty" toml:"enabled,omitempty,omitzero"`
-	ListenAddress      string `json:"listen_address,omitempty" toml:"listen_address,omitempty,omitzero"`
-	Port               int32  `json:"port,omitempty" toml:"port,omitempty,omitzero"`
-	Keystore           string `json:"keystore,omitempty" toml:"keystore,omitempty,omitzero"`
-	KeystorePassword   string `json:"keystore_password,omitempty" toml:"keystore_password,omitempty,omitzero"`
-	Truststore         string `json:"truststore,omitempty" toml:"truststore,omitempty,omitzero"`
-	TruststorePassword string `json:"truststore_password,omitempty" toml:"truststore_password,omitempty,omitzero"`
+	Enabled       bool   `json:"enabled,omitempty" toml:"enabled,omitempty,omitzero"`
+	ListenAddress string `json:"listen_address,omitempty" toml:"listen_address,omitempty,omitzero"`
+	Port          int32  `json:"port,omitempty" toml:"port,omitempty,omitzero"`
 }
 
 type ControllerConfigLdap struct {

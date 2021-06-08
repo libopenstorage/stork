@@ -273,7 +273,7 @@ func createMigratedDeployment(t *testing.T) {
 			Replicas: &replicas,
 		},
 	}
-	_, err = apps.Instance().CreateDeployment(deployment)
+	_, err = apps.Instance().CreateDeployment(deployment, metav1.CreateOptions{})
 	require.NoError(t, err, "Error creating deployment")
 }
 
@@ -294,7 +294,7 @@ func createMigratedStatefulSet(t *testing.T) {
 			Replicas: &replicas,
 		},
 	}
-	_, err = apps.Instance().CreateStatefulSet(statefulSet)
+	_, err = apps.Instance().CreateStatefulSet(statefulSet, metav1.CreateOptions{})
 	require.NoError(t, err, "Error creating statefulset")
 
 }
@@ -351,14 +351,14 @@ func TestActivateDeactivateMigrations(t *testing.T) {
 
 	cmdArgs = []string{"activate", "migrations", "-a"}
 	expected = "Updated replicas for deployment dep/migratedDeployment to 1\n"
-	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 3\n"
 	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 1\n"
+	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 3\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 
 	cmdArgs = []string{"deactivate", "migrations", "-a"}
 	expected = "Updated replicas for deployment dep/migratedDeployment to 0\n"
-	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
 	expected += "Updated replicas for deploymentconfig depconf/migratedDeploymentConfig to 0\n"
+	expected += "Updated replicas for statefulset sts/migratedStatefulSet to 0\n"
 	testCommon(t, cmdArgs, nil, expected, false)
 }
 

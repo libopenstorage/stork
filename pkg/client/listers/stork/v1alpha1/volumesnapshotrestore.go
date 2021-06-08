@@ -26,8 +26,10 @@ import (
 )
 
 // VolumeSnapshotRestoreLister helps list VolumeSnapshotRestores.
+// All objects returned here must be treated as read-only.
 type VolumeSnapshotRestoreLister interface {
 	// List lists all VolumeSnapshotRestores in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.VolumeSnapshotRestore, err error)
 	// VolumeSnapshotRestores returns an object that can list and get VolumeSnapshotRestores.
 	VolumeSnapshotRestores(namespace string) VolumeSnapshotRestoreNamespaceLister
@@ -58,10 +60,13 @@ func (s *volumeSnapshotRestoreLister) VolumeSnapshotRestores(namespace string) V
 }
 
 // VolumeSnapshotRestoreNamespaceLister helps list and get VolumeSnapshotRestores.
+// All objects returned here must be treated as read-only.
 type VolumeSnapshotRestoreNamespaceLister interface {
 	// List lists all VolumeSnapshotRestores in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.VolumeSnapshotRestore, err error)
 	// Get retrieves the VolumeSnapshotRestore from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.VolumeSnapshotRestore, error)
 	VolumeSnapshotRestoreNamespaceListerExpansion
 }

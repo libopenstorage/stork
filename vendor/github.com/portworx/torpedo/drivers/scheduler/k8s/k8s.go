@@ -3,6 +3,9 @@ package k8s
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,6 +19,7 @@ import (
 	"text/template"
 	"time"
 
+	docker_types "github.com/docker/docker/api/types"
 	vaultapi "github.com/hashicorp/vault/api"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -40,6 +44,7 @@ import (
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -348,7 +353,7 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 					logrus.Warnf("Error parsing spec from %v: %v", fileName, err)
 					return nil, err
 				}
-
+				substituteImageWithInternalRegistry(specObj)
 				specs = append(specs, specObj)
 			}
 		}
@@ -1055,19 +1060,41 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		}
 		obj.Annotations[secretName] = configMap.Data[secretNameKey]
 		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+	} else if obj, ok := spec.(*storkapi.ClusterPair); ok {
+		if obj.Annotations == nil {
+			obj.Annotations = make(map[string]string)
+		}
+		obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
 	}
 	return nil
 }
 
 func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec.AppSpec,
 	options scheduler.ScheduleOptions) (interface{}, error) {
+	// configure app create options
+	opts := metav1.CreateOptions{}
+	if len(options.DryRun) > 0 {
+		opts.DryRun = options.DryRun
+	}
 	if obj, ok := spec.(*appsapi.Deployment); ok {
 		obj.Namespace = ns.Name
 		obj.Spec.Template.Spec.Volumes = k.substituteNamespaceInVolumes(obj.Spec.Template.Spec.Volumes, ns.Name)
 		if options.Scheduler != "" {
 			obj.Spec.Template.Spec.SchedulerName = options.Scheduler
 		}
-		dep, err := k8sApps.CreateDeployment(obj)
+
+		secret, err := createDockerRegistrySecret(app.Key, obj.Namespace)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Docker registry secret for deployment: %s. Err: %v", obj.Name, err),
+			}
+		}
+		if secret != nil {
+			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
+		}
+		dep, err := k8sApps.CreateDeployment(obj, opts)
 		if errors.IsAlreadyExists(err) {
 			if dep, err = k8sApps.GetDeployment(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing deployment: %v", app.Key, dep.Name)
@@ -1120,7 +1147,17 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 		obj.Spec.VolumeClaimTemplates = pvcList
 
-		ss, err := k8sApps.CreateStatefulSet(obj)
+		secret, err := createDockerRegistrySecret(app.Key, obj.Namespace)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Docker registry secret for statefulset: %s. Err: %v", obj.Name, err),
+			}
+		}
+		if secret != nil {
+			obj.Spec.Template.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
+		}
+		ss, err := k8sApps.CreateStatefulSet(obj, opts)
 		if errors.IsAlreadyExists(err) {
 			if ss, err = k8sApps.GetStatefulSet(obj.Name, obj.Namespace); err == nil {
 				logrus.Infof("[%v] Found existing StatefulSet: %v", app.Key, ss.Name)
@@ -1204,6 +1241,17 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		if options.Scheduler != "" {
 			obj.Spec.SchedulerName = options.Scheduler
 		}
+		secret, err := createDockerRegistrySecret(obj.Namespace, obj.Namespace)
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Docker registry secret for pod: %s. Err: %v", obj.Name, err),
+			}
+		}
+		if secret != nil {
+			obj.Spec.ImagePullSecrets = []v1.LocalObjectReference{{Name: secret.Name}}
+		}
+
 		pod, err := k8sCore.CreatePod(obj)
 		if errors.IsAlreadyExists(err) {
 			if pod, err := k8sCore.GetPodByName(obj.Name, obj.Namespace); err == nil {
@@ -3484,7 +3532,7 @@ func (k *K8s) collectEvents() error {
 		return err
 	}
 
-	iface, err := clientset.CoreV1().Events(namespace).Watch(metav1.ListOptions{})
+	iface, err := clientset.CoreV1().Events(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -3654,6 +3702,83 @@ func (k *K8s) isRollingDeleteStrategyEnabled(ctx *scheduler.Context) bool {
 		}
 	}
 	return false
+}
+
+func substituteImageWithInternalRegistry(spec interface{}) {
+	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
+	if internalDockerRegistry != "" {
+		if obj, ok := spec.(*appsapi.DaemonSet); ok {
+			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
+			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
+		}
+		if obj, ok := spec.(*appsapi.Deployment); ok {
+			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
+			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
+		}
+		if obj, ok := spec.(*appsapi.StatefulSet); ok {
+			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
+			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
+		}
+		if obj, ok := spec.(*batchv1.Job); ok {
+			modifyImageInContainers(obj.Spec.Template.Spec.InitContainers, internalDockerRegistry)
+			modifyImageInContainers(obj.Spec.Template.Spec.Containers, internalDockerRegistry)
+		}
+		if obj, ok := spec.(*corev1.Pod); ok {
+			modifyImageInContainers(obj.Spec.InitContainers, internalDockerRegistry)
+			modifyImageInContainers(obj.Spec.Containers, internalDockerRegistry)
+		}
+	}
+}
+
+func modifyImageInContainers(containers []v1.Container, imageName string) {
+	if containers != nil {
+		for idx := range containers {
+			containers[idx].Image = fmt.Sprintf("%s/%s", imageName, containers[idx].Image)
+		}
+	}
+}
+
+func createDockerRegistrySecret(secretName, secretNamespace string) (*v1.Secret, error) {
+	var auths = struct {
+		AuthConfigs map[string]docker_types.AuthConfig `json:"auths"`
+	}{}
+
+	dockerServer := os.Getenv("IMAGE_PULL_SERVER")
+	dockerUsername := os.Getenv("IMAGE_PULL_USERNAME")
+	dockerPassword := os.Getenv("IMAGE_PULL_PASSWORD")
+
+	if dockerServer != "" && dockerUsername != "" && dockerPassword != "" {
+		auths.AuthConfigs = map[string]docker_types.AuthConfig{
+			dockerServer: {
+				Username: dockerUsername,
+				Password: dockerPassword,
+				Auth:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", dockerUsername, dockerPassword))),
+			},
+		}
+		authConfigsEnc, _ := json.Marshal(auths)
+
+		secretObj := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: secretNamespace,
+			},
+			Type: "docker-registry",
+			Data: map[string][]byte{".dockerconfigjson": authConfigsEnc},
+		}
+		secret, err := k8sCore.CreateSecret(secretObj)
+		if errors.IsAlreadyExists(err) {
+			if secret, err = k8sCore.GetSecret(secretName, secretNamespace); err == nil {
+				logrus.Infof("Using existing Docker regisrty secret: %v", secret.Name)
+				return secret, nil
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create Docker registry secret: %s. Err: %v", secretName, err)
+		}
+		logrus.Infof("Created Docker registry secret: %s", secret.Name)
+		return secret, nil
+	}
+	return nil, nil
 }
 
 func insertLineBreak(note string) string {

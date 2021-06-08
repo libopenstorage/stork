@@ -3,7 +3,7 @@ CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HU
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork')
+PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork' | grep -v 'hack')
 endif
 
 GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
@@ -11,7 +11,8 @@ GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
                                    grep -v '\.pb\.gw\.go' | \
                                    grep -v 'externalversions' | \
                                    grep -v 'versioned' | \
-                                   grep -v 'generated')
+                                   grep -v 'generated' | \
+								   grep -v 'hack')
 
 ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
@@ -32,16 +33,17 @@ BUILD_OPTIONS := -ldflags=$(LDFLAGS)
 
 all: stork storkctl cmdexecutor pretest
 
+vendor-tidy:
+	go mod tidy
+
 vendor-update:
-	dep ensure -update
-	./hack/update-deprecated-apis.sh
+	go mod download
 
 vendor:
-	dep ensure
-	./hack/update-deprecated-apis.sh
+	go mod vendor
 
 lint:
-	go get -u golang.org/x/lint/golint
+	GO111MODULE=off go get -u golang.org/x/lint/golint
 	for file in $(GO_FILES); do \
 		golint $${file}; \
 		if [ -n "$$(golint $${file})" ]; then \
@@ -55,14 +57,14 @@ vet:
 	go vet -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
 staticcheck:
-	go get -u honnef.co/go/tools/cmd/staticcheck
+	GO111MODULE=off go get -u honnef.co/go/tools/cmd/staticcheck
 	staticcheck $(PKGS)
 	staticcheck -tags integrationtest test/integration_test/*.go
 	staticcheck -tags unittest $(PKGS)
 
 errcheck:
-	go get -u github.com/kisielk/errcheck
-	errcheck -verbose -blank $(PKGS)
+	GO111MODULE=off go get -u github.com/kisielk/errcheck
+	errcheck -verbose -blank $(PKGS) 
 	errcheck -verbose -blank -tags unittest $(PKGS)
 	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
@@ -73,7 +75,7 @@ do-fmt:
 	 gofmt -s -w $(GO_FILES)
 
 gocyclo:
-	go get -u github.com/fzipp/gocyclo
+	GO111MODULE=off go get -u github.com/fzipp/gocyclo
 	gocyclo -over 15 $(GO_FILES)
 
 pretest: check-fmt lint vet errcheck staticcheck
@@ -101,7 +103,7 @@ integration-test-deploy:
 
 codegen:
 	@echo "Generating CRD"
-	@hack/update-codegen.sh
+	(GOFLAGS="" hack/update-codegen.sh)
 
 stork:
 	@echo "Building the stork binary"

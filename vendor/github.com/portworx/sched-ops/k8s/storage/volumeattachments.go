@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"context"
+
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -25,7 +27,7 @@ func (c *Client) ListVolumeAttachments() (*storagev1.VolumeAttachmentList, error
 		return nil, err
 	}
 
-	return c.storage.VolumeAttachments().List(metav1.ListOptions{})
+	return c.storage.VolumeAttachments().List(context.TODO(), metav1.ListOptions{})
 }
 
 // DeleteVolumeAttachment deletes a given Volume Attachment by name
@@ -34,7 +36,7 @@ func (c *Client) DeleteVolumeAttachment(name string) error {
 		return err
 	}
 
-	return c.storage.VolumeAttachments().Delete(name, &metav1.DeleteOptions{})
+	return c.storage.VolumeAttachments().Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // CreateVolumeAttachment creates a volume attachment
@@ -43,7 +45,7 @@ func (c *Client) CreateVolumeAttachment(volumeAttachment *storagev1.VolumeAttach
 		return nil, err
 	}
 
-	return c.storage.VolumeAttachments().Create(volumeAttachment)
+	return c.storage.VolumeAttachments().Create(context.TODO(), volumeAttachment, metav1.CreateOptions{})
 }
 
 // UpdateVolumeAttachment updates a volume attachment
@@ -52,7 +54,7 @@ func (c *Client) UpdateVolumeAttachment(volumeAttachment *storagev1.VolumeAttach
 		return nil, err
 	}
 
-	return c.storage.VolumeAttachments().Update(volumeAttachment)
+	return c.storage.VolumeAttachments().Update(context.TODO(), volumeAttachment, metav1.UpdateOptions{})
 }
 
 // UpdateVolumeAttachmentStatus updates a volume attachment status
@@ -61,5 +63,5 @@ func (c *Client) UpdateVolumeAttachmentStatus(volumeAttachment *storagev1.Volume
 		return nil, err
 	}
 
-	return c.storage.VolumeAttachments().UpdateStatus(volumeAttachment)
+	return c.storage.VolumeAttachments().UpdateStatus(context.TODO(), volumeAttachment, metav1.UpdateOptions{})
 }
