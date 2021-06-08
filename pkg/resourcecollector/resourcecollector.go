@@ -37,9 +37,10 @@ const (
 	skipResourceAnnotation           = "stork.libopenstorage.org/skip-resource"
 	skipOwnerRefCheckAnnotation      = "stork.libopenstorage.org/skip-owner-ref-check"
 	skipModifyResources              = "stork.libopenstorage.org/skip-modify-resource"
-	ServiceKind                      = "Service"
-	deletedMaxRetries                = 12
-	deletedRetryInterval             = 10 * time.Second
+	// ServiceKind for k8s service resources
+	ServiceKind          = "Service"
+	deletedMaxRetries    = 12
+	deletedRetryInterval = 10 * time.Second
 )
 
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
