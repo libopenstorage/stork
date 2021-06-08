@@ -1021,6 +1021,15 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 			destSA.ImagePullSecrets = append(destSA.ImagePullSecrets, s)
 		}
 	}
+	// merge annotation for SA
+	if destSA.Annotations != nil {
+		if sourceSA.Annotations == nil {
+			sourceSA.Annotations = make(map[string]string)
+		}
+		for k, v := range sourceSA.Annotations {
+			destSA.Annotations[k] = v
+		}
+	}
 	_, err = adminClient.CoreV1().ServiceAccounts(destSA.GetNamespace()).Update(context.TODO(), destSA, metav1.UpdateOptions{})
 	if err != nil {
 		return err
