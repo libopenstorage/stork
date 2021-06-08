@@ -72,6 +72,15 @@ func (r *ResourceCollector) mergeAndUpdateServiceAccount(
 			currentSA.Secrets = append(currentSA.Secrets, secret)
 		}
 	}
+	// merge annotation for SA
+	if newSA.Annotations != nil {
+		if currentSA.Annotations == nil {
+			currentSA.Annotations = make(map[string]string)
+		}
+		for k, v := range newSA.Annotations {
+			currentSA.Annotations[k] = v
+		}
+	}
 	_, err = r.coreOps.UpdateServiceAccount(currentSA)
 	return err
 }
