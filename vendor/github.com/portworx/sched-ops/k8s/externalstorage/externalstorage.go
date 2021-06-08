@@ -69,6 +69,7 @@ func (c *Client) handleWatch(
 					if _, ok := object.(*snapv1.VolumeSnapshot); ok {
 						err = c.WatchVolumeSnapshot(namespace, fn, listOptions)
 					} else {
+						logrus.Infof("unsupported objec")
 						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
 					}
 					return "", true, err

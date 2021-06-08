@@ -7,6 +7,7 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	snapshotcontrollers "github.com/libopenstorage/stork/pkg/snapshot/controllers"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -56,6 +57,7 @@ func watchVolumeSnapshotScheduleCR(object runtime.Object) error {
 }
 
 func watchVolumeSnapshotCR(object runtime.Object) error {
+	logrus.Infof("testing, starting the watch")
 	snapshot, ok := object.(*snapv1.VolumeSnapshot)
 	if !ok {
 		err := fmt.Errorf("invalid object type on volume snapshot watch: %v", object)
@@ -78,8 +80,11 @@ func watchVolumeSnapshotCR(object runtime.Object) error {
 	status, err := getVolumeSnapshotStatus(*snapshot)
 
 	if err != nil {
+		logrus.Infof("testing, error, %v", err)
 		return err
 	}
+
+	logrus.Infof("testing, status: %v", status)
 
 	volumeSnapshotStatusCounter.With(labels).Set(volumeSnapshotStatus[status])
 	return nil

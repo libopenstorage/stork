@@ -282,6 +282,7 @@ func (c *Client) DeleteSnapshotData(name string) error {
 
 func (c *Client) WatchVolumeSnapshot(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
 	if err := c.initClient(); err != nil {
+		logrus.Infof("testing WatchVolumeSnapshot err: %v", err)
 		return err
 	}
 
