@@ -192,7 +192,6 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
-		volumeInfos = append(volumeInfos, volumeInfo)
 
 		pvName, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
@@ -258,7 +257,7 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 				snapshot, snapErr = a.client.CreateSnapshot(snapshotInput)
 				if snapErr != nil {
 					if awsErr, ok := snapErr.(awserr.Error); ok {
-						if awsErr.Code() != "SnapshotCreationPerVolumeRateExceeded" && awsErr.Code() != "InternalError" {
+						if !isExponentialError(awsErr) {
 							return true, snapErr
 						}
 						log.ApplicationBackupLog(backup).Warnf("Retrying AWS snapshot for %v/%v : %v", pvc.Name, pvc.Namespace, snapErr)
@@ -269,12 +268,17 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 			})
 			if err != nil {
 				if snapErr != nil {
+					if awsErr, ok := snapErr.(awserr.Error); ok && isExponentialError(awsErr) {
+						return volumeInfos, &storkvolume.ErrStorageProviderBusy{Reason: awsErr.Message()}
+					}
 					return nil, snapErr
 				}
 				return nil, err
 			}
 
 			volumeInfo.BackupID = *snapshot.SnapshotId
+			volumeInfos = append(volumeInfos, volumeInfo)
+
 		}
 
 	}
@@ -599,4 +603,28 @@ func init() {
 	if err := storkvolume.Register(driverName, a); err != nil {
 		logrus.Panicf("Error registering aws volume driver: %v", err)
 	}
+}
+
+func isExponentialError(err error) bool {
+	// Got the list of error codes from here
+	// https://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html
+	awsCodes := map[string]struct{}{
+		"InternalError":                         {},
+		"SnapshotCreationPerVolumeRateExceeded": {},
+		"VolumeLimitExceeded":                   {},
+		"AttachmentLimitExceeded":               {},
+		"MaxIOPSLimitExceeded":                  {},
+		"ResourceLimitExceeded":                 {},
+		"RequestLimitExceeded":                  {},
+		"SnapshotLimitExceeded":                 {},
+		"TagLimitExceeded":                      {},
+	}
+	if err != nil {
+		if awsErr, ok := err.(awserr.Error); ok {
+			if _, exist := awsCodes[awsErr.Code()]; exist {
+				return true
+			}
+		}
+	}
+	return false
 }
