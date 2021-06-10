@@ -13,3 +13,14 @@ type ErrPVCPending struct {
 func (e *ErrPVCPending) Error() string {
 	return fmt.Sprintf("PVC is pending for %v", e.Name)
 }
+
+// ErrStorageProviderBusy is returned when the storage provider
+// cannot perform the requested operation
+type ErrStorageProviderBusy struct {
+	// Reason for the error
+	Reason string
+}
+
+func (e *ErrStorageProviderBusy) Error() string {
+	return fmt.Sprintf("storage provider busy: %v", e.Reason)
+}

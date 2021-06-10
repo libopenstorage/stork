@@ -2808,7 +2808,6 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 		volumeInfo.PersistentVolumeClaim = pvc.Name
 		volumeInfo.Namespace = pvc.Namespace
 		volumeInfo.DriverName = driverName
-		volumeInfos = append(volumeInfos, volumeInfo)
 
 		volume, err := core.Instance().GetVolumeForPersistentVolumeClaim(&pvc)
 		if err != nil {
@@ -2866,7 +2865,13 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 			}
 			return true, nil
 		})
-		if err != nil || cloudBackupCreateErr != nil {
+		if err == nil {
+			// Only add volumeInfos if this was a successful backup
+			volumeInfos = append(volumeInfos, volumeInfo)
+		} else if err != nil || cloudBackupCreateErr != nil {
+			if _, ok := cloudBackupCreateErr.(*ost_errors.ErrCloudBackupServerBusy); ok {
+				return volumeInfos, &storkvolume.ErrStorageProviderBusy{Reason: cloudBackupCreateErr.Error()}
+			}
 			if _, ok := cloudBackupCreateErr.(*ost_errors.ErrExists); !ok {
 				return nil, fmt.Errorf("failed to start backup for %v (%v/%v): %v",
 					volume, pvc.Namespace, pvc.Name, cloudBackupCreateErr)

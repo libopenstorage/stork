@@ -564,21 +564,40 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						// it as failed
 						message := fmt.Sprintf("Error starting ApplicationBackup for volumes: %v", err)
 						log.ApplicationBackupLog(backup).Errorf(message)
-						a.recorder.Event(backup,
-							v1.EventTypeWarning,
-							string(stork_api.ApplicationBackupStatusFailed),
-							message)
-						_, err = a.updateBackupCRInVolumeStage(
-							namespacedName,
-							stork_api.ApplicationBackupStatusFailed,
-							stork_api.ApplicationBackupStageFinal,
-							message,
-							nil,
-						)
-						if err != nil {
-							return err
+						if _, ok := err.(*volume.ErrStorageProviderBusy); ok {
+							msg := fmt.Sprintf("Volume backups are in progress. Backups are failing for some volumes since the storage provider is busy: %v. Backup will be retried", err)
+							log.ApplicationBackupLog(backup).Errorf(message)
+							a.recorder.Event(backup,
+								v1.EventTypeWarning,
+								string(stork_api.ApplicationBackupStatusInProgress),
+								msg)
+							_, err = a.updateBackupCRInVolumeStage(
+								namespacedName,
+								stork_api.ApplicationBackupStatusInProgress,
+								backup.Status.Stage,
+								msg,
+								volumeInfos,
+							)
+							if err != nil {
+								return err
+							}
+						} else {
+							a.recorder.Event(backup,
+								v1.EventTypeWarning,
+								string(stork_api.ApplicationBackupStatusFailed),
+								message)
+							_, err = a.updateBackupCRInVolumeStage(
+								namespacedName,
+								stork_api.ApplicationBackupStatusFailed,
+								stork_api.ApplicationBackupStageFinal,
+								message,
+								nil,
+							)
+							if err != nil {
+								return err
+							}
+							return nil
 						}
-						return nil
 					}
 					backup, err = a.updateBackupCRInVolumeStage(
 						namespacedName,
