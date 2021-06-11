@@ -42,6 +42,9 @@ const (
 	schedulingFailureEventReason = "FailedScheduling"
 	// annotation to check if only local nodes should be used to schedule a pod
 	preferLocalNodeOnlyAnnotation = "stork.libopenstorage.org/preferLocalNodeOnly"
+	// annotation to skip a volume and its local node replicas for scoring while
+	// scheduling a pod
+	skipScoringLabel = "stork.libopenstorage.org/skipSchedulerScoring"
 )
 
 var (
@@ -526,6 +529,16 @@ func (e *Extender) processPrioritizeRequest(w http.ResponseWriter, req *http.Req
 		storklog.PodLog(pod).Debugf("regionMap: %v", regionInfo.HostnameMap)
 
 		for _, volume := range driverVolumes {
+			skipVolumeScoring := false
+			if value, exists := volume.Labels[skipScoringLabel]; exists {
+				if skipVolumeScoring, err = strconv.ParseBool(value); err != nil {
+					skipVolumeScoring = false
+				}
+			}
+			if skipVolumeScoring {
+				storklog.PodLog(pod).Debugf("Skipping volume %v from scoring", volume.VolumeName)
+				continue
+			}
 			storklog.PodLog(pod).Debugf("Volume %v allocated on nodes:", volume.VolumeName)
 			// Get the racks, zones and regions where the volume is located
 			rackInfo.PreferredLocality = rackInfo.PreferredLocality[:0]
