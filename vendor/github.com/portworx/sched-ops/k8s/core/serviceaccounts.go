@@ -17,6 +17,8 @@ type ServiceAccountOps interface {
 	UpdateServiceAccount(account *corev1.ServiceAccount) (*corev1.ServiceAccount, error)
 	// DeleteServiceAccount deletes the given service account
 	DeleteServiceAccount(accountName, namespace string) error
+	// ListServiceAccount in given namespace
+	ListServiceAccount(namespace string, opts metav1.ListOptions) (*corev1.ServiceAccountList, error)
 }
 
 // CreateServiceAccount creates the given service account
@@ -37,7 +39,16 @@ func (c *Client) GetServiceAccount(name, namespace string) (*corev1.ServiceAccou
 	return c.kubernetes.CoreV1().ServiceAccounts(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
-// UpdaeServiceAccount updates the given service account
+// ListServiceAccount in given namespace
+func (c *Client) ListServiceAccount(namespace string, opts metav1.ListOptions) (*corev1.ServiceAccountList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+
+	return c.kubernetes.CoreV1().ServiceAccounts(namespace).List(context.TODO(), opts)
+}
+
+// UpdateServiceAccount updates the given service account
 func (c *Client) UpdateServiceAccount(account *corev1.ServiceAccount) (*corev1.ServiceAccount, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err

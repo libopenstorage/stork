@@ -38,15 +38,15 @@ type ClusterDomainsStatusesGetter interface {
 
 // ClusterDomainsStatusInterface has methods to work with ClusterDomainsStatus resources.
 type ClusterDomainsStatusInterface interface {
-	Create(*v1alpha1.ClusterDomainsStatus) (*v1alpha1.ClusterDomainsStatus, error)
-	Update(*v1alpha1.ClusterDomainsStatus) (*v1alpha1.ClusterDomainsStatus, error)
-	UpdateStatus(*v1alpha1.ClusterDomainsStatus) (*v1alpha1.ClusterDomainsStatus, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string, options v1.GetOptions) (*v1alpha1.ClusterDomainsStatus, error)
-	List(opts v1.ListOptions) (*v1alpha1.ClusterDomainsStatusList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterDomainsStatus, err error)
+	Create(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.CreateOptions) (*v1alpha1.ClusterDomainsStatus, error)
+	Update(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.UpdateOptions) (*v1alpha1.ClusterDomainsStatus, error)
+	UpdateStatus(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.UpdateOptions) (*v1alpha1.ClusterDomainsStatus, error)
+	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ClusterDomainsStatus, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ClusterDomainsStatusList, error)
+	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClusterDomainsStatus, err error)
 	ClusterDomainsStatusExpansion
 }
 
@@ -63,19 +63,19 @@ func newClusterDomainsStatuses(c *StorkV1alpha1Client) *clusterDomainsStatuses {
 }
 
 // Get takes name of the clusterDomainsStatus, and returns the corresponding clusterDomainsStatus object, and an error if there is any.
-func (c *clusterDomainsStatuses) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *clusterDomainsStatuses) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Get().
 		Resource("clusterdomainsstatuses").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of ClusterDomainsStatuses that match those selectors.
-func (c *clusterDomainsStatuses) List(opts v1.ListOptions) (result *v1alpha1.ClusterDomainsStatusList, err error) {
+func (c *clusterDomainsStatuses) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ClusterDomainsStatusList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -85,13 +85,13 @@ func (c *clusterDomainsStatuses) List(opts v1.ListOptions) (result *v1alpha1.Clu
 		Resource("clusterdomainsstatuses").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested clusterDomainsStatuses.
-func (c *clusterDomainsStatuses) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *clusterDomainsStatuses) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -101,81 +101,84 @@ func (c *clusterDomainsStatuses) Watch(opts v1.ListOptions) (watch.Interface, er
 		Resource("clusterdomainsstatuses").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch(context.TODO())
+		Watch(ctx)
 }
 
 // Create takes the representation of a clusterDomainsStatus and creates it.  Returns the server's representation of the clusterDomainsStatus, and an error, if there is any.
-func (c *clusterDomainsStatuses) Create(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *clusterDomainsStatuses) Create(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.CreateOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Post().
 		Resource("clusterdomainsstatuses").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(clusterDomainsStatus).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Update takes the representation of a clusterDomainsStatus and updates it. Returns the server's representation of the clusterDomainsStatus, and an error, if there is any.
-func (c *clusterDomainsStatuses) Update(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *clusterDomainsStatuses) Update(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.UpdateOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Put().
 		Resource("clusterdomainsstatuses").
 		Name(clusterDomainsStatus.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(clusterDomainsStatus).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-
-func (c *clusterDomainsStatuses) UpdateStatus(clusterDomainsStatus *v1alpha1.ClusterDomainsStatus) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *clusterDomainsStatuses) UpdateStatus(ctx context.Context, clusterDomainsStatus *v1alpha1.ClusterDomainsStatus, opts v1.UpdateOptions) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Put().
 		Resource("clusterdomainsstatuses").
 		Name(clusterDomainsStatus.Name).
 		SubResource("status").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(clusterDomainsStatus).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the clusterDomainsStatus and deletes it. Returns an error if one occurs.
-func (c *clusterDomainsStatuses) Delete(name string, options *v1.DeleteOptions) error {
+func (c *clusterDomainsStatuses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Resource("clusterdomainsstatuses").
 		Name(name).
-		Body(options).
-		Do(context.TODO()).
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *clusterDomainsStatuses) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+func (c *clusterDomainsStatuses) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Resource("clusterdomainsstatuses").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do(context.TODO()).
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched clusterDomainsStatus.
-func (c *clusterDomainsStatuses) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterDomainsStatus, err error) {
+func (c *clusterDomainsStatuses) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClusterDomainsStatus, err error) {
 	result = &v1alpha1.ClusterDomainsStatus{}
 	err = c.client.Patch(pt).
 		Resource("clusterdomainsstatuses").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }

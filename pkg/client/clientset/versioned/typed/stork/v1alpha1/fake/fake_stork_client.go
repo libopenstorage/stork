@@ -80,6 +80,10 @@ func (c *FakeStorkV1alpha1) MigrationSchedules(namespace string) v1alpha1.Migrat
 	return &FakeMigrationSchedules{c, namespace}
 }
 
+func (c *FakeStorkV1alpha1) NamespacedSchedulePolicies(namespace string) v1alpha1.NamespacedSchedulePolicyInterface {
+	return &FakeNamespacedSchedulePolicies{c, namespace}
+}
+
 func (c *FakeStorkV1alpha1) Rules(namespace string) v1alpha1.RuleInterface {
 	return &FakeRules{c, namespace}
 }

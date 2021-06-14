@@ -26,8 +26,10 @@ import (
 )
 
 // ApplicationCloneLister helps list ApplicationClones.
+// All objects returned here must be treated as read-only.
 type ApplicationCloneLister interface {
 	// List lists all ApplicationClones in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ApplicationClone, err error)
 	// ApplicationClones returns an object that can list and get ApplicationClones.
 	ApplicationClones(namespace string) ApplicationCloneNamespaceLister
@@ -58,10 +60,13 @@ func (s *applicationCloneLister) ApplicationClones(namespace string) Application
 }
 
 // ApplicationCloneNamespaceLister helps list and get ApplicationClones.
+// All objects returned here must be treated as read-only.
 type ApplicationCloneNamespaceLister interface {
 	// List lists all ApplicationClones in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ApplicationClone, err error)
 	// Get retrieves the ApplicationClone from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ApplicationClone, error)
 	ApplicationCloneNamespaceListerExpansion
 }

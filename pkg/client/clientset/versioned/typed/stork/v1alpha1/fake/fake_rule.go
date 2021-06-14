@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var rulesResource = schema.GroupVersionResource{Group: "stork.libopenstorage.org
 var rulesKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "Rule"}
 
 // Get takes name of the rule, and returns the corresponding rule object, and an error if there is any.
-func (c *FakeRules) Get(name string, options v1.GetOptions) (result *v1alpha1.Rule, err error) {
+func (c *FakeRules) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Rule, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(rulesResource, c.ns, name), &v1alpha1.Rule{})
 
@@ -50,7 +52,7 @@ func (c *FakeRules) Get(name string, options v1.GetOptions) (result *v1alpha1.Ru
 }
 
 // List takes label and field selectors, and returns the list of Rules that match those selectors.
-func (c *FakeRules) List(opts v1.ListOptions) (result *v1alpha1.RuleList, err error) {
+func (c *FakeRules) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.RuleList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(rulesResource, rulesKind, c.ns, opts), &v1alpha1.RuleList{})
 
@@ -72,14 +74,14 @@ func (c *FakeRules) List(opts v1.ListOptions) (result *v1alpha1.RuleList, err er
 }
 
 // Watch returns a watch.Interface that watches the requested rules.
-func (c *FakeRules) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeRules) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(rulesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a rule and creates it.  Returns the server's representation of the rule, and an error, if there is any.
-func (c *FakeRules) Create(rule *v1alpha1.Rule) (result *v1alpha1.Rule, err error) {
+func (c *FakeRules) Create(ctx context.Context, rule *v1alpha1.Rule, opts v1.CreateOptions) (result *v1alpha1.Rule, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(rulesResource, c.ns, rule), &v1alpha1.Rule{})
 
@@ -90,7 +92,7 @@ func (c *FakeRules) Create(rule *v1alpha1.Rule) (result *v1alpha1.Rule, err erro
 }
 
 // Update takes the representation of a rule and updates it. Returns the server's representation of the rule, and an error, if there is any.
-func (c *FakeRules) Update(rule *v1alpha1.Rule) (result *v1alpha1.Rule, err error) {
+func (c *FakeRules) Update(ctx context.Context, rule *v1alpha1.Rule, opts v1.UpdateOptions) (result *v1alpha1.Rule, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(rulesResource, c.ns, rule), &v1alpha1.Rule{})
 
@@ -101,7 +103,7 @@ func (c *FakeRules) Update(rule *v1alpha1.Rule) (result *v1alpha1.Rule, err erro
 }
 
 // Delete takes name of the rule and deletes it. Returns an error if one occurs.
-func (c *FakeRules) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeRules) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(rulesResource, c.ns, name), &v1alpha1.Rule{})
 
@@ -109,15 +111,15 @@ func (c *FakeRules) Delete(name string, options *v1.DeleteOptions) error {
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeRules) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(rulesResource, c.ns, listOptions)
+func (c *FakeRules) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(rulesResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.RuleList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched rule.
-func (c *FakeRules) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.Rule, err error) {
+func (c *FakeRules) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Rule, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(rulesResource, c.ns, name, pt, data, subresources...), &v1alpha1.Rule{})
 

@@ -1,6 +1,7 @@
 package stork
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -31,7 +32,7 @@ func (c *Client) CreateBackupLocation(backupLocation *storkv1alpha1.BackupLocati
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().BackupLocations(backupLocation.Namespace).Create(backupLocation)
+	return c.stork.StorkV1alpha1().BackupLocations(backupLocation.Namespace).Create(context.TODO(), backupLocation, metav1.CreateOptions{})
 }
 
 // GetBackupLocation gets the BackupLocation
@@ -39,7 +40,7 @@ func (c *Client) GetBackupLocation(name string, namespace string) (*storkv1alpha
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	backupLocation, err := c.stork.StorkV1alpha1().BackupLocations(namespace).Get(name, metav1.GetOptions{})
+	backupLocation, err := c.stork.StorkV1alpha1().BackupLocations(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func (c *Client) ListBackupLocations(namespace string) (*storkv1alpha1.BackupLoc
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	backupLocations, err := c.stork.StorkV1alpha1().BackupLocations(namespace).List(metav1.ListOptions{})
+	backupLocations, err := c.stork.StorkV1alpha1().BackupLocations(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func (c *Client) UpdateBackupLocation(backupLocation *storkv1alpha1.BackupLocati
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().BackupLocations(backupLocation.Namespace).Update(backupLocation)
+	return c.stork.StorkV1alpha1().BackupLocations(backupLocation.Namespace).Update(context.TODO(), backupLocation, metav1.UpdateOptions{})
 }
 
 // DeleteBackupLocation deletes the BackupLocation
@@ -83,7 +84,7 @@ func (c *Client) DeleteBackupLocation(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().BackupLocations(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().BackupLocations(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }

@@ -3,7 +3,7 @@ CMD_EXECUTOR_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_CMD_EXECUTOR_IMAGE):$(DOCKER_HU
 STORK_TEST_IMG=$(DOCKER_HUB_REPO)/$(DOCKER_HUB_STORK_TEST_IMAGE):$(DOCKER_HUB_STORK_TEST_TAG)
 
 ifndef PKGS
-PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork')
+PKGS := $(shell go list ./... 2>&1 | grep -v 'github.com/libopenstorage/stork/vendor' | grep -v 'pkg/client/informers/externalversions' | grep -v versioned | grep -v 'pkg/apis/stork' | grep -v 'hack')
 endif
 
 GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
@@ -11,7 +11,8 @@ GO_FILES := $(shell find . -name '*.go' | grep -v vendor | \
                                    grep -v '\.pb\.gw\.go' | \
                                    grep -v 'externalversions' | \
                                    grep -v 'versioned' | \
-                                   grep -v 'generated')
+                                   grep -v 'generated' | \
+								   grep -v 'hack')
 
 ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
@@ -102,7 +103,7 @@ integration-test-deploy:
 
 codegen:
 	@echo "Generating CRD"
-	@hack/update-codegen.sh
+	(GOFLAGS="" hack/update-codegen.sh)
 
 stork:
 	@echo "Building the stork binary"

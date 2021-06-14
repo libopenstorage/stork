@@ -26,8 +26,10 @@ import (
 )
 
 // ApplicationBackupScheduleLister helps list ApplicationBackupSchedules.
+// All objects returned here must be treated as read-only.
 type ApplicationBackupScheduleLister interface {
 	// List lists all ApplicationBackupSchedules in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ApplicationBackupSchedule, err error)
 	// ApplicationBackupSchedules returns an object that can list and get ApplicationBackupSchedules.
 	ApplicationBackupSchedules(namespace string) ApplicationBackupScheduleNamespaceLister
@@ -58,10 +60,13 @@ func (s *applicationBackupScheduleLister) ApplicationBackupSchedules(namespace s
 }
 
 // ApplicationBackupScheduleNamespaceLister helps list and get ApplicationBackupSchedules.
+// All objects returned here must be treated as read-only.
 type ApplicationBackupScheduleNamespaceLister interface {
 	// List lists all ApplicationBackupSchedules in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ApplicationBackupSchedule, err error)
 	// Get retrieves the ApplicationBackupSchedule from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ApplicationBackupSchedule, error)
 	ApplicationBackupScheduleNamespaceListerExpansion
 }

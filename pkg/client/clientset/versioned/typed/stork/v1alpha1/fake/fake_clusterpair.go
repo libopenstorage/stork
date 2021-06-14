@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var clusterpairsResource = schema.GroupVersionResource{Group: "stork.libopenstor
 var clusterpairsKind = schema.GroupVersionKind{Group: "stork.libopenstorage.org", Version: "v1alpha1", Kind: "ClusterPair"}
 
 // Get takes name of the clusterPair, and returns the corresponding clusterPair object, and an error if there is any.
-func (c *FakeClusterPairs) Get(name string, options v1.GetOptions) (result *v1alpha1.ClusterPair, err error) {
+func (c *FakeClusterPairs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(clusterpairsResource, c.ns, name), &v1alpha1.ClusterPair{})
 
@@ -50,7 +52,7 @@ func (c *FakeClusterPairs) Get(name string, options v1.GetOptions) (result *v1al
 }
 
 // List takes label and field selectors, and returns the list of ClusterPairs that match those selectors.
-func (c *FakeClusterPairs) List(opts v1.ListOptions) (result *v1alpha1.ClusterPairList, err error) {
+func (c *FakeClusterPairs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ClusterPairList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(clusterpairsResource, clusterpairsKind, c.ns, opts), &v1alpha1.ClusterPairList{})
 
@@ -72,14 +74,14 @@ func (c *FakeClusterPairs) List(opts v1.ListOptions) (result *v1alpha1.ClusterPa
 }
 
 // Watch returns a watch.Interface that watches the requested clusterPairs.
-func (c *FakeClusterPairs) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeClusterPairs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(clusterpairsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a clusterPair and creates it.  Returns the server's representation of the clusterPair, and an error, if there is any.
-func (c *FakeClusterPairs) Create(clusterPair *v1alpha1.ClusterPair) (result *v1alpha1.ClusterPair, err error) {
+func (c *FakeClusterPairs) Create(ctx context.Context, clusterPair *v1alpha1.ClusterPair, opts v1.CreateOptions) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(clusterpairsResource, c.ns, clusterPair), &v1alpha1.ClusterPair{})
 
@@ -90,7 +92,7 @@ func (c *FakeClusterPairs) Create(clusterPair *v1alpha1.ClusterPair) (result *v1
 }
 
 // Update takes the representation of a clusterPair and updates it. Returns the server's representation of the clusterPair, and an error, if there is any.
-func (c *FakeClusterPairs) Update(clusterPair *v1alpha1.ClusterPair) (result *v1alpha1.ClusterPair, err error) {
+func (c *FakeClusterPairs) Update(ctx context.Context, clusterPair *v1alpha1.ClusterPair, opts v1.UpdateOptions) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(clusterpairsResource, c.ns, clusterPair), &v1alpha1.ClusterPair{})
 
@@ -102,7 +104,7 @@ func (c *FakeClusterPairs) Update(clusterPair *v1alpha1.ClusterPair) (result *v1
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeClusterPairs) UpdateStatus(clusterPair *v1alpha1.ClusterPair) (*v1alpha1.ClusterPair, error) {
+func (c *FakeClusterPairs) UpdateStatus(ctx context.Context, clusterPair *v1alpha1.ClusterPair, opts v1.UpdateOptions) (*v1alpha1.ClusterPair, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateSubresourceAction(clusterpairsResource, "status", c.ns, clusterPair), &v1alpha1.ClusterPair{})
 
@@ -113,7 +115,7 @@ func (c *FakeClusterPairs) UpdateStatus(clusterPair *v1alpha1.ClusterPair) (*v1a
 }
 
 // Delete takes name of the clusterPair and deletes it. Returns an error if one occurs.
-func (c *FakeClusterPairs) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeClusterPairs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(clusterpairsResource, c.ns, name), &v1alpha1.ClusterPair{})
 
@@ -121,15 +123,15 @@ func (c *FakeClusterPairs) Delete(name string, options *v1.DeleteOptions) error 
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeClusterPairs) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(clusterpairsResource, c.ns, listOptions)
+func (c *FakeClusterPairs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(clusterpairsResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ClusterPairList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched clusterPair.
-func (c *FakeClusterPairs) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ClusterPair, err error) {
+func (c *FakeClusterPairs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClusterPair, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(clusterpairsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ClusterPair{})
 

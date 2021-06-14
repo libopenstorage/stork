@@ -38,15 +38,15 @@ type ApplicationRestoresGetter interface {
 
 // ApplicationRestoreInterface has methods to work with ApplicationRestore resources.
 type ApplicationRestoreInterface interface {
-	Create(*v1alpha1.ApplicationRestore) (*v1alpha1.ApplicationRestore, error)
-	Update(*v1alpha1.ApplicationRestore) (*v1alpha1.ApplicationRestore, error)
-	UpdateStatus(*v1alpha1.ApplicationRestore) (*v1alpha1.ApplicationRestore, error)
-	Delete(name string, options *v1.DeleteOptions) error
-	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string, options v1.GetOptions) (*v1alpha1.ApplicationRestore, error)
-	List(opts v1.ListOptions) (*v1alpha1.ApplicationRestoreList, error)
-	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationRestore, err error)
+	Create(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.CreateOptions) (*v1alpha1.ApplicationRestore, error)
+	Update(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.UpdateOptions) (*v1alpha1.ApplicationRestore, error)
+	UpdateStatus(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.UpdateOptions) (*v1alpha1.ApplicationRestore, error)
+	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ApplicationRestore, error)
+	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ApplicationRestoreList, error)
+	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationRestore, err error)
 	ApplicationRestoreExpansion
 }
 
@@ -65,20 +65,20 @@ func newApplicationRestores(c *StorkV1alpha1Client, namespace string) *applicati
 }
 
 // Get takes name of the applicationRestore, and returns the corresponding applicationRestore object, and an error if there is any.
-func (c *applicationRestores) Get(name string, options v1.GetOptions) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *applicationRestores) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ApplicationRestore, err error) {
 	result = &v1alpha1.ApplicationRestore{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("applicationrestores").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of ApplicationRestores that match those selectors.
-func (c *applicationRestores) List(opts v1.ListOptions) (result *v1alpha1.ApplicationRestoreList, err error) {
+func (c *applicationRestores) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ApplicationRestoreList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -89,13 +89,13 @@ func (c *applicationRestores) List(opts v1.ListOptions) (result *v1alpha1.Applic
 		Resource("applicationrestores").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested applicationRestores.
-func (c *applicationRestores) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *applicationRestores) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -106,87 +106,90 @@ func (c *applicationRestores) Watch(opts v1.ListOptions) (watch.Interface, error
 		Resource("applicationrestores").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch(context.TODO())
+		Watch(ctx)
 }
 
 // Create takes the representation of a applicationRestore and creates it.  Returns the server's representation of the applicationRestore, and an error, if there is any.
-func (c *applicationRestores) Create(applicationRestore *v1alpha1.ApplicationRestore) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *applicationRestores) Create(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.CreateOptions) (result *v1alpha1.ApplicationRestore, err error) {
 	result = &v1alpha1.ApplicationRestore{}
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("applicationrestores").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationRestore).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Update takes the representation of a applicationRestore and updates it. Returns the server's representation of the applicationRestore, and an error, if there is any.
-func (c *applicationRestores) Update(applicationRestore *v1alpha1.ApplicationRestore) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *applicationRestores) Update(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.UpdateOptions) (result *v1alpha1.ApplicationRestore, err error) {
 	result = &v1alpha1.ApplicationRestore{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("applicationrestores").
 		Name(applicationRestore.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationRestore).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-
-func (c *applicationRestores) UpdateStatus(applicationRestore *v1alpha1.ApplicationRestore) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *applicationRestores) UpdateStatus(ctx context.Context, applicationRestore *v1alpha1.ApplicationRestore, opts v1.UpdateOptions) (result *v1alpha1.ApplicationRestore, err error) {
 	result = &v1alpha1.ApplicationRestore{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("applicationrestores").
 		Name(applicationRestore.Name).
 		SubResource("status").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(applicationRestore).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the applicationRestore and deletes it. Returns an error if one occurs.
-func (c *applicationRestores) Delete(name string, options *v1.DeleteOptions) error {
+func (c *applicationRestores) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("applicationrestores").
 		Name(name).
-		Body(options).
-		Do(context.TODO()).
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *applicationRestores) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
+func (c *applicationRestores) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("applicationrestores").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do(context.TODO()).
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched applicationRestore.
-func (c *applicationRestores) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ApplicationRestore, err error) {
+func (c *applicationRestores) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ApplicationRestore, err error) {
 	result = &v1alpha1.ApplicationRestore{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
 		Resource("applicationrestores").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do(context.TODO()).
+		Do(ctx).
 		Into(result)
 	return
 }
