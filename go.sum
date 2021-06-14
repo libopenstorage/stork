@@ -830,6 +830,7 @@ github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67 h1:A40Pv8+F
 github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67/go.mod h1:4QOUUeRMHtTniKPj+biL3wlusahU/7OnMsGKc4FN/EY=
 github.com/libopenstorage/stork v0.0.0-20191009210244-6a3497c42b2a/go.mod h1:qBSzYTJVHlOMg5RINNiHD1kBzlasnrc2uKLPZLgu1Qs=
 github.com/libopenstorage/stork v1.3.0-beta1.0.20200630005842-9255e7a98775/go.mod h1:qBSzYTJVHlOMg5RINNiHD1kBzlasnrc2uKLPZLgu1Qs=
+github.com/libopenstorage/stork v1.3.0-beta1.0.20210503014041-fb328e234db7/go.mod h1:Z38BxJx7Al1BVEX0RLa9BtqEzU3QQjwDu9FEspIuXck=
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de h1:9TO3cAIGXtEhnIaL+V+BEER86oLrvS+kWobKpbJuye0=
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de/go.mod h1:zAbeS9B/r2mtpb6U+EI2rYA5OAXxsYw6wTamcNW+zcE=
 github.com/lightstep/lightstep-tracer-common/golang/gogo v0.0.0-20190605223551-bc2310a04743/go.mod h1:qklhhLq1aX+mtWk9cPHPzaBjWImj5ULL6C7HFJtXQMM=
@@ -1060,6 +1061,8 @@ github.com/portworx/sched-ops v0.20.4-openstorage-rc3.0.20210325150944-0b2c20233
 github.com/portworx/sched-ops v1.20.0-rc1/go.mod h1:nl2AP/W8sWmhmW7ScwNQrm5OCHiHjLYQ2NmO3TUjIhE=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20210503012502-d83d87d42ead h1:3YTLDjXjwruf0DTYtx4i3Sq5LVZA5Qf63K+K/NHGgto=
 github.com/portworx/sched-ops v1.20.4-rc1.0.20210503012502-d83d87d42ead/go.mod h1:fZ+nl20syzzXqeVuF41XfOJAmLXRV5+CFteuBkijB7A=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a h1:N+zSnQ2r2ps+fh7wi1pq2dcB6wYjTAUF0HSZ9Uny/qs=
+github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a/go.mod h1:+R+28pHhZ2Go7LquCo1+9ctpxwFGWak7zNcTFyXVh4k=
 github.com/portworx/talisman v0.0.0-20191007232806-837747f38224/go.mod h1:OjpMH9Uh5o9ntVGktm4FbjLNwubJ3ITih2OfYrAeWtA=
 github.com/portworx/talisman v0.0.0-20210302012732-8af4564777f7/go.mod h1:e8a6uFpSbOlRpZQlW9aXYogC+GWAo065G0RL9hDkD4Q=
 github.com/portworx/torpedo v0.20.4-rc1 h1:iI6J8IgMfZdqYpFQ2jNDNet7RbMOcuBmvh8T+B3NJF0=
