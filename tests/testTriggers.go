@@ -101,7 +101,44 @@ const (
 	RebootNode = "rebootNode"
 	// EmailReporter notifies via email outcome of past events
 	EmailReporter = "emailReporter"
+	// CoreChecker checks if any cores got generated
+	CoreChecker = "coreChecker"
 )
+
+// TriggerCoreChecker checks if any cores got generated
+func TriggerCoreChecker(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CoreChecker,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	context(fmt.Sprintf("checking for core files..."), func() {
+		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
+			nodes := node.GetWorkerNodes()
+			expect(nodes).NotTo(beEmpty())
+			for _, n := range nodes {
+				if !n.IsStorageDriverInstalled {
+					continue
+				}
+				logrus.Infof("looking for core files on node %s", n.Name)
+				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				UpdateOutcome(event, err)
+
+				if len(file) != 0 {
+					UpdateOutcome(event, fmt.Errorf("[%s] found on node [%s]", file, n.Name))
+				}
+			}
+		})
+	})
+}
 
 // TriggerDeployNewApps deploys applications in separate namespaces
 func TriggerDeployNewApps(contexts []*scheduler.Context, recordChan *chan *EventRecord) {

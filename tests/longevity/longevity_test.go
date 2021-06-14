@@ -64,6 +64,7 @@ var _ = Describe("{Longevity}", func() {
 		HADecrease:       TriggerHADecrease,
 		EmailReporter:    TriggerEmailReporter,
 		AppTaskDown:      TriggerAppTaskDown,
+		CoreChecker:      TriggerCoreChecker,
 	}
 	It("has to schedule app and introduce test triggers", func() {
 		Step(fmt.Sprintf("Start watch on K8S configMap [%s/%s]",
@@ -262,6 +263,7 @@ func populateIntervals() {
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[AppTaskDown] = map[int]time.Duration{}
 	triggerInterval[DeployApps] = map[int]time.Duration{}
+	triggerInterval[CoreChecker] = map[int]time.Duration{}
 
 	baseInterval := 60 * time.Minute
 	triggerInterval[RebootNode][10] = 1 * baseInterval
@@ -341,6 +343,17 @@ func populateIntervals() {
 	triggerInterval[EmailReporter][3] = 8 * baseInterval
 	triggerInterval[EmailReporter][2] = 9 * baseInterval
 	triggerInterval[EmailReporter][1] = 10 * baseInterval
+
+	triggerInterval[CoreChecker][10] = 1 * baseInterval
+	triggerInterval[CoreChecker][9] = 2 * baseInterval
+	triggerInterval[CoreChecker][8] = 3 * baseInterval
+	triggerInterval[CoreChecker][7] = 4 * baseInterval
+	triggerInterval[CoreChecker][6] = 5 * baseInterval
+	triggerInterval[CoreChecker][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CoreChecker][4] = 7 * baseInterval
+	triggerInterval[CoreChecker][3] = 8 * baseInterval
+	triggerInterval[CoreChecker][2] = 9 * baseInterval
+	triggerInterval[CoreChecker][1] = 10 * baseInterval
 
 	triggerInterval[DeployApps][10] = 1 * baseInterval
 	triggerInterval[DeployApps][9] = 2 * baseInterval
