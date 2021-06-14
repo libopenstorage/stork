@@ -9,6 +9,7 @@ import (
 	storkv1alpha1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/errors"
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,6 +31,8 @@ type SnapshotScheduleOps interface {
 	// The caller is expected to validate if the returned map has all snapshots expected at that point of time
 	ValidateSnapshotSchedule(string, string, time.Duration, time.Duration) (
 		map[storkv1alpha1.SchedulePolicyType][]*storkv1alpha1.ScheduledVolumeSnapshotStatus, error)
+	// sets up a watcher that listens for changes on volume snapshot schedules
+	WatchVolumeSnapshotSchedule(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error
 }
 
 // CreateSnapshotSchedule creates a SnapshotSchedule
@@ -156,4 +159,22 @@ func (c *Client) ValidateSnapshotSchedule(name string, namespace string, timeout
 	}
 
 	return snapshots, nil
+}
+
+// WatchVolumeSnapshotSchedule sets up a watcher that listens for changes on volume snapshot schedules
+func (c *Client) WatchVolumeSnapshotSchedule(namespace string, fn WatchFunc, listOptions metav1.ListOptions) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+
+	listOptions.Watch = true
+	watchInterface, err := c.stork.StorkV1alpha1().VolumeSnapshotSchedules(namespace).Watch(context.TODO(), listOptions)
+	if err != nil {
+		logrus.WithError(err).Error("error invoking the watch api for snapshot schedules")
+		return err
+	}
+
+	// fire off watch function
+	go c.handleWatch(watchInterface, &storkv1alpha1.VolumeSnapshotSchedule{}, "", fn, listOptions)
+	return nil
 }
