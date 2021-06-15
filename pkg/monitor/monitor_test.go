@@ -103,13 +103,13 @@ func setup(t *testing.T) {
 	err = driver.UpdateNodeStatus(5, volume.NodeOffline)
 	require.NoError(t, err, "Error setting node status to Offline")
 
-	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1)
+	err = driver.ProvisionVolume(driverVolumeName, provNodes, 1, nil)
 	require.NoError(t, err, "Error provisioning volume")
 
-	err = driver.ProvisionVolume(attachmentVolumeName, provNodes, 2)
+	err = driver.ProvisionVolume(attachmentVolumeName, provNodes, 2, nil)
 	require.NoError(t, err, "Error provisioning volume")
 
-	err = driver.ProvisionVolume(unknownPodsVolumeName, provNodes, 3)
+	err = driver.ProvisionVolume(unknownPodsVolumeName, provNodes, 3, nil)
 	require.NoError(t, err, "Error provisioning volume")
 
 	eventBroadcaster := record.NewBroadcaster()

@@ -710,8 +710,12 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 	var volumes []*storkvolume.Info
 	for _, volume := range podSpec.Volumes {
 		volumeName := ""
+		var (
+			pvc *v1.PersistentVolumeClaim
+			err error
+		)
 		if volume.PersistentVolumeClaim != nil {
-			pvc, err := core.Instance().GetPersistentVolumeClaim(
+			pvc, err = core.Instance().GetPersistentVolumeClaim(
 				volume.PersistentVolumeClaim.ClaimName,
 				namespace)
 			if err != nil {
@@ -735,10 +739,17 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 		if volumeName != "" {
 			volumeInfo, err := p.InspectVolume(volumeName)
 			if err != nil {
-				// If the ispect volume fails return with atleast some info
+				// If the inspect volume fails return with atleast some info
 				volumeInfo = &storkvolume.Info{
 					VolumeName: volumeName,
 				}
+			}
+			// Add the annotations as volume labels
+			if len(volumeInfo.Labels) == 0 {
+				volumeInfo.Labels = make(map[string]string)
+			}
+			for k, v := range pvc.ObjectMeta.Annotations {
+				volumeInfo.Labels[k] = v
 			}
 			volumes = append(volumes, volumeInfo)
 		}
