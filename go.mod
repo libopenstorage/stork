@@ -40,20 +40,23 @@ require (
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a
 	github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
+	github.com/projectcalico/libcalico-go v1.7.2-0.20210510231246-b2f91f5ac4d6
 	github.com/prometheus/client_golang v1.9.0
 	github.com/sirupsen/logrus v1.7.0
 	github.com/skyrings/skyring-common v0.0.0-20160929130248-d1c0bb1cbd5e
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
-	github.com/urfave/cli v1.22.2
+	github.com/urfave/cli v1.22.4
 	gocloud.dev v0.20.0
 	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
 	golang.org/x/mod v0.4.1 // indirect
 	golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5
 	golang.org/x/sys v0.0.0-20210301091718-77cc2087c03b // indirect
 	google.golang.org/api v0.30.0
-	google.golang.org/grpc v1.33.2
+	google.golang.org/genproto v0.0.0-20201210142538-e3217bee35cc // indirect
+	google.golang.org/grpc v1.36.0
+	google.golang.org/grpc/examples v0.0.0-20210614190250-22c535818725 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	honnef.co/go/tools v0.1.2 // indirect
 	k8s.io/api v0.20.4
@@ -75,6 +78,7 @@ require (
 replace (
 	github.com/LINBIT/golinstor => github.com/LINBIT/golinstor v0.26.0
 	github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
+	github.com/coreos/etcd => github.com/coreos/etcd v3.3.13+incompatible
 	github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
 	github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
@@ -82,9 +86,11 @@ replace (
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 	github.com/libopenstorage/autopilot-api => github.com/libopenstorage/autopilot-api v0.6.1-0.20210301232050-ca2633c6e114
 	github.com/portworx/torpedo => github.com/portworx/torpedo v0.20.4-rc1.0.20210325154352-eb81b0cdd145
+	go.etcd.io/bbolt => go.etcd.io/bbolt v1.3.5
+	go.etcd.io/etcd => go.etcd.io/etcd v0.5.0-alpha.5.0.20200910180754-dd1b699fc489 // ae9734ed278b is the SHA for git tag v3.4.13
+	google.golang.org/grpc => google.golang.org/grpc v1.27.1
 	gopkg.in/fsnotify.v1 v1.4.7 => github.com/fsnotify/fsnotify v1.4.7
 	helm.sh/helm/v3 => helm.sh/helm/v3 v3.5.2
-
 	k8s.io/api => k8s.io/api v0.20.4
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.20.4
 	k8s.io/apimachinery => k8s.io/apimachinery v0.20.4

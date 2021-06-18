@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -48,6 +49,7 @@ type ResourceCollector struct {
 	coreOps          core.Ops
 	rbacOps          rbac.Ops
 	storkOps         storkops.Ops
+	calicoOps        clientv3.Interface
 }
 
 // Objects Collection of objects
@@ -96,6 +98,12 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 	if err != nil {
 		return err
 	}
+
+	r.calicoOps, err = clientv3.NewFromEnv()
+	if err != nil {
+		logrus.Errorf("Unable to initialise calico client %v", err)
+	}
+
 	return nil
 }
 
@@ -136,7 +144,8 @@ func resourceToBeCollected(resource metav1.APIResource, grp schema.GroupVersion,
 		"ReplicaSet",
 		"LimitRange",
 		"NetworkPolicy",
-		"PodDisruptionBudget":
+		"PodDisruptionBudget",
+		"GlobalNetworkPolicy":
 		return true
 	case "Job":
 		return slice.ContainsString(optionalResourceTypes, "job", strings.ToLower) ||
@@ -474,6 +483,8 @@ func (r *ResourceCollector) objectToBeCollected(
 		return r.resourceQuotaToBeCollected(object)
 	case "NetworkPolicy":
 		return r.networkPolicyToBeCollected(object)
+	case "GlobalNetworkPolicy":
+		return r.globalNetworkPolicyToBeCollected(object, namespace)
 	}
 
 	return true, nil
