@@ -14,10 +14,19 @@ import (
 func (r *ResourceCollector) subjectInNamespace(subject *rbacv1.Subject, namespace string) (bool, error) {
 	switch subject.Kind {
 	case rbacv1.ServiceAccountKind:
-		// For ServiceAccount the namespace is in the spec
-		if subject.Namespace == namespace {
-			return true, nil
+		// skip check for default service account
+		if subject.Name == "default" {
+			return false, nil
 		}
+		// check if user has an access to sa in namespace
+		_, err := r.coreOps.GetServiceAccount(subject.Name, namespace)
+		if err != nil {
+			if apierrors.IsForbidden(err) || apierrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
 	case rbacv1.UserKind:
 		// For User we need to parse the username to get the namespace
 		userNamespace, _, err := serviceaccount.SplitUsername(subject.Name)
