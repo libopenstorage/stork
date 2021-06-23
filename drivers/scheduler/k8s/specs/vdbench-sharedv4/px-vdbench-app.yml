@@ -2,26 +2,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vdbench
+  name: vdbench-sharedv4
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
-      app: vdbench
+      app: vdbench-sharedv4
   template:
     metadata:
       labels:
-        app: vdbench
+        app: vdbench-sharedv4
     spec:
       containers:
         - name: vdbench
           image: openebs/tests-vdbench
           command: ["./bench_runner.sh"]
-          args: ["Basic", "5400"]
+          args: ["Basic", "5400", "$(POD_NAME)"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           volumeMounts:
             - name: vdbench-persistent-storage
-              mountPath: /datadir1
+              mountPath: /tmp
       volumes:
         - name: vdbench-persistent-storage
           persistentVolumeClaim:
-            claimName: vdbench-pvc
+            claimName: vdbench-pvc-sharedv4
