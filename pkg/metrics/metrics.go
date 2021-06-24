@@ -19,6 +19,8 @@ const (
 	metricNamespace = "namespace"
 	// metricSchedule for stork prometheus metrics
 	metricSchedule = "schedule"
+	// metricPolicy for stork prometheus metrics
+	metricPolicy = "policy"
 	// waitInterval to wait for crd registration
 	waitInterval = 5 * time.Second
 )
@@ -60,7 +62,10 @@ func StartMetrics(enableApplicationController, enableMigrationController bool) e
 				logrus.Errorf("failed to watch applicationclones due to: %v", err)
 			}
 			if err := storkops.Instance().WatchApplicationBackupSchedule("", watchBackupScheduleCR, metav1.ListOptions{}); err != nil {
-				logrus.Errorf("failed to watch applicationbackup scheduless due to: %v", err)
+				logrus.Errorf("failed to watch applicationbackup schedules due to: %v", err)
+			}
+			if err := storkops.Instance().WatchVolumeSnapshotSchedule("", watchVolumeSnapshotScheduleCR, metav1.ListOptions{}); err != nil {
+				logrus.Errorf("failed to watch volume snapshot schedules due to: %v", err)
 			}
 			logrus.Infof("started metrics collection for applicationcontrollers")
 		}

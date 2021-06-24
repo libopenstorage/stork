@@ -269,6 +269,8 @@ func (c *Client) handleWatch(
 						err = c.WatchMigration(namespace, fn, listOptions)
 					} else if _, ok := object.(*storkv1.MigrationSchedule); ok {
 						err = c.WatchMigrationSchedule(namespace, fn, listOptions)
+					} else if _, ok := object.(*storkv1.VolumeSnapshotSchedule); ok {
+						err = c.WatchVolumeSnapshotSchedule(namespace, fn, listOptions)
 					} else {
 						return "", false, fmt.Errorf("unsupported object: %v given to handle watch", object)
 					}

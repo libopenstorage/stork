@@ -306,7 +306,9 @@ func (r *ResourceCollector) GetResources(
 	}
 	crbs, err := r.rbacOps.ListClusterRoleBindings()
 	if err != nil {
-		return nil, err
+		if !apierrors.IsForbidden(err) {
+			return nil, err
+		}
 	}
 
 	for _, group := range r.discoveryHelper.Resources() {

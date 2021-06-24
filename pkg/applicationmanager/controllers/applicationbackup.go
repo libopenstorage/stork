@@ -420,7 +420,7 @@ func min(x, y int) int {
 	return y
 }
 
-func (a *ApplicationBackupController) updateBackupCRWithRetry(
+func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 	namespacedName types.NamespacedName,
 	status stork_api.ApplicationBackupStatusType,
 	stage stork_api.ApplicationBackupStageType,
@@ -435,7 +435,11 @@ func (a *ApplicationBackupController) updateBackupCRWithRetry(
 			time.Sleep(retrySleep)
 			continue
 		}
-		if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+		// since updateBackupCRInVolumeStage called during volume stage , make sure
+		// we are not re-reading CR contents and updating application/final stage to
+		// volume stage again
+		if backup.Status.Stage == stork_api.ApplicationBackupStageFinal ||
+			backup.Status.Stage == stork_api.ApplicationBackupStageApplications {
 			return backup, nil
 		}
 		backup.Status.Status = status
@@ -553,7 +557,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						v1.EventTypeWarning,
 						string(stork_api.ApplicationBackupStatusFailed),
 						message)
-					_, err = a.updateBackupCRWithRetry(
+					_, err = a.updateBackupCRInVolumeStage(
 						namespacedName,
 						stork_api.ApplicationBackupStatusFailed,
 						stork_api.ApplicationBackupStageFinal,
@@ -565,7 +569,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					}
 					return nil
 				}
-				backup, err = a.updateBackupCRWithRetry(
+				backup, err = a.updateBackupCRInVolumeStage(
 					namespacedName,
 					stork_api.ApplicationBackupStatusInProgress,
 					backup.Status.Stage,
@@ -670,7 +674,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					time.Sleep(retrySleep)
 					continue
 				}
-				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal ||
+					backup.Status.Stage == stork_api.ApplicationBackupStageApplications {
 					return nil
 				}
 				backup.Status.Volumes = volumeInfos
@@ -707,7 +712,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					time.Sleep(retrySleep)
 					continue
 				}
-				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
+				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal ||
+					backup.Status.Stage == stork_api.ApplicationBackupStageApplications {
 					return nil
 				}
 				backup.Status.Stage = stork_api.ApplicationBackupStageApplications
