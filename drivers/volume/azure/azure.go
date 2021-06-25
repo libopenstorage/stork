@@ -174,7 +174,7 @@ func (a *azure) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 
 	if provisioner != provisionerName &&
 		!isCsiProvisioner(provisioner) {
-		logrus.Debugf("Provisioner in Storageclass not Azure: %v", provisioner)
+		logrus.Tracef("Provisioner in Storageclass not Azure: %v", provisioner)
 		return false
 	}
 	return true
@@ -193,7 +193,7 @@ func (a *azure) OwnsPV(pv *v1.PersistentVolume) bool {
 	}
 	if provisioner != provisionerName &&
 		!isCsiProvisioner(provisioner) {
-		logrus.Debugf("Provisioner in Storageclass not AzureDisk: %v", provisioner)
+		logrus.Tracef("Provisioner in Storageclass not AzureDisk: %v", provisioner)
 		return false
 	}
 	return true

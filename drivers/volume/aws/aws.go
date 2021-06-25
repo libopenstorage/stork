@@ -143,7 +143,7 @@ func (a *aws) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 
 	if provisioner != provisionerName &&
 		!isCsiProvisioner(provisioner) {
-		logrus.Debugf("Provisioner in Storageclass not AWS EBS: %v", provisioner)
+		logrus.Tracef("Provisioner in Storageclass not AWS EBS: %v", provisioner)
 		return false
 	}
 	return true
@@ -162,7 +162,7 @@ func (a *aws) OwnsPV(pv *v1.PersistentVolume) bool {
 	}
 	if provisioner != provisionerName &&
 		!isCsiProvisioner(provisioner) {
-		logrus.Debugf("Provisioner in Storageclass not AWS EBS: %v", provisioner)
+		logrus.Tracef("Provisioner in Storageclass not AWS EBS: %v", provisioner)
 		return false
 	}
 	return true
@@ -277,10 +277,8 @@ func (a *aws) StartBackup(backup *storkapi.ApplicationBackup,
 			}
 
 			volumeInfo.BackupID = *snapshot.SnapshotId
-			volumeInfos = append(volumeInfos, volumeInfo)
-
 		}
-
+		volumeInfos = append(volumeInfos, volumeInfo)
 	}
 	return volumeInfos, nil
 }
@@ -457,7 +455,6 @@ func (a *aws) StartRestore(
 		volumeInfo.SourceVolume = backupVolumeInfo.Volume
 		volumeInfo.DriverName = driverName
 		volumeInfo.RestoreVolume = a.generatePVName()
-		volumeInfos = append(volumeInfos, volumeInfo)
 
 		tags := storkvolume.GetApplicationRestoreLabels(restore, volumeInfo)
 		tags[nameTag] = volumeInfo.RestoreVolume
@@ -502,11 +499,33 @@ func (a *aws) StartRestore(
 				sourceTags = append(sourceTags, tag)
 			}
 			input.TagSpecifications[0].Tags = append(input.TagSpecifications[0].Tags, sourceTags...)
-			output, err := a.client.CreateVolume(input)
+			var createErr error
+			var createVolume *ec2.Volume
+			err = wait.ExponentialBackoff(apiBackoff, func() (bool, error) {
+				createVolume, createErr = a.client.CreateVolume(input)
+				if createErr != nil {
+					if awsErr, ok := createErr.(awserr.Error); ok {
+						if !isExponentialError(awsErr) {
+							return true, createErr
+						}
+						log.ApplicationRestoreLog(restore).Warnf("Retrying AWS "+
+							"volume restore for %v/%v : %v", volumeInfo.PersistentVolumeClaim, volumeInfo.SourceVolume, createErr)
+					}
+					return false, nil
+				}
+				return true, nil
+			})
 			if err != nil {
+				if createErr != nil {
+					if awsErr, ok := createErr.(awserr.Error); ok && isExponentialError(awsErr) {
+						return volumeInfos, &storkvolume.ErrStorageProviderBusy{Reason: awsErr.Message()}
+					}
+					return nil, createErr
+				}
 				return nil, err
 			}
-			volumeInfo.RestoreVolume = *output.VolumeId
+			volumeInfo.RestoreVolume = *createVolume.VolumeId
+			volumeInfos = append(volumeInfos, volumeInfo)
 		}
 	}
 	return volumeInfos, nil

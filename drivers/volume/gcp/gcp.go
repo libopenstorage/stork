@@ -120,7 +120,7 @@ func (g *gcp) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool {
 
 	if provisioner != provisionerName &&
 		!isCsiProvisioner(provisioner) {
-		logrus.Debugf("Provisioner in Storageclass not GCE: %v", provisioner)
+		logrus.Tracef("Provisioner in Storageclass not GCE: %v", provisioner)
 		return false
 	}
 	return true
@@ -139,7 +139,7 @@ func (g *gcp) OwnsPV(pv *v1.PersistentVolume) bool {
 	}
 	if provisioner != provisionerName &&
 		!isCsiProvisioner(provisioner) {
-		logrus.Debugf("Provisioner in Storageclass not GCE: %v", provisioner)
+		logrus.Tracef("Provisioner in Storageclass not GCE: %v", provisioner)
 		return false
 	}
 	return true
