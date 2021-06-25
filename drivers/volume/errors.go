@@ -24,3 +24,13 @@ type ErrStorageProviderBusy struct {
 func (e *ErrStorageProviderBusy) Error() string {
 	return fmt.Sprintf("storage provider busy: %v", e.Reason)
 }
+
+// ErrBackupExists is returned when the backup already exists
+type ErrBackupExists struct {
+	// UID of the backup
+	UID string
+}
+
+func (e *ErrBackupExists) Error() string {
+	return fmt.Sprintf("backup with uid %v already exists", e.UID)
+}
