@@ -46,6 +46,8 @@ const (
 // ResourceCollector is used to collect and process unstructured objects in namespaces and using label selectors
 type ResourceCollector struct {
 	Driver           volume.Driver
+	QPS              float32
+	Burst            int
 	discoveryHelper  discovery.Helper
 	dynamicInterface dynamic.Interface
 	coreOps          core.Ops
@@ -70,7 +72,12 @@ func (r *ResourceCollector) Init(config *restclient.Config) error {
 			return fmt.Errorf("error getting cluster config: %v", err)
 		}
 	}
-
+	if r.QPS > 0 {
+		config.QPS = r.QPS
+	}
+	if r.Burst > 0 {
+		config.Burst = r.Burst
+	}
 	aeclient, err := apiextensionsclient.NewForConfig(config)
 	if err != nil {
 		return fmt.Errorf("error getting apiextension client, %v", err)
