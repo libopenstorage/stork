@@ -329,6 +329,13 @@ func (r *ResourceCollector) GetResources(
 					dynamicClient = r.dynamicInterface.Resource(groupVersion.WithResource(resource.Name)).Namespace(ns)
 				}
 
+				var objectToInclude map[stork_api.ObjectInfo]bool
+				if !IsNsPresentInIncludeResource(includeObjects, ns) {
+					objectToInclude = make(map[stork_api.ObjectInfo]bool)
+				} else {
+					objectToInclude = includeObjects
+				}
+
 				var selectors string
 				// PVs don't get the labels from their PVCs, so don't use the label selector
 				switch resource.Kind {
@@ -355,7 +362,16 @@ func (r *ResourceCollector) GetResources(
 						return nil, fmt.Errorf("error casting object: %v", o)
 					}
 
-					collect, err := r.objectToBeCollected(includeObjects, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers)
+					var err error
+					var collect bool
+					// If a namespace is present in both namespace list and IncludeResource Object,
+					// IncludeResource takes priority and only those resources are backed up.
+					// If a ns is only present in namespace list, all resources in that ns
+					// is backed up.
+					// With this now a user can choose to backup all resources in a ns and some
+					// selected resources from different ns
+
+					collect, err = r.objectToBeCollected(objectToInclude, labelSelectors, resourceMap, runtimeObject, crbs, ns, allDrivers)
 					if err != nil {
 						if apierrors.IsForbidden(err) {
 							continue
@@ -386,6 +402,17 @@ func (r *ResourceCollector) GetResources(
 		return nil, err
 	}
 	return allObjects, nil
+}
+
+// IsNsPresentInIncludeResource checks if a given ns is present in the IncludeResource object
+func IsNsPresentInIncludeResource(includeObjects map[stork_api.ObjectInfo]bool, namespace string) bool {
+	for obj := range includeObjects {
+		if obj.Namespace == namespace {
+			return true
+		}
+	}
+
+	return false
 }
 
 // SkipResource returns whether the annotations of the object require it to be
