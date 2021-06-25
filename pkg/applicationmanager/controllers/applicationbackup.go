@@ -435,6 +435,7 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 			time.Sleep(retrySleep)
 			continue
 		}
+		logrus.Infof("Updating backup  %s/%s in stage/stagus: %s/%s to volume stage", backup.Namespace, backup.Name, backup.Status.Stage, backup.Status.Status)
 		// since updateBackupCRInVolumeStage called during volume stage , make sure
 		// we are not re-reading CR contents and updating application/final stage to
 		// volume stage again
@@ -674,6 +675,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					time.Sleep(retrySleep)
 					continue
 				}
+				logrus.Infof("Updating backup  %s/%s in stage/stagus: %s/%s to volume stage", backup.Namespace, backup.Name, backup.Status.Stage, backup.Status.Status)
 				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal ||
 					backup.Status.Stage == stork_api.ApplicationBackupStageApplications {
 					return nil
@@ -712,6 +714,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					time.Sleep(retrySleep)
 					continue
 				}
+				logrus.Infof("Updating backup  %s/%s in stage/stagus: %s/%s to volume stage", backup.Namespace, backup.Name, backup.Status.Stage, backup.Status.Status)
 				if backup.Status.Stage == stork_api.ApplicationBackupStageFinal ||
 					backup.Status.Stage == stork_api.ApplicationBackupStageApplications {
 					return nil
@@ -1052,6 +1055,7 @@ func (a *ApplicationBackupController) backupResources(
 				time.Sleep(retrySleep)
 				continue
 			}
+			logrus.Infof("Updating backup  %s/%s in stage/stagus: %s/%s", backup.Namespace, backup.Name, backup.Status.Stage, backup.Status.Status)
 			if backup.Status.Stage == stork_api.ApplicationBackupStageFinal {
 				return nil
 			}
