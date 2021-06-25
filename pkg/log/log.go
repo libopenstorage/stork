@@ -223,6 +223,7 @@ func ApplicationBackupLog(backup *storkv1.ApplicationBackup) *logrus.Entry {
 		return logrus.WithFields(logrus.Fields{
 			"ApplicationBackupName": backup.Name,
 			"Namespace":             backup.Namespace,
+			"ResourceVersion":       backup.ResourceVersion,
 		})
 	}
 

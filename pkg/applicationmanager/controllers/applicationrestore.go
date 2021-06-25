@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"time"
 
 	"github.com/libopenstorage/stork/drivers/volume"
 	"github.com/libopenstorage/stork/pkg/apis/stork"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
@@ -187,7 +189,7 @@ func (a *ApplicationRestoreController) createNamespaces(backup *storkapi.Applica
 
 // Reconcile updates for ApplicationRestore objects.
 func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-	logrus.Tracef("Reconciling ApplicationRestore %s/%s", request.Namespace, request.Name)
+	logrus.Infof("Reconciling ApplicationRestore %s/%s", request.Namespace, request.Name)
 
 	// Fetch the ApplicationBackup instance
 	restore := &storkapi.ApplicationRestore{}
@@ -208,7 +210,7 @@ func (a *ApplicationRestoreController) Reconcile(ctx context.Context, request re
 		return reconcile.Result{Requeue: true}, a.client.Update(context.TODO(), restore)
 	}
 
-	if err = a.handle(context.TODO(), restore); err != nil {
+	if err = a.handle(context.TODO(), restore); err != nil && err != errResourceBusy {
 		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(a), restore.Namespace, restore.Name, err)
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
@@ -266,6 +268,9 @@ func (a *ApplicationRestoreController) handle(ctx context.Context, restore *stor
 				v1.EventTypeWarning,
 				string(storkapi.ApplicationRestoreStatusFailed),
 				message)
+			if _, ok := err.(*volume.ErrStorageProviderBusy); ok {
+				return errResourceBusy
+			}
 			return nil
 		}
 	case storkapi.ApplicationRestoreStageApplications:
@@ -328,51 +333,115 @@ func (a *ApplicationRestoreController) getNamespacedObjectsToDelete(restore *sto
 	return tempObjects, nil
 }
 
+func (a *ApplicationRestoreController) updateRestoreCRInVolumeStage(
+	namespacedName types.NamespacedName,
+	status storkapi.ApplicationRestoreStatusType,
+	stage storkapi.ApplicationRestoreStageType,
+	reason string,
+	volumeInfos []*storkapi.ApplicationRestoreVolumeInfo,
+) (*storkapi.ApplicationRestore, error) {
+	restore := &storkapi.ApplicationRestore{}
+	var err error
+	for i := 0; i < maxRetry; i++ {
+		err := a.client.Get(context.TODO(), namespacedName, restore)
+		if err != nil {
+			time.Sleep(retrySleep)
+			continue
+		}
+		if restore.Status.Stage == storkapi.ApplicationRestoreStageFinal ||
+			restore.Status.Stage == storkapi.ApplicationRestoreStageApplications {
+			return restore, nil
+		}
+		logrus.Infof("Updating restore  %s/%s in stage/stagus: %s/%s to volume stage", restore.Namespace, restore.Name, restore.Status.Stage, restore.Status.Status)
+		restore.Status.Status = status
+		restore.Status.Stage = stage
+		restore.Status.Reason = reason
+		restore.Status.LastUpdateTimestamp = metav1.Now()
+		if volumeInfos != nil {
+			restore.Status.Volumes = append(restore.Status.Volumes, volumeInfos...)
+		}
+		err = a.client.Update(context.TODO(), restore)
+		if err != nil {
+			time.Sleep(retrySleep)
+			continue
+		} else {
+			break
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return restore, nil
+}
+
 func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.ApplicationRestore) error {
 	restore.Status.Stage = storkapi.ApplicationRestoreStageVolumes
-	if restore.Status.Volumes == nil || len(restore.Status.Volumes) == 0 {
-		backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
-		if err != nil {
-			return fmt.Errorf("error getting backup spec for restore: %v", err)
-		}
-		backupVolumeInfoMappings := make(map[string][]*storkapi.ApplicationBackupVolumeInfo)
-		objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
-		info := storkapi.ObjectInfo{
-			GroupVersionKind: metav1.GroupVersionKind{
-				Group:   "core",
-				Version: "v1",
-				Kind:    "PersistentVolumeClaim",
-			},
-		}
 
-		for _, namespace := range backup.Spec.Namespaces {
-			if _, ok := restore.Spec.NamespaceMapping[namespace]; !ok {
+	backup, err := storkops.Instance().GetApplicationBackup(restore.Spec.BackupName, restore.Namespace)
+	if err != nil {
+		return fmt.Errorf("error getting backup spec for restore: %v", err)
+	}
+	objectMap := storkapi.CreateObjectsMap(restore.Spec.IncludeResources)
+	info := storkapi.ObjectInfo{
+		GroupVersionKind: metav1.GroupVersionKind{
+			Group:   "core",
+			Version: "v1",
+			Kind:    "PersistentVolumeClaim",
+		},
+	}
+
+	pvcCount := 0
+	restoreDone := 0
+	backupVolumeInfoMappings := make(map[string][]*storkapi.ApplicationBackupVolumeInfo)
+	for _, namespace := range backup.Spec.Namespaces {
+		if _, ok := restore.Spec.NamespaceMapping[namespace]; !ok {
+			continue
+		}
+		for _, volumeBackup := range backup.Status.Volumes {
+			if volumeBackup.Namespace != namespace {
 				continue
 			}
-			for _, volumeBackup := range backup.Status.Volumes {
-				if volumeBackup.Namespace != namespace {
+			// If a list of resources was specified during restore check if
+			// this PVC was included
+			info.Name = volumeBackup.PersistentVolumeClaim
+			info.Namespace = volumeBackup.Namespace
+			if len(objectMap) != 0 {
+				if val, present := objectMap[info]; !present || !val {
 					continue
 				}
-				// If a list of resources was specified during restore check if
-				// this PVC was included
-				info.Name = volumeBackup.PersistentVolumeClaim
-				info.Namespace = volumeBackup.Namespace
-				if len(objectMap) != 0 {
-					if val, present := objectMap[info]; !present || !val {
-						continue
-					}
-				}
-
-				if volumeBackup.DriverName == "" {
-					volumeBackup.DriverName = volume.GetDefaultDriverName()
-				}
-				if backupVolumeInfoMappings[volumeBackup.DriverName] == nil {
-					backupVolumeInfoMappings[volumeBackup.DriverName] = make([]*storkapi.ApplicationBackupVolumeInfo, 0)
-				}
-				backupVolumeInfoMappings[volumeBackup.DriverName] = append(backupVolumeInfoMappings[volumeBackup.DriverName], volumeBackup)
 			}
-		}
 
+			pvcCount++
+			isVolRestoreDone := false
+			for _, statusVolume := range restore.Status.Volumes {
+				if statusVolume.SourceVolume == volumeBackup.Volume {
+					isVolRestoreDone = true
+					break
+				}
+			}
+			if isVolRestoreDone {
+				restoreDone++
+				continue
+			}
+
+			if volumeBackup.DriverName == "" {
+				volumeBackup.DriverName = volume.GetDefaultDriverName()
+			}
+			if backupVolumeInfoMappings[volumeBackup.DriverName] == nil {
+				backupVolumeInfoMappings[volumeBackup.DriverName] = make([]*storkapi.ApplicationBackupVolumeInfo, 0)
+			}
+			backupVolumeInfoMappings[volumeBackup.DriverName] = append(backupVolumeInfoMappings[volumeBackup.DriverName], volumeBackup)
+		}
+	}
+
+	if restore.Status.Volumes == nil {
+		restore.Status.Volumes = make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
+	}
+	namespacedName := types.NamespacedName{}
+	namespacedName.Namespace = restore.Namespace
+	namespacedName.Name = restore.Name
+	restoreCompleteList := make([]*storkapi.ApplicationRestoreVolumeInfo, 0)
+	if len(restore.Status.Volumes) != pvcCount {
 		for driverName, vInfos := range backupVolumeInfoMappings {
 			driver, err := volume.Get(driverName)
 			if err != nil {
@@ -438,25 +507,44 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 			if err != nil {
 				message := fmt.Sprintf("Error starting Application Restore for volumes: %v", err)
 				log.ApplicationRestoreLog(restore).Errorf(message)
+				if _, ok := err.(*volume.ErrStorageProviderBusy); ok {
+					msg := fmt.Sprintf("Volume restores are in progress. Restores are failing for some volumes"+
+						" since the storage provider is busy. Restore will be retried. Error: %v", err)
+					a.recorder.Event(restore,
+						v1.EventTypeWarning,
+						string(storkapi.ApplicationRestoreStatusInProgress),
+						msg)
+
+					log.ApplicationRestoreLog(restore).Errorf(msg)
+					// Update the restore status even for failed restores when storage is busy
+					_, updateErr := a.updateRestoreCRInVolumeStage(
+						namespacedName,
+						storkapi.ApplicationRestoreStatusInProgress,
+						storkapi.ApplicationRestoreStageVolumes,
+						msg,
+						restoreVolumeInfos,
+					)
+					if updateErr != nil {
+						logrus.Warnf("failed to update restore status: %v", updateErr)
+					}
+					return err
+				}
 				a.recorder.Event(restore,
 					v1.EventTypeWarning,
 					string(storkapi.ApplicationRestoreStatusFailed),
 					message)
-				restore.Status.Status = storkapi.ApplicationRestoreStatusFailed
-				restore.Status.Stage = storkapi.ApplicationRestoreStageFinal
-				restore.Status.Reason = message
-				err = a.client.Update(context.TODO(), restore)
-				if err != nil {
-					return err
-				}
-
-				return nil
+				_, err = a.updateRestoreCRInVolumeStage(namespacedName, storkapi.ApplicationRestoreStatusFailed, storkapi.ApplicationRestoreStageFinal, message, nil)
+				return err
 			}
-			restore.Status.Volumes = append(restore.Status.Volumes, restoreVolumeInfos...)
+			restoreCompleteList = append(restoreCompleteList, restoreVolumeInfos...)
 		}
-		restore.Status.Status = storkapi.ApplicationRestoreStatusInProgress
-		restore.Status.LastUpdateTimestamp = metav1.Now()
-		err = a.client.Update(context.TODO(), restore)
+		restore, err = a.updateRestoreCRInVolumeStage(
+			namespacedName,
+			storkapi.ApplicationRestoreStatusInProgress,
+			storkapi.ApplicationRestoreStageVolumes,
+			"Volume restores are in progress",
+			restoreCompleteList,
+		)
 		if err != nil {
 			return err
 		}
@@ -517,7 +605,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 	}
 
 	// Return if we have any volume restores still in progress
-	if inProgress {
+	if inProgress || len(restore.Status.Volumes) != pvcCount {
 		return nil
 	}
 
@@ -545,7 +633,7 @@ func (a *ApplicationRestoreController) restoreVolumes(restore *storkapi.Applicat
 		restore.Status.TotalSize += vInfo.TotalSize
 	}
 
-	err := a.client.Update(context.TODO(), restore)
+	err = a.client.Update(context.TODO(), restore)
 	if err != nil {
 		return err
 	}

@@ -70,6 +70,7 @@ var (
 		Steps:    backupCancelBackoffSteps,
 	}
 	optionalBackupResources = []string{"Job"}
+	errResourceBusy         = fmt.Errorf("resource is busy")
 )
 
 // NewApplicationBackup creates a new instance of ApplicationBackupController.
@@ -129,8 +130,7 @@ func (a *ApplicationBackupController) Reconcile(ctx context.Context, request rec
 		controllers.SetFinalizer(backup, controllers.FinalizerCleanup)
 		return reconcile.Result{Requeue: true}, a.client.Update(context.TODO(), backup)
 	}
-	if err = a.handle(context.TODO(), backup); err != nil {
-		logrus.Errorf("%s: %s/%s: %s", reflect.TypeOf(a), backup.Namespace, backup.Name, err)
+	if err = a.handle(context.TODO(), backup); err != nil && err != errResourceBusy {
 		return reconcile.Result{RequeueAfter: controllers.DefaultRequeueError}, err
 	}
 
@@ -363,6 +363,9 @@ func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_
 				v1.EventTypeWarning,
 				string(stork_api.ApplicationBackupStatusFailed),
 				message)
+			if _, ok := err.(*volume.ErrStorageProviderBusy); ok {
+				return errResourceBusy
+			}
 			return nil
 		}
 	case stork_api.ApplicationBackupStageApplications:
@@ -472,6 +475,12 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 	var err error
 	// Start backup of the volumes if we don't have any status stored
 	pvcMappings := make(map[string][]v1.PersistentVolumeClaim)
+
+	backupStatusVolMap := make(map[string]string)
+	for _, statusVolume := range backup.Status.Volumes {
+		backupStatusVolMap[statusVolume.Namespace+"-"+statusVolume.PersistentVolumeClaim] = ""
+	}
+
 	backup.Status.Stage = stork_api.ApplicationBackupStageVolumes
 	namespacedName := types.NamespacedName{}
 	if IsVolsToBeBackedUp(backup) {
@@ -509,6 +518,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						if !isResourceTypePVC {
 							break
 						}
+						return err
 					}
 				}
 
@@ -524,12 +534,20 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					}
 					return err
 				}
+
+				// Don't backup PVCs which are already added to Status and for
+				// which backup was triggered
+				if _, isVolBackupDone := backupStatusVolMap[pvc.Namespace+"-"+pvc.Name]; isVolBackupDone {
+					continue
+				}
+
 				if driverName != "" {
 					if pvcMappings[driverName] == nil {
 						pvcMappings[driverName] = make([]v1.PersistentVolumeClaim, 0)
 					}
 					pvcCount++
 					pvcMappings[driverName] = append(pvcMappings[driverName], pvc)
+					backupStatusVolMap[pvc.Namespace+"-"+pvc.Name] = ""
 				}
 			}
 		}
@@ -562,42 +580,40 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						// TODO: If starting backup for a drive fails mark the entire backup
 						// as Cancelling, cancel any other started backups and then mark
 						// it as failed
-						message := fmt.Sprintf("Error starting ApplicationBackup for volumes: %v", err)
-						log.ApplicationBackupLog(backup).Errorf(message)
 						if _, ok := err.(*volume.ErrStorageProviderBusy); ok {
-							msg := fmt.Sprintf("Volume backups are in progress. Backups are failing for some volumes since the storage provider is busy: %v. Backup will be retried", err)
-							log.ApplicationBackupLog(backup).Errorf(message)
+							inProgressMsg := fmt.Sprintf("Volume backups are in progress. Backups are failing for some volumes"+
+								" since the storage provider is busy: %v. Backup will be retried", err)
+							log.ApplicationBackupLog(backup).Errorf(inProgressMsg)
 							a.recorder.Event(backup,
 								v1.EventTypeWarning,
 								string(stork_api.ApplicationBackupStatusInProgress),
-								msg)
-							_, err = a.updateBackupCRInVolumeStage(
+								inProgressMsg)
+							backup, updateErr := a.updateBackupCRInVolumeStage(
 								namespacedName,
 								stork_api.ApplicationBackupStatusInProgress,
 								backup.Status.Stage,
-								msg,
+								inProgressMsg,
 								volumeInfos,
 							)
-							if err != nil {
-								return err
+							if updateErr != nil {
+								log.ApplicationBackupLog(backup).Errorf("failed to update backup object: %v", updateErr)
 							}
-						} else {
-							a.recorder.Event(backup,
-								v1.EventTypeWarning,
-								string(stork_api.ApplicationBackupStatusFailed),
-								message)
-							_, err = a.updateBackupCRInVolumeStage(
-								namespacedName,
-								stork_api.ApplicationBackupStatusFailed,
-								stork_api.ApplicationBackupStageFinal,
-								message,
-								nil,
-							)
-							if err != nil {
-								return err
-							}
-							return nil
+							return err
 						}
+						message := fmt.Sprintf("Error starting ApplicationBackup for volumes: %v", err)
+						log.ApplicationBackupLog(backup).Errorf(message)
+						a.recorder.Event(backup,
+							v1.EventTypeWarning,
+							string(stork_api.ApplicationBackupStatusFailed),
+							message)
+						_, err = a.updateBackupCRInVolumeStage(
+							namespacedName,
+							stork_api.ApplicationBackupStatusFailed,
+							stork_api.ApplicationBackupStageFinal,
+							message,
+							nil,
+						)
+						return err
 					}
 					backup, err = a.updateBackupCRInVolumeStage(
 						namespacedName,

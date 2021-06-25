@@ -680,7 +680,7 @@ func (p *portworx) OwnsPVC(coreOps core.Ops, pvc *v1.PersistentVolumeClaim) bool
 	if provisioner != provisionerName &&
 		!isCsiProvisioner(provisioner) &&
 		provisioner != snapshot.GetProvisionerName() {
-		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
+		logrus.Tracef("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
 	return true
@@ -700,7 +700,7 @@ func (p *portworx) OwnsPV(pv *v1.PersistentVolume) bool {
 	if provisioner != provisionerName &&
 		!isCsiProvisioner(provisioner) &&
 		provisioner != snapshot.GetProvisionerName() {
-		logrus.Debugf("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
+		logrus.Tracef("Provisioner in Storageclass not Portworx or from the snapshot Provisioner: %v", provisioner)
 		return false
 	}
 	return true
@@ -2865,19 +2865,19 @@ func (p *portworx) StartBackup(backup *storkapi.ApplicationBackup,
 			}
 			return true, nil
 		})
-		if err == nil {
-			// Only add volumeInfos if this was a successful backup
-			volumeInfos = append(volumeInfos, volumeInfo)
-		} else if err != nil || cloudBackupCreateErr != nil {
-			if _, ok := cloudBackupCreateErr.(*ost_errors.ErrCloudBackupServerBusy); ok {
+
+		if err != nil || cloudBackupCreateErr != nil {
+			if isCloudBackupServerBusyError(cloudBackupCreateErr) {
 				return volumeInfos, &storkvolume.ErrStorageProviderBusy{Reason: cloudBackupCreateErr.Error()}
 			}
 			if _, ok := cloudBackupCreateErr.(*ost_errors.ErrExists); !ok {
 				return nil, fmt.Errorf("failed to start backup for %v (%v/%v): %v",
 					volume, pvc.Namespace, pvc.Name, cloudBackupCreateErr)
 			}
+		} else if err == nil {
+			// Only add volumeInfos if this was a successful backup
+			volumeInfos = append(volumeInfos, volumeInfo)
 		}
-
 	}
 	return volumeInfos, nil
 }
@@ -3103,7 +3103,6 @@ func (p *portworx) StartRestore(
 		volumeInfo.SourceVolume = backupVolumeInfo.Volume
 		volumeInfo.RestoreVolume = p.generatePVName()
 		volumeInfo.DriverName = driverName
-		volumeInfos = append(volumeInfos, volumeInfo)
 
 		taskID := p.getBackupRestoreTaskID(restore.UID, volumeInfo.SourceNamespace, volumeInfo.PersistentVolumeClaim)
 		credID := p.getCredID(restore.Spec.BackupLocation, restore.Namespace)
@@ -3115,11 +3114,28 @@ func (p *portworx) StartRestore(
 			Spec:              &api.RestoreVolumeSpec{IoProfileBkupSrc: true},
 		}
 
-		_, err = volDriver.CloudBackupRestore(request)
-		if err != nil {
-			if _, ok := err.(*ost_errors.ErrExists); !ok {
-				return nil, fmt.Errorf("Error starting restore for %v: %v", backupVolumeInfo.Volume, err)
+		var cloudRestoreErr error
+		err = wait.ExponentialBackoff(cloudBackupCreateBackoff, func() (bool, error) {
+			_, cloudRestoreErr = volDriver.CloudBackupRestore(request)
+			if cloudRestoreErr != nil {
+				if _, ok := cloudRestoreErr.(*ost_errors.ErrExists); !ok {
+					return false, nil
+				}
 			}
+			return true, nil
+		})
+
+		if err != nil || cloudRestoreErr != nil {
+			if isCloudBackupServerBusyError(cloudRestoreErr) {
+				return volumeInfos, &storkvolume.ErrStorageProviderBusy{Reason: cloudRestoreErr.Error()}
+			}
+			if _, ok := cloudRestoreErr.(*ost_errors.ErrExists); !ok {
+				return nil, fmt.Errorf("failed to start restore for %v (%v/%v): %v",
+					volumeInfo.SourceVolume, volumeInfo.SourceNamespace, volumeInfo.PersistentVolumeClaim, cloudRestoreErr)
+			}
+		} else if err == nil {
+			// Only add volumeInfos if this was a successful backup
+			volumeInfos = append(volumeInfos, volumeInfo)
 		}
 	}
 	return volumeInfos, nil
@@ -3574,6 +3590,14 @@ func getDriverTypeFromPV(pv *v1.PersistentVolume) (string, error) {
 	}
 
 	return volumeType, nil
+}
+
+func isCloudBackupServerBusyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	cloudBackupErr := &ost_errors.ErrCloudBackupServerBusy{}
+	return strings.Contains(err.Error(), cloudBackupErr.Error())
 }
 
 func init() {

@@ -228,11 +228,11 @@ func (c *csi) OwnsPV(pv *v1.PersistentVolume) bool {
 			return false
 		}
 
-		log.PVLog(pv).Debugf("CSI Owns PV: %s", pv.Name)
+		log.PVLog(pv).Tracef("CSI Owns PV: %s", pv.Name)
 		return true
 	}
 
-	log.PVLog(pv).Debugf("CSI does not own PV: %s", pv.Name)
+	log.PVLog(pv).Tracef("CSI does not own PV: %s", pv.Name)
 	return false
 }
 
