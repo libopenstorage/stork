@@ -159,6 +159,16 @@ func main() {
 			Value: 10,
 			Usage: "The interval in seconds to sync reconcilers (default: 10 seconds)",
 		},
+		cli.IntFlag{
+			Name:  "k8s-api-qps",
+			Value: 100,
+			Usage: "Restrict number of k8s api requests from stork (default: 100 QPS)",
+		},
+		cli.IntFlag{
+			Name:  "k8s-api-burst",
+			Value: 100,
+			Usage: "Restrict number of k8s api requests from stork (default: 100 Burst)",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -304,9 +314,12 @@ func runStork(mgr manager.Manager, d volume.Driver, recorder record.EventRecorde
 	if err := rule.Init(); err != nil {
 		log.Fatalf("Error initializing rule: %v", err)
 	}
-
+	qps := c.Int("k8s-api-qps")
+	burst := c.Int("k8s-api-burst")
 	resourceCollector := resourcecollector.ResourceCollector{
 		Driver: d,
+		QPS:    float32(qps),
+		Burst:  burst,
 	}
 	if err := resourceCollector.Init(nil); err != nil {
 		log.Fatalf("Error initializing ResourceCollector: %v", err)
