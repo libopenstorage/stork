@@ -297,7 +297,6 @@ func (r *ResourceCollector) GetResources(
 		return nil, err
 	}
 	allObjects := make([]runtime.Unstructured, 0)
-
 	// Map to prevent collection of duplicate objects
 	resourceMap := make(map[types.UID]bool)
 	var crdResources []metav1.GroupVersionKind
@@ -481,7 +480,7 @@ func (r *ResourceCollector) objectToBeCollected(
 		return false, err
 	}
 
-	if include, err := r.includeObject(object, includeObjects); err != nil {
+	if include, err := r.includeObject(object, includeObjects, namespace); err != nil {
 		return false, err
 	} else if !include {
 		return false, nil
@@ -653,6 +652,7 @@ func (r *ResourceCollector) prepareResourcesForCollection(
 func (r *ResourceCollector) includeObject(
 	object runtime.Unstructured,
 	includeObjects map[stork_api.ObjectInfo]bool,
+	namespace string,
 ) (bool, error) {
 	if len(includeObjects) == 0 {
 		return true, nil
@@ -683,6 +683,9 @@ func (r *ResourceCollector) includeObject(
 		if info.Group == "" {
 			info.Group = "core"
 		}
+		if namespace != "" {
+			info.Namespace = namespace
+		}
 		if val, present := includeObjects[info]; !present || !val {
 			return false, nil
 		}
@@ -712,7 +715,7 @@ func (r *ResourceCollector) PrepareResourceForApply(
 		return false, err
 	}
 
-	if include, err := r.includeObject(object, includeObjects); err != nil {
+	if include, err := r.includeObject(object, includeObjects, ""); err != nil {
 		return true, err
 	} else if !include {
 		return true, nil
