@@ -32,10 +32,12 @@ import (
 	"github.com/libopenstorage/stork/pkg/snapshot"
 	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/libopenstorage/stork/pkg/webhookadmission"
+	schedops "github.com/portworx/sched-ops/k8s/core"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	api_v1 "k8s.io/api/core/v1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	core_v1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -51,6 +53,8 @@ const (
 	defaultLockObjectName      = "stork"
 	defaultLockObjectNamespace = "kube-system"
 	defaultAdminNamespace      = "kube-system"
+	storkVersion               = "version"
+	cmName                     = "stork-version"
 	eventComponentName         = "stork"
 	debugFilePath              = "/var/cores"
 )
@@ -180,6 +184,23 @@ func run(c *cli.Context) {
 	dbg.Init(c.App.Name, debugFilePath)
 
 	log.Infof("Starting stork version %v", version.Version)
+	// create configmap with stork version details
+	cm := &api_v1.ConfigMap{}
+	cm.Name = cmName
+	cm.Namespace = defaultAdminNamespace
+	cm.Data = make(map[string]string)
+	cm.Data[storkVersion] = version.Version
+	// ConfigMap create/update op should not be blocking operation
+	_, err := schedops.Instance().CreateConfigMap(cm)
+	if k8s_errors.IsAlreadyExists(err) {
+		_, err := schedops.Instance().UpdateConfigMap(cm)
+		if err != nil {
+			log.Warnf("unable to create stork version configmap: %v", err)
+		}
+	} else if err != nil {
+		log.Warnf("Unable to create stork version configmap: %v", err)
+	}
+
 	driverName := c.String("driver")
 
 	verbose := c.Bool("verbose")
