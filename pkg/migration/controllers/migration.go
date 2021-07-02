@@ -182,6 +182,10 @@ func setDefaults(spec stork_api.MigrationSpec) stork_api.MigrationSpec {
 		defaultBool := false
 		spec.PurgeDeletedResources = &defaultBool
 	}
+	if spec.SkipServiceUpdate == nil {
+		defaultBool := false
+		spec.SkipServiceUpdate = &defaultBool
+	}
 	return spec
 }
 
