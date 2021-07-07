@@ -535,25 +535,24 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 					return err
 				}
 
-				// Don't backup PVCs which are already added to Status and for
-				// which backup was triggered
-				if _, isVolBackupDone := backupStatusVolMap[pvc.Namespace+"-"+pvc.Name]; isVolBackupDone {
-					continue
-				}
-
 				if driverName != "" {
+					// This PVC needs to be backed up
+					pvcCount++
 					if pvcMappings[driverName] == nil {
 						pvcMappings[driverName] = make([]v1.PersistentVolumeClaim, 0)
 					}
-					pvcCount++
+					// Don't backup PVCs which are already added to Status and for
+					// which backup was triggered
+					if _, isVolBackupDone := backupStatusVolMap[pvc.Namespace+"-"+pvc.Name]; isVolBackupDone {
+						continue
+					}
 					pvcMappings[driverName] = append(pvcMappings[driverName], pvc)
 					backupStatusVolMap[pvc.Namespace+"-"+pvc.Name] = ""
 				}
 			}
 		}
 
-		if backup.Status.Volumes == nil ||
-			(backup.Status.Volumes != nil && len(backup.Status.Volumes) != pvcCount) {
+		if backup.Status.Volumes == nil {
 			backup.Status.Volumes = make([]*stork_api.ApplicationBackupVolumeInfo, 0)
 		}
 
