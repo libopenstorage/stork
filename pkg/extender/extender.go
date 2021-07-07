@@ -205,7 +205,7 @@ func (e *Extender) processFilterRequest(w http.ResponseWriter, req *http.Request
 	} else if len(driverVolumes) > 0 {
 		driverNodes, err := e.Driver.GetNodes()
 		if err != nil {
-			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes")
+			storklog.PodLog(pod).Errorf("Error getting list of driver nodes, returning all nodes, err: %v", err)
 		} else {
 			for _, volumeInfo := range driverVolumes {
 				onlineNodeFound := false

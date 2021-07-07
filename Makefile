@@ -92,7 +92,7 @@ test:
 
 integration-test:
 	@echo "Building stork integration tests"
-	@cd test/integration_test && go test -tags integrationtest -v -c -o stork.test
+	@cd test/integration_test && GOOS=linux go test -tags integrationtest $(BUILD_OPTIONS) -v -c -o stork.test
 
 integration-test-container:
 	@echo "Building container: docker build --tag $(STORK_TEST_IMG) -f Dockerfile ."
