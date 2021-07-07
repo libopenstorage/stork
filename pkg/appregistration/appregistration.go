@@ -27,6 +27,8 @@ const (
 	KafkaApp = "kafka"
 	// PostgressApp registration name
 	PostgressApp = "postgress"
+	// MongoDBCommunityApp registration name
+	MongoDBCommunityApp = "mongodbcommunity"
 )
 
 // GetSupportedCRD returns the list of supported CRDs.
@@ -302,6 +304,22 @@ func GetSupportedCRD() map[string][]stork_api.ApplicationResource {
 			},
 		},
 	}
+	// mongdb app crds
+	defCRD[MongoDBCommunityApp] = []stork_api.ApplicationResource{
+		{
+			GroupVersionKind: metav1.GroupVersionKind{
+				Kind:    "MongoDBCommunity",
+				Group:   "mongodbcommunity.mongodb.com",
+				Version: "v1",
+			},
+			KeepStatus: false,
+			SuspendOptions: stork_api.SuspendOptions{
+				Path: "spec.members",
+				Type: "int",
+			},
+		},
+	}
+
 	return defCRD
 }
 
@@ -403,5 +421,11 @@ func GetSupportedGVR() map[schema.GroupVersionResource]string {
 			Group:    "weblogic.oracle",
 			Version:  "v8",
 		}: "DomainsList",
+		// mongodb crds
+		{
+			Resource: "MongoDBCommunity",
+			Group:    "mongodbcommunity.mongodb.com",
+			Version:  "v1",
+		}: "MongoDBCommunityList",
 	}
 }
