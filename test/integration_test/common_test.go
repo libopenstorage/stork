@@ -25,6 +25,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/schedule"
 	"github.com/libopenstorage/stork/pkg/storkctl"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
@@ -60,6 +61,8 @@ import (
 
 const (
 	nodeDriverName              = "ssh"
+	cmName                      = "stork-version"
+	defaultAdminNamespace       = "kube-system"
 	schedulerDriverName         = "k8s"
 	remotePairName              = "remoteclusterpair"
 	srcConfig                   = "sourceconfigmap"
@@ -193,7 +196,19 @@ func setup() error {
 	if err = volumeDriver.Init(schedulerDriverName, nodeDriverName, authToken, provisioner, genericCsiConfigMap); err != nil {
 		return fmt.Errorf("Error initializing volume driver %v: %v", volumeDriverName, err)
 	}
-
+	cm, err := core.Instance().GetConfigMap(cmName, defaultAdminNamespace)
+	if err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("Unable to get stork version configmap: %v", err)
+	}
+	if cm != nil {
+		ver, ok := cm.Data["version"]
+		if !ok {
+			return fmt.Errorf("stork version not found in configmap: %s", cmName)
+		}
+		if ver != version.Version {
+			return fmt.Errorf("stork version mismatch, found: %s, expected: %s", ver, version.Version)
+		}
+	}
 	return nil
 }
 

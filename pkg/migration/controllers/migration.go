@@ -897,7 +897,7 @@ func (m *MigrationController) prepareResources(
 			if err != nil {
 				return fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
-		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer":
+		case "Deployment", "StatefulSet", "DeploymentConfig", "IBPPeer", "IBPCA", "IBPConsole", "IBPOrderer", "ReplicaSet":
 			err := m.prepareApplicationResource(migration, o)
 			if err != nil {
 				return fmt.Errorf("error preparing %v resource %v: %v", o.GetObjectKind().GroupVersionKind().Kind, metadata.GetName(), err)
@@ -1343,6 +1343,7 @@ func (m *MigrationController) applyResources(
 	ruleset := inflect.NewDefaultRuleset()
 	ruleset.AddPlural("quota", "quotas")
 	ruleset.AddPlural("prometheus", "prometheuses")
+	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 
 	var pvObjects, pvcObjects []runtime.Unstructured
 	for _, o := range objects {
