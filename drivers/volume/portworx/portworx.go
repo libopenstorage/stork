@@ -933,11 +933,21 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]api.Sto
 		return nodes, err
 	}
 	for _, n := range nodeEnumerateResp.GetNodeIds() {
-		nodeResp, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n})
+		t := func() (interface{}, bool, error) {
+			nodeResponse, err := nodeManager.Inspect(d.getContext(), &api.SdkNodeInspectRequest{NodeId: n})
+			if err != nil {
+				return nil, true, err
+			}
+			if nodeResponse.Node.MgmtIp == "" {
+				return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest")
+			}
+			return nodeResponse, false, nil
+		}
+		nodeResp, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 		if err != nil {
 			return nodes, err
 		}
-		nodes = append(nodes, *nodeResp.Node)
+		nodes = append(nodes, *nodeResp.(*api.SdkNodeInspectResponse).Node)
 	}
 	return nodes, nil
 }
