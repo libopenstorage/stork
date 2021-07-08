@@ -995,18 +995,7 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 		return err
 	}
 
-	if sourceSA.GetName() != "default" {
-		// delete and recreate service account
-		if err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Delete(context.TODO(), sourceSA.GetName(), metav1.DeleteOptions{}); err != nil {
-			return err
-		}
-		if _, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Create(context.TODO(), &sourceSA, metav1.CreateOptions{}); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	log.MigrationLog(migration).Infof("Updating default service account(namespace : %v) with image pull secrets", sourceSA.GetNamespace())
+	log.MigrationLog(migration).Infof("Updating service account(namespace/name : %s/%s) with image pull secrets", sourceSA.GetNamespace(), sourceSA.GetName())
 	// merge service account resource for default namespaces
 	destSA, err := adminClient.CoreV1().ServiceAccounts(sourceSA.GetNamespace()).Get(context.TODO(), sourceSA.GetName(), metav1.GetOptions{})
 	if err != nil {
@@ -1026,6 +1015,7 @@ func (m *MigrationController) checkAndUpdateDefaultSA(
 		}
 	}
 	// merge annotation for SA
+	log.MigrationLog(migration).Infof("Updating service account(namespace/name : %s/%s) annotations", sourceSA.GetNamespace(), sourceSA.GetName())
 	if destSA.Annotations != nil {
 		if sourceSA.Annotations == nil {
 			sourceSA.Annotations = make(map[string]string)
