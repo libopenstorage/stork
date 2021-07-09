@@ -32,7 +32,8 @@ const (
 	podSpecSchedPath         = "/spec/schedulerName"
 	storkScheduler           = "stork"
 	storkAdmissionController = "stork-webhooks-cfg"
-	secretName               = "servercert-secret"
+	oldSecretName            = "servercert-secret"
+	secretName               = "stork-webhook-secret"
 	privKey                  = "privKey"
 	privCert                 = "privCert"
 	defaultSkipAnnotation    = "stork.libopenstorage.org/disable-admission-controller"
@@ -226,8 +227,8 @@ func (c *Controller) Start() error {
 		return err
 	} else if k8serr.IsNotFound(err) {
 		// create CN string
-		cn := storkService + "." + ns + ".svc"
-		caBundle, key, err = GenerateCertificate(cn)
+		dnsName := storkService + "." + ns + ".svc"
+		caBundle, key, err = GenerateCertificate("Stork CA", dnsName)
 		if err != nil {
 			log.Errorf("Unable to generate x509 certificate: %v", err)
 			return err
@@ -255,6 +256,11 @@ func (c *Controller) Start() error {
 			log.Errorf("unable to generate tls certs: %v", err)
 			return err
 		}
+	}
+	// Cleanup the old webhook cert
+	err = core.Instance().DeleteSecret(oldSecretName, ns)
+	if err != nil && !k8serr.IsNotFound(err) {
+		log.Warnf("Failed to delete old webhook secret: %v", err)
 	}
 	c.server = &http.Server{Addr: ":443",
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{tlsCert}}}
