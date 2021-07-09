@@ -739,6 +739,7 @@ func (p *portworx) GetPodVolumes(podSpec *v1.PodSpec, namespace string) ([]*stor
 		if volumeName != "" {
 			volumeInfo, err := p.InspectVolume(volumeName)
 			if err != nil {
+				logrus.Warnf("Failed to inspect volume %v: %v", volumeName, err)
 				// If the inspect volume fails return with atleast some info
 				volumeInfo = &storkvolume.Info{
 					VolumeName: volumeName,
