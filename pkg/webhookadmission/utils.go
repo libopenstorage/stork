@@ -81,7 +81,7 @@ func CreateMutateWebhook(caBundle []byte, ns string) error {
 
 // GenerateCertificate Self Signed certificate using given CN, returns x509 cert
 // and priv key in PEM format
-func GenerateCertificate(cn string) ([]byte, []byte, error) {
+func GenerateCertificate(cn string, dnsName string) ([]byte, []byte, error) {
 	var err error
 	pemCert := &bytes.Buffer{}
 
@@ -104,6 +104,7 @@ func GenerateCertificate(cn string) ([]byte, []byte, error) {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  true,
+		DNSNames:              []string{dnsName},
 	}
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
