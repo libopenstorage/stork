@@ -498,7 +498,7 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		for _, namespace := range backup.Spec.Namespaces {
 			pvcList, err := core.Instance().GetPersistentVolumeClaims(namespace, backup.Spec.Selectors)
 			if err != nil {
-				return fmt.Errorf("error getting list of volumes to migrate: %v", err)
+				return fmt.Errorf("error getting list of volumes to backup: %v", err)
 			}
 
 			for _, pvc := range pvcList.Items {
@@ -518,7 +518,6 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						if !isResourceTypePVC {
 							break
 						}
-						return err
 					}
 				}
 
