@@ -1,0 +1,214 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"os/exec"
+	"time"
+
+	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/stork"
+	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	dirName            = "./specs"
+	bkpDirName         = "./backup"
+	adminNamespace     = "kube-system"
+	backuplocationName = "upgrade-bkp-location"
+	upgradeSchedPolicy = "upgrade-test-sched-policy"
+	bkpSchedName       = "upgrade-test-backup"
+	version            = "2.6-dev"
+)
+
+func main() {
+	namespaces := []string{"upgrade-test"}
+	appOps, err := apps.NewInstanceFromConfigFile("/tmp/config")
+	if err != nil {
+		logrus.Errorf("unable to set app inst: %v", err)
+		panic(err)
+	}
+	apps.SetInstance(appOps)
+	storkOps, err := stork.NewInstanceFromConfigFile("/tmp/config")
+	if err != nil {
+		logrus.Errorf("unable to set app inst: %v", err)
+		panic(err)
+	}
+	stork.SetInstance(storkOps)
+	// create application in different namespaces
+	if err := deployApps("/tmp/config", dirName, namespaces); err != nil {
+		panic(err)
+	}
+
+	// Configure applicationbackupschedule
+	// wait for backups to trigger and validate
+	status, err := createBackupSchedule("/tmp/config", bkpDirName, namespaces)
+	if err != nil {
+		panic(err)
+	}
+	logrus.Infof("status map: %v", status)
+	// upgrade stork version
+	if err := upgradeStorkVersion(version); err != nil {
+		panic(err)
+	}
+	// validate applicationbackups after upgrade
+	if err := validateAppBackup(status); err != nil {
+		panic(err)
+	}
+	logrus.Infof("upgrade test done")
+}
+
+func deployApps(config, dirName string, namespaces []string) error {
+	var outb, errb bytes.Buffer
+	for _, namespace := range namespaces {
+		cmd := exec.Command("kubectl", "--kubeconfig="+config, "create", "ns", namespace)
+		cmd.Stdout = &outb
+		cmd.Stderr = &errb
+		err := cmd.Run()
+		if err != nil {
+			logrus.Errorf("unable to exec cmd: %v, err: %v\n", cmd, errb.String())
+			return err
+		}
+		logrus.Infof("%s", outb.String())
+
+		cmd = exec.Command("kubectl", "--kubeconfig="+config, "apply", "-f", dirName, "-n", namespace)
+		cmd.Stdout = &outb
+		cmd.Stderr = &errb
+		err = cmd.Run()
+		if err != nil {
+			logrus.Errorf("unable to exec cmd: %v, err: %v\n", err.Error(), errb.String())
+			return err
+		}
+		logrus.Infof("Creating apps:")
+		logrus.Infof("%s", outb.String())
+	}
+
+	// wait for apps to in given namespaces
+	for _, namespace := range namespaces {
+		deployList, err := apps.Instance().ListDeployments(namespace, metav1.ListOptions{})
+		if err != nil {
+			logrus.Errorf("unable to list deploy: %v", err)
+			return err
+		}
+		for _, deploy := range deployList.Items {
+			if err := apps.Instance().ValidateDeployment(&deploy, 12*time.Minute, 10*time.Second); err != nil {
+				return err
+			}
+		}
+		// validate statefulset
+		stsList, err := apps.Instance().ListStatefulSets(namespace)
+		if err != nil {
+			logrus.Errorf("unable to list deploy: %v", err)
+			return err
+		}
+		for _, sts := range stsList.Items {
+			if err := apps.Instance().ValidateStatefulSet(&sts, 5*time.Minute); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func createBackupSchedule(config, backupDir string, namespaces []string) (map[stork_api.SchedulePolicyType][]*stork_api.ScheduledApplicationBackupStatus, error) {
+	var outb, errb bytes.Buffer
+	// create backuplocation
+	cmd := exec.Command("kubectl", "--kubeconfig="+config, "apply", "-f",
+		backupDir, "-n", adminNamespace)
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+	err := cmd.Run()
+	if err != nil {
+		logrus.Errorf("unable to exec cmd: %v, err: %v\n", cmd, errb.String())
+		return nil, err
+	}
+	logrus.Infof("%s", outb.String())
+	// create backupschedule
+	bkpSched := &stork_api.ApplicationBackupSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      bkpSchedName,
+			Namespace: adminNamespace,
+		},
+	}
+	bkpSched.Spec.SchedulePolicyName = upgradeSchedPolicy
+	bkpSched.Spec.Template.Spec = stork_api.ApplicationBackupSpec{
+		Namespaces:     namespaces,
+		BackupLocation: backuplocationName,
+	}
+	_, err = stork.Instance().CreateApplicationBackupSchedule(bkpSched)
+	if err != nil {
+		return nil, err
+	}
+	// wait for at least 3 backups to success if any failed return err
+	time.Sleep(15 * time.Minute)
+	resp, err := stork.Instance().ValidateApplicationBackupSchedule(bkpSchedName, adminNamespace, 3, 15*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	// send last successful backup info back
+	return resp, err
+}
+
+func upgradeStorkVersion(version string) error {
+	logrus.Infof("upgrading stork version to %s", version)
+	deploy, err := apps.Instance().GetDeployment("stork", adminNamespace)
+	if err != nil {
+		return err
+	}
+
+	if len(deploy.Spec.Template.Spec.Containers) == 0 {
+		return fmt.Errorf("unable to update image: path not found")
+	}
+	deploy.Spec.Template.Spec.Containers[0].Image = "openstorage/stork:" + version
+	resp, err := apps.Instance().UpdateDeployment(deploy)
+	if err != nil {
+		return err
+	}
+	if err := apps.Instance().ValidateDeployment(resp, 10*time.Minute, 10*time.Second); err != nil {
+		return err
+	}
+	logrus.Infof("updated stork version to %s", version)
+
+	return nil
+}
+
+func validateAppBackup(status map[stork_api.SchedulePolicyType][]*stork_api.ScheduledApplicationBackupStatus) error {
+	logrus.Infof("validating app backups")
+
+	// wait for at least 3 backups to success if any failed return err
+	resp, err := stork.Instance().ValidateApplicationBackupSchedule(bkpSchedName, adminNamespace, 3, 15*time.Minute, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	var orgBackup, upgradeBackup *stork_api.ApplicationBackup
+	for _, v := range status {
+		orgBackup, err = stork.Instance().GetApplicationBackup(v[0].Name, adminNamespace)
+		if err != nil {
+			return err
+		}
+		break
+	}
+	for _, v := range resp {
+		upgradeBackup, err = stork.Instance().GetApplicationBackup(v[0].Name, adminNamespace)
+		if err != nil {
+			return err
+		}
+
+	}
+	if len(orgBackup.Status.Volumes) != len(upgradeBackup.Status.Volumes) {
+		logrus.Errorf("volumes before upgrade: %v", orgBackup.Status.Volumes)
+		logrus.Errorf("volumes after upgrade: %v", upgradeBackup.Status.Volumes)
+		return fmt.Errorf("volume counts after upgrade does not match, expected: %v, actual: %v", len(upgradeBackup.Status.Volumes), len(orgBackup.Status.Volumes))
+	}
+	if len(orgBackup.Status.Resources) != len(upgradeBackup.Status.Resources) {
+		logrus.Errorf("volumes before upgrade: %v", orgBackup.Status.Resources)
+		logrus.Errorf("volumes after upgrade: %v", upgradeBackup.Status.Resources)
+		return fmt.Errorf("volume counts after upgrade does not match, expected: %v, actual: %v", len(upgradeBackup.Status.Resources), len(orgBackup.Status.Resources))
+	}
+
+	return nil
+}
