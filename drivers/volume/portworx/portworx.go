@@ -1001,7 +1001,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
-		return err
+		return fmt.Errorf("PX failed to come up on node : [%s]. Error: [%v]", n.Name, err)
 	}
 
 	// Check if PX pod is up
@@ -1017,7 +1017,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
-		return err
+		return fmt.Errorf("PX pod failed to come up on node : [%s]. Error: [%v]", n.Name, err)
 	}
 
 	logrus.Debugf("px is fully operational on node: %s", n.Name)
@@ -1043,7 +1043,7 @@ func (d *portworx) WaitDriverDownOnNode(n node.Node) error {
 	}
 
 	if _, err := task.DoRetryWithTimeout(t, validateNodeStopTimeout, waitDriverDownOnNodeRetryInterval); err != nil {
-		return err
+		return fmt.Errorf("failed to stop PX on node : [%s]. Error: [%v]", n.Name, err)
 	}
 
 	return nil
