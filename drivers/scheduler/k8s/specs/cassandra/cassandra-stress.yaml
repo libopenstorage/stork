@@ -48,6 +48,13 @@ spec:
       containers:
       - name: cassandra-stress
         image: scylladb/scylla:4.1.11
+        resources:
+          limits:
+            cpu: "2000m"
+            memory: 4Gi
+          requests:
+            cpu: "1000m"
+            memory: 4Gi
         readinessProbe:
             exec:
               command:

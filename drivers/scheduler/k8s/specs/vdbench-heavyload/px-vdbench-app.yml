@@ -16,6 +16,13 @@ spec:
       containers:
         - name: vdbench
           image: openebs/tests-vdbench
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 500Mi
+            requests:
+              memory: 256Mi
+              cpu: 100m
           command: ["./bench_runner.sh"]
           args: ["Writes", "21600"]
           volumeMounts:

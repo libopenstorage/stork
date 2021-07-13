@@ -193,8 +193,15 @@ func ValidateCleanup() {
 }
 
 func processError(err error, errChan ...*chan error) {
-	updateChannel(err, errChan...)
-	expect(err).NotTo(haveOccurred())
+	// if errChan is provided then just push err to on channel
+	// Useful for frameworks like longevity that must continue
+	// execution and must not not fail immidiately
+	if len(errChan) > 0 {
+		logrus.Error(err)
+		updateChannel(err, errChan...)
+	} else {
+		expect(err).NotTo(haveOccurred())
+	}
 }
 
 func updateChannel(err error, errChan ...*chan error) {
@@ -436,7 +443,12 @@ func GetAppNamespace(ctx *scheduler.Context, taskname string) string {
 }
 
 // ScheduleApplications schedules but does not wait for applications
-func ScheduleApplications(testname string) []*scheduler.Context {
+func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
 	var contexts []*scheduler.Context
 	var err error
 
@@ -446,8 +458,10 @@ func ScheduleApplications(testname string) []*scheduler.Context {
 			AppKeys:            Inst().AppList,
 			StorageProvisioner: Inst().Provisioner,
 		})
-		expect(err).NotTo(haveOccurred())
-		expect(contexts).NotTo(beEmpty())
+		processError(err, errChan...)
+		if len(contexts) == 0 {
+			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+		}
 	})
 
 	return contexts
@@ -463,19 +477,24 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // StartVolDriverAndWait starts volume driver on given app nodes
-func StartVolDriverAndWait(appNodes []node.Node) {
+func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
 	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
 		Step(fmt.Sprintf("start volume driver on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.StartDriver(n)
-				expect(err).NotTo(haveOccurred())
+				processError(err, errChan...)
 			}
 		})
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-				expect(err).NotTo(haveOccurred())
+				processError(err, errChan...)
 			}
 		})
 
@@ -483,17 +502,22 @@ func StartVolDriverAndWait(appNodes []node.Node) {
 }
 
 // StopVolDriverAndWait stops volume driver on given app nodes and waits till driver is down
-func StopVolDriverAndWait(appNodes []node.Node) {
+func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
 	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
 		Step(fmt.Sprintf("stop volume driver on nodes: %v", appNodes), func() {
 			err := Inst().V.StopDriver(appNodes, false, nil)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 		})
 
 		Step(fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverDownOnNode(n)
-				expect(err).NotTo(haveOccurred())
+				processError(err, errChan...)
 			}
 		})
 
@@ -501,17 +525,22 @@ func StopVolDriverAndWait(appNodes []node.Node) {
 }
 
 // CrashVolDriverAndWait crashes volume driver on given app nodes and waits till driver is back up
-func CrashVolDriverAndWait(appNodes []node.Node) {
+func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
 	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
 		Step(fmt.Sprintf("crash volume driver on nodes: %v", appNodes), func() {
 			err := Inst().V.StopDriver(appNodes, true, nil)
-			expect(err).NotTo(haveOccurred())
+			processError(err, errChan...)
 		})
 
 		Step(fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes), func() {
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-				expect(err).NotTo(haveOccurred())
+				processError(err, errChan...)
 			}
 		})
 

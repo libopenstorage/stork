@@ -63,6 +63,13 @@ spec:
       - name: px-mongo-mongodb
         image: docker.io/bitnami/mongodb:4.2.4-debian-10-r0
         imagePullPolicy: "IfNotPresent"
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
         securityContext:
           runAsNonRoot: true
           runAsUser: 1001

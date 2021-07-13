@@ -85,6 +85,8 @@ func UpdateOutcome(event *EventRecord, err error) {
 }
 
 const (
+	// DeployApps installs new apps
+	DeployApps = "deployApps"
 	// HAIncrease performs repl-add
 	HAIncrease = "haIncrease"
 	// HADecrease performs repl-reduce
@@ -99,7 +101,79 @@ const (
 	RebootNode = "rebootNode"
 	// EmailReporter notifies via email outcome of past events
 	EmailReporter = "emailReporter"
+	// CoreChecker checks if any cores got generated
+	CoreChecker = "coreChecker"
 )
+
+// TriggerCoreChecker checks if any cores got generated
+func TriggerCoreChecker(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CoreChecker,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	context(fmt.Sprintf("checking for core files..."), func() {
+		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
+			nodes := node.GetWorkerNodes()
+			expect(nodes).NotTo(beEmpty())
+			for _, n := range nodes {
+				if !n.IsStorageDriverInstalled {
+					continue
+				}
+				logrus.Infof("looking for core files on node %s", n.Name)
+				file, err := Inst().N.SystemCheck(n, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				UpdateOutcome(event, err)
+
+				if len(file) != 0 {
+					UpdateOutcome(event, fmt.Errorf("[%s] found on node [%s]", file, n.Name))
+				}
+			}
+		})
+	})
+}
+
+// TriggerDeployNewApps deploys applications in separate namespaces
+func TriggerDeployNewApps(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeployApps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	errorChan := make(chan error, errorChannelSize)
+
+	Step("Deploy applications", func() {
+		contexts := []*scheduler.Context{}
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			newContexts := ScheduleApplications(fmt.Sprintf("longevity-%d", i), &errorChan)
+			contexts = append(contexts, newContexts...)
+		}
+
+		for _, ctx := range contexts {
+			ctx.SkipVolumeValidation = false
+			ValidateContext(ctx, &errorChan)
+			for err := range errorChan {
+				UpdateOutcome(event, err)
+			}
+		}
+	})
+}
 
 // TriggerHAIncrease peforms repl-add on all volumes of given contexts
 func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
@@ -127,7 +201,9 @@ func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
-				expect(appVolumes).NotTo(beEmpty())
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				}
 			})
 			opts := volume.Options{
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
@@ -142,14 +218,14 @@ func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
-						expect(err).NotTo(haveOccurred())
+
 						// GetMaxReplicationFactory is hardcoded to 3
 						// if it increases repl 3 to an aggregated 2 volume, it will fail
 						// because it would require 6 worker nodes, since
 						// number of nodes required = aggregation level * replication factor
 						currAggr, err := Inst().V.GetAggregationLevel(v)
 						UpdateOutcome(event, err)
-						expect(err).NotTo(haveOccurred())
+
 						if currAggr > 1 {
 							MaxRF = int64(len(node.GetWorkerNodes())) / currAggr
 						}
@@ -160,10 +236,9 @@ func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 						err = Inst().V.SetReplicationFactor(v, currRep+1, opts)
 						if !errExpected {
 							UpdateOutcome(event, err)
-							expect(err).NotTo(haveOccurred())
 						} else {
 							if !expect(err).To(haveOccurred()) {
-								UpdateOutcome(event, fmt.Errorf("Expected HA increase to fail since new repl factor is greater than %v but it did not", MaxRF))
+								UpdateOutcome(event, fmt.Errorf("expected HA increase to fail since new repl factor is greater than %v but it did not", MaxRF))
 							}
 						}
 					})
@@ -173,12 +248,15 @@ func TriggerHAIncrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 					func() {
 						newRepl, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
-						expect(err).NotTo(haveOccurred())
+
 						if newRepl != expReplMap[v] {
 							err = fmt.Errorf("volume has invalid repl value. Expected:%d Actual:%d", expReplMap[v], newRepl)
 							UpdateOutcome(event, err)
 						}
-						expect(newRepl).To(equal(expReplMap[v]))
+						if newRepl != expReplMap[v] {
+							UpdateOutcome(event,
+								fmt.Errorf("actual volume replica %d does not match with expected volume replica %d for volume [%s]", newRepl, expReplMap[v], v.Name))
+						}
 					})
 			}
 			Step(fmt.Sprintf("validating context after increasing HA for app: %s",
@@ -219,7 +297,9 @@ func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 			Step(fmt.Sprintf("get volumes for %s app", ctx.App.Key), func() {
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				UpdateOutcome(event, err)
-				expect(appVolumes).NotTo(beEmpty())
+				if len(appVolumes) == 0 {
+					UpdateOutcome(event, fmt.Errorf("found no volumes for app %s", ctx.App.Key))
+				}
 			})
 			opts := volume.Options{
 				ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
@@ -234,7 +314,6 @@ func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 						errExpected := false
 						currRep, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
-						expect(err).NotTo(haveOccurred())
 
 						if currRep == MinRF {
 							errExpected = true
@@ -244,7 +323,7 @@ func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 						err = Inst().V.SetReplicationFactor(v, currRep-1, opts)
 						if !errExpected {
 							UpdateOutcome(event, err)
-							expect(err).NotTo(haveOccurred())
+
 						} else {
 							if !expect(err).To(haveOccurred()) {
 								UpdateOutcome(event, fmt.Errorf("Expected HA reduce to fail since new repl factor is less than %v but it did not", MinRF))
@@ -258,11 +337,14 @@ func TriggerHADecrease(contexts []*scheduler.Context, recordChan *chan *EventRec
 					func() {
 						newRepl, err := Inst().V.GetReplicationFactor(v)
 						UpdateOutcome(event, err)
-						expect(err).NotTo(haveOccurred())
+
 						if newRepl != expReplMap[v] {
 							UpdateOutcome(event, fmt.Errorf("volume has invalid repl value. Expected:%d Actual:%d", expReplMap[v], newRepl))
 						}
-						expect(newRepl).To(equal(expReplMap[v]))
+						if newRepl != expReplMap[v] {
+							UpdateOutcome(event,
+								fmt.Errorf("actual volume replica %d does not match with expected volume replica %d for volume [%s]", newRepl, expReplMap[v], v.Name))
+						}
 					})
 			}
 			Step(fmt.Sprintf("validating context after reducing HA for app: %s",
@@ -299,7 +381,6 @@ func TriggerAppTaskDown(contexts []*scheduler.Context, recordChan *chan *EventRe
 		Step(fmt.Sprintf("delete tasks for app: [%s]", ctx.App.Key), func() {
 			err := Inst().S.DeleteTasks(ctx, nil)
 			UpdateOutcome(event, err)
-			expect(err).NotTo(haveOccurred())
 		})
 
 		Step(fmt.Sprintf("validating context after delete tasks for app: [%s]",
@@ -336,7 +417,11 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *Even
 				fmt.Sprintf("crash volume driver %s on node: %v",
 					Inst().V.String(), appNode.Name),
 				func() {
-					CrashVolDriverAndWait([]node.Node{appNode})
+					errorChan := make(chan error, errorChannelSize)
+					CrashVolDriverAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
 				})
 		}
 	})
@@ -364,14 +449,22 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				fmt.Sprintf("stop volume driver %s on node: %s",
 					Inst().V.String(), appNode.Name),
 				func() {
-					StopVolDriverAndWait([]node.Node{appNode})
+					errorChan := make(chan error, errorChannelSize)
+					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
 				})
 
 			Step(
 				fmt.Sprintf("starting volume %s driver on node %s",
 					Inst().V.String(), appNode.Name),
 				func() {
-					StartVolDriverAndWait([]node.Node{appNode})
+					errorChan := make(chan error, errorChannelSize)
+					StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
+					for err := range errorChan {
+						UpdateOutcome(event, err)
+					}
 				})
 
 			Step("Giving few seconds for volume driver to stabilize", func() {
@@ -424,7 +517,6 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 								TimeBeforeRetry: 5 * time.Second,
 							},
 						})
-						expect(err).NotTo(haveOccurred())
 						UpdateOutcome(event, err)
 					})
 
@@ -433,13 +525,11 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 							Timeout:         15 * time.Minute,
 							TimeBeforeRetry: 10 * time.Second,
 						})
-						expect(err).NotTo(haveOccurred())
 						UpdateOutcome(event, err)
 					})
 
 					Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
 						err := Inst().V.WaitDriverDownOnNode(n)
-						expect(err).NotTo(haveOccurred())
 						UpdateOutcome(event, err)
 					})
 
@@ -447,11 +537,9 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 						Inst().S.String(), Inst().V.String()), func() {
 
 						err := Inst().S.IsNodeReady(n)
-						expect(err).NotTo(haveOccurred())
 						UpdateOutcome(event, err)
 
 						err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
-						expect(err).NotTo(haveOccurred())
 						UpdateOutcome(event, err)
 					})
 

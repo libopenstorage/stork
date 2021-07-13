@@ -17,6 +17,13 @@ spec:
       containers:
       - name: es-rally
         image: disrani/es-rally:latest
+        resources:
+          limits:
+            cpu: "2"
+            memory: 4Gi
+          requests:
+            cpu: "1"
+            memory: 4Gi
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -34,6 +41,6 @@ spec:
                 "--pipeline",
                 "benchmark-only",
                 "--track-params",
-                "index_name:'index2',index_alias:'index2'"
+                "index_name:'index2',index_alias:'index2',clients:10"
         ]
       restartPolicy: Always

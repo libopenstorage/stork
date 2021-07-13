@@ -17,6 +17,13 @@
         containers:
         - name: ycsb
           image: alvarobrandon/ycsb:latest
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: "1"
+              memory: 4Gi
           env:
           - name: POD_NAMESPACE
             valueFrom:

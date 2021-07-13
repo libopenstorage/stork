@@ -24,6 +24,9 @@ spec:
         - image: mysql:5.7
           name: mysql
           resources:
+            limits:
+              cpu: 1000m
+              memory: 500Mi
             requests:
               memory: 256Mi
               cpu: 100m
@@ -46,6 +49,13 @@ spec:
             - name: mysql-persistent-storage
               mountPath: /var/lib/mysql
         - name: sysbench
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 500Mi
+            requests:
+              memory: 256Mi
+              cpu: 100m
           image: portworx/torpedo-sysbench:new
           env:
             - name: MYSQL_HOST
