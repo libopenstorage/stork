@@ -3,6 +3,7 @@ package storkctl
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-openapi/inflect"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -25,8 +27,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	k8sdynamic "k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubernetes/pkg/printers"
 )
@@ -145,6 +150,11 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 		Short:   "Activate apps that were created from a migration",
 		Run: func(c *cobra.Command, args []string) {
 			activationNamespaces := make([]string, 0)
+			config, err := cmdFactory.GetConfig()
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
 			if allNamespaces {
 				namespaces, err := core.Instance().ListNamespaces(nil)
 				if err != nil {
@@ -167,7 +177,7 @@ func newActivateMigrationsCommand(cmdFactory Factory, ioStreams genericclioption
 				updateIBPObjects("IBPCA", ns, true, ioStreams)
 				updateIBPObjects("IBPOrderer", ns, true, ioStreams)
 				updateIBPObjects("IBPConsole", ns, true, ioStreams)
-				updateCRDObjects(ns, true, ioStreams)
+				updateCRDObjects(ns, true, ioStreams, config)
 				updateCronJobObjects(ns, true, ioStreams)
 			}
 
@@ -187,6 +197,11 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 		Short:   "Deactivate apps that were created from a migration",
 		Run: func(c *cobra.Command, args []string) {
 			deactivationNamespaces := make([]string, 0)
+			config, err := cmdFactory.GetConfig()
+			if err != nil {
+				util.CheckErr(err)
+				return
+			}
 			if allNamespaces {
 				namespaces, err := core.Instance().ListNamespaces(nil)
 				if err != nil {
@@ -209,7 +224,7 @@ func newDeactivateMigrationsCommand(cmdFactory Factory, ioStreams genericcliopti
 				updateIBPObjects("IBPCA", ns, false, ioStreams)
 				updateIBPObjects("IBPOrderer", ns, false, ioStreams)
 				updateIBPObjects("IBPConsole", ns, false, ioStreams)
-				updateCRDObjects(ns, false, ioStreams)
+				updateCRDObjects(ns, false, ioStreams, config)
 				updateCronJobObjects(ns, false, ioStreams)
 			}
 
@@ -280,21 +295,33 @@ func updateDeploymentConfigs(namespace string, activate bool, ioStreams genericc
 	}
 }
 
-func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOStreams) {
+func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOStreams, config *rest.Config) {
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
 		util.CheckErr(err)
 		return
 	}
+	configClient, err := k8sdynamic.NewForConfig(config)
+	if err != nil {
+		util.CheckErr(err)
+		return
+	}
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+	ruleset.AddPlural("prometheus", "prometheuses")
+	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	for _, res := range crdList.Items {
 		for _, crd := range res.Resources {
-			objects, err := dynamic.Instance().ListObjects(
-				&metav1.ListOptions{
-					TypeMeta: metav1.TypeMeta{
-						Kind:       crd.Kind,
-						APIVersion: crd.Group + "/" + crd.Version},
-				},
-				ns)
+			var client k8sdynamic.ResourceInterface
+			opts := &metav1.ListOptions{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       crd.Kind,
+					APIVersion: crd.Group + "/" + crd.Version},
+			}
+			gvk := schema.FromAPIVersionAndKind(opts.APIVersion, opts.Kind)
+			resourceInterface := configClient.Resource(gvk.GroupVersion().WithResource(ruleset.Pluralize(strings.ToLower(gvk.Kind))))
+			client = resourceInterface.Namespace(ns)
+			objects, err := client.List(context.TODO(), *opts)
 			if err != nil {
 				if errors.IsNotFound(err) {
 					continue
@@ -327,7 +354,8 @@ func updateCRDObjects(ns string, activate bool, ioStreams genericclioptions.IOSt
 						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
 						continue
 					}
-					_, err = dynamic.Instance().UpdateObject(&o)
+
+					_, err = client.Update(context.TODO(), &o, metav1.UpdateOptions{}, "")
 					if err != nil {
 						printMsg(fmt.Sprintf("Error updating \"%v\" for %v %v/%v to %v : %v", crd.SuspendOptions.Path, strings.ToLower(crd.Kind), o.GetNamespace(), o.GetName(), !activate, err), ioStreams.ErrOut)
 						continue
@@ -420,16 +448,16 @@ func getSuspendStringOpts(annotations map[string]string, activate bool, ioStream
 	return suspend, nil
 }
 
-func getSuspendIntOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int32, bool) {
+func getSuspendIntOpts(annotations map[string]string, activate bool, ioStreams genericclioptions.IOStreams) (int64, bool) {
 	if intOpts, present := annotations[migration.StorkMigrationCRDActivateAnnotation]; present {
-		var replicas int32
+		var replicas int64
 		if activate {
 			parsedReplicas, err := strconv.Atoi(intOpts)
 			if err != nil {
 				printMsg(fmt.Sprintf("Error parsing replicas for app : %v", err), ioStreams.ErrOut)
 				return 0, false
 			}
-			replicas = int32(parsedReplicas)
+			replicas = int64(parsedReplicas)
 		} else {
 			replicas = 0
 		}
