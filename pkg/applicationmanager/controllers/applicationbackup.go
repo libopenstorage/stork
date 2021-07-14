@@ -994,13 +994,17 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 	if err != nil {
 		return err
 	}
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+	ruleset.AddPlural("prometheus", "prometheuses")
+	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	var crds []*apiextensionsv1beta1.CustomResourceDefinition
 	for _, crd := range crdList.Items {
 		for _, v := range crd.Resources {
 			if _, ok := resKinds[v.Kind]; !ok {
 				continue
 			}
-			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
 			res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
 			if err != nil {
 				if k8s_errors.IsNotFound(err) {

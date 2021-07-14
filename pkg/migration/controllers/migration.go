@@ -1214,6 +1214,12 @@ func (m *MigrationController) applyResources(
 	if err != nil {
 		return err
 	}
+	// TODO: we should use k8s code generator logic to pluralize
+	// crd resources instead of depending on inflect lib
+	ruleset := inflect.NewDefaultRuleset()
+	ruleset.AddPlural("quota", "quotas")
+	ruleset.AddPlural("prometheus", "prometheuses")
+	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
 	// create CRD on destination cluster
 	crdList, err := storkops.Instance().ListApplicationRegistrations()
 	if err != nil {
@@ -1239,7 +1245,7 @@ func (m *MigrationController) applyResources(
 			if err != nil {
 				return err
 			}
-			crdName := inflect.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
+			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
 			crdvbeta1, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Get(context.TODO(), crdName, metav1.GetOptions{})
 			if err == nil {
 				crdvbeta1.ResourceVersion = ""
@@ -1338,13 +1344,6 @@ func (m *MigrationController) applyResources(
 			return err
 		}
 	}
-	// TODO: we should use k8s code generator logic to pluralize
-	// crd resources instead of depending on inflect lib
-	ruleset := inflect.NewDefaultRuleset()
-	ruleset.AddPlural("quota", "quotas")
-	ruleset.AddPlural("prometheus", "prometheuses")
-	ruleset.AddPlural("mongodbcommunity", "mongodbcommunity")
-
 	var pvObjects, pvcObjects []runtime.Unstructured
 	for _, o := range objects {
 		metadata, err := meta.Accessor(o)
