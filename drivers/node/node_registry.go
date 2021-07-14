@@ -55,6 +55,17 @@ func GetWorkerNodes() []Node {
 	return nodeList
 }
 
+// GetMasterNodes returns only the master nodes/agent nodes
+func GetMasterNodes() []Node {
+	var nodeList []Node
+	for _, n := range nodeRegistry {
+		if n.Type == TypeMaster {
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
 // GetStorageDriverNodes returns only the worker node where storage
 // driver is installed
 func GetStorageDriverNodes() []Node {
