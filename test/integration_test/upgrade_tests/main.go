@@ -20,11 +20,17 @@ const (
 	backuplocationName = "upgrade-bkp-location"
 	upgradeSchedPolicy = "upgrade-test-sched-policy"
 	bkpSchedName       = "upgrade-test-backup"
+	migrSchedName      = "upgrade-test-migration"
+	clusterPairName    = "upgrade-test-clusterpair"
 	version            = "2.6-dev"
 )
 
 func main() {
 	namespaces := []string{"upgrade-test"}
+	customFormatter := new(logrus.TextFormatter)
+	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+	logrus.SetFormatter(customFormatter)
+	customFormatter.FullTimestamp = true
 	appOps, err := apps.NewInstanceFromConfigFile("/tmp/config")
 	if err != nil {
 		logrus.Errorf("unable to set app inst: %v", err)
@@ -42,19 +48,28 @@ func main() {
 		panic(err)
 	}
 
-	// Configure applicationbackupschedule
-	// wait for backups to trigger and validate
-	status, err := createBackupSchedule("/tmp/config", bkpDirName, namespaces)
+	// Configure migration schedule
+	// wait for migrations to trigger and validate
+	migr, err := createMigrationSchedule("/tmp/config", bkpDirName, namespaces)
 	if err != nil {
 		panic(err)
 	}
-	logrus.Infof("status map: %v", status)
+	logrus.Debugf("Migration before upgrade: %v", migr)
+	bkp, err := createBackupSchedule("/tmp/config", bkpDirName, namespaces)
+	if err != nil {
+		panic(err)
+	}
+	logrus.Debugf("application backup before upgarde: %v", bkp)
 	// upgrade stork version
 	if err := upgradeStorkVersion(version); err != nil {
 		panic(err)
 	}
 	// validate applicationbackups after upgrade
-	if err := validateAppBackup(status); err != nil {
+	if err := validateAppBackup(bkp); err != nil {
+		panic(err)
+	}
+	// validate migrations after upgrade
+	if err := validateMigrations(migr); err != nil {
 		panic(err)
 	}
 	logrus.Infof("upgrade test done")
@@ -113,7 +128,8 @@ func deployApps(config, dirName string, namespaces []string) error {
 	return nil
 }
 
-func createBackupSchedule(config, backupDir string, namespaces []string) (map[stork_api.SchedulePolicyType][]*stork_api.ScheduledApplicationBackupStatus, error) {
+func createBackupSchedule(config, backupDir string, namespaces []string) (*stork_api.ApplicationBackup, error) {
+	logrus.Infof("create backup schedule")
 	var outb, errb bytes.Buffer
 	// create backuplocation
 	cmd := exec.Command("kubectl", "--kubeconfig="+config, "apply", "-f",
@@ -142,15 +158,25 @@ func createBackupSchedule(config, backupDir string, namespaces []string) (map[st
 	if err != nil {
 		return nil, err
 	}
+	logrus.Infof("waiting for backups to be triggered... 15mins")
 	// wait for at least 3 backups to success if any failed return err
 	time.Sleep(15 * time.Minute)
+
 	resp, err := stork.Instance().ValidateApplicationBackupSchedule(bkpSchedName, adminNamespace, 3, 15*time.Minute, 10*time.Second)
 	if err != nil {
 		return nil, err
 	}
 
 	// send last successful backup info back
-	return resp, err
+	var orgBackup *stork_api.ApplicationBackup
+	for _, v := range resp {
+		orgBackup, err = stork.Instance().GetApplicationBackup(v[0].Name, adminNamespace)
+		if err != nil {
+			return nil, err
+		}
+		break
+	}
+	return orgBackup, err
 }
 
 func upgradeStorkVersion(version string) error {
@@ -163,6 +189,7 @@ func upgradeStorkVersion(version string) error {
 	if len(deploy.Spec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("unable to update image: path not found")
 	}
+	logrus.Infof("current stork version: %s", deploy.Spec.Template.Spec.Containers[0].Image)
 	deploy.Spec.Template.Spec.Containers[0].Image = "openstorage/stork:" + version
 	resp, err := apps.Instance().UpdateDeployment(deploy)
 	if err != nil {
@@ -176,22 +203,17 @@ func upgradeStorkVersion(version string) error {
 	return nil
 }
 
-func validateAppBackup(status map[stork_api.SchedulePolicyType][]*stork_api.ScheduledApplicationBackupStatus) error {
-	logrus.Infof("validating app backups")
+func validateAppBackup(orgBackup *stork_api.ApplicationBackup) error {
+	logrus.Infof("validating app backups..waiting for 10 mins")
+
+	time.Sleep(10 * time.Minute)
 
 	// wait for at least 3 backups to success if any failed return err
 	resp, err := stork.Instance().ValidateApplicationBackupSchedule(bkpSchedName, adminNamespace, 3, 15*time.Minute, 10*time.Second)
 	if err != nil {
 		return err
 	}
-	var orgBackup, upgradeBackup *stork_api.ApplicationBackup
-	for _, v := range status {
-		orgBackup, err = stork.Instance().GetApplicationBackup(v[0].Name, adminNamespace)
-		if err != nil {
-			return err
-		}
-		break
-	}
+	var upgradeBackup *stork_api.ApplicationBackup
 	for _, v := range resp {
 		upgradeBackup, err = stork.Instance().GetApplicationBackup(v[0].Name, adminNamespace)
 		if err != nil {
@@ -208,6 +230,78 @@ func validateAppBackup(status map[stork_api.SchedulePolicyType][]*stork_api.Sche
 		logrus.Errorf("volumes before upgrade: %v", orgBackup.Status.Resources)
 		logrus.Errorf("volumes after upgrade: %v", upgradeBackup.Status.Resources)
 		return fmt.Errorf("volume counts after upgrade does not match, expected: %v, actual: %v", len(upgradeBackup.Status.Resources), len(orgBackup.Status.Resources))
+	}
+
+	return nil
+}
+
+func createMigrationSchedule(config, backupDir string, namespaces []string) (*stork_api.Migration, error) {
+	logrus.Infof("create migration schedule")
+	// create migration
+	migrSched := &stork_api.MigrationSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      migrSchedName,
+			Namespace: adminNamespace,
+		},
+	}
+	migrSched.Spec.SchedulePolicyName = upgradeSchedPolicy
+	migrSched.Spec.Template.Spec = stork_api.MigrationSpec{
+		Namespaces:  namespaces,
+		ClusterPair: clusterPairName,
+	}
+	_, err := stork.Instance().CreateMigrationSchedule(migrSched)
+	if err != nil {
+		return nil, err
+	}
+	// wait for at least 3 backups to success if any failed return err
+	logrus.Infof("waiting for migrations to start..15 min")
+	time.Sleep(15 * time.Minute)
+
+	resp, err := stork.Instance().ValidateMigrationSchedule(migrSchedName, adminNamespace, 15*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	// send last successful backup info back
+	var oldMigr *stork_api.Migration
+	for _, v := range resp {
+		oldMigr, err = stork.Instance().GetMigration(v[0].Name, adminNamespace)
+		if err != nil {
+			return nil, err
+		}
+		break
+	}
+	return oldMigr, err
+}
+
+func validateMigrations(oldMigr *stork_api.Migration) error {
+	logrus.Infof("validating migrations..wait 10 mins")
+
+	time.Sleep(10 * time.Minute)
+
+	// wait for at least 3 backups to success if any failed return err
+	resp, err := stork.Instance().ValidateMigrationSchedule(migrSchedName, adminNamespace, 15*time.Minute, 10*time.Second)
+	if err != nil {
+		return err
+	}
+
+	var updatedMigr *stork_api.Migration
+	for _, v := range resp {
+		updatedMigr, err = stork.Instance().GetMigration(v[0].Name, adminNamespace)
+		if err != nil {
+			return err
+		}
+
+	}
+	if len(oldMigr.Status.Volumes) != len(updatedMigr.Status.Volumes) {
+		logrus.Errorf("volumes before upgrade: %v", oldMigr.Status.Volumes)
+		logrus.Errorf("volumes after upgrade: %v", updatedMigr.Status.Volumes)
+		return fmt.Errorf("volume counts after upgrade does not match, expected: %v, actual: %v", len(oldMigr.Status.Volumes), len(updatedMigr.Status.Volumes))
+	}
+	if len(oldMigr.Status.Resources) != len(updatedMigr.Status.Resources) {
+		logrus.Errorf("volumes before upgrade: %v", oldMigr.Status.Resources)
+		logrus.Errorf("volumes after upgrade: %v", updatedMigr.Status.Resources)
+		return fmt.Errorf("volume counts after upgrade does not match, expected: %v, actual: %v", len(oldMigr.Status.Resources), len(updatedMigr.Status.Resources))
 	}
 
 	return nil
