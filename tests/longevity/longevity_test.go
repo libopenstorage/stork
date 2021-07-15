@@ -250,6 +250,12 @@ func populateTriggers(triggers *map[string]string) error {
 		}
 		chaosMap[triggerType] = chaosLevelInt
 	}
+	RunningTriggers = map[string]time.Duration{}
+	for k, v := range chaosMap {
+		if v != 0 {
+			RunningTriggers[k] = triggerInterval[k][v]
+		}
+	}
 	return nil
 }
 

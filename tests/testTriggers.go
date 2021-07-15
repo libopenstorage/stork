@@ -43,6 +43,9 @@ const (
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
 
+// RunningTriggers map of events and corresponding interval
+var RunningTriggers map[string]time.Duration
+
 // SendGridEmailAPIKey holds API key used to interact
 // with SendGrid Email APIs
 var SendGridEmailAPIKey string
@@ -76,12 +79,18 @@ type emailData struct {
 	MasterIP     []string
 	NodeInfo     []nodeInfo
 	EmailRecords emailRecords
+	TriggersInfo []triggerInfo
 }
 
 type nodeInfo struct {
 	MgmtIP    string
 	PxVersion string
 	Status    string
+}
+
+type triggerInfo struct {
+	Name     string
+	Duration time.Duration
 }
 
 // GenerateUUID generates unique ID
@@ -430,6 +439,9 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *Even
 				fmt.Sprintf("crash volume driver %s on node: %v",
 					Inst().V.String(), appNode.Name),
 				func() {
+					taskStep := fmt.Sprintf("crash volume driver %s on node: %s",
+						Inst().V.String(), appNode.Name)
+					event.Event.Type += "\n" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					CrashVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -462,6 +474,9 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				fmt.Sprintf("stop volume driver %s on node: %s",
 					Inst().V.String(), appNode.Name),
 				func() {
+					taskStep := fmt.Sprintf("stop volume driver %s on node: %s.",
+						Inst().V.String(), appNode.Name)
+					event.Event.Type += "\n" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -473,6 +488,9 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				fmt.Sprintf("starting volume %s driver on node %s",
 					Inst().V.String(), appNode.Name),
 				func() {
+					taskStep := fmt.Sprintf("starting volume driver %s on node: %s.",
+						Inst().V.String(), appNode.Name)
+					event.Event.Type += "\n" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -523,6 +541,8 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 			for _, n := range nodesToReboot {
 				if n.IsStorageDriverInstalled {
 					Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+						taskStep := fmt.Sprintf("reboot node: %s.", n.Name)
+						event.Event.Type += "\n" + taskStep
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -612,7 +632,11 @@ func TriggerEmailReporter(contexts []*scheduler.Context, recordChan *chan *Event
 		}
 
 		emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp,
-			PxVersion: n.NodeLabels["PX Version"], Status: string(pxStatus)})
+			PxVersion: n.NodeLabels["PX Version"], Status: pxStatus})
+	}
+
+	for k, v := range RunningTriggers {
+		emailData.TriggersInfo = append(emailData.TriggersInfo, triggerInfo{Name: k, Duration: v})
 	}
 	for i := 0; i < eventRing.Len(); i++ {
 		record := eventRing.Value
@@ -719,6 +743,18 @@ tbody tr:last-child {
    <td align="center"><h4>PX Status </h4></td>
  </tr>
 {{range .NodeInfo}}<tr>
+{{range rangeStruct .}} <td>{{.}}</td>
+{{end}}</tr>
+{{end}}
+</table>
+<hr/>
+<h3>Running Event Details</h3>
+<table border=1 width: 50%>
+<tr>
+   <td align="center"><h4>Trigget Name </h4></td>
+   <td align="center"><h4>Interval </h4></td>
+ </tr>
+{{range .TriggersInfo}}<tr>
 {{range rangeStruct .}} <td>{{.}}</td>
 {{end}}</tr>
 {{end}}
