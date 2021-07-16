@@ -138,6 +138,10 @@ func TriggerCoreChecker(contexts []*scheduler.Context, recordChan *chan *EventRe
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
 
 	context(fmt.Sprintf("checking for core files..."), func() {
 		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
@@ -439,9 +443,9 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *Even
 				fmt.Sprintf("crash volume driver %s on node: %v",
 					Inst().V.String(), appNode.Name),
 				func() {
-					taskStep := fmt.Sprintf("crash volume driver %s on node: %s",
-						Inst().V.String(), appNode.Name)
-					event.Event.Type += "\n" + taskStep
+					taskStep := fmt.Sprintf("crash volume driver on node: %s",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					CrashVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -474,9 +478,9 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				fmt.Sprintf("stop volume driver %s on node: %s",
 					Inst().V.String(), appNode.Name),
 				func() {
-					taskStep := fmt.Sprintf("stop volume driver %s on node: %s.",
-						Inst().V.String(), appNode.Name)
-					event.Event.Type += "\n" + taskStep
+					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -488,9 +492,9 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				fmt.Sprintf("starting volume %s driver on node %s",
 					Inst().V.String(), appNode.Name),
 				func() {
-					taskStep := fmt.Sprintf("starting volume driver %s on node: %s.",
-						Inst().V.String(), appNode.Name)
-					event.Event.Type += "\n" + taskStep
+					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -541,8 +545,8 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 			for _, n := range nodesToReboot {
 				if n.IsStorageDriverInstalled {
 					Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
-						taskStep := fmt.Sprintf("reboot node: %s.", n.Name)
-						event.Event.Type += "\n" + taskStep
+						taskStep := fmt.Sprintf("reboot node: %s.", n.MgmtIp)
+						event.Event.Type += "<br>" + taskStep
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -723,11 +727,23 @@ td {
   text-align: center;
   padding: 3px;
 }
+
 tbody tr:nth-child(even) {
   background-color: #bac5ca;
 }
 tbody tr:last-child {
   background-color: #79ab78;
+}
+@media only screen and (max-width: 500px) {
+	.wrapper table {
+		width: 100% !important;
+	}
+
+	.wrapper .column {
+		// make the column full width on small screens and allow stacking
+		width: 100% !important;
+		display: block !important;
+	}
 }
 </style>
 </head>
@@ -763,7 +779,7 @@ tbody tr:last-child {
 <h3>Event Details</h3>
 <table border=1 width: 100%>
 <tr>
-   <td align="center"><h4>Event </h4></td>
+   <td class="wrapper" width="600" align="center"><h4>Event </h4></td>
    <td align="center"><h4>Start Time </h4></td>
    <td align="center"><h4>End Time </h4></td>
    <td align="center"><h4>Errors </h4></td>
