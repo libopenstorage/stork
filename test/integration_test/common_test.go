@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -204,7 +205,7 @@ func setup() error {
 		if !ok {
 			return fmt.Errorf("stork version not found in configmap: %s", cmName)
 		}
-		if ver != version.Version {
+		if strings.Split(ver, "-")[0] != strings.Split(version.Version, "-")[0] {
 			return fmt.Errorf("stork version mismatch, found: %s, expected: %s", ver, version.Version)
 		}
 	}
