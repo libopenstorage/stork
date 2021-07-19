@@ -165,6 +165,9 @@ type Driver interface {
 
 	// PowerOffVM powers VM
 	PowerOffVM(node Node) error
+
+	// SystemctlUnitExist checks if a given service exists in a node
+	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
 }
 
 // Register registers the given node driver
@@ -330,5 +333,12 @@ func (d *notSupportedDriver) RebootVM(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootVM()",
+	}
+}
+
+func (d *notSupportedDriver) SystemctlUnitExist(node Node, service string, options SystemctlOpts) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "SystemctlUnitExist()",
 	}
 }

@@ -366,7 +366,10 @@ func (s *SSH) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 	systemctlCmd := fmt.Sprintf("sudo systemctl %v %v", options.Action, service)
 	t := func() (interface{}, bool, error) {
 		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
-		return out, true, err
+		if err != nil {
+			return out, true, err
+		}
+		return out, false, nil
 	}
 
 	if _, err := task.DoRetryWithTimeout(t,
@@ -378,6 +381,27 @@ func (s *SSH) Systemctl(n node.Node, service string, options node.SystemctlOpts)
 		}
 	}
 	return nil
+}
+
+// SystemctlUnitExist checks if a given service exists on the node
+func (s *SSH) SystemctlUnitExist(n node.Node, service string, options node.SystemctlOpts) (bool, error) {
+	systemctlCmd := fmt.Sprintf("sudo systemctl list-units --full --all | grep \"%s.service\" || true", service)
+	t := func() (interface{}, bool, error) {
+		out, err := s.doCmd(n, options.ConnectionOpts, systemctlCmd, false)
+		if err != nil {
+			return out, true, err
+		}
+		return out, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, options.ConnectionOpts.Timeout, options.ConnectionOpts.TimeBeforeRetry)
+	if err != nil {
+		return false, &node.ErrFailedToRunSystemctlOnNode{
+			Node:  n,
+			Cause: err.Error(),
+		}
+	}
+
+	return len(out.(string)) > 0, nil
 }
 
 func (s *SSH) doCmd(n node.Node, options node.ConnectionOpts, cmd string, ignoreErr bool) (string, error) {
