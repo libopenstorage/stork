@@ -12,7 +12,6 @@ import (
 
 	"container/ring"
 
-	"github.com/libopenstorage/openstorage/api"
 	"github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -626,13 +625,8 @@ func TriggerEmailReporter(contexts []*scheduler.Context, recordChan *chan *Event
 		status, err := Inst().V.GetNodeStatus(n)
 		if err != nil {
 			pxStatus = "ERROR GETTING STATUS"
-
-		}
-
-		if *status == api.Status_STATUS_OK {
-			pxStatus = "OPERATIONAL"
 		} else {
-			pxStatus = "NON-OPERATIONAL"
+			pxStatus = status.String()
 		}
 
 		emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp,
@@ -793,13 +787,9 @@ tbody tr:last-child {
 $('#pxtable tr td').each(function(){
   var cellValue = $(this).html();
   
-    if (cellValue === "OPERATIONAL") {
-      $(this).css('background-color','green');
+    if (cellValue != "STATUS_OK") {
+      $(this).css('background-color','red');
     }
- 
-    if((cellValue === "NON-OPERATIONAL") || (cellValue === "ERROR GETTING STATUS")){
-     $(this).css('background-color','red');
-     } 
 });
 </script>
 <hr/>
