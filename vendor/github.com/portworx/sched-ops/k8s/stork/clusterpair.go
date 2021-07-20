@@ -1,6 +1,7 @@
 package stork
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -34,7 +35,7 @@ func (c *Client) CreateClusterPair(pair *storkv1alpha1.ClusterPair) (*storkv1alp
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ClusterPairs(pair.Namespace).Create(pair)
+	return c.stork.StorkV1alpha1().ClusterPairs(pair.Namespace).Create(context.TODO(), pair, metav1.CreateOptions{})
 }
 
 // GetClusterPair gets the ClusterPair
@@ -42,7 +43,7 @@ func (c *Client) GetClusterPair(name string, namespace string) (*storkv1alpha1.C
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ClusterPairs(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().ClusterPairs(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListClusterPairs gets all the ClusterPairs
@@ -50,7 +51,7 @@ func (c *Client) ListClusterPairs(namespace string) (*storkv1alpha1.ClusterPairL
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ClusterPairs(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().ClusterPairs(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // UpdateClusterPair updates the ClusterPair
@@ -58,7 +59,7 @@ func (c *Client) UpdateClusterPair(pair *storkv1alpha1.ClusterPair) (*storkv1alp
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().ClusterPairs(pair.Namespace).Update(pair)
+	return c.stork.StorkV1alpha1().ClusterPairs(pair.Namespace).Update(context.TODO(), pair, metav1.UpdateOptions{})
 }
 
 // DeleteClusterPair deletes the ClusterPair
@@ -66,7 +67,7 @@ func (c *Client) DeleteClusterPair(name string, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().ClusterPairs(namespace).Delete(name, &metav1.DeleteOptions{
+	return c.stork.StorkV1alpha1().ClusterPairs(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{
 		PropagationPolicy: &deleteForegroundPolicy,
 	})
 }
@@ -116,7 +117,7 @@ func (c *Client) WatchClusterPair(namespace string, fn WatchFunc, listOptions me
 	}
 
 	listOptions.Watch = true
-	watchInterface, err := c.stork.StorkV1alpha1().ClusterPairs(namespace).Watch(listOptions)
+	watchInterface, err := c.stork.StorkV1alpha1().ClusterPairs(namespace).Watch(context.TODO(), listOptions)
 	if err != nil {
 		logrus.WithError(err).Error("error invoking the watch api for cluster pair")
 		return err

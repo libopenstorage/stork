@@ -346,8 +346,7 @@ func (a *azureOps) SetInstanceGroupSize(instanceGroupID string,
 
 	instanceGroupSize := int32(count)
 	agentPoolProperties := containerservice.ManagedClusterAgentPoolProfileProperties{
-		Count:  &instanceGroupSize,
-		OsType: containerservice.Linux,
+		Count: &instanceGroupSize,
 	}
 
 	agentPool := containerservice.AgentPool{

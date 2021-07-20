@@ -94,6 +94,8 @@ github.com/aws/aws-sdk-go/service/s3/s3manager
 github.com/aws/aws-sdk-go/service/ssm
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
+# github.com/blang/semver v3.5.1+incompatible
+github.com/blang/semver
 # github.com/coreos/go-oidc v2.2.1+incompatible
 github.com/coreos/go-oidc
 # github.com/davecgh/go-spew v1.1.1
@@ -244,6 +246,11 @@ github.com/json-iterator/go
 github.com/jstemmer/go-junit-report
 github.com/jstemmer/go-junit-report/formatter
 github.com/jstemmer/go-junit-report/parser
+# github.com/kubernetes-csi/external-snapshotter/client/v4 v4.0.0
+github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1
+github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1beta1
+github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/scheme
+github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned/typed/volumesnapshot/v1beta1
 # github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc2 => github.com/libopenstorage/external-storage v0.20.4-openstorage-rc3
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1
 github.com/kubernetes-incubator/external-storage/snapshot/pkg/client
@@ -279,7 +286,7 @@ github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
-# github.com/libopenstorage/stork v1.3.0-beta1.0.20210331175814-30fe03cc1e33
+# github.com/libopenstorage/stork v1.3.0-beta1.0.20210503014041-fb328e234db7
 github.com/libopenstorage/stork/pkg/apis/stork
 github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1
 github.com/libopenstorage/stork/pkg/client/clientset/versioned
@@ -353,11 +360,15 @@ github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
 # github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 github.com/openshift/api/apps/v1
+github.com/openshift/api/config/v1
 github.com/openshift/api/security/v1
 # github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 github.com/openshift/client-go/apps/clientset/versioned
 github.com/openshift/client-go/apps/clientset/versioned/scheme
 github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1
+github.com/openshift/client-go/config/clientset/versioned
+github.com/openshift/client-go/config/clientset/versioned/scheme
+github.com/openshift/client-go/config/clientset/versioned/typed/config/v1
 github.com/openshift/client-go/security/clientset/versioned
 github.com/openshift/client-go/security/clientset/versioned/scheme
 github.com/openshift/client-go/security/clientset/versioned/typed/security/v1
@@ -376,13 +387,15 @@ github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
 # github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef
 github.com/portworx/px-backup-api/pkg/apis/v1
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20210401031424-429c07e70276
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20210614212742-d19cd551f94a
+github.com/portworx/sched-ops/k8s/apiextensions
 github.com/portworx/sched-ops/k8s/apps
 github.com/portworx/sched-ops/k8s/autopilot
 github.com/portworx/sched-ops/k8s/batch
 github.com/portworx/sched-ops/k8s/common
 github.com/portworx/sched-ops/k8s/core
 github.com/portworx/sched-ops/k8s/errors
+github.com/portworx/sched-ops/k8s/externalsnapshotter
 github.com/portworx/sched-ops/k8s/externalstorage
 github.com/portworx/sched-ops/k8s/networking
 github.com/portworx/sched-ops/k8s/openshift

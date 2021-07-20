@@ -22,6 +22,7 @@ import (
 
 const (
 	masterLabelKey           = "node-role.kubernetes.io/master"
+	controlplaneLabelKey     = "node-role.kubernetes.io/controlplane"
 	pvcStorageProvisionerKey = "volume.beta.kubernetes.io/storage-provisioner"
 	labelUpdateMaxRetries    = 5
 )

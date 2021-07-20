@@ -1,6 +1,7 @@
 package stork
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -33,7 +34,7 @@ func (c *Client) CreateVolumeSnapshotRestore(snapRestore *storkv1alpha1.VolumeSn
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(snapRestore.Namespace).Create(snapRestore)
+	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(snapRestore.Namespace).Create(context.TODO(), snapRestore, metav1.CreateOptions{})
 }
 
 // UpdateVolumeSnapshotRestore updates given volumesnapshorestore CRD
@@ -41,7 +42,7 @@ func (c *Client) UpdateVolumeSnapshotRestore(snapRestore *storkv1alpha1.VolumeSn
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(snapRestore.Namespace).Update(snapRestore)
+	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(snapRestore.Namespace).Update(context.TODO(), snapRestore, metav1.UpdateOptions{})
 }
 
 // GetVolumeSnapshotRestore returns details of given restore crd status
@@ -49,7 +50,7 @@ func (c *Client) GetVolumeSnapshotRestore(name, namespace string) (*storkv1alpha
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).Get(name, metav1.GetOptions{})
+	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // ListVolumeSnapshotRestore return list of volumesnapshotrestores in given namespaces
@@ -57,7 +58,7 @@ func (c *Client) ListVolumeSnapshotRestore(namespace string) (*storkv1alpha1.Vol
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).List(metav1.ListOptions{})
+	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).List(context.TODO(), metav1.ListOptions{})
 }
 
 // DeleteVolumeSnapshotRestore delete given volumesnapshotrestore CRD
@@ -65,7 +66,7 @@ func (c *Client) DeleteVolumeSnapshotRestore(name, namespace string) error {
 	if err := c.initClient(); err != nil {
 		return err
 	}
-	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).Delete(name, &metav1.DeleteOptions{})
+	return c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 // ValidateVolumeSnapshotRestore validates given volumesnapshotrestore CRD
@@ -74,7 +75,7 @@ func (c *Client) ValidateVolumeSnapshotRestore(name, namespace string, timeout, 
 		return err
 	}
 	t := func() (interface{}, bool, error) {
-		snapRestore, err := c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).Get(name, metav1.GetOptions{})
+		snapRestore, err := c.stork.StorkV1alpha1().VolumeSnapshotRestores(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return "", true, err
 		}
