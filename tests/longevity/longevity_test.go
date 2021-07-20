@@ -34,6 +34,8 @@ var (
 	// Stores which are disruptive triggers. When disruptive triggers are happening in test,
 	// other triggers are allowed to happen only after existing triggers are complete.
 	disruptiveTriggers map[string]bool
+
+	triggerFunctions map[string]func([]*scheduler.Context, *chan *EventRecord)
 )
 
 func TestLongevity(t *testing.T) {
@@ -55,7 +57,7 @@ var _ = Describe("{Longevity}", func() {
 	var contexts []*scheduler.Context
 	var triggerLock sync.Mutex
 	triggerEventsChan := make(chan *EventRecord, 100)
-	triggerFunctions := map[string]func([]*scheduler.Context, *chan *EventRecord){
+	triggerFunctions = map[string]func([]*scheduler.Context, *chan *EventRecord){
 		DeployApps:       TriggerDeployNewApps,
 		RebootNode:       TriggerRebootNodes,
 		RestartVolDriver: TriggerRestartVolDriver,
@@ -249,6 +251,18 @@ func populateTriggers(triggers *map[string]string) error {
 				testTriggersConfigMap, configMapNS, err)
 		}
 		chaosMap[triggerType] = chaosLevelInt
+	}
+
+	RunningTriggers = map[string]time.Duration{}
+	for triggerType := range triggerFunctions {
+		chaosLevel, ok := chaosMap[triggerType]
+		if !ok {
+			chaosLevel = Inst().ChaosLevel
+		}
+		if chaosLevel != 0 {
+			RunningTriggers[triggerType] = triggerInterval[triggerType][chaosLevel]
+		}
+
 	}
 	return nil
 }

@@ -42,6 +42,9 @@ const (
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
 
+// RunningTriggers map of events and corresponding interval
+var RunningTriggers map[string]time.Duration
+
 // SendGridEmailAPIKey holds API key used to interact
 // with SendGrid Email APIs
 var SendGridEmailAPIKey string
@@ -69,6 +72,24 @@ var eventRing *ring.Ring
 // email template
 type emailRecords struct {
 	Records []EventRecord
+}
+
+type emailData struct {
+	MasterIP     []string
+	NodeInfo     []nodeInfo
+	EmailRecords emailRecords
+	TriggersInfo []triggerInfo
+}
+
+type nodeInfo struct {
+	MgmtIP    string
+	PxVersion string
+	Status    string
+}
+
+type triggerInfo struct {
+	Name     string
+	Duration time.Duration
 }
 
 // GenerateUUID generates unique ID
@@ -116,6 +137,10 @@ func TriggerCoreChecker(contexts []*scheduler.Context, recordChan *chan *EventRe
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
 	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
 
 	context(fmt.Sprintf("checking for core files..."), func() {
 		Step(fmt.Sprintf("verifying if core files are present on each node"), func() {
@@ -417,6 +442,9 @@ func TriggerCrashVolDriver(contexts []*scheduler.Context, recordChan *chan *Even
 				fmt.Sprintf("crash volume driver %s on node: %v",
 					Inst().V.String(), appNode.Name),
 				func() {
+					taskStep := fmt.Sprintf("crash volume driver on node: %s",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					CrashVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -449,6 +477,9 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				fmt.Sprintf("stop volume driver %s on node: %s",
 					Inst().V.String(), appNode.Name),
 				func() {
+					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -460,6 +491,9 @@ func TriggerRestartVolDriver(contexts []*scheduler.Context, recordChan *chan *Ev
 				fmt.Sprintf("starting volume %s driver on node %s",
 					Inst().V.String(), appNode.Name),
 				func() {
+					taskStep := fmt.Sprintf("starting volume driver on node: %s.",
+						appNode.MgmtIp)
+					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
 					StartVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
@@ -510,6 +544,8 @@ func TriggerRebootNodes(contexts []*scheduler.Context, recordChan *chan *EventRe
 			for _, n := range nodesToReboot {
 				if n.IsStorageDriverInstalled {
 					Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+						taskStep := fmt.Sprintf("reboot node: %s.", n.MgmtIp)
+						event.Event.Type += "<br>" + taskStep
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -573,18 +609,43 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 // TriggerEmailReporter sends email with all reported errors
 func TriggerEmailReporter(contexts []*scheduler.Context, recordChan *chan *EventRecord) {
 	// emailRecords stores events to be notified
-	emailRecords := emailRecords{}
+
+	emailData := emailData{}
 	logrus.Infof("Generating email report: %s", time.Now().Format(time.RFC1123))
+
+	var masterNodeList []string
+	var pxStatus string
+
+	for _, n := range node.GetMasterNodes() {
+		masterNodeList = append(masterNodeList, n.Addresses...)
+	}
+	emailData.MasterIP = masterNodeList
+
+	for _, n := range node.GetWorkerNodes() {
+		status, err := Inst().V.GetNodeStatus(n)
+		if err != nil {
+			pxStatus = "ERROR GETTING STATUS"
+		} else {
+			pxStatus = status.String()
+		}
+
+		emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp,
+			PxVersion: n.NodeLabels["PX Version"], Status: pxStatus})
+	}
+
+	for k, v := range RunningTriggers {
+		emailData.TriggersInfo = append(emailData.TriggersInfo, triggerInfo{Name: k, Duration: v})
+	}
 	for i := 0; i < eventRing.Len(); i++ {
 		record := eventRing.Value
 		if record != nil {
-			emailRecords.Records = append(emailRecords.Records, *record.(*EventRecord))
+			emailData.EmailRecords.Records = append(emailData.EmailRecords.Records, *record.(*EventRecord))
 			eventRing.Value = nil
 		}
 		eventRing = eventRing.Next()
 	}
 
-	content, err := prepareEmailBody(emailRecords)
+	content, err := prepareEmailBody(emailData)
 	if err != nil {
 		logrus.Errorf("Failed to prepare email body. Error: [%v]", err)
 	}
@@ -603,7 +664,7 @@ func TriggerEmailReporter(contexts []*scheduler.Context, recordChan *chan *Event
 	}
 }
 
-func prepareEmailBody(eventRecords emailRecords) (string, error) {
+func prepareEmailBody(eventRecords emailData) (string, error) {
 	var err error
 	t := template.New("t").Funcs(templateFuncs)
 	t, err = t.Parse(htmlTemplate)
@@ -642,15 +703,14 @@ func rangeStructer(args ...interface{}) []interface{} {
 	return out
 }
 
-var htmlTemplate = `
-<!DOCTYPE html>
+var htmlTemplate = `<!DOCTYPE html>
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
 <style>
 table {
   border-collapse: collapse;
-  width: 100%;
 }
 th {
    background-color: #0ca1f0;
@@ -658,35 +718,81 @@ th {
    padding: 3px;
 }
 td {
-  text-align: left;
+  text-align: center;
   padding: 3px;
 }
+
 tbody tr:nth-child(even) {
-	background-color: #bac5ca;
+  background-color: #bac5ca;
 }
 tbody tr:last-child {
   background-color: #79ab78;
+}
+@media only screen and (max-width: 500px) {
+	.wrapper table {
+		width: 100% !important;
+	}
+
+	.wrapper .column {
+		// make the column full width on small screens and allow stacking
+		width: 100% !important;
+		display: block !important;
+	}
 }
 </style>
 </head>
 <body>
 <h1>Torpedo Longevity Report</h1>
 <hr/>
-<h3>Event Details</h3>
-<table border=1>
+<h3>SetUp Details</h3>
+<p><b>Master IP:</b> {{.MasterIP}}</p>
+<table id="pxtable" border=1 width: 50% >
 <tr>
-   <td align="center"><h4>Event </h4></td>
-   <td align="center"><h4>Start Time </h4></td>
-   <td align="center"><h4>End Time </h4></td>
-   <td align="center"><h4>Errors </h4></td>
+   <td align="center"><h4>PX Node IP </h4></td>
+   <td align="center"><h4>PX Version </h4></td>
+   <td align="center"><h4>PX Status </h4></td>
  </tr>
-{{range .Records}}<tr>
-{{range rangeStruct .}}	<td>{{.}}</td>
+{{range .NodeInfo}}<tr>
+{{range rangeStruct .}} <td>{{.}}</td>
 {{end}}</tr>
 {{end}}
 </table>
 <hr/>
+<h3>Running Event Details</h3>
+<table border=1 width: 50%>
+<tr>
+   <td align="center"><h4>Trigget Name </h4></td>
+   <td align="center"><h4>Interval </h4></td>
+ </tr>
+{{range .TriggersInfo}}<tr>
+{{range rangeStruct .}} <td>{{.}}</td>
+{{end}}</tr>
+{{end}}
+</table>
+<hr/>
+<h3>Event Details</h3>
+<table border=1 width: 100%>
+<tr>
+   <td class="wrapper" width="600" align="center"><h4>Event </h4></td>
+   <td align="center"><h4>Start Time </h4></td>
+   <td align="center"><h4>End Time </h4></td>
+   <td align="center"><h4>Errors </h4></td>
+ </tr>
+{{range .EmailRecords.Records}}<tr>
+{{range rangeStruct .}} <td>{{.}}</td>
+{{end}}</tr>
+{{end}}
+</table>
+<script>
+$('#pxtable tr td').each(function(){
+  var cellValue = $(this).html();
+  
+    if (cellValue != "STATUS_OK") {
+      $(this).css('background-color','red');
+    }
+});
+</script>
+<hr/>
 </table>
 </body>
-</html>
-`
+</html>`
