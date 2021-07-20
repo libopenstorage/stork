@@ -26,7 +26,8 @@ type MigrationTemplateSpec struct {
 
 // MigrationScheduleStatus is the status of a migration schedule
 type MigrationScheduleStatus struct {
-	Items map[SchedulePolicyType][]*ScheduledMigrationStatus `json:"items"`
+	Items                map[SchedulePolicyType][]*ScheduledMigrationStatus `json:"items"`
+	ApplicationActivated bool                                               `json:"applicationActivated"`
 }
 
 // ScheduledMigrationStatus keeps track of the migration that was triggered by a

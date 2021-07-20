@@ -18,7 +18,7 @@ import (
 // StatefulSetOps is an interface to perform k8s stateful set operations
 type StatefulSetOps interface {
 	// ListStatefulSets lists all the statefulsets for a given namespace
-	ListStatefulSets(namespace string) (*appsv1.StatefulSetList, error)
+	ListStatefulSets(namespace string, options metav1.ListOptions) (*appsv1.StatefulSetList, error)
 	// GetStatefulSet returns a statefulset for given name and namespace
 	GetStatefulSet(name, namespace string) (*appsv1.StatefulSet, error)
 	// CreateStatefulSet creates the given statefulset
@@ -44,12 +44,12 @@ type StatefulSetOps interface {
 }
 
 // ListStatefulSets lists all the statefulsets for a given namespace
-func (c *Client) ListStatefulSets(namespace string) (*appsv1.StatefulSetList, error) {
+func (c *Client) ListStatefulSets(namespace string, options metav1.ListOptions) (*appsv1.StatefulSetList, error) {
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
 
-	return c.apps.StatefulSets(namespace).List(context.TODO(), metav1.ListOptions{})
+	return c.apps.StatefulSets(namespace).List(context.TODO(), options)
 }
 
 // GetStatefulSet returns a statefulset for given name and namespace
