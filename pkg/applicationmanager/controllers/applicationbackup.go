@@ -1088,7 +1088,6 @@ func (a *ApplicationBackupController) backupResources(
 				incResNsBatch = batch
 			}
 		}
-
 		if len(incResNsBatch) != 0 {
 			objects, err := a.resourceCollector.GetResources(
 				incResNsBatch,
@@ -1106,7 +1105,8 @@ func (a *ApplicationBackupController) backupResources(
 		if len(resourceTypeNsBatch) != 0 {
 			for _, backupResourceType := range backup.Spec.ResourceTypes {
 				for _, resource := range resourceTypes {
-					if resource.Kind == backupResourceType {
+					if resource.Kind == backupResourceType || (backupResourceType == "PersistentVolumeClaim" && resource.Kind == "PersistentVolume") {
+						log.ApplicationBackupLog(backup).Tracef("GetResourcesType for : %v", resource.Kind)
 						objects, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, true)
 						if err != nil {
 							log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
@@ -1141,24 +1141,10 @@ func (a *ApplicationBackupController) backupResources(
 			}
 		}
 	}
-	updatedAllObjects := make([]runtime.Unstructured, 0)
-	for _, obj := range allObjects {
-		resourceMap := make(map[types.UID]bool)
-		metadata, err := meta.Accessor(obj)
-		if err != nil {
-			return err
-		}
-		if _, ok := resourceMap[metadata.GetUID()]; ok {
-			continue
-		}
-		resourceMap[metadata.GetUID()] = true
-		updatedAllObjects = append(updatedAllObjects, obj)
-	}
-
 	if backup.Status.Resources == nil {
 		// Save the collected resources infos in the status
 		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
-		for _, obj := range updatedAllObjects {
+		for _, obj := range allObjects {
 			metadata, err := meta.Accessor(obj)
 			if err != nil {
 				return err
@@ -1191,7 +1177,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	// Do any additional preparation for the resources if required
-	if err = a.prepareResources(backup, updatedAllObjects); err != nil {
+	if err = a.prepareResources(backup, allObjects); err != nil {
 		message := fmt.Sprintf("Error preparing resources for backup: %v", err)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
@@ -1210,7 +1196,7 @@ func (a *ApplicationBackupController) backupResources(
 	}
 
 	// Upload the resources to the backup location
-	if err = a.uploadResources(backup, updatedAllObjects); err != nil {
+	if err = a.uploadResources(backup, allObjects); err != nil {
 		message := fmt.Sprintf("Error uploading resources: %v", err)
 		backup.Status.Status = stork_api.ApplicationBackupStatusFailed
 		backup.Status.Stage = stork_api.ApplicationBackupStageFinal
