@@ -513,9 +513,9 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 						}
 					} else {
 						// We could have case where includeResource has data, current ns is not part of includeResource
-						// and the user has given ResourceType != PVC. In this case we don't
+						// and the user has given ResourceType list and ResourceType does not contain PVC. In this case we don't
 						// want to collect vol data from this ns
-						if !isResourceTypePVC {
+						if len(backup.Spec.ResourceTypes) != 0 && !isResourceTypePVC {
 							break
 						}
 					}
