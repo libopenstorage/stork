@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	pvNamePrefix = "pvc-"
+	pvNamePrefix        = "pvc-"
+	skipModifyResources = "stork.libopenstorage.org/skip-modify-resource"
 )
 
 // NewApplicationClone create a new instance of ApplicationCloneController.
@@ -527,6 +528,11 @@ func (a *ApplicationCloneController) prepareResources(
 			if err != nil {
 				return nil, fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
 			}
+		case "Service":
+			err := a.prepareServiceResource(o)
+			if err != nil {
+				return nil, fmt.Errorf("error preparing PV resource %v: %v", metadata.GetName(), err)
+			}
 		}
 		_, err = a.resourceCollector.PrepareResourceForApply(
 			o,
@@ -541,6 +547,32 @@ func (a *ApplicationCloneController) prepareResources(
 		tempObjects = append(tempObjects, o)
 	}
 	return tempObjects, nil
+}
+
+func (a *ApplicationCloneController) prepareServiceResource(
+	object runtime.Unstructured,
+) error {
+	var service v1.Service
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &service); err != nil {
+		return fmt.Errorf("error converting to service: %v", err)
+	}
+	if service.Annotations != nil {
+		if _, ok := service.Annotations[skipModifyResources]; ok {
+			// Skip Modify annotation set don't modify specs for resource
+			// Note: some metadata annotation resource will be deleted later like
+			// resourceVersion, UID
+			return nil
+		}
+	}
+	for i := range service.Spec.Ports {
+		service.Spec.Ports[i].NodePort = 0
+	}
+	o, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&service)
+	if err != nil {
+		return err
+	}
+	object.SetUnstructuredContent(o)
+	return nil
 }
 
 func (a *ApplicationCloneController) preparePVResource(
