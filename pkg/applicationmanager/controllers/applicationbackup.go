@@ -1088,7 +1088,8 @@ func (a *ApplicationBackupController) backupResources(
 				incResNsBatch = batch
 			}
 		}
-
+		logrus.Infof("sivakumar incResNsBatch %v", incResNsBatch)
+		logrus.Infof("sivakumar resourceTypeNsBatch %v", resourceTypeNsBatch)
 		if len(incResNsBatch) != 0 {
 			objects, err := a.resourceCollector.GetResources(
 				incResNsBatch,
@@ -1100,23 +1101,46 @@ func (a *ApplicationBackupController) backupResources(
 				log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 				return err
 			}
+			for _, obj := range objects {
+				metadata, err := meta.Accessor(obj)
+				if err != nil {
+					return err
+				}
+				logrus.Infof("sivakuamr objects GetResources %v - %v - %v ", metadata.GetName(), metadata.GetNamespace(), metadata.GetUID())
+			}
 			allObjects = append(allObjects, objects...)
 		}
 
 		if len(resourceTypeNsBatch) != 0 {
+			isPVCBackup := false
+			for _, backupResourceType := range backup.Spec.ResourceTypes {
+				if backupResourceType == "PersistentVolumeClaim" {
+					isPVCBackup = true
+				}
+			}
 			for _, backupResourceType := range backup.Spec.ResourceTypes {
 				for _, resource := range resourceTypes {
-					if resource.Kind == backupResourceType {
+					logrus.Infof("sivakumar resource %v", resource)
+					if resource.Kind == backupResourceType || (isPVCBackup && resource.Kind == "PersistentVolume") {
 						objects, err := a.resourceCollector.GetResourcesForType(resource, nil, resourceTypeNsBatch, backup.Spec.Selectors, nil, true)
 						if err != nil {
 							log.ApplicationBackupLog(backup).Errorf("Error getting resources: %v", err)
 							return err
+						}
+						for _, obj := range objects.Items {
+							metadata, err := meta.Accessor(obj)
+							if err != nil {
+								return err
+							}
+							logrus.Infof("sivakuamr objects GetResourcesType %v - %v - %v ", metadata.GetName(), metadata.GetNamespace(), metadata.GetUID())
 						}
 						allObjects = append(allObjects, objects.Items...)
 					}
 				}
 			}
 		}
+
+		logrus.Infof("sivakumar: allObjects ... dump ---> %+v", allObjects)
 
 		// Do a dummy update to the backup CR to update only the last update timestamp
 		namespacedName := types.NamespacedName{}
@@ -1142,19 +1166,22 @@ func (a *ApplicationBackupController) backupResources(
 		}
 	}
 	updatedAllObjects := make([]runtime.Unstructured, 0)
+	updatedAllObjects = append(updatedAllObjects, allObjects...)
+	/*
+	resourceMap := make(map[types.UID]bool)
 	for _, obj := range allObjects {
-		resourceMap := make(map[types.UID]bool)
 		metadata, err := meta.Accessor(obj)
 		if err != nil {
 			return err
 		}
+		logrus.Infof("sivakuamr objects resourceMap %v - %v - %v ", metadata.GetName(), metadata.GetNamespace(), metadata.GetUID())
 		if _, ok := resourceMap[metadata.GetUID()]; ok {
 			continue
 		}
 		resourceMap[metadata.GetUID()] = true
 		updatedAllObjects = append(updatedAllObjects, obj)
 	}
-
+*/
 	if backup.Status.Resources == nil {
 		// Save the collected resources infos in the status
 		resourceInfos := make([]*stork_api.ApplicationBackupResourceInfo, 0)
