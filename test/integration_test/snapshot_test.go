@@ -38,8 +38,11 @@ func testSnapshot(t *testing.T) {
 	t.Run("simpleSnapshotTest", simpleSnapshotTest)
 	t.Run("cloudSnapshotTest", cloudSnapshotTest)
 	t.Run("snapshotScaleTest", snapshotScaleTest)
-	t.Run("groupSnapshotTest", groupSnapshotTest)
-	t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
+
+	if !testing.Short() {
+		t.Run("groupSnapshotTest", groupSnapshotTest)
+		t.Run("groupSnapshotScaleTest", groupSnapshotScaleTest)
+	}
 	t.Run("scheduleTests", snapshotScheduleTests)
 	// TODO: waiting for https://portworx.atlassian.net/browse/STOR-281 to be resolved
 	if authTokenConfigMap == "" {
