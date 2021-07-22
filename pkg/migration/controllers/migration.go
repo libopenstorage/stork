@@ -1373,6 +1373,13 @@ func (m *MigrationController) applyResources(
 			continue
 		}
 		log.MigrationLog(migration).Infof("Applying %v %v", pv.Kind, pv.GetName())
+
+		if pv.GetAnnotations() == nil {
+			pv.Annotations = make(map[string]string)
+		}
+		pv.Annotations[StorkMigrationAnnotation] = "true"
+		pv.Annotations[StorkMigrationName] = migration.GetName()
+		pv.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 		_, err = adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), &pv, metav1.CreateOptions{})
 		if err != nil {
 			if err != nil && errors.IsAlreadyExists(err) {
@@ -1433,6 +1440,12 @@ func (m *MigrationController) applyResources(
 		}
 		if isDeleted {
 			log.MigrationLog(migration).Infof("Applying %v %v", pvc.Kind, pvc.GetName())
+			if pvc.GetAnnotations() == nil {
+				pvc.Annotations = make(map[string]string)
+			}
+			pvc.Annotations[StorkMigrationAnnotation] = "true"
+			pvc.Annotations[StorkMigrationName] = migration.GetName()
+			pvc.Annotations[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
 			_, err = adminClient.CoreV1().PersistentVolumeClaims(pvc.GetNamespace()).Create(context.TODO(), &pvc, metav1.CreateOptions{})
 			if err != nil {
 				log.MigrationLog(migration).Errorf("Error creating %v/%v during migration: %v", pvc.GetNamespace(), pvc.GetName(), err)

@@ -494,8 +494,12 @@ func validateMigrationCleanup(t *testing.T, name, namespace string, pvcs *v1.Per
 	require.Error(t, err, "expected ss:%v error not found", name)
 
 	for _, pvc := range pvcs.Items {
-		_, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
-		require.Error(t, err, "expected pvc:%v error not found", pvc.Name)
+		resp, err := core.Instance().GetPersistentVolumeClaim(pvc.Name, pvc.Namespace)
+		if err == nil {
+			require.NotNil(t, resp.DeletionTimestamp)
+		} else {
+			require.Error(t, err, "expected pvc to be deleted:%v", resp.Name)
+		}
 	}
 
 	err = setSourceKubeConfig()

@@ -15,8 +15,8 @@ func testSnapshotRestore(t *testing.T) {
 	require.NoError(t, err, "failed to set kubeconfig to source cluster: %v", err)
 
 	t.Run("simpleSnapshotRestoreTest", simpleSnapshotRestoreTest)
-	t.Run("groupSnapshotRestoreTest", groupSnapshotRestoreTest)
 	if !testing.Short() {
+		t.Run("groupSnapshotRestoreTest", groupSnapshotRestoreTest)
 		t.Run("cloudSnapshotRestoreTest", cloudSnapshotRestoreTest)
 		t.Run("groupCloudSnapshotRestoreTest", groupCloudSnapshotRestoreTest)
 	}
