@@ -29,7 +29,9 @@ const (
 	// SystemdSchedServiceName is the name of the system service responsible for scheduling
 	SystemdSchedServiceName = "atomic-openshift-node"
 	// OpenshiftMirror is the mirror we use do download ocp client
-	OpenshiftMirror = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
+	OpenshiftMirror   = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
+	defaultCmdTimeout = 5 * time.Minute
+	defaultCmdRetry   = 15 * time.Second
 )
 
 var (
@@ -307,11 +309,18 @@ func startUpgrade(upgradeVersion string) error {
 	var err error
 
 	args := []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion)}
-	if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
+	t := func() (interface{}, bool, error) {
+		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
+			return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", string(output), err)
+		}
+		return output, false, nil
 	}
 
-	t := func() (interface{}, bool, error) {
+	if _, err := task.DoRetryWithTimeout(t, defaultCmdTimeout, defaultCmdRetry); err != nil {
+		return err
+	}
+
+	t = func() (interface{}, bool, error) {
 		clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
 		if err != nil {
 			return nil, true, fmt.Errorf("failed to get cluster version. cause: %v", err)
@@ -326,7 +335,7 @@ func startUpgrade(upgradeVersion string) error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 15*time.Second)
+	_, err = task.DoRetryWithTimeout(t, defaultCmdTimeout, defaultCmdRetry)
 	return err
 }
 
