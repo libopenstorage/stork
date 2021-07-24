@@ -1383,11 +1383,7 @@ func (m *MigrationController) applyResources(
 		_, err = adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), &pv, metav1.CreateOptions{})
 		if err != nil {
 			if err != nil && errors.IsAlreadyExists(err) {
-				if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
-					err = nil
-				} else {
-					_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), &pv, metav1.UpdateOptions{})
-				}
+				_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), &pv, metav1.UpdateOptions{})
 			}
 		}
 		if err != nil {
@@ -1430,11 +1426,11 @@ func (m *MigrationController) applyResources(
 				}
 				createTime := obj.GetCreationTimestamp()
 				if deleteStart.Before(&createTime) {
-					logrus.Warnf("Object[%v] got re-created after deletion. Not retrying deletion, deleteStart time:[%v], create time:[%v]",
+					log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. Not retrying deletion, deleteStart time:[%v], create time:[%v]",
 						obj.GetName(), deleteStart, createTime)
 					break
 				}
-				logrus.Warnf("Object %v still present, retrying in %v", pvc.GetName(), deletedRetryInterval)
+				log.MigrationLog(migration).Infof("Object %v still present, retrying in %v", pvc.GetName(), deletedRetryInterval)
 				time.Sleep(deletedRetryInterval)
 			}
 		}
@@ -1562,11 +1558,11 @@ func (m *MigrationController) applyResources(
 							}
 							createTime := obj.GetCreationTimestamp()
 							if deleteStart.Before(&createTime) {
-								logrus.Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+								log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
 									obj.GetName(), deleteStart, createTime)
 								break
 							}
-							logrus.Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
+							log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
 							time.Sleep(deletedRetryInterval)
 						}
 						_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
