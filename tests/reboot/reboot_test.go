@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
@@ -138,7 +137,6 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 						logrus.Infof("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
 						err = Inst().S.DisableSchedulingOnNode(*n)
 						Expect(err).NotTo(HaveOccurred())
-						StopVolDriverAndWait([]node.Node{*n})
 						err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
 						Expect(err).NotTo(HaveOccurred())
 						err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
@@ -148,25 +146,16 @@ var _ = Describe("{ReallocateSharedMount}", func() {
 								TimeBeforeRetry: defaultCommandRetry,
 							},
 						})
-						Expect(err).NotTo(HaveOccurred())
-						t := func() (interface{}, bool, error) {
-							err = Inst().N.TestConnection(*n, node.ConnectionOpts{
-								Timeout:         defaultCommandTimeout,
-								TimeBeforeRetry: defaultCommandRetry,
-							})
-							if err == nil {
-								return nil, true, fmt.Errorf("node %s is not down yet. retrying", n.Name)
-							}
-							return nil, false, nil
-						}
-						_, err = task.DoRetryWithTimeout(t, defaultWaitRebootTimeout, defaultWaitRebootRetry)
-						Expect(err).NotTo(HaveOccurred())
-						// as we keep the storage driver down on node until we check if the volume we need to force
-						// driver to refresh endpoint to pick another storage node which is up
+
+						// as we keep the storage driver down on node until we check if the volume, we wait a minute for
+						// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
+						logrus.Info("wait for 1 minute for node reboot")
+						time.Sleep(defaultCommandTimeout)
 						ctx.RefreshStorageEndpoint = true
 						ValidateContext(ctx)
 						n2, err := Inst().V.GetNodeForVolume(vol, defaultCommandTimeout, defaultCommandRetry)
 						Expect(err).NotTo(HaveOccurred())
+						// the mount should move to another node otherwise fail
 						Expect(n2.SchedulerNodeName).NotTo(Equal(n.SchedulerNodeName))
 						logrus.Infof("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
 						StartVolDriverAndWait([]node.Node{*n})
