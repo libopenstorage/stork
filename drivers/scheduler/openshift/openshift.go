@@ -437,6 +437,7 @@ func getChannel(version string) (string, error) {
 		} else {
 			selectedChannel = channel
 		}
+		previousOutput = output
 	}
 	return selectedChannel, err
 }
