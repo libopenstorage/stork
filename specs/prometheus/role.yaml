@@ -25,7 +25,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: prometheus
+  name: stork-prometheus
 subjects:
   - kind: ServiceAccount
     name: stork-prometheus
