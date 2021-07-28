@@ -27,6 +27,15 @@ type Driver interface {
 
 	// ValidateBackupsDeletedFromCloud validates if bucket has been deleted from the cloud objectstore
 	ValidateBackupsDeletedFromCloud(backupLocation *stork_api.BackupLocation, backupPath string) error
+
+	// ListBuckets()
+	ListBuckets() ([]string, error)
+
+	// ListFilesInBucket(bucketName string) ([]string, error)
+	ListFilesInBucket(bucketName string) ([]string, error)
+
+	// CheckConnection() error
+	CheckConnection() error
 }
 
 type objstore struct {
@@ -62,6 +71,17 @@ func (o *objstore) String() string {
 	return driverName
 }
 
+func (o *objstore) ListBuckets() ([]string, error) {
+	return []string{}, nil
+}
+
+func (o *objstore) ListFilesInBucket(bucketName string) ([]string, error) {
+	return []string{}, nil
+}
+
+func (o *objstore) CheckConnection() error {
+	return nil
+}
 func init() {
 	Register(driverName, &objstore{})
 }

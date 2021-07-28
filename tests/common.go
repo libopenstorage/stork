@@ -710,7 +710,7 @@ func CollectSupport() {
 			}
 			Step(fmt.Sprintf("save all useful logs on node %s", n.SchedulerNodeName), func() {
 
-				Inst().V.CollectDiags(n)
+				Inst().V.CollectDiags(n, volume.DiagOps{})
 
 				journalCmd := fmt.Sprintf("journalctl -l > %s/all_journal_%v.log", Inst().BundleLocation, time.Now().Format(time.RFC3339))
 				runCmd(journalCmd, n)

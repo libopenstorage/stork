@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/http"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -2141,7 +2142,15 @@ func (d *portworx) getKvdbMembers(n node.Node) (map[string]metadataNode, error) 
 	return kvdbMembers, err
 }
 
-func (d *portworx) CollectDiags(n node.Node) error {
+// GetTimeStamp returns 'readable' timestamp with no spaces 'YYYYMMDDHHMMSS'
+func GetTimeStamp() string {
+	tnow := time.Now()
+	return fmt.Sprintf("%d%02d%02d%02d%02d%02d",
+		tnow.Year(), tnow.Month(), tnow.Day(),
+		tnow.Hour(), tnow.Minute(), tnow.Second())
+}
+
+func (d *portworx) CollectDiags(n node.Node, diagOps torpedovolume.DiagOps) error {
 	var err error
 
 	pxNode, err := d.getPxNode(&n)
@@ -2166,6 +2175,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 		if err != nil {
 			return fmt.Errorf("failed to collect diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
 		}
+
 		logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 		return nil
 	}
@@ -2174,7 +2184,7 @@ func (d *portworx) CollectDiags(n node.Node) error {
 
 	r := &DiagRequestConfig{
 		DockerHost:    "unix:///var/run/docker.sock",
-		OutputFile:    "/var/cores/diags.tar.gz",
+		OutputFile:    "",
 		ContainerName: "",
 		Profile:       false,
 		Live:          true,
@@ -2189,11 +2199,39 @@ func (d *portworx) CollectDiags(n node.Node) error {
 	if err != nil {
 		return err
 	}
+
 	req := c.Post().Resource(pxDiagPath).Body(r)
+
 	resp := req.Do()
 	if resp.Error() != nil {
 		return fmt.Errorf("failed to collect diags on node %v, Err: %v", pxNode.Hostname, resp.Error())
 	}
+
+	if diagOps.Validate {
+		//filename := "/var/cores/" + pxNode.Hostname + "-diags-" + GetTimeStamp() + ".tar.gz"
+
+		cmd := fmt.Sprintf("test -f %s", r.OutputFile)
+		out, err := d.nodeDriver.RunCommand(n, cmd, opts)
+		if err != nil {
+			return fmt.Errorf("failed to locate diags on node %v, Err: %v %v", pxNode.Hostname, err, out)
+		}
+
+		logrus.Debug("Validating CCM health")
+		// Change to config package.
+		url := fmt.Sprintf("http://%s:%d/1.0/status/troubleshoot-cloud-connection", n.MgmtIp, 1970)
+		resp, err := http.Get(url)
+		if err != nil {
+			return fmt.Errorf("failed to talk to CCM on node %v, Err: %v", pxNode.Hostname, err)
+		}
+		defer resp.Body.Close()
+
+		/*
+			// Check S3 bucket for diags
+
+			// TODO: Waiting for S3 credentials.
+		*/
+	}
+
 	logrus.Debugf("Successfully collected diags on node %v", pxNode.Hostname)
 	return nil
 }

@@ -22,6 +22,12 @@ type LicenseSummary struct {
 	LicenesConditionMsg string
 }
 
+// DiagOps options collection for switching the workflow of the DiagCollection function.
+type DiagOps struct {
+	// Toggle to indicate that we want to test the diags generation (only used in telemetry test currently)
+	Validate bool
+}
+
 // DefaultDriver implements defaults for Driver interface
 type DefaultDriver struct {
 }
@@ -281,7 +287,7 @@ func (d *DefaultDriver) ValidateVolumeSnapshotRestore(vol string, snapshotData *
 }
 
 // CollectDiags collects live diags on a node
-func (d *DefaultDriver) CollectDiags(n node.Node) error {
+func (d *DefaultDriver) CollectDiags(n node.Node, diagOps DiagOps) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CollectDiags()",

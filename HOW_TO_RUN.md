@@ -28,14 +28,18 @@ The above command starts Torpedo by deploying a k8s `Pod` in your kubernetes clu
 You can look at status of torpedo by viewing logs using: `kubectl logs -f torpedo`
 
 ## Running directly using ginkgo
-
 First expose KUBECONFIG to torpedo can talk to the k8s API.
 
 `export KUBECONFIG=<location_of_k8s_cluster_kubeconfig_file>`
 
-To run all tests: ``ginkgo -v bin/*.test --  -spec-dir `pwd`/drivers/scheduler/k8s/specs``
+It is highly suggested to run your new test against a single app
 
-To run just the basic tests: ``ginkgo -v bin/basic.test --  -spec-dir `pwd`/drivers/scheduler/k8s/specs``
+For example:
+``ginkgo --focus SetupTeardown -v bin/basic.test -- -spec-dir `pwd`/drivers/scheduler/k8s/specs --app-list elasticsearch``
+
+This will run the basic test against just elastic search
+
+To run all tests: ``ginkgo -v bin/*.test --  -spec-dir `pwd`/drivers/scheduler/k8s/specs``
 
 To run just the reboot tests: ``ginkgo -v bin/reboot.test --  -spec-dir `pwd`/drivers/scheduler/k8s/specs``
 
