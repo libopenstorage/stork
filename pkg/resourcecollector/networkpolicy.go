@@ -22,7 +22,7 @@ func (r *ResourceCollector) networkPolicyToBeCollected(
 	for _, ingress := range ingressRule {
 		for _, fromPolicyPeer := range ingress.From {
 			ipBlock := fromPolicyPeer.IPBlock
-			if len(ipBlock.CIDR) != 0 {
+			if ipBlock != nil && len(ipBlock.CIDR) != 0 {
 				return false, nil
 			}
 		}
@@ -31,7 +31,7 @@ func (r *ResourceCollector) networkPolicyToBeCollected(
 	for _, egress := range egreeRule {
 		for _, networkPolicyPeer := range egress.To {
 			ipBlock := networkPolicyPeer.IPBlock
-			if len(ipBlock.CIDR) != 0 {
+			if ipBlock != nil && len(ipBlock.CIDR) != 0 {
 				return false, nil
 			}
 		}
