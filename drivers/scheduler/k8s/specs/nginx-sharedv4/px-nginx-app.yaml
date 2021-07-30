@@ -31,6 +31,7 @@ spec:
       containers:
       - name: nginx
         image: bitnami/nginx
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
         volumeMounts:

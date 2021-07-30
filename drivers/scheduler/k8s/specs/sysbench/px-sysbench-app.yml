@@ -22,6 +22,7 @@ spec:
       schedulerName: stork
       containers:
         - image: mysql:5.7
+          imagePullPolicy: IfNotPresent
           name: mysql
           resources:
             requests:
@@ -47,6 +48,7 @@ spec:
               mountPath: /var/lib/mysql
         - name: sysbench
           image: portworx/torpedo-sysbench:latest
+          imagePullPolicy: IfNotPresent
           env:
             - name: MYSQL_HOST
               value: 127.0.0.1

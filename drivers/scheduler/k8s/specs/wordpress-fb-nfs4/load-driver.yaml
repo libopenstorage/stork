@@ -19,6 +19,7 @@ spec:
     spec:
       initContainers:
         - image: appropriate/curl
+          imagePullPolicy: IfNotPresent
           name: wait-until-wordpress-up
           args:
             - "sh"

@@ -54,7 +54,7 @@ spec:
           mountPath: /var/lib/postgresql/volume
       - name: pgbench
         image: portworx/torpedo-pgbench:latest
-        imagePullPolicy: "Always"
+        imagePullPolicy: IfNotPresent
         env:
           - name: PG_HOST
             value: 127.0.0.1

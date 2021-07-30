@@ -38,7 +38,7 @@ spec:
           mountPath: /logs
       - name: grok
         image: pwxvin/grok-exporter:v1.0.0-RC4
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - name: grok-port
           containerPort: 9144

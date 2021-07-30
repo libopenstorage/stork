@@ -16,6 +16,7 @@ spec:
       containers:
         - name: vdbench
           image: openebs/tests-vdbench
+          imagePullPolicy: IfNotPresent
           command: ["./bench_runner.sh"]
           args: ["Basic", "5400", "$(POD_NAME)"]
           env:

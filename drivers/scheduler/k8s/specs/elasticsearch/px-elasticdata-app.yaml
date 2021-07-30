@@ -78,6 +78,7 @@ spec:
               - IPC_LOCK
               - SYS_RESOURCE
         image: docker.elastic.co/elasticsearch/elasticsearch:6.5.0
+        imagePullPolicy: IfNotPresent
         env:
         - name: ES_JAVA_OPTS
           valueFrom:
@@ -138,6 +139,7 @@ spec:
       containers:
       - name: es-load
         image: portworx/torpedo-esload:1.1
+        imagePullPolicy: IfNotPresent
         env:
         - name: POD_NAMESPACE
           valueFrom:

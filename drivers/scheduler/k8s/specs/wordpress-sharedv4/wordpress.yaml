@@ -21,6 +21,7 @@ spec:
     spec:
       containers:
       - image: wordpress:4.8-apache
+        imagePullPolicy: IfNotPresent
         name: wordpress
         env:
         - name: WORDPRESS_DB_HOST

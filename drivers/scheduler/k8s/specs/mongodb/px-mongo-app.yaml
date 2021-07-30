@@ -116,9 +116,6 @@ spec:
         - name: data
           mountPath: /bitnami/mongodb
           subPath:
-        resources:
-          {}
-
       volumes:
       - name: data
         persistentVolumeClaim:

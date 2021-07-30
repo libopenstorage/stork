@@ -16,6 +16,7 @@ spec:
       containers:
         - name: vdbench
           image: openebs/tests-vdbench
+          imagePullPolicy: IfNotPresent
           resources:
             limits:
               cpu: 1000m

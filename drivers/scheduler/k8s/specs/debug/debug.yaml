@@ -34,7 +34,7 @@ spec:
       containers:
       - name: debug
         image: ubuntu:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         command: [ "sleep" ]
         args: [ "infinity" ]
         env:
