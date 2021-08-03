@@ -111,6 +111,8 @@ github.com/aws/aws-sdk-go/service/s3/s3iface
 github.com/aws/aws-sdk-go/service/s3/s3manager
 github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/service/sts/stsiface
+# github.com/banzaicloud/k8s-objectmatcher v1.5.1 => github.com/banzaicloud/k8s-objectmatcher v1.5.1
+## explicit
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
 # github.com/cenkalti/backoff v2.2.1+incompatible
@@ -381,6 +383,9 @@ github.com/miekg/dns
 github.com/mitchellh/go-homedir
 # github.com/mitchellh/go-wordwrap v1.0.0
 github.com/mitchellh/go-wordwrap
+# github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452
+## explicit
+github.com/mitchellh/hashstructure
 # github.com/mitchellh/mapstructure v1.3.3
 github.com/mitchellh/mapstructure
 # github.com/moby/term v0.0.0-20200312100748-672ec06f55cd
@@ -1351,6 +1356,7 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0
 sigs.k8s.io/yaml
 # github.com/LINBIT/golinstor => github.com/LINBIT/golinstor v0.26.0
+# github.com/banzaicloud/k8s-objectmatcher => github.com/banzaicloud/k8s-objectmatcher v1.5.1
 # github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 # github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
 # github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
