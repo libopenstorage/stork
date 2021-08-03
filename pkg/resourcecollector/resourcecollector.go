@@ -37,6 +37,11 @@ const (
 	skipResourceAnnotation           = "stork.libopenstorage.org/skip-resource"
 	skipOwnerRefCheckAnnotation      = "stork.libopenstorage.org/skip-owner-ref-check"
 	skipModifyResources              = "stork.libopenstorage.org/skip-modify-resource"
+	// StorkResourceHash is the annotation used to keep track of resources
+	// updates
+	StorkResourceHash = "stork.libopenstorage.org/resource-hash"
+	// SkipModifyResources is the annotation used to skip update of resources
+	SkipModifyResources = "stork.libopenstorage.org/skip-modify-resource"
 	// ServiceKind for k8s service resources
 	ServiceKind          = "Service"
 	deletedMaxRetries    = 12
