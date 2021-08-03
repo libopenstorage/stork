@@ -14,6 +14,7 @@ require (
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/MakeNowJust/heredoc v0.0.0-20171113091838-e9091a26100e // indirect
 	github.com/aws/aws-sdk-go v1.35.37
+	github.com/banzaicloud/k8s-objectmatcher v1.5.1 // indirect
 	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/frankban/quicktest v1.4.1 // indirect
@@ -34,6 +35,7 @@ require (
 	github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67
 	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0
@@ -74,6 +76,7 @@ require (
 
 replace (
 	github.com/LINBIT/golinstor => github.com/LINBIT/golinstor v0.26.0
+	github.com/banzaicloud/k8s-objectmatcher => github.com/banzaicloud/k8s-objectmatcher v1.5.1
 	github.com/census-instrumentation/opencensus-proto => github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/docker/distribution => github.com/docker/distribution v2.7.0+incompatible
 	github.com/docker/docker => github.com/moby/moby v20.10.4+incompatible
