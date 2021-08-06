@@ -83,6 +83,7 @@ type emailData struct {
 
 type nodeInfo struct {
 	MgmtIP    string
+	NodeName  string
 	PxVersion string
 	Status    string
 }
@@ -629,7 +630,7 @@ func TriggerEmailReporter(contexts []*scheduler.Context, recordChan *chan *Event
 			pxStatus = status.String()
 		}
 
-		emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp,
+		emailData.NodeInfo = append(emailData.NodeInfo, nodeInfo{MgmtIP: n.MgmtIp, NodeName: n.Name,
 			PxVersion: n.NodeLabels["PX Version"], Status: pxStatus})
 	}
 
@@ -749,6 +750,7 @@ tbody tr:last-child {
 <table id="pxtable" border=1 width: 50% >
 <tr>
    <td align="center"><h4>PX Node IP </h4></td>
+   <td align="center"><h4>PX Node Name </h4></td>
    <td align="center"><h4>PX Version </h4></td>
    <td align="center"><h4>PX Status </h4></td>
  </tr>

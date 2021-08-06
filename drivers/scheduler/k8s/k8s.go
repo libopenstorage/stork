@@ -507,6 +507,7 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 			region = value
 		}
 	}
+	logrus.Infof("Parsed node [%s] as Type: %s, Zone: %s, Region %s", n.Name, nodeType, zone, region)
 
 	return node.Node{
 		Name:      n.Name,
