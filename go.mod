@@ -34,6 +34,7 @@ require (
 	github.com/libopenstorage/openstorage v8.0.1-0.20210603043922-faf638fed3e5+incompatible
 	github.com/libopenstorage/secrets v0.0.0-20200207034622-cdb443738c67
 	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	github.com/pborman/uuid v1.2.0

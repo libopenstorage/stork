@@ -381,6 +381,9 @@ github.com/miekg/dns
 github.com/mitchellh/go-homedir
 # github.com/mitchellh/go-wordwrap v1.0.0
 github.com/mitchellh/go-wordwrap
+# github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452
+## explicit
+github.com/mitchellh/hashstructure
 # github.com/mitchellh/mapstructure v1.3.3
 github.com/mitchellh/mapstructure
 # github.com/moby/term v0.0.0-20200312100748-672ec06f55cd
