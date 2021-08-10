@@ -1560,9 +1560,10 @@ func (p *portworx) pxSnapshotRestore(snapRestore *storkapi.VolumeSnapshotRestore
 			// check restore status
 			if orgVol[0].State == api.VolumeState_VOLUME_STATE_RESTORE {
 				// restore is in progress mark volume as stage again & return
-				if orgVol[0].Error == "" {
+				if orgVol[0].Error == "" || strings.Contains(orgVol[0].Error, "resource temporarily unavailable") {
 					vol.RestoreStatus = storkapi.VolumeSnapshotRestoreStatusInProgress
 					log.VolumeSnapshotRestoreLog(snapRestore).Infof("volume is in restore state %v:%v", vol.Volume, orgVol[0].State)
+					log.VolumeSnapshotRestoreLog(snapRestore).Debugf("Error state : %v", orgVol[0].Error)
 					return false, nil
 				}
 				// restore is failed, stop and return error
