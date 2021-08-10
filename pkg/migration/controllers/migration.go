@@ -992,6 +992,10 @@ func (m *MigrationController) checkAndUpdateService(
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &svc); err != nil {
 		return false, fmt.Errorf("error converting unstructured obj to service resource: %v", err)
 	}
+	if _, ok := svc.Annotations[resourcecollector.SkipModifyResources]; ok {
+		// older behaviour where we delete and create svc resources
+		return false, nil
+	}
 	adminClient, err := m.getRemoteAdminConfig(migration)
 	if err != nil {
 		return false, err
@@ -1013,10 +1017,6 @@ func (m *MigrationController) checkAndUpdateService(
 				return true, nil
 			}
 		}
-	}
-	if _, ok := svc.Annotations[resourcecollector.SkipModifyResources]; ok {
-		// older behaviour where we delete and create svc resources
-		return false, nil
 	}
 	// update annotations
 	for k, v := range svc.Annotations {
