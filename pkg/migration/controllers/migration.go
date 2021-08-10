@@ -16,6 +16,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/mitchellh/hashstructure"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -982,6 +983,59 @@ func (m *MigrationController) getRemoteAdminConfig(migration *stork_api.Migratio
 	return adminClient, nil
 }
 
+func (m *MigrationController) checkAndUpdateService(
+	migration *stork_api.Migration,
+	object runtime.Unstructured,
+	objHash uint64,
+) (bool, error) {
+	var svc v1.Service
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.UnstructuredContent(), &svc); err != nil {
+		return false, fmt.Errorf("error converting unstructured obj to service resource: %v", err)
+	}
+	adminClient, err := m.getRemoteAdminConfig(migration)
+	if err != nil {
+		return false, err
+	}
+
+	// compare and decide if update to svc is required on dest cluster
+	curr, err := adminClient.CoreV1().Services(svc.GetNamespace()).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+	if err != nil {
+		return false, err
+	}
+	if curr.Annotations != nil {
+		if hash, ok := curr.Annotations[resourcecollector.StorkResourceHash]; ok {
+			old, err := strconv.ParseUint(hash, 10, 64)
+			if err != nil {
+				return false, err
+			}
+			if old == objHash {
+				log.MigrationLog(migration).Infof("Skipping service update, no changes found since last migration %d/%d", old, objHash)
+				return true, nil
+			}
+		}
+	}
+	if _, ok := svc.Annotations[resourcecollector.SkipModifyResources]; ok {
+		// older behaviour where we delete and create svc resources
+		return false, nil
+	}
+	// update annotations
+	for k, v := range svc.Annotations {
+		curr.Annotations[k] = v
+	}
+	// update selectors
+	if curr.Spec.Selector == nil {
+		curr.Spec.Selector = make(map[string]string)
+	}
+	for k, v := range svc.Spec.Selector {
+		curr.Spec.Selector[k] = v
+	}
+	_, err = adminClient.CoreV1().Services(svc.GetNamespace()).Update(context.TODO(), curr, metav1.UpdateOptions{})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (m *MigrationController) checkAndUpdateDefaultSA(
 	migration *stork_api.Migration,
 	object runtime.Unstructured,
@@ -1383,11 +1437,7 @@ func (m *MigrationController) applyResources(
 		_, err = adminClient.CoreV1().PersistentVolumes().Create(context.TODO(), &pv, metav1.CreateOptions{})
 		if err != nil {
 			if err != nil && errors.IsAlreadyExists(err) {
-				if migration.Spec.IncludeVolumes == nil || *migration.Spec.IncludeVolumes {
-					err = nil
-				} else {
-					_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), &pv, metav1.UpdateOptions{})
-				}
+				_, err = adminClient.CoreV1().PersistentVolumes().Update(context.TODO(), &pv, metav1.UpdateOptions{})
 			}
 		}
 		if err != nil {
@@ -1430,11 +1480,11 @@ func (m *MigrationController) applyResources(
 				}
 				createTime := obj.GetCreationTimestamp()
 				if deleteStart.Before(&createTime) {
-					logrus.Warnf("Object[%v] got re-created after deletion. Not retrying deletion, deleteStart time:[%v], create time:[%v]",
+					log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. Not retrying deletion, deleteStart time:[%v], create time:[%v]",
 						obj.GetName(), deleteStart, createTime)
 					break
 				}
-				logrus.Warnf("Object %v still present, retrying in %v", pvc.GetName(), deletedRetryInterval)
+				log.MigrationLog(migration).Infof("Object %v still present, retrying in %v", pvc.GetName(), deletedRetryInterval)
 				time.Sleep(deletedRetryInterval)
 			}
 		}
@@ -1536,6 +1586,11 @@ func (m *MigrationController) applyResources(
 		migrAnnot[StorkMigrationAnnotation] = "true"
 		migrAnnot[StorkMigrationName] = migration.GetName()
 		migrAnnot[StorkMigrationTime] = time.Now().Format(nameTimeSuffixFormat)
+		objHash, err := hashstructure.Hash(o, &hashstructure.HashOptions{})
+		if err != nil {
+			log.MigrationLog(migration).Warnf("unable to generate hash for an object %v %v, err: %v", objectType.GetKind(), metadata.GetName(), err)
+		}
+		migrAnnot[resourcecollector.StorkResourceHash] = strconv.FormatUint(objHash, 10)
 		unstructured.SetAnnotations(migrAnnot)
 		retries := 0
 		log.MigrationLog(migration).Infof("Applying %v %v", objectType.GetKind(), metadata.GetName())
@@ -1545,6 +1600,13 @@ func (m *MigrationController) applyResources(
 				switch objectType.GetKind() {
 				case "ServiceAccount":
 					err = m.checkAndUpdateDefaultSA(migration, o)
+				case "Service":
+					var skipUpdate bool
+					skipUpdate, err = m.checkAndUpdateService(migration, o, objHash)
+					if err == nil && skipUpdate {
+						break
+					}
+					fallthrough
 				default:
 					// Delete the resource if it already exists on the destination
 					// cluster and try creating again
@@ -1562,11 +1624,11 @@ func (m *MigrationController) applyResources(
 							}
 							createTime := obj.GetCreationTimestamp()
 							if deleteStart.Before(&createTime) {
-								logrus.Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
+								log.MigrationLog(migration).Warnf("Object[%v] got re-created after deletion. So, Ignore wait. deleteStart time:[%v], create time:[%v]",
 									obj.GetName(), deleteStart, createTime)
 								break
 							}
-							logrus.Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
+							log.MigrationLog(migration).Warnf("Object %v still present, retrying in %v", metadata.GetName(), deletedRetryInterval)
 							time.Sleep(deletedRetryInterval)
 						}
 						_, err = dynamicClient.Create(context.TODO(), unstructured, metav1.CreateOptions{})
