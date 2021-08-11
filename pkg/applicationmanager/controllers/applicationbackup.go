@@ -211,6 +211,7 @@ func (a *ApplicationBackupController) createBackupLocationPath(backup *stork_api
 
 // handle updates for ApplicationBackup objects
 func (a *ApplicationBackupController) handle(ctx context.Context, backup *stork_api.ApplicationBackup) error {
+	logrus.Debugf("reconciling backup CR, %s/%s stage: %s, status:%s", backup.Namespace, backup.Name, backup.Status.Stage, backup.Status.Stage)
 	if backup.DeletionTimestamp != nil {
 		if controllers.ContainsFinalizer(backup, controllers.FinalizerCleanup) {
 			if err := a.deleteBackup(backup); err != nil {
@@ -445,6 +446,7 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 			backup.Status.Stage == stork_api.ApplicationBackupStageApplications {
 			return backup, nil
 		}
+		logrus.Infof("Updating backup  %s/%s in stage/stagus: %s/%s to %s/%s stage", backup.Namespace, backup.Name, backup.Status.Stage, backup.Status.Status, stage, status)
 		backup.Status.Status = status
 		backup.Status.Stage = stage
 		backup.Status.Reason = reason
@@ -467,6 +469,8 @@ func (a *ApplicationBackupController) updateBackupCRInVolumeStage(
 }
 
 func (a *ApplicationBackupController) backupVolumes(backup *stork_api.ApplicationBackup, terminationChannels []chan bool) error {
+	logrus.Debugf("backupCR volume backups %s/%s stage: %s, status:%s", backup.Namespace, backup.Name, backup.Status.Stage, backup.Status.Stage)
+
 	defer func() {
 		for _, channel := range terminationChannels {
 			channel <- true
@@ -560,6 +564,8 @@ func (a *ApplicationBackupController) backupVolumes(backup *stork_api.Applicatio
 		if len(backup.Status.Volumes) != pvcCount {
 
 			for driverName, pvcs := range pvcMappings {
+				log.ApplicationBackupLog(backup).Infof("taking backup of pvcs with driver %v", driverName)
+
 				driver, err := volume.Get(driverName)
 				if err != nil {
 					return err
@@ -1243,13 +1249,13 @@ func (a *ApplicationBackupController) backupResources(
 }
 
 func (a *ApplicationBackupController) deleteBackup(backup *stork_api.ApplicationBackup) error {
+	logrus.Debugf("deleting backup CR, %s/%s stage: %s, status:%s", backup.Namespace, backup.Name, backup.Status.Stage, backup.Status.Stage)
 	// Only delete the backup from the backupLocation if the ReclaimPolicy is
 	// set to Delete or if it is not successful
 	if backup.Spec.ReclaimPolicy != stork_api.ApplicationBackupReclaimPolicyDelete &&
 		backup.Status.Status == stork_api.ApplicationBackupStatusSuccessful {
 		return nil
 	}
-
 	drivers := a.getDriversForBackup(backup)
 	for driverName := range drivers {
 

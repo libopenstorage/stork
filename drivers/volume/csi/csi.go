@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,7 +69,7 @@ const (
 	// snapshotTimeout represents the duration to wait before timing out on snapshot completion
 	snapshotTimeout = time.Minute * 5
 	// restoreTimeout is the duration to wait before timing out the restore
-	restoreTimeout = time.Minute * 5
+	// restoreTimeout = time.Minute * 5
 )
 
 // csiBackupObject represents a backup of a series of CSI objects
@@ -116,7 +118,8 @@ func (cbo *csiBackupObject) GetVolumeSnapshotClass(snapshotID string) (*kSnapsho
 }
 
 type csi struct {
-	snapshotClient *kSnapshotClient.Clientset
+	snapshotClient  *kSnapshotClient.Clientset
+	snapshotTimeout time.Duration
 
 	storkvolume.ClusterPairNotSupported
 	storkvolume.MigrationNotSupported
@@ -147,7 +150,13 @@ func (c *csi) Init(_ interface{}) error {
 	} else {
 		logrus.Infof("CSI VolumeSnapshotClass CRD does not exist, skipping default SnapshotClass creation")
 	}
-
+	c.snapshotTimeout = snapshotTimeout
+	if timeout := os.Getenv("csi_snapshot_timeout"); timeout != "" {
+		if v, err := strconv.Atoi(timeout); err == nil {
+			c.snapshotTimeout = time.Duration(v) * time.Minute
+			logrus.Infof("resetting default snapshot timeout to :%v", c.snapshotTimeout.String())
+		}
+	}
 	return nil
 }
 
@@ -369,6 +378,7 @@ func (c *csi) StartBackup(
 
 		// Create CSI volume snapshot
 		vsName := c.getBackupSnapshotName(&pvc, backup)
+		log.ApplicationBackupLog(backup).Debugf("CSI volumesnapshot name : %s", vsName)
 		vs := &kSnapshotv1beta1.VolumeSnapshot{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      vsName,
@@ -381,12 +391,12 @@ func (c *csi) StartBackup(
 				},
 			},
 		}
-		log.ApplicationBackupLog(backup).Debugf("creating volumesnapshot: %v", vsName)
 		_, err = c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(pvc.Namespace).Create(context.TODO(), vs, metav1.CreateOptions{})
 		if err != nil {
 			c.cancelBackupDuringStartFailure(backup, volumeInfos)
 			return nil, fmt.Errorf("failed to create volumesnapshot %s: %v", vsName, err)
 		}
+		log.ApplicationBackupLog(backup).Debugf("created volumesnapshot: %s/%s for pvc : %s", vsName, pvc.Namespace, pvc.Name)
 		volumeInfo.BackupID = string(vsName)
 
 		sc, err := core.Instance().GetStorageClassForPVC(&pvc)
@@ -411,6 +421,7 @@ func (c *csi) StartBackup(
 		c.cancelBackupDuringStartFailure(backup, volumeInfos)
 		return nil, fmt.Errorf("failed to backup storage classes: %v", err)
 	}
+	log.ApplicationBackupLog(backup).Debugf("CSI backup started successfully for volumes %+v", volumeInfos)
 
 	return volumeInfos, nil
 }
@@ -570,6 +581,7 @@ func (c *csi) cleanupSnapshots(
 
 	// delete all vs & vscontent
 	for _, vs := range vsMap {
+		logrus.Debugf("cleaning up volumesnapshot: %s/%s", vs.Namespace, vs.Name)
 		err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vs.Namespace).Delete(context.TODO(), vs.Name, metav1.DeleteOptions{})
 		if k8s_errors.IsNotFound(err) {
 			continue
@@ -591,6 +603,8 @@ func (c *csi) cleanupSnapshots(
 }
 
 func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.ApplicationBackupVolumeInfo, error) {
+	log.ApplicationBackupLog(backup).Debugf("CSI backup status for %s/%s", backup.Status.Stage, backup.Status.Status)
+
 	if c.snapshotClient == nil {
 		if err := c.Init(nil); err != nil {
 			return nil, err
@@ -608,6 +622,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			continue
 		}
 
+		log.ApplicationBackupLog(backup).Debugf("CSI backup volume info %+v", vInfo)
 		// Get PVC we're checking the backup for
 		pvc, err := core.Instance().GetPersistentVolumeClaim(vInfo.PersistentVolumeClaim, vInfo.Namespace)
 		if err != nil {
@@ -616,6 +631,8 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 
 		// Not in cleanup state. From here on, we're checking if the PVC snapshot has finished.
 		snapshotName := c.getBackupSnapshotName(pvc, backup)
+		log.ApplicationBackupLog(backup).Debugf("CSI backup: snapname %s", snapshotName)
+
 		snapshot, err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(vInfo.Namespace).Get(context.TODO(), snapshotName, metav1.GetOptions{})
 		if err != nil {
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
@@ -634,6 +651,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 		if err != nil {
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
 			vInfo.Reason = fmt.Sprintf("Snapshot class %s lost during backup: %v", snapshotClassName, err)
+			log.ApplicationBackupLog(backup).Debugf(vInfo.Reason)
 			anyFailed = true
 			volumeInfos = append(volumeInfos, vInfo)
 			continue
@@ -649,6 +667,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			if err != nil {
 				vInfo.Status = storkapi.ApplicationBackupStatusFailed
 				vInfo.Reason = fmt.Sprintf("Snapshot content %s lost during backup: %v", snapshotClassName, err)
+				log.ApplicationBackupLog(backup).Debugf(vInfo.Reason)
 				anyFailed = true
 				volumeInfos = append(volumeInfos, vInfo)
 				continue
@@ -681,9 +700,10 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 			vInfo.ActualSize = uint64(size)
 			vInfo.TotalSize = uint64(size)
 
-		case time.Now().After(snapshot.CreationTimestamp.Add(snapshotTimeout)):
+		case time.Now().After(snapshot.CreationTimestamp.Add(c.snapshotTimeout)):
 			vInfo.Status = storkapi.ApplicationBackupStatusFailed
-			vInfo.Reason = c.formatReasonErrorMessage(fmt.Sprintf("Snapshot timeout out after %s", snapshotTimeout.String()), vsError, vscError)
+			vInfo.Reason = c.formatReasonErrorMessage(fmt.Sprintf("Snapshot timeout out after %s", c.snapshotTimeout.String()), vsError, vscError)
+			log.ApplicationBackupLog(backup).Debugf("CSI backup timeout for volume %+v", vInfo)
 			anyFailed = true
 
 		default:
@@ -786,12 +806,15 @@ func (c *csi) recreateSnapshotForDeletion(
 }
 
 func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
+	log.ApplicationBackupLog(backup).Debugf("CSI backup cancel")
 	if backup.Status.Status == storkapi.ApplicationBackupStatusInProgress {
 		// set of all snapshot classes deleted
 		for _, vInfo := range backup.Status.Volumes {
 			snapshotName := vInfo.BackupID
+			log.ApplicationBackupLog(backup).Debugf("CSI backup cancel cleanup of snapshot: %s/%s", snapshotName, backup.Namespace)
 
 			// Delete VS
+			// namespace should be pvc namespace since in case of multiple namespace backup we use admin namespace
 			err := c.snapshotClient.SnapshotV1beta1().VolumeSnapshots(backup.Namespace).Delete(context.TODO(), snapshotName, metav1.DeleteOptions{})
 			if !k8s_errors.IsNotFound(err) {
 				log.ApplicationBackupLog(backup).Warnf("Cancel backup failed to delete volumesnapshot %s: %v", snapshotName, err)
@@ -854,6 +877,8 @@ func (c *csi) cleanupBackupLocation(backup *storkapi.ApplicationBackup) error {
 }
 
 func (c *csi) DeleteBackup(backup *storkapi.ApplicationBackup) error {
+	log.ApplicationBackupLog(backup).Debugf("Deleting CSI backup ")
+
 	// if successful, re-create VS and VSC
 	backupSuccessful := backup.Status.Status == storkapi.ApplicationBackupStatusSuccessful
 
@@ -1450,9 +1475,9 @@ func (c *csi) GetRestoreStatus(restore *storkapi.ApplicationRestore) ([]*storkap
 			anyInProgress = true
 		}
 
-		if time.Now().After(pvc.CreationTimestamp.Add(restoreTimeout)) {
+		if time.Now().After(pvc.CreationTimestamp.Add(c.snapshotTimeout)) {
 			vrInfo.Status = storkapi.ApplicationRestoreStatusFailed
-			vrInfo.Reason = c.formatReasonErrorMessage(fmt.Sprintf("PVC restore timeout out after %s", restoreTimeout.String()), vsError, vscError)
+			vrInfo.Reason = c.formatReasonErrorMessage(fmt.Sprintf("PVC restore timeout out after %s", c.snapshotTimeout.String()), vsError, vscError)
 			anyFailed = true
 		}
 
