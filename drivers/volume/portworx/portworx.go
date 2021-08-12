@@ -31,6 +31,7 @@ import (
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/units"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -119,19 +120,21 @@ var deleteVolumeLabelList = []string{
 var k8sCore = core.Instance()
 
 type portworx struct {
-	legacyClusterManager cluster.Cluster
-	clusterManager       api.OpenStorageClusterClient
-	nodeManager          api.OpenStorageNodeClient
-	mountAttachManager   api.OpenStorageMountAttachClient
-	volDriver            api.OpenStorageVolumeClient
-	clusterPairManager   api.OpenStorageClusterPairClient
-	alertsManager        api.OpenStorageAlertsClient
-	csbackupManager      api.OpenStorageCloudBackupClient
-	storagePoolManager   api.OpenStoragePoolClient
-	schedOps             schedops.Driver
-	nodeDriver           node.Driver
-	refreshEndpoint      bool
-	token                string
+	legacyClusterManager  cluster.Cluster
+	clusterManager        api.OpenStorageClusterClient
+	nodeManager           api.OpenStorageNodeClient
+	mountAttachManager    api.OpenStorageMountAttachClient
+	volDriver             api.OpenStorageVolumeClient
+	clusterPairManager    api.OpenStorageClusterPairClient
+	alertsManager         api.OpenStorageAlertsClient
+	csbackupManager       api.OpenStorageCloudBackupClient
+	storagePoolManager    api.OpenStoragePoolClient
+	licenseManager        pxapi.PortworxLicenseClient
+	licenseFeatureManager pxapi.PortworxLicensedFeatureClient
+	schedOps              schedops.Driver
+	nodeDriver            node.Driver
+	refreshEndpoint       bool
+	token                 string
 }
 
 // TODO temporary solution until sdk supports metadataNode response
@@ -1482,6 +1485,8 @@ func (d *portworx) testAndSetEndpoint(endpoint string, sdkport, apiport int32) e
 	d.clusterPairManager = api.NewOpenStorageClusterPairClient(conn)
 	d.alertsManager = api.NewOpenStorageAlertsClient(conn)
 	d.csbackupManager = api.NewOpenStorageCloudBackupClient(conn)
+	d.licenseManager = pxapi.NewPortworxLicenseClient(conn)
+	d.licenseFeatureManager = pxapi.NewPortworxLicensedFeatureClient(conn)
 	if legacyClusterManager, err := d.getLegacyClusterManager(endpoint, apiport); err == nil {
 		d.legacyClusterManager = legacyClusterManager
 	} else {
@@ -1818,6 +1823,20 @@ func (d *portworx) getNodeManager() api.OpenStorageNodeClient {
 	}
 	return d.nodeManager
 
+}
+
+func (d *portworx) getLicenseManager() pxapi.PortworxLicenseClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.licenseManager
+}
+
+func (d *portworx) getLicenseFeatureManager() pxapi.PortworxLicensedFeatureClient {
+	if d.refreshEndpoint {
+		d.setDriver()
+	}
+	return d.licenseFeatureManager
 }
 
 func (d *portworx) getMountAttachManager() api.OpenStorageMountAttachClient {
@@ -2333,6 +2352,29 @@ func (d *portworx) EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize,
 			}
 		}
 	}
+}
+
+// GetLicenseSummary() returns the activated License
+func (d *portworx) GetLicenseSummary() (torpedovolume.LicenseSummary, error) {
+	licenseMgr := d.getLicenseManager()
+	featureMgr := d.getLicenseFeatureManager()
+	licenseSummary := torpedovolume.LicenseSummary{}
+
+	lic, err := licenseMgr.Status(d.getContext(), &pxapi.PxLicenseStatusRequest{})
+	if err != nil {
+		return licenseSummary, err
+	}
+
+	licenseSummary.SKU = lic.GetStatus().GetSku()
+
+	features, err := featureMgr.Enumerate(d.getContext(), &pxapi.PxLicensedFeatureEnumerateRequest{})
+	if err != nil {
+		logrus.Infof("XXX: %v - %v", features, err)
+		return licenseSummary, err
+	}
+	logrus.Info("XXX: Enumerated Features")
+	licenseSummary.Features = features.GetFeatures()
+	return licenseSummary, nil
 }
 
 func doesConditionMatch(expectedMetricValue float64, conditionExpression *apapi.LabelSelectorRequirement) bool {

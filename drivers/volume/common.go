@@ -1,6 +1,7 @@
 package volume
 
 import (
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"regexp"
 	"time"
 
@@ -12,6 +13,12 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
+
+// LicenseSummary struct that will hold our SKU and Features
+type LicenseSummary struct {
+	SKU      string
+	Features []*pxapi.LicensedFeature
+}
 
 // DefaultDriver implements defaults for Driver interface
 type DefaultDriver struct {
@@ -331,6 +338,11 @@ func (d *DefaultDriver) EstimateVolumeExpand(apRule apapi.AutopilotRule, initial
 		Type:      "Function",
 		Operation: "EstimateVolumeExpand()",
 	}
+}
+
+// GetLicenseSummary returns the activated License
+func (d *DefaultDriver) GetLicenseSummary() (LicenseSummary, error) {
+	return LicenseSummary{}, nil
 }
 
 // RestartDriver must cause the volume driver to restart on a given node.

@@ -163,6 +163,7 @@ if [[ -z "$TEST_SUITE" || "$TEST_SUITE" == "" ]]; then
             "bin/sched.test",
             "bin/scheduler_upgrade.test",
             "bin/node_decommission.test",
+            "bin/license.test",
             "bin/upgrade_cluster.test",'
 else
   TEST_SUITE=$(echo \"$TEST_SUITE\" | sed "s/,/\",\n\"/g")","

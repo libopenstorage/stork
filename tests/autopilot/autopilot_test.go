@@ -407,10 +407,10 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 		}
 
 		poolExpandLabels := map[string]map[string]string{
-			"addDiskLabel":          map[string]string{"autopilot": "adddisk"},
-			"addDiskFixedSizeLabel": map[string]string{"autopilot": "adddiskfixedsize"},
-			"resizeDiskLabel":       map[string]string{"autopilot": "resizedisk"},
-			"resizeFixedSizeLabel":  map[string]string{"autopilot": "resizefixedsize"},
+			"addDiskLabel":          {"autopilot": "adddisk"},
+			"addDiskFixedSizeLabel": {"autopilot": "adddiskfixedsize"},
+			"resizeDiskLabel":       {"autopilot": "resizedisk"},
+			"resizeFixedSizeLabel":  {"autopilot": "resizefixedsize"},
 		}
 
 		storageNodes := node.GetStorageDriverNodes()

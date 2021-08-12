@@ -13,7 +13,6 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/hashicorp/go-version v1.2.1
 	github.com/hashicorp/vault/api v1.0.5-0.20200317185738-82f498082f02
-	github.com/kubernetes-csi/external-snapshotter/v2 v2.1.1 // indirect
 	github.com/kubernetes-incubator/external-storage v0.20.4-openstorage-rc2
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20210223183702-b9c6b74cbf1d
@@ -32,9 +31,9 @@ require (
 	gocloud.dev v0.20.0
 	golang.org/x/crypto v0.0.0-20201208171446-5f87f3452ae9
 	golang.org/x/net v0.0.0-20201224014010-6772e930b67b
+	google.golang.org/genproto v0.0.0-20201201144952-b05cb90ed32e
 	google.golang.org/grpc v1.33.2
 	gopkg.in/yaml.v2 v2.4.0
-	helm.sh/helm/v3 v3.0.0-00010101000000-000000000000 // indirect
 	k8s.io/api v0.20.4
 	k8s.io/apimachinery v0.20.4
 	k8s.io/client-go v12.0.0+incompatible
