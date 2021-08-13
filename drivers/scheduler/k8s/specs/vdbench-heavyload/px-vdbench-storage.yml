@@ -20,3 +20,15 @@ spec:
   resources:
     requests:
       storage: 200Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vdbench-pvc-output
+spec:
+  storageClassName: vdbench-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi

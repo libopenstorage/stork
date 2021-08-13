@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: vdbench
-          image: openebs/tests-vdbench
+          image: portworx/vdbench:torpedo
           imagePullPolicy: IfNotPresent
           resources:
             limits:
@@ -31,6 +31,8 @@ spec:
               mountPath: /datadir1
             - name: vdbench-config-vol
               mountPath: /templates/Writes
+            - name: vdbench-output-persistent-storage
+              mountPath: /output
       volumes:
         - name: vdbench-config-vol
           configMap:
@@ -38,6 +40,9 @@ spec:
         - name: vdbench-persistent-storage
           persistentVolumeClaim:
             claimName: vdbench-pvc
+        - name: vdbench-output-persistent-storage
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-output
 ---
 apiVersion: v1
 kind: ConfigMap

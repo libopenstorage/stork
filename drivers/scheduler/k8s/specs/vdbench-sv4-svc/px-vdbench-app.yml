@@ -15,10 +15,10 @@ spec:
     spec:
       containers:
         - name: vdbench
-          image: openebs/tests-vdbench
+          image: portworx/vdbench:torpedo
           imagePullPolicy: IfNotPresent
           command: ["./bench_runner.sh"]
-          args: ["Basic", "5400", "$(POD_NAME)"]
+          args: ["Basic", "5400", "$(POD_NAME)", "output/$(POD_NAME)"]
           env:
             - name: POD_NAME
               valueFrom:
@@ -27,6 +27,8 @@ spec:
           volumeMounts:
             - name: vdbench-persistent-storage
               mountPath: /tmp
+            - name: vdbench-output-persistent-storage
+              mountPath: /output
           resources:
             limits:
               cpu: "200m"
@@ -35,3 +37,6 @@ spec:
         - name: vdbench-persistent-storage
           persistentVolumeClaim:
             claimName: vdbench-pvc-sv4-svc
+        - name: vdbench-output-persistent-storage
+          persistentVolumeClaim:
+            claimName: vdbench-pvc-output-sv4-svc
