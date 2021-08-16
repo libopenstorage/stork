@@ -2,8 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"os"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
@@ -16,6 +19,14 @@ import (
 type Label string
 
 const (
+	defaultWaitRebootTimeout = 5 * time.Minute
+	defaultWaitRebootRetry   = 10 * time.Second
+	defaultCommandRetry      = 5 * time.Second
+	defaultCommandTimeout    = 1 * time.Minute
+
+	defaultTestConnectionTimeout = 15 * time.Minute
+	defaultRetryInterval         = 10 * time.Second
+
 	// LabNodes - Number of nodes maximum
 	LabNodes Label = "Nodes"
 	// LabVolumeSize - Volume capacity [TB] maximum
@@ -61,7 +72,7 @@ const (
 	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
 	LabGlobalSecretsOnly Label = "GlobalSecretsOnly"
 
-	essentialsFaFbSKU = "PX-Essentials FA/FB"
+	essentialsFaFbSKU = "PX-Essential FA/FB"
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
 	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
@@ -85,29 +96,29 @@ const (
 )
 
 var (
-	faLicense = map[Label]int64{
-		LabNodes:              1000,
-		LabVolumeSize:         40,
-		LabVolumes:            200,
-		LabHaLevel:            MaxHaLevel,
-		LabSnapshots:          5,
-		LabAggregatedVol:      0,
-		LabSharedVol:          UnlimitedNumber,
-		LabEncryptedVol:       UnlimitedNumber,
-		LabGlobalSecretsOnly:  UnlimitedNumber,
-		LabScaledVol:          UnlimitedNumber,
-		LabResizeVolume:       UnlimitedNumber,
-		LabCloudSnap:          UnlimitedNumber,
-		LabCloudSnapDaily:     1,
-		LabCloudMigration:     0,
-		LabDisasterRecovery:   0,
-		LabPlatformBare:       UnlimitedNumber,
-		LabPlatformVM:         UnlimitedNumber,
-		LabNodeCapacity:       MaxNodeCapacity,
-		LabNodeCapacityExtend: 0,
-		LabLocalAttaches:      128,
-		LabOIDCSecurity:       0,
-		LabAUTCapacityMgmt:    0,
+	faLicense = map[Label]interface{}{
+		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
+		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 200},
+		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 5},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: 1},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: MaxNodeCapacity},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 128},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: false},
 	}
 )
 
@@ -147,11 +158,145 @@ var _ = Describe("{BasicEssentialsFaFbTest}", func() {
 
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
-					Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
-						fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					// if the feature limit exists in the hardcoded license limits we test it.
+					if _, ok := faLicense[Label(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					}
 				}
 			})
 		})
+		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+// This test performs basic reboot test of starting an application and destroying it (along with storage)
+var _ = Describe("{BasicEssentialsRebootTest}", func() {
+	var err error
+	var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-license-reboot-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		Step("get all nodes and reboot one by one", func() {
+			nodesToReboot := node.GetWorkerNodes()
+
+			// Reboot node and check driver status
+			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
+				for _, n := range nodesToReboot {
+					if n.IsStorageDriverInstalled {
+						Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+							err = Inst().N.RebootNode(n, node.RebootNodeOpts{
+								Force: true,
+								ConnectionOpts: node.ConnectionOpts{
+									Timeout:         defaultCommandTimeout,
+									TimeBeforeRetry: defaultCommandRetry,
+								},
+							})
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+							err = Inst().N.TestConnection(n, node.ConnectionOpts{
+								Timeout:         defaultTestConnectionTimeout,
+								TimeBeforeRetry: defaultWaitRebootRetry,
+							})
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
+							err := Inst().V.WaitDriverDownOnNode(n)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+							Inst().S.String(), Inst().V.String()), func() {
+
+							err = Inst().S.IsNodeReady(n)
+							Expect(err).NotTo(HaveOccurred())
+
+							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step("validate apps", func() {
+							for _, ctx := range contexts {
+								ValidateContext(ctx)
+							}
+						})
+					}
+				}
+			})
+		})
+
+		Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+		})
+		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+// This test performs basic limit test of starting an application and destroying it (along with storage)
+var _ = Describe("{BasicEssentialsAggrLimitTest}", func() {
+	var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-license-aggrlimit-%d", i))...)
+		}
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		for _, ctx := range contexts {
+			err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultWaitRebootTimeout, defaultRetryInterval, &scheduler.VolumeOptions{ExpectError: true})
+			Expect(err).To(HaveOccurred())
+		}
+
+		ValidateApplications(contexts)
+		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+// This test performs basic limit test of starting an application and destroying it (along with storage)
+var _ = Describe("{BasicEssentialsSnapLimitTest}", func() {
+	var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		scaleFactor := Inst().GlobalScaleFactor + 5
+		for i := 0; i < scaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-license-snaplimit-%d", i))...)
+		}
+
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		for _, ctx := range contexts {
+			err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultWaitRebootTimeout, defaultRetryInterval, &scheduler.VolumeOptions{ExpectError: true})
+			Expect(err).To(HaveOccurred())
+		}
+
+		ValidateApplications(contexts)
+
 		ValidateAndDestroy(contexts, nil)
 	})
 	JustAfterEach(func() {

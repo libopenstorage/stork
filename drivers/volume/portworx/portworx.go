@@ -2369,10 +2369,8 @@ func (d *portworx) GetLicenseSummary() (torpedovolume.LicenseSummary, error) {
 
 	features, err := featureMgr.Enumerate(d.getContext(), &pxapi.PxLicensedFeatureEnumerateRequest{})
 	if err != nil {
-		logrus.Infof("XXX: %v - %v", features, err)
 		return licenseSummary, err
 	}
-	logrus.Info("XXX: Enumerated Features")
 	licenseSummary.Features = features.GetFeatures()
 	return licenseSummary, nil
 }

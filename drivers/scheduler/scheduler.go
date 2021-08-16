@@ -289,6 +289,8 @@ type UpgradeAutopilotOptions struct {
 type VolumeOptions struct {
 	// SkipClusterScopedObjects skips volume operations on cluster scoped objects like storage class
 	SkipClusterScopedObjects bool
+	// ExpectError indicates a boolean that tells the code to expect an error
+	ExpectError bool
 }
 
 // Event collects kubernetes events data for further validation
