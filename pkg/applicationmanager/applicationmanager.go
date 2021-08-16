@@ -9,7 +9,9 @@ import (
 	stork_crd "github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/applicationmanager/controllers"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -54,7 +56,6 @@ func (a *ApplicationManager) Init(mgr manager.Manager, adminNamespace string, st
 	if err := scheduleController.Init(mgr); err != nil {
 		return err
 	}
-
 	syncController := &controllers.BackupSyncController{
 		Recorder:     a.Recorder,
 		SyncInterval: 1 * time.Minute,
@@ -78,14 +79,6 @@ func (a *ApplicationManager) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.BackupLocation{}).Name(),
 	}
-	err := apiextensions.Instance().CreateCRD(resource)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	if err := apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval); err != nil {
-		return err
-	}
 	appReg := apiextensions.CustomResource{
 		Name:    stork_api.ApplicationRegistrationResourceName,
 		Plural:  stork_api.ApplicationRegistrationResourcePlural,
@@ -94,9 +87,35 @@ func (a *ApplicationManager) createCRD() error {
 		Scope:   apiextensionsv1beta1.ClusterScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationRegistration{}).Name(),
 	}
-	err = apiextensions.Instance().CreateCRD(appReg)
+
+	ok, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if ok {
+		err := k8sutils.CreateCRD(resource)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
+		err = k8sutils.CreateCRD(appReg)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		return apiextensions.Instance().ValidateCRD(appReg.Plural+"."+appReg.Group, validateCRDTimeout, validateCRDInterval)
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-	return apiextensions.Instance().ValidateCRD(appReg, validateCRDTimeout, validateCRDInterval)
+	if err := apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval); err != nil {
+		return err
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(appReg)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return apiextensions.Instance().ValidateCRDV1beta1(appReg, validateCRDTimeout, validateCRDInterval)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/libopenstorage/stork/pkg/apis/stork"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	fakeclient "github.com/libopenstorage/stork/pkg/client/clientset/versioned/fake"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
@@ -68,7 +69,7 @@ func resetTest() {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationBackup{}).Name(),
 	}
-	err := apiextensions.Instance().CreateCRD(bkp)
+	err := k8sutils.CreateCRD(bkp)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		os.Exit(1)
 	}
@@ -81,7 +82,7 @@ func resetTest() {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationRestore{}).Name(),
 	}
-	err = apiextensions.Instance().CreateCRD(restore)
+	err = k8sutils.CreateCRD(restore)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		os.Exit(1)
 	}
@@ -94,7 +95,7 @@ func resetTest() {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationClone{}).Name(),
 	}
-	err = apiextensions.Instance().CreateCRD(clone)
+	err = k8sutils.CreateCRD(clone)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		os.Exit(1)
 	}
@@ -107,7 +108,7 @@ func resetTest() {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ClusterPair{}).Name(),
 	}
-	err = apiextensions.Instance().CreateCRD(pair)
+	err = k8sutils.CreateCRD(pair)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		os.Exit(1)
 	}
@@ -120,7 +121,7 @@ func resetTest() {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.Migration{}).Name(),
 	}
-	err = apiextensions.Instance().CreateCRD(migr)
+	err = k8sutils.CreateCRD(migr)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		os.Exit(1)
 	}
