@@ -7,6 +7,8 @@ import (
 	"time"
 
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -398,16 +400,7 @@ func createCRD() error {
 		Scope:   apiextensionsv1beta1.ClusterScoped,
 		Kind:    reflect.TypeOf(stork_api.SchedulePolicy{}).Name(),
 	}
-	err := apiextensions.Instance().CreateCRD(resource)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	err = apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
-	if err != nil {
-		return err
-	}
-	resource = apiextensions.CustomResource{
+	policy := apiextensions.CustomResource{
 		Name:    stork_api.NamespacedSchedulePolicyResourceName,
 		Plural:  stork_api.NamespacedSchedulePolicyResourcePlural,
 		Group:   stork_api.SchemeGroupVersion.Group,
@@ -415,10 +408,35 @@ func createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.NamespacedSchedulePolicy{}).Name(),
 	}
-	err = apiextensions.Instance().CreateCRD(resource)
+
+	ok, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if ok {
+		err := k8sutils.CreateCRD(resource)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		if err := apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval); err != nil {
+			return err
+		}
+		err = k8sutils.CreateCRD(policy)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		return apiextensions.Instance().ValidateCRD(policy.Plural+"."+policy.Group, validateCRDTimeout, validateCRDInterval)
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-
-	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	if err := apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval); err != nil {
+		return err
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(policy)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return apiextensions.Instance().ValidateCRDV1beta1(policy, validateCRDTimeout, validateCRDInterval)
 }

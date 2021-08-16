@@ -13,7 +13,9 @@ import (
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor"
 	"github.com/libopenstorage/stork/pkg/cmdexecutor/status"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/dynamic"
@@ -22,7 +24,7 @@ import (
 	"github.com/skyrings/skyring-common/tools/uuid"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -102,19 +104,22 @@ func Init() error {
 		Kind:    reflect.TypeOf(stork_api.Rule{}).Name(),
 	}
 
-	err := apiextensions.Instance().CreateCRD(storkRuleResource)
+	ok, err := version.RequiresV1Registration()
 	if err != nil {
-		if !k8serrors.IsAlreadyExists(err) {
-			return fmt.Errorf("failed to create CRD due to: %v", err)
+		return err
+	}
+	if ok {
+		err := k8sutils.CreateCRD(storkRuleResource)
+		if err != nil && !k8s_errors.IsAlreadyExists(err) {
+			return err
 		}
+		return apiextensions.Instance().ValidateCRD(storkRuleResource.Plural+"."+storkRuleResource.Group, validateCRDTimeout, validateCRDInterval)
 	}
-
-	err = apiextensions.Instance().ValidateCRD(storkRuleResource, validateCRDTimeout, validateCRDInterval)
-	if err != nil {
-		return fmt.Errorf("failed to validate stork rules CRD due to: %v", err)
+	err = apiextensions.Instance().CreateCRDV1beta1(storkRuleResource)
+	if err != nil && !k8s_errors.IsAlreadyExists(err) {
+		return err
 	}
-
-	return nil
+	return apiextensions.Instance().ValidateCRDV1beta1(storkRuleResource, validateCRDTimeout, validateCRDInterval)
 }
 
 // ValidateRule validates a rule

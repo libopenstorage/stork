@@ -9,6 +9,7 @@ import (
 	snapshotcontroller "github.com/kubernetes-incubator/external-storage/snapshot/pkg/controller/snapshot-controller"
 	snapshotvolume "github.com/kubernetes-incubator/external-storage/snapshot/pkg/volume"
 	"github.com/libopenstorage/stork/drivers/volume"
+	"github.com/libopenstorage/stork/pkg/version"
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	log "github.com/sirupsen/logrus"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -63,9 +64,20 @@ func (s *Snapshotter) Start(stopChannel <-chan struct{}) error {
 	}
 
 	log.Infof("Registering CRDs")
-	err = client.CreateCRD(aeclientset)
+	ok, err := version.RequiresV1Registration()
 	if err != nil {
 		return err
+	}
+	if ok {
+		err = client.CreateCRDV1(aeclientset)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = client.CreateCRD(aeclientset)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = client.WaitForSnapshotResource(snapshotClient)

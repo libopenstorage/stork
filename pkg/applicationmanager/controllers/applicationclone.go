@@ -8,9 +8,11 @@ import (
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/controllers"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -803,10 +805,20 @@ func (a *ApplicationCloneController) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationClone{}).Name(),
 	}
-	err := apiextensions.Instance().CreateCRD(resource)
+	ok, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if ok {
+		err := k8sutils.CreateCRD(resource)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+		return apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval)
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(resource)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-
-	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
 }
