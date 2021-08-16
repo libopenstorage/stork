@@ -100,6 +100,7 @@ func RegisterDefaultCRDs() error {
 	// create appreg for already registered crd
 	crds, err := apiextensions.Instance().ListCRDs()
 	if err != nil {
+		logrus.Errorf("unable to list crds: %v", err)
 		return err
 	}
 
@@ -108,7 +109,7 @@ func RegisterDefaultCRDs() error {
 		if _, ok := skipCrds[crd.Spec.Group]; ok {
 			continue
 		}
-		if err := registerCRD(crd); err != nil {
+		if err := registerCRDV1(crd); err != nil {
 			return err
 		}
 	}
@@ -148,9 +149,8 @@ func watchCRDs(fn WatchFunc) error {
 		return err
 	}
 	listOptions := metav1.ListOptions{Watch: true}
-	watchInterface, err := srcClnt.ApiextensionsV1beta1().CustomResourceDefinitions().Watch(context.TODO(), listOptions)
+	watchInterface, err := srcClnt.ApiextensionsV1().CustomResourceDefinitions().Watch(context.TODO(), listOptions)
 	if err != nil {
-		logrus.WithError(err).Error("error invoking the watch api for crds", err)
 		return err
 	}
 	// fire of watch interface
