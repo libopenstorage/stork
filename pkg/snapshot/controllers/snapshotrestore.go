@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	snap_v1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/stork/drivers/volume"
 	stork_api "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
@@ -235,6 +237,7 @@ func (c *SnapshotRestoreController) handleFinal(snapRestore *stork_api.VolumeSna
 }
 
 func markPVCForRestore(volumes []*stork_api.RestoreVolumeInfo) error {
+	// Get a list of pods that need to be deleted
 	for _, vol := range volumes {
 		pvc, err := core.Instance().GetPersistentVolumeClaim(vol.PVC, vol.Namespace)
 		if err != nil {
@@ -256,19 +259,56 @@ func markPVCForRestore(volumes []*stork_api.RestoreVolumeInfo) error {
 			if pod.Spec.SchedulerName != storkSchedulerName {
 				return fmt.Errorf("application not scheduled by stork scheduler")
 			}
-			log.PodLog(&pod).Infof("Deleting pod %v", pod.Name)
-			if err := core.Instance().DeletePod(pod.Name, pod.Namespace, true); err != nil {
-				log.PodLog(&pod).Errorf("Error deleting pod %v: %v", pod.Name, err)
-				return err
-			}
-			if err := core.Instance().WaitForPodDeletion(pod.UID, pod.Namespace, 120*time.Second); err != nil {
-				log.PodLog(&pod).Errorf("Pod is not deleted %v:%v", pod.Name, err)
-				return err
-			}
-			log.PodLog(&pod).Debugf("Deleted pod %v", pod.Name)
+		}
+
+		logrus.Infof("Deleting pods using volume %v/%v", vol.PVC, vol.Namespace)
+		if err := ensurePodsDeletion(pods); err != nil {
+			logrus.Errorf("Failed to delete pods using volume %v/%v: %v", vol.PVC, vol.Namespace, err)
+			return err
 		}
 	}
 	return nil
+}
+
+func ensurePodsDeletion(pods []v1.Pod) error {
+	if err := core.Instance().DeletePods(pods, false); err != nil {
+		return err
+	}
+	var (
+		wg               sync.WaitGroup
+		podDeleteErr     error
+		podDeleteErrLock sync.Mutex
+	)
+	wg.Add(len(pods))
+	for _, p := range pods {
+		podDeleteFunc := func(pod v1.Pod) {
+			defer wg.Done()
+			if err := core.Instance().WaitForPodDeletion(pod.UID, pod.Namespace, 120*time.Second); err != nil {
+				log.PodLog(&pod).Errorf("Pod is not deleted %v:%v", pod.Name, err)
+				// Force delete the pod
+				if err := core.Instance().DeletePod(pod.Name, pod.Namespace, true); err != nil {
+					log.PodLog(&pod).Errorf("Error force deleting pod %v: %v", pod.Name, err)
+					podDeleteErrLock.Lock()
+					podDeleteErr = multierror.Append(podDeleteErr, err)
+					podDeleteErrLock.Unlock()
+					return
+				}
+				// wait for a shorter period of time since this was a force delete
+				if err := core.Instance().WaitForPodDeletion(pod.UID, pod.Namespace, 30*time.Second); err != nil {
+					log.PodLog(&pod).Errorf("Failed to forcefully delete pods %v: %v", pod.Name, err)
+					podDeleteErrLock.Lock()
+					podDeleteErr = multierror.Append(podDeleteErr, err)
+					podDeleteErrLock.Unlock()
+				}
+			}
+			// wait for pod deletion
+			log.PodLog(&pod).Debugf("Deleted pod %v", pod.Name)
+		}
+		go podDeleteFunc(p)
+	}
+	// Wait for all goroutines to finish
+	wg.Wait()
+	return podDeleteErr
 }
 
 func unmarkPVCForRestore(volumes []*stork_api.RestoreVolumeInfo) error {
