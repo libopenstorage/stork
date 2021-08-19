@@ -35,6 +35,7 @@ type ApplicationBackupSpec struct {
 	Options          map[string]string `json:"options"`
 	IncludeResources []ObjectInfo      `json:"includeResources"`
 	ResourceTypes    []string          `json:"resourceTypes"`
+	backupType       string            `json:"backupType"`
 }
 
 // ApplicationBackupReclaimPolicyType is the reclaim policy for the application backup
@@ -88,6 +89,7 @@ type ApplicationBackupVolumeInfo struct {
 	Options               map[string]string           `jons:"options"`
 	TotalSize             uint64                      `json:"totalSize"`
 	ActualSize            uint64                      `json:"actualSize"`
+	StorageClass          string                      `json:"storageClass"`
 }
 
 // ApplicationBackupStatusType is the status of the application backup
