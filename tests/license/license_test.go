@@ -2,16 +2,19 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
+	"golang.org/x/net/context"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/portworx/torpedo/drivers/scheduler"
+
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -26,6 +29,10 @@ const (
 
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultRetryInterval         = 10 * time.Second
+
+	pureSecretName      = "px-pure-secret"
+	pureSecretNamespace = "kube-system"
+	expiredLicString    = "License is expired"
 
 	// LabNodes - Number of nodes maximum
 	LabNodes Label = "Nodes"
@@ -73,6 +80,7 @@ const (
 	LabGlobalSecretsOnly Label = "GlobalSecretsOnly"
 
 	essentialsFaFbSKU = "PX-Essential FA/FB"
+
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
 	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
@@ -244,7 +252,8 @@ var _ = Describe("{BasicEssentialsRebootTest}", func() {
 				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
 
 			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
-				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+				fmt.Sprintf("SKU did not match: [%v] with [%v]",
+					summary.SKU, essentialsFaFbSKU))
 		})
 		ValidateAndDestroy(contexts, nil)
 	})
@@ -304,6 +313,117 @@ var _ = Describe("{BasicEssentialsSnapLimitTest}", func() {
 	})
 })
 
+/* This test
+1. Deletes px-pure-secret
+2. Waits for lic_expiry_timeout
+3. Verifies that Essentials lic expires
+4. Re-creates px-pure-secret
+5. Waits for next metering interval
+6. Verifies that Essentials lic gets renewed again
+*/
+var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
+	var contexts []*scheduler.Context
+	var pureSecretJSON string
+
+	It("has to setup, validate and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("delseclicexprenewal-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+
+			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
+				for _, feature := range summary.Features {
+					// if the feature limit exists in the hardcoded license limits we test it.
+					if _, ok := faLicense[Label(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					}
+				}
+			})
+		})
+
+		Step("Fetch and store Pure secret", func() {
+			var err error
+			pureSecretJSON, err = Inst().S.GetSecretData(pureSecretNamespace, pureSecretName, "pure.json")
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace. Error: [%v]",
+					pureSecretName, pureSecretNamespace, err))
+		})
+
+		Step("Delete Pure secret", func() {
+			err := Inst().S.DeleteSecret(pureSecretNamespace, pureSecretName)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to delete secret [%s] in [%s] namespace. Error: [%v]",
+					pureSecretName, pureSecretNamespace, err))
+		})
+
+		Step(fmt.Sprintf("Wait for license expiry timeout of [%v]",
+			Inst().LicenseExpiryTimeoutHours), func() {
+			SleepWithContext(context.Background(), Inst().LicenseExpiryTimeoutHours)
+			// Additional sleep to wait for lic to get expired on all nodes
+			SleepWithContext(context.Background(), 10*time.Minute)
+		})
+
+		Step("Verify license is expired", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+			Expect(summary.LicenesConditionMsg).To(ContainSubstring(expiredLicString))
+		})
+
+		Step("Re-create Pure secret", func() {
+			err := Inst().S.CreateSecret(pureSecretNamespace, pureSecretName, "pure.json", pureSecretJSON)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to create secret [%s] in [%s] namespace. Error: [%v]",
+					pureSecretName, pureSecretNamespace, err))
+		})
+
+		Step(fmt.Sprintf("Wait for next metering interval which is going to happen in [%v]",
+			Inst().MeteringIntervalMins), func() {
+			SleepWithContext(context.Background(), Inst().MeteringIntervalMins)
+			// Additional sleep to wait for lic to get renewed on all nodes
+			SleepWithContext(context.Background(), 5*time.Minute)
+		})
+
+		Step("Verify correct license got re-activated for PX-Essentials FA/FB", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+
+			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
+				for _, feature := range summary.Features {
+					// if the feature limit exists in the hardcoded license limits we test it.
+					if _, ok := faLicense[Label(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					}
+				}
+			})
+		})
+
+		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
 var _ = AfterSuite(func() {
 	PerformSystemCheck()
 	ValidateCleanup()
@@ -313,4 +433,23 @@ func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
 	ParseFlags()
 	os.Exit(m.Run())
+}
+
+// SleepWithContext will wait for the timer duration to expire, or the context
+// is canceled. Which ever happens first. If the context is canceled the Context's
+// error will be returned.
+//
+// Expects Context to always return a non-nil error if the Done channel is closed.
+func SleepWithContext(ctx context.Context, dur time.Duration) error {
+	t := time.NewTimer(dur)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		break
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	return nil
 }

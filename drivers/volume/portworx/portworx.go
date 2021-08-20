@@ -2366,6 +2366,11 @@ func (d *portworx) GetLicenseSummary() (torpedovolume.LicenseSummary, error) {
 	}
 
 	licenseSummary.SKU = lic.GetStatus().GetSku()
+	if lic != nil && lic.Status != nil &&
+		lic.Status.GetConditions() != nil &&
+		len(lic.Status.GetConditions()) > 0 {
+		licenseSummary.LicenesConditionMsg = lic.Status.GetConditions()[0].GetMessage()
+	}
 
 	features, err := featureMgr.Enumerate(d.getContext(), &pxapi.PxLicensedFeatureEnumerateRequest{})
 	if err != nil {

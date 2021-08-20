@@ -92,6 +92,8 @@ const (
 	enableStorkUpgradeFlag               = "enable-stork-upgrade"
 	autopilotUpgradeImageCliFlag         = "autopilot-upgrade-version"
 	csiGenericDriverConfigMapFlag        = "csi-generic-driver-config-map"
+	licenseExpiryTimeoutHoursFlag        = "license_expiry_timeout_hours"
+	meteringIntervalMinsFlag             = "metering_interval_mins"
 )
 
 const (
@@ -110,6 +112,8 @@ const (
 	defaultStorageNodesPerAZ              = 2
 	defaultAutoStorageNodeRecoveryTimeout = 30 * time.Minute
 	specObjAppWorkloadSizeEnvVar          = "SIZE"
+	defaultLicenseExpiryTimeoutHours      = 1 * time.Hour
+	defaultMeteringIntervalMins           = 10 * time.Minute
 )
 
 const (
@@ -926,6 +930,8 @@ type Torpedo struct {
 	DestroyAppTimeout                   time.Duration
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
+	LicenseExpiryTimeoutHours           time.Duration
+	MeteringIntervalMins                time.Duration
 	ConfigMap                           string
 	BundleLocation                      string
 	CustomAppConfig                     map[string]scheduler.AppConfig
@@ -956,6 +962,8 @@ func ParseFlags() {
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
+	var licenseExpiryTimeoutHours time.Duration
+	var meteringIntervalMins time.Duration
 	var bundleLocation string
 	var customConfigPath string
 	var customAppConfig map[string]scheduler.AppConfig
@@ -990,6 +998,8 @@ func ParseFlags() {
 	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
+	flag.DurationVar(&licenseExpiryTimeoutHours, licenseExpiryTimeoutHoursFlag, defaultLicenseExpiryTimeoutHours, "Maximum wait time in hours after which force expire license")
+	flag.DurationVar(&meteringIntervalMins, meteringIntervalMinsFlag, defaultMeteringIntervalMins, "Metering interval in minutes for metering agent")
 	flag.StringVar(&configMapName, configMapFlag, "", "Name of the config map to be used.")
 	flag.StringVar(&bundleLocation, "bundle-location", defaultBundleLocation, "Path to support bundle output files")
 	flag.StringVar(&customConfigPath, "custom-config", "", "Path to custom configuration files")
@@ -1073,6 +1083,8 @@ func ParseFlags() {
 				SchedUpgradeHops:                    schedUpgradeHops,
 				AutopilotUpgradeImage:               autopilotUpgradeImage,
 				CsiGenericDriverConfigMap:           csiGenericDriverConfigMapName,
+				LicenseExpiryTimeoutHours:           licenseExpiryTimeoutHours,
+				MeteringIntervalMins:                meteringIntervalMins,
 			}
 		})
 	}

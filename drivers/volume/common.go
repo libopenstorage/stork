@@ -1,9 +1,10 @@
 package volume
 
 import (
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"regexp"
 	"time"
+
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -16,8 +17,9 @@ import (
 
 // LicenseSummary struct that will hold our SKU and Features
 type LicenseSummary struct {
-	SKU      string
-	Features []*pxapi.LicensedFeature
+	SKU                 string
+	Features            []*pxapi.LicensedFeature
+	LicenesConditionMsg string
 }
 
 // DefaultDriver implements defaults for Driver interface

@@ -3893,6 +3893,38 @@ func (k *K8s) UpgradeScheduler(version string) error {
 	}
 }
 
+// DeleteSecret deletes secret with given name in given namespace
+func (k *K8s) DeleteSecret(namespace, name string) error {
+	return k8sCore.DeleteSecret(name, namespace)
+}
+
+// GetSecretData returns secret with given name in given namespace
+func (k *K8s) GetSecretData(namespace, name, dataField string) (string, error) {
+	secret, err := k8sCore.GetSecret(name, namespace)
+	if err != nil {
+		return "", err
+	}
+	return string(secret.Data[dataField]), nil
+}
+
+// CreateSecret creates new secret with given name in given namespace
+func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) error {
+	meta := &metav1.ObjectMeta{
+		Name:      name,
+		Namespace: namespace,
+	}
+	secretData := map[string]string{
+		dataField: secretDataString,
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: *meta,
+		StringData: secretData,
+	}
+
+	_, err := k8sCore.CreateSecret(secret)
+	return err
+}
+
 func substituteImageWithInternalRegistry(spec interface{}) {
 	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
 	if internalDockerRegistry != "" {

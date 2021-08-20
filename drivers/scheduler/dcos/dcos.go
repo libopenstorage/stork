@@ -727,6 +727,30 @@ func (d *dcos) UpgradeScheduler(version string) error {
 	}
 }
 
+func (d *dcos) CreateSecret(namespace, name, dataField, secretDataString string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateSecret()",
+	}
+}
+
+func (d *dcos) GetSecretData(namespace, name, dataField string) (string, error) {
+	// TODO: Add implementation
+	return "", &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetSecret()",
+	}
+}
+
+func (d *dcos) DeleteSecret(namespace, name string) error {
+	// TODO: Add implementation
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteSecret()",
+	}
+}
+
 func init() {
 	d := &dcos{}
 	scheduler.Register(SchedName, d)

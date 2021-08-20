@@ -269,6 +269,15 @@ type Driver interface {
 
 	// UpgradeScheduler upgrades the scheduler on the cluster to the specified version
 	UpgradeScheduler(version string) error
+
+	// CreateSecret creates new secret with given name in given namespace
+	CreateSecret(namespace, name, dataField, secretDataString string) error
+
+	// GetSecret returns secret with given name in given namespace
+	GetSecretData(namespace, name, dataField string) (string, error)
+
+	// DeleteSecret deletes secret with given name in given namespace
+	DeleteSecret(namespace, name string) error
 }
 
 var (

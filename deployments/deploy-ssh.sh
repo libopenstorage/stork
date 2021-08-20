@@ -115,6 +115,16 @@ if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
     APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
 fi
 
+if [ -z "$LICENSE_EXPIRY_TIMEOUT_HOURS" ]; then
+    LICENSE_EXPIRY_TIMEOUT_HOURS="1h0m0s"
+    echo "Using default license expiry timeout of ${LICENSE_EXPIRY_TIMEOUT_HOURS}"
+fi
+
+if [ -z "$METERING_INTERVAL_MINS" ]; then
+    METERING_INTERVAL_MINS="10m0s"
+    echo "Using default metering of ${METERING_INTERVAL_MINS}"
+fi
+
 if [ -z "$STORAGENODE_RECOVERY_TIMEOUT" ]; then
     STORAGENODE_RECOVERY_TIMEOUT="35m0s"
     echo "Using default storage node recovery timeout of ${STORAGENODE_RECOVERY_TIMEOUT}"
@@ -422,6 +432,8 @@ spec:
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
             "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
             "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
+            "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
+            "--metering_interval_mins=$METERING_INTERVAL_MINS",
             "$APP_DESTROY_TIMEOUT_ARG"
     ]
     tty: true
