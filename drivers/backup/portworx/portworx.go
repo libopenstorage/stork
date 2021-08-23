@@ -188,52 +188,52 @@ func (p *portworx) setDriver(serviceName string, namespace string) error {
 	return fmt.Errorf("failed to get endpoint for portworx backup driver: %v", err)
 }
 
-func (p *portworx) CreateOrganization(req *api.OrganizationCreateRequest) (*api.OrganizationCreateResponse, error) {
-	return p.organizationManager.Create(context.Background(), req)
+func (p *portworx) CreateOrganization(ctx context.Context, req *api.OrganizationCreateRequest) (*api.OrganizationCreateResponse, error) {
+	return p.organizationManager.Create(ctx, req)
 }
 
-func (p *portworx) EnumerateOrganization() (*api.OrganizationEnumerateResponse, error) {
-	return p.organizationManager.Enumerate(context.Background(), &api.OrganizationEnumerateRequest{})
+func (p *portworx) EnumerateOrganization(ctx context.Context) (*api.OrganizationEnumerateResponse, error) {
+	return p.organizationManager.Enumerate(ctx, &api.OrganizationEnumerateRequest{})
 }
 
-func (p *portworx) CreateCloudCredential(req *api.CloudCredentialCreateRequest) (*api.CloudCredentialCreateResponse, error) {
-	return p.cloudCredentialManager.Create(context.Background(), req)
+func (p *portworx) CreateCloudCredential(ctx context.Context, req *api.CloudCredentialCreateRequest) (*api.CloudCredentialCreateResponse, error) {
+	return p.cloudCredentialManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateCloudCredential(req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error) {
-	return p.cloudCredentialManager.Update(context.Background(), req)
+func (p *portworx) UpdateCloudCredential(ctx context.Context, req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error) {
+	return p.cloudCredentialManager.Update(ctx, req)
 }
 
-func (p *portworx) InspectCloudCredential(req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error) {
-	return p.cloudCredentialManager.Inspect(context.Background(), req)
+func (p *portworx) InspectCloudCredential(ctx context.Context, req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error) {
+	return p.cloudCredentialManager.Inspect(ctx, req)
 }
 
-func (p *portworx) EnumerateCloudCredential(req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
-	return p.cloudCredentialManager.Enumerate(context.Background(), req)
+func (p *portworx) EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
+	return p.cloudCredentialManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) DeleteCloudCredential(req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error) {
-	return p.cloudCredentialManager.Delete(context.Background(), req)
+func (p *portworx) DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error) {
+	return p.cloudCredentialManager.Delete(ctx, req)
 }
 
-func (p *portworx) CreateCluster(req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error) {
-	return p.clusterManager.Create(context.Background(), req)
+func (p *portworx) CreateCluster(ctx context.Context, req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error) {
+	return p.clusterManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateCluster(req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error) {
-	return p.clusterManager.Update(context.Background(), req)
+func (p *portworx) UpdateCluster(ctx context.Context, req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error) {
+	return p.clusterManager.Update(ctx, req)
 }
 
-func (p *portworx) InspectCluster(req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error) {
-	return p.clusterManager.Inspect(context.Background(), req)
+func (p *portworx) InspectCluster(ctx context.Context, req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error) {
+	return p.clusterManager.Inspect(ctx, req)
 }
 
-func (p *portworx) EnumerateCluster(req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error) {
-	return p.clusterManager.Enumerate(context.Background(), req)
+func (p *portworx) EnumerateCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error) {
+	return p.clusterManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) DeleteCluster(req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error) {
-	return p.clusterManager.Delete(context.Background(), req)
+func (p *portworx) DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error) {
+	return p.clusterManager.Delete(ctx, req)
 }
 
 // WaitForClusterDeletion waits for cluster to be deleted successfully
@@ -273,28 +273,28 @@ func (p *portworx) WaitForClusterDeletion(
 	return nil
 }
 
-func (p *portworx) CreateBackupLocation(req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error) {
-	return p.backupLocationManager.Create(context.Background(), req)
+func (p *portworx) CreateBackupLocation(ctx context.Context, req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error) {
+	return p.backupLocationManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateBackupLocation(req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error) {
-	return p.backupLocationManager.Update(context.Background(), req)
+func (p *portworx) UpdateBackupLocation(ctx context.Context, req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error) {
+	return p.backupLocationManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateBackupLocation(req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
-	return p.backupLocationManager.Enumerate(context.Background(), req)
+func (p *portworx) EnumerateBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
+	return p.backupLocationManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectBackupLocation(req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error) {
-	return p.backupLocationManager.Inspect(context.Background(), req)
+func (p *portworx) InspectBackupLocation(ctx context.Context, req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error) {
+	return p.backupLocationManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteBackupLocation(req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error) {
-	return p.backupLocationManager.Delete(context.Background(), req)
+func (p *portworx) DeleteBackupLocation(ctx context.Context, req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error) {
+	return p.backupLocationManager.Delete(ctx, req)
 }
 
-func (p *portworx) ValidateBackupLocation(req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error) {
-	return p.backupLocationManager.Validate(context.Background(), req)
+func (p *portworx) ValidateBackupLocation(ctx context.Context, req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error) {
+	return p.backupLocationManager.Validate(ctx, req)
 }
 
 // WaitForBackupLocationDeletion waits for backup location to be deleted successfully
@@ -340,24 +340,24 @@ func (p *portworx) WaitForBackupLocationDeletion(
 	return nil
 }
 
-func (p *portworx) CreateBackup(req *api.BackupCreateRequest) (*api.BackupCreateResponse, error) {
-	return p.backupManager.Create(context.Background(), req)
+func (p *portworx) CreateBackup(ctx context.Context, req *api.BackupCreateRequest) (*api.BackupCreateResponse, error) {
+	return p.backupManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateBackup(req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error) {
-	return p.backupManager.Update(context.Background(), req)
+func (p *portworx) UpdateBackup(ctx context.Context, req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error) {
+	return p.backupManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateBackup(req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error) {
-	return p.backupManager.Enumerate(context.Background(), req)
+func (p *portworx) EnumerateBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error) {
+	return p.backupManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectBackup(req *api.BackupInspectRequest) (*api.BackupInspectResponse, error) {
-	return p.backupManager.Inspect(context.Background(), req)
+func (p *portworx) InspectBackup(ctx context.Context, req *api.BackupInspectRequest) (*api.BackupInspectResponse, error) {
+	return p.backupManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteBackup(req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
-	return p.backupManager.Delete(context.Background(), req)
+func (p *portworx) DeleteBackup(ctx context.Context, req *api.BackupDeleteRequest) (*api.BackupDeleteResponse, error) {
+	return p.backupManager.Delete(ctx, req)
 }
 
 // GetVolumeBackupIDs returns backup IDs of volumes
@@ -628,24 +628,24 @@ func (p *portworx) WaitForDeletePending(
 	return nil
 }
 
-func (p *portworx) CreateRestore(req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {
-	return p.restoreManager.Create(context.Background(), req)
+func (p *portworx) CreateRestore(ctx context.Context, req *api.RestoreCreateRequest) (*api.RestoreCreateResponse, error) {
+	return p.restoreManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateRestore(req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error) {
-	return p.restoreManager.Update(context.Background(), req)
+func (p *portworx) UpdateRestore(ctx context.Context, req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error) {
+	return p.restoreManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateRestore(req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
-	return p.restoreManager.Enumerate(context.Background(), req)
+func (p *portworx) EnumerateRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
+	return p.restoreManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectRestore(req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error) {
-	return p.restoreManager.Inspect(context.Background(), req)
+func (p *portworx) InspectRestore(ctx context.Context, req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error) {
+	return p.restoreManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteRestore(req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error) {
-	return p.restoreManager.Delete(context.Background(), req)
+func (p *portworx) DeleteRestore(ctx context.Context, req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error) {
+	return p.restoreManager.Delete(ctx, req)
 }
 
 // WaitForRestoreCompletion waits for restore to complete successfully
@@ -696,44 +696,44 @@ func (p *portworx) WaitForRestoreCompletion(
 	return nil
 }
 
-func (p *portworx) CreateSchedulePolicy(req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error) {
-	return p.schedulePolicyManager.Create(context.Background(), req)
+func (p *portworx) CreateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error) {
+	return p.schedulePolicyManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateSchedulePolicy(req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error) {
-	return p.schedulePolicyManager.Update(context.Background(), req)
+func (p *portworx) UpdateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error) {
+	return p.schedulePolicyManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateSchedulePolicy(req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
-	return p.schedulePolicyManager.Enumerate(context.Background(), req)
+func (p *portworx) EnumerateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
+	return p.schedulePolicyManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectSchedulePolicy(req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error) {
-	return p.schedulePolicyManager.Inspect(context.Background(), req)
+func (p *portworx) InspectSchedulePolicy(ctx context.Context, req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error) {
+	return p.schedulePolicyManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteSchedulePolicy(req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error) {
-	return p.schedulePolicyManager.Delete(context.Background(), req)
+func (p *portworx) DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error) {
+	return p.schedulePolicyManager.Delete(ctx, req)
 }
 
-func (p *portworx) CreateBackupSchedule(req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error) {
-	return p.backupScheduleManager.Create(context.Background(), req)
+func (p *portworx) CreateBackupSchedule(ctx context.Context, req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error) {
+	return p.backupScheduleManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateBackupSchedule(req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error) {
-	return p.backupScheduleManager.Update(context.Background(), req)
+func (p *portworx) UpdateBackupSchedule(ctx context.Context, req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error) {
+	return p.backupScheduleManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateBackupSchedule(req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
-	return p.backupScheduleManager.Enumerate(context.Background(), req)
+func (p *portworx) EnumerateBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
+	return p.backupScheduleManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectBackupSchedule(req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error) {
-	return p.backupScheduleManager.Inspect(context.Background(), req)
+func (p *portworx) InspectBackupSchedule(ctx context.Context, req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error) {
+	return p.backupScheduleManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteBackupSchedule(req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error) {
-	return p.backupScheduleManager.Delete(context.Background(), req)
+func (p *portworx) DeleteBackupSchedule(ctx context.Context, req *api.BackupScheduleDeleteRequest) (*api.BackupScheduleDeleteResponse, error) {
+	return p.backupScheduleManager.Delete(ctx, req)
 }
 
 // BackupScheduleWaitForNBackupsCompletion waits for given number of backup to be complete successfully
@@ -956,12 +956,12 @@ func (p *portworx) WaitForRestoreRunning(
 	return nil
 }
 
-func (p *portworx) ActivateLicense(req *api.LicenseActivateRequest) (*api.LicenseActivateResponse, error) {
-	return p.licenseManager.Activate(context.Background(), req)
+func (p *portworx) ActivateLicense(ctx context.Context, req *api.LicenseActivateRequest) (*api.LicenseActivateResponse, error) {
+	return p.licenseManager.Activate(ctx, req)
 }
 
-func (p *portworx) InspectLicense(req *api.LicenseInspectRequest) (*api.LicenseInspectResponse, error) {
-	return p.licenseManager.Inspect(context.Background(), req)
+func (p *portworx) InspectLicense(ctx context.Context, req *api.LicenseInspectRequest) (*api.LicenseInspectResponse, error) {
+	return p.licenseManager.Inspect(ctx, req)
 }
 
 func (p *portworx) WaitForLicenseActivation(ctx context.Context, req *api.LicenseInspectRequest, timeout, retryInterval time.Duration) error {
@@ -999,24 +999,24 @@ func (p *portworx) WaitForLicenseActivation(ctx context.Context, req *api.Licens
 	return nil
 }
 
-func (p *portworx) CreateRule(req *api.RuleCreateRequest) (*api.RuleCreateResponse, error) {
-	return p.ruleManager.Create(context.Background(), req)
+func (p *portworx) CreateRule(ctx context.Context, req *api.RuleCreateRequest) (*api.RuleCreateResponse, error) {
+	return p.ruleManager.Create(ctx, req)
 }
 
-func (p *portworx) UpdateRule(req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error) {
-	return p.ruleManager.Update(context.Background(), req)
+func (p *portworx) UpdateRule(ctx context.Context, req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error) {
+	return p.ruleManager.Update(ctx, req)
 }
 
-func (p *portworx) EnumerateRule(req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
-	return p.ruleManager.Enumerate(context.Background(), req)
+func (p *portworx) EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
+	return p.ruleManager.Enumerate(ctx, req)
 }
 
-func (p *portworx) InspectRule(req *api.RuleInspectRequest) (*api.RuleInspectResponse, error) {
-	return p.ruleManager.Inspect(context.Background(), req)
+func (p *portworx) InspectRule(ctx context.Context, req *api.RuleInspectRequest) (*api.RuleInspectResponse, error) {
+	return p.ruleManager.Inspect(ctx, req)
 }
 
-func (p *portworx) DeleteRule(req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error) {
-	return p.ruleManager.Delete(context.Background(), req)
+func (p *portworx) DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error) {
+	return p.ruleManager.Delete(ctx, req)
 }
 
 func init() {
