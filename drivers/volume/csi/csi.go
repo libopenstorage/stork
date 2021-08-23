@@ -604,7 +604,7 @@ func (c *csi) GetBackupStatus(backup *storkapi.ApplicationBackup) ([]*storkapi.A
 	vsContentMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotContent)
 	vsClassMap := make(map[string]*kSnapshotv1beta1.VolumeSnapshotClass)
 	for _, vInfo := range backup.Status.Volumes {
-		if vInfo.DriverName != storkCSIDriverName {
+		if vInfo.DriverName != storkCSIDriverName || vInfo.Status == storkapi.ApplicationBackupStatusSuccessful {
 			continue
 		}
 
@@ -789,6 +789,9 @@ func (c *csi) CancelBackup(backup *storkapi.ApplicationBackup) error {
 	if backup.Status.Status == storkapi.ApplicationBackupStatusInProgress {
 		// set of all snapshot classes deleted
 		for _, vInfo := range backup.Status.Volumes {
+			if vInfo.DriverName != storkCSIDriverName {
+				continue
+			}
 			snapshotName := vInfo.BackupID
 
 			// Delete VS
