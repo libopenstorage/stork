@@ -2949,15 +2949,17 @@ func (k *K8s) IsScalable(spec interface{}) bool {
 			return false
 		}
 		for _, vol := range dep.Spec.Template.Spec.Volumes {
-			pvcName := vol.PersistentVolumeClaim.ClaimName
-			pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, dep.Namespace)
-			if err != nil {
-				logrus.Errorf("Failed to retrieve PVC [%s] %s. Cause: %v", obj.Namespace, pvcName, err)
-				return false
-			}
-			for _, ac := range pvc.Spec.AccessModes {
-				if ac == corev1.ReadWriteOnce {
+			if vol.PersistentVolumeClaim != nil {
+				pvcName := vol.PersistentVolumeClaim.ClaimName
+				pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, dep.Namespace)
+				if err != nil {
+					logrus.Errorf("Failed to retrieve PVC [%s] %s. Cause: %v", obj.Namespace, pvcName, err)
 					return false
+				}
+				for _, ac := range pvc.Spec.AccessModes {
+					if ac == corev1.ReadWriteOnce {
+						return false
+					}
 				}
 			}
 		}

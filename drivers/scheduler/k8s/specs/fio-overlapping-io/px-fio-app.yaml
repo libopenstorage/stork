@@ -1,0 +1,44 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fio-overlapping-io
+  labels:
+    app: fio-overlapping-io
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fio-overlapping-io
+  template:
+    metadata:
+      labels:
+        app: fio-overlapping-io
+    spec:
+      schedulerName: stork
+      containers:
+        - name: fio-overlapping-io
+          image: joshuarobinson/fio:3.19
+          command: ["sh"]
+          args: ["-c", "mkdir -p /scratch && fio --name=integrity_test --ioengine=libaio --iodepth=128 --rw=write:-4k --bs=8k --size=20g --filename=file1 --direct=1 --end_fsync=1 --time_based --runtime=99999 --eta=never --directory=/scratch --output=/var/log/fio.log"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: fio-data
+              mountPath: /scratch
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: "500m"
+              memory: 4Gi
+            requests:
+              cpu: "500m"
+              memory: 4Gi
+      restartPolicy: Always
+      volumes:
+        - name: fio-data
+          persistentVolumeClaim:
+            claimName: fio-overlapping-io-pvc

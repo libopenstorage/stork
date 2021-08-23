@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fio-job-config
+data:
+    fio.job: |
+        [global]
+        name=fio-rand-RW
+        directory=/scratch/
+        rw=randwrite
+        rwmixread=75
+        randrepeat=1
+        blocksize_range=4k-512k
+        direct=1
+        do_verify=1
+        verify=crc32c
+        verify_pattern=0xdeadbeef
+        disable_lat=0
+        time_based=1
+        runtime=99999999
+        [file1]
+        filesize=1M-10M
+        nrfiles=10000
+        ioengine=libaio
+        iodepth=128

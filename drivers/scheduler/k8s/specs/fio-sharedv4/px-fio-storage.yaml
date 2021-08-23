@@ -1,0 +1,27 @@
+##### Portworx storage class
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fio-sharedv4-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  priority_io: "high"
+  io_profile: "db_remote"
+  repl: "3"
+  sharedv4: "true"
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fio-sharedv4-pvc
+spec:
+  storageClassName: fio-sharedv4-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      {{ if .VolumeSize }}
+      storage: {{ .VolumeSize }}
+      {{ else }}
+      storage: 2000Gi{{ end }}
