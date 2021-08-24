@@ -60,10 +60,12 @@ func (in *Context) GetID() string {
 
 // AppConfig custom settings
 type AppConfig struct {
-	Replicas     int    `yaml:"replicas"`
-	VolumeSize   string `yaml:"volume_size"`
-	WorkloadSize string `yaml:"workload_size"`
-	ClaimsCount  int    `yaml:"claims_count"`
+	Replicas      int      `yaml:"replicas"`
+	VolumeSize    string   `yaml:"volume_size"`
+	WorkloadSize  string   `yaml:"workload_size"`
+	ClaimsCount   int      `yaml:"claims_count"`
+	CustomCommand []string `yaml:"custom_command"`
+	CustomArgs    []string `yaml:"custom_args"`
 }
 
 // InitOptions initialization options

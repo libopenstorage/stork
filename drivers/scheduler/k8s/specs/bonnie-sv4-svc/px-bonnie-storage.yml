@@ -1,0 +1,24 @@
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: bonnie-sc
+provisioner: kubernetes.io/portworx-volume
+parameters:
+  repl: "3"
+  priority_io: "high"
+  sharedv4: "true"
+  sharedv4_svc_type: "ClusterIP"
+allowVolumeExpansion: true
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: bonnie-pvc
+spec:
+  storageClassName: bonnie-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ if .VolumeSize }}{{ .VolumeSize }}{{ else }}200Gi{{ end }}

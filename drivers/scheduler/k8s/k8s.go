@@ -338,6 +338,16 @@ func (k *K8s) ParseSpecs(specDir, storageProvisioner string) ([]interface{}, err
 				}
 				return Items
 			},
+			"array": func(arr []string) string {
+				string := "[\""
+				for i, val := range arr {
+					if i != 0 {
+						string += "\", \""
+					}
+					string += val
+				}
+				return string + "\"]"
+			},
 		}
 
 		tmpl, err := template.New("customConfig").Funcs(funcs).Parse(string(file))

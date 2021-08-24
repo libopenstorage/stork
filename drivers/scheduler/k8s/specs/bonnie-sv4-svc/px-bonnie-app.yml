@@ -1,0 +1,43 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bonnie-sv4-svc
+spec:
+  replicas: {{ if .Replicas }}{{ .Replicas }}{{ else }}3{{ end }}
+  selector:
+    matchLabels:
+      app: bonnie-sv4-svc
+  template:
+    metadata:
+      labels:
+        app: bonnie-sv4-svc
+    spec:
+      containers:
+        - name: bonnie-sv4-svc
+          image: polinux/bonnie
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              memory: 1Gi
+              cpu: 100m
+          {{ if .CustomCommand }}
+          command: {{ .CustomCommand | array }}
+          {{ else }}
+          command: [ "sh" ]{{ end }}
+          {{ if .CustomArgs }}
+          args: {{ .CustomArgs | array }}
+          {{ else }}
+          args: [ "-c", "mkdir -p /testdir/$(POD_NAME) && bonnie++ -d /testdir/$(POD_NAME) -x 10 -n 10:10:1:10 -b -u root"]{{ end }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: bonnie-persistent-storage
+              mountPath: /testdir
+      volumes:
+        - name: bonnie-persistent-storage
+          persistentVolumeClaim:
+            claimName: bonnie-pvc
