@@ -971,7 +971,15 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		logrus.Debugf("checking PX status on node: %s", n.Name)
 		pxNode := nodeInspectResponse.Node
 		switch pxNode.Status {
-		case api.Status_STATUS_DECOMMISSION, api.Status_STATUS_OK: // do nothing
+		case api.Status_STATUS_DECOMMISSION: // do nothing
+		case api.Status_STATUS_OK:
+			err := d.testAndSetEndpointUsingNodeIP(pxNode.MgmtIp)
+			if err != nil {
+				return "", true, &ErrFailedToWaitForPx{
+					Node:  n,
+					Cause: fmt.Sprintf("px is not yet up on node. cause: %v", err),
+				}
+			}
 		case api.Status_STATUS_OFFLINE:
 			// in case node is offline and it is a storageless node, the id might have changed so update it
 			if len(pxNode.Pools) == 0 {
