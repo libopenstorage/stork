@@ -167,7 +167,7 @@ func validateAndDestroyMigration(
 				require.Error(t, err, "All apps shouldn't have been migrated")
 			}
 		} else {
-			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/2, defaultWaitInterval)
+			err = schedulerDriver.WaitForRunning(preMigrationCtx, defaultWaitTimeout/4, defaultWaitInterval)
 			require.Error(t, err, "Expected pods to NOT get to running state on remote cluster after migration")
 		}
 

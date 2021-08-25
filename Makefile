@@ -18,7 +18,7 @@ ifeq ($(BUILD_TYPE),debug)
 BUILDFLAGS += -gcflags "-N -l"
 endif
 
-RELEASE_VER := 2.5.0
+RELEASE_VER := 2.7.0
 BASE_DIR    := $(shell git rev-parse --show-toplevel)
 GIT_SHA     := $(shell git rev-parse --short HEAD)
 BIN         :=$(BASE_DIR)/bin
@@ -64,7 +64,7 @@ staticcheck:
 
 errcheck:
 	GO111MODULE=off go get -u github.com/kisielk/errcheck
-	errcheck -verbose -blank $(PKGS) 
+	errcheck -verbose -blank $(PKGS)
 	errcheck -verbose -blank -tags unittest $(PKGS)
 	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
@@ -142,4 +142,3 @@ clean:
 	@echo "Deleting image "$(CMD_EXECUTOR_IMG)
 	-sudo docker rmi -f $(CMD_EXECUTOR_IMG)
 	go clean -i $(PKGS)
-
