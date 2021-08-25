@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"time"
 
+	pxapi "github.com/portworx/torpedo/porx/px/api"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/api"
@@ -12,6 +14,13 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 )
+
+// LicenseSummary struct that will hold our SKU and Features
+type LicenseSummary struct {
+	SKU                 string
+	Features            []*pxapi.LicensedFeature
+	LicenesConditionMsg string
+}
 
 // DefaultDriver implements defaults for Driver interface
 type DefaultDriver struct {
@@ -331,6 +340,11 @@ func (d *DefaultDriver) EstimateVolumeExpand(apRule apapi.AutopilotRule, initial
 		Type:      "Function",
 		Operation: "EstimateVolumeExpand()",
 	}
+}
+
+// GetLicenseSummary returns the activated License
+func (d *DefaultDriver) GetLicenseSummary() (LicenseSummary, error) {
+	return LicenseSummary{}, nil
 }
 
 // RestartDriver must cause the volume driver to restart on a given node.

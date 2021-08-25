@@ -2033,7 +2033,6 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 // ValidateVolumes Validates the volumes
 func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration,
 	options *scheduler.VolumeOptions) error {
-	var err error
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			if ctx.SkipClusterScopedObject {
@@ -2051,12 +2050,14 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 			}
 		} else if obj, ok := specObj.(*v1.PersistentVolumeClaim); ok {
-			if err := k8sCore.ValidatePersistentVolumeClaim(obj, timeout, retryInterval); err != nil {
+			err := k8sCore.ValidatePersistentVolumeClaim(obj, timeout, retryInterval)
+			if err != nil && !options.ExpectError {
 				return &scheduler.ErrFailedToValidateStorage{
 					App:   ctx.App,
 					Cause: fmt.Sprintf("Failed to validate PVC: %v. Err: %v", obj.Name, err),
 				}
 			}
+
 			logrus.Infof("[%v] Validated PVC: %v, Namespace: %v", ctx.App.Key, obj.Name, obj.Namespace)
 
 			autopilotEnabled := false
@@ -3890,6 +3891,38 @@ func (k *K8s) UpgradeScheduler(version string) error {
 		Type:      "Function",
 		Operation: "UpgradeScheduler()",
 	}
+}
+
+// DeleteSecret deletes secret with given name in given namespace
+func (k *K8s) DeleteSecret(namespace, name string) error {
+	return k8sCore.DeleteSecret(name, namespace)
+}
+
+// GetSecretData returns secret with given name in given namespace
+func (k *K8s) GetSecretData(namespace, name, dataField string) (string, error) {
+	secret, err := k8sCore.GetSecret(name, namespace)
+	if err != nil {
+		return "", err
+	}
+	return string(secret.Data[dataField]), nil
+}
+
+// CreateSecret creates new secret with given name in given namespace
+func (k *K8s) CreateSecret(namespace, name, dataField, secretDataString string) error {
+	meta := &metav1.ObjectMeta{
+		Name:      name,
+		Namespace: namespace,
+	}
+	secretData := map[string]string{
+		dataField: secretDataString,
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: *meta,
+		StringData: secretData,
+	}
+
+	_, err := k8sCore.CreateSecret(secret)
+	return err
 }
 
 func substituteImageWithInternalRegistry(spec interface{}) {

@@ -10,6 +10,7 @@ RUN apk update && apk add --no-cache git gcc  musl-dev make curl openssh-client
 COPY deployments deployments
 COPY drivers drivers
 COPY pkg pkg
+COPY porx porx
 COPY scripts scripts
 COPY tests tests
 COPY vendor vendor

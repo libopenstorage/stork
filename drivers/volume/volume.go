@@ -166,6 +166,9 @@ type Driver interface {
 
 	// EstimatePoolExpandSize calculates expected volume size based on autopilot rule, initial and workload sizes
 	EstimateVolumeExpand(apRule apapi.AutopilotRule, initialSize, workloadSize uint64) (uint64, int, error)
+
+	// GetLicenseSummary returns the activated license SKU and Features
+	GetLicenseSummary() (LicenseSummary, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
