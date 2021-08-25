@@ -32,6 +32,7 @@ const (
 
 	pureSecretName      = "px-pure-secret"
 	pureSecretNamespace = "kube-system"
+	pureSecretDataField = "pure.json"
 	expiredLicString    = "License is expired"
 
 	// LabNodes - Number of nodes maximum
@@ -355,7 +356,7 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 
 		Step("Fetch and store Pure secret", func() {
 			var err error
-			pureSecretJSON, err = Inst().S.GetSecretData(pureSecretNamespace, pureSecretName, "pure.json")
+			pureSecretJSON, err = Inst().S.GetSecretData(pureSecretNamespace, pureSecretName, pureSecretDataField)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace. Error: [%v]",
 					pureSecretName, pureSecretNamespace, err))
@@ -381,11 +382,12 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
 			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
 				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
-			Expect(summary.LicenesConditionMsg).To(ContainSubstring(expiredLicString))
+			Expect(summary.LicenesConditionMsg).To(ContainSubstring(expiredLicString),
+				fmt.Sprintf("License did not expire after deleting [%s] secret", pureSecretName))
 		})
 
 		Step("Re-create Pure secret", func() {
-			err := Inst().S.CreateSecret(pureSecretNamespace, pureSecretName, "pure.json", pureSecretJSON)
+			err := Inst().S.CreateSecret(pureSecretNamespace, pureSecretName, pureSecretDataField, pureSecretJSON)
 			Expect(err).NotTo(HaveOccurred(),
 				fmt.Sprintf("Failed to create secret [%s] in [%s] namespace. Error: [%v]",
 					pureSecretName, pureSecretNamespace, err))
@@ -406,6 +408,9 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
 				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
 
+			Expect(summary.LicenesConditionMsg).To(BeEmpty(),
+				fmt.Sprintf("License did not got re-activated after recreating [%s] secret", pureSecretName))
+
 			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
@@ -415,6 +420,144 @@ var _ = Describe("{DeleteSecretLicExpiryAndRenewal}", func() {
 					}
 				}
 			})
+		})
+
+		ValidateAndDestroy(contexts, nil)
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+})
+
+/*
+  This Test:
+1. Deletes px-pure-secret
+2. Restarts PX on all nodes
+3. Expects PX-Essentials FA/FB lic does not falls back to PX-Essentials license
+*/
+var _ = Describe("{DeleteSecretRebootAllNodes}", func() {
+	var contexts []*scheduler.Context
+	var err error
+	var pureSecretJSON string
+
+	It("has to setup, validate and teardown apps", func() {
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("delseclicexprenewal-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+				fmt.Sprintf("SKU did not match: [%v]", essentialsFaFbSKU))
+
+			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
+				for _, feature := range summary.Features {
+					// if the feature limit exists in the hardcoded license limits we test it.
+					if _, ok := faLicense[Label(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					}
+				}
+			})
+		})
+
+		Step("Fetch and store Pure secret", func() {
+			var err error
+			pureSecretJSON, err = Inst().S.GetSecretData(pureSecretNamespace, pureSecretName, pureSecretDataField)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to fetch secret [%s] in [%s] namespace. Error: [%v]",
+					pureSecretName, pureSecretNamespace, err))
+		})
+
+		Step("Delete Pure secret", func() {
+			err := Inst().S.DeleteSecret(pureSecretNamespace, pureSecretName)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to delete secret [%s] in [%s] namespace. Error: [%v]",
+					pureSecretName, pureSecretNamespace, err))
+		})
+
+		Step("get all nodes and reboot one by one", func() {
+			nodesToReboot := node.GetWorkerNodes()
+
+			// Reboot node and check driver status
+			Step(fmt.Sprintf("reboot node one at a time from the node(s): %v", nodesToReboot), func() {
+				for _, n := range nodesToReboot {
+					if n.IsStorageDriverInstalled {
+						Step(fmt.Sprintf("reboot node: %s", n.Name), func() {
+							err = Inst().N.RebootNode(n, node.RebootNodeOpts{
+								Force: true,
+								ConnectionOpts: node.ConnectionOpts{
+									Timeout:         defaultCommandTimeout,
+									TimeBeforeRetry: defaultCommandRetry,
+								},
+							})
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait for node: %s to be back up", n.Name), func() {
+							err = Inst().N.TestConnection(n, node.ConnectionOpts{
+								Timeout:         defaultTestConnectionTimeout,
+								TimeBeforeRetry: defaultWaitRebootRetry,
+							})
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait for volume driver to stop on node: %v", n.Name), func() {
+							err := Inst().V.WaitDriverDownOnNode(n)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step(fmt.Sprintf("wait to scheduler: %s and volume driver: %s to start",
+							Inst().S.String(), Inst().V.String()), func() {
+
+							err = Inst().S.IsNodeReady(n)
+							Expect(err).NotTo(HaveOccurred())
+
+							err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						Step("validate apps", func() {
+							for _, ctx := range contexts {
+								ValidateContext(ctx)
+							}
+						})
+					}
+				}
+			})
+		})
+
+		Step("Get SKU and compare with PX-Essentials FA/FB", func() {
+			summary, err := Inst().V.GetLicenseSummary()
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+			Expect(summary.SKU).To(Equal(essentialsFaFbSKU),
+				fmt.Sprintf("SKU changed after deleting [%s] secret and reboot to [%v]", pureSecretName, summary.SKU))
+
+			Step("Compare PX-Essentials FA/FB features vs activated license", func() {
+				for _, feature := range summary.Features {
+					// if the feature limit exists in the hardcoded license limits we test it.
+					if _, ok := faLicense[Label(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(faLicense[Label(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, faLicense[Label(feature.Name)]))
+					}
+				}
+			})
+		})
+
+		Step("Re-create Pure secret", func() {
+			err := Inst().S.CreateSecret(pureSecretNamespace, pureSecretName, pureSecretDataField, pureSecretJSON)
+			Expect(err).NotTo(HaveOccurred(),
+				fmt.Sprintf("Failed to create secret [%s] in [%s] namespace. Error: [%v]",
+					pureSecretName, pureSecretNamespace, err))
 		})
 
 		ValidateAndDestroy(contexts, nil)
