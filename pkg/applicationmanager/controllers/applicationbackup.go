@@ -19,10 +19,12 @@ import (
 	"github.com/libopenstorage/stork/pkg/controllers"
 	"github.com/libopenstorage/stork/pkg/crypto"
 	"github.com/libopenstorage/stork/pkg/errors"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/libopenstorage/stork/pkg/log"
 	"github.com/libopenstorage/stork/pkg/objectstore"
 	"github.com/libopenstorage/stork/pkg/resourcecollector"
 	"github.com/libopenstorage/stork/pkg/rule"
+	"github.com/libopenstorage/stork/pkg/version"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -1005,7 +1007,7 @@ func (a *ApplicationBackupController) uploadCRDResources(backup *stork_api.Appli
 				continue
 			}
 			crdName := ruleset.Pluralize(strings.ToLower(v.Kind)) + "." + v.Group
-			res, err := apiextensions.Instance().GetCRD(crdName, metav1.GetOptions{})
+			res, err := apiextensions.Instance().GetCRDV1beta1(crdName, metav1.GetOptions{})
 			if err != nil {
 				if k8s_errors.IsNotFound(err) {
 					continue
@@ -1313,12 +1315,22 @@ func (a *ApplicationBackupController) createCRD() error {
 		Scope:   apiextensionsv1beta1.NamespaceScoped,
 		Kind:    reflect.TypeOf(stork_api.ApplicationBackup{}).Name(),
 	}
-	err := apiextensions.Instance().CreateCRD(resource)
+	ok, err := version.RequiresV1Registration()
+	if err != nil {
+		return err
+	}
+	if ok {
+		err := k8sutils.CreateCRD(resource)
+		if err != nil && !k8s_errors.IsAlreadyExists(err) {
+			return err
+		}
+		return apiextensions.Instance().ValidateCRD(resource.Plural+"."+resource.Group, validateCRDTimeout, validateCRDInterval)
+	}
+	err = apiextensions.Instance().CreateCRDV1beta1(resource)
 	if err != nil && !k8s_errors.IsAlreadyExists(err) {
 		return err
 	}
-
-	return apiextensions.Instance().ValidateCRD(resource, validateCRDTimeout, validateCRDInterval)
+	return apiextensions.Instance().ValidateCRDV1beta1(resource, validateCRDTimeout, validateCRDInterval)
 }
 
 // IsVolsToBeBackedUp for a given backupspec do we need to have volumes backed up
