@@ -21,6 +21,7 @@ var (
 // Ops is an interface to perform kubernetes related operations on the crd resources.
 type Ops interface {
 	CRDOps
+	CRDV1beta1Ops
 
 	// SetConfig sets the config and resets the client.
 	SetConfig(config *rest.Config)
