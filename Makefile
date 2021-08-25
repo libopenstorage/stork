@@ -64,7 +64,7 @@ staticcheck:
 
 errcheck:
 	GO111MODULE=off go get -u github.com/kisielk/errcheck
-	errcheck -verbose -blank $(PKGS) 
+	errcheck -verbose -blank $(PKGS)
 	errcheck -verbose -blank -tags unittest $(PKGS)
 	errcheck -verbose -blank -tags integrationtest github.com/libopenstorage/stork/test/integration_test
 
