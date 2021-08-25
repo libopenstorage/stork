@@ -1,4 +1,4 @@
-FROM golang:1.13.7-alpine AS build
+FROM golang:1.17.0-alpine AS build
 LABEL maintainer="harsh@portworx.com"
 
 WORKDIR /go/src/github.com/portworx/torpedo
