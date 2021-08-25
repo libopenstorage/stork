@@ -57,7 +57,7 @@ func testSnapshot(t *testing.T) {
 
 func simpleSnapshotTest(t *testing.T) {
 	ctx := createSnapshot(t, []string{"mysql-snap-restore"}, "simple-snap-restore")
-	verifySnapshot(t, ctx, "mysql-data", defaultWaitTimeout)
+	verifySnapshot(t, ctx, "mysql-data", 3, 2, true, defaultWaitTimeout)
 	destroyAndWait(t, ctx)
 }
 
@@ -276,7 +276,12 @@ func createSnapshot(t *testing.T, appKeys []string, nsKey string) []*scheduler.C
 	return ctx
 }
 
-func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest string, waitTimeout time.Duration) {
+func verifySnapshot(t *testing.T,
+	ctxs []*scheduler.Context, pvcInUseByTest string,
+	numExpectedVols,
+	numExpectedDataVols int,
+	verifyClone bool,
+	waitTimeout time.Duration) {
 	logrus.Info("Now verifying volume snapshot")
 	err := schedulerDriver.WaitForRunning(ctxs[0], waitTimeout, defaultWaitInterval)
 	require.NoError(t, err, fmt.Sprintf("Error waiting for app to get to running state in context: %s-%s", ctxs[0].App.Key, ctxs[0].UID))
@@ -288,10 +293,10 @@ func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest stri
 	err = schedulerDriver.ValidateVolumes(ctxs[0], waitTimeout, defaultWaitInterval, nil)
 	require.NoError(t, err, fmt.Sprintf("Error waiting for volumes in context: %s-%s", ctxs[0].App.Key, ctxs[0].UID))
 	volumeNames := getVolumeNames(t, ctxs[0])
-	require.Equal(t, 3, len(volumeNames), "Should only have two volumes and a snapshot")
+	require.Equal(t, numExpectedVols, len(volumeNames), "Should only have two volumes and a snapshot")
 
 	dataVolumesNames, dataVolumesInUse := parseDataVolumes(t, pvcInUseByTest, ctxs[0])
-	require.Len(t, dataVolumesNames, 2, "should have only 2 data volumes")
+	require.Len(t, dataVolumesNames, numExpectedDataVols, "should have only 2 data volumes")
 
 	snaps, err := schedulerDriver.GetSnapshots(ctxs[0])
 	require.NoError(t, err, "failed to get snapshots")
@@ -326,21 +331,27 @@ func verifySnapshot(t *testing.T, ctxs []*scheduler.Context, pvcInUseByTest stri
 		require.NoError(t, err, "Error getting snapshot parent volume")
 
 		parentVolName := parentVolInfo.VolumeName
-		var cloneVolName string
 
-		found := false
-		for _, volume := range dataVolumesNames {
-			if volume == parentVolName {
-				found = true
-			} else if volume != snapVolInfo.VolumeName {
-				cloneVolName = volume
+		if verifyClone {
+			var cloneVolName string
+
+			logrus.Infof("ParentVolName: %s", parentVolName)
+			logrus.Infof("DataVolumeNames: %v", dataVolumesNames)
+
+			found := false
+			for _, volume := range dataVolumesNames {
+				if volume == parentVolName {
+					found = true
+				} else if volume != snapVolInfo.VolumeName {
+					cloneVolName = volume
+				}
 			}
-		}
-		require.True(t, found, "Parent volume (%v) not found in list of volumes: %v", parentVolName, volumeNames)
+			require.True(t, found, "Parent volume (%v) not found in list of volumes: %v", parentVolName, volumeNames)
 
-		cloneVolInfo, err := storkVolumeDriver.InspectVolume(cloneVolName)
-		require.NoError(t, err, "Error getting clone volume")
-		require.Equal(t, snapVolInfo.VolumeID, cloneVolInfo.ParentID, "Clone volume does not have snapshot as parent")
+			cloneVolInfo, err := storkVolumeDriver.InspectVolume(cloneVolName)
+			require.NoError(t, err, "Error getting clone volume")
+			require.Equal(t, snapVolInfo.VolumeID, cloneVolInfo.ParentID, "Clone volume does not have snapshot as parent")
+		}
 	}
 
 	verifyScheduledNode(t, scheduledNodes[0], dataVolumesInUse)
@@ -396,7 +407,7 @@ func snapshotScaleTest(t *testing.T) {
 		timeout *= time.Duration((snapshotScaleCount / 10) + 1)
 	}
 	for i := 0; i < snapshotScaleCount; i++ {
-		verifySnapshot(t, ctxs[i], "mysql-data", timeout)
+		verifySnapshot(t, ctxs[i], "mysql-data", 3, 2, true, timeout)
 	}
 	for i := 0; i < snapshotScaleCount; i++ {
 		destroyAndWait(t, ctxs[i])
