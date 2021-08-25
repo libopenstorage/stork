@@ -114,6 +114,10 @@ const (
 const (
 	secretNameKey      = "secret_name"
 	secretNamespaceKey = "secret_namespace"
+	encryptionKey      = "encryption"
+
+	// Encryption annotations
+	encryptionName      = "secure"
 
 	// In-Tree Auth annotations
 	secretName      = "openstorage.io/auth-secret-name"
@@ -1335,49 +1339,78 @@ func (k *K8s) createVolumeSnapshotRestore(specObj interface{},
 }
 
 func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMap) error {
-	logrus.Debugf("Config Map details: %v", configMap.Data)
-	if _, ok := configMap.Data[secretNameKey]; !ok {
-		return fmt.Errorf("failed to get secret name from config map")
+	//logrus.Debugf("Config Map details: %v", configMap.Data)
+	secretNameKeyFlag := false
+	secretNamespaceKeyFlag := false
+	encryptionFlag := false
+	if _, ok := configMap.Data[secretNameKey]; ok {
+		secretNameKeyFlag = true
 	}
-	if _, ok := configMap.Data[secretNamespaceKey]; !ok {
-		return fmt.Errorf("failed to get secret namespace from config map")
+	if _, ok := configMap.Data[secretNamespaceKey]; ok {
+		secretNamespaceKeyFlag = true
+	}
+	if _, ok := configMap.Data[encryptionKey]; ok {
+		encryptionFlag = true
 	}
 
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		if obj.Parameters == nil {
 			obj.Parameters = make(map[string]string)
 		}
+		if encryptionFlag {
+			obj.Parameters[encryptionName] = "true"
+		}
 		if strings.Contains(volume.GetStorageProvisioner(), "pxd") {
-			obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
-			obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
-			obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
-			obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
-			obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
-			obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+			if secretNameKeyFlag {
+				obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
+				obj.Parameters[CsiControllerExpandSecretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]
+				obj.Parameters[CsiControllerExpandSecretNamespace] = configMap.Data[secretNamespaceKey]
+			}
 		} else {
-			obj.Parameters[secretName] = configMap.Data[secretNameKey]
-			obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
+			if secretNameKeyFlag {
+				obj.Parameters[secretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				obj.Parameters[secretNamespace] = configMap.Data[secretNamespaceKey]
+			}
 		}
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*snapv1.VolumeSnapshot); ok {
 		if obj.Metadata.Annotations == nil {
 			obj.Metadata.Annotations = make(map[string]string)
 		}
-		obj.Metadata.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Metadata.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Metadata.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Metadata.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*appsapi.StatefulSet); ok {
 		var pvcList []corev1.PersistentVolumeClaim
 		for _, pvc := range obj.Spec.VolumeClaimTemplates {
 			if pvc.Annotations == nil {
 				pvc.Annotations = make(map[string]string)
 			}
-			pvc.Annotations[secretName] = configMap.Data[secretNameKey]
-			pvc.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+			if secretNameKeyFlag {
+				pvc.Annotations[secretName] = configMap.Data[secretNameKey]
+			}
+			if secretNamespaceKeyFlag {
+				pvc.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+			}
 			pvcList = append(pvcList, pvc)
 		}
 		obj.Spec.VolumeClaimTemplates = pvcList
@@ -1385,50 +1418,82 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*storkapi.ApplicationClone); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*storkapi.ApplicationRestore); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*storkapi.Migration); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*storkapi.MigrationSchedule); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*storkapi.VolumeSnapshotRestore); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*storkapi.GroupVolumeSnapshot); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	} else if obj, ok := spec.(*storkapi.ClusterPair); ok {
 		if obj.Annotations == nil {
 			obj.Annotations = make(map[string]string)
 		}
-		obj.Annotations[secretName] = configMap.Data[secretNameKey]
-		obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		if secretNameKeyFlag {
+			obj.Annotations[secretName] = configMap.Data[secretNameKey]
+		}
+		if secretNamespaceKeyFlag {
+			obj.Annotations[secretNamespace] = configMap.Data[secretNamespaceKey]
+		}
 	}
 	return nil
 }
