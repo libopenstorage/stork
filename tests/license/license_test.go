@@ -263,57 +263,6 @@ var _ = Describe("{BasicEssentialsRebootTest}", func() {
 	})
 })
 
-// This test performs basic limit test of starting an application and destroying it (along with storage)
-var _ = Describe("{BasicEssentialsAggrLimitTest}", func() {
-	var contexts []*scheduler.Context
-
-	It("has to setup, validate and teardown apps", func() {
-		contexts = make([]*scheduler.Context, 0)
-
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-license-aggrlimit-%d", i))...)
-		}
-		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		for _, ctx := range contexts {
-			err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultWaitRebootTimeout, defaultRetryInterval, &scheduler.VolumeOptions{ExpectError: true})
-			Expect(err).To(HaveOccurred())
-		}
-
-		ValidateApplications(contexts)
-		ValidateAndDestroy(contexts, nil)
-	})
-	JustAfterEach(func() {
-		AfterEachTest(contexts)
-	})
-})
-
-// This test performs basic limit test of starting an application and destroying it (along with storage)
-var _ = Describe("{BasicEssentialsSnapLimitTest}", func() {
-	var contexts []*scheduler.Context
-
-	It("has to setup, validate and teardown apps", func() {
-		contexts = make([]*scheduler.Context, 0)
-
-		scaleFactor := Inst().GlobalScaleFactor + 5
-		for i := 0; i < scaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-license-snaplimit-%d", i))...)
-		}
-
-		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		for _, ctx := range contexts {
-			err := Inst().S.ValidateVolumes(ctx, appScaleFactor*defaultWaitRebootTimeout, defaultRetryInterval, &scheduler.VolumeOptions{ExpectError: true})
-			Expect(err).To(HaveOccurred())
-		}
-
-		ValidateApplications(contexts)
-
-		ValidateAndDestroy(contexts, nil)
-	})
-	JustAfterEach(func() {
-		AfterEachTest(contexts)
-	})
-})
-
 /* This test
 1. Deletes px-pure-secret
 2. Waits for lic_expiry_timeout
