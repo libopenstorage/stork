@@ -1007,16 +1007,17 @@ func (m *MigrationController) checkAndUpdateService(
 	if err != nil {
 		return false, err
 	}
-	if curr.Annotations != nil {
-		if hash, ok := curr.Annotations[resourcecollector.StorkResourceHash]; ok {
-			old, err := strconv.ParseUint(hash, 10, 64)
-			if err != nil {
-				return false, err
-			}
-			if old == objHash {
-				log.MigrationLog(migration).Infof("Skipping service update, no changes found since last migration %d/%d", old, objHash)
-				return true, nil
-			}
+	if curr.Annotations == nil {
+		curr.Annotations = make(map[string]string)
+	}
+	if hash, ok := curr.Annotations[resourcecollector.StorkResourceHash]; ok {
+		old, err := strconv.ParseUint(hash, 10, 64)
+		if err != nil {
+			return false, err
+		}
+		if old == objHash {
+			log.MigrationLog(migration).Infof("skipping service update, no changes found since last migration %d/%d", old, objHash)
+			return true, nil
 		}
 	}
 	// update annotations
