@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      schedulerName: stork
+      containers:
+      - image: mysql:5.6
+        name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        ports:
+        - containerPort: 3306
+        livenessProbe:
+          exec:
+            command: ["sh", "-c", "mysqladmin -u root -p$MYSQL_ROOT_PASSWORD ping"]
+          initialDelaySeconds: 70
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "mysql -u root -p$MYSQL_ROOT_PASSWORD -e \"select 1\""]
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+        - mountPath: /var/lib/mysql-aggr
+          name: mysql-persistent-storage-aggr
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-data
+      - name: mysql-persistent-storage-aggr
+        persistentVolumeClaim:
+          claimName: mysql-data-aggr
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysqlslap
+  labels:
+    app: mysqlslap
+spec:
+  selector:
+    matchLabels:
+      app: mysqlslap
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysqlslap
+    spec:
+      containers:
+      - name: mysqlslap
+        image: adityadani/mysqlslap
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        - name: MYSQL_SERVICE_PORT
+          value: "3306"

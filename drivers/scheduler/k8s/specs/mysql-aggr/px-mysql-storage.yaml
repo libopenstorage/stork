@@ -1,0 +1,24 @@
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-data
+spec:
+  storageClassName: mysql-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+   name: mysql-data-aggr
+spec:
+   storageClassName: mysql-sc-aggr
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
