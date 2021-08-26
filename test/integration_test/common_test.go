@@ -117,6 +117,7 @@ var schedulerName string
 var backupLocationPath string
 var genericCsiConfigMap string
 var externalTest bool
+var storkVersionCheck bool
 
 func TestSnapshotMigration(t *testing.T) {
 	t.Run("testSnapshot", testSnapshot)
@@ -200,13 +201,13 @@ func setup() error {
 	if err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("Unable to get stork version configmap: %v", err)
 	}
-	if cm != nil {
+	if cm != nil && storkVersionCheck == true {
 		ver, ok := cm.Data["version"]
 		if !ok {
 			return fmt.Errorf("stork version not found in configmap: %s", cmName)
 		}
-		if strings.Split(ver, "-")[0] != strings.Split(version.Version, "-")[0] {
-			return fmt.Errorf("stork version mismatch, found: %s, expected: %s", ver, version.Version)
+		if getStorkVersion(ver) != getStorkVersion(version.Version) {
+			return fmt.Errorf("stork version mismatch, found: %s, expected: %s", getStorkVersion(ver), getStorkVersion(version.Version))
 		}
 	}
 	return nil
@@ -747,6 +748,12 @@ func addSecurityAnnotation(spec interface{}) error {
 	return nil
 }
 
+func getStorkVersion(fullVersion string) string {
+	noHash := strings.Split(fullVersion, "-")[0]
+	majorVersion := strings.Split(noHash, ".")
+	return strings.Join([]string{majorVersion[0], majorVersion[1]}, ".")
+}
+
 func TestMain(m *testing.M) {
 	flag.IntVar(&snapshotScaleCount,
 		"snapshot-scale-count",
@@ -768,6 +775,10 @@ func TestMain(m *testing.M) {
 		"generic-csi-config",
 		"",
 		"Config map name that contains details of csi driver to be used for provisioning")
+	flag.BoolVar(&storkVersionCheck,
+		"stork-version-check",
+		false,
+		"Turn on/off stork version check before running tests. Default off.")
 	flag.Parse()
 	if err := setup(); err != nil {
 		logrus.Errorf("Setup failed with error: %v", err)
