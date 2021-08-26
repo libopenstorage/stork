@@ -58,6 +58,7 @@ spec:
     - -backup-scale-count=10
     - -volume-driver=pxd
     - -generic-csi-config=csi_config_map_name
+    - -stork-version-check=false
     imagePullPolicy: Always
     image: openstorage/stork_test:latest
     securityContext:
